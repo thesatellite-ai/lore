@@ -55,6 +55,38 @@ func TestExportImportAcrossRepos(t *testing.T) {
 	if field(u, "body") != "multi\nline" {
 		t.Errorf("body %q", field(u, "body"))
 	}
+	// PC-TASK-1: every dropped reference is one W_IMPORT_DROPPED_REF
+	// warning and one note on the task that lost it.
+	io, ok := res.Value().Interface().(opstask.ImportOut)
+	if !ok {
+		t.Fatalf("result is %T", res.Value().Interface())
+	}
+	if len(io.Warnings) == 0 {
+		t.Fatalf("no drop warnings: %s", b.JSON(res))
+	}
+	notes := 0
+	for _, id := range got {
+		sh, ok := b.Must(opstask.OpShow, `{"id":"`+id+`"}`).Value().Interface().(opstask.ShowOut)
+		if !ok {
+			t.Fatal("show result type")
+		}
+		for _, n := range sh.Data.Notes {
+			if strings.Contains(n, "import: dropped ") && strings.Contains(n, " (not in this repo)") {
+				notes++
+			}
+		}
+	}
+	for _, w := range io.Warnings {
+		if w.Code != opstask.WarnImportDroppedRef || !strings.Contains(out.Content, strings.Fields(w.Message)[3]) {
+			t.Errorf("warning %+v", w)
+		}
+	}
+	if notes != len(io.Warnings) {
+		t.Errorf("%d drop notes for %d warnings", notes, len(io.Warnings))
+	}
+	if txt := io.Text(); !strings.Contains(txt, opstask.WarnImportDroppedRef+": ") {
+		t.Errorf("text has no warning line:\n%s", txt)
+	}
 	// The import never points at a row of repo a.
 	for _, id := range got {
 		_, r := get(b, schema.TableTasks, id)

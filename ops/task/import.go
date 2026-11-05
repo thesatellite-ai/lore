@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/model/checklist"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
@@ -103,7 +104,16 @@ type ImportOut struct {
 	DryRun bool        `json:"dry_run,omitempty"`
 	Count  int         `json:"count"`
 	Rows   []ImportRow `json:"rows"`
+	// Warnings are the W_IMPORT_DROPPED_REF lines, one per reference
+	// dropped because its row is not in the target (PC-TASK-1).
+	Warnings []Warning `json:"warnings,omitempty"`
 }
+
+// WarnImportDroppedRef names a tasklist, mission or plan id an imported
+// row pointed at that the target repo does not hold (an export from
+// another repo); the reference is dropped, never the whole file
+// (PC-TASK-1). W_ codes live beside their writer, like engine's.
+const WarnImportDroppedRef = "W_IMPORT_DROPPED_REF"
 
 // Text implements op.Texter.
 func (o ImportOut) Text() string {
@@ -113,9 +123,20 @@ func (o ImportOut) Text() string {
 		for _, r := range o.Rows {
 			b.WriteString("  " + r.ExtID + "  " + r.Title + "\n")
 		}
+		o.warnLines(&b)
 		return b.String()
 	}
-	return work.Success + " " + strconv.Itoa(o.Count) + " tasks imported from " + o.Source + " (batch " + o.Batch + ")\n"
+	var b strings.Builder
+	b.WriteString(work.Success + " " + strconv.Itoa(o.Count) + " tasks imported from " + o.Source + " (batch " + o.Batch + ")\n")
+	o.warnLines(&b)
+	return b.String()
+}
+
+// warnLines writes one "  W_…: message" line per warning.
+func (o ImportOut) warnLines(b *strings.Builder) {
+	for _, w := range o.Warnings {
+		b.WriteString("  " + w.Code + ": " + w.Message + "\n")
+	}
 }
 
 // ImportOps returns the task import operation bound to env, for
@@ -189,6 +210,18 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		items = append(items, bulk.Item{ID: r.extID, Label: strings.TrimSpace(r.cols[colTitle])})
 	}
 	out.Count = len(recs)
+	// PC-TASK-1: a tasklist / mission / plan id the target does not hold
+	// (an export from another repo) is dropped with a warning and a note.
+	dropped, err := o.dropDanglingRefs(ctx, recs)
+	if err != nil {
+		return ImportOut{}, err
+	}
+	for i, ds := range dropped {
+		for _, d := range ds {
+			out.Warnings = append(out.Warnings, Warning{Code: WarnImportDroppedRef, Field: d.field,
+				Message: recs[i].extID + ": dropped " + d.field + " " + d.id + " (not in this repo)"})
+		}
+	}
 	if in.DryRun || len(recs) == 0 {
 		return out, nil
 	}
@@ -235,6 +268,64 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 				strconv.Itoa(i)+" of "+strconv.Itoa(len(recs))+" tasks; the ones written are in batch "+out.Batch))
 		}
 		out.Rows[i].ID = got.Data.ID
+		for _, d := range dropped[i] {
+			// PC-TASK-1: the row says what it lost, outside the import
+			// slot (the note is not an imported row).
+			if err = o.addNote(bctx, got.Data.ID, d.note()); err != nil {
+				return ImportOut{}, err
+			}
+		}
+	}
+	return out, nil
+}
+
+// droppedRef is one reference an import dropped (PC-TASK-1).
+type droppedRef struct {
+	field string // the task field: tasklist_id, mission_id, plan_id
+	id    string
+}
+
+// note is the comment the imported task gets for d.
+func (d droppedRef) note() string {
+	return "import: dropped " + d.field + " " + d.id + " (not in this repo)"
+}
+
+// dropDanglingRefs clears every tasklist / mission / plan column whose id
+// is well formed but names no row in the attached stores, and returns
+// what it cleared per record. A malformed id is left for task add to
+// refuse; an id that exists (even in the trash) is kept, so add's own
+// checks apply. The import file creates no tasklists, missions or plans,
+// so the target is the only place such an id can exist (PC-TASK-1).
+func (o ops) dropDanglingRefs(ctx context.Context, recs []importRecord) (map[int][]droppedRef, error) {
+	refCols := []struct {
+		col, field string
+		tbl        row.Table
+	}{
+		{colTasklist, work.FieldTasklist, schema.TableTasklists},
+		{colMission, work.FieldMission, schema.TableMissions},
+		{colPlan, work.FieldPlan, schema.TablePlans},
+	}
+	out := map[int][]droppedRef{}
+	for i, r := range recs {
+		for _, c := range refCols {
+			raw := strings.TrimSpace(r.cols[c.col])
+			if raw == "" {
+				continue
+			}
+			id, perr := ids.ParseAny(raw)
+			if perr != nil {
+				continue
+			}
+			_, _, gerr := o.env.Get(ctx, engine.Ref{Table: c.tbl, ID: id})
+			if gerr == nil {
+				continue
+			}
+			if !errs.Has(gerr, errs.NotFound) {
+				return nil, gerr
+			}
+			delete(r.cols, c.col)
+			out[i] = append(out[i], droppedRef{field: c.field, id: raw})
+		}
 	}
 	return out, nil
 }
