@@ -8,6 +8,10 @@ import (
 
 	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/merge3"
+
+	rowmerge "github.com/thesatellite-ai/lore/logic/merge"
+	lorerow "github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // StrategySource returns the field strategy for rows of a table (lsync's
@@ -30,6 +34,9 @@ type MergeNote struct {
 	ConflictKeys []string
 	// OursHLC and TheirsHLC are the two stamps compared.
 	OursHLC, TheirsHLC HLC
+	// Trash names the soft-delete rule that settled a v2 row (deleted on
+	// one side, edited on the other: kept alive), "" when none applied.
+	Trash rowmerge.TrashOutcome
 }
 
 // MergeTrees three-way merges two live trees (F4): base is their merge
@@ -49,6 +56,16 @@ type MergeNote struct {
 //
 // The result is a whole tree; notes list every row both sides changed.
 func MergeTrees(base, ours, theirs Tree, strategies StrategySource) (Tree, []MergeNote, error) {
+	// v2 row bodies (the 0.1.18 core's `_v: 2` documents) merge through
+	// logic/merge, the one row merge every backend uses (STORE_SERVER_SPEC
+	// 11 rule 5): ordered by the row's _hlc, envelope keys (_hlc, updated_*)
+	// settled by the row rule, per-field strategies from the schema, soft
+	// deletes by its trash rules. A registry that fails to build only
+	// costs the per-table policy (UnknownTable keeps clashes loud).
+	reg, regErr := schema.NewRegistry(schema.Builtin()...)
+	if regErr != nil {
+		reg = nil
+	}
 	out := Tree{}
 	var notes []MergeNote
 	for _, p := range unionPaths(base, ours, theirs) {
@@ -69,7 +86,7 @@ func MergeTrees(base, ours, theirs Tree, strategies StrategySource) (Tree, []Mer
 			}
 			continue
 		}
-		merged, note, keep, err := mergeRow(p, b, inB, o, inO, t, inT, strategies, key.Table)
+		merged, note, keep, err := mergeRow(p, b, inB, o, inO, t, inT, strategies, reg, key.Table)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -128,7 +145,7 @@ func pickPlain(b []byte, inB bool, o []byte, inO bool, t []byte, inT bool) ([]by
 }
 
 // mergeRow merges one row file. keep=false deletes the path.
-func mergeRow(p string, b []byte, inB bool, o []byte, inO bool, t []byte, inT bool, strategies StrategySource, table string) ([]byte, *MergeNote, bool, error) {
+func mergeRow(p string, b []byte, inB bool, o []byte, inO bool, t []byte, inT bool, strategies StrategySource, reg *schema.Registry, table string) ([]byte, *MergeNote, bool, error) {
 	bf, err := sideFile(b, inB)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("live: merge %s (base): %w", p, err)
@@ -148,6 +165,9 @@ func mergeRow(p string, b []byte, inB bool, o []byte, inO bool, t []byte, inT bo
 	}
 	if inO && inT && string(o) == string(t) {
 		return o, nil, true, nil
+	}
+	if out, note, ok, err := mergeV2Row(p, bf, of, tf, reg); ok || err != nil {
+		return out, note, ok, err
 	}
 	newer := merge3.SideTheirs
 	if of.block.HLC.Compare(tf.block.HLC) > 0 {
@@ -189,6 +209,81 @@ func mergeRow(p string, b []byte, inB bool, o []byte, inO bool, t []byte, inT bo
 		return nil, nil, false, err
 	}
 	return out, note, true, nil
+}
+
+// mergeV2Row merges a row both sides hold alive when both bodies are v2
+// row documents, through logic/merge (see MergeTrees). ok=false (and no
+// error) means the row is not a v2 row on both sides, or one side is a
+// live tombstone: the caller's merge3 path settles it (file-level rules,
+// modify beats delete).
+func mergeV2Row(p string, bf, of, tf side, reg *schema.Registry) ([]byte, *MergeNote, bool, error) {
+	if !of.present || !tf.present || of.file.Deleted() || tf.file.Deleted() {
+		return nil, nil, false, nil
+	}
+	or, ok := v2Row(of)
+	if !ok {
+		return nil, nil, false, nil
+	}
+	tr, ok := v2Row(tf)
+	if !ok {
+		return nil, nil, false, nil
+	}
+	br := rowmerge.Absent
+	if bf.present && !bf.file.Deleted() {
+		if r, ok := v2Row(bf); ok && r.Table == or.Table && r.ID == or.ID {
+			br = r
+		}
+	}
+	pol := rowmerge.UnknownTable()
+	if reg != nil {
+		if def, ok := reg.Table(or.Table); ok {
+			pol = rowmerge.PolicyFor(def)
+		}
+	}
+	res, err := rowmerge.Rows(pol, br, or, tr)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("live: merge %s: %w", p, err)
+	}
+	enc, err := lorerow.Encode(res.Row)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("live: merge %s: %w", p, err)
+	}
+	body, err := canonjson.Decode(enc, canonjson.DefaultMaxDepth)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("live: merge %s: %w", p, err)
+	}
+	f := File{Body: body, Block: combineBlocks(of, tf)}
+	f.Block.Deleted = false
+	f.Block.Conflict = f.HasConflictMarkers()
+	note := &MergeNote{Path: p, Decision: merge3.DecisionFieldMerge, OursHLC: of.block.HLC, TheirsHLC: tf.block.HLC, Trash: res.Trash}
+	if !res.Clean() {
+		note.Conflict = true
+		for _, c := range res.Conflicts {
+			note.ConflictKeys = append(note.ConflictKeys, c.Field)
+		}
+	}
+	out, err := f.Encode()
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return out, note, true, nil
+}
+
+// v2Row decodes a side's body as a v2 row document; ok=false for any body
+// that is not one (a v0.1.17 row, a hand-written file).
+func v2Row(s side) (lorerow.Row, bool) {
+	if _, has := s.file.Body[lorerow.KeyVersion]; !has {
+		return lorerow.Row{}, false
+	}
+	b, err := s.file.EncodeBody()
+	if err != nil {
+		return lorerow.Row{}, false
+	}
+	r, err := lorerow.Decode(b)
+	if err != nil {
+		return lorerow.Row{}, false
+	}
+	return r, true
 }
 
 // side is one side of a row merge, decoded.
@@ -319,6 +414,9 @@ func (n MergeNote) Describe() string {
 		}
 		return fmt.Sprintf("%s was deleted by %s but edited on the other side; kept", id, by)
 	case merge3.DecisionFieldMerge:
+		if n.Trash != "" {
+			return fmt.Sprintf("%s: %s", id, n.Trash)
+		}
 		if n.Conflict {
 			return fmt.Sprintf("%s: both sides edited %s; both kept with conflict markers, see `lore sync conflicts`", id, strings.Join(n.ConflictKeys, ", "))
 		}
