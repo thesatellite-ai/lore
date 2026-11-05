@@ -44,7 +44,7 @@ func CheckRuleDefs(t Type, r Rules) error {
 			continue
 		}
 		if !ordered(k) {
-			return errs.New(errs.InvalidInput, "meta: --min/--max apply to number, date and datetime keys, not "+t.String())
+			return errs.New(errs.InvalidInput, "meta: --min/--max apply to number, date, datetime and duration keys, not "+t.String())
 		}
 		if _, err := bound(k, b); err != nil {
 			return errs.Wrap(errs.InvalidInput, "meta: bound "+quote(b)+" is not a "+string(k), err)
@@ -167,7 +167,7 @@ func elemKind(t Type) value.Kind {
 
 // ordered reports the kinds min/max apply to (3.19).
 func ordered(k value.Kind) bool {
-	return k == value.KindNumber || k == value.KindDate || k == value.KindDateTime
+	return k == value.KindNumber || k == value.KindDate || k == value.KindDateTime || k == value.KindDuration // RES 3.1: duration bounds (OV32)
 }
 
 // orderedValue is a parsed bound or value.
@@ -199,7 +199,13 @@ func bound(k value.Kind, s string) (orderedValue, error) {
 	case value.KindDateTime:
 		t, err := time.Parse(time.RFC3339Nano, s)
 		return orderedValue{t: t}, err
-	case value.KindText, value.KindBool, value.KindDuration, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL,
+	case value.KindDuration: // compared as nanoseconds
+		d, err := time.ParseDuration(s)
+		if err != nil {
+			return orderedValue{}, err
+		}
+		return orderedValue{n: big.NewRat(int64(d), 1)}, nil
+	case value.KindText, value.KindBool, value.KindIP, value.KindCIDR, value.KindDNS, value.KindURL,
 		value.KindEmail, value.KindRef, value.KindSecretRef, value.KindJSON, value.KindList, value.KindNull:
 	}
 	return orderedValue{}, errs.New(errs.InvalidInput, "not an ordered type")
