@@ -74,6 +74,15 @@ func TestUpsertActor_ReusesProjectedRowOnSecondMachine(t *testing.T) {
 		}},
 		{"no row yet", func(*testing.T, *ent.Client) {}},
 	}
+	// coreApp is the package-wide core mountCore builds over the test's
+	// working directory, which sits inside this source checkout: left
+	// mounted, the "no row yet" case writes an actor row file into the
+	// checkout's own .lore and fails on its missing lore.db. This test pins
+	// the lore.db dedup (N1), so it runs with no repo store, the way a
+	// --db command does (coreEnsureActor: nothing to write).
+	prevCore := coreApp
+	coreApp = nil
+	t.Cleanup(func() { coreApp = prevCore })
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			client := openRawTestClient(t)
