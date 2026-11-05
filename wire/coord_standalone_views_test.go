@@ -7,15 +7,19 @@ package wire
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
+	opssettings "github.com/thesatellite-ai/lore/ops/settings"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -220,4 +224,218 @@ func TestInboxListsForcedReveals(t *testing.T) {
 	if got = forcedOf(inboxItems(t, plain)); len(got) != 0 {
 		t.Fatalf("no chain, no FORCED items: %+v", got)
 	}
+}
+
+// TestAssignedBy (later.md 630, port of coord_inbox_assigned_test.go): the
+// inbox names who made me lead or added me as an assignee (TASK 20),
+// never my own change, and not a list I was already in.
+func TestAssignedBy(t *testing.T) {
+	t.Parallel()
+	const me, other = "act_me", "act_other"
+	w := taskWatch{ID: "tsk_1", Lead: me, Assignees: []string{me, other}, History: []opstask.HistoryEntry{
+		{ID: "h1", At: "2026-11-05T00:00:00Z", By: other, Field: schema.FieldTaskAssignees, From: "", To: me},
+		{ID: "h2", At: "2026-11-05T00:01:00Z", By: me, Field: fieldTaskLead, From: "", To: me},
+		{ID: "h3", At: "2026-11-05T00:02:00Z", By: other, Field: schema.FieldTaskAssignees, From: me, To: me + "," + other},
+	}}
+	if got := w.assignedRole(me); got != roleLead {
+		t.Fatalf("role = %q, want lead", got)
+	}
+	if _, ok := w.assignedBy(me, roleLead); ok {
+		t.Fatal("my own lead change must not be news")
+	}
+	e, ok := w.assignedBy(me, roleAssignee)
+	if !ok || e.ID != "h1" {
+		t.Fatalf("assignee entry = %+v %v, want h1 (h3 kept me, it did not add me)", e, ok)
+	}
+	if got := (taskWatch{Assignees: []string{other}}).assignedRole(me); got != "" {
+		t.Fatalf("role = %q, want none", got)
+	}
+	if got := (taskWatch{Assignees: []string{me}}).assignedRole(me); got != roleAssignee {
+		t.Fatalf("role = %q, want assignee", got)
+	}
+}
+
+// TestMetaReviewText (later.md 630, port of inbox_metakeys_test.go): the
+// review-queue line (METADATA 3.14 sample): count, distinct authors in
+// first-seen order, names once each, the hint; the singular; and a key row
+// without a writer (no "added by").
+func TestMetaReviewText(t *testing.T) {
+	t.Parallel()
+	who := map[string]string{"act_a": "tomas via codex", "act_b": "mira via claude_code"}
+	author := func(id string) string { return who[id] }
+	cases := []struct {
+		name string
+		keys []opssettings.UnreviewedKey
+		want string
+	}{
+		{"design sample", []opssettings.UnreviewedKey{{Name: "customer_tier", CreatedBy: "act_a"}, {Name: "renewal_risk", CreatedBy: "act_a"}, {Name: "root_cause", CreatedBy: "act_a"}},
+			"3 keys await review (added by tomas via codex): customer_tier, renewal_risk, root_cause — lore meta keys --unreviewed"},
+		{"two authors, a name in two stores", []opssettings.UnreviewedKey{{Name: "a", CreatedBy: "act_b", Store: "repo"}, {Name: "a", CreatedBy: "act_a", Store: "kb"}, {Name: "b", CreatedBy: "act_a"}},
+			"2 keys await review (added by mira via claude_code, tomas via codex): a, b — lore meta keys --unreviewed"},
+		{"one key", []opssettings.UnreviewedKey{{Name: "solo", CreatedBy: "act_a"}},
+			"1 key awaits review (added by tomas via codex): solo — lore meta keys --unreviewed"},
+		{"no writer", []opssettings.UnreviewedKey{{Name: "old"}},
+			"1 key awaits review: old — lore meta keys --unreviewed"},
+		{"a writer the roster cannot name", []opssettings.UnreviewedKey{{Name: "x", CreatedBy: "act_gone"}},
+			"1 key awaits review: x — lore meta keys --unreviewed"},
+	}
+	for _, c := range cases {
+		if got := metaReviewText(c.keys, author); got != c.want {
+			t.Errorf("%s:\ngot  %q\nwant %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestParentCycleItems (later.md 630, port of inbox_parentcycle_test.go):
+// one item per cycle holding an open task of mine, named from the smallest
+// id; a cycle of only others' tasks, or only closed ones, gives none; a
+// plain tree gives none.
+func TestParentCycleItems(t *testing.T) {
+	t.Parallel()
+	const me, other = "act_me", "act_other"
+	doc := func(id, parent, status, lead string) coord.Doc {
+		d := coord.Doc{}
+		for k, v := range map[string]string{docKeyID: id, vkParent: parent, "status": status, fieldTaskLead: lead, vkMission: "msn_1"} {
+			d.SetStr(k, v)
+		}
+		return d
+	}
+	mine := func(d coord.Doc) bool { return d.Str(fieldTaskLead) == me }
+	cases := []struct {
+		name string
+		docs []coord.Doc
+		want []string
+	}{
+		{"two-task cycle with my open task", []coord.Doc{doc("tsk_b", "tsk_a", "todo", me), doc("tsk_a", "tsk_b", "todo", other)},
+			[]string{"parent cycle tsk_a → tsk_b → tsk_a: tsk_a reads as top level"}},
+		{"three-task cycle, mine in the middle", []coord.Doc{doc("tsk_a", "tsk_c", "todo", other), doc("tsk_b", "tsk_a", "in_progress", me), doc("tsk_c", "tsk_b", "done", other)},
+			[]string{"tsk_a → tsk_b → tsk_c → tsk_a"}},
+		{"cycle of others only", []coord.Doc{doc("tsk_a", "tsk_b", "todo", other), doc("tsk_b", "tsk_a", "todo", other)}, nil},
+		{"my tasks in the cycle are closed", []coord.Doc{doc("tsk_a", "tsk_b", "done", me), doc("tsk_b", "tsk_a", "cancelled", me)}, nil},
+		{"plain tree", []coord.Doc{doc("tsk_a", "", "todo", me), doc("tsk_b", "tsk_a", "todo", me)}, nil},
+		{"self parent is not a cycle", []coord.Doc{doc("tsk_a", "tsk_a", "todo", me)}, nil},
+		{"two cycles, one mine", []coord.Doc{doc("tsk_a", "tsk_b", "todo", me), doc("tsk_b", "tsk_a", "todo", other),
+			doc("tsk_x", "tsk_y", "todo", other), doc("tsk_y", "tsk_x", "todo", other)}, []string{"tsk_a → tsk_b"}},
+	}
+	for _, tc := range cases {
+		got := cycleItems(tc.docs, mine)
+		if len(got) != len(tc.want) {
+			t.Fatalf("%s: got %d items %+v, want %d", tc.name, len(got), got, len(tc.want))
+		}
+		for i, w := range tc.want {
+			if got[i].Kind != inboxParent || got[i].Mission != "msn_1" || !strings.Contains(got[i].Text, w) {
+				t.Fatalf("%s: item %d = %+v, want kind %q mission msn_1 text containing %q", tc.name, i, got[i], inboxParent, w)
+			}
+		}
+	}
+}
+
+// TestMissionSLAColumn (later.md 630, port of mission_sla_test.go):
+// mission status's SLA column (18.4) is breached past the priority's
+// hours, at_risk from 80%, ok before, and empty (not counted) for a
+// priority with no SLA or with no policy at all; a late open row's detail
+// says so, a done one's does not.
+func TestMissionSLAColumn(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	hours := map[string]int64{"urgent": 10}
+	task := func(prio, status string, age time.Duration) coord.Doc {
+		d := coord.Doc{}
+		d.SetStr(docKeyID, "tsk_x")
+		d.SetStr(vkPriority, prio)
+		d.SetStr("status", status)
+		d.SetTime(docKeyCreatedAt, now.Add(-age))
+		return d
+	}
+	cases := []struct {
+		name       string
+		d          coord.Doc
+		state      string
+		hours      map[string]int64
+		want       string
+		wantCount  bool
+		wantDetail string
+	}{
+		{"breached", task("urgent", "todo", 11*time.Hour), opscoord.StateReady, hours, opstask.SLABreached, true, "SLA breached (urgent, 10h)"},
+		{"at risk", task("urgent", "todo", 9*time.Hour), opscoord.StateReady, hours, opstask.SLAAtRisk, true, "SLA at risk (urgent, 10h)"},
+		{"ok", task("urgent", "todo", time.Hour), opscoord.StateReady, hours, opstask.SLAOK, true, ""},
+		{"priority without SLA", task("low", "todo", 99*time.Hour), opscoord.StateReady, hours, opstask.SLANone, false, ""},
+		{"no policy", task("urgent", "todo", 99*time.Hour), opscoord.StateReady, nil, opstask.SLANone, false, ""},
+		{"done row: counted, no late detail", task("urgent", "done", 11*time.Hour), opscoord.StateDone, hours, opstask.SLABreached, true, ""},
+	}
+	for _, c := range cases {
+		r := opscoord.MissionRow{ID: "tsk_x", State: c.state}
+		counted := withMissionSLA(&r, c.d, c.hours, now)
+		if counted != c.wantCount || r.SLA != c.want || r.Detail != c.wantDetail {
+			t.Errorf("%s: counted=%v sla=%q detail=%q, want %v %q %q", c.name, counted, r.SLA, r.Detail, c.wantCount, c.want, c.wantDetail)
+		}
+	}
+}
+
+// TestInboxWatchedAndAssignedE2E (later.md 488, 630): over real rows and
+// ops, a watcher is told when someone else changes a watched field (not
+// about its own change), and bob making me lead is an "assigned" item that
+// names bob.
+func TestInboxWatchedAndAssignedE2E(t *testing.T) {
+	f := newViewFixture(t)
+	out, err := run(t, f.me, opstask.OpAdd, `{"title":"rotate keys"}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shown struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err = json.Unmarshal([]byte(out), &shown); err != nil || shown.Data.ID == "" {
+		t.Fatalf("task add: %s %v", out, err)
+	}
+	id := shown.Data.ID
+	if _, err = run(t, f.me, opstask.OpWatch, `{"id":"`+id+`"}`, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = run(t, f.me, opstask.OpEdit, `{"id":"`+id+`","status":"in_progress"}`, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := kindsOf(inboxItems(t, f.me)); got[inboxWatched] != 0 {
+		t.Fatalf("my own change is not news to me: %v", got)
+	}
+	if _, err = run(t, f.bob, opstask.OpEdit, `{"id":"`+id+`","status":"blocked"}`, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = run(t, f.bob, opstask.OpEdit, `{"id":"`+id+`","status":"todo","assign":["`+f.meID+`"]}`, true); err != nil {
+		t.Fatal(err)
+	}
+	var watched, assigned []opscoord.InboxItem
+	for _, it := range inboxItems(t, f.me) {
+		switch it.Kind {
+		case inboxWatched:
+			watched = append(watched, it)
+		case inboxAssigned:
+			assigned = append(assigned, it)
+		}
+	}
+	if len(watched) == 0 {
+		t.Fatal("bob's changes to a task I watch reach my inbox")
+	}
+	for _, it := range watched {
+		if it.Who != "@bob" || !strings.Contains(it.Text, id) {
+			t.Fatalf("a watched item names bob and the task: %+v", it)
+		}
+	}
+	if !slices.ContainsFunc(watched, func(it opscoord.InboxItem) bool { return strings.Contains(it.Text, "status in_progress → blocked") }) {
+		t.Fatalf("the status change is one of them: %+v", watched)
+	}
+	if len(assigned) != 1 || assigned[0].Who != "@bob" || !strings.HasSuffix(assigned[0].Text, ": made you lead") {
+		t.Fatalf("bob made me lead: %+v", assigned)
+	}
+}
+
+// kindsOf counts items per kind.
+func kindsOf(items []opscoord.InboxItem) map[string]int {
+	out := map[string]int{}
+	for _, it := range items {
+		out[it.Kind]++
+	}
+	return out
 }

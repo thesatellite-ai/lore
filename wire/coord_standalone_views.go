@@ -802,12 +802,22 @@ func (cv *coordView) metaReviewItems(ctx context.Context) []opscoord.InboxItem {
 	if err != nil || len(keys) == 0 {
 		return nil
 	}
+	return []opscoord.InboxItem{{Kind: inboxMetadata, Text: metaReviewText(keys, func(id string) string { return cv.keyAuthor(ctx, id) })}}
+}
+
+// metaReviewText is the review-queue line (METADATA 3.14 sample, v0.1.17
+// text): the count of distinct key names, their distinct authors in
+// first-seen order, each name once, and the command to review them.
+func metaReviewText(keys []opssettings.UnreviewedKey, author func(id string) string) string {
 	var names, who []string
 	for _, k := range keys {
 		if !slices.Contains(names, k.Name) {
 			names = append(names, k.Name)
 		}
-		if a := cv.keyAuthor(ctx, k.CreatedBy); a != "" && !slices.Contains(who, a) {
+		if k.CreatedBy == "" {
+			continue
+		}
+		if a := author(k.CreatedBy); a != "" && !slices.Contains(who, a) {
 			who = append(who, a)
 		}
 	}
@@ -819,7 +829,7 @@ func (cv *coordView) metaReviewItems(ctx context.Context) []opscoord.InboxItem {
 	if len(who) > 0 {
 		by = " (added by " + strings.Join(who, ", ") + ")"
 	}
-	return []opscoord.InboxItem{{Kind: inboxMetadata, Text: fmt.Sprintf("%d %s review%s: %s — %s", len(names), noun, by, strings.Join(names, ", "), metaReviewCmd)}}
+	return fmt.Sprintf("%d %s review%s: %s — %s", len(names), noun, by, strings.Join(names, ", "), metaReviewCmd)
 }
 
 // keyAuthor names a key's writer: an agent actor's own label, else the
@@ -887,21 +897,33 @@ func (h standaloneCoord) MissionStatus(ctx context.Context, in opscoord.MissionS
 			continue
 		}
 		r := cv.missionRow(ctx, d, ready, waiting)
-		if len(hours) > 0 {
-			c := slaClock(d, watchOf(d).History)
-			if r.SLA = opstask.SLAStateOf(c, hours, cv.now()); r.SLA != "" {
-				slaCounts.Add(r.SLA)
-				late := r.SLA == opstask.SLAAtRisk || r.SLA == opstask.SLABreached
-				if late && r.State != opscoord.StateDone && r.State != opscoord.StateCancelled {
-					r.Detail = strings.TrimSpace(r.Detail + " " + fmt.Sprintf("SLA %s (%s, %dh)", strings.ReplaceAll(r.SLA, "_", " "), c.Priority, hours[c.Priority]))
-				}
-			}
+		if withMissionSLA(&r, d, hours, cv.now()) {
+			slaCounts.Add(r.SLA)
 		}
 		counts.Add(r.State)
 		out = append(out, r)
 	}
 	data := opscoord.MissionStatus{Mission: m.Str(docKeyID), Title: m.Str(fieldTitle), Counts: counts, SLA: slaCounts, Tasks: out}
 	return opscoord.MissionStatusOut{SchemaVersion: coordSchemaV, Kind: kindTaskList, Count: len(out), Data: data, Lines: missionLines(data)}, nil
+}
+
+// withMissionSLA fills mission status's SLA column (TASK 18.4) of r from
+// the task's SLA clock: breached past the priority's hours, at_risk from
+// 80%, ok before; none for a priority without an SLA or with no policy
+// (false: not counted). A late open row's detail also says so.
+func withMissionSLA(r *opscoord.MissionRow, d coord.Doc, hours map[string]int64, now time.Time) bool {
+	if len(hours) == 0 {
+		return false
+	}
+	c := slaClock(d, watchOf(d).History)
+	if r.SLA = opstask.SLAStateOf(c, hours, now); r.SLA == "" {
+		return false
+	}
+	late := r.SLA == opstask.SLAAtRisk || r.SLA == opstask.SLABreached
+	if late && r.State != opscoord.StateDone && r.State != opscoord.StateCancelled {
+		r.Detail = strings.TrimSpace(r.Detail + " " + fmt.Sprintf("SLA %s (%s, %dh)", strings.ReplaceAll(r.SLA, "_", " "), c.Priority, hours[c.Priority]))
+	}
+	return true
 }
 
 // missionRow is one task's line of mission status.
