@@ -182,6 +182,12 @@ type RepoIdentifier interface {
 	RepoIdentity(ctx context.Context) (repoID string, ok bool)
 }
 
+// DeletePreviewer is the optional Env upgrade that plans a delete without
+// writing (engine.PreviewDelete; wire.App has it).
+type DeletePreviewer interface {
+	PreviewDelete(ctx context.Context, refs ...engine.Ref) (engine.DeletePreview, error)
+}
+
 // projectDelete deletes a project together with the checkout's own repos
 // row.
 //
@@ -216,6 +222,18 @@ func (o ops) projectDelete(ctx context.Context, in IDIn) (work.WriteOut, error) 
 	}
 	if len(deps) > 0 {
 		return work.WriteOut{}, dependentsErr(deps, id)
+	}
+	// r3-projdel: plan both deletes as one group before writing either, so a
+	// dependent the built-in list above cannot see (a run-time kind's
+	// restrict relation) refuses here, not after the own repos row is gone.
+	if pv, ok := upgrade.As[DeletePreviewer](o.env); ok {
+		refs := []engine.Ref{{Store: src, Table: schema.TableProjects, ID: id}}
+		if ownRef != nil {
+			refs = append(refs, *ownRef)
+		}
+		if _, err = pv.PreviewDelete(ctx, refs...); err != nil {
+			return work.WriteOut{}, err
+		}
 	}
 	bctx, batch, err := bulk.Begin(ctx, bulk.KindDelete)
 	if err != nil {
