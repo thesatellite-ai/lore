@@ -292,7 +292,7 @@ func (o ops) metaImport(ctx context.Context, in MetaImportIn) (RowOut, error) {
 			return RowOut{}, errs.Wrap(errs.CodeOf(err), fmt.Sprintf("meta import: stopped at row %s after %d of %d rows (batch %s; see: lore batch show %s)", id, i, len(order), bid, bid), err)
 		}
 	}
-	return RowOut{ID: bid.String(), Human: fmt.Sprintf("imported %d values on %d rows; batch %s (see: lore batch show %s)\n", len(recs), len(order), bid, bid)}, nil
+	return RowOut{ID: bid.String(), Human: fmt.Sprintf("imported %d values on %d rows; batch %s (undo: lore batch undo %s)\n", len(recs), len(order), bid, bid)}, nil
 }
 
 // readMetaImport reads an import file, capped.

@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	opsbatch "github.com/thesatellite-ai/lore/ops/batch"
@@ -174,3 +175,157 @@ func (a *App) Policy(ctx context.Context, target store.Source) (policy.Set, erro
 	}
 	return eng.Policy(target)
 }
+
+// batchPriorExt is the file of a batch's before-images, beside its event
+// file: <BatchDir>/<bat_id>.prior (JSON lines). It is not a ".jsonl" file,
+// so BatchEvents never reads it as events.
+const batchPriorExt = ".prior"
+
+// priorLine is one before-image of an edit batch (R14, PASS3-A-6): the
+// whole row document as it was just before one Update of the batch, and
+// the hlc that Update left. `lore batch undo` puts the row back to the
+// first image of the batch when its hlc still is the last one.
+//
+// Unlike batchLine it holds field values. It stays in the owner-only,
+// machine-local batch log (never in a checkout, never synced), and the
+// values are the ones the row file already held, past the secret checks
+// (P3-BATCH-2).
+type priorLine struct {
+	Store  string          `json:"store"`
+	ID     string          `json:"id"`
+	After  string          `json:"after"`
+	Before json.RawMessage `json:"before"`
+}
+
+// recordPrior appends before (the row as read before an Update of batch
+// b) and after (the hlc that Update stored) to b's prior file.
+func (a *App) recordPrior(b engine.Batch, src store.Source, before row.Row, after hlc.HLC) error {
+	doc, err := row.Encode(before)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: encode a batch before-image", err)
+	}
+	line, err := json.Marshal(priorLine{Store: string(src), ID: before.ID.String(), After: after.String(), Before: doc})
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: encode a batch before-image", err)
+	}
+	dir := filepath.Join(a.opts.Home, filepath.FromSlash(BatchDir))
+	// The file name is the parsed bat_ id, never row data.
+	return appendAuditLine(filepath.Join(dir, b.ID.String()+batchPriorExt), batchDirMode, line)
+}
+
+// BatchPriors implements opsbatch.Reverter: per row the batch edited, the
+// first before-image and the last hlc (a row edited twice in one batch is
+// put back to its state before the first edit, P3-BATCH-1). A batch with
+// no prior file has none (it edited nothing, or ran before 0.1.18 kept
+// them). A line that does not parse is E_CONFIG_INVALID naming the file.
+func (a *App) BatchPriors(_ context.Context, id ids.ID[ids.Batch]) (map[ids.AnyID]opsbatch.Prior, error) {
+	path := filepath.Join(a.opts.Home, filepath.FromSlash(BatchDir), id.String()+batchPriorExt)
+	fh, err := os.Open(filepath.Clean(path))
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[ids.AnyID]opsbatch.Prior{}, nil
+	}
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "wire: open a batch before-image file", err)
+	}
+	defer func() { _ = fh.Close() }() // read only: a close error loses nothing
+	out := map[ids.AnyID]opsbatch.Prior{}
+	sc := bufio.NewScanner(fh)
+	sc.Buffer(make([]byte, 0, priorScanStart), priorScanMax) // a whole row document per line
+	for sc.Scan() {
+		if len(strings.TrimSpace(sc.Text())) == 0 {
+			continue
+		}
+		p, perr := parsePriorLine(sc.Bytes())
+		if perr != nil {
+			return nil, errs.New(errs.ConfigInvalid, "batch log "+filepath.Base(path)+": "+perr.Error())
+		}
+		if first, ok := out[p.Before.ID]; ok {
+			first.After = p.After // keep the first image, the last hlc
+			out[p.Before.ID] = first
+			continue
+		}
+		out[p.Before.ID] = p
+	}
+	if err = sc.Err(); err != nil {
+		return nil, errs.Wrap(errs.Internal, "wire: read a batch before-image file", err)
+	}
+	return out, nil
+}
+
+// Scanner sizes of a prior file: a line holds a whole row document.
+const (
+	priorScanStart = 64 << 10
+	priorScanMax   = 64 << 20
+)
+
+// parsePriorLine decodes and types one prior line.
+func parsePriorLine(b []byte) (opsbatch.Prior, error) {
+	var l priorLine
+	if err := json.Unmarshal(b, &l); err != nil {
+		return opsbatch.Prior{}, err
+	}
+	after, err := hlc.Parse(l.After)
+	if err != nil {
+		return opsbatch.Prior{}, err
+	}
+	before, err := row.Decode(l.Before)
+	if err != nil {
+		return opsbatch.Prior{}, err
+	}
+	return opsbatch.Prior{Store: store.Source(l.Store), Before: before, After: after}, nil
+}
+
+// Revert implements opsbatch.Reverter: engine.Revert behind the same write
+// guards as Update (the target is writable and reachable, the actor row
+// exists).
+func (a *App) Revert(ctx context.Context, ref engine.Ref, want hlc.HLC, before row.Row) (engine.Written, error) {
+	st, err := a.writeState(ctx)
+	if err != nil {
+		return engine.Written{}, err
+	}
+	src := refStore(ctx, st, ref)
+	if uerr := a.unreachableGuard(ctx, st, explicitTarget(src)); uerr != nil {
+		return engine.Written{}, uerr
+	}
+	if ferr := a.checkTarget(src); ferr != nil {
+		return engine.Written{}, ferr
+	}
+	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
+		return engine.Written{}, aerr
+	}
+	at, was, gerr := st.eng.Get(ctx, ref)
+	w, err := st.eng.Revert(ctx, ref, want, before)
+	a.wroteTo(src, err)
+	if err == nil && gerr == nil {
+		w = a.keepPrior(ctx, at, was, w) // the undo's own batch can be undone too
+	}
+	return w, err
+}
+
+// priorOf reads the before-image of an Update about to run inside a batch
+// (R14): ok is false outside a batch or when the row cannot be read (the
+// Update then fails or is not undoable, and keepPrior says so).
+func priorOf(ctx context.Context, eng *engine.Engine, ref engine.Ref) (store.Source, row.Row, bool) {
+	if _, ok := engine.BatchOf(ctx); !ok {
+		return "", row.Row{}, false
+	}
+	at, was, err := eng.Get(ctx, ref)
+	return at, was, err == nil
+}
+
+// keepPrior records was (the row before an Update of ctx's batch) once the
+// Update stored a change. The row is already written, so a failed record
+// is a warning naming the row undo will not cover, never an error.
+func (a *App) keepPrior(ctx context.Context, at store.Source, was row.Row, w engine.Written) engine.Written {
+	b, ok := engine.BatchOf(ctx)
+	if !ok || w.Row.HLC.Compare(was.HLC) == 0 { // a no-op update writes no event
+		return w
+	}
+	if err := a.recordPrior(b, at, was, w.Row.HLC); err != nil {
+		w.Warnings = append(w.Warnings, engine.Warning{Code: engine.WarnUndoUncovered,
+			Message: "lore batch undo " + b.ID.String() + " cannot put " + was.ID.String() + " back: " + err.Error()})
+	}
+	return w
+}
+
+var _ opsbatch.Reverter = (*App)(nil)

@@ -4,8 +4,13 @@ package batch
 // coordinator default, built by FA-DEL-3):
 //
 //	undo ─► BatchEvents (this machine's log, Q-R3-8) ─► rows of the batch
-//	     ├► any "update" / "purge" row ─► E_UNSUPPORTED (the log keeps no
-//	     │   old values, so an edit cannot be reverted; FA-DEL-3)
+//	     ├► any "purge" row, or an "update" row without a before-image
+//	     │   (a batch older than R14's log) ─► E_UNSUPPORTED
+//	     ├► "update" rows (an edit batch: meta set/unset, resource edit or
+//	     │   check, the edits of an import; R14, PASS3-A-6) ─► every row
+//	     │   still at the batch's hlc? else E_STALE naming the rows changed
+//	     │   since, nothing written (P3-BATCH-1) ─► one new batch of the
+//	     │   same kind putting each row back to its image before the batch
 //	     ├► "trash" rows (a delete batch) ─► Undoer.Restore(bat_) — the same
 //	     │   write as `lore trash restore <bat_…>`; rows purged since are
 //	     │   listed as skipped, never brought back (DQ4)
@@ -19,12 +24,15 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // OpUndo is `lore batch undo`.
@@ -46,6 +54,22 @@ type Undoer interface {
 	Delete(ctx context.Context, ref engine.Ref) (engine.Written, error)
 }
 
+// Reverter is the optional Env upgrade an edit batch's undo needs (*wire.App
+// has it): the before-images the batch log kept (R14) and the write that
+// puts a row back. Without it an edit batch stays E_UNSUPPORTED.
+type Reverter interface {
+	BatchPriors(ctx context.Context, id ids.ID[ids.Batch]) (map[ids.AnyID]Prior, error)
+	Revert(ctx context.Context, ref engine.Ref, want hlc.HLC, before row.Row) (engine.Written, error)
+}
+
+// Prior is one row an edit batch changed: the row before the batch's first
+// write of it, and the hlc its last write left.
+type Prior struct {
+	Store  store.Source
+	Before row.Row
+	After  hlc.HLC
+}
+
 // UndoIn is the input of batch.undo.
 type UndoIn struct {
 	ID string `json:"id" arg:"0" desc:"the batch id (bat_…)"`
@@ -60,6 +84,10 @@ type UndoOut struct {
 	// the new delete batch Into.
 	Trashed []string `json:"trashed"`
 	Into    string   `json:"into,omitempty"`
+	// Reverted lists rows an edit batch's undo put back to their values
+	// before the batch, under the new batch Reverts (itself undoable).
+	Reverted []string `json:"reverted"`
+	Reverts  string   `json:"reverts,omitempty"`
 	// Skipped names rows left alone and why ("purged", "already gone").
 	Skipped []Skip `json:"skipped"`
 }
@@ -72,9 +100,9 @@ type Skip struct {
 
 // undoEntry is the batch.undo operation.
 func undoEntry(o ops) op.Entry {
-	return op.Define(op.Spec{Name: OpUndo, Summary: "Undo a bulk action: restore a delete batch, or move the rows a create batch added to the trash",
+	return op.Define(op.Spec{Name: OpUndo, Summary: "Undo a bulk action: restore a delete batch, put the rows an edit batch changed back, or move the rows a create batch added to the trash",
 		Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{MayAsk: true},
-		Errors:   []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.NeedsConfirm, errs.Cancelled, errs.ParentDeleted, errs.Internal},
+		Errors:   []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.Stale, errs.NeedsConfirm, errs.Cancelled, errs.ParentDeleted, errs.Internal},
 		Examples: []op.Example{{Title: "undo a bulk delete", CLI: "lore batch undo bat_<id>", Want: "restored"}}}, o.undo)
 }
 
@@ -101,7 +129,7 @@ func (o ops) undo(ctx context.Context, in UndoIn) (UndoOut, error) {
 		return UndoOut{}, errs.New(errs.NotFound, "batch "+id.String()+" is not in this machine's batch log").
 			WithHint("lore batch list shows the batches run on this machine")
 	}
-	var trashed, created []Event
+	var trashed, created, updated []Event
 	for _, ev := range mine {
 		switch ev.Action {
 		case actTrash:
@@ -110,15 +138,23 @@ func (o ops) undo(ctx context.Context, in UndoIn) (UndoOut, error) {
 			created = append(created, ev)
 		case actRestore, actDelete:
 			// a restore already undone, or a tombstone row of the cascade: nothing to revert
-		case actUpdate, actPurge:
-			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" "+ev.Action+"d "+ev.ID.String()+
-				"; edits and purges cannot be undone (the batch log keeps no old values, and purged rows never come back, DQ4)").
+		case actUpdate:
+			updated = append(updated, ev)
+		case actPurge:
+			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" purged "+ev.ID.String()+
+				"; purged rows never come back (DQ4)").
 				WithHint("see what it changed: lore batch show " + id.String() + " --all")
 		default:
 			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" holds a "+strconv.Quote(ev.Action)+" row ("+ev.ID.String()+"); only delete and create batches can be undone")
 		}
 	}
-	out := UndoOut{Batch: id.String(), Restored: []string{}, Trashed: []string{}, Skipped: []Skip{}}
+	out := UndoOut{Batch: id.String(), Restored: []string{}, Trashed: []string{}, Reverted: []string{}, Skipped: []Skip{}}
+	if len(updated) > 0 {
+		// edits first: an import's edited row may point at a row it created
+		if err = o.undoEdits(ctx, id, updated, &out); err != nil {
+			return out, err
+		}
+	}
 	if len(trashed) > 0 {
 		if err = o.undoDelete(ctx, u, id, trashed, &out); err != nil {
 			return out, err
@@ -130,6 +166,116 @@ func (o ops) undo(ctx context.Context, in UndoIn) (UndoOut, error) {
 		}
 	}
 	return out, nil
+}
+
+// undoEdits puts every row an edit batch changed back to its image before
+// the batch (R14, PASS3-A-6). It checks every row first and refuses with
+// nothing written when one changed (or was deleted) after the batch
+// (P3-BATCH-1: undo never overwrites a later edit); then it writes one new
+// batch of the same kind, so the undo is itself undoable.
+func (o ops) undoEdits(ctx context.Context, id ids.ID[ids.Batch], evs []Event, out *UndoOut) error {
+	rv, ok := upgrade.As[Reverter](o.env)
+	if !ok {
+		return errs.New(errs.Unsupported, "batch undo: this surface cannot put edited rows back")
+	}
+	priors, err := rv.BatchPriors(ctx, id)
+	if err != nil {
+		return err
+	}
+	order, err := editOrder(id, evs, priors)
+	if err != nil {
+		return err
+	}
+	if err = o.refuseChanged(ctx, id, order, priors); err != nil {
+		return err
+	}
+	bctx, into, err := bulk.Begin(ctx, revertKind(evs[0]))
+	if err != nil {
+		return err
+	}
+	for i, rid := range order {
+		p := priors[rid]
+		if _, werr := rv.Revert(bctx, engine.Ref{Store: p.Store, Table: p.Before.Table, ID: rid}, p.After, p.Before); werr != nil {
+			return errs.Wrap(errs.CodeOf(werr), "batch undo: stopped after "+strconv.Itoa(i)+" of "+strconv.Itoa(len(order))+
+				" rows (the rows put back are in batch "+into.String()+"; undo: lore batch undo "+into.String()+")", werr)
+		}
+		out.Reverted = append(out.Reverted, rid.String())
+	}
+	out.Reverts = into.String()
+	return nil
+}
+
+// editOrder is each edited row once, in the order the batch first wrote
+// it. An update with no before-image (a batch written before the log kept
+// them, or by a write path that keeps none) is E_UNSUPPORTED.
+func editOrder(id ids.ID[ids.Batch], evs []Event, priors map[ids.AnyID]Prior) ([]ids.AnyID, error) {
+	seen := map[ids.AnyID]bool{}
+	var order []ids.AnyID
+	for _, ev := range evs {
+		if seen[ev.ID] {
+			continue
+		}
+		seen[ev.ID] = true
+		if _, ok := priors[ev.ID]; !ok {
+			return nil, errs.New(errs.Unsupported, "batch undo: "+id.String()+" updated "+ev.ID.String()+
+				" but the batch log kept no earlier values for it, so the edit cannot be reverted").
+				WithHint("see what it changed: lore batch show " + id.String() + " --all")
+		}
+		order = append(order, ev.ID)
+	}
+	return order, nil
+}
+
+// refuseChanged is E_STALE naming every row that changed (or was deleted)
+// after the batch, before anything is written.
+func (o ops) refuseChanged(ctx context.Context, id ids.ID[ids.Batch], order []ids.AnyID, priors map[ids.AnyID]Prior) error {
+	g, ok := upgrade.As[getter](o.env)
+	if !ok {
+		return nil // Revert checks each row again under its Expect
+	}
+	var changed []string
+	for _, rid := range order {
+		p := priors[rid]
+		_, cur, err := g.Get(ctx, engine.Ref{Store: p.Store, Table: p.Before.Table, ID: rid})
+		switch {
+		case errs.Has(err, errs.NotFound):
+			changed = append(changed, rid.String()+" (gone)")
+		case err != nil:
+			return err
+		case cur.Deleted:
+			changed = append(changed, rid.String()+" (deleted)")
+		case cur.HLC.Compare(p.After) != 0:
+			changed = append(changed, rid.String())
+		}
+	}
+	if len(changed) == 0 {
+		return nil
+	}
+	return errs.New(errs.Stale, "batch undo: "+id.String()+" not undone: "+strconv.Itoa(len(changed))+" of its rows changed after the batch: "+
+		strings.Join(changed, ", ")+"; nothing written (undo never overwrites a later edit)").
+		WithHint("lore batch list shows later bulk edits; undo those first, or set the values back by hand")
+}
+
+// getter is the read refuseChanged uses (*wire.App has it).
+type getter interface {
+	Get(ctx context.Context, ref engine.Ref) (store.Source, row.Row, error)
+}
+
+// revertKind is the kind of the batch an undo of edits writes: the kind
+// of the batch undone, except that an import's edits are put back as an
+// edit of their noun (the undo imports nothing).
+func revertKind(ev Event) bulk.Kind {
+	if ev.Kind != bulk.KindImport {
+		return ev.Kind
+	}
+	switch {
+	case strings.HasPrefix(ev.Op, "meta."):
+		return bulk.KindMeta
+	case strings.HasPrefix(ev.Op, "task."):
+		return bulk.KindTask
+	default:
+		return bulk.KindResource
+	}
 }
 
 // undoDelete restores a delete batch: the same write as `lore trash
@@ -192,7 +338,11 @@ func (o UndoOut) Text() string {
 		b.WriteString("✓ moved " + strconv.Itoa(len(o.Trashed)) + " rows batch " + o.Batch + " created to the trash (batch " + o.Into +
 			"; restore: lore trash restore " + o.Into + ")\n")
 	}
-	if len(o.Restored) == 0 && len(o.Trashed) == 0 {
+	if len(o.Reverted) > 0 {
+		b.WriteString("✓ restored " + strconv.Itoa(len(o.Reverted)) + " rows to their values before " + o.Batch +
+			"; batch " + o.Reverts + " (undo: lore batch undo " + o.Reverts + ")\n")
+	}
+	if len(o.Restored) == 0 && len(o.Trashed) == 0 && len(o.Reverted) == 0 {
 		b.WriteString("nothing to undo in batch " + o.Batch + "\n")
 	}
 	if len(o.Skipped) > 0 {

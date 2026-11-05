@@ -149,7 +149,7 @@ func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun, 
 			}
 		}
 	}
-	human := fmt.Sprintf("%s on %d rows; batch %s (see: lore batch show %s)\n", what, len(hits), bid, bid)
+	human := fmt.Sprintf("%s on %d rows; batch %s (undo: lore batch undo %s)\n", what, len(hits), bid, bid)
 	for _, x := range warns {
 		human += x + "\n"
 	}

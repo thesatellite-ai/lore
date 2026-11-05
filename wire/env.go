@@ -91,8 +91,12 @@ func (a *App) Update(ctx context.Context, ref engine.Ref, patch map[string]value
 	if aerr := a.ensureNamedActors(ctx, st, src, ref.Table, patch); aerr != nil {
 		return engine.Written{}, aerr
 	}
+	at, was, undoable := priorOf(ctx, st.eng, ref) // R14: an edit batch keeps each row's before-image
 	w, err := st.eng.Update(ctx, ref, patch)
 	a.wroteTo(src, err)
+	if err == nil && undoable {
+		w = a.keepPrior(ctx, at, was, w)
+	}
 	return w, err
 }
 
