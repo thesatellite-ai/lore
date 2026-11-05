@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"dbent/schema"
@@ -193,11 +194,17 @@ func (d Doc) ClaimLog() []schema.ClaimLogEntry {
 }
 
 // AppendClaimLog adds one entry, keeping the newest schema.ClaimLogMax
-// (design principle 1: bounded).
+// (design principle 1: bounded). Every entry written keeps its session
+// only as a lore session ref (claimLogSession), the older entries too, so
+// a log a v0.1.17 binary or an earlier build wrote is cleaned on the next
+// event.
 func (d Doc) AppendClaimLog(e schema.ClaimLogEntry) error {
 	log := append(d.ClaimLog(), e)
 	if len(log) > schema.ClaimLogMax {
 		log = log[len(log)-schema.ClaimLogMax:]
+	}
+	for i := range log {
+		log[i].Session = claimLogSession(log[i].Session)
 	}
 	v, err := jsonValue(log)
 	if err != nil {
@@ -205,6 +212,22 @@ func (d Doc) AppendClaimLog(e schema.ClaimLogEntry) error {
 	}
 	d[keyClaimLog] = v
 	return nil
+}
+
+// claimLogSession is the session a claim_log entry may carry: lore's own
+// `ses_` id, else nothing. The caller's signal session is a raw value
+// (LORE_SESSION or a tool's session id for an agent, `<stable_key>@<host>`
+// for a person); claim_log is a synced row field, and a tool session id
+// never leaves the machine (AGENT_IDENTITY 6.2 + 9, OQ14, R11; TIME D8 does
+// the same for time entries, closeClaimSpan). Writing the raw value made
+// every landing of an agent-closed task fail E_LEAK_BLOCKED at the
+// session-id rule (BUG-LAND-SESSION, P3-SEC-LAND-1). The holder's session
+// stays on the signals ref, where fencing reads it.
+func claimLogSession(s string) string {
+	if strings.HasPrefix(s, sessionRefPrefix) {
+		return s
+	}
+	return ""
 }
 
 // BlockedBy returns the row's dependency edges.
