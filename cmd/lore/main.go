@@ -50,7 +50,7 @@ func main() {
 // process exit status (never 0 for a failure).
 func run(ctx context.Context, args []string) int {
 	wd, home := dirs()
-	hooks := hosthooks.Default() // the host hooks both binaries install (wire/host)
+	hooks := hosthooks.Default(wd) // the host hooks both binaries install (wire/host)
 	app, err := wire.New(hosthooks.Options(wire.StandaloneOptions(wd, home, wd, version), hooks))
 	if err != nil {
 		return printHostError(err)

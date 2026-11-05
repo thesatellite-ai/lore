@@ -23,8 +23,8 @@ func TestOptionsAppliesHooksInOrder(t *testing.T) {
 
 // TestDefaultSetsNotice: the default hooks route notices somewhere.
 func TestDefaultSetsNotice(t *testing.T) {
-	o := Options(wire.Options{}, Default())
+	o := Options(wire.Options{}, Default(t.TempDir()))
 	if o.Notice == nil {
-		t.Fatal("Default() left Notice unset")
+		t.Fatal("Default left Notice unset")
 	}
 }

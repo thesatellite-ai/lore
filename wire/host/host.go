@@ -173,13 +173,18 @@ const (
 	HookCompat = "compat-flags"
 	// HookDeletePurge is DeletePurgeHook.
 	HookDeletePurge = "delete-purge"
+	// HookGitignore is GitignoreHook.
+	HookGitignore = "gitignore"
 )
 
 // Default is the host hooks that live in the root module, in install
 // order. A binary appends its own (the old binary's org hooks) after them,
 // or swaps one for its own configuration with Replace.
-func Default() []Hook {
-	return []Hook{NoticeHook(), CompatFlagsHook(CompatOptions{}), DeletePurgeHook(CompatOptions{})}
+//
+// workDir is the folder the command runs in (the project's .gitignore is
+// found from it).
+func Default(workDir string) []Hook {
+	return []Hook{NoticeHook(), GitignoreHook(workDir), CompatFlagsHook(CompatOptions{}), DeletePurgeHook(CompatOptions{})}
 }
 
 // Replace returns hooks with every hook named h.Name replaced by h, or h
