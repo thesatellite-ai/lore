@@ -66,6 +66,8 @@ type TimeShowIn struct {
 	TZ      string `json:"tz,omitempty" flag:"tz" desc:"time zone for display (e.g. Europe/Prague; default local)"`
 	// IncludeDeleted reads a task in the trash (DQ10, D16).
 	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"the task may be in the trash: show its time anyway (DQ10)"`
+	// NoChildren drops the subtree total of a parent task (TASK 6.11).
+	NoChildren bool `json:"no_children,omitempty" flag:"no-children" desc:"own time only: no subtree total of the sub-tasks"`
 }
 
 // TimeLogIn is the input of task.time.log.
@@ -124,8 +126,11 @@ type TimeData struct {
 	// OpenClaims is the claim still on the board, counted live (5.1 rule 1).
 	OpenClaims []TimeClaim `json:"open_claims,omitempty"`
 	// InTrash: read with --include-deleted from the trash (DQ10).
-	InTrash     bool     `json:"in_trash,omitempty"`
-	Notes       []string `json:"notes,omitempty"`
+	InTrash bool     `json:"in_trash,omitempty"`
+	Notes   []string `json:"notes,omitempty"`
+	// Subtree is the parent's own time plus its live sub-tasks' (TASK
+	// 6.11); empty for a task without sub-tasks or with --no-children.
+	Subtree     TimeSubtree `json:"subtree,omitzero"`
 	showEntries bool
 	loc         *time.Location
 	// names maps actor ids to display names for the WHO column.
@@ -171,6 +176,88 @@ func timeOps(o ops) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.timeStop),
 	}
+}
+
+// TimeSubtree is a parent's subtree time (TASK 6.11): every live
+// descendant's effort, and the total with each worker's overlapping spans
+// across the subtree counted once (TIME 5 rule).
+type TimeSubtree struct {
+	OwnSeconds     int64       `json:"own_seconds"`
+	TotalSeconds   int64       `json:"total_seconds"`
+	OverlapSeconds int64       `json:"overlap_seconds"`
+	Children       []TimeChild `json:"children"`
+}
+
+// TimeChild is one sub-task line of the subtree breakdown.
+type TimeChild struct {
+	ID            string   `json:"id"`
+	Title         string   `json:"title"`
+	Depth         int      `json:"depth"`
+	EffortSeconds int64    `json:"effort_seconds"`
+	Workers       []string `json:"workers,omitempty"`
+}
+
+// rowSpans are the countable spans of one task row: live entries and open
+// spans (end = now) in range, plus its open claim (time show's sources).
+func (o ops) rowSpans(ctx context.Context, r row.Row, now time.Time, inRange func(string) bool, ownerOf func(string) string) []timecalc.Span {
+	var spans []timecalc.Span
+	for _, e := range TimeEntries(r) {
+		if e.Deleted() || !inRange(e.Day) {
+			continue
+		}
+		w := timecalc.Worker{Actor: e.ActorID.String(), Session: e.SessionRef}
+		spans = append(spans, timecalc.Span{Worker: w, Owner: ownerOf(w.Actor), Start: e.StartTime(), End: e.EndTime(), Seconds: e.Seconds, Manual: e.Source == timeentry.SourceManual})
+	}
+	for _, s := range TimeOpen(r) {
+		if !inRange(s.StartTime().Format(timeentry.DayLayout)) {
+			continue
+		}
+		w := timecalc.Worker{Actor: s.ActorID.String()}
+		spans = append(spans, timecalc.Span{Worker: w, Owner: ownerOf(w.Actor), Start: s.StartTime(), End: now, Open: true})
+	}
+	if _, sp, ok := o.openClaimSpan(ctx, r.ID.String()); ok && inRange(sp.Start.UTC().Format(timeentry.DayLayout)) {
+		sp.Owner = ownerOf(sp.Worker.Actor)
+		spans = append(spans, sp)
+	}
+	return spans
+}
+
+// subtreeTime is the TASK 6.11 breakdown of id: empty when it has no live
+// sub-task: no Children. own are the parent's own spans (already filtered).
+func (o ops) subtreeTime(ctx context.Context, r row.Row, own []timecalc.Span, now time.Time, inRange func(string) bool, ownerOf func(string) string) (TimeSubtree, error) {
+	f, err := o.forest(ctx, work.Field(r, work.FieldProject))
+	if err != nil {
+		return TimeSubtree{}, err
+	}
+	id := r.ID.String()
+	if !f.tree.Has(id) || len(f.tree.Children(id)) == 0 {
+		return TimeSubtree{}, nil
+	}
+	ownRes := timecalc.Compute(own)
+	st := TimeSubtree{OwnSeconds: ownRes.Effort}
+	all := slices.Clone(own)
+	sum := ownRes.Effort
+	base := f.tree.Depth(id)
+	var walk func(string)
+	walk = func(at string) {
+		for _, c := range f.tree.Children(at) {
+			cs := o.rowSpans(ctx, f.row(c).Row, now, inRange, ownerOf)
+			res := timecalc.Compute(cs)
+			ch := TimeChild{ID: c, Title: f.title(c), Depth: f.tree.Depth(c) - base, EffortSeconds: res.Effort}
+			for _, w := range res.Workers {
+				ch.Workers = append(ch.Workers, o.workerLabel(ctx, w.Worker)+" "+timeentry.FormatSeconds(w.Total()))
+			}
+			st.Children = append(st.Children, ch)
+			all = append(all, cs...)
+			sum += res.Effort
+			walk(c)
+		}
+	}
+	walk(id)
+	// 6.11: overlap once per worker across the subtree (timecalc's rule).
+	st.TotalSeconds = timecalc.Compute(all).Effort
+	st.OverlapSeconds = sum - st.TotalSeconds
+	return st, nil
 }
 
 // timeShow computes a task's time (design 5.1, 2.4):
@@ -332,6 +419,13 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		}
 	}
 	d.Notes = append(d.Notes, manualOverlapHints(TimeEntries(r))...)
+	// 6.11: a live parent shows its subtree total unless --no-children;
+	// trashed sub-tasks stay out (DQ10: the forest holds live tasks only).
+	if !in.NoChildren && !trashed {
+		if d.Subtree, err = o.subtreeTime(ctx, r, spans, now, inRange, ownerOf); err != nil {
+			return TimeOut{}, err
+		}
+	}
 	return TimeOut{SchemaVersion: work.SchemaVersion, Kind: KindTime, Data: d}, nil
 }
 
@@ -490,6 +584,14 @@ func (o TimeOut) Text() string {
 			}
 			b.WriteString(pad("open claim", 32) + pad(d.who(c.Actor), 28) + pad(string(timeentry.SourceClaim), 8) + pad(show(c.Since), 18) + pad(end, 18) + "\n")
 		}
+	}
+	if st := d.Subtree; len(st.Children) > 0 {
+		b.WriteString("\nsubtree  own " + timeentry.FormatSeconds(st.OwnSeconds) + "   subtree " + timeentry.FormatSeconds(st.TotalSeconds) + "\n")
+		for _, c := range st.Children {
+			line := strings.Repeat("  ", c.Depth) + c.ID + " " + c.Title
+			b.WriteString(pad(line, 50) + pad(timeentry.FormatSeconds(c.EffortSeconds), 9) + strings.Join(c.Workers, ", ") + "\n")
+		}
+		b.WriteString("  overlap counted once: " + timeentry.FormatSeconds(st.OverlapSeconds) + "\n")
 	}
 	if len(d.Notes) > 0 {
 		b.WriteString("\nnotes\n")
