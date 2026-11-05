@@ -6,6 +6,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/actorproject"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -268,9 +269,8 @@ func agentOwnerOf(ctx context.Context, st *state) (ids.ID[ids.Actor], string, er
 // row: in a live repo the actor row is held and rides in the row's live
 // commit (saas/cmd/cli live_core.go holdActorCompanions), otherwise both
 // files sit in .lore/data for the same code commit. It is the projection
-// v0.1.17 recorded as ClientActorProjection (saas/pkg/aicoder/stores, which
-// this module cannot import), rebuilt here from the actor's row in the
-// first attached store that has it:
+// v0.1.17 recorded as ClientActorProjection, built from the actor's row in
+// the first attached store that has it:
 //   - an actor already in the client repo with the same display_name and
 //     kind is skipped; a different one is updated to the projection;
 //   - the caller and the agent owner are ensureActor's (skipped here);
@@ -278,7 +278,8 @@ func agentOwnerOf(ctx context.Context, st *state) (ids.ID[ids.Actor], string, er
 //     would be its owner under another id, and the row names the agent;
 //   - an actor no attached store knows is skipped (nothing to project).
 //
-// Non-client stores are untouched (fullActorRow keeps its behaviour).
+// The projection itself is logic/actorproject.ClientProjection (later 385:
+// one definition below wire). Non-client stores are untouched (fullActorRow keeps its behaviour).
 func (a *App) ensureNamedActors(ctx context.Context, st *state, target store.Source, table row.Table, fields map[string]value.Value) error {
 	if target == "" {
 		target = st.defaultTarget
@@ -306,18 +307,21 @@ func (a *App) ensureNamedActors(ctx context.Context, st *state, target store.Sou
 			}
 			continue
 		}
-		kind, display := fieldText(src, actorFieldKind), fieldText(src, actorFieldDisplay)
-		if kind == schema.ActorKindAgent {
+		kind := fieldText(src, actorFieldKind)
+		agentClient := false
+		if kind == schema.ActorKindAgent { // agent_details is read only when an agent is named
 			if details == "" {
 				if details, err = agentDetailsOf(a.opts.Home, st.who.Org); err != nil {
 					return err
 				}
 			}
-			if details != AgentDetailsClient {
-				continue
-			}
+			agentClient = details == AgentDetailsClient
 		}
-		if err := writeClientActor(ctx, st, target, id, actorKindOf(kind), display); err != nil {
+		proj, write := actorproject.ClientProjection(actorKindOf(kind), fieldText(src, actorFieldDisplay), agentClient)
+		if !write {
+			continue
+		}
+		if err := writeClientActor(ctx, st, target, id, proj); err != nil {
 			return err
 		}
 	}
@@ -381,47 +385,35 @@ func actorRowElsewhere(ctx context.Context, st *state, target store.Source, id i
 	return row.Row{}, false, nil
 }
 
-// writeClientActor makes target's actors row id the projection {kind,
-// display_name}: created when absent, updated when it differs, left when
-// it matches.
-func writeClientActor(ctx context.Context, st *state, target store.Source, id ids.ID[ids.Actor], kind, display string) error {
-	want := map[string]value.Value{}
-	for k, v := range map[string]string{actorFieldKind: kind, actorFieldDisplay: display} {
-		if v == "" {
-			continue
-		}
-		t, err := value.TextOf(v)
-		if err != nil {
-			return errs.Wrap(errs.InvalidInput, "wire: actor "+id.String()+" field "+k, err)
-		}
-		want[k] = t
-	}
-	if _, ok := want[actorFieldDisplay]; !ok {
-		return nil // display_name is required: an actor with none cannot be projected
-	}
+// writeClientActor makes target's actors row id the FLAG6 projection
+// (logic/actorproject): created when absent, updated when it differs, left
+// when it matches.
+func writeClientActor(ctx context.Context, st *state, target store.Source, id ids.ID[ids.Actor], proj actorproject.ClientActor) error {
 	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: id.Any()}
 	_, cur, err := st.eng.Get(ctx, ref)
-	switch {
-	case errs.Has(err, errs.NotFound) || (err == nil && cur.Deleted):
-		_, err = st.eng.CreateWithID(ctx, target, schema.TableActors, id.Any(), want)
-		if err != nil && !errs.Has(err, errs.Stale) {
-			return errs.Wrap(errs.CodeOf(err), "wire: write the actor row "+id.String()+" to store "+string(target), err)
-		}
-		return nil
-	case err != nil:
+	create := errs.Has(err, errs.NotFound) || (err == nil && cur.Deleted)
+	if err != nil && !create {
 		return err
 	}
-	patch := map[string]value.Value{}
-	for k, v := range want {
-		if fieldText(cur, k) != v.String() {
-			patch[k] = v
+	cols := proj.Fields()
+	if !create {
+		if cols = proj.Patch(func(f string) string { return fieldText(cur, f) }); len(cols) == 0 {
+			return nil
 		}
 	}
-	if len(patch) == 0 {
-		return nil
+	want, err := textFields(cols)
+	if err != nil {
+		return errs.Wrap(errs.InvalidInput, "wire: actor "+id.String(), err)
 	}
-	_, err = st.eng.Update(ctx, ref, patch)
-	return err
+	if !create {
+		_, err = st.eng.Update(ctx, ref, want)
+		return err
+	}
+	_, err = st.eng.CreateWithID(ctx, target, schema.TableActors, id.Any(), want)
+	if err != nil && !errs.Has(err, errs.Stale) {
+		return errs.Wrap(errs.CodeOf(err), "wire: write the actor row "+id.String()+" to store "+string(target), err)
+	}
+	return nil
 }
 
 // settleAgentKey applies the 6.1 collision rule (OQ9) to a detected
