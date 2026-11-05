@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // coreAuditDeleteKind is the action suffix of a core tombstone write (the
@@ -42,6 +43,12 @@ type coreAuditSink struct {
 	// from a subfolder records its audit entry instead of failing after
 	// the row was stored (OVERNIGHT Qs subfolder). "" = working directory.
 	root string
+	// app is the App whose writes this sink records, for the session
+	// lookup; nil = the package's coreApp. init and the project seed set it
+	// to their own minimal App: they run before the org's stores have a
+	// local copy, so coreApp (full options) could not even read the
+	// identity and every init write failed its audit (TestE10).
+	app *wire.App
 	// topOnce/top cache the git top of root (projectRoot).
 	topOnce sync.Once
 	top     string
@@ -174,7 +181,7 @@ func (s *coreAuditSink) Session(ctx context.Context) (string, error) {
 		if s.err != nil {
 			return // no repo lore.db (attached-store-only run): no session link
 		}
-		s.ses, s.sesErr = currentSession(ctx, s.db, s.projectRoot(ctx))
+		s.ses, s.sesErr = currentSession(ctx, s.app, s.db, s.projectRoot(ctx))
 	})
 	return s.ses, s.sesErr
 }

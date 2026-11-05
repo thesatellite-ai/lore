@@ -4,7 +4,7 @@
 // (machine-local, Q-LOCAL / OQ14).
 //
 //	coreAuditSink.Session(ctx)            (first write of the process)
-//	  └─ currentSession(ctx, db)
+//	  └─ currentSession(ctx, app, db, root)
 //	       ├─ sessionDetailsOf(who, actor) — nil when no session applies
 //	       └─ sessions.FindOrCreate(…)   — the ses_ id audit_logs.session_id carries (6.6)
 package main
@@ -140,7 +140,12 @@ func gitPlace() (repo, branch, cwd string) {
 // whose actor the old binary set through Options resolves no chain (Who
 // is zero), so detection runs here directly (the same wire.DetectAgent).
 func detectedWho(ctx context.Context) (identity.Resolved, error) {
-	who, err := coreApp.Who(ctx)
+	return detectedWhoOf(ctx, coreApp)
+}
+
+// detectedWhoOf is detectedWho for app (an audit sink's own App).
+func detectedWhoOf(ctx context.Context, app *wire.App) (identity.Resolved, error) {
+	who, err := app.Who(ctx)
 	if err != nil {
 		return who, err
 	}
@@ -160,15 +165,19 @@ func detectedWho(ctx context.Context) (identity.Resolved, error) {
 // root is the project root lore.db belongs to ("" = the working
 // directory; the core audit sink passes the repo top, OVERNIGHT Qs
 // subfolder).
-func currentSession(ctx context.Context, db *sql.DB, root string) (string, error) {
-	if coreApp == nil {
+// app is the App whose write is audited (nil = the package's coreApp).
+func currentSession(ctx context.Context, app *wire.App, db *sql.DB, root string) (string, error) {
+	if app == nil {
+		app = coreApp
+	}
+	if app == nil {
 		return "", nil
 	}
-	who, err := detectedWho(ctx)
+	who, err := detectedWhoOf(ctx, app)
 	if err != nil {
 		return "", err
 	}
-	actor, err := coreApp.Actor(ctx)
+	actor, err := app.Actor(ctx)
 	if err != nil {
 		return "", err
 	}

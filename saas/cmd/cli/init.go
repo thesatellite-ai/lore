@@ -276,10 +276,12 @@ func wireToolFiles(ctx context.Context, projectRoot string, values []string) err
 	if err != nil {
 		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
 	}
-	app, err := wire.New(initCoreOptions(projectRoot, home))
+	opts, sink := initCoreOptions(projectRoot, home)
+	app, err := wire.New(opts)
 	if err != nil {
 		return err
 	}
+	sink.app = app // TestE10: the session lookup reads this App's identity
 	defer func() { _ = app.Close() }()
 	pick, err := resolveTargets(ctx, projectRoot, values, func(ctx context.Context) ([]string, bool, error) {
 		return contextTargetsOf(ctx, app)
@@ -328,9 +330,12 @@ func initTargetReason(fromFlag bool, r toolprofile.Reason) string {
 // the org's stores have no local copy yet while init runs, so the client/org
 // hooks of coreOptions would refuse a repo write (TestE8, TestE10); the
 // live-row wrapper is kept so the actor row the seed wrote is seen (FLAG6).
-func initCoreOptions(root, home string) wire.Options {
-	return wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: &coreAuditSink{root: root}, ModeB: modeBExporter{},
-		WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
+// The audit sink is returned too: the caller points it at the built App
+// (coreAuditSink.app) so the session lookup never opens the org's stores.
+func initCoreOptions(root, home string) (wire.Options, *coreAuditSink) {
+	sink := &coreAuditSink{root: root}
+	return wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: sink, ModeB: modeBExporter{},
+		WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}, sink
 }
 
 // writeContextTargets writes names as the repo's context.targets policies
