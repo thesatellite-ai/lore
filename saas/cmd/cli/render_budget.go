@@ -510,7 +510,55 @@ func contextDoctor(ctx context.Context, root string) (warnings, notes []string) 
 		}
 		notes = append(notes, launchSet(root, t.profile, size))
 	}
+	warnings = append(warnings, doubleLoads(root, pick.targets)...)
+	if n := dirFileCount(ctx, root); n > maxDirFiles {
+		warnings = append(warnings, fmt.Sprintf("context: %d folder LORE.md files (over %d): globs or topics may fit better than this many folder scopes (lore scope list)", n, maxDirFiles))
+	}
 	return warnings, notes
+}
+
+// maxDirFiles is the 8.9 doctor threshold for folder files.
+const maxDirFiles = 20
+
+// doubleLoads warns when one target's pointer file imports another
+// target's pointer file (8.6): that tool then loads lore's pointer, and so
+// LORE.md, twice; the fix is to drop one target.
+func doubleLoads(root string, targets []contextTarget) []string {
+	var out []string
+	for _, a := range targets {
+		if !a.profile.HasPointerFile() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(a.profile.PointerFile))))
+		if err != nil {
+			continue
+		}
+		for _, b := range targets {
+			if b.profile.Name == a.profile.Name || !b.profile.HasPointerFile() {
+				continue
+			}
+			for _, l := range strings.Split(string(data), "\n") {
+				if strings.TrimSpace(l) == "@"+b.profile.PointerFile {
+					out = append(out, fmt.Sprintf("context: double load: %s imports %s and both carry lore's pointer, so %s loads LORE.md twice; drop one target (lore policy set context.targets ...)",
+						a.profile.PointerFile, b.profile.PointerFile, a.profile.Name))
+					break
+				}
+			}
+		}
+	}
+	return out
+}
+
+// dirFileCount counts the folder scopes whose LORE.md render wrote (8.9).
+func dirFileCount(ctx context.Context, root string) int {
+	n := 0
+	for _, dir := range scopePathsOfRepo(ctx) {
+		data, err := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(dir), dirFileName)))
+		if err == nil && strings.HasPrefix(string(data), dirHeaderPrefix) {
+			n++
+		}
+	}
+	return n
 }
 
 // launchSet adds up the files a @import tool loads at start (6.11, CQ7).
