@@ -512,6 +512,10 @@ func (a *App) unreachableGuard(ctx context.Context, st *state, target store.Sour
 			return errs.New(errs.LeakBlocked, "cannot check this write for internal content: org store "+which+" has no local copy and cannot be reached").
 				WithHint("go online once so the store is kept locally, then write again")
 		}
+	case store.SourceMachine:
+		// Machine-local rows never leave this machine: no link decides
+		// where they go and no leak check compares them, so an
+		// unreachable org store does not stop them.
 	}
 	return nil
 }

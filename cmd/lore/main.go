@@ -50,8 +50,11 @@ func main() {
 // process exit status (never 0 for a failure).
 func run(ctx context.Context, args []string) int {
 	wd, home := dirs()
-	hooks := hosthooks.Default(wd) // the host hooks both binaries install (wire/host)
-	app, err := wire.New(hosthooks.Options(wire.StandaloneOptions(wd, home, wd, version), hooks))
+	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
+	// The host hooks both binaries install (wire/host); the compat hook
+	// also prints v0.1.17's "  filed: <rule>" line under a routed create.
+	hooks := hosthooks.Replace(hosthooks.Default(wd), hosthooks.CompatFlagsHook(hosthooks.CompatOptions{Filed: org.Routed}))
+	app, err := wire.New(hosthooks.Options(base, hooks))
 	if err != nil {
 		return printHostError(err)
 	}

@@ -41,6 +41,15 @@ const envOn = "1"
 // "a person can answer" (F14). Every other hook keeps its documented
 // default (append-only audit file, no live-ref overlay).
 func StandaloneOptions(repoDir, home, workDir, version string) Options {
+	o, _ := StandaloneOptionsOrg(repoDir, home, workDir, version)
+	return o
+}
+
+// StandaloneOptionsOrg is StandaloneOptions that also returns the org
+// resolution whose hooks it applied, so the binary can print the
+// "  filed: <rule>" line of a routed create from res.Routed() (v0.1.17
+// printRoute; the old binary reads the same method).
+func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *OrgResolution) {
 	o := Options{
 		RepoDir:        repoDir,
 		Home:           home,
@@ -55,7 +64,7 @@ func StandaloneOptions(repoDir, home, workDir, version string) Options {
 	res := StandaloneOrgResolution(home, dir)
 	res.Interactive = stdinTTY
 	res.Apply(&o)
-	return o
+	return o, res
 }
 
 // StandaloneOrgResolution is the org resolution of the project at dir with

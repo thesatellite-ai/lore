@@ -27,7 +27,12 @@ import (
 // projectNameField is the projects table's name field (schema/builtin.go).
 const projectNameField = "name"
 
-// initCommand is `lore init [--name]`.
+// flagNonInteractive is v0.1.17's `lore init --non-interactive`. Init never
+// asks (CLI_REFERENCE 2.14, Q-R2-4), so the flag is accepted for v0.1.17
+// scripts and changes nothing, as on the old binary (P3-CMDLORE-1).
+const flagNonInteractive = "non-interactive"
+
+// initCommand is `lore init [--name] [--non-interactive]`.
 func (h *host) initCommand(wd string) *cobra.Command {
 	name := ""
 	cmd := &cobra.Command{
@@ -70,5 +75,6 @@ func (h *host) initCommand(wd string) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "project name (default: the folder name)")
+	cmd.Flags().Bool(flagNonInteractive, false, "accepted for v0.1.17 scripts; init never asks")
 	return cmd
 }
