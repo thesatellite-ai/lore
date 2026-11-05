@@ -12,9 +12,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
+	"saas/pkg/aicoder/canonjson"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitref"
 	"saas/pkg/aicoder/identity"
@@ -28,6 +30,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -679,9 +683,14 @@ Examples:
 				defer t.Close()
 				// TASK 14.4: reassign sets the lead and replaces the assignees
 				// list with that one actor (the lead is always an assignee).
-				if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideReassign, func(d coord.Doc) {
+				// TASK 17.2 (OV59): the lead and assignees change is recorded in
+				// the row's history in the same write.
+				by := w.Caller().ActorID
+				if _, err := coord.OverrideChecked(ctx, w.env(t), id, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
+					prevLead, prevAll := d.Str(fieldTaskLead), d.Strs(schema.FieldTaskAssignees)
 					d.SetStr(fieldTaskLead, to)
 					d[schema.FieldTaskAssignees] = []string{to}
+					return appendReassignHistory(d, by, now, prevLead, prevAll, to)
 				}); err != nil {
 					return coordError(err)
 				}
@@ -824,4 +833,58 @@ func commitMsgHook(ctx context.Context, file string) error {
 		return nil
 	}
 	return root.WriteFile(name, out, commitMsgFileMode)
+}
+
+// historyEntryTag types the ids of history entries reassign writes (the_…,
+// TASK 17.2); entries are not rows, the id is the list's merge key.
+type historyEntryTag struct{}
+
+// Prefix implements ids.Tag.
+func (historyEntryTag) Prefix() ids.Prefix { return ids.PrefixHistoryEntry }
+
+// appendReassignHistory adds reassign's entries to d's history (TASK 17.2,
+// OV59): one for the lead, one for the assignees (sorted, comma-joined, as
+// the core writes them), each only when it changes. The cap
+// (tasks.history_max) is folded by the next core write of the task, which
+// folds the whole list.
+func appendReassignHistory(d coord.Doc, by string, now time.Time, prevLead string, prevAll []string, to string) error {
+	prev := slices.Clone(prevAll)
+	slices.Sort(prev)
+	at := now.UTC().Format(time.RFC3339)
+	var add []opstask.HistoryEntry
+	for _, c := range [][3]string{{fieldTaskLead, prevLead, to}, {schema.FieldTaskAssignees, strings.Join(prev, ","), to}} {
+		if c[1] == c[2] {
+			continue
+		}
+		id, err := ids.New[historyEntryTag]()
+		if err != nil {
+			return err
+		}
+		add = append(add, opstask.HistoryEntry{ID: id.String(), At: at, By: by, Field: c[0], From: c[1], To: c[2]})
+	}
+	if len(add) == 0 {
+		return nil
+	}
+	var list []opstask.HistoryEntry
+	if raw, ok := d[schema.FieldTaskHistory]; ok && raw != nil {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			return fmt.Errorf("reassign: read history: %w", err)
+		}
+		if err = json.Unmarshal(b, &list); err != nil {
+			return fmt.Errorf("reassign: read history: %w", err)
+		}
+	}
+	b, err := json.Marshal(map[string][]opstask.HistoryEntry{schema.FieldTaskHistory: append(list, add...)})
+	if err != nil {
+		return fmt.Errorf("reassign: encode history: %w", err)
+	}
+	// Decoded back into the generic form the row codec keeps (maps, slices,
+	// json.Number), like every other JSON column of a coord.Doc.
+	g, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
+	if err != nil {
+		return fmt.Errorf("reassign: encode history: %w", err)
+	}
+	d[schema.FieldTaskHistory] = g[schema.FieldTaskHistory]
+	return nil
 }
