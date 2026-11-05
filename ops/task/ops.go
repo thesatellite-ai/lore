@@ -995,6 +995,13 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			}
 		}
 	}
+	if in.Signals { // F7 Debug: the claim as seen now, after the body
+		text, err := claimShow(ctx, id.String())
+		if err != nil {
+			return ShowOut{}, err
+		}
+		full.Detail.Tail += text
+	}
 	out := ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: full}
 	if in.Expand { // SECRETS 2.7, 12: the row as read (--from too), stored text unchanged
 		ex, _ := o.env.(rowexpand.Env)
@@ -1317,6 +1324,12 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
+	// F7: a claimed task's done ends the claim first (closeheld.go).
+	if hc, ok := heldCloser(ctx); ok {
+		if in.Commit, err = hc.CloseHeldDone(ctx, id.String(), in.Commit, in.PR); err != nil {
+			return DoneOut{}, err
+		}
+	}
 	// --from names the source of the id (fixed rule 5): another org
 	// entry's store the runner attached for this run (op.SourceNamer).
 	dsrc, dcur, err := o.getSource(ctx, in.From, id)
@@ -1447,6 +1460,17 @@ func (o ops) cancel(ctx context.Context, in CancelIn) (DoneOut, error) {
 	id, err := taskID(in.ID)
 	if err != nil {
 		return DoneOut{}, err
+	}
+	// F7: cancelling a claimed task is a human override through the host's
+	// fenced writer (closeheld.go); it then prints the host's line.
+	if hc, ok := heldCloser(ctx); ok {
+		line, handled, herr := hc.CloseHeldCancel(ctx, id.String())
+		if herr != nil {
+			return DoneOut{}, herr
+		}
+		if handled {
+			return DoneOut{ID: id.String(), Human: line + "\n"}, nil
+		}
 	}
 	csrc, ccur, err := work.Get(ctx, o.env, Noun, table, id)
 	if err != nil {
@@ -1765,4 +1789,14 @@ func (o ops) repoNamedAnywhere(ctx context.Context, name string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// heldCloser is the host's HeldCloser, if any.
+func heldCloser(ctx context.Context) (HeldCloser, bool) {
+	t, ok := work.TeamFrom(ctx)
+	if !ok {
+		return nil, false
+	}
+	c, ok := t.(HeldCloser)
+	return c, ok
 }
