@@ -11,8 +11,8 @@ import (
 
 // TestMissionEstimateSkipsTrash (OV12, TASK 9.2/9.4): a mission's estimate
 // rollup counts its live tasks only; a task moved to the trash takes its
-// estimate and its tracked time out of the rollup, and restoring it (not
-// tested here: trash restore is p2-del's) is the way back.
+// estimate and its tracked time out of the rollup, and trash restore
+// brings both back.
 func TestMissionEstimateSkipsTrash(t *testing.T) {
 	// time data lives in internal stores only (PC-LEAK-1): an own repo
 	h := opstest.New(t, func(o *wire.Options) {
@@ -56,5 +56,9 @@ func TestMissionEstimateSkipsTrash(t *testing.T) {
 	h.MustYes("task.delete", `{"id":"`+b+`"}`)
 	if total, tracked, un := rollup(); total != "3" || tracked != 3600 || un != 1 {
 		t.Errorf("after delete: estimate %q tracked %d unestimated %d, want 3, 3600, 1", total, tracked, un)
+	}
+	h.Must("trash.restore", `{"target":"`+b+`"}`)
+	if total, tracked, un := rollup(); total != "5" || tracked != 3*3600 || un != 1 {
+		t.Errorf("after restore: estimate %q tracked %d unestimated %d, want 5, 10800, 1", total, tracked, un)
 	}
 }

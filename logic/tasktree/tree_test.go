@@ -2,6 +2,7 @@ package tasktree
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -115,5 +116,49 @@ func TestRanks(t *testing.T) {
 	}
 	if got := Between("b", "a"); got != After("b") {
 		t.Fatalf("unordered fallback %q", got)
+	}
+}
+
+// TestCheckWidth is FA-TASK-1's table: n new children under parent with
+// have live children (open or closed) pass while have+n <= max; parent ""
+// (top level), max <= 0 (no limit) and n <= 0 always pass; the refusal is
+// E_TREE_WIDTH naming the total, the limit and the chain down to parent.
+func TestCheckWidth(t *testing.T) {
+	// root → p; p has two children (one done), q has none.
+	tr := Build([]Node{
+		{ID: "root"}, {ID: "p", Parent: "root"}, {ID: "q"},
+		{ID: "c1", Parent: "p"}, {ID: "c2", Parent: "p", State: Done},
+	})
+	cases := []struct {
+		parent    string
+		n, max    int
+		wantError bool
+	}{
+		{"p", 1, 2, true},  // 2+1 > 2
+		{"p", 1, 3, false}, // 2+1 = 3
+		{"p", 0, 2, false}, // nothing added
+		{"p", -1, 2, false},
+		{"p", 5, 0, false},  // no limit
+		{"p", 5, -1, false}, // no limit
+		{"q", 2, 2, false},  // empty parent, exactly the limit
+		{"q", 3, 2, true},   // a split of 3 pieces over 2
+		{"", 100, 1, false}, // top level never counts
+		{"unknown", 1, 1, false},
+		{"unknown", 2, 1, true},
+	}
+	for _, c := range cases {
+		err := tr.CheckWidth(c.parent, c.n, c.max)
+		if (err != nil) != c.wantError {
+			t.Fatalf("CheckWidth(%q, %d, %d) = %v, want error %v", c.parent, c.n, c.max, err, c.wantError)
+		}
+		if err != nil && errs.CodeOf(err) != errs.TreeWidth {
+			t.Fatalf("CheckWidth(%q, %d, %d) code %v", c.parent, c.n, c.max, errs.CodeOf(err))
+		}
+	}
+	err := tr.CheckWidth("p", 1, 2)
+	for _, want := range []string{"would have 3 sub-tasks", "tasks.max_children 2", "root → p"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("message %q lacks %q", err, want)
+		}
 	}
 }
