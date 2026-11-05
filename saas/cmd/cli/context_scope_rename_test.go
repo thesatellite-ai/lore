@@ -19,9 +19,15 @@ func renameRepo(t *testing.T, files []string, change ...[]string) string {
 	t.Setenv("GIT_COMMITTER_NAME", "t")
 	t.Setenv("GIT_COMMITTER_EMAIL", "t@example.invalid")
 	dir := t.TempDir()
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
 	git := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		// built directly (as gitcommit does): the program is the resolved
+		// git binary and every argument is its own argv entry, no shell
+		cmd := &exec.Cmd{Path: gitPath, Args: append([]string{"git", "-C", dir}, args...)}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}
