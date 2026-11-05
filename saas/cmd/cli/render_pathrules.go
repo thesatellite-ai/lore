@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"saas/pkg/aicoder/style"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -100,12 +102,32 @@ func pathRuleIDs(groups []pathGroup) []reportEntry {
 	return out
 }
 
-// pathGroupBody is the rules of one group in full, in the core's format.
-func pathGroupBody(g pathGroup) string {
+// fallbackPathFileBudget is context.budget.path_file's default, used when
+// the policy cannot be read.
+const fallbackPathFileBudget = 8000
+
+// loadPathFileBudget reads context.budget.path_file (6.1).
+func loadPathFileBudget(ctx context.Context) int {
+	if set, ok := policySet(ctx); ok {
+		if n, found := set.Limit(policy.KeyContextBudgetPathFile); found {
+			return int(n)
+		}
+	}
+	return fallbackPathFileBudget
+}
+
+// pathGroupBody is the rules of one group in the core's format: in full
+// while they fit budget (context.budget.path_file), then as line forms
+// (id + `lore show`); an entry is never cut (6.1, 8.4).
+func pathGroupBody(g pathGroup, budget int) string {
 	var b strings.Builder
 	b.WriteString("# Rules for " + strings.Join(g.Globs, ", ") + "\n\n")
 	for _, r := range g.Rules {
-		b.WriteString(ruleFull(r))
+		if full := ruleFull(r); budget <= 0 || b.Len()+len(full) <= budget {
+			b.WriteString(full)
+		} else {
+			b.WriteString(ruleLine(r))
+		}
 	}
 	return b.String()
 }
@@ -113,7 +135,7 @@ func pathGroupBody(g pathGroup) string {
 // writePathRules writes each group's file for every profile with a path
 // loader in the registry that is a target, and removes lore's stale
 // lore-path-* files (also those of profiles no longer targeted).
-func writePathRules(root string, groups []pathGroup, targets []contextTarget, reg []toolprofile.Profile, quiet bool) error {
+func writePathRules(root string, groups []pathGroup, targets []contextTarget, reg []toolprofile.Profile, budget int, quiet bool) error {
 	live := map[string]bool{}
 	for _, t := range targets {
 		if !t.profile.HasPathRules() {
@@ -123,7 +145,7 @@ func writePathRules(root string, groups []pathGroup, targets []contextTarget, re
 			rel := t.profile.PathRuleFile(g.Slug)
 			live[rel] = true
 			abs := filepath.Join(root, filepath.FromSlash(rel))
-			body := t.profile.PathRuleContent(g.Globs, pathGroupBody(g))
+			body := t.profile.PathRuleContent(g.Globs, pathGroupBody(g, budget))
 			wrote, err := writeIfChanged(abs, body)
 			if err != nil {
 				return fmt.Errorf("write %s: %w", abs, err)

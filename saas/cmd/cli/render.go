@@ -324,7 +324,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	if err != nil {
 		return err
 	}
-	if err := writePathRules(root, pathGroups, pick.targets, reg.Profiles(), f.quiet); err != nil {
+	if err := writePathRules(root, pathGroups, pick.targets, reg.Profiles(), loadPathFileBudget(ctx), f.quiet); err != nil {
 		return errcodes.New(errcodes.Internal, "path rule files").WithCause(err)
 	}
 	// 6.2.5: folder files and each target's folder file; stale ones go.
