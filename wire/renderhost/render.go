@@ -19,7 +19,8 @@
 // .cursor/rules/lore.mdc, …) gets only a pointer block in its own file. The
 // tools come from one registry (logic/toolprofile) plus the user's profiles
 // in ~/.lore/config.yaml; no tool is the default.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -31,19 +32,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"saas/pkg/aicoder/errcodes"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"saas/pkg/aicoder/ids"
-	"saas/pkg/aicoder/style"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
 type renderFlags struct {
-	commonFlags
 	outPath string
 	// targets are --target values: profile names or pointer files. Empty
 	// means the repo's context targets (its context.targets row, else
@@ -88,26 +86,18 @@ type renderResult struct {
 	Memories int `json:"memories"`
 }
 
-func runRender(ctx context.Context, f *renderFlags) (err error) {
-	rctx, client, err := resolveContext(&f.commonFlags)
-	if err != nil {
-		return err
-	}
-	defer joinClose(&err, client, "the project DB")
-
-	projectID, err := resolveProjectID(ctx, rctx.ProjectID)
-	if err != nil {
-		return err
-	}
-	repoID, err := resolveRepoID(ctx, projectID, rctx.RepoMount)
+func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
+	// render has no --repo since 0.1.18: the master scope (repo id "").
+	repoID := ""
+	projectID, err := h.projectID(ctx)
 	if err != nil {
 		return err
 	}
 	if f.scopes && !f.report {
-		return errcodes.New(errcodes.InvalidInput, "--scopes needs --report").WithHint("run `lore render --report --scopes`")
+		return errs.New(errs.InvalidInput, "--scopes needs --report").WithHint("run `lore render --report --scopes`")
 	}
 	if f.trend { // 6.11: read-only, from render_history
-		return renderTrend(ctx, projectID, f)
+		return h.renderTrend(ctx, projectID, f)
 	}
 
 	// ds:def id=render-pins-ez0g6hen owner=@khanakia stability=stable desc="what render pins into the context file (must rules, critical/high hotfixes, directive)"
@@ -116,26 +106,26 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	// memories, decisions, patterns, …) is fetched via `lore search`
 	// on demand per the directive's pre-response checklist
 	var skips pinSkips
-	rules, err := loadPinnedRules(ctx, projectID, &skips)
+	rules, err := h.loadPinnedRules(ctx, projectID, &skips)
 	if err != nil {
 		return err
 	}
-	hotfixes, err := loadPinnedHotfixes(ctx, projectID, &skips)
+	hotfixes, err := h.loadPinnedHotfixes(ctx, projectID, &skips)
 	if err != nil {
 		return err
 	}
 	// SECRETS 12 / 13.2: references filled for the committed render; a
 	// value that brings a secret in refuses it (D23).
-	if rules, hotfixes, err = expandPinned(ctx, rules, hotfixes); err != nil {
+	if rules, hotfixes, err = h.expandPinned(ctx, rules, hotfixes); err != nil {
 		return err
 	}
 	root, err := os.Getwd()
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+		return errs.Wrap(errs.Internal, "getwd", err)
 	}
 	// CQ6: the budget is the smallest of the targets' budgets; the targets
 	// are resolved silently here and announced when stitched below.
-	pick, err := resolveTargets(ctx, root, f.targets, coreContextTargets)
+	pick, err := h.resolveTargets(ctx, root, f.targets, h.coreContextTargets)
 	if err != nil {
 		return err
 	}
@@ -143,24 +133,24 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	for _, t := range pick.targets {
 		profiles = append(profiles, t.profile)
 	}
-	topics, err := loadTopicIndex(ctx)
+	topics, err := h.loadTopicIndex(ctx)
 	if err != nil {
 		return err
 	}
 	// 6.2: folder-scoped rows go to <dir>/LORE.md (render_scopes.go); the
 	// full file still holds every scope (CQ2).
 	allRules, allHotfixes := rules, hotfixes
-	rules, hotfixes, dirs := planDirs(ctx, root, rules, hotfixes)
+	rules, hotfixes, dirs := h.planDirs(ctx, root, rules, hotfixes)
 	// 6.7 claude_rules / cursor_rules: glob rules go to the tools' own path
 	// files when every target loads them (render_pathrules.go, FA-CTX-2).
 	rules, pathGroups := planPathRules(rules, profiles)
 	skips.IDs = append(skips.IDs, pathRuleIDs(pathGroups)...)
 	skips.PathScoped = len(pathRuleIDs(pathGroups))
-	in := renderInput{Settings: loadContextSettings(ctx, profiles), Rules: rules, Hotfixes: hotfixes, Topics: topics, Skips: skips, Dirs: dirs.Groups}
+	in := renderInput{Settings: h.loadContextSettings(ctx, profiles), Rules: rules, Hotfixes: hotfixes, Topics: topics, Skips: skips, Dirs: dirs.Groups}
 	// 6.13 (RES-OQ3b) and META 3.14 (FA-META-10): the resource index and
 	// the metadata keys block of the committed sources, after the core and
 	// only when they fit (FA-CTX-7).
-	if in.Tails, err = renderTails(ctx); err != nil {
+	if in.Tails, err = h.renderTails(ctx); err != nil {
 		return err
 	}
 	dirBodies, dirReps := buildDirFiles(dirs, in.Settings.EntryMax)
@@ -180,11 +170,11 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 
 	if f.report && f.scopes {
 		// 6.2.6: the per-file table; writes nothing.
-		sr := buildScopeReport(ctx, report, dirs, dirBodies, dirReps, pick.targets)
+		sr := h.buildScopeReport(ctx, report, dirs, dirBodies, dirReps, pick.targets)
 		if f.asJSON {
 			data, jerr := sr.jsonBody()
 			if jerr != nil {
-				return errcodes.New(errcodes.Internal, "encode report").WithCause(jerr)
+				return errs.Wrap(errs.Internal, "encode report", jerr)
 			}
 			fmt.Fprintln(f.out(), string(data))
 			return nil
@@ -197,7 +187,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 		if f.asJSON {
 			data, jerr := report.reportJSON()
 			if jerr != nil {
-				return errcodes.New(errcodes.Internal, "encode report").WithCause(jerr)
+				return errs.Wrap(errs.Internal, "encode report", jerr)
 			}
 			fmt.Fprintln(f.out(), string(data))
 			return nil
@@ -209,11 +199,10 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 		// 6.11: CI dry run; fails above warn_at or on budget_exceeded.
 		// DECISION OV18-1: the failure is E_REFUSED (no new code).
 		if report.Over || report.WarnExceeded {
-			return errcodes.New(errcodes.Refused, fmt.Sprintf("%s would be %d bytes: over the warn level (%d%% of %d, profile %s)",
-				f.outPath, report.After, report.WarnPct, report.Budget, report.Profile)).
-				WithHint("run `lore render --report` to see what is in the core, and `lore lint --context` for clean-up")
+			return errs.New(errs.Refused, fmt.Sprintf("%s would be %d bytes: over the warn level (%d%% of %d, profile %s)",
+				f.outPath, report.After, report.WarnPct, report.Budget, report.Profile)).WithHint("run `lore render --report` to see what is in the core, and `lore lint --context` for clean-up")
 		}
-		fmt.Fprintf(f.out(), "%s %s would be %d of %d bytes (%d%%; warn at %d%%)\n", style.Success("✓"), f.outPath,
+		fmt.Fprintf(f.out(), "%s %s would be %d of %d bytes (%d%%; warn at %d%%)\n", h.decor.check(), f.outPath,
 			report.After, report.Budget, report.After*percent/max(report.Budget, 1), report.WarnPct)
 		return nil
 	}
@@ -221,7 +210,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	if f.dryRun {
 		fmt.Fprint(f.out(), body)
 		// The private per-store files (spec 7.3, CFG6), shown, not written.
-		return renderPrivate(ctx, f.out(), root, true, f.quiet)
+		return h.renderPrivate(ctx, f.out(), root, true, f.quiet)
 	}
 
 	// Generated content goes to the out file (default .lore/LORE.md), never
@@ -230,7 +219,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	// (stitchPointer below)
 
 	// Resolve symlinks (R27 #19): if the out file is a symlink, write to target
-	resolvedOut := resolveSymlinkTarget(f.outPath)
+	resolvedOut := h.resolveSymlinkTarget(f.outPath)
 
 	// Skip rename if content unchanged (R29 #53) — but still re-stitch the
 	// pointer: a tool file may have lost it even when the body is identical
@@ -241,57 +230,57 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 
 	if unchanged {
 		if !f.quiet {
-			fmt.Fprintf(f.out(), "%s %s (unchanged)\n", style.Muted("·"), resolvedOut)
+			fmt.Fprintf(f.out(), "%s %s (unchanged)\n", h.decor.muted("·"), resolvedOut)
 		}
 	} else {
 		if err = atomicWriteFile(resolvedOut, []byte(body), 0o644); err != nil {
-			return errcodes.New(errcodes.Internal, "atomic write").WithCause(err)
+			return errs.Wrap(errs.Internal, "atomic write", err)
 		}
 		if !f.quiet {
 			fmt.Fprintf(f.out(), "%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes, %d topics)\n",
-				style.Success("✓"), resolvedOut, len(body), report.Budget, report.Profile,
+				h.decor.check(), resolvedOut, len(body), report.Budget, report.Profile,
 				report.MustFull, report.MustLine, report.Critical, report.HighLine, report.Topics)
 		}
 	}
 	if report.Over {
-		fmt.Fprintln(os.Stderr, style.Warn(fmt.Sprintf("WARN: budget_exceeded: %s is %d bytes, over the %d-byte budget of %s; every must rule and critical/high hotfix is still written (lore render --report)",
+		fmt.Fprintln(os.Stderr, h.decor.warn(fmt.Sprintf("WARN: budget_exceeded: %s is %d bytes, over the %d-byte budget of %s; every must rule and critical/high hotfix is still written (lore render --report)",
 			resolvedOut, report.After, report.Budget, report.Profile)))
 	}
 	// CQ2: the full fallback file, next to LORE.md, never imported.
 	if in.Settings.FullFile {
-		if err = writeFullFile(f.out(), filepath.Join(filepath.Dir(resolvedOut), fullFileName), full, f.quiet); err != nil {
+		if err = h.writeFullFile(f.out(), filepath.Join(filepath.Dir(resolvedOut), fullFileName), full, f.quiet); err != nil {
 			return err
 		}
 	}
 
 	if !f.noPointer {
 		if !f.quiet {
-			printTargetPick(f.out(), pick)
+			h.printTargetPick(f.out(), pick)
 		}
 		for _, t := range pick.targets {
-			if err = stitchPointer(f.out(), root, t, resolvedOut); err != nil {
+			if err = h.stitchPointer(f.out(), root, t, resolvedOut); err != nil {
 				return err
 			}
 		}
 	}
 	// 6.7: path-scoped rule files per target; stale lore-path-* files go.
-	reg, err := loadToolRegistry(ctx)
+	reg, err := h.loadToolRegistry(ctx)
 	if err != nil {
 		return err
 	}
-	if err := writePathRules(f.out(), root, pathGroups, pick.targets, reg.Profiles(), loadPathFileBudget(ctx), f.quiet); err != nil {
-		return errcodes.New(errcodes.Internal, "path rule files").WithCause(err)
+	if err := h.writePathRules(f.out(), root, pathGroups, pick.targets, reg.Profiles(), h.loadPathFileBudget(ctx), f.quiet); err != nil {
+		return errs.Wrap(errs.Internal, "path rule files", err)
 	}
 	// 6.2.5: folder files and each target's folder file; stale ones go.
-	if err := writeDirs(f.out(), root, dirs, dirBodies, pick.targets, len(body), f.quiet); err != nil {
-		return errcodes.New(errcodes.Internal, "folder files").WithCause(err)
+	if err := h.writeDirs(f.out(), root, dirs, dirBodies, pick.targets, len(body), f.quiet); err != nil {
+		return errs.Wrap(errs.Internal, "folder files", err)
 	}
 
-	if err := persistRenderHistory(ctx, projectID, repoID, resolvedOut, body, renderResult{
+	if err := h.persistRenderHistory(ctx, projectID, repoID, resolvedOut, body, renderResult{
 		Rules: len(rules), Hotfixes: len(hotfixes),
 	}, newCutSummary(report, skips)); err != nil {
 		// Non-fatal: file written, history failed. Log and continue
-		fmt.Fprintln(os.Stderr, style.Warn("WARN: render_history write failed: "+err.Error()))
+		fmt.Fprintln(os.Stderr, h.decor.warn("WARN: render_history write failed: "+err.Error()))
 	}
 
 	// Second target (F20, spec 7.3, CFG6): each internal store's rows go to
@@ -300,7 +289,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	// The automatic re-render after a sync (quiet) leaves it to the next
 	// explicit `lore render`, so a plain command never reaches a store for it.
 	if !f.quiet {
-		if err := renderPrivate(ctx, f.out(), root, false, f.quiet); err != nil {
+		if err := h.renderPrivate(ctx, f.out(), root, false, f.quiet); err != nil {
 			return err
 		}
 	}
@@ -321,15 +310,14 @@ type contextTarget struct {
 // loadToolRegistry is the built-in tool profiles plus the user's own from
 // ~/.lore/config.yaml (context.profiles). TOOL NEUTRAL + no-hardwire: a
 // tool lore does not ship is a config entry, resolved by the same code.
-func loadToolRegistry(ctx context.Context) (*toolprofile.Registry, error) {
-	cfg, err := loadTeamConfig(ctx)
+func (h *Host) loadToolRegistry(ctx context.Context) (*toolprofile.Registry, error) {
+	profiles, err := h.profiles(ctx)
 	if err != nil {
 		return nil, err
 	}
-	reg, err := toolprofile.New(cfg.Context.Profiles)
+	reg, err := toolprofile.New(profiles)
 	if err != nil {
-		return nil, errcodes.New(errcodes.ConfigInvalid, "context.profiles in ~/.lore/config.yaml").
-			WithCause(err).WithHint("run `lore config check` for every problem with its location")
+		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in ~/.lore/config.yaml", err).WithHint("run `lore config check` for every problem with its location")
 	}
 	return reg, nil
 }
@@ -361,21 +349,21 @@ type targetSetting func(ctx context.Context) (names []string, ok bool, err error
 // (E_CONFIG_INVALID, as for every write), while a core that cannot open at
 // all (no repo store yet) falls back to the tool files with a warning, so
 // render keeps working where it did before the row existed.
-func coreContextTargets(ctx context.Context) ([]string, bool, error) {
-	if coreApp == nil {
+func (h *Host) coreContextTargets(ctx context.Context) ([]string, bool, error) {
+	if h.app == nil {
 		return nil, false, nil
 	}
-	return contextTargetsOf(ctx, coreApp)
+	return h.contextTargetsOf(ctx, h.app)
 }
 
 // contextTargetsOf reads the effective context.targets of app's repo.
-func contextTargetsOf(ctx context.Context, app *wire.App) ([]string, bool, error) {
+func (h *Host) contextTargetsOf(ctx context.Context, app *wire.App) ([]string, bool, error) {
 	eng, err := app.Engine(ctx)
 	if err != nil {
 		if errs.Has(err, errs.ConfigInvalid) {
 			return nil, false, err
 		}
-		fmt.Fprintln(os.Stderr, style.Warn("WARN: could not read the context.targets setting ("+err.Error()+"); using the repo's tool files"))
+		fmt.Fprintln(os.Stderr, h.decor.warn("WARN: could not read the context.targets setting ("+err.Error()+"); using the repo's tool files"))
 		return nil, false, nil
 	}
 	set, err := eng.Policy(store.SourceRepo)
@@ -396,10 +384,10 @@ type targetPick struct {
 // printTargetPick prints how the targets were chosen (silent for an
 // already-wired repo and for the settings row: nothing new to say) and
 // names each tool file found but not wired.
-func printTargetPick(w *strings.Builder, pick targetPick) {
+func (h *Host) printTargetPick(w *strings.Builder, pick targetPick) {
 	switch pick.sel.Reason {
 	case toolprofile.ReasonDetected, toolprofile.ReasonFallback:
-		fmt.Fprintf(w, "%s context targets: %s (%s)\n", style.Muted("·"), describeTargets(pick.targets), describeReason(pick.sel.Reason))
+		fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), describeReason(pick.sel.Reason))
 	case toolprofile.ReasonWired, toolprofile.ReasonSetting:
 	}
 	// TOOL NEUTRAL, no surprises: a tool file added after lore was wired
@@ -410,14 +398,14 @@ func printTargetPick(w *strings.Builder, pick targetPick) {
 		if pick.sel.Reason == toolprofile.ReasonSetting {
 			hint = "lore policy set " + string(policy.KeyContextTargets) + " <profiles incl. " + p.Name + "> --yes"
 		}
-		fmt.Fprintf(w, "%s %s found but not wired to lore; add it with: %s\n", style.Muted("·"), p.PointerFile, hint)
+		fmt.Fprintf(w, "%s %s found but not wired to lore; add it with: %s\n", h.decor.muted("·"), p.PointerFile, hint)
 	}
 	// r3-targets (DECISION P2-OLDCLI-2): a file that carries lore's pointer
 	// but is not in context.targets is left as it is; say so and how to
 	// list it, instead of skipping it silently.
 	for _, p := range pick.sel.Unlisted {
 		fmt.Fprintf(w, "%s %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set %s <profiles incl. %s> --yes\n",
-			style.Muted("·"), p.PointerFile, policy.KeyContextTargets, policy.KeyContextTargets, p.Name)
+			h.decor.muted("·"), p.PointerFile, policy.KeyContextTargets, policy.KeyContextTargets, p.Name)
 	}
 }
 
@@ -427,8 +415,8 @@ func printTargetPick(w *strings.Builder, pick targetPick) {
 // (toolprofile.Resolve). A value is a profile name, a known profile's
 // pointer file, or any other file, wired with an @import pointer as
 // v0.1.17's --target was. TOOL NEUTRAL: no tool file is assumed.
-func resolveTargets(ctx context.Context, root string, values []string, setting targetSetting) (targetPick, error) {
-	reg, err := loadToolRegistry(ctx)
+func (h *Host) resolveTargets(ctx context.Context, root string, values []string, setting targetSetting) (targetPick, error) {
+	reg, err := h.loadToolRegistry(ctx)
 	if err != nil {
 		return targetPick{}, err
 	}
@@ -517,7 +505,7 @@ func describeReason(r toolprofile.Reason) string {
 // path is computed RELATIVE to the tool file's directory so the tool
 // resolves it regardless of cwd. A profile without a pointer file
 // (generic) has nothing to stitch.
-func stitchPointer(w *strings.Builder, root string, t contextTarget, outFile string) error {
+func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, outFile string) error {
 	if !t.profile.HasPointerFile() {
 		return nil
 	}
@@ -527,11 +515,11 @@ func stitchPointer(w *strings.Builder, root string, t contextTarget, outFile str
 	}
 	absAgent, err := filepath.Abs(agentFile)
 	if err != nil {
-		return errcodes.New(errcodes.BadPath, "resolve "+agentFile).WithCause(err)
+		return errs.Wrap(errs.BadPath, "resolve "+agentFile, err)
 	}
 	absOut, err := filepath.Abs(outFile)
 	if err != nil {
-		return errcodes.New(errcodes.BadPath, "resolve "+outFile).WithCause(err)
+		return errs.Wrap(errs.BadPath, "resolve "+outFile, err)
 	}
 	link := toolprofile.Link{FromPointer: relSlash(filepath.Dir(absAgent), absOut, outFile), FromRoot: relSlash(root, absOut, outFile)}
 
@@ -539,21 +527,21 @@ func stitchPointer(w *strings.Builder, root string, t contextTarget, outFile str
 	if data, err := os.ReadFile(filepath.Clean(absAgent)); err == nil {
 		existing = string(data)
 	} else if !os.IsNotExist(err) {
-		return errcodes.New(errcodes.Internal, "read "+absAgent).WithCause(err)
+		return errs.Wrap(errs.Internal, "read "+absAgent, err)
 	}
 
 	out := t.profile.StitchPointer(existing, link)
 	if out == existing {
-		fmt.Fprintf(w, "%s %s (pointer present)\n", style.Muted("="), absAgent)
+		fmt.Fprintf(w, "%s %s (pointer present)\n", h.decor.muted("="), absAgent)
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(absAgent), cliDirMode); err != nil {
-		return errcodes.New(errcodes.Internal, "mkdir parent").WithCause(err)
+	if err := os.MkdirAll(filepath.Dir(absAgent), dirMode); err != nil {
+		return errs.Wrap(errs.Internal, "mkdir parent", err)
 	}
-	if err := writeFileInDir(absAgent, []byte(out), cliFileMode); err != nil {
-		return errcodes.New(errcodes.Internal, "write "+absAgent).WithCause(err)
+	if err := writeFileInDir(absAgent, []byte(out), fileMode); err != nil {
+		return errs.Wrap(errs.Internal, "write "+absAgent, err)
 	}
-	fmt.Fprintf(w, "%s %s (pointer → %s)\n", style.Success("✓"), absAgent, link.FromPointer)
+	fmt.Fprintf(w, "%s %s (pointer → %s)\n", h.decor.check(), absAgent, link.FromPointer)
 	return nil
 }
 
@@ -571,15 +559,15 @@ func relSlash(base, target, fallback string) string {
 const fullFileName = "LORE.full.md"
 
 // writeFullFile writes LORE.full.md when its bytes changed.
-func writeFullFile(w *strings.Builder, path, body string, quiet bool) error {
+func (h *Host) writeFullFile(w *strings.Builder, path, body string, quiet bool) error {
 	if existing, err := os.ReadFile(filepath.Clean(path)); err == nil && sha256Hex(existing) == sha256Hex([]byte(body)) {
 		return nil
 	}
 	if err := atomicWriteFile(path, []byte(body), 0o644); err != nil {
-		return errcodes.New(errcodes.Internal, "write "+path).WithCause(err)
+		return errs.Wrap(errs.Internal, "write "+path, err)
 	}
 	if !quiet {
-		fmt.Fprintf(w, "%s %s (%d bytes, every pinned entry in full; not imported)\n", style.Success("✓"), path, len(body))
+		fmt.Fprintf(w, "%s %s (%d bytes, every pinned entry in full; not imported)\n", h.decor.check(), path, len(body))
 	}
 	return nil
 }
@@ -595,7 +583,7 @@ func writeFullFile(w *strings.Builder, path, body string, quiet bool) error {
 // Returns the first error from any step
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, cliDirMode); err != nil {
+	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return fmt.Errorf("mkdir parent: %w", err)
 	}
 
@@ -644,7 +632,7 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 // resolveSymlinkTarget returns the target if path is a symlink; path otherwise.
 // Any lookup failure falls back to path itself, so it never fails.
 // (R27 #19 — atomic-write should preserve user's symlink layout.)
-func resolveSymlinkTarget(path string) string {
+func (h *Host) resolveSymlinkTarget(path string) string {
 	info, err := os.Lstat(path)
 	if err != nil {
 		// File doesn't exist yet — return path as-is
@@ -671,13 +659,13 @@ func resolveSymlinkTarget(path string) string {
 // `render --trend`, with what the render left out of the core (cut, 6.11),
 // in the machine store (P3-LOCAL-5). Its time is the core's wall clock,
 // which is cliClock (a test build's LORE_NOW fixes it).
-func persistRenderHistory(ctx context.Context, projectID, repoID, target, body string, summary renderResult, cut cutSummary) error {
+func (h *Host) persistRenderHistory(ctx context.Context, projectID, repoID, target, body string, summary renderResult, cut cutSummary) error {
 	scope := renderScopeSummary{Included: summary, Cut: &cut}
 	scopeJSON, err := json.Marshal(scope)
 	if err != nil {
 		return err
 	}
-	return coreRecordRender(ctx, wire.RenderRecord{ProjectID: projectID, RepoID: repoID, TargetPath: target, Text: body,
+	return h.recordRender(ctx, wire.RenderRecord{ProjectID: projectID, RepoID: repoID, TargetPath: target, Text: body,
 		SHA256: sha256Hex([]byte(body)), TotalBytes: len(body), ScopeSummary: string(scopeJSON)})
 }
 

@@ -31,14 +31,3 @@ func writeFileInDir(path string, data []byte, mode fs.FileMode) error {
 	}
 	return errors.Join(root.WriteFile(filepath.Base(path), data, mode), root.Close())
 }
-
-// statInDir is os.Stat of path through an os.Root on its parent folder
-// (P2-LINT-5): a final symlink leading outside that folder is refused.
-func statInDir(path string) (fs.FileInfo, error) {
-	root, err := os.OpenRoot(filepath.Dir(path))
-	if err != nil {
-		return nil, err
-	}
-	info, err := root.Stat(filepath.Base(path))
-	return info, errors.Join(err, root.Close())
-}

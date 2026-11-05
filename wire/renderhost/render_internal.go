@@ -1,3 +1,5 @@
+package renderhost
+
 // render_internal.go — the guards of the second render target (F20, C19,
 // ADR TEAM-019, guard 2 in §6.2): internal and personal context is rendered
 // OUTSIDE the checkout (render_private.go: one file per internal store,
@@ -5,8 +7,6 @@
 // checkout gets only CLAUDE.local.md holding import lines, excluded through
 // .git/info/exclude (never the client's .gitignore). A Docker build, a ZIP
 // or an rsync of the checkout therefore carries nothing internal.
-package main
-
 import (
 	"context"
 	"errors"
@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"saas/pkg/aicoder/errcodes"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // Files of the internal render.
@@ -44,14 +44,12 @@ var errRenderTarget = errors.New("refusing to write a private import file")
 func checkLocalFile(ctx context.Context, root, rel string) error {
 	path := filepath.Join(root, filepath.FromSlash(rel))
 	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		return errcodes.New(errcodes.LeakBlocked, fmt.Sprintf("%v %s: it is a symlink (the import lines would be written wherever it points)", errRenderTarget, rel)).
-			WithHint("delete the symlink; lore writes a plain " + rel)
+		return errs.New(errs.LeakBlocked, fmt.Sprintf("%v %s: it is a symlink (the import lines would be written wherever it points)", errRenderTarget, rel)).WithHint("delete the symlink; lore writes a plain " + rel)
 	}
 	if tracked, err := gitTracks(ctx, root, rel); err != nil {
-		return errcodes.New(errcodes.Internal, "ask git about "+rel).WithCause(err)
+		return errs.Wrap(errs.Internal, "ask git about "+rel, err)
 	} else if tracked {
-		return errcodes.New(errcodes.LeakBlocked, fmt.Sprintf("%v %s: git tracks it, so its content would be committed", errRenderTarget, rel)).
-			WithHint("`git rm --cached " + rel + "` and commit, then render again")
+		return errs.New(errs.LeakBlocked, fmt.Sprintf("%v %s: git tracks it, so its content would be committed", errRenderTarget, rel)).WithHint("`git rm --cached " + rel + "` and commit, then render again")
 	}
 	return nil
 }
@@ -59,9 +57,7 @@ func checkLocalFile(ctx context.Context, root, rel string) error {
 // gitTracks reports whether path (relative to root) is in git's index. A
 // directory that is not a git checkout tracks nothing.
 func gitTracks(ctx context.Context, root, path string) (bool, error) {
-	cmd := newProgramCmd(ctx, "git", "-C", root, "ls-files", "--error-unmatch", "--", path)
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	out, err := cmd.CombinedOutput()
+	out, err := runGit(ctx, true, "-C", root, "ls-files", "--error-unmatch", "--", path)
 	if err == nil {
 		return true, nil
 	}
@@ -83,19 +79,19 @@ func excludeInGit(ctx context.Context, root, name string) error {
 	}
 	excl, err := gitOutput(ctx, root, "rev-parse", "--git-path", "info/exclude")
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "locate info/exclude").WithCause(err)
+		return errs.Wrap(errs.Internal, "locate info/exclude", err)
 	}
 	if !filepath.IsAbs(excl) {
 		excl = filepath.Join(root, excl)
 	}
 	rel, err := filepath.Rel(top, filepath.Join(root, name))
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "locate "+name).WithCause(err)
+		return errs.Wrap(errs.Internal, "locate "+name, err)
 	}
 	pattern := "/" + filepath.ToSlash(rel)
 	cur, err := os.ReadFile(filepath.Clean(excl))
 	if err != nil && !os.IsNotExist(err) {
-		return errcodes.New(errcodes.Internal, "read info/exclude").WithCause(err)
+		return errs.Wrap(errs.Internal, "read info/exclude", err)
 	}
 	for _, line := range strings.Split(string(cur), "\n") {
 		if strings.TrimSpace(line) == pattern {
@@ -108,26 +104,24 @@ func excludeInGit(ctx context.Context, root, name string) error {
 	}
 	add += "# lore: internal context import (never commit)\n" + pattern + "\n"
 	if mkdirErr := os.MkdirAll(filepath.Dir(excl), renderDirMode); mkdirErr != nil {
-		return errcodes.New(errcodes.Internal, "create info dir").WithCause(mkdirErr)
+		return errs.Wrap(errs.Internal, "create info dir", mkdirErr)
 	}
 	f, err := os.OpenFile(filepath.Clean(excl), os.O_APPEND|os.O_CREATE|os.O_WRONLY, excludeFileMode)
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "open info/exclude").WithCause(err)
+		return errs.Wrap(errs.Internal, "open info/exclude", err)
 	}
 	_, werr := f.WriteString(add)
 	if cerr := f.Close(); werr == nil {
 		werr = cerr
 	}
 	if werr != nil {
-		return errcodes.New(errcodes.Internal, "write info/exclude").WithCause(werr)
+		return errs.Wrap(errs.Internal, "write info/exclude", werr)
 	}
 	return nil
 }
 
 func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := newProgramCmd(ctx, "git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	out, err := cmd.Output()
+	out, err := runGit(ctx, false, append([]string{"-C", dir}, args...)...)
 	if err != nil {
 		return "", err
 	}

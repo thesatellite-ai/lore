@@ -35,7 +35,8 @@
 // The project filter applies to repo-store rows only: a shareable store's
 // rows carry its own folder's project id, and attaching the store is what
 // puts them in scope.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -55,7 +56,7 @@ import (
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 
-	"saas/pkg/aicoder/errcodes"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // Row fields render reads (schema/builtin_knowledge.go names).
@@ -134,10 +135,10 @@ type pinSkips struct {
 
 // renderSources are the stores whose rows may reach the committed render:
 // the repo store first, then every attached store marked shareable.
-func renderSources(ctx context.Context) ([]store.Source, error) {
-	shared, err := coreApp.ShareableStores(ctx)
+func (h *Host) renderSources(ctx context.Context) ([]store.Source, error) {
+	shared, err := h.app.ShareableStores(ctx)
 	if err != nil {
-		return nil, coreErr(err)
+		return nil, err
 	}
 	return append([]store.Source{store.SourceRepo}, shared...), nil
 }
@@ -161,19 +162,19 @@ func (r renderRow) inProject(projectID string, allowGlobal bool) bool {
 
 // renderLiveRows lists the live, not archived rows of table across the
 // render sources.
-func renderLiveRows(ctx context.Context, table row.Table) ([]renderRow, error) {
-	if coreApp == nil {
-		return nil, errcodes.New(errcodes.Internal, "the core is not mounted")
+func (h *Host) renderLiveRows(ctx context.Context, table row.Table) ([]renderRow, error) {
+	if h.app == nil {
+		return nil, errs.New(errs.Internal, "the core is not mounted")
 	}
-	srcs, err := renderSources(ctx)
+	srcs, err := h.renderSources(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var out []renderRow
 	for _, src := range srcs {
-		rows, err := coreApp.List(ctx, src, table)
+		rows, err := h.app.List(ctx, src, table)
 		if err != nil {
-			return nil, coreErr(err)
+			return nil, err
 		}
 		for _, r := range rows {
 			if r.Deleted || renderField(r, renderFieldArchivedAt) != "" {
@@ -214,13 +215,13 @@ func renderTrust(r row.Row) float64 {
 }
 
 // loadPinnedRules returns the must rules of projectID (and global ones).
-func loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]pinnedRule, error) {
-	rows, err := renderLiveRows(ctx, schema.TableRules)
+func (h *Host) loadPinnedRules(ctx context.Context, projectID string, skips *pinSkips) ([]pinnedRule, error) {
+	rows, err := h.renderLiveRows(ctx, schema.TableRules)
 	if err != nil {
 		return nil, err
 	}
 	var out []pinnedRule
-	mk := newRenderMetaKeys() // MQ13: metadata values on rendered rows
+	mk := newRenderMetaKeys(h.app) // MQ13: metadata values on rendered rows
 	for _, r := range rows {
 		if renderField(r.Row, renderFieldSeverity) != renderRuleSeverityMust {
 			continue
@@ -292,13 +293,13 @@ func renderTagIDs(r row.Row) []string {
 }
 
 // loadPinnedHotfixes returns the critical and high hotfixes of projectID.
-func loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) ([]pinnedHotfix, error) {
-	rows, err := renderLiveRows(ctx, schema.TableHotfixes)
+func (h *Host) loadPinnedHotfixes(ctx context.Context, projectID string, skips *pinSkips) ([]pinnedHotfix, error) {
+	rows, err := h.renderLiveRows(ctx, schema.TableHotfixes)
 	if err != nil {
 		return nil, err
 	}
 	var out []pinnedHotfix
-	mk := newRenderMetaKeys() // MQ13: metadata values on rendered rows
+	mk := newRenderMetaKeys(h.app) // MQ13: metadata values on rendered rows
 	for _, r := range rows {
 		sev := renderField(r.Row, renderFieldSeverity)
 		if sev != renderHotfixSeverityCritical && sev != renderHotfixSeverityHigh {
@@ -338,10 +339,10 @@ const renderVarShareable = "shareable"
 // expandPinned fills the references of the pinned rows' text fields for
 // the committed render, or refuses when an expanded value brings a secret
 // in (13.2, D23).
-func expandPinned(ctx context.Context, rules []pinnedRule, hotfixes []pinnedHotfix) ([]pinnedRule, []pinnedHotfix, error) {
-	opt, err := renderExpandOptions(ctx)
+func (h *Host) expandPinned(ctx context.Context, rules []pinnedRule, hotfixes []pinnedHotfix) ([]pinnedRule, []pinnedHotfix, error) {
+	opt, err := h.renderExpandOptions(ctx)
 	if err != nil {
-		return nil, nil, coreErr(err)
+		return nil, nil, err
 	}
 	fill := func(id, field string, s *string) error {
 		if *s == "" || len(refs.References(*s)) == 0 {
@@ -349,7 +350,7 @@ func expandPinned(ctx context.Context, rules []pinnedRule, hotfixes []pinnedHotf
 		}
 		res, err := refpoint.Expand(opt, id+" "+field, *s)
 		if err != nil {
-			return coreErr(err)
+			return err
 		}
 		*s = res.Text
 		return nil
@@ -382,25 +383,25 @@ func expandPinned(ctx context.Context, rules []pinnedRule, hotfixes []pinnedHotf
 // renderExpandOptions builds the render point: Client when the repo store
 // is client-class (13.1), the resolver and scanner from the App, and
 // Locate placing a value's row against the render sources.
-func renderExpandOptions(ctx context.Context) (refpoint.Options, error) {
+func (h *Host) renderExpandOptions(ctx context.Context) (refpoint.Options, error) {
 	opt := refpoint.Options{Point: refpoint.Render}
-	if coreApp == nil {
-		return opt, errcodes.New(errcodes.Internal, "the core is not mounted")
+	if h.app == nil {
+		return opt, errs.New(errs.Internal, "the core is not mounted")
 	}
-	repoClass, err := coreApp.StoreClass(ctx, store.SourceRepo)
+	repoClass, err := h.app.StoreClass(ctx, store.SourceRepo)
 	if err != nil {
 		return opt, err
 	}
 	if repoClass == direction.Client {
 		opt.Point = refpoint.Client
 	}
-	if opt.Resolver, err = coreApp.RefResolver(ctx); err != nil { // wire/expandport.go
+	if opt.Resolver, err = h.app.RefResolver(ctx); err != nil { // wire/expandport.go
 		return opt, err
 	}
-	if opt.Scanner, err = coreApp.OutputScanner(ctx); err != nil {
+	if opt.Scanner, err = h.app.OutputScanner(ctx); err != nil {
 		return opt, err
 	}
-	srcs, err := renderSources(ctx)
+	srcs, err := h.renderSources(ctx)
 	if err != nil {
 		return opt, err
 	}
@@ -410,11 +411,11 @@ func renderExpandOptions(ctx context.Context) (refpoint.Options, error) {
 		reach[s] = opt.Point == refpoint.Render || s == store.SourceRepo
 	}
 	opt.Locate = func(id ids.AnyID) refpoint.Target {
-		src, r, err := coreApp.Get(ctx, engine.Ref{ID: id})
+		src, r, err := h.app.Get(ctx, engine.Ref{ID: id})
 		if err != nil || r.Deleted {
 			return refpoint.Target{} // unplaced: kept as written
 		}
-		class, err := coreApp.StoreClass(ctx, src)
+		class, err := h.app.StoreClass(ctx, src)
 		b, _ := r.Fields[renderVarShareable].(value.Bool)
 		return refpoint.Target{
 			Personal:  err != nil || class == direction.Personal,

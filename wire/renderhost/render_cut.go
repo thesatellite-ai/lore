@@ -1,3 +1,5 @@
+package renderhost
+
 // render_cut.go — the cut_summary of a render (CONTEXT_BUDGET 6.11):
 // what `lore render` left out of the core of .lore/LORE.md and why, kept
 // on the render history row so `lore why-context --cut` can show the last
@@ -11,8 +13,6 @@
 // scope_summary JSON text of the machine-local render_histories row, not a
 // new column (render_histories stays on the old ent module, which gets no
 // new generated code; the JSON already carries the render's breakdown).
-package main
-
 // renderScopeSummary is the scope_summary JSON of a render history row.
 // Cut is nil on rows written before 0.1.18 (no cut_summary key).
 type renderScopeSummary struct {

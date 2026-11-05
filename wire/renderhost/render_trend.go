@@ -1,3 +1,5 @@
+package renderhost
+
 // render_trend.go — `lore render --trend` (CONTEXT_BUDGET 6.11): bytes per
 // render from render_histories (the machine store, written by every
 // render, P3-LOCAL-5), growth per day over the last 14 days, and the projected date
@@ -7,8 +9,6 @@
 //	        ─▶ growth/day = (last − first) / days between them
 //	        ─▶ budget (CQ6: smallest target budget) ─▶ days left = (budget − last) / growth
 //	        ─▶ text (one line per render + summary) or --json
-package main
-
 import (
 	"context"
 	"encoding/json"
@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"saas/pkg/aicoder/errcodes"
+	"github.com/thesatellite-ai/lore/model/errs"
 
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/wire"
@@ -50,12 +50,12 @@ type trendOut struct {
 }
 
 // renderTrend prints the trend for f.outPath of projectID.
-func renderTrend(ctx context.Context, projectID string, f *renderFlags) error {
-	target := resolveSymlinkTarget(f.outPath)
-	now := cliClock().Now()
-	all, err := coreRenderHistory(ctx, projectID) // P3-LOCAL-5: the machine store, oldest first
+func (h *Host) renderTrend(ctx context.Context, projectID string, f *renderFlags) error {
+	target := h.resolveSymlinkTarget(f.outPath)
+	now := h.now()
+	all, err := h.app.RenderHistory(ctx, projectID) // P3-LOCAL-5: the machine store, oldest first
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "read render history").WithCause(err)
+		return errs.Wrap(errs.Internal, "read render history", err)
 	}
 	since := now.Add(-renderTrendWindow)
 	var rows []wire.RenderRecord
@@ -66,9 +66,9 @@ func renderTrend(ctx context.Context, projectID string, f *renderFlags) error {
 	}
 	root, err := os.Getwd()
 	if err != nil {
-		return errcodes.New(errcodes.Internal, "getwd").WithCause(err)
+		return errs.Wrap(errs.Internal, "getwd", err)
 	}
-	pick, err := resolveTargets(ctx, root, f.targets, coreContextTargets)
+	pick, err := h.resolveTargets(ctx, root, f.targets, h.coreContextTargets)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func renderTrend(ctx context.Context, projectID string, f *renderFlags) error {
 	for _, t := range pick.targets {
 		profiles = append(profiles, t.profile)
 	}
-	set := loadContextSettings(ctx, profiles)
+	set := h.loadContextSettings(ctx, profiles)
 	out := trendOut{Target: target, Budget: set.Budget, Profile: set.Profile}
 	for _, r := range rows {
 		out.Renders = append(out.Renders, trendPoint{At: r.CreatedAt.UTC(), Bytes: r.TotalBytes})
@@ -85,7 +85,7 @@ func renderTrend(ctx context.Context, projectID string, f *renderFlags) error {
 	if f.asJSON {
 		b, jerr := json.MarshalIndent(out, "", "  ")
 		if jerr != nil {
-			return errcodes.New(errcodes.Internal, "encode trend").WithCause(jerr)
+			return errs.Wrap(errs.Internal, "encode trend", jerr)
 		}
 		fmt.Fprintln(f.out(), string(b))
 		return nil

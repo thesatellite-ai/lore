@@ -12,7 +12,8 @@
 //	    ─► internal values too; sensitive values never (RQ1, OQ2)
 //
 // Values print in the same form `lore show` uses (meta.Show).
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -24,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // renderMetaPrefix starts the metadata line of a rendered row.
@@ -32,6 +34,7 @@ const renderMetaPrefix = "meta: "
 // renderMetaKeys caches the key rows a render looks up (key id → flags);
 // one per render pass. found is false for a key id with no readable row.
 type renderMetaKeys struct {
+	app  *wire.App
 	keys map[ids.AnyID]renderMetaKey
 }
 
@@ -40,8 +43,8 @@ type renderMetaKey struct {
 }
 
 // newRenderMetaKeys starts an empty cache.
-func newRenderMetaKeys() *renderMetaKeys {
-	return &renderMetaKeys{keys: map[ids.AnyID]renderMetaKey{}}
+func newRenderMetaKeys(app *wire.App) *renderMetaKeys {
+	return &renderMetaKeys{app: app, keys: map[ids.AnyID]renderMetaKey{}}
 }
 
 // key reads one key row through the core (cached).
@@ -50,8 +53,8 @@ func (c *renderMetaKeys) key(ctx context.Context, kid ids.AnyID) renderMetaKey {
 		return k
 	}
 	var k renderMetaKey
-	if coreApp != nil {
-		if _, r, err := coreApp.Get(ctx, engine.Ref{Table: schema.TableMetaKeys, ID: kid}); err == nil && !r.Deleted {
+	if c.app != nil {
+		if _, r, err := c.app.Get(ctx, engine.Ref{Table: schema.TableMetaKeys, ID: kid}); err == nil && !r.Deleted {
 			k = renderMetaKey{found: true, internal: rowBool(r, metaKeyInternalField), sensitive: rowBool(r, metaKeySensitiveField)}
 		}
 	}

@@ -14,7 +14,8 @@
 //
 // Render stays a pure function of the synced rows and policy (6.6): the
 // detected tool never changes the bytes.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -54,11 +55,11 @@ type contextSettings struct {
 }
 
 // policySet is the repo's effective policy, ok false without a core.
-func policySet(ctx context.Context) (policy.Set, bool) {
-	if coreApp == nil {
+func (h *Host) policySet(ctx context.Context) (policy.Set, bool) {
+	if h.app == nil {
 		return policy.Set{}, false
 	}
-	eng, err := coreApp.Engine(ctx)
+	eng, err := h.app.Engine(ctx)
 	if err != nil {
 		return policy.Set{}, false
 	}
@@ -88,8 +89,8 @@ func profileBudget(set policy.Set, havePolicy bool, p toolprofile.Profile) int {
 }
 
 // loadContextSettings reads the render settings for the given profiles.
-func loadContextSettings(ctx context.Context, profiles []toolprofile.Profile) contextSettings {
-	set, ok := policySet(ctx)
+func (h *Host) loadContextSettings(ctx context.Context, profiles []toolprofile.Profile) contextSettings {
+	set, ok := h.policySet(ctx)
 	cs := contextSettings{Budget: toolprofile.DefaultBudget, Profile: toolprofile.NameGeneric,
 		EntryMax: fallbackEntryMax, WarnPct: fallbackWarnPct, FullFile: true}
 	for i, p := range profiles {
@@ -132,8 +133,8 @@ const noTopic = "(no topic)"
 
 // loadTopicIndex counts live rows per tag and kind (6.10); untagged rows
 // go under "(no topic)". Sorted by name, "(no topic)" last.
-func loadTopicIndex(ctx context.Context) ([]topicLine, error) {
-	tags, err := renderLiveRows(ctx, schema.TableTags)
+func (h *Host) loadTopicIndex(ctx context.Context) ([]topicLine, error) {
+	tags, err := h.renderLiveRows(ctx, schema.TableTags)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +150,7 @@ func loadTopicIndex(ctx context.Context) ([]topicLine, error) {
 		byName[topic][kind]++
 	}
 	for _, k := range indexKinds {
-		rows, err := renderLiveRows(ctx, row.Table(k.table))
+		rows, err := h.renderLiveRows(ctx, row.Table(k.table))
 		if err != nil {
 			return nil, err
 		}
@@ -511,8 +512,8 @@ func (r renderReport) reportJSON() ([]byte, error) {
 // file that tool loads at start, the user-level ~/.claude/CLAUDE.md
 // reported with its share (lore never edits it). The CQ8 measurement of
 // the tool's real warning is a release checklist step, not built here.
-func contextDoctor(ctx context.Context, root string) (warnings, notes []string) {
-	pick, err := resolveTargets(ctx, root, nil, coreContextTargets)
+func (h *Host) contextDoctor(ctx context.Context, root string) (warnings, notes []string) {
+	pick, err := h.resolveTargets(ctx, root, nil, h.coreContextTargets)
 	if err != nil {
 		return nil, []string{"context: targets not resolved: " + err.Error()}
 	}
@@ -520,7 +521,7 @@ func contextDoctor(ctx context.Context, root string) (warnings, notes []string) 
 	for _, t := range pick.targets {
 		profiles = append(profiles, t.profile)
 	}
-	cs := loadContextSettings(ctx, profiles)
+	cs := h.loadContextSettings(ctx, profiles)
 	lore := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
 	size := fileSize(lore)
 	if size < 0 {
@@ -540,7 +541,7 @@ func contextDoctor(ctx context.Context, root string) (warnings, notes []string) 
 		notes = append(notes, launchSet(root, t.profile, size))
 	}
 	warnings = append(warnings, doubleLoads(root, pick.targets)...)
-	if n := dirFileCount(ctx, root); n > maxDirFiles {
+	if n := h.dirFileCount(ctx, root); n > maxDirFiles {
 		warnings = append(warnings, fmt.Sprintf("context: %d folder LORE.md files (over %d): globs or topics may fit better than this many folder scopes (lore scope list)", n, maxDirFiles))
 	}
 	return warnings, notes
@@ -579,9 +580,9 @@ func doubleLoads(root string, targets []contextTarget) []string {
 }
 
 // dirFileCount counts the folder scopes whose LORE.md render wrote (8.9).
-func dirFileCount(ctx context.Context, root string) int {
+func (h *Host) dirFileCount(ctx context.Context, root string) int {
 	n := 0
-	for _, dir := range scopePathsOfRepo(ctx) {
+	for _, dir := range h.scopePathsOfRepo(ctx) {
 		data, err := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(dir), dirFileName)))
 		if err == nil && strings.HasPrefix(string(data), dirHeaderPrefix) {
 			n++

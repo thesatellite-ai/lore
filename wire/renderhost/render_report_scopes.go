@@ -12,7 +12,8 @@
 //	        DirAt (Claude Code) → reported only (each file loads on demand)
 //
 // Writes nothing, like every --report (6.11).
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -80,9 +81,9 @@ func scopeStatus(bytes, budget, warnPct int) string {
 
 // buildScopeReport builds the table from what one render computed: the root
 // report, the folder plan with its bodies and reports, and the targets.
-func buildScopeReport(ctx context.Context, root renderReport, plan dirPlan, bodies dirBodies,
+func (h *Host) buildScopeReport(ctx context.Context, root renderReport, plan dirPlan, bodies dirBodies,
 	reps []dirReport, targets []contextTarget) scopeReport {
-	set, ok := policySet(ctx)
+	set, ok := h.policySet(ctx)
 	out := scopeReport{DirsOff: root.DirsOff}
 	repOf := map[string]dirReport{}
 	for _, r := range reps {

@@ -13,7 +13,8 @@
 // profile loads path rules natively; with any other target (AGENTS.md,
 // GEMINI.md, ...) they stay in the core and no path files are written, so
 // no tool loses a rule and none loads it twice.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -22,8 +23,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-
-	"saas/pkg/aicoder/style"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -107,8 +106,8 @@ func pathRuleIDs(groups []pathGroup) []reportEntry {
 const fallbackPathFileBudget = 8000
 
 // loadPathFileBudget reads context.budget.path_file (6.1).
-func loadPathFileBudget(ctx context.Context) int {
-	if set, ok := policySet(ctx); ok {
+func (h *Host) loadPathFileBudget(ctx context.Context) int {
+	if set, ok := h.policySet(ctx); ok {
 		if n, found := set.Limit(policy.KeyContextBudgetPathFile); found {
 			return int(n)
 		}
@@ -135,7 +134,7 @@ func pathGroupBody(g pathGroup, budget int) string {
 // writePathRules writes each group's file for every profile with a path
 // loader in the registry that is a target, and removes lore's stale
 // lore-path-* files (also those of profiles no longer targeted).
-func writePathRules(w *strings.Builder, root string, groups []pathGroup, targets []contextTarget, reg []toolprofile.Profile, budget int, quiet bool) error {
+func (h *Host) writePathRules(w *strings.Builder, root string, groups []pathGroup, targets []contextTarget, reg []toolprofile.Profile, budget int, quiet bool) error {
 	live := map[string]bool{}
 	for _, t := range targets {
 		if !t.profile.HasPathRules() {
@@ -151,7 +150,7 @@ func writePathRules(w *strings.Builder, root string, groups []pathGroup, targets
 				return fmt.Errorf("write %s: %w", abs, err)
 			}
 			if wrote && !quiet {
-				fmt.Fprintf(w, "%s %s (%d bytes, paths: %s)\n", style.Success("✓"), abs, len(body), strings.Join(g.Globs, ", "))
+				fmt.Fprintf(w, "%s %s (%d bytes, paths: %s)\n", h.decor.check(), abs, len(body), strings.Join(g.Globs, ", "))
 			}
 		}
 	}
@@ -179,7 +178,7 @@ func writePathRules(w *strings.Builder, root string, groups []pathGroup, targets
 				return err
 			}
 			if !quiet {
-				fmt.Fprintf(w, "%s %s (removed: no glob rules for it now)\n", style.Muted("-"), filepath.Join(dir, name))
+				fmt.Fprintf(w, "%s %s (removed: no glob rules for it now)\n", h.decor.muted("-"), filepath.Join(dir, name))
 			}
 		}
 	}

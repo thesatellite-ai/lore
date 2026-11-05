@@ -8,7 +8,8 @@
 //	  ─▶ a tail block of the core, kept only when it fits (FA-CTX-7)
 //
 // Resources are never rendered in full (RES-OQ3); only names and counts.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -43,12 +44,12 @@ type resKindCount struct {
 }
 
 // resourceIndexBlock is the index over sources ("" when no live resource).
-func resourceIndexBlock(ctx context.Context, sources []store.Source) (string, error) {
+func (h *Host) resourceIndexBlock(ctx context.Context, sources []store.Source) (string, error) {
 	kinds := map[string]*resKindCount{}
 	for _, src := range sources {
-		rows, err := coreApp.List(ctx, src, schema.TableKinds)
+		rows, err := h.app.List(ctx, src, schema.TableKinds)
 		if err != nil {
-			return "", coreErr(err)
+			return "", err
 		}
 		for _, r := range rows {
 			if r.Deleted {
@@ -58,9 +59,9 @@ func resourceIndexBlock(ctx context.Context, sources []store.Source) (string, er
 		}
 	}
 	for _, src := range sources {
-		rows, err := coreApp.List(ctx, src, schema.TableResources)
+		rows, err := h.app.List(ctx, src, schema.TableResources)
 		if err != nil {
-			return "", coreErr(err)
+			return "", err
 		}
 		for _, r := range rows {
 			if r.Deleted || renderField(r, renderFieldArchivedAt) != "" {
@@ -79,7 +80,7 @@ func resourceIndexBlock(ctx context.Context, sources []store.Source) (string, er
 			list = append(list, k)
 		}
 	}
-	metaLines, err := metaIndexLines(ctx, sources)
+	metaLines, err := h.metaIndexLines(ctx, sources)
 	if err != nil {
 		return "", err
 	}
@@ -110,16 +111,16 @@ func resourceIndexBlock(ctx context.Context, sources []store.Source) (string, er
 // live rows of sources carry it, per table, and the lookup command. Keys
 // that are internal, retired or not in sources are left out; a key whose
 // count is 0 shows no line. Name order (6.6: same bytes for the same rows).
-func metaIndexLines(ctx context.Context, sources []store.Source) ([]string, error) {
+func (h *Host) metaIndexLines(ctx context.Context, sources []store.Source) ([]string, error) {
 	type metaIdx struct {
 		name    string
 		byTable map[string]int
 	}
 	keys := map[string]*metaIdx{}
 	for _, src := range sources {
-		rows, err := coreApp.List(ctx, src, schema.TableMetaKeys)
+		rows, err := h.app.List(ctx, src, schema.TableMetaKeys)
 		if err != nil {
-			return nil, coreErr(err)
+			return nil, err
 		}
 		for _, k := range rows {
 			if k.Deleted || renderField(k, metaKeyContextField) != opssettings.MetaContextIndex || rowBool(k, metaKeyInternalField) {
@@ -136,9 +137,9 @@ func metaIndexLines(ctx context.Context, sources []store.Source) ([]string, erro
 			if t == schema.TableMetaKeys || t == schema.TableMetaValues {
 				continue
 			}
-			rows, err := coreApp.List(ctx, src, t)
+			rows, err := h.app.List(ctx, src, t)
 			if err != nil {
-				return nil, coreErr(err)
+				return nil, err
 			}
 			for _, r := range rows {
 				if r.Deleted || renderField(r, renderFieldArchivedAt) != "" {
@@ -175,18 +176,18 @@ func metaIndexLines(ctx context.Context, sources []store.Source) ([]string, erro
 
 // renderTails are the committed file's tail blocks: the resource index,
 // then the metadata keys block (META 3.14), over the render sources.
-func renderTails(ctx context.Context) ([]tailBlock, error) {
-	srcs, err := renderSources(ctx)
+func (h *Host) renderTails(ctx context.Context) ([]tailBlock, error) {
+	srcs, err := h.renderSources(ctx)
 	if err != nil {
 		return nil, err
 	}
-	res, err := resourceIndexBlock(ctx, srcs)
+	res, err := h.resourceIndexBlock(ctx, srcs)
 	if err != nil {
 		return nil, err
 	}
-	keys, err := coreApp.MetaKeysBlock(ctx, srcs)
+	keys, err := h.app.MetaKeysBlock(ctx, srcs)
 	if err != nil {
-		return nil, coreErr(err)
+		return nil, err
 	}
 	return []tailBlock{{Name: "resource_index", Text: res}, {Name: "meta_keys", Text: keys}}, nil
 }

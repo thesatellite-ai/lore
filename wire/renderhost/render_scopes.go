@@ -15,7 +15,8 @@
 //
 // Render stays a pure function of rows and policy: the scope rows and the
 // folders on disk decide every file; nothing is remembered between runs.
-package main
+
+package renderhost
 
 import (
 	"context"
@@ -33,8 +34,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
-
-	"saas/pkg/aicoder/style"
 )
 
 // Fallbacks of the folder keys when the policy cannot be read (key defaults).
@@ -81,9 +80,9 @@ type dirPlan struct {
 
 // loadDirSettings reads the folder keys; dir_files left at its default is
 // off in a client repo (CQ10: decided per client org, off until set).
-func loadDirSettings(ctx context.Context) dirSettings {
+func (h *Host) loadDirSettings(ctx context.Context) dirSettings {
 	ds := dirSettings{On: true, Budget: fallbackDirBudget, CodexBudget: fallbackDirBudgetCdx, MinEntries: fallbackDirMinEntries, ChainCodex: fallbackChainMaxCodex}
-	set, ok := policySet(ctx)
+	set, ok := h.policySet(ctx)
 	if ok {
 		if n, found := set.Limit(policy.KeyContextBudgetDir); found {
 			ds.Budget = int(n)
@@ -107,7 +106,7 @@ func loadDirSettings(ctx context.Context) dirSettings {
 		}
 	}
 	if !explicit && ds.On {
-		if client, err := coreRepoIsClient(ctx); client || err != nil {
+		if client, err := h.repoIsClient(ctx); client || err != nil {
 			ds.On = false // fail closed: no new files in someone else's repo
 		}
 	}
@@ -115,9 +114,9 @@ func loadDirSettings(ctx context.Context) dirSettings {
 }
 
 // planDirs splits the pinned rows into the root's and each folder file's.
-func planDirs(ctx context.Context, root string, rules []pinnedRule, hotfixes []pinnedHotfix) ([]pinnedRule, []pinnedHotfix, dirPlan) {
-	plan := dirPlan{Settings: loadDirSettings(ctx), Overrides: map[string]string{}}
-	paths := scopePathsOfRepo(ctx)
+func (h *Host) planDirs(ctx context.Context, root string, rules []pinnedRule, hotfixes []pinnedHotfix) ([]pinnedRule, []pinnedHotfix, dirPlan) {
+	plan := dirPlan{Settings: h.loadDirSettings(ctx), Overrides: map[string]string{}}
+	paths := h.scopePathsOfRepo(ctx)
 	for _, p := range paths {
 		plan.All = append(plan.All, p)
 	}
@@ -198,16 +197,16 @@ func planDirs(ctx context.Context, root string, rules []pinnedRule, hotfixes []p
 
 // scopePathsOfRepo maps this repo's live scp_ ids to their paths (repo
 // store only: folder files hold the repo's own rows, CFG6).
-func scopePathsOfRepo(ctx context.Context) map[string]string {
+func (h *Host) scopePathsOfRepo(ctx context.Context) map[string]string {
 	out := map[string]string{}
-	if coreApp == nil {
+	if h.app == nil {
 		return out
 	}
-	rid, ok := coreApp.RepoIdentity(ctx)
+	rid, ok := h.app.RepoIdentity(ctx)
 	if !ok {
 		return out
 	}
-	rows, err := coreApp.List(ctx, store.SourceRepo, schema.TableScopes)
+	rows, err := h.app.List(ctx, store.SourceRepo, schema.TableScopes)
 	if err != nil {
 		return out
 	}
@@ -373,7 +372,7 @@ func writeIfChanged(path, data string) (bool, error) {
 	if old, err := os.ReadFile(filepath.Clean(path)); err == nil && string(old) == data {
 		return false, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), cliDirMode); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
 		return false, err
 	}
 	return true, atomicWriteFile(path, []byte(data), 0o644)
@@ -382,10 +381,10 @@ func writeIfChanged(path, data string) (bool, error) {
 // writeDirs writes the folder files and each target's folder file, removes
 // lore's files of folders that lost theirs, and runs the Codex chain check
 // (6.2.6). rootSize is the root LORE.md's bytes.
-func writeDirs(w *strings.Builder, root string, plan dirPlan, bodies dirBodies, targets []contextTarget, rootSize int, quiet bool) error {
-	say := func(format string, a ...any) {
+func (h *Host) writeDirs(w *strings.Builder, root string, plan dirPlan, bodies dirBodies, targets []contextTarget, rootSize int, quiet bool) error {
+	say := func(line string) {
 		if !quiet {
-			fmt.Fprintf(w, format, a...)
+			w.WriteString(line)
 		}
 	}
 	live := map[string]bool{}
@@ -397,7 +396,7 @@ func writeDirs(w *strings.Builder, root string, plan dirPlan, bodies dirBodies, 
 			return fmt.Errorf("write %s: %w", abs, err)
 		}
 		if wrote {
-			say("%s %s (%d bytes, dir:%s)\n", style.Success("✓"), abs, len(bodies.File[g.Path]), g.Path)
+			say(fmt.Sprintf("%s %s (%d bytes, dir:%s)\n", h.decor.check(), abs, len(bodies.File[g.Path]), g.Path))
 		}
 		for _, t := range targets {
 			rel, kind := t.profile.DirTarget(g.Path, dirscope.Slug(g.Path))
@@ -412,11 +411,11 @@ func writeDirs(w *strings.Builder, root string, plan dirPlan, bodies dirBodies, 
 			if w, werr := writeIfChanged(tf, t.profile.DirContent(kind, existing, g.Path, bodies.of(kind, g.Path))); werr != nil {
 				return fmt.Errorf("write %s: %w", tf, werr)
 			} else if w {
-				say("%s %s (%s folder file)\n", style.Success("✓"), tf, t.profile.Name)
+				say(fmt.Sprintf("%s %s (%s folder file)\n", h.decor.check(), tf, t.profile.Name))
 			}
 		}
 	}
-	if err := cleanStaleDirs(root, plan, live, say); err != nil {
+	if err := h.cleanStaleDirs(root, plan, live, say); err != nil {
 		return err
 	}
 	// 6.2.6: Codex adds every AGENTS.md level into one cap.
@@ -435,7 +434,7 @@ func writeDirs(w *strings.Builder, root string, plan dirPlan, bodies dirBodies, 
 				sum += len(bodies.Inline[d]) // 6.2.6: the blocks Codex reads
 			}
 			if sum > plan.Settings.ChainCodex {
-				fmt.Fprintln(os.Stderr, style.Warn(fmt.Sprintf("WARN: chain %s is %d bytes for Codex, over %s %d (root + every folder file on the way); shorten rules or raise the key",
+				fmt.Fprintln(os.Stderr, h.decor.warn(fmt.Sprintf("WARN: chain %s is %d bytes for Codex, over %s %d (root + every folder file on the way); shorten rules or raise the key",
 					g.Path, sum, policy.KeyContextChainMaxCodex, plan.Settings.ChainCodex)))
 			}
 		}
@@ -447,7 +446,7 @@ func writeDirs(w *strings.Builder, root string, plan dirPlan, bodies dirBodies, 
 // the generated LORE.md, lore's blocks in every built-in profile's folder
 // file (the file goes when nothing else is left, 6.2.5), and per-folder
 // rule files (lore-dir-*.mdc) of folders no longer live.
-func cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(string, ...any)) error {
+func (h *Host) cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(string)) error {
 	for _, p := range plan.All {
 		if live[p] {
 			continue
@@ -458,7 +457,7 @@ func cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(st
 			if err := os.Remove(lore); err != nil {
 				return err
 			}
-			say("%s %s (removed: folder has no file now)\n", style.Muted("-"), lore)
+			say(fmt.Sprintf("%s %s (removed: folder has no file now)\n", h.decor.muted("-"), lore))
 		}
 		for _, prof := range toolprofile.Builtins() {
 			rel, kind := prof.DirTarget(p, dirscope.Slug(p))
@@ -477,12 +476,12 @@ func cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(st
 			if empty {
 				err = os.Remove(f)
 			} else {
-				err = writeFileInDir(f, []byte(rest), cliFileMode)
+				err = writeFileInDir(f, []byte(rest), fileMode)
 			}
 			if err != nil {
 				return err
 			}
-			say("%s %s (lore block removed)\n", style.Muted("-"), f)
+			say(fmt.Sprintf("%s %s (lore block removed)\n", h.decor.muted("-"), f))
 		}
 	}
 	for _, prof := range toolprofile.Builtins() {
@@ -503,7 +502,7 @@ func cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(st
 				if err := os.Remove(filepath.Join(rulesDir, e.Name())); err != nil {
 					return err
 				}
-				say("%s %s (removed)\n", style.Muted("-"), filepath.Join(rulesDir, e.Name()))
+				say(fmt.Sprintf("%s %s (removed)\n", h.decor.muted("-"), filepath.Join(rulesDir, e.Name())))
 			}
 		}
 	}
