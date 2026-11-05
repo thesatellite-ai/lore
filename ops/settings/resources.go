@@ -686,6 +686,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	}
 	human += defaults + notes
 	human += sizeWarning(ctx, o.env, target, w.Row.Fields) // RQ4
+	human += o.staleNote(ctx, d, target)                   // RES 3.6 stale_after
 	// OV10: --meta notes like meta set
 	for _, x := range w.Warnings {
 		human += metalist.NoteLine(string(x.Code), x.Message)
@@ -800,6 +801,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 		all := maps.Clone(r.Row.Fields)
 		maps.Copy(all, patch)
 		out.Human += sizeWarning(ctx, o.env, r.Src, all) // RQ4
+		out.Human += o.staleNote(ctx, d, r.Src)          // RES 3.6 stale_after
 	}
 	return out, err
 }

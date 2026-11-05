@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -16,6 +18,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -164,4 +168,53 @@ func valueSets(sets, setJSON []string, setStdin string) ([]string, error) {
 		out = append(out, setStdin+setSep+v)
 	}
 	return out, nil
+}
+
+// staleAfterHours is resources.stale_after's default (RES 3.6: 24 h),
+// used only when the Env has no policy reader; shortCommitLen is the
+// commit prefix the note prints.
+const (
+	staleAfterHours = 24
+	shortCommitLen  = 12
+)
+
+// freshener is the optional Env upgrade wire implements (App.StoreFresh):
+// an attached store's fetch stamp (store.Freshness).
+type freshener interface {
+	StoreFresh(ctx context.Context, source store.Source) (store.Fresh, error)
+}
+
+// staleNote is the RES 3.6 line of a resource write checked against
+// store kind rows fetched longer ago than resources.stale_after (policy
+// of the write's target): "checked against store kinds as of <commit>".
+// The write itself is never refused (resources can be written offline).
+// P2-RES-8: only the store holding the kind row is asked; a store with no
+// stamp (a folder store, the repo store, never fetched) adds nothing.
+func (o ops) staleNote(ctx context.Context, d kindDef, target store.Source) string {
+	f, ok := upgrade.As[freshener](o.env)
+	if !ok {
+		return ""
+	}
+	fr, err := f.StoreFresh(ctx, d.kind.Src)
+	if err != nil || !fr.Known {
+		return ""
+	}
+	hours := int64(staleAfterHours)
+	if p, isP := o.env.(bulk.Policier); isP {
+		if set, perr := p.Policy(ctx, target); perr == nil {
+			if n, set := set.Limit(policy.KeyResourcesStaleAfter); set {
+				hours = n
+			}
+		}
+	}
+	age := opclock.Now(o.env).Sub(fr.FetchedAt)
+	if age <= time.Duration(hours)*time.Hour {
+		return ""
+	}
+	commit := fr.Commit
+	if len(commit) > shortCommitLen {
+		commit = commit[:shortCommitLen]
+	}
+	return "  note: checked against store kinds as of " + cmp.Or(commit, "an unknown commit") + " (" + string(d.kind.Src) +
+		", last fetched " + fr.FetchedAt.UTC().Format(time.DateOnly) + "; run lore sync)\n"
 }
