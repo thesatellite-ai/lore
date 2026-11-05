@@ -20,6 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -271,6 +272,12 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			continue
 		}
 		out.Fields[k] = v.String()
+	}
+	if !in.ShowSensitive { // a resource kind's own sensitive fields (RQ1)
+		if m, names, ok := resmask.Fields(ctx, o.env, r, hidden); ok {
+			out.Fields[resmask.FieldsField] = m
+			out.MetaMasked = append(out.MetaMasked, names...)
+		}
 	}
 	for kid, j := range r.Meta {
 		en, derr := meta.DecodeEntry(j)
