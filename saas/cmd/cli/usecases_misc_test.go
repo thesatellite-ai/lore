@@ -465,7 +465,7 @@ func TestUC_MiscInferProjectNameFromGit(t *testing.T) {
 		"gitlab.com:org/sub/internal-api.git":        "internal-api",
 	} {
 		dir := gitInitRepo(t)
-		cmd := exec.Command("git", "remote", "add", "origin", url)
+		cmd := testCmd(t, "git", "remote", "add", "origin", url)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%v %s", err, out)

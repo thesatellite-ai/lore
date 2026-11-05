@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -51,7 +50,7 @@ func initBareClone(t *testing.T, dir string) {
 	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("git", "init", "-q", "--bare", dir).CombinedOutput(); err != nil {
+	if out, err := testCmd(t, "git", "init", "-q", "--bare", dir).CombinedOutput(); err != nil {
 		t.Fatalf("git init --bare: %v %s", err, out)
 	}
 }

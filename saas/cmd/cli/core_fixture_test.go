@@ -58,7 +58,7 @@ func newCoreFixture(t *testing.T) *coreFixture {
 // developer's own HOME and git identity never leak in).
 func (f *coreFixture) run(name string, args ...string) result {
 	f.t.Helper()
-	cmd := exec.Command(name, args...)
+	cmd := testCmd(f.t, name, args...)
 	cmd.Dir = f.dir
 	cmd.Env = f.env
 	var out, errb bytes.Buffer

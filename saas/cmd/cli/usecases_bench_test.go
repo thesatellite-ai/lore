@@ -666,9 +666,7 @@ func fakeClaude(t *testing.T, script string) []string {
 	t.Helper()
 	dir := t.TempDir()
 	body := "#!/bin/sh\n" + script + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(body), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	writeExecutable(t, filepath.Join(dir, "claude"), body)
 	return []string{
 		"PATH=" + dir + string(os.PathListSeparator) + filepath.Dir(e2eBin) + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"ANTHROPIC_API_KEY=", // empty = unset for llmcall's router

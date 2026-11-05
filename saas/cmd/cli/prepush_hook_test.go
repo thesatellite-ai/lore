@@ -50,7 +50,7 @@ func newHookRepo(t *testing.T) *hookRepo {
 
 func (r *hookRepo) git(args ...string) string {
 	r.t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := testCmd(r.t, "git", args...)
 	cmd.Dir = r.dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -102,9 +102,7 @@ func (r *hookRepo) standInTask(mode standInMode) {
 	default:
 		body += run + "check:begin\n" + run + "check:stamp\n"
 	}
-	if err := os.WriteFile(filepath.Join(r.bin, "task"), []byte(body), 0o700); err != nil {
-		r.t.Fatal(err)
-	}
+	writeExecutable(r.t, filepath.Join(r.bin, "task"), body)
 }
 
 // push runs the hook as git would for pushing HEAD (or deleting with sha =
@@ -115,7 +113,7 @@ func (r *hookRepo) push(sha string, path string) (int, string, int) {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	cmd := exec.Command("sh", hook, "origin", "git@example.com:x.git")
+	cmd := testCmd(r.t, "sh", hook, "origin", "git@example.com:x.git")
 	cmd.Dir = r.dir
 	cmd.Env = append(os.Environ(), "PATH="+path)
 	cmd.Stdin = strings.NewReader("refs/heads/main " + sha + " refs/heads/main " + zeroSHA + "\n")

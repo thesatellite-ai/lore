@@ -295,9 +295,7 @@ func TestUpgradeScriptSwapEndToEnd(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "lore")
-	if err := os.WriteFile(exe, []byte("old"), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	writeExecutable(t, exe, "old")
 	var out bytes.Buffer
 	if err := upgradeByScript(context.Background(), &out, newReleaseClient(5*time.Second), exe, "0.1.19", "v0.1.20"); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())

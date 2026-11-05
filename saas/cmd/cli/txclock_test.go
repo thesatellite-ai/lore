@@ -95,7 +95,8 @@ func TestTxClockHelperProcess(t *testing.T) {
 	if role == "" {
 		t.Skip("helper process for TestTxAtWaitsForTheWriteLock")
 	}
-	path, dir := os.Getenv(envTxClockDB), os.Getenv(envTxClockDir)
+	path := os.Getenv(envTxClockDB)
+	dir := txClockRoot(t, os.Getenv(envTxClockDir))
 	db := dbent.InitDB(path)
 	defer func() { _ = db.Close() }() // helper process; exits right after
 	if err := dbent.ApplyPragmas(db); err != nil {
@@ -108,10 +109,10 @@ func TestTxClockHelperProcess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, txClockReadyFile), nil, 0o600); err != nil {
+		if err := dir.WriteFile(txClockReadyFile, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		waitForFile(t, filepath.Join(dir, txClockGoFile))
+		waitForFile(t, dir, txClockGoFile)
 		if err := tx.DBConfig.Create().SetKey(txClockKey).SetValue(txClockHolderValue).Exec(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -119,10 +120,10 @@ func TestTxClockHelperProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 	case txClockRoleWriter:
-		if err := os.WriteFile(filepath.Join(dir, txClockWriterReadyFile), nil, 0o600); err != nil {
+		if err := dir.WriteFile(txClockWriterReadyFile, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		waitForFile(t, filepath.Join(dir, txClockWriterGoFile))
+		waitForFile(t, dir, txClockWriterGoFile)
 		at, err := nextTxAt(ctx, dbent.New(db).Client(), time.Now().UTC())
 		if err != nil {
 			t.Fatal(err)
@@ -133,17 +134,30 @@ func TestTxClockHelperProcess(t *testing.T) {
 	}
 }
 
-// waitForFile polls until path exists.
-func waitForFile(t *testing.T, path string) {
+// txClockRoot opens the processes' shared signal directory as an os.Root, so
+// every signal file is read and written inside it and a name can never reach
+// outside (P2-LINT-5). It is closed when the test ends.
+func txClockRoot(t *testing.T, dir string) *os.Root {
+	t.Helper()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() }) // a directory handle; nothing to flush
+	return root
+}
+
+// waitForFile polls until name exists in dir.
+func waitForFile(t *testing.T, dir *os.Root, name string) {
 	t.Helper()
 	deadline := time.Now().Add(time.Minute)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(filepath.Clean(path)); err == nil {
+		if _, err := dir.Stat(name); err == nil {
 			return
 		}
 		time.Sleep(txClockPoll)
 	}
-	t.Fatalf("timed out waiting for %s", path)
+	t.Fatalf("timed out waiting for %s in %s", name, dir.Name())
 }
 
 // The clock's read and write must happen under the write lock, as one
@@ -176,15 +190,16 @@ func TestTxAtWaitsForTheWriteLock(t *testing.T) {
 		}
 		return cmd, out
 	}
+	signals := txClockRoot(t, dir)
 	writer, writerOut := helper(txClockRoleWriter)
-	waitForFile(t, filepath.Join(dir, txClockWriterReadyFile))
+	waitForFile(t, signals, txClockWriterReadyFile)
 	holder, holderOut := helper(txClockRoleHolder)
-	waitForFile(t, filepath.Join(dir, txClockReadyFile))
-	if err = os.WriteFile(filepath.Join(dir, txClockWriterGoFile), nil, 0o600); err != nil {
+	waitForFile(t, signals, txClockReadyFile)
+	if err = signals.WriteFile(txClockWriterGoFile, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(txClockWriterHead)
-	if err = os.WriteFile(filepath.Join(dir, txClockGoFile), nil, 0o600); err != nil {
+	if err = signals.WriteFile(txClockGoFile, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err = holder.Wait(); err != nil {

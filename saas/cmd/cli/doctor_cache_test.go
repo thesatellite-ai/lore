@@ -68,7 +68,12 @@ func TestCacheFinding(t *testing.T) {
 	for i := 8192; i < len(b)-4096; i++ { // keep page 1 (the header) and the tail
 		b[i] = 0x5a
 	}
-	if err := os.WriteFile(filepath.Clean(path), b, 0o600); err != nil {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }() // read-only handle on the test's temp dir
+	if err := root.WriteFile(filepath.Base(path), b, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got := cacheFinding(ctx, path); !strings.Contains(got, "is damaged; delete it") {

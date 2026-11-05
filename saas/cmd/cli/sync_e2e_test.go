@@ -78,7 +78,11 @@ func runTests(m *testing.M) int {
 		if os.Getenv(envE2ECoverDir) != "" {
 			args = append(args, "-cover", "-coverpkg=./...,saas/pkg/...")
 		}
-		build := exec.Command("go", append(args, ".")...)
+		build, err := lookedUpCmd("go", append(args, ".")...)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "build lore for e2e: %v\n", err)
+			return 1
+		}
 		build.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if out, err := build.CombinedOutput(); err != nil {
 			fmt.Fprintf(os.Stderr, "build lore for e2e: %v\n%s", err, out)
@@ -158,7 +162,7 @@ type result struct {
 
 func (w *world) run(dir string, extraEnv []string, name string, args ...string) result {
 	w.t.Helper()
-	cmd := exec.Command(name, args...)
+	cmd := testCmd(w.t, name, args...)
 	cmd.Dir = dir
 	cmd.Env = append(append(append([]string{}, os.Environ()...), w.base...), extraEnv...)
 	var out, errb bytes.Buffer
@@ -612,9 +616,7 @@ func TestE2E_HooksChainIntoExistingHooksPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	existing := "#!/bin/sh\necho user-hook-ran\nexit 0\n"
-	if err := os.WriteFile(filepath.Join(hooks, "pre-commit"), []byte(existing), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	writeExecutable(t, filepath.Join(hooks, "pre-commit"), existing)
 	c.git("config", "core.hooksPath", ".husky")
 	c.lore("init", "--non-interactive", "--name=app")
 	if v := c.git("config", "--get", "core.hooksPath"); v != ".husky" {
@@ -1554,9 +1556,7 @@ func TestE2E_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 	ci := w.newClone("ci")
 	stub := t.TempDir()
 	gh := "#!/bin/sh\ncase \"$*\" in\n  *headRefName*) echo feature ;;\n  *baseRefName*) echo main ;;\n  *'pr list'*) echo 7 ;;\n  *) echo \"unexpected gh $*\" >&2; exit 1 ;;\nesac\n"
-	if err := os.WriteFile(filepath.Join(stub, "gh"), []byte(gh), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	writeExecutable(t, filepath.Join(stub, "gh"), gh)
 	summary := filepath.Join(t.TempDir(), "summary.md")
 	env := []string{
 		"PATH=" + stub + string(os.PathListSeparator) + filepath.Dir(e2eBin) + string(os.PathListSeparator) + os.Getenv("PATH"),
@@ -1648,7 +1648,7 @@ func TestE2E_MissionJSONForScripts(t *testing.T) {
 func buildReleaseLore(t *testing.T, ver string) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), BinaryName)
-	build := exec.Command("go", "build", "-ldflags", "-X main.version="+ver, "-o", bin, ".")
+	build := testCmd(t, "go", "build", "-ldflags", "-X main.version="+ver, "-o", bin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build release lore: %v\n%s", err, out)
 	}
@@ -1717,10 +1717,26 @@ func e2ePath() string {
 		if d == "" || filepath.Clean(d) == filepath.Clean(own) {
 			continue
 		}
-		if fi, err := os.Stat(filepath.Clean(filepath.Join(d, BinaryName))); err == nil && !fi.IsDir() {
+		if hasProgram(d, BinaryName) {
 			continue // another lore: keep the test hermetic
 		}
 		parts = append(parts, d)
 	}
 	return strings.Join(parts, string(os.PathListSeparator))
+}
+
+// hasProgram reports whether PATH directory dir holds an entry named name
+// that is not a directory. The lookup goes through os.Root on dir, so name
+// can never reach outside it; Lstat, because an installed lore is often a
+// symlink into another tree (Homebrew's Cellar), which os.Root would refuse
+// to follow, and the entry alone already makes the PATH ambiguous. A dir
+// that cannot be opened holds nothing.
+func hasProgram(dir, name string) bool {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = root.Close() }() // a directory handle; nothing to flush
+	fi, err := root.Lstat(name)
+	return err == nil && !fi.IsDir()
 }

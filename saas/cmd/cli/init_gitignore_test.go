@@ -17,7 +17,7 @@ func TestEnsureGitignoreHidesBrokenDBCopies(t *testing.T) {
 		t.Fatal("git is required for this test")
 	}
 	root := t.TempDir()
-	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+	if out, err := testCmd(t, "git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, out)
 	}
 	ctx := context.Background()
@@ -32,11 +32,11 @@ func TestEnsureGitignoreHidesBrokenDBCopies(t *testing.T) {
 		".lore/lore.db-wal",
 		".lore/lore.db.broken." + "20260101-000000",
 	} {
-		if err := exec.Command("git", "-C", root, "check-ignore", "-q", p).Run(); err != nil {
+		if err := testCmd(t, "git", "-C", root, "check-ignore", "-q", p).Run(); err != nil {
 			t.Errorf("%s is not ignored after ensureGitignore", p)
 		}
 	}
-	if err := exec.Command("git", "-C", root, "check-ignore", "-q", ".lore/data/tasks/x.json").Run(); err == nil {
+	if err := testCmd(t, "git", "-C", root, "check-ignore", "-q", ".lore/data/tasks/x.json").Run(); err == nil {
 		t.Error(".lore/data must stay tracked")
 	}
 	b, err := os.ReadFile(filepath.Clean(filepath.Join(root, ".gitignore")))

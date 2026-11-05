@@ -28,7 +28,12 @@ func TestDoctorNamesResurrectedRows(t *testing.T) {
 	if r := f.run(e2eBin, "doctor"); strings.Contains(r.stdout+r.stderr, resurrectedMark) {
 		t.Fatalf("control: nothing resurrected yet: %s%s", r.stdout, r.stderr)
 	}
-	if err := os.WriteFile(filepath.Clean(filepath.Join(f.dir, rel)), live, 0o600); err != nil {
+	repo, err := os.OpenRoot(f.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = repo.Close() }() // a directory handle; nothing to flush
+	if err := repo.WriteFile(rel, live, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	r := f.run(e2eBin, "doctor")

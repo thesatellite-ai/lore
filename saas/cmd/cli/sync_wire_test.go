@@ -242,7 +242,7 @@ func TestPreCommitLineAgainstOldAndNewLore(t *testing.T) {
 	} {
 		dir := t.TempDir()
 		writeExecutable(t, filepath.Join(dir, BinaryName), tc.script)
-		cmd := exec.Command("sh", "-c", line)
+		cmd := testCmd(t, "sh", "-c", line)
 		cmd.Env = []string{"PATH=" + dir + string(os.PathListSeparator) + "/usr/bin:/bin"}
 		var stderr strings.Builder
 		cmd.Stderr = &stderr
@@ -266,10 +266,10 @@ func TestPreCommitLineAgainstOldAndNewLore(t *testing.T) {
 // child execs, and exec'ing the script then fails with ETXTBSY ("text file
 // busy", exit 126). The hook's probe hides that stderr, so the failure read as
 // "lore too old" in a loaded full-suite run while the test passed alone.
-func writeExecutable(t *testing.T, path, script string) {
+func writeExecutable(t testing.TB, path, script string) {
 	t.Helper()
 	syscall.ForkLock.RLock()
-	err := os.WriteFile(path, []byte(script), 0o700)
+	err := os.WriteFile(path, []byte(script), testExecMode)
 	syscall.ForkLock.RUnlock()
 	if err != nil {
 		t.Fatal(err)
