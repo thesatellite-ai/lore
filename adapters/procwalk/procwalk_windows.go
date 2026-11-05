@@ -39,21 +39,9 @@ func read(pid int) (agentdetect.Process, int, bool) {
 // whose pid was reused is newer than this process (10.7).
 func startValid(pid int) bool { return parentOlder(int(windows.GetCurrentProcessId()), pid) }
 
-// parentOlder reports whether ppid was created no later than pid (10.7:
-// Windows reuses pids, so a recorded parent pid may now name a newer,
-// unrelated process). A time lore cannot read (access denied, the process
-// gone) keeps the link: the walk then behaves as before the check.
-func parentOlder(pid, ppid int) bool {
-	child, ok := created(pid)
-	if !ok {
-		return true
-	}
-	parent, ok := created(ppid)
-	if !ok {
-		return true
-	}
-	return parent <= child
-}
+// parentOlder reports whether ppid was created no later than pid, read
+// from the real process table (the rule is parentOlderBy, 10.7).
+func parentOlder(pid, ppid int) bool { return parentOlderBy(created, pid, ppid) }
 
 // created is pid's creation time as a FILETIME count of 100 ns ticks.
 func created(pid int) (int64, bool) {
