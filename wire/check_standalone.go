@@ -8,7 +8,7 @@ package wire
 //	pr-body ─▶ LeakCheckDocs("PR body", {file: body})
 //	leaks   ─▶ --ci: key loosening since the default branch, then every
 //	           .lore/data row file must belong to this project (no store)
-//	        ─▶ --as-client: not ported (E_UNSUPPORTED)
+//	        ─▶ --as-client: CheckAsClient (check_asclient_standalone.go)
 //	        ─▶ default: staged files (+ --commit-msg) ─▶ LeakCheckDocs
 //	           ("commit"); silent when clean
 //
@@ -78,8 +78,15 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 			return opscheck.LeaksOut{}, cerr
 		}
 		return opscheck.LeaksOut{Message: checkCIClean}, nil
-	case in.AsClient:
-		return opscheck.LeaksOut{}, errs.New(errs.Unsupported, "lore check leaks --as-client is not available in this binary yet")
+	case in.AsClient: // later 515 (check_asclient_standalone.go)
+		a, aerr := l.appOf()
+		if aerr != nil {
+			return opscheck.LeaksOut{}, aerr
+		}
+		if cerr := a.CheckAsClient(ctx, root, in.Explain); cerr != nil {
+			return opscheck.LeaksOut{}, cerr
+		}
+		return opscheck.LeaksOut{Message: AsClientClean}, nil
 	}
 	docs := map[string][]byte{}
 	if in.CommitMsg != "" {
