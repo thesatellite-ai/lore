@@ -329,7 +329,9 @@ func (o ops) checkRecord(ctx context.Context, r resRecord, inFile map[string]boo
 }
 
 // refOrder sorts records so a record comes after every record of the file
-// its ref values name (refs by name, any order in the file, 3.20).
+// its ref values name (refs by name, any order in the file, 3.20). Records
+// in a ref cycle keep file order at the end; importPlan defers the refs
+// that would point forward.
 func refOrder(recs []resRecord) []resRecord {
 	names := map[string]bool{}
 	for _, r := range recs {
@@ -354,12 +356,86 @@ func refOrder(recs []resRecord) []resRecord {
 				next = append(next, r)
 			}
 		}
-		if len(next) == len(pending) { // a cycle: keep file order, writes report it
+		if len(next) == len(pending) { // a cycle: keep file order
 			return append(out, next...)
 		}
 		pending = next
 	}
 	return out
+}
+
+// plannedRecord is one record of an import as it is written (PC-RES-1):
+// first holds every set written by pass 1, later the ref sets that name a
+// record of the file not yet written when pass 1 reaches this one (the
+// other end of a ref cycle, or the record itself), written by pass 2 once
+// every record exists.
+type plannedRecord struct {
+	resRecord
+	first, later []string
+}
+
+// refField reports whether field of kind is a ref field and whether it is
+// required; ok is false when the kind or the field is unknown (the check
+// pass has already refused those).
+type refField func(kind, field string) (isRef, required, ok bool)
+
+// importPlan orders recs (refOrder) and splits each record's sets into the
+// two passes of PC-RES-1. A ref set is deferred only when its value is the
+// name of a record of the file that pass 1 has not written yet; a ref to an
+// existing row, or to a record written earlier, stays in pass 1.
+//
+// Refusal: RESOURCES defines no ref cycle as invalid data (3.4, 3.20, the
+// graph cuts cycles, 4), so a cross-reference or a self reference always
+// imports. The one cycle refused is one pass 1 cannot write at all: a
+// REQUIRED ref field whose value is deferred, because the row cannot be
+// created without it. That is E_RESOURCE_INVALID before the first write.
+func importPlan(recs []resRecord, field refField) ([]plannedRecord, error) {
+	inFile := map[string]bool{}
+	for _, r := range recs {
+		inFile[r.name] = true
+	}
+	written := map[string]bool{}
+	out := make([]plannedRecord, 0, len(recs))
+	for _, r := range refOrder(recs) {
+		p := plannedRecord{resRecord: r}
+		for _, s := range r.sets {
+			f, v, _ := strings.Cut(s, setSep)
+			isRef, required, ok := field(r.kind, f)
+			if !ok || !isRef || !inFile[v] || written[v] {
+				p.first = append(p.first, s)
+				continue
+			}
+			if required {
+				return nil, errs.New(errs.ResourceInvalid, r.kind+" "+r.name+": required ref "+f+" names "+quote(v)+
+					", which needs "+r.name+" first (a cycle of required refs cannot be written)").
+					WithHint("make " + f + " optional, or import " + v + " without its ref first")
+			}
+			p.later = append(p.later, s)
+		}
+		written[r.name] = true
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// refFieldOf answers refField from the kinds the store defines.
+func (o ops) refFieldOf(ctx context.Context) refField {
+	defs := map[string]kindDef{}
+	return func(kind, field string) (bool, bool, bool) {
+		d, seen := defs[kind]
+		if !seen {
+			var err error
+			if d, err = o.kindDef(ctx, kind); err != nil {
+				return false, false, false
+			}
+			defs[kind] = d
+		}
+		f, ok := d.byName[field]
+		if !ok {
+			return false, false, false
+		}
+		return text(f.Row, fType) == string(value.KindRef), flag(f.Row, fRequired), true
+	}
 }
 
 func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error) {
@@ -426,6 +502,12 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 		}
 		out.Rows = append(out.Rows, line)
 	}
+	// PC-RES-1: plan both passes before anything is written, so a cycle
+	// that cannot be written is refused with nothing written (dry run too).
+	plan, err := importPlan(good, o.refFieldOf(ctx))
+	if err != nil {
+		return ResImportOut{}, errs.Wrap(errs.ResourceInvalid, "resource import: nothing written (all or nothing)", err)
+	}
 	if in.DryRun {
 		return out, nil
 	}
@@ -441,25 +523,41 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 		return ResImportOut{}, err
 	}
 	out.Batch = bid.String()
-	for i, r := range refOrder(good) {
-		rctx := engine.WithImport(bctx, origin.Import{Source: format, ExtID: r.extID})
+	stopped := func(werr error, at string, i int) error {
+		return errors.Join(werr, errs.New(errs.ResourceInvalid, "resource import: stopped at "+at+" after "+
+			strconv.Itoa(i)+" of "+strconv.Itoa(len(plan))+" rows; the ones written are in batch "+out.Batch))
+	}
+	// Pass 1: every row, without its deferred refs.
+	rowIDs := make([]string, len(plan))
+	for i, p := range plan {
+		rctx := engine.WithImport(bctx, origin.Import{Source: format, ExtID: p.extID})
 		var got RowOut
 		var werr error
-		if id, up := existing[r.extID]; up {
-			got, werr = o.resEdit(rctx, ResEditIn{Name: id, Set: r.sets})
+		if id, up := existing[p.extID]; up {
+			got, werr = o.resEdit(rctx, ResEditIn{Name: id, Set: p.first})
 			out.Updated++
 		} else {
-			got, werr = o.resAdd(rctx, ResAddIn{Kind: r.kind, Name: r.name, Set: r.sets, To: in.To})
+			got, werr = o.resAdd(rctx, ResAddIn{Kind: p.kind, Name: p.name, Set: p.first, To: in.To})
 			out.Created++
 		}
 		if werr != nil {
-			return ResImportOut{}, errors.Join(werr, errs.New(errs.ResourceInvalid, "resource import: stopped at "+r.extID+" after "+
-				strconv.Itoa(i)+" of "+strconv.Itoa(len(good))+" rows; the ones written are in batch "+out.Batch))
+			return ResImportOut{}, stopped(werr, p.extID, i)
 		}
+		rowIDs[i] = got.ID
 		for j := range out.Rows {
-			if out.Rows[j].Kind == r.kind && out.Rows[j].Name == r.name {
+			if out.Rows[j].Kind == p.kind && out.Rows[j].Name == p.name {
 				out.Rows[j].ID = got.ID
 			}
+		}
+	}
+	// Pass 2: the deferred refs, now that every row of the file exists.
+	for i, p := range plan {
+		if len(p.later) == 0 {
+			continue
+		}
+		rctx := engine.WithImport(bctx, origin.Import{Source: format, ExtID: p.extID})
+		if _, werr := o.resEdit(rctx, ResEditIn{Name: rowIDs[i], Set: p.later}); werr != nil {
+			return ResImportOut{}, stopped(werr, p.extID+" (refs)", len(plan))
 		}
 	}
 	return out, nil
