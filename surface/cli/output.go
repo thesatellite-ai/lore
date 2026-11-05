@@ -58,7 +58,8 @@ func printJSON(w io.Writer, r op.Result) error {
 // printHuman writes the result as `name: value` lines; a list field becomes
 // a table under its name, an object field an indented block. Optional
 // (omitempty) fields holding their zero value are skipped, as in the JSON.
-func printHuman(w io.Writer, r op.Result) error {
+// pal colours the success and warning lines (colour.go; off = plain).
+func printHuman(w io.Writer, r op.Result, pal Palette) error {
 	v := r.Value()
 	if !v.IsValid() {
 		return nil
@@ -66,14 +67,14 @@ func printHuman(w io.Writer, r op.Result) error {
 	// An output with its own human form (op.Texter) prints exactly that,
 	// with the Runner's edits (a purged delete's line, P3-DEL-1).
 	if t, ok := r.Text(); ok {
-		_, err := io.WriteString(w, masked(t))
+		_, err := io.WriteString(w, pal.Lines(masked(t)))
 		return err
 	}
 	var b strings.Builder
 	if err := writeObject(&b, v, r.Fields(), ""); err != nil {
 		return err
 	}
-	_, err := io.WriteString(w, masked(b.String()))
+	_, err := io.WriteString(w, pal.Lines(masked(b.String())))
 	return err
 }
 
@@ -212,8 +213,9 @@ func jsonField(v reflect.Value, name string) (reflect.Value, bool) {
 }
 
 // printError writes err in the chosen format and returns its exit status:
-// with --json the spec 9.4 object on stdout, else the human line on stderr.
-func printError(stdout, stderr io.Writer, err error, asJSON bool) int {
+// with --json the spec 9.4 object on stdout, else the human line on stderr,
+// its "ERROR:" and hint coloured by pal (the stderr palette; off = plain).
+func printError(stdout, stderr io.Writer, err error, asJSON bool, pal Palette) int {
 	env := errs.EnvelopeOf(err)
 	if asJSON {
 		// Envelope is a fixed struct of strings and ints: Marshal cannot
@@ -224,10 +226,10 @@ func printError(stdout, stderr io.Writer, err error, asJSON bool) int {
 		}
 		return env.Error.Exit
 	}
-	line := errorPrefix + "[" + string(env.Error.Code) + "] " + env.Error.Message + "\n"
+	line := pal.Error(strings.TrimSuffix(errorPrefix, " ")) + " [" + string(env.Error.Code) + "] " + masked(env.Error.Message) + "\n"
 	if env.Error.Hint != "" {
-		line += hintPrefix + env.Error.Hint + "\n"
+		line += hintPrefix + pal.Hint(masked(env.Error.Hint)) + "\n"
 	}
-	_, _ = io.WriteString(stderr, masked(line))
+	_, _ = io.WriteString(stderr, line)
 	return env.Error.Exit
 }

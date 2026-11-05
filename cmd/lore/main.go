@@ -103,8 +103,8 @@ func run(ctx context.Context, args []string) int {
 	}
 	// --trace / LORE_TRACE=1 print every git command of live rows (trace.go);
 	// the flag is parsed later, so the runner reads it per call.
-	trace := false
-	liveGit := hosthooks.TraceGit{Inner: gitref.Exec{}, On: hosthooks.TraceOn(&trace), W: os.Stderr}
+	flags := &rootFlags{} // rootflags.go: --trace, --color
+	liveGit := hosthooks.TraceGit{Inner: gitref.Exec{}, On: hosthooks.TraceOn(&flags.trace), W: os.Stderr}
 	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak, Git: liveGit,
 		RepoAddresses: func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) }})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
@@ -118,12 +118,12 @@ func run(ctx context.Context, args []string) int {
 	if err != nil {
 		return printHostError(err)
 	}
-	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now, External: renderhost.CoreExternal(app)})
+	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now, External: renderhost.CoreExternal(app), Decor: renderDecor(flags)})
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
-	root := cli.Build(app.Registry(), runner, cli.WithInteractive(wire.StdinIsTerminal))
+	root := cli.Build(app.Registry(), runner, cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette))
 	root.Version = version
-	addRootFlags(root, &trace)
+	addRootFlags(root, flags)
 	hosthooks.Install(root, runner)
 	h := &host{app: app, home: home, live: liveRows, render: rend.h}
 	h.markPrinted(root)

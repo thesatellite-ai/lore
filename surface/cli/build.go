@@ -61,6 +61,9 @@ type config struct {
 	interactive func() bool
 	// caller resolves the base Caller (actor, agent) for one command run.
 	caller func(context.Context) (op.Caller, error)
+	// color is the palette of one output stream (colour.go); the default
+	// is off for every stream.
+	color func(Stream) Palette
 }
 
 // WithInteractive injects the TTY check (the binary passes an isatty test of
@@ -81,6 +84,7 @@ func newConfig(opts []Option) config {
 	c := config{
 		interactive: func() bool { return false },
 		caller:      func(context.Context) (op.Caller, error) { return op.Caller{}, nil },
+		color:       func(Stream) Palette { return Palette{} },
 	}
 	for _, o := range opts {
 		o(&c)
@@ -294,15 +298,15 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags, FlagPos: pos}, *yes, sf.choice(cmd))
 		out := cmd.OutOrStdout()
 		if err != nil {
-			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON), cause: err}
+			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr)), cause: err}
 		}
 		if *asJSON {
 			err = printJSON(out, res)
 		} else {
-			err = printHuman(out, res)
+			err = printHuman(out, res, cfg.color(StreamOut))
 		}
 		if err != nil {
-			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON), cause: err}
+			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr)), cause: err}
 		}
 		// P3-MISC-8: a successful result may carry its own exit status
 		// (op.ExitStatuser, lore doctor's 1 degraded / 2 broken); it is
