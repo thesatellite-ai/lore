@@ -174,7 +174,11 @@ func (o ops) urgencyOrder(ctx context.Context, f forest, now time.Time, dir int,
 	for _, s := range f.rows {
 		tasks = append(tasks, urgencyTaskOf(s.Row, next, targets))
 	}
-	scores := urgency.Compute(tasks, now, urgency.Default())
+	w, err := o.urgencyWeights(ctx)
+	if err != nil {
+		return nil, err
+	}
+	scores := urgency.Compute(tasks, now, w)
 	return func(a, b row.Row) int {
 		c := dir * cmp.Compare(scores[a.ID.String()].Total, scores[b.ID.String()].Total)
 		if c == 0 && then != nil {
@@ -592,4 +596,38 @@ func claimedNow(v teamView, r row.Row) bool {
 	}
 	_, claimed, active := v.board.Claim(r.ID.String())
 	return claimed && active
+}
+
+// urgencyWeights are the 13.2 defaults with every tasks.urgency.<term> /
+// tasks.urgency.priority.<level> a policy level sets (OV15B-URG: the
+// nearest level wins, values in hundredths). Without a policy reader the
+// defaults stand.
+func (o ops) urgencyWeights(ctx context.Context) (urgency.Weights, error) {
+	w := urgency.Default()
+	p, ok := upgrade.As[bulk.Policier](o.env)
+	if !ok {
+		return w, nil
+	}
+	set, err := p.Policy(ctx, "")
+	if err != nil {
+		return urgency.Weights{}, err
+	}
+	return UrgencyWeights(set)
+}
+
+// UrgencyWeights applies a policy set's urgency weights to the 13.2
+// defaults. Exported for the old binary's queue (saas/pkg/aicoder/queue),
+// which reads the policy itself.
+func UrgencyWeights(set policy.Set) (urgency.Weights, error) {
+	w := urgency.Default()
+	for _, k := range policy.UrgencyKeys() {
+		h, isSet := set.Weight(k.Key)
+		if !isSet {
+			continue
+		}
+		if err := w.Set(urgency.Term(k.Term), k.Level, int(h)); err != nil {
+			return urgency.Weights{}, errs.Wrap(errs.ConfigInvalid, "policy "+string(k.Key), err)
+		}
+	}
+	return w, nil
 }

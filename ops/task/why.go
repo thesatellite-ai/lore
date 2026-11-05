@@ -92,7 +92,11 @@ func (o ops) why(ctx context.Context, r row.Row) (Why, error) {
 	for _, s := range f.rows {
 		tasks = append(tasks, urgencyTaskOf(s.Row, next, targets))
 	}
-	sc := urgency.Compute(tasks, opclock.Now(o.env), urgency.Default())[r.ID.String()]
+	w, err := o.urgencyWeights(ctx)
+	if err != nil {
+		return Why{}, err
+	}
+	sc := urgency.Compute(tasks, opclock.Now(o.env), w)[r.ID.String()]
 	return Why{Urgency: urgency.Format(sc.Total), Terms: sc.Terms, shown: true}, nil
 }
 
