@@ -373,10 +373,10 @@ func (o ops) checklistEdit(ctx context.Context, in ChecklistEditIn) (ChecklistOu
 	if err != nil {
 		return ChecklistOut{}, err
 	}
-	if err := requireField("item", in.Item); err != nil {
+	if err = requireField("item", in.Item); err != nil {
 		return ChecklistOut{}, err
 	}
-	if err := requireField("text", in.Text); err != nil {
+	if err = requireField("text", in.Text); err != nil {
 		return ChecklistOut{}, err
 	}
 	text, err := checklist.CleanText(in.Text)
@@ -398,7 +398,7 @@ func (o ops) checklistRm(ctx context.Context, in ChecklistItemIn) (ChecklistOut,
 	if err != nil {
 		return ChecklistOut{}, err
 	}
-	if err := requireField("item", in.Item); err != nil {
+	if err = requireField("item", in.Item); err != nil {
 		return ChecklistOut{}, err
 	}
 	i, err := liveIndex(h.list, in.Item)

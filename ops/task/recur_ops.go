@@ -131,7 +131,7 @@ func (o ops) recurEdit(ctx context.Context, in RecurEditIn) (RecurOut, error) {
 	if err != nil {
 		return RecurOut{}, err
 	}
-	if err := requireField("rule", in.Rule); err != nil {
+	if err = requireField("rule", in.Rule); err != nil {
 		return RecurOut{}, err
 	}
 	patch := map[string]value.Value{}

@@ -64,6 +64,8 @@ type TimeShowIn struct {
 	Since   string `json:"since,omitempty" flag:"since" desc:"only entries on or after this day (YYYY-MM-DD or a date phrase: today, mon, in 3d, …)"`
 	Until   string `json:"until,omitempty" flag:"until" desc:"only entries on or before this day (YYYY-MM-DD or a date phrase)"`
 	TZ      string `json:"tz,omitempty" flag:"tz" desc:"time zone for display (e.g. Europe/Prague; default local)"`
+	// IncludeDeleted reads a task in the trash (DQ10, D16).
+	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"the task may be in the trash: show its time anyway (DQ10)"`
 }
 
 // TimeLogIn is the input of task.time.log.
@@ -119,9 +121,15 @@ type TimeData struct {
 	Workers        []TimeWorker      `json:"workers"`
 	Entries        []timeentry.Entry `json:"entries,omitempty"`
 	Open           []timeentry.Open  `json:"open,omitempty"`
-	Notes          []string          `json:"notes,omitempty"`
-	showEntries    bool
-	loc            *time.Location
+	// OpenClaims is the claim still on the board, counted live (5.1 rule 1).
+	OpenClaims []TimeClaim `json:"open_claims,omitempty"`
+	// InTrash: read with --include-deleted from the trash (DQ10).
+	InTrash     bool     `json:"in_trash,omitempty"`
+	Notes       []string `json:"notes,omitempty"`
+	showEntries bool
+	loc         *time.Location
+	// names maps actor ids to display names for the WHO column.
+	names map[string]string
 }
 
 // TimeOut is the output of task.time.show.
@@ -183,7 +191,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 			return TimeOut{}, errs.Wrap(errs.InvalidInput, "--tz "+work.Quote(in.TZ)+" is not a time zone", err).WithHint("e.g. Europe/Prague or UTC")
 		}
 	}
-	src, r, err := work.Get(ctx, o.env, Noun, table, id)
+	src, r, trashed, err := o.timeTask(ctx, id, in.IncludeDeleted)
 	if err != nil {
 		return TimeOut{}, err
 	}
@@ -207,7 +215,12 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 	inRange := func(day string) bool {
 		return (since == "" || day >= since) && (until == "" || day <= until)
 	}
-	d := TimeData{TaskID: id.String(), Title: work.Field(r, work.FieldTitle), Status: work.Field(r, work.FieldStatus), GroupBy: group, showEntries: in.Entries, loc: loc}
+	d := TimeData{TaskID: id.String(), Title: work.Field(r, work.FieldTitle), Status: work.Field(r, work.FieldStatus), GroupBy: group, showEntries: in.Entries, loc: loc, InTrash: trashed, names: map[string]string{}}
+	nameOf := func(actor string) { // WHO column: display name, not the actor id
+		if _, ok := d.names[actor]; !ok {
+			d.names[actor] = o.actorName(ctx, actor)
+		}
+	}
 	owners := map[string]string{}
 	ownerOf := func(actor string) string {
 		if v, ok := owners[actor]; ok {
@@ -271,6 +284,27 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		sp := timecalc.Span{Worker: w, Owner: ownerOf(w.Actor), Start: s.StartTime(), End: now, Open: true}
 		spans = append(spans, sp)
 		ks = append(ks, keyed{keyOf(w, s.Source, day), sp})
+	}
+	if tc, sp, ok := o.openClaimSpan(ctx, id.String()); ok {
+		day := sp.Start.UTC().Format(timeentry.DayLayout)
+		d.OpenClaims = append(d.OpenClaims, tc)
+		if inRange(day) {
+			sp.Owner = ownerOf(sp.Worker.Actor)
+			spans = append(spans, sp)
+			ks = append(ks, keyed{keyOf(sp.Worker, timeentry.SourceClaim, day), sp})
+		}
+	}
+	for _, e := range d.Entries {
+		nameOf(e.ActorID.String())
+	}
+	for _, s := range d.Open {
+		nameOf(s.ActorID.String())
+	}
+	for _, c := range d.OpenClaims {
+		nameOf(c.Actor)
+	}
+	if trashed {
+		d.Notes = append(d.Notes, "this task is in the trash (--include-deleted); its time is left out of every other report (DQ10)")
 	}
 	res := timecalc.Compute(spans)
 	d.EffortSeconds, d.ElapsedSeconds, d.ManualSeconds = res.Effort, res.Elapsed, res.Manual
@@ -394,10 +428,14 @@ func (o TimeOut) Text() string {
 		loc = time.Local
 	}
 	var b strings.Builder
-	b.WriteString(d.TaskID + "  " + d.Title + "   (" + d.Status + ")\n\n")
+	status := d.Status
+	if d.InTrash {
+		status += ", in the trash"
+	}
+	b.WriteString(d.TaskID + "  " + d.Title + "   (" + status + ")\n\n")
 	b.WriteString("effort   " + timeentry.FormatSeconds(d.EffortSeconds) + "     elapsed  " + timeentry.FormatSeconds(d.ElapsedSeconds) +
 		"     manual  " + timeentry.FormatSeconds(d.ManualSeconds) + "   (included in effort)\n\n")
-	head := map[string]string{groupWorker: "WORKER", groupPerson: "PERSON", groupSource: "SOURCE", groupDay: "DAY"}[d.GroupBy]
+	head := map[string]string{groupWorker: "WORKER", groupPerson: "PERSON", groupSource: "SOURCE", groupDay: "DAY", groupWeek: "WEEK", groupSession: "SESSION"}[d.GroupBy]
 	if d.GroupBy == groupPerson {
 		b.WriteString(pad(head, 30) + pad("OWN", 10) + pad("AGENTS", 10) + "INCL. AGENTS\n")
 		for _, w := range d.Workers {
@@ -440,10 +478,17 @@ func (o TimeOut) Text() string {
 			if e.Deleted() {
 				note = strings.TrimSpace(note + " (removed)")
 			}
-			b.WriteString(pad(e.ID.String(), 32) + pad(e.ActorID.String(), 28) + pad(string(e.Source), 8) + pad(start, 18) + pad(show(e.End), 18) + pad(timeentry.FormatSeconds(e.Seconds), 9) + note + "\n")
+			b.WriteString(pad(e.ID.String(), 32) + pad(d.who(e.ActorID.String()), 28) + pad(string(e.Source), 8) + pad(start, 18) + pad(show(e.End), 18) + pad(timeentry.FormatSeconds(e.Seconds), 9) + note + "\n")
 		}
 		for _, s := range d.Open {
-			b.WriteString(pad("open", 32) + pad(s.ActorID.String(), 28) + pad(string(s.Source), 8) + pad(show(s.Start), 18) + pad("(now)", 18) + "\n")
+			b.WriteString(pad("open", 32) + pad(d.who(s.ActorID.String()), 28) + pad(string(s.Source), 8) + pad(show(s.Start), 18) + pad("(now)", 18) + "\n")
+		}
+		for _, c := range d.OpenClaims {
+			end := "(now)"
+			if c.Expired {
+				end = show(c.End) + " (expired)"
+			}
+			b.WriteString(pad("open claim", 32) + pad(d.who(c.Actor), 28) + pad(string(timeentry.SourceClaim), 8) + pad(show(c.Since), 18) + pad(end, 18) + "\n")
 		}
 	}
 	if len(d.Notes) > 0 {
@@ -453,6 +498,33 @@ func (o TimeOut) Text() string {
 		}
 	}
 	return b.String()
+}
+
+// who is the WHO label of actor: its display name when known.
+func (d TimeData) who(actor string) string {
+	if n, ok := d.names[actor]; ok && n != "" {
+		return n
+	}
+	return actor
+}
+
+// timeTask reads the task of time show; with includeDeleted a task in the
+// trash is read from it (DQ10) and trashed is true.
+func (o ops) timeTask(ctx context.Context, id ids.AnyID, includeDeleted bool) (src store.Source, r row.Row, trashed bool, err error) {
+	src, r, err = work.Get(ctx, o.env, Noun, table, id)
+	if err == nil || !includeDeleted || !errs.Has(err, errs.InTrash) {
+		return src, r, false, err
+	}
+	del, derr := o.trashedTasks(ctx, "")
+	if derr != nil {
+		return "", row.Row{}, false, derr
+	}
+	for _, s := range del {
+		if s.Row.ID == id {
+			return s.Source, s.Row, true, nil
+		}
+	}
+	return "", row.Row{}, false, err
 }
 
 // pad left-aligns s in w columns (at least one space after).

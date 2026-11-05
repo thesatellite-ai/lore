@@ -410,8 +410,10 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, err
 	}
 	out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(work.LabelerOf(o.env), src, w.Row), Store: string(src)}
+	var metaNotes strings.Builder // OV10/OV56: --meta notes as meta set prints them
 	for _, x := range w.Warnings {
 		out.Warnings = append(out.Warnings, Warning{Code: string(x.Code), Field: x.Field, Message: x.Message})
+		metaNotes.WriteString(metalist.NoteLine(string(x.Code), x.Message))
 	}
 	label := ""
 	if l := work.Label(work.LabelerOf(o.env), src); l != "" {
@@ -422,6 +424,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		out.Parent, out.Inherited = par.id, par.inh
 		out.Human += par.human()
 	}
+	out.Human += metaNotes.String()
 	return out, nil
 }
 
@@ -1074,7 +1077,12 @@ func (o ops) actorName(ctx context.Context, id string) string {
 	}
 	_, r, err := o.env.Get(ctx, engine.Ref{Table: schema.TableActors, ID: aid})
 	if err != nil || r.Deleted || work.Field(r, fieldDisplay) == "" {
-		return id
+		// OV7: the actor row may sit where a by-id Get does not look (a
+		// minimal client actor row); the list read finds it (as ownerOf).
+		var ok bool
+		if r, ok = o.actorRow(ctx, id); !ok || work.Field(r, fieldDisplay) == "" {
+			return id
+		}
 	}
 	return work.Field(r, fieldDisplay)
 }
@@ -1219,7 +1227,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if len(patch) == 0 && len(refs) > 0 {
 		return work.WriteOut{ID: id.String(), Store: work.SourceName(curSrc), Human: work.Success + " " + id.String() + " updated\n"}, nil
 	}
-	if len(patch) == 0 {
+	if len(patch) == 0 && !engine.MetaBound(ctx) { // OV56: --meta alone is a change
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: nothing to change").
 			WithHint("give at least one flag, e.g. --title, --status, --priority, --due")
 	}

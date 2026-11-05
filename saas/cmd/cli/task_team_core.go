@@ -149,6 +149,23 @@ func (b claimBoard) Claim(taskID string) (string, bool, bool) {
 	return sig.Holder, claimed, active
 }
 
+// OpenClaim implements opstask.ClaimSpanner (TIME_TRACKING 5.1 rule 1):
+// the claim on taskID counted live by task time show, ending now while
+// the lease lives, else at the last heartbeat (D3).
+func (b claimBoard) OpenClaim(taskID string) (opstask.OpenClaim, bool) {
+	p := signals.ClaimPath(b.folder, taskID)
+	sig, ok := b.view.Board[p]
+	if !ok || sig.Kind != signals.KindClaim || sig.Since.IsZero() {
+		return opstask.OpenClaim{}, false
+	}
+	_, active := b.view.Active(p)
+	end := b.view.Now
+	if !active {
+		end, _ = sig.LastHeartbeat(b.view.Lease.TTL)
+	}
+	return opstask.OpenClaim{Holder: sig.Holder, Session: sig.Session, Since: sig.Since, End: end, Expired: !active}, true
+}
+
 // teamCommandGroups are the core noun groups whose operations take team
 // flags (task, mission; plan apply creates missions with approvers).
 var teamCommandGroups = []string{"task", "mission", "plan"}
@@ -161,15 +178,22 @@ func withCLITeam(root *cobra.Command) {
 		if err != nil || grp.Name() != g {
 			continue
 		}
-		for _, c := range grp.Commands() {
-			if c.RunE == nil {
-				continue
-			}
-			run := c.RunE
-			c.RunE = func(cmd *cobra.Command, args []string) error {
-				cmd.SetContext(opstask.WithTeam(cmd.Context(), cliTeam{}))
-				return run(cmd, args)
-			}
+		withTeamUnder(grp)
+	}
+}
+
+// withTeamUnder wraps every runnable command under c, sub-groups included
+// (`task time show` sits in the time sub-group and reads open claims).
+func withTeamUnder(c *cobra.Command) {
+	for _, sub := range c.Commands() {
+		withTeamUnder(sub)
+		if sub.RunE == nil {
+			continue
+		}
+		run := sub.RunE
+		sub.RunE = func(cmd *cobra.Command, args []string) error {
+			cmd.SetContext(opstask.WithTeam(cmd.Context(), cliTeam{}))
+			return run(cmd, args)
 		}
 	}
 }
