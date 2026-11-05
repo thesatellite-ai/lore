@@ -9,6 +9,10 @@
 //	    each non-sensitive text field ─▶ refpoint.Expand(Show)
 //	        var/res/row/env filled; secrets and scanner hits ••••••
 //	    ─▶ Block{Expanded: changed fields, Refs: every reference met}
+//	lore show --reveal ─▶ Reveal(ctx, env, r, force)
+//	    ${secret:…} targets ─▶ ops/internal/reveal Ask + Group (audited)
+//	    ─▶ Row's path with each revealed reference held by a placeholder,
+//	       filled in after refpoint (D18, SQ10); unstored stays masked
 //
 // Layer L5 helper (ops/internal): imports engine-free lower layers only.
 package expand

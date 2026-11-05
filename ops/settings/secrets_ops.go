@@ -12,13 +12,13 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/secretmgr"
 	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/reveal"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -53,16 +53,12 @@ const (
 
 // SecretAuditor is the Env upgrade that records secret.* events (wire.App
 // has it). A reveal without it is refused: a reveal is never unaudited.
-type SecretAuditor interface {
-	AuditSecret(ctx context.Context, action engine.Action, s engine.SecretAudit) error
-}
+type SecretAuditor = reveal.Auditor
 
 // SecretManagerSource is an optional Env upgrade giving the managers (tests
-// hand in fakes; a later plugin system adds its own). Without it the
+// hand in fakes; wire.App passes secrets.manager_timeout). Without it the
 // built-in managers with their default timeout are used.
-type SecretManagerSource interface {
-	SecretManagers() secretmgr.Set
-}
+type SecretManagerSource = reveal.ManagerSource
 
 // Holderer is an optional Env upgrade: this machine's holder id and label
 // for a reference lore writes (5.2). Without it lore secrets link writes
@@ -136,11 +132,7 @@ type SecretsOut struct {
 
 // RevealedOne is one revealed reference: which target answered, and the
 // value (printed only because the caller asked with --reveal).
-type RevealedOne struct {
-	Ref      string `json:"ref"`
-	Answered string `json:"answered"`
-	Value    string `json:"value"`
-}
+type RevealedOne = reveal.One
 
 // Text implements op.Texter.
 func (o SecretsOut) Text() string { return o.Human }
@@ -182,10 +174,8 @@ func (o ops) secretIndexOps() []op.Entry {
 
 // managers is the manager set of this Env.
 func (o ops) managers() secretmgr.Set {
-	if s, ok := o.env.(SecretManagerSource); ok {
-		return s.SecretManagers()
-	}
-	return secretmgr.Builtin(secretmgr.Options{})
+	src, _ := o.env.(SecretManagerSource)
+	return reveal.Managers(src)
 }
 
 // filterUses keeps the uses matching holder and manager.
@@ -393,7 +383,8 @@ func (o ops) secretsShow(ctx context.Context, in SecretsShowIn) (SecretsOut, err
 	if len(groups) == 0 {
 		return SecretsOut{}, errs.New(errs.NotFound, "nothing to reveal: no manager reference in "+quote(in.ID))
 	}
-	g, err := o.revealGate(ctx, groups, in.Force)
+	pol, _ := o.env.(bulk.Policier)
+	g, err := reveal.Ask(ctx, pol, groups, in.Force)
 	if err != nil {
 		return SecretsOut{}, err
 	}
@@ -404,16 +395,16 @@ func (o ops) secretsShow(ctx context.Context, in SecretsShowIn) (SecretsOut, err
 	set := o.managers()
 	var b strings.Builder
 	for _, grp := range groups {
-		one, rerr := revealGroup(ctx, set, auditor, grp, g, us[0].Row)
+		one, rerr := reveal.Group(ctx, set, auditor, grp, g, cmdSecretsShow, us[0].Row)
 		if rerr != nil {
 			return SecretsOut{}, rerr
 		}
 		out.Values = append(out.Values, one)
 		fmt.Fprintf(&b, "%s = %s\n", one.Answered, one.Value)
 	}
-	out.Revealed, out.Forced = len(out.Values), g.forced
-	if g.forced {
-		out.Warning = "W_REVEAL_FORCED: revealed without a person's answer; recorded in the audit log as forced"
+	out.Revealed, out.Forced = len(out.Values), g.Forced
+	if g.Forced {
+		out.Warning = reveal.Warning
 		b.WriteString(out.Warning + "\n")
 	}
 	out.Human = b.String()
@@ -471,95 +462,19 @@ func (o ops) usesOf(ctx context.Context, arg string) ([]SecretUse, error) {
 }
 
 // revealGroups groups the uses by reference (row, field, position): each
-// group's alternates are tried in order.
-func revealGroups(us []SecretUse) [][]SecretUse {
-	var out [][]SecretUse
+// group's alternates are tried in order (19.7).
+func revealGroups(us []SecretUse) [][]reveal.Target {
+	var out [][]reveal.Target
 	for _, u := range us {
 		if u.Alt == 0 || len(out) == 0 {
 			out = append(out, nil)
 		}
 		if u.Manager != "" {
-			out[len(out)-1] = append(out[len(out)-1], u)
+			out[len(out)-1] = append(out[len(out)-1], reveal.Target{Ref: u.Ref, Manager: u.Manager, Loc: locatorOf(u)})
 		}
 	}
-	return slices.DeleteFunc(out, func(g []SecretUse) bool { return len(g) == 0 })
+	return slices.DeleteFunc(out, func(g []reveal.Target) bool { return len(g) == 0 })
 }
-
-// gate is how a reveal was allowed.
-type gate struct {
-	confirmed bool
-	forced    bool
-	by        engine.ForcedBy
-}
-
-// revealGate settles SQ10: --yes (a person said yes) passes; --force, or an
-// agent under secrets.agent_reveal: allow, passes as forced; anyone else
-// gets E_NEEDS_CONFIRM with the question (the CLI asks a terminal and
-// re-runs with yes). No session-wide yes: the question is per command.
-func (o ops) revealGate(ctx context.Context, groups [][]SecretUse, force bool) (gate, error) {
-	if engine.Confirmed(ctx) {
-		return gate{confirmed: true}, nil
-	}
-	if force {
-		return gate{forced: true, by: engine.ForcedFlag}, nil
-	}
-	agent := engine.AgentOf(ctx) != ""
-	if agent {
-		if p, ok := o.env.(bulk.Policier); ok {
-			set, err := p.Policy(ctx, store.SourceRepo)
-			if err != nil {
-				return gate{}, err
-			}
-			if e, found := set.Get(policy.KeyAgentReveal); found && e.Value != nil && e.Value.String() == string(policy.AgentRevealAllow) {
-				return gate{forced: true, by: engine.ForcedPolicy}, nil
-			}
-		}
-	}
-	var names []string
-	for _, g := range groups {
-		names = append(names, g[0].Manager+" ("+g[0].Locator+")")
-	}
-	q := fmt.Sprintf("lore will read %d secret(s) from %s and print it in clear. This is recorded in the audit log.", len(groups), strings.Join(names, ", "))
-	if agent {
-		q += " The value will be printed to this agent's session."
-	}
-	return gate{}, errs.New(errs.NeedsConfirm, q+" Continue?").WithHint("ask the person, then rerun with --yes (an agent alone: --force, audited as FORCED)")
-}
-
-// revealGroup tries a reference's alternates in order; the first that
-// answers is printed. Every attempt is audited without its value.
-func revealGroup(ctx context.Context, set secretmgr.Set, a SecretAuditor, grp []SecretUse, g gate, rowID string) (RevealedOne, error) {
-	var last error
-	for _, u := range grp {
-		au := engine.SecretAudit{Ref: u.Ref, Command: cmdSecretsShow, Forced: g.forced, ForcedBy: g.by}
-		if id, perr := ids.ParseAny(rowID); perr == nil {
-			au.Row = id
-		}
-		m, ok := set.Get(u.Manager)
-		if !ok {
-			last = errs.New(errs.RefScheme, "no secret manager "+quote(u.Manager))
-			continue
-		}
-		s, err := m.Reveal(ctx, locatorOf(u))
-		if err != nil {
-			last = err
-			au.Result = string(errs.CodeOf(err))
-			if aerr := a.AuditSecret(ctx, engine.ActionSecretRevealFailed, au); aerr != nil {
-				return RevealedOne{}, aerr
-			}
-			continue
-		}
-		if aerr := a.AuditSecret(ctx, engine.ActionSecretRevealed, au); aerr != nil {
-			return RevealedOne{}, aerr
-		}
-		return RevealedOne{Ref: grp[0].Ref, Answered: u.Ref, Value: exposeForPrint(s)}, nil
-	}
-	return RevealedOne{}, last
-}
-
-// exposeForPrint is the ONLY caller of Secret.Expose (10.2; a source test
-// pins it): the --reveal printer.
-func exposeForPrint(s secretmgr.Secret) string { return s.Expose() }
 
 // holderOf resolves --to of move: an mch_/act_ id (label from the
 // machines table when known), or a person.machine label of a known machine.

@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -15,6 +16,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/reveal"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -34,12 +37,25 @@ type Flag struct {
 	Expand bool `json:"expand,omitempty" flag:"expand" desc:"fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"`
 }
 
+// RevealFlag is --reveal / --force of a show that can reveal (2.7, SQ10):
+// embedded only in the shows that call Reveal, so no show offers a flag it
+// ignores.
+type RevealFlag struct {
+	Reveal bool `json:"reveal,omitempty" flag:"reveal" desc:"--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"`
+	Force  bool `json:"force,omitempty" flag:"force" desc:"with --reveal: reveal without a person's answer (agents; audited as FORCED)"`
+}
+
 // Block is what --expand adds to a show output (SECRETS 12: "--json adds
 // expanded and refs"): each text field it changed, filled in, and every
 // reference met with its value or why it stayed as written.
 type Block struct {
 	Expanded map[string]string
 	Refs     []refpoint.Used
+	// Revealed, Forced and Warning: --reveal (2.7: "revealed": n,
+	// "forced", "warning" W_REVEAL_FORCED).
+	Revealed int
+	Forced   bool
+	Warning  string
 }
 
 // Unsupported is the refusal for an env that cannot resolve references.
@@ -67,6 +83,101 @@ func Show(ctx context.Context, env Env, id string) (Block, error) {
 // Row expands r's non-sensitive text fields at the show point. env is
 // nil when the caller's env does not implement Env.
 func Row(ctx context.Context, env Env, r row.Row) (Block, error) {
+	return expandRow(ctx, env, r, nil)
+}
+
+// Reveal is show --reveal (2.7, D18, SQ10): --expand, and each manager
+// secret reference in r's non-sensitive text fields read through
+// ops/internal/reveal and printed in clear.
+//
+//	collect ${secret:…} targets ─▶ none: plain --expand
+//	reveal.Ask (--yes | --force | agent_reveal allow; else E_NEEDS_CONFIRM)
+//	env is a reveal.Auditor? no ─▶ refused (never unaudited)
+//	reveal.Group per reference (alternates in order, each audited)
+//	expand with each revealed reference held by a placeholder, then filled
+//
+// Fixed targets (unstored, redacted) stay masked. A secret brought in by a
+// var/res value stays masked (only references written in the row reveal).
+func Reveal(ctx context.Context, env Env, r row.Row, force bool) (Block, error) {
+	if env == nil {
+		return Block{}, Unsupported()
+	}
+	def, _ := env.TableSchema(ctx, r.Table)
+	var raws []string
+	var groups [][]reveal.Target
+	for _, k := range slices.Sorted(maps.Keys(r.Fields)) {
+		t, ok := expandable(def, k, r.Fields[k])
+		if !ok {
+			continue
+		}
+		for _, p := range refs.Parse(t) {
+			if p.Kind != refs.PartRef || p.Ref.Scheme != refs.SchemeSecret || slices.Contains(raws, p.Raw) {
+				continue
+			}
+			var grp []reveal.Target
+			for _, at := range p.Ref.Alternates {
+				if tg, ok := reveal.Of(at); ok {
+					grp = append(grp, tg)
+				}
+			}
+			if len(grp) > 0 {
+				raws, groups = append(raws, p.Raw), append(groups, grp)
+			}
+		}
+	}
+	if len(groups) == 0 {
+		return expandRow(ctx, env, r, nil)
+	}
+	pol, _ := env.(bulk.Policier)
+	g, err := reveal.Ask(ctx, pol, groups, force)
+	if err != nil {
+		return Block{}, err
+	}
+	auditor, ok := env.(reveal.Auditor)
+	if !ok {
+		return Block{}, errs.New(errs.Internal, "this surface cannot audit a reveal, so lore does not reveal here")
+	}
+	src, _ := env.(reveal.ManagerSource)
+	set := reveal.Managers(src)
+	got := map[string]reveal.One{}
+	for i, grp := range groups {
+		one, rerr := reveal.Group(ctx, set, auditor, grp, g, cmdShow, r.ID.String())
+		if rerr != nil {
+			return Block{}, rerr
+		}
+		got[raws[i]] = one
+	}
+	b, err := expandRow(ctx, env, r, got)
+	if err != nil {
+		return Block{}, err
+	}
+	b.Revealed, b.Forced = len(got), g.Forced
+	if g.Forced {
+		b.Warning = reveal.Warning
+	}
+	return b, nil
+}
+
+// cmdShow names this surface in the secret.revealed audit record.
+const cmdShow = "show"
+
+// expandable is a field's text when --expand may touch it: text, and not
+// sensitive (RQ1: a sensitive value is hidden, never expanded).
+func expandable(def schema.TableDef, k string, v value.Value) (string, bool) {
+	t, isText := v.(value.Text)
+	if f, ok := def.Field(k); !isText || (ok && f.Sensitive) {
+		return "", false
+	}
+	return t.String(), true
+}
+
+// placeholder holds revealed reference i's place through refpoint (which
+// masks every ${secret:…}); NUL bytes never occur in stored text.
+func placeholder(i int) string { return "\x00lore-reveal-" + strconv.Itoa(i) + "\x00" }
+
+// expandRow is --expand of r; revealed maps a secret reference's raw text
+// to its revealed value (nil: nothing revealed, every secret masked).
+func expandRow(ctx context.Context, env Env, r row.Row, revealed map[string]reveal.One) (Block, error) {
 	var b Block
 	if env == nil {
 		return b, Unsupported()
@@ -81,21 +192,32 @@ func Row(ctx context.Context, env Env, r row.Row) (Block, error) {
 	}
 	def, _ := env.TableSchema(ctx, r.Table)
 	opt := refpoint.Options{Point: refpoint.Show, Resolver: rv, Scanner: sc, Env: os.LookupEnv}
+	order := slices.Sorted(maps.Keys(revealed))
 	for _, k := range slices.Sorted(maps.Keys(r.Fields)) {
-		t, isText := r.Fields[k].(value.Text)
-		if f, ok := def.Field(k); !isText || (ok && f.Sensitive) {
-			continue // RQ1: a sensitive value is hidden, never expanded
+		stored, ok := expandable(def, k, r.Fields[k])
+		if !ok {
+			continue
 		}
-		res, err := refpoint.Expand(opt, k, t.String())
+		in := stored
+		if len(revealed) > 0 {
+			in = hold(stored, order)
+		}
+		res, err := refpoint.Expand(opt, k, in)
 		if err != nil {
 			return b, err
+		}
+		for i, raw := range order {
+			if strings.Contains(res.Text, placeholder(i)) {
+				res.Text = strings.ReplaceAll(res.Text, placeholder(i), revealed[raw].Value)
+				res.Refs = append(res.Refs, refpoint.Used{Ref: raw, Source: revealed[raw].Answered, State: refpoint.StateExpanded, Note: "revealed (audited)"})
+			}
 		}
 		for _, u := range res.Refs {
 			if !slices.ContainsFunc(b.Refs, func(v refpoint.Used) bool { return v.Ref == u.Ref }) {
 				b.Refs = append(b.Refs, u)
 			}
 		}
-		if res.Text != t.String() {
+		if res.Text != stored {
 			if b.Expanded == nil {
 				b.Expanded = map[string]string{}
 			}
@@ -103,6 +225,20 @@ func Row(ctx context.Context, env Env, r row.Row) (Block, error) {
 		}
 	}
 	return b, nil
+}
+
+// hold replaces each revealed secret reference of s (by raw text, order
+// giving its index) with its placeholder.
+func hold(s string, order []string) string {
+	var out strings.Builder
+	for _, p := range refs.Parse(s) {
+		if i := slices.Index(order, p.Raw); p.Kind == refs.PartRef && i >= 0 {
+			out.WriteString(placeholder(i))
+			continue
+		}
+		out.WriteString(p.Raw)
+	}
+	return out.String()
 }
 
 // Text is the human block a noun show appends under --expand: the

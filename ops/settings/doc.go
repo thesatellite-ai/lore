@@ -11,7 +11,7 @@
 //	resource rename|merge|lint, field retype ─► resources_maint.go header
 //
 //	secrets list|check ─► secretIndex (text refs, resource secret_ref, vars) ─► verify ─► secretmgr Reveal, dropped
-//	secrets show --reveal ─► revealGate (SQ10) ─► revealGroup (alternates) ─► AuditSecret ─► exposeForPrint
+//	secrets show --reveal ─► reveal.Ask (SQ10) ─► reveal.Group (alternates) ─► AuditSecret ─► expose (ops/internal/reveal, shared with show --reveal)
 //	secrets move|relabel|rename-entry|link ─► rewriteText per row ─► Env.Update, one batch ─► AuditSecret
 
 package settings

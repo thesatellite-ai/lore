@@ -2,6 +2,7 @@ package settings_test
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,26 +116,37 @@ func TestSecretsOffboarding(t *testing.T) {
 	}
 }
 
-// TestExposeOneCaller: Secret.Expose is called from exactly one function,
-// the --reveal printer (SECRETS_AND_REFERENCES 10.2).
+// TestExposeOneCaller: Secret.Expose is called from exactly one function
+// in lore's whole source, the --reveal printer in ops/internal/reveal
+// (SECRETS_AND_REFERENCES 10.2).
 func TestExposeOneCaller(t *testing.T) {
-	files, err := filepath.Glob("*.go")
+	n, where := 0, []string{}
+	root := os.DirFS(filepath.Join("..", ".."))
+	err := fs.WalkDir(root, ".", func(p string, d fs.DirEntry, werr error) error {
+		if werr != nil {
+			return werr
+		}
+		if d.IsDir() && p != "." && (d.Name() == "vendor" || d.Name() == "tmp" || strings.HasPrefix(d.Name(), ".")) {
+			return fs.SkipDir
+		}
+		if d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+			return nil
+		}
+		b, rerr := fs.ReadFile(root, p)
+		if rerr != nil {
+			return rerr
+		}
+		if c := strings.Count(string(b), ".Expose()"); c > 0 {
+			n += c
+			where = append(where, p)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := 0
-	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") {
-			continue
-		}
-		b, rerr := os.ReadFile(filepath.Clean(f))
-		if rerr != nil {
-			t.Fatal(rerr)
-		}
-		n += strings.Count(string(b), ".Expose()")
-	}
-	if n != 1 {
-		t.Fatalf(".Expose() called %d times in ops/settings, want 1 (exposeForPrint)", n)
+	if n != 1 || where[0] != "ops/internal/reveal/reveal.go" {
+		t.Fatalf(".Expose() called %d times (%v), want 1 in ops/internal/reveal (expose)", n, where)
 	}
 }
 
@@ -144,4 +156,40 @@ func TestSecretsShowTrashed(t *testing.T) {
 	mem := h.ID(h.MustYes("memory.add", `{"body":"k ${secret:env://LORE_X}","to":"kb"}`))
 	h.MustYes("memory.delete", `{"id":`+opstest.Quote(mem)+`}`)
 	h.Fails(settings.OpSecretsShow, `{"id":`+opstest.Quote(mem)+`}`, errs.InTrash)
+}
+
+// TestRowShowReveal: lore show --reveal (2.7) asks every time, fills the
+// manager reference in clear, keeps ${secret:unstored} masked, and marks a
+// --force reveal; --force alone is refused.
+func TestRowShowReveal(t *testing.T) {
+	t.Setenv("LORE_HUMAN", "1")
+	t.Setenv("LORE_TEST_DB", secretDummy)
+	h := multiStore(t)
+	mem := h.ID(h.MustYes("memory.add", `{"body":"db: ${secret:env://LORE_TEST_DB} t ${secret:unstored}","to":"kb"}`))
+	id := opstest.Quote(mem)
+	if msg := h.Fails("row.show", `{"id":`+id+`,"reveal":true}`, errs.NeedsConfirm); strings.Contains(msg, secretDummy) {
+		t.Fatalf("question leaks: %q", msg)
+	}
+	h.Fails("row.show", `{"id":`+id+`,"force":true}`, errs.InvalidInput)
+	if j := h.JSON(h.Must("row.show", `{"id":`+id+`,"expand":true}`)); strings.Contains(j, secretDummy) {
+		t.Fatalf("--expand leaks: %s", j)
+	}
+	res, err := h.RunYes("row.show", `{"id":`+id+`,"reveal":true}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Expanded map[string]string `json:"expanded"`
+		Revealed int               `json:"revealed"`
+		Forced   bool              `json:"forced"`
+	}
+	if err = json.Unmarshal([]byte(h.JSON(res)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Revealed != 1 || out.Forced || out.Expanded["body"] != "db: "+secretDummy+" t ••••••" {
+		t.Fatalf("reveal = %+v", out)
+	}
+	if j := h.JSON(h.Must("row.show", `{"id":`+id+`,"reveal":true,"force":true}`)); !strings.Contains(j, `"forced":true`) || !strings.Contains(j, "W_REVEAL_FORCED") {
+		t.Fatalf("forced = %s", j)
+	}
 }

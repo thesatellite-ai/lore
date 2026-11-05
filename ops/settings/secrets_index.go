@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
-	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/internal/reveal"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -205,30 +205,8 @@ func resourceUses(l located, base SecretUse) []SecretUse {
 }
 
 // targetText writes one alternate back as URI text (5.1: reserved
-// characters percent-encoded, options in written order).
-func targetText(t refs.SecretTarget) string {
-	if t.Fixed != "" {
-		return t.Fixed
-	}
-	segs := strings.Split(t.Locator, "/")
-	for i, s := range segs {
-		segs[i] = strings.ReplaceAll(url.PathEscape(s), ":", "%3A")
-	}
-	var b strings.Builder
-	b.WriteString(t.Manager + "://" + strings.Join(segs, "/"))
-	for i, o := range t.Options {
-		if i == 0 {
-			b.WriteByte('?')
-		} else {
-			b.WriteByte('&')
-		}
-		b.WriteString(url.QueryEscape(o.Name) + "=" + url.QueryEscape(o.Value))
-	}
-	if t.Fragment != "" {
-		b.WriteString("#" + url.PathEscape(t.Fragment))
-	}
-	return b.String()
-}
+// characters escaped); shared with the reveal path.
+func targetText(t refs.SecretTarget) string { return reveal.TargetText(t) }
 
 // holderMatch: q is a holder id (or its short prefix), a label, or a
 // person handle (label "<handle>.<machine>" or "<handle>").

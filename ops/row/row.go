@@ -62,6 +62,7 @@ type ShowIn struct {
 	ID     string `json:"id" arg:"0" desc:"any row id (mem_…, tsk_…, res_…, var_…)"`
 	Origin bool   `json:"origin,omitempty" flag:"origin" desc:"also print where the row came from: _o, the audit fields, the _w stamp and its moves (PROV 9.1)"`
 	expand.Flag
+	expand.RevealFlag
 }
 
 // MoveIn is the input of row.move.
@@ -177,6 +178,10 @@ type ShowOut struct {
 	// reference met, with its value or why it stayed as written.
 	Expanded map[string]string `json:"expanded,omitempty"`
 	Refs     []refpoint.Used   `json:"refs,omitempty"`
+	// Revealed, Forced and Warning: --reveal (SECRETS 2.7, SQ10).
+	Revealed int    `json:"revealed,omitempty"`
+	Forced   bool   `json:"forced,omitempty"`
+	Warning  string `json:"warning,omitempty"`
 	prov     *Origin
 }
 
@@ -208,10 +213,12 @@ func (o MoveOut) Text() string {
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	return []op.Entry{
+		// --reveal may answer E_NEEDS_CONFIRM (SQ10: asks every time), so
+		// surfaces offer --yes (MayAsk).
 		op.Define(op.Spec{Name: OpShow, Summary: "Show any row by id, with --origin for where it came from",
-			Permission: op.PermRead, Access: op.AccessRead,
-			Errors: []errs.Code{errs.InvalidID, errs.NotFound, errs.Unsupported, errs.RefCycle, errs.RefDepth,
-				errs.RefLimit, errs.RefRequired, errs.Internal}}, o.show),
+			Permission: op.PermRead, Access: op.AccessRead, Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.RefCycle, errs.RefDepth,
+				errs.RefLimit, errs.RefRequired, errs.NeedsConfirm, errs.RefScheme, errs.SecretUnavailable, errs.Internal}}, o.show),
 		op.Define(op.Spec{Name: OpMove, Summary: "Move any row to another store, keeping its id (the old copy is tombstoned)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{Always: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.MetaInternal, errs.LeakBlocked,
@@ -255,8 +262,11 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			out.Meta[name] = val
 		}
 	}
-	if in.Expand {
-		if err := o.expand(ctx, r, &out); err != nil {
+	if in.Force && !in.Reveal {
+		return ShowOut{}, errs.New(errs.InvalidInput, "--force goes with --reveal")
+	}
+	if in.Expand || in.Reveal {
+		if err := o.expand(ctx, r, in.RevealFlag, &out); err != nil {
 			return ShowOut{}, err
 		}
 	}
@@ -271,14 +281,22 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 }
 
 // expand is --expand (ops/internal/expand: the show point of refpoint;
-// SECRETS 2.7, 12, 13.2). Stored text is never changed (SQ3).
-func (o ops) expand(ctx context.Context, r row.Row, out *ShowOut) error {
+// SECRETS 2.7, 12, 13.2) and --reveal, which implies it (expand.Reveal:
+// asks every time, audited; SQ10, D18). Stored text is never changed (SQ3).
+func (o ops) expand(ctx context.Context, r row.Row, rf expand.RevealFlag, out *ShowOut) error {
 	ex, _ := o.env.(expand.Env)
-	blk, err := expand.Row(ctx, ex, r)
+	var b expand.Block
+	var err error
+	if rf.Reveal {
+		b, err = expand.Reveal(ctx, ex, r, rf.Force)
+	} else {
+		b, err = expand.Row(ctx, ex, r)
+	}
 	if err != nil {
 		return err
 	}
-	out.Expanded, out.Refs = blk.Expanded, blk.Refs
+	out.Expanded, out.Refs = b.Expanded, b.Refs
+	out.Revealed, out.Forced, out.Warning = b.Revealed, b.Forced, b.Warning
 	return nil
 }
 
@@ -432,6 +450,9 @@ func (o ShowOut) Text() string {
 		b.WriteString("  meta " + k + ": " + o.Meta[k] + "\n")
 	}
 	b.WriteString(expand.RefsText(o.Refs))
+	if o.Warning != "" {
+		b.WriteString(o.Warning + "\n")
+	}
 	if o.prov != nil {
 		b.WriteString(o.prov.text())
 	}
