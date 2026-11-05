@@ -590,7 +590,7 @@ func stitchPointer(root string, t contextTarget, outFile string) error {
 	if err := os.MkdirAll(filepath.Dir(absAgent), cliDirMode); err != nil {
 		return errcodes.New(errcodes.Internal, "mkdir parent").WithCause(err)
 	}
-	if err := os.WriteFile(absAgent, []byte(out), cliFileMode); err != nil {
+	if err := writeFileInDir(absAgent, []byte(out), cliFileMode); err != nil {
 		return errcodes.New(errcodes.Internal, "write "+absAgent).WithCause(err)
 	}
 	fmt.Printf("%s %s (pointer → %s)\n", style.Success("✓"), absAgent, link.FromPointer)

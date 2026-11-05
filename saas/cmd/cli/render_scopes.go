@@ -446,7 +446,7 @@ func cleanStaleDirs(root string, plan dirPlan, live map[string]bool, say func(st
 			if empty {
 				err = os.Remove(f)
 			} else {
-				err = os.WriteFile(f, []byte(rest), cliFileMode)
+				err = writeFileInDir(f, []byte(rest), cliFileMode)
 			}
 			if err != nil {
 				return err

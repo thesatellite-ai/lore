@@ -24,28 +24,35 @@ type Finding struct {
 func (c *Clone) LeakScan(needles ...string) []Finding {
 	c.A.w.T.Helper()
 	var found []Finding
-	objects := filepath.Join(c.Dir, ".git", "objects")
-	err := filepath.WalkDir(c.Dir, func(path string, d fs.DirEntry, err error) error {
+	// Walked through an os.Root on the clone (P2-LINT-5); paths are
+	// slash-separated and relative to it.
+	const objects = ".git/objects"
+	root, err := os.OpenRoot(c.Dir)
+	if err != nil {
+		c.A.w.T.Fatalf("leak scan %s: %v", c.Dir, err)
+	}
+	defer func() { _ = root.Close() }() // read-only use
+	fsys := root.FS()
+	err = fs.WalkDir(fsys, ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
-			if path == objects {
-				return filepath.SkipDir
+			if rel == objects {
+				return fs.SkipDir
 			}
 			return nil
 		}
 		if !d.Type().IsRegular() {
 			return nil
 		}
-		b, err := os.ReadFile(filepath.Clean(path))
+		b, err := fs.ReadFile(fsys, rel)
 		if err != nil {
 			return err
 		}
 		for _, n := range needles {
 			if n != "" && strings.Contains(string(b), n) {
-				rel, _ := filepath.Rel(c.Dir, path)
-				found = append(found, Finding{Needle: n, Where: rel})
+				found = append(found, Finding{Needle: n, Where: filepath.FromSlash(rel)})
 			}
 		}
 		return nil

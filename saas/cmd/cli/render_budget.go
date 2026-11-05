@@ -547,7 +547,7 @@ func launchSet(root string, p toolprofile.Profile, loreSize int) string {
 
 // fileSize is a file's size, -1 when it cannot be read.
 func fileSize(path string) int {
-	st, err := os.Stat(path)
+	st, err := statInDir(path)
 	if err != nil || st.IsDir() {
 		return -1
 	}

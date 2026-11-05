@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -291,22 +292,28 @@ func identityForPersonal(ctx context.Context) (lorecfg.OrgIdentity, error) {
 // missing dir is empty.
 func readDirFiles(dir string) (map[string][]byte, error) {
 	out := map[string][]byte{}
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	// Read through an os.Root on dir (P2-LINT-5), so no read leaves it.
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return out, nil
+		}
+		return nil, errcodes.New(errcodes.Internal, fmt.Sprintf("read %s", dir)).WithCause(err)
+	}
+	defer func() { _ = root.Close() }() // read-only use
+	fsys := root.FS()
+	err = fs.WalkDir(fsys, ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
-			if os.IsNotExist(err) {
-				return filepath.SkipAll
-			}
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
-		rel, _ := filepath.Rel(dir, path)
-		b, err := os.ReadFile(filepath.Clean(path))
+		b, err := fs.ReadFile(fsys, rel)
 		if err != nil {
 			return err
 		}
-		out[filepath.ToSlash(rel)] = b
+		out[rel] = b
 		return nil
 	})
 	if err != nil {

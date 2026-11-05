@@ -216,7 +216,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, in, cliFileMode)
+	return writeFileInDir(dst, in, cliFileMode)
 }
 
 // repair.go — `lore repair` (S2.6)

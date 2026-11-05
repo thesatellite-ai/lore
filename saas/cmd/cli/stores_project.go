@@ -642,17 +642,23 @@ func (p *externalProject) diff() (stores.RowChanges, error) {
 	data := filepath.Join(p.Root, projresolve.MarkerDir, lsync.DataDirName)
 	rc := stores.RowChanges{Put: map[string][]byte{}}
 	seen := map[string]bool{}
-	err := filepath.WalkDir(data, func(path string, d fs.DirEntry, err error) error {
+	// Walked through an os.Root on the data folder (P2-LINT-5): a symlink
+	// swapped in mid-walk cannot make a read leave the mirror.
+	root, err := os.OpenRoot(data)
+	if err != nil {
+		return rc, errcodes.New(errcodes.Internal, "scan mirror").WithCause(err)
+	}
+	defer func() { _ = root.Close() }() // read-only use
+	fsys := root.FS()
+	err = fs.WalkDir(fsys, ".", func(rel string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		rel, _ := filepath.Rel(data, path)
-		rel = filepath.ToSlash(rel)
 		if strings.HasSuffix(rel, ".tmp") {
 			return nil
 		}
 		seen[rel] = true
-		b, err := os.ReadFile(filepath.Clean(path))
+		b, err := fs.ReadFile(fsys, rel)
 		if err != nil {
 			return err
 		}

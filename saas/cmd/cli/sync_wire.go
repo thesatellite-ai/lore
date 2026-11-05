@@ -776,7 +776,7 @@ func restoreFile(path string, content []byte, existed bool) error {
 	if !existed {
 		return os.Remove(path)
 	}
-	return os.WriteFile(path, content, syncFileMode)
+	return writeFileInDir(path, content, syncFileMode)
 }
 
 // State keys (lsync caller state) caching the git wiring check.
