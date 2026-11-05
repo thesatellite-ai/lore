@@ -178,6 +178,13 @@ func (w *World) baseEnv(home, actorName string) []string {
 		"GIT_TERMINAL_PROMPT=0",
 		"NO_COLOR=1",
 		"LORE_SYNC_QUIET=0",
+		// Every simulated person is a human at a terminal unless the test
+		// says otherwise (LORE_ACTOR, which wins over this, or an actor env
+		// override, which comes later). Without it, a suite started from a
+		// coding-agent session inherits that agent through agent detection
+		// (the ancestor-process walk, AGENT_IDENTITY 6.1) and every write is
+		// attributed to "alice via <tool>" instead of alice.
+		"LORE_HUMAN=1",
 		EnvRealGit+"="+w.realGit,
 		EnvGitLog+"="+w.gitLog,
 		EnvActorName+"="+actorName,
