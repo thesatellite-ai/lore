@@ -51,6 +51,7 @@ const (
 	searchRunVerb   = "run"
 	planApplyVerb   = "apply"
 	missionApply    = "lore mission apply "
+	helpFlag        = "help"
 )
 
 // mountShortcuts adds the short words; a missing core command adds nothing.
@@ -68,8 +69,9 @@ func mountShortcuts(root *cobra.Command) {
 		root.AddCommand(shortcutOf(mv, "move <id>", "Move a row to another store (same id; asks first)"))
 	}
 	defaultVerb(root, opslint.Noun, lintRunVerb)
-	defaultVerb(root, opssync.Noun, opssync.VerbRun)     // lore sync ─► sync run
-	defaultVerb(root, opssync.NounLand, opssync.VerbRun) // lore land ─► land run
+	defaultVerb(root, opssync.Noun, opssync.VerbRun)        // lore sync ─► sync run
+	defaultVerb(root, opssync.NounLand, opssync.VerbRun)    // lore land ─► land run
+	defaultVerb(root, opssync.NounExplain, opssync.VerbRun) // lore explain <id> ─► explain run (v0.1.17 spelling)
 	if g := defaultVerb(root, opsinfra.NounMachine, machineListVerb); g != nil {
 		g.Aliases = append(g.Aliases, opsinfra.NounMachine+"s")
 	}
@@ -114,6 +116,11 @@ func defaultVerb(root *cobra.Command, noun, verb string) *cobra.Command {
 		return nil
 	}
 	g.Short = run.Short
+	// "lore explain <id>", "lore sql <query>": the verb's positionals on
+	// the bare spelling (cobra names the command by Use's first word).
+	g.Use = noun + strings.TrimPrefix(run.Use, run.Name())
+	g.Long, g.Example = run.Long, run.Example
+	showFlags(g, run)
 	g.Args = cobra.ArbitraryArgs
 	g.DisableFlagParsing = true
 	g.RunE = forward(run)
@@ -123,11 +130,28 @@ func defaultVerb(root *cobra.Command, noun, verb string) *cobra.Command {
 // shortcutOf is a top-level command that parses its arguments with target's
 // flags and runs target, so both spellings share one implementation.
 func shortcutOf(target *cobra.Command, use, short string) *cobra.Command {
-	return &cobra.Command{
+	c := &cobra.Command{
 		Use: use, Short: short, Long: target.Long, Example: target.Example,
 		DisableFlagParsing: true,
 		RunE:               forward(target),
 	}
+	showFlags(c, target)
+	return c
+}
+
+// showFlags lists target's flags in c's --help. c never parses them
+// (DisableFlagParsing: forward parses with target's own set), so the shared
+// *pflag.Flag values are only read for the help text. This is what makes
+// `lore move --help` print "lore move <id> [flags]" and bare-noun help
+// print "lore whoami [flags]" (CLI_REFERENCE 2.7, 3.8) instead of the
+// registered path of the operation they run (lore row move, lore whoami show).
+func showFlags(c, target *cobra.Command) {
+	target.InitDefaultHelpFlag()
+	target.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Name != helpFlag && c.Flags().Lookup(f.Name) == nil {
+			c.Flags().AddFlag(f)
+		}
+	})
 }
 
 // forward runs target with args parsed by target's own flag set.
@@ -136,14 +160,16 @@ func forward(target *cobra.Command) func(*cobra.Command, []string) error {
 		target.SetContext(cmd.Context())
 		target.SetOut(cmd.OutOrStdout())
 		target.SetErr(cmd.ErrOrStderr())
+		// Help is cmd's: the spelling the user typed, with target's flags
+		// (showFlags), not target's registered path.
 		if err := target.ParseFlags(args); err != nil {
 			if errors.Is(err, pflag.ErrHelp) {
-				return target.Help()
+				return cmd.Help()
 			}
 			return target.FlagErrorFunc()(target, err)
 		}
-		if h, _ := target.Flags().GetBool("help"); h {
-			return target.Help()
+		if h, _ := target.Flags().GetBool(helpFlag); h {
+			return cmd.Help()
 		}
 		rest := target.Flags().Args()
 		if err := target.ValidateArgs(rest); err != nil {
