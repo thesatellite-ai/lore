@@ -52,10 +52,14 @@ type FieldInfo struct {
 	// flag).
 	Flag string
 	Desc string
-	// Required: the json tag has no omitempty. Bool fields are never
+	// Required: the json tag has no omitempty, or the field carries
+	// `required:"after-lookup"` (required.go). Bool fields are never
 	// required (false is a value).
 	Required bool
-	UI       schema.UI
+	// AfterLookup marks a required field the operation checks itself after
+	// its id lookup (OV29); the decoder does not refuse it (checkRequired).
+	AfterLookup bool
+	UI          schema.UI
 	// Fields are the children of an object or list-of-object output field.
 	Fields []FieldInfo
 	// Nullable marks an op.Null output field: printed as JSON null when
@@ -202,6 +206,7 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 	f.Type, f.Fields = typeOf(op, where, ft, dir)
 	f.Actor = ft == actorRefType
 	f.Required = !strings.Contains(opts, "omitempty") && f.Type != TypeBool
+	markAfterLookup(where, sf, &f)
 	if a, ok := sf.Tag.Lookup(tagArg); ok {
 		n, err := strconv.Atoi(a)
 		if err != nil || n < 0 {

@@ -175,7 +175,7 @@ func (r Result) JSON() ([]byte, error) {
 // checkRequired refuses a decoded input whose required fields are zero.
 func checkRequired(v reflect.Value, fields []FieldInfo) error {
 	for _, f := range fields {
-		if f.Required && v.FieldByIndex(f.index).IsZero() {
+		if f.Required && !f.AfterLookup && v.FieldByIndex(f.index).IsZero() {
 			return errs.New(errs.InvalidInput, "missing required field "+f.Name)
 		}
 	}
