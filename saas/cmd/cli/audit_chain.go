@@ -20,8 +20,11 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 
 	"saas/pkg/aicoder/errcodes"
+	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
@@ -31,12 +34,45 @@ import (
 
 // auditDBPath is the lore.db path of the project at root ("" = working
 // directory), the chain's key source.
+//
+// P3-F18-1: a fresh clone of a 0.1.18 project has .lore/data and no lore.db
+// (it is gitignored), so projresolve answers ErrNotProjectRoot there. The
+// chain lives in the machine store since P3-LOCAL-7 and needs only a name,
+// so such a folder names the lore.db path a later materialize builds
+// (<root>/.lore/lore.db, projresolve's Mode A default): the chain key stays
+// the same before and after lore.db exists. Before this, every core write
+// in a fresh clone failed its audit record (the first actor row: E_INTERNAL
+// "wire: write the actor row to store repo"; lore actor register:
+// E_NOT_PROJECT_ROOT), because the sink no longer materialized lore.db.
 func auditDBPath(root string) (string, error) {
 	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: root})
-	if err != nil {
-		return "", mapResolveError(err)
+	if err == nil {
+		return rctx.DBPath, nil
 	}
-	return rctx.DBPath, nil
+	if errors.Is(err, projresolve.ErrNotProjectRoot) {
+		if p, ok := freshCloneDBPath(root); ok {
+			return p, nil
+		}
+	}
+	return "", mapResolveError(err)
+}
+
+// freshCloneDBPath is <root>/.lore/lore.db when root ("" = working
+// directory) holds a .lore folder with a data folder but neither lore.db
+// nor a pointer file (projresolve.DetectMode's ErrNotProjectRoot case).
+func freshCloneDBPath(root string) (string, bool) {
+	if root == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", false
+		}
+		root = wd
+	}
+	fi, err := os.Stat(filepath.Join(root, projresolve.MarkerDir, lsync.DataDirName))
+	if err != nil || !fi.IsDir() {
+		return "", false
+	}
+	return filepath.Join(root, projresolve.MarkerDir, projresolve.ModeAFile), true
 }
 
 // openAuditChain opens app's chain (nil = coreApp) and makes sure the
