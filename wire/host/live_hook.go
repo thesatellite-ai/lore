@@ -199,6 +199,7 @@ func (l *Live) Hook() Hook {
 			if o.Sync == nil {
 				o.Sync = liveSync{h: h} // live-only lore sync / lore land (P3-MODEB-3)
 			}
+			o.Context.Doctor = liveDoctor{h: h, inner: o.Context.Doctor} // live rows in `lore doctor` (live_doctor.go)
 		},
 		Around:  h.around,
 		OnError: h.explainNotFound,
