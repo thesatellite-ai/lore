@@ -224,8 +224,19 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 // dependent, recursively (3.4). Set-null and many-to-many links are
 // referrers and stay as they are (D8), so a restore needs no undo of them.
 func (e *Engine) planTrash(ctx context.Context, src store.Source, root row.Row) ([]trashItem, error) {
-	plan := []trashItem{{src, root}}
-	seen := map[ids.AnyID]bool{root.ID: true}
+	return e.planTrashMany(ctx, []trashItem{{src, root}})
+}
+
+// planTrashMany is planTrash for several roots deleted in one batch
+// (r3-projdel: a project with the checkout's own repos row): a root never
+// blocks another root through a restrict relation, because it is already
+// in the group.
+func (e *Engine) planTrashMany(ctx context.Context, roots []trashItem) ([]trashItem, error) {
+	plan := slices.Clone(roots)
+	seen := make(map[ids.AnyID]bool, len(roots))
+	for _, r := range roots {
+		seen[r.row.ID] = true
+	}
 	for i := 0; i < len(plan); i++ {
 		it := plan[i]
 		deps, err := e.dependents(ctx, it.row.Table, it.row.ID)

@@ -44,6 +44,17 @@ func (a *App) InTrash(ctx context.Context, ref engine.Ref) error {
 	return eng.InTrash(ctx, ref)
 }
 
+// PreviewDelete is the group a delete of refs would move to the trash,
+// planned without writing (r3-projdel): plan and project delete name the
+// counts and refuse before their first write.
+func (a *App) PreviewDelete(ctx context.Context, refs ...engine.Ref) (engine.DeletePreview, error) {
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		return engine.DeletePreview{}, err
+	}
+	return eng.PreviewDelete(ctx, refs...)
+}
+
 // TableSchema implements opstrash.Env.
 func (a *App) TableSchema(ctx context.Context, table row.Table) (schema.TableDef, bool) {
 	eng, err := a.Engine(ctx)

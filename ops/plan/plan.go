@@ -10,13 +10,16 @@ package plan
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -225,8 +228,10 @@ func Ops(env work.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
-			Name: OpDelete, Summary: "Delete a plan (its tasks and missions are detached; a tombstone is kept)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors, Confirm: op.ConfirmRule{Always: true},
+			Name: OpDelete, Summary: "Move a plan to the trash, with its tasks (one batch; restore with lore trash restore)",
+			// MayAsk: the question is asked in delete, after the group is
+			// counted (an up-front Always could not name the tasks, XQ2).
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.delete),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across plan title + body + status",
@@ -359,14 +364,56 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" plan "+id.String()+" updated\n")
 }
 
-// delete tombstones the plan; its tasks' and missions' plan_id is cleared.
+// Previewer is the optional Env upgrade that plans a delete without
+// writing (engine.PreviewDelete; wire.App has it). Without it plan delete
+// asks the plain question and the engine still asks for the group.
+type Previewer interface {
+	PreviewDelete(ctx context.Context, refs ...engine.Ref) (engine.DeletePreview, error)
+}
+
+// delete moves the plan to the trash with its tasks (DELETION 3.4, OV33:
+// tasks.plan_id is a cascade relation), as one batch:
+//
+//	id ─► Get (E_IN_TRASH for a trashed plan) ─► PreviewDelete (counts,
+//	      E_HAS_DEPENDENTS before any write) ─► Ask (names the tasks)
+//	   ─► bulk.Begin ─► engine delete ─► "moved to the trash (batch …)"
 func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	id, err := listID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, Noun, table, id, trashline.Moved(id.String(), id.String()))
+	src, cur, err := work.Get(ctx, o.env, Noun, table, id)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	label := "plan " + id.String() + " " + work.Quote(work.Field(cur, work.FieldTitle))
+	question := "delete " + label + "?"
+	deps := 0
+	if pv, ok := upgrade.As[Previewer](o.env); ok {
+		p, perr := pv.PreviewDelete(ctx, engine.Ref{Store: src, Table: table, ID: id})
+		if perr != nil {
+			return work.WriteOut{}, perr
+		}
+		deps = p.Dependents(1)
+		if deps > 0 {
+			// 3.4: a group with tasks always asks; the question names them.
+			question = "deleting " + label + " also moves " + strconv.Itoa(deps) + " rows to the trash (" +
+				strconv.Itoa(p.Tasks(1)) + " tasks, " + strconv.Itoa(p.Count(schema.TableMissions, 1)) + " missions); delete them all?"
+		}
+	}
+	if err = bulk.Ask(ctx, question); err != nil {
+		return work.WriteOut{}, err
+	}
+	bctx, batch, err := bulk.Begin(ctx, bulk.KindDelete)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	human := trashline.Moved(id.String(), id.String())
+	if deps > 0 { // OV46-D1: a delete of several rows names the batch as its restore target
+		human = trashline.MovedBatch(label+" + "+strconv.Itoa(deps)+" rows", batch.String())
+	}
+	return work.Delete(bctx, o.env, Noun, table, id, human)
 }
 
 // search matches plans by title, body and status.
