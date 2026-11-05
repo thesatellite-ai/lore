@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"dbent/gen/ent"
 	"saas/pkg/aicoder/canonjson"
@@ -39,6 +40,7 @@ import (
 	"saas/pkg/aicoder/signals/coord"
 	"saas/pkg/constants"
 
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -182,7 +184,35 @@ func openRepoTarget(ctx context.Context, w *coordWorld) (coordTarget, error) {
 // env builds the coord.Env for a target.
 func (w *coordWorld) env(t coordTarget) coord.Env {
 	return coord.Env{Signals: t.Signals, Folder: t.Folder, Rows: t.Rows, Caller: w.Caller(), Agents: w.Agents, Held: w.held(),
-		Urgency: urgencyWeights(context.Background())} // OV15B-URG (coord_views.go); policySet reads the process's core app
+		Urgency: urgencyWeights(context.Background()), // OV15B-URG (coord_views.go); policySet reads the process's core app
+		Time:    claimTimeSpans(context.Background())}
+}
+
+// Built-in time.long_span / time.coalesce_gap (TQ2 10h, TQ4 2m) for a
+// policy that leaves the key unset.
+const (
+	claimLongSpanDefault    = 10 * time.Hour
+	claimCoalesceGapDefault = 2 * time.Minute
+)
+
+// claimTimeSpans are the repo's time.long_span / time.coalesce_gap for the
+// claim spans the coordination writer closes (OV7-6, FA-LTASK-3: the same
+// keys task start/stop read). No policy, or a key not set, leaves the
+// zero value: coord then uses the built-in 10h / 2m.
+func claimTimeSpans(ctx context.Context) coord.TimeSpans {
+	set, ok := policySet(ctx)
+	if !ok {
+		return coord.TimeSpans{}
+	}
+	// a key not set keeps its built-in default (the policy default is the same)
+	out := coord.TimeSpans{LongSpan: claimLongSpanDefault, CoalesceGap: claimCoalesceGapDefault, Read: true}
+	if n, isSet := set.Limit(policy.KeyTimeLongSpan); isSet {
+		out.LongSpan = time.Duration(n) * time.Minute
+	}
+	if n, isSet := set.Limit(policy.KeyTimeCoalesceGap); isSet {
+		out.CoalesceGap = time.Duration(n) * time.Minute
+	}
+	return out
 }
 
 // liveRows is coord.Rows over this repo's live ref (live wins) with the

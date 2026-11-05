@@ -56,6 +56,9 @@ type Env struct {
 	// Urgency are the tasks.urgency.* weights the host read from policy
 	// (OV15B-URG); the zero value means the TASK 13.2 defaults.
 	Urgency urgency.Weights
+	// Time is time.long_span / time.coalesce_gap for the claim spans the
+	// writer closes (OV7-6); the zero value means the built-in defaults.
+	Time TimeSpans
 }
 
 // FenceKind is the kind of fencing failure (§7.4), mapped by the CLI to
@@ -281,7 +284,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			entry.Event = schema.ClaimEventReclaim
 			entry.PrevActorID = plan.Prev.Holder
 			// D3: the previous holder's span ends at its last heartbeat.
-			if err = next.closeClaimSpan(*plan.Prev, now, v.Lease.TTL); err != nil {
+			if err = next.closeClaimSpan(*plan.Prev, now, v.Lease.TTL, env.Time); err != nil {
 				return signals.Change{}, err
 			}
 		}
@@ -463,7 +466,7 @@ func Release(ctx context.Context, env Env, id string) error {
 			return signals.Change{}, errors.Join(err, errIf(!ok, fmt.Errorf("%w: %s", ErrUnknownTask, id)))
 		}
 		next := doc.Clone()
-		if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL); err != nil { // D4: same write
+		if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
 			return signals.Change{}, err
 		}
 		if err := next.AppendClaimLog(schema.ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: schema.ClaimEventRelease,
@@ -514,7 +517,7 @@ func HolderWrite(ctx context.Context, env Env, id string, dropClaim bool, mutate
 		}
 		next := doc.Clone()
 		if dropClaim { // holder done: the claim span closes in the same write (D4)
-			if err = next.closeClaimSpan(held, v.Now, v.Lease.TTL); err != nil {
+			if err = next.closeClaimSpan(held, v.Now, v.Lease.TTL, env.Time); err != nil {
 				return signals.Change{}, err
 			}
 		}
@@ -630,7 +633,7 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 			entry.PrevActorID = removed.Holder
 		}
 		if removed != nil { // revoke/reassign/cancel close the holder's span (D4)
-			if err = next.closeClaimSpan(*removed, v.Now, v.Lease.TTL); err != nil {
+			if err = next.closeClaimSpan(*removed, v.Now, v.Lease.TTL, env.Time); err != nil {
 				return signals.Change{}, err
 			}
 		}

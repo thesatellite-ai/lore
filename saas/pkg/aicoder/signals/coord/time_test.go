@@ -38,7 +38,7 @@ func TestCloseClaimSpan(t *testing.T) {
 			s := base
 			s.RenewedAt, s.Expires = c.renewed, c.expires
 			d := Doc{}
-			if err := d.closeClaimSpan(s, c.now, ttl); err != nil {
+			if err := d.closeClaimSpan(s, c.now, ttl, TimeSpans{}); err != nil {
 				t.Fatal(err)
 			}
 			es := d.TimeEntries()

@@ -80,7 +80,7 @@ func expiredRowWrites(ctx context.Context, env Env, v signals.View, ch signals.C
 			continue
 		}
 		next := doc.Clone()
-		if err := next.closeClaimSpan(sig, v.Now, v.Lease.TTL); err != nil {
+		if err := next.closeClaimSpan(sig, v.Now, v.Lease.TTL, env.Time); err != nil {
 			continue
 		}
 		at, _ := sig.LastHeartbeat(v.Lease.TTL)

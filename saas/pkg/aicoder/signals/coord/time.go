@@ -5,7 +5,7 @@ package coord
 // in the SAME atomic write as the signal change:
 //
 //	Release ───────────────┐
-//	HolderWrite(dropClaim) ├─► closeClaimSpan(doc, signal, now, ttl)
+//	HolderWrite(dropClaim) ├─► closeClaimSpan(doc, signal, now, ttl, env.Time)
 //	OverrideChecked ───────┤      end = now, or the last heartbeat when the
 //	Claim (reclaim, Prev) ─┘      lease already expired (D3; estimated_end
 //	                              for a signal without renewed_at)
@@ -26,13 +26,31 @@ import (
 // keyTimeEntries is the task row's closed time spans (model/timeentry).
 const keyTimeEntries = "time_entries"
 
-// Time policy defaults the coord writer applies (the policy keys
-// time.long_span / time.coalesce_gap are read by the core; this writer
-// has no policy reader yet, OV7-6).
+// Time policy defaults of the claim span writer: time.long_span and
+// time.coalesce_gap's built-in values, used when the host read no policy
+// (Env.Time zero, OV7-6).
 const (
 	claimLongSpan    = 10 * time.Hour
 	claimCoalesceGap = 2 * time.Minute
 )
+
+// TimeSpans are the time.long_span / time.coalesce_gap values the host
+// read from policy (OV7-6, FA-LTASK-3). Read false (the zero value) means
+// the host read no policy: the built-in defaults apply. With Read true the
+// values are used as given, 0 included (a policy may set coalesce_gap 0).
+type TimeSpans struct {
+	LongSpan    time.Duration
+	CoalesceGap time.Duration
+	Read        bool
+}
+
+// orDefaults is t, or the built-in defaults when no policy was read.
+func (t TimeSpans) orDefaults() TimeSpans {
+	if !t.Read {
+		return TimeSpans{LongSpan: claimLongSpan, CoalesceGap: claimCoalesceGap, Read: true}
+	}
+	return t
+}
 
 // agentLabelPrefix marks an agent holder in Signal.HolderLabel.
 const agentLabelPrefix = "agent:"
@@ -65,7 +83,7 @@ func (d Doc) TimeEntries() []timeentry.Entry {
 
 // closeClaimSpan appends the closed span of claim s to the row. A holder
 // id that is not a core actor id (rows of an old binary) writes nothing.
-func (d Doc) closeClaimSpan(s signals.Signal, now time.Time, ttl time.Duration) error {
+func (d Doc) closeClaimSpan(s signals.Signal, now time.Time, ttl time.Duration, tp TimeSpans) error {
 	actor, err := ids.Parse[ids.Actor](s.Holder)
 	if err != nil || s.Since.IsZero() {
 		return nil // nothing to attribute; the claim log still records the event
@@ -90,7 +108,8 @@ func (d Doc) closeClaimSpan(s signals.Signal, now time.Time, ttl time.Duration) 
 	for _, f := range flags {
 		e = e.WithFlag(f)
 	}
-	v, err := jsonValue(timecalc.CloseInto(d.TimeEntries(), e, claimLongSpan, claimCoalesceGap))
+	tp = tp.orDefaults()
+	v, err := jsonValue(timecalc.CloseInto(d.TimeEntries(), e, tp.LongSpan, tp.CoalesceGap))
 	if err != nil {
 		return fmt.Errorf("coord: encode time_entries: %w", err)
 	}
