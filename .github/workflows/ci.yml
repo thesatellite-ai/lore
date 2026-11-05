@@ -36,14 +36,14 @@ jobs:
           fi
 
       - name: go vet
-        run: go vet ./saas/cmd/cli/...
+        run: go vet ./... ./saas/cmd/cli/...
 
       - name: go build (pure Go, no CGO)
         env:
           CGO_ENABLED: "0"
-        run: go build -o /tmp/lore ./saas/cmd/cli
+        run: go build -o /tmp/lore ./cmd/lore
 
       - name: go test
         env:
           CGO_ENABLED: "0"
-        run: go test -count=1 ./dbent/... ./lace/... ./saas/...
+        run: go test -count=1 ./... ./dbent/... ./lace/... ./saas/...

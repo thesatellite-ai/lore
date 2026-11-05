@@ -20,7 +20,8 @@ This is a Go **workspace** (`go.work`) stitching local modules:
 
 | Module | Role |
 |--------|------|
-| `saas/cmd/cli` | the `lore` binary (package `main`) |
+| `.` (`github.com/thesatellite-ai/lore`) | the 0.1.18 core; `cmd/lore` is the release `lore` binary (package `main`, built by `task lore:build` and `.goreleaser.yml`) |
+| `saas/cmd/cli` | the old v0.1.17-layout binary, kept while the old modules are emptied (`task lore:build:old` → `tmp/bin/lore-old`; the team e2e and docs-example tasks still build it) |
 | `saas/pkg/aicoder/*` | core domain logic (capture, search, render, fts5) |
 | `saas/pkg/aicoder/lsync` | git sync engine: table registry, change triggers, reconcile, bootstrap/adopt, merge driver, trash/conflicts |
 | `saas/pkg/aicoder/{canonjson,merge3,gitsetup}` | generic helpers sync is built on: byte-stable JSON, field-level 3-way merge, idempotent git wiring + plumbing |
@@ -73,7 +74,7 @@ Adding an ent table? `saas/pkg/aicoder/lsync/registry.go` must classify it as sy
 Plain `go build`:
 
 ```sh
-CGO_ENABLED=0 go build -o tmp/bin/lore ./saas/cmd/cli
+CGO_ENABLED=0 go build -o tmp/bin/lore ./cmd/lore
 ```
 
 ## Releases

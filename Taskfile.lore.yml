@@ -30,14 +30,24 @@ vars:
 
 tasks:
   build:
-    desc: "Build aicoder binary (pure-Go sqlite, CGO off, version stamped)"
+    desc: "Build the lore release binary from ./cmd/lore (pure-Go sqlite, CGO off, version stamped; same ldflags as .goreleaser.yml)"
     vars:
       VERSION:
         sh: git describe --tags --always --dirty 2>/dev/null || echo dev
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -trimpath -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.LORE_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -trimpath -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.LORE_BIN}} ./cmd/lore
       - echo "Built {{.LORE_BIN}} ({{.VERSION}})"
+
+  build:old:
+    desc: "Build the old v0.1.17-layout binary from ./saas/cmd/cli into tmp/bin/lore-old (kept while saas exists: the team e2e and docs-example tasks still build it; removed in phase E)"
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -trimpath -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.BIN_DIR}}/lore-old ./saas/cmd/cli
+      - echo "Built {{.BIN_DIR}}/lore-old ({{.VERSION}})"
 
   spec:
     desc: "Regenerate docs/reference/cli-commands.md and openapi.json from the 0.1.18 operation registry (the wire drift test fails until this is run). Runs the binary from a temp folder so it never touches this repo's hooks"
@@ -46,13 +56,13 @@ tasks:
       - cd "$(mktemp -d)" && {{.LORE_BIN}} spec docs --out {{.ROOT_DIR}}/docs/reference && {{.LORE_BIN}} spec openapi --out {{.ROOT_DIR}}/docs/reference
 
   build:debug:
-    desc: "Build aicoder with debug symbols"
+    desc: "Build lore (./cmd/lore) with debug symbols"
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -o {{.LORE_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -o {{.LORE_BIN}} ./cmd/lore
 
   install:
-    desc: "Install aicoder to $GOPATH/bin"
+    desc: "Install lore (./cmd/lore) to $GOPATH/bin"
     deps: [build]
     cmds:
       - cp {{.LORE_BIN}} $(go env GOPATH)/bin/lore
@@ -187,13 +197,18 @@ tasks:
       # (pipefail so a build failure of the test binary is not swallowed by the pipe).
       - |
         set -o pipefail
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
           | go run ./saas/cmd/cli/internal/teamharness/matrix
 
   trial:github:
     desc: "MANUAL ONLY, never in CI or any automatic gate: the real-repo trial (docs/team/real-repo-trial.md). Needs two empty private repos you can push to, named by LORE_TRIAL_CLIENT_REMOTE and LORE_TRIAL_STORE_REMOTE; it deletes every ref of both (only when empty or carrying the trial's marker), builds lore from this checkout and runs every team step against them, then prints a pass/fail table"
     cmds:
       - tests/team/trial/run.sh
+
+  test:team:lockranks:
+    desc: "Team e2e suite with every test under the ranked lock watch (LORE_TEAM_LOCK_RANKS=1, FORMAT_EVOLUTION 7.5/7.8; Linux only): fails when any process takes a lock ranked before one it holds. Extra go test flags after --"
+    cmds:
+      - LORE_TEAM_LOCK_RANKS=1 task lore:test:team -- {{.CLI_ARGS}}
 
   test:team:race:
     desc: "Team e2e race tests repeated (default -count=5; override: task lore:test:team:race -- -count=10)"
@@ -271,13 +286,19 @@ tasks:
         go tool cover -func=coverage.out | grep -E "saas/(cmd/cli|pkg/aicoder/(lsync|gitsetup|merge3|canonjson|guard|migrationlog))/" | awk '$NF == "0.0%"' || true
 
   build:cross:
-    desc: "Cross-compile the CLI for every shipped OS/arch (platform code must build everywhere, not just on the host)"
+    desc: "Cross-compile the release binary (./cmd/lore) and, while saas exists, the old one for every shipped OS/arch (platform code must build everywhere, not just on the host)"
     cmds:
+      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/lore
       - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/lore
       - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/lore
       - CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./cmd/lore
       - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/lore
       - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o /dev/null ./cmd/lore
       - CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
 
   lint:
