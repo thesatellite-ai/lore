@@ -54,41 +54,6 @@ var _ opscoord.Host = standaloneCoord{}
 // coordUnsupported is ops/coord's refusal for the verb name.
 func coordUnsupported(name string) error { return opscoord.Unsupported(name) }
 
-// TaskMerged implements opscoord.Host.
-func (standaloneCoord) TaskMerged(context.Context, opscoord.MergedIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpTaskMerged)
-}
-
-// TaskReassign implements opscoord.Host.
-func (standaloneCoord) TaskReassign(context.Context, opscoord.ReassignIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpTaskReassign)
-}
-
-// TaskReassignPlan implements opscoord.Host.
-func (standaloneCoord) TaskReassignPlan(context.Context, opscoord.ReassignIn) (opscoord.ReassignPlan, error) {
-	return opscoord.ReassignPlan{}, coordUnsupported(opscoord.OpTaskReassign)
-}
-
-// HoldClaim implements opscoord.Host.
-func (standaloneCoord) HoldClaim(context.Context, opscoord.HoldClaimIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpHoldClaim)
-}
-
-// HoldRelease implements opscoord.Host.
-func (standaloneCoord) HoldRelease(context.Context, opscoord.HoldReleaseIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpHoldRelease)
-}
-
-// GateRequest implements opscoord.Host.
-func (standaloneCoord) GateRequest(context.Context, opscoord.GateIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpGateRequest)
-}
-
-// GateApprove implements opscoord.Host.
-func (standaloneCoord) GateApprove(context.Context, opscoord.GateIn) (opscoord.Report, error) {
-	return opscoord.Report{}, coordUnsupported(opscoord.OpGateApprove)
-}
-
 // Inbox implements opscoord.Host.
 func (standaloneCoord) Inbox(context.Context, opscoord.InboxIn) (opscoord.InboxOut, error) {
 	return opscoord.InboxOut{}, coordUnsupported(opscoord.OpInbox)
