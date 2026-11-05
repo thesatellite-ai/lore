@@ -142,6 +142,9 @@ const (
 	KeyContextDirFiles Key = "context.dir_files"
 	// KeyContextBudgetDir: bytes of each per-directory LORE.md (6.1).
 	KeyContextBudgetDir Key = "context.budget.dir"
+	// KeyContextBudgetPathFile: bytes of each path-scoped rule file
+	// (.claude/rules/lore/lore-path-*.md, .cursor/rules/lore-path-*.mdc; 6.1).
+	KeyContextBudgetPathFile Key = "context.budget.path_file"
 	// KeyContextDirMinEntries: a directory with fewer scoped entries gets no file; its rows go to the parent file (6.1).
 	KeyContextDirMinEntries Key = "context.dir_min_entries"
 	// KeyContextChainMaxCodex: bytes the root-to-deepest AGENTS.md chain may hold (Codex adds every level into one cap, 6.2.6).
@@ -195,6 +198,7 @@ const (
 	ceilingContextWarnAtPct     int64 = 100
 	defaultContextHookCap       int64 = 9000
 	defaultContextBudgetDir     int64 = 8000
+	defaultContextBudgetPath    int64 = 8000
 	defaultContextDirMinEntries int64 = 3
 	defaultContextChainMaxCodex int64 = 32768
 	defaultManagerTimeoutSec    int64 = 5  // SECRETS 6
@@ -389,6 +393,7 @@ func Keys() []KeyDef {
 		// CQ10: off is the strict value (no new files in a repo); client repos read an unset key as off.
 		{Key: KeyContextDirFiles, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true), Doc: "lore render writes per-directory LORE.md files for dir scopes (client repos: off until set for that client, CQ10)"},
 		{Key: KeyContextBudgetDir, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetDir), Doc: "bytes of each per-directory LORE.md (6.1)"},
+		{Key: KeyContextBudgetPathFile, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetPath), Doc: "bytes of each path-scoped rule file (6.1, 6.7)"},
 		{Key: KeyContextDirMinEntries, Shape: ShapeLimit, Default: value.Int(defaultContextDirMinEntries), Doc: "a directory scope with fewer entries gets no file; its rows go to the parent file (6.1)"},
 		{Key: KeyContextChainMaxCodex, Shape: ShapeLimit, Default: value.Int(defaultContextChainMaxCodex), Doc: "bytes the root-to-deepest AGENTS.md chain may hold for Codex (6.2.6)"},
 		// XQ2: a limit, the smaller is stricter: a lower preview count makes
