@@ -103,7 +103,7 @@ func MergeFiles(ctx context.Context, basePath, oursPath, theirsPath, repoPath st
 		}
 	}
 	// F4 step 1: settle the file first (add/add, delete versus edit,
-	// two tombstones), then field level with the newer side chosen by hlc
+	// two tombstones: the earlier one is kept, DEL-TOMB2), then field level with the newer side chosen by hlc
 	// when both carry one, else by updated_at (step 2).
 	bF := merge3.Absent()
 	if bDoc != nil {

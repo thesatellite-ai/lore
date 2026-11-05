@@ -57,8 +57,10 @@ func TestMergeFile_Contract(t *testing.T) {
 			wantKind: FileRow, wantDecision: DecisionFieldMerge, wantConflict: true},
 		{name: "tombstone vs removed → tombstone", base: Row(baseRow), ours: Absent(), theirs: Tombstone(tombDoc1),
 			wantKind: FileTombstone, wantDoc: tombDoc1, wantDecision: DecisionBothDeleted},
-		{name: "two tombstones → newer side's (theirs)", base: Row(baseRow), ours: Tombstone(tombDoc1), theirs: Tombstone(tombDoc2),
-			wantKind: FileTombstone, wantDoc: tombDoc2, wantDecision: DecisionBothDeleted},
+		// DEL-TOMB2 (DELETION 3.7): two tombstones keep the EARLIER one;
+		// theirs is Newer here, so ours' tombstone is kept.
+		{name: "two tombstones → earlier side's (ours)", base: Row(baseRow), ours: Tombstone(tombDoc1), theirs: Tombstone(tombDoc2),
+			wantKind: FileTombstone, wantDoc: tombDoc1, wantDecision: DecisionBothDeleted},
 		{name: "resurrected on both from a tombstone → merge with empty base", base: Tombstone(tombDoc1), ours: Row(editA), theirs: Row(editA),
 			wantKind: FileRow, wantDoc: editA, wantDecision: DecisionSame},
 		// A tombstone that still carries the row's fields must not act as

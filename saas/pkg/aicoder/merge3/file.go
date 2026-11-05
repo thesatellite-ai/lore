@@ -128,8 +128,8 @@ func (r FileResult) Conflicted() bool { return len(r.Fields.Conflicts) > 0 }
 //     was a row and an empty base otherwise;
 //  4. one side holds an edited row and the other deleted it → the row
 //     (modify beats delete);
-//  5. both deleted it differently → a tombstone (the Newer side's when
-//     both wrote one).
+//  5. both deleted it differently → a tombstone (the EARLIER side's, i.e.
+//     not Newer, when both wrote one: DEL-TOMB2).
 //
 // The result is always one whole file; base is used only to tell what each
 // side changed.
@@ -177,8 +177,11 @@ func MergeFile(base, ours, theirs File, p Policy) (FileResult, error) {
 		return FileResult{File: theirs, Decision: DecisionModifyBeatsDelete, DeletedBy: SideOurs}, nil
 	}
 	// Both deleted and they differ, so at least one wrote a tombstone.
+	// DEL-TOMB2 (DELETION 3.7): two tombstones keep the EARLIER one (the
+	// side that is not Newer), so the first deleter and time stay on record,
+	// the same rule as the core merge (logic/merge).
 	winner := ours
-	if theirs.Kind == FileTombstone && (ours.Kind != FileTombstone || p.Newer == SideTheirs) {
+	if theirs.Kind == FileTombstone && (ours.Kind != FileTombstone || p.Newer == SideOurs) {
 		winner = theirs
 	}
 	return FileResult{File: winner, Decision: DecisionBothDeleted}, nil
