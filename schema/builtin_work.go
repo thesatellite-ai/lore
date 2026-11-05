@@ -296,8 +296,10 @@ func workDefs() []TableDef {
 			IndexOn("project_id", "idempotency_key"),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 			BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),
-			// DELETION 3.4: a plan's tasks go to the trash with it.
-			BelongsToRel("plan", "plan_id", TablePlans, Cascade),
+			// DELETION 3.4 lists only a plan's TASKS as its dependents, so a
+			// mission is not trashed with its plan: the pointer is cleared at
+			// purge (P2-DEL-4; a soft delete leaves set_null pointers as is).
+			BelongsToRel("plan", "plan_id", TablePlans, SetNull),
 			HasManyRel("tasks", TableTasks, "mission_id"),
 			tagIDs(),
 			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinMissionTags, Cascade),
