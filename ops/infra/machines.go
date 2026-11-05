@@ -108,11 +108,11 @@ type Machine struct {
 	IDSource  string            `json:"id_source,omitempty"`
 	Label     string            `json:"label,omitempty"`
 	Hostname  string            `json:"hostname,omitempty"`
-	OS        map[string]string `json:"os,omitempty"`
-	Kernel    map[string]string `json:"kernel,omitempty"`
-	Libc      map[string]string `json:"libc,omitempty"`
+	OS        NameVersion       `json:"os,omitzero"`
+	Kernel    NameVersion       `json:"kernel,omitzero"`
+	Libc      NameVersion       `json:"libc,omitzero"`
 	Arch      string            `json:"arch,omitempty"`
-	CPU       map[string]string `json:"cpu,omitempty"`
+	CPU       CPU               `json:"cpu,omitzero"`
 	RAMMB     int64             `json:"ram_mb,omitempty"`
 	OSUser    string            `json:"os_user,omitempty"`
 	Install   string            `json:"install_method,omitempty"`
@@ -123,6 +123,22 @@ type Machine struct {
 	Lore      string          `json:"lore_version,omitempty"`
 	LastWrite string          `json:"last_write,omitempty"`
 	Store     store.SourceRef `json:"_source,omitempty,omitzero"`
+}
+
+// NameVersion is a profile {name, version} object (os, kernel, libc).
+type NameVersion struct {
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
+}
+
+// Text is "ubuntu 24.04".
+func (n NameVersion) Text() string { return strings.TrimSpace(n.Name + " " + n.Version) }
+
+// CPU is the profile cpu object; Cores stays a number in --json (OV3: the
+// closed string map printed it as a string).
+type CPU struct {
+	Model string `json:"model,omitempty"`
+	Cores int64  `json:"cores,omitempty"`
 }
 
 // MachineListOut is the list envelope.
@@ -196,9 +212,9 @@ func (o MachineListOut) Text() string {
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "ID\tLABEL\tHOST\tOS\tKERNEL\tLIBC\tARCH\tCPU (CORES)\tRAM\tRUNTIME\tLORE\tLAST WRITE")
 	for _, m := range o.Data {
-		cpu := nv(m.CPU, "model", "")
-		if c := nv(m.CPU, "cores", ""); c != "" {
-			cpu = strings.TrimSpace(cpu + " (" + c + ")")
+		cpu := m.CPU.Model
+		if m.CPU.Cores > 0 {
+			cpu = strings.TrimSpace(fmt.Sprintf("%s (%d)", cpu, m.CPU.Cores))
 		}
 		ram := "-"
 		if m.RAMMB > 0 {
@@ -209,7 +225,7 @@ func (o MachineListOut) Text() string {
 			last = m.UpdatedAt
 		}
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", shortMachine(m.ID), dash(m.Label), dash(m.Hostname),
-			dash(nv(m.OS, "name", "version")), dash(nv(m.Kernel, "name", "version")), dash(nv(m.Libc, "name", "version")), dash(m.Arch),
+			dash(m.OS.Text()), dash(m.Kernel.Text()), dash(m.Libc.Text()), dash(m.Arch),
 			dash(cpu), ram, dash(runtimeText(m.Runtime)), dash(m.Lore), dash(dateOnly(last)))
 	}
 	_ = tw.Flush()
@@ -221,9 +237,9 @@ func (o MachineShowOut) Text() string {
 	m := o.Data
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", m.ID)
-	for _, kv := range [][2]string{{"label", m.Label}, {"id_source", m.IDSource}, {"host", m.Hostname}, {"os", nv(m.OS, "name", "version")},
-		{"kernel", nv(m.Kernel, "name", "version")}, {"libc", nv(m.Libc, "name", "version")}, {"arch", m.Arch},
-		{"cpu", nv(m.CPU, "model", "")}, {"cores", nv(m.CPU, "cores", "")}, {"ram_mb", fmt.Sprint(m.RAMMB)}, {"os_user", m.OSUser},
+	for _, kv := range [][2]string{{"label", m.Label}, {"id_source", m.IDSource}, {"host", m.Hostname}, {"os", m.OS.Text()},
+		{"kernel", m.Kernel.Text()}, {"libc", m.Libc.Text()}, {"arch", m.Arch},
+		{"cpu", m.CPU.Model}, {"cores", coresText(m.CPU.Cores)}, {"ram_mb", fmt.Sprint(m.RAMMB)}, {"os_user", m.OSUser},
 		{"install", m.Install}, {"runtime", runtimeText(m.Runtime)}, {"lore", m.Lore}, {"last_write", m.LastWrite}, {"updated", m.UpdatedAt}} {
 		fmt.Fprintf(&b, "  %-10s %s\n", kv[0]+":", dash(kv[1]))
 	}
@@ -244,22 +260,37 @@ func dateOnly(s string) string {
 	return s
 }
 
-// nv joins two keys of a small profile object ("ubuntu 24.04").
-func nv(m map[string]string, a, b string) string {
-	var parts []string
-	for _, k := range []string{a, b} {
-		if k == "" {
-			continue
-		}
-		if v := m[k]; v != "" {
-			parts = append(parts, v)
-		}
+// coresText is the core count, "" when unknown.
+func coresText(n int64) string {
+	if n <= 0 {
+		return ""
 	}
-	return strings.Join(parts, " ")
+	return strconv.FormatInt(n, 10)
 }
 
-// objMap reads a small JSON object of the profile (os, kernel, libc, cpu,
-// runtime) as name → text: the op registry describes outputs with closed
+// nameVersionOf reads an {name, version} profile object; a malformed one
+// reads as empty (shown "-").
+func nameVersionOf(raw json.RawMessage) NameVersion {
+	var nv NameVersion
+	if len(raw) > 0 && json.Unmarshal(raw, &nv) != nil {
+		return NameVersion{}
+	}
+	return nv
+}
+
+// cpuOf reads the cpu profile object; cores is a JSON number (a string
+// count written by an older build is parsed too).
+func cpuOf(raw json.RawMessage) CPU {
+	m := objMap(raw)
+	c := CPU{Model: m["model"]}
+	if n, err := strconv.ParseInt(m["cores"], 10, 64); err == nil {
+		c.Cores = n
+	}
+	return c
+}
+
+// objMap reads a small JSON object of the profile (cpu, runtime) as
+// name → text: the op registry describes outputs with closed
 // types only, and every value of these objects is a string or a number.
 // A value that is neither (a nested object) is left out.
 func objMap(raw json.RawMessage) map[string]string {
@@ -316,8 +347,8 @@ func machineOf(lab work.Labeler, s work.Sourced) Machine {
 		return nil
 	}
 	return Machine{ID: work.Field(r, schema.FieldMachineID), RowID: r.ID.String(), IDSource: work.Field(r, "id_source"),
-		Label: work.Field(r, schema.FieldMachineLabel), Hostname: work.Field(r, "hostname"), OS: objMap(raw("os")), Kernel: objMap(raw("kernel")),
-		Libc: objMap(raw("libc")), Arch: work.Field(r, "arch"), CPU: objMap(raw("cpu")), RAMMB: work.Int(r, "ram_mb"), OSUser: work.Field(r, "os_user"),
+		Label: work.Field(r, schema.FieldMachineLabel), Hostname: work.Field(r, "hostname"), OS: nameVersionOf(raw("os")), Kernel: nameVersionOf(raw("kernel")),
+		Libc: nameVersionOf(raw("libc")), Arch: work.Field(r, "arch"), CPU: cpuOf(raw("cpu")), RAMMB: work.Int(r, "ram_mb"), OSUser: work.Field(r, "os_user"),
 		Install: work.Field(r, "install_method"), Runtime: objMap(raw("runtime")), UpdatedAt: timeOf(r, false), Store: sourceOf(lab, s.Source)}
 }
 
