@@ -36,7 +36,7 @@ identity:
   key: human:alice@agency.example
   name: Alice
 personal:
-  store: local
+  store: git@github.com:alice/lore-me
 orgs:
   - name: agency
     identity:
@@ -80,6 +80,14 @@ link_index:
   max_age: 1h
 untrusted_hosts:
   - build-*.client.example
+upgrade_notice: true
+auto_upgrade: false
+context:
+  profiles:
+    - name: mytool
+      pointer_file: MYTOOL.md
+      import: at
+      budget: 20000
 Y
 on alice . "cat .lore/config.yaml"
 on alice work/website "lore config check"

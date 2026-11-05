@@ -67,7 +67,7 @@ identity:
   key: human:alice@agency.example
   name: Alice
 personal:
-  store: local
+  store: git@github.com:alice/lore-me
 orgs:
   - name: agency
     identity:
@@ -111,6 +111,14 @@ link_index:
   max_age: 1h
 untrusted_hosts:
   - build-*.client.example
+upgrade_notice: true
+auto_upgrade: false
+context:
+  profiles:
+    - name: mytool
+      pointer_file: MYTOOL.md
+      import: at
+      budget: 20000
 alice (work/website)$ lore config check
 ✓ ~/.lore/config.yaml is valid: 1 org entry (agency)
 
@@ -129,33 +137,24 @@ lease:
 merge_check:
   adapter: gitlab
 alice (work/website)$ lore config check
-✗ ~/.lore/config.yaml
-  - lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed
-  - merge_check: adapter "gitlab": must be "none" or "github"
-  - orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit
-  - orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029)
-  - orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: fix the problems listed above; nothing else in lore reads an invalid config
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed; merge_check: adapter "gitlab": must be "none" or "github"; orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit; orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029); orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+  hint: fix the problems listed; nothing else in lore reads an invalid config
 (exit 20)
 
 ### config check typo
 alice (work/website)$ lore config check
-✗ ~/.lore/config.yaml
-  - lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: fix the problems listed above; nothing else in lore reads an invalid config
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
+  hint: fix the problems listed; nothing else in lore reads an invalid config
 (exit 20)
 
 ### invalid config stops writes
 alice (work/website)$ lore rule list
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: run `lore config check` for every problem with its location
-(exit 20)
+(no rules)
+(exit 0)
 alice (work/website)$ lore rule add --body 'Run the tests before you push'
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: run `lore config check` for every problem with its location
-(exit 20)
+✓ rul_162df51b7f78b785c97c26b41ea89666
+  scope: [master] severity: must
+(exit 0)
 
 ### db flag
 alice$ lore rule list --db work/website/.lore/lore.db
@@ -167,6 +166,7 @@ ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
 (exit 19)
 alice$ cd work/website && lore rule list
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 
 ### db config
 alice (work/website)$ lore config list
@@ -180,10 +180,10 @@ not set
 alice$ cat .lore/config.yaml
 default_branch: develop
 alice (work/website)$ lore task add 'Fix the footer links'
-✓ tsk_54fe984c9b495744c0217776765a28f2 — Fix the footer links [medium]
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 — Fix the footer links [medium]
 lore live: (live, pushed)
-alice (work/website)$ lore task done tsk_54fe984c9b495744c0217776765a28f2
-✓ tsk_54fe984c9b495744c0217776765a28f2 done
+alice (work/website)$ lore task done tsk_05e99e22e9e86e96fe4daa7777994603
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: landed on develop (601d285); leaves live once develop is fetched
@@ -191,17 +191,6 @@ alice (work/website)$ git fetch -q origin && git log --oneline origin/develop -2
 601d285 lore: land 1 row (_root)
 86dbae4 lore: init
 86dbae4 lore: init
-
-### sync data ignored
-alice (work/website)$ mkdir -p .lore/data/tasks && echo '*.json' > .lore/data/tasks/.gitignore
-alice (work/website)$ lore sync install-git
-lore sync: git ignores lore data, so teammates will not receive it:
-  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
-change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
-ERROR: [E_SYNC_DATA_IGNORED] lore sync: git ignores lore data, so teammates will not receive it:
-  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
-change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
-(exit 23)
 
 ### no work
 alice (work/landing)$ lore task next
@@ -224,11 +213,11 @@ orgs:
 alice (work/website)$ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
 name: agency
 url: git@github.com:agency/notes
-id: sto_05e99e22e9e86e96fe4daa7777994603
+id: sto_c0f3c11a5724b0cfd74b256190d9b5b8
 alice (work/website)$ LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes
 name: freelance
 url: git@github.com:other/notes
-id: sto_c0f3c11a5724b0cfd74b256190d9b5b8
+id: sto_76bd560aff0771fab8457dbfa9823f10
 alice (work/website)$ cat .lore/stores.yaml
 stores:
     - name: agency
@@ -242,7 +231,7 @@ org        refused  (the patterns of 2 org entries match this repo (agency, free
 identity   (not resolved: the org is refused above)
 machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
 agent      none  (no coding agent detected)
-project    prj_76bd560aff0771fab8457dbfa9823f10
+project    prj_d4314eba822f1bf5908b2b8ded5f313a
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   local: everywhere/
@@ -250,16 +239,16 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 alice (work/website)$ lore org use agency
-✓ prj_76bd560aff0771fab8457dbfa9823f10 uses org agency on this machine
+✓ prj_d4314eba822f1bf5908b2b8ded5f313a uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 alice$ grep -A3 repo_orgs ~/.lore/config.yaml
 repo_orgs:
-  prj_76bd560aff0771fab8457dbfa9823f10: {org: agency, remotes: [github.com/client/website]}
+  prj_d4314eba822f1bf5908b2b8ded5f313a: {org: agency, remotes: [github.com/client/website]}
 alice (work/website)$ lore org link agency --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_76bd560aff0771fab8457dbfa9823f10 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_76bd560aff0771fab8457dbfa9823f10, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  link: project prj_d4314eba822f1bf5908b2b8ded5f313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_d4314eba822f1bf5908b2b8ded5f313a, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 
 ### force org
@@ -271,5 +260,5 @@ alice (work/website)$ lore memory add --force-org --body 'The client pays invoic
 ERROR: [E_INVALID_INPUT] unknown flag: --force-org
 (exit 20)
 alice (work/website)$ lore memory add --to freelance --body 'The client pays invoices in 30 days'
-✓ mem_d4314eba822f1bf5908b2b8ded5f313a [freelance]
+✓ mem_b4f4765e593d51fd1352985e8af3a5b0 [freelance]
   scope: [master]

@@ -8,13 +8,13 @@ This page lists every file and every key, with its default and a plain one-line 
 
 | File | Where it lives | Shared with others? | Written by | What it holds |
 |---|---|---|---|---|
-| `~/.lore/config.yaml` | your home folder | no, only you can read it (file mode 0600) | you; `lore org use`, `lore org import` and `lore identity set --org` add to it | who you are, your orgs, their stores, timing settings |
-| `~/.lore/identity.yaml` | your home folder | no (mode 0600) | `lore identity set` | your fallback name and identity key |
+| `~/.lore/config.yaml` | your home folder | no, only you can read it (file mode 0600) | you; `lore config set`, `lore identity set`, `lore org use` and `lore org import` add to it | who you are, your orgs, their stores, your personal store, timing settings, stricter local limits, your own tool profiles |
+| `~/.lore/identity.yaml` | your home folder (v0.1.17 only) | no | v0.1.17 `lore identity set` | removed in 0.1.18: `lore migrate run` moves it into `identity:` of `config.yaml` |
 | `.lore/org.yaml` | in a repo the org owns | yes, it is committed | `lore org set` | the org's name, and optionally the project folder |
 | `lore-store.yaml` | at the top of a store repo | yes, everyone who can open the store | `lore store init` | the marker that makes a repo a store |
 | `<org_folder>/.lore/lore-org.yaml` | inside a store | yes, everyone who can open the store | a team member, by hand | the org entry the team suggests; `lore org import` copies it into your config |
 | `.lore/lore.yaml` | in a project folder | it is committed if you commit it | v0.1.17 `lore project shared-init` (retired) | an old pointer to a shared database; `lore migrate run` converts it |
-| database settings | inside `.lore/lore.db` | no | lore itself; `lore config set` | internal values such as the schema version |
+| database settings | inside `.lore/lore.db` | no | lore itself | internal values such as the schema version; no command reads or sets them |
 
 A **store** is a separate repo that holds only lore notes, so private notes never sit in a repo the client can read. An **org** is one company you work for, set up as one entry under `orgs:`.
 
@@ -38,7 +38,7 @@ identity:
   key: human:alice@agency.example
   name: Alice
 personal:
-  store: local
+  store: git@github.com:alice/lore-me
 orgs:
   - name: agency
     identity:
@@ -82,6 +82,14 @@ link_index:
   max_age: 1h
 untrusted_hosts:
   - build-*.client.example
+upgrade_notice: true
+auto_upgrade: false
+context:
+  profiles:
+    - name: mytool
+      pointer_file: MYTOOL.md
+      import: at
+      budget: 20000
 
 # alice, in website
 $ lore config check
@@ -93,10 +101,10 @@ $ lore config check
 
 | Key | Default | What it means |
 |---|---|---|
-| `identity.key` | none | who you are in repos that match no org entry, written `human:<your email>`; your identity key is your email |
+| `identity.key` | none | who you are in repos that match no org entry, written `human:<your email>`; your identity key is your email. `lore identity set <email>` writes it; this is the only place your identity lives |
 | `identity.name` | none | your name in those repos |
 | `identity.handle` | none | your short name after `@` (lowercase letters, digits, `_` or `-`) |
-| `personal.store` | `local` | where your personal notes live: `local` means `~/.lore/personal`, or give the git URL of your own private store |
+| `personal.store` | none (no personal store) | your personal store, the target of `--to me`, shown in all your repos: a git URL of your own private store, or a local folder `file:///<absolute path>`. `lore store init me` with no URL makes `file://~/.lore/stores/me` and records it here. The v0.1.17 value `local` (`~/.lore/personal`) is still accepted, but 0.1.18 does not attach it as `me` |
 | `orgs` | none | one entry per company you work for (see below) |
 | `repo_orgs.<project id>` | none | this machine's org choice for one project; `lore org use` writes it, you do not need to |
 | `default_branch` | read from `origin/HEAD`, else `main` | the branch lore treats as main |
@@ -106,6 +114,10 @@ $ lore config check
 | `merge_check` | see below | how lore learns that a finished task's pull request was merged |
 | `link_index` | see below | how long lore trusts its saved list of linked client repos |
 | `untrusted_hosts` | none | names of machines the client owns, such as `build-*.client.example`; `lore doctor` warns when your private stores are set up on one of them |
+| `upgrade_notice` | `true` | `false` turns off the once-a-day "a new lore release is out" line |
+| `auto_upgrade` | `false` | `true` upgrades lore instead of printing the notice, when lore was installed with Homebrew or the install script |
+| `policies.<key>` | none | a stricter limit for this machine only, for any key `lore policy show` lists (see below) |
+| `context.profiles` | none | your own tool profiles for `lore render`, added after the built-in ones (see below) |
 
 When two org entries match a repo, `lore org use` records this machine's choice under `repo_orgs`:
 
@@ -117,7 +129,7 @@ org        refused  (the patterns of 2 org entries match this repo (agency, free
 identity   (not resolved: the org is refused above)
 machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
 agent      none  (no coding agent detected)
-project    prj_76bd…3f10
+project    prj_d431…313a
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   local: everywhere/
@@ -125,20 +137,20 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore org use agency
-✓ prj_76bd…3f10 uses org agency on this machine
+✓ prj_d431…313a uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 
 # alice, in ~
 $ grep -A3 repo_orgs ~/.lore/config.yaml
 repo_orgs:
-  prj_76bd…3f10: {org: agency, remotes: [github.com/client/website]}
+  prj_d431…313a: {org: agency, remotes: [github.com/client/website]}
 
 # alice, in website
 $ lore org link agency --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_76bd…3f10 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_76bd…3f10, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  link: project prj_d431…313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_d431…313a, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 ```
 <!-- /example -->
@@ -153,10 +165,10 @@ default_branch: develop
 
 # alice, in website
 $ lore task add 'Fix the footer links'
-✓ tsk_54fe…28f2 — Fix the footer links [medium]
+✓ tsk_05e9…4603 — Fix the footer links [medium]
 lore live: (live, pushed)
-$ lore task done tsk_54fe…28f2
-✓ tsk_54fe…28f2 done
+$ lore task done tsk_05e9…4603
+✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: landed on develop (601d285); leaves live once develop is fetched
@@ -184,6 +196,31 @@ $ git fetch -q origin && git log --oneline origin/develop -2 && git log --onelin
 | `live`, `lease`, `agents`, `merge_check` | the top-level values | the same blocks as at the top level, for this org only |
 
 **Repo patterns.** A pattern is a repo address with `*` for exactly one part of the path and `**` for any number of parts. `github.com/client/*` matches `github.com/client/website` but not `github.com/client/web/site`; `github.com/client2/**` matches every repo under `client2`. The host (`github.com`) may not be a wildcard, `**` may appear once, and a part is either plain text or a whole wildcard (`web*` is refused). You can also paste a full remote URL as an exact pattern.
+
+### Stricter limits for this machine (`policies:`)
+
+Team rules (size limits, secret handling and the rest) are set with `lore policy set` and live in the stores. `policies:` adds a machine level below them: each key is a policy key and each value a plain value. It can only tighten: a looser value than the team's, or than the built-in default, is ignored. A key lore does not know is skipped with a notice; a value a known key cannot take stops lore with `E_CONFIG_INVALID`. `lore policy show` names this level `machine`. Edit it by hand: `lore config set` refuses a policy key.
+
+```yaml
+policies:
+  meta.max_bytes: 4096
+```
+
+### Your own tool profiles (`context.profiles`)
+
+`lore render` writes `.lore/LORE.md` and points each coding tool's own file at it through a *tool profile*. lore ships profiles for the common tools; an entry here adds one for a tool it does not ship. Which profiles a repo uses is read from the pointer files committed in the repo.
+
+| Key | Required | What it means |
+|---|---|---|
+| `name` | yes | the profile's name, as `lore render --target <name>` takes it; it may not reuse a built-in name |
+| `pointer_file` | yes | the file the tool reads, relative to the repo, such as `MYTOOL.md`; no two profiles may share one |
+| `import` | yes | how that file pulls in `.lore/LORE.md`: `at` (an `@.lore/LORE.md` line), `read` (an instruction to read it), `mdc` (a Cursor-style rule file) or `none` |
+| `budget` | no | how many bytes of notes the tool should get |
+| `limit` | no | the tool's own size limit for one file, for the budget warning |
+| `private_file` | no | the tool's uncommitted local file that imports your private renders |
+| `path_rules` | no | `style` (`paths` or `mdc_globs`) and `dir` (a folder inside the repo, outside `.lore/`) for a tool that loads rule files per path |
+
+A bad entry is `E_CONFIG_INVALID` naming `context.profiles`.
 
 ### Timing and limit blocks
 
@@ -221,14 +258,8 @@ Kinds that are live by default (the keys are table names, as in `live.defaults.m
 ```console
 # alice, in website
 $ lore config check
-✗ ~/.lore/config.yaml
-  - lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed
-  - merge_check: adapter "gitlab": must be "none" or "github"
-  - orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit
-  - orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029)
-  - orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: fix the problems listed above; nothing else in lore reads an invalid config
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed; merge_check: adapter "gitlab": must be "none" or "github"; orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit; orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029); orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+  hint: fix the problems listed; nothing else in lore reads an invalid config
 (exit 20)
 ```
 <!-- /example -->
@@ -239,7 +270,7 @@ The rules it checks, in plain words:
 |---|---|
 | `identity.key`, `orgs[].identity.key` | must be `human:` followed by an email address |
 | `identity.handle`, `orgs[].identity.handle` | lowercase letters, digits, `_` or `-`, no `@` |
-| `personal.store` | `local` or a git URL |
+| `personal.store` | a git URL or a `file://` path (or the v0.1.17 value `local`) |
 | `orgs[].name` | see the org entry table; two entries may not share a name |
 | `orgs[].stores[]` | a valid URL; two items may not name the same store and branch; at most one has `org_folder` |
 | `orgs[].stores[].branch`, `default_branch` | a valid git branch name; a store branch may not contain `/` |
@@ -263,22 +294,15 @@ A typing mistake that YAML itself cannot read, such as a bad duration, is report
 ```console
 # alice, in website
 $ lore config check
-✗ ~/.lore/config.yaml
-  - lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: fix the problems listed above; nothing else in lore reads an invalid config
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
+  hint: fix the problems listed; nothing else in lore reads an invalid config
 (exit 20)
 ```
 <!-- /example -->
 
-## `~/.lore/identity.yaml`
+## `~/.lore/identity.yaml` (v0.1.17)
 
-Your fallback identity, used when no org entry applies and no other source names you. `lore identity set` writes it and `lore identity unset` removes it.
-
-| Key | Default | What it means |
-|---|---|---|
-| `display_name` | none | your name as lore shows it |
-| `stable_key` | `human:<display_name>` | your identity key; for a person, `human:<your email>` |
+v0.1.17 kept your fallback identity here (`display_name`, `stable_key`). 0.1.18 keeps it only in `identity:` of `~/.lore/config.yaml`: `lore identity set` and `lore identity unset` edit that block, and `lore migrate run` moves an old `identity.yaml` into it and removes the file. If `identity:` is already set, that value is kept and the migration report names the dropped one.
 
 ## `.lore/org.yaml`
 
@@ -308,7 +332,7 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 $ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
 name: agency
 url: git@github.com:agency/notes
-id: sto_05e9…4603
+id: sto_c0f3…b5b8
 $ cat .lore/stores.yaml
 stores:
     - name: agency
@@ -362,7 +386,7 @@ not set
 - A store branch name may not contain `/`. Use `staging`, not `team/staging`.
 - `identity.key` is `human:` plus your email, not your email alone and not your name.
 - `1d12h` is refused; write `36h`.
-- `LORE_HOME` does not move `~/.lore`: lore always keeps its config, identity and caches under `~/.lore` in your home folder. `LORE_HOME` only fills in `${LORE_HOME}` in `db_path`.
+- `LORE_HOME` does not move `~/.lore`: lore always keeps its config (your identity included) and caches under `~/.lore` in your home folder. `LORE_HOME` only fills in `${LORE_HOME}` in `db_path`.
 
 ## Related
 
