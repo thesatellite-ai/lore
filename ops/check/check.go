@@ -12,6 +12,8 @@
 //	                                         secret scan, metadata rules FB-META-1)
 //	check leaks --ci                         ids and structure of .lore/data only
 //	check leaks --as-client                  the whole repo as the client sees it
+//	check leaks --rows                       every stored row re-scanned with today's
+//	                                         secret rules (SQ12, the lint secret_found scan)
 //	check pr-body <file|->                   read the text ─► Checker.CheckText
 //
 // Every refusal is E_LEAK_BLOCKED (exit class guard); a check that cannot
@@ -57,6 +59,7 @@ const (
 	ModeCommit   = "commit"
 	ModeCI       = "ci"
 	ModeAsClient = "as_client"
+	ModeRows     = "rows"
 )
 
 // prBodyClean is the line a clean pr-body check prints (v0.1.17).
@@ -69,6 +72,7 @@ type LeaksIn struct {
 	Staged    bool   `json:"staged,omitempty" flag:"staged" desc:"check the staged files (default unless --commit-msg is given alone)"`
 	CommitMsg string `json:"commit_msg,omitempty" flag:"commit-msg" desc:"also check this commit message file (the commit-msg hook's $1)"`
 	AsClient  bool   `json:"as_client,omitempty" flag:"as-client" desc:"check the whole repo as the client would see it (before a hand-over)"`
+	Rows      bool   `json:"rows,omitempty" flag:"rows" desc:"re-scan every stored row of every attached store with today's secret rules (SQ12)"`
 }
 
 // Mode is the check the flags ask for.
@@ -78,6 +82,8 @@ func (in LeaksIn) Mode() string {
 		return ModeCI
 	case in.AsClient:
 		return ModeAsClient
+	case in.Rows:
+		return ModeRows
 	}
 	return ModeCommit
 }
@@ -146,11 +152,16 @@ func Ops(c Checker) []op.Entry {
 				{Title: "the commit message", CLI: "lore check leaks --commit-msg .git/COMMIT_EDITMSG", Want: ""},
 				{Title: "in the client's CI", CLI: "lore check leaks --ci", Want: "✓"},
 				{Title: "before handing an own repo to the client", CLI: "lore check leaks --as-client", Want: "✓"},
+				{Title: "every stored row with today's secret rules", CLI: "lore check leaks --rows", Want: "✓"},
 			},
 		}, func(ctx context.Context, in LeaksIn) (LeaksOut, error) {
 			if in.CI && in.AsClient {
 				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --ci and --as-client cannot be used together").
 					WithHint("--ci is the client's CI check; --as-client is the hand-over check of an own repo")
+			}
+			if in.Rows && (in.CI || in.AsClient || in.Staged || in.CommitMsg != "") {
+				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --rows checks the stored rows alone").
+					WithHint("run --rows on its own; the commit, --ci and --as-client checks are separate runs")
 			}
 			out, err := c.CheckLeaks(ctx, in)
 			if err != nil {
