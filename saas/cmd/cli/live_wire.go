@@ -198,7 +198,13 @@ func newLiveSession(ctx context.Context, repo *gitref.Repo, top string) (*liveSe
 	if remoteConfigured(ctx, repo, remoteName) {
 		remote = &gitremote.Git{Repo: repo, Name: remoteName}
 	}
-	who := identityBestEffort(ctx)
+	// FLAG4 (r2-ident): the code repo's live ref commits are signed by the
+	// person's git identity when git has one for this repo, else by the
+	// lore identity (liveSignature).
+	sig, ok := repo.GitIdentity(ctx)
+	if !ok {
+		sig = liveSignature(identityBestEffort(ctx))
+	}
 	s.ref = &live.Ref{
 		Repo:        repo,
 		Name:        live.RefLive,
@@ -206,7 +212,7 @@ func newLiveSession(ctx context.Context, repo *gitref.Repo, top string) (*liveSe
 		RemoteName:  remoteName,
 		StateDir:    s.stateDir,
 		Clock:       s.clk,
-		Signature:   liveSignature(who),
+		Signature:   sig,
 		Strategies:  liveStrategies,
 		IgnoreKeys:  []string{updatedAtKey},
 		PushRetries: retries,
