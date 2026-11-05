@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
@@ -135,5 +137,22 @@ func TestSupersedesCarryFillsRequired(t *testing.T) {
 				t.Fatalf("Filled = %d, want %d", bound.Filled(), c.want.filled)
 			}
 		})
+	}
+}
+
+// TestMetaTypeClashHintNamesNoMissingCommand (later 433): a :type that
+// differs from the registered type is E_META_TYPE, and its hint names no
+// command that does not exist (meta edit --type is not built in 0.1.18).
+func TestMetaTypeClashHintNamesNoMissingCommand(t *testing.T) {
+	f := setup(t)
+	metaKeyRow(t, f, "client", "")
+	ctx := WithMeta(context.Background(), metaWrite(t, []metaArg{{Text: "client:number=3"}}))
+	_, err := f.eng.Create(ctx, "", schema.TableMemories, f.memFields("typed"))
+	var le *errs.Error
+	if !errors.As(err, &le) || le.Code != errs.MetaType {
+		t.Fatalf("err = %v, want E_META_TYPE", err)
+	}
+	if strings.Contains(le.Hint, "--type") || !strings.Contains(le.Hint, "drop the :type") {
+		t.Fatalf("hint = %q", le.Hint)
 	}
 }

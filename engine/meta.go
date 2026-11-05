@@ -447,7 +447,7 @@ func (p *metaPlan) set(t meta.Term, isJSON bool) error {
 		name, typ = d.name, d.typ
 		if !t.Type.IsZero() && len(fields) == 0 && t.Type != d.typ {
 			return errs.New(errs.MetaType, fmt.Sprintf("meta: %s is registered as %s, not %s", d.name, d.typ, t.Type)).
-				WithHint("drop the :type, or lore meta edit " + d.name + " --type " + t.Type.String())
+				WithHint("drop the :type; a registered key keeps its type (changing the type of a key is not built in 0.1.18)")
 		}
 	default:
 		name = meta.TopSegment(t.Key)
