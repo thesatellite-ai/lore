@@ -51,8 +51,9 @@ func coreSeedProject(ctx context.Context, root, projectID, name, originURL strin
 	// minimal options otherwise: seeding the project row runs before the
 	// org's stores have a local copy, so the client/org hooks of coreOptions
 	// (RepoIsClient, OrgStores) would refuse the write (TestE8, TestE10).
-	sink := &coreAuditSink{root: root}
-	app, err := wire.New(wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: sink, ModeB: modeBExporter{}, WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now})
+	// r3-targets: the same minimal options as init's own writes (one copy).
+	opts, sink := initCoreOptions(root, home)
+	app, err := wire.New(opts)
 	if err != nil {
 		return err
 	}

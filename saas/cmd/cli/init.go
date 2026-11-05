@@ -325,8 +325,8 @@ func initTargetReason(fromFlag bool, r toolprofile.Reason) string {
 	return describeReason(r)
 }
 
-// initCoreOptions are the core options of init's own writes: the same
-// minimal set as coreSeedProject (infra_core_seed.go), for the same reason:
+// initCoreOptions are the core options of init's own writes and of
+// coreSeedProject (infra_core_seed.go; one copy, r3-targets), minimal because
 // the org's stores have no local copy yet while init runs, so the client/org
 // hooks of coreOptions would refuse a repo write (TestE8, TestE10); the
 // live-row wrapper is kept so the actor row the seed wrote is seen (FLAG6).
@@ -334,8 +334,11 @@ func initTargetReason(fromFlag bool, r toolprofile.Reason) string {
 // (coreAuditSink.app) so the session lookup never opens the org's stores.
 func initCoreOptions(root, home string) (wire.Options, *coreAuditSink) {
 	sink := &coreAuditSink{root: root}
+	// r3-origin: WorkDir and Version, so the rows init writes carry _o.dir
+	// (PROV6) and the _w version stamp (OQ7) like every other core write.
 	return wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: sink, ModeB: modeBExporter{},
-		WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}, sink
+		WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now,
+		WorkDir: coreWorkDir(), Version: version}, sink
 }
 
 // writeContextTargets writes names as the repo's context.targets policies
