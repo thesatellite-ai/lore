@@ -3,8 +3,8 @@ package wire
 // org_standalone.go — the `lore org` host of cmd/lore (ops/orgcmd.Host,
 // P3-CMDLORE-4): link, use and set as v0.1.17's org_cmd.go did them, over
 // the process's OrgResolution, ~/.lore/config.yaml and the shared v0.1.17
-// bare store clones (adapters/orgcfg.WriteLink). create, import and rename
-// are not ported to cmd/lore yet and answer E_UNSUPPORTED. The old binary
+// bare store clones (adapters/orgcfg.WriteLink); create, import and rename
+// are in org_create_standalone.go (P3-ORG-G-2). The old binary
 // keeps its own host (Options.OrgCommands); StandaloneOptionsOrg installs
 // this one.
 //
@@ -59,30 +59,12 @@ const (
 type standaloneOrg struct {
 	home string
 	res  *OrgResolution
+	// reg builds the Apps create, import and rename need (roster
+	// registration, the org folder's id).
+	reg orgRegistrar
 }
 
 var _ opsorgcmd.Host = (*standaloneOrg)(nil)
-
-// notPorted is the answer of the verbs cmd/lore does not host yet.
-func notPorted(verb string) error {
-	return errs.New(errs.Unsupported, "lore org "+verb+" is not available in this binary yet").
-		WithHint("run it with the v0.1.17-compatible binary")
-}
-
-// Create implements opsorgcmd.Host (not ported).
-func (*standaloneOrg) Create(context.Context, opsorgcmd.CreateIn, bool) (opsorgcmd.Report, error) {
-	return opsorgcmd.Report{}, notPorted("create")
-}
-
-// Import implements opsorgcmd.Host (not ported).
-func (*standaloneOrg) Import(context.Context, opsorgcmd.ImportIn, bool) (opsorgcmd.Report, error) {
-	return opsorgcmd.Report{}, notPorted("import")
-}
-
-// Rename implements opsorgcmd.Host (not ported).
-func (*standaloneOrg) Rename(context.Context, opsorgcmd.RenameIn) (opsorgcmd.RenameOut, error) {
-	return opsorgcmd.RenameOut{}, notPorted("rename")
-}
 
 // situation is the org situation of this folder; a refusal stays in
 // ResolveErr (link and use work in an ambiguous repo: they fix it).

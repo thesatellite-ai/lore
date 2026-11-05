@@ -104,8 +104,47 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 		return LinkWriteResult{}, err
 	}
 	res := LinkWriteResult{StoreURL: target, NoPush: !g.autopush(o.Live)}
-	dir := g.cloneDirOf(target)
-	branch := w.Plan.Branch
+	cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(target), Store: target, Branch: w.Plan.Branch, NoPush: res.NoPush,
+		Message: fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature,
+		Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
+			put, created, changed, err := linkChange(ctx, repo, tip, target, w)
+			res.CreatedFolder = res.CreatedFolder || created
+			res.Changed = res.Changed || changed
+			return put, err
+		}})
+	res.Pushed, res.Offline = cr.Pushed, cr.Offline
+	return res, err
+}
+
+// storeCommit is one change to commit into a store's shared bare clone.
+type storeCommit struct {
+	// Dir is the clone, Store its normalised url (for messages), Branch
+	// the store branch.
+	Dir, Store, Branch string
+	// NoPush commits in the clone only (autopush off).
+	NoPush bool
+	// Message and Signature make the commit.
+	Message   string
+	Signature gitref.Signature
+	// Change returns the files to put at tip; an empty map on the first
+	// attempt means "already so" (nothing committed or pushed).
+	Change func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error)
+}
+
+// storeCommitResult says where the commit went.
+type storeCommitResult struct {
+	// Pushed: the commit reached the remote; Offline: committed locally
+	// only because the remote could not be reached.
+	Pushed, Offline bool
+}
+
+// commitStore commits c into the clone under its write lock and pushes it
+// with retry: the marker is checked on every tip, and a push that lost a
+// race fetches and builds c.Change again on the remote's new tip (shared
+// by `lore org link` and `lore org create`).
+func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) {
+	var res storeCommitResult
+	dir, branch, target := c.Dir, c.Branch, c.Store
 	// One writer per clone: processes share the clone (§5.3), and two
 	// racing commits would fight over its refs (F11 race).
 	unlock, err := lockClone(ctx, dir)
@@ -137,28 +176,26 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 		if _, found, merr := repo.ReadFile(ctx, tip, storeMarkerFile); merr != nil || !found {
 			return res, fmt.Errorf("%w: %s@%s has no %s", ErrNotAStore, target, branch, storeMarkerFile)
 		}
-		put, created, changed, err := linkChange(ctx, repo, tip, target, w)
+		put, err := c.Change(ctx, repo, tip)
 		if err != nil {
 			return res, err
 		}
-		res.CreatedFolder = res.CreatedFolder || created
-		res.Changed = res.Changed || changed
 		if len(put) == 0 && attempt == 0 {
 			return res, nil // already so: nothing to commit or push
 		}
 		oid := tip
 		if len(put) > 0 {
-			c, cerr := repo.MakeCommit(ctx, gitref.CommitRequest{Base: tip, Changes: gitref.Changes{Put: put},
-				Message: fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature})
+			cm, cerr := repo.MakeCommit(ctx, gitref.CommitRequest{Base: tip, Changes: gitref.Changes{Put: put},
+				Message: c.Message, Signature: c.Signature})
 			if cerr != nil {
 				return res, fmt.Errorf("orgcfg: commit on %s: %w", branch, cerr)
 			}
-			oid = c.OID
+			oid = cm.OID
 		}
 		if err := moveRef(ctx, repo, localRef(branch), oid); err != nil {
 			return res, err
 		}
-		if res.NoPush || offline {
+		if c.NoPush || offline {
 			res.Offline = offline
 			return res, nil
 		}
@@ -169,7 +206,7 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 			return res, nil
 		}
 		if !pushRejected(out, perr) {
-			res.Offline = true // unreachable: the next link or fetch pushes the local commit
+			res.Offline = true // unreachable: the next write or fetch pushes the local commit
 			return res, nil
 		}
 	}

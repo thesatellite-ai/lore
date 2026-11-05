@@ -67,7 +67,7 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	res.Apply(&o)
 	// cmd/lore's org and whoami hosts (P3-CMDLORE-4): built on the same
 	// resolution the write hooks use, so whoami shows what a write does.
-	o.OrgCommands = &standaloneOrg{home: home, res: res}
+	o.OrgCommands = &standaloneOrg{home: home, res: res, reg: orgRegistrar{repoDir: repoDir, home: home, workDir: workDir, version: version}}
 	if o.Local.Clones == nil {
 		o.Local.Clones = &standaloneClones{home: home}
 	}
