@@ -102,6 +102,7 @@ type Lister interface {
 const (
 	fName, fScope, fType, fMerged = "name", "scope", "type", "merged_into"
 	fKeyID, fLabel                = "key_id", "label"
+	fSensitive                    = "sensitive"
 	fArchivedAt                   = "archived_at" // every archivable table's column
 )
 
@@ -132,7 +133,7 @@ func Keys(ctx context.Context, env Lister) ([]metafilter.Key, error) {
 			if terr != nil {
 				continue
 			}
-			d := metafilter.Key{ID: id, Name: text(k, fName), Scope: text(k, fScope), Type: t, Retired: text(k, fMerged) != ""}
+			d := metafilter.Key{ID: id, Name: text(k, fName), Scope: text(k, fScope), Type: t, Retired: text(k, fMerged) != "", Sensitive: text(k, fSensitive) == "true"}
 			for _, v := range vals {
 				if !v.Deleted && text(v, fKeyID) == k.ID.String() {
 					d.Values = append(d.Values, metafilter.Value{Name: text(v, fName), Label: text(v, fLabel)})
@@ -204,5 +205,62 @@ func Select(ctx context.Context, env Lister, f Flags, rows []row.Row) (Result, e
 	for _, id := range unchecked {
 		res.Notes = append(res.Notes, "note: 1 row not checked: "+id+" has quarantined metadata")
 	}
+	// 3.7 "each filtered key becomes a column" (FA-META-5): every list
+	// prints its own row shape, so the filtered keys' values follow the
+	// rows as one line per listed row, sensitive values masked (3.20).
+	sens := map[string]bool{}
+	for _, k := range keys {
+		if k.Sensitive {
+			sens[k.ID.String()] = true
+		}
+	}
+	for _, i := range res.Order {
+		if line := columnLine(rows[i], p.Columns, sens); line != "" {
+			res.Notes = append(res.Notes, line)
+		}
+	}
 	return res, nil
+}
+
+// columnLine is "meta: <id>  key=value  key=value" for the filtered key
+// names cols ("" when cols is empty). A column names a key as the filter
+// did: a scope prefix and a type suffix are dropped, a dotted name shows
+// its top key's value, a key id matches by id; a row without the key
+// shows "key=-".
+func columnLine(r row.Row, cols []string, sens map[string]bool) string {
+	if len(cols) == 0 {
+		return ""
+	}
+	parts := []string{"meta: " + r.ID.String()}
+	for _, c := range cols {
+		name := columnKey(c)
+		shown := "-"
+		for kid, j := range r.Meta {
+			en, err := meta.DecodeEntry(j)
+			if err != nil || (en.Name != name && kid.String() != name) {
+				continue
+			}
+			en.Sensitive = en.Sensitive || sens[kid.String()]
+			shown = meta.Show(en)
+			break
+		}
+		parts = append(parts, c+"="+shown)
+	}
+	return strings.Join(parts, "  ")
+}
+
+// columnKey is the top key name (or key id) of a filter's key part:
+// "project:deploy.env:text" → "deploy".
+func columnKey(c string) string {
+	segs := strings.Split(c, ":")
+	if len(segs) > 1 {
+		if _, err := meta.ParseType(segs[len(segs)-1]); err == nil {
+			segs = segs[:len(segs)-1]
+		}
+	}
+	last := segs[len(segs)-1]
+	if strings.HasPrefix(last, "mky_") {
+		return strings.SplitN(last, ".", 2)[0]
+	}
+	return meta.TopSegment(strings.SplitN(last, "$", 2)[0])
 }

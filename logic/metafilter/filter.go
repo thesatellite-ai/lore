@@ -26,6 +26,9 @@ type Key struct {
 	Values []Value
 	// Retired keys (merged_into set) never match a bare name.
 	Retired bool
+	// Sensitive is the registry's flag (3.20): its values print masked in
+	// the filtered-key columns (FA-META-5).
+	Sensitive bool
 }
 
 // Value is one allowed value of a key.
