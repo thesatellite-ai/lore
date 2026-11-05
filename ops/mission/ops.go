@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	"slices"
 	"strconv"
 	"strings"
@@ -91,7 +92,7 @@ func Ops(env work.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a mission (its tasks go with it: one batch, to the trash)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
-			Confirm: op.ConfirmRule{Always: true},
+			Confirm: op.ConfirmRule{MayAsk: true}, // asked in delete: --where --dry-run never asks, FA-LTASK-2
 		}, o.delete),
 		applyOp(o),
 		op.Define(op.Spec{
@@ -470,13 +471,32 @@ func (o ops) setStatus(ctx context.Context, raw, status, label string) (work.Wri
 // delete tombstones the mission; its tasks' mission_id is cleared.
 func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
+	bulkForm, err := wheredel.Form(Noun, in.ID, in.Where, in.DryRun)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if bulkForm {
+		res, werr := wheredel.Run(ctx, o.env, wheredel.Spec{Noun: Noun, Table: table, Fence: func(fctx context.Context, tasks []wheredel.Located) (int, error) {
+			rows := make([]work.Sourced, len(tasks))
+			for i, t := range tasks {
+				rows[i] = work.Sourced(t)
+			}
+			return opstask.FenceClaimed(fctx, o.env, rows) // TASK 6.12 / FA-TASK-7
+		}}, in.Where, in.DryRun)
+		if werr != nil {
+			return work.WriteOut{}, werr
+		}
+		return work.WriteOut{ID: res.Batch, Human: res.Human}, nil
+	}
 	id, err := missionID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if !engine.Confirmed(ctx) {
-		// the engine asks for a group holding tasks; nothing is fenced yet
-		return work.Delete(ctx, o.env, Noun, table, id, trashline.Moved(id.String(), id.String()))
+	// the one-row form asks as the engine did under Confirm Always
+	// (FA-DEL-1); the CLI prompts and re-runs with yes, so the fence below
+	// always runs on a confirmed delete.
+	if err = bulk.Ask(ctx, "run mission delete?"); err != nil {
+		return work.WriteOut{}, err
 	}
 	// TASK 6.12 / FA-TASK-7: the mission's claimed tasks are fenced in the
 	// delete batch before the tombstones, as a task subtree delete does.

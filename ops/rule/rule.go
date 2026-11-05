@@ -8,6 +8,8 @@ package rule
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -99,7 +101,7 @@ func Ops(env kn.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a rule (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.DeleteErrors(),
-			Confirm: op.ConfirmRule{Always: true},
+			Confirm: op.ConfirmRule{MayAsk: true}, // asked in delete: --where --dry-run never asks, FA-LTASK-2
 		}, o.delete),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search over rules of every attached store",
@@ -165,11 +167,16 @@ type WriteOut struct {
 	done string
 	// trashed marks a delete: the line says where the row went (DQ8).
 	trashed bool
+	// bulk is the whole text of a delete --where (its batch line).
+	bulk string
 }
 
 // Text prints v0.1.17's "✓ <id> <verb>"; a delete prints the trash line
 // with its restore hint (DQ8, DELETION 3.1).
 func (o WriteOut) Text() string {
+	if o.bulk != "" {
+		return o.bulk
+	}
 	if o.trashed {
 		return trashline.Moved(o.ID, o.ID)
 	}
@@ -263,9 +270,13 @@ type IDIn struct {
 
 // DeleteIn is the input of rule.delete.
 type DeleteIn struct {
-	ID      string `json:"id" arg:"0" desc:"the rule id (rul_…)"`
+	ID      string `json:"id,omitempty" arg:"0" desc:"the rule id (rul_…); leave out with --where"`
 	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
-	Reason  string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+	// Where / DryRun are the bulk delete (DELETION 3.2, FA-LTASK-2): every
+	// matching row in one bat_ batch, always asked (ops/internal/wheredel).
+	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk delete: every rule matching this filter (field=value, field:a,b, created_at<2026-06-01; repeatable, all must match)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list what would be deleted, write nothing"`
+	Reason string   `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
 
 // ShowOut is v0.1.17's show envelope.
@@ -486,6 +497,21 @@ func (o ops) stamp(ctx context.Context, id string, v value.Value, done string) (
 // delete writes the rule's tombstone.
 func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
+	bulkForm, err := wheredel.Form(noun.Name, in.ID, in.Where, in.DryRun)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if bulkForm {
+		res, werr := wheredel.Run(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table}, in.Where, in.DryRun)
+		if werr != nil {
+			return WriteOut{}, werr
+		}
+		return WriteOut{ID: res.Batch, bulk: res.Human}, nil
+	}
+	// the one-row form asks as the engine did under Confirm Always (FA-DEL-1)
+	if err = bulk.Ask(ctx, "run rule delete?"); err != nil {
+		return WriteOut{}, err
+	}
 	w, err := kn.Delete(ctx, o.env, noun, in.ID)
 	if err != nil {
 		return WriteOut{}, err

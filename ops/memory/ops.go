@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	"slices"
 	"strconv"
 	"strings"
@@ -125,7 +126,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a memory (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.HasDependents),
-			Confirm:  op.ConfirmRule{Always: true},
+			Confirm:  op.ConfirmRule{Always: true}, // FA-LTASK-2: memory keeps asking up front, so --where --dry-run needs --yes too (its direct-runner tests delete without a confirm)
 			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore memory delete mem_<id> --yes", Want: "id: mem_"}},
 		}, o.delete),
 		op.Define(op.Spec{
@@ -595,6 +596,17 @@ func (o ops) retagPatch(ctx context.Context, id ids.ID[ids.Memory], add, drop []
 // delete writes the memory's tombstone.
 func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
+	bulkForm, err := wheredel.Form("memory", in.ID, in.Where, in.DryRun)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if bulkForm {
+		res, werr := wheredel.Run(ctx, o.env, wheredel.Spec{Noun: "memory", Table: table}, in.Where, in.DryRun)
+		if werr != nil {
+			return WriteOut{}, werr
+		}
+		return WriteOut{ID: res.Batch, Human: res.Human}, nil
+	}
 	id, err := memoryID(in.ID)
 	if err != nil {
 		return WriteOut{}, err

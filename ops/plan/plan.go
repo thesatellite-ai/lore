@@ -10,6 +10,7 @@ package plan
 import (
 	"context"
 	"github.com/thesatellite-ai/lore/logic/planstatus"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	"strconv"
 	"strings"
 	"time"
@@ -175,8 +176,12 @@ type IDIn struct {
 
 // DeleteIn is the input of plan.delete.
 type DeleteIn struct {
-	ID     string `json:"id" arg:"0" desc:"the plan id (pln_…)"`
-	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+	ID string `json:"id,omitempty" arg:"0" desc:"the plan id (pln_…); leave out with --where"`
+	// Where / DryRun are the bulk delete (DELETION 3.2, FA-LTASK-2): every
+	// matching row in one bat_ batch, always asked (ops/internal/wheredel).
+	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk delete: every plan matching this filter (field=value, field:a,b, created_at<2026-06-01; repeatable, all must match)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list what would be deleted, write nothing"`
+	Reason string   `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
 
 // EditIn is the input of plan.edit (only the flags given change).
@@ -367,6 +372,23 @@ type Previewer interface {
 //	   ─► bulk.Begin ─► engine delete ─► "moved to the trash (batch …)"
 func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
+	bulkForm, err := wheredel.Form(Noun, in.ID, in.Where, in.DryRun)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if bulkForm {
+		res, werr := wheredel.Run(ctx, o.env, wheredel.Spec{Noun: Noun, Table: table, Fence: func(fctx context.Context, tasks []wheredel.Located) (int, error) {
+			rows := make([]work.Sourced, len(tasks))
+			for i, t := range tasks {
+				rows[i] = work.Sourced(t)
+			}
+			return opstask.FenceClaimed(fctx, o.env, rows) // TASK 6.12 / FA-TASK-7
+		}}, in.Where, in.DryRun)
+		if werr != nil {
+			return work.WriteOut{}, werr
+		}
+		return work.WriteOut{ID: res.Batch, Human: res.Human}, nil
+	}
 	id, err := listID(in.ID)
 	if err != nil {
 		return work.WriteOut{}, err

@@ -136,8 +136,12 @@ type IDIn struct {
 
 // DeleteIn is the input of mission.delete.
 type DeleteIn struct {
-	ID     string `json:"id" arg:"0" desc:"the mission id (msn_…)"`
-	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
+	ID string `json:"id,omitempty" arg:"0" desc:"the mission id (msn_…); leave out with --where"`
+	// Where / DryRun are the bulk delete (DELETION 3.2, FA-LTASK-2): every
+	// matching row in one bat_ batch, always asked (ops/internal/wheredel).
+	Where  []string `json:"where,omitempty" flag:"where" desc:"bulk delete: every mission matching this filter (field=value, field:a,b, created_at<2026-06-01; repeatable, all must match)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --where: list what would be deleted, write nothing"`
+	Reason string   `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
 
 // EditIn is the input of mission.edit (only the flags given change).
