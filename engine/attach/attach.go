@@ -6,8 +6,8 @@
 //
 // Rules enforced: names are snake_case, unique and not reserved (repo, me,
 // team, company: CFG2, STORE TARGETS); a url must name a backend scheme
-// (E_STORE_SCHEME) and may not carry a password (E_URL_CREDENTIALS: no
-// credentials in urls, D24); unknown keys are refused, so a typo never
+// (E_STORE_SCHEME); a credential in a url is cleaned on read (D24, SECRETS
+// 14.2 row 16; NormalizeURL); unknown keys are refused, so a typo never
 // silently drops read_only.
 //
 // Layer L4 (beside the engine): imports store and engine only.
@@ -27,6 +27,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
@@ -114,21 +115,51 @@ func Parse(b []byte) (Config, error) {
 var scpForm = regexp.MustCompile(`^([A-Za-z0-9._-]+)@([A-Za-z0-9.-]+):([^/].*)$`)
 
 // NormalizeURL turns the scp form into ssh:// and refuses a url carrying a
-// password (ssh keeps its login user, SQ13). The url never appears in an
-// error.
+// credential: a password, or a token-shaped user name (OV4: https://<token>@host
+// is caught too; repourl.Strip decides, D24/SQ13). An ssh login user is
+// kept. It is the strict form for a url a person is adding (lore store add,
+// wire's canonical form); a url read back from stores.yaml goes through
+// CleanURL instead. The url never appears in an error.
 func NormalizeURL(raw string) (string, error) {
+	u, err := parseStoreURL(raw)
+	if err != nil {
+		return "", err
+	}
+	_, removed, err := repourl.Strip(u.String())
+	if err != nil || removed.Warn() {
+		return "", errs.New(errs.URLUserinfo, "attach: a store url holds a credential").
+			WithHint("remove the credential from stores.yaml and use your git credential helper")
+	}
+	return u.String(), nil
+}
+
+// CleanURL is the read form (SECRETS 14.2 row 16): a hand-edited
+// stores.yaml url with a credential is cleaned on read, not refused, so a
+// teammate's checkout still opens; the commit hook keeps refusing the
+// committed file. A value Strip cannot read safely is refused.
+func CleanURL(raw string) (string, error) {
+	u, err := parseStoreURL(raw)
+	if err != nil {
+		return "", err
+	}
+	clean, _, err := repourl.Strip(u.String())
+	if err != nil {
+		return "", errs.New(errs.URLUserinfo, "attach: a store url cannot be read safely (it may hold a credential)").
+			WithHint("remove the credential from stores.yaml and use your git credential helper")
+	}
+	return clean, nil
+}
+
+// parseStoreURL turns the scp form into ssh:// and parses the url.
+func parseStoreURL(raw string) (*url.URL, error) {
 	if m := scpForm.FindStringSubmatch(raw); m != nil {
 		raw = "ssh://" + m[1] + "@" + m[2] + "/" + m[3]
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme == "" {
-		return "", errs.New(errs.StoreScheme, "attach: a store url has no scheme")
+		return nil, errs.New(errs.StoreScheme, "attach: a store url has no scheme")
 	}
-	if _, has := u.User.Password(); has {
-		return "", errs.New(errs.URLUserinfo, "attach: a store url holds a password").
-			WithHint("remove the credential from stores.yaml and use your git credential helper")
-	}
-	return u.String(), nil
+	return u, nil
 }
 
 // Opened is one opened store: what the engine attaches, plus the linked
@@ -150,7 +181,7 @@ func Open(ctx context.Context, c Config, openers *store.Openers, opts store.Open
 		return nil, err
 	}
 	for _, s := range c.Stores {
-		u, err := NormalizeURL(s.URL)
+		u, err := CleanURL(s.URL) // read form: cleaned, not refused (14.2 row 16)
 		if err != nil {
 			return fail(storeErr(s.Name, err))
 		}

@@ -183,7 +183,8 @@ var ErrUnreadable = errors.New("repourl: the URL cannot be read, and it may hold
 //
 // URL CREDENTIALS FIX / SQ13: an http or https URL (and any scheme other
 // than ssh) loses its whole user part (a token is often the user name);
-// an ssh:// URL keeps the login user and loses a password; a scp-like
+// an ssh:// URL keeps the login user and loses a password (a token-shaped
+// login user is dropped whole, OV4); a scp-like
 // URL (git@host:o/r) keeps its login user. A value without a scheme that
 // has an "@" before its first "/" and is not scp-like is refused
 // (ErrUnreadable), so a token is never stored by accident. Host, port,
@@ -215,11 +216,18 @@ func Strip(raw string) (clean string, removed Removed, err error) {
 	_, hasPw := u.User.Password()
 	switch strings.ToLower(u.Scheme) {
 	case "ssh", "git+ssh", "ssh+git":
-		if !hasPw {
+		switch {
+		case TokenShaped(u.User.Username()):
+			// OV4: a token as the ssh login user is a credential too
+			// (14.6); the whole user part goes.
+			u.User = nil
+			removed = RemovedTokenUser
+		case hasPw:
+			u.User = url.User(u.User.Username())
+			removed = RemovedPassword
+		default:
 			return s, RemovedNone, nil
 		}
-		u.User = url.User(u.User.Username())
-		removed = RemovedPassword
 	default:
 		switch {
 		case hasPw:
