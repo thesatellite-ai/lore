@@ -167,8 +167,9 @@ func (b claimBoard) OpenClaim(taskID string) (opstask.OpenClaim, bool) {
 }
 
 // teamCommandGroups are the core noun groups whose operations take team
-// flags (task, mission; plan apply creates missions with approvers).
-var teamCommandGroups = []string{"task", "mission", "plan"}
+// flags (task, mission; plan apply creates missions with approvers); tasklist
+// delete fences the claimed tasks it takes (FA-TASK-7).
+var teamCommandGroups = []string{"task", "mission", "plan", "tasklist"}
 
 // withCLITeam gives every operation command under the team groups the
 // CLI's opstask.Team in its context.

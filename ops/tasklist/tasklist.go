@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -326,7 +327,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	inList, elsewhere, err := o.listTasks(ctx, id.String())
+	inList, elsewhere, taken, err := o.listTasks(ctx, id.String())
 	if err != nil {
 		return work.WriteOut{}, err
 	}
@@ -350,22 +351,34 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if inList+elsewhere > 0 {
 		human = trashline.MovedBatch("tasklist "+id.String()+" + "+strconv.Itoa(inList+elsewhere)+" tasks", batch.String())
 	}
+	// TASK 6.12 / FA-TASK-7: claimed tasks the cascade takes are fenced
+	// (claim_epoch +1) inside the delete batch, before the tombstones.
+	n, err := opstask.FenceClaimed(bctx, o.env, taken)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if n > 0 {
+		human += "  fenced " + strconv.Itoa(n) + " claimed task(s): their holders' next write fails\n"
+	}
 	return work.Delete(bctx, o.env, Noun, table, id, human)
 }
 
 // listTasks counts the live tasks of list and their sub-tasks that sit in
-// other lists (they go with their parent, 6.12.1).
-func (o ops) listTasks(ctx context.Context, list string) (inList, elsewhere int, err error) {
+// other lists (they go with their parent, 6.12.1), and returns every row
+// the delete takes (for the claim fence).
+func (o ops) listTasks(ctx context.Context, list string) (inList, elsewhere int, taken []work.Sourced, err error) {
 	all, err := work.ListAll(ctx, o.env, schema.TableTasks, "")
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
+	byID := map[string]work.Sourced{}
 	var nodes []tasktree.Node
 	var roots []string
 	for _, s := range all {
 		if s.Row.Deleted {
 			continue
 		}
+		byID[s.Row.ID.String()] = s
 		nodes = append(nodes, tasktree.Node{ID: s.Row.ID.String(), Parent: work.Field(s.Row, schema.FieldTaskParent)})
 		if work.Field(s.Row, work.FieldTasklist) == list {
 			roots = append(roots, s.Row.ID.String())
@@ -375,17 +388,19 @@ func (o ops) listTasks(ctx context.Context, list string) (inList, elsewhere int,
 	gone := map[string]bool{}
 	for _, r := range roots {
 		gone[r] = true
+		taken = append(taken, byID[r])
 	}
 	inList = len(roots)
 	for _, r := range roots {
 		for _, d := range t.Descendants(r) {
 			if !gone[d] {
 				gone[d] = true
+				taken = append(taken, byID[d])
 				elsewhere++
 			}
 		}
 	}
-	return inList, elsewhere, nil
+	return inList, elsewhere, taken, nil
 }
 
 // search matches tasklists by title, body and status.

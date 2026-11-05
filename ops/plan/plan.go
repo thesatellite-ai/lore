@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -377,12 +378,18 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	label := "plan " + id.String() + " " + work.Quote(work.Field(cur, work.FieldTitle))
 	question := "delete " + label + "?"
 	deps := 0
+	var tasks []work.Sourced // the tasks the cascade takes, for the claim fence
 	if pv, ok := upgrade.As[Previewer](o.env); ok {
 		p, perr := pv.PreviewDelete(ctx, engine.Ref{Store: src, Table: table, ID: id})
 		if perr != nil {
 			return work.WriteOut{}, perr
 		}
 		deps = p.Dependents(1)
+		for _, c := range p.Rows {
+			if c.Row.Table == schema.TableTasks {
+				tasks = append(tasks, work.Sourced{Source: c.Store, Row: c.Row})
+			}
+		}
 		if deps > 0 {
 			// 3.4: a group with tasks always asks; the question names them.
 			question = "deleting " + label + " also moves " + strconv.Itoa(deps) + " rows to the trash (" +
@@ -399,6 +406,15 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	human := trashline.Moved(id.String(), id.String())
 	if deps > 0 { // OV46-D1: a delete of several rows names the batch as its restore target
 		human = trashline.MovedBatch(label+" + "+strconv.Itoa(deps)+" rows", batch.String())
+	}
+	// TASK 6.12 / FA-TASK-7: claimed tasks the cascade takes are fenced
+	// (claim_epoch +1) inside the delete batch, before the tombstones.
+	n, err := opstask.FenceClaimed(bctx, o.env, tasks)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	if n > 0 {
+		human += "  fenced " + strconv.Itoa(n) + " claimed task(s): their holders' next write fails\n"
 	}
 	return work.Delete(bctx, o.env, Noun, table, id, human)
 }
