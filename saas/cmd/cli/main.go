@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -91,6 +92,29 @@ func checkNetworkFS(path string) error {
 			WithHint("SQLite corrupts silently under iCloud/Dropbox/OneDrive/NFS; move the project to a local folder (git still shares the knowledge via .lore/data), or set " + envAllowNetworkFS + "=1")
 	}
 	return nil
+}
+
+// coreMountDirs gives mountCore the repo folder and lore home of the
+// package-level core (coreApp). mountCore runs at package init, before any
+// test sets up its own dirs, so a test binary replaces this func in a
+// package-level var initializer (core_mount_dirs_test.go; Go runs every
+// var initializer before any init) with a temp repo and home: unit tests
+// then never write into the source checkout's .lore or the real ~/.lore
+// (cl-gate). The binary keeps the process's own folder and home.
+var coreMountDirs = processCoreDirs
+
+// processCoreDirs is the working directory ("." when unreadable) and the
+// lore home (a temp fallback when HOME cannot be resolved).
+func processCoreDirs() (dir, home string) {
+	dir, err := os.Getwd()
+	if err != nil {
+		dir = "."
+	}
+	home, herr := loreHome()
+	if herr != nil {
+		home = filepath.Join(os.TempDir(), "lore-home-unresolved")
+	}
+	return dir, home
 }
 
 // flagColor is the global --color flag bound by Init()

@@ -57,6 +57,11 @@ func runTests(m *testing.M) int {
 		return 1
 	}
 	defer os.RemoveAll(tmp) // temp fixtures; nothing to report on failure
+	defer func() {
+		if testCoreRoot != "" {
+			_ = os.RemoveAll(testCoreRoot) // the package-level core's temp repo (core_mount_dirs_test.go)
+		}
+	}()
 	templateDB = filepath.Join(tmp, "template.db")
 	if err := dbtemplate.Build(context.Background(), templateDB); err != nil {
 		fmt.Fprintln(os.Stderr, err)
