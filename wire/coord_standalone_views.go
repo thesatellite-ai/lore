@@ -10,13 +10,13 @@ package wire
 //	          ─► task documents of every attached store (engineRows.List)
 //	          ─► missions, handoffs, memories, comments of the project
 //	          ─► the last fetched board (Signals.Local)
-//	inbox          ─► items (assigned, sla, EXPIRED, blocked, gate, overdue,
+//	inbox          ─► items (assigned, sla, EXPIRED, FORCED, blocked, gate, overdue,
 //	                  watched, triage, child, parent, deleted, mention,
 //	                  recurring, metadata, handoff, finding), --since/--ack
 //	mission status ─► one row per task with its state, counts, SLA counts
 //
-// Forced reveals (SECRETS 16) come from the hash-chained audit log, which
-// this host keeps none of: the inbox lists none here.
+// Forced reveals (SECRETS 16) come from the repo audit sink's hash chain
+// (coord_standalone_forced.go); a sink without a chain lists none.
 
 import (
 	"context"
@@ -381,6 +381,11 @@ func (h standaloneCoord) Inbox(ctx context.Context, in opscoord.InboxIn) (opscoo
 		return opscoord.InboxOut{}, err
 	}
 	items := cv.inbox(ctx)
+	forced, err := cv.forcedItems(ctx) // SECRETS 16 / SQ10 (coord_standalone_forced.go)
+	if err != nil {
+		return opscoord.InboxOut{}, err
+	}
+	items = append(items, forced...)
 	marker := filepath.Join(cv.w.stateDir, "inbox-"+cv.w.actorID+".json")
 	var m inboxMarker
 	if b, rerr := os.ReadFile(filepath.Clean(marker)); rerr == nil {

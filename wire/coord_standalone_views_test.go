@@ -7,7 +7,9 @@ package wire
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -152,5 +154,70 @@ func TestInboxAuthorsFromTheEnvelope(t *testing.T) {
 	}
 	if got := inboxItems(t, f.bob); len(got) != 0 {
 		t.Fatalf("bob owns no mission and has no handoff: %+v", got)
+	}
+}
+
+// TestInboxListsForcedReveals (later.md 272, SECRETS 16 / SQ10): with the
+// chain sink, every forced reveal in the audit chain is a FORCED inbox
+// item naming who revealed what; an ordinary reveal and other events are
+// not; --ack hides it until the next forced reveal; without a chain
+// (no sink) the inbox lists none and does not fail.
+func TestInboxListsForcedReveals(t *testing.T) {
+	repo := gitRepo(t)
+	home := t.TempDir()
+	notClient := func(context.Context) (bool, error) { return false, nil }
+	a := openWith(t, repo, Options{Home: home, RepoIsClient: notClient, Audit: NewChainAudit(home, repo, time.Now)})
+	withProject(t, a)
+	actor, err := a.Actor(background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	reveal := func(forced engine.ForcedBy, rowID string) {
+		t.Helper()
+		id, perr := ids.ParseAny(rowID)
+		if perr != nil {
+			t.Fatal(perr)
+		}
+		ev := engine.Event{Op: "secrets.show", Action: engine.ActionSecretRevealed, Store: store.SourceRepo, Table: schema.TableMemories, ID: id, Actor: actor,
+			Secret: engine.SecretAudit{Command: "secrets show", Result: "present", Forced: forced != engine.ForcedNone, ForcedBy: forced}}
+		if rerr := a.opts.Audit.Record(background(), ev); rerr != nil {
+			t.Fatal(rerr)
+		}
+	}
+	forcedOf := func(items []opscoord.InboxItem) []opscoord.InboxItem {
+		var out []opscoord.InboxItem
+		for _, it := range items {
+			if it.Kind == inboxForced {
+				out = append(out, it)
+			}
+		}
+		return out
+	}
+	reveal(engine.ForcedNone, fixtureMem)
+	if got := forcedOf(inboxItems(t, a)); len(got) != 0 {
+		t.Fatalf("an ordinary reveal is not FORCED: %+v", got)
+	}
+	reveal(engine.ForcedFlag, fixtureMem)
+	got := forcedOf(inboxItems(t, a))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "secret revealed without a person's answer") || !strings.Contains(got[0].Text, "FORCED (flag)") ||
+		!strings.Contains(got[0].Text, "(row "+fixtureMem+")") || got[0].Who == "" || got[0].At.IsZero() {
+		t.Fatalf("one FORCED item for the forced reveal: %+v", got)
+	}
+	if _, err = run(t, a, opscoord.OpInbox, `{"ack":true}`, true); err != nil {
+		t.Fatal(err)
+	}
+	if got = forcedOf(inboxItems(t, a)); len(got) != 0 {
+		t.Fatalf("an acked forced reveal is not shown again: %+v", got)
+	}
+	time.Sleep(1100 * time.Millisecond) // the chain stamps whole seconds: the next reveal is after the ack
+	reveal(engine.ForcedPolicy, fixtureMem)
+	if got = forcedOf(inboxItems(t, a)); len(got) != 1 || !strings.Contains(got[0].Text, "FORCED (policy)") {
+		t.Fatalf("a new forced reveal after the ack shows: %+v", got)
+	}
+	// No chain sink: nothing to list, no failure.
+	plain := openWith(t, gitRepo(t), Options{RepoIsClient: notClient})
+	withProject(t, plain)
+	if got = forcedOf(inboxItems(t, plain)); len(got) != 0 {
+		t.Fatalf("no chain, no FORCED items: %+v", got)
 	}
 }
