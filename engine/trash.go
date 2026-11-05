@@ -93,6 +93,45 @@ func reasonOf(ctx context.Context) string {
 	return s
 }
 
+// PurgeRequest is a delete's `--purge` (DELETION 2.5, 3.5): Asked is the
+// flag, Confirmed the literal --confirm (DQ2: --yes never purges). The
+// engine fills Purged with the ids it tombstoned, so a surface can say
+// "purged" instead of "moved to the trash". Policy trash.purge_on_delete
+// turns every delete into a purge even without Asked (3.12).
+type PurgeRequest struct {
+	Asked     bool
+	Confirmed bool
+	Purged    []ids.AnyID
+}
+
+// purgeKey is the context key of a delete's PurgeRequest.
+type purgeKey struct{}
+
+// WithPurge attaches req to every delete made with ctx; req.Purged is
+// written by the engine.
+func WithPurge(ctx context.Context, req *PurgeRequest) context.Context {
+	return context.WithValue(ctx, purgeKey{}, req)
+}
+
+// purgeOf is ctx's PurgeRequest, or nil.
+func purgeOf(ctx context.Context) *PurgeRequest {
+	r, _ := ctx.Value(purgeKey{}).(*PurgeRequest)
+	return r
+}
+
+// purgeOnDelete reports policy trash.purge_on_delete for src (3.12).
+func (e *Engine) purgeOnDelete(src store.Source) bool {
+	set, _, err := e.settings.Policy(src)
+	if err != nil {
+		return false // an unreadable policy never turns a delete into a purge: the soft delete keeps the content restorable
+	}
+	if v, ok := set.Get(policy.KeyTrashPurgeOnDelete); ok && v.Value != nil {
+		b, isBool := v.Value.(value.Bool)
+		return isBool && b.Bool()
+	}
+	return false
+}
+
 // Trashed is one row in the trash: where it lives, the row (body kept) and
 // its delete fields.
 type Trashed struct {
@@ -134,7 +173,24 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 	if err != nil {
 		return Written{}, err
 	}
-	if err = e.confirmGroup(ctx, src, cur, plan); err != nil {
+	// DELETION 2.5 / 3.12: --purge (or policy trash.purge_on_delete) skips
+	// the trash; it needs the literal --confirm (DQ2), which also answers
+	// the group question because it names every row that goes.
+	pr := purgeOf(ctx)
+	purge := (pr != nil && pr.Asked) || e.purgeOnDelete(src)
+	if purge {
+		if pr == nil || !pr.Confirmed {
+			q := "--purge removes " + cur.ID.String()
+			if len(plan) > 1 {
+				q += " and " + strconv.Itoa(len(plan)-1) + " dependent rows"
+			}
+			if pr == nil || !pr.Asked {
+				q = "policy trash.purge_on_delete makes this delete a purge: it removes " + strings.TrimPrefix(q, "--purge removes ")
+			}
+			return Written{}, errs.New(errs.NeedsConfirm, "engine: "+q+" for good, without the trash (only a tombstone stays)").
+				WithHint("ask the person, then rerun with --confirm (--yes does not purge)")
+		}
+	} else if err = e.confirmGroup(ctx, src, cur, plan); err != nil {
 		return Written{}, err
 	}
 	b, ok := BatchOf(ctx)
@@ -217,8 +273,42 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 			return w, ferr
 		}
 	}
+	if purge {
+		return e.purgeDeleted(ctx, cur, reason, w, pr)
+	}
 	return w, nil
 }
+
+// purgeDeleted purges the group a --purge delete just put in the trash
+// (DELETION 2.5): the root and its batch dependents become tombstones in
+// a Lore-Purge commit. A reason that holds a secret gets a warning: the
+// files lose it, git history does not (4.6).
+func (e *Engine) purgeDeleted(ctx context.Context, cur row.Row, reason string, w Written, pr *PurgeRequest) (Written, error) {
+	res, err := e.TrashTarget(ctx, cur.ID.String())
+	if err != nil {
+		return w, err
+	}
+	done, err := e.purgeRows(ctx, res)
+	if pr != nil {
+		for _, t := range done.Rows {
+			pr.Purged = append(pr.Purged, t.Row.ID)
+		}
+	}
+	if err != nil {
+		return w, err
+	}
+	w.Warnings = append(w.Warnings, Warning{Code: WarnPurgedHistory, Message: "purged " + strconv.Itoa(len(done.Rows)) +
+		" rows for good (tombstones written); their old content is still in git history"})
+	if found, _ := e.scanText("deleted_reason", reason); len(found) > 0 {
+		w.Warnings = append(w.Warnings, Warning{Code: WarnPurgedHistory, Field: "deleted_reason",
+			Message: "the reason mentions a secret: purging removes it from the files, not from git history; rotate the secret now"})
+	}
+	return w, nil
+}
+
+// WarnPurgedHistory is the note of a delete --purge (DELETION 2.5): the
+// content left the files but stays in git history.
+const WarnPurgedHistory WarnCode = "W_PURGED_HISTORY"
 
 // planTrash is the group a soft delete moves: root plus every cascade
 // dependent, recursively (3.4). Set-null and many-to-many links are
