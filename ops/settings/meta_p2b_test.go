@@ -105,7 +105,7 @@ func TestMetaRenameRewriteRows(t *testing.T) {
 // the names), the survivor takes the protective flags, the old key is
 // retired; folding a store-level key into a repo-level key works the same.
 func TestMetaFoldWithValues(t *testing.T) {
-	h := multiStore(t)
+	h := multiStore(t, ownRepo)
 	h.MustYes(settings.OpMetaAdd, `{"name":"tier","type":"text","values":"gold,silver"}`)
 	h.MustYes(settings.OpMetaAdd, `{"name":"level","type":"text","values":"silver,bronze","to":"kb","sensitive":true}`)
 	a := h.ID(h.MustYes(memAdd, `{"body":"a","meta":["level=bronze"]}`))
@@ -241,7 +241,7 @@ func TestMetaHistoryFolderStore(t *testing.T) {
 // TestMetaAdoptWithValues pins OV58: adopt moves a place's key rows with
 // their allowed values (the moved key still takes its values by name).
 func TestMetaAdoptWithValues(t *testing.T) {
-	h := multiStore(t)
+	h := multiStore(t, ownRepo)
 	h.MustYes(settings.OpMetaAdd, `{"name":"env","type":"text","values":"prod,dev","to":"kb/web"}`)
 	a := h.ID(h.MustYes(memAdd, `{"body":"a","meta":["env=prod"]}`))
 	out := h.JSON(h.MustYes(settings.OpMetaAdopt, `{"from":"kb/web","to":"kb/org"}`))

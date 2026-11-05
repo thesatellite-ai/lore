@@ -510,7 +510,7 @@ func (o ops) metaValueRename(ctx context.Context, in MetaValueRenameIn) (RowOut,
 // metaWriteErrors are the codes of meta set / unset (METADATA 6).
 var metaWriteErrors = append(slices.Clone(writeErrors), errs.MetaKey, errs.MetaReserved, errs.MetaType, errs.MetaValue,
 	errs.MetaShape, errs.MetaSize, errs.MetaDepth, errs.MetaOp, errs.MetaTable, errs.MetaUnknown, errs.MetaAmbiguous,
-	errs.MetaUnregistered, errs.MetaRequired, errs.MetaInUse, errs.MetaRetired)
+	errs.MetaUnregistered, errs.MetaRequired, errs.MetaInUse, errs.MetaRetired, errs.MetaForeignKey)
 
 // checkKeyName is the name rule of a registry key (3.5): dotted snake_case
 // ASCII (E_META_KEY, E_META_DEPTH) and not one of lore's words

@@ -17,7 +17,7 @@ import (
 // place's key rows (refused on a name clash); rehome reports a clash
 // (METADATA 3.9, 3.18, OV58).
 func TestMetaMoveAdoptRehome(t *testing.T) {
-	h := multiStore(t)
+	h := multiStore(t, ownRepo) // a client repo refuses store keys' values (FA-META-7)
 	id := h.ID(h.MustYes(settings.OpMetaAdd, `{"name":"retry_count","type":"text","values":"one,two","to":"kb/web"}`))
 	h.MustYes(memAdd, `{"body":"a","meta":["retry_count=one"]}`)
 	h.Fails(settings.OpMetaMove, `{"id":"retry_count","to":"kb/org"}`, errs.NeedsConfirm)

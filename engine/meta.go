@@ -389,6 +389,9 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 	if err := p.register(ctx, cl); err != nil {
 		return nil, nil, err
 	}
+	if err := p.checkForeign(); err != nil {
+		return nil, nil, err
+	}
 	out := make(map[ids.ID[ids.MetaKey]]value.JSON, len(p.entries))
 	for id, en := range p.entries {
 		j, eerr := en.Encode()
@@ -1047,6 +1050,40 @@ func (p *metaPlan) register(ctx context.Context, cl call) error {
 		if !reviewed {
 			p.warn(k.name, "unreviewed: a person approves it with lore meta describe "+k.name+" \"…\" (lore meta keys --unreviewed)")
 		}
+	}
+	return nil
+}
+
+// checkForeign refuses, in a client-class target, any entry whose key id
+// is not one of the target's own key rows (or registered by this write
+// there), or whose scope label names another place: E_META_FOREIGN_KEY
+// (META 3.11 rule 1, R2 item 1, FA-META-7). Values reach a client repo
+// only through lore move, which maps the keys. An own-class target is not
+// checked.
+func (p *metaPlan) checkForeign() error {
+	if !p.e.IsClient(p.target) {
+		return nil
+	}
+	own := map[ids.ID[ids.MetaKey]]bool{}
+	for _, d := range p.reg {
+		if d.src == p.target {
+			own[d.id] = true
+		}
+	}
+	for _, k := range p.pending {
+		if k.home == p.target {
+			own[k.id] = true
+		}
+	}
+	want := metaScope(p.target)
+	for _, id := range sortedIDs(p.entries) {
+		en := p.entries[id]
+		if own[id] && (en.Scope == "" || en.Scope == want) {
+			continue
+		}
+		return errs.New(errs.MetaForeignKey, "meta entry "+id.String()+" (label "+en.Name+", scope "+en.Scope+
+			") is not a key of this client repo; values reach a client repo only through lore move").
+			WithHint("lore meta unset <id> " + en.Name + ", or lore move the row in (it maps the keys)")
 	}
 	return nil
 }
