@@ -1,13 +1,12 @@
 package cachedb
 
 import (
-	"os"
 	"testing"
 	"time"
 )
 
 // Built is false for a new cache and true once a Rebuild recorded a key;
-// Touch moves last_used so `lore cache prune` keeps a cache in use.
+// Touch is repeatable (age-based Prune went with FLAG3).
 func TestBuiltAndTouch(t *testing.T) {
 	dir := t.TempDir()
 	path := Path(dir, "prj_x")
@@ -33,19 +32,6 @@ func TestBuiltAndTouch(t *testing.T) {
 	}
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
-	}
-	render := t.TempDir()
-	// Idle 30 days since the rebuild, but used just now: kept.
-	res, err := Prune(ctx(), dir, render, later.Add(time.Hour), 7*24*time.Hour)
-	if err != nil || res.Kept != 1 || len(res.Removed) != 0 {
-		t.Fatalf("a touched cache is kept: %+v %v", res, err)
-	}
-	res, err = Prune(ctx(), dir, render, later.Add(8*24*time.Hour), 7*24*time.Hour)
-	if err != nil || len(res.Removed) != 1 || res.Removed[0] != "prj_x" {
-		t.Fatalf("idle past max: removed: %+v %v", res, err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("the pruned cache file is gone: %v", err)
 	}
 }
 

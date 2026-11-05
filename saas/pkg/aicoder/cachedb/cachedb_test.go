@@ -132,48 +132,6 @@ func TestSchemaVersionGuard(t *testing.T) {
 	}
 }
 
-// Side effect 40: prune removes caches idle > maxIdle and their render.
-func TestPrune(t *testing.T) {
-	cache, render := t.TempDir(), t.TempDir()
-	for _, pid := range []string{"prj_old", "prj_new"} {
-		d, err := Open(ctx(), Path(cache, pid))
-		if err != nil {
-			t.Fatal(err)
-		}
-		when := t0
-		if pid == "prj_new" {
-			when = t0.Add(80 * 24 * time.Hour)
-		}
-		if err := d.Rebuild(ctx(), Key{Entry: "e"}, nil, when); err != nil {
-			t.Fatal(err)
-		}
-		d.Close()
-		if err := os.WriteFile(filepath.Join(render, pid+".md"), []byte("x"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(cache, "links-northwind.json"), []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	res, err := Prune(ctx(), cache, render, t0.Add(91*24*time.Hour), 90*24*time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Removed) != 1 || res.Removed[0] != "prj_old" || res.Kept != 1 {
-		t.Fatalf("prune: %+v", res)
-	}
-	for p, want := range map[string]bool{
-		Path(cache, "prj_old"): false, filepath.Join(render, "prj_old.md"): false,
-		Path(cache, "prj_new"): true, filepath.Join(render, "prj_new.md"): true,
-		filepath.Join(cache, "links-northwind.json"): true,
-	} {
-		_, err := os.Stat(p)
-		if (err == nil) != want {
-			t.Fatalf("%s exists=%v want %v", p, err == nil, want)
-		}
-	}
-}
-
 // A 0.1.18 tombstone file (`_deleted: true`, what `lore move` and delete
 // leave in the old store) is no row: its id must not reach the leak index
 // as internal content. `_deleted: false`, a non-bool, or a body field named
