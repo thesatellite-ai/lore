@@ -730,6 +730,9 @@ type missionRow struct {
 	State  string `json:"state"`
 	Who    string `json:"who,omitempty"`
 	Detail string `json:"detail,omitempty"`
+	// SLA is ok | at_risk | breached, "" when the priority has no SLA
+	// (TASK 18.4, mission_sla.go).
+	SLA string `json:"sla,omitempty"`
 }
 
 func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool) error {
@@ -766,6 +769,8 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 	}
 	res := queue.Next(queue.Input{Tasks: qs, Filter: queue.Filter{Mission: id, AnyRepoRole: true}, Now: cv.now(), MaxAttempts: cv.maxAttempts()})
 	counts := map[string]int{}
+	slaCounts := map[string]int{}
+	sla := cv.newMissionSLA(ctx)
 	var rows []missionRow
 	waiting := map[string]queue.Waiting{}
 	for _, w := range res.Waiting {
@@ -814,15 +819,27 @@ func (cv *coordView) missionStatus(ctx context.Context, id string, jsonOut bool)
 		if used, per := cv.leaseTime(t); used > 0 || t.TimeboxSeconds != nil {
 			row.Detail = strings.TrimSpace(row.Detail + " " + cv.timeboxText(ctx, t, used, per))
 		}
+		// 18.4: SLA on read; a closed task keeps its state in --json, the
+		// text calls out only open late ones.
+		if row.SLA = sla.state(t); row.SLA != "" {
+			slaCounts[row.SLA]++
+			if slaLate(row.SLA) && row.State != missionStateDone && row.State != missionStateCancelled {
+				row.Detail = strings.TrimSpace(row.Detail + " " + sla.slaText(t, row.SLA))
+			}
+		}
 		counts[row.State]++
 		rows = append(rows, row)
 	}
 	if jsonOut {
-		printJSON(constants.KindTaskList, map[string]any{"mission": mID, "title": mTitle, "counts": counts, "tasks": rows}, len(rows))
+		printJSON(constants.KindTaskList, map[string]any{"mission": mID, "title": mTitle, "counts": counts, "sla": slaCounts, "tasks": rows}, len(rows))
 		return nil
 	}
-	fmt.Printf("%s %s   %d tasks · %d done · %d claimed · %d ready · %d waiting · %d gated · %d expired · %d blocked\n",
-		mID, mTitle, len(rows), counts[missionStateDone], counts[missionStateClaimed], counts[missionStateReady], counts[missionStateWaiting], counts[missionStateGated], counts[missionStateExpired], counts[missionStateBlocked])
+	slaLine := ""
+	if n, b := slaCounts[opstask.SLAAtRisk], slaCounts[opstask.SLABreached]; n+b > 0 {
+		slaLine = fmt.Sprintf(" · SLA: %d at risk, %d breached", n, b)
+	}
+	fmt.Printf("%s %s   %d tasks · %d done · %d claimed · %d ready · %d waiting · %d gated · %d expired · %d blocked%s\n",
+		mID, mTitle, len(rows), counts[missionStateDone], counts[missionStateClaimed], counts[missionStateReady], counts[missionStateWaiting], counts[missionStateGated], counts[missionStateExpired], counts[missionStateBlocked], slaLine)
 	for _, r := range rows {
 		fmt.Printf("  %-9s %s  %-28s %-12s %s\n", r.State, r.ID, r.Title, r.Who, r.Detail)
 	}
