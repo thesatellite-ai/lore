@@ -334,12 +334,24 @@ func TestUC_Tasks_StatusTransitionsAndShow(t *testing.T) {
 	}
 	show := func() {
 		t.Helper()
-		var raw map[string]string
+		// The show --json object also holds non-string fields (watchers is
+		// a list since TASK_SYSTEM_DESIGN 14 / TSQ5), so only the string
+		// fields this test reads are decoded.
+		var raw map[string]json.RawMessage
 		ucJSON(t, c.lore("task", "show", id, "--json"), &raw)
-		full.Status, full.Commitment = raw["status"], raw["commitment"]
-		full.StartedAt, full.CompletedAt, full.DeferredUntil = raw["started_at"], raw["completed_at"], raw["deferred_until"]
-		full.Body, full.DueAt, full.MissionID = raw["body"], raw["due_at"], raw["mission_id"]
-		full.TasklistID, full.ProjectID, full.CreatedAt = raw["tasklist_id"], raw["project_id"], raw["created_at"]
+		str := func(k string) string {
+			var v string
+			if b, ok := raw[k]; ok {
+				if err := json.Unmarshal(b, &v); err != nil {
+					t.Fatalf("show --json %s is not a string: %s", k, b)
+				}
+			}
+			return v
+		}
+		full.Status, full.Commitment = str("status"), str("commitment")
+		full.StartedAt, full.CompletedAt, full.DeferredUntil = str("started_at"), str("completed_at"), str("deferred_until")
+		full.Body, full.DueAt, full.MissionID = str("body"), str("due_at"), str("mission_id")
+		full.TasklistID, full.ProjectID, full.CreatedAt = str("tasklist_id"), str("project_id"), str("created_at")
 	}
 	show()
 	if full.Status != "in_progress" || full.Commitment != "accepted" || full.DeferredUntil != "" || full.StartedAt == "" {
@@ -383,15 +395,20 @@ func TestUC_Tasks_EditValidationAndDeferral(t *testing.T) {
 	c := ucProject(t)
 	tl := ucTasklist(t, c)
 	id := ucID(t, c, "task", "add", "edit me", "--tasklist="+tl)
-	for _, args := range [][]string{
-		{"task", "edit", id, "--commitment=maybe"},
-		{"task", "edit", id, "--defer-until=next week"},
-		{"task", "edit", id, "--status=paused"},
-		{"task", "add", "x", "--tasklist=" + tl, "--commitment=maybe"},
-		{"task", "add", "x", "--tasklist=" + tl, "--defer-until=31/12/2099"},
+	// OV15B: a bad date on any date flag is E_DATE (the design's code), not
+	// E_INVALID_INPUT; the other bad values stay E_INVALID_INPUT.
+	for _, tc := range []struct {
+		args []string
+		code string
+	}{
+		{[]string{"task", "edit", id, "--commitment=maybe"}, "E_INVALID_INPUT"},
+		{[]string{"task", "edit", id, "--defer-until=next week"}, "E_DATE"},
+		{[]string{"task", "edit", id, "--status=paused"}, "E_INVALID_INPUT"},
+		{[]string{"task", "add", "x", "--tasklist=" + tl, "--commitment=maybe"}, "E_INVALID_INPUT"},
+		{[]string{"task", "add", "x", "--tasklist=" + tl, "--defer-until=31/12/2099"}, "E_DATE"},
 	} {
-		if r := c.loreAny(args...); r.code == 0 || !strings.Contains(r.stderr, "E_INVALID_INPUT") {
-			t.Fatalf("%v must be refused: %d %s", args, r.code, r.stderr)
+		if r := c.loreAny(tc.args...); r.code == 0 || !strings.Contains(r.stderr, tc.code) {
+			t.Fatalf("%v must be refused with %s: %d %s", tc.args, tc.code, r.code, r.stderr)
 		}
 	}
 	c.lore("task", "edit", id, "--defer-until=2099-03-03", "--priority=high", "--commitment=someday")
