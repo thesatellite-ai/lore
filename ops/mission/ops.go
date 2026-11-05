@@ -9,6 +9,7 @@ package mission
 import (
 	"context"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"slices"
 	"strconv"
 	"strings"
@@ -466,7 +467,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, Noun, table, id, work.Success+" "+id.String()+" deleted\n")
+	return work.Delete(ctx, o.env, Noun, table, id, trashline.Moved(id.String(), id.String()))
 }
 
 // search matches missions by title, body and status.

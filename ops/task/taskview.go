@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -294,7 +295,7 @@ func (o ops) viewDelete(ctx context.Context, in ViewNameIn) (work.WriteOut, erro
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, viewNoun, viewTable, r.ID, work.Success+" "+r.ID.String()+" — task view "+work.Field(r, schema.FieldTaskViewName)+" deleted\n")
+	return work.Delete(ctx, o.env, viewNoun, viewTable, r.ID, trashline.Moved(r.ID.String()+" — task view "+work.Field(r, schema.FieldTaskViewName), r.ID.String()))
 }
 
 // findView resolves a view by tvw_ id or name.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -460,7 +461,7 @@ func (o ops) metaDelete(ctx context.Context, in MetaDeleteIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	return RowOut{ID: k.Row.ID.String(), Store: string(k.Src),
-		Human: fmt.Sprintf("✓ deleted metadata key %s (%s)\n", text(k.Row, mName), short(k.Row.ID))}, nil
+		Human: trashline.Moved("metadata key "+text(k.Row, mName)+" ("+short(k.Row.ID)+")", k.Row.ID.String())}, nil
 }
 
 func (o ops) metaValueAdd(ctx context.Context, in MetaValueAddIn) (RowOut, error) {

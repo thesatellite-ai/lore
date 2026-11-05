@@ -15,6 +15,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -360,7 +361,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, Noun, table, id, work.Success+" "+id.String()+" deleted\n")
+	return work.Delete(ctx, o.env, Noun, table, id, trashline.Moved(id.String(), id.String()))
 }
 
 // search matches plans by title, body and status.

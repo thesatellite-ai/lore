@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -225,9 +226,9 @@ type DeleteOut struct {
 	Store string `json:"store"`
 }
 
-// Text is the delete line (v0.1.17 said "deleted (hard)"; the row is now
-// a tombstone, so old copies never come back).
-func (o DeleteOut) Text() string { return "✓ " + o.ID + " deleted\n" }
+// Text is the delete line (v0.1.17 said "deleted (hard)"; DQ8 every
+// delete is soft, so it names the trash and the restore command).
+func (o DeleteOut) Text() string { return trashline.Moved(o.ID, o.ID) }
 
 // writeErrors are the codes a comment write can return.
 var writeErrors = []errs.Code{
@@ -264,7 +265,7 @@ func Ops(env Env) []op.Entry {
 			Name: OpDelete, Summary: "Delete a comment (a tombstone is kept so old copies never return)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm:  op.ConfirmRule{Always: true},
-			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore comment delete cmt_<id> --yes", Want: "deleted"}},
+			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore comment delete cmt_<id> --yes", Want: "moved to the trash"}},
 		}, o.delete),
 	}
 }

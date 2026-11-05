@@ -30,7 +30,9 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -163,7 +165,7 @@ func Ops(env work.Env) []op.Entry {
 			// TSQ3: the op asks itself, so the question can list the subtree
 			// and its claimed children (bulk.Ask); it always asks.
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task delete tsk_<id> --yes", Want: "deleted"}},
+			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task delete tsk_<id> --yes", Want: "moved to the trash"}},
 		}, o.delete),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across task title + body (BM25 ranked)",
@@ -195,8 +197,9 @@ type ops struct {
 	deco func(*Brief, row.Row)
 	// meta is list's metadata filter (METADATA 3.7), set per call.
 	meta work.MetaFlags
-	// withDeleted is list's --include-deleted (DQ10), set per call.
-	withDeleted bool
+	// trash is list's --include-deleted / --deleted-only (DQ10, DELETION
+	// 3.2), set per call.
+	trash metalist.Trash
 }
 
 // notYet refuses a v0.1.17 team flag on a surface that supplies no
@@ -763,7 +766,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		return ListOut{}, err
 	}
 	timeOf := o.timeIndex(ctx, tq)
-	o.withDeleted = in.IncludeDeleted
+	o.trash = in.Trash
 	// XQ10: --sort key[:asc|:desc]; ties keep the default order (stable).
 	specs, err := listSort(fieldSort, keys)
 	if err != nil {
@@ -844,15 +847,19 @@ func (o ops) viewWith(ctx context.Context, only, project string, state func(row.
 	if err != nil {
 		return ListOut{}, err
 	}
-	// DQ10: --include-deleted adds the tasks in the trash.
+	// DQ10: --include-deleted adds the tasks in the trash; --deleted-only
+	// lists only them (DELETION 3.2).
 	trashed := map[string]bool{}
-	if o.withDeleted {
+	if o.trash.Any() {
 		del, derr := o.trashedTasks(ctx, only)
 		if derr != nil {
 			return ListOut{}, derr
 		}
 		for _, d := range del {
 			trashed[d.Row.ID.String()] = true
+		}
+		if o.trash.DeletedOnly {
+			all = nil
 		}
 		all = append(all, del...)
 	}
@@ -1466,9 +1473,9 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	human := work.Success + " " + id.String() + " deleted\n"
+	human := trashline.Moved(id.String(), id.String())
 	if len(desc) > 0 {
-		human = work.Success + " " + strconv.Itoa(len(desc)+1) + " tasks deleted (" + id.String() + " and its sub-tasks; batch " + batch.String() + ")\n"
+		human = trashline.MovedBatch(strconv.Itoa(len(desc)+1)+" tasks ("+id.String()+" and its sub-tasks)", batch.String())
 	}
 	return work.Delete(bctx, o.env, Noun, table, id, human)
 }

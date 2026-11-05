@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/store"
@@ -184,7 +185,7 @@ func (o ops) stamp(ctx context.Context, noun string, p ids.Prefix, table row.Tab
 		work.Success+" "+label(r)+" "+verb+"\n")
 }
 
-// remove tombstones the row id in table ("✓ <label> deleted").
+// remove tombstones the row id in table ("✓ <label> moved to the trash …").
 func (o ops) remove(ctx context.Context, noun string, p ids.Prefix, table row.Table, raw string, label func(row.Row) string) (work.WriteOut, error) {
 	id, err := work.ParseID(noun, p, raw)
 	if err != nil {
@@ -194,7 +195,7 @@ func (o ops) remove(ctx context.Context, noun string, p ids.Prefix, table row.Ta
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, noun, table, id, work.Success+" "+label(r)+" deleted\n")
+	return work.Delete(ctx, o.env, noun, table, id, trashline.Moved(label(r), id.String()))
 }
 
 // archived reports whether r carries an archived_at stamp.

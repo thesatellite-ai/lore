@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
@@ -340,9 +341,9 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	human := work.Success + " " + id.String() + " deleted\n"
+	human := trashline.Moved(id.String(), id.String())
 	if inList+elsewhere > 0 {
-		human = work.Success + " tasklist " + id.String() + " + " + strconv.Itoa(inList+elsewhere) + " tasks deleted (batch " + batch.String() + ")\n"
+		human = trashline.MovedBatch("tasklist "+id.String()+" + "+strconv.Itoa(inList+elsewhere)+" tasks", batch.String())
 	}
 	return work.Delete(bctx, o.env, Noun, table, id, human)
 }

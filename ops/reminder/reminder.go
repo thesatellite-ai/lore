@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -220,7 +221,7 @@ func Ops(env Env) []op.Entry {
 			Name: OpDelete, Summary: "Delete a reminder (a tombstone is kept so old copies never return)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
 			Confirm:  op.ConfirmRule{Always: true},
-			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore reminder delete rmd_<id> --yes", Want: "deleted"}},
+			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore reminder delete rmd_<id> --yes", Want: "moved to the trash"}},
 		}, o.delete),
 	}
 }
@@ -401,7 +402,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Delete(ctx, o.env, Noun, table, id, work.Success+" "+id.String()+" deleted\n")
+	return work.Delete(ctx, o.env, Noun, table, id, trashline.Moved(id.String(), id.String()))
 }
 
 // checkTarget applies F15 (ops/internal/pointer) to --on-id: target_id is

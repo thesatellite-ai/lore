@@ -61,9 +61,9 @@ func TestTextMatchesV017(t *testing.T) {
 	fifth := add(h, "Fifth", "")
 	check("cancel", opstest.Text(h.Must(opstask.OpCancel, `{"id":"`+fifth+`"}`)), "✓ tsk_ID cancelled\n")
 	check("edit", opstest.Text(h.Must(opstask.OpEdit, `{"id":"`+fifth+`","priority":"low"}`)), "✓ tsk_ID updated\n")
-	// Delta: v0.1.17 printed "deleted (hard)"; 0.1.18 keeps a tombstone
-	// (later.md g3 CLI_REFERENCE note: delete is a tombstone with --yes).
-	check("delete", opstest.Text(h.MustYes(opstask.OpDelete, `{"id":"`+fifth+`"}`)), "✓ tsk_ID deleted\n")
+	// Delta: v0.1.17 printed "deleted (hard)"; DQ8 every delete is soft, so
+	// the line names the trash and the restore command.
+	check("delete", opstest.Text(h.MustYes(opstask.OpDelete, `{"id":"`+fifth+`"}`)), "✓ tsk_ID moved to the trash (restore: lore trash restore tsk_ID)\n")
 	check("empty list", opstask.ListOut{}.Text(), "(no tasks)\n")
 }
 

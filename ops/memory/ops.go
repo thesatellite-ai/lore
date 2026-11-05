@@ -16,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -519,7 +520,9 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return withLine(writeOut(src, w), nil)("deleted")
+	out := writeOut(src, w)
+	out.Human = trashline.Moved(out.ID, out.ID) // DQ8: every delete is soft
+	return out, nil
 }
 
 // move moves the memory to another attached store, keeping its id.

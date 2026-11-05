@@ -38,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -659,7 +660,7 @@ func (o ops) templateDelete(ctx context.Context, in TemplateNameIn) (work.WriteO
 	if _, err = o.env.Delete(ctx, engine.Ref{Table: tplTable, ID: cur.ID}); err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.WriteOut{ID: cur.ID.String(), Store: work.SourceName(src), Human: work.Success + " " + cur.ID.String() + " — template " + work.Field(cur, schema.FieldTemplateName) + " deleted\n"}, nil
+	return work.WriteOut{ID: cur.ID.String(), Store: work.SourceName(src), Human: trashline.Moved(cur.ID.String()+" — template "+work.Field(cur, schema.FieldTemplateName), cur.ID.String())}, nil
 }
 
 // snapshot reads task id and its sub-tasks as a template tree (11.3

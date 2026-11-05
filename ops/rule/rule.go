@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -161,10 +162,18 @@ type WriteOut struct {
 	Warnings []kn.Warning `json:"warnings,omitempty"`
 	// done is the verb of the human line ("updated", "archived", …).
 	done string
+	// trashed marks a delete: the line says where the row went (DQ8).
+	trashed bool
 }
 
-// Text prints v0.1.17's "✓ <id> <verb>".
-func (o WriteOut) Text() string { return "✓ " + o.ID + " " + o.done + "\n" }
+// Text prints v0.1.17's "✓ <id> <verb>"; a delete prints the trash line
+// with its restore hint (DQ8, DELETION 3.1).
+func (o WriteOut) Text() string {
+	if o.trashed {
+		return trashline.Moved(o.ID, o.ID)
+	}
+	return "✓ " + o.ID + " " + o.done + "\n"
+}
 
 // ListIn is the input of rule.list.
 type ListIn struct {
@@ -475,7 +484,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
-	return WriteOut{ID: w.Row.ID.String(), done: "deleted (hard)"}, nil
+	return WriteOut{ID: w.Row.ID.String(), trashed: true}, nil
 }
 
 // search runs the full-text search.

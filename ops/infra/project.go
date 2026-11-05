@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
@@ -216,7 +217,7 @@ func (o ops) projectDelete(ctx context.Context, in IDIn) (work.WriteOut, error) 
 	if len(deps) > 0 {
 		return work.WriteOut{}, dependentsErr(deps, id)
 	}
-	bctx, _, err := bulk.Begin(ctx, bulk.KindDelete)
+	bctx, batch, err := bulk.Begin(ctx, bulk.KindDelete)
 	if err != nil {
 		return work.WriteOut{}, err
 	}
@@ -229,7 +230,10 @@ func (o ops) projectDelete(ctx context.Context, in IDIn) (work.WriteOut, error) 
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	return work.Out(src, w, work.Success+" "+projectName(p)+" deleted\n"), nil
+	if ownRef != nil { // the repo's own row went in the same batch: restore both at once (DELETION 3.2)
+		return work.Out(src, w, trashline.MovedBatch(projectName(p)+" (and this repo's row)", batch.String())), nil
+	}
+	return work.Out(src, w, trashline.Moved(projectName(p), id.String())), nil
 }
 
 // dependent is one live row whose Restrict relation points at a project.

@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -333,7 +334,7 @@ func (o Ops) Unarchive(ctx context.Context, raw string) (WriteOut, error) {
 
 // DeletedText is the human line of a soft delete (DELETION 3.1, DQ8).
 func DeletedText(id string) string {
-	return Mark + " " + id + " moved to the trash (restore: lore trash restore " + id + ")\n"
+	return trashline.Moved(id, id)
 }
 
 // Delete moves the row to the trash ("✓ <id> moved to the trash; restore

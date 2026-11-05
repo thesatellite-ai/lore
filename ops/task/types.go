@@ -5,6 +5,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
@@ -278,13 +279,15 @@ type ListIn struct {
 	// its sort is used unless --sort is given.
 	View string `json:"view,omitempty" flag:"view" desc:"apply a saved task view (name or tvw_ id; lore task view list)"`
 	// Time reporting (TIME_TRACKING_DESIGN 10, DQ10); time_list.go.
-	WorkedBy       string   `json:"worked_by,omitempty" flag:"worked-by" desc:"only tasks with time by this actor (@me, act_ id, key or name); add +agents for their agents too"`
-	WorkedSince    string   `json:"worked_since,omitempty" flag:"worked-since" desc:"only tasks with time on or after this day (YYYY-MM-DD or a date phrase); TIME shows that range"`
-	WorkedUntil    string   `json:"worked_until,omitempty" flag:"worked-until" desc:"only tasks with time on or before this day; TIME shows that range"`
-	MinTime        string   `json:"min_time,omitempty" flag:"min-time" desc:"only tasks with at least this effort (e.g. 2h)"`
-	MaxTime        string   `json:"max_time,omitempty" flag:"max-time" desc:"only tasks with at most this effort (e.g. 30m)"`
-	Columns        []string `json:"columns,omitempty" flag:"columns" desc:"extra columns: +time, +elapsed (comma-separated or repeated)"`
-	IncludeDeleted bool     `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also list tasks in the trash (their time counts too)"`
+	WorkedBy    string   `json:"worked_by,omitempty" flag:"worked-by" desc:"only tasks with time by this actor (@me, act_ id, key or name); add +agents for their agents too"`
+	WorkedSince string   `json:"worked_since,omitempty" flag:"worked-since" desc:"only tasks with time on or after this day (YYYY-MM-DD or a date phrase); TIME shows that range"`
+	WorkedUntil string   `json:"worked_until,omitempty" flag:"worked-until" desc:"only tasks with time on or before this day; TIME shows that range"`
+	MinTime     string   `json:"min_time,omitempty" flag:"min-time" desc:"only tasks with at least this effort (e.g. 2h)"`
+	MaxTime     string   `json:"max_time,omitempty" flag:"max-time" desc:"only tasks with at most this effort (e.g. 30m)"`
+	Columns     []string `json:"columns,omitempty" flag:"columns" desc:"extra columns: +time, +elapsed (comma-separated or repeated)"`
+	// --include-deleted / --deleted-only: the shared trash flags of every
+	// noun list (DELETION 3.2, DQ10); time of trashed tasks counts too.
+	metalist.Trash
 }
 
 // ViewIn is the input of the triage, someday and deferred views.

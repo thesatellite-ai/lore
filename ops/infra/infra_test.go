@@ -136,7 +136,7 @@ func TestRepoLifecycleText(t *testing.T) {
 		{op: infra.OpRepoList, want: "rep_ID  web  git@github.com:a/web.git [archived]\nrep_ID  api [archived]\n"},
 		{op: infra.OpRepoUnarchive, in: api, want: "✓ api unarchived\n"},
 		{op: infra.OpRepoUnarchive, in: api, want: "✓ api unarchived\n"},
-		{op: infra.OpRepoDelete, in: api, yes: true, want: "✓ api deleted\n"},
+		{op: infra.OpRepoDelete, in: api, yes: true, want: "✓ api moved to the trash (restore: lore trash restore rep_ID)\n"},
 		{op: infra.OpRepoList, want: "rep_ID  web  git@github.com:a/web.git [archived]\n"},
 	}
 	for i, s := range steps {

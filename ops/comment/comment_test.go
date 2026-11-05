@@ -75,7 +75,7 @@ func TestCommentLifecycle(t *testing.T) {
 	}
 
 	h.Fails("comment.delete", `{"id":"`+id+`"}`, errs.NeedsConfirm)
-	if got := opstest.Text(h.MustYes("comment.delete", `{"id":"`+id+`"}`)); got != "✓ "+id+" deleted\n" {
+	if got := opstest.Text(h.MustYes("comment.delete", `{"id":"`+id+`"}`)); got != "✓ "+id+" moved to the trash (restore: lore trash restore "+id+")\n" {
 		t.Fatalf("delete %q", got)
 	}
 	if strings.Contains(opstest.Text(h.Must("comment.list", ``)), id) {

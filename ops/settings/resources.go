@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -145,6 +146,9 @@ type ResListIn struct {
 	// --archived already mean the resource forms here.
 	Meta  []string `json:"meta_where,omitempty" flag:"meta" desc:"filter by metadata: key=value, key!=value, key~=text, key>n, key?, key!? (repeatable, all must match)"`
 	Place string   `json:"place,omitempty" flag:"place" desc:"narrow --meta names to one place: repo, project, org or a scope label"`
+	// --include-deleted / --deleted-only: the shared trash flags of every
+	// noun list (DELETION 3.2); trashed resources are marked in a note.
+	metalist.Trash
 }
 
 // ResStaleIn is the input of resource.stale.
@@ -835,7 +839,9 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	if err != nil {
 		return ResListOut{}, err
 	}
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableResources)
+	// DELETION 3.2: only the resources table reads the trash mode; the
+	// kind and ref lookups below stay live.
+	rows, err := liveRows(in.Deleted(ctx, schema.TableResources), o.env, o.env.Stores(), schema.TableResources)
 	if err != nil {
 		return ResListOut{}, err
 	}
@@ -885,9 +891,12 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	slices.SortStableFunc(hits, func(a, b hit) int {
 		return sortspec.Compare(specs, resourceSortValue(d, a.row, a.got), resourceSortValue(d, b.row, b.got))
 	})
-	for _, h := range hits {
+	shown := make([]row.Row, len(hits))
+	for i, h := range hits {
 		out.Data = append(out.Data, h.res)
+		shown[i] = h.row.Row
 	}
+	out.Notes = append(out.Notes, in.TrashNotes(shown)...)
 	out.Count = len(out.Data)
 	return out, nil
 }
@@ -1037,7 +1046,7 @@ func (o ops) resDelete(ctx context.Context, in ResDeleteIn) (ResDeleteOut, error
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: r.Src, Table: schema.TableResources, ID: r.Row.ID}); err != nil {
 		return ResDeleteOut{}, err
 	}
-	human := fmt.Sprintf("✓ %s (%s) deleted\n", short(r.Row.ID), text(r.Row, rName))
+	human := trashline.Moved(short(r.Row.ID)+" ("+text(r.Row, rName)+")", r.Row.ID.String())
 	if len(referrers) > 0 {
 		human += "  still pointing at it: " + strings.Join(referrers, ", ") + "; they show the old id until you repoint them\n"
 	}
@@ -1110,7 +1119,7 @@ func (o ops) resDeleteWhere(ctx context.Context, in ResDeleteIn) (ResDeleteOut, 
 				" of "+strconv.Itoa(len(hits))+" resources; the ones deleted are in batch "+out.Batch))
 		}
 	}
-	out.Human = fmt.Sprintf("✓ %d %s resources deleted (batch %s)\n", len(hits), d.name(), out.Batch)
+	out.Human = trashline.MovedBatch(strconv.Itoa(len(hits))+" "+d.name()+" resources", out.Batch)
 	return out, nil
 }
 

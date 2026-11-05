@@ -52,7 +52,7 @@ func TestTextMatchesV017(t *testing.T) {
 		}
 	}
 	del := h.MustYes(rule.OpDelete, `{"id":"`+id1+`"}`)
-	if got := norm(opstest.Text(del)); got != "✓ rul_ID deleted (hard)\n" {
+	if got := norm(opstest.Text(del)); got != "✓ rul_ID moved to the trash (restore: lore trash restore rul_ID)\n" {
 		t.Fatalf("delete: %q", got)
 	}
 }
