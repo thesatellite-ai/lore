@@ -34,7 +34,10 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/signals"
+	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -57,15 +60,18 @@ func coordUnsupported(name string) error { return opscoord.Unsupported(name) }
 // fromRepo is the --from value naming this repo's own project.
 const fromRepo = "repo"
 
-// TaskNote implements opscoord.Host: v0.1.17's note in a checkout without
-// team coordination (plainNote: a comment row on the task, "✓ note <cmt>
-// on <tsk>"). Refused, nothing written:
-//   - --to / --from another place: the note's place is decided by store
-//     links, which this binary does not resolve (FA-OLDCODE-1);
-//   - a task the caller holds on the last fetched signals board: a
-//     holder's note is fenced on the signals ref (F7), which only the
-//     release binary can do; writing it unfenced could land a note from a
-//     holder that already lost the claim.
+// TaskNote implements opscoord.Host: v0.1.17's note (saas task_note.go).
+//   - the caller holds the task (its claim, or its held record in this
+//     session): a fenced write on the signals ref the task is coordinated
+//     on (F7, heldNote);
+//   - anyone else: a comment row in the store holding the task (a store
+//     task's note goes to the store, never into the repo, N2);
+//   - where this host coordinates nothing (no git repo, no agent or
+//     person) the plain comment row; any other failure to open the
+//     coordination world fails closed (closeWorld, B11).
+//
+// Refused, nothing written: --to / --from another place (the note's place
+// is decided by store links, FA-OLDCODE-1).
 func (h standaloneCoord) TaskNote(ctx context.Context, in opscoord.NoteIn) (opscoord.Report, error) {
 	if in.ShareTo != "" || (in.From != "" && in.From != fromRepo) {
 		return opscoord.Report{}, coordUnsupported(opscoord.OpTaskNote)
@@ -85,31 +91,122 @@ func (h standaloneCoord) TaskNote(ctx context.Context, in opscoord.NoteIn) (opsc
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if ferr := h.refuseHeld(ctx, tid.String()); ferr != nil {
-		return opscoord.Report{}, ferr
+	if rep, done, cerr := h.clientTaskNote(ctx, src, tid, body); done || cerr != nil {
+		return rep, cerr
+	}
+	w, err := standaloneTeam(h).closeWorld(ctx, tid.String())
+	if err != nil {
+		return opscoord.Report{}, err
+	}
+	if w != nil {
+		env := w.env(ctx)
+		hs, herr := w.heldOf(ctx, env, tid.String())
+		if herr != nil {
+			return opscoord.Report{}, herr
+		}
+		if hs.mine || hs.hadClaim {
+			return w.heldNote(ctx, env, tid, body)
+		}
 	}
 	fields, err := noteFields(tid, body)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	w, err := h.a.Create(ctx, src, schema.TableComments, fields)
+	wr, err := h.a.Create(ctx, src, schema.TableComments, fields)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	return opscoord.Report{Lines: []string{"✓ note " + w.Row.ID.String() + " on " + tid.String()}}, nil
+	return opscoord.Report{Lines: []string{"✓ note " + wr.Row.ID.String() + " on " + tid.String()}}, nil
 }
 
-// refuseHeld refuses a note on a task the caller holds (TaskNote).
-func (h standaloneCoord) refuseHeld(ctx context.Context, taskID string) error {
-	b, err := h.a.localClaims(ctx)
-	if err != nil {
-		return err
+// clientTaskNote is the note on a client repo's own task (D8, §7.6): its
+// claim is on the linked store, and its notes are internal, so a note by
+// anyone but the holder is a comment row in the linked store folder,
+// never in the client repo. A holder's note on such a task needs the
+// internal-details path, not built here (E_UNSUPPORTED). done=false: not
+// a client repo's own task, the usual note applies.
+func (h standaloneCoord) clientTaskNote(ctx context.Context, src store.Source, tid ids.AnyID, body string) (opscoord.Report, bool, error) {
+	if src != store.SourceRepo {
+		return opscoord.Report{}, false, nil
 	}
-	if holder, claimed, active := b.Claim(taskID); claimed && active && holder == b.Me() {
-		return errs.New(errs.Unsupported, "you hold the claim on "+taskID+": a holder's note is fenced on the signals ref, which this binary does not have yet").
+	w, err := h.openWorld(ctx)
+	if err != nil || w.sit.Role != orgresolve.RoleClient || len(w.sit.Links) == 0 {
+		return opscoord.Report{}, false, nil // closeWorld decides the other cases
+	}
+	if err = w.useStore(ctx); err != nil {
+		return opscoord.Report{}, true, err
+	}
+	hs, err := w.heldOf(ctx, w.env(ctx), tid.String())
+	if err != nil {
+		return opscoord.Report{}, true, err
+	}
+	if hs.mine || hs.hadClaim {
+		return opscoord.Report{}, true, errs.New(errs.Unsupported, "a holder's note on a client repo's own task stays internal on the store, which this binary does not do yet").
 			WithHint("run it with the release binary")
 	}
-	return nil
+	fields, err := noteFields(tid, body)
+	if err != nil {
+		return opscoord.Report{}, true, err
+	}
+	wr, err := h.a.Create(ctx, store.Source(w.sit.Org.Name), schema.TableComments, fields)
+	if err != nil {
+		return opscoord.Report{}, true, err
+	}
+	return opscoord.Report{Lines: []string{"✓ note " + wr.Row.ID.String() + " on " + tid.String()}}, true, nil
+}
+
+// commentTag types a note's comment id (cmt_…).
+type commentTag struct{}
+
+// Prefix implements ids.Tag.
+func (commentTag) Prefix() ids.Prefix { return ids.PrefixComment }
+
+// fieldWorkBranch is the task's recorded work branch (§7.4).
+const fieldWorkBranch = "work_branch"
+
+// envRideActive marks lore's own git push, so lore's hooks skip it.
+const envRideActive = "LORE_RIDE_ACTIVE"
+
+// heldNote is the holder's fenced note (v0.1.17 runTaskNote's held path):
+// staged with the claim on its signals ref, the claim's work branch
+// recorded on the row and pushed; a holder that lost the claim writes
+// nothing (E_LOST_CLAIM).
+func (w *coordWorld) heldNote(ctx context.Context, env coord.Env, tid ids.AnyID, body string) (opscoord.Report, error) {
+	cid, err := ids.New[commentTag]()
+	if err != nil {
+		return opscoord.Report{}, errs.Wrap(errs.Internal, "mint note id", err)
+	}
+	doc := coord.Doc{schema.FieldEntityTable: canonjson.String(string(schema.TableTasks)), schema.FieldEntityID: canonjson.String(tid.String()),
+		fieldCommentBody: canonjson.String(body)}
+	branch := w.workBranch(ctx)
+	if _, err = coord.HolderWrite(ctx, env, tid.String(), false, func(d coord.Doc, _ time.Time) ([]coord.RowWrite, error) {
+		if branch != "" {
+			d.SetStr(fieldWorkBranch, branch)
+		}
+		return []coord.RowWrite{{Table: string(schema.TableComments), ID: cid.String(), Doc: doc}}, nil
+	}); err != nil {
+		return opscoord.Report{}, coordErr(err) // fenced out or offline: nothing written
+	}
+	lines := []string{"✓ note " + cid.String() + " on " + tid.String()}
+	switch {
+	case branch != "" && w.pushWorkBranch(ctx, branch):
+		lines = append(lines, "  work branch "+branch+" pushed")
+	case branch != "":
+		lines = append(lines, "  ! work branch "+branch+" NOT pushed (offline or no remote); a replacement cannot fetch it yet")
+	}
+	return opscoord.Report{Lines: lines}, nil
+}
+
+// pushWorkBranch pushes the work branch so a replacement agent can fetch
+// it (§7.4 "Work branch"). Best effort: a failed push is reported, never
+// fatal.
+func (w *coordWorld) pushWorkBranch(ctx context.Context, branch string) bool {
+	if w.remote == nil || !w.autopush {
+		return false
+	}
+	_, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"push", "--quiet", w.remoteName, "refs/heads/" + branch + ":refs/heads/" + branch},
+		Env: []string{envRideActive + "=1"}})
+	return err == nil
 }
 
 // noteFields is the comment row of a note: on the task, with the body.

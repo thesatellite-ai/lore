@@ -121,6 +121,8 @@ type coordView struct {
 	hasBoard bool
 	docs     []coord.Doc
 	labels   map[string]string
+	// rosterSynced: the roster's store was synced once for a label miss.
+	rosterSynced bool
 }
 
 // openView gathers the view: the world pointed at the work queue, the
@@ -197,13 +199,35 @@ func (cv *coordView) label(ctx context.Context, id string) string {
 		return l
 	}
 	l := id
-	if _, r, ok, err := cv.a.locateRow(ctx, schema.TableActors, id); err == nil && ok {
-		if d, derr := docOfRow(r); derr == nil {
-			l = labelOf(d.Str(vkHandle), d.Str(vkLabel), d.Str(vkDisplayName))
+	for attempt := 0; attempt < rosterLookups; attempt++ {
+		if attempt > 0 && !cv.syncRoster(ctx) {
+			break
+		}
+		if _, r, ok, err := cv.a.locateRow(ctx, schema.TableActors, id); err == nil && ok {
+			if d, derr := docOfRow(r); derr == nil {
+				l = labelOf(d.Str(vkHandle), d.Str(vkLabel), d.Str(vkDisplayName))
+			}
+			break
 		}
 	}
 	cv.labels[id] = l
 	return l
+}
+
+// syncRoster syncs the org roster's store once per view, so an agent
+// registered since this clone last fetched is named by its label (v0.1.17
+// opened the roster fresh); false when there is nothing (more) to sync.
+func (cv *coordView) syncRoster(ctx context.Context) bool {
+	if cv.rosterSynced {
+		return false
+	}
+	cv.rosterSynced = true
+	r, err := cv.a.coordRoster(ctx)
+	if err != nil || r.src == store.SourceRepo {
+		return false
+	}
+	_, err = cv.a.Sync(ctx, r.src)
+	return err == nil
 }
 
 // labelOf is v0.1.17 actorDisplay over plain fields.

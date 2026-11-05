@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -95,7 +96,7 @@ func TestStandaloneNote(t *testing.T) {
 // writeTrackedClaim puts one claim on task id held by holder into the
 // tracking copy of refs/lore/signals (what a fetch by the release binary
 // leaves), expiring in 15 minutes.
-func writeTrackedClaim(t *testing.T, repo, id, holder string) {
+func writeTrackedClaim(t *testing.T, repo, id, holder, session string) {
 	t.Helper()
 	r, err := gitref.Open(background(), repo, nil)
 	if err != nil {
@@ -109,7 +110,7 @@ func writeTrackedClaim(t *testing.T, repo, id, holder string) {
 		return strings.TrimSpace(string(out))
 	}
 	now := time.Now().UTC().Truncate(time.Second)
-	sig := `{"kind":"claim","task":"` + id + `","holder":"` + holder + `","session":"ses_x","claim_token":"tok","since":"` +
+	sig := `{"kind":"claim","task":"` + id + `","holder":"` + holder + `","session":"` + session + `","claim_token":"tok","since":"` +
 		now.Add(-5*time.Minute).Format(time.RFC3339) + `","expires":"` + now.Add(15*time.Minute).Format(time.RFC3339) + `","renewed_seq":1}`
 	blob := git(sig, "hash-object", "-w", "--stdin")
 	claims := git("100644 blob "+blob+"\t"+id+".json\n", "mktree")
@@ -119,25 +120,32 @@ func writeTrackedClaim(t *testing.T, repo, id, holder string) {
 	git("", "update-ref", "refs/lore-remote/origin/signals", commit)
 }
 
-// TestStandaloneNoteFencedForHolder: a task the caller holds on the last
-// fetched board is refused (a holder's note is fenced on the signals ref);
-// someone else's claim does not stop the note. The board also fills the
-// STATE column and Claim answers.
+// TestStandaloneNoteFencedForHolder: a note by the task's holder (this
+// actor in this session, v0.1.17 readClaim) is a fenced write on the
+// signals ref (P3-SIGCOORD-6); in a repo without a remote it cannot be
+// confirmed, so it fails closed and writes nothing. Someone else's claim
+// does not stop the note. The board also fills the STATE column and Claim
+// answers.
 func TestStandaloneNoteFencedForHolder(t *testing.T) {
 	a, repo, id := standaloneTask(t)
 	me, err := a.Actor(background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeTrackedClaim(t, repo, id, me.String())
-	if _, nerr := noteLines(t, a, `{"id":"`+id+`","text":["held"]}`); !errs.Has(nerr, errs.Unsupported) {
-		t.Fatalf("note by the holder: %v, want E_UNSUPPORTED", nerr)
+	who, err := a.Who(background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, _ := os.Hostname() // the session's host part; empty is still one session
+	writeTrackedClaim(t, repo, id, me.String(), who.StableKey+humanSessionSeparator+host)
+	if _, nerr := noteLines(t, a, `{"id":"`+id+`","text":["held"]}`); !errs.Has(nerr, errs.Offline) {
+		t.Fatalf("note by the holder: %v, want E_OFFLINE (fenced, no remote to confirm it)", nerr)
 	}
 	if n := countRows(t, a, schema.TableComments); n != 0 {
 		t.Fatalf("a fenced note wrote %d comments", n)
 	}
 	other := "act_00000000000000000000000000000001"
-	writeTrackedClaim(t, repo, id, other)
+	writeTrackedClaim(t, repo, id, other, "ses_x")
 	if _, nerr := noteLines(t, a, `{"id":"`+id+`","text":["unheld"]}`); nerr != nil {
 		t.Fatalf("note on someone else's claim: %v", nerr)
 	}

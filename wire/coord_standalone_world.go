@@ -240,7 +240,10 @@ func (w *coordWorld) forTask(ctx context.Context, id string) error {
 		if src, _, ok, err := w.a.locateRow(ctx, tableFor(id), id); err != nil {
 			return err
 		} else if ok && src == store.SourceRepo {
-			if w.sit.Role == orgresolve.RoleClient {
+			if w.sit.Role == orgresolve.RoleClient && len(w.sit.Links) > 0 {
+				// A client repo with no store link (client by repos:
+				// pattern only) has no store to keep the claim on: its
+				// own signals ref, as v0.1.17 (p3-cmdlore NOTE).
 				return errs.New(errs.Unsupported, "a client repo's own task keeps its claim on the store with agent details internal, which this binary does not do yet").
 					WithHint("run it with the release binary")
 			}
@@ -602,8 +605,17 @@ func (a *App) locateRow(ctx context.Context, table row.Table, id string) (store.
 	ref := engine.Ref{Table: table, ID: aid}
 	src, rw, err := a.Get(ctx, ref)
 	if errs.Has(err, errs.AmbiguousID) {
-		ref.Store = store.SourceRepo
-		src, rw, err = a.Get(ctx, ref)
+		// The repo store's copy first; else the first attached store, in
+		// attach order, with a live copy (an actor sits in the org store
+		// and its org folder under one id: v0.1.17 coreLocateInStores).
+		src, rw, err = "", row.Row{}, errs.New(errs.NotFound, "no live copy of "+aid.String())
+		for _, s := range append([]store.Source{store.SourceRepo}, a.Stores()...) {
+			ref.Store = s
+			if gs, gr, gerr := a.Get(ctx, ref); gerr == nil && !gr.Deleted {
+				src, rw, err = gs, gr, nil
+				break
+			}
+		}
 	}
 	if errs.Has(err, errs.NotFound) || (err == nil && rw.Deleted) {
 		return "", row.Row{}, false, nil
@@ -741,7 +753,7 @@ func (a *App) writeDoc(ctx context.Context, table row.Table, id string, doc coor
 				delete(patch, docKeyAuthor)
 			}
 		}
-		_, err = a.CreateWithID(ctx, store.SourceRepo, table, aid, patch)
+		_, err = a.CreateWithID(ctx, a.newRowTarget(ctx, doc), table, aid, patch)
 		return err
 	}
 	if len(patch) == 0 {
@@ -749,6 +761,20 @@ func (a *App) writeDoc(ctx context.Context, table row.Table, id string, doc coor
 	}
 	_, err = a.Update(ctx, engine.Ref{Table: table, ID: aid, Store: src}, patch)
 	return err
+}
+
+// newRowTarget is the store a new staged row is created in: where the row
+// it points at lives (a note on a store task goes to the store, never into
+// the repo, N2), else the repo store.
+func (a *App) newRowTarget(ctx context.Context, doc coord.Doc) store.Source {
+	et, eid := doc.Str(schema.FieldEntityTable), doc.Str(schema.FieldEntityID)
+	if et == "" || eid == "" {
+		return store.SourceRepo
+	}
+	if src, _, ok, err := a.locateRow(ctx, row.Table(et), eid); err == nil && ok {
+		return src
+	}
+	return store.SourceRepo
 }
 
 // docValue types one document value by its field definition.
