@@ -13,6 +13,7 @@ import (
 	"saas/pkg/aicoder/canonjson"
 
 	"entgo.io/ent/schema/field"
+	"github.com/thesatellite-ai/lore/logic/trash"
 )
 
 // FormatVersion is the on-disk file format version written as "_v" in every
@@ -398,6 +399,13 @@ func upcast(doc map[string]any, from int64) (map[string]any, error) {
 		return doc, nil
 	case formatV2:
 		if doc[keyDeleted] == true {
+			return nil, nil
+		}
+		// A row in the trash (OV9/DQ8 soft delete: the file stays, with
+		// deleted_at set) is not live either: DEL-R2 trashed rows never
+		// reach a cache, so it reads as nil and leaves lore.db, the same
+		// as a tombstone (sync dupes and every lore.db reader skip it).
+		if at, ok := doc[trash.FieldDeletedAt].(string); ok && at != "" {
 			return nil, nil
 		}
 		out := make(map[string]any, len(doc))

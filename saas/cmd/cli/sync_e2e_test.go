@@ -727,8 +727,10 @@ func TestE2E_FixProjectsRepointsCoreRows(t *testing.T) {
 			t.Fatalf("rule %s names project %v, want the kept %v", id, got, keep)
 		}
 	}
-	if d := bob.readDoc("projects", folded.(string)); d["_deleted"] != true {
-		t.Fatalf("the folded project row is not deleted: %v", d)
+	// OV9/DQ8: delete is a soft delete, so the folded project row stays as
+	// a file in the trash (deleted_at + deleted_by set), not a tombstone.
+	if d := bob.readDoc("projects", folded.(string)); d["deleted_at"] == nil || d["deleted_at"] == "" || d["deleted_by"] == nil || d["deleted_by"] == "" {
+		t.Fatalf("the folded project row is not in the trash: %v", d)
 	}
 	var n int
 	if err := bob.loreDB().QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&n); err != nil || n != 1 {
