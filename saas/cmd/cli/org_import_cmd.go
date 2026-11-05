@@ -22,6 +22,7 @@ import (
 	"saas/pkg/aicoder/stores"
 
 	"github.com/spf13/cobra"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // Flags of org import.
@@ -149,8 +150,10 @@ func newOrgImportCommand() *cobra.Command {
 			}
 			fmt.Printf("✓ added org entry %s\n", entry.Name)
 			if err := registerAfterImport(ctx, entry.Name); err != nil {
-				fmt.Fprintln(os.Stderr, "lore: the entry is added, but registering on the roster failed: "+redactIfQuiet(err.Error()))
-				fmt.Fprintln(os.Stderr, "      run `lore actor register` in one of "+entry.Name+"'s repos")
+				// BUG-T3: a half-done import must not exit 0. The entry stays
+				// (it is valid on its own); the error keeps the cause's code
+				// so the exit status says what failed.
+				return importRegisterErr(entry.Name, err)
 			}
 			return nil
 		},
@@ -272,6 +275,20 @@ func appendOrgEntry(ctx context.Context, home string, entry lorecfg.Org) error {
 		return errcodes.New(errcodes.ConfigInvalid, "the imported entry does not validate; nothing changed").WithCause(err)
 	}
 	return nil
+}
+
+// importRegisterErr is the error of an import whose entry was added but
+// whose roster registration failed: the cause's own code (fail closed:
+// E_INTERNAL for an uncoded one), a message saying the entry stays, and the
+// command that finishes the job.
+func importRegisterErr(entryName string, cause error) error {
+	code := errcodes.Code(errs.CodeOf(cause))
+	var ce *errcodes.CLIError
+	if errors.As(cause, &ce) {
+		code = ce.Code
+	}
+	return errcodes.New(code, "the org entry "+entryName+" is added to ~/.lore/config.yaml, but registering on its roster failed: "+redactIfQuiet(cause.Error())).
+		WithHint("run `lore actor register` in one of " + entryName + "'s repos")
 }
 
 // registerAfterImport registers the user on the new entry's roster
