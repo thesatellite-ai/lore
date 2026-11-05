@@ -17,9 +17,10 @@ const (
 	TableScopes = "scopes"
 )
 
-// Scope fields (6.2.1). FieldScope is on rules, hotfixes, decisions and
-// memories; FieldOverrides on rules and hotfixes (6.2.2: a narrower row
-// replaces a wider one only through an explicit --overrides).
+// Scope fields (6.2.1). FieldScope is on rules, hotfixes, decisions,
+// memories, patterns and architecture notes (CQ12); FieldOverrides on
+// rules and hotfixes (6.2.2: a narrower row replaces a wider one only
+// through an explicit --overrides).
 const (
 	FieldScope     = "scope_id"
 	FieldOverrides = "overrides_id"

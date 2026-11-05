@@ -120,6 +120,10 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	if fields[content.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return content.WriteOut{}, err
 	}
+	// 6.2.3 / CQ12: --scope picks the store, repo and folder.
+	if err = scopeAdd(ctx, o.c.Env, in.Scope, &in.To, &in.Repo, fields); err != nil {
+		return content.WriteOut{}, err
+	}
 	if in.Repo != "" {
 		repo, rerr := o.c.Env.RepoID(ctx, in.Repo)
 		if rerr != nil {
@@ -236,6 +240,9 @@ func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
 	if err != nil {
 		return content.WriteOut{}, err
 	}
+	if err = scopeEdit(ctx, o.c.Env, in.Scope, &in.RebindRepo, &in.RebindMaster, patch); err != nil {
+		return content.WriteOut{}, err
+	}
 	switch {
 	case in.RebindRepo != "" && in.RebindMaster:
 		return content.WriteOut{}, errs.New(errs.InvalidInput, "pattern edit: give --rebind-repo or --rebind-master, not both")
@@ -252,7 +259,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
 	}
 	if len(patch) == 0 {
 		return content.WriteOut{}, errs.New(errs.InvalidInput, "pattern edit: nothing to change").
-			WithHint("give at least one of --title, --body, --language, --rebind-repo, --rebind-master")
+			WithHint("give at least one of --title, --body, --language, --scope, --rebind-repo, --rebind-master")
 	}
 	return o.c.Patch(ctx, in.ID, patch, func(id string) string { return content.Mark + " pattern " + id + " updated\n" })
 }
@@ -294,7 +301,7 @@ func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 		SourceKind: content.Field(r, content.FieldSourceKind), SourceRef: content.Field(r, content.FieldSourceRef),
 		ProjectID: content.Field(r, content.FieldProject), RepoID: content.Field(r, content.FieldRepo),
 		Title: content.Field(r, fieldTitle), Body: content.Field(r, content.FieldBody), Language: content.Field(r, fieldLanguage),
-		SupersededByID: content.Field(r, fieldSuperseded), CreatedByActorID: content.CreatedBy(r),
+		SupersededByID: content.Field(r, fieldSuperseded), ScopeID: content.Field(r, schema.FieldScope), CreatedByActorID: content.CreatedBy(r),
 		TagIDs: content.TagIDs(r), Store: content.SourceOf(lab, src), Label: content.Label(lab, src),
 	}
 }

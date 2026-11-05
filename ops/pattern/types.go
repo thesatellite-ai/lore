@@ -32,8 +32,11 @@ type AddIn struct {
 	Body  string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
 	Text  string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
 	// Language is new on the CLI (the v0.1.17 column had no flag).
-	Language   string `json:"language,omitempty" flag:"language" desc:"programming language of the exemplar (go, ts, …)"`
-	Repo       string `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id; default project-wide)"`
+	Language string `json:"language,omitempty" flag:"language" desc:"programming language of the exemplar (go, ts, …)"`
+	Repo     string `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id; default project-wide)"`
+	// Scope is --scope (CONTEXT_BUDGET 6.2.3, CQ12): a folder scope ranks
+	// the row in lore context only.
+	Scope      string `json:"scope,omitempty" flag:"scope" desc:"where it attaches: global | project | repo | dir:<path> (folder scopes rank it in lore context)"`
 	Project    string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 	Supersedes string `json:"supersedes,omitempty" flag:"supersedes" desc:"pattern_id this entry replaces"`
 	CreatedBy  string `json:"created_by,omitempty" flag:"created-by" desc:"actor_id; defaults to current identity"`
@@ -101,6 +104,7 @@ type Record struct {
 	Body             string          `json:"body,omitempty"`
 	Language         string          `json:"language,omitempty"`
 	SupersededByID   string          `json:"superseded_by_id,omitempty"`
+	ScopeID          string          `json:"scope_id,omitempty"`
 	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
 	TagIDs           []string        `json:"tag_ids,omitempty"`
 	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
@@ -148,6 +152,8 @@ type EditIn struct {
 	Language     string `json:"language,omitempty" flag:"language" desc:"new language"`
 	RebindRepo   string `json:"rebind_repo,omitempty" flag:"rebind-repo" desc:"move this row to repo <mount> (rebinds repo_id; distinct from context --repo)"`
 	RebindMaster bool   `json:"rebind_master,omitempty" flag:"rebind-master" desc:"move this row to master scope (clears repo_id)"`
+	// Scope moves the row to another scope (6.2.3, CQ12).
+	Scope string `json:"scope,omitempty" flag:"scope" desc:"move to another scope: project | repo | dir:<path>"`
 }
 
 // SearchIn is the input of pattern.search (v0.1.17 entitySearchFlags).

@@ -51,8 +51,11 @@ func content2Defs() []TableDef {
 			Ref("repo_id", TableRepos),
 			Text("title", Required()),
 			Text(contentBody, Required(), WithWidget(WidgetMarkdown)),
+			// CQ12: a folder scope ranks the note in lore context only.
+			Ref(FieldScope, TableScopes),
 			Ref(contentCreatedBy, TableActors),
 			IndexOn(contentProjectID, "repo_id"),
+			BelongsToRel("scope", FieldScope, TableScopes, SetNull),
 			content2Common(JoinArchitectureNoteTags, true),
 		),
 		Table(TableBehaviours, ids.PrefixBehaviour, Synced(), FTS(fieldName, contentBody), Description("how the agent should behave in a situation"),

@@ -32,10 +32,13 @@ type AddIn struct {
 	engine.MetaFlags
 
 	// Title is set with --title, as v0.1.17 add did.
-	Title     string `json:"title" flag:"title" desc:"title (required)"`
-	Body      string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
-	Text      string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
-	Repo      string `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id; default project-wide)"`
+	Title string `json:"title" flag:"title" desc:"title (required)"`
+	Body  string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
+	Text  string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
+	Repo  string `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id; default project-wide)"`
+	// Scope is --scope (CONTEXT_BUDGET 6.2.3, CQ12): a folder scope ranks
+	// the row in lore context only.
+	Scope     string `json:"scope,omitempty" flag:"scope" desc:"where it attaches: global | project | repo | dir:<path> (folder scopes rank it in lore context)"`
 	Project   string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 	CreatedBy string `json:"created_by,omitempty" flag:"created-by" desc:"actor_id; defaults to current identity"`
 	To        string `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
@@ -91,6 +94,7 @@ type Record struct {
 	RepoID           string          `json:"repo_id,omitempty"`
 	Title            string          `json:"title,omitempty"`
 	Body             string          `json:"body,omitempty"`
+	ScopeID          string          `json:"scope_id,omitempty"`
 	CreatedByActorID string          `json:"created_by_actor_id,omitempty"`
 	TagIDs           []string        `json:"tag_ids,omitempty"`
 	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
@@ -137,6 +141,8 @@ type EditIn struct {
 	Body         string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
 	RebindRepo   string `json:"rebind_repo,omitempty" flag:"rebind-repo" desc:"move this row to repo <mount> (rebinds repo_id; distinct from context --repo)"`
 	RebindMaster bool   `json:"rebind_master,omitempty" flag:"rebind-master" desc:"move this row to master scope (clears repo_id)"`
+	// Scope moves the row to another scope (6.2.3, CQ12).
+	Scope string `json:"scope,omitempty" flag:"scope" desc:"move to another scope: project | repo | dir:<path>"`
 }
 
 // SearchIn is the input of architecturenote.search (v0.1.17 entitySearchFlags).
