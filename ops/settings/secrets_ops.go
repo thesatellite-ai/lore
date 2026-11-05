@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/thesatellite-ai/lore/adapters/secretmgr"
 	"github.com/thesatellite-ai/lore/engine"
@@ -99,6 +100,9 @@ type SecretsMoveIn struct {
 // SecretsRelabelIn is the input of secrets.relabel.
 type SecretsRelabelIn struct {
 	Holder string `json:"holder,omitempty" flag:"holder" desc:"only this holder id"`
+	// Label sets this exact label on every reference of --holder instead of
+	// deriving it (CLI_REFERENCE 3.13); it asks first, --yes answers.
+	Label string `json:"label,omitempty" flag:"label" desc:"with --holder: the label to write (asks first)"`
 }
 
 // SecretsRenameIn is the input of secrets.rename_entry.
@@ -164,7 +168,7 @@ func (o ops) secretIndexOps() []op.Entry {
 		op.Define(op.Spec{Name: OpSecretsMove, Summary: "Rewrite the holder of matching references (one batch; never copies a secret)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: secretErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.secretsMove),
 		op.Define(op.Spec{Name: OpSecretsRelabel, Summary: "Rewrite each reference's holder label from its holder id (one batch)", Permission: op.PermWrite,
-			Access: op.AccessWrite, Errors: secretErrors}, o.secretsRelabel),
+			Access: op.AccessWrite, Errors: secretErrors, Confirm: op.ConfirmRule{MayAsk: true}}, o.secretsRelabel),
 		op.Define(op.Spec{Name: OpSecretsRenameEntry, Summary: "Rewrite an entry name everywhere (a renamed vault entry; one batch)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: secretErrors}, o.secretsRename),
 		op.Define(op.Spec{Name: OpSecretsLink, Summary: "Fill a ${secret:unstored} placeholder with the entry it is now stored in", Permission: op.PermWrite,
@@ -354,12 +358,19 @@ func (o ops) unstoredTask(ctx context.Context, r secretRow) (string, bool, error
 	if len(fields) == 0 || !ok {
 		return "", false, nil
 	}
-	id := r.Row.ID.String()
-	body := "Row " + id + " (" + r.Row.Table.String() + "), fields " + strings.Join(fields, ", ") + ", holds $${secret:unstored} (escaped here so this task is not indexed as one).\n" +
-		"1. Store the secret in a manager, then: lore secrets link " + id + " --at 1 --ref <manager>://<entry>\n" +
+	return AddUnstoredTask(ctx, we, r.Src, r.Row.ID.String(), r.Row.Table.String(), fields)
+}
+
+// AddUnstoredTask adds (or finds, by key secret-unstored-<row id>) the D21
+// "store, then rotate" task for a row holding ${secret:unstored} in
+// fields. lore secrets check calls it, and wire's engine RedactHook calls
+// it at write time (on_detect: redact). made is false when it existed.
+func AddUnstoredTask(ctx context.Context, env work.Env, src store.Source, rowID, table string, fields []string) (string, bool, error) {
+	body := "Row " + rowID + " (" + table + "), fields " + strings.Join(fields, ", ") + ", holds $${secret:unstored} (escaped here so this task is not indexed as one).\n" +
+		"1. Store the secret in a manager, then: lore secrets link " + rowID + " --at 1 --ref <manager>://<entry>\n" +
 		"2. Rotate it (it was seen by a shell or an agent), then close this task."
-	tid, existed, err := task.AddSecretTask(ctx, we, task.SecretTask{Store: r.Src, Title: fmt.Sprintf(unstoredTitle, id), Body: body,
-		Key: "secret-unstored-" + id, Rows: []string{id}})
+	tid, existed, err := task.AddSecretTask(ctx, env, task.SecretTask{Store: src, Title: fmt.Sprintf(unstoredTitle, rowID), Body: body,
+		Key: "secret-unstored-" + rowID, Rows: []string{rowID}})
 	return tid, err == nil && !existed, err
 }
 
@@ -723,6 +734,9 @@ func (o ops) auditBatch(ctx context.Context, action engine.Action, n int, from, 
 // secretsRelabel is `lore secrets relabel` (5.2): each machine holder's
 // label becomes "<handle>.<current machine label>" (the handle part kept).
 func (o ops) secretsRelabel(ctx context.Context, in SecretsRelabelIn) (SecretsBatchOut, error) {
+	if in.Label != "" {
+		return o.secretsSetLabel(ctx, in)
+	}
 	ms, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableMachines)
 	if err != nil {
 		return SecretsBatchOut{}, err
@@ -754,6 +768,44 @@ func (o ops) secretsRelabel(ctx context.Context, in SecretsRelabelIn) (SecretsBa
 		return setOption(t, refs.OptLabel, want), true
 	}
 	return o.batchRewrite(ctx, engine.ActionSecretRelabeled, fix, "Relabelled", in.Holder, "")
+}
+
+// secretsSetLabel is `lore secrets relabel --holder <id> --label <text>`
+// (CLI_REFERENCE 3.13): count the references of that holder id ─► none is
+// E_NOT_FOUND ─► ask (E_NEEDS_CONFIRM, --yes) ─► one audited batch.
+func (o ops) secretsSetLabel(ctx context.Context, in SecretsRelabelIn) (SecretsBatchOut, error) {
+	if in.Holder == "" {
+		return SecretsBatchOut{}, errs.New(errs.InvalidInput, "--label needs --holder <id>: the label is set on that holder's references")
+	}
+	if strings.ContainsFunc(in.Label, unicode.IsControl) || strings.TrimSpace(in.Label) != in.Label {
+		return SecretsBatchOut{}, errs.New(errs.InvalidInput, "--label must be one line with no leading or trailing spaces")
+	}
+	all, err := o.secretIndex(ctx)
+	if err != nil {
+		return SecretsBatchOut{}, err
+	}
+	n := 0
+	for _, r := range all {
+		for _, u := range r.uses {
+			if u.Manager != "" && u.Holder == in.Holder && u.Label != in.Label {
+				n++
+			}
+		}
+	}
+	if n == 0 {
+		return SecretsBatchOut{}, errs.New(errs.NotFound, "no reference of holder "+quote(in.Holder)+" needs the label "+quote(in.Label)).
+			WithHint("the full holder id (mch_… or act_…) from `lore secrets list`")
+	}
+	if err = bulk.Ask(ctx, fmt.Sprintf("Set the label %s on %d references held by %s? Only the label changes; the holder id stays.", quote(in.Label), n, in.Holder)); err != nil {
+		return SecretsBatchOut{}, err
+	}
+	fix := func(t refs.SecretTarget) (refs.SecretTarget, bool) {
+		if t.Fixed != "" || targetOption(t, refs.OptHolder) != in.Holder || targetOption(t, refs.OptLabel) == in.Label {
+			return t, false
+		}
+		return setOption(t, refs.OptLabel, in.Label), true
+	}
+	return o.batchRewrite(ctx, engine.ActionSecretRelabeled, fix, "Relabelled", in.Holder, in.Label)
 }
 
 // secretsRename is `lore secrets rename-entry` (19.5).

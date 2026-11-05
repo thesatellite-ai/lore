@@ -403,6 +403,9 @@ func (a *App) state(ctx context.Context) (*state, error) {
 	if !a.opened {
 		a.opened = true
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
+		if a.err == nil {
+			a.st.eng.SetRedactHook(a.redactTask) // D21: write-time store-then-rotate task (wire/secretmgrs.go)
+		}
 		if a.err == nil && a.opts.Notice != nil {
 			a.healedNotices(a.st)
 			if n := liveNote(ctx, a.st); n != "" {

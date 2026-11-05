@@ -366,3 +366,84 @@ func (e *Engine) refuseClientSecretRefs(target store.Source, rowID ids.AnyID, fi
 	}
 	return refuseSecretRefs(row.Row{ID: rowID, Fields: fields})
 }
+
+// RedactedWrite is a stored write whose scan replaced secrets with
+// ${secret:unstored} (secrets.on_detect: redact): the row and the fields
+// and rules that fired, never a value or a preview.
+type RedactedWrite struct {
+	Store  store.Source
+	Table  row.Table
+	ID     ids.AnyID
+	Fields []string // sorted, unique
+	Rules  []string // sorted, unique
+}
+
+// RedactHook runs after a redacted write is stored, cached and audited
+// (D21: the "store, then rotate" task appears at write time). wire sets it
+// to task.AddSecretTask; the engine cannot import ops. An error fails the
+// command after the row is stored (like a failed audit record); lore
+// secrets check adds the same task idempotently later.
+type RedactHook func(ctx context.Context, w RedactedWrite) error
+
+// WithRedactHook sets the hook (nil: no hook).
+func WithRedactHook(h RedactHook) Option { return func(e *Engine) error { e.redact = h; return nil } }
+
+// SetRedactHook binds the hook after New, for a composition root whose
+// hook needs the object that owns the engine (wire.App). Call it before
+// the engine serves any write.
+func (e *Engine) SetRedactHook(h RedactHook) {
+	e.redact = h
+	e.audit = redactSink(e.audit, h)
+}
+
+// redactKey marks a context already inside a RedactHook, so the hook's own
+// writes never call it again.
+type redactKey struct{}
+
+// redactSink wraps the audit sink: Record is the last step of every write
+// (finish, after the backend and the cache), so the hook runs there for
+// each create, update or move event that carries redacted findings.
+//
+//	finish ─▶ Record(ev) ─▶ inner.Record ─▶ ev.SecretsRedacted? ─▶ hook (once per row write)
+func redactSink(inner AuditSink, h RedactHook) AuditSink {
+	if r, ok := inner.(redacting); ok {
+		inner = r.inner // rebinding replaces the hook, never stacks it
+	}
+	if h == nil {
+		return inner
+	}
+	return redacting{inner: inner, hook: h}
+}
+
+type redacting struct {
+	inner AuditSink
+	hook  RedactHook
+}
+
+// Record implements AuditSink: the inner record first, then the hook.
+func (r redacting) Record(ctx context.Context, ev Event) error {
+	if err := r.inner.Record(ctx, ev); err != nil {
+		return err
+	}
+	if len(ev.SecretsRedacted) == 0 || ctx.Value(redactKey{}) != nil {
+		return nil
+	}
+	if ev.Action != ActionCreate && ev.Action != ActionUpdate {
+		return nil
+	}
+	w := RedactedWrite{Store: ev.Store, Table: ev.Table, ID: ev.ID}
+	for _, f := range ev.SecretsRedacted {
+		if !slices.Contains(w.Fields, f.Field) {
+			w.Fields = append(w.Fields, f.Field)
+		}
+		if !slices.Contains(w.Rules, f.RuleID) {
+			w.Rules = append(w.Rules, f.RuleID)
+		}
+	}
+	slices.Sort(w.Fields)
+	slices.Sort(w.Rules)
+	if err := r.hook(context.WithValue(ctx, redactKey{}, true), w); err != nil {
+		return errs.Wrap(errs.CodeOf(err), "engine: the row is stored but its store-then-rotate task failed (lore secrets check adds it)", err)
+	}
+	return nil
+}

@@ -168,6 +168,7 @@ type Engine struct {
 	audit     AuditSink
 	confirmer Confirmer
 	prov      Provenance // nil: _o is {cmd, store}, no _w (WithProvenance)
+	redact    RedactHook // nil: no write-time unstored task (WithRedactHook, D21)
 }
 
 // Option configures New.
@@ -301,6 +302,7 @@ func New(opts ...Option) (*Engine, error) {
 	if e.settings == nil {
 		e.settings = storeSettings{e: e}
 	}
+	e.audit = redactSink(e.audit, e.redact) // D21: the hook runs after the audit record
 	e.clock = hlc.NewClock(e.actor, e.wall)
 	return e, nil
 }

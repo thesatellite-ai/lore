@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/secretmgr"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/ops/settings"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -23,4 +25,12 @@ func (a *App) SecretManagers(ctx context.Context) (secretmgr.Set, error) {
 		opt.Timeout = time.Duration(n) * time.Second
 	}
 	return secretmgr.Builtin(opt), nil
+}
+
+// redactTask is the engine RedactHook (D21, SECRETS 7): a write that
+// on_detect: redact stored with ${secret:unstored} gets its "store, then
+// rotate" task in the same command, beside the row (idempotent by row).
+func (a *App) redactTask(ctx context.Context, w engine.RedactedWrite) error {
+	_, _, err := settings.AddUnstoredTask(ctx, a, w.Store, w.ID.String(), w.Table.String(), w.Fields)
+	return err
 }
