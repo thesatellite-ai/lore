@@ -43,6 +43,7 @@ const (
 	resFieldsKey    = "fields"
 	resEntryName    = "name"
 	resEntryValue   = "v"
+	resEntryVName   = "v_name"
 	kfType          = "type"
 	kfInternal      = "internal"
 	kfSensitive     = "sensitive"
@@ -86,6 +87,10 @@ func (e *Engine) resourceIntoClient(ctx context.Context, to store.Source, id ids
 		v, hasV := ent[resEntryValue]
 		if !hasV {
 			continue
+		}
+		// OQ-AV: a closed value stores its val_ id in v; the checks read its name.
+		if vn, ok := ent[resEntryVName]; ok && len(vn) > 0 {
+			v = vn
 		}
 		def := e.fieldDef(ctx, fid)
 		if def == nil {

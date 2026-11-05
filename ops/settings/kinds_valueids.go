@@ -181,3 +181,129 @@ func checkValuesCap(field string, vals []string) error {
 	}
 	return nil
 }
+
+// valueIDsOf maps a closed value given by name (a JSON string, or a list
+// of them) to its val_ id(s) by field row f's value entries; false when f
+// has no entries or a name has none (stored as the name, the 0.1.17-era
+// and pre-id shape, read the same way).
+func valueIDsOf(f row.Row, names json.RawMessage) (json.RawMessage, bool) {
+	es := valueEntries(f)
+	if len(es) == 0 {
+		return nil, false
+	}
+	idOf := func(n string) (string, bool) {
+		for _, e := range es {
+			if e.Name == n {
+				return e.ID, true
+			}
+		}
+		return "", false
+	}
+	var one string
+	if json.Unmarshal(names, &one) == nil {
+		id, ok := idOf(one)
+		if !ok {
+			return nil, false
+		}
+		b, err := json.Marshal(id)
+		return b, err == nil
+	}
+	var many []string
+	if json.Unmarshal(names, &many) != nil || len(many) == 0 {
+		return nil, false
+	}
+	out := make([]string, len(many))
+	for i, n := range many {
+		id, ok := idOf(n)
+		if !ok {
+			return nil, false
+		}
+		out[i] = id
+	}
+	b, err := json.Marshal(out)
+	return b, err == nil
+}
+
+// decode is decodeValues with each closed value's name refreshed from d's
+// field rows by its val_ id (OQ-AV: a renamed value changes the field row
+// only; the row's v_name is a label that may be stale).
+func (d kindDef) decode(r located) (resValues, error) {
+	out, err := decodeValues(r)
+	if err != nil || len(out.valIDs) == 0 {
+		return out, err
+	}
+	for fid, raw := range out.valIDs {
+		f, ok := d.byID[fid]
+		if !ok {
+			continue
+		}
+		if names, ok := namesOf(f.Row, raw); ok {
+			out.vals[fid] = names
+		}
+	}
+	return out, nil
+}
+
+// namesOf is valueIDsOf's inverse: the current name(s) of stored val_ id(s).
+func namesOf(f row.Row, ids json.RawMessage) (json.RawMessage, bool) {
+	es := valueEntries(f)
+	nameOf := func(id string) (string, bool) {
+		for _, e := range es {
+			if e.ID == id {
+				return e.Name, true
+			}
+		}
+		return "", false
+	}
+	var one string
+	if json.Unmarshal(ids, &one) == nil {
+		n, ok := nameOf(one)
+		if !ok {
+			return nil, false
+		}
+		b, err := json.Marshal(n)
+		return b, err == nil
+	}
+	var many []string
+	if json.Unmarshal(ids, &many) != nil {
+		return nil, false
+	}
+	out := make([]string, len(many))
+	for i, id := range many {
+		n, ok := nameOf(id)
+		if !ok {
+			return nil, false
+		}
+		out[i] = n
+	}
+	b, err := json.Marshal(out)
+	return b, err == nil
+}
+
+// valueAliases are every label and val_ id of f's allowed values: --where
+// accepts them beside the names (OQ-AV).
+func valueAliases(f row.Row) []string {
+	var out []string
+	for _, e := range valueEntries(f) {
+		out = append(out, e.ID)
+		if e.Label != "" {
+			out = append(out, e.Label)
+		}
+	}
+	return out
+}
+
+// withAliases adds each name's label and val_ id to names, so a --where
+// term naming a value by any of them matches.
+func withAliases(f row.Row, names []string) []string {
+	out := slices.Clone(names)
+	for _, e := range valueEntries(f) {
+		if slices.Contains(names, e.Name) {
+			out = append(out, e.ID)
+			if e.Label != "" {
+				out = append(out, e.Label)
+			}
+		}
+	}
+	return out
+}

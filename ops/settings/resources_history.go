@@ -125,7 +125,7 @@ func (o ops) withHistory(ctx context.Context, d kindDef, old *located, patch map
 	var list []ResHistoryEntry
 	if old != nil {
 		var err error
-		if prev, err = decodeValues(*old); err != nil {
+		if prev, err = d.decode(*old); err != nil {
 			return err
 		}
 		list = historyOf(*old)
@@ -542,7 +542,7 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 		} else if t, ok := parseWhen(lc); ok && t.Before(cutoff) {
 			out.Stale = append(out.Stale, label)
 		}
-		stored, derr := decodeValues(r)
+		stored, derr := d.decode(r)
 		if derr != nil {
 			continue
 		}

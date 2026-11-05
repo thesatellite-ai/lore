@@ -337,6 +337,9 @@ func (o ops) resourceOps() []op.Entry {
 type fieldEntry struct {
 	Name string          `json:"name"`
 	V    json.RawMessage `json:"v"`
+	// VName is the value name beside a closed value's val_ id in V (OQ-AV,
+	// FA-RES-OQAV): a label, refreshed from the field row by id on read.
+	VName json.RawMessage `json:"v_name,omitempty"`
 }
 
 // resValues is a decoded `fields` object: the values by fld_ id (what every
@@ -351,6 +354,9 @@ type resValues struct {
 	// as unset; a re-write keeps the entry as is until --set (or --unset)
 	// on that field settles it.
 	conflicts map[string]json.RawMessage
+	// valIDs are the stored val_ id(s) of closed-value entries (OQ-AV), by
+	// fld_ id; vals holds their names.
+	valIDs map[string]json.RawMessage
 }
 
 // Conflict is one unsettled field of a resource as shown: the three sides
@@ -409,6 +415,15 @@ func decodeValues(r located) (resValues, error) {
 		if err := json.Unmarshal(probe[entryNameKey], &name); err != nil || !hasV || name == "" {
 			return resValues{}, bad("entry "+id+" lacks its name or value", nil)
 		}
+		// OQ-AV: a closed value stores its val_ id in v and its name in
+		// v_name; readers work on the name (decodeNamed refreshes it by id).
+		if vn, ok := probe[entryVNameKey]; ok && len(vn) > 0 {
+			if out.valIDs == nil {
+				out.valIDs = map[string]json.RawMessage{}
+			}
+			out.valIDs[id] = v
+			v = vn
+		}
 		out.vals[id], out.names[id] = v, name
 	}
 	return out, nil
@@ -418,6 +433,7 @@ func decodeValues(r located) (resValues, error) {
 const (
 	entryNameKey  = "name"
 	entryValueKey = "v"
+	entryVNameKey = "v_name"
 )
 
 // valuesPatch builds the `fields` patch from vals in the spec shape: each
@@ -436,13 +452,19 @@ func valuesPatch(d kindDef, vals map[string]json.RawMessage, prev resValues) (ma
 	}
 	for id, v := range vals {
 		name := prev.names[id]
+		entry := fieldEntry{V: v}
 		if f, ok := d.byID[id]; ok {
 			name = text(f.Row, kName)
+			// OQ-AV: a closed value is stored as its val_ id + v_name.
+			if ids, ok := valueIDsOf(f.Row, v); ok {
+				entry.V, entry.VName = ids, v
+			}
 		}
 		if name == "" {
 			return nil, errs.New(errs.Internal, "resource: no field name for "+id)
 		}
-		e, err := json.Marshal(fieldEntry{Name: name, V: v})
+		entry.Name = name
+		e, err := json.Marshal(entry)
 		if err != nil {
 			return nil, errs.Wrap(errs.Internal, "resource: encode field "+id, err)
 		}
@@ -790,7 +812,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 	if len(sets) == 0 && len(in.Unset) == 0 && in.Empty() {
 		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: nothing to change").WithHint("give --set field=value, --unset field or --meta key=value")
 	}
-	stored, err := decodeValues(r)
+	stored, err := d.decode(r)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -862,7 +884,7 @@ func (o ops) view(ctx context.Context, r located, show bool) (Resource, error) {
 	if err != nil {
 		return Resource{}, err
 	}
-	stored, err := decodeValues(r)
+	stored, err := d.decode(r)
 	if err != nil {
 		return Resource{}, err
 	}
@@ -937,7 +959,7 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 		if text(r.Row, rArchivedAt) != "" && !in.Archived {
 			continue
 		}
-		stored, derr := decodeValues(r)
+		stored, derr := d.decode(r)
 		if derr != nil {
 			return ResListOut{}, derr
 		}
@@ -1001,7 +1023,8 @@ func resourceMatcher(d kindDef, where []string) (filter.Matcher, error) {
 		if perr != nil {
 			return filter.Field{}, errs.Wrap(errs.ConfigInvalid, "kind field "+def.Row.ID.String()+" has an unknown type", perr)
 		}
-		return filter.Field{Kind: kind, Elem: value.KindText, Values: texts(def.Row, fValues)}, nil
+		// OQ-AV: a closed value may be named by its name, label or val_ id.
+		return filter.Field{Kind: kind, Elem: value.KindText, Values: append(texts(def.Row, fValues), valueAliases(def.Row)...)}, nil
 	})
 }
 
@@ -1020,9 +1043,12 @@ func (o ops) resourceGetter(ctx context.Context, d kindDef, stored resValues) fi
 			return nil
 		}
 		if b, isJSON := value.JSONForm(v); isJSON && canon.KindOf(b) == canon.KindArray {
-			return value.ItemStrings(v)
+			return withAliases(def.Row, value.ItemStrings(v))
 		}
 		s := display(v)
+		if len(valueEntries(def.Row)) > 0 {
+			return withAliases(def.Row, []string{s})
+		}
 		if text(def.Row, fType) == string(value.KindRef) {
 			if r, err := o.resourceByName(ctx, s, ""); err == nil {
 				return []string{s, text(r.Row, rName)}
@@ -1159,7 +1185,7 @@ func (o ops) resDeleteWhere(ctx context.Context, in ResDeleteIn) (ResDeleteOut, 
 	}
 	var hits []located
 	for _, r := range where(rows, map[string]string{rKind: d.kind.Row.ID.String()}) {
-		stored, derr := decodeValues(r)
+		stored, derr := d.decode(r)
 		if derr != nil {
 			return ResDeleteOut{}, derr
 		}

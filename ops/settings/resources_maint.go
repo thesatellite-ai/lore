@@ -189,11 +189,11 @@ func (o ops) resMerge(ctx context.Context, in ResMergeIn) (ResRepointOut, error)
 	if err != nil {
 		return ResRepointOut{}, err
 	}
-	dv, err := decodeValues(dup)
+	dv, err := d.decode(dup)
 	if err != nil {
 		return ResRepointOut{}, err
 	}
-	kv, err := decodeValues(keep)
+	kv, err := d.decode(keep)
 	if err != nil {
 		return ResRepointOut{}, err
 	}
@@ -278,7 +278,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 		if text(r.Row, rArchivedAt) != "" {
 			continue
 		}
-		stored, derr := decodeValues(r)
+		stored, derr := d.decode(r)
 		if derr != nil {
 			add(lintDangling, "", derr.Error())
 			continue
@@ -410,7 +410,7 @@ func (o ops) fieldRetype(ctx context.Context, in FieldRetypeIn) (RowOut, error) 
 	var convs []conv
 	var bad []string
 	for _, r := range using {
-		stored, derr := decodeValues(r)
+		stored, derr := d.decode(r)
 		if derr != nil {
 			return RowOut{}, derr
 		}

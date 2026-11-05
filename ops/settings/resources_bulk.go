@@ -91,7 +91,7 @@ func (o ops) matchWhere(ctx context.Context, b BulkWhere, verb string) (kindDef,
 		if text(r.Row, rArchivedAt) != "" {
 			continue
 		}
-		stored, derr := decodeValues(r)
+		stored, derr := d.decode(r)
 		if derr != nil {
 			return kindDef{}, nil, derr
 		}
@@ -175,7 +175,7 @@ func (o ops) resEditWhere(ctx context.Context, in ResEditIn) (RowOut, error) {
 			})
 	}
 	change := func(r located) string {
-		stored, derr := decodeValues(r)
+		stored, derr := d.decode(r)
 		if derr != nil {
 			return "(unreadable fields)"
 		}

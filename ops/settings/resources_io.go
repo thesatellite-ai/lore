@@ -722,7 +722,7 @@ func (o ops) resRepoint(ctx context.Context, in ResRepointIn) (ResRepointOut, er
 		if derr != nil {
 			continue // a row of a kind this place cannot see
 		}
-		stored, derr := decodeValues(r)
+		stored, derr := d.decode(r)
 		if derr != nil {
 			return ResRepointOut{}, derr
 		}
@@ -807,7 +807,7 @@ func (o ops) resClone(ctx context.Context, in ResCloneIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	stored, err := decodeValues(src)
+	stored, err := d.decode(src)
 	if err != nil {
 		return RowOut{}, err
 	}

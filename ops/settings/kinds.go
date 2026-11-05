@@ -861,7 +861,7 @@ func (o ops) relabelFieldRows(ctx context.Context, k, f located) (int, string, e
 	}
 	res, err := o.bulkRun(ctx, d, using, false, "relabel", func(located) string { return "stored field name → " + text(d.byID[f.Row.ID.String()].Row, kName) },
 		func(c context.Context, r located) error {
-			stored, derr := decodeValues(r)
+			stored, derr := d.decode(r)
 			if derr != nil {
 				return derr
 			}
@@ -900,7 +900,7 @@ func (o ops) fieldRemove(ctx context.Context, in FieldRemoveIn) (RowOut, error) 
 		return RowOut{}, err
 	}
 	for _, r := range using {
-		stored, verr := decodeValues(r)
+		stored, verr := d.decode(r)
 		if verr != nil {
 			return RowOut{}, verr
 		}
@@ -952,7 +952,13 @@ func (o ops) valueUses(ctx context.Context, k, f located, v string) (int, error)
 		if verr != nil {
 			return 0, verr
 		}
-		if display(fromJSONRaw(stored.vals[f.Row.ID.String()])) == v {
+		cur := stored.vals[f.Row.ID.String()]
+		if ids, ok := stored.valIDs[f.Row.ID.String()]; ok { // OQ-AV: by id
+			if names, ok := namesOf(f.Row, ids); ok {
+				cur = names
+			}
+		}
+		if display(fromJSONRaw(cur)) == v {
 			n++
 		}
 	}

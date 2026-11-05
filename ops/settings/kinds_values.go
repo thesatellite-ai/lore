@@ -71,7 +71,7 @@ func (o ops) rewriteValueRows(ctx context.Context, k, f located, pairs []valueRe
 	}
 	fid, n := f.Row.ID.String(), 0
 	for _, r := range using {
-		stored, verr := decodeValues(r)
+		stored, verr := d.decode(r)
 		if verr != nil {
 			return n, verr
 		}
