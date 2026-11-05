@@ -52,22 +52,22 @@ alice (work/website)$ lore agent start --label agent-backend --owner @alice
 ✓ act_2ad3618e878ebbf527d34d446ef4f891 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 agent-backend (work/website)$ lore task claim tsk_7a670ae8548ed05bf57ad29ad0759504
-ERROR: signals: signals written but the companion write failed: companion 1 on its own remote: [E_NEEDS_CONFIRM] engine: claim_log looks like a secret (session-id) at line 1: s-…: store it anyway as not a secret?
+✓ claimed tsk_7a670ae8548ed05bf57ad29ad0759504 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
 alice (work/website)$ lore task revoke tsk_7a670ae8548ed05bf57ad29ad0759504
 ✓ revoked the claim on tsk_7a670ae8548ed05bf57ad29ad0759504 (was held by agent-backend)
 agent-backend (work/website)$ lore task done tsk_7a670ae8548ed05bf57ad29ad0759504
-✓ tsk_7a670ae8548ed05bf57ad29ad0759504 done
-  learned something? `lore memory add --body "…"` (or pass --lesson next time)
-(exit 0)
+ERROR: [E_LOST_CLAIM] tsk_7a670ae8548ed05bf57ad29ad0759504: your claim (token ct_cb04f…) was revoked by act_162df51b7f78b785c97c26b41ea89666 at 10:17AM
+  hint: stop work on this task; `lore task next` finds other work
+(exit 12)
 
 ### reassign
 alice (work/website)$ lore task add 'update the contact page' --to agency --assign @bob
-✓ tsk_162df51b7f78b785c97c26b41ea89666 — update the contact page [medium] → [agency/client]
-bob (work/website)$ lore task claim tsk_162df51b7f78b785c97c26b41ea89666
-✓ claimed tsk_162df51b7f78b785c97c26b41ea89666 update the contact page (lease 20m, token ct_cb04f…) on refs/lore/signals/main
-alice (work/website)$ lore task reassign tsk_162df51b7f78b785c97c26b41ea89666 --assign @alice
-✓ tsk_162df51b7f78b785c97c26b41ea89666 reassigned to @alice
-bob (work/website)$ lore task done tsk_162df51b7f78b785c97c26b41ea89666
-ERROR: [E_REASSIGNED] tsk_162df51b7f78b785c97c26b41ea89666 was reassigned while you held it; stop work on it (now assigned to act_54fe984c9b495744c0217776765a28f2)
+✓ tsk_54fe984c9b495744c0217776765a28f2 — update the contact page [medium] → [agency/client]
+bob (work/website)$ lore task claim tsk_54fe984c9b495744c0217776765a28f2
+✓ claimed tsk_54fe984c9b495744c0217776765a28f2 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
+alice (work/website)$ lore task reassign tsk_54fe984c9b495744c0217776765a28f2 --assign @alice
+✓ tsk_54fe984c9b495744c0217776765a28f2 reassigned to @alice
+bob (work/website)$ lore task done tsk_54fe984c9b495744c0217776765a28f2
+ERROR: [E_REASSIGNED] tsk_54fe984c9b495744c0217776765a28f2 was reassigned while you held it; stop work on it (now assigned to act_162df51b7f78b785c97c26b41ea89666)
   hint: stop work on this task; `lore task next` finds other work
 (exit 14)

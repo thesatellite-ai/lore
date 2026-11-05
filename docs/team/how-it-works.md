@@ -251,7 +251,7 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 ```console
 # agent-backend, in website
 $ lore task claim tsk_76bd…3f10
-ERROR: signals: signals written but the companion write failed: companion 1 on its own remote: [E_NEEDS_CONFIRM] engine: claim_log looks like a secret (session-id) at line 1: s-…: store it anyway as not a secret?
+✓ claimed tsk_76bd…3f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 
 # alice, in ~
 $ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
@@ -325,28 +325,27 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 <!-- example: agents#done-then-merged only=3,4,5,6,7 -->
 ```console
 # agent-backend, in agents/api
-$ lore task done tsk_missing --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
-ERROR: [E_NOT_FOUND] task: "tsk_missing" is not a task id (tsk_…)
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main tasks`
+$ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
+✓ tsk_162d…9666 done (commit 601d285); waiting for merge
+  lesson → mem_4c59…6c38
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
-  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (claimed by agent:agent-backend)
+  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 601d285 not on the default branch yet)
 (exit 10)
 
 # alice, in api
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 $ lore task list
-○ tsk_162d…9666 send the invite email from the API [medium]  [agency/client2]
+lore: tsk_162d…9666 merged 10:23 (found by: ancestry, 86dbae4) but it could not be recorded: write tsk_162d…9666: signals: push: gitremote: invalid request: destination "" is not a full ref; the next lore command retries
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
-○ tsk_05e9…4603 allow /invite on the proxy [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
-ERROR: [E_NO_WORK] nothing ready:
-  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (claimed by agent:agent-backend)
+✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
+  read its notes: lore task show tsk_54fe…28f2
 ```
 <!-- /example -->
 

@@ -89,9 +89,9 @@ A real one, from the worked example: the crashed `agent-frontend` woke up after 
 ```console
 # agent-frontend, in agents/app
 $ lore task done tsk_54fe…28f2
-✓ tsk_54fe…28f2 done
-  learned something? `lore memory add --body "…"` (or pass --lesson next time)
-(exit 0)
+ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 10:57AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:45AM
+  hint: stop work on this task; `lore task next` finds other work
+(exit 12)
 ```
 <!-- /example -->
 
@@ -144,7 +144,7 @@ export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 
 # agent-backend, in website
 $ lore task claim tsk_7a67…9504
-ERROR: signals: signals written but the companion write failed: companion 1 on its own remote: [E_NEEDS_CONFIRM] engine: claim_log looks like a secret (session-id) at line 1: s-…: store it anyway as not a secret?
+✓ claimed tsk_7a67…9504 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
 
 # alice, in website
 $ lore task revoke tsk_7a67…9504
@@ -152,9 +152,9 @@ $ lore task revoke tsk_7a67…9504
 
 # agent-backend, in website
 $ lore task done tsk_7a67…9504
-✓ tsk_7a67…9504 done
-  learned something? `lore memory add --body "…"` (or pass --lesson next time)
-(exit 0)
+ERROR: [E_LOST_CLAIM] tsk_7a67…9504: your claim (token ct_cb04f…) was revoked by act_162d…9666 at 10:17AM
+  hint: stop work on this task; `lore task next` finds other work
+(exit 12)
 ```
 <!-- /example -->
 
@@ -166,19 +166,19 @@ Use it when the work should move to another person. The old holder's next write 
 ```console
 # alice, in website
 $ lore task add 'update the contact page' --to agency --assign @bob
-✓ tsk_162d…9666 — update the contact page [medium] → [agency/client]
+✓ tsk_54fe…28f2 — update the contact page [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_162d…9666
-✓ claimed tsk_162d…9666 update the contact page (lease 20m, token ct_cb04f…) on refs/lore/signals/main
+$ lore task claim tsk_54fe…28f2
+✓ claimed tsk_54fe…28f2 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
 
 # alice, in website
-$ lore task reassign tsk_162d…9666 --assign @alice
-✓ tsk_162d…9666 reassigned to @alice
+$ lore task reassign tsk_54fe…28f2 --assign @alice
+✓ tsk_54fe…28f2 reassigned to @alice
 
 # bob, in website
-$ lore task done tsk_162d…9666
-ERROR: [E_REASSIGNED] tsk_162d…9666 was reassigned while you held it; stop work on it (now assigned to act_54fe…28f2)
+$ lore task done tsk_54fe…28f2
+ERROR: [E_REASSIGNED] tsk_54fe…28f2 was reassigned while you held it; stop work on it (now assigned to act_162d…9666)
   hint: stop work on this task; `lore task next` finds other work
 (exit 14)
 ```

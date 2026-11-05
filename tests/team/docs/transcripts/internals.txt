@@ -37,7 +37,7 @@ carol (work/app)$ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only re
     "cmd": "task add",
     "git": {
       "branch": "main",
-      "commit": "af8b10d777117f0cf86a74b8773ffc656c347d92",
+      "commit": "d9a70f8f951bcdd2344aa3ed634d1f3deb3a2224",
       "state": "branch"
     },
     "repo": "rep_54fe984c9b495744c0217776765a28f2",
@@ -107,7 +107,7 @@ alice (work/website)$ lore agent start --label agent-backend --owner @alice
 ✓ act_3b6283bc4392c556bbae5f094246e913 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 agent-backend (work/website)$ lore task claim tsk_76bd560aff0771fab8457dbfa9823f10
-ERROR: signals: signals written but the companion write failed: companion 1 on its own remote: [E_NEEDS_CONFIRM] engine: claim_log looks like a secret (session-id) at line 1: s-…: store it anyway as not a secret?
+✓ claimed tsk_76bd560aff0771fab8457dbfa9823f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
 client/claims/tsk_76bd560aff0771fab8457dbfa9823f10.json
 86dbae4 lore: signals
