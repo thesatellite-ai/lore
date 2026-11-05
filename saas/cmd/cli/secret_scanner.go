@@ -5,8 +5,10 @@
 //
 //	runLeakCheck / secretCheck
 //	  └─ newCoreSecrets(ctx, root)
-//	       ├─ coreApp.OutputScanner   gitleaks defaults + lore pack + every
-//	       │                          attached store's secret_rules rows + D8
+//	       ├─ coreApp.HookScanner     gitleaks defaults + lore pack + the team
+//	       │                          stores' secret_rules rows + D8 + rules
+//	       │                          `me` adds (a personal off/change never
+//	       │                          applies here: BATCH 8)
 //	       └─ committedAllows         secret_allows rows from the git INDEX
 //	                                  (19.4: the tree being committed, never
 //	                                  the working copy alone)
@@ -103,7 +105,7 @@ func newCoreSecrets(ctx context.Context, root string) (*coreSecrets, error) {
 	if err != nil {
 		return nil, err
 	}
-	sc, err := coreApp.OutputScanner(ctx)
+	sc, err := coreApp.HookScanner(ctx) // team rules only (BATCH 8)
 	if err != nil {
 		return nil, err
 	}
