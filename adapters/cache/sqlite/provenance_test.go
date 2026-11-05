@@ -70,3 +70,49 @@ func TestProvenanceViewsAttached(t *testing.T) {
 		t.Fatalf("rows %+v", res.Rows)
 	}
 }
+
+// TestProvenanceViewsLens: every provenance view gets a lens view
+// "<view>_all" with a leading source column over all attached caches
+// (OV20 lens hook); each source keeps its own rows, a source with no
+// matching rows adds none, and the masked lens exposes them too.
+func TestProvenanceViewsLens(t *testing.T) {
+	f := newFixture(t)
+	repo := f.open("repo.db")
+	agency := f.open("agency.db")
+	empty := f.open("empty.db")
+	prj := newPrj()
+	f.apply(repo, store.SourceRepo, "1",
+		f.withEnvelope(f.memory(newMem(), prj, "r"), `{"cmd":"memory add","moves":[{"at":"a","moved_from":"repo","moved_to":"agency/acme"}],"copied_from":"mem_src"}`, nil))
+	f.apply(agency, store.Source("agency"), "1",
+		f.withEnvelope(f.memory(newMem(), prj, "a1"), `{"cmd":"memory add","repo":"rep_2"}`,
+			map[string]value.Value{"shared_as": must(value.JSONOf([]byte(`["mem_a"]`)))}),
+		f.withEnvelope(f.memory(newMem(), prj, "a2"), `{"cmd":"memory add","repo":"rep_2"}`, nil))
+	f.apply(empty, store.Source("empty"), "1", f.memory(newMem(), prj, "no origin"))
+	srcs := []LensSource{{Name: "repo", Path: f.dir + "/repo.db"}, {Name: "agency", Path: f.dir + "/agency.db"}, {Name: "empty", Path: f.dir + "/empty.db"}}
+	for _, mask := range []bool{false, true} {
+		l, err := OpenLensWith(f.ctx, srcs, LensOptions{MaskSensitive: mask})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for q, want := range map[string]string{
+			`SELECT group_concat(source || ':' || n, ',') FROM (SELECT source, COUNT(*) n FROM row_provenance_all GROUP BY source ORDER BY source)`: "agency:2,empty:1,repo:1",
+			`SELECT COUNT(*) FROM row_provenance_all WHERE has_origin = 1`:                                                                          "3",
+			`SELECT source || ':' || moved_to FROM row_moves_all`:                                                                                   "repo:agency/acme",
+			`SELECT group_concat(source || ':' || kind || ':' || other_id, ',') FROM (SELECT * FROM row_lineage_all ORDER BY source)`:               "agency:shared_as:mem_a,repo:copied_from:mem_src",
+			`SELECT COUNT(*) FROM repo_urls_all`:                                                                                                    "0",
+		} {
+			res, err := l.Query(f.ctx, q)
+			if err != nil {
+				t.Fatalf("mask=%v %s: %v", mask, q, err)
+			}
+			if got := res.Rows[0][0].String(); got != want {
+				t.Errorf("mask=%v %s = %q, want %q", mask, q, got, want)
+			}
+		}
+		res, err := l.Query(f.ctx, `SELECT * FROM row_provenance_all LIMIT 1`)
+		if err != nil || res.Columns[0] != "source" {
+			t.Fatalf("mask=%v leading column: %v %v", mask, res.Columns, err)
+		}
+		_ = l.Close()
+	}
+}

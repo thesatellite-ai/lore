@@ -2,9 +2,16 @@ package rowfs
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/merge3"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
@@ -15,11 +22,15 @@ import (
 var markerStart = []byte("<<<<<<< ")
 
 // decodeImportable is DecodeRowFile for the import path (Read, Problems):
-// a document whose text field still holds the conflict markers of an
-// unresolved merge is refused (STORE_SERVER_SPEC merge rule 2: "refused
-// on import until resolved"), so marker text never reaches the cache as
-// knowledge. Get keeps reading such a file as it is, so a person or
-// `lore sync` can show and resolve it.
+// a document whose text field, or any string inside a meta entry, still
+// holds the conflict markers of an unresolved merge is refused
+// (STORE_SERVER_SPEC merge rule 2: "refused on import until resolved";
+// METADATA 3.12: every conflict scanner recurses into meta), so marker
+// text never reaches the cache as knowledge. A structured meta conflict
+// entry ({"conflict": {base, ours, theirs}}) is NOT refused here: 3.12
+// imports the row with its other values, and the commit and landing
+// checks hold it back (merge.MetaConflicts). Get keeps reading such a
+// file as it is, so a person or `lore sync` can show and resolve it.
 func decodeImportable(rel string, doc []byte) (store.Row, error) {
 	r, err := DecodeRowFile(rel, doc)
 	if err != nil || !bytes.Contains(doc, markerStart) {
@@ -34,7 +45,30 @@ func decodeImportable(rel string, doc []byte) (store.Row, error) {
 			return store.Row{}, errs.New(errs.InvalidInput, "rowfs: "+quote(rel)+": field "+name+" holds unresolved conflict markers; resolve them in the file and commit")
 		}
 	}
+	keys := slices.SortedFunc(maps.Keys(full.Meta), func(a, b ids.ID[ids.MetaKey]) int { return strings.Compare(a.String(), b.String()) })
+	for _, k := range keys { // by id: the same first entry named on every machine
+		if rawHasMarkers(full.Meta[k].Raw()) {
+			return store.Row{}, errs.New(errs.InvalidInput, "rowfs: "+quote(rel)+": meta entry "+k.String()+" holds unresolved conflict markers; resolve them in the file and commit")
+		}
+	}
 	return r, nil
+}
+
+// rawHasMarkers reports a JSON document holding a conflict block in any
+// string at any depth (object keys included: a hand edit can put one
+// anywhere). A document that does not decode is not this check's business
+// (row.Decode already accepted it).
+func rawHasMarkers(raw []byte) bool {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	for {
+		t, err := dec.Token()
+		if errors.Is(err, io.EOF) || err != nil {
+			return false
+		}
+		if s, ok := t.(string); ok && merge3.ContainsConflictMarkers(s) {
+			return true
+		}
+	}
 }
 
 // hasMarkers reports a text value, or a list item, holding a conflict
