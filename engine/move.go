@@ -145,6 +145,13 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 			if err = refuseSecretRefs(row.Row{ID: cur.ID, Fields: typed}); err != nil {
 				return Written{}, err
 			}
+			// RES 3.9: a resource's foreign refs, internal and sensitive values.
+			var resDropped []Warning
+			if def.Name == schema.TableResources {
+				if typed, resDropped, err = e.resourceIntoClient(ctx, to, cur.ID, typed, opt.DropInternal); err != nil {
+					return Written{}, err
+				}
+			}
 			if typed, err = e.rehomeProject(ctx, to, def, typed); err != nil {
 				return Written{}, err
 			}
@@ -157,7 +164,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 			if typed, kept, err = e.clientTime(ctx, def, to, typed, opt.WithTime); err != nil {
 				return Written{}, err
 			}
-			dropped = append(dropped, kept...)
+			dropped = append(append(dropped, kept...), resDropped...)
 		}
 		names := slices.Sorted(maps.Keys(typed))
 		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {
