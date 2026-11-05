@@ -532,6 +532,9 @@ func (a *App) state(ctx context.Context) (*state, error) {
 			if n := liveNote(ctx, a.st); n != "" {
 				a.opts.Notice(n)
 			}
+			for _, n := range strayProjectNotes(ctx, a.st) {
+				a.opts.Notice(n)
+			}
 		}
 	}
 	return a.st, a.err
