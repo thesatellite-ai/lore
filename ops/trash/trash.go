@@ -185,6 +185,12 @@ type ListOut struct {
 	Copies []LocalCopy `json:"copies,omitempty"`
 }
 
+// Warning is one engine warning copied into a trash output (later 542).
+type Warning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // ShowOut is the output of trash.show.
 type ShowOut struct {
 	Data   Item              `json:"data"`
@@ -224,6 +230,9 @@ type ResultOut struct {
 	// safety copies it dropped (or would drop); Rows stays empty.
 	Local  bool        `json:"local,omitempty"`
 	Copies []LocalCopy `json:"copies,omitempty"`
+	// Warnings are the engine's warnings of the write (W_AUDIT_DEFERRED:
+	// the audit record is kept with the rows and added later).
+	Warnings []Warning `json:"warnings,omitempty"`
 }
 
 // Ops returns the trash operations bound to env, for op.NewRegistry.
@@ -734,6 +743,9 @@ func resultOf(action string, res engine.TrashResult, dry bool) ResultOut {
 		out.Rows = append(out.Rows, it)
 	}
 	out.Count = len(out.Rows)
+	for _, w := range res.Warnings {
+		out.Warnings = append(out.Warnings, Warning{Code: string(w.Code), Message: w.Message})
+	}
 	return out
 }
 
@@ -885,6 +897,9 @@ func (o ResultOut) Text() string {
 	}
 	if o.DryRun {
 		b.WriteString("dry run: nothing written\n")
+	}
+	for _, w := range o.Warnings {
+		b.WriteString("note: " + w.Message + "\n")
 	}
 	return b.String()
 }

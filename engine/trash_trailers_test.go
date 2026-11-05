@@ -26,6 +26,13 @@ func (s *trailerSpy) Write(ctx context.Context, changes []store.Change) error {
 	return s.Backend.Write(ctx, changes)
 }
 
+// WriteAudited: trash, restore and delete write their audit records in
+// the rows' own batch (later 542), so they reach the backend here.
+func (s *trailerSpy) WriteAudited(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
+	s.got = append(s.got, store.CommitTrailers(ctx))
+	return s.Backend.WriteAudited(ctx, changes, recs)
+}
+
 func (s *trailerSpy) WritePurge(ctx context.Context, changes []store.Change, purged []ids.AnyID) error {
 	s.got = append(s.got, store.CommitTrailers(ctx))
 	return s.Backend.WritePurge(ctx, changes, purged)

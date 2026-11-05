@@ -66,5 +66,6 @@ func (e *Engine) RewriteOrigin(ctx context.Context, ref Ref, fn func(value.JSON)
 		opName = OpRepoMergeIDs
 	}
 	ev := Event{Op: opName, Action: ActionUpdate, Store: src, Table: cur.Table, ID: cur.ID, HLC: got.row.HLC, Actor: actor}
-	return Written{Row: got.row}, e.finish(ctx, src, got.docs(), ev)
+	aw, err := e.finishW(ctx, src, got.docs(), ev)
+	return Written{Row: got.row, Warnings: aw}, err
 }

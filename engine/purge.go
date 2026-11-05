@@ -90,7 +90,8 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 		return Written{}, err
 	}
 	ev := Event{Op: cl.op, Action: ActionPurge, Store: src, Table: cur.Table, ID: cur.ID, HLC: cur.HLC, Actor: e.actorOf(cl)}
-	return Written{Row: cur}, e.finish(ctx, src, docs, ev)
+	aw, err := e.finishW(ctx, src, docs, ev)
+	return Written{Row: cur, Warnings: aw}, err
 }
 
 // purgedDay is how an E_PURGED message prints the purge date

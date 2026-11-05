@@ -234,9 +234,11 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		}
 		ev := Event{Op: cl.op, Action: ActionCreate, Store: to, Table: cur.Table, ID: cur.ID, HLC: moved.HLC, Actor: actor,
 			SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
-		if err = e.finish(ctx, to, []store.Row{got.doc}, ev); err != nil {
+		var aw []Warning
+		if aw, err = e.finishW(ctx, to, []store.Row{got.doc}, ev); err != nil {
 			return Written{}, err
 		}
+		dropped = append(dropped, aw...) // W_AUDIT_DEFERRED of the copy (later 542)
 	} else if moved, err = there.Decode(); err != nil {
 		return Written{}, err
 	}
@@ -254,7 +256,9 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	}
 	ev := Event{Op: cl.op, Action: ActionDelete, Store: src, Table: cur.Table, ID: cur.ID, HLC: h, Actor: actor}
 	w := Written{Row: moved, Warnings: dropped}
-	if err = e.finish(ctx, src, []store.Row{got.doc}, ev); err != nil {
+	aw, err := e.finishW(ctx, src, []store.Row{got.doc}, ev)
+	w.Warnings = append(w.Warnings, aw...)
+	if err != nil {
 		return w, err
 	}
 	if fresh && def.Name == schema.TableTasks {

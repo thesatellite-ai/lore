@@ -151,6 +151,9 @@ type Trashed struct {
 type TrashResult struct {
 	Batch string
 	Rows  []Trashed
+	// Warnings are the restore's warnings (W_AUDIT_DEFERRED: the audit
+	// record is kept in the store's journal and replayed later).
+	Warnings []Warning
 }
 
 // trashItem is one row of a trash plan.
@@ -272,13 +275,16 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 		if err = e.gate(ctx, st, marked...); err != nil {
 			return Written{}, err // FORMAT_EVOLUTION rule 2
 		}
-		if werr := st.Backend.Write(ctx, changes); werr != nil {
+		// later 542: the audit records go in the rows' own batch (CLEANUP Qs)
+		if werr := e.writeChanges(ctx, st, changes, events); werr != nil {
 			if errors.Is(werr, store.ErrStale) {
 				return Written{}, errs.Wrap(errs.Stale, "engine: a row changed while "+cur.ID.String()+" was deleted", werr).WithHint("rerun the command")
 			}
 			return Written{}, werr
 		}
-		if ferr := e.finish(ctx, name, docs, events...); ferr != nil {
+		aw, ferr := e.finishW(ctx, name, docs, events...)
+		w.Warnings = append(w.Warnings, aw...)
+		if ferr != nil {
 			return w, ferr
 		}
 	}
@@ -709,13 +715,16 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 		if err := e.gate(ctx, st, next...); err != nil {
 			return TrashResult{}, err
 		}
-		if err := st.Backend.Write(ctx, changes); err != nil {
+		// later 542: the audit records go in the rows' own batch (CLEANUP Qs)
+		if err := e.writeChanges(ctx, st, changes, events); err != nil {
 			if errors.Is(err, store.ErrStale) {
 				return TrashResult{}, errs.Wrap(errs.Stale, "engine: a row changed during the restore", err).WithHint("rerun the command")
 			}
 			return TrashResult{}, err
 		}
-		if err := e.finish(ctx, name, docs, events...); err != nil {
+		aw, err := e.finishW(ctx, name, docs, events...)
+		out.Warnings = append(out.Warnings, aw...)
+		if err != nil {
 			return out, err
 		}
 		for _, n := range next {

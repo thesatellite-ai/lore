@@ -566,7 +566,9 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 			}
 			return Written{}, err
 		}
-		if err := e.finish(ctx, name, rows, events...); err != nil {
+		aw, err := e.finishW(ctx, name, rows, events...)
+		w.Warnings = append(w.Warnings, aw...)
+		if err != nil {
 			return w, err
 		}
 	}
@@ -926,6 +928,9 @@ func (s stored) allowEvents(opName string, target store.Source) []Event {
 // finish refreshes the cache with the stored rows and records the audit
 // events (finishW without the warnings: a deferred audit record stays in
 // the backend's journal and is replayed, so it is not an error here).
+// Only for a write with no output to carry a warning (RelabelMeta, a
+// label-only rewrite); every write that returns Written or TrashResult
+// uses finishW so W_AUDIT_DEFERRED reaches the person (later 542).
 func (e *Engine) finish(ctx context.Context, source store.Source, rows []store.Row, evs ...Event) error {
 	_, err := e.finishW(ctx, source, rows, evs...)
 	return err
