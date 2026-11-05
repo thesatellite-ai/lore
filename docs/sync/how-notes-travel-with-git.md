@@ -256,7 +256,7 @@ pre-push
 ```
 <!-- /example -->
 
-Text that looks like a password stops `lore memory add` with a question; `--yes` answers it and stores the row as not a secret, so its file is in `.lore/data` at once (`LORE_SYNC_ALLOW_SECRETS=1` adds nothing). lore's commit hook still checks every file and refuses to commit one that holds a credential pattern, so edit or delete such a row before you commit:
+Text that looks like a password stops `lore memory add` with a question; a bare `--yes` does not answer it. `--not-a-secret --reason "<why>" --yes` stores the row as not a secret (`--secret-ref` and `--secret-unstored` are the other answers), so its file is in `.lore/data` at once (`LORE_SYNC_ALLOW_SECRETS=1` adds nothing). lore's commit hook still checks every file and refuses to commit one that holds a credential pattern, so edit or delete such a row before you commit:
 
 <!-- example: environment#sync-allow-secrets -->
 ```console

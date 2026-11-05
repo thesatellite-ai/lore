@@ -146,7 +146,7 @@ The DB schema generation. v0.1 = `schema_version: 1`. Bumped only on breaking ch
 The triple `(project_id, repo_id, master?)` that determines who sees a row. Flags `--repo`, `--all-repos`, `--master-only`, `--no-inherit` control scope at query time.
 
 ## Secret scrubber
-Pre-write check that refuses bodies containing credential patterns (AWS keys, GitHub PATs, JWTs, OpenAI keys, Stripe keys, etc.). The write stops with `E_NEEDS_CONFIRM`; `--yes` (after the person confirms) stores it as not a secret, and the commit hook still refuses a credential.
+Pre-write check that refuses bodies containing credential patterns (AWS keys, GitHub PATs, JWTs, OpenAI keys, Stripe keys, etc.). The write stops with `E_NEEDS_CONFIRM` (the JSON error carries `findings[]` and `next.add_args_one_of`); a bare `--yes` does not store it. The choices are `--secret-ref "<manager>://<entry>"`, `--secret-unstored`, or `--not-a-secret --reason "<why>" --yes` (after the person confirms); at a terminal a menu offers redact / unstored / not a secret (reason required) / cancel. The commit hook still refuses a credential.
 
 ## Symlink protection
 lore refuses to open `.lore/lore.db` if it's a symlink (O_NOFOLLOW semantics). Prevents an attacker with write access to `.lore/` from redirecting writes to `/etc/passwd` etc.

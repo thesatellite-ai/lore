@@ -184,7 +184,7 @@ ERROR: [E_IN_TRASH] engine: mem_28f8…03df is in the trash (deleted by act_4c59
 
 ## Try it: a password is refused
 
-lore stops on text that looks like a password, a key or a token, because rows end up in git where everyone with the repo can read them. It asks first (`E_NEEDS_CONFIRM` without a terminal); the better fix is to keep the secret in your password manager and leave it out of the note. When the match is not a real secret (an example value, a test string), `--yes` stores the row as not a secret. Its file is written to `.lore/data` (the `1` below counts it), but lore's commit hook checks every file again and refuses to commit one that still holds a credential pattern, so a real password does not reach git by accident.
+lore stops on text that looks like a password, a key or a token, because rows end up in git where everyone with the repo can read them. It asks first (`E_NEEDS_CONFIRM` without a terminal); the better fix is to keep the secret in your password manager and leave it out of the note. A bare `--yes` does not answer that question. When the match is not a real secret (an example value, a test string), `--not-a-secret --reason "<why>" --yes` stores the row as not a secret; for a real one, `--secret-ref "<manager>://<entry>"` keeps a reference and `--secret-unstored` keeps the note without the value. At a terminal a menu offers the same choices (redact, unstored, not a secret with a required reason, cancel). Its file is written to `.lore/data` (the `1` below counts it), but lore's commit hook checks every file again and refuses to commit one that still holds a credential pattern, so a real password does not reach git by accident.
 
 <!-- example: knowledge#secrets -->
 ```console
@@ -212,7 +212,7 @@ lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `
 - **Rows written by older lore versions point the other way.** Before this was fixed, `--supersedes` stored the old id on the new row and left the old row unchanged. `lore doctor` lists such pairs and `lore doctor --fix` turns them around once (a second run changes nothing).
 - **`delete` takes `--yes`.** Without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`. The old spelling `--confirm` is refused with a hint to use `--yes`.
 - **Shell quotes.** Wrap the body in single quotes so the shell does not touch `$` or `!` in your text. You can also pipe the body in: `echo 'Run the tests before you push' | lore rule add`.
-- **`--yes` on a secret warning does not put the secret in git.** It records that you looked and the text is not a secret; the commit hook still refuses a file that holds a credential pattern. Fix the row (`edit`) or delete it before you commit.
+- **`--not-a-secret` does not put the secret in git.** It records that you looked and the text is not a secret; the commit hook still refuses a file that holds a credential pattern. Fix the row (`edit`) or delete it before you commit.
 - **Not committed yet.** A new or changed row is a file in `.lore/data`. It is safe on your machine, but nobody else sees it until you commit `.lore/data` (`git status` lists it).
 
 ## Related

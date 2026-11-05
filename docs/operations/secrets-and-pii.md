@@ -17,7 +17,7 @@ Then there is a second check: before lore writes a note into `.lore/data` (the f
 
 ## Step 1 — See lore refuse a secret
 
-Alice (an agency developer) tries to save a deploy key as a memory. lore stops, names the kind of secret it found, shows only the first characters, and asks whether to store it anyway. Without a terminal (a script, an agent) the question becomes `E_NEEDS_CONFIRM`:
+Alice (an agency developer) tries to save a deploy key as a memory. lore stops, names the kind of secret it found, shows only the first characters, and asks what to do. At a terminal a menu offers: redact it with a reference, keep the note without the value (unstored), mark it not a secret (a typed reason is required), or cancel; `--yes` alone does not pick one. Without a terminal (a script, an agent) the question becomes `E_NEEDS_CONFIRM`; with `--json` the error carries `findings[]` (masked) and `next.add_args_one_of`, the three flag sets you can add:
 
 <!-- example: ops#secret-refused -->
 ```console
@@ -33,7 +33,7 @@ The example key is the public sample key from cloud documentation; it opens noth
 
 ## Step 2 — Say it is not a secret
 
-When the match is not a real secret (a sample value like this one, a test string), `--yes` answers the question and stores the row as not a secret. Its file is written to `.lore/data`, but lore's commit hook checks every file again and refuses to commit one that holds a credential pattern, so a real key does not reach git by accident:
+When the match is not a real secret (a sample value like this one, a test string), `--not-a-secret --reason "<why>" --yes` answers the question and stores the row as not a secret (a bare `--yes` does not). For a real secret use `--secret-ref "<manager>://<entry>"` (the note keeps a reference to where it lives) or `--secret-unstored` (the note is kept, the value is left out). Its file is written to `.lore/data`, but lore's commit hook checks every file again and refuses to commit one that holds a credential pattern, so a real key does not reach git by accident:
 
 <!-- example: ops#allow-secrets only=1,2 -->
 ```console
@@ -58,7 +58,7 @@ lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `
 ```
 <!-- /example -->
 
-If a note that is meant to be shared trips the check by mistake, edit its text so it no longer looks like a secret. `LORE_SYNC_ALLOW_SECRETS=1` lets one run write such rows into `.lore/data` anyway; use it only when you are sure, because what is in git stays in git history.
+If a note that is meant to be shared trips the check by mistake, edit its text so it no longer looks like a secret. `LORE_SYNC_ALLOW_SECRETS=1` is ignored since 0.1.18 (it prints a warning); keep a false positive with `--not-a-secret --reason "<why>" --yes`, and remember that what is in git stays in git history.
 
 ## Add your own patterns
 
@@ -92,7 +92,7 @@ lore refuses a few risky setups on its own. Each refusal has one environment var
 | `LORE_ALLOW_ROOT` | Running as the root (administrator) user: `E_ROOT_REFUSED`. | Files created as root can no longer be changed by your normal user, and a mistake as root can damage the whole machine. |
 | `LORE_ALLOW_NETWORK_FS` | A database on a network drive or a cloud-synced folder (shared network folders, folders a sync app copies between computers): `E_NETWORK_FS`. | SQLite databases get damaged silently when two machines or a sync app touch the file. Keep the repo on a local disk; git shares the notes anyway. |
 | `LORE_ALLOW_DB_PATH_OUTSIDE` | A `..` (a step up out of the folder) in the database path of a `.lore/lore.yaml` pointer file: `E_BAD_PATH`. | A path that climbs out of the project can point lore at someone else's files. |
-| `--yes` (a flag, not a variable) | Saving a note that looks like a secret: `E_NEEDS_CONFIRM` until you answer. | See Step 2. |
+| `--secret-ref`, `--secret-unstored`, `--not-a-secret --reason … --yes` (flags, not variables) | Saving a note that looks like a secret: `E_NEEDS_CONFIRM` until you add one of them; a bare `--yes` is not an answer. | See Step 2. |
 
 Use them for one command, not in your shell profile, so the refusal is back next time.
 

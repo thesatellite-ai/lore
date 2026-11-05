@@ -1064,7 +1064,7 @@ lore sync uninstall-action [--force] [--json]   # delete that workflow (only if 
 lore restore <backup> --confirm --prefer db|files|newest
 ```
 
-Environment: `LORE_SYNC=0` (off), `LORE_SYNC_GIT=0` (no git wiring), `LORE_SYNC_QUIET=1`, `LORE_SYNC_ALLOW_SECRETS=1` (one run).
+Environment: `LORE_SYNC=0` (off), `LORE_SYNC_GIT=0` (no git wiring), `LORE_SYNC_QUIET=1`, `LORE_SYNC_ALLOW_SECRETS=1` (ignored since 0.1.18, warns).
 
 Error kinds in `errors[]`: `invalid-file`, `conflict-markers`, `newer-format` (upgrade lore), `import-failed`, `secret-detected` (row kept local, not written to git).
 

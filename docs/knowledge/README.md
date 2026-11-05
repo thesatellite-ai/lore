@@ -8,7 +8,7 @@
 
 ## Write things down
 
-- [Rules, memories and decisions](rules-memories-decisions.md): the three kinds you use most; add, list, change, replace (`--supersedes`), retire (`archive`, `invalidate`), delete, and why a password is stopped (`--yes` to mark a sample value as not a secret).
+- [Rules, memories and decisions](rules-memories-decisions.md): the three kinds you use most; add, list, change, replace (`--supersedes`), retire (`archive`, `invalidate`), delete, and why a password is stopped (`--not-a-secret --reason "<why>" --yes` to mark a sample value as not a secret).
 - [Other kinds of notes](other-row-kinds.md): hotfixes, patterns, playbooks, prompts, snapshots, incidents, behaviours, architecture notes, cookbook recipes, suggestions, taste preferences, tech docs, workflows and workspaces.
 - [Comments and tags](comments-and-tags.md): reply to a row, and label rows so they can be found together.
 - [Bring in notes you already have](import-existing-notes.md): `lore learn-from`, the review tray (`lore learn`), and `lore external-source`.

@@ -203,7 +203,7 @@ $ lore sync conflicts | head -3
 - **The `.lore/lore.db.broken.*` files are not ignored by git.** After a restore or repair, `git status` lists them as new files. Do not commit them (they are whole databases, with private rows in them); move or delete them once you are happy with the result.
 - **Repair tier 2 takes the newest backup, whatever made it.** That can be one of lore's own `…-pre-sync.sqlite` copies, not the one you made. If you want a specific copy, use `lore restore <file> --confirm` instead.
 - **`lore repair --tier=3` is a dead end today.** It creates an empty file, says "run `lore init`", but `lore init` then refuses (`E_ALREADY_INITIALIZED`) and every other command reports `E_DB_CORRUPT`. Get out of it by deleting `.lore/lore.db` and running any lore command (Step 5).
-- **Backups contain everything in the database,** including rows that never go to git (for example a note confirmed with `--yes` as not a secret). Keep `.lore/backups/` out of shared folders; it is in `.gitignore` already.
+- **Backups contain everything in the database,** including rows that never go to git (for example a note kept with `--not-a-secret --reason … --yes`). Keep `.lore/backups/` out of shared folders; it is in `.gitignore` already.
 - **A restore can remove rows from `.lore/data`.** With the default `--prefer db`, rows that are only in the files are deleted from the files. Read `git diff` before you commit.
 - **Backups are per machine.** The database is not in git, so a backup on your laptop does not help a teammate. Shared notes reach them through `.lore/data`.
 

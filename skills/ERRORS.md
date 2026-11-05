@@ -68,7 +68,7 @@ These codes also set the process exit status, so a script or agent can branch on
 | `E_INVALID_UTF8` | input is not valid UTF-8 |
 | `E_BODY_TOO_LARGE` | body exceeds maximum allowed size |
 | `E_INVALID_IDENTIFIER` | identifier contains disallowed character |
-| `E_SECRET_DETECTED` | input contains a credential pattern; refusing to store. In 0.1.18 a write asks first (`E_NEEDS_CONFIRM`); rerun with --yes only after the person confirms it is not a secret |
+| `E_SECRET_DETECTED` | input contains a credential pattern; refusing to store. In 0.1.18 a write asks first (`E_NEEDS_CONFIRM`, with `error.findings[]` and `error.next.add_args_one_of`); a bare `--yes` does not store it. Rerun with one of `--secret-ref "<manager>://<entry>"`, `--secret-unstored`, or `--not-a-secret --reason "<why>" --yes` (only after the person confirms it is not a secret) |
 | `E_ROOT_REFUSED` | lore refuses to run as root; set LORE_ALLOW_ROOT=1 to override |
 | `E_SYMLINK_DB` | DB path is a symlink; refusing for safety. Use --allow-symlink-db to override |
 | `E_SYMLINK_LOOP` | filesystem walk encountered a symlink loop |
@@ -126,8 +126,12 @@ E_AMBIGUOUS_PROJECT
     → both lore.db and lore.toml exist in .lore/. Remove one.
 
 E_SECRET_DETECTED
-    → input matched a credential pattern. Strip the secret OR use
-      --yes once the person confirms it is not a secret (agents ask first).
+    → input matched a credential pattern (0.1.18: E_NEEDS_CONFIRM with
+      error.findings[] and error.next.add_args_one_of). A bare --yes does
+      not store it. Strip the secret, or rerun with one of:
+        --secret-ref "<manager>://<entry>"   (keep a reference instead)
+        --secret-unstored                    (keep the row, drop the value)
+        --not-a-secret --reason "<why>" --yes  (only after the person confirms)
 
 E_ROOT_REFUSED
     → run as your normal user; set LORE_ALLOW_ROOT=1 only if you really

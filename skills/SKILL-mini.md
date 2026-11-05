@@ -589,7 +589,7 @@ P20 migrate to new lore version
 
 ## TEAMS (orgs, live rows, agents)
 
-Tasks are live: they reach everyone at once on any branch and land on main when done (`--live` / `--no-live` per write). In a client repo a note without `--to` goes to the internal store; share on purpose only. Exit 12/13/14 = the task is no longer yours: stop. Agents never approve gates.
+Tasks are live: they reach everyone at once on any branch and land on main when done (`--live` / `--no-live` per write). In a client repo a note without `--to` goes to the internal store; move a note to the client on purpose only (`lore move <id> --to repo`). Exit 12/13/14 = the task is no longer yours: stop. Agents never approve gates.
 
 ```bash
 lore whoami                                           # org, why, identity: run once per repo
@@ -613,7 +613,7 @@ E_DB_NOT_FOUND         DB missing; run lore init or check LORE_DB env
 E_MIGRATION_INCOMPLETE run lore doctor (triggers auto-migrate)
 E_NOT_PROJECT_ROOT     cd to project root or use --db=<path>
 E_AMBIGUOUS_PROJECT    both lore.db and lore.toml exist; remove one
-E_SECRET_DETECTED      strip secret, or --yes after the person confirms it is not a secret
+E_SECRET_DETECTED      strip secret, or --secret-ref "<mgr>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes (bare --yes does not store it)
 E_ROOT_REFUSED         set MINI_ALLOW_ROOT=1 only if truly needed
 E_SYMLINK_DB           DB is a symlink; delete + restore from backup
 E_READ_ONLY            drop --read-only or unset LORE_READ_ONLY

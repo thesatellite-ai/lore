@@ -194,8 +194,7 @@ One name per thing. Real row ids are long (`tsk_01a1985b…`, UUIDv7, `saas/pkg/
 | `lore store init <url> [--branch <b>]`, `lore store show [--links]`, `lore store open`, `lore store forget`, `lore store doctor` | manage stores |
 | `lore org link <org> --project <folder> [--own] [--default]`, `lore org unlink`, `lore org use <entry>`, `lore org set <org> --commit`, `lore org import <url>`, `lore org global <folder>` | org setup |
 | `lore whoami` | the resolved org, identity, sources and the rule that decided |
-| `lore share <id> --to <target>` | copy a row to a wider audience (new id, asks first) |
-| `lore move <id> --to <target>` | relocate a row (asks first when the target is a client repo) |
+| `lore move <id> --to <target>` | relocate a row, keeping its id (asks first when the target is a client repo); replaces `lore share`, which 0.1.18 removed |
 | `lore actor register [--kind agent --label <l> --owner @h]`, `lore actor deactivate`, `lore team add\|list` | roster (`lore actor` inspect exists: `saas/cmd/cli/entity_commands.go:44`) |
 | `lore task claim\|next\|heartbeat\|release\|revoke\|reassign\|note\|merged` | agent coordination (`lore task add\|done\|edit\|list\|show\|start\|cancel` exist) |
 | `lore resource claim\|release <name>` | holds on a shared thing |
@@ -230,7 +229,7 @@ One name per thing. Real row ids are long (`tsk_01a1985b…`, UUIDv7, `saas/pkg/
 | `--mission <id>`, `--repo <name>`, `--all-repos`, `--role <role>`, `--mine`, `--claimed-by <@handle>` | filters on task commands; `--mine` = assigned to me or my team, and unclaimed or claimed by me (`--repo`, `--all-repos` exist: `saas/pkg/constants/flags.go:9`, `:14`) |
 | `--timebox <dur>`, `--ttl <dur>`, `--label <name>`, `--owner <@handle>`, `--kind <kind>` | time box on a task, hold length on a resource, agent label and owner, actor or row kind |
 | `--store <url>` | on `lore org link`: which store to create the folder in |
-| `--strict`, `--yes` | refuse instead of warn (file ownership); confirm without a prompt (never accepted from agent actors on `share`) |
+| `--strict`, `--yes` | refuse instead of warn (file ownership); confirm without a prompt |
 | `--all`, `--ci`, `--explain`, `--merge`, `--refs`, `--signals` | on `land`; on `check leaks`; on `explain` (field decisions, pointers, the claim as seen now) |
 | `--json`, `--trace`, `--dry-run`, `--share`, `--force-org` | machine output (`--json` exists, `saas/pkg/constants/flags.go:11`), tracing, plan only, unredacted output, override an org disagreement |
 
@@ -1145,7 +1144,7 @@ lore: blocked, this commit would share internal content with the client repo:
   src/checkout.ts:42                    matches internal note mem_0b77 (14 words)
   commit message                        matches internal note mem_0c12 (9 words)
 Move it:  lore move mem_0b77 --to agency
-Share it on purpose: lore share mem_0c12 --to repo
+Move it on purpose: lore move mem_0c12 --to repo
 ```
 
 **Contract.**
@@ -1168,7 +1167,7 @@ CI mode (`lore check leaks --ci`, in the client's CI): no store access, ids and 
 out:  findings; with --explain the rule, the source and the matched words
 ```
 
-**Edge cases handled.** Promoting on purpose goes through `lore share`, which mints a new id, so the id rule never fires on a shared copy. Redacted output when not a TTY or when any common CI marker is set (named constant list: `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD`, `BITBUCKET_BUILD_NUMBER`); guard errors on a developer's own terminal or log keep internal ids and paths so the fix is clear (`--share` shows full detail on a terminal). A commit with nothing staged passes the leak hook without reading the store (nothing could match); anything staged needs the store (fail closed). An unreachable store of an org entry whose patterns and links do not match this repo is reported by doctor and whoami, never fatal. What this cannot stop is listed in §6.6.
+**Edge cases handled.** Promoting on purpose goes through `lore move`, which makes the target the row's one home (same id, a tombstone where it was), so the id rule does not fire on the moved row. Redacted output when not a TTY or when any common CI marker is set (named constant list: `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD`, `BITBUCKET_BUILD_NUMBER`); guard errors on a developer's own terminal or log keep internal ids and paths so the fix is clear (`--share` shows full detail on a terminal). A commit with nothing staged passes the leak hook without reading the store (nothing could match); anything staged needs the store (fail closed). An unreachable store of an org entry whose patterns and links do not match this repo is reported by doctor and whoami, never fatal. What this cannot stop is listed in §6.6.
 
 **Test.** Pure `CheckLeaks` over: id elsewhere / reference to internal / text match at 7 and 8 words / allowed actor projection / secret / store offline / CI mode. E2E: cookbook 3 plus a hand-pasted internal sentence in `src/` is blocked; the same in CI mode prints no internal names.
 
@@ -1478,14 +1477,13 @@ F16: the id rule, the text rule (normaliser plus 8-word threshold) and the secre
 ### 6.4 Guard 4: sharing is one deliberate step
 
 ```console
-$ lore share mem_0c12 --to repo
+$ lore move mem_0c12 --to repo
 This becomes visible to everyone with access to client/website:
   "Checkout must support INR and USD"
-Share it? [y/N] y
-✓ shared as mem_9a41 in client/website .lore/data (the internal row mem_0c12 records the copy)
+Move it? [y/N] y
 ```
 
-`lore share` always shows the text and asks. The copy gets a new id and no origin fields; the provenance is stored only in the internal row. Agent actors cannot pass `--yes`, so a prompt injected into a client-writable row ("run `lore share … --yes`") cannot make an agent share. `lore move` works the same way and tombstones the original.
+`lore move` always shows the text and asks. The row keeps its id and has one home: it is written in the client repo with an `_o` trimmed to what the client may see, and the store keeps a tombstone where it was. A row whose text holds `${secret:…}` references is refused for a client repo. (`lore share`, which copied the row under a new id, was removed in 0.1.18; `lore share` now answers unknown command.)
 
 ### 6.5 Other rules
 
@@ -1863,11 +1861,11 @@ $ lore rule add --body "never run migrations from the app container" --live   # 
 
 ```console
 $ lore memory add --body "prune the pnpm store before the Docker build or the image doubles" --to me
-$ lore share mem_1a2b --to agency        # the linked internal project (asks first) → new id mem_7c01
-$ lore share mem_7c01 --to agency/org    # every agency repo (asks first) → new id mem_7c02
+$ lore move mem_1a2b --to agency        # the linked internal project (asks first), same id
+$ lore move mem_1a2b --to agency/org    # every agency repo (asks first), same id
 ```
 
-**Result:** each audience has its own row with its own id; the earlier rows record where they were shared. Nothing points from a wider audience back to a narrower one.
+**Result:** the row has one home at a time and keeps its id; each move leaves a tombstone where it was and records `moved_from` / `moved_to`. Nothing points from a wider audience back to a narrower one. (0.1.17 had `lore share`, which copied under a new id; 0.1.18 removed it.)
 
 </Details>
 
@@ -2665,7 +2663,7 @@ Each phase is usable on its own and ends with a test gate: its flows' matrices (
 |---|---|---|---|
 | **P1 — YAML config, orgs, identity, personal notes, render outside the checkout** | finish and merge `feat/yaml-config`; `~/.lore/config.yaml` with `orgs:` / `stores:` / `own:` / `repos:`; F10 org resolution (steps 1–3, 5, 6; links in P3); per-org identity required; `lore whoami`, `lore explain org`, `lore identity set`, `lore org use`, `lore org set --commit`; personal store with `everywhere/` and per-org folders, `--to me`, `--everywhere` (F17); cache outside the checkout and render to `~/.lore/render` with the `CLAUDE.local.md` import line (F20); `lore config check` | C10, C11, C17 (identity part), C18, C19, C21 | F10, F17, F19, F20 matrices; E8 (without links), E12, E13; render scan proves no internal text in the checkout |
 | **P2 — live rows and landing** | `refs/lore/live` with folders, `--live` / `--no-live`, `live.defaults`; F1 lookup; F2 write; F3 tracking fetch; F4 merge rules; F5 landing (`lore land` with `--all`, `--kind`, `--mission`, `--dry-run`; max-age copy; leave-live content check); F6 ride-along; tombstones and `_purged.json` in lookup; F8 compaction and epochs; `_live/meta.json` version floor; `lore live show\|diff\|log\|compact\|restore\|purge`; `lore explain <id>`; `--trace`; doctor rows | C1–C9, C12 | F1–F6, F8 matrices; E1–E4, E6; `FaultRemote` suite; chaos script for a deleted remote live ref |
-| **P3 — stores, links, roster, leak guards** | `lore store init\|show\|open\|forget\|doctor`; F12 store checks; F13 several stores; F11 link and link index; F10 steps 4 and the fail-closed rule; F14 targets and `defaults.client_repos` from the store's `lore-org.yaml`; F15 references; F16 leak checks (pre-commit, commit-msg, live write, landing, `check pr-body`, `check leaks --ci`); `lore share`, `lore move`; roster (`lore actor register\|deactivate`, `lore team add\|list`, handles); `lore org import\|link\|unlink\|global` | C3 (bare), C15, C16, C20, C22 | F11–F16, F18 matrices; E9, E10, E11; cookbook 3, 4, 12, 13, 14 by hand |
+| **P3 — stores, links, roster, leak guards** | `lore store init\|show\|open\|forget\|doctor`; F12 store checks; F13 several stores; F11 link and link index; F10 steps 4 and the fail-closed rule; F14 targets and `defaults.client_repos` from the store's `lore-org.yaml`; F15 references; F16 leak checks (pre-commit, commit-msg, live write, landing, `check pr-body`, `check leaks --ci`); `lore share` (removed in 0.1.18), `lore move`; roster (`lore actor register\|deactivate`, `lore team add\|list`, handles); `lore org import\|link\|unlink\|global` | C3 (bare), C15, C16, C20, C22 | F11–F16, F18 matrices; E9, E10, E11; cookbook 3, 4, 12, 13, 14 by hand |
 | **P4 — signals and agent coordination** | signals ref (F7) with the ephemeral class; claims, heartbeat daemon and hook, release, revoke, reassign, reclaim with attempts; `lore task next` (§7.3); dependencies with done/merged and cycle checks; F9 merged watching with trailer and GitHub adapter; gates as fields, `gate request\|approve`; notes, handoffs (`--for`), findings, inbox with events, `mission status`, `plan apply`, idempotency keys, `lore agent start`; resource holds; D8 client-repo split; claim log | C8 (commit-msg trailer), C13, C14, C17 (approval part), C23 | F7, F9, §7.3 matrices; E5, E7; the §7.5 worked example run end to end with four sessions; side effect 29 verified on GitHub |
 | **P5 — optional hub** | a small server mirroring data folders, live and signals refs for instant updates, org-wide search and dashboards | everything above; `.lore/data` stays the source of truth | its own spec |
 
@@ -2779,7 +2777,7 @@ All config. An org lists one or several stores (monorepo, per client, or mixed);
 
 <Details summary="14. How does leak protection actually work?">
 
-Four guards: client repos default internal kinds to the internal project (fail closed when unsure); nothing internal is written inside the checkout; checks at commit, commit message, live write, landing and PR body block internal ids and copied text; sharing is one deliberate `lore share` with the text shown. §6.6 lists honestly what hooks cannot stop. Detail: §6, F16.
+Four guards: client repos default internal kinds to the internal project (fail closed when unsure); nothing internal is written inside the checkout; checks at commit, commit message, live write, landing and PR body block internal ids and copied text; sharing is one deliberate `lore move` with the text shown. §6.6 lists honestly what hooks cannot stop. Detail: §6, F16.
 
 **Status:** decided — Updated 2026-11-02
 

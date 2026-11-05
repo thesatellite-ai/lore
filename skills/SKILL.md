@@ -755,7 +755,7 @@ Run `lore whoami` once per repo: it says which org applies, why, and which ident
 - **Tasks are live:** a task you add or edit reaches everyone at once on any branch, and lands on `main` when done. Use `--live` to share a rule or memory at once; `--no-live` keeps a row with your branch.
 - **Never put internal content into a client repo.** Without `--to`, notes in a client repo go to the org's internal store. Before posting a PR body or comment run `lore check pr-body <file>`; a commit carrying internal ids or sentences is refused (`E_LEAK_BLOCKED`, exit 19), and so is a push of one (the pre-push hook). Never pass `--no-verify` to `git commit` or `git push` there: it skips every local check. Move a note to the client on purpose with `lore move <id> --to repo`.
 - **As an agent**, start with `lore agent start --label <name> --owner @<human>` and export what it prints, then loop: `lore inbox`, `lore task next --mission <id>` (exit 10 = no ready work), work, `lore task heartbeat` while working, `lore task note <id> "<progress>"`, `lore task done <id> --pr <n> --lesson "<what you learned>"`. Exit 12, 13 or 14 means the task is no longer yours: stop work on it.
-- **Splitting and claiming (TASK 21.2):** split a task with more than one independent piece or more than about an hour of work (`lore task split <id> --title … --title …`); use checklists for steps within one piece. Claim leaves, not umbrellas: a parent with open sub-tasks is refused (`E_HAS_OPEN_CHILDREN`) unless `--coordinate`, and a split keeps your claim as a coordinator lease. Use ids (`tsk_`, `chk_`), never positions, in scripts. Before closing a parent, read `E_OPEN_CHILDREN` and ask the person whether to cancel or finish the rest, then use `--children` with `--yes`. Tick checklist items that were done before `task done`; `--tick-all` only when every item really was done, `--force` only after the person says so. On any `E_NEEDS_CONFIRM`, show the person the question from `--json`, then re-run the `rerun` command with `--yes`. Create a mission and its tasks from a file with `lore mission apply`, never `lore plan apply`. When a person asks "why this one?", run `lore task next --why --dry-run` or `lore task show <id> --why`.
+- **Splitting and claiming (TASK 21.2):** split a task with more than one independent piece or more than about an hour of work (`lore task split <id> --title … --title …`); use checklists for steps within one piece. Claim leaves, not umbrellas: a parent with open sub-tasks is refused (`E_HAS_OPEN_CHILDREN`) unless `--coordinate`, and a split keeps your claim as a coordinator lease. Use ids (`tsk_`, `chk_`), never positions, in scripts. Before closing a parent, read `E_OPEN_CHILDREN` and ask the person whether to cancel or finish the rest, then use `--children` with `--yes`. Tick checklist items that were done before `task done`; `--tick-all` only when every item really was done, `--force` only after the person says so. On any `E_NEEDS_CONFIRM`, show the person the question from `--json`, then re-run the `rerun` command with `--yes` (a secret finding is the exception: `--yes` alone is not an answer; add one of `error.next.add_args_one_of`). Create a mission and its tasks from a file with `lore mission apply`, never `lore plan apply`. When a person asks "why this one?", run `lore task next --why --dry-run` or `lore task show <id> --why`.
 - **Gates:** an agent never approves; it stops at a gated task until a human runs `lore gate approve <id>`.
 - Findings every agent of a mission should see: `lore finding add --mission <id> "<text>"`. Notes for the next agent: `lore handoff add --for @<handle> --task <id> "<text>"`.
 
@@ -910,7 +910,7 @@ Quick reactions:
 | `E_DB_CORRUPT` / `E_DB_NOT_FOUND` | `lore repair --tier=2 --confirm`. |
 | `E_NOT_PROJECT_ROOT` | Either `cd` to the project, or use `--db=<path>`. |
 | `E_AMBIGUOUS_PROJECT` | Both `lore.db` and `lore.toml` exist — remove one. |
-| `E_SECRET_DETECTED` / `E_NEEDS_CONFIRM` on a secret | Strip the secret. `--yes` only with explicit user consent. |
+| `E_SECRET_DETECTED` / `E_NEEDS_CONFIRM` on a secret | Strip the secret, or rerun with `--secret-ref "<manager>://<entry>"` or `--secret-unstored`. A bare `--yes` does not store it; `--not-a-secret --reason "<why>" --yes` only with explicit user consent. |
 | `E_ROOT_REFUSED` | Set `MINI_ALLOW_ROOT=1` (only if user explicitly wants). |
 | `E_SYMLINK_DB` | DB path is a symlink — delete + restore from backup. |
 | `E_READ_ONLY` | Drop `--read-only` and unset `LORE_READ_ONLY`. |
@@ -927,7 +927,7 @@ Quick reactions:
 | Calling `lore memory add` but skipping `lore render` | Knowledge is in DB but invisible to the agent | Always `render` after capture |
 | Adding a rule for a one-off preference | Pollutes future sessions | Use `memory add` for soft preferences; `rule add` for true constraints |
 | Mixing repo-scoped + master memories without `--repo` | Memories leak into other repos' renders | Always pass `--repo=<mount>` for repo-specific captures |
-| Bypassing secret-scrub without user consent | Leaks credentials into DB | Refuse loudly; rerun with `--yes` only with user OK |
+| Bypassing secret-scrub without user consent | Leaks credentials into DB | Refuse loudly; offer `--secret-ref` / `--secret-unstored`; `--not-a-secret --reason ... --yes` only with user OK |
 | Storing tasks that map 1:1 to GitHub issues | Duplicate state, drift | Use tags + comments to cross-link, don't mirror |
 | Using `rule` when `decision` is right | Rules say WHAT, decisions say WHY | Use `decision add` when the rationale matters more than the conclusion |
 | Adding rules without severity | Defaults to `must` (blocking) | Always set `--severity=must|should|may` explicitly |
@@ -942,7 +942,7 @@ Quick reactions:
 
 1. **Capture is cheap. Forgetting is expensive.** When unsure, write a memory.
 2. **Render after every write.** Otherwise the agent doesn't see it.
-3. **Never bypass secret-scrub silently.** `--yes` on a secret warning requires explicit user consent.
+3. **Never bypass secret-scrub silently.** A bare `--yes` no longer stores a detected secret; `--not-a-secret --reason "<why>" --yes` requires explicit user consent, and `--secret-ref` / `--secret-unstored` are the usual answers.
 4. **Read-only mode is honored.** If `LORE_READ_ONLY=1` or `--read-only`, refuse writes.
 5. **Scope before storing.** Repo-specific → `--repo=<mount>`. Cross-cutting → master.
 6. **Errors are codes, not prose.** Match `E_*` strings; use `lore errors list --json` for the registry.

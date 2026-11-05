@@ -518,9 +518,11 @@ lore run list --json
 
 ### N.1 User pastes content with an embedded API key
 ```bash
-# lore refuses by default with E_SECRET_DETECTED.
-# Only override if user explicitly says "yes, I know, override":
-lore memory add --body "<...>" --yes              # only after the person confirms it is not a secret; the commit hook still refuses a credential
+# lore stops with E_NEEDS_CONFIRM (findings[] + next.add_args_one_of); a bare --yes does not store it.
+lore memory add --body "<...>" --secret-ref "vault://team/deploy-key"   # keep a reference instead of the value
+lore memory add --body "<...>" --secret-unstored                        # keep the note, leave the value out
+# Only if the person explicitly confirms it is not a secret:
+lore memory add --body "<...>" --not-a-secret --reason "<why>" --yes    # the commit hook still refuses a credential
 ```
 
 ### N.2 User runs as root
@@ -670,7 +672,7 @@ lore bench report summary --latest
 ## O · What you should refuse
 
 ### O.1 User: "store this AWS key as a memory"
-**Refuse.** Even if they say "trust me" — the secret-scrubber pattern is broad and the false-positive rate is low. Suggest: store in `.env` (gitignored) or a secrets manager. If they really insist, require the person's explicit yes, then rerun with `--yes`.
+**Refuse.** Even if they say "trust me" — the secret-scrubber pattern is broad and the false-positive rate is low. Suggest: store in `.env` (gitignored) or a secrets manager. Offer `--secret-ref "<manager>://<entry>"` (a reference to where the key lives) or `--secret-unstored`. A bare `--yes` does not store a detected secret; `--not-a-secret --reason "<why>" --yes` is only for text the person explicitly confirms is not a secret.
 
 ### O.2 User: "run lore as root"
 **Refuse by default.** Suggest: chown the directory to the user.
