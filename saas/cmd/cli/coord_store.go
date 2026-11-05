@@ -869,7 +869,79 @@ func (r *clientRows) redact(ctx context.Context, d coord.Doc) coord.Doc {
 	if by := d.Str(keyDoneByDoc); by != "" && r.w.IsAgent() {
 		owner = ownerOf(ctx, by)
 	}
-	return redactClientCopy(d, r.w.IsAgent(), owner)
+	out := redactClientCopy(d, r.w.IsAgent(), owner)
+	r.ownersForAgents(ctx, out)
+	return out
+}
+
+// clientActorKeys are the task fields naming one actor by id.
+var clientActorKeys = []string{keyDoneByDoc, "created_by_actor_id", "assigned_to_actor_id"}
+
+// keyAssigneesDoc is the task's list of assignee actor ids.
+const keyAssigneesDoc = "assignees"
+
+// ownersForAgents rewrites, in a client copy written while agent details
+// stay internal, every actor field that names an agent (this writer or
+// ANOTHER agent) to that agent's owner, or to nobody when no owner is known
+// (r2-actor; Q11 fail closed): the client never learns an agent's id, and
+// no client actor row is needed for it. Persons are left as they are.
+func (r *clientRows) ownersForAgents(ctx context.Context, d coord.Doc) {
+	look := agentOwnerLookup(ctx)
+	for _, k := range clientActorKeys {
+		id := d.Str(k)
+		if id == "" {
+			continue
+		}
+		if owner, agent := look(id); agent {
+			if owner == "" {
+				d[k] = nil
+			} else {
+				d.SetStr(k, owner)
+			}
+		}
+	}
+	list, ok := d[keyAssigneesDoc].([]any)
+	if !ok {
+		return
+	}
+	seen := map[string]bool{}
+	out := make([]any, 0, len(list))
+	for _, v := range list {
+		id, _ := v.(string)
+		if owner, agent := look(id); agent {
+			id = owner
+		}
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	d[keyAssigneesDoc] = out
+}
+
+// agentOwnerLookup answers, for an actor id, its owner and whether it is
+// an agent: from the core roster (kind agent) when the org's roster is on
+// the core, else from the v0.1.17 roster (an actor with an owner is an
+// agent). The roster is read once per lookup function.
+func agentOwnerLookup(ctx context.Context) func(id string) (string, bool) {
+	if cr, err := openCoreRoster(ctx); err == nil && cr != nil {
+		actors, aerr := cr.app.RosterActors(ctx, cr.target)
+		byID := map[string][2]string{}
+		if aerr == nil {
+			for _, a := range actors {
+				byID[a.ID] = [2]string{a.Kind, a.OwnerID}
+			}
+		}
+		return func(id string) (string, bool) {
+			a, ok := byID[id]
+			return a[1], ok && a[0] == identityKindAgent
+		}
+	}
+	return func(id string) (string, bool) {
+		o := ownerOf(ctx, id)
+		return o, o != ""
+	}
 }
 
 // redactClientCopy is the pure D8 rule for a client task row written for an
