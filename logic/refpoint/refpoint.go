@@ -72,8 +72,8 @@ type Options struct {
 	// Scanner scans the expanded text (13.2); nil skips the scan.
 	Scanner scan.Scanner
 	// Meta reads a metadata value of the row being expanded, by key name
-	// (${meta:<key>}, OV13a); nil fills no meta reference. MetaOf builds
-	// it from a row.
+	// (${meta:<key>}, OV13a); nil fills no meta reference. MetaOfWith
+	// builds it from a row and the key registry's sensitive flags (3.20).
 	Meta func(key string) (MetaValue, bool)
 }
 

@@ -33,11 +33,6 @@ type KeyFlagsFunc func(keyID string) bool
 // KeySensitive implements KeyFlags.
 func (f KeyFlagsFunc) KeySensitive(keyID string) bool { return f != nil && f(keyID) }
 
-// MetaOf is MetaOfWith without a registry: only entry labels mask. It
-// stays until both callers (ops/internal/expand, saas/cmd/cli
-// render_private) pass their registry; new code uses MetaOfWith.
-func MetaOf(r row.Row) func(key string) (MetaValue, bool) { return MetaOfWith(r, nil) }
-
 // MetaOfWith is Options.Meta for r: each stored meta entry carries its key
 // name, sensitive flag and value (logic/meta Entry); flags (nil: none) adds
 // the registry's sensitive flag by key id (3.20). The longest entry name
