@@ -229,6 +229,10 @@ func mountCore(root *cobra.Command) {
 	coreRunner = runner
 	if err := cli.Mount(root, app.Registry(), runner,
 		cli.WithInteractive(stdinIsTTY),
+		// --color for the core nouns: style is resolved from --color,
+		// NO_COLOR and FORCE_COLOR before any command runs, and read per
+		// print, so the core's marks follow the old binary's own setting.
+		cli.WithColor(func(cli.Stream) cli.Palette { return cli.Palette{On: style.Enabled()} }),
 	); err != nil {
 		panic(err)
 	}
