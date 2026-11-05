@@ -104,16 +104,47 @@ func (o ops) actorList(ctx context.Context, in ActorListIn) (ActorListOut, error
 	return out, nil
 }
 
+// ActorShowIn is the input of actor.show.
+type ActorShowIn struct {
+	ID string `json:"id" arg:"0" desc:"the actor id"`
+	// Store picks one store's copy of the actor row.
+	Store string `json:"store,omitempty" flag:"store" desc:"show this store's copy of the actor (default: the first attached store that has it, the repo first)"`
+}
+
 // actorShow shows one actor by id (E_NOT_FOUND "actor "<id>" not found").
-func (o ops) actorShow(ctx context.Context, in IDIn) (ActorShowOut, error) {
+// An actor row is written into every store the person writes to under the
+// same deterministic id (the actor row once per store), so the same id in
+// the repo and the personal store `me` is one actor, not an ambiguity:
+// without --store the first copy in store precedence order (the repo
+// first) is shown; --store names one copy.
+func (o ops) actorShow(ctx context.Context, in ActorShowIn) (ActorShowOut, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil || id.Prefix() != ids.PrefixActor {
 		return ActorShowOut{}, errs.New(errs.NotFound, "actor "+work.Quote(in.ID)+" not found").
 			WithHint("use `lore actor list` to see available actor IDs")
 	}
-	src, r, err := work.Get(ctx, o.env, NounActor, schema.TableActors, id)
+	if in.Store == "" {
+		src, r, gerr := work.Get(ctx, o.env, NounActor, schema.TableActors, id)
+		if gerr == nil {
+			return ActorShowOut{SchemaVersion: SchemaVersion, Kind: KindActorShow, Data: actorOf(work.LabelerOf(o.env), work.Sourced{Source: src, Row: r})}, nil
+		}
+		if !errs.Has(gerr, errs.AmbiguousID) {
+			return ActorShowOut{}, gerr
+		}
+	}
+	rows, err := work.ListAll(ctx, o.env, schema.TableActors, in.Store)
 	if err != nil {
 		return ActorShowOut{}, err
 	}
-	return ActorShowOut{SchemaVersion: SchemaVersion, Kind: KindActorShow, Data: actorOf(work.LabelerOf(o.env), work.Sourced{Source: src, Row: r})}, nil
+	for _, s := range rows {
+		if s.Row.ID == id {
+			return ActorShowOut{SchemaVersion: SchemaVersion, Kind: KindActorShow, Data: actorOf(work.LabelerOf(o.env), s)}, nil
+		}
+	}
+	if in.Store == "" {
+		return ActorShowOut{}, errs.New(errs.NotFound, "actor "+work.Quote(in.ID)+" not found").
+			WithHint("use `lore actor list` to see available actor IDs")
+	}
+	return ActorShowOut{}, errs.New(errs.NotFound, "actor "+work.Quote(in.ID)+" not found in store "+work.Quote(in.Store)).
+		WithHint("use `lore actor list --store " + in.Store + "` to see that store's actors")
 }
