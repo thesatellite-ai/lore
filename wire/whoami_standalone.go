@@ -21,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/machine"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -72,8 +73,8 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 		agent = &det
 		w.hookModel(ctx, agent)
 	}
-	m := whoamiMachine(w.opts.Home)
-	return opswhoami.Out{Data: whoamiData(s, id, red, agent, m), Lines: whoamiLines(s, id, in.Explain, red, agent, m)}, nil
+	m, personal := whoamiMachine(w.opts.Home), whoamiPersonal(w.opts.Home)
+	return opswhoami.Out{Data: whoamiData(s, id, red, agent, m, personal), Lines: whoamiLines(s, id, in.Explain, red, agent, m, personal)}, nil
 }
 
 // hookModel fills a model the environment did not expose from the one
@@ -185,13 +186,23 @@ func (r whoamiRedactor) folder(f string) string {
 	return redactedText
 }
 
-// personalFolders are the personal-store folders that load here (F17).
-func personalFolders(org string) []string {
-	if org == "" {
-		return []string{orgconf.PersonalEverywhere}
+// whoamiPersonal is the personal store `me` as one place (G-DECIDE-7):
+// personal.store's url, else the v0.1.17 local folder (~/.lore/personal,
+// `store: local` or present on disk), else "" (not set). Read only: whoami
+// never makes the local store's marker.
+func whoamiPersonal(home string) string {
+	mc, err := readMachineConfig(home)
+	if err != nil {
+		return ""
 	}
-	return []string{org, orgconf.PersonalEverywhere}
+	if u := mc.personalURL(); u != "" {
+		return u
+	}
+	return mc.localPersonalV017(home)
 }
+
+// personalNotSet is the personal row when no personal store is set.
+const personalNotSet = "not set"
 
 // whoamiActorID is the act_ id of a stable key ("" when none).
 func whoamiActorID(key string) string {
@@ -217,10 +228,10 @@ func whoamiWarnings(s *orgcfg.Situation, id identity.Resolved) []string {
 }
 
 // whoamiData is the --json data (v0.1.17 whoamiJSON keys).
-func whoamiData(s *orgcfg.Situation, id identity.Resolved, red whoamiRedactor, agent *agentdetect.Result, m string) opswhoami.Data {
+func whoamiData(s *orgcfg.Situation, id identity.Resolved, red whoamiRedactor, agent *agentdetect.Result, m, personal string) opswhoami.Data {
 	r := s.Result
 	d := opswhoami.Data{Org: r.OrgName(), MatchedBy: red.str(r.MatchedBy), Rule: int(r.Step), RepoRole: string(r.Role),
-		ProjectID: s.ProjectID, Remotes: nonNilStrs(s.Remotes), Personal: personalFolders(r.OrgName()),
+		ProjectID: s.ProjectID, Remotes: nonNilStrs(s.Remotes), Personal: personal,
 		LinkStatus: r.LinkStatus.String(), Warnings: []string{}, Stores: []opswhoami.Store{}, Trace: []opswhoami.Rule{}, Machine: m,
 		Identity: opswhoami.Identity{StableKey: id.StableKey, Name: id.DisplayName, Kind: id.Kind, ActorID: whoamiActorID(id.StableKey), Source: string(id.Step), Session: os.Getenv(identity.EnvSession)}}
 	for _, warn := range whoamiWarnings(s, id) {
@@ -287,7 +298,7 @@ func orgUseHint(cfg *orgconf.Config) string {
 }
 
 // whoamiLines are the human lines (v0.1.17 printWhoami without colour).
-func whoamiLines(s *orgcfg.Situation, id identity.Resolved, explain bool, red whoamiRedactor, agent *agentdetect.Result, m string) []string {
+func whoamiLines(s *orgcfg.Situation, id identity.Resolved, explain bool, red whoamiRedactor, agent *agentdetect.Result, m, personal string) []string {
 	var out []string
 	row := func(label, value string) { out = append(out, fmt.Sprintf("%-*s %s", whoamiLabelWidth, label, value)) }
 	r := s.Result
@@ -314,7 +325,7 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, explain bool, red wh
 	case orgresolve.RoleOwn:
 		row("repo", "own repo  (no client guards)")
 	default:
-		row("repo", "no org  (fallback identity, personal everywhere/ notes only)")
+		row("repo", "no org  (fallback identity)")
 	}
 	if m == "" {
 		row("machine", "(no OS machine id readable here)")
@@ -359,15 +370,11 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, explain bool, red wh
 		}
 	}
 	row("links", r.LinkStatus.String()+"  "+red.str(r.LinkDetail))
-	store := orgconf.PersonalStoreLocal
-	if s.Config != nil && s.Config.Personal.Store != "" {
-		store = s.Config.Personal.Store
+	if personal == "" {
+		row("personal", personalNotSet)
+	} else {
+		row("personal", attach.ReservedMe+" -> "+personal)
 	}
-	pf := personalFolders(r.OrgName())
-	for i := range pf {
-		pf[i] += "/"
-	}
-	row("personal", store+": "+strings.Join(pf, ", "))
 	if !s.HasConfig {
 		row("config", s.ConfigPath+" does not exist (no orgs configured)")
 	}

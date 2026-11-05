@@ -108,15 +108,18 @@ type Agent struct {
 
 // Data is the whoami envelope's data (v0.1.17 whoamiJSON).
 type Data struct {
-	Org        string   `json:"org"`
-	MatchedBy  string   `json:"matched_by"`
-	Rule       int      `json:"rule"`
-	RepoRole   string   `json:"repo_role"`
-	Identity   Identity `json:"identity"`
-	ProjectID  string   `json:"project_id,omitempty"`
-	Remotes    []string `json:"remotes"`
-	Stores     []Store  `json:"stores"`
-	Personal   []string `json:"personal_folders"`
+	Org       string   `json:"org"`
+	MatchedBy string   `json:"matched_by"`
+	Rule      int      `json:"rule"`
+	RepoRole  string   `json:"repo_role"`
+	Identity  Identity `json:"identity"`
+	ProjectID string   `json:"project_id,omitempty"`
+	Remotes   []string `json:"remotes"`
+	Stores    []Store  `json:"stores"`
+	// Personal is the personal store `me` as one place (G-DECIDE-7,
+	// STORE TARGETS: no per-company or everywhere/ split): its url, or the
+	// v0.1.17 local folder; "" when none is set.
+	Personal   string   `json:"personal_store"`
 	LinkStatus string   `json:"link_status"`
 	Trace      []Rule   `json:"trace"`
 	Warnings   []string `json:"warnings"`
