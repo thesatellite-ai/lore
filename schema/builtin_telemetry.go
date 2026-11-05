@@ -10,6 +10,21 @@ import "github.com/thesatellite-ai/lore/model/ids"
 // bench_*, assemble_*, compress_runs, …) is dropped (p3/dropped.md).
 const (
 	TableRuns = "runs"
+	// TablePIIPatterns holds the v0.1.17 custom PII patterns, machine-local
+	// as they were in lore.db (CLI_REFERENCE 2.25). Read-only leftovers: no
+	// scanner reads them and nothing writes them but the one-time
+	// machine_local copy of `lore migrate run` (secret rules are settings
+	// rows now, FORMAT_EVOLUTION step 17); fields are the v0.1.17 column
+	// names so that copy needs no code (P3-PII-1).
+	TablePIIPatterns = "pii_patterns"
+)
+
+// PII pattern fields (v0.1.17 dbent/schema/pii_pattern.go).
+const (
+	FieldPIIName       = "name"
+	FieldPIIRegex      = "regex"
+	FieldPIIEnabled    = "enabled"
+	FieldPIISourceKind = "source_kind"
 )
 
 // Run fields (TIME_TRACKING 4: `lore run start|end|cancel`).
@@ -60,6 +75,12 @@ func telemetryDefs() []TableDef {
 			DateTime(FieldRunCompletedAt),
 			Text(FieldRunNotes, WithWidget(WidgetJSON)),
 			IndexOn(FieldRunProjectID, FieldRunStartedAt),
+		),
+		Table(TablePIIPatterns, ids.PrefixPiiPattern, MachineLocal(), Description("a v0.1.17 custom PII pattern kept read-only; secret rules replaced it"),
+			Text(FieldPIIName, Required()),
+			Text(FieldPIIRegex, Required()),
+			Bool(FieldPIIEnabled),
+			Text(FieldPIISourceKind, Required()),
 		),
 	}
 }

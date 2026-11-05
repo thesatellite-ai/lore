@@ -219,6 +219,10 @@ patterns.superseded_by_id ref
 patterns.tag_ids list[ref]
 patterns.title text required
 patterns.trust_score number
+pii_patterns.enabled bool
+pii_patterns.name text required
+pii_patterns.regex text required
+pii_patterns.source_kind text required
 plans.body text required
 plans.created_by_actor_id ref
 plans.project_id ref required

@@ -85,6 +85,9 @@ var deleteExceptions = map[row.Table]deletePath{
 	// TIME_TRACKING 2.2: a run is ended by run.end or run.cancel; the
 	// design has no run delete (machine-local, P3-LOCAL-3).
 	schema.TableRuns: {none: noRowDelete + "a run is a machine-local log of one attempt: run.end or run.cancel closes it"},
+	// P3-PII-1: v0.1.17 custom PII patterns, kept read-only on the machine
+	// (secret rules replaced them); pii-pattern has only list (CLI_REFERENCE 2.25).
+	schema.TablePIIPatterns: {none: noRowDelete + "a v0.1.17 PII pattern is a read-only leftover; secret rules replaced it"},
 	// Rows that leave only with what owns them (DELETION 3.4 group rule).
 	schema.TableMetaValues:       {none: noRowDelete + "allowed values go to the trash with their key (meta.delete)"},
 	schema.TableKnowledgeRefs:    {none: noRowDelete + "a link goes to the trash with either end (DELETION 3.3, RESOURCES group)"},
