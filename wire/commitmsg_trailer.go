@@ -29,8 +29,9 @@ import (
 const commitMsgFileMode = 0o600
 
 // coordSession is the signals session of who: an agent's LORE_SESSION when
-// set, else the person's stable key and this host (coordWorld.session's
-// rule; one session per person per machine).
+// set, else the person's stable key and this host (one session per person
+// per machine). coordWorld.session calls it: the claim side and the hook
+// share this one rule.
 func coordSession(who identity.Resolved) string {
 	if who.Kind == identity.KindAgent {
 		if v := strings.TrimSpace(os.Getenv(identity.EnvSession)); v != "" {

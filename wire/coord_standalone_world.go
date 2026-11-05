@@ -407,16 +407,10 @@ func (w *coordWorld) applyLease(l *orgconf.Lease) {
 func (w *coordWorld) isAgent() bool { return w.who.Kind == identity.KindAgent }
 
 // session is LORE_SESSION for an agent; for a person `<stable_key>@<host>`
-// (one person at one machine is one holder; v0.1.17 humanSession).
-func (w *coordWorld) session() string {
-	if w.isAgent() {
-		if v := strings.TrimSpace(os.Getenv(identity.EnvSession)); v != "" {
-			return v
-		}
-	}
-	host, _ := os.Hostname() // no host name: the key alone still names the person
-	return w.who.StableKey + humanSessionSeparator + host
-}
+// (one person at one machine is one holder; v0.1.17 humanSession). It is
+// coordSession, the one rule the commit-msg hook also uses, so a claim and
+// the Lore-Task trailer always name the same session.
+func (w *coordWorld) session() string { return coordSession(w.who) }
 
 // caller is the signals caller (v0.1.17 coordWorld.Caller).
 func (w *coordWorld) caller() signals.Caller {
