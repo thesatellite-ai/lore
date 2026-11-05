@@ -19,11 +19,13 @@ const envRemovedSyncAllow = "LORE_SYNC_ALLOW_SECRETS"
 // (a note each, with the command that turns it back on: what is NOT being
 // scanned must be visible), and warns when the removed
 // LORE_SYNC_ALLOW_SECRETS is still set, because a person relying on it
-// believes secrets pass while every hook refuses them.
+// believes secrets pass while every hook refuses them. envCheck is false
+// under the doctor operation, which runs that warning in the core
+// (wire.DoctorRemovedEnv), so it is printed once.
 //
 //	doctor → env check → secrets.rules (registry op) → state == off → note
-func doctorSecretRules(ctx context.Context, r *doctorReport) {
-	if os.Getenv(envRemovedSyncAllow) != "" {
+func doctorSecretRules(ctx context.Context, r *doctorReport, envCheck bool) {
+	if envCheck && os.Getenv(envRemovedSyncAllow) != "" {
 		r.Warnings = append(r.Warnings, envRemovedSyncAllow+" is set but does nothing since 0.1.18 (the hooks always scan); unset it, and switch one rule off with `lore secrets rule off <id> --reason …` instead")
 		degrade(r)
 	}

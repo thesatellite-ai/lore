@@ -192,7 +192,9 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 	// 7. Resurrected rows: a live row file whose id its folder lists in
 	// _purged.json (an old clone or a hand copy brought it back). One
 	// check only (resurrectedFindings, doctor_stores.go).
-	if coreApp != nil {
+	// The doctor operation runs it in the core (wire.DoctorResurrected):
+	// only the support bundle's full runDoctor still runs it here.
+	if coreApp != nil && !f.skipCore {
 		for _, msg := range resurrectedFindings(ctx) {
 			r.Warnings = append(r.Warnings, msg)
 			degrade(r)
@@ -204,7 +206,9 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 		repoTop = filepath.Dir(filepath.Dir(rctx.DBPath))
 	}
 	home, _ := loreHome()
-	doctorCaches(ctx, repoTop, home, r)
+	if !f.skipCore { // the doctor operation runs it in the core (wire.DoctorCaches)
+		doctorCaches(ctx, repoTop, home, r)
+	}
 	doctorTimeOutbox(ctx, home, r)      // TIME 11.9: run time queued on this machine (doctor_local.go)
 	doctorTeamVersions(ctx, repoTop, r) // OQ7 Team versions
 	for _, q := range metaQuarantineLines(ctx) {
@@ -226,7 +230,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 	doctorTrash(ctx, r)                // DELETION 3.8: rows past trash.retention_days, tombstones
 	doctorUnclassifiedSettings(ctx, r) // CFG12: v0.1.17 settings left in place (doctor_local.go)
 	// 10b. Secret rules that are off + leftover LORE_SYNC_ALLOW_SECRETS (D2/D3, doctor_secrets.go).
-	doctorSecretRules(ctx, r)
+	doctorSecretRules(ctx, r, !f.skipCore) // the env warning runs in the core for the operation (wire.DoctorRemovedEnv)
 	// 11. Context budget and launch set (CONTEXT_BUDGET 6.11, CQ7).
 	if repoTop != "" {
 		cw, cn := contextDoctor(ctx, repoTop)
