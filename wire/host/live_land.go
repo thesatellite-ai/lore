@@ -58,13 +58,18 @@ const (
 	purgedFormatV1   = 1
 )
 
-// purgedIDs decodes a _purged.json. A file that does not decode or whose
-// "ids" is not a list is an error, never an empty set (purged rows would
-// come back); non-string entries name no row and are skipped.
+// purgedIDs decodes a _purged.json. A file that does not decode, has no
+// readable "_v" (or a newer one than this lore writes), or whose "ids" is
+// not a list is an error, never an empty set (purged rows would come back;
+// P3-LIVE-2, v0.1.17 lsync.PurgedIDs); non-string entries name no row and
+// are skipped.
 func purgedIDs(b []byte) (canonjson.Object, []string, error) {
 	doc, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", purgedFileName, err)
+	}
+	if err = purgedVersionOK(doc); err != nil {
+		return nil, nil, err
 	}
 	raw, has := doc[purgedKeyIDs]
 	if !has {
@@ -81,6 +86,28 @@ func purgedIDs(b []byte) (canonjson.Object, []string, error) {
 		}
 	}
 	return doc, out, nil
+}
+
+// purgedVersionOK checks a _purged.json's "_v": present, an integer, at
+// least 1 and not above purgedFormatV1 (a newer file may hold ids in a
+// shape this lore cannot read; reading it as fewer ids would resurrect).
+func purgedVersionOK(doc canonjson.Object) error {
+	raw, has := doc[purgedKeyVersion]
+	if !has {
+		return fmt.Errorf("%s: missing %q", purgedFileName, purgedKeyVersion)
+	}
+	num, ok := raw.AsNumber()
+	if !ok {
+		return fmt.Errorf("%s: %q is not a number", purgedFileName, purgedKeyVersion)
+	}
+	n, err := strconv.Atoi(num)
+	if err != nil || n < 1 {
+		return fmt.Errorf("%s: bad %q %s", purgedFileName, purgedKeyVersion, num)
+	}
+	if n > purgedFormatV1 {
+		return fmt.Errorf("%s: %q is %d, this lore understands %d: upgrade lore", purgedFileName, purgedKeyVersion, n, purgedFormatV1)
+	}
+	return nil
 }
 
 // addPurged is live.Layout.AddPurged: existing (nil when absent) plus ids,

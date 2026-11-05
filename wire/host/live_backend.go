@@ -311,6 +311,9 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		prev, inLive := files[k]
 		chosen := liveChosen(ctx, ch.Row.Table) && liveReadable(s, ch.Row.Table)
 		if !chosen && !isLiveKind(s, ch.Row.Table) && (!inLive || !liveReadable(s, ch.Row.Table)) {
+			if ch, err = b.landedExpect(ctx, s, files, ch); err != nil {
+				return err
+			}
 			branch = append(branch, ch)
 			continue
 		}
@@ -324,6 +327,9 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 			place = rowroute.PlaceLive
 		}
 		if place != rowroute.PlaceLive {
+			if !inLive {
+				ch = b.overLanded(ctx, s, ch, branchRow, inBranch)
+			}
 			branch = append(branch, ch)
 			continue
 		}
@@ -572,6 +578,19 @@ func (b *liveBackend) WriteAudited(ctx context.Context, changes []store.Change, 
 		if !branch {
 			return b.Write(ctx, changes)
 		}
+		// The journal writes the batch as given: a read-through edit must
+		// expect the branch copy first, as Write's branch rows do.
+		_, files, err := b.liveFiles(ctx, s)
+		if err != nil {
+			return err
+		}
+		out := make([]store.Change, len(changes))
+		for i, ch := range changes {
+			if out[i], err = b.landedExpect(ctx, s, files, ch); err != nil {
+				return err
+			}
+		}
+		changes = out
 		if err := s.h.leakCheckBranch(ctx, b.folder, changes); err != nil {
 			return err // F16 before the branch write, as Write does
 		}
@@ -666,4 +685,44 @@ func (b *liveBackend) Purged(ctx context.Context) (map[string]bool, error) {
 		return p.Purged(ctx)
 	}
 	return map[string]bool{}, nil
+}
+
+// landedExpect is overLanded for a branch-bound change whose branch copy
+// is not known yet; a live row keeps its Expect (Get served the live copy).
+func (b *liveBackend) landedExpect(ctx context.Context, s *liveSession, files map[live.RowKey]live.File, ch store.Change) (store.Change, error) {
+	if ch.Expect.IsZero() || !liveReadable(s, ch.Row.Table) {
+		return ch, nil // Get reads through only live-readable tables
+	}
+	if _, inLive := files[keyOf(ch.Row)]; inLive {
+		return ch, nil
+	}
+	branchRow, berr := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID)
+	if berr != nil && !errors.Is(berr, store.ErrNotFound) {
+		return ch, berr
+	}
+	return b.overLanded(ctx, s, ch, branchRow, berr == nil), nil
+}
+
+// overLanded rewrites the Expect of a branch-bound edit of a row Get read
+// through from origin/<default> (landedCopy, F1): the caller expects the
+// landed copy, but the branch file the edit replaces is the work tree's
+// older copy (found) or none, so the branch write would refuse it as
+// stale (t-old2: `memory archive` after a committed local delete of a
+// row still on origin/main was E_STALE). Only an Expect that names exactly
+// the landed copy is rewritten; a stale read stays stale. v0.1.17
+// live_core.go materialiseLanded / overLanded.
+func (b *liveBackend) overLanded(ctx context.Context, s *liveSession, ch store.Change, branchRow store.Row, found bool) store.Change {
+	if ch.Expect.IsZero() {
+		return ch
+	}
+	landed, ok := b.landedCopy(ctx, s, keyOf(ch.Row), branchRow, found)
+	if !ok || landed.HLC.Compare(ch.Expect) != 0 {
+		return ch
+	}
+	if found {
+		ch.Expect = branchRow.HLC
+	} else {
+		ch.Expect = hlc.HLC{}
+	}
+	return ch
 }
