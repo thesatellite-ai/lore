@@ -224,7 +224,30 @@ func Select(ctx context.Context, env Lister, f Flags, rows []row.Row) (Result, e
 			res.Notes = append(res.Notes, line)
 		}
 	}
+	if len(f.Meta) > 0 && filtersSensitive(keys, p.Columns) {
+		res.Notes = append(res.Notes, noteSensitiveFilter)
+	}
 	return res, nil
+}
+
+// noteSensitiveFilter is METADATA 3.20's line under a list whose --meta
+// filter named a sensitive key: the filter compared the stored values,
+// the list prints them masked.
+const noteSensitiveFilter = "note: filtered on a sensitive key; values are masked"
+
+// filtersSensitive reports whether a filtered column (a key name or key
+// id, with any scope prefix, type suffix or dotted field; columnKey) is a
+// sensitive key.
+func filtersSensitive(keys []metafilter.Key, cols []string) bool {
+	for _, c := range cols {
+		top := columnKey(c)
+		for _, k := range keys {
+			if k.Sensitive && (k.Name == top || k.ID.String() == top) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // columnLine is "meta: <id>  key=value  key=value" for the filtered key
