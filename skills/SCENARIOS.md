@@ -257,7 +257,7 @@ lore render --dry-run | less
 
 ### E.3 "Render for a specific repo"
 ```bash
-lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
+(cd web && lore render)   # render runs in the repo it renders
 ```
 
 ### E.4 "Also stitch the pointer into AGENTS.md for Codex"

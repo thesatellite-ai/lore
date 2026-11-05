@@ -29,9 +29,10 @@ lore memory add --body="Run the API tests before you push"     --repo=api
 lore memory add --body="All times are shown in the user's own time zone"
 lore memory add --body="Never put passwords in the code"
 
-lore render --repo=app   --target=../app/CLAUDE.md
-lore render --repo=admin --target=../admin/CLAUDE.md
-lore render --repo=api   --target=../api/CLAUDE.md
+# render runs in the repo it renders (no --repo on render)
+(cd ../app   && lore render)
+(cd ../admin && lore render)
+(cd ../api   && lore render)
 ```
 
 ## What each repo's CLAUDE.md contains

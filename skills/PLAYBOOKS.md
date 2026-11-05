@@ -99,9 +99,9 @@ lore memory add --body="Client charges in USD"
 lore memory add --body="All times in UTC"
 
 # Render per repo (each gets only its repo + master)
-cd web   && lore render --repo=web
-cd admin && lore render --repo=admin
-cd api   && lore render --repo=api
+(cd web   && lore render)   # render runs in the repo it renders
+(cd admin && lore render)
+(cd api   && lore render)
 ```
 
 Search defaults to "current repo + master". To search elsewhere:
@@ -404,7 +404,7 @@ When the rendered knowledge grows large and you want a focused view:
 
 ```bash
 # Per-repo render (that repo's rows + master)
-lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
+(cd web && lore render)   # each repo renders its own rows + master
 
 # Note: a plain `lore render` always includes project-master + project rows;
 # there is no master-only render flag. Use --repo to narrow to a repo slice.

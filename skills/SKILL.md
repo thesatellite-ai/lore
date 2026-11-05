@@ -517,7 +517,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "stitch the pointer into AGENTS.md instead" | `lore render --target=AGENTS.md` |
 | "put the generated file somewhere else" | `lore render --out=docs/LORE.md` |
 | "write the generated file only, leave CLAUDE.md alone" | `lore render --no-pointer` |
-| "render just one repo's slice" | `lore render --repo=<mount> --out=<mount>/.lore/LORE.md --target=<mount>/CLAUDE.md` |
+| "render just one repo's slice" | `cd <repo> && lore render` (render runs in the repo it renders; no `--repo`) |
 | "what did the agent actually see?" | `lore why-context` |
 
 ### What's pinned in `.lore/LORE.md` vs searched on demand
@@ -782,31 +782,23 @@ lore
 
 ---
 
-## 7b · Entities with NO CLI (intentionally)
+## 7b · Where rows live: files, the cache and `lore sql`
 
-The DB has ~63 ent entities. ~32 have user-facing CLI commands (above). The rest are **internal-only** — managed by the system, not the user. Do NOT instruct the user to `add/list/show` these:
+**The row files are the truth.** Every shared row is one JSON file, `.lore/data/<table>/<id>.json` (or the same path inside an attached store). `.lore/lore.db` and the per-store cache files are rebuilt from those files at run time; never edit them, and never tell the user to. The same table names are what `lore sql` reads: each table `<t>` is also a view `<t>_all` with a leading `source` column (which attached store the row came from), e.g. `lore sql "SELECT source, count(*) FROM memories_all GROUP BY source"`.
 
-| Internal entity | Why no CLI |
-|---|---|
-| `audit_log` | append-only; querying is forensic (direct SQL or v0.2 `audit search`) |
-| `schema_migration`, `dbconfig`, `projectconfig`, `config` | self-managed at startup |
-| `knowledge_ref`, `memory_code_ref`, `rule_verifier_ref` | join tables |
-| `code_file`, `code_symbols` | v0.2 code-indexing pipeline |
-| `interventionmetric`, `taskview`, `knowledge_revision`, `activityarchive` | analytics + history; read via SQL or v0.2 |
-| `assemble_run`, `assemble_citation` | retrieval pipeline runs |
-| `compress_run`, `learn_run` | background runs |
-| `external_source` | plugin protocol (v0.2) |
-| `identity_profile` | actor backing; manage via `identity` cmd |
-| `pii_pattern`, `trusted_plugin` | security registries (v0.2) |
-| `actor` | resolved via 8-step chain; `identity` cmd is the surface |
-| `entitytag` | backing for `tag attach`; never touched directly |
-| `draft` | v0.2 staging |
-| `tech_doc`, `tech_doc_page` | schema exists; CLI lands in v0.2 |
-| `snapshot` | schema exists; CLI lands in v0.2 |
+| Group | Tables (`.lore/data/<table>/`, and `lore sql` names) | Written with |
+|---|---|---|
+| knowledge | `rules`, `memories`, `decisions`, `hotfixes`, `patterns`, `playbooks`, `prompts`, `snapshots`, `incidents`, `behaviours`, `suggestions`, `taste_prefs`, `architecture_notes`, `cookbook_recipes`, `workflows`, `workspaces`, `tech_docs`, `external_sources` | `lore <kind> add\|edit\|archive\|delete` |
+| work | `tasks`, `task_lists`, `task_views`, `task_templates`, `missions`, `plans`, `handoffs`, `reminders` | `lore task …`, `lore mission …`, `lore handoff add`, `lore reminder …` |
+| links | `comments`, `tags`, `commit_links`, `knowledge_refs`, `rule_verifier_refs` | `lore comment`, `lore tag`, `lore link`, `--supersedes` and friends |
+| people and places | `actors`, `teams`, `machines`, `projects`, `repos`, `scopes` | `lore identity`, `lore agent start`, `lore actor`, `lore project`, `lore repo`; `machines` is written by lore itself |
+| settings | `policies`, `meta_keys`, `meta_values`, `kinds`, `kind_fields`, `vars`, `secret_rules`, `secret_allows` | `lore policy set`, `lore meta …`, `lore resource kind …`, `lore vars set`, `lore secrets rule …`, `lore secrets allow` |
+| resources | `resources` (one row per resource; the cache also builds a typed `res_<kind>` table per kind) | `lore resource …` |
+| this machine only | `runs`, `pii_patterns` (in the machine store, never in git) | `lore run start\|end\|cancel`; `pii_patterns` is read-only (v0.1.17 leftovers) |
 
-If the user asks about one of these by name, point them at the underlying user-facing command (e.g., `tag attach` for entity_tags) or note that it's deferred to v0.2.
+**Cache-only tables** (built from the row files, never stored, never written by hand): the full-text search tables (`lore search status` lists them), one join table per tag relation (`memory_tags`, `repo_tags`, …), `row_refs` and `row_expanded` (the `${…}` references inside rows), `time_spent` (a task's tracked time), and the `<t>_all` views above. `lore search rebuild` rebuilds them.
 
----
+If the user asks for a v0.1.17 table that is gone (`audit_log`, `learn_candidates`, `bench_*`, `query_logs`, `mount_alias`, `trusted_plugins`, `identity_profiles`, …), say it is not in 0.1.18: the audit trail is `lore audit log`, identity lives in `~/.lore/config.yaml`, and the rest has no 0.1.18 command.
 
 ## 8 · JSON output contract
 

@@ -113,7 +113,7 @@ Preview without writing?   → lore render --dry-run        (prints the .lore/LO
 Different pointer file?    → lore render --target=AGENTS.md
 Different generated path?  → lore render --out=docs/LORE.md
 Generated file only?       → lore render --no-pointer
-Different scope?           → lore render --repo=<mount>
+Different scope?           → cd <repo> && lore render
 ```
 
 ## What goes into `.lore/LORE.md` vs what lives in search

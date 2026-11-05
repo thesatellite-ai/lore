@@ -413,8 +413,8 @@ P5  multi-repo scoping
     lore repo add api   --origin=git@…
     lore memory add --body="<web-only fact>"  --repo=web
     lore memory add --body="<cross-cutting>"
-    lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
-    lore render --repo=api --out=api/.lore/LORE.md --target=api/CLAUDE.md
+    (cd web && lore render)
+    (cd api && lore render)
 
 P6  notes shared by sibling projects (a store; Mode B is retired)
     lore store init shared "file://$HOME/stores/shared"   # first repo
@@ -499,7 +499,7 @@ P18 audit log forensics
       "SELECT tx_at,actor_id,op,entity_id FROM audit_log WHERE entity_table='rules' ORDER BY tx_at DESC LIMIT 20"
 
 P19 render slice (budget control)
-    lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
+    (cd web && lore render)
     # plain `lore render` is always project-master + project; no master-only flag
     lore render --dry-run | wc -c
 
