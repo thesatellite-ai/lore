@@ -277,5 +277,5 @@ func linkError(err error) error {
 	if errors.As(err, &le) {
 		return err
 	}
-	return errs.Wrap(errs.Internal, "wire: write the link", err)
+	return errs.Wrap(errs.Internal, "wire: write the link: "+err.Error(), err)
 }

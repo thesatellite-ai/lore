@@ -18,9 +18,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -103,6 +106,13 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 	res := LinkWriteResult{StoreURL: target, NoPush: !g.autopush(o.Live)}
 	dir := g.cloneDirOf(target)
 	branch := w.Plan.Branch
+	// One writer per clone: processes share the clone (§5.3), and two
+	// racing commits would fight over its refs (F11 race).
+	unlock, err := lockClone(ctx, dir)
+	if err != nil {
+		return res, err
+	}
+	defer unlock()
 	for attempt := 0; attempt <= linkPushRetries; attempt++ {
 		offline := false
 		if attempt > 0 {
@@ -115,6 +125,14 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 		repo, err := gitref.Open(ctx, dir, nil)
 		if err != nil {
 			return res, err
+		}
+		if attempt > 0 && !offline {
+			// The push lost a race: build on the remote's new tip (the
+			// local branch holds this run's rejected commit, which would
+			// never fast-forward).
+			if t, tok, terr := repo.ResolveRef(ctx, trackingRef(branch)); terr == nil && tok {
+				tip = t
+			}
 		}
 		if _, found, merr := repo.ReadFile(ctx, tip, storeMarkerFile); merr != nil || !found {
 			return res, fmt.Errorf("%w: %s@%s has no %s", ErrNotAStore, target, branch, storeMarkerFile)
@@ -136,9 +154,9 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 				return res, fmt.Errorf("orgcfg: commit on %s: %w", branch, cerr)
 			}
 			oid = c.OID
-			if err := moveRef(ctx, repo, localRef(branch), oid); err != nil {
-				return res, err
-			}
+		}
+		if err := moveRef(ctx, repo, localRef(branch), oid); err != nil {
+			return res, err
 		}
 		if res.NoPush || offline {
 			res.Offline = offline
@@ -249,7 +267,13 @@ func (g *GitLinks) pickLinkStore(ctx context.Context, plan orgresolve.LinkPlan) 
 		if berr := ensureBare(ctx, dir, sc.URL); berr != nil {
 			return "", berr
 		}
-		if ferr := fetch(ctx, dir); ferr != nil {
+		unlock, lerr := lockClone(ctx, dir)
+		if lerr != nil {
+			return "", lerr
+		}
+		ferr := fetch(ctx, dir)
+		unlock()
+		if ferr != nil {
 			if lastFetch(dir).IsZero() {
 				return "", fmt.Errorf("%w: %s (cannot tell which store holds %s/)", ErrStoreOffline, n, plan.Folder)
 			}
@@ -329,4 +353,48 @@ func pushRejected(out string, err error) bool {
 		}
 	}
 	return false
+}
+
+// Clone lock: an O_EXCL file in the clone's state folder, polled; a lock
+// older than cloneLockStale is a crashed holder's and is taken over.
+const (
+	cloneLockFile  = "link.lock"
+	cloneLockPoll  = 50 * time.Millisecond
+	cloneLockWait  = 60 * time.Second
+	cloneLockStale = 2 * time.Minute
+)
+
+// ErrCloneBusy means another process held the clone for cloneLockWait.
+var ErrCloneBusy = errors.New("orgcfg: the store clone is busy (another lore command holds it)")
+
+// lockClone takes the clone's write lock; the returned func releases it.
+func lockClone(ctx context.Context, dir string) (func(), error) {
+	sdir := filepath.Join(dir, cloneStateDir)
+	if err := os.MkdirAll(sdir, cloneDirMode); err != nil {
+		return nil, fmt.Errorf("orgcfg: create clone state dir: %w", err)
+	}
+	path := filepath.Join(sdir, cloneLockFile)
+	deadline := time.Now().Add(cloneLockWait)
+	for {
+		f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_EXCL|os.O_WRONLY, cloneFileMode)
+		if err == nil {
+			_ = f.Close() // the file's existence is the lock
+			return func() { _ = os.Remove(path) }, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, fmt.Errorf("orgcfg: lock the store clone: %w", err)
+		}
+		if fi, serr := os.Stat(path); serr == nil && time.Since(fi.ModTime()) > cloneLockStale {
+			_ = os.Remove(path) // a crashed holder's lock
+			continue
+		}
+		if time.Now().After(deadline) {
+			return nil, ErrCloneBusy
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(cloneLockPoll):
+		}
+	}
 }

@@ -272,6 +272,10 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		if !ok {
 			continue // the store has no such branch yet: no links
 		}
+		// F12/E10: a code repo listed as a store is refused, never read.
+		if cerr := checkStoreTree(ctx, dir, tip, norm, branch); cerr != nil {
+			return nil, entryUnknown, "", cerr
+		}
 		links, err := readLinks(ctx, dir, tip)
 		if err != nil {
 			return nil, entryUnknown, o.Name + ": " + err.Error(), nil
