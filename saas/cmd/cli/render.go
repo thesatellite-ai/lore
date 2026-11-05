@@ -57,6 +57,8 @@ type renderFlags struct {
 	dryRun    bool
 	// report, check and asJSON: CONTEXT_BUDGET 6.11 (write nothing).
 	report bool
+	// scopes adds the per-file, per-tool table and chain sums (6.2.6).
+	scopes bool
 	check  bool
 	asJSON bool
 	// trend: 6.11 bytes per render, growth per day (render_trend.go).
@@ -117,6 +119,7 @@ replaced in place on re-run. Pass --no-pointer to skip stitching, or
 	cmd.Flags().BoolVar(&f.noPointer, constants.FlagNoPointer, false, "do not stitch the pointer into the agent file")
 	cmd.Flags().BoolVar(&f.dryRun, constants.FlagDryRun, false, "print to stdout instead of writing file")
 	cmd.Flags().BoolVar(&f.report, flagRenderReport, false, "print the budget report (what is full, what is a line, what moved out) and write nothing")
+	cmd.Flags().BoolVar(&f.scopes, flagRenderScopes, false, "with --report: one row per generated file per tool, plus the Codex and Claude Code chain sums")
 	cmd.Flags().BoolVar(&f.check, flagRenderCheck, false, "CI check: write nothing, fail when LORE.md would be over the warn level or the budget")
 	cmd.Flags().BoolVar(&f.asJSON, constants.FlagJSON, false, "with --report or --trend: machine-readable output")
 	cmd.Flags().BoolVar(&f.trend, flagRenderTrend, false, "bytes per render over the last 14 days, growth per day and when LORE.md reaches its budget; writes nothing")
@@ -144,6 +147,9 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	repoID, err := resolveRepoID(ctx, client, projectID, rctx.RepoMount)
 	if err != nil {
 		return err
+	}
+	if f.scopes && !f.report {
+		return errcodes.New(errcodes.InvalidInput, "--scopes needs --report").WithHint("run `lore render --report --scopes`")
 	}
 	if f.trend { // 6.11: read-only, from render_history
 		return renderTrend(ctx, client, projectID, f)
@@ -206,6 +212,20 @@ func runRender(ctx context.Context, f *renderFlags) error {
 	report.File, report.Before = f.outPath, len(full)
 	report.Dirs, report.DirsOff = dirReps, !dirs.Settings.On && len(dirs.All) > 0
 
+	if f.report && f.scopes {
+		// 6.2.6: the per-file table; writes nothing.
+		sr := buildScopeReport(ctx, report, dirs, dirBodies, dirReps, pick.targets)
+		if f.asJSON {
+			data, jerr := sr.jsonBody()
+			if jerr != nil {
+				return errcodes.New(errcodes.Internal, "encode report").WithCause(jerr)
+			}
+			fmt.Println(string(data))
+			return nil
+		}
+		fmt.Print(sr.text())
+		return nil
+	}
 	if f.report {
 		// 6.11: --report writes nothing.
 		if f.asJSON {
