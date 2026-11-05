@@ -72,7 +72,11 @@ func (a *App) StoreIdentities(ctx context.Context) ([]StoreIdentity, error) {
 // agentdetect table, 6.3), whether stdin is a terminal (OQ11), the
 // ancestor walk (adapters/procwalk) and the package.json reader for the
 // tool version (OQ12). Plugin detectors (PQ1) are not wired yet.
+// In loretest builds LORE_NO_DETECT=1 makes it see nothing (cl-gate).
 func DetectAgent() (agentdetect.Result, error) {
+	if identity.DetectionOff() {
+		return agentdetect.Result{}, nil
+	}
 	return agentdetect.Detect(agentdetect.Inputs{Getenv: os.Getenv, TTY: stdinTTY(), Procs: procwalk.New(), Files: machine.OSFiles{}})
 }
 

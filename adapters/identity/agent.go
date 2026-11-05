@@ -35,8 +35,8 @@ func Resolve(ctx context.Context, in Inputs) (Resolved, error) {
 	if r.Kind == KindAgent {
 		r.Agent = r.StableKey
 	}
-	if in.Detect == nil {
-		return r, nil
+	if in.Detect == nil || DetectionOff() {
+		return r, nil // DetectionOff: loretest-only LORE_NO_DETECT (cl-gate)
 	}
 	det, derr := in.Detect()
 	if derr != nil {
