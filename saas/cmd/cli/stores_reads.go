@@ -94,19 +94,49 @@ func externalJSONRowsExcept(ctx context.Context, table, text string, skip map[st
 // Source is "store:<org>/<folder>" or "personal:<folder>".
 //
 // FLAG1 (owner C): `_source` is {store, store_id, folder, folder_id}, the
-// same object the core prints, so scripts read one shape. These v0.1.17
-// stores have no sto_ id (their marker predates it) and the cache row
-// does not carry the folder's prj_ id, so only the names are filled; the
-// personal store is "me" (its attached name, personalStoreEntry). Any
-// other Source is kept as the store name alone.
+// same object the core prints, so scripts read one shape. The cache row
+// carries only names; the ids come from the core when it attaches the same
+// store (withCoreIDs: store_id from the store's marker, folder_id when the
+// core attached that very folder). A v0.1.17 store the core does not
+// attach keeps the names alone. The personal store is "me" (its attached
+// name, personalStoreEntry). Any other Source is kept as the store name
+// alone.
 func externalSource(src string) store.SourceRef {
 	kind, rest, _ := strings.Cut(src, ":")
 	switch kind {
 	case cachedb.SourceStore:
 		org, folder, _ := strings.Cut(rest, "/")
-		return store.SourceRef{Store: org, Folder: folder}
+		return withCoreIDs(store.SourceRef{Store: org, Folder: folder})
 	case cachedb.SourcePersonal:
-		return store.SourceRef{Store: personalStoreEntry, Folder: rest}
+		return withCoreIDs(store.SourceRef{Store: personalStoreEntry, Folder: rest})
 	}
 	return store.SourceRef{Store: src}
+}
+
+// withCoreIDs fills ref's store_id and folder_id from the core's
+// description of the same store (FLAG1, r2-source): the attached name
+// "<store>/<folder>" first, then the bare store name. The store id is
+// taken from either; the folder id only when the described folder is
+// ref's folder (another folder's prj_ id would be wrong).
+func withCoreIDs(ref store.SourceRef) store.SourceRef {
+	if coreApp == nil {
+		return ref
+	}
+	names := []store.Source{store.Source(ref.Store)}
+	if ref.Folder != "" {
+		names = append([]store.Source{store.Source(ref.Store + "/" + ref.Folder)}, names...)
+	}
+	for _, n := range names {
+		d := coreApp.DescribeSource(n)
+		if d.Store != ref.Store {
+			continue
+		}
+		if ref.StoreID.IsZero() && !d.StoreID.IsZero() {
+			ref.StoreID = d.StoreID
+		}
+		if ref.FolderID.IsZero() && d.Folder == ref.Folder && !d.FolderID.IsZero() {
+			ref.FolderID = d.FolderID
+		}
+	}
+	return ref
 }
