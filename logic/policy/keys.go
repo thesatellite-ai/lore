@@ -26,8 +26,10 @@ const (
 	// KeyMetaWarnBytes: row metadata larger than this prints the "looks like content" warning (METADATA 3.13: 4096); a limit, the smaller is stricter.
 	KeyMetaWarnBytes Key = "meta.warn_bytes"
 	// KeyMetaMaxDepth: most dot segments in a metadata key name (METADATA 3.13: 4, ceiling 6 = the import cap so a written key never quarantines on import); a limit, the smaller is stricter.
-	KeyMetaMaxDepth      Key = "meta.max_depth"
-	KeyResourcesMaxBytes Key = "resources.max_bytes"
+	KeyMetaMaxDepth Key = "meta.max_depth"
+	// KeyMetaResourceHintValues: past this many distinct values `meta lint` suggests a resource kind (MQ8, D39: 30); a limit, the smaller is stricter (the hint comes sooner).
+	KeyMetaResourceHintValues Key = "meta.resource_hint_values"
+	KeyResourcesMaxBytes      Key = "resources.max_bytes"
 	// KeyResourcesWarnBytes: a resource larger than this prints a warning
 	// (RQ4: 4 KB); a limit, the smaller is stricter.
 	KeyResourcesWarnBytes Key = "resources.warn_bytes"
@@ -127,6 +129,7 @@ const (
 	defaultTasksMaxDepth        int64 = 4         // TSQ1
 	ceilingTasksMaxDepth        int64 = 8         // TSQ1: "default 4, up to 8"
 	defaultMetaMaxDepth         int64 = 4         // METADATA 3.13
+	defaultMetaResourceHint     int64 = 30        // MQ8, D39
 	ceilingMetaMaxDepth         int64 = 6         // metafilter.ImportMaxDepth: deeper keys would quarantine on import
 	defaultTasksHistoryMax      int64 = 200       // TSQ10
 	ceilingTasksHistoryMax      int64 = 1000      // TSQ10 "up to 1000"
@@ -229,6 +232,7 @@ func Keys() []KeyDef {
 		{Key: KeyMetaMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest metadata value in bytes"},
 		{Key: KeyMetaWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "row metadata larger than this many bytes prints a warning (METADATA 3.13)"},
 		{Key: KeyMetaMaxDepth, Shape: ShapeLimit, Ceiling: ceilingMetaMaxDepth, Default: value.Int(defaultMetaMaxDepth), Doc: "most dot segments in a metadata key name (METADATA 3.13)"},
+		{Key: KeyMetaResourceHintValues, Shape: ShapeLimit, Default: value.Int(defaultMetaResourceHint), Doc: "distinct values past which meta lint suggests a resource kind (METADATA 3.8, D39)"},
 		{Key: KeyResourcesMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest resource in bytes"},
 		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource larger than this many bytes prints a warning (RQ4)"},
 		{Key: KeyResourcesAllowedIn, Shape: ShapeAllow, Choices: AllowedInPlaces(), Default: mustTexts(AllowedInPlaces()...),

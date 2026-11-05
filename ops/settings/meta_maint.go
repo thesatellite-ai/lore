@@ -9,12 +9,15 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Registry maintenance ops (METADATA 3.8, 3.19).
@@ -25,9 +28,26 @@ const (
 )
 
 // resourceHintValues is meta.resource_hint_values' default (MQ8, D39): past
-// this many distinct values lint suggests a resource kind. The policy key
-// is not registered yet, so the default is used everywhere.
+// this many distinct values lint suggests a resource kind. Used when the
+// Env has no policy (hintLimit).
 const resourceHintValues = 30
+
+// hintLimit is the effective meta.resource_hint_values for the repo's
+// chain (OV64), else resourceHintValues.
+func (o ops) hintLimit(ctx context.Context) int {
+	p, ok := o.env.(bulk.Policier)
+	if !ok {
+		return resourceHintValues
+	}
+	set, err := p.Policy(ctx, store.SourceRepo)
+	if err != nil {
+		return resourceHintValues
+	}
+	if n, isSet := set.Limit(policy.KeyMetaResourceHintValues); isSet && n > 0 {
+		return int(n)
+	}
+	return resourceHintValues
+}
 
 // Purger is the optional Env upgrade forget needs: purge a trashed row (and
 // its trashed dependents) for good, leaving tombstones (wire.App has it).
@@ -161,6 +181,7 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 		return MetaLintOut{}, err
 	}
 	use := usage(rows)
+	hint := o.hintLimit(ctx)
 	out := MetaLintOut{Data: []MetaFinding{}}
 	add := func(f MetaFinding) { out.Data = append(out.Data, f) }
 	byID := map[string]located{}
@@ -200,8 +221,8 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 			add(MetaFinding{Key: name, Problem: fmt.Sprintf("retired (merged into %s) but still on %d rows", text(k.Row, mMergedInto), u.rows),
 				Fix: "lore meta edit " + name + " --merge-into " + text(k.Row, mMergedInto) + " --yes"})
 		}
-		if u != nil && len(vs) == 0 && len(u.values) > resourceHintValues {
-			add(MetaFinding{Key: name, Problem: fmt.Sprintf("%d distinct values; when the values need facts of their own (an owner, a contact), consider a resource kind (meta.resource_hint_values: %d)", len(u.values), resourceHintValues)})
+		if u != nil && len(vs) == 0 && len(u.values) > hint {
+			add(MetaFinding{Key: name, Problem: fmt.Sprintf("%d distinct values; when the values need facts of their own (an owner, a contact), consider a resource kind (meta.resource_hint_values: %d)", len(u.values), hint)})
 		}
 	}
 	for _, r := range rows {
