@@ -50,8 +50,10 @@ const (
 	exitBroken   = 2
 )
 
-// Levels of a core check finding.
+// Levels of a core check finding: an error breaks (exit 2), a warning
+// degrades (exit 1), a note does not count.
 const (
+	LevelError   = "error"
 	LevelWarning = "warning"
 	LevelNote    = "note"
 )
@@ -243,7 +245,8 @@ func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
 
 // addChecks folds the core checks into r (a-doctor's rule: a warning not
 // fixed degrades, everything else is a note; a check that cannot run is
-// one warning naming it).
+// one warning naming it). An error finding (a damaged cache file, the old
+// binary's r.Errors) goes to Errors and breaks the status.
 func addChecks(r *Report, runs []CheckRun) {
 	for _, c := range runs {
 		if c.Err != nil {
@@ -252,6 +255,11 @@ func addChecks(r *Report, runs []CheckRun) {
 			continue
 		}
 		for _, f := range c.Findings {
+			if f.Level == LevelError && !f.Fixed {
+				r.Errors = append(r.Errors, f.Line)
+				r.Status = StatusBroken
+				continue
+			}
 			if f.Level != LevelWarning || f.Fixed {
 				r.Notes = append(r.Notes, f.Line)
 				continue

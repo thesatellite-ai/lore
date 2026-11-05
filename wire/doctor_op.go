@@ -1,7 +1,7 @@
 package wire
 
 // The core side of `lore doctor` (ops/doctor, P3-MISC-8): the five store
-// checks of doctor_checks.go mapped onto the operation's types, and the
+// checks of doctor_checks.go and the three of doctor_more.go mapped onto the operation's types, and the
 // binary's own lore.db checks from Options.Context.Doctor.
 
 import (
@@ -31,6 +31,9 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckStoreLock, a.DoctorStoreLocks},
 		{DoctorCheckEditAfterPurge, a.DoctorEditsAfterPurge},
 		{DoctorCheckInternalOff, a.DoctorInternalOff},
+		{DoctorCheckResurrected, a.DoctorResurrected},
+		{DoctorCheckCache, a.DoctorCaches},
+		{DoctorCheckRemovedEnv, a.DoctorRemovedEnv},
 	}
 	out := make([]opsdoctor.CheckRun, 0, len(checks))
 	for _, c := range checks {
@@ -47,6 +50,8 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 // doctorLevel maps a finding level onto the operation's (exhaustive).
 func doctorLevel(l DoctorLevel) string {
 	switch l {
+	case DoctorError:
+		return opsdoctor.LevelError
 	case DoctorWarning:
 		return opsdoctor.LevelWarning
 	case DoctorNote:

@@ -46,12 +46,13 @@ const (
 	DoctorCheckInternalOff    DoctorCheck = "internal_off"
 )
 
-// DoctorLevel is how a finding counts toward doctor's status: a warning
-// degrades it (exit 1), a note does not.
+// DoctorLevel is how a finding counts toward doctor's status: an error
+// breaks it (exit 2), a warning degrades it (exit 1), a note does not.
 type DoctorLevel string
 
 // The levels.
 const (
+	DoctorError   DoctorLevel = "error"
 	DoctorWarning DoctorLevel = "warning"
 	DoctorNote    DoctorLevel = "note"
 )
@@ -67,10 +68,18 @@ type DoctorFinding struct {
 	Fix string `json:"fix,omitempty"`
 	// Fixed is true when doctor --fix repaired it in this run.
 	Fixed bool `json:"fixed,omitempty"`
+	// Plain prints Message as it is, without the "<check>: " prefix and
+	// the fix suffix: the checks moved from the old binary keep their
+	// v0.1.17 lines word for word (doctor_more.go; scripts grep them).
+	Plain bool `json:"-"`
 }
 
-// Line is the finding as one text line: "<check>: <message>[; fix: …]".
+// Line is the finding as one text line: "<check>: <message>[; fix: …]",
+// or Message alone for a Plain finding.
 func (f DoctorFinding) Line() string {
+	if f.Plain {
+		return f.Message
+	}
 	s := string(f.Check) + ": " + f.Message
 	if f.Fixed {
 		return s + " (fixed)"
