@@ -202,6 +202,12 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	skips.IDs = append(skips.IDs, pathRuleIDs(pathGroups)...)
 	skips.PathScoped = len(pathRuleIDs(pathGroups))
 	in := renderInput{Settings: loadContextSettings(ctx, profiles), Rules: rules, Hotfixes: hotfixes, Topics: topics, Skips: skips, Dirs: dirs.Groups}
+	// 6.13 (RES-OQ3b) and META 3.14 (FA-META-10): the resource index and
+	// the metadata keys block of the committed sources, after the core and
+	// only when they fit (FA-CTX-7).
+	if in.Tails, err = renderTails(ctx); err != nil {
+		return err
+	}
 	dirBodies, dirReps := buildDirFiles(dirs, in.Settings.EntryMax)
 
 	// Build the rendered text. The canary is content-derived (sha256 of the

@@ -252,6 +252,16 @@ type renderInput struct {
 	Skips    pinSkips
 	// Dirs are the folder files (6.2.5): one root index line each.
 	Dirs []dirGroup
+	// Tails are optional blocks after the core (the resource index, the
+	// metadata keys block, 6.13 / META 3.14): each is kept whole only when
+	// it fits the budget the core left (FA-CTX-7).
+	Tails []tailBlock
+}
+
+// tailBlock is one optional block after the core.
+type tailBlock struct {
+	Name string // report name, e.g. "resource_index"
+	Text string
 }
 
 // reportEntry is one entry not shown in full, with its reason.
@@ -287,6 +297,8 @@ type renderReport struct {
 	// context.dir_files is off.
 	Dirs    []dirReport `json:"dirs,omitempty"`
 	DirsOff bool        `json:"dir_files_off,omitempty"`
+	// TailsOut names the tail blocks left out for lack of room (FA-CTX-7).
+	TailsOut []string `json:"tails_left_out,omitempty"`
 }
 
 // buildBudgetedFile renders LORE.md within the budget and its report.
@@ -383,6 +395,19 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 	if len(in.Rules)+len(in.Hotfixes) == 0 {
 		b.WriteString("_No pinned knowledge yet. Run `lore rule add` or `lore memory add` to add some._\n")
 	}
+	// FA-CTX-7: tails never displace a core entry; a tail that does not
+	// fit what is left of the budget is left out whole and reported.
+	for _, t := range in.Tails {
+		if t.Text == "" {
+			continue
+		}
+		if in.Settings.Budget > 0 && b.Len()+1+len(t.Text) > in.Settings.Budget {
+			rep.TailsOut = append(rep.TailsOut, t.Name)
+			continue
+		}
+		b.WriteString("\n")
+		b.WriteString(t.Text)
+	}
 	body := b.String()
 	rep.After = len(body)
 	rep.Over = in.Settings.Budget > 0 && rep.After > in.Settings.Budget
@@ -463,6 +488,9 @@ func (r renderReport) reportText() string {
 	}
 	if r.NoSummary > 0 {
 		fmt.Fprintf(&b, "\nwarnings\n  %d must rules have no summary; their line form is the first sentence (lore lint --context)\n", r.NoSummary)
+	}
+	for _, t := range r.TailsOut {
+		fmt.Fprintf(&b, "  %s left out: it does not fit the budget the core leaves\n", t)
 	}
 	if r.Over {
 		b.WriteString("  budget_exceeded: every must rule and critical/high hotfix is still written; shorten or supersede rules, or add summaries\n")
