@@ -30,22 +30,29 @@ const (
 )
 
 // newCopyEngine is an engine over a memstore repo and the real machine
-// store under home, with tableCopyRuns registered.
+// store under home, with tableCopyRuns registered in place of the
+// built-in machine-local tables.
 func newCopyEngine(t *testing.T, home string) *engine.Engine {
 	t.Helper()
-	ctx := context.Background()
 	var shared []schema.TableDef
 	for _, d := range schema.Builtin() {
 		if !d.MachineLocal {
 			shared = append(shared, d)
 		}
 	}
-	reg, err := schema.NewRegistry(append(shared, schema.Table(string(tableCopyRuns), ids.PrefixSession, schema.MachineLocal(),
+	return newCopyEngineOver(t, home, append(shared, schema.Table(string(tableCopyRuns), ids.PrefixSession, schema.MachineLocal(),
 		schema.Field("kind", value.KindText, schema.Required()),
 		schema.Field("steps", value.KindNumber),
 		schema.Field("ok", value.KindBool),
 		schema.Field("started_at", value.KindDateTime),
-		schema.Field("notes", value.KindJSON)))...)
+		schema.Field("notes", value.KindJSON))))
+}
+
+// newCopyEngineOver is newCopyEngine over the table defs defs.
+func newCopyEngineOver(t *testing.T, home string, defs []schema.TableDef) *engine.Engine {
+	t.Helper()
+	ctx := context.Background()
+	reg, err := schema.NewRegistry(defs...)
 	if err != nil {
 		t.Fatal(err)
 	}

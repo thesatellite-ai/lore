@@ -15,9 +15,13 @@ import (
 	"github.com/thesatellite-ai/lore/store/memstore"
 )
 
-// tableTestSessions is a machine-local table of these tests only (the real
-// built-in machine-local tables land with their nouns, P3-LOCAL-3).
+// tableTestSessions is a machine-local table of these tests only, with a
+// prefix no built-in table uses (the built-in sessions table owns "ses").
 const tableTestSessions row.Table = "test_sessions"
+
+// prefixTestSession is tableTestSessions' id prefix: v0.1.17's query_logs
+// prefix, a registered prefix of a dropped table (p3/dropped.md).
+const prefixTestSession = ids.PrefixQueryLog
 
 // machineWorld is an engine with the repo store, a read-only `agency`
 // store and the machine store, over a registry with one machine-local
@@ -31,7 +35,7 @@ type machineWorld struct {
 
 func newMachineWorld(t *testing.T, attachMachine bool) machineWorld {
 	t.Helper()
-	defs := append(schema.Builtin(), schema.Table(string(tableTestSessions), ids.PrefixSession, schema.MachineLocal(),
+	defs := append(schema.Builtin(), schema.Table(string(tableTestSessions), prefixTestSession, schema.MachineLocal(),
 		schema.Field("tool", value.KindText, schema.Required())))
 	reg, err := schema.NewRegistry(defs...)
 	if err != nil {
@@ -70,7 +74,7 @@ func TestMachineLocalRoutesThroughTheEnginePath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create (target %q): %v", target, err)
 		}
-		if wr.Row.ID.Prefix() != ids.PrefixSession || wr.Row.HLC.IsZero() || wr.Row.CreatedBy != testActor {
+		if wr.Row.ID.Prefix() != prefixTestSession || wr.Row.HLC.IsZero() || wr.Row.CreatedBy != testActor {
 			t.Fatalf("not stamped: %+v", wr.Row)
 		}
 		if _, err = w.repo.Open(store.OpenOptions{}).Get(ctx, tableTestSessions, wr.Row.ID); err == nil {

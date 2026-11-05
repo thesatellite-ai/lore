@@ -147,7 +147,7 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 		}
 		r.fields = map[string]value.Value{}
 		for _, f := range fields {
-			v, set, verr := v017Value(f.Kind, cells[f.Name])
+			v, set, verr := v017Value(f, cells[f.Name])
 			if verr != nil {
 				r.bad = "column " + f.Name + ": " + verr.Error()
 				break
@@ -248,8 +248,10 @@ func v017Columns(ctx context.Context, db *sql.DB, table string) (map[string]bool
 }
 
 // v017Value converts one v0.1.17 cell (JSON as json_object gave it) to a
-// value of kind k; set is false for NULL (the field stays unset).
-func v017Value(k value.Kind, raw json.RawMessage) (v value.Value, set bool, err error) {
+// value of f's kind; set is false for NULL (the field stays unset). A list
+// field reads ent's JSON array text (sessions.flags, outer_tools).
+func v017Value(f schema.FieldDef, raw json.RawMessage) (v value.Value, set bool, err error) {
+	k := f.Kind
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil, false, nil
 	}
@@ -282,6 +284,8 @@ func v017Value(k value.Kind, raw json.RawMessage) (v value.Value, set bool, err 
 		v, err = v017Time(s)
 	case value.KindJSON:
 		v, err = value.JSONOf([]byte(s))
+	case value.KindList:
+		v, err = value.ParseList(f.Elem, []byte(s))
 	default:
 		q, merr := json.Marshal(s)
 		if merr != nil {
