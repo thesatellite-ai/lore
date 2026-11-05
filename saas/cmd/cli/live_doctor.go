@@ -133,7 +133,7 @@ func liveOldWarn(n int, branch string) string {
 
 // liveHooksMissingWarn is the doctor warning for missing hook blocks.
 func liveHooksMissingWarn(missing []string, branch string) string {
-	return "git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + "); run `lore sync install-git`"
+	return "git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + "); run any lore command (such as `lore sync`) to install it"
 }
 
 // explainLeaveLine is explain's land line for a finished row.

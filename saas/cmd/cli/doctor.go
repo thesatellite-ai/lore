@@ -260,7 +260,7 @@ func doctorSync(ctx context.Context, rctx *projresolve.Context, db *sql.DB, r *d
 		degrade(r)
 	}
 	if !st.DataDirPresent && st.Baselined {
-		warn(".lore/data is missing; run `lore sync export --all` to recreate it")
+		warn(".lore/data is missing; run `git checkout HEAD -- .lore/data` to bring it back")
 	}
 	if st.PendingExports > 0 {
 		warn(fmt.Sprintf("%d lore change(s) not yet written to .lore/data (run `lore sync`)", st.PendingExports))
@@ -299,7 +299,7 @@ func doctorSync(ctx context.Context, rctx *projresolve.Context, db *sql.DB, r *d
 	}
 	if groups, err := lsync.FindDuplicates(ctx, db); err == nil && len(groups) > 0 {
 		info.DuplicateGroups = len(groups)
-		warn(fmt.Sprintf("%d group(s) of duplicate rows; see `lore sync dupes`", len(groups)))
+		warn(fmt.Sprintf("%d group(s) of duplicate rows", len(groups)))
 	}
 	if info.ProjectFiles > 1 {
 		warn(fmt.Sprintf("%d project files in .lore/data; run `lore sync fix-projects`", info.ProjectFiles))
@@ -315,7 +315,7 @@ func doctorSync(ctx context.Context, rctx *projresolve.Context, db *sql.DB, r *d
 	if v, ok, err := gitsetup.ConfigGet(ctx, root, "merge."+mergeDriverLore+".driver"); err == nil && ok && v != "" {
 		info.MergeDriverOK = true
 	} else {
-		warn("lore merge driver not configured in this clone (any lore command or `lore sync install-git` installs it)")
+		warn("lore merge driver not configured in this clone (any lore command installs it)")
 	}
 	// Uncommitted lore files are normal work in progress (like uncommitted
 	// code): reported as information, never a degradation.
@@ -360,7 +360,7 @@ func dbOpenError(step string, err error) string {
 	msg := err.Error()
 	for _, m := range sqliteCorruptionMarkers {
 		if strings.Contains(strings.ToLower(msg), m) {
-			return fmt.Sprintf("%s: DB file is corrupt (%s: %s); recover with `lore repair --tier=2 --confirm` (latest backup) — shared rows also rebuild from .lore/data", errcodes.DBCorrupt, step, msg)
+			return fmt.Sprintf("%s: DB file is corrupt (%s: %s); move .lore/lore.db away, run `lore sync` to rebuild it from .lore/data, then `lore search rebuild`", errcodes.DBCorrupt, step, msg)
 		}
 	}
 	return step + ": " + msg

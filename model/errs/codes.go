@@ -240,7 +240,7 @@ type entry struct {
 // mutated, so it is not shared mutable state.
 var table = map[Code]entry{
 	DBLocked:              {class: ClassRefused, desc: "another lore process is holding the DB write lock"},
-	DBCorrupt:             {class: ClassRefused, desc: "DB file failed quick_check; run `lore repair`"},
+	DBCorrupt:             {class: ClassRefused, desc: "DB file failed quick_check; move .lore/lore.db away, run `lore sync` to rebuild it from .lore/data, then `lore search rebuild`"},
 	DBNotFound:            {class: ClassRefused, desc: "DB file does not exist at the configured path"},
 	SchemaVersionMismatch: {class: ClassRefused, desc: "DB was migrated by a newer lore; upgrade or use a different DB"},
 	MigrationIncomplete:   {class: ClassRefused, desc: "a schema migration did not finish; run `lore setup`"},

@@ -457,7 +457,7 @@ This file is generated from the operation registry of the 0.1.18 core (the `op.D
 | `E_CONTENDED` | 11 | `coordination` | 409 | every claim attempt lost a race; retry after a short wait |
 | `E_CYCLE` | 19 | `guard` | 403 | the write would create a cycle |
 | `E_DATE` | 20 | `bad_input` | 400 | a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days |
-| `E_DB_CORRUPT` | 23 | `refused` | 409 | DB file failed quick_check; run `lore repair` |
+| `E_DB_CORRUPT` | 23 | `refused` | 409 | DB file failed quick_check; move .lore/lore.db away, run `lore sync` to rebuild it from .lore/data, then `lore search rebuild` |
 | `E_DB_LOCKED` | 23 | `refused` | 409 | another lore process is holding the DB write lock |
 | `E_DB_NOT_FOUND` | 23 | `refused` | 409 | DB file does not exist at the configured path |
 | `E_DISK_FULL` | 23 | `refused` | 409 | no space left on device for write or backup |
