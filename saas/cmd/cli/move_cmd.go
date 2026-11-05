@@ -110,10 +110,6 @@ func runMove(ctx context.Context, id string, f *moveFlags) error {
 	if err != nil {
 		return err
 	}
-	if f.yes && me.Kind == identityKindAgent {
-		return errcodes.New(errcodes.InvalidInput, "agents cannot confirm a move with --yes; a person must run it (§6.4)").
-			WithHint("ask the owner to run `lore move " + id + " --to " + f.to.To + "`")
-	}
 	src, err := findMoveSource(ctx, id)
 	if err != nil {
 		return err
@@ -127,9 +123,12 @@ func runMove(ctx context.Context, id string, f *moveFlags) error {
 	}
 	who := "everyone with access to " + targetAudience(route)
 	fmt.Printf("This becomes visible to %s:\n  %q\n", who, oneLine(rowText(src.doc)))
+	// An agent confirms like a person (FA-Q-2, OQ25 agents override: the
+	// agent asks its human in its own conversation; lore does not block),
+	// exactly as the core move does.
 	if !f.yes {
-		if !stdinIsTTY() || me.Kind == identityKindAgent {
-			return errcodes.New(errcodes.InvalidInput, "not moved: confirm on a terminal (or --yes, people only); nothing written")
+		if !stdinIsTTY() {
+			return errcodes.New(errcodes.InvalidInput, "not moved: confirm on a terminal (or --yes); nothing written")
 		}
 		if !confirmYes("Move it? [y/N] ") {
 			fmt.Println("nothing written")

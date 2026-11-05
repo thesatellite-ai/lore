@@ -130,3 +130,24 @@ func mustGlob(t *testing.T, pattern string) []string {
 	}
 	return m
 }
+
+// FA-Q-2 (OQ25 agents override): moving a row still on the v0.1.17 path
+// takes an agent's --yes exactly like the core move; before, that path
+// refused it ("agents cannot confirm a move with --yes"). The row is a
+// planted teams row (teams is not a core table), moved from the client
+// repo to the agent's personal place (`--to me`: the v0.1.17 path cannot
+// write a 0.1.18 org store); the original row file is gone afterwards.
+func TestMove_V017RowTakesAnAgentsYes(t *testing.T) {
+	a := newAgency(t, th.Cmd("move"), th.Cmd("agent", "start"))
+	const id = "tem_0123456789abcdef0123456789abcdef"
+	if _, ok := coreTableOf(id); ok {
+		t.Fatalf("precondition: %s must not be a core row", id)
+	}
+	rel := filepath.Join(".lore", "data", "teams", id+".json")
+	a.aliceApp.WriteFile(rel, `{"_table":"teams","_v":1,"id":"`+id+`","name":"checkout squad","body":"checkout squad owns payments"}`)
+	agent := startAgent(t, a.alice, a.aliceApp, agentLabelBackend, "alice")
+	a.aliceApp.As(agent).MustLore("move", id, "--to", "me", "--yes").Says(t, "moved from "+id).Never(t, "agents cannot confirm")
+	if _, ok := a.aliceApp.ReadFile(rel); ok {
+		t.Fatalf("the moved row must leave the repo: %s", rel)
+	}
+}
