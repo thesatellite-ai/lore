@@ -107,6 +107,14 @@ const (
 	KeyTimeMaxEntry    Key = "time.max_entry"
 	// KeyTimeClientShare: what a task moved into a client repo carries of its time (TQ3): none (default, strictest) | totals.
 	KeyTimeClientShare Key = "time.client_share"
+	// KeyTimeClientKey names the metadata key the time_spent view reads as
+	// the client column (TQ8, OV16-CLIENTKEY; FB-TASK-4): text, default
+	// "client", resolved to the key's permanent mky_ id at read.
+	KeyTimeClientKey Key = "time.client_key"
+	// KeyTasksTriageOwner is the actor whose inbox lists proposed tasks
+	// (TASK 18.3; FB-TASK-3): text, an actor id, stable key or name
+	// (a leading @ is ignored); unset = nobody.
+	KeyTasksTriageOwner Key = "tasks.triage_owner"
 	// KeyClientRoutes is v0.1.17's lore-org.yaml `defaults.client_repos`
 	// (CFG8: team rules are policies rows of the org folder): where a row
 	// of each kind goes in a client repo when the write names no --to.
@@ -229,6 +237,9 @@ const (
 	AgentRevealAllow AgentReveal = "allow"
 )
 
+// DefaultTimeClientKey is time.client_key's default (TQ8).
+const DefaultTimeClientKey = "client"
+
 // Shape says how a key's values compare.
 type Shape string
 
@@ -253,6 +264,10 @@ const (
 	// OV15B-URG). Read as integer hundredths (Set.Weight), so every machine
 	// adds the same integers.
 	ShapeWeight Shape = "weight"
+	// ShapeText: free text (a name, an actor reference); the NEAREST level
+	// that sets it wins, like a weight: a name has no stricter value
+	// (FB-TASK-3: tasks.triage_owner, time.client_key). Read with Set.Text.
+	ShapeText Shape = "text"
 )
 
 // Urgency weight terms (TASK 13.2; the names of logic/urgency.Term, kept
@@ -377,6 +392,8 @@ func Keys() []KeyDef {
 		{Key: KeyTimeMaxEntry, Shape: ShapeLimit, Ceiling: defaultTimeMaxEntryMin, Default: value.Int(defaultTimeMaxEntryMin), Doc: "minutes: the longest manual time entry (D13, max 24h)"},
 		// TQ3: none is the strict value (a client gets no time data); a per-move --with-time overrides it.
 		{Key: KeyTimeClientShare, Shape: ShapeRank, Choices: []string{"none", "totals"}, Default: mustText("none"), Doc: "what a task moved into a client repo carries of its time: none or totals (per worker, no spans) (TQ3)"},
+		{Key: KeyTimeClientKey, Shape: ShapeText, Default: mustText(DefaultTimeClientKey), Doc: "the metadata key the time_spent view reads as the client column, by its permanent id (TQ8)"},
+		{Key: KeyTasksTriageOwner, Shape: ShapeText, Doc: "the actor (id, stable key or name) whose lore inbox lists proposed tasks (TASK 18.3); unset = nobody"},
 		{Key: KeyContextBudgetClaudeCode, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetLarge), Doc: "bytes of .lore/LORE.md when the claude_code profile reads it (CQ1)"},
 		{Key: KeyContextBudgetCodex, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md when the codex profile reads it (CQ1)"},
 		{Key: KeyContextBudgetCursor, Shape: ShapeLimit, Default: value.Int(defaultContextBudget), Doc: "bytes of .lore/LORE.md when the cursor profile reads it (CQ1)"},

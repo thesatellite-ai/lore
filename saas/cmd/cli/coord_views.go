@@ -658,6 +658,7 @@ func (cv *coordView) inbox(ctx context.Context) ([]inboxItem, error) {
 		}
 	}
 	out = append(out, cv.watchedItems(ctx, docs, me)...)
+	out = append(out, cv.moreInboxItems(ctx, docs, me)...) // TASK 20 rest (FB-TASK-3)
 	hs, err := cv.projectDocs(ctx, tableHandoffs)
 	if err == nil {
 		for _, h := range hs {

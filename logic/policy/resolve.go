@@ -142,9 +142,9 @@ func stricter(d KeyDef, cur Effective, e Entry) (Effective, error) {
 		if n < c {
 			return take, nil
 		}
-	case ShapeWeight:
-		// OV15B-URG: nearest wins; levels arrive nearest first, so the
-		// first level that set it (taken above) stays.
+	case ShapeWeight, ShapeText:
+		// OV15B-URG, FB-TASK-3: nearest wins; levels arrive nearest first,
+		// so the first level that set it (taken above) stays.
 	case ShapeSet:
 		u, err := union(cur.Value, e.Value)
 		if err != nil {
@@ -188,6 +188,10 @@ func check(d KeyDef, v value.Value) error {
 		h, ok := hundredthsOf(v)
 		if !ok || h > d.Ceiling*hundredth || h < -d.Ceiling*hundredth {
 			return errs.New(errs.ConfigInvalid, "value must be a number with at most two decimals"+weightRange(d.Ceiling))
+		}
+	case ShapeText:
+		if t, ok := v.(value.Text); !ok || strings.TrimSpace(t.String()) == "" {
+			return errs.New(errs.ConfigInvalid, "value must be non-empty text")
 		}
 	case ShapeSet:
 		if l, ok := v.(value.List); !ok || (len(l.Items()) > 0 && l.Elem() != value.KindText) {
@@ -282,6 +286,20 @@ func weightRange(c int64) string {
 	}
 	n := strconv.FormatInt(c, 10)
 	return " from -" + n + " to " + n
+}
+
+// Text returns a ShapeText key's value; ok is false when it is unset (and
+// has no default) or k is not a text key.
+func (s Set) Text(k Key) (string, bool) {
+	e, ok := s.m[k]
+	if !ok || e.Value == nil {
+		return "", false
+	}
+	t, isText := e.Value.(value.Text)
+	if !isText {
+		return "", false
+	}
+	return t.String(), true
 }
 
 // Strings returns a ShapeSet key's items, sorted.
