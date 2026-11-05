@@ -313,6 +313,11 @@ func (o ops) putRule(ctx context.Context, target store.Source, id string, fields
 	if err != nil {
 		return RowOut{}, err
 	}
+	// FA-AGENT-4: secret.rule_changed beside the row's own audit entry.
+	if err = o.auditSecretEvent(ctx, auditRuleChanged, "secrets rule "+verb, w.Row.ID, "rule="+id, "row="+w.Row.ID.String(),
+		"place="+place(target), "state="+text(w.Row, sState), "changed="+changedNames(fields)); err != nil {
+		return RowOut{}, err
+	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
 		Human: fmt.Sprintf("✓ %s %s in %s (%s)\n", id, verb, place(target), short(w.Row.ID))}, nil
 }
@@ -394,9 +399,18 @@ func (o ops) ruleOn(ctx context.Context, in RuleOnIn) (RowOut, error) {
 		if serr != nil {
 			return RowOut{}, serr
 		}
-		return o.patchRow(ctx, *have, map[string]value.Value{sState: v, sReason: value.Null{}}, in.RuleID+" on in "+place(target))
+		out, perr := o.patchRow(ctx, *have, map[string]value.Value{sState: v, sReason: value.Null{}}, in.RuleID+" on in "+place(target))
+		if perr != nil {
+			return out, perr
+		}
+		return out, o.auditSecretEvent(ctx, auditRuleChanged, "secrets rule on", have.Row.ID, "rule="+in.RuleID, "row="+have.Row.ID.String(),
+			"place="+place(target), "state="+schema.SecretRuleOn, "changed=state")
 	}
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: target, Table: schema.TableSecretRules, ID: have.Row.ID}); err != nil {
+		return RowOut{}, err
+	}
+	if err := o.auditSecretEvent(ctx, auditRuleChanged, "secrets rule on", have.Row.ID, "rule="+in.RuleID, "row="+have.Row.ID.String(),
+		"place="+place(target), "state=default", "changed=removed"); err != nil {
 		return RowOut{}, err
 	}
 	return RowOut{ID: have.Row.ID.String(), Store: string(target), Human: fmt.Sprintf("✓ %s on in %s (%s removed)\n", in.RuleID, place(target), short(have.Row.ID))}, nil
@@ -459,6 +473,11 @@ func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
+	// FA-AGENT-4: names and ids only; the matched text never reaches the log.
+	if err = o.auditSecretEvent(ctx, auditAllowAdded, "secrets allow", rowID, "allow="+w.Row.ID.String(), "field="+field,
+		"rule="+in.Rule, "reason="+strings.TrimSpace(in.Reason)); err != nil {
+		return RowOut{}, err
+	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(src),
 		Human: fmt.Sprintf("✓ %s: %s.%s marked not a secret (%s)\n", in.Rule, short(rowID), field, short(w.Row.ID))}, nil
 }
@@ -468,7 +487,7 @@ func (o ops) allowRm(ctx context.Context, in AllowRmIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, lookup.BadID("secrets allow rm: "+quote(in.ID)+" is not an allow id (sal_…)", err)
 	}
-	src, _, err := o.env.Get(ctx, engine.Ref{Table: schema.TableSecretAllows, ID: id.Any()})
+	src, have, err := o.env.Get(ctx, engine.Ref{Table: schema.TableSecretAllows, ID: id.Any()})
 	if err != nil {
 		if errs.Has(err, errs.NotFound) {
 			// DELETION 3.2: a trashed allow entry says where it is.
@@ -479,6 +498,14 @@ func (o ops) allowRm(ctx context.Context, in AllowRmIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: src, Table: schema.TableSecretAllows, ID: id.Any()}); err != nil {
+		return RowOut{}, err
+	}
+	var target ids.AnyID
+	if t, perr := ids.ParseAny(text(have, aRowID)); perr == nil {
+		target = t
+	}
+	if err := o.auditSecretEvent(ctx, auditAllowRemoved, "secrets allow rm", target, "allow="+id.String(), "field="+text(have, aField),
+		"rule="+text(have, aRuleID)); err != nil {
 		return RowOut{}, err
 	}
 	return RowOut{ID: id.String(), Store: string(src), Human: fmt.Sprintf("✓ removed %s; the finding is reported again on the next scan\n", short(id.Any()))}, nil
@@ -496,4 +523,17 @@ func (o ops) allowList(ctx context.Context, _ AllowListIn) (AllowsOut, error) {
 	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// changedNames lists the rule fields a write set, sorted (secret.rule_changed
+// "what changed").
+func changedNames(fields map[string]value.Value) string {
+	names := make([]string, 0, len(fields))
+	for n := range fields {
+		if n != sRuleID {
+			names = append(names, n)
+		}
+	}
+	slices.Sort(names)
+	return strings.Join(names, ",")
 }
