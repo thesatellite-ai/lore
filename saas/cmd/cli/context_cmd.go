@@ -18,6 +18,7 @@
 //	  --session-start                SessionStart: in-flight tasks + rows changed since
 //	                                 the last session (context_sessionstart.go)
 //	  --max-bytes <n>                cap (default 16,000; hooks: context.hook_cap)
+//	  --meta                         each returned row's metadata (context_meta.go, 6.13)
 //	lore context --internal          internal, global and personal rows (unchanged)
 //
 // Output never splits an entry (contextfit.Pick): a piece is full, or its
@@ -85,7 +86,7 @@ var errContextNeedsMode = errors.New("pass --for-file <path>, --for-task <id>, -
 
 type contextFlags struct {
 	internal, asJSON, topics, hookStdin bool
-	sessionStart                        bool
+	sessionStart, withMeta              bool
 	table, search                       string
 	forFile, topic, forPrompt, hook     string
 	forTask                             string
@@ -122,6 +123,7 @@ func newContextCommand() *cobra.Command {
 	fl.BoolVar(&f.hookStdin, flagContextHookStdin, false, "with --hook: read the hook input JSON from stdin")
 	fl.BoolVar(&f.sessionStart, flagContextSessionStart, false, "with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)")
 	fl.IntVar(&f.maxBytes, flagContextMaxBytes, 0, "cap the output in bytes (default 16000; hooks: context.hook_cap)")
+	fl.BoolVar(&f.withMeta, flagContextMeta, false, "also print each returned row's metadata (sensitive values masked)")
 	fl.BoolVar(&f.asJSON, constants.FlagJSON, false, "machine-readable output")
 	return cmd
 }
@@ -181,6 +183,12 @@ func runContext(ctx context.Context, f *contextFlags, stdin io.Reader, out io.Wr
 	if err != nil {
 		return err
 	}
+	// 6.13: metadata only on request.
+	if f.withMeta {
+		if res, err = withMeta(ctx, res); err != nil {
+			return err
+		}
+	}
 	if f.asJSON {
 		ids := make([]string, 0, len(res.picks))
 		for _, p := range res.picks {
@@ -212,6 +220,9 @@ type contextPick struct {
 	Kind  string `json:"kind"`
 	Why   string `json:"why"`
 	Bytes int    `json:"bytes"`
+	// Meta is the row's metadata, only with --meta (context_meta.go).
+	Meta  map[string]string `json:"meta,omitempty"`
+	metas []pickMeta
 	full  string
 	line  string
 	group string
@@ -345,7 +356,7 @@ func pickOf(k knowledgeRow, why string) contextPick {
 	}
 	full += body + "\n</" + k.kind + ">\n\n"
 	line := contextfit.LineForm(id, contextfit.ShortForm(id, renderField(k.r.Row, schema.FieldSummary), title, body))
-	return contextPick{ID: id, Kind: k.kind, Why: why, Bytes: len(full), full: full, line: line, group: groupOf(k.kind)}
+	return contextPick{ID: id, Kind: k.kind, Why: why, Bytes: len(full), full: full, line: line, group: groupOf(k.kind), metas: metasOf(k.r.Row)}
 }
 
 // sortPicks orders picks by group (rules, hotfixes, notes) keeping the
