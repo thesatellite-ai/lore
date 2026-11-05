@@ -14434,6 +14434,10 @@
                     "type": "string",
                     "description": "the memory text (or give it as the first argument)"
                   },
+                  "create": {
+                    "type": "boolean",
+                    "description": "with --to \u003cstore\u003e/\u003cfolder\u003e: create the folder when the store does not have it yet"
+                  },
                   "created_by": {
                     "type": "string",
                     "description": "actor id (act_…); default: the row's created_by is the current identity"
@@ -14445,6 +14449,10 @@
                   "kind": {
                     "type": "string",
                     "description": "core | retrieved | episodic | procedural | archival (default retrieved)"
+                  },
+                  "live": {
+                    "type": "boolean",
+                    "description": "share this row with everyone at once on the live ref (refs/lore/live)"
                   },
                   "meta": {
                     "type": "array",
@@ -14463,6 +14471,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_live": {
+                    "type": "boolean",
+                    "description": "keep this row with the code (this branch's .lore/data)"
                   },
                   "no_meta": {
                     "type": "boolean",
@@ -15412,6 +15424,10 @@
                     "type": "string",
                     "description": "core | retrieved | episodic | procedural | archival"
                   },
+                  "live": {
+                    "type": "boolean",
+                    "description": "share this row with everyone at once on the live ref (refs/lore/live)"
+                  },
                   "meta": {
                     "type": "array",
                     "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
@@ -15429,6 +15445,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_live": {
+                    "type": "boolean",
+                    "description": "keep this row with the code (this branch's .lore/data)"
                   },
                   "rebind_master": {
                     "type": "boolean",
@@ -40764,6 +40784,10 @@
                     "type": "string",
                     "description": "JSON array of glob patterns (when activation=glob)"
                   },
+                  "live": {
+                    "type": "boolean",
+                    "description": "share this row with everyone at once on the live ref (refs/lore/live)"
+                  },
                   "meta": {
                     "type": "array",
                     "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
@@ -40781,6 +40805,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_live": {
+                    "type": "boolean",
+                    "description": "keep this row with the code (this branch's .lore/data)"
                   },
                   "no_meta": {
                     "type": "boolean",
@@ -41751,6 +41779,10 @@
                     "type": "string",
                     "description": "JSON array of glob patterns"
                   },
+                  "live": {
+                    "type": "boolean",
+                    "description": "share this row with everyone at once on the live ref (refs/lore/live)"
+                  },
                   "meta": {
                     "type": "array",
                     "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
@@ -41768,6 +41800,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_live": {
+                    "type": "boolean",
+                    "description": "keep this row with the code (this branch's .lore/data)"
                   },
                   "overrides": {
                     "type": "string",
@@ -58190,6 +58226,10 @@
                     "type": "string",
                     "description": "the lead (@handle or actor); added to the assignees if missing"
                   },
+                  "live": {
+                    "type": "boolean",
+                    "description": "share this row with everyone at once on the live ref (refs/lore/live)"
+                  },
                   "meta": {
                     "type": "array",
                     "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
@@ -58211,6 +58251,10 @@
                   "mission": {
                     "type": "string",
                     "description": "mission_id (msn_*) to attach to"
+                  },
+                  "no_live": {
+                    "type": "boolean",
+                    "description": "keep this row with the code (this branch's .lore/data)"
                   },
                   "parent": {
                     "type": "string",
@@ -62418,6 +62462,10 @@
                     "type": "string",
                     "description": "make this person the lead (added to the assignees if missing)"
                   },
+                  "live": {
+                    "type": "boolean",
+                    "description": "share this row with everyone at once on the live ref (refs/lore/live)"
+                  },
                   "meta": {
                     "type": "array",
                     "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
@@ -62439,6 +62487,10 @@
                   "mission": {
                     "type": "string",
                     "description": "attach to mission_id (msn_*)"
+                  },
+                  "no_live": {
+                    "type": "boolean",
+                    "description": "keep this row with the code (this branch's .lore/data)"
                   },
                   "no_parent": {
                     "type": "boolean",
@@ -63356,6 +63408,10 @@
                   "force": {
                     "type": "boolean",
                     "description": "close even with unticked checklist items"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "the source of the id: repo | \u003corg\u003e | \u003corg\u003e/\u003cfolder\u003e"
                   },
                   "lesson": {
                     "type": "string",
