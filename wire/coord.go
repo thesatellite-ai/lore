@@ -9,9 +9,14 @@ import (
 )
 
 // Coordinator implements opscoord.Env: the host's coordination machinery
-// (Options.Coord), shared by the CLI and `lore api` (P3-COORD-1).
+// (Options.Coord), shared by the CLI and `lore api` (P3-COORD-1); a host
+// that wires none gets what the core can answer alone (standaloneCoord,
+// P3-COORD-3).
 func (a *App) Coordinator(_ context.Context) (opscoord.Host, bool) {
-	return a.opts.Coord, a.opts.Coord != nil
+	if a.opts.Coord == nil {
+		return standaloneCoord{a: a}, true
+	}
+	return a.opts.Coord, true
 }
 
 // RecordBatchEvent implements opscoord.BatchRecorder: `task reassign

@@ -144,10 +144,17 @@ type ops struct{ env Env }
 func (o ops) host(ctx context.Context, name string) (Host, error) {
 	h, ok := o.env.Coordinator(ctx)
 	if !ok || h == nil {
-		return nil, errs.New(errs.Unsupported, "lore "+spaced(name)+" needs the team coordination machinery (the signals ref), which this binary does not have yet").
-			WithHint("run it with the release binary")
+		return nil, Unsupported(name)
 	}
 	return h, nil
+}
+
+// Unsupported is the refusal of operation name on a host without the
+// coordination machinery it needs (the standalone binary's host answers
+// it for every verb it cannot run from the core alone, P3-COORD-3).
+func Unsupported(name string) *errs.Error {
+	return errs.New(errs.Unsupported, "lore "+spaced(name)+" needs the team coordination machinery (the signals ref), which this binary does not have yet").
+		WithHint("run it with the release binary")
 }
 
 // spaced turns an operation name into its CLI words.
