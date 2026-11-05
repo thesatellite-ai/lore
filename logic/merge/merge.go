@@ -15,7 +15,7 @@
 //
 // Flow:
 //
-//	Rows ─ order (HLC, then bytes) ─ tombstone rules ─ fields:
+//	Rows ─ order (HLC, then bytes) ─ tombstone rules ─ fields ─ settleTrash (soft deletes, trash.go):
 //	  each field: pick (3-way) ─ clash? ─ strategyMerge (schema.FieldDef.Merge)
 //	                                       list_by_id │ set_union │ url_set │ entries_by_id
 //	                                     └ else: text → Mark, other → newer side
@@ -120,6 +120,9 @@ type Result struct {
 	// never resurrected) and the edit's HLC is reported here for lore doctor
 	// (spec 11 rule 3). Zero when nothing was overruled.
 	EditAfterDelete hlc.HLC
+	// Trash is the soft-delete rule that settled the row (DELETION 3.7,
+	// trash.go), "" when none applied.
+	Trash TrashOutcome
 }
 
 // Clean reports whether the merge needs no person.
@@ -158,7 +161,9 @@ func Rows(p Policy, base, ours, theirs row.Row) (Result, error) {
 	if oursNewer {
 		ns = newerOurs
 	}
-	return fields(p, base, ours, theirs, newer, older, ns), nil
+	res := fields(p, base, ours, theirs, newer, older, ns)
+	settleTrash(&res, base, ours, theirs, newer) // DELETION 3.7: soft-delete rules (trash.go)
+	return res, nil
 }
 
 // order returns (newer, older) by HLC; equal HLCs (which only one edit can
