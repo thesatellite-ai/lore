@@ -2,6 +2,8 @@ package metaquery
 
 import (
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/meta"
 )
 
 // TermKind is the closed set of what one search term is.
@@ -14,14 +16,25 @@ const (
 	Cond
 	// Has is key? (the row has the key).
 	Has
+	// Cmp is a comparison on a visible key (3.17 via the 3.6 grammar):
+	// key>v, key>=v, key<v, key<=v (numbers, dates), key!=v, key~=v
+	// (case-insensitive equality). Term.Op names the operator.
+	Cmp
 )
 
+// cmpOps are the comparison operators a search term may use, longest
+// first where one is a prefix of another. "<<" (ip in range) and "!?"
+// (missing) are not search terms: they stay text (OV39-CMP).
+var cmpOps = []meta.Op{meta.OpGe, meta.OpLe, meta.OpNe, meta.OpLike, meta.OpGt, meta.OpLt}
+
 // Term is one parsed search term. Word is the term as written; Key, Path
-// and Value are set for Cond (Key and Path for Has: Path is empty).
+// and Value are set for Cond and Cmp (Key and Path for Has: Path is
+// empty); Op is set for Cmp only.
 type Term struct {
 	Kind             TermKind
 	Word             string
 	Key, Path, Value string
+	Op               meta.Op
 }
 
 // Name is the term's key name as row_meta spells it (key, or key.path).
@@ -49,10 +62,10 @@ func parseWord(w string, isKey func(string) bool) Term {
 		key, path := splitKey(name)
 		return Term{Kind: Has, Word: w, Key: key, Path: path}
 	}
-	// the split is at the first ':' or '=' after the key part (3.17:
+	// the split is at the first ':' or operator after the key part (3.17:
 	// note:10:30 is key note, value 10:30)
-	i := strings.IndexAny(w, ":=")
-	if i <= 0 || i == len(w)-1 {
+	i, op := findOp(w)
+	if i <= 0 || i+len(op) >= len(w) {
 		return Term{Kind: Text, Word: w}
 	}
 	name := w[:i]
@@ -60,7 +73,30 @@ func parseWord(w string, isKey func(string) bool) Term {
 		return Term{Kind: Text, Word: w}
 	}
 	key, path := splitKey(name)
-	return Term{Kind: Cond, Word: w, Key: key, Path: path, Value: unquote(w[i+1:])}
+	t := Term{Kind: Cond, Word: w, Key: key, Path: path, Value: unquote(w[i+len(op):])}
+	if op != ":" && op != string(meta.OpEq) {
+		t.Kind, t.Op = Cmp, meta.Op(op)
+	}
+	return t
+}
+
+// findOp finds the first ':' or search operator in w and returns its
+// index and spelling (index -1 when none).
+func findOp(w string) (int, string) {
+	for i := 0; i < len(w); i++ {
+		if w[i] == ':' || w[i] == '=' && (i == 0 || !strings.ContainsRune("!~<>", rune(w[i-1]))) {
+			return i, w[i : i+1]
+		}
+		for _, op := range cmpOps {
+			if strings.HasPrefix(w[i:], string(op)) {
+				if op == meta.OpLt && strings.HasPrefix(w[i:], string(meta.OpIn)) {
+					return -1, "" // << stays text
+				}
+				return i, string(op)
+			}
+		}
+	}
+	return -1, ""
 }
 
 // topOf is the key part before the first '.' (dotted keys are one object
