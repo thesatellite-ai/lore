@@ -14,9 +14,17 @@ func (e *Engine) StoreFresh(ctx context.Context, source store.Source) (store.Fre
 	if err != nil {
 		return store.Fresh{}, err
 	}
-	f, ok := a.Backend.(store.Freshness)
-	if !ok {
-		return store.Fresh{}, nil
+	// A wrapper (the CLI's push-after-write layer) unwraps to the concrete
+	// backend; the first layer that implements Freshness answers.
+	for b := a.Backend; b != nil; {
+		if f, ok := b.(store.Freshness); ok {
+			return f.Fresh(ctx)
+		}
+		u, ok := b.(unwrapper)
+		if !ok {
+			break
+		}
+		b = u.Unwrap()
 	}
-	return f.Fresh(ctx)
+	return store.Fresh{}, nil
 }
