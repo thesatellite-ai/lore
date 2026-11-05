@@ -32,12 +32,13 @@ import (
 	"time"
 
 	"dbent"
-	"saas/pkg/aicoder/audit"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/gitsetup"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
 	"saas/pkg/aicoder/style"
+
+	"github.com/thesatellite-ai/lore/logic/auditchain"
 )
 
 // Environment switches (see file doc).
@@ -205,7 +206,7 @@ func syncOptions(db *sql.DB, root, dataDir string, kind lsync.ChangeKind) lsync.
 		ReadOnly:     os.Getenv(envReadOnly) == envValueOn,
 		Backup:       backupBeforeSync(db, root),
 		DBChangeKind: kind,
-		OnChange:     auditChange,
+		OnChange:     auditChangeFor(root),
 		// The CLI clock, so conflict and trash times honour LORE_NOW in
 		// test builds like every other team-command time.
 		Now: func() time.Time { return cliClock().Now() },
@@ -939,19 +940,28 @@ func remindUncommitted(ctx context.Context, root string) {
 	fmt.Fprintf(os.Stderr, "%s%d file(s) in .lore/data not committed — commit them with your change\n", syncLogPrefix, len(paths))
 }
 
-// auditChange appends one hash-chained audit entry per row a sync pass
-// changed, inside the pass's transaction (saas/pkg/aicoder/audit).
-// Action is "<table>.<kind>", e.g. "rules.write", "memories.import",
-// "tasks.external-write".
-func auditChange(ctx context.Context, q lsync.Execer, c lsync.Change) error {
-	return audit.Append(ctx, q, audit.Entry{
-		ActorID:     currentAuditActor(ctx, q),
-		Action:      c.Table + "." + string(c.Kind),
-		TargetTable: c.Table,
-		TargetID:    c.ID,
-		BeforeHash:  c.BeforeHash,
-		AfterHash:   c.AfterHash,
-	})
+// auditChangeFor returns the pass's OnChange: one hash-chained audit entry
+// per row the pass changed, appended to the chain of the project at root
+// in the machine store (P3-LOCAL-7, audit_chain.go). Action is
+// "<table>.<kind>", e.g. "rules.write", "memories.import",
+// "tasks.external-write". The entry is written in the chain's own
+// transaction, not the pass's: a pass that rolls back after it leaves the
+// entry (the change it names was attempted); the bridge goes in phase E.
+func auditChangeFor(root string) func(ctx context.Context, q lsync.Execer, c lsync.Change) error {
+	return func(ctx context.Context, q lsync.Execer, c lsync.Change) error {
+		dbPath, err := auditDBPath(root)
+		if err != nil {
+			return err
+		}
+		return appendAudit(ctx, nil, dbPath, auditchain.Record{
+			ActorID:     currentAuditActor(ctx, q),
+			Action:      c.Table + "." + string(c.Kind),
+			TargetTable: c.Table,
+			TargetID:    c.ID,
+			BeforeHash:  c.BeforeHash,
+			AfterHash:   c.AfterHash,
+		})
+	}
 }
 
 // auditActor caches the resolved actor for this process (one CLI command).

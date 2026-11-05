@@ -2,7 +2,7 @@
 // "lore inbox lists every forced reveal since the person last looked, so
 // a person sees what an agent revealed alone").
 //
-//	inbox ─▶ forcedRevealItems(ctx) ─▶ lore.db audit_logs
+//	inbox ─▶ forcedRevealItems(ctx) ─▶ the audit chain (machine store, P3-LOCAL-7)
 //	         action = secret.revealed AND reason carries " FORCED ("
 //	         (core_audit.go writes that marker for engine.SecretAudit.Forced)
 //	      ─▶ one inboxItem per event (kind "FORCED"), filtered by the ack time
@@ -10,9 +10,9 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 )
@@ -24,36 +24,32 @@ const inboxForced = "FORCED"
 // forcedMarker is the text core_audit.go adds to a forced reveal's reason.
 const forcedMarker = " FORCED ("
 
-// forcedRevealItems lists every forced reveal in the project's lore.db
-// audit log, oldest first. No lore.db (or no audit table yet) lists
-// nothing; the inbox must not fail on it.
+// forcedRevealItems lists every forced reveal in the project's audit
+// chain, oldest first. No project (or no core) lists nothing; the inbox
+// must not fail on it.
 func forcedRevealItems(ctx context.Context) ([]inboxItem, error) {
-	db, err := openCoreAuditDB(ctx)
-	if err != nil {
-		return nil, nil // no lore.db here: nothing was revealed through it
+	if coreApp == nil {
+		return nil, nil
 	}
-	defer func() { _ = db.Close() }() // read-only use
-	rows, err := db.QueryContext(ctx, `SELECT actor_id, COALESCE(target_id, ''), COALESCE(reason, ''), created_at
-		FROM audit_logs WHERE action = ? AND reason LIKE ? ORDER BY rowid`, string(engine.ActionSecretRevealed), "%"+forcedMarker+"%")
+	dbPath, err := auditDBPath("")
 	if err != nil {
-		if strings.Contains(err.Error(), "no such table") {
-			return nil, nil
-		}
-		return nil, err
+		return nil, nil // no project here: nothing was revealed in it
 	}
-	defer func() { _ = rows.Close() }() // read-only cursor
+	recs, err := auditRecords(ctx, coreApp, dbPath)
+	if err != nil {
+		return nil, errors.Join(errors.New("inbox: read the forced reveals"), err)
+	}
 	var out []inboxItem
-	for rows.Next() {
-		var actor, target, reason string
-		var at sql.NullTime
-		if err := rows.Scan(&actor, &target, &reason, &at); err != nil {
-			return nil, errors.Join(errors.New("inbox: read a forced reveal"), err)
+	for _, r := range recs {
+		if r.Action != string(engine.ActionSecretRevealed) || !strings.Contains(r.Reason, forcedMarker) {
+			continue
 		}
-		text := "secret revealed without a person's answer: " + strings.TrimSpace(reason)
-		if target != "" {
-			text += " (row " + target + ")"
+		text := "secret revealed without a person's answer: " + strings.TrimSpace(r.Reason)
+		if r.TargetID != "" {
+			text += " (row " + r.TargetID + ")"
 		}
-		out = append(out, inboxItem{Kind: inboxForced, Who: actor, Text: text, At: at.Time})
+		at, _ := time.Parse(time.RFC3339Nano, r.CreatedAt) // a v0.1.17 time that does not parse sorts as zero
+		out = append(out, inboxItem{Kind: inboxForced, Who: r.ActorID, Text: text, At: at})
 	}
-	return out, rows.Err()
+	return out, nil
 }

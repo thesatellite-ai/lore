@@ -6,7 +6,7 @@
 //	coreAuditSink.Session(ctx)            (first write of the process)
 //	  └─ currentSession(ctx, app, db, root)
 //	       ├─ sessionDetailsOf(who, actor) — nil when no session applies
-//	       └─ sessions.FindOrCreate(…)   — the ses_ id audit_logs.session_id carries (6.6)
+//	       └─ App.FindOrCreateSession(…) — the ses_ id the audit chain's session_id carries (6.6)
 package main
 
 import (

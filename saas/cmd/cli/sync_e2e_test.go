@@ -1075,7 +1075,7 @@ func TestE2E_PreCommitBlocksHandAddedSecret(t *testing.T) {
 	c.lore("init", "--non-interactive", "--name=app")
 	mem := c.addRow("clean")
 	c.commitAll("base")
-	c.writeDocField("rules", mem, "body", "key AKIAIOSFODNN7EXAMPLE")
+	c.writeDocField("rules", mem, "body", "key AKIA"+"IOSFODNN7EXAMPLE") // the AWS example key, built at run time (convention 8)
 	c.git("add", "-A")
 	if _, code := c.tryGit("commit", "-qm", "leak"); code == 0 {
 		t.Fatal("secret committed")
@@ -1161,7 +1161,7 @@ func TestE2E_PreCommitGuardsUnstagedFileInSubdirProject(t *testing.T) {
 	mem := c.addRow("clean")
 	repo.commitAll("base")
 	// The lore file gets a secret but stays UNSTAGED; only README is staged.
-	c.writeDocField("rules", mem, "body", "key AKIAIOSFODNN7EXAMPLE")
+	c.writeDocField("rules", mem, "body", "key AKIA"+"IOSFODNN7EXAMPLE") // the AWS example key, built at run time (convention 8)
 	if err := os.WriteFile(filepath.Join(repo.dir, "README.md"), []byte("# changed\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -1231,15 +1231,17 @@ func TestE2E_AuditVerifyAndLog(t *testing.T) {
 		t.Fatalf("write not logged: %s", log)
 	}
 	db := filepath.Join(c.dir, ".lore", "lore.db")
-	tamper := func(sqlText string) {
+	// P3-LOCAL-7: the chain is in the machine store, lore.db holds the rows.
+	chainDB := filepath.Join(w.home, ".lore", "state", "machine.db")
+	tamperIn := func(file, sqlText string) {
 		t.Helper()
 		r := w.run(c.dir, nil, "python3", "-c",
-			"import sqlite3,sys;c=sqlite3.connect(sys.argv[1]);c.execute(sys.argv[2]);c.commit()", db, sqlText)
+			"import sqlite3,sys;c=sqlite3.connect(sys.argv[1]);c.execute(sys.argv[2]);c.commit()", file, sqlText)
 		if r.code != 0 {
 			t.Fatalf("tamper: %s", r.stderr)
 		}
 	}
-	tamper("UPDATE rules SET body = 'HACKED' WHERE id = '" + mem + "'")
+	tamperIn(db, "UPDATE rules SET body = 'HACKED' WHERE id = '"+mem+"'")
 	if r := c.loreAny("audit", "verify"); r.code == 0 || !strings.Contains(r.stdout+r.stderr, "hash mismatch") {
 		t.Fatalf("tamper not detected: %d %s %s", r.code, r.stdout, r.stderr)
 	}
@@ -1250,7 +1252,7 @@ func TestE2E_AuditVerifyAndLog(t *testing.T) {
 	if out := c.lore("audit", "verify").stdout; !strings.Contains(out, "outside lore and later recorded") {
 		t.Fatalf("verify must surface recorded external writes: %s", out)
 	}
-	tamper("UPDATE audit_logs SET action = 'forged' WHERE rowid = 1")
+	tamperIn(chainDB, "UPDATE audit_chain SET action = 'forged' WHERE pos = 1")
 	// P3-AUDIT-1: a broken chain is the error envelope (E_AUDIT_CHAIN_BROKEN), not a report.
 	if r := c.loreAny("audit", "verify", "--json"); r.code == 0 || !strings.Contains(r.stdout+r.stderr, "audit chain broken at") {
 		t.Fatalf("forged entry not detected: %d %s", r.code, r.stdout)

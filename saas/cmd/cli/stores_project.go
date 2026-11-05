@@ -589,7 +589,7 @@ func (p *externalProject) syncOptions(db *sql.DB) lsync.Options {
 		DataDir:      filepath.Join(p.Root, projresolve.MarkerDir, lsync.DataDirName),
 		LockPath:     filepath.Join(p.Root, projresolve.MarkerDir, projresolve.StateDir, syncLockFile),
 		DBChangeKind: lsync.ChangeLocal,
-		OnChange:     auditChange,
+		OnChange:     auditChangeFor(p.Root),
 		CheckSecrets: secretCheck(),
 		Now:          func() time.Time { return cliClock().Now() },
 		StoreMirror:  true,

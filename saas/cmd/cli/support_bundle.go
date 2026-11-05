@@ -91,8 +91,11 @@ func gatherCounts(ctx context.Context, f *doctorFlags) opssupportbundle.Counts {
 	if n, err := client.LearnCandidate.Query().Count(ctx); err == nil {
 		counts["learn_candidates"] = n
 	}
-	if n, err := client.AuditLog.Query().Count(ctx); err == nil {
-		counts["audit_log_rows"] = n
+	// P3-LOCAL-7: the project's audit chain is in the machine store.
+	if dbPath, derr := auditDBPath(oldProjectDir()); derr == nil && coreApp != nil {
+		if recs, rerr := auditRecords(ctx, coreApp, dbPath); rerr == nil {
+			counts["audit_log_rows"] = len(recs)
+		}
 	}
 	// P3-LOCAL-5: render records live in the machine store (every repo's;
 	// the bundle counts the machine's, as v0.1.17 counted its lore.db's).

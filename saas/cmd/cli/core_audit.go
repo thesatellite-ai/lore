@@ -1,16 +1,15 @@
 // core_audit.go — the 0.1.18 core's audit events appended to the v0.1.17
-// hash-chained audit log (lore.db audit_logs), so `lore audit log` and
-// `lore audit verify` see core writes as they saw every v0.1.17 write.
+// hash chain, which lives in the machine store since P3-LOCAL-7
+// (audit_chain.go; one chain per lore.db path, the old rows imported once),
+// so `lore audit log` and `lore audit verify` see core writes as they saw
+// every v0.1.17 write.
 //
-// The chain writer (saas/pkg/aicoder/audit) lives in the old module, so the
-// sink is built here and handed to the core through wire.Options.Audit; the
-// new module never imports saas.
+// The sink is built here and handed to the core through wire.Options.Audit.
 package main
 
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -18,12 +17,12 @@ import (
 	"strings"
 	"sync"
 
-	"saas/pkg/aicoder/audit"
 	"saas/pkg/aicoder/errcodes"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/auditchain"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -60,9 +59,11 @@ type coreAuditSink struct {
 	// topOnce/top cache the git top of root (projectRoot).
 	topOnce sync.Once
 	top     string
-	once    sync.Once
-	db      *sql.DB
-	err     error
+	// once/dbPath/err: the lore.db path naming this project's chain
+	// (resolved once; the chain itself is in the machine store, P3-LOCAL-7).
+	once   sync.Once
+	dbPath string
+	err    error
 	// session is this process's ses_ row (6.2), found or created once on
 	// the first event that asks (Session).
 	sesOnce sync.Once
@@ -91,7 +92,7 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 		// of every repo row this command purged (purge_local_copies.go).
 		notePurgedThisRun(s.projectRoot(ctx), ev.ID)
 	}
-	s.once.Do(func() { s.db, s.err = openCoreAuditDBAt(ctx, s.projectRoot(ctx)) })
+	s.once.Do(func() { s.dbPath, s.err = auditDBPath(s.projectRoot(ctx)) })
 	if s.err != nil {
 		return s.err
 	}
@@ -120,21 +121,11 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 			return serr
 		}
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return errcodes.New(errcodes.Internal, "audit: begin").WithCause(err)
-	}
-	if err = audit.Append(ctx, tx, audit.Entry{
+	return appendAudit(ctx, s.app, s.dbPath, auditchain.Record{
 		ActorID: ev.Actor.String(), Action: action,
 		TargetTable: table, TargetID: ev.ID.String(), Reason: reason,
 		SessionID: ses, Confirmed: ev.Confirmed || engine.Confirmed(ctx), // 6.6, hashed only when set (OQ10)
-	}); err != nil {
-		return errcodes.New(errcodes.Internal, "audit: append a core write").WithCause(errors.Join(err, tx.Rollback()))
-	}
-	if err = tx.Commit(); err != nil {
-		return errcodes.New(errcodes.Internal, "audit: commit").WithCause(err)
-	}
-	return nil
+	})
 }
 
 // projectRoot is the folder lore.db is resolved at: the nearest folder

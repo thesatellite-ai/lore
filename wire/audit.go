@@ -21,7 +21,8 @@ import (
 // history, not shared knowledge).
 //
 // It is the fallback sink: when Options.Audit is set (the old binary's
-// sink appending the v0.1.17 audit_logs hash chain) nothing is written here.
+// sink appending the v0.1.17 hash chain, in the machine store since
+// P3-LOCAL-7) nothing is written here.
 // Writes to attached stores never land here (AUDIT ATTACHED STORES: the
 // checkout's chain keeps only repo-store writes): their trail is the
 // machine-local StoreAuditDir file (routedAudit).

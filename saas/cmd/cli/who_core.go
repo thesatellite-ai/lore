@@ -1,10 +1,11 @@
 // who_core.go — the session lines of `lore task show --who` (AGENT_IDENTITY
-// 6.2 / 9): the old binary's audit sink owns lore.db, so it implements
-// wire.WhoSource and the core's (*wire.App).WhoLines hands the question on.
+// 6.2 / 9): the old binary's audit sink keeps the repo's audit chain, so it
+// implements wire.WhoSource and the core's (*wire.App).WhoLines hands the
+// question on.
 //
 //	opstask.who → (*wire.App).WhoLines → (*coreAuditSink).WhoLines
-//	  ├─ open lore.db (the sink's handle; none here → no lines)
-//	  ├─ audit_logs rows of the target with a session_id, grouped per session
+//	  ├─ resolve the project's chain (no project here → no lines)
+//	  ├─ audit chain entries of the target with a session_id (machine store, P3-LOCAL-7), grouped per session
 //	  └─ each ses_ id looked up in the machine store's sessions (tool, tool
 //	     session id, model; P3-COORD-SESS-1); the tool session id is
 //	     redacted off-terminal / in CI
@@ -29,44 +30,50 @@ var _ wire.WhoSource = (*coreAuditSink)(nil)
 // guessed).
 const whoNone = "-"
 
-// whoSelect lists the sessions that wrote one row, oldest first.
-const whoSelect = `SELECT a.session_id, MAX(COALESCE(a.confirmed, 0)), COUNT(*)
-	FROM audit_logs a
-	WHERE a.target_id = ? AND COALESCE(a.session_id, '') <> ''
-	GROUP BY a.session_id ORDER BY MIN(a.created_at)`
-
 // WhoLines implements wire.WhoSource: one line per session that wrote
-// rowID — ses_ id, tool, tool session (redacted), model, confirmed, writes.
+// rowID — ses_ id, tool, tool session (redacted), model, confirmed, writes
+// — oldest first (the session's first write), from the audit chain in the
+// machine store (P3-LOCAL-7).
 func (s *coreAuditSink) WhoLines(ctx context.Context, rowID string) ([]string, error) {
-	s.once.Do(func() { s.db, s.err = openCoreAuditDB(ctx) })
+	s.once.Do(func() { s.dbPath, s.err = auditDBPath(s.projectRoot(ctx)) })
 	if s.err != nil {
-		return nil, nil // no repo lore.db here: nothing machine-local to show
+		return nil, nil // no project here: nothing machine-local to show
 	}
-	if ok, err := columnExists(ctx, s.db, "audit_logs", "session_id"); err != nil || !ok {
-		return nil, err // a v0.1.17 lore.db not migrated yet: no session links
+	recs, err := auditRecords(ctx, s.app, s.dbPath)
+	if err != nil {
+		return nil, errcodes.New(errcodes.Internal, "who: read the audit log").WithCause(err)
+	}
+	type tally struct {
+		confirmed bool
+		writes    int
+	}
+	var order []string
+	per := map[string]*tally{}
+	for _, r := range recs {
+		if r.TargetID != rowID || strings.TrimSpace(r.SessionID) == "" {
+			continue
+		}
+		t, ok := per[r.SessionID]
+		if !ok {
+			t = &tally{}
+			per[r.SessionID] = t
+			order = append(order, r.SessionID)
+		}
+		t.writes++
+		t.confirmed = t.confirmed || r.Confirmed
+	}
+	if len(order) == 0 {
+		return nil, nil
 	}
 	known, err := s.whoSessions(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, whoSelect, rowID)
-	if err != nil {
-		return nil, errcodes.New(errcodes.Internal, "who: read the audit log").WithCause(err)
-	}
-	defer func() { _ = rows.Close() }() // read-only
-	var out []string
-	for rows.Next() {
-		var ses string
-		var confirmed, writes int
-		if err := rows.Scan(&ses, &confirmed, &writes); err != nil {
-			return nil, errcodes.New(errcodes.Internal, "who: scan the audit log").WithCause(err)
-		}
-		d := known[ses]
+	out := make([]string, 0, len(order))
+	for _, ses := range order {
+		d, t := known[ses], per[ses]
 		out = append(out, fmt.Sprintf("%s  tool %s  session %s  model %s  confirmed %s  (%d writes)",
-			ses, whoField(d.Tool), whoField(redactToolSession(d.ToolSessionID)), whoField(d.Model), yesNoWho(confirmed != 0), writes))
-	}
-	if err := rows.Err(); err != nil {
-		return nil, errcodes.New(errcodes.Internal, "who: read the audit log").WithCause(err)
+			ses, whoField(d.Tool), whoField(redactToolSession(d.ToolSessionID)), whoField(d.Model), yesNoWho(t.confirmed), t.writes))
 	}
 	return out, nil
 }

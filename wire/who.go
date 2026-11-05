@@ -6,7 +6,7 @@ package wire
 //
 //	opstask.who ─ upgrade.As[Whoer](env) ─ (*App).WhoLines
 //	  ├─ Options.Audit implements WhoSource (the old binary's sink:
-//	  │    lore.db audit_logs ⋈ sessions) → its lines
+//	  │    the machine store audit chain ⋈ sessions, P3-LOCAL-7) → its lines
 //	  └─ else the fallback .lore/state/audit-v2.jsonl: one line per
 //	       ses_ id with the confirmed flag (no tool/model: that file
 //	       never holds them)

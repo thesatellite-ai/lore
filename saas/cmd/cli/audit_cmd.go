@@ -1,5 +1,6 @@
 // audit_cmd.go — the old binary's reader of the v0.1.17 hash-chained audit
-// log (lore.db audit_logs) for `lore audit log|verify`, which are core
+// log (in the machine store since P3-LOCAL-7, audit_chain.go; one chain per
+// lore.db path) for `lore audit log|verify`, which are core
 // operations now (ops/audit, P3-AUDIT-1..4): coreAuditSink, which appends
 // the chain, also implements opsaudit.Env, and wire hands the operations
 // to it (wire/auditlog.go).
@@ -18,13 +19,15 @@ package main
 import (
 	"context"
 	"database/sql"
+	"os"
+	"slices"
 	"strings"
 
 	"dbent"
-	"saas/pkg/aicoder/audit"
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/projresolve"
 
+	"github.com/thesatellite-ai/lore/logic/auditchain"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 )
@@ -49,14 +52,17 @@ func openAuditDB() (*sql.DB, *projresolve.Context, error) {
 
 // AuditLog implements opsaudit.Env: newest first, limit <= 0 = all.
 func (s *coreAuditSink) AuditLog(ctx context.Context, limit int) ([]opsaudit.Entry, error) {
-	db, _, err := openAuditDB()
+	dbPath, err := auditDBPath(oldProjectDir())
 	if err != nil {
-		return nil, err
+		return nil, asCoreError(err)
 	}
-	defer func() { _ = db.Close() }() // read-only: nothing to flush
-	recs, err := audit.List(ctx, db, limit)
+	recs, err := auditRecords(ctx, s.app, dbPath)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "read audit log", err)
+	}
+	slices.Reverse(recs)
+	if limit > 0 && len(recs) > limit {
+		recs = recs[:limit]
 	}
 	out := make([]opsaudit.Entry, 0, len(recs))
 	for _, r := range recs {
@@ -67,23 +73,31 @@ func (s *coreAuditSink) AuditLog(ctx context.Context, limit int) ([]opsaudit.Ent
 
 // AuditVerify implements opsaudit.Env. It records nothing.
 func (s *coreAuditSink) AuditVerify(ctx context.Context) (opsaudit.Report, error) {
+	dbPath, err := auditDBPath(oldProjectDir())
+	if err != nil {
+		return opsaudit.Report{}, asCoreError(err)
+	}
+	recs, err := auditRecords(ctx, s.app, dbPath)
+	if err != nil {
+		return opsaudit.Report{}, errs.Wrap(errs.Internal, "read audit log", err)
+	}
+	var rep opsaudit.Report
+	rep.BrokenAt, rep.Entries = auditchain.Verify(recs)
+	for _, r := range recs {
+		if strings.HasSuffix(r.Action, "."+string(lsync.ChangeExternal)) {
+			rep.ExternalWrites++
+		}
+	}
+	// 2. rows changed in lore.db by something other than lore (the sync
+	// bridge's lore.db, not the chain): only where lore.db exists.
+	if fi, lerr := os.Lstat(dbPath); lerr != nil || !fi.Mode().IsRegular() {
+		return rep, nil
+	}
 	db, rctx, err := openAuditDB()
 	if err != nil {
-		return opsaudit.Report{}, err
+		return rep, err
 	}
 	defer func() { _ = db.Close() }() // read-only: nothing to flush
-	return runAuditVerify(ctx, db, rctx)
-}
-
-// runAuditVerify walks the chain, compares the rows with the synced state
-// and counts the external writes recorded earlier.
-func runAuditVerify(ctx context.Context, db *sql.DB, rctx *projresolve.Context) (opsaudit.Report, error) {
-	var rep opsaudit.Report
-	broken, n, err := audit.Verify(ctx, db)
-	if err != nil {
-		return rep, errs.Wrap(errs.Internal, "verify audit chain", err)
-	}
-	rep.Entries, rep.BrokenAt = n, broken
 	if syncApplies(rctx) {
 		changed, uerr := lsync.UnexportedChanges(ctx, db)
 		if uerr != nil {
@@ -93,20 +107,11 @@ func runAuditVerify(ctx context.Context, db *sql.DB, rctx *projresolve.Context) 
 			rep.ChangedOutside = append(rep.ChangedOutside, opsaudit.RowRef{Table: c.Table, ID: c.ID})
 		}
 	}
-	recs, err := audit.List(ctx, db, 0)
-	if err != nil {
-		return rep, errs.Wrap(errs.Internal, "read audit log", err)
-	}
-	for _, r := range recs {
-		if strings.HasSuffix(r.Action, "."+string(lsync.ChangeExternal)) {
-			rep.ExternalWrites++
-		}
-	}
 	return rep, nil
 }
 
 // entryOf is one chain record in the operation's shape (same JSON keys).
-func entryOf(r audit.Record) opsaudit.Entry {
+func entryOf(r auditchain.Record) opsaudit.Entry {
 	return opsaudit.Entry{
 		ActingProjectID: r.ActingProjectID, TargetProjectID: r.TargetProjectID, ActorID: r.ActorID, Action: r.Action,
 		TargetTable: r.TargetTable, TargetID: r.TargetID, Override: r.Override, BeforeHash: r.BeforeHash, AfterHash: r.AfterHash,
