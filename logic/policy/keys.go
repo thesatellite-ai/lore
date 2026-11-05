@@ -219,9 +219,9 @@ const (
 	defaultContextBudgetIntern  int64 = 8000 // 6.1: all private files of a repo
 	defaultContextBudgetPath    int64 = 8000
 	defaultContextDirMinEntries int64 = 3
-	defaultContextChainMaxCodex int64 = 32768
-	defaultManagerTimeoutSec    int64 = 5  // SECRETS 6
-	ceilingManagerTimeoutSec    int64 = 30 // SECRETS 6: "max 30 s"
+	defaultContextChainMaxCodex int64 = 26000 // 6.1: 80% of Codex's 32 KiB cap (G-META-1)
+	defaultManagerTimeoutSec    int64 = 5     // SECRETS 6
+	ceilingManagerTimeoutSec    int64 = 30    // SECRETS 6: "max 30 s"
 )
 
 // OnDetect is the value of secrets.on_detect.
