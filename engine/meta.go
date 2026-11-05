@@ -296,6 +296,10 @@ type metaPlan struct {
 	warnings []Warning
 	columns  map[string]bool
 	changed  []ids.ID[ids.MetaKey]
+	// ask is the terminal's yes/no question for an interactive caller
+	// (nil otherwise): an ambiguous bare name asks which definition to
+	// use instead of failing (OV10, P2-META-8).
+	ask func(question string) (bool, error)
 }
 
 // applyMeta returns cur changed by mw (see the file's flow sketch). A
@@ -330,6 +334,9 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 		return nil, nil, err
 	}
 	p := &metaPlan{e: e, target: target, reg: reg, entries: map[ids.ID[ids.MetaKey]]meta.Entry{}, columns: e.columnNames()}
+	if cl.caller.Interactive && !cl.caller.Yes && e.confirmer != nil {
+		p.ask = func(q string) (bool, error) { return e.confirmer.Confirm(ctx, q) }
+	}
 	for id, j := range cur {
 		en, derr := meta.DecodeEntry(j)
 		if derr != nil {
@@ -607,6 +614,19 @@ func (p *metaPlan) resolve(t meta.Term) (*keyDef, []string, error) {
 		return nil, fields, nil
 	case 1:
 		return hits[0], fields, nil
+	}
+	if p.ask != nil {
+		// P2-META-8: a terminal asks per definition, nearest place first
+		// (the reg order); the first yes is used; all no → the error below.
+		for _, h := range hits {
+			ok, err := p.ask(fmt.Sprintf("%q has %d definitions; use %s (%s, %s)?", top, len(hits), h.label(), h.id, h.typ))
+			if err != nil {
+				return nil, nil, err
+			}
+			if ok {
+				return h, fields, nil
+			}
+		}
 	}
 	var lines, forms []string
 	for _, h := range hits {
