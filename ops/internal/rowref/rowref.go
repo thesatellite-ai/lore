@@ -4,8 +4,11 @@
 // confidence "extracted"); a commit pointer (commit:<sha>) is a
 // commit_links row on the source row.
 //
-//	--ref values ─▶ Parse (known table, row exists or <prj_…>:<id>)
-//	             ─▶ Check (F15 direction, before anything is written)
+//	--ref values ─▶ Parse (known table, row exists or <prj_…>:<id>;
+//	                       not loaded here but in another folder of an
+//	                       attached store ─▶ kept as hidden)
+//	             ─▶ Check (F15 direction, before anything is written; a
+//	                       hidden target is placed by its store's class)
 //	(row written by the noun)
 //	             ─▶ Save  (one knowledge_refs / commit_links row each; a
 //	                       pointer already present writes nothing)
@@ -14,10 +17,12 @@ package rowref
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -71,6 +76,17 @@ type Ref struct {
 	ID      ids.AnyID
 	Project string
 	SHA     string
+	// hidden is set by Parse when the row is not loaded in this checkout
+	// but sits in a data folder of an attached store it does not attach
+	// (engine.LocateHidden); Check places it by that store's class.
+	hidden *engine.HiddenHit
+}
+
+// HiddenLocator is the optional Env upgrade Parse uses after Get missed:
+// *wire.App implements it (engine.LocateHidden). An Env without it answers
+// E_NOT_FOUND as before.
+type HiddenLocator interface {
+	LocateHidden(ctx context.Context, ref engine.Ref) (engine.HiddenHit, bool, error)
 }
 
 // Out is one pointer of a row as `show` prints it.
@@ -155,6 +171,21 @@ func Parse(ctx context.Context, env Env, raw []string) ([]Ref, error) {
 			_, got, gerr := env.Get(ctx, engine.Ref{Table: def.Name, ID: id})
 			switch {
 			case errs.CodeOf(gerr) == errs.NotFound:
+				// Final smoke: a row of a folder this checkout does not
+				// attach (the root of the org store a client repo links
+				// to) is still a row of an attached store: Check refuses
+				// it by F15 instead of "no such row". Any lookup error
+				// refuses (fail closed).
+				if hl, ok := env.(HiddenLocator); ok {
+					hit, found, herr := hl.LocateHidden(ctx, engine.Ref{Table: def.Name, ID: id})
+					if herr != nil {
+						return nil, herr
+					}
+					if found {
+						out = append(out, Ref{Table: def.Name, ID: id, hidden: &hit})
+						continue
+					}
+				}
 				return nil, errs.New(errs.NotFound, "--ref "+r+": no row "+id.String()+" in any attached store").
 					WithHint("qualify a row of another project as <prj_…>:<id>")
 			case gerr != nil:
@@ -177,11 +208,51 @@ func Check(ctx context.Context, env Env, from store.Source, refs []Ref) error {
 		if r.SHA != "" {
 			continue
 		}
+		if r.hidden != nil {
+			if err := checkHidden(ctx, env, from, r); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := pointer.Check(ctx, env, from, engine.Ref{Table: r.Table, ID: r.ID}); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// checkHidden is F15 for a target Parse found only in a folder this
+// checkout does not attach: placed by the class of the store holding it
+// (pointer.Classifier, else by name), refused as E_LEAK_BLOCKED naming the
+// direction rule and where the row is. A direction F15 allows (an
+// internal row pointing at another internal folder) passes, and the
+// pointer reads "(not available here)" on this checkout.
+func checkHidden(ctx context.Context, env Env, from store.Source, r Ref) error {
+	fc, err := classOf(ctx, env, from)
+	if err != nil {
+		return err
+	}
+	tc, err := classOf(ctx, env, r.hidden.Store)
+	if err != nil {
+		return err
+	}
+	err = direction.Check(fc, tc)
+	var e *errs.Error
+	if errors.As(err, &e) {
+		named := *e
+		named.Message = "pointer to " + r.ID.String() + " (in store " + string(r.hidden.Store) + ", folder " + r.hidden.Folder + ", not attached here): " + e.Message
+		return &named
+	}
+	return err
+}
+
+// classOf asks env's pointer.Classifier, or places name by itself (the
+// repo store and the default target flagged client: fail closed).
+func classOf(ctx context.Context, env Env, name store.Source) (direction.Class, error) {
+	if c, ok := env.(pointer.Classifier); ok {
+		return c.StoreClass(ctx, name)
+	}
+	return direction.ClassOf(string(name), name == "" || name == store.SourceRepo), nil
 }
 
 // Save records refs of row id (table srcTable, project prj) in store src
