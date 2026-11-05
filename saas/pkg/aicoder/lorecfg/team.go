@@ -155,7 +155,12 @@ type Personal struct {
 
 // Org is one entry under `orgs:` (§5.2, F13).
 type Org struct {
-	Name     string      `yaml:"name"`
+	Name string `yaml:"name"`
+	// ID is the org's permanent id: the prj_ id of its org folder's
+	// _meta.json (P2-ORG-1: no org_ prefix, CONFIG_GUIDE Q3). Written by
+	// `lore org rename`; Name is only this machine's label for it
+	// (PROVENANCE 10.7). Empty until recorded.
+	ID       string      `yaml:"id,omitempty"`
 	Identity OrgIdentity `yaml:"identity,omitempty"`
 	Stores   []Store     `yaml:"stores,omitempty"`
 	// Own are patterns of the org's own code repos (no client guards).
