@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/content/contenttest"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // actor writes an actors row and returns its id; empty values are left
@@ -35,6 +36,16 @@ func actor(t *testing.T, h *opstest.H, kind, display, handle, key string) string
 	return w.Row.ID.String()
 }
 
+// internalRepo makes the harness repo an internal one. With no
+// RepoIsClient hook the repo fails closed to client-class, where every
+// write drops the actors' Internal stable_key and projects agent ids to
+// their owner (PC-LEAK-1, P2B-OLD-2); --for resolution by stable key and
+// to an agent is about the person's own repo, so the roster tests run in
+// one.
+func internalRepo(o *wire.Options) {
+	o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
+}
+
 // roster seeds the actors the resolution matrix runs against.
 func roster(t *testing.T, h *opstest.H) map[string]string {
 	t.Helper()
@@ -52,7 +63,7 @@ func roster(t *testing.T, h *opstest.H) map[string]string {
 // (unicode too); no match is E_NOT_FOUND, several matches is
 // E_INVALID_INPUT naming them; --to is the deprecated alias.
 func TestForResolution(t *testing.T) {
-	h := opstest.New(t)
+	h := opstest.New(t, internalRepo)
 	ids := roster(t, h)
 	cases := []struct {
 		name, input, want string
@@ -110,7 +121,7 @@ func TestForResolution(t *testing.T) {
 // both accepted, the argument wins when both are given; an empty text is
 // E_EMPTY_BODY; list/show/ack/delete lines match v0.1.17.
 func TestAddLinesAndText(t *testing.T) {
-	h := opstest.New(t)
+	h := opstest.New(t, internalRepo)
 	ids := roster(t, h)
 	res := h.Must("handoff.add", `{"for":"@alice","text":"form is half done, see PR 12"}`)
 	id := h.ID(res)
@@ -159,7 +170,7 @@ func TestAddLinesAndText(t *testing.T) {
 // without a mission records no mission; an unknown or malformed task is
 // refused before anything is written.
 func TestTaskFillsMission(t *testing.T) {
-	h := opstest.New(t)
+	h := opstest.New(t, internalRepo)
 	roster(t, h)
 	mission := contenttest.Str(t, h.JSON(h.Must("mission.add", `{"title":"Ship v2"}`)), "data", "id")
 	if mission == "" {
@@ -192,7 +203,7 @@ func TestTaskFillsMission(t *testing.T) {
 // TestSearch: search covers body and status (v0.1.17 FTS of handoffs),
 // with "<id> <body>" lines and the v0.1.17 hit row keys.
 func TestSearch(t *testing.T) {
-	h := opstest.New(t)
+	h := opstest.New(t, internalRepo)
 	roster(t, h)
 	a := h.ID(h.Must("handoff.add", `{"for":"@alice","text":"retry logic is half done"}`))
 	b := h.ID(h.Must("handoff.add", `{"for":"@alice","text":"nothing to see"}`))

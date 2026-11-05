@@ -248,7 +248,12 @@ func TestProjectText(t *testing.T) {
 // TestActorText: actor list / show lines as v0.1.17 printed them, from a
 // roster row (kinds × optional fields).
 func TestActorText(t *testing.T) {
-	h := opstest.New(t)
+	// An internal repo: a client-class repo (the harness default, no
+	// RepoIsClient hook) drops the actors' Internal stable_key on write
+	// (PC-LEAK-1), and show prints the stored key.
+	h := opstest.New(t, func(o *wire.Options) {
+		o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
+	})
 	if got := opstest.Text(h.Must(infra.OpActorList, ``)); got != "(no actors)\n" {
 		t.Errorf("empty %q", got)
 	}
