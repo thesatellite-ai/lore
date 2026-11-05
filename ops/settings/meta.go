@@ -12,6 +12,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -666,7 +667,8 @@ func (o ops) metaRowWrite(ctx context.Context, id ids.AnyID, mw engine.MetaWrite
 // setEcho is "name = value, …" of the keys a meta set wrote, read back
 // from the stored row so a sensitive key echoes "= •••" (METADATA 3.2,
 // 3.20; OV10) and a typed value shows as stored. A dotted (object field)
-// name, or one the row does not hold, shows alone.
+// name echoes that field's value (later 516); a name the row does not
+// hold, or a field the stored object lacks, shows alone.
 func setEcho(r row.Row, names []string, sens map[string]bool) string {
 	byName := map[string]meta.Entry{}
 	for _, en := range decodeEntries(r, sens) {
@@ -675,16 +677,40 @@ func setEcho(r row.Row, names []string, sens map[string]bool) string {
 	parts := make([]string, 0, len(names))
 	for _, n := range names {
 		en, ok := byName[meta.TopSegment(n)]
+		segs := meta.Segments(n)
 		switch {
 		case ok && en.Sensitive:
 			parts = append(parts, n+" = "+meta.Show(en))
-		case ok && len(meta.Segments(n)) == 1:
+		case ok && len(segs) == 1:
 			parts = append(parts, n+" = "+meta.Show(en))
-		default: // a field of an object key: the name alone
+		case ok:
+			if sub, found := fieldOf(en.V, segs[1:]); found {
+				parts = append(parts, n+" = "+meta.Show(meta.Entry{V: sub}))
+				continue
+			}
+			parts = append(parts, n)
+		default:
 			parts = append(parts, n)
 		}
 	}
 	return strings.Join(parts, ", ")
+}
+
+// fieldOf is the canonical JSON of the object field at path inside raw;
+// false when a step is not an object member.
+func fieldOf(raw []byte, path []string) ([]byte, bool) {
+	for _, step := range path {
+		ms, err := canon.Members(raw)
+		if err != nil {
+			return nil, false
+		}
+		at := slices.IndexFunc(ms, func(m canon.Member) bool { return m.Key == step })
+		if at < 0 {
+			return nil, false
+		}
+		raw = ms[at].Raw
+	}
+	return raw, true
 }
 
 // metaSet is `lore meta set <id> k=v` (3.2; MQ9, MQ12, R13).
