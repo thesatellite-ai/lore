@@ -1,0 +1,28 @@
+<rule id="rul_01a1acbf80f6709f92908f65b9112bbd" severity="must" trust="0.50">
+Never commit secrets
+</rule>
+
+<rule id="rul_01a1acbf82617e79ac41a0e5cc530de1" severity="must" trust="0.50">
+Use tabs in Go files
+</rule>
+
+<rule id="rul_01a1acbf867079d8ae525fa4268df417" severity="must" trust="0.50">
+Manual only rule
+</rule>
+
+<rule id="rul_01a1acbf87bb766cbe739ea81ec19d23" severity="must" trust="0.50">
+Global must rule
+</rule>
+
+<hotfix id="hfx_01a1acbf892b7b67bf73d1a0171e2acc" severity="critical">
+**DB pool leak**
+
+Close rows after Query
+</hotfix>
+
+<hotfix id="hfx_01a1acbf8a8776a3985f04cfd9cdd939" severity="high">
+**Retry storm**
+
+Cap retries at 3
+</hotfix>
+
