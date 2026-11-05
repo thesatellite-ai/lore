@@ -414,7 +414,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		dup := false
 		if pc, perr := canonical(me); perr == nil {
 			for _, s := range cfg.Stores {
-				if c, cerr := canonical(attach.Store{URL: s.URL, Folder: s.Folder, Branch: s.Branch}); cerr == nil && c == pc {
+				if c, cerr := canonical(attach.Store{URL: s.URL, Folder: s.Folder, Branch: s.Branch}); cerr == nil && sameRoot(c, pc) {
 					dup = true
 				}
 			}
@@ -545,6 +545,30 @@ func canonical(s attach.Store) (string, error) {
 		u.RawQuery = q.Encode()
 	}
 	return u.String(), nil
+}
+
+// sameRoot reports whether two canonical urls name the same store place.
+// canonical leaves a file:// path as written, so "file:///x/" and
+// "file:///x" (one folder) would load the personal store twice under two
+// names; a trailing slash on the path is not a different place.
+func sameRoot(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ua, ea := url.Parse(a)
+	ub, eb := url.Parse(b)
+	if ea != nil || eb != nil || ua.Scheme != folder.Scheme || ub.Scheme != folder.Scheme {
+		return false
+	}
+	trim := func(u *url.URL) string {
+		c := *u
+		if p := strings.TrimRight(c.Path, "/"); p != "" {
+			c.Path = p
+		}
+		c.RawPath = ""
+		return c.String()
+	}
+	return trim(ua) == trim(ub)
 }
 
 // originsOf maps each git store url in raws (as written: stores.yaml, the

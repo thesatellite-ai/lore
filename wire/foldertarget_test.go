@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -101,14 +102,89 @@ func TestFolderTargetConfirmThenCreate(t *testing.T) {
 		}
 	}
 
-	for _, to := range []string{"team/x", "company/x"} {
+	// team and company with no org: E_NOT_FOUND (STORE_SERVER_SPEC STORE
+	// TARGETS: "A repo with no org link (or no such folder) gets
+	// E_NOT_FOUND", hint naming `lore org link` or --to <store>/<folder>);
+	// the bare shortcut says which org folder is missing, a folder under a
+	// reserved word is no attached store. Nothing is written either way.
+	for _, c := range []struct{ to, msg, hint string }{
+		{"team", "--to team: this repository has no org store folder linked to it", "lore org link <org> --project <folder>"},
+		{"company", "--to company: this repository has no org store org folder", "--to <store>/<folder>"},
+		{"team/x", "no store named team/x is attached", ""},
+		{"company/x", "no store named company/x is attached", ""},
+	} {
 		before := string(mustRead(t, yamlPath))
-		if _, err = run(t, a, opsmemory.OpAdd, `{"body":"no org","to":"`+to+`","create":true}`, true); err == nil {
-			t.Fatalf("--to %s with no org was accepted", to)
+		_, err = run(t, a, opsmemory.OpAdd, `{"body":"no org","to":"`+c.to+`","create":true}`, true)
+		var e *errs.Error
+		if !errors.As(err, &e) || e.Code != errs.NotFound || !strings.Contains(e.Message, c.msg) || !strings.Contains(e.Hint, c.hint) {
+			t.Fatalf("--to %s with no org: %#v", c.to, err)
 		}
 		if after := string(mustRead(t, yamlPath)); after != before {
-			t.Fatalf("--to %s changed stores.yaml", to)
+			t.Fatalf("--to %s changed stores.yaml", c.to)
 		}
+		if _, serr := os.Stat(filepath.Join(storeDir, c.to)); !os.IsNotExist(serr) {
+			t.Fatalf("--to %s made a folder in the store: %v", c.to, serr)
+		}
+	}
+}
+
+// TestPersonalStoreLoadedOnce (STORE TARGETS, BATCH 15): the personal
+// store `me` is attached last, and skipped when stores.yaml already
+// attaches the same url at its root (the store loads once, under the
+// stores.yaml name); the same url at a folder, or another url, keeps `me`.
+func TestPersonalStoreLoadedOnce(t *testing.T) {
+	cases := []struct {
+		name    string
+		yaml    func(url string) string
+		wantMe  bool
+		wantErr bool
+	}{
+		{"same url at the root: me skipped", func(u string) string { return "stores:\n  - name: northwind\n    url: " + u + "\n" }, false, false},
+		{"same url with a trailing slash: me skipped", func(u string) string { return "stores:\n  - name: northwind\n    url: " + u + "/\n" }, false, false},
+		{"same url at a folder: me kept", func(u string) string {
+			return "stores:\n  - name: northwind\n    url: " + u + "\n    folder: acme\n"
+		}, true, false},
+		{"no stores.yaml: me attached", nil, true, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			repo, storeDir, yamlPath, _ := folderStoreRepo(t)
+			url := "file://" + filepath.ToSlash(storeDir)
+			if c.yaml == nil {
+				if err := os.Remove(yamlPath); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(yamlPath, []byte(c.yaml(url)), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			a := newTestApp(t, repo)
+			if err := os.MkdirAll(a.opts.Home, 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(configPath(a.opts.Home), []byte("personal:\n  store: "+url+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := a.Engine(background()); err != nil {
+				t.Fatal(err)
+			}
+			got := a.Stores()
+			if hasMe := slices.Contains(got, store.Source(attach.ReservedMe)); hasMe != c.wantMe {
+				t.Fatalf("me attached = %v, want %v: %v", hasMe, c.wantMe, got)
+			}
+			n := 0
+			for _, s := range got {
+				if s == "northwind" || s == store.Source(attach.ReservedMe) {
+					n++
+				}
+			}
+			want := 1
+			if c.wantMe && c.yaml != nil {
+				want = 2 // a folder entry and the root are two places
+			}
+			if n != want {
+				t.Fatalf("stores = %v, want %d of northwind/me", got, want)
+			}
+		})
 	}
 }
 
