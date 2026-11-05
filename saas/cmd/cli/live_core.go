@@ -90,7 +90,9 @@ func coreWrapBackend(_ context.Context, name store.Source, _ string, b store.Bac
 	if !ok {
 		return b
 	}
-	return &liveBackend{inner: d, top: d.Dir(), folder: live.RootFolder}
+	// A monorepo subproject's rows live under its own folder (live_folder.go).
+	top, folder := liveRepoPlace(d.Dir())
+	return &liveBackend{inner: d, top: top, folder: folder}
 }
 
 // liveBackend is the repo store's backend with v0.1.17's live ref in front
@@ -99,8 +101,9 @@ type liveBackend struct {
 	inner store.Backend
 	// top is the repository's top level (the live session's key).
 	top string
-	// folder is the live folder of the repo store (`_root`: the repo store
-	// is always the repository's top-level .lore/data).
+	// folder is the live folder of the repo store's project: `_root` for
+	// the repository's top-level .lore/data, the repo-relative path of a
+	// monorepo subproject otherwise (liveRepoPlace).
 	folder string
 }
 
