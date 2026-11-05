@@ -90,6 +90,8 @@ func (c *Config) Validate() error {
 			add("context.profiles: %v", err)
 		}
 	}
+	errs = append(errs, c.validatePolicies()...)
+	errs = append(errs, prefixAll("store", c.Store.validate())...)
 
 	seen := map[string]int{}
 	for i := range c.Orgs {

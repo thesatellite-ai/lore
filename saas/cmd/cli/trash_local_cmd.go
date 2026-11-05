@@ -5,7 +5,7 @@
 // store). Two forms read lore.db, which only this binary opens, so they
 // are added here to the generated commands:
 //
-//	lore trash --local [--json]          ─► sync trash list (this machine's _lore_sync_trash)
+//	lore trash list --local [--json]     ─► sync trash list (this machine's _lore_sync_trash)
 //	lore trash restore --local <n>       ─► sync trash restore <n>
 //	lore trash purge --local --purged    ─► lsync.DropPurgedCopies (OV31: drop
 //	    [--dry-run|--confirm]                this machine's copies of rows
@@ -32,7 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/trash"
 )
 
-// localTrashNote heads `lore trash --local` (DELETION 501).
+// localTrashNote heads `lore trash list --local` (DELETION 501).
 const localTrashNote = "this machine only: local safety copies of rows sync removed (never shared)"
 
 // Flags this file adds to the generated trash commands.
@@ -65,7 +65,7 @@ func attachTrashLocal(root *cobra.Command) {
 					return nil
 				}, newSyncTrashCommand)
 		case trashVerbRest:
-			wrapTrashLocal(sub, "restore this machine's safety copy <n> (lore trash --local lists them); replaces lore sync trash restore",
+			wrapTrashLocal(sub, "restore this machine's safety copy <n> (lore trash list --local lists them); replaces lore sync trash restore",
 				func(_ *cobra.Command, args []string) []string { return append([]string{trashVerbRest}, args...) },
 				newSyncTrashCommand)
 		case trashVerbPurge:

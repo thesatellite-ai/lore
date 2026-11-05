@@ -133,6 +133,14 @@ type Config struct {
 	UpgradeNotice *bool `yaml:"upgrade_notice,omitempty"`
 	// AutoUpgrade true turns the daily notice into an upgrade (FORMAT_EVOLUTION 8.7); default off.
 	AutoUpgrade *bool `yaml:"auto_upgrade,omitempty"`
+	// Policies is the machine level of policy (FA-AGENT-6, CONFIG_GUIDE
+	// 5.4): policy key → plain value, read by the core (wire
+	// machine_policy.go); declared here so `lore config check` knows the
+	// key, and shape-checked by Validate (policies.go, P3-CFG-6).
+	Policies map[string]yaml.Node `yaml:"policies,omitempty"`
+	// Store holds store.lock_timeout (FA-AGENT-8), read by the core (wire
+	// locktimeout.go); declared and validated here for the same reason.
+	Store StoreSettings `yaml:"store,omitempty"`
 }
 
 // Context is the `context:` block: how `lore render` wires the generated

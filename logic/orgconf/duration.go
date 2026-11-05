@@ -77,9 +77,16 @@ func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Live is the part of a `live:` block org resolution reads.
+// Live is a `live:` block. Org resolution reads only FetchTTL; the other
+// keys are declared so Validate checks them and a broken value fails every
+// command closed (P3-CFG-5), as v0.1.17's lorecfg.Live did.
 type Live struct {
-	FetchTTL *Duration `yaml:"fetch_ttl,omitempty"`
+	Defaults     map[string]bool `yaml:"defaults,omitempty"`
+	MaxAge       *Duration       `yaml:"max_age,omitempty"`
+	FetchTTL     *Duration       `yaml:"fetch_ttl,omitempty"`
+	Autopush     *bool           `yaml:"autopush,omitempty"`
+	CompactAfter *int            `yaml:"compact_after,omitempty"`
+	Remote       string          `yaml:"remote,omitempty"`
 }
 
 // LinkIndex is the `link_index:` block (F11).

@@ -211,6 +211,7 @@ func TestSetRefusesAndWritesNothing(t *testing.T) {
 		{name: "scalar in the way of a deeper key", key: "lease.ttl.x", val: "1", code: errs.InvalidInput},
 		{name: "past the end of a list", key: "orgs.5.name", val: "x", code: errs.InvalidInput},
 		{name: "bad dotted key", key: "a..b", val: "x", code: errs.InvalidInput},
+		{name: "policy key (FA-AGENT-6, valid verdict)", key: "policies.meta.max_bytes", val: "4096", code: errs.InvalidInput},
 		{name: "unknown key", key: "colour", val: "red", code: errs.InvalidInput,
 			verdict: func([]byte) Verdict { return Verdict{Unknown: []string{"colour (line 12)"}} }},
 		{name: "wrong type", key: "live.autopush", val: "maybe", code: errs.InvalidInput,

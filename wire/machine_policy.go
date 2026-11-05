@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -67,9 +68,51 @@ func machinePolicy(home string) ([]policy.Entry, []string, error) {
 		if err != nil {
 			return nil, nil, errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" policies."+k+" is not a plain value", err)
 		}
-		out = append(out, policy.Entry{Level: policy.LevelMachine, Key: policy.Key(k), Value: v})
+		e := policy.Entry{Level: policy.LevelMachine, Key: policy.Key(k), Value: v}
+		// A value its key's shape refuses fails closed here, naming the
+		// config key (policy.Resolve would name an empty row id).
+		if _, rerr := policy.Resolve([]policy.Entry{e}); rerr != nil {
+			return nil, nil, errs.New(errs.ConfigInvalid, "~/.lore/"+ConfigFile+": policies."+k+": "+policyProblem(rerr))
+		}
+		out = append(out, e)
 	}
 	return out, notes, nil
+}
+
+// policyRowPrefix starts policy.Resolve's messages ("policy row <id> …");
+// a machine entry has no row id, so the prefix is dropped.
+const policyRowPrefix = "policy row "
+
+// policyProblem is the problem text of a policy.Resolve error.
+func policyProblem(err error) string {
+	msg := err.Error()
+	var pe *errs.Error
+	if errors.As(err, &pe) {
+		msg = pe.Message
+	}
+	msg = strings.TrimSpace(strings.TrimPrefix(msg, policyRowPrefix))
+	// The shape check's own "[E_CONFIG_INVALID] " is folded into the text.
+	if strings.HasPrefix(msg, codeOpen) {
+		if i := strings.Index(msg, codeClose); i > 0 {
+			msg = msg[i+len(codeClose):]
+		}
+	}
+	return msg
+}
+
+// codeOpen and codeClose bracket an errs code in an error text.
+const (
+	codeOpen  = "["
+	codeClose = "] "
+)
+
+// CheckMachinePolicy validates the `policies:` map of <home>/config.yaml
+// for `lore config check` (P3-CFG-6): the notices name the keys lore does
+// not know (skipped, FA-AGENT-6); the error is E_CONFIG_INVALID for a
+// value that is not plain or that its key's shape refuses.
+func CheckMachinePolicy(home string) (notices []string, err error) {
+	_, notices, err = machinePolicy(home)
+	return notices, err
 }
 
 // yamlValue turns one YAML value into the typed value a policies row holds

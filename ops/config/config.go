@@ -223,12 +223,22 @@ func get(ctx context.Context, p Port, key string) (Entry, error) {
 	return Entry{Key: key, Value: scalarText(n)}, nil
 }
 
+// policiesKey is config.yaml's machine-level policy map (FA-AGENT-6).
+const policiesKey = "policies"
+
 // set edits one scalar and writes the file only when the result is a
 // config lore reads and accepts (nothing written otherwise).
 func set(ctx context.Context, p Port, in SetIn) (SetOut, error) {
 	parts, err := keyParts(in.Key)
 	if err != nil {
 		return SetOut{}, err
+	}
+	// FA-AGENT-6: the machine level of policy is edited by hand only (a
+	// policy key holds dots, so a dotted path cannot name it); refused by
+	// name now that config check knows `policies:` (P3-CFG-6).
+	if parts[0] == policiesKey {
+		return SetOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("config key %q is a policy key; lore config set does not edit policies:", in.Key)).
+			WithHint("nothing written; edit policies: in ~/.lore/config.yaml by hand (it only tightens), or set a team rule with `lore policy set`")
 	}
 	f, err := p.ReadConfigFile(ctx)
 	if err != nil {

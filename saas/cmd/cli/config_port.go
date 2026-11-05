@@ -20,6 +20,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsconfig "github.com/thesatellite-ai/lore/ops/config"
+	"github.com/thesatellite-ai/lore/wire"
 	"gopkg.in/yaml.v3"
 )
 
@@ -54,6 +55,18 @@ func (configSchemaPort) CheckConfig(ctx context.Context) (opsconfig.CheckOut, er
 	var warnings []string
 	if raw, rerr := os.ReadFile(loc.Path); rerr == nil {
 		warnings = append(warnings, unknownKeyWarnings(raw)...)
+	}
+	// P3-CFG-6: policies: as the core reads it (FA-AGENT-6): an unknown
+	// policy key is a warning (skipped), a value its key refuses is a
+	// problem. Only after the file decoded (a syntax error is reported once).
+	if err == nil {
+		notices, perr := wire.CheckMachinePolicy(dir)
+		warnings = append(warnings, notices...)
+		var pe *errs.Error
+		if errors.As(perr, &pe) {
+			perr = errors.New(pe.Message) // the problem text, without its code
+		}
+		err = perr
 	}
 	if err != nil {
 		// P3-CFG-3: the human and --json forms both carry every problem in

@@ -299,8 +299,10 @@ func Reconcile(ctx context.Context, o Options) (Report, error) {
 		rep.Pass = PassAdopt
 		err = e.inTx(ctx, e.adopt)
 	case !dataExists:
+		// The row files are the truth (0.1.18): git brings a deleted
+		// .lore/data back; `sync export --all` is dropped (P3-DOCS-1).
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf(
-			"%s is missing (a branch without lore data, or deleted): lore.db is left untouched; run `lore sync export --all` to recreate it", o.DataDir))
+			"%s is missing (a branch without lore data, or deleted): lore.db is left untouched; run `git checkout HEAD -- .lore/data` to bring it back", o.DataDir))
 		return rep, nil
 	default:
 		rep.Pass = PassNormal

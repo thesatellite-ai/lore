@@ -9,10 +9,15 @@
 // the config shapes org resolution reads move here, byte-compatible with
 // v0.1.17's YAML: the same file is read by both binaries.
 //
-// Scope: only the keys org resolution reads (identity, personal, orgs,
-// repo_orgs, live.fetch_ttl, link_index.max_age). Every other
-// config.yaml block (lease, agents, context, …) is ignored here; its own
-// reader validates it (P3-ORG-1).
+// Scope: org resolution reads identity, personal, orgs, repo_orgs,
+// live.fetch_ttl and link_index.max_age. Validate also checks the
+// machine's other settings (default_branch, live, lease, agents,
+// merge_check, untrusted_hosts, upgrade_notice, auto_upgrade,
+// context.profiles; machine.go), because every core command loads this
+// Config first and an invalid config.yaml must stop it (fail closed,
+// CONFIG_GUIDE: nothing in lore reads an invalid config; P3-CFG-5
+// narrows P3-ORG-1). `policies:` and `store:` have their own readers in
+// wire (machine_policy.go, locktimeout.go), which fail closed themselves.
 //
 //	config.yaml bytes ──▶ Parse ──▶ Config ──▶ Validate (every problem at once)
 //	org.yaml bytes    ──▶ ParseOrgFile ──▶ OrgFile (validated)
@@ -79,9 +84,12 @@ type Config struct {
 	Personal Personal           `yaml:"personal,omitempty"`
 	Orgs     []Org              `yaml:"orgs,omitempty"`
 	RepoOrgs map[string]RepoOrg `yaml:"repo_orgs,omitempty"`
-	// Live is read for live.fetch_ttl only (store clone freshness).
+	// Live is read for live.fetch_ttl only (store clone freshness); its
+	// other keys are validated.
 	Live      Live      `yaml:"live,omitempty"`
 	LinkIndex LinkIndex `yaml:"link_index,omitempty"`
+	// Settings are the machine's other keys, validated only (machine.go).
+	Settings `yaml:",inline"`
 }
 
 // Personal is the personal store setting.
@@ -105,6 +113,9 @@ type Org struct {
 	AgentDetails AgentDetails `yaml:"agent_details,omitempty"`
 	// Live overrides the top level's live.fetch_ttl for this entry.
 	Live *Live `yaml:"live,omitempty"`
+	// OrgSettings are the entry's lease/agents/merge_check overrides,
+	// validated only (machine.go).
+	OrgSettings `yaml:",inline"`
 }
 
 // OrgIdentity is who you are inside one org (F18); the key is
@@ -226,12 +237,27 @@ func (o *Org) StoreFor(norm string) *Store {
 	return nil
 }
 
+// yamlSyntaxPrefix starts yaml.v3's syntax errors (a value error from an
+// UnmarshalYAML method has no such prefix).
+const yamlSyntaxPrefix = "yaml: "
+
 // Parse decodes config.yaml bytes and validates the org part. Empty bytes
 // are an empty config.
 func Parse(b []byte) (*Config, error) {
 	c := &Config{}
 	if err := yaml.Unmarshal(b, c); err != nil {
-		return nil, fmt.Errorf("orgconf: %s%s is not valid YAML: %w", TeamFileBase, ExtYAML, err)
+		// Only a syntax error (yaml's own "yaml: line 1: …") is "not valid
+		// YAML"; a bad value (a *yaml.TypeError, or a Duration's "line 2:
+		// invalid duration …") names its line and key as it is.
+		var te *yaml.TypeError
+		switch {
+		case errors.As(err, &te):
+			return nil, fmt.Errorf("orgconf: %s%s: %s", TeamFileBase, ExtYAML, strings.Join(te.Errors, "; "))
+		case strings.HasPrefix(err.Error(), yamlSyntaxPrefix):
+			return nil, fmt.Errorf("orgconf: %s%s is not valid YAML: %w", TeamFileBase, ExtYAML, err)
+		default:
+			return nil, fmt.Errorf("orgconf: %s%s: %w", TeamFileBase, ExtYAML, err)
+		}
 	}
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -315,6 +341,7 @@ func (c *Config) Validate() error {
 	if h := c.Identity.Handle; h != "" && !handleRe.MatchString(h) {
 		add(fmt.Errorf("identity.handle %q: use lowercase letters, digits, '_' or '-' (no '@')", h))
 	}
+	all = append(all, c.validateSettings()...)
 	seen := map[string]int{}
 	for i := range c.Orgs {
 		o := &c.Orgs[i]
@@ -425,6 +452,10 @@ func (o *Org) validate() []error {
 	default:
 		add(fmt.Errorf("agent_details %q: must be %q or %q", o.AgentDetails, AgentDetailsInternal, AgentDetailsClient))
 	}
+	if o.Live != nil {
+		all = append(all, prefixAll("live", o.Live.validate())...)
+	}
+	all = append(all, o.validateSettings()...)
 	return all
 }
 
