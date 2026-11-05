@@ -346,6 +346,8 @@ type ShowIn struct {
 	Why       bool `json:"why,omitempty" flag:"why" desc:"explain the urgency score term by term"`
 	Who       bool `json:"who,omitempty" flag:"who" desc:"who created and last changed it (and, on the writing machine, with which session)"`
 	Relations bool `json:"relations,omitempty" flag:"relations" desc:"show every relation, both directions"`
+	// Signals: F7 Debug, PENDING-60 (claimshow.go); human output only.
+	Signals bool `json:"signals,omitempty" flag:"signals" desc:"show the claim as seen now (holder, token prefix, expires, renewed_seq)"`
 	rowexpand.Flag
 }
 

@@ -11,6 +11,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -46,23 +47,31 @@ func withTaskShowSignals(root *cobra.Command) {
 	}
 }
 
-// printTaskSignals prints the claim on task id from this repo's own
-// signals ref, as v0.1.17 did: a client repo is refused (its claims live
-// on the linked store's ref, D8) and an unknown link status fails closed.
+// printTaskSignals prints the claim on task id (cliTeam.ClaimText).
 func printTaskSignals(cmd *cobra.Command, id string) error {
-	ctx := cmd.Context()
-	w, err := openCoordWorld(ctx)
-	if err != nil {
-		return err
-	}
-	st, err := w.repoSignalsChecked()
-	if err != nil {
-		return err
-	}
-	text, err := claimText(ctx, st, w.Folder, id)
+	text, err := cliTeam{}.ClaimText(cmd.Context(), id)
 	if err != nil {
 		return err
 	}
 	_, err = fmt.Fprint(cmd.OutOrStdout(), text)
 	return err
+}
+
+var _ opstask.ClaimShower = cliTeam{}
+
+// ClaimText implements opstask.ClaimShower: the claim on task id from this
+// repo's own signals ref, as v0.1.17 did: a client repo is refused (its
+// claims live on the linked store's ref, D8) and an unknown link status
+// fails closed. Since task.show has --signals itself, the op calls this
+// and withTaskShowSignals leaves the command alone.
+func (cliTeam) ClaimText(ctx context.Context, id string) (string, error) {
+	w, err := openCoordWorld(ctx)
+	if err != nil {
+		return "", err
+	}
+	st, err := w.repoSignalsChecked()
+	if err != nil {
+		return "", err
+	}
+	return claimText(ctx, st, w.Folder, id)
 }

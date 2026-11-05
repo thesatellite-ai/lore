@@ -995,6 +995,13 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			}
 		}
 	}
+	if in.Signals { // F7 Debug: the claim as seen now, after the body
+		text, err := claimShow(ctx, id.String())
+		if err != nil {
+			return ShowOut{}, err
+		}
+		full.Detail.Tail += text
+	}
 	out := ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: full}
 	if in.Expand { // SECRETS 2.7, 12: the row as read (--from too), stored text unchanged
 		ex, _ := o.env.(rowexpand.Env)
