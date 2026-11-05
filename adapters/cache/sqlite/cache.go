@@ -276,6 +276,12 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 				return err
 			}
 		}
+		if kindsChanged {
+			// RES 3.13 / OV35-LASTGOOD: the last good definition per kind
+			if err := refreshKindsGood(ctx, tx, source, applied); err != nil {
+				return err
+			}
+		}
 		if tasksChanged {
 			if err := refreshTaskTree(ctx, tx); err != nil {
 				return err
