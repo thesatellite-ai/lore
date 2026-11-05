@@ -102,6 +102,9 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	default:
 		return Written{}, errs.New(errs.InvalidInput, "engine: --with-time takes totals or none, not "+strconv.Quote(string(opt.WithTime)))
 	}
+	if err := e.refuseMachineMove(ref, to); err != nil { // P3-LOCAL-1
+		return Written{}, err
+	}
 	cl := e.callOf(ctx)
 	dst, err := e.writable(to)
 	if err != nil {

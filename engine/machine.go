@@ -108,3 +108,24 @@ func (e *Engine) listSource(source store.Source, table row.Table) store.Source {
 	}
 	return source
 }
+
+// refuseMachineMove is a move's machine-store rule (P3-LOCAL-1): a
+// machine-local row never travels to a store, and the machine store takes
+// no moved row. Both are E_INVALID_INPUT, said before any lookup, so the
+// answer is the rule and not a misleading E_NOT_FOUND.
+func (e *Engine) refuseMachineMove(ref Ref, to store.Source) error {
+	if to == store.SourceMachine {
+		return errs.New(errs.InvalidInput, "engine: the machine store keeps only machine-local rows; nothing moves into it").
+			WithHint("move to the repo or an attached store")
+	}
+	table := ref.Table
+	if table == "" {
+		if def, ok := e.reg.ByPrefix(ref.ID.Prefix()); ok {
+			table = def.Name
+		}
+	}
+	if e.IsMachineLocal(table) {
+		return errs.New(errs.InvalidInput, "engine: "+string(table)+" rows are machine-local: they stay on this machine and never move to a store")
+	}
+	return nil
+}
