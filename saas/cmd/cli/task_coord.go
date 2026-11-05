@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Flag names of the coordination subcommands (§1 "Flags").
@@ -676,7 +677,12 @@ Examples:
 					return err
 				}
 				defer t.Close()
-				if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideReassign, func(d coord.Doc) { d.SetStr("assigned_to_actor_id", to) }); err != nil {
+				// TASK 14.4: reassign sets the lead and replaces the assignees
+				// list with that one actor (the lead is always an assignee).
+				if _, err := coord.Override(ctx, w.env(t), id, coord.OverrideReassign, func(d coord.Doc) {
+					d.SetStr(fieldTaskLead, to)
+					d[schema.FieldTaskAssignees] = []string{to}
+				}); err != nil {
 					return coordError(err)
 				}
 				fmt.Printf("%s %s reassigned to %s\n", style.Success("✓"), id, assign)

@@ -58,6 +58,10 @@ func taskKeys() map[string]filter.Field {
 			}
 			out[f.Name] = filter.Field{Kind: f.Kind, Elem: f.Elem, Values: f.Values}
 		}
+		// 9.1: the estimate is stored as its typed decimal text ("3.50"),
+		// but it is a number: --sort estimate and estimate>3 compare it
+		// numerically, never as text ("10" after "9").
+		out[fieldEstimate] = filter.Field{Kind: value.KindNumber}
 	}
 	return out
 }
