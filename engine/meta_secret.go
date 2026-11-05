@@ -1,0 +1,245 @@
+package engine
+
+// Secrets in metadata values (SECRETS_AND_REFERENCES 19.1, METADATA 3.21;
+// PASS3-A-2, replaces META-B7-SCAN's flat refusal): the same answer flow
+// as a row's fields (FB-SEC-1..4), applied leaf by leaf.
+//
+//	scanMeta(changed entries)
+//	   ├─ leaves: the key name, every string leaf, every member name
+//	   ├─ scan each leaf; rules off / allow rows dropped (D2/D9)
+//	   ├─ a finding in a key name ─► E_SECRET_DETECTED in every mode
+//	   ├─ answer given (--secret-ref | --secret-unstored | --not-a-secret --reason)
+//	   │     ref/unstored ─► the match is replaced inside its leaf only
+//	   │     not a secret ─► confirm, value kept, sc.accepted (allow rows)
+//	   └─ no answer: on_detect ask    ─► E_NEEDS_CONFIRM (findings[], flag sets)
+//	                 on_detect redact ─► ${secret:unstored} in the leaf
+//	                 on_detect refuse ─► E_SECRET_DETECTED
+//	   nothing is written on any error: the row put follows applyMeta
+
+import (
+	"context"
+	"errors"
+	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/logic/scan"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// metaHit is the findings of one string leaf of one metadata entry.
+type metaHit struct {
+	id       ids.ID[ids.MetaKey]
+	leaf     meta.Leaf
+	findings []scan.Finding
+}
+
+// scanMeta runs the secret scan over the changed metadata values and
+// applies secrets.on_detect and the caller's answer (see the file's flow
+// sketch). Redaction rewrites p.entries in place; accepted and redacted
+// findings are added to sc (nil: dropped, for callers that keep no allow
+// rows). A finding's field is "meta.<key>" plus the leaf's path
+// ("meta.smtp.url", "meta.hosts[1]"), so an allow row pins that leaf (D6).
+func (e *Engine) scanMeta(ctx context.Context, cl call, target store.Source, rowID ids.AnyID, p *metaPlan, sc *screened) error {
+	if sc == nil {
+		sc = &screened{}
+	}
+	pol, rules, err := e.settings.Policy(target)
+	if err != nil {
+		return err
+	}
+	allows, err := e.settings.Allows(target)
+	if err != nil {
+		return err
+	}
+	own := e.actorOf(cl) == e.actor
+	var hits []metaHit
+	var keyHits []scan.Finding
+	seen := map[ids.ID[ids.MetaKey]]bool{}
+	for _, id := range p.changed {
+		en, ok := p.entries[id]
+		if !ok || seen[id] {
+			continue
+		}
+		seen[id] = true
+		leaves, lerr := meta.Leaves(en.V)
+		if lerr != nil {
+			return lerr
+		}
+		// 19.1: the key name is scanned too (an identifier, never redacted)
+		leaves = append([]meta.Leaf{{Text: en.Name, Key: true}}, leaves...)
+		for _, l := range leaves {
+			field := row.KeyMeta + "." + en.Name
+			if ps := l.PathString(); ps != "" {
+				field += "." + ps
+			}
+			found, warn := e.scanText(field, l.Text)
+			if warn != nil {
+				p.warnings = append(p.warnings, *warn)
+			}
+			var kept []scan.Finding
+			for _, f := range found {
+				if !rules.IsOff(f.RuleID, own) {
+					kept = append(kept, f)
+				}
+			}
+			kept = scan.Filter(rowID, kept, allows)
+			switch {
+			case len(kept) == 0:
+			case l.Key:
+				keyHits = append(keyHits, kept...)
+			default:
+				hits = append(hits, metaHit{id: id, leaf: l, findings: kept})
+			}
+		}
+	}
+	mode := string(pol.OnDetect())
+	if len(keyHits) > 0 {
+		// a key name cannot hold a reference: refused in every mode (19.1)
+		if aerr := e.auditFindings(ctx, cl, rowID, mode, choiceRefused, keyHits); aerr != nil {
+			return aerr
+		}
+		return secretErr(keyHits).WithHint("a key name cannot hold a reference: rename the key, keep the secret in your vault and write ${secret:…} as its value")
+	}
+	if len(hits) == 0 {
+		return nil
+	}
+	var all []scan.Finding
+	for _, h := range hits {
+		all = append(all, h.findings...)
+	}
+	uniq, slot := uniqueFindings(all) // FB-SEC-3: one secret, one finding
+	// SECRETS 4: an answer given up front applies in every on_detect mode
+	if ch := cl.caller.Secret; ch.Any() {
+		if err := checkChoice(ch, len(uniq)); err != nil {
+			return err
+		}
+		if ch.NotASecret {
+			if err := e.confirm(ctx, cl, describe(uniq)+": keep it as not a secret ("+ch.Reason+")?"); err != nil {
+				return errors.Join(err, e.auditFindings(ctx, cl, rowID, mode, choiceCancelled, all))
+			}
+			if err := e.auditFindings(ctx, cl, rowID, mode, choiceNotASecret, all); err != nil {
+				return err
+			}
+			sc.accepted = append(sc.accepted, all...) // allowRows records ch.Reason (D12, SQ2)
+			return nil
+		}
+		repl := make([]string, len(all))
+		for i := range all {
+			repl[i] = refs.Unstored
+			if len(ch.Refs) == 1 {
+				repl[i] = secretRefText(ch.Refs[0])
+			} else if len(ch.Refs) > 0 {
+				repl[i] = secretRefText(ch.Refs[slot[i]]) // one ref per unique finding
+			}
+		}
+		if err := p.redactLeaves(hits, repl); err != nil {
+			return err
+		}
+		choice := choiceRedacted
+		if ch.Unstored {
+			sc.redacted = append(sc.redacted, all...) // the D21 task follows (RedactHook)
+			choice = choiceUnstored
+		}
+		if err := e.auditFindings(ctx, cl, rowID, mode, choice, all); err != nil {
+			return err
+		}
+		return e.refuseClientMetaRefs(target, rowID, hits)
+	}
+	switch pol.OnDetect() {
+	case policy.OnDetectAsk:
+		// FB-SEC-1: no answer = nothing written, with or without --yes or a
+		// terminal; the surface's menu (FB-SEC-2) re-runs with the answer
+		if aerr := e.auditFindings(ctx, cl, rowID, mode, choiceCancelled, all); aerr != nil {
+			return aerr
+		}
+		return askErr(uniq)
+	case policy.OnDetectRedact:
+		repl := make([]string, len(all))
+		for i := range repl {
+			repl[i] = refs.Unstored
+		}
+		if err := p.redactLeaves(hits, repl); err != nil {
+			return err
+		}
+		if err := e.auditFindings(ctx, cl, rowID, mode, choiceUnstored, all); err != nil {
+			return err
+		}
+		sc.redacted = append(sc.redacted, all...)
+		return e.refuseClientMetaRefs(target, rowID, hits)
+	case policy.OnDetectRefuse:
+	}
+	if err := e.auditFindings(ctx, cl, rowID, mode, choiceRefused, all); err != nil {
+		return err
+	}
+	return secretErr(uniq)
+}
+
+// redactLeaves replaces each hit's matches inside its own leaf: repl[i]
+// replaces the i-th finding of hits in order. Only a text, list<text> or
+// json value can hold a reference; a typed value (url, email, ip, …) or
+// one picked from a key's values: list is refused instead (a reference
+// would break its type), never stored half-redacted.
+func (p *metaPlan) redactLeaves(hits []metaHit, repl []string) error {
+	n := 0
+	for _, h := range hits {
+		r := repl[n : n+len(h.findings)]
+		n += len(h.findings)
+		en := p.entries[h.id]
+		if !redactableMeta(p.types[h.id]) || len(en.VName) > 0 {
+			return secretErr(h.findings).WithHint("a " + p.types[h.id].String() + " value cannot hold a reference; store the secret in your vault and write ${secret:…} in a text key")
+		}
+		v, err := meta.ReplaceLeaf(en.V, h.leaf.Path, redactText(h.leaf.Text, h.findings, r))
+		if err != nil {
+			return err
+		}
+		en.V = v
+		p.entries[h.id] = en
+	}
+	return nil
+}
+
+// redactableMeta reports a value type whose string leaves may hold a
+// reference: text, a list of text, json (METADATA 3.21: "any text value
+// and any text leaf of a json value"). A type without a kind is text.
+func redactableMeta(t meta.Type) bool {
+	switch t.Kind {
+	case value.KindText, value.KindJSON, "":
+		return true
+	case value.KindList:
+		return t.Elem == "" || t.Elem == value.KindText
+	}
+	return false
+}
+
+// refuseClientMetaRefs is refuseClientSecretRefs for redacted metadata:
+// a reference the answer wrote into a client repo's row would show the
+// client our vault locator (FLAG5, BATCH 5), so it is refused there.
+func (e *Engine) refuseClientMetaRefs(target store.Source, rowID ids.AnyID, hits []metaHit) error {
+	if !e.IsClient(target) {
+		return nil
+	}
+	fields := make([]string, 0, len(hits))
+	for _, h := range hits {
+		fields = append(fields, h.findings[0].Field)
+	}
+	return errs.New(errs.LeakBlocked, "engine: "+rowID.String()+": a secret reference in metadata ("+strings.Join(fields, ", ")+") cannot live in a client repo; nothing written").
+		WithHint("drop the value, or keep the row in one of your own stores (BATCH 5)")
+}
+
+// auditFindings records secret.detected once per finding (SECRETS 16,
+// FA-AGENT-7): field, rule, mode and the choice; never the value.
+func (e *Engine) auditFindings(ctx context.Context, cl call, rowID ids.AnyID, mode, choice string, fs []scan.Finding) error {
+	for _, f := range fs {
+		if err := e.AuditSecret(ctx, ActionSecretDetected, SecretAudit{Command: cl.op, Row: rowID,
+			Result: "field=" + f.Field + " rule=" + f.RuleID + " mode=" + mode + " choice=" + choice}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

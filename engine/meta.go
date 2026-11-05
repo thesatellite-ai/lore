@@ -13,7 +13,7 @@ package engine
 //	      ├─ unset (parent removes children)      E_META_UNKNOWN
 //	      ├─ create only (createMeta): defaults, then required_on   E_META_REQUIRED
 //	      ├─ size vs meta.max_bytes, 4 KB warning E_META_SIZE
-//	      ├─ secret scan of the values            E_SECRET_DETECTED
+//	      ├─ secret scan, leaf by leaf (meta_secret.go): on_detect + answers  E_SECRET_DETECTED, E_NEEDS_CONFIRM
 //	      └─ register new keys (internal in a store, R2-Q2; added_by/reviewed, MQ7)
 //	   the row is written with the new meta in the same put
 
@@ -32,7 +32,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/policy"
-	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -301,6 +300,10 @@ type metaPlan struct {
 	warnings []Warning
 	columns  map[string]bool
 	changed  []ids.ID[ids.MetaKey]
+	// types is the value type of each changed entry (the key's whole
+	// value, not a written field's): the secret answer redacts only text,
+	// list<text> and json values (meta_secret.go).
+	types map[ids.ID[ids.MetaKey]]meta.Type
 	// ask is the terminal's yes/no question for an interactive caller
 	// (nil otherwise): an ambiguous bare name asks which definition to
 	// use instead of failing (OV10, P2-META-8).
@@ -311,7 +314,15 @@ type metaPlan struct {
 // write with no change returns cur untouched.
 func (e *Engine) applyMeta(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
 	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
-	return e.applyMetaOn(ctx, cl, target, def, rowID, cur, mw, false)
+	return e.applyMetaOn(ctx, cl, target, def, rowID, cur, mw, false, nil)
+}
+
+// applyMetaScreened is applyMeta adding the metadata secret answers to sc
+// (PASS3-A-2): findings kept as not secrets go to sc.accepted (allow rows),
+// redacted ones to sc.redacted (the D21 task), as for the row's fields.
+func (e *Engine) applyMetaScreened(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
+	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite, sc *screened) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
+	return e.applyMetaOn(ctx, cl, target, def, rowID, cur, mw, false, sc)
 }
 
 // createMeta is the metadata step of every create (write.go): the change
@@ -321,15 +332,22 @@ func (e *Engine) applyMeta(ctx context.Context, cl call, target store.Source, de
 // A create with no change on a table without metadata does nothing.
 func (e *Engine) createMeta(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
 	mw MetaWrite, has bool) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
+	return e.createMetaScreened(ctx, cl, target, def, rowID, mw, has, nil)
+}
+
+// createMetaScreened is createMeta adding the metadata secret answers to
+// sc, as applyMetaScreened does (PASS3-A-2).
+func (e *Engine) createMetaScreened(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
+	mw MetaWrite, has bool, sc *screened) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
 	if !has && !metaTables[def.Name] {
 		return nil, nil, nil
 	}
-	return e.applyMetaOn(ctx, cl, target, def, rowID, nil, mw, true)
+	return e.applyMetaOn(ctx, cl, target, def, rowID, nil, mw, true, sc)
 }
 
 // applyMetaOn is applyMeta; creating adds the create-only rules (3.19).
 func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, def schema.TableDef, rowID ids.AnyID,
-	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite, creating bool) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
+	cur map[ids.ID[ids.MetaKey]]value.JSON, mw MetaWrite, creating bool, sc *screened) (map[ids.ID[ids.MetaKey]]value.JSON, []Warning, error) {
 	if !metaTables[def.Name] {
 		return nil, nil, errs.New(errs.MetaTable, "metadata cannot be set on "+string(def.Name)+" from the command line; knowledge, work and resource rows accept it").
 			WithHint("lore help meta")
@@ -338,7 +356,8 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 	if err != nil {
 		return nil, nil, err
 	}
-	p := &metaPlan{e: e, target: target, reg: reg, entries: map[ids.ID[ids.MetaKey]]meta.Entry{}, columns: e.columnNames()}
+	p := &metaPlan{e: e, target: target, reg: reg, entries: map[ids.ID[ids.MetaKey]]meta.Entry{}, columns: e.columnNames(),
+		types: map[ids.ID[ids.MetaKey]]meta.Type{}}
 	if cl.caller.Interactive && !cl.caller.Yes && e.confirmer != nil {
 		p.ask = func(q string) (bool, error) { return e.confirmer.Confirm(ctx, q) }
 	}
@@ -384,7 +403,7 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 	if err := p.checkSize(); err != nil {
 		return nil, nil, err
 	}
-	if err := e.scanMeta(cl, target, rowID, p); err != nil {
+	if err := e.scanMeta(ctx, cl, target, rowID, p, sc); err != nil {
 		return nil, nil, err
 	}
 	if err := p.register(ctx, cl); err != nil {
@@ -501,6 +520,14 @@ func (p *metaPlan) set(t meta.Term, isJSON bool) error {
 	}
 	p.entries[id] = en
 	p.changed = append(p.changed, id)
+	switch {
+	case d != nil:
+		p.types[id] = d.typ
+	case len(fields) > 0:
+		p.types[id] = meta.Type{Kind: value.KindJSON} // an object built by fields
+	default:
+		p.types[id] = vt
+	}
 	shown := strings.Join(append([]string{name}, fields...), ".")
 	for _, n := range c.Notes {
 		if en.Sensitive {
@@ -898,40 +925,6 @@ func (p *metaPlan) checkSize() error {
 	}
 	if w != "" {
 		p.warn("meta", w)
-	}
-	return nil
-}
-
-// scanMeta runs the secret scan over the changed values. A finding is
-// refused whatever secrets.on_detect says (DECISION META-B7-SCAN: ask and
-// redact for metadata come with the leak guards of B9).
-func (e *Engine) scanMeta(cl call, target store.Source, rowID ids.AnyID, p *metaPlan) error {
-	_, rules, err := e.settings.Policy(target)
-	if err != nil {
-		return err
-	}
-	allows, err := e.settings.Allows(target)
-	if err != nil {
-		return err
-	}
-	own := e.actorOf(cl) == e.actor
-	for _, id := range p.changed {
-		en, ok := p.entries[id]
-		if !ok {
-			continue
-		}
-		field := row.KeyMeta + "." + en.Name
-		found, _ := e.scanText(field, string(en.V))
-		var kept []scan.Finding
-		for _, f := range found {
-			if !rules.IsOff(f.RuleID, own) {
-				kept = append(kept, f)
-			}
-		}
-		if len(scan.Filter(rowID, kept, allows)) > 0 {
-			return errs.New(errs.SecretDetected, "meta: the value of "+en.Name+" looks like a secret").
-				WithHint("store it in your vault and write ${secret:…} instead")
-		}
 	}
 	return nil
 }
