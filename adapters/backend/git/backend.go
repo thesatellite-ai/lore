@@ -141,6 +141,17 @@ func (b *Backend) Missing(ctx context.Context, cursor store.Cursor) ([]string, e
 	return b.missingCommits(ctx, cursor)
 }
 
+// ReadProblems lists the row files the last Read left out as unusable
+// (rowfs.Folder.ReadProblems), so a command can say so instead of showing
+// a silent gap. Repo mode only: a store clone reads commits, and its
+// broken files are reported by Problems (lore doctor).
+func (b *Backend) ReadProblems() []rowfs.Problem {
+	if b.mode != modeRepo {
+		return nil
+	}
+	return b.folder.ReadProblems()
+}
+
 // Problems lists data-folder entries that are not usable rows; for
 // `lore doctor`.
 func (b *Backend) Problems(ctx context.Context) ([]rowfs.Problem, error) {

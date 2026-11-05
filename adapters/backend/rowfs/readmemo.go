@@ -67,6 +67,9 @@ type checked struct {
 	stat FileStat
 	row  *store.Row
 	ok   bool
+	// bad is why the file is not a usable row ("" for a good file or one
+	// gone since the scan); Read keeps it for ReadProblems.
+	bad string
 }
 
 // parallel runs work(0..n-1) on up to GOMAXPROCS goroutines and returns

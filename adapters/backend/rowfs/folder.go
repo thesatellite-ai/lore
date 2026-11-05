@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/canon"
@@ -33,6 +34,22 @@ type Folder struct {
 	// memo keeps the rows Read decoded (readmemo.go); a Folder is only
 	// used through its pointer, so the memo is never copied.
 	memo readMemo
+	// badMu guards bad: the files the last Read left out because they are
+	// not usable rows (ReadProblems).
+	badMu sync.Mutex
+	bad   []Problem
+}
+
+// ReadProblems lists the row files the last Read left out because they
+// cannot be used (not JSON, wrong path, over the cap, unresolved conflict
+// markers): fail closed, never a silent gap (STORE_SERVER_SPEC merge rule
+// 2, v0.1.17's "invalid-file" line). A broken file never enters the
+// cursor, so every Read checks it again and the list is always complete;
+// it is cheap (no extra file access) and empty before the first Read.
+func (f *Folder) ReadProblems() []Problem {
+	f.badMu.Lock()
+	defer f.badMu.Unlock()
+	return slices.Clone(f.bad)
 }
 
 // MetaSource returns the shared (remote) copy of a store file, by its path
@@ -237,12 +254,16 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 	if err = parallel(ctx, len(rels), func(i int) {
 		rel := rels[i]
 		p, known := seen[rel]
-		results[i].stat, results[i].row, results[i].ok = f.check(rel, files[rel], p, known, prev.At, at)
+		results[i].stat, results[i].row, results[i].ok, results[i].bad = f.check(rel, files[rel], p, known, prev.At, at)
 	}); err != nil {
 		return nil, "", err
 	}
 	var out []store.Row
-	for _, c := range results {
+	var bad []Problem
+	for i, c := range results {
+		if c.bad != "" {
+			bad = append(bad, Problem{Path: rels[i], Reason: c.bad})
+		}
 		if !c.ok {
 			continue
 		}
@@ -251,6 +272,9 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 		}
 		next.Files = append(next.Files, c.stat)
 	}
+	f.badMu.Lock()
+	f.bad = bad
+	f.badMu.Unlock()
 	c, err := next.Encode()
 	if err != nil {
 		return nil, "", err
@@ -263,36 +287,39 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 // cursor, the row when the file changed, and ok false when the file must
 // stay out of the cursor (gone since the scan, or unreadable: Problems
 // reports it, and leaving it out makes the next Read try again).
-func (f *Folder) check(rel string, st entry, p FileStat, known bool, prevAt, at int64) (FileStat, *store.Row, bool) {
+func (f *Folder) check(rel string, st entry, p FileStat, known bool, prevAt, at int64) (FileStat, *store.Row, bool, string) {
 	if known && p.Size == st.size && p.MTime == st.mtime && !racy(st.mtime, prevAt) {
-		return p, nil, true
+		return p, nil, true, ""
 	}
 	// An unchanged file this process already decoded (readmemo.go).
 	if m, ok := f.memo.fresh(rel, st); ok {
 		stat := FileStat{Path: rel, Size: m.size, MTime: st.mtime, SHA256: m.sha}
 		if known && stat.SHA256 == p.SHA256 {
-			return stat, nil, true
+			return stat, nil, true, ""
 		}
 		r := m.row
-		return stat, &r, true
+		return stat, &r, true, ""
 	}
 	b, err := readCapped(filepath.Join(f.dataDir, filepath.FromSlash(rel)), rel)
+	if errors.Is(err, fs.ErrNotExist) {
+		return FileStat{}, nil, false, "" // gone since the scan: not a problem
+	}
 	if err != nil {
-		return FileStat{}, nil, false
+		return FileStat{}, nil, false, err.Error()
 	}
 	stat := FileStat{Path: rel, Size: int64(len(b)), MTime: st.mtime, SHA256: sum(b)}
 	if known && stat.SHA256 == p.SHA256 {
-		return stat, nil, true
+		return stat, nil, true, ""
 	}
 	r, ok := f.memo.bySHA(rel, stat.SHA256)
 	if !ok {
-		if r.row, err = DecodeRowFile(rel, b); err != nil {
-			return FileStat{}, nil, false
+		if r.row, err = decodeImportable(rel, b); err != nil {
+			return FileStat{}, nil, false, err.Error()
 		}
 	}
 	f.memo.put(rel, memoRow{size: stat.Size, mtime: st.mtime, at: at, sha: stat.SHA256, row: r.row})
 	decoded := r.row
-	return stat, &decoded, true
+	return stat, &decoded, true, ""
 }
 
 // Problems lists every entry of the data folder that is not a usable row:
@@ -312,7 +339,7 @@ func (f *Folder) Problems(ctx context.Context) ([]Problem, error) {
 			continue
 		}
 		if err == nil {
-			_, err = DecodeRowFile(rel, b)
+			_, err = decodeImportable(rel, b)
 		}
 		if err != nil {
 			problems = append(problems, Problem{Path: rel, Reason: err.Error()})
