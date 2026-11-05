@@ -81,7 +81,7 @@ var RevealConfirm = op.ConfirmRule{MayAsk: true}
 // RevealErrors adds the codes --reveal can return to a show's codes.
 func RevealErrors(base []errs.Code) []errs.Code {
 	out := slices.Clone(base)
-	for _, c := range []errs.Code{errs.InvalidInput, errs.NeedsConfirm, errs.RefScheme, errs.SecretUnavailable, errs.Internal} {
+	for _, c := range []errs.Code{errs.InvalidInput, errs.NeedsConfirm, errs.RefScheme, errs.VaultEntryUnavailable, errs.Internal} {
 		if !slices.Contains(out, c) {
 			out = append(out, c)
 		}

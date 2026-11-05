@@ -69,7 +69,7 @@ func TestSecretsOffboarding(t *testing.T) {
 	if !forced.Forced || !strings.HasPrefix(forced.Warning, "W_REVEAL_FORCED") {
 		t.Fatalf("forced = %+v", forced)
 	}
-	h.Fails(settings.OpSecretsShow, `{"id":"env://LORE_NOT_SET","reveal":true,"force":true}`, errs.SecretUnavailable)
+	h.Fails(settings.OpSecretsShow, `{"id":"env://LORE_NOT_SET","reveal":true,"force":true}`, errs.VaultEntryUnavailable)
 	h.Fails(settings.OpSecretsShow, `{"id":"nope://x"}`, errs.RefScheme)
 
 	// the audit has the events, never the value.

@@ -154,7 +154,7 @@ type SecretsBatchOut struct {
 func (o SecretsBatchOut) Text() string { return o.Human }
 
 // secretErrors are the codes the secret index ops may return.
-var secretErrors = append(slices.Clone(writeErrors), errs.SecretUnavailable, errs.RefSyntax, errs.RefScheme)
+var secretErrors = append(slices.Clone(writeErrors), errs.VaultEntryUnavailable, errs.RefSyntax, errs.RefScheme)
 
 func (o ops) secretIndexOps() []op.Entry {
 	return []op.Entry{
@@ -683,7 +683,7 @@ func (o ops) secretsMove(ctx context.Context, in SecretsMoveIn) (SecretsBatchOut
 	if err != nil {
 		return SecretsBatchOut{}, err
 	}
-	if err = o.auditBatch(ctx, engine.ActionSecretRefsMoved, total, in.From, toLabel+" ("+toID+")"); err != nil {
+	if err = o.auditBatch(ctx, engine.ActionVaultRefsMoved, total, in.From, toLabel+" ("+toID+")"); err != nil {
 		return SecretsBatchOut{}, err
 	}
 	out := SecretsBatchOut{Batch: bat.String(), Count: total, Rows: changed}

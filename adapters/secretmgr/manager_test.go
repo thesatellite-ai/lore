@@ -116,7 +116,7 @@ func TestRevealMatrix(t *testing.T) {
 
 	gp, _ := set.Get(Gopass)
 	_, err := gp.Reveal(context.Background(), Locator{Path: "acme/missing"})
-	if !errors.Is(err, ErrMissing) || !errs.Has(err, errs.SecretUnavailable) {
+	if !errors.Is(err, ErrMissing) || !errs.Has(err, errs.VaultEntryUnavailable) {
 		t.Fatalf("missing entry: %v", err)
 	}
 	_, err = gp.Reveal(context.Background(), Locator{Path: "acme/locked"})
@@ -135,14 +135,14 @@ func TestRevealUnavailable(t *testing.T) {
 	gp, _ := set.Get(Gopass)
 	start := time.Now()
 	_, err := gp.Reveal(context.Background(), Locator{Path: "a/b"})
-	if !errs.Has(err, errs.SecretUnavailable) || !strings.Contains(err.Error(), "timed out") || time.Since(start) > 3*time.Second {
+	if !errs.Has(err, errs.VaultEntryUnavailable) || !strings.Contains(err.Error(), "timed out") || time.Since(start) > 3*time.Second {
 		t.Fatalf("timeout: %v after %s", err, time.Since(start))
 	}
 	op, _ := set.Get(OnePass)
-	if err = op.Available(context.Background()); !errs.Has(err, errs.SecretUnavailable) {
+	if err = op.Available(context.Background()); !errs.Has(err, errs.VaultEntryUnavailable) {
 		t.Fatalf("op not on PATH: %v", err)
 	}
-	if _, err = op.Reveal(context.Background(), Locator{Path: "a/b/c"}); !errs.Has(err, errs.SecretUnavailable) {
+	if _, err = op.Reveal(context.Background(), Locator{Path: "a/b/c"}); !errs.Has(err, errs.VaultEntryUnavailable) {
 		t.Fatalf("op reveal not on PATH: %v", err)
 	}
 }

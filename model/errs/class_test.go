@@ -32,7 +32,7 @@ func allConstants() []Code {
 		ResourceInUse, KindConflict, ResourceStale, ResourceInternal, ResourceQuarantined, NameTaken, MetaTaken, Purged, Refused,
 		OpenChildren, ParentClosed, ParentMission, ParentProject, TreeDepth, OpenItems, HasOpenChildren, Date, Recur, Template,
 		DurationBad, TimeTooLong, UpgradePermission, UpgradeChecksum, UpgradePinned,
-		RefSyntax, RefScheme, RefCycle, RefDepth, RefLimit, RefDangling, RefRequired, SecretUnavailable,
+		RefSyntax, RefScheme, RefCycle, RefDepth, RefLimit, RefDangling, RefRequired, VaultEntryUnavailable,
 		InTrash, ParentDeleted, ParentPurged, ReasonRequired, MigrateRollbackLoses,
 	}
 }

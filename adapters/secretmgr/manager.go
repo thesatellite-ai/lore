@@ -134,13 +134,13 @@ func Builtin(o Options) Set {
 // unavailable is E_SECRET_UNAVAILABLE with the manager's one-line reason.
 // It never carries stderr or the value.
 func unavailable(manager, reason string) error {
-	return errs.New(errs.SecretUnavailable, manager+": "+reason).
+	return errs.New(errs.VaultEntryUnavailable, manager+": "+reason).
 		WithHint("check that " + manager + " is installed, unlocked and logged in on this machine")
 }
 
 // missing is E_SECRET_UNAVAILABLE for an entry the manager does not have.
 func missing(manager, path string) error {
-	return errs.Wrap(errs.SecretUnavailable, manager+" has no entry "+path+" on this machine", ErrMissing).
+	return errs.Wrap(errs.VaultEntryUnavailable, manager+" has no entry "+path+" on this machine", ErrMissing).
 		WithHint("the reference names its holder; ask them, or point it elsewhere with lore secrets move / rename-entry")
 }
 

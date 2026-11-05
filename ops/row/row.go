@@ -225,7 +225,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: OpShow, Summary: "Show any row by id, with --origin for where it came from",
 			Permission: op.PermRead, Access: op.AccessRead, Confirm: op.ConfirmRule{MayAsk: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.RefCycle, errs.RefDepth,
-				errs.RefLimit, errs.RefRequired, errs.NeedsConfirm, errs.RefScheme, errs.SecretUnavailable, errs.Internal}}, o.show),
+				errs.RefLimit, errs.RefRequired, errs.NeedsConfirm, errs.RefScheme, errs.VaultEntryUnavailable, errs.Internal}}, o.show),
 		op.Define(op.Spec{Name: OpMove, Summary: "Move any row to another store, keeping its id (the old copy is tombstoned)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{Always: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.MetaInternal, errs.LeakBlocked,

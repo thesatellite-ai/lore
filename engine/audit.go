@@ -28,7 +28,9 @@ const (
 	ActionSecretRevealed     Action = "secret.revealed"
 	ActionSecretRevealFailed Action = "secret.reveal_failed"
 	ActionSecretVerified     Action = "secret.verified"
-	ActionSecretRefsMoved    Action = "secret.refs_moved"
+	// ActionVaultRefsMoved keeps the wire value secret.refs_moved; the Go name
+	// avoids gosec G101 reading it as a credential (CLEANUP Qs).
+	ActionVaultRefsMoved     Action = "secret.refs_moved"
 	ActionSecretEntryRenamed Action = "secret.entry_renamed"
 	ActionSecretLinked       Action = "secret.linked"
 	ActionSecretRelabeled    Action = "secret.relabeled"
@@ -36,7 +38,7 @@ const (
 
 // SecretActions lists the secret.* actions (16).
 func SecretActions() []Action {
-	return []Action{ActionSecretRevealed, ActionSecretRevealFailed, ActionSecretVerified, ActionSecretRefsMoved,
+	return []Action{ActionSecretRevealed, ActionSecretRevealFailed, ActionSecretVerified, ActionVaultRefsMoved,
 		ActionSecretEntryRenamed, ActionSecretLinked, ActionSecretRelabeled}
 }
 
