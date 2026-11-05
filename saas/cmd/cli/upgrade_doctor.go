@@ -10,13 +10,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
 	"os"
-	"path/filepath"
 
-	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
-	"github.com/thesatellite-ai/lore/wire"
 )
 
 // doctorSchemaDrift makes the DB "broken" when a table or column this
@@ -63,23 +59,14 @@ func doctorVersionPin(r *doctorReport) {
 }
 
 // doctorTeamVersions adds one "Team versions" note per writer and machine
-// from the repo cache's `_w` stamps, and a warning for each one below the
+// from the `_w` stamps of every attached cache (coreApp.TeamVersions: the
+// repo and every store, OV28), and a warning for each one below the
 // project floor. Rows without a stamp are older than 0.1.18 and not listed.
 func doctorTeamVersions(ctx context.Context, repoTop string, r *doctorReport) {
-	if repoTop == "" {
+	if coreApp == nil {
 		return
 	}
-	path := filepath.Join(repoTop, filepath.FromSlash(wire.RepoCacheFile))
-	if _, err := os.Stat(path); err != nil {
-		return
-	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=ro"}
-	db, err := sql.Open(doctorCacheDriver, u.String())
-	if err != nil {
-		return
-	}
-	defer func() { _ = db.Close() }() // read-only handle
-	tvs, err := sqlite.QueryTeamVersions(ctx, db)
+	tvs, err := coreApp.TeamVersions(ctx)
 	if err != nil || len(tvs) == 0 {
 		return
 	}

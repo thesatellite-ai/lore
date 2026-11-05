@@ -259,6 +259,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	home, _ := loreHome()
 	doctorCaches(ctx, repoTop, home, r)
 	doctorTeamVersions(ctx, repoTop, r) // OQ7 Team versions
+	doctorSharedMachineIDs(ctx, r)      // 6.8 one machine id on two hosts (doctor_machines.go)
 	doctorVersionPin(r)                 // FORMAT_EVOLUTION 8.8: a pin below the floor
 	doctorCIPins(repoTop, r)            // FORMAT_EVOLUTION 4: a CI workflow pinning lore below the floor
 	// 9. Repo addresses (PROV2, Q5).
