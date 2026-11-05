@@ -260,6 +260,7 @@ func runDoctor(ctx context.Context, f *doctorFlags) (*doctorReport, error) {
 	doctorCaches(ctx, repoTop, home, r)
 	doctorTeamVersions(ctx, repoTop, r) // OQ7 Team versions
 	doctorVersionPin(r)                 // FORMAT_EVOLUTION 8.8: a pin below the floor
+	doctorCIPins(repoTop, r)            // FORMAT_EVOLUTION 4: a CI workflow pinning lore below the floor
 	// 9. Repo addresses (PROV2, Q5).
 	doctorRepoAddresses(ctx, r)
 	// 10. Duplicate imports (PROV9).
