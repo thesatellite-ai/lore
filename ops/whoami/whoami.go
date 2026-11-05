@@ -177,7 +177,13 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
 			Errors: []errs.Code{errs.InvalidInput, errs.NotAStore, errs.ConfigInvalid, errs.OrgAmbiguous, errs.OrgDisagrees,
 				errs.IdentityFailed, errs.StoreReadOnly, errs.Refused, errs.Unsupported, errs.Internal},
-			Examples: []op.Example{{Title: "every org rule with hit or miss", CLI: "lore whoami --explain", Want: "identity"}},
+			Examples: []op.Example{
+				{Title: "", CLI: "lore whoami", Want: "identity"},
+				{Title: "every org rule with hit or miss", CLI: "lore whoami --explain", Want: "identity"},
+				{Title: "as if the org were agency-stag", CLI: "LORE_ORG=agency-stag lore whoami", Want: "identity"},
+				{Title: "", CLI: "lore whoami --json", Want: "identity"},
+				{Title: `synced label of this machine ("" clears)`, CLI: `lore whoami --machine-label "tomas desktop"`, Want: "machine"},
+			},
 		}, func(ctx context.Context, in ShowIn) (Out, error) {
 			h, ok := env.WhoamiHost(ctx)
 			if !ok || h == nil {
