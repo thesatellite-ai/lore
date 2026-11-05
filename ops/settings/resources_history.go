@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/task"
@@ -407,6 +408,11 @@ func shortCommit(c string) string {
 type ResReportIn struct {
 	Kind string `json:"kind,omitempty" flag:"kind" desc:"only this kind (name or knd_ id)"`
 	Days int    `json:"days,omitempty" flag:"days" desc:"stale when last_checked is older than this many days (default 60)"`
+	// Offboarding (RES 3.22, OV49-R1): one place's resources, or the ones
+	// whose metadata matches, across every attached store, with the
+	// inbound refs from resources outside that set.
+	Project string   `json:"project,omitempty" flag:"project" desc:"offboarding: only resources living in this place (<folder>, <store>/<folder> or <store>), across every attached store"`
+	Meta    []string `json:"meta_where,omitempty" flag:"meta" desc:"offboarding: only resources whose metadata matches: key=value, key!=value, key~=text, key? (repeatable, all must match)"`
 }
 
 // KindCount is one kind's live resource count.
@@ -423,6 +429,9 @@ type ResReportOut struct {
 	Unchecked []string      `json:"unchecked"`
 	Findings  []LintFinding `json:"findings"`
 	Links     []GraphLink   `json:"open_links"`
+	// Inbound are refs into the selected set from resources outside it
+	// ("<from> <field> → <to>"); filled only with --project or --meta.
+	Inbound []string `json:"inbound_refs,omitempty"`
 	// Rotate are the secret_ref values (references, never secrets) as a
 	// rotation checklist (3.22).
 	Rotate []string `json:"rotate"`
@@ -454,6 +463,9 @@ func (o ResReportOut) Text() string {
 		links[i] = strings.TrimSuffix(l.Table, "s") + " " + l.Row
 	}
 	fmt.Fprintf(&b, "open links  %d%s\n", len(links), listTail(links))
+	if o.Inbound != nil {
+		fmt.Fprintf(&b, "inbound refs %d%s\n", len(o.Inbound), listTail(o.Inbound))
+	}
 	fmt.Fprintf(&b, "rotate      %d%s\n", len(o.Rotate), listTail(o.Rotate))
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
@@ -472,8 +484,21 @@ func listTail(xs []string) string {
 // resReport: live resources of the view (one kind with --kind) ─► counts,
 // stale/unchecked (resource stale's rule), lint findings of those rows,
 // open links of those rows, secret_ref references (RES 3.20/3.22, OV49).
+//
+// Offboarding (OV49-R1, FA-RES-2): --project and --meta read every
+// attached store, narrow to the place / metadata match, and list the refs
+// into that set from the other resources (inbound refs).
 func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error) {
-	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
+	offboard := in.Project != "" || len(in.Meta) > 0
+	stores := o.resStores()
+	if offboard {
+		stores = o.env.Stores()
+	}
+	all, err := liveRows(ctx, o.env, stores, schema.TableResources)
+	if err != nil {
+		return ResReportOut{}, err
+	}
+	rows, err := o.offboardSet(ctx, all, in)
 	if err != nil {
 		return ResReportOut{}, err
 	}
@@ -553,7 +578,74 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 			out.Links = []GraphLink{}
 		}
 	}
+	if offboard {
+		out.Inbound = o.inboundRefs(ctx, all, nodes)
+	}
 	return out, nil
+}
+
+// offboardSet narrows rows to --project's place and --meta's match; with
+// neither it returns rows unchanged.
+func (o ops) offboardSet(ctx context.Context, rows []located, in ResReportIn) ([]located, error) {
+	if in.Project != "" {
+		kept := rows[:0:0]
+		for _, r := range rows {
+			src := string(r.Src)
+			if src == in.Project || scopeOf(r.Src) == in.Project {
+				kept = append(kept, r)
+			}
+		}
+		if len(kept) == 0 {
+			return nil, errs.New(errs.NotFound, "resource report --project "+in.Project+": no resources live there").
+				WithHint("give a folder (acme-hub), <store>/<folder> or a store name; lore store list")
+		}
+		rows = kept
+	}
+	if len(in.Meta) == 0 {
+		return rows, nil
+	}
+	plain := make([]row.Row, len(rows))
+	for i, r := range rows {
+		plain[i] = r.Row
+	}
+	sel, err := metalist.Select(ctx, o.env, metalist.Flags{Meta: in.Meta}, plain)
+	if err != nil {
+		return nil, err
+	}
+	kept := make([]located, 0, len(sel.Order))
+	for _, i := range sel.Order {
+		kept = append(kept, rows[i])
+	}
+	return kept, nil
+}
+
+// inboundRefs are the refs from a live resource outside nodes into one of
+// nodes, as "<kind> <name>.<field> → <kind> <name>", sorted.
+func (o ops) inboundRefs(ctx context.Context, all []located, nodes []string) []string {
+	label := map[string]string{}
+	for _, r := range all {
+		label[r.Row.ID.String()] = o.kindName(ctx, text(r.Row, rKind)) + " " + text(r.Row, rName)
+	}
+	out := []string{}
+	for _, r := range all {
+		id := r.Row.ID.String()
+		if slices.Contains(nodes, id) || text(r.Row, rArchivedAt) != "" {
+			continue
+		}
+		stored, err := decodeValues(r)
+		if err != nil {
+			continue
+		}
+		for fid, raw := range stored.vals {
+			for _, n := range nodes {
+				if strings.Contains(string(raw), `"`+n+`"`) {
+					out = append(out, label[id]+"."+stored.names[fid]+" → "+label[n])
+				}
+			}
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 func (o ops) historyOps() []op.Entry {
