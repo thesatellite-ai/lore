@@ -153,7 +153,8 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	}
 	var moved row.Row
 	var dropped []Warning
-	if there.ID.IsZero() {
+	fresh := there.ID.IsZero() // false on a rerun that only removes the old copy
+	if fresh {
 		// A row read back from a backend carries inferred values (a ref is
 		// Text, a json array of objects a List of JSON items), and
 		// validate.Targets only sees typed refs: re-type it first, or the
@@ -247,6 +248,11 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	w := Written{Row: moved, Warnings: dropped}
 	if err = e.finish(ctx, src, []store.Row{got.doc}, ev); err != nil {
 		return w, err
+	}
+	if fresh && def.Name == schema.TableTasks {
+		if err = e.noteMovedAlone(ctx, to, moved, &w); err != nil { // TASK 6.8 (OVERNIGHT Qs)
+			return w, err
+		}
 	}
 	return w, e.moveChildren(ctx, to, kids, opt, &w) // B7: parents first, ids kept
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -55,6 +56,55 @@ func (e *Engine) refuseOrphanChild(ctx context.Context, to store.Source, cur row
 	}
 	return errs.New(errs.LeakBlocked, "engine: "+cur.ID.String()+" is a sub-task of "+p+", which client repo "+string(to)+" cannot see; nothing moved").
 		WithHint("lore move " + p + " --to " + string(to) + " --with-children   (or detach first: lore task edit " + cur.ID.String() + " --no-parent)")
+}
+
+// WarnMovedFromParent is the line of a sub-task moved without its parent
+// (TASK 6.8, OVERNIGHT Qs): it keeps parent_id and gets a note.
+const WarnMovedFromParent WarnCode = "W_MOVED_FROM_PARENT"
+
+// fieldCommentBody is the comments table's text field (schema/builtin_link.go
+// declares it inline as "body").
+const fieldCommentBody = "body"
+
+// noteMovedAlone is TASK 6.8 (OVERNIGHT Qs, owner yes 2026-11-05): a
+// sub-task that lands in to while its parent is not live there keeps its
+// parent_id and gets one comment row "moved from parent <id>" in to, written
+// through the normal create path (scan, audit). A child of a --with-children
+// run finds its parent already in to and gets none; a client repo never gets
+// here without the parent (refuseOrphanChild, 6.14).
+func (e *Engine) noteMovedAlone(ctx context.Context, to store.Source, moved row.Row, w *Written) error {
+	p := parentOf(moved)
+	if p == "" {
+		return nil
+	}
+	pid, err := ids.ParseAny(p)
+	if err != nil {
+		return errs.Wrap(errs.InvalidInput, "engine: "+moved.ID.String()+" has a parent_id that is not an id: "+strconv.Quote(p), err)
+	}
+	_, gone, err := e.getRow(ctx, to, schema.TableTasks, pid)
+	switch {
+	case err == nil && !gone:
+		return nil // moved with (or after) its parent
+	case err != nil && !errors.Is(err, store.ErrNotFound):
+		return err
+	}
+	body := "moved from parent " + p
+	fields := map[string]value.Value{}
+	if fields[schema.FieldEntityTable], err = value.TextOf(schema.TableTasks); err != nil {
+		return err
+	}
+	if fields[schema.FieldEntityID], err = value.RefOf(moved.ID); err != nil {
+		return err
+	}
+	if fields[fieldCommentBody], err = value.TextOf(body); err != nil {
+		return err
+	}
+	if _, err = e.Create(ctx, to, schema.TableComments, fields); err != nil {
+		return errs.Wrap(errs.CodeOf(err), "engine: "+moved.ID.String()+" moved to "+string(to)+" but its note \""+body+"\" could not be written", err)
+	}
+	w.Warnings = append(w.Warnings, Warning{Code: WarnMovedFromParent,
+		Message: moved.ID.String() + " keeps parent_id " + p + " (its parent did not move); note added: " + body})
+	return nil
 }
 
 // taskDescendants lists id's sub-tasks to move: the tree is built from
