@@ -188,7 +188,7 @@ const fieldMission = "mission_id"
 // a mission (the mission row and its tasks).
 func landSelector(id, kind, mission string) landSelect {
 	table := kind
-	if t, ok := nounTables[kind]; ok {
+	if t, ok := tableOfNoun(kind); ok {
 		table = t
 	} else if kind != "" && !strings.HasSuffix(kind, "s") {
 		table = kind + "s"

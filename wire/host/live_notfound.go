@@ -18,11 +18,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
-// nounTables are the command nouns whose table is not the plain plural.
-var nounTables = map[string]string{
-	"memory": "memories", "hotfix": "hotfixes", "tasklist": "task_lists",
-}
-
 // purgedFileName is the branch's list of ids deleted on purpose.
 const purgedFileName = "_purged.json"
 
@@ -34,9 +29,15 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 	}
 	id := run.Args[0]
 	noun, _, _ := strings.Cut(run.Entry.Spec().Name, ".")
-	table := nounTables[noun]
-	if table == "" {
-		table = strings.ReplaceAll(noun, "-", "_") + "s"
+	table, idKnown := tableOfID(id)
+	nounTable, nounKnown := tableOfNoun(noun)
+	switch {
+	case idKnown && nounKnown && table != nounTable:
+		return err // an id of another kind (`lore memory show tsk_…`): it cannot land as this noun
+	case !idKnown && !nounKnown:
+		return err // no built-in table to name in the hint (a dynamic kind): say nothing rather than guess
+	case !idKnown:
+		table = nounTable
 	}
 	remote, branch := defaultLiveRemote, defaultBranchFallback
 	if root := liveProjectRoot(h.cfg.WorkDir); root != "" && !liveDisabled() {
