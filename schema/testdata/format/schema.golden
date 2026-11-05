@@ -172,6 +172,7 @@ meta_keys.merged_into text
 meta_keys.min text
 meta_keys.name text required
 meta_keys.pattern text
+meta_keys.rebuilt bool
 meta_keys.replaced_by text
 meta_keys.required_on json
 meta_keys.reviewed bool

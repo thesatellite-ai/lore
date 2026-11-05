@@ -223,6 +223,9 @@ func coreDefs() []TableDef {
 			// (absent on older rows = reviewed).
 			Text("added_by", OneOf(MetaAddedByPerson, MetaAddedByAgent)),
 			Bool("reviewed"),
+			// rebuilt: recreated by meta rebuild from data rows (METADATA 3.18);
+			// a real key row of the same id replaces it whole.
+			Bool("rebuilt"),
 			// METADATA 3.19 everyday features and the 3.12 fold (OV21):
 			// required_on/default_on are JSON lists of table names; min and
 			// max are text so one field covers numbers, dates and datetimes.

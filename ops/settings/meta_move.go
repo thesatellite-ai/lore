@@ -18,7 +18,7 @@ import (
 )
 
 // Key-row maintenance across places (METADATA 3.9 moves, 3.18 rehome and
-// adopt; OV58). History-based `meta rebuild` waits for backend history.
+// adopt; OV58). `meta rebuild` is meta_rebuild.go (OV64).
 const (
 	OpMetaAdopt  = "meta.adopt"
 	OpMetaRehome = "meta.rehome"
