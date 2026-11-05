@@ -84,7 +84,15 @@ type ListIn struct {
 	// Overruled lists the alive rows a merge kept although one side had
 	// deleted them (DELETION 3.7, delete_overruled) instead of the trash.
 	Overruled bool `json:"overruled,omitempty" flag:"overruled" desc:"list rows a merge kept alive over a delete (the other side edited them)"`
+	// Search, Limit and Page are the huge-trash reads (DELETION 4.5).
+	Search string `json:"search,omitempty" flag:"search" desc:"only rows whose id, title or delete reason holds this text"`
+	Limit  int    `json:"limit,omitempty" flag:"limit" desc:"rows per page (default: all; 50 when --page is given)"`
+	Page   int    `json:"page,omitempty" flag:"page" desc:"page number, from 1 (with --limit)"`
 }
+
+// defaultPageRows is --limit when only --page is given (DELETION 4.5:
+// "1–50 of 4,812").
+const defaultPageRows = 50
 
 // ShowIn is the input of trash.show.
 type ShowIn struct {
@@ -146,6 +154,10 @@ type ListOut struct {
 	Dependents int `json:"dependents"`
 	// Overruled marks a --overruled listing (alive rows, not the trash).
 	Overruled bool `json:"overruled,omitempty"`
+	// Total is the number of matching rows before --limit / --page; From
+	// is the 1-based position of the first listed row (DELETION 4.5).
+	Total int `json:"total"`
+	From  int `json:"from,omitempty"`
 }
 
 // ShowOut is the output of trash.show.
@@ -237,22 +249,54 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		case by != "" && it.DeletedBy != by:
 		case in.Batch != "" && it.Batch != strings.TrimSpace(in.Batch):
 		case in.Reason != "" && !strings.Contains(strings.ToLower(it.Reason), strings.ToLower(in.Reason)):
+		case in.Search != "" && !matches(it, in.Search):
 		case !since.IsZero() && it.at.Before(since):
 		case it.Dependent && !in.WithDependents:
 			deps = append(deps, it)
 		default:
 			out.Data = append(out.Data, it)
-			shown[it.Batch] = true
 		}
+	}
+	slices.SortStableFunc(out.Data, func(a, b Item) int { return b.at.Compare(a.at) })
+	out.Total = len(out.Data)
+	if out.Data, out.From, err = page(out.Data, in.Limit, in.Page); err != nil {
+		return ListOut{}, err
+	}
+	for _, it := range out.Data {
+		shown[it.Batch] = true // batches with a listed root on this page
 	}
 	for _, d := range deps {
 		if shown[d.Batch] {
 			out.Dependents++ // counted under its root (3.9)
 		}
 	}
-	slices.SortStableFunc(out.Data, func(a, b Item) int { return b.at.Compare(a.at) })
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// matches is --search: the text in the id, title or delete reason, any case.
+func matches(it Item, text string) bool {
+	q := strings.ToLower(strings.TrimSpace(text))
+	return strings.Contains(strings.ToLower(it.ID), q) || strings.Contains(strings.ToLower(it.Title), q) ||
+		strings.Contains(strings.ToLower(it.Reason), q)
+}
+
+// page cuts rows to --limit / --page (DELETION 4.5) and returns the
+// 1-based position of the first row kept (0 when nothing is cut).
+func page(rows []Item, limit, pg int) ([]Item, int, error) {
+	if limit < 0 || pg < 0 {
+		return nil, 0, errs.New(errs.InvalidInput, "trash: --limit and --page take a positive number")
+	}
+	if pg > 0 && limit == 0 {
+		limit = defaultPageRows
+	}
+	if limit == 0 {
+		return rows, 0, nil
+	}
+	pg = max(pg, 1)
+	start := min((pg-1)*limit, len(rows))
+	end := min(start+limit, len(rows))
+	return rows[start:end], start + 1, nil
 }
 
 // show is trash.show: one trashed row with its fields.
@@ -661,6 +705,9 @@ func (o ListOut) Text() string {
 		b.WriteString(strconv.Itoa(o.Count) + " rows kept alive over a delete; delete one again to settle it\n")
 		return b.String()
 	}
+	if len(o.Data) == 0 && o.Total > 0 {
+		return "no rows on this page (" + strconv.Itoa(o.Total) + " match)\n"
+	}
 	if len(o.Data) == 0 {
 		return "the trash is empty\n"
 	}
@@ -672,7 +719,11 @@ func (o ListOut) Text() string {
 	if o.Dependents > 0 {
 		b.WriteString(" (and " + strconv.Itoa(o.Dependents) + " dependents)")
 	}
-	b.WriteString(" in the trash\n")
+	b.WriteString(" in the trash")
+	if o.From > 0 { // a page of a larger list (4.5): "1–50 of 4812"
+		b.WriteString(" (" + strconv.Itoa(o.From) + "–" + strconv.Itoa(o.From+o.Count-1) + " of " + strconv.Itoa(o.Total) + ")")
+	}
+	b.WriteString("\n")
 	return b.String()
 }
 
