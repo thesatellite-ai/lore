@@ -141,6 +141,10 @@ type privatePlan struct {
 type privateLocal struct {
 	rel     string // slash path relative to the repo root
 	in, out string // current ("" if none) and new content ("" = delete)
+	// imports is true when this file carries lore's import lines (its
+	// profile is a target); a non-target file keeps only the user's lines,
+	// so the summary line must not name it (later.md t-old2 479).
+	imports bool
 }
 
 // privateLocalsChanged reports whether any private import file exists or
@@ -208,7 +212,7 @@ func renderPrivate(ctx context.Context, root string, dryRun, quiet bool) error {
 		if err := writeLocalLines(ctx, root, l); err != nil {
 			return err
 		}
-		if l.out != "" {
+		if l.out != "" && l.imports {
 			wrote = append(wrote, l.rel)
 		}
 	}
@@ -332,6 +336,7 @@ func planPrivateLocals(ctx context.Context, root string, imports []string) ([]pr
 			continue
 		}
 		l.out = prof.PrivateContent(l.in, privateImportDir, lines)
+		l.imports = len(lines) > 0
 		out = append(out, l)
 	}
 	return out, nil
