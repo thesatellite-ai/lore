@@ -16,9 +16,13 @@ import (
 // conflictText is a field value holding git conflict markers.
 const conflictText = "<<<<<<< ours\nweb hosts\n=======\nall hosts\n>>>>>>> theirs"
 
-// markRow writes conflict markers into the text column col of the row
-// file table/id, as an unresolved git merge would leave it.
-func markRow(t *testing.T, h *opstest.H, table, id, col string) {
+// markedCol is the text column markRow damages: every kind and field row
+// has a description, so one column covers both tables.
+const markedCol = "description"
+
+// markRow writes conflict markers into the description of the row file
+// table/id, as an unresolved git merge would leave it.
+func markRow(t *testing.T, h *opstest.H, table, id string) {
 	t.Helper()
 	p := filepath.Clean(filepath.Join(h.Repo, ".lore", "data", table, id+".json"))
 	b, err := os.ReadFile(p)
@@ -29,7 +33,7 @@ func markRow(t *testing.T, h *opstest.H, table, id, col string) {
 	if err = json.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc[col], err = json.Marshal(conflictText); err != nil {
+	if doc[markedCol], err = json.Marshal(conflictText); err != nil {
 		t.Fatal(err)
 	}
 	if b, err = json.MarshalIndent(doc, "", "  "); err != nil {
@@ -67,7 +71,7 @@ func lastGoodHarness(t *testing.T) *opstest.H {
 func TestKindLastGoodFallback(t *testing.T) {
 	h := lastGoodHarness(t)
 	kid := kindID(t, h, "host")
-	markRow(t, h, schema.TableKinds, kid, "description")
+	markRow(t, h, schema.TableKinds, kid)
 	h = h.Reopen()
 	warn := "showing its last good definition (read-only)"
 	for _, r := range []struct{ op, in string }{
@@ -110,7 +114,7 @@ func TestKindLastGoodMarkedField(t *testing.T) {
 		t.Fatalf("field rows %v %v", paths, err)
 	}
 	fid = strings.TrimSuffix(filepath.Base(paths[0]), ".json")
-	markRow(t, h, schema.TableKindFields, fid, "description")
+	markRow(t, h, schema.TableKindFields, fid)
 	h = h.Reopen()
 	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"h1"}`)); !strings.Contains(s, "os = linux") {
 		t.Errorf("show %q", s)
@@ -125,7 +129,7 @@ func TestKindLastGoodMarkedField(t *testing.T) {
 // nothing rather than guess (RES 3.13).
 func TestKindNeverSeenGood(t *testing.T) {
 	h := lastGoodHarness(t)
-	markRow(t, h, schema.TableKinds, kindID(t, h, "host"), "description")
+	markRow(t, h, schema.TableKinds, kindID(t, h, "host"))
 	h = h.ReopenCold()
 	h.Fails(settings.OpResList, `{"kind":"host"}`, errs.KindConflict)
 	h.Fails(settings.OpResShow, `{"id":"h1"}`, errs.KindConflict)
@@ -139,7 +143,7 @@ func TestKindNeverSeenGood(t *testing.T) {
 func TestKindShowLastGood(t *testing.T) {
 	h := lastGoodHarness(t)
 	kid := kindID(t, h, "host")
-	markRow(t, h, schema.TableKinds, kid, "description")
+	markRow(t, h, schema.TableKinds, kid)
 	warm := h.Reopen()
 	for _, r := range []struct{ op, in string }{
 		{settings.OpKindShow, `{"id":"host"}`},

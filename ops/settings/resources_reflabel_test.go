@@ -13,8 +13,11 @@ import (
 	"github.com/thesatellite-ai/lore/schema"
 )
 
-// refLabelOf is the stored v_label of resource id's field (by name).
-func refLabelOf(t *testing.T, h *opstest.H, id, field string) string {
+// refField is the ref field whose stored label these tests follow.
+const refField = "runs_on"
+
+// refLabelOf is the stored v_label of resource id's refField.
+func refLabelOf(t *testing.T, h *opstest.H, id string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Clean(filepath.Join(h.Repo, ".lore", "data", schema.TableResources, id+".json")))
 	if err != nil {
@@ -30,11 +33,11 @@ func refLabelOf(t *testing.T, h *opstest.H, id, field string) string {
 		t.Fatal(err)
 	}
 	for _, e := range doc.Fields {
-		if e.Name == field {
+		if e.Name == refField {
 			return e.Label
 		}
 	}
-	return "<no field " + field + ">"
+	return "<no field " + refField + ">"
 }
 
 // rowID is the id of a RowOut's JSON.
@@ -64,7 +67,7 @@ func TestResourceRenameRewriteRows(t *testing.T) {
 	a := rowID(t, h, h.MustYes(settings.OpResAdd, `{"kind":"service","name":"a","set":["runs_on=h1"]}`))
 	b := rowID(t, h, h.MustYes(settings.OpResAdd, `{"kind":"service","name":"b","set":["runs_on=h1"]}`))
 	c := rowID(t, h, h.MustYes(settings.OpResAdd, `{"kind":"service","name":"c","set":["runs_on=h2"]}`))
-	if got := refLabelOf(t, h, a, "runs_on"); got != "host/h1" {
+	if got := refLabelOf(t, h, a); got != "host/h1" {
 		t.Fatalf("label on add = %q, want host/h1", got)
 	}
 
@@ -73,12 +76,12 @@ func TestResourceRenameRewriteRows(t *testing.T) {
 	if !strings.Contains(got, "2 ref labels refresh on each row's next write") {
 		t.Fatalf("rename without --rewrite-rows: %q", got)
 	}
-	if l := refLabelOf(t, h, a, "runs_on"); l != "host/h1" {
+	if l := refLabelOf(t, h, a); l != "host/h1" {
 		t.Fatalf("rename alone rewrote a referrer: %q", l)
 	}
 	// The next real write of a referrer refreshes its label.
 	h.MustYes(settings.OpResEdit, `{"id":"a","set":["port=80"]}`)
-	if l := refLabelOf(t, h, a, "runs_on"); l != "host/hub" {
+	if l := refLabelOf(t, h, a); l != "host/hub" {
 		t.Fatalf("label after edit = %q, want host/hub", l)
 	}
 
@@ -93,11 +96,11 @@ func TestResourceRenameRewriteRows(t *testing.T) {
 		t.Fatalf("batch in JSON %q (%v)", h.JSON(out), err)
 	}
 	for _, id := range []string{a, b} {
-		if l := refLabelOf(t, h, id, "runs_on"); l != "host/hub2" {
+		if l := refLabelOf(t, h, id); l != "host/hub2" {
 			t.Fatalf("%s label = %q, want host/hub2", id, l)
 		}
 	}
-	if l := refLabelOf(t, h, c, "runs_on"); l != "host/h2" {
+	if l := refLabelOf(t, h, c); l != "host/h2" {
 		t.Fatalf("unrelated referrer changed: %q", l)
 	}
 	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"a"}`)); !strings.Contains(s, "runs_on = hub2") {
