@@ -210,6 +210,10 @@ type DetailField struct{ Name, Value string }
 // operations run under it (work.WithTeam).
 func WithTeam(ctx context.Context, t Team) context.Context { return work.WithTeam(ctx, t) }
 
+// HasTeam reports whether ctx already carries a Team (a host's own or a
+// test's), so a default one is never layered over it (P3-PERF-2).
+func HasTeam(ctx context.Context) bool { _, ok := work.TeamFrom(ctx); return ok }
+
 // refuseClientTeam is TEAM-030 (LORE_TEAM_SPEC §7.2, ADR TEAM-030): a team
 // is never assigned on a task written into a linked client repo, because
 // team names are internal. target is the store the task is (or will be)

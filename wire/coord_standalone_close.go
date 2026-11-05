@@ -148,3 +148,34 @@ func (w *coordWorld) workBranchHead(ctx context.Context) string {
 	}
 	return oid
 }
+
+var _ opstask.HolderFencer = standaloneTeam{}
+
+// FenceHolder implements opstask.HolderFencer (TASK 7.4, PASS3-A): a
+// checklist write by the task's holder (its claim on the board, or its
+// held record in this session) is fenced like `task note`; anyone else
+// writes unfenced. Only a holder pays for the fresh read the fence decides
+// on; a failed fence is E_LOST_CLAIM. Where this host coordinates nothing,
+// nothing is fenced (v0.1.17 plainRowFallback).
+func (t standaloneTeam) FenceHolder(ctx context.Context, taskID string, rowEpoch int) error {
+	w, ok := t.closeWorld(ctx)
+	if !ok {
+		return nil
+	}
+	st := w.signalsStore()
+	local, err := st.Local(ctx)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "read the signals ref", err)
+	}
+	_, mine := signals.FindOwn(local, w.caller(), w.folder, taskID)
+	_, had := w.held().Get(w.session(), taskID)
+	if !mine && !had {
+		return nil
+	}
+	v, err := st.Read(ctx)
+	if err != nil {
+		return coordErr(err)
+	}
+	_, err = signals.CheckHolder(v, w.caller(), w.folder, taskID, rowEpoch)
+	return coordErr(err)
+}

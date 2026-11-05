@@ -118,9 +118,11 @@ func TestAssignHandle(t *testing.T) {
 	if h.JSON(h.Must("tasklist.list", ``)) != before {
 		t.Error("a refused --assign wrote a tasklist")
 	}
-	// Without a host Team the handle is refused, never guessed.
-	h.Fails(opstask.OpAdd, `{"title":"t4","assign":["@ann"]}`, errs.Unsupported)
-	h.Fails(opstask.OpEdit, `{"id":"`+id+`","assign":["@ann"]}`, errs.Unsupported)
+	// Without the test's Team, App.Run supplies the standalone one
+	// (P3-COORD-3, P3-COORD-3a): it resolves on the repo roster, where Ann
+	// has no handle, so the handle is refused, never guessed.
+	h.Fails(opstask.OpAdd, `{"title":"t4","assign":["@ann"]}`, errs.NotFound)
+	h.Fails(opstask.OpEdit, `{"id":"`+id+`","assign":["@ann"]}`, errs.NotFound)
 	// A plain actor reference needs no host Team.
 	h.Must(opstask.OpEdit, `{"id":"`+id+`","assign":["Ann"]}`)
 }

@@ -147,9 +147,11 @@ const fieldCommentBody = "body"
 // operations ask for (`--assign @h`, `task list --mine|--claimed-by`, the
 // STATE column, the claimed-task fence of group deletes). A host with its
 // own coordination (Options.Coord: the release binary, which also puts its
-// own Team in every command's context) is left alone.
+// own Team in every command's context) is left alone, and so is a context
+// that already carries a Team (a caller's or a test's fake: App.Run calls
+// this on every operation, P3-PERF-2).
 func (a *App) TeamContext(ctx context.Context) context.Context {
-	if a.opts.Coord != nil {
+	if a.opts.Coord != nil || opstask.HasTeam(ctx) {
 		return ctx
 	}
 	return opstask.WithTeam(ctx, standaloneTeam{a: a})
@@ -168,20 +170,21 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 	if h == "" {
 		return opstask.Assignee{}, errs.New(errs.InvalidInput, "empty handle")
 	}
-	actors, err := t.a.RosterActors(ctx, store.SourceRepo)
+	// The roster this repo resolves on: the repo's own, or the org
+	// folder's when an org applies (repoRoster, P3-CMDLORE-5), with the
+	// sync-then-retry on a miss.
+	r, err := t.a.coordRoster(ctx)
 	if err != nil {
 		return opstask.Assignee{}, err
 	}
-	for _, x := range actors {
-		if x.Active && x.Handle == h {
-			return opstask.Assignee{ActorID: x.ID}, nil
-		}
+	x, err := t.a.rosterByHandle(ctx, r, h)
+	if err == nil {
+		return opstask.Assignee{ActorID: x.ID}, nil
 	}
-	if !allowTeam {
-		return opstask.Assignee{}, errs.New(errs.InvalidInput, "no one is @"+h+" on "+repoRosterWhere+"'s roster").
-			WithHint("register first: `lore actor register` (as that person)")
+	if !allowTeam || !errs.Has(err, errs.InvalidInput) {
+		return opstask.Assignee{}, err
 	}
-	teams, err := t.a.RosterTeams(ctx, store.SourceRepo)
+	teams, err := t.a.RosterTeams(ctx, r.src)
 	if err != nil {
 		return opstask.Assignee{}, err
 	}
@@ -192,6 +195,29 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 	}
 	return opstask.Assignee{}, errs.New(errs.NotFound, "no person or team with handle @"+h).
 		WithHint("people join with `lore actor register`")
+}
+
+// coordRoster is the roster @handles resolve on (repoRoster's place,
+// without its caller checks: resolving a handle needs no identity, and an
+// agent may assign): the org folder store with an org, else the repo.
+func (a *App) coordRoster(ctx context.Context) (rosterAt, error) {
+	r := rosterAt{src: store.SourceRepo, where: repoRosterWhere}
+	if a.opts.Org == nil {
+		return r, nil
+	}
+	org, err := a.opts.Org(ctx)
+	if err != nil || org == nil {
+		return r, err
+	}
+	src, folder, ok, err := a.orgRosterSource(ctx, org.Name)
+	if err != nil {
+		return r, err
+	}
+	if !ok {
+		return r, errs.New(errs.NotImplemented, "org "+org.Name+"'s roster is kept in its org store, which this lore build does not reach for the roster").
+			WithHint("set org_folder on one of the org's stores in ~/.lore/config.yaml")
+	}
+	return rosterAt{src: src, where: org.Name + " " + folder + "/"}, nil
 }
 
 // Claims implements opstask.Team: the last fetched copy of this repo's

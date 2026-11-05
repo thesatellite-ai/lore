@@ -148,7 +148,10 @@ func TestAddValidation(t *testing.T) {
 		{"ref bad", `{"title":"x","ref":["nope"]}`, errs.NotFound},
 		{"ref commit empty", `{"title":"x","ref":["commit:"]}`, errs.InvalidInput},
 		{"ref missing row", `{"title":"x","ref":["mem_01a1a5aca7f57659be7320c5f4b70011"]}`, errs.NotFound},
-		{"assign no team host", `{"title":"x","assign":["@bob"]}`, errs.Unsupported},
+		// P3-COORD-3, P3-COORD-3a: App.Run always supplies the standalone
+		// Team; in this client repo its roster is the org's, never the
+		// repo's, so a handle is refused, never guessed.
+		{"assign no team host", `{"title":"x","assign":["@bob"]}`, errs.LeakBlocked},
 		{"assign unknown actor", `{"title":"x","assign":["nobody"]}`, errs.NotFound},
 	}
 	for _, c := range cases {
