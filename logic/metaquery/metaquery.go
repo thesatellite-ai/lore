@@ -35,7 +35,18 @@ type Term struct {
 	Word             string
 	Key, Path, Value string
 	Op               meta.Op
+	// Level and Place are a scope prefix (3.17: repo:acmehub_backend:
+	// status_code:404): Level is repo, project or org ("" none); Place the
+	// named repo or project folder ("" the nearest).
+	Level, Place string
 }
+
+// Scope levels a search term may start with (3.6 level words).
+const (
+	LevelRepo    = "repo"
+	LevelProject = "project"
+	LevelOrg     = "org"
+)
 
 // Name is the term's key name as row_meta spells it (key, or key.path).
 func (t Term) Name() string {
@@ -51,9 +62,32 @@ func (t Term) Name() string {
 func Parse(q string, isKey func(name string) bool) []Term {
 	var out []Term
 	for _, w := range split(q) {
-		out = append(out, parseWord(w, isKey))
+		out = append(out, parseScoped(w, isKey))
 	}
 	return out
+}
+
+// parseScoped reads a term that may start with a scope prefix
+// (level:[place:]term, P2-META-9); a level word not followed by a key
+// term is read as a plain term.
+func parseScoped(w string, isKey func(string) bool) Term {
+	for _, lv := range []string{LevelRepo, LevelProject, LevelOrg} {
+		rest, ok := strings.CutPrefix(w, lv+":")
+		if !ok || rest == "" {
+			continue
+		}
+		if t := parseWord(rest, isKey); t.Kind != Text {
+			t.Word, t.Level = w, lv
+			return t
+		}
+		if place, rest2, ok := strings.Cut(rest, ":"); ok && place != "" && lv != LevelOrg {
+			if t := parseWord(rest2, isKey); t.Kind != Text {
+				t.Word, t.Level, t.Place = w, lv, place
+				return t
+			}
+		}
+	}
+	return parseWord(w, isKey)
 }
 
 // parseWord reads one term.

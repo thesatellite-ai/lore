@@ -31,6 +31,34 @@ const isoDateGlob = `'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'`
 // alias that t's term matches. Values are written as SQL literals (single
 // quotes doubled), so the result can be put in a read-only lore sql query.
 func RowMetaCond(alias string, t metaquery.Term) (string, error) {
+	c, err := rowMetaCond(alias, t)
+	if err != nil || t.Level == "" {
+		return c, err
+	}
+	return c + " AND " + scopeCond(alias+".", t), nil
+}
+
+// scopeCond is the entry-scope condition of a scoped term (P2-META-9):
+// the scope label an entry carries is "repo", a project folder name, or
+// "store" for an org-level store key (engine metaScope). A repo place is
+// checked by the caller (it knows the repo's name; the cache does not).
+func scopeCond(a string, t metaquery.Term) string {
+	switch t.Level {
+	case metaquery.LevelRepo:
+		return a + "scope = 'repo'"
+	case metaquery.LevelOrg:
+		return a + "scope = 'store'"
+	case metaquery.LevelProject:
+		if t.Place != "" {
+			return a + "scope = " + sqlLit(t.Place)
+		}
+		return a + "scope NOT IN ('repo', 'store')"
+	}
+	return "1"
+}
+
+// rowMetaCond is RowMetaCond without the scope part.
+func rowMetaCond(alias string, t metaquery.Term) (string, error) {
 	a := alias + "."
 	switch t.Kind {
 	case metaquery.Has:

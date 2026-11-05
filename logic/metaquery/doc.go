@@ -12,6 +12,8 @@
 //	FTS(terms) → the FTS5 text: a word holding - . or : becomes one phrase,
 //	             a trailing * moves outside the quotes ("HUB-41"* finds HUB-412)
 //
-// Not built (0.1.18): scope prefixes
+//	      level:[place:]term (repo|project|org)  → the term with Level/Place (P2-META-9)
+//
+// Not built (0.1.18):
 // (repo:<name>:key:v), json paths ($.), "did you mean" hints.
 package metaquery
