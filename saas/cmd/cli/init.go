@@ -329,7 +329,7 @@ func initTargetReason(fromFlag bool, r toolprofile.Reason) string {
 // hooks of coreOptions would refuse a repo write (TestE8, TestE10); the
 // live-row wrapper is kept so the actor row the seed wrote is seen (FLAG6).
 func initCoreOptions(root, home string) wire.Options {
-	return wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: &coreAuditSink{}, ModeB: modeBExporter{},
+	return wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: &coreAuditSink{root: root}, ModeB: modeBExporter{},
 		WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now}
 }
 

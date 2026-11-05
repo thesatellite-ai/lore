@@ -35,9 +35,17 @@ const coreAuditDeleteKind = "delete"
 // _txlock=immediate serialises appenders, so two processes never fork the
 // chain). lore.db is opened once per process, on the first event.
 type coreAuditSink struct {
-	once sync.Once
-	db   *sql.DB
-	err  error
+	// root is the repo top the core opened (wire.Options.RepoDir): lore.db
+	// is resolved there, not at the working directory, so a write run
+	// from a subfolder records its audit entry instead of failing after
+	// the row was stored (OVERNIGHT Qs subfolder). "" = working directory.
+	root string
+	// topOnce/top cache the git top of root (projectRoot).
+	topOnce sync.Once
+	top     string
+	once    sync.Once
+	db      *sql.DB
+	err     error
 	// session is this process's ses_ row (6.2), found or created once on
 	// the first event that asks (Session).
 	sesOnce sync.Once
@@ -61,7 +69,7 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 	if ev.Store != store.SourceRepo {
 		return nil
 	}
-	s.once.Do(func() { s.db, s.err = openCoreAuditDB(ctx) })
+	s.once.Do(func() { s.db, s.err = openCoreAuditDBAt(ctx, s.projectRoot(ctx)) })
 	if s.err != nil {
 		return s.err
 	}
@@ -107,16 +115,34 @@ func (s *coreAuditSink) Record(ctx context.Context, ev engine.Event) error {
 	return nil
 }
 
+// projectRoot is the folder lore.db is resolved at: the git top of root
+// (root is any folder inside the repo, like wire.Options.RepoDir; the
+// git backend finds its store by the same rev-parse), else root itself
+// ("" = working directory). OVERNIGHT Qs subfolder: a write run from
+// repo/sub must chain into repo/.lore/lore.db.
+func (s *coreAuditSink) projectRoot(ctx context.Context) string {
+	s.topOnce.Do(func() {
+		s.top = s.root
+		if s.root == "" {
+			return
+		}
+		if top, err := gitOutput(ctx, s.root, "rev-parse", "--show-toplevel"); err == nil && top != "" {
+			s.top = top
+		}
+	})
+	return s.top
+}
+
 // Session implements wire.SessionSource: this process's ses_ id in the
 // repo's lore.db (machine-local, OQ14), "" when no session applies or
 // there is no lore.db here. Found or created once per process.
 func (s *coreAuditSink) Session(ctx context.Context) (string, error) {
 	s.sesOnce.Do(func() {
-		s.once.Do(func() { s.db, s.err = openCoreAuditDB(ctx) })
+		s.once.Do(func() { s.db, s.err = openCoreAuditDBAt(ctx, s.projectRoot(ctx)) })
 		if s.err != nil {
 			return // no repo lore.db (attached-store-only run): no session link
 		}
-		s.ses, s.sesErr = currentSession(ctx, s.db)
+		s.ses, s.sesErr = currentSession(ctx, s.db, s.projectRoot(ctx))
 	})
 	return s.ses, s.sesErr
 }
@@ -124,11 +150,26 @@ func (s *coreAuditSink) Session(ctx context.Context) (string, error) {
 // openCoreAuditDB opens the project's lore.db for the chain, building it
 // from .lore/data first in a fresh clone (as every old command does).
 func openCoreAuditDB(ctx context.Context) (*sql.DB, error) {
-	var none commonFlags
-	if err := maybeMaterialize(ctx, &none); err != nil {
-		return nil, materializeError(err)
+	return openCoreAuditDBAt(ctx, "")
+}
+
+// openCoreAuditDBAt is openCoreAuditDB for the project at root ("" = the
+// working directory; OVERNIGHT Qs subfolder).
+func openCoreAuditDBAt(ctx context.Context, root string) (*sql.DB, error) {
+	if os.Getenv(envDBPath) == "" {
+		dir := root
+		if dir == "" {
+			wd, err := os.Getwd()
+			if err != nil {
+				return nil, errcodes.New(errcodes.Internal, "audit: read the working directory").WithCause(err)
+			}
+			dir = wd
+		}
+		if err := materializeAt(ctx, dir); err != nil {
+			return nil, materializeError(err)
+		}
 	}
-	rctx, err := projresolve.Resolve(projresolve.Inputs{})
+	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: root})
 	if err != nil {
 		return nil, mapResolveError(err)
 	}

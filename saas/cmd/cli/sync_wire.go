@@ -393,13 +393,24 @@ func maybeMaterialize(ctx context.Context, c *commonFlags) error {
 		return nil
 	}
 	cwd, err := os.Getwd()
-	if err != nil || !needsMaterialize(cwd) {
+	if err != nil {
 		return nil
 	}
-	if err := checkNetworkFS(cwd); err != nil {
+	return materializeAt(ctx, cwd)
+}
+
+// materializeAt is maybeMaterialize for an explicit project root (the
+// core's audit sink passes the repo top, so a write from a subfolder
+// builds the root's lore.db, never one in the subfolder: OVERNIGHT Qs
+// subfolder). Same network-FS-first order.
+func materializeAt(ctx context.Context, root string) error {
+	if !needsMaterialize(root) {
+		return nil
+	}
+	if err := checkNetworkFS(root); err != nil {
 		return err
 	}
-	return materializeFromData(ctx, cwd)
+	return materializeFromData(ctx, root)
 }
 
 // materializeError is how callers report a maybeMaterialize failure: an

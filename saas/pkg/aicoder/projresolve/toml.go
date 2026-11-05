@@ -259,6 +259,11 @@ type Context struct {
 // Inputs collects raw values from CLI flags and environment.
 // Caller (cobra root) populates these.
 type Inputs struct {
+	// Dir is the folder resolved as the project root; "" means the
+	// process's working directory. The core's audit sink passes the repo
+	// top so a write run from a subfolder still finds lore.db (OVERNIGHT
+	// Qs subfolder).
+	Dir         string
 	FlagDB      string
 	FlagProject string
 	FlagRepo    string
@@ -267,9 +272,13 @@ type Inputs struct {
 // Resolve computes a Context from cwd + flags + env per the universal chain.
 // Returns ErrNotProjectRoot if cwd is not an aicoder project (no walk-up).
 func Resolve(in Inputs) (*Context, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("getwd: %w", err)
+	cwd := in.Dir
+	if cwd == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("getwd: %w", err)
+		}
+		cwd = wd
 	}
 
 	// An explicit DB (--db flag or LORE_DB env) is the escape hatch for

@@ -157,7 +157,10 @@ func detectedWho(ctx context.Context) (identity.Resolved, error) {
 // returns its ses_ id; "" when no session applies, the core is not
 // mounted, or lore.db predates the 0.1.18 columns (the change is still
 // audited, only without the link; `lore doctor` reports the schema drift).
-func currentSession(ctx context.Context, db *sql.DB) (string, error) {
+// root is the project root lore.db belongs to ("" = the working
+// directory; the core audit sink passes the repo top, OVERNIGHT Qs
+// subfolder).
+func currentSession(ctx context.Context, db *sql.DB, root string) (string, error) {
 	if coreApp == nil {
 		return "", nil
 	}
@@ -173,17 +176,23 @@ func currentSession(ctx context.Context, db *sql.DB) (string, error) {
 	if !ok {
 		return "", nil
 	}
-	return currentSessionWith(ctx, db, d)
+	return currentSessionAt(ctx, db, d, root)
 }
 
 // currentSessionWith finds or creates d's row in db ("" on a lore.db
 // without the 0.1.18 columns).
 func currentSessionWith(ctx context.Context, db *sql.DB, d sessions.Details) (string, error) {
+	return currentSessionAt(ctx, db, d, "")
+}
+
+// currentSessionAt is currentSessionWith resolving the project at root
+// ("" = the working directory; OVERNIGHT Qs subfolder).
+func currentSessionAt(ctx context.Context, db *sql.DB, d sessions.Details, root string) (string, error) {
 	ready, err := sessions.Ready(ctx, db)
 	if err != nil || !ready {
 		return "", err
 	}
-	rctx, err := projresolve.Resolve(projresolve.Inputs{})
+	rctx, err := projresolve.Resolve(projresolve.Inputs{Dir: root})
 	if err != nil {
 		return "", mapResolveError(err)
 	}
