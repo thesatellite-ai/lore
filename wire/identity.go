@@ -169,7 +169,7 @@ func (a *App) ThisMachine(context.Context) (opsinfra.ThisMachine, error) {
 
 // MachineTarget is where this machine's profile is written: to when it
 // names an attached own store, else the first attached store that is
-// neither the code repo nor client-readable. Machine data never goes into
+// neither the code repo, client-readable nor read-only (OV59). Machine data never goes into
 // a code repo (Q-R3-9) nor a client repo (MACHINE PROFILE).
 func (a *App) MachineTarget(ctx context.Context, to string) (store.Source, error) {
 	st, err := a.state(ctx)
@@ -188,14 +188,20 @@ func (a *App) MachineTarget(ctx context.Context, to string) (store.Source, error
 		if name == store.SourceRepo || st.eng.IsClient(name) {
 			return refuse("store " + to + " is a repo or client-readable")
 		}
+		if st.eng.ReadOnly(name) {
+			return "", errs.Wrap(errs.StoreReadOnly, "store "+to+" is attached read-only", store.ErrReadOnly).
+				WithHint("pass --to an own store that is not read_only")
+		}
 		return name, nil
 	}
+	// OV59: the automatic pick skips a read-only own store (a write there
+	// is E_STORE_READ_ONLY) and takes the next own store.
 	for _, name := range st.eng.Stores() {
-		if name != store.SourceRepo && !st.eng.IsClient(name) {
+		if name != store.SourceRepo && !st.eng.IsClient(name) && !st.eng.ReadOnly(name) {
 			return name, nil
 		}
 	}
-	return refuse("no own store is attached")
+	return refuse("no writable own store is attached")
 }
 
 var _ opsinfra.Machines = (*App)(nil)
