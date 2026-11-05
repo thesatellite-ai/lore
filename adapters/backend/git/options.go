@@ -128,11 +128,13 @@ func Join(opts ...Option) Option {
 	}
 }
 
-// withTrailers is msg with the configured trailers after one blank line
-// (git interpret-trailers form); msg unchanged when there are none.
-func (c config) withTrailers(msg string) string {
+// withTrailers is msg with the configured trailers, then the per-write
+// extra ones (store.CommitTrailers, e.g. Lore-Moved-To; PROVENANCE 5.4),
+// after one blank line (git interpret-trailers form); msg unchanged when
+// there are none. A blank or multi-line entry is dropped.
+func (c config) withTrailers(msg string, extra ...string) string {
 	var keep []string
-	for _, t := range c.trailers {
+	for _, t := range slices.Concat(c.trailers, extra) {
 		if t = strings.TrimSpace(t); t != "" && !strings.ContainsAny(t, "\r\n") {
 			keep = append(keep, t)
 		}

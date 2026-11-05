@@ -33,3 +33,23 @@ func TestCommitTrailers(t *testing.T) {
 		t.Fatalf("no trailers changed the message: %q", got)
 	}
 }
+
+// PROVENANCE 5.4: per-write trailers carried on the context land after the
+// fixed ones on that write's commit only, never on the next.
+func TestPerWriteTrailers(t *testing.T) {
+	noGitIdentity(t)
+	who := WithIdentity(func(context.Context) Signature { return Signature{Name: "L", Email: "l@example.invalid"} })
+	remote := newRemote(t, true)
+	a, g := clone(t, remote, who, WithTrailers("Lore-Version: 0.1.18")), newGen(t)
+	ctx := store.WithCommitTrailers(context.Background(), "Lore-Moved-To: rep_1", "Bad: a\nb")
+	if err := a.Write(ctx, []store.Change{{Row: g.row(newID(t), "a", hlc.HLC{})}}); err != nil {
+		t.Fatal(err)
+	}
+	if body := gitT(t, a.Dir(), "log", "-1", "--format=%(trailers:only,unfold)"); strings.TrimSpace(body) != "Lore-Version: 0.1.18\nLore-Moved-To: rep_1" {
+		t.Fatalf("trailers %q", body)
+	}
+	write(t, a, store.Change{Row: g.row(newID(t), "b", hlc.HLC{})})
+	if body := gitT(t, a.Dir(), "log", "-1", "--format=%(trailers:only,unfold)"); strings.TrimSpace(body) != "Lore-Version: 0.1.18" {
+		t.Fatalf("next commit kept the per-write trailer: %q", body)
+	}
+}

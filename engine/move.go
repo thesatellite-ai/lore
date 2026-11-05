@@ -199,7 +199,12 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	}
 	h := e.clock.Now(cur.HLC)
 	tomb := row.Row{Table: cur.Table, ID: cur.ID, HLC: h, Deleted: true, UpdatedAt: h.Wall, UpdatedBy: actor}
-	got, err := e.put(ctx, srcSt, tomb, cur.HLC)
+	// PROVENANCE 5.4: the source place's commit records where the row went
+	// (Lore-Moved-To: the target's place id; for a client repo its rep_
+	// id), so the history our side keeps can be stitched across a hop the
+	// client file never names. Per write: only this tombstone's commit.
+	mctx := store.WithCommitTrailers(ctx, MovedToTrailer+": "+e.placeOf(to))
+	got, err := e.put(mctx, srcSt, tomb, cur.HLC)
 	if err != nil {
 		return Written{Row: moved}, errs.Wrap(errs.CodeOf(err), "engine: "+cur.ID.String()+" is now in "+string(to)+" but its old copy in "+string(src)+" could not be removed", err).
 			WithHint("run the same move again: it only removes the old copy")
@@ -410,6 +415,10 @@ func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.
 	out[projectField] = ref
 	return out, nil
 }
+
+// MovedToTrailer is the commit trailer key a move adds to the source
+// place's commit (PROVENANCE 5.4).
+const MovedToTrailer = "Lore-Moved-To"
 
 // placeOf is the place id a `moves` entry records for the attached store
 // name (FQ4): its Place, or the attached name when wire knows no place id
