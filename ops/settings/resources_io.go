@@ -156,7 +156,7 @@ type resRecord struct {
 func (o ops) resourceIOOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpResImport, Summary: "Import resources from a csv, json or yaml file (one batch, all or nothing)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.ResourcePlace, errs.NameTaken), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourcePlace, errs.NameTaken), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "import hosts", CLI: "lore resource import hosts.csv --kind host --yes", Want: "imported"}}}, o.resImport),
 		op.Define(op.Spec{Name: OpResExport, Summary: "Export resources of a kind in the import format (sensitive values masked)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resExport),

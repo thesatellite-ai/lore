@@ -281,29 +281,32 @@ func dayOf(s string) string {
 	return s
 }
 
+// Every resource op that resolves a kind by name lists E_KIND_CONFLICT and
+// E_RESOURCE_STALE beside E_KIND_UNKNOWN: lookupKind answers them under
+// layering (RES 3.6, OV35).
 func (o ops) resourceOps() []op.Entry {
 	return append([]op.Entry{
 		op.Define(op.Spec{Name: OpResAdd, Summary: "Add a resource of a kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.ResourcePlace), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourcePlace), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "add a host", CLI: "lore resource add host hub_prod --set provider=hetzner", Want: "res_"}}}, o.resAdd),
 		op.Define(op.Spec{Name: OpResEdit, Summary: "Edit a resource's values (stamps last_checked)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "bulk edit", CLI: "lore resource edit --kind service --where runs_on=hub_prod --set runs_on=hub_prod_2 --yes", Want: "batch bat_"}}}, o.resEdit),
 		op.Define(op.Spec{Name: OpResShow, Summary: "Show one resource", Permission: op.PermRead, Access: op.AccessRead,
 			// XQ3: --show-sensitive always confirms; without a terminal it needs --yes.
 			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resShow),
 		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resList),
+			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}}, o.resList),
 		// XQ2: MayAsk, not Always: the bulk form must count its rows before
 		// it may ask (a preview above batch.preview_rows); the one-row form
 		// still always asks, in resDelete (bulk.Ask).
 		op.Define(op.Spec{Name: OpResDelete, Summary: "Delete a resource, or every resource of a kind matching --where (a tombstone is kept)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "bulk delete without a terminal", CLI: "lore resource delete --kind host --where provider=linode --yes", Want: "batch bat_"}}}, o.resDelete),
 		op.Define(op.Spec{Name: OpResArchive, Summary: "Archive a resource (refs stay; new refs are refused)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.resArchive),
 		op.Define(op.Spec{Name: OpResCheck, Summary: "Stamp last_checked: a person or agent looked and the facts are right", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.KindUnknown), Confirm: op.ConfirmRule{MayAsk: true}}, o.resCheck),
+			Errors: append(slices.Clone(writeErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{MayAsk: true}}, o.resCheck),
 		op.Define(op.Spec{Name: OpResStale, Summary: "Resources whose last_checked is older than --days, or never set", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors}, o.resStale),
 	}, append(append(append(o.resourceIOOps(), o.graphOps()...), o.maintOps()...), o.historyOps()...)...) // history, report (resources_history.go); import, export, repoint, clone (resources_io.go); graph, impact (resources_graph.go)
