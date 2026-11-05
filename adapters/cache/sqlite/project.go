@@ -176,6 +176,10 @@ func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 			}
 		}
 		ftsErr = indexResource(ctx, tx, p, source, r, info)
+		if ftsErr == nil {
+			// OV34-REFLABEL: resources naming r now index its current name
+			ftsErr = reindexReferrers(ctx, tx, p, r.ID)
+		}
 	} else {
 		// METADATA 3.17: the row's non-sensitive meta values in f_meta
 		ftsVals, metaErr := withMeta(ctx, tx, vals, r)
@@ -525,6 +529,14 @@ func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row
 	text, err := resourceValueText(r, info.indexable)
 	if err != nil {
 		return err
+	}
+	// OV34-REFLABEL (reflabel.go): a ref value is also found by its target's name
+	labels, err := refLabels(ctx, tx, source, text)
+	if err != nil {
+		return err
+	}
+	if labels != "" {
+		text += " " + labels
 	}
 	if t, terr := value.TextOf(text); terr == nil && text != "" {
 		vals[ftsResValues] = t
