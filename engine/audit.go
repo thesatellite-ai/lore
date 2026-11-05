@@ -101,6 +101,9 @@ func (e *Engine) AuditSecret(ctx context.Context, action Action, a SecretAudit) 
 	cl := e.callOf(ctx)
 	ev := Event{Op: cl.op, Action: action, Store: store.SourceRepo, ID: a.Row, Actor: e.actorOf(cl),
 		Confirmed: cl.caller.Yes, Secret: a}
+	if def, ok := e.reg.ByPrefix(a.Row.Prefix()); !a.Row.IsZero() && ok {
+		ev.Table = def.Name // a batch log line needs its table (FB-RES-2)
+	}
 	if b, ok := BatchOf(ctx); ok {
 		ev.Batch = b
 	}
