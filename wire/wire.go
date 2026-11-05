@@ -481,7 +481,7 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err != nil {
 		return op.Result{}, err
 	}
-	if d, err = a.prepareTarget(ctx, e, d, c); err != nil {
+	if ctx, d, err = a.prepareTarget(ctx, e, d, c); err != nil {
 		return op.Result{}, err
 	}
 	eng, err := a.Engine(ctx)

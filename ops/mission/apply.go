@@ -147,7 +147,9 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 	if err != nil {
 		return ApplyOut{}, err
 	}
-	to := strings.TrimSpace(p.Mission.To)
+	// the Runner may have rewritten a <store>/<folder> to the store already
+	// attached at that folder (BUG-T8, client repos)
+	to := op.TargetAlias(ctx, strings.TrimSpace(p.Mission.To))
 	if in.DryRun {
 		return o.applyDry(ctx, to, project, p)
 	}

@@ -161,6 +161,28 @@ func (i Input) NamedTarget() (name string, ok bool) {
 	return n, true
 }
 
+// targetAliasKey carries the Runner's rewrite of a named target.
+type targetAliasKey struct{}
+
+// targetAlias is one rewrite: the name the input gave and the attached name.
+type targetAlias struct{ from, to string }
+
+// WithTargetAlias records that the target from is attached as to (a
+// `<store>/<folder>` that names a store already attached at that folder),
+// for an operation whose target is not a `to` field (TargetNamer).
+func WithTargetAlias(ctx context.Context, from, to string) context.Context {
+	return context.WithValue(ctx, targetAliasKey{}, targetAlias{from: from, to: to})
+}
+
+// TargetAlias returns the attached name of target name: the Runner's
+// rewrite when it recorded one for name, else name itself.
+func TargetAlias(ctx context.Context, name string) string {
+	if a, ok := ctx.Value(targetAliasKey{}).(targetAlias); ok && a.from == name {
+		return a.to
+	}
+	return name
+}
+
 // Bool returns the value of the bool field with json name name; ok is false
 // when there is no such bool field.
 func (i Input) Bool(name string) (value, ok bool) {

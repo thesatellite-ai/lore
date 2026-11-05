@@ -29,15 +29,21 @@ const targetSep = "/"
 // attached at its root, `<store>/.` is that same place and the input is
 // rewritten to plain `<store>` (the returned decoder), so one data folder
 // keeps one name and nothing new is recorded in stores.yaml.
-func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Decoder, error) {
+//
+// A target named outside a `to` field (op.TargetNamer: mission apply's plan
+// file) gets the same rewrite through the context (op.WithTargetAlias),
+// which the operation reads with op.TargetAlias (BUG-T8: in a client repo
+// `agency/client2` is the org store attached at its linked folder, named
+// `agency`).
+func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (context.Context, op.Decoder, error) {
 	from, root, err := a.attachFolderTarget(ctx, e, d, c)
 	if err != nil {
-		return d, err
+		return ctx, d, err
 	}
 	if root != "" {
-		return aliasDecoder{inner: d, from: from, to: root}, nil
+		return op.WithTargetAlias(ctx, from, root), aliasDecoder{inner: d, from: from, to: root}, nil
 	}
-	return d, nil
+	return ctx, d, nil
 }
 
 // attachFolderTarget is prepareTarget's attach step (see there). A
@@ -54,17 +60,13 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 			to = tv.Text
 		}
 	}
-	named := false
 	if to == "" {
 		// mission apply names its target in the plan file (BUG-T8)
-		to, named = in.NamedTarget()
+		to, _ = in.NamedTarget()
 	}
 	base, folderName, ok := strings.Cut(to, targetSep)
 	if !ok || base == "" || folderName == "" {
 		return "", "", nil
-	}
-	if named && folderName == rowfs.FolderRoot {
-		return "", "", nil // `<store>/.` is rewritten in a to field only; the run answers it
 	}
 	name := store.Source(to)
 	a.mu.Lock()
