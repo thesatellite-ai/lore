@@ -72438,7 +72438,7 @@
                   },
                   "map": {
                     "type": "array",
-                    "description": "rename columns: \u003cfile column\u003e=\u003ctask field\u003e[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key)",
+                    "description": "rename columns: \u003cfile column\u003e=\u003ctask field\u003e[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name)",
                     "items": {
                       "type": "string"
                     }
