@@ -55,6 +55,9 @@ func (h standaloneCoord) TaskReassign(ctx context.Context, in opscoord.ReassignI
 	if strings.TrimSpace(in.ID) == "" {
 		return opscoord.Report{}, errs.New(errs.InvalidInput, "give a task id or --from @handle")
 	}
+	if err = w.forTask(ctx, in.ID); err != nil {
+		return opscoord.Report{}, err
+	}
 	by := w.actorID
 	if _, err = coord.OverrideChecked(ctx, w.env(ctx), in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
 		prevLead, prevAll := d.Str(fieldTaskLead), d.Strs(schema.FieldTaskAssignees)
@@ -185,7 +188,7 @@ func (h standaloneCoord) TaskMerged(ctx context.Context, in opscoord.MergedIn) (
 	if err := refuseFrom(opscoord.OpTaskMerged, in.From); err != nil {
 		return opscoord.Report{}, err
 	}
-	w, err := h.openWorld(ctx)
+	w, err := h.openWorldFor(ctx, in.ID)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
@@ -232,6 +235,9 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
+	if err = w.forRepoOnly(); err != nil {
+		return opscoord.Report{}, err
+	}
 	st := w.signalsStore()
 	d := in.TTL
 	if d <= 0 {
@@ -262,6 +268,9 @@ func (h standaloneCoord) HoldRelease(ctx context.Context, in opscoord.HoldReleas
 	if err != nil {
 		return opscoord.Report{}, err
 	}
+	if err = w.forRepoOnly(); err != nil {
+		return opscoord.Report{}, err
+	}
 	_, err = w.signalsStore().Write(ctx, func(v signals.View) (signals.Change, error) {
 		p, derr := signals.DecideUnhold(v, w.caller(), w.folder, in.Name)
 		return signals.Change{Delete: []string{p}}, derr
@@ -286,7 +295,7 @@ func (h standaloneCoord) GateRequest(ctx context.Context, in opscoord.GateIn) (o
 	if err := refuseFrom(opscoord.OpGateRequest, in.From); err != nil {
 		return opscoord.Report{}, err
 	}
-	w, err := h.openWorld(ctx)
+	w, err := h.openWorldFor(ctx, in.ID)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
@@ -359,7 +368,7 @@ func (h standaloneCoord) GateApprove(ctx context.Context, in opscoord.GateIn) (o
 		return opscoord.Report{}, errs.New(errs.InvalidInput, fmt.Sprintf("approvals come from your identity file, never from %s (%s is set here)", identity.EnvActor, identity.EnvActor)).
 			WithHint("an agent session cannot approve; run `lore gate approve` in your own shell")
 	}
-	w, err := h.openWorld(ctx)
+	w, err := h.openWorldFor(ctx, in.ID)
 	if err != nil {
 		return opscoord.Report{}, err
 	}

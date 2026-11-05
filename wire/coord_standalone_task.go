@@ -36,12 +36,12 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 	if err := refuseFrom(opscoord.OpTaskClaim, in.From); err != nil {
 		return opscoord.Report{}, err
 	}
-	w, err := h.openWorld(ctx)
+	w, err := h.openWorldFor(ctx, in.ID)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
 	env := w.env(ctx)
-	opts := coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), Repo: h.hereRepo(ctx), InRepo: true, Coordinate: in.Coordinate}
+	opts := coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), Repo: h.hereRepo(ctx, w), InRepo: !w.spot.store, Coordinate: in.Coordinate}
 	// TASK 6.9: a parent with open sub-tasks is refused unless --coordinate.
 	docs, err := engineRows(h).List(ctx)
 	if err != nil {
@@ -106,7 +106,10 @@ func shortDuration(d time.Duration) string {
 
 // hereRepo is this checkout's repo mount name ("" when the repo has no
 // identity yet): the default --repo of task next and the claim's repo.
-func (h standaloneCoord) hereRepo(ctx context.Context) string {
+func (h standaloneCoord) hereRepo(ctx context.Context, w *coordWorld) string {
+	if w.spot.store {
+		return w.remoteRepoName(ctx)
+	}
 	id, ok := h.a.RepoIdentity(ctx)
 	if !ok {
 		return ""
@@ -137,13 +140,15 @@ func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.Heartbea
 			return opscoord.Report{Lines: []string{"no claims held by this session"}}, nil
 		}
 	}
-	env := w.env(ctx)
 	var lines []string
 	for _, id := range ids {
 		if in.ID == "" && w.renewedRecently(id) {
 			continue
 		}
-		s, rerr := coord.Renew(ctx, env, id)
+		if ferr := w.forHeld(ctx, id); ferr != nil {
+			return opscoord.Report{Lines: lines}, ferr
+		}
+		s, rerr := coord.Renew(ctx, w.env(ctx), id)
 		if rerr != nil {
 			return opscoord.Report{Lines: lines}, coordErr(rerr)
 		}
@@ -167,7 +172,7 @@ func (h standaloneCoord) TaskRelease(ctx context.Context, in opscoord.ReleaseIn)
 	if err := refuseFrom(opscoord.OpTaskRelease, in.From); err != nil {
 		return opscoord.Report{}, err
 	}
-	w, err := h.openWorld(ctx)
+	w, err := h.openWorldFor(ctx, in.ID)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
@@ -183,7 +188,7 @@ func (h standaloneCoord) TaskRevoke(ctx context.Context, in opscoord.RevokeIn) (
 	if err := refuseFrom(opscoord.OpTaskRevoke, in.From); err != nil {
 		return opscoord.Report{}, err
 	}
-	w, err := h.openWorld(ctx)
+	w, err := h.openWorldFor(ctx, in.ID)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
@@ -208,15 +213,15 @@ const nextTagName = "next"
 // most urgent ready leaf; --dry-run ranks and explains, writing nothing.
 // Poisoned tasks are announced even when the claim then fails.
 func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opscoord.NextOut, error) {
-	w, err := h.openWorld(ctx)
+	w, err := h.openWorldFor(ctx, "")
 	if err != nil {
 		return opscoord.NextOut{}, err
 	}
 	env := w.env(ctx)
 	rows := engineRows(h)
 	req := coord.NextRequest{
-		Filter: queue.Filter{Mission: in.Mission, Role: in.Role, Repo: in.Repo, Here: h.hereRepo(ctx)},
-		Opts:   coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), InRepo: true},
+		Filter: queue.Filter{Mission: in.Mission, Role: in.Role, Repo: in.Repo, Here: h.hereRepo(ctx, w)},
+		Opts:   coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), InRepo: !w.spot.store},
 		List:   rows.List, RepoName: rows.RepoName, Pick: cryptoPick, Urgency: h.urgencyContext(ctx),
 	}
 	if in.DryRun {

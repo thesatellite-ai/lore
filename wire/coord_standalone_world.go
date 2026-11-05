@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -75,6 +76,24 @@ type coordWorld struct {
 	folder     string
 	who        identity.Resolved
 	actorID    string
+	// sit is the org resolution of this checkout (links, role, org).
+	sit orgresolve.Result
+	// spot is where claims go: this repo's own signals ref, or the linked
+	// store's (useStore, D8).
+	spot sigSpot
+}
+
+// sigSpot is one signals ref: the git repo holding it, its remote, the
+// ref name, the observation file and the project folder on it.
+type sigSpot struct {
+	repo       *gitref.Repo
+	remote     gitremote.Remote
+	remoteName string
+	ref        string
+	seen       string
+	folder     string
+	// store: the linked store's ref (the task row is not in this repo).
+	store bool
 }
 
 // openWorld gathers the world, refusing what this host cannot coordinate:
@@ -110,12 +129,13 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = refuseLinked(sit.Result); err != nil {
-		return nil, err
+	if sit.Result.LinkUnknown {
+		return nil, errs.New(errs.LinkUnknown, "cannot tell whether this repo is a client repo; refusing to write coordination data").
+			WithHint("`lore whoami` shows the link status; fetch the store and retry")
 	}
 	w := &coordWorld{
 		a: a, repo: repo, stateDir: filepath.Join(strings.TrimSpace(string(gitDir)), signalsStateDir),
-		folder: signalsRootFolder, who: who, actorID: actor.String(),
+		folder: signalsRootFolder, who: who, actorID: actor.String(), sit: sit.Result,
 	}
 	if rel, rerr := filepath.Rel(top, a.projectDir()); rerr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
 		w.folder = filepath.ToSlash(rel)
@@ -124,22 +144,151 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	if _, rerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + w.remoteName + ".url"}}); rerr == nil {
 		w.remote = &gitremote.Git{Repo: repo, Name: w.remoteName}
 	}
+	w.spot = w.repoSpot()
 	return w, nil
 }
 
-// refuseLinked keeps a linked repo (client or group) on the release binary:
-// its claims belong on the store's signals ref (D8), and an unknown link
-// status fails closed (TEAM-024).
-func refuseLinked(r orgresolve.Result) error {
-	if r.LinkUnknown {
-		return errs.New(errs.LinkUnknown, "cannot tell whether this repo is a client repo; refusing to write coordination data").
-			WithHint("`lore whoami` shows the link status; fetch the store and retry")
+// openWorldFor is openWorld pointed at where task id is coordinated
+// (forTask; "" = the work queue).
+func (h standaloneCoord) openWorldFor(ctx context.Context, id string) (*coordWorld, error) {
+	w, err := h.openWorld(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if len(r.Links) > 0 || r.Role == orgresolve.RoleClient {
-		return errs.New(errs.Unsupported, "this repo is linked to an org store: its claims live on the store's signals ref, which this binary does not reach yet").
-			WithHint("run it with the release binary")
+	if err = w.forTask(ctx, id); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+// forHeld points the world at the ref a claim of this session was taken
+// on (its held record), else at the task's own place.
+func (w *coordWorld) forHeld(ctx context.Context, id string) error {
+	if rec, ok := w.held().Get(w.session(), id); ok && rec.Ref == signals.CodeRepoRef {
+		w.spot = w.repoSpot()
+		w.folder = rec.Folder
+		w.spot.folder = rec.Folder
+		return nil
+	}
+	return w.forTask(ctx, id)
+}
+
+// repoSpot is this repo's own signals ref.
+func (w *coordWorld) repoSpot() sigSpot {
+	return sigSpot{repo: w.repo, remote: w.remote, remoteName: w.remoteName, ref: signals.CodeRepoRef,
+		seen: filepath.Join(w.stateDir, signalsSeenFile), folder: w.folder}
+}
+
+// remoteRepoName is this checkout's repo name in a group: the last path
+// segment of its remote (github.com/globex/backend → backend), v0.1.17
+// hereRepoName.
+func (w *coordWorld) remoteRepoName(ctx context.Context) string {
+	out, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + w.remoteName + ".url"}})
+	if err != nil {
+		return ""
+	}
+	u := strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(string(out)), "/"), ".git")
+	if i := strings.LastIndexAny(u, "/:"); i >= 0 {
+		u = u[i+1:]
+	}
+	return u
+}
+
+// linked reports a repo with store links (a group or client repo).
+func (w *coordWorld) linked() bool {
+	return len(w.sit.Links) > 0 || w.sit.Role == orgresolve.RoleClient
+}
+
+// forTask points the world at where task id is coordinated (D8, §7.5,
+// v0.1.17 openCoordTarget):
+//   - a repo without store links: its own signals ref;
+//   - a linked repo's own row (in the repo store): an own repo keeps it
+//     on its own ref (§7.6); a client repo's own task keeps its claim on
+//     the store with the agent details internal, not built here;
+//   - any other id, or "" (task next): the linked store's signals ref.
+func (w *coordWorld) forTask(ctx context.Context, id string) error {
+	if !w.linked() {
+		return nil
+	}
+	if id != "" {
+		if src, _, ok, err := w.a.locateRow(ctx, tableFor(id), id); err != nil {
+			return err
+		} else if ok && src == store.SourceRepo {
+			if w.sit.Role == orgresolve.RoleClient {
+				return errs.New(errs.Unsupported, "a client repo's own task keeps its claim on the store with agent details internal, which this binary does not do yet").
+					WithHint("run it with the release binary")
+			}
+			return nil
+		}
+	}
+	return w.useStore(ctx)
+}
+
+// forRepoOnly refuses a client repo for a verb that only has the repo's
+// own ref (hold claim/release): its coordination belongs on the store (D8).
+func (w *coordWorld) forRepoOnly() error {
+	if w.sit.Role == orgresolve.RoleClient {
+		return errs.New(errs.Unsupported, "this is a client repo: its holds belong on the linked store's signals ref, which this binary does not reach for holds").
+			WithHint("never written into the client repo (D8); run it with the release binary")
 	}
 	return nil
+}
+
+// useStore points the world at the linked store's signals ref: the store
+// clone the core attached for the resolved org entry, its branch's
+// refs/lore/signals/<branch>, the link folder.
+func (w *coordWorld) useStore(ctx context.Context) error {
+	if w.sit.Org == nil {
+		return errs.New(errs.Unsupported, "this repo is linked but no org entry resolved; its claims live on the store's signals ref").
+			WithHint("`lore whoami` shows the org resolution")
+	}
+	dir, branch, folder, ok := w.a.storeClone(ctx, store.Source(w.sit.Org.Name))
+	if !ok {
+		return errs.New(errs.Unsupported, "the linked store of "+w.sit.Org.Name+" is not a git clone here: its signals ref cannot be reached").
+			WithHint("`lore stores show` lists the attached stores")
+	}
+	repo, err := gitref.Open(ctx, dir, nil)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "open the store clone", err)
+	}
+	if folder == "" {
+		folder = signalsRootFolder
+	}
+	w.spot = sigSpot{repo: repo, remote: &gitremote.Git{Repo: repo, Name: gitbackend.RemoteName}, remoteName: gitbackend.RemoteName,
+		ref: signals.StoreRef(branch), seen: filepath.Join(filepath.Dir(dir), signalsStateDir, signalsSeenFile), folder: folder, store: true}
+	w.folder = folder
+	return nil
+}
+
+// storeClone is the local clone of an attached git store: its worktree,
+// branch and the project folder attached ("" for the root); ok=false for a
+// store that is not a git clone (a folder store) or not attached.
+func (a *App) storeClone(ctx context.Context, name store.Source) (dir, branch, folder string, ok bool) {
+	if _, err := a.state(ctx); err != nil {
+		return "", "", "", false
+	}
+	a.mu.Lock()
+	var b store.Backend
+	if a.st != nil {
+		b = a.st.byName[name]
+		folder = strings.Trim(a.st.folders[name], "/")
+	}
+	a.mu.Unlock()
+	if b == nil {
+		return "", "", "", false
+	}
+	g, isGit := concrete(b).(*gitbackend.Backend)
+	if !isGit {
+		return "", "", "", false
+	}
+	branch = g.Branch()
+	if branch == "" {
+		branch = fallbackDefaultBranch
+	}
+	if folder == "." {
+		folder = ""
+	}
+	return g.Dir(), branch, folder, true
 }
 
 // settings applies lease, agents and live.autopush/remote: the defaults,
@@ -249,14 +398,15 @@ func (w *coordWorld) held() coord.HeldStore {
 func (w *coordWorld) signalsStore() *signals.Store {
 	name := w.who.DisplayName
 	email := signatureEmail(w.who.StableKey)
+	sp := w.spot
 	return &signals.Store{
-		Repo: w.repo, Remote: w.remote, RemoteName: w.remoteName, Ref: signals.CodeRepoRef,
-		Seen:  signals.SeenStore{Path: filepath.Join(w.stateDir, signalsSeenFile)},
+		Repo: sp.repo, Remote: sp.remote, RemoteName: sp.remoteName, Ref: sp.ref,
+		Seen:  signals.SeenStore{Path: sp.seen},
 		Clock: w.a, Lease: w.lease,
 		Signature: func(at time.Time) gitref.Signature {
 			return gitref.Signature{Name: name, Email: email, When: at}
 		},
-		Autopush: w.autopush && w.remote != nil, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
+		Autopush: w.autopush && sp.remote != nil, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
 		// Gate (FORMAT_EVOLUTION rule 2, E_OLD_LORE) is left nil: the
 		// engine's own format floor refuses the row half of every fenced
 		// write in a project this binary may not write.

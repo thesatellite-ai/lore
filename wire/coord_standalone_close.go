@@ -41,10 +41,10 @@ type heldState struct {
 
 // closeWorld opens the world for a close; ok=false where this host
 // coordinates nothing (the op then runs alone).
-func (t standaloneTeam) closeWorld(ctx context.Context) (*coordWorld, bool) {
-	w, err := standaloneCoord(t).openWorld(ctx)
+func (t standaloneTeam) closeWorld(ctx context.Context, taskID string) (*coordWorld, bool) {
+	w, err := standaloneCoord(t).openWorldFor(ctx, taskID)
 	if err != nil {
-		return nil, false // no git, a linked repo or no actor: no claims here
+		return nil, false // no git, an unreachable store or no actor: no claims here
 	}
 	return w, true
 }
@@ -67,7 +67,7 @@ func (w *coordWorld) heldOf(ctx context.Context, env coord.Env, id string) (held
 
 // CloseHeldDone implements opstask.HeldCloser.
 func (t standaloneTeam) CloseHeldDone(ctx context.Context, taskID, commit string, pr int) (string, error) {
-	w, ok := t.closeWorld(ctx)
+	w, ok := t.closeWorld(ctx, taskID)
 	if !ok {
 		return commit, nil
 	}
@@ -103,7 +103,7 @@ func (t standaloneTeam) CloseHeldDone(ctx context.Context, taskID, commit string
 
 // CloseHeldCancel implements opstask.HeldCloser.
 func (t standaloneTeam) CloseHeldCancel(ctx context.Context, taskID string) (string, bool, error) {
-	w, ok := t.closeWorld(ctx)
+	w, ok := t.closeWorld(ctx, taskID)
 	if !ok {
 		return "", false, nil
 	}
@@ -158,7 +158,7 @@ var _ opstask.HolderFencer = standaloneTeam{}
 // on; a failed fence is E_LOST_CLAIM. Where this host coordinates nothing,
 // nothing is fenced (v0.1.17 plainRowFallback).
 func (t standaloneTeam) FenceHolder(ctx context.Context, taskID string, rowEpoch int) error {
-	w, ok := t.closeWorld(ctx)
+	w, ok := t.closeWorld(ctx, taskID)
 	if !ok {
 		return nil
 	}
