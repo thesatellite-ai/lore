@@ -147,3 +147,29 @@ func ValidName(name string) bool {
 type Texter interface {
 	Text() string
 }
+
+// ExitStatuser is the optional process exit status of a SUCCESSFUL
+// operation (P3-MISC-8): a health check that reports "degraded" or
+// "broken" has run fine, yet its contract is a non-zero exit (lore doctor:
+// 0 healthy, 1 degraded, 2 broken). The CLI prints the result as usual,
+// then exits with ExitStatus() when it is not 0. REST does not change the
+// HTTP status for it (the request succeeded); an output that implements
+// ExitStatuser carries the same number in its own documented JSON field
+// (exit_status), so an HTTP caller reads it from the body. A failure is
+// still an error, never an exit status.
+type ExitStatuser interface {
+	ExitStatus() int
+}
+
+// ExitStatus is the output's ExitStatuser value, 0 when the output has
+// none.
+func (r Result) ExitStatus() int {
+	if !r.v.IsValid() || !r.v.CanInterface() {
+		return 0
+	}
+	// Interface() is the reflect boundary; it is narrowed at once.
+	if s, ok := r.v.Interface().(ExitStatuser); ok {
+		return s.ExitStatus()
+	}
+	return 0
+}

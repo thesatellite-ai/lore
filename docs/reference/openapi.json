@@ -9473,6 +9473,153 @@
         }
       }
     },
+    "/v1/doctor/run": {
+      "post": {
+        "operationId": "doctor.run",
+        "summary": "Run health checks; exit 0 healthy, 1 degraded, 2 broken",
+        "tags": [
+          "doctor"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fix": {
+                    "type": "boolean",
+                    "description": "repair what doctor can fix safely (reversed --supersedes links, a task lead missing from assignees)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "binary_version": {
+                      "type": "string"
+                    },
+                    "db_ok": {
+                      "type": "boolean"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "exit_status": {
+                      "type": "integer"
+                    },
+                    "identity": {
+                      "type": "object",
+                      "properties": {
+                        "resolved": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "stable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "resolved",
+                        "source"
+                      ]
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "path_conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "repo_addresses": {
+                      "type": "string"
+                    },
+                    "schema_version": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "sync": {
+                      "type": "string"
+                    },
+                    "wal_size_bytes": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "status",
+                    "wal_size_bytes",
+                    "identity",
+                    "binary_version",
+                    "exit_status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/explains/{id}/run": {
       "post": {
         "operationId": "explain.run",
@@ -36761,6 +36908,133 @@
           },
           "503": {
             "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/render/run": {
+      "post": {
+        "operationId": "render.run",
+        "summary": "Render .lore/LORE.md from scoped knowledge and point your AI tools at it",
+        "tags": [
+          "render"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "check": {
+                    "type": "boolean",
+                    "description": "CI check: write nothing, fail when LORE.md would be over the warn level or the budget"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "print the generated body instead of writing it"
+                  },
+                  "no_pointer": {
+                    "type": "boolean",
+                    "description": "do not stitch the pointer into the agent file"
+                  },
+                  "out": {
+                    "type": "string",
+                    "description": "generated knowledge file path (default .lore/LORE.md)"
+                  },
+                  "report": {
+                    "type": "boolean",
+                    "description": "print the budget report (what is full, what is a line, what moved out) and write nothing"
+                  },
+                  "scopes": {
+                    "type": "boolean",
+                    "description": "with --report: one row per generated file per tool, plus the Codex and Claude Code chain sums"
+                  },
+                  "target": {
+                    "type": "array",
+                    "description": "tool profile name or pointer file to wire (repeatable, comma-separated; default: the repo's tool files, else AGENTS.md)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "trend": {
+                    "type": "boolean",
+                    "description": "bytes per render over the last 14 days, growth per day and when LORE.md reaches its budget; writes nothing"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "output": {
+                      "type": "string"
+                    },
+                    "report": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_REFUSED, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
             "content": {
               "application/json": {
                 "schema": {

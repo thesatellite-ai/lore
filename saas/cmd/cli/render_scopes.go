@@ -382,10 +382,10 @@ func writeIfChanged(path, data string) (bool, error) {
 // writeDirs writes the folder files and each target's folder file, removes
 // lore's files of folders that lost theirs, and runs the Codex chain check
 // (6.2.6). rootSize is the root LORE.md's bytes.
-func writeDirs(root string, plan dirPlan, bodies dirBodies, targets []contextTarget, rootSize int, quiet bool) error {
+func writeDirs(w *strings.Builder, root string, plan dirPlan, bodies dirBodies, targets []contextTarget, rootSize int, quiet bool) error {
 	say := func(format string, a ...any) {
 		if !quiet {
-			fmt.Printf(format, a...)
+			fmt.Fprintf(w, format, a...)
 		}
 	}
 	live := map[string]bool{}

@@ -264,9 +264,6 @@ func repairSupersedes(ctx context.Context, db *ent.Client, apply bool) (supersed
 	return res, nil
 }
 
-// doctorFlagFix is `lore doctor --fix`.
-const doctorFlagFix = "fix"
-
 // doctorSupersedes reports reversed --supersedes links (a warning that
 // degrades health, with the --fix hint) and, with --fix, repairs them
 // through the normal write client so the change reaches .lore/data like

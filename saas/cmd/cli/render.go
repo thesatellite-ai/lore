@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"saas/pkg/constants"
 	"strings"
 
 	"dbent/gen/ent"
@@ -42,8 +41,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
-
-	"github.com/spf13/cobra"
 )
 
 type renderFlags struct {
@@ -63,6 +60,10 @@ type renderFlags struct {
 	asJSON bool
 	// trend: 6.11 bytes per render, growth per day (render_trend.go).
 	trend bool
+	// w collects the command's lines: the render operation's host gives
+	// its buffer (P3-MISC-7); nil means out() makes one, which a CLI caller
+	// prints afterwards (rerenderLoreMD).
+	w *strings.Builder
 	// quiet suppresses the per-file stdout lines. Not a CLI flag: set by the
 	// post-command sync step that re-renders LORE.md after importing
 	// teammates' changes, where stdout belongs to the user's command (and
@@ -70,61 +71,16 @@ type renderFlags struct {
 	quiet bool
 }
 
-// Flags of lore render (CONTEXT_BUDGET 6.11).
-const (
-	flagRenderReport = "report"
-	flagRenderCheck  = "check"
-)
-
-func newRenderCommand() *cobra.Command {
-	f := &renderFlags{}
-	cmd := &cobra.Command{
-		Use:   "render",
-		Short: "Render .lore/LORE.md from scoped knowledge and point your AI tools at it",
-		Long: `render assembles the project's knowledge into a generated file
-(default .lore/LORE.md) and stitches an idempotent pointer block into the
-file each AI tool reads, so hand-written content there is never clobbered
-
-Tools are profiles: claude_code (CLAUDE.md), codex (AGENTS.md), cursor
-(.cursor/rules/lore.mdc), gemini_cli (GEMINI.md), copilot
-(.github/copilot-instructions.md), generic (no pointer file), plus your own
-under context.profiles in ~/.lore/config.yaml. Without --target, render uses
-the repo's context.targets setting (written by lore init, changed with
-lore policy set context.targets codex,cursor --yes); a repo without it uses
-the tool files that already carry lore's pointer; if none does, the tool
-files present in the repo; if there are none, AGENTS.md
-
-Output is deterministic (same DB state produces byte-identical output)
-Atomic-write safe: the generated file is replaced via rename only after the
-new content is fully written
-
-Symlink-aware: if the generated file is a symlink, the target is updated;
-the symlink itself is preserved
-
-The pointer block in the agent file is bounded by sentinel markers and
-replaced in place on re-run. Pass --no-pointer to skip stitching, or
---dry-run to print the generated body to stdout without writing anything.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRender(cmd.Context(), f)
-		},
+// out is where the command's lines go.
+func (f *renderFlags) out() *strings.Builder {
+	if f.w == nil {
+		f.w = &strings.Builder{}
 	}
-	bindCommonFlags(cmd, &f.commonFlags)
-	cmd.Flags().StringVar(&f.outPath, constants.FlagOut, ".lore/LORE.md", "generated knowledge file path")
-	// TOOL NEUTRAL: no default tool file; an empty --target resolves the
-	// repo's own targets (the context.targets row, Q-R2-3; without one the
-	// wired pointer files, else detected tools, else AGENTS.md), so an
-	// existing CLAUDE.md repo keeps rendering as before.
-	cmd.Flags().StringSliceVar(&f.targets, constants.FlagTarget, nil,
-		"tool profile name or pointer file to wire (repeatable; default: the repo's tool files, else AGENTS.md)")
-	cmd.Flags().BoolVar(&f.noPointer, constants.FlagNoPointer, false, "do not stitch the pointer into the agent file")
-	cmd.Flags().BoolVar(&f.dryRun, constants.FlagDryRun, false, "print to stdout instead of writing file")
-	cmd.Flags().BoolVar(&f.report, flagRenderReport, false, "print the budget report (what is full, what is a line, what moved out) and write nothing")
-	cmd.Flags().BoolVar(&f.scopes, flagRenderScopes, false, "with --report: one row per generated file per tool, plus the Codex and Claude Code chain sums")
-	cmd.Flags().BoolVar(&f.check, flagRenderCheck, false, "CI check: write nothing, fail when LORE.md would be over the warn level or the budget")
-	cmd.Flags().BoolVar(&f.asJSON, constants.FlagJSON, false, "with --report or --trend: machine-readable output")
-	cmd.Flags().BoolVar(&f.trend, flagRenderTrend, false, "bytes per render over the last 14 days, growth per day and when LORE.md reaches its budget; writes nothing")
-	return cmd
+	return f.w
 }
+
+// The `lore render` command is the operation render.run (ops/render,
+// render_host.go); runRender below is its machinery (P3-MISC-7).
 
 // renderResult tracks counts for the render_history scope_summary field
 type renderResult struct {
@@ -231,10 +187,10 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 			if jerr != nil {
 				return errcodes.New(errcodes.Internal, "encode report").WithCause(jerr)
 			}
-			fmt.Println(string(data))
+			fmt.Fprintln(f.out(), string(data))
 			return nil
 		}
-		fmt.Print(sr.text())
+		fmt.Fprint(f.out(), sr.text())
 		return nil
 	}
 	if f.report {
@@ -244,10 +200,10 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 			if jerr != nil {
 				return errcodes.New(errcodes.Internal, "encode report").WithCause(jerr)
 			}
-			fmt.Println(string(data))
+			fmt.Fprintln(f.out(), string(data))
 			return nil
 		}
-		fmt.Print(report.reportText())
+		fmt.Fprint(f.out(), report.reportText())
 		return nil
 	}
 	if f.check {
@@ -258,15 +214,15 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 				f.outPath, report.After, report.WarnPct, report.Budget, report.Profile)).
 				WithHint("run `lore render --report` to see what is in the core, and `lore lint --context` for clean-up")
 		}
-		fmt.Printf("%s %s would be %d of %d bytes (%d%%; warn at %d%%)\n", style.Success("✓"), f.outPath,
+		fmt.Fprintf(f.out(), "%s %s would be %d of %d bytes (%d%%; warn at %d%%)\n", style.Success("✓"), f.outPath,
 			report.After, report.Budget, report.After*percent/max(report.Budget, 1), report.WarnPct)
 		return nil
 	}
 
 	if f.dryRun {
-		fmt.Print(body)
+		fmt.Fprint(f.out(), body)
 		// The private per-store files (spec 7.3, CFG6), shown, not written.
-		return renderPrivate(ctx, root, true, f.quiet)
+		return renderPrivate(ctx, f.out(), root, true, f.quiet)
 	}
 
 	// Generated content goes to the out file (default .lore/LORE.md), never
@@ -286,14 +242,14 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 
 	if unchanged {
 		if !f.quiet {
-			fmt.Printf("%s %s (unchanged)\n", style.Muted("·"), resolvedOut)
+			fmt.Fprintf(f.out(), "%s %s (unchanged)\n", style.Muted("·"), resolvedOut)
 		}
 	} else {
 		if err = atomicWriteFile(resolvedOut, []byte(body), 0o644); err != nil {
 			return errcodes.New(errcodes.Internal, "atomic write").WithCause(err)
 		}
 		if !f.quiet {
-			fmt.Printf("%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes, %d topics)\n",
+			fmt.Fprintf(f.out(), "%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes, %d topics)\n",
 				style.Success("✓"), resolvedOut, len(body), report.Budget, report.Profile,
 				report.MustFull, report.MustLine, report.Critical, report.HighLine, report.Topics)
 		}
@@ -304,17 +260,17 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	}
 	// CQ2: the full fallback file, next to LORE.md, never imported.
 	if in.Settings.FullFile {
-		if err = writeFullFile(filepath.Join(filepath.Dir(resolvedOut), fullFileName), full, f.quiet); err != nil {
+		if err = writeFullFile(f.out(), filepath.Join(filepath.Dir(resolvedOut), fullFileName), full, f.quiet); err != nil {
 			return err
 		}
 	}
 
 	if !f.noPointer {
 		if !f.quiet {
-			printTargetPick(pick)
+			printTargetPick(f.out(), pick)
 		}
 		for _, t := range pick.targets {
-			if err = stitchPointer(root, t, resolvedOut); err != nil {
+			if err = stitchPointer(f.out(), root, t, resolvedOut); err != nil {
 				return err
 			}
 		}
@@ -324,11 +280,11 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	if err != nil {
 		return err
 	}
-	if err := writePathRules(root, pathGroups, pick.targets, reg.Profiles(), loadPathFileBudget(ctx), f.quiet); err != nil {
+	if err := writePathRules(f.out(), root, pathGroups, pick.targets, reg.Profiles(), loadPathFileBudget(ctx), f.quiet); err != nil {
 		return errcodes.New(errcodes.Internal, "path rule files").WithCause(err)
 	}
 	// 6.2.5: folder files and each target's folder file; stale ones go.
-	if err := writeDirs(root, dirs, dirBodies, pick.targets, len(body), f.quiet); err != nil {
+	if err := writeDirs(f.out(), root, dirs, dirBodies, pick.targets, len(body), f.quiet); err != nil {
 		return errcodes.New(errcodes.Internal, "folder files").WithCause(err)
 	}
 
@@ -345,7 +301,7 @@ func runRender(ctx context.Context, f *renderFlags) (err error) {
 	// The automatic re-render after a sync (quiet) leaves it to the next
 	// explicit `lore render`, so a plain command never reaches a store for it.
 	if !f.quiet {
-		if err := renderPrivate(ctx, root, false, f.quiet); err != nil {
+		if err := renderPrivate(ctx, f.out(), root, false, f.quiet); err != nil {
 			return err
 		}
 	}
@@ -441,10 +397,10 @@ type targetPick struct {
 // printTargetPick prints how the targets were chosen (silent for an
 // already-wired repo and for the settings row: nothing new to say) and
 // names each tool file found but not wired.
-func printTargetPick(pick targetPick) {
+func printTargetPick(w *strings.Builder, pick targetPick) {
 	switch pick.sel.Reason {
 	case toolprofile.ReasonDetected, toolprofile.ReasonFallback:
-		fmt.Printf("%s context targets: %s (%s)\n", style.Muted("·"), describeTargets(pick.targets), describeReason(pick.sel.Reason))
+		fmt.Fprintf(w, "%s context targets: %s (%s)\n", style.Muted("·"), describeTargets(pick.targets), describeReason(pick.sel.Reason))
 	case toolprofile.ReasonWired, toolprofile.ReasonSetting:
 	}
 	// TOOL NEUTRAL, no surprises: a tool file added after lore was wired
@@ -455,13 +411,13 @@ func printTargetPick(pick targetPick) {
 		if pick.sel.Reason == toolprofile.ReasonSetting {
 			hint = "lore policy set " + string(policy.KeyContextTargets) + " <profiles incl. " + p.Name + "> --yes"
 		}
-		fmt.Printf("%s %s found but not wired to lore; add it with: %s\n", style.Muted("·"), p.PointerFile, hint)
+		fmt.Fprintf(w, "%s %s found but not wired to lore; add it with: %s\n", style.Muted("·"), p.PointerFile, hint)
 	}
 	// r3-targets (DECISION P2-OLDCLI-2): a file that carries lore's pointer
 	// but is not in context.targets is left as it is; say so and how to
 	// list it, instead of skipping it silently.
 	for _, p := range pick.sel.Unlisted {
-		fmt.Printf("%s %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set %s <profiles incl. %s> --yes\n",
+		fmt.Fprintf(w, "%s %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set %s <profiles incl. %s> --yes\n",
 			style.Muted("·"), p.PointerFile, policy.KeyContextTargets, policy.KeyContextTargets, p.Name)
 	}
 }
@@ -562,7 +518,7 @@ func describeReason(r toolprofile.Reason) string {
 // path is computed RELATIVE to the tool file's directory so the tool
 // resolves it regardless of cwd. A profile without a pointer file
 // (generic) has nothing to stitch.
-func stitchPointer(root string, t contextTarget, outFile string) error {
+func stitchPointer(w *strings.Builder, root string, t contextTarget, outFile string) error {
 	if !t.profile.HasPointerFile() {
 		return nil
 	}
@@ -589,7 +545,7 @@ func stitchPointer(root string, t contextTarget, outFile string) error {
 
 	out := t.profile.StitchPointer(existing, link)
 	if out == existing {
-		fmt.Printf("%s %s (pointer present)\n", style.Muted("="), absAgent)
+		fmt.Fprintf(w, "%s %s (pointer present)\n", style.Muted("="), absAgent)
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(absAgent), cliDirMode); err != nil {
@@ -598,7 +554,7 @@ func stitchPointer(root string, t contextTarget, outFile string) error {
 	if err := writeFileInDir(absAgent, []byte(out), cliFileMode); err != nil {
 		return errcodes.New(errcodes.Internal, "write "+absAgent).WithCause(err)
 	}
-	fmt.Printf("%s %s (pointer → %s)\n", style.Success("✓"), absAgent, link.FromPointer)
+	fmt.Fprintf(w, "%s %s (pointer → %s)\n", style.Success("✓"), absAgent, link.FromPointer)
 	return nil
 }
 
@@ -616,7 +572,7 @@ func relSlash(base, target, fallback string) string {
 const fullFileName = "LORE.full.md"
 
 // writeFullFile writes LORE.full.md when its bytes changed.
-func writeFullFile(path, body string, quiet bool) error {
+func writeFullFile(w *strings.Builder, path, body string, quiet bool) error {
 	if existing, err := os.ReadFile(filepath.Clean(path)); err == nil && sha256Hex(existing) == sha256Hex([]byte(body)) {
 		return nil
 	}
@@ -624,7 +580,7 @@ func writeFullFile(path, body string, quiet bool) error {
 		return errcodes.New(errcodes.Internal, "write "+path).WithCause(err)
 	}
 	if !quiet {
-		fmt.Printf("%s %s (%d bytes, every pinned entry in full; not imported)\n", style.Success("✓"), path, len(body))
+		fmt.Fprintf(w, "%s %s (%d bytes, every pinned entry in full; not imported)\n", style.Success("✓"), path, len(body))
 	}
 	return nil
 }

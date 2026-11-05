@@ -91,7 +91,7 @@ func coreOptions(repoDir, home string) wire.Options {
 	o := wire.Options{RepoDir: repoDir, Home: home, Local: coreLocalPorts(),
 		WorkDir: coreWorkDir(), Version: version, Audit: &coreAuditSink{root: repoDir}, // OVERNIGHT Qs subfolder: audit at the repo top
 		ModeB: modeBExporter{}, Roster: cliRoster{}, WrapBackend: coreWrapBackend, ProjectHint: coreProjectHint, LiveRef: coreLiveRef, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now,
-		Context: wire.ContextHosts{RenderHistory: renderHistoryHost{}, Setup: setupHost{}, SupportBundle: supportBundleHost{}, Fetch: contextHost{}},
+		Context: wire.ContextHosts{RenderHistory: renderHistoryHost{}, Setup: setupHost{}, SupportBundle: supportBundleHost{}, Fetch: contextHost{}, Render: renderHost{}, Doctor: doctorHost{}},
 		Sync:    syncHost{},  // P3-SYNC-1: lore sync|land|explain are ops/sync operations run by this host
 		Coord:   coordHost{}} // P3-COORD-1: task claim|next|…, hold, gate, inbox, mission status (coord_ops_host.go)
 	// Org, RepoIsClient, OrgStores, OrgEntryStore, OrgSigners, DefaultTarget

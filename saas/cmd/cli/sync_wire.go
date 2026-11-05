@@ -474,7 +474,9 @@ func rerenderLoreMD(ctx context.Context, root string) bool {
 		return false // render resolves the project from cwd (no walk-up)
 	}
 	f := &renderFlags{outPath: out, noPointer: true, quiet: true}
-	if err := runRender(ctx, f); err != nil {
+	err = runRender(ctx, f)
+	fmt.Print(f.out().String()) // quiet: only what render prints even then
+	if err != nil {
 		fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"re-render "+loreMDRel+": "+err.Error()))
 		return false
 	}

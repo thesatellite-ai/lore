@@ -12,6 +12,8 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	contextop "github.com/thesatellite-ai/lore/ops/context"
+	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opssupportbundle "github.com/thesatellite-ai/lore/ops/supportbundle"
 	opswhycontext "github.com/thesatellite-ai/lore/ops/whycontext"
@@ -32,6 +34,10 @@ type ContextHosts struct {
 	SupportBundle opssupportbundle.Host
 	// Fetch is `lore context` (the agent's fetch command and the hooks).
 	Fetch contextop.Host
+	// Render is `lore render`.
+	Render opsrender.Host
+	// Doctor is the lore.db checks of `lore doctor` (nil: the core checks only).
+	Doctor opsdoctor.Host
 }
 
 // hostMissingHint says where a missing host part comes from.
@@ -72,4 +78,12 @@ func (a *App) ContextHost(_ context.Context) (contextop.Host, error) {
 		return nil, hostMissing("context")
 	}
 	return a.opts.Context.Fetch, nil
+}
+
+// RenderHost is Options.Context.Render (opsrender.Env).
+func (a *App) RenderHost(_ context.Context) (opsrender.Host, error) {
+	if a.opts.Context.Render == nil {
+		return nil, hostMissing("render")
+	}
+	return a.opts.Context.Render, nil
 }

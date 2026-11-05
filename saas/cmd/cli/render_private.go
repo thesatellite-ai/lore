@@ -181,7 +181,7 @@ func (p *privatePlan) privateLocalsChanged() bool {
 // renders for the repo at root and the import lines in CLAUDE.local.md.
 // With no internal store attached it only drops stale lore lines from an
 // existing CLAUDE.local.md.
-func renderPrivate(ctx context.Context, root string, dryRun, quiet bool) error {
+func renderPrivate(ctx context.Context, w *strings.Builder, root string, dryRun, quiet bool) error {
 	if coreApp == nil {
 		return nil
 	}
@@ -191,12 +191,12 @@ func renderPrivate(ctx context.Context, root string, dryRun, quiet bool) error {
 	}
 	if dryRun {
 		for _, f := range p.files {
-			fmt.Printf("\n==> %s (private, not written: --dry-run)\n%s", f.path, f.body)
+			fmt.Fprintf(w, "\n==> %s (private, not written: --dry-run)\n%s", f.path, f.body)
 		}
 		if len(p.files) > 0 {
 			for _, l := range p.locals {
 				if l.out != "" {
-					fmt.Printf("\n==> %s (not written: --dry-run)\n%s", l.rel, l.out)
+					fmt.Fprintf(w, "\n==> %s (not written: --dry-run)\n%s", l.rel, l.out)
 				}
 			}
 		}
@@ -248,7 +248,7 @@ func renderPrivate(ctx context.Context, root string, dryRun, quiet bool) error {
 		if p.leftOut > 0 {
 			left = fmt.Sprintf(", %d more left out by %s %d", p.leftOut, policy.KeyContextBudgetInternal, p.budget)
 		}
-		fmt.Printf("%s private context → %s (%d stores, %d rows%s, outside the checkout); %s\n",
+		fmt.Fprintf(w, "%s private context → %s (%d stores, %d rows%s, outside the checkout); %s\n",
 			style.Success("✓"), redactIfQuiet(p.dir), len(p.stores), p.rows, left, where)
 	}
 	if p.budget > 0 && p.coreBytes > p.budget {
@@ -700,7 +700,10 @@ func rerenderPrivateQuiet(ctx context.Context, root string) {
 	if err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
 		return
 	}
-	if err := renderPrivate(ctx, root, false, true); err != nil {
+	var lines strings.Builder
+	err = renderPrivate(ctx, &lines, root, false, true)
+	fmt.Print(lines.String())
+	if err != nil {
 		fmt.Fprintln(os.Stderr, style.Warn(syncLogPrefix+"re-render the private context: "+err.Error()))
 	}
 }

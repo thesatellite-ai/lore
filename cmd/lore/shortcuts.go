@@ -67,6 +67,8 @@ func mountShortcuts(root *cobra.Command) {
 	defaultVerb(root, opscoord.NounInbox, opscoord.InboxVerb)      // bare `lore inbox` (CLI_REFERENCE 2.11, P3-COORD-1)
 	defaultVerb(root, "support-bundle", "run")                     // CLI_REFERENCE 2.11 (P3-MISC-5)
 	defaultVerb(root, "context", "fetch")                          // CLI_REFERENCE 2.14 (P3-MISC-6)
+	defaultVerb(root, "render", "run")                             // CLI_REFERENCE 2.14 (P3-MISC-7)
+	defaultVerb(root, "doctor", "run")                             // CLI_REFERENCE 3.7 (P3-MISC-8)
 	if g := find(root, opsplan.Noun); g != nil {
 		g.AddCommand(&cobra.Command{
 			Use: planApplyVerb, Hidden: true, Args: cobra.ArbitraryArgs, DisableFlagParsing: true,

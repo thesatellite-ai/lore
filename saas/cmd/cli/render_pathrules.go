@@ -135,7 +135,7 @@ func pathGroupBody(g pathGroup, budget int) string {
 // writePathRules writes each group's file for every profile with a path
 // loader in the registry that is a target, and removes lore's stale
 // lore-path-* files (also those of profiles no longer targeted).
-func writePathRules(root string, groups []pathGroup, targets []contextTarget, reg []toolprofile.Profile, budget int, quiet bool) error {
+func writePathRules(w *strings.Builder, root string, groups []pathGroup, targets []contextTarget, reg []toolprofile.Profile, budget int, quiet bool) error {
 	live := map[string]bool{}
 	for _, t := range targets {
 		if !t.profile.HasPathRules() {
@@ -151,7 +151,7 @@ func writePathRules(root string, groups []pathGroup, targets []contextTarget, re
 				return fmt.Errorf("write %s: %w", abs, err)
 			}
 			if wrote && !quiet {
-				fmt.Printf("%s %s (%d bytes, paths: %s)\n", style.Success("✓"), abs, len(body), strings.Join(g.Globs, ", "))
+				fmt.Fprintf(w, "%s %s (%d bytes, paths: %s)\n", style.Success("✓"), abs, len(body), strings.Join(g.Globs, ", "))
 			}
 		}
 	}
@@ -179,7 +179,7 @@ func writePathRules(root string, groups []pathGroup, targets []contextTarget, re
 				return err
 			}
 			if !quiet {
-				fmt.Printf("%s %s (removed: no glob rules for it now)\n", style.Muted("-"), filepath.Join(dir, name))
+				fmt.Fprintf(w, "%s %s (removed: no glob rules for it now)\n", style.Muted("-"), filepath.Join(dir, name))
 			}
 		}
 	}

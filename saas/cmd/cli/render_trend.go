@@ -25,9 +25,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
 
-// flagRenderTrend is lore render --trend.
-const flagRenderTrend = "trend"
-
 // renderTrendWindow is the 6.11 window ("growth per day over 14 days").
 const renderTrendWindow = 14 * 24 * time.Hour
 
@@ -88,10 +85,10 @@ func renderTrend(ctx context.Context, client *ent.Client, projectID string, f *r
 		if jerr != nil {
 			return errcodes.New(errcodes.Internal, "encode trend").WithCause(jerr)
 		}
-		fmt.Println(string(b))
+		fmt.Fprintln(f.out(), string(b))
 		return nil
 	}
-	fmt.Print(out.text())
+	fmt.Fprint(f.out(), out.text())
 	return nil
 }
 

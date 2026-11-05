@@ -293,7 +293,10 @@ func wireToolFiles(ctx context.Context, projectRoot string, values []string) err
 	fmt.Printf("%s context targets: %s (%s)\n", style.Muted("·"), describeTargets(pick.targets), initTargetReason(len(values) > 0, pick.sel.Reason))
 	out := filepath.Join(projectRoot, filepath.FromSlash(toolprofile.CanonicalOutput))
 	for _, t := range pick.targets {
-		if err := stitchPointer(projectRoot, t, out); err != nil {
+		var lines strings.Builder
+		err := stitchPointer(&lines, projectRoot, t, out)
+		fmt.Print(lines.String())
+		if err != nil {
 			return err
 		}
 	}
@@ -337,7 +340,7 @@ func initCoreOptions(root, home string) (wire.Options, *coreAuditSink) {
 	sink := &coreAuditSink{root: root}
 	// r3-origin: WorkDir and Version, so the rows init writes carry _o.dir
 	// (PROV6) and the _w version stamp (OQ7) like every other core write.
-	return wire.Options{RepoDir: root, Home: home, Org: coreOrg, GuardRepoWrite: guardCoreRepoWrite, Audit: sink, ModeB: modeBExporter{},
+	return wire.Options{RepoDir: root, Home: home, Org: coreOrgResolution().Org, GuardRepoWrite: guardCoreRepoWrite, Audit: sink, ModeB: modeBExporter{},
 		WrapBackend: coreWrapBackend, AllowNetworkFS: os.Getenv(envAllowNetworkFS) == envValueOn, Wall: cliClock().Now,
 		WorkDir: coreWorkDir(), Version: version}, sink
 }

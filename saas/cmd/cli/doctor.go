@@ -12,11 +12,9 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"saas/pkg/constants"
 	"strings"
 
 	"dbent"
@@ -26,14 +24,11 @@ import (
 	"saas/pkg/aicoder/lsync"
 	"saas/pkg/aicoder/migrationlog"
 	"saas/pkg/aicoder/projresolve"
-	"saas/pkg/aicoder/style"
 
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/wire"
-
-	"github.com/spf13/cobra"
 )
 
 // ds:def id=doctor-statuses-y6sro1m4 owner=@khanakia stability=stable desc="lore doctor statuses and their exit codes (healthy 0, degraded 1, broken 2)"
@@ -88,70 +83,16 @@ type doctorIdentityInfo struct {
 
 type doctorFlags struct {
 	commonFlags
-	jsonOutput bool
 	// fix applies the safe repairs doctor knows (today: reversed
 	// --supersedes links written by older versions; supersede_repair.go).
 	fix bool
+	// skipCore leaves out the core's store checks: the doctor operation
+	// (ops/doctor) runs them itself (P3-MISC-8); support-bundle keeps them.
+	skipCore bool
 }
 
-func newDoctorCommand() *cobra.Command {
-	f := &doctorFlags{}
-	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Run health checks; exit 0 healthy, 1 degraded, 2 broken",
-		Long: `doctor inspects the project DB and identity resolution state
-
-Checks:
-  • DB integrity (PRAGMA quick_check)
-  • WAL file size (warn if > 100MB)
-  • Identity resolution + stability
-  • PATH conflicts (` + "`which -a aicoder`" + `)
-  • Sync: pending exports, conflicts, broken .lore/data files, duplicate
-    project files, dangling references, duplicate rows, .lore/data
-    gitignored, merge driver missing (uncommitted files are reported,
-    not counted as unhealthy)
-  • Schema version (TODO: validate against expected)
-  • --supersedes links written the old way (on the new row instead of
-    the old one); --fix repairs them (and writes a task lead missing from its assignees back), and a second --fix changes nothing
-
-Exit codes are stable across versions for monitoring integration.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			report, err := runDoctor(cmd.Context(), f)
-			if err != nil {
-				return err
-			}
-			if f.jsonOutput {
-				out, _ := json.MarshalIndent(report, "", "  ")
-				fmt.Println(string(out))
-			} else {
-				printDoctor(report)
-			}
-			code := 0
-			switch report.Status {
-			case doctorBroken:
-				code = 2
-			case doctorDegraded:
-				code = 1
-			}
-			if code == 0 {
-				return nil
-			}
-			// os.Exit skips main's end-of-command sync pass, which is what
-			// writes the rows --fix repaired to .lore/data; run it first.
-			if f.fix {
-				if err := finishSyncSessions(cmd.Context()); err != nil {
-					fmt.Fprintln(os.Stderr, style.Warn("lore doctor --fix: "+err.Error()))
-				}
-			}
-			os.Exit(code)
-			return nil
-		},
-	}
-	bindCommonFlags(cmd, &f.commonFlags)
-	cmd.Flags().BoolVar(&f.jsonOutput, constants.FlagJSON, false, "JSON output (stable schema)")
-	cmd.Flags().BoolVar(&f.fix, doctorFlagFix, false, "repair what doctor can fix safely (reversed --supersedes links, a task lead missing from assignees)")
-	return cmd
-}
+// `lore doctor` is the operation doctor.run (ops/doctor, doctor_host.go);
+// runDoctor is its lore.db half (P3-MISC-8).
 
 func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error) {
 	r := &doctorReport{
@@ -279,7 +220,9 @@ func runDoctor(ctx context.Context, f *doctorFlags) (_ *doctorReport, err error)
 	// 10. Duplicate imports (PROV9).
 	doctorDuplicateImports(ctx, r)
 	doctorTaskTree(ctx, r)
-	doctorWireChecks(ctx, f.fix, r)    // TASK 14.4/18.3, SPEC 6.2, DQ4, META 3.8 (wire/doctor_checks.go)
+	if !f.skipCore {
+		doctorWireChecks(ctx, f.fix, r)
+	} // TASK 14.4/18.3, SPEC 6.2, DQ4, META 3.8 (wire/doctor_checks.go)
 	doctorTrash(ctx, r)                // DELETION 3.8: rows past trash.retention_days, tombstones
 	doctorUnclassifiedSettings(ctx, r) // CFG12: v0.1.17 settings left in place (doctor_local.go)
 	// 10b. Secret rules that are off + leftover LORE_SYNC_ALLOW_SECRETS (D2/D3, doctor_secrets.go).
@@ -426,62 +369,6 @@ func dbOpenError(step string, err error) string {
 func degrade(r *doctorReport) {
 	if r.Status == doctorHealthy {
 		r.Status = doctorDegraded
-	}
-}
-
-func printDoctor(r *doctorReport) {
-	statusStyle := style.Success
-	switch r.Status {
-	case doctorDegraded:
-		statusStyle = style.Warn
-	case doctorBroken:
-		statusStyle = style.Error
-	}
-	fmt.Printf("Status: %s\n", statusStyle(strings.ToUpper(r.Status)))
-	fmt.Printf("Binary: %s\n", r.BinaryVersion)
-	fmt.Println()
-	fmt.Printf("[db]\n")
-	fmt.Printf("  ok:       %v\n", r.DBOK)
-	fmt.Printf("  wal_size: %d bytes\n", r.WALSizeBytes)
-	fmt.Println()
-	if r.Sync != nil {
-		fmt.Printf("[sync]\n")
-		fmt.Printf("  baselined:        %v\n", r.Sync.Baselined)
-		fmt.Printf("  pending exports:  %d\n", r.Sync.PendingExports)
-		fmt.Printf("  open conflicts:   %d\n", r.Sync.OpenConflicts)
-		fmt.Printf("  file errors:      %d\n", len(r.Sync.FileErrors))
-		fmt.Printf("  merge driver:     %v\n", r.Sync.MergeDriverOK)
-		fmt.Printf("  uncommitted:      %d\n", r.Sync.Uncommitted)
-		fmt.Println()
-	}
-	fmt.Printf("[identity]\n")
-	fmt.Printf("  resolved: %s\n", r.IdentityInfo.Resolved)
-	fmt.Printf("  source:   %s\n", r.IdentityInfo.Source)
-	stable := "yes"
-	if !r.IdentityInfo.Stable {
-		stable = style.Warn("NO (ephemeral)")
-	}
-	fmt.Printf("  stable:   %s\n", stable)
-	if len(r.Errors) > 0 {
-		fmt.Println()
-		fmt.Println(style.Error("Errors:"))
-		for _, e := range r.Errors {
-			fmt.Println("  - " + e)
-		}
-	}
-	if len(r.Notes) > 0 {
-		fmt.Println()
-		fmt.Println(style.Muted("Notes:"))
-		for _, n := range r.Notes {
-			fmt.Println("  - " + n)
-		}
-	}
-	if len(r.Warnings) > 0 {
-		fmt.Println()
-		fmt.Println(style.Warn("Warnings:"))
-		for _, w := range r.Warnings {
-			fmt.Println("  - " + w)
-		}
 	}
 }
 

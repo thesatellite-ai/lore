@@ -25,9 +25,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 )
 
-// flagRenderScopes adds the per-file table to --report (6.2.6).
-const flagRenderScopes = "scopes"
-
 // Statuses of a scope row or chain.
 const (
 	scopeStatusOK   = "ok"

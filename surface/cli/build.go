@@ -296,6 +296,12 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		if err != nil {
 			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON), cause: err}
 		}
+		// P3-MISC-8: a successful result may carry its own exit status
+		// (op.ExitStatuser, lore doctor's 1 degraded / 2 broken); it is
+		// already printed, so only the status goes back.
+		if code := res.ExitStatus(); code != 0 {
+			return &exitError{code: code}
+		}
 		return nil
 	}
 	return c

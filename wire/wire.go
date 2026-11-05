@@ -57,6 +57,7 @@ import (
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsdecision "github.com/thesatellite-ai/lore/ops/decision"
 	opsdirective "github.com/thesatellite-ai/lore/ops/directive"
+	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsexternalsource "github.com/thesatellite-ai/lore/ops/externalsource"
 	opshandoff "github.com/thesatellite-ai/lore/ops/handoff"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
@@ -76,6 +77,7 @@ import (
 	opsplaybook "github.com/thesatellite-ai/lore/ops/playbook"
 	opsprompt "github.com/thesatellite-ai/lore/ops/prompt"
 	opsreminder "github.com/thesatellite-ai/lore/ops/reminder"
+	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opsrow "github.com/thesatellite-ai/lore/ops/row"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opsrun "github.com/thesatellite-ai/lore/ops/run"
@@ -462,6 +464,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, contextop.Ops(a)...)
 	// PASS3 ONE-PATH: lore sync …, land, explain (the host is Options.Sync).
 	entries = append(entries, opssync.Ops(a.opts.Sync)...)
+	entries = append(entries, opsrender.Ops(a)...)
+	entries = append(entries, opsdoctor.Ops(a)...)
 	return op.NewRegistry(entries...)
 }
 

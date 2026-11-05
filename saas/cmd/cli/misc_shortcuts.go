@@ -14,6 +14,8 @@ import (
 
 	contextop "github.com/thesatellite-ai/lore/ops/context"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
+	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opsselfupgrade "github.com/thesatellite-ai/lore/ops/selfupgrade"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opssupportbundle "github.com/thesatellite-ai/lore/ops/supportbundle"
@@ -28,6 +30,8 @@ var bareVerbs = []struct{ noun, verb string }{
 	{contextop.Noun, contextop.FetchVerb},
 	{opsselfupgrade.Noun, opsselfupgrade.RunVerb}, // CLI_REFERENCE 3.5 (P3-UPG-1)
 	{opscoord.NounInbox, opscoord.InboxVerb},      // bare `lore inbox [--since …]` (CLI_REFERENCE 2.11, P3-COORD-1)
+	{opsrender.Noun, opsrender.RunVerb},
+	{opsdoctor.Noun, opsdoctor.RunVerb},
 }
 
 // mountBareVerbs mounts every bareVerbs entry whose group is mounted.
