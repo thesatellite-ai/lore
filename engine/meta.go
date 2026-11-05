@@ -55,7 +55,11 @@ type MetaWrite struct {
 	// or the update of ID. Any other write in the same call ignores it.
 	Table row.Table
 	ID    ids.AnyID
-	used  *atomic.Bool
+	// prefer is the op's own table for a change bound to neither (Run
+	// sets it from the op's noun): a side write of another table, such
+	// as task add's auto-created tasklist, never claims it (OV10-BIND).
+	prefer row.Table
+	used   *atomic.Bool
 }
 
 // Empty reports a change with nothing to do.
@@ -76,6 +80,50 @@ func WithMeta(ctx context.Context, mw MetaWrite) context.Context {
 	return context.WithValue(ctx, metaKey{}, mw)
 }
 
+// MetaCarry is the metadata a --supersedes add copies from the replaced
+// row (METADATA 3.19) when the add also has its own --meta flags: on the
+// create of Table, after the flags are applied and BEFORE the create-only
+// rules, every carried key the new row does not hold yet is set. So a
+// required key set only on the old row is satisfied by the copy instead
+// of failing E_META_REQUIRED before it (OV30-CARRY-REQ).
+type MetaCarry struct {
+	// Terms name their key by id (mky_…=<json>).
+	Terms  []meta.Term
+	Table  row.Table
+	used   *atomic.Bool
+	filled *atomic.Int32
+}
+
+// Filled is how many carried keys the create set (0 before it ran).
+func (c MetaCarry) Filled() int {
+	if c.filled == nil {
+		return 0
+	}
+	return int(c.filled.Load())
+}
+
+// metaCarryKey keys a MetaCarry in a context.
+type metaCarryKey struct{}
+
+// WithMetaCarry returns ctx carrying c for the next create of c.Table and
+// the bound MetaCarry, whose Filled reports the result after the create.
+func WithMetaCarry(ctx context.Context, c MetaCarry) (context.Context, MetaCarry) {
+	if len(c.Terms) == 0 {
+		return ctx, c
+	}
+	c.used, c.filled = &atomic.Bool{}, &atomic.Int32{}
+	return context.WithValue(ctx, metaCarryKey{}, c), c
+}
+
+// carryFor claims the carry bound to a create of table.
+func carryFor(ctx context.Context, table row.Table) (MetaCarry, bool) {
+	c, ok := ctx.Value(metaCarryKey{}).(MetaCarry)
+	if !ok || c.Table != table || !c.used.CompareAndSwap(false, true) {
+		return MetaCarry{}, false
+	}
+	return c, true
+}
+
 // metaFor returns the change bound to a create of table (id zero) or an
 // update of id, claiming it so it applies once. A change bound to neither
 // (the --meta flags of a command, bound by Run) takes the command's first
@@ -85,7 +133,7 @@ func metaFor(ctx context.Context, table row.Table, id ids.AnyID) (MetaWrite, boo
 	if !ok {
 		return MetaWrite{}, false
 	}
-	first := mw.Table == "" && mw.ID.IsZero() && metaTables[table]
+	first := mw.Table == "" && mw.ID.IsZero() && metaTables[table] && (mw.prefer == "" || mw.prefer == table)
 	match := first || (id.IsZero() && mw.ID.IsZero() && mw.Table == table) || (!id.IsZero() && mw.ID == id)
 	if !match || !mw.used.CompareAndSwap(false, true) {
 		return MetaWrite{}, false
@@ -305,6 +353,18 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 		}
 	}
 	if creating {
+		// OV30-CARRY-REQ: carried keys fill in before the required check.
+		if c, ok := carryFor(ctx, def.Name); ok {
+			for _, t := range c.Terms {
+				if _, has := p.entries[t.KeyID]; has {
+					continue // the add's own --meta wins
+				}
+				if err := p.set(t, true); err != nil {
+					return nil, nil, err
+				}
+				c.filled.Add(1)
+			}
+		}
 		if err := p.createRules(string(def.Name)); err != nil {
 			return nil, nil, err
 		}
@@ -1024,6 +1084,7 @@ func bindInputMeta(ctx context.Context, in op.Input) (context.Context, func() er
 	if err != nil {
 		return nil, none, err
 	}
+	mw.prefer = opTable(in.Op())
 	ctx = WithMeta(ctx, mw)
 	bound, _ := ctx.Value(metaKey{}).(MetaWrite)
 	return ctx, func() error {
@@ -1033,6 +1094,24 @@ func bindInputMeta(ctx context.Context, in op.Input) (context.Context, func() er
 		}
 		return nil
 	}, nil
+}
+
+// opTable is the metadata table an op's noun names ("task.add" → tasks,
+// "architecture_note.edit" → architecture_notes), or "" when the noun is
+// no such table (then the first metadata write takes the flags).
+func opTable(opName string) row.Table {
+	noun, _, _ := strings.Cut(opName, ".")
+	n := strings.ReplaceAll(noun, "_", "")
+	if n == "" {
+		return ""
+	}
+	plurals := []string{n + "s", n + "es", strings.TrimSuffix(n, "y") + "ies"}
+	for t := range metaTables {
+		if slices.Contains(plurals, strings.ReplaceAll(string(t), "_", "")) {
+			return t
+		}
+	}
+	return ""
 }
 
 // AgentOf is the agent name of the running call ("" for a person or a

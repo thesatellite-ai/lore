@@ -40,11 +40,15 @@ func TestPlanCarry(t *testing.T) {
 		explicit  engine.MetaFlags
 		noMeta    bool
 		wantTerms int
-		wantCount int // after Before
+		wantCount int  // after Before
+		wantCtx   bool // Before binds something on ctx
 	}{
-		{"carry all on the create", engine.MetaFlags{}, false, 2, 2},
-		{"--no-meta carries nothing", engine.MetaFlags{}, true, 0, 0},
-		{"--meta given: create untouched", engine.MetaFlags{Meta: []string{"client=globex"}}, false, 2, 0},
+		{"carry all on the create", engine.MetaFlags{}, false, 2, 2, true},
+		{"--no-meta carries nothing", engine.MetaFlags{}, true, 0, 0, false},
+		// OV30-CARRY-REQ: with --meta the create still gets the carry (as an
+		// engine.MetaCarry filled before the required check); the count is
+		// known only after the create runs.
+		{"--meta given: carry bound for the create", engine.MetaFlags{Meta: []string{"client=globex"}}, false, 2, 0, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -61,7 +65,7 @@ func TestPlanCarry(t *testing.T) {
 				}
 			}
 			got := cr.Before(ctx)
-			if cr.Count != c.wantCount || (c.wantCount == 0) != (got == ctx) {
+			if cr.Count != c.wantCount || c.wantCtx != (got != ctx) {
 				t.Errorf("Before: count %d (want %d), ctx changed %v", cr.Count, c.wantCount, got != ctx)
 			}
 		})

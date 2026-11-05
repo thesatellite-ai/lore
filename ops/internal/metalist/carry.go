@@ -26,13 +26,15 @@ import (
 //	PlanCarry(old, explicit, noMeta)
 //	  ├ no --meta given: Before(ctx) → the create itself writes the
 //	  │   carried values (defaults and required keys see them)
-//	  └ --meta given: the create takes the flags (Run bound them);
-//	      After(ctx, upd, new row) sets the carried keys the new row
-//	      does not hold yet, in one more write of the new row
+//	  └ --meta given: the create takes the flags (Run bound them) and
+//	      Before binds an engine.MetaCarry: the same create fills in the
+//	      carried keys the flags did not set, before the required-key
+//	      check (OV30-CARRY-REQ); After only reads how many it filled
 type Carry struct {
 	terms []meta.Term
 	table row.Table
 	after bool
+	bound engine.MetaCarry
 	// Count is how many keys were carried over ("carried over N keys").
 	Count int
 }
@@ -66,7 +68,11 @@ func PlanCarry(old row.Row, table row.Table, explicit engine.MetaFlags, noMeta b
 
 // Before is ctx carrying the values for the create (no --meta given).
 func (c *Carry) Before(ctx context.Context) context.Context {
-	if c.after || len(c.terms) == 0 {
+	if len(c.terms) == 0 {
+		return ctx
+	}
+	if c.after {
+		ctx, c.bound = engine.WithMetaCarry(ctx, engine.MetaCarry{Terms: c.terms, Table: c.table})
 		return ctx
 	}
 	c.Count = len(c.terms)
@@ -85,6 +91,7 @@ func (c *Carry) After(ctx context.Context, upd Updater, ref engine.Ref, newRow r
 	if !c.after || len(c.terms) == 0 {
 		return nil
 	}
+	c.Count = c.bound.Filled()
 	var todo []meta.Term
 	for _, t := range c.terms {
 		if _, has := newRow.Meta[t.KeyID]; !has {
@@ -97,7 +104,7 @@ func (c *Carry) After(ctx context.Context, upd Updater, ref engine.Ref, newRow r
 	if _, err := upd.Update(engine.WithMeta(ctx, engine.MetaWrite{JSON: todo, ID: ref.ID}), ref, map[string]value.Value{}); err != nil {
 		return err
 	}
-	c.Count = len(todo)
+	c.Count += len(todo)
 	return nil
 }
 
