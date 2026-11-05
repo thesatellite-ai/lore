@@ -185,3 +185,36 @@ func (b *storePushBackend) Close() error { return b.inner.Close() }
 
 // Unwrap implements wire.Unwrapper.
 func (b *storePushBackend) Unwrap() store.Backend { return b.inner }
+
+var _ store.AuditJournal = (*storePushBackend)(nil)
+
+// WriteAudited implements store.AuditJournal (CLEANUP Qs): the rows and
+// their audit records in one commit of the clone, then the push as Write
+// does; a clone without a journal gets Write.
+func (b *storePushBackend) WriteAudited(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
+	j, ok := b.inner.(store.AuditJournal)
+	if !ok {
+		return b.Write(ctx, changes)
+	}
+	if err := j.WriteAudited(ctx, changes, recs); err != nil {
+		return err
+	}
+	b.pushAfterWrite(ctx)
+	return nil
+}
+
+// PendingAudit implements store.AuditJournal (the clone's journal).
+func (b *storePushBackend) PendingAudit(ctx context.Context) ([]store.AuditRecord, error) {
+	if j, ok := b.inner.(store.AuditJournal); ok {
+		return j.PendingAudit(ctx)
+	}
+	return nil, nil
+}
+
+// AckAudit implements store.AuditJournal (the clone's journal).
+func (b *storePushBackend) AckAudit(ctx context.Context, recs []store.AuditRecord) error {
+	if j, ok := b.inner.(store.AuditJournal); ok {
+		return j.AckAudit(ctx, recs)
+	}
+	return nil
+}
