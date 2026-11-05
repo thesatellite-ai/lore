@@ -190,18 +190,9 @@ func (u *keyUse) tableCounts() string {
 // a new key named name in target's registry (METADATA 3.8 R11, 3.13,
 // FA-META-11). An Env without a policy reader checks the defaults.
 func (o ops) checkRegistryCaps(ctx context.Context, target store.Source, name string) error {
-	maxLen, maxKeys := int64(meta.MaxKeyLen), int64(defaultMaxKeysPerRegistry)
-	if p, ok := o.env.(bulk.Policier); ok {
-		set, err := p.Policy(ctx, target)
-		if err != nil {
-			return err
-		}
-		if n, isSet := set.Limit(policy.KeyMetaMaxKeyLength); isSet && n > 0 {
-			maxLen = n
-		}
-		if n, isSet := set.Limit(policy.KeyMetaMaxKeysPerRegistry); isSet && n >= 0 {
-			maxKeys = n
-		}
+	maxLen, maxKeys, err := registryLimits(ctx, o.env, target)
+	if err != nil {
+		return err
 	}
 	if int64(len(name)) > maxLen {
 		return errs.New(errs.MetaKey, fmt.Sprintf("meta: %q is longer than %d characters (meta.max_key_length)", name, maxLen))
@@ -212,10 +203,67 @@ func (o ops) checkRegistryCaps(ctx context.Context, target store.Source, name st
 	}
 	if int64(len(keys)) >= maxKeys {
 		return errs.New(errs.MetaSize, fmt.Sprintf("meta: %s already holds %d key rows (meta.max_keys_per_registry %d)", target, len(keys), maxKeys)).
-			WithHint("fold or forget unused keys: lore meta keys --unused; lore meta forget <key> --confirm")
+			WithHint(registryCapHint)
 	}
 	return nil
 }
 
-// defaultMaxKeysPerRegistry is meta.max_keys_per_registry's default (R11).
-const defaultMaxKeysPerRegistry = 500
+// registryCapHint is the fix for a registry at or past its key cap.
+const registryCapHint = "fold or forget unused keys: lore meta keys --unused; lore meta forget <key> --confirm"
+
+// registryLimits reads meta.max_key_length and meta.max_keys_per_registry
+// for target (the defaults when env reads no policy).
+func registryLimits(ctx context.Context, env Env, target store.Source) (maxLen, maxKeys int64, err error) {
+	maxLen, maxKeys = int64(meta.MaxKeyLen), int64(DefaultMaxKeysPerRegistry)
+	if p, ok := env.(bulk.Policier); ok {
+		set, perr := p.Policy(ctx, target)
+		if perr != nil {
+			return 0, 0, perr
+		}
+		if n, isSet := set.Limit(policy.KeyMetaMaxKeyLength); isSet && n > 0 {
+			maxLen = n
+		}
+		if n, isSet := set.Limit(policy.KeyMetaMaxKeysPerRegistry); isSet && n >= 0 {
+			maxKeys = n
+		}
+	}
+	return maxLen, maxKeys, nil
+}
+
+// DefaultMaxKeysPerRegistry is meta.max_keys_per_registry's default (R11).
+const DefaultMaxKeysPerRegistry = 500
+
+// RegistryOver is one registry holding more live key rows than its
+// meta.max_keys_per_registry: writes refuse new keys there, but rows that
+// arrive by sync are never refused, so lint and sync status report it
+// (FA-META-11, METADATA 3.13).
+type RegistryOver struct {
+	Store string `json:"store"`
+	Keys  int    `json:"keys"`
+	Cap   int64  `json:"cap"`
+}
+
+// Line is the one-line report of r.
+func (r RegistryOver) Line() string {
+	return fmt.Sprintf("%s: %d key rows, past meta.max_keys_per_registry %d (%s)", place(store.Source(r.Store)), r.Keys, r.Cap, registryCapHint)
+}
+
+// RegistriesOverCap lists every attached store whose registry is past its
+// key cap, in env.Stores() order.
+func RegistriesOverCap(ctx context.Context, env Env) ([]RegistryOver, error) {
+	var out []RegistryOver
+	for _, src := range env.Stores() {
+		keys, err := liveRows(ctx, env, []store.Source{src}, schema.TableMetaKeys)
+		if err != nil {
+			return nil, err
+		}
+		_, maxKeys, err := registryLimits(ctx, env, src)
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(keys)) > maxKeys {
+			out = append(out, RegistryOver{Store: string(src), Keys: len(keys), Cap: maxKeys})
+		}
+	}
+	return out, nil
+}
