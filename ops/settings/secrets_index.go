@@ -126,12 +126,14 @@ func (o ops) rowUses(l located) []SecretUse {
 	return out
 }
 
-// fieldTexts are the texts of a text or text-list field (other kinds hold
-// no references a write would keep).
+// fieldTexts are the texts of a text, text-list or json field (a json
+// field's string values; other kinds hold no references a write would keep).
 func fieldTexts(v value.Value) []string {
 	switch t := v.(type) {
 	case value.Text:
 		return []string{t.String()}
+	case value.JSON:
+		return jsonStrings(t.Raw()) // OV13b: secrets_json.go
 	case value.List:
 		if t.Elem() != value.KindText {
 			return nil
@@ -281,8 +283,8 @@ func targetOption(t refs.SecretTarget, name string) string {
 	return ""
 }
 
-// rowPatch applies fix to every text and text-list field of r; nil when
-// nothing changed.
+// rowPatch applies fix to every text, text-list and json field of r; nil
+// when nothing changed.
 func rowPatch(r row.Row, fix rewriter) (map[string]value.Value, int, error) {
 	patch := map[string]value.Value{}
 	total := 0
@@ -298,6 +300,15 @@ func rowPatch(r row.Row, fix rewriter) (map[string]value.Value, int, error) {
 				return nil, 0, err
 			}
 			patch[f], total = nv, total+n
+		case value.JSON:
+			// OV13b: references inside json string values (secrets_json.go)
+			nv, n, err := jsonRewrite(t, fix)
+			if err != nil {
+				return nil, 0, err
+			}
+			if n > 0 {
+				patch[f], total = nv, total+n
+			}
 		case value.List:
 			if t.Elem() != value.KindText {
 				continue
