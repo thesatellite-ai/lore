@@ -377,6 +377,9 @@ func New(opts Options) (*App, error) {
 		opts.Wall = time.Now
 	}
 	a := &App{opts: opts}
+	if b, ok := opts.Audit.(appBinder); ok {
+		b.bindApp(a) // a sink that links sessions and stamps with the App's clock (wire/auditchain.go)
+	}
 	reg, err := Registry(a)
 	if err != nil {
 		return nil, err

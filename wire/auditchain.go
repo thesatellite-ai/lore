@@ -18,6 +18,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -30,6 +31,8 @@ import (
 	"github.com/thesatellite-ai/lore/logic/auditchain"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
+	opssession "github.com/thesatellite-ai/lore/ops/session"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -125,6 +128,15 @@ type chainAudit struct {
 	home, dir string
 	now       func() time.Time
 
+	// app is the App this sink records for (bindApp, from New): its clock
+	// stamps created_at (LORE_NOW under loretest, as the old binary's
+	// cliClock) and its CurrentSession links the session. nil before New.
+	app *App
+	// sesOnce/ses/sesErr: this process's session, found or created once.
+	sesOnce sync.Once
+	ses     string
+	sesErr  error
+
 	once   sync.Once
 	top    string // git top (AuditFile's checkout)
 	dbPath string // <project>/.lore/lore.db (the chain key and import source)
@@ -135,7 +147,32 @@ var (
 	_ engine.AuditSink = (*chainAudit)(nil)
 	_ opsaudit.Env     = (*chainAudit)(nil)
 	_ WhoSource        = (*chainAudit)(nil)
+	_ SessionSource    = (*chainAudit)(nil)
+	_ appBinder        = (*chainAudit)(nil)
 )
+
+// appBinder is a repo audit sink that needs the App it records for; New
+// hands it the App before anything opens.
+type appBinder interface {
+	bindApp(a *App)
+}
+
+// bindApp implements appBinder: the App's clock replaces the one given to
+// NewChainAudit.
+func (c *chainAudit) bindApp(a *App) {
+	c.app = a
+	c.now = a.opts.Wall
+}
+
+// Session implements SessionSource: this process's ses_ id (App.CurrentSession),
+// "" before New bound an App or when no session applies.
+func (c *chainAudit) Session(ctx context.Context) (string, error) {
+	if c.app == nil {
+		return "", nil
+	}
+	c.sesOnce.Do(func() { c.ses, c.sesErr = c.app.CurrentSession(ctx) })
+	return c.ses, c.sesErr
+}
 
 // NewChainAudit is the repo audit sink of a binary with no chain of its
 // own (cmd/lore, StandaloneOptions): the project is the nearest folder at
@@ -256,11 +293,87 @@ func (c *chainAudit) AuditVerify(ctx context.Context) (opsaudit.Report, error) {
 	return rep, nil
 }
 
-// WhoLines implements WhoSource with the fallback file's lines (cmd/lore
-// keeps no tool/model per session there).
+// WhoLines implements WhoSource as the old binary's sink does: one line
+// per session that wrote rowID, in first-write order, from the chain, with
+// the session's tool, tool session (redacted off-terminal / in CI) and
+// model from the machine store. Before New bound an App it reads the
+// fallback file's lines.
 func (c *chainAudit) WhoLines(ctx context.Context, rowID string) ([]string, error) {
 	c.resolve(ctx)
-	return whoFromAuditFile(c.file.path, rowID)
+	if c.app == nil {
+		return whoFromAuditFile(c.file.path, rowID)
+	}
+	recs, err := c.records(ctx)
+	if err != nil {
+		return nil, err
+	}
+	type tally struct {
+		confirmed bool
+		writes    int
+	}
+	var order []string
+	per := map[string]*tally{}
+	for _, r := range recs {
+		if r.TargetID != rowID || strings.TrimSpace(r.SessionID) == "" {
+			continue
+		}
+		t, ok := per[r.SessionID]
+		if !ok {
+			t = &tally{}
+			per[r.SessionID] = t
+			order = append(order, r.SessionID)
+		}
+		t.writes++
+		t.confirmed = t.confirmed || r.Confirmed
+	}
+	if len(order) == 0 {
+		return nil, nil
+	}
+	rows, err := c.app.Sessions(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	known := map[string]SessionDetails{}
+	for _, r := range rows {
+		known[r.ID] = r.SessionDetails
+	}
+	out := make([]string, 0, len(order))
+	for _, ses := range order {
+		d, t := known[ses], per[ses]
+		out = append(out, fmt.Sprintf("%s  tool %s  session %s  model %s  confirmed %s  (%d writes)",
+			ses, whoCell(d.Tool), whoCell(redactSession(d.ToolSessionID)), whoCell(d.Model), yesNo(t.confirmed), t.writes))
+	}
+	return out, nil
+}
+
+// whoCell shows an unknown --who field as "-" (OQ8: never guessed).
+func whoCell(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "-"
+	}
+	return v
+}
+
+// SessionCounts fills each session row's Writes (its chain entries) and
+// NewKeys (distinct meta_keys rows it wrote) from recs (P3-RUNS-5).
+func SessionCounts(recs []auditchain.Record, rows []opssession.Row) {
+	writes := map[string]int{}
+	keys := map[string]map[string]bool{}
+	for _, r := range recs {
+		if r.SessionID == "" {
+			continue
+		}
+		writes[r.SessionID]++
+		if r.TargetTable == schema.TableMetaKeys && r.TargetID != "" {
+			if keys[r.SessionID] == nil {
+				keys[r.SessionID] = map[string]bool{}
+			}
+			keys[r.SessionID][r.TargetID] = true
+		}
+	}
+	for i := range rows {
+		rows[i].Writes, rows[i].NewKeys = writes[rows[i].ID], len(keys[rows[i].ID])
+	}
 }
 
 // ExternalWrites counts the entries the sync bridge recorded as changes

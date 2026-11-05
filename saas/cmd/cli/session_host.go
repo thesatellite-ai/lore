@@ -13,9 +13,8 @@ import (
 
 	"saas/pkg/aicoder/errcodes"
 
-	"github.com/thesatellite-ai/lore/logic/auditchain"
 	opssession "github.com/thesatellite-ai/lore/ops/session"
-	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // sessionHost is wire.SessionHosts.Session.
@@ -44,28 +43,6 @@ func (sessionHost) ListSessions(ctx context.Context, limit int) (_ []opssession.
 	if err != nil {
 		return nil, err
 	}
-	sessionCounts(recs, out)
+	wire.SessionCounts(recs, out)
 	return out, nil
-}
-
-// sessionCounts fills each row's Writes (its chain entries) and NewKeys
-// (distinct meta_keys rows it wrote) from the audit chain (P3-RUNS-5).
-func sessionCounts(recs []auditchain.Record, rows []opssession.Row) {
-	writes := map[string]int{}
-	keys := map[string]map[string]bool{}
-	for _, r := range recs {
-		if r.SessionID == "" {
-			continue
-		}
-		writes[r.SessionID]++
-		if r.TargetTable == schema.TableMetaKeys && r.TargetID != "" {
-			if keys[r.SessionID] == nil {
-				keys[r.SessionID] = map[string]bool{}
-			}
-			keys[r.SessionID][r.TargetID] = true
-		}
-	}
-	for i := range rows {
-		rows[i].Writes, rows[i].NewKeys = writes[rows[i].ID], len(keys[rows[i].ID])
-	}
 }

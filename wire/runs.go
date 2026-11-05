@@ -65,15 +65,27 @@ type machineSessionHost struct{ app *App }
 
 var _ opssession.Host = machineSessionHost{}
 
-// ListSessions implements opssession.Host.
+// ListSessions implements opssession.Host; with the chain sink (cmd/lore)
+// the WRITES and NEW KEYS counts come from the project's audit chain, as
+// the old binary's host counts them.
 func (h machineSessionHost) ListSessions(ctx context.Context, limit int) ([]opssession.Row, error) {
-	return h.app.SessionOpRows(ctx, limit)
+	out, err := h.app.SessionOpRows(ctx, limit)
+	if err != nil || len(out) == 0 {
+		return out, err
+	}
+	if c, ok := h.app.opts.Audit.(*chainAudit); ok {
+		recs, rerr := c.records(ctx)
+		if rerr != nil {
+			return nil, rerr
+		}
+		SessionCounts(recs, out)
+	}
+	return out, nil
 }
 
-// RevealToolSessions implements opssession.Host: the App cannot tell a
-// terminal from a pipe, so it never reveals raw tool session ids (the safe
-// side of AGENT_IDENTITY 9); a binary that can tell supplies its own host.
-func (machineSessionHost) RevealToolSessions(context.Context) bool { return false }
+// RevealToolSessions implements opssession.Host: raw ids only on a
+// terminal outside CI (quietOutput, the whoami rule, AGENT_IDENTITY 9).
+func (machineSessionHost) RevealToolSessions(context.Context) bool { return !quietOutput() }
 
 // AgentHost implements opsagent.Env (the --label mode also uses the App's
 // opsinfra.Roster).
