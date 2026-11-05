@@ -15,6 +15,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/origin"
+	"github.com/thesatellite-ai/lore/model/checklist"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
@@ -58,6 +59,9 @@ const (
 	mapSep      = "="
 	mapListSep  = ","
 	extIDRowSep = ":" // ext_id of a row without an id column: <file>:<row>
+	// extIDKidSep joins a child's position to its parent's ext_id when the
+	// child has no id: <parent ext_id>/<n> (stable on re-import).
+	extIDKidSep = "/"
 	// maxImportBytes bounds the file an import reads (a task file far
 	// over this is a mistake, not a backlog).
 	maxImportBytes = 16 << 20
@@ -85,6 +89,10 @@ type ImportRow struct {
 	ID    string `json:"id,omitempty"`
 	ExtID string `json:"ext_id"`
 	Title string `json:"title"`
+	// ParentExtID is set for a task read from a parent's "children".
+	ParentExtID string `json:"parent_ext_id,omitempty"`
+	// Checklist is how many checklist items the task got.
+	Checklist int `json:"checklist,omitempty"`
 }
 
 // ImportOut is the output of task.import.
@@ -125,10 +133,23 @@ func ImportOps(env work.Env) []op.Entry {
 	}
 }
 
-// importRecord is one parsed task of the file.
+// importRecord is one parsed task of the file. Records are in pre-order:
+// a parent always comes before its children (task export --with-children
+// nests them under "children"), so the parent's id exists when a child is
+// added.
 type importRecord struct {
 	extID string
 	cols  map[string]string
+	// parent is the index of the parent record, -1 for a top-level task.
+	parent int
+	// checklist is the export's [{text, done}] (--with-checklist).
+	checklist []importItem
+}
+
+// importItem is one checklist item as task export --with-checklist writes it.
+type importItem struct {
+	Text string `json:"text"`
+	Done bool   `json:"done"`
 }
 
 // importTasks reads the file, checks every record, previews (XQ2), then
@@ -159,7 +180,11 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		if err = checkRecord(r); err != nil {
 			return ImportOut{}, err
 		}
-		out.Rows = append(out.Rows, ImportRow{ExtID: r.extID, Title: strings.TrimSpace(r.cols[colTitle])})
+		ir := ImportRow{ExtID: r.extID, Title: strings.TrimSpace(r.cols[colTitle]), Checklist: len(r.checklist)}
+		if r.parent >= 0 {
+			ir.ParentExtID = recs[r.parent].extID
+		}
+		out.Rows = append(out.Rows, ir)
 		items = append(items, bulk.Item{ID: r.extID, Label: strings.TrimSpace(r.cols[colTitle])})
 	}
 	out.Count = len(recs)
@@ -195,7 +220,15 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		add := AddIn{Title: r.cols[colTitle], Body: r.cols[colBody], Priority: r.cols[colPriority], Commitment: r.cols[colCommitment],
 			Due: r.cols[colDue], DeferUntil: r.cols[colDeferUntil], Tasklist: orDefault(r.cols[colTasklist], defList),
 			Mission: r.cols[colMission], Plan: r.cols[colPlan], Role: r.cols[colRole], Key: r.cols[colKey], To: in.To}
+		if r.parent >= 0 {
+			// TASK 6.5: a child without its own tasklist inherits the
+			// parent's instead of the import default.
+			add.Parent, add.Tasklist = out.Rows[r.parent].ID, r.cols[colTasklist]
+		}
 		got, aerr := o.add(rctx, add)
+		if aerr == nil && len(r.checklist) > 0 {
+			aerr = o.importChecklist(rctx, got.Data.ID, r.checklist)
+		}
 		if aerr != nil {
 			return ImportOut{}, errors.Join(aerr, errs.New(errs.InvalidInput, "task import: stopped at "+r.extID+" after "+
 				strconv.Itoa(i)+" of "+strconv.Itoa(len(recs))+" tasks; the ones written are in batch "+out.Batch))
@@ -203,6 +236,24 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		out.Rows[i].ID = got.Data.ID
 	}
 	return out, nil
+}
+
+// importChecklist writes a record's checklist onto the task just added
+// (TASK 7.3 items, ticked ones stamped by the importer now).
+func (o ops) importChecklist(ctx context.Context, id string, items []importItem) error {
+	h, err := o.getChecklist(ctx, id)
+	if err != nil {
+		return err
+	}
+	texts, done := make([]string, len(items)), make([]bool, len(items))
+	for i, it := range items {
+		texts[i], done[i] = it.Text, it.Done
+	}
+	if _, err = o.appendItems(ctx, &h, texts, done); err != nil {
+		return err
+	}
+	_, err = o.saveChecklist(ctx, h, nil, "")
+	return err
 }
 
 // importSource settles --from: given, or the file's extension.
@@ -262,18 +313,30 @@ func readImportFile(path string) ([]byte, error) {
 // without an id column gets ext_id "<file>:<row>" (row 1 = the first
 // record), so importing the same file again names the same external ids.
 func parseImport(from, base string, raw []byte, rename map[string]string) ([]importRecord, error) {
-	var rows []map[string]string
-	var err error
+	var rows []jsonRow
 	if from == FromCSV {
-		rows, err = csvRows(raw)
+		flat, err := csvRows(raw)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range flat {
+			rows = append(rows, jsonRow{cols: m, parent: -1})
+		}
 	} else {
-		rows, err = jsonRows(raw)
-	}
-	if err != nil {
-		return nil, err
+		var objs []map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &objs); err != nil {
+			return nil, errs.Wrap(errs.InvalidInput, "task import: the JSON must be an array of objects", err)
+		}
+		var err error
+		if rows, err = jsonRows(objs, -1, nil); err != nil {
+			return nil, err
+		}
 	}
 	out := make([]importRecord, 0, len(rows))
-	for i, m := range rows {
+	top := 0
+	kids := map[int]int{} // children seen so far per parent index
+	for _, jr := range rows {
+		m := jr.cols
 		cols := map[string]string{}
 		for k, v := range m {
 			if to, ok := rename[k]; ok {
@@ -286,12 +349,26 @@ func parseImport(from, base string, raw []byte, rename map[string]string) ([]imp
 			cols[k] = v
 		}
 		ext := strings.TrimSpace(cols[colExtID])
-		if ext == "" {
-			ext = base + extIDRowSep + strconv.Itoa(i+1)
+		if jr.parent < 0 {
+			top++
+		} else {
+			kids[jr.parent]++
 		}
-		out = append(out, importRecord{extID: ext, cols: cols})
+		if ext == "" && jr.parent < 0 {
+			ext = base + extIDRowSep + strconv.Itoa(top)
+		} else if ext == "" {
+			ext = out[jr.parent].extID + extIDKidSep + strconv.Itoa(kids[jr.parent])
+		}
+		out = append(out, importRecord{extID: ext, cols: cols, parent: jr.parent, checklist: jr.checklist})
 	}
 	return out, nil
+}
+
+// jsonRow is one task object of a JSON import, flattened in pre-order.
+type jsonRow struct {
+	cols      map[string]string
+	parent    int
+	checklist []importItem
 }
 
 // csvRows reads a CSV with a header row.
@@ -320,37 +397,61 @@ func csvRows(raw []byte) ([]map[string]string, error) {
 	return out, nil
 }
 
-// jsonRows reads a JSON array of objects whose values are strings or
-// numbers (a number is kept as written, e.g. an id 412).
-func jsonRows(raw []byte) ([]map[string]string, error) {
-	var objs []map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &objs); err != nil {
-		return nil, errs.Wrap(errs.InvalidInput, "task import: the JSON must be an array of objects", err)
-	}
-	out := make([]map[string]string, 0, len(objs))
+// jsonRows flattens a JSON array of task objects in pre-order. Values are
+// strings or numbers (a number is kept as written, e.g. an id 412); the
+// keys "children" (nested task objects) and "checklist" ([{text, done}])
+// read back task export --with-children / --with-checklist. out is the
+// rows so far, so a child's parent is its index in the final list.
+func jsonRows(objs []map[string]json.RawMessage, parent int, out []jsonRow) ([]jsonRow, error) {
 	for i, o := range objs {
-		m := map[string]string{}
+		jr := jsonRow{cols: map[string]string{}, parent: parent}
+		var kids []map[string]json.RawMessage
 		for k, v := range o {
-			var s string
-			if err := json.Unmarshal(v, &s); err == nil {
-				if s != "" {
-					m[k] = s
+			switch k {
+			case keyChildren:
+				if err := json.Unmarshal(v, &kids); err != nil {
+					return nil, errs.Wrap(errs.InvalidInput, "task import: item "+strconv.Itoa(i+1)+" children must be an array of task objects", err)
+				}
+				continue
+			case keyChecklist:
+				if err := json.Unmarshal(v, &jr.checklist); err != nil {
+					return nil, errs.Wrap(errs.InvalidInput, "task import: item "+strconv.Itoa(i+1)+` checklist must be [{"text": "…", "done": false}]`, err)
 				}
 				continue
 			}
-			var n json.Number
-			if err := json.Unmarshal(v, &n); err == nil {
-				m[k] = n.String()
-				continue
+			s, ok, err := jsonScalar(v)
+			if err != nil {
+				return nil, errs.New(errs.InvalidInput, "task import: item "+strconv.Itoa(i+1)+" field "+strconv.Quote(k)+" must be a string or a number")
 			}
-			if string(bytes.TrimSpace(v)) == "null" {
-				continue
+			if ok {
+				jr.cols[k] = s
 			}
-			return nil, errs.New(errs.InvalidInput, "task import: item "+strconv.Itoa(i+1)+" field "+strconv.Quote(k)+" must be a string or a number")
 		}
-		out = append(out, m)
+		out = append(out, jr)
+		if len(kids) > 0 {
+			var err error
+			if out, err = jsonRows(kids, len(out)-1, out); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return out, nil
+}
+
+// jsonScalar reads a string or number value; ok is false for null or "".
+func jsonScalar(v json.RawMessage) (string, bool, error) {
+	var s string
+	if err := json.Unmarshal(v, &s); err == nil {
+		return s, s != "", nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(v, &n); err == nil {
+		return n.String(), true, nil
+	}
+	if string(bytes.TrimSpace(v)) == "null" {
+		return "", false, nil
+	}
+	return "", false, errs.New(errs.InvalidInput, "not a string or a number")
 }
 
 // checkRecord is the part of task add's checks that needs no store, run on
@@ -366,6 +467,14 @@ func checkRecord(r importRecord) error {
 	}
 	if c := r.cols[colCommitment]; c != "" {
 		if err := work.OneOf(Noun, colCommitment, c, schema.TaskCommitments()); err != nil {
+			return errors.Join(err, errs.New(errs.InvalidInput, "task import: in "+r.extID))
+		}
+	}
+	if len(r.checklist) > checklist.MaxItems {
+		return errs.New(errs.InvalidInput, "task import: "+r.extID+" has "+strconv.Itoa(len(r.checklist))+" checklist items, over "+strconv.Itoa(checklist.MaxItems))
+	}
+	for _, it := range r.checklist {
+		if _, err := checklist.CleanText(it.Text); err != nil {
 			return errors.Join(err, errs.New(errs.InvalidInput, "task import: in "+r.extID))
 		}
 	}
