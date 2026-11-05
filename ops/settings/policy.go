@@ -167,8 +167,25 @@ func policyValue(d policy.KeyDef, raw string) (value.Value, error) {
 	if d.Shape == policy.ShapeSet || d.Shape == policy.ShapeAllow {
 		return textList(splitList(raw))
 	}
+	if d.Shape == policy.ShapeFlag {
+		// CONTEXT_BUDGET 6.2.7 / CQ10 write `policy set context.dir_files
+		// on|off`: on and off are the flag's spoken spellings of true and
+		// false (P3-CTX-3); any other text still fails the shape check.
+		switch strings.ToLower(strings.TrimSpace(raw)) {
+		case flagOn:
+			return value.BoolOf(true), nil
+		case flagOff:
+			return value.BoolOf(false), nil
+		}
+	}
 	return inferText(raw)
 }
+
+// flagOn / flagOff are the on|off spellings a flag key accepts.
+const (
+	flagOn  = "on"
+	flagOff = "off"
+)
 
 // MachinePolicySource is an optional Env upgrade: this machine's local
 // policy values (wire.App reads ~/.lore/config.yaml `policies:`, FQ11).

@@ -21,12 +21,24 @@
 // here is ever written inside the checkout except those private files.
 //
 // File names use permanent ids so a renamed repo or store keeps its file.
-// The repo id is `repo_id` from .lore/data/_meta.json; a repo whose
-// _meta.json has none yet (no 0.1.18 writer stamps it so far) falls back to
-// its prj_ project id, which is just as permanent and local-only. Several
+// The repo id is `repo_id` from .lore/data/_meta.json, which `lore init`
+// and `lore sync` stamp (wire.EnsureRepoIdentity, PROV1); a v0.1.17
+// checkout not yet synced has none and falls back to its prj_ project id,
+// which is just as permanent and local-only. Several
 // attached sources of one store (an org store's two folders) share its sto_
 // id and therefore one file. A store whose marker carries no id (v0.1.17)
 // gets a name-derived file stem so its rows are not dropped.
+//
+// Budget (CONTEXT_BUDGET 6.1, P3-CTX-2): every private file of one repo
+// loads in the same session, so together they share
+// context.budget.internal. The pinned rules and hotfixes (each file's
+// core) are never cut; the "Other notes" bullets fill what is left, store
+// by store in file order, and a file whose bullets did not all fit ends
+// with one "N more notes left out" pointer at `lore search`:
+//
+//	buildPrivateStore ─► privateBody{core, sections}
+//	fitPrivate(bodies, budget) ─► texts, shown, left out
+//	cores alone over the budget ─► one WARN on stderr (nothing is cut)
 //
 // Expansion (SECRETS_AND_REFERENCES 12, CONTEXT_BUDGET 6.13):
 //
@@ -49,6 +61,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/direction"
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -87,6 +100,9 @@ const (
 	// private render leaves out (as v0.1.17's internal render did).
 	privateTaskDone      = "done"
 	privateTaskCancelled = "cancelled"
+	// fallbackInternalBudget is context.budget.internal's default, used
+	// when the policy cannot be read (6.1).
+	fallbackInternalBudget = 8000
 )
 
 // privateImportDir starts the path of every private line lore owns; the
@@ -134,7 +150,10 @@ type privatePlan struct {
 	stores    []privateStore
 	files     []privateFile  // store files, then index.md
 	locals    []privateLocal // one per profile private file to write or clean
-	rows      int
+	rows      int            // rows shown in the store files
+	leftOut   int            // "Other notes" rows the budget left out (P3-CTX-2)
+	budget    int            // context.budget.internal
+	coreBytes int            // the store files' cores (never cut)
 }
 
 // privateLocal is one tool's private import file in the checkout.
@@ -225,10 +244,28 @@ func renderPrivate(ctx context.Context, root string, dryRun, quiet bool) error {
 			}
 			where = strings.Join(wrote, ", ") + verb + " only the import lines"
 		}
-		fmt.Printf("%s private context → %s (%d stores, %d rows, outside the checkout); %s\n",
-			style.Success("✓"), redactIfQuiet(p.dir), len(p.stores), p.rows, where)
+		left := ""
+		if p.leftOut > 0 {
+			left = fmt.Sprintf(", %d more left out by %s %d", p.leftOut, policy.KeyContextBudgetInternal, p.budget)
+		}
+		fmt.Printf("%s private context → %s (%d stores, %d rows%s, outside the checkout); %s\n",
+			style.Success("✓"), redactIfQuiet(p.dir), len(p.stores), p.rows, left, where)
+	}
+	if p.budget > 0 && p.coreBytes > p.budget {
+		fmt.Fprintln(os.Stderr, style.Warn(fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut: unpin some or raise the key",
+			p.coreBytes, policy.KeyContextBudgetInternal, p.budget)))
 	}
 	return nil
+}
+
+// loadInternalBudget reads context.budget.internal (6.1).
+func loadInternalBudget(ctx context.Context) int {
+	if set, ok := policySet(ctx); ok {
+		if n, found := set.Limit(policy.KeyContextBudgetInternal); found {
+			return int(n)
+		}
+	}
+	return fallbackInternalBudget
 }
 
 // planPrivate gathers the internal stores and builds every file's text.
@@ -282,13 +319,19 @@ func planPrivate(ctx context.Context, root string) (*privatePlan, error) {
 			return nil, err
 		}
 	}
+	bodies := make([]privateBody, 0, len(internal))
 	for _, s := range internal {
-		body, n, buildErr := buildPrivateStore(ctx, ex, repoName, p.repoKey, s)
+		body, buildErr := buildPrivateStore(ctx, ex, repoName, p.repoKey, s)
 		if buildErr != nil {
 			return nil, buildErr
 		}
-		p.rows += n
-		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, s.stem+privateFileExt), body: body})
+		bodies = append(bodies, body)
+	}
+	p.budget = loadInternalBudget(ctx)
+	fit := fitPrivate(bodies, p.budget)
+	p.rows, p.leftOut, p.coreBytes = fit.shown, fit.leftOut, fit.coreBytes
+	for i, s := range internal {
+		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, s.stem+privateFileExt), body: fit.texts[i]})
 		imports = append(imports, privateImportDir+p.repoKey+"/"+s.stem+privateFileExt)
 	}
 	if len(internal) > 0 {
@@ -358,16 +401,104 @@ func privateRepoKey(root, projectID string) string {
 	return projectID
 }
 
-// buildPrivateStore renders one internal store's file: the pinned rules
-// and hotfixes in the committed render's format, then every other live row
-// as one bullet per row. It returns the text and the number of rows in it.
-func buildPrivateStore(ctx context.Context, ex *privateExpander, repoName, repoKey string, s privateStore) (string, int, error) {
+// privateSection is one "Other notes" table: its heading and one bullet
+// line per row.
+type privateSection struct {
+	heading string
+	lines   []string
+}
+
+// privateBody is one internal store's file before the budget: the core
+// (header, pinned rules and hotfixes; never cut) and the "Other notes"
+// sections fitPrivate fills.
+type privateBody struct {
+	core     string
+	pinned   int // rows in core
+	sections []privateSection
+}
+
+// privateFit is what fitPrivate decided for every store file.
+type privateFit struct {
+	texts     []string
+	shown     int
+	leftOut   int
+	coreBytes int
+}
+
+// Text of the "Other notes" part of a private file.
+const (
+	privateNotesHead = "\n## Other notes (details: `lore search`)\n"
+	privateEmpty     = "\n_No rows in this store yet._\n"
+)
+
+// fitPrivate fits the store files into budget bytes together (6.1,
+// P3-CTX-2): every core is kept whole, then the bullets are added in file
+// order while the running total stays within budget; the first bullet
+// that does not fit ends the filling for every later file too, so what is
+// shown never depends on line lengths further down. budget <= 0 keeps
+// everything. A file that loses bullets ends with one pointer line (not
+// counted against the budget: it replaces far more than it costs).
+func fitPrivate(bodies []privateBody, budget int) privateFit {
+	var out privateFit
+	for _, b := range bodies {
+		out.coreBytes += len(b.core)
+	}
+	used, full := out.coreBytes, false
+	for _, b := range bodies {
+		var t strings.Builder
+		t.WriteString(b.core)
+		shown, left, headed := b.pinned, 0, false
+		for _, sec := range b.sections {
+			sh := false
+			for _, line := range sec.lines {
+				add := len(line)
+				if !sh {
+					add += len("\n### " + sec.heading + "\n\n")
+				}
+				if !headed {
+					add += len(privateNotesHead)
+				}
+				if full || (budget > 0 && used+add > budget) {
+					full = true
+					left++
+					continue
+				}
+				if !headed {
+					t.WriteString(privateNotesHead)
+					headed = true
+				}
+				if !sh {
+					t.WriteString("\n### " + sec.heading + "\n\n")
+					sh = true
+				}
+				t.WriteString(line)
+				used += add
+				shown++
+			}
+		}
+		switch {
+		case left > 0:
+			fmt.Fprintf(&t, "\n_%d more notes left out by %s %d bytes: run `lore search`._\n", left, policy.KeyContextBudgetInternal, budget)
+		case shown == 0:
+			t.WriteString(privateEmpty)
+		}
+		out.texts = append(out.texts, t.String())
+		out.shown += shown
+		out.leftOut += left
+	}
+	return out
+}
+
+// buildPrivateStore renders one internal store's file before the budget:
+// the pinned rules and hotfixes in the committed render's format as the
+// core, then every other live row as one bullet per row, by table.
+func buildPrivateStore(ctx context.Context, ex *privateExpander, repoName, repoKey string, s privateStore) (privateBody, error) {
 	byTable := map[row.Table][]row.Row{}
 	for _, t := range privateTables {
 		for _, src := range s.sources {
 			rows, err := coreApp.List(ctx, src, t.table)
 			if err != nil {
-				return "", 0, coreErr(err)
+				return privateBody{}, coreErr(err)
 			}
 			for _, r := range rows {
 				if r.Deleted || renderField(r, renderFieldArchivedAt) != "" {
@@ -380,7 +511,7 @@ func buildPrivateStore(ctx context.Context, ex *privateExpander, repoName, repoK
 				}
 				er, err := ex.row(r)
 				if err != nil {
-					return "", 0, err
+					return privateBody{}, err
 				}
 				byTable[t.table] = append(byTable[t.table], er)
 			}
@@ -437,23 +568,13 @@ func buildPrivateStore(ctx context.Context, ex *privateExpander, repoName, repoK
 		n += len(hotfixes)
 	}
 
-	headed := false
+	out := privateBody{core: b.String(), pinned: n}
 	for _, t := range privateTables {
-		var rest []row.Row
+		sec := privateSection{heading: t.heading}
 		for _, r := range byTable[t.table] {
-			if !pinned[r.ID.String()] {
-				rest = append(rest, r)
+			if pinned[r.ID.String()] {
+				continue
 			}
-		}
-		if len(rest) == 0 {
-			continue
-		}
-		if !headed {
-			b.WriteString("\n## Other notes (details: `lore search`)\n")
-			headed = true
-		}
-		b.WriteString("\n### " + t.heading + "\n\n")
-		for _, r := range rest {
 			mark := ""
 			if sev := renderField(r, renderFieldSeverity); sev != "" {
 				mark = " [" + sev + "]"
@@ -461,14 +582,13 @@ func buildPrivateStore(ctx context.Context, ex *privateExpander, repoName, repoK
 			if ml := mk.line(ctx, r, true); ml != "" {
 				mark += " (" + ml + ")"
 			}
-			fmt.Fprintf(&b, "- %s%s `%s`\n", oneLine(privateRowText(r)), mark, r.ID)
+			sec.lines = append(sec.lines, fmt.Sprintf("- %s%s `%s`\n", oneLine(privateRowText(r)), mark, r.ID))
 		}
-		n += len(rest)
+		if len(sec.lines) > 0 {
+			out.sections = append(out.sections, sec)
+		}
 	}
-	if n == 0 {
-		b.WriteString("\n_No rows in this store yet._\n")
-	}
-	return b.String(), n, nil
+	return out, nil
 }
 
 // privateRowText is a row's one-line text: "title — body", or whichever

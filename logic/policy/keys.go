@@ -150,6 +150,15 @@ const (
 	KeyContextDirFiles Key = "context.dir_files"
 	// KeyContextBudgetDir: bytes of each per-directory LORE.md (6.1).
 	KeyContextBudgetDir Key = "context.budget.dir"
+	// KeyContextBudgetDirCodex: bytes of each per-directory AGENTS.md
+	// block (6.1): Codex adds every level into one 32 KiB cap, so its
+	// folder blocks get a smaller budget than the folder LORE.md files
+	// other tools import (P3-CTX-1 replaces OV53-SCOPES' one folder key).
+	KeyContextBudgetDirCodex Key = "context.budget.dir.codex"
+	// KeyContextBudgetInternal: bytes of all private files of one repo
+	// together (~/.lore/render/<repo_id>/<store_id>.md, one per internal
+	// store, CFG6), which load in the same session (6.1, P3-CTX-2).
+	KeyContextBudgetInternal Key = "context.budget.internal"
 	// KeyContextBudgetPathFile: bytes of each path-scoped rule file
 	// (.claude/rules/lore/lore-path-*.md, .cursor/rules/lore-path-*.mdc; 6.1).
 	KeyContextBudgetPathFile Key = "context.budget.path_file"
@@ -206,6 +215,8 @@ const (
 	ceilingContextWarnAtPct     int64 = 100
 	defaultContextHookCap       int64 = 9000
 	defaultContextBudgetDir     int64 = 8000
+	defaultContextBudgetDirCdx  int64 = 4000 // 6.1: each Codex folder block
+	defaultContextBudgetIntern  int64 = 8000 // 6.1: all private files of a repo
 	defaultContextBudgetPath    int64 = 8000
 	defaultContextDirMinEntries int64 = 3
 	defaultContextChainMaxCodex int64 = 32768
@@ -410,6 +421,8 @@ func Keys() []KeyDef {
 		// CQ10: off is the strict value (no new files in a repo); client repos read an unset key as off.
 		{Key: KeyContextDirFiles, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true), Doc: "lore render writes per-directory LORE.md files for dir scopes (client repos: off until set for that client, CQ10)"},
 		{Key: KeyContextBudgetDir, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetDir), Doc: "bytes of each per-directory LORE.md (6.1)"},
+		{Key: KeyContextBudgetDirCodex, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetDirCdx), Doc: "bytes of each per-directory AGENTS.md block Codex reads (6.1)"},
+		{Key: KeyContextBudgetInternal, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetIntern), Doc: "bytes of all private render files of one repo together (6.1, CFG6)"},
 		{Key: KeyContextBudgetPathFile, Shape: ShapeLimit, Default: value.Int(defaultContextBudgetPath), Doc: "bytes of each path-scoped rule file (6.1, 6.7)"},
 		{Key: KeyContextDirMinEntries, Shape: ShapeLimit, Default: value.Int(defaultContextDirMinEntries), Doc: "a directory scope with fewer entries gets no file; its rows go to the parent file (6.1)"},
 		{Key: KeyContextChainMaxCodex, Shape: ShapeLimit, Default: value.Int(defaultContextChainMaxCodex), Doc: "bytes the root-to-deepest AGENTS.md chain may hold for Codex (6.2.6)"},

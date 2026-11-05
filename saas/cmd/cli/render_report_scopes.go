@@ -6,6 +6,7 @@
 //	  ├─ folder rows per target: toolprofile.DirTarget of each folder file
 //	  │     (DirAt → <dir>/LORE.md, DirInline → <dir>/AGENTS.md block,
 //	  │      DirGlobRule → the .mdc rule), budget context.budget.dir
+//	  │      (an AGENTS.md block: context.budget.dir.codex, P3-CTX-1)
 //	  └─ chains, root to each deepest folder:
 //	        DirInline (Codex) → checked against context.chain_max.codex
 //	        DirAt (Claude Code) → reported only (each file loads on demand)
@@ -82,7 +83,7 @@ func scopeStatus(bytes, budget, warnPct int) string {
 
 // buildScopeReport builds the table from what one render computed: the root
 // report, the folder plan with its bodies and reports, and the targets.
-func buildScopeReport(ctx context.Context, root renderReport, plan dirPlan, bodies map[string]string,
+func buildScopeReport(ctx context.Context, root renderReport, plan dirPlan, bodies dirBodies,
 	reps []dirReport, targets []contextTarget) scopeReport {
 	set, ok := policySet(ctx)
 	out := scopeReport{DirsOff: root.DirsOff}
@@ -106,16 +107,17 @@ func buildScopeReport(ctx context.Context, root renderReport, plan dirPlan, bodi
 			if kind == toolprofile.DirNone {
 				continue
 			}
-			file, n := rel, len(t.profile.DirContent(kind, "", g.Path, bodies[g.Path]))
+			file, n := rel, len(t.profile.DirContent(kind, "", g.Path, bodies.of(kind, g.Path)))
+			fit, budget := rep, plan.Settings.Budget
 			switch kind {
 			case toolprofile.DirAt: // the pointer imports the folder's LORE.md
 				file, n = rep.File, rep.Bytes
-			case toolprofile.DirInline:
-				file = rel + " (block)"
+			case toolprofile.DirInline: // its own budget, dir.codex (P3-CTX-1)
+				file, fit, budget = rel+" (block)", bodies.InlineReps[g.Path], plan.Settings.CodexBudget
 			case toolprofile.DirGlobRule, toolprofile.DirNone: // the rule file itself
 			}
-			out.Files = append(out.Files, scopeFileRow{File: file, Scope: rep.Scope, Tool: t.profile.Name, Budget: plan.Settings.Budget,
-				Bytes: n, MustFull: rep.MustFull, MustLine: rep.MustLine, Status: scopeStatus(n, plan.Settings.Budget, root.WarnPct)})
+			out.Files = append(out.Files, scopeFileRow{File: file, Scope: rep.Scope, Tool: t.profile.Name, Budget: budget,
+				Bytes: n, MustFull: fit.MustFull, MustLine: fit.MustLine, Status: scopeStatus(n, budget, root.WarnPct)})
 		}
 	}
 	for _, g := range plan.Groups {
@@ -129,9 +131,9 @@ func buildScopeReport(ctx context.Context, root renderReport, plan dirPlan, bodi
 			}
 			c := scopeChain{Dir: g.Path, Tool: t.profile.Name, Parts: []int{root.After}, Sum: root.After}
 			for _, d := range dirscope.Chain(paths, g.Path) {
-				n := len(bodies[d])
+				n := len(bodies.File[d])
 				if kind == toolprofile.DirInline {
-					n = len(t.profile.DirContent(kind, "", d, bodies[d]))
+					n = len(t.profile.DirContent(kind, "", d, bodies.Inline[d]))
 				}
 				c.Parts, c.Sum = append(c.Parts, n), c.Sum+n
 			}
