@@ -229,10 +229,10 @@ lore pii-pattern list [--json]
 lore pii-pattern add --name=<n> --regex=<re> [--source=user]
 lore pii-pattern enable / disable <id>
 
-# task-view — saved task-filter presets
-lore task-view add --name=<n> [--filter=<json>]
-lore task-view list [--json]
-lore task-view delete <id>
+# task view — saved task-list filters (rows in .lore/data, travel with git)
+lore task view add <name> --where '<filter>' [--sort <key>[:asc|:desc]] [--group-by <field>]
+lore task view list|show|edit|delete
+lore task list --view <name>
 
 # external-source — registrations consumed by learn-from
 lore external-source list [--json]

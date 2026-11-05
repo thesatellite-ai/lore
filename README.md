@@ -236,7 +236,7 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 | `lore project` | Manage projects (the top-level container) |
 | `lore repo` | Manage repos within a project (per-repo scoping) |
 | `lore task` | Discrete work items: `add / list / triage / someday / deferred / show / edit / start / done / cancel / search`. Two axes beyond `status`: `commitment` (`accepted`/`proposed`/`someday` — agents must set it on `add`, no default) and `deferred_until` (snooze; auto-resurfaces). Default views show only committed, active, non-deferred tasks. |
-| `lore tasklist` / `lore task-view` | Group tasks; saved task-list filter views |
+| `lore tasklist` / `lore task view` | Group tasks; saved task-list filter views |
 | `lore mission` | Containers that group related tasks |
 | `lore plan` | Plans |
 | `lore reminder` | Time-based reminders |

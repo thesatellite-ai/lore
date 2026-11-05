@@ -172,13 +172,12 @@ $ lore task add 'Test task, please ignore'
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
 $ lore task delete tsk_05e9…4603
-ERROR: [E_NEEDS_CONFIRM] engine: run task delete?
+ERROR: [E_NEEDS_CONFIRM] delete task tsk_05e9…4603 Test task, please ignore?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore task delete tsk_05e9…4603 --yes
-✓ tsk_05e9…4603 deleted
+✓ tsk_05e9…4603 moved to the trash (restore: lore trash restore tsk_05e9…4603)
 lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -250,15 +249,20 @@ $ lore tasklist edit tlt_d431…313a --status closed
 ## Step 11 — Save a filter under a name
 
 <!-- ds:block id=sync-localtables-dcpb69pj -->
-`lore task-view add` stores a task filter under a name, such as "urgent", so you or a tool can look it up later. The filter is a small JSON text, for example `{"priority":"urgent"}`. Saved views stay on your machine; they are not shared with git.
+`lore task view add` stores a task filter under a name, such as `open_todo`, so you or a tool can reuse it. The filter uses the same `--where` grammar as `lore task list` (and `--sort`, `--group-by` if you like). `lore task list --view <name>` applies it. A saved view is a row in `.lore/data`, so it travels with git like your tasks.
 
 <!-- example: tasks#task-view -->
 ```console
 # alice, in website
-$ lore task-view add --name urgent --filter '{"priority":"urgent"}'
-✓ task-view urgent saved
-$ lore task-view list
-tvw_4c59…6c38 urgent
+$ lore task view add open_todo --where 'status:todo'
+tvw_4c59…6c38  open_todo  where "status:todo"
+$ lore task view list
+tvw_4c59…6c38  open_todo  where "status:todo"
+$ lore task list --view open_todo
+lore sync: imported 1
+○ tsk_c0f3…b5b8 Write the welcome email [medium]
+○ tsk_76bd…3f10 Send the welcome email [medium]
+○ tsk_b4f4…a5b0 Check every link on the home page [medium]
 ```
 <!-- /example -->
 
@@ -312,7 +316,6 @@ Other traps:
 - **Deleting needs a yes.** Without a terminal, `task delete` stops with `E_NEEDS_CONFIRM` until you add `--yes`; the old spelling `--confirm` is refused. To keep the task but stop it, use `lore task cancel` instead.
 - **`lore tasklist list` and `lore tasklist show` print only `TA` and the id**, not the title. Use `lore tasklist search <word>` to see titles.
 - **`lore task show` does not list the tasks a task in this repo waits for.** Use `lore mission status` for that: it prints "waits for <id> to be done" next to the task. (For a task kept in an org's notes store, `task show` does print an `after:` line.)
-- **A saved view is only stored.** No command applies a saved `task-view` to `task list` yet, and lore does not check the filter text when you save it.
 - **Ids are long on purpose.** Copy them from `lore task list` or `--json` output rather than typing them.
 
 ## Related

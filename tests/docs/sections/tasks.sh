@@ -71,8 +71,9 @@ on alice $W "lore tasklist search launch"
 on alice $W "lore tasklist edit $tl --status closed"
 
 note "task view"
-on alice $W "lore task-view add --name urgent --filter '{\"priority\":\"urgent\"}'"
-on alice $W "lore task-view list"
+on alice $W "lore task view add open_todo --where 'status:todo'"
+on alice $W "lore task view list"
+on alice $W "lore task list --view open_todo"
 
 # --- commitment and snooze ------------------------------------------------------
 note "commitment"
