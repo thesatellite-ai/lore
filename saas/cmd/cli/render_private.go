@@ -614,7 +614,9 @@ func (e *privateExpander) row(r row.Row) (row.Row, error) {
 		if txt == "" || len(refs.References(txt)) == 0 {
 			continue
 		}
-		res, err := refpoint.Expand(e.opt, r.ID.String()+" "+f, txt)
+		opt := e.opt
+		opt.Meta = refpoint.MetaOf(r) // ${meta:…}: the row's own metadata (OV13a)
+		res, err := refpoint.Expand(opt, r.ID.String()+" "+f, txt)
 		if err != nil {
 			return r, coreErr(err)
 		}

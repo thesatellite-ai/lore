@@ -71,6 +71,16 @@ type Options struct {
 	Env func(name string) (string, bool)
 	// Scanner scans the expanded text (13.2); nil skips the scan.
 	Scanner scan.Scanner
+	// Meta reads a metadata value of the row being expanded, by key name
+	// (${meta:<key>}, OV13a); nil fills no meta reference. MetaOf builds
+	// it from a row.
+	Meta func(key string) (MetaValue, bool)
+}
+
+// MetaValue is one metadata value as an expansion sees it.
+type MetaValue struct {
+	Text      string
+	Sensitive bool
 }
 
 // Used is one reference as the output reports it (--json "refs").
@@ -136,6 +146,8 @@ func (x *expansion) rewrite(s string) string {
 			b.WriteString(x.secret(p.Raw))
 		case refs.SchemeEnv:
 			b.WriteString(x.env(p.Ref, p.Raw))
+		case refs.SchemeMeta:
+			b.WriteString(x.meta(p.Ref, p.Raw))
 		default:
 			b.WriteString(p.Raw)
 		}
@@ -180,6 +192,31 @@ func (x *expansion) env(r refs.Ref, raw string) string {
 	}
 	x.note(Used{Ref: raw, Value: v, Source: "environment", State: StateExpanded})
 	return escape(v)
+}
+
+// meta: the holding row's own metadata (OV13a; DECISION P2-CTX-4). Show
+// and the private render fill it, a sensitive value masked; a committed or
+// client render keeps the reference as written (metadata may be scoped or
+// internal, and the file must be the same for every reader).
+func (x *expansion) meta(r refs.Ref, raw string) string {
+	if (x.o.Point != Show && x.o.Point != Private) || x.o.Meta == nil {
+		return raw
+	}
+	name := r.Target
+	if name == "" {
+		name = r.Body
+	}
+	v, ok := x.o.Meta(name)
+	if !ok {
+		x.note(Used{Ref: raw, State: StateDangling, Note: "the row has no such metadata key"})
+		return raw
+	}
+	if v.Sensitive {
+		x.note(Used{Ref: raw, State: StateMasked, Note: "sensitive metadata value"})
+		return Mask
+	}
+	x.note(Used{Ref: raw, Value: v.Text, Source: "metadata", State: StateExpanded})
+	return escape(v.Text)
 }
 
 // escape makes s literal text for the expander ("${" → "$${").

@@ -238,7 +238,8 @@ func expandRow(ctx context.Context, env Env, r row.Row, revealed map[string]reve
 		return b, err
 	}
 	def, _ := env.TableSchema(ctx, r.Table)
-	opt := refpoint.Options{Point: refpoint.Show, Resolver: rv, Scanner: sc, Env: os.LookupEnv}
+	opt := refpoint.Options{Point: refpoint.Show, Resolver: rv, Scanner: sc, Env: os.LookupEnv,
+		Meta: refpoint.MetaOf(r)} // ${meta:…}: the row's own metadata (OV13a)
 	order := slices.Sorted(maps.Keys(revealed))
 	for _, k := range slices.Sorted(maps.Keys(r.Fields)) {
 		stored, ok := expandable(def, k, r.Fields[k])
