@@ -162,7 +162,25 @@ func newTeamWorld(t *testing.T, caps ...th.Cap) *th.World {
 	t.Parallel()
 	w := th.New(t, teamBin())
 	w.Require(caps...)
+	if os.Getenv(envLockRanks) == "1" { // FORMAT_EVOLUTION 7.8 TestLockOrderRanks over the whole suite
+		w.CheckLockRanks(knownLockOrderDefect)
+	}
 	return w
+}
+
+// envLockRanks runs every team test under the ranked lock watch.
+const envLockRanks = "LORE_TEAM_LOCK_RANKS"
+
+// bugLiveLockWholeCommand: the old binary's live session takes L (live.lock)
+// at the start of every command and holds it to the end (live_wire.go
+// liveSession.acquire), so `lore migrate run` takes M while holding L, the
+// reverse of 7.5's M < L, and L stays held through the whole branch phase.
+var bugLiveLockWholeCommand = th.Bug{ID: "BUG-LIVE-LOCK-WHOLE-COMMAND", Owner: "a-meta-live (live_wire.go)", Open: true}
+
+// knownLockOrderDefect matches the violation bugLiveLockWholeCommand causes
+// (held L, then took M) while the bug is open.
+func knownLockOrderDefect(o th.LockOrder) bool {
+	return bugLiveLockWholeCommand.Open && strings.HasSuffix(o.First, "/live.lock") && strings.HasSuffix(o.Then, "/migrate.lock")
 }
 
 // rowDoc is the subset of a row file every test reads; extra fields are kept in
