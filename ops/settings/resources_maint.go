@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -523,6 +524,7 @@ func (o ops) resDeleteWithDependents(ctx context.Context, in ResDeleteIn) (ResDe
 			return ResDeleteOut{}, err
 		}
 	}
-	out.Human = fmt.Sprintf("✓ %d resources deleted (batch %s): %s\n  undo: lore trash restore %s\n", len(targets), out.Batch, strings.Join(labels, ", "), out.Batch)
+	// DQ8 (OV46): one delete wording for every noun, through trashline.
+	out.Human = trashline.MovedBatch(strconv.Itoa(len(targets))+" resources ("+strings.Join(labels, ", ")+")", out.Batch)
 	return out, nil
 }

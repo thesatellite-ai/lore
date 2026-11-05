@@ -62,7 +62,7 @@ func TestResourceMaint(t *testing.T) {
 		t.Fatalf("with-dependents must ask: %v", err)
 	}
 	del := opstest.Text(h.MustYes(settings.OpResDelete, `{"id":"hub","with_dependents":true,"reason":"gone"}`))
-	if !strings.Contains(del, "2 resources deleted") {
+	if !strings.Contains(del, "2 resources (") || !strings.Contains(del, "moved to the trash") {
 		t.Fatalf("delete %q", del)
 	}
 }
