@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -54,9 +55,11 @@ func (o MetaMoveOut) Text() string { return o.Human }
 // MetaRehomeIn is the input of meta.rehome.
 type MetaRehomeIn struct {
 	In string `json:"in,omitempty" flag:"in" desc:"the place whose rows are checked (default repo)"`
-	// DryRun is accepted for the reference spelling (3.1); rehome is a
-	// report in 0.1.18 (OV58), so it never writes either way.
-	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"preview (rehome only reports in this release; nothing is written either way)"`
+	// To is where a key that must be created lands (3.18; default the
+	// place --in names).
+	To string `json:"to,omitempty" flag:"to" desc:"the place that takes a new key row when no visible key of that name and type exists (default: --in)"`
+	// DryRun lists the mapping and writes nothing (FA-META-13).
+	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"list the keys to re-file and the rows to rewrite; write nothing"`
 }
 
 // MetaRehomeItem is one key id a row of the place uses that no visible
@@ -69,6 +72,9 @@ type MetaRehomeItem struct {
 	// Reuse is a visible key of the same name (the copy rule of MQ15
 	// would reuse it when it has the same type), "" when none.
 	Reuse string `json:"reuse,omitempty"`
+	// To is the key id the row's value is re-filed under (a reused key or
+	// a new one), set when rehome writes or plans (FA-META-13).
+	To string `json:"to,omitempty"`
 }
 
 // MetaRehomeOut is the output of meta.rehome.
@@ -76,6 +82,12 @@ type MetaRehomeOut struct {
 	Clashes []string         `json:"clashes"`
 	Missing []MetaRehomeItem `json:"missing"`
 	Store   string           `json:"store"`
+	// Plan is one line per re-filed key ("name old → new (reused|new in
+	// place)"); Rewritten counts the rows written; Batch names the batch.
+	Plan      []string `json:"plan,omitempty"`
+	Rewritten int      `json:"rewritten"`
+	Batch     string   `json:"batch,omitempty"`
+	DryRun    bool     `json:"dry_run,omitempty"`
 }
 
 // Text implements op.Texter.
@@ -95,7 +107,17 @@ func (o MetaRehomeOut) Text() string {
 		}
 		b.WriteString(line + "\n")
 	}
-	b.WriteString("nothing written; adopt the keys (lore meta adopt --from <place>) or sync the place that defines them\n")
+	for _, l := range o.Plan {
+		b.WriteString("  " + l + "\n")
+	}
+	switch {
+	case len(o.Missing) == 0:
+		b.WriteString("nothing to re-file\n")
+	case o.DryRun:
+		fmt.Fprintf(&b, "dry run: %d rows would be rewritten; nothing written\n", len(o.Missing))
+	default:
+		fmt.Fprintf(&b, "rehomed %d keys, %d rows rewritten in batch %s (see: lore batch show %s)\n", len(o.Plan), o.Rewritten, o.Batch, o.Batch)
+	}
 	return b.String()
 }
 
@@ -112,8 +134,8 @@ func (o ops) metaMoveOps() []op.Entry {
 		op.Define(op.Spec{Name: OpMetaAdopt, Summary: "Move another place's metadata key rows into this place (ids kept)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: moveErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
 			Examples: []op.Example{{Title: "a project merge", CLI: "lore meta adopt --from agency/acme-mobile --to agency/acme-hub --yes", Want: "adopted"}}}, o.metaAdopt),
-		op.Define(op.Spec{Name: OpMetaRehome, Summary: "List the metadata keys a place's rows use that it can no longer see", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors, RESTNoun: metaREST}, o.metaRehome),
+		op.Define(op.Spec{Name: OpMetaRehome, Summary: "Re-file the metadata keys a place's rows use that it can no longer see (copy rule: reuse a visible key of that name and type, else a new key row)", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: moveErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST}, o.metaRehome),
 		op.Define(op.Spec{Name: OpMetaMove, Summary: "Move a metadata key row outward to another place (id kept, values unchanged)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: moveErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
 			Examples: []op.Example{{Title: "repo key to the project", CLI: "lore meta move retry_count --to agency/acme-hub --yes", Want: "moved"}}}, o.metaMoveKey),
@@ -285,8 +307,8 @@ func (o ops) moveKey(ctx context.Context, k located, to store.Source) (internal 
 // chain changed (3.18): key names defined by more than one visible key
 // row, and key ids its rows carry that no visible key row defines, each
 // with the row's own scope label and a visible key of the same name.
-// Report only (DECISION: re-filing by the copy rule rewrites rows and
-// needs chain-change detection; until then the person adopts or syncs).
+// The missing ids are the chain change (a scope this place no longer
+// sees); rehomeRefile re-files them (FA-META-13, replaces OV58-4).
 func (o ops) metaRehome(ctx context.Context, in MetaRehomeIn) (MetaRehomeOut, error) {
 	src := targetOf(in.In)
 	out := MetaRehomeOut{Clashes: []string{}, Missing: []MetaRehomeItem{}, Store: string(src)}
@@ -334,7 +356,152 @@ func (o ops) metaRehome(ctx context.Context, in MetaRehomeIn) (MetaRehomeOut, er
 			out.Missing = append(out.Missing, item)
 		}
 	}
+	if len(out.Missing) == 0 {
+		return out, nil
+	}
+	return o.rehomeRefile(ctx, in, src, rows, keys, out)
+}
+
+// rehomeRefile re-files every missing key id of src's rows by the copy
+// rule of MQ15 (3.18, FA-META-13):
+//
+//	per missing id ─ visible live key of the same name and type? reuse it
+//	               └ else plan a new key row in --to (internal in a store,
+//	                 unreviewed, type inferred from the values like rebuild)
+//	--dry-run? report ─ ask (bulk.Ask) ─ create the new keys ─ one batch:
+//	every row: unset the old id, set the new id (allowed values by name)
+//
+// The old key row is out of reach, so it records no `copies`; meta_keys
+// has no `origin` field yet, so a re-run reuses the key by name instead.
+func (o ops) rehomeRefile(ctx context.Context, in MetaRehomeIn, src store.Source, rows []metaRow, keys []located, out MetaRehomeOut) (MetaRehomeOut, error) {
+	to := src
+	if in.To != "" {
+		to = targetOf(in.To)
+	}
+	type refile struct {
+		name, typ string
+		reuse     *located
+		newID     ids.ID[ids.MetaKey]
+		sensitive bool
+	}
+	plan := map[string]*refile{}
+	var order []string
+	for _, m := range out.Missing {
+		if _, seen := plan[m.Key]; seen {
+			continue
+		}
+		kid, err := ids.Parse[ids.MetaKey](m.Key)
+		if err != nil {
+			return MetaRehomeOut{}, errs.Wrap(errs.ConfigInvalid, "meta key id", err)
+		}
+		mk := missingKey{id: kid, name: m.Name}
+		for _, r := range rows {
+			if en, ok := r.entries[kid]; ok && r.Src == src {
+				mk.vals = append(mk.vals, en.V)
+				mk.sensitive = mk.sensitive || en.Sensitive
+			}
+		}
+		typ, _ := inferType(mk)
+		rf := &refile{name: m.Name, typ: typ, sensitive: mk.sensitive}
+		for i := range keys {
+			k := keys[i]
+			if text(k.Row, mName) == m.Name && text(k.Row, mMergedInto) == "" && sameMetaType(text(k.Row, mType), typ) {
+				rf.reuse = &keys[i]
+				break
+			}
+		}
+		plan[m.Key] = rf
+		order = append(order, m.Key)
+	}
+	for _, old := range order {
+		rf := plan[old]
+		if rf.reuse != nil {
+			out.Plan = append(out.Plan, fmt.Sprintf("%s %s → %s in %s (reused)", rf.name, old, rf.reuse.Row.ID, place(rf.reuse.Src)))
+			continue
+		}
+		out.Plan = append(out.Plan, fmt.Sprintf("%s %s → a new %s key in %s", rf.name, old, rf.typ, place(to)))
+	}
+	if in.DryRun {
+		out.DryRun = true
+		return out, nil
+	}
+	if err := bulk.Ask(ctx, fmt.Sprintf("re-file %d keys and rewrite %d values of %s?", len(order), len(out.Missing), place(src))); err != nil {
+		return MetaRehomeOut{}, err
+	}
+	for i, old := range order {
+		rf := plan[old]
+		if rf.reuse != nil {
+			nid, err := ids.Parse[ids.MetaKey](rf.reuse.Row.ID.String())
+			if err != nil {
+				return MetaRehomeOut{}, errs.Wrap(errs.ConfigInvalid, "meta key id", err)
+			}
+			rf.newID = nid
+			continue
+		}
+		if err := o.checkRegistryCaps(ctx, to, rf.name); err != nil {
+			return MetaRehomeOut{}, err
+		}
+		fields := map[string]value.Value{mStrict: value.BoolOf(false), mInternal: value.BoolOf(to != store.SourceRepo),
+			mSensitive: value.BoolOf(rf.sensitive), mReviewed: value.BoolOf(false)}
+		desc := "re-filed by lore meta rehome from " + old
+		if err := optTexts(fields, map[string]string{mName: rf.name, mScope: scopeOf(to), mType: rf.typ, mDescription: desc, mAddedBy: addedBy(ctx)}); err != nil {
+			return MetaRehomeOut{}, err
+		}
+		w, err := create(ctx, o.env, to, schema.TableMetaKeys, map[string]string{mName: rf.name, mScope: scopeOf(to)}, fields)
+		if err != nil {
+			return MetaRehomeOut{}, err
+		}
+		nid, err := ids.Parse[ids.MetaKey](w.Row.ID.String())
+		if err != nil {
+			return MetaRehomeOut{}, errs.Wrap(errs.ConfigInvalid, "meta key id", err)
+		}
+		rf.newID = nid
+		out.Plan[i] += " " + nid.String()
+	}
+	bctx, bid, err := bulk.Begin(ctx, bulk.KindMeta)
+	if err != nil {
+		return MetaRehomeOut{}, err
+	}
+	out.Batch = bid.String()
+	for i := range out.Missing {
+		out.Missing[i].To = plan[out.Missing[i].Key].newID.String()
+	}
+	for _, r := range rows {
+		if r.Src != src {
+			continue
+		}
+		mw := engine.MetaWrite{ID: r.Row.ID}
+		for _, old := range order {
+			kid, _ := ids.Parse[ids.MetaKey](old) // parsed above
+			en, ok := r.entries[kid]
+			if !ok {
+				continue
+			}
+			raw := en.V
+			if len(en.VName) > 0 {
+				raw = en.VName // allowed values move by name, like a fold
+			}
+			mw.Unset = append(mw.Unset, old)
+			if _, has := r.entries[plan[old].newID]; !has {
+				mw.JSON = append(mw.JSON, meta.Term{KeyID: plan[old].newID, Value: string(raw)})
+			}
+		}
+		if len(mw.Unset) == 0 {
+			continue
+		}
+		if _, err := o.env.Update(engine.WithMeta(bctx, mw), engine.Ref{Store: r.Src, ID: r.Row.ID}, map[string]value.Value{}); err != nil {
+			return MetaRehomeOut{}, errs.Wrap(errs.CodeOf(err), fmt.Sprintf("meta rehome: stopped after %d rows (batch %s; see: lore batch show %s)", out.Rewritten, bid, bid), err)
+		}
+		out.Rewritten++
+	}
 	return out, nil
+}
+
+// sameMetaType reports whether a key row's stored type word fits the type
+// inferred from values: equal, or the key is text-like (every inferred
+// text value fits a text key) or list (a list key's row type is "list").
+func sameMetaType(keyType, inferred string) bool {
+	return keyType == inferred || (inferred == string(value.KindText) && keyType != string(value.KindNumber) && keyType != string(value.KindBool))
 }
 
 // sortedKeys is r's key ids in a stable order.
