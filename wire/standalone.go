@@ -68,8 +68,6 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	// cmd/lore's org and whoami hosts (P3-CMDLORE-4): built on the same
 	// resolution the write hooks use, so whoami shows what a write does.
 	o.OrgCommands = &standaloneOrg{home: home, res: res}
-	o.Whoami = &standaloneWhoami{opts: o, res: res}
-	o.Sessions.Agent = &standaloneAgent{opts: o}
 	if o.Local.Clones == nil {
 		o.Local.Clones = &standaloneClones{home: home}
 	}
@@ -78,9 +76,15 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	}
 	// P3-LOCAL-7: the repo's hash-chained audit log in the machine store,
 	// the same chain the old binary appends (lore audit log|verify work).
+	// Built after the leaks host, whose own New must not rebind this sink:
+	// New binds it to the App, and whoami and agent start read and write
+	// session rows through that App (AGENT_IDENTITY 6.3-6.4).
 	if o.Audit == nil {
 		o.Audit = NewChainAudit(home, dir, time.Now)
 	}
+	bound, _ := o.Audit.(boundAppSource)
+	o.Whoami = &standaloneWhoami{opts: o, res: res, app: bound}
+	o.Sessions.Agent = &standaloneAgent{opts: o, app: bound}
 	// Org store writes are pushed at once (P3-CMDLORE-7); host hooks wrap
 	// after this (their WrapBackend calls this one first).
 	if o.WrapBackend == nil {

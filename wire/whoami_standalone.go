@@ -44,6 +44,9 @@ var ciMarkers = []string{"CI", "GITHUB_ACTIONS", "GITLAB_CI", "BUILDKITE", "CIRC
 type standaloneWhoami struct {
 	opts Options
 	res  *OrgResolution
+	// app hands out the App New bound (nil = no session lookup): the
+	// session hook's model lives on its machine-store session rows.
+	app boundAppSource
 }
 
 var _ opswhoami.Host = (*standaloneWhoami)(nil)
@@ -67,9 +70,27 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 	var agent *agentdetect.Result
 	if derr == nil {
 		agent = &det
+		w.hookModel(ctx, agent)
 	}
 	m := whoamiMachine(w.opts.Home)
 	return opswhoami.Out{Data: whoamiData(s, id, red, agent, m), Lines: whoamiLines(s, id, in.Explain, red, agent, m)}, nil
+}
+
+// hookModel fills a model the environment did not expose from the one
+// `lore agent start` (the session hook) recorded on this session's row,
+// with source session_hook (OV11, AGENT_IDENTITY 6.3; v0.1.17 whoami).
+func (w *standaloneWhoami) hookModel(ctx context.Context, a *agentdetect.Result) {
+	if a.Model != "" || a.Tool == "" || a.SessionID == "" || w.app == nil {
+		return
+	}
+	app := w.app.boundApp()
+	if app == nil {
+		return
+	}
+	if m := app.HookReportedModel(ctx, a.Tool, a.SessionID); m != "" {
+		a.Model = m
+		a.Sources = withHookModel(a.Sources)
+	}
 }
 
 // SetMachineLabel implements opswhoami.Host: not wired in cmd/lore yet
@@ -395,7 +416,10 @@ func agentLines(a *agentdetect.Result) []string {
 		out = append(out, row("tool version", a.Version+"  (from: "+a.Sources["tool_version"]+")"))
 	}
 	model := "(not exposed by the tool)"
-	if a.Model != "" {
+	switch {
+	case a.Model != "" && a.Sources[sourceFieldModel] == SessionSourceHook:
+		model = a.Model + "  (from: session hook)"
+	case a.Model != "":
 		model = a.Model + "  (from config)"
 	}
 	return append(out, row("model", model))

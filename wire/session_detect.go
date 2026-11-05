@@ -130,9 +130,36 @@ func agentPID() int {
 // repo has no project row yet (the write is still audited, only without
 // the link).
 func (a *App) CurrentSession(ctx context.Context) (string, error) {
-	who, err := a.Who(ctx)
+	pl, err := a.sessionPlace(ctx)
 	if err != nil {
 		return "", err
+	}
+	d, ok := SessionDetailsOf(pl.who, pl.actor, a.opts.Home, pl.top, pl.cwd)
+	if !ok {
+		return "", nil
+	}
+	d.Branch = pl.branch
+	project, err := a.Project(ctx)
+	if err != nil {
+		return "", nil // `lore init` before the project row exists has no session link yet
+	}
+	return a.FindOrCreateSession(ctx, project.String(), d)
+}
+
+// sessionPlace is what a session row is built from: the identity with
+// detection filled in, the act_ id, the git top ("" outside git), the
+// working folder and the branch ("" when detached or outside git).
+type sessionPlace struct {
+	who                     identity.Resolved
+	actor, top, cwd, branch string
+}
+
+// sessionPlace gathers this process's sessionPlace (CurrentSession and
+// RecordSessionHook).
+func (a *App) sessionPlace(ctx context.Context) (sessionPlace, error) {
+	who, err := a.Who(ctx)
+	if err != nil {
+		return sessionPlace{}, err
 	}
 	if who.Detection == nil { // an App whose actor Options set resolves no detection
 		if det, derr := DetectAgent(); derr == nil {
@@ -142,28 +169,21 @@ func (a *App) CurrentSession(ctx context.Context) (string, error) {
 	}
 	actor, err := a.Actor(ctx)
 	if err != nil {
-		return "", err
+		return sessionPlace{}, err
 	}
 	top, err := a.repoTop(ctx)
 	if err != nil && !errs.Has(err, errs.NotAStore) {
-		return "", err
+		return sessionPlace{}, err
 	}
 	cwd := a.opts.WorkDir
 	if cwd == "" {
 		cwd = a.opts.RepoDir
 	}
-	d, ok := SessionDetailsOf(who, actor.String(), a.opts.Home, top, cwd)
-	if !ok {
-		return "", nil
-	}
+	pl := sessionPlace{who: who, actor: actor.String(), top: top, cwd: cwd}
 	if top != "" {
 		if b, berr := (gitRun{dir: top, args: []string{"symbolic-ref", "--short", "-q", "HEAD"}}).output(ctx); berr == nil {
-			d.Branch = strings.TrimSpace(string(b))
+			pl.branch = strings.TrimSpace(string(b))
 		}
 	}
-	project, err := a.Project(ctx)
-	if err != nil {
-		return "", nil // `lore init` before the project row exists has no session link yet
-	}
-	return a.FindOrCreateSession(ctx, project.String(), d)
+	return pl, nil
 }

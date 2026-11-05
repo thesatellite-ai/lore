@@ -164,6 +164,18 @@ func (c *chainAudit) bindApp(a *App) {
 	c.now = a.opts.Wall
 }
 
+// boundAppSource is a sink that hands out the App New bound it to (nil
+// before New): cmd/lore's whoami and agent start hosts reach the machine
+// store's session rows through it (wire/session_hook.go).
+type boundAppSource interface {
+	boundApp() *App
+}
+
+var _ boundAppSource = (*chainAudit)(nil)
+
+// boundApp implements boundAppSource.
+func (c *chainAudit) boundApp() *App { return c.app }
+
 // Session implements SessionSource: this process's ses_ id (App.CurrentSession),
 // "" before New bound an App or when no session applies.
 func (c *chainAudit) Session(ctx context.Context) (string, error) {
