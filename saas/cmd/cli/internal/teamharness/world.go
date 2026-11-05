@@ -217,7 +217,7 @@ func (w *World) TryGit(dir string, args ...string) Result {
 // harness bug and fails the test; a non-zero exit is data.
 func (w *World) run(dir string, env []string, name string, args ...string) Result {
 	w.T.Helper()
-	cmd := exec.Command(name, args...)
+	cmd := binCmd(name, args...)
 	cmd.Dir = dir
 	cmd.Env = env
 	var out, errb bytes.Buffer
@@ -368,4 +368,17 @@ func writeFile(t testing.TB, path, body string) {
 	if err := os.WriteFile(path, []byte(body), harnessFileMode); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// binCmd builds the Cmd for one program run: name is the built lore binary
+// (an absolute path) or a bare program name looked up on PATH, as
+// exec.Command does; every argument is one argv entry and no shell parses
+// them (P2-LINT-4). A failed lookup is left in Cmd.Err, so Start reports it.
+func binCmd(name string, args ...string) *exec.Cmd {
+	path := name
+	var lookErr error
+	if !strings.ContainsRune(name, filepath.Separator) {
+		path, lookErr = exec.LookPath(name)
+	}
+	return &exec.Cmd{Path: path, Args: append([]string{name}, args...), Err: lookErr}
 }

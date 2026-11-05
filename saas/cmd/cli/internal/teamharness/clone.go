@@ -128,7 +128,7 @@ type Pending struct {
 // Prepare builds a lore command to start later at the same instant as others.
 func (c *Clone) Prepare(args ...string) *Pending {
 	p := &Pending{args: args}
-	p.cmd = exec.Command(c.A.w.Bin, args...)
+	p.cmd = binCmd(c.A.w.Bin, args...)
 	p.cmd.Dir = c.Dir
 	p.cmd.Env = c.A.environ(c.extra)
 	p.cmd.Stdout, p.cmd.Stderr = &p.out, &p.errb
@@ -139,7 +139,7 @@ func (c *Clone) Prepare(args ...string) *Pending {
 // for a long-running process the test drives itself (`lore api`). The
 // caller starts it and must stop it (Process.Kill in t.Cleanup).
 func (c *Clone) Command(args ...string) *exec.Cmd {
-	cmd := exec.Command(c.A.w.Bin, args...)
+	cmd := binCmd(c.A.w.Bin, args...)
 	cmd.Dir = c.Dir
 	cmd.Env = c.A.environ(c.extra)
 	return cmd

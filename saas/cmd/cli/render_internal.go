@@ -59,7 +59,7 @@ func checkLocalFile(ctx context.Context, root, rel string) error {
 // gitTracks reports whether path (relative to root) is in git's index. A
 // directory that is not a git checkout tracks nothing.
 func gitTracks(ctx context.Context, root, path string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "--error-unmatch", "--", path)
+	cmd := newProgramCmd(ctx, "git", "-C", root, "ls-files", "--error-unmatch", "--", path)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -125,7 +125,7 @@ func excludeInGit(ctx context.Context, root, name string) error {
 }
 
 func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	cmd := newProgramCmd(ctx, "git", append([]string{"-C", dir}, args...)...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	out, err := cmd.Output()
 	if err != nil {

@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"saas/pkg/constants"
@@ -65,7 +64,7 @@ on a fresh machine without right-click-Open friction.`,
 
 			// Strip macOS quarantine xattr (R16 #17). Best-effort; ignore errors
 			if runtime.GOOS == "darwin" {
-				_ = exec.Command("xattr", "-d", "com.apple.quarantine", abs).Run()
+				_ = newProgramCmd(cmd.Context(), "xattr", "-d", "com.apple.quarantine", abs).Run()
 			}
 
 			info, _ := os.Stat(abs)

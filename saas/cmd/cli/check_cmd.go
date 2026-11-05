@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -424,7 +423,7 @@ func stagedItems(ctx context.Context, root string) ([]leakcheck.Item, error) {
 	if err != nil {
 		return nil, nil // not a git checkout: nothing is staged
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", top, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR").Output()
+	out, err := newProgramCmd(ctx, "git", "-C", top, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR").Output()
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "list staged files").WithCause(err)
 	}
@@ -434,7 +433,7 @@ func stagedItems(ctx context.Context, root string) ([]leakcheck.Item, error) {
 			continue
 		}
 		path := string(p)
-		content, err := exec.CommandContext(ctx, "git", "-C", top, "show", ":"+path).Output()
+		content, err := newProgramCmd(ctx, "git", "-C", top, "show", ":"+path).Output()
 		if err != nil {
 			continue // a submodule or an unreadable blob: nothing to read
 		}

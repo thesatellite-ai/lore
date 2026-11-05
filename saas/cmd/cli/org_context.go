@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -285,7 +284,7 @@ const rawRemoteKeyPattern = `^remote\..*\.(url|pushurl)$`
 // on with a mirror or local path (spec F10 edge cases, coordinator Q2).
 // No git, no repo or no remotes all give nil.
 func rawRemoteURLs(ctx context.Context, dir, only string) []rawRemote {
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "config", "--get-regexp", rawRemoteKeyPattern).Output()
+	out, err := newProgramCmd(ctx, "git", "-C", dir, "config", "--get-regexp", rawRemoteKeyPattern).Output()
 	if err != nil {
 		return nil // exit 1 = no remote configured
 	}

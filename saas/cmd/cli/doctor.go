@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"saas/pkg/constants"
 	"strings"
@@ -487,7 +486,7 @@ func walSize(dbPath string) int64 {
 }
 
 func findPathConflicts(name string) []string {
-	cmd := exec.Command("which", "-a", name)
+	cmd := newProgramCmd(context.Background(), "which", "-a", name)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil

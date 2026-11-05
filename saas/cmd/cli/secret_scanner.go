@@ -30,7 +30,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -181,7 +180,7 @@ func committedAllows(ctx context.Context, root string) ([]scan.Allow, error) {
 		return nil, nil
 	}
 	dir := projectDataPrefix(ctx, root) + allowsDir
-	out, err := exec.CommandContext(ctx, "git", "-C", top, "ls-files", "-z", "--", dir).Output()
+	out, err := newProgramCmd(ctx, "git", "-C", top, "ls-files", "-z", "--", dir).Output()
 	if err != nil {
 		return nil, errcodes.New(errcodes.Internal, "list committed secret allow entries").WithCause(err)
 	}
@@ -190,7 +189,7 @@ func committedAllows(ctx context.Context, root string) ([]scan.Allow, error) {
 		if len(p) == 0 {
 			continue
 		}
-		b, err := exec.CommandContext(ctx, "git", "-C", top, "show", ":"+string(p)).Output()
+		b, err := newProgramCmd(ctx, "git", "-C", top, "show", ":"+string(p)).Output()
 		if err != nil {
 			continue
 		}

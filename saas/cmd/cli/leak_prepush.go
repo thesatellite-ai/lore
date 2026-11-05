@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -91,7 +90,7 @@ func prePushLeakCheck(ctx context.Context, top, remote string, updates []pushUpd
 // pushLeakProjects lists the roots of the repo's lore projects that need
 // the check: client repos, and repos lore cannot place (fail closed).
 func pushLeakProjects(ctx context.Context, top string) ([]string, error) {
-	out, err := exec.CommandContext(ctx, "git", "-C", top, "ls-files", "-z", "--", metaGlob).Output()
+	out, err := newProgramCmd(ctx, "git", "-C", top, "ls-files", "-z", "--", metaGlob).Output()
 	if err != nil {
 		return nil, nil // not a git checkout lore can read: nothing of lore's to guard
 	}
@@ -144,7 +143,7 @@ func pushItems(ctx context.Context, top, remote string, updates []pushUpdate) ([
 		notRemote += "=" + remote
 	}
 	args = append(args, "--not", notRemote)
-	out, err := exec.CommandContext(ctx, "git", args...).Output()
+	out, err := newProgramCmd(ctx, "git", args...).Output()
 	if err != nil {
 		return nil, fmt.Errorf("rev-list: %w", err)
 	}
@@ -167,7 +166,7 @@ func pushItems(ctx context.Context, top, remote string, updates []pushUpdate) ([
 // objectExists reports whether the local repository holds oid (the
 // remote's tip may be a commit this clone never fetched).
 func objectExists(ctx context.Context, top, oid string) bool {
-	return exec.CommandContext(ctx, "git", "-C", top, "cat-file", "-e", oid+"^{commit}").Run() == nil
+	return newProgramCmd(ctx, "git", "-C", top, "cat-file", "-e", oid+"^{commit}").Run() == nil
 }
 
 // shortOIDLen is how many hex digits of a commit id a finding shows.
@@ -186,7 +185,7 @@ func readPushObjects(ctx context.Context, top string, oids []string, paths map[s
 	if len(oids) == 0 {
 		return nil, nil
 	}
-	cmd := exec.CommandContext(ctx, "git", "-C", top, "cat-file", "--batch")
+	cmd := newProgramCmd(ctx, "git", "-C", top, "cat-file", "--batch")
 	cmd.Stdin = strings.NewReader(strings.Join(oids, "\n") + "\n")
 	out, err := cmd.Output()
 	if err != nil {
