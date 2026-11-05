@@ -322,6 +322,7 @@ suggestions.status_str text required
 suggestions.tag_ids list[ref]
 suggestions.title text required
 tags.color text
+tags.globs text
 tags.name text required
 tags.project_id ref required
 task_lists.body text

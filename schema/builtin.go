@@ -323,6 +323,9 @@ func coreDefs() []TableDef {
 			Ref("project_id", TableProjects, Required()),
 			Text(fieldName, Required()),
 			Text("color"),
+			// globs is a topic's glob set (CONTEXT_BUDGET 6.10): lore context
+			// --for-file pulls the rows of a topic whose globs cover the path.
+			Text("globs"),
 			UniqueOn("project_id", fieldName),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 		),
