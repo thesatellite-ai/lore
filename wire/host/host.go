@@ -167,8 +167,34 @@ func Install(root *cobra.Command, r *Runner) {
 	}
 }
 
+// Hook names of Default, for Replace.
+const (
+	HookNotice = "notice"
+	HookCompat = "compat-flags"
+	// HookDeletePurge is DeletePurgeHook.
+	HookDeletePurge = "delete-purge"
+)
+
 // Default is the host hooks that live in the root module, in install
-// order. A binary appends its own (the old binary's org hooks) after them.
+// order. A binary appends its own (the old binary's org hooks) after them,
+// or swaps one for its own configuration with Replace.
 func Default() []Hook {
-	return []Hook{NoticeHook()}
+	return []Hook{NoticeHook(), CompatFlagsHook(CompatOptions{}), DeletePurgeHook(CompatOptions{})}
+}
+
+// Replace returns hooks with every hook named h.Name replaced by h, or h
+// appended when none has that name.
+func Replace(hooks []Hook, h Hook) []Hook {
+	out := make([]Hook, 0, len(hooks)+1)
+	found := false
+	for _, x := range hooks {
+		if x.Name == h.Name {
+			x, found = h, true
+		}
+		out = append(out, x)
+	}
+	if !found {
+		out = append(out, h)
+	}
+	return out
 }
