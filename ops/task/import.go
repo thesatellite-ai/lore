@@ -344,8 +344,8 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 			continue
 		}
 		if id, perr := ids.ParseAny(p); perr == nil {
-			src, _, gerr := o.env.Get(ctx, engine.Ref{Table: table, ID: id})
-			if gerr == nil && src == target {
+			src, cur, gerr := o.env.Get(ctx, engine.Ref{Table: table, ID: id})
+			if gerr == nil && src == target && !cur.Deleted {
 				continue
 			}
 			if gerr != nil && !errs.Has(gerr, errs.NotFound) && !errs.Has(gerr, errs.InTrash) {
