@@ -30,6 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/canon"
@@ -350,7 +351,17 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 	if cl.caller.Interactive && !cl.caller.Yes && e.confirmer != nil {
 		p.ask = func(q string) (bool, error) { return e.confirmer.Confirm(ctx, q) }
 	}
+	// An entry holding an unsettled merge conflict (METADATA 3.12:
+	// {"conflict": {base, ours, theirs}}, no v) is not a value: it is kept
+	// byte for byte unless this write sets its key, which is how
+	// a person settles it (lore meta set <id> <key>=<value>).
+	unsettled := map[ids.ID[ids.MetaKey]]value.JSON{}
+	conflicted := merge.MetaConflicts(row.Row{Meta: cur})
 	for id, j := range cur {
+		if slices.Contains(conflicted, id.String()) {
+			unsettled[id] = j
+			continue
+		}
 		en, derr := meta.DecodeEntry(j)
 		if derr != nil {
 			return nil, nil, derr
@@ -401,13 +412,18 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 	if err := p.checkForeign(); err != nil {
 		return nil, nil, err
 	}
-	out := make(map[ids.ID[ids.MetaKey]]value.JSON, len(p.entries))
+	out := make(map[ids.ID[ids.MetaKey]]value.JSON, len(p.entries)+len(unsettled))
 	for id, en := range p.entries {
 		j, eerr := en.Encode()
 		if eerr != nil {
 			return nil, nil, eerr
 		}
 		out[id] = j
+	}
+	for id, j := range unsettled {
+		if _, settled := p.entries[id]; !settled {
+			out[id] = j
+		}
 	}
 	if len(out) == 0 {
 		out = nil
