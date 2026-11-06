@@ -33,11 +33,11 @@ func TestWindowsUpgradeLockTwoHandlesContend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first tryAcquire: %v", err)
 	}
-	if _, err := tryAcquire(path); !errors.Is(err, errLockBusy) {
-		t.Fatalf("second tryAcquire = %v, want errLockBusy", err)
+	if _, berr := tryAcquire(path); !errors.Is(berr, errLockBusy) {
+		t.Fatalf("second tryAcquire = %v, want errLockBusy", berr)
 	}
-	if _, err := acquireLock(path); !errors.Is(err, errLockHeld) {
-		t.Fatalf("acquire while held = %v, want errLockHeld", err)
+	if _, herr := acquireLock(path); !errors.Is(herr, errLockHeld) {
+		t.Fatalf("acquire while held = %v, want errLockHeld", herr)
 	}
 	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
@@ -46,8 +46,8 @@ func TestWindowsUpgradeLockTwoHandlesContend(t *testing.T) {
 	if !strings.HasPrefix(string(data), strconv.Itoa(os.Getpid())+" ") {
 		t.Fatalf("lock content = %q, want our pid first", data)
 	}
-	if err := l1.release(); err != nil {
-		t.Fatalf("release: %v", err)
+	if rerr := l1.release(); rerr != nil {
+		t.Fatalf("release: %v", rerr)
 	}
 	l2, err := tryAcquire(path)
 	if err != nil {

@@ -115,14 +115,14 @@ func TestUpgradeLockBusyDeadPidFileNotDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(portDeadPidContent), cliFileMode); err != nil {
-		t.Fatal(err)
+	if werr := os.WriteFile(path, []byte(portDeadPidContent), cliFileMode); werr != nil {
+		t.Fatal(werr)
 	}
 	for i := range 2 {
-		l, err := acquireLock(path)
-		if !errors.Is(err, errLockHeld) {
+		l, aerr := acquireLock(path)
+		if !errors.Is(aerr, errLockHeld) {
 			_ = l.release()
-			t.Fatalf("attempt %d: want errLockHeld, got %v", i+1, err)
+			t.Fatalf("attempt %d: want errLockHeld, got %v", i+1, aerr)
 		}
 	}
 	after, err := os.Stat(path)
@@ -216,14 +216,14 @@ func TestUpgradeLockCycle(t *testing.T) {
 	if !strings.HasPrefix(string(data), strconv.Itoa(os.Getpid())+" ") {
 		t.Errorf("lock content = %q, want our pid first", data)
 	}
-	if l2, err := acquireLock(path); !errors.Is(err, errLockHeld) || l2 != nil {
-		t.Fatalf("second acquire while held = %v (lock=%v), want errLockHeld", err, l2)
+	if l2, herr := acquireLock(path); !errors.Is(herr, errLockHeld) || l2 != nil {
+		t.Fatalf("second acquire while held = %v (lock=%v), want errLockHeld", herr, l2)
 	}
-	if err := l1.release(); err != nil {
-		t.Fatalf("release: %v", err)
+	if rerr := l1.release(); rerr != nil {
+		t.Fatalf("release: %v", rerr)
 	}
-	if err := l1.release(); err != nil {
-		t.Fatalf("double release: %v", err)
+	if rerr := l1.release(); rerr != nil {
+		t.Fatalf("double release: %v", rerr)
 	}
 	l3, err := acquireLock(path)
 	if err != nil {
@@ -244,11 +244,11 @@ func TestUpgradeLockReadOnlySkips(t *testing.T) {
 	if !errors.Is(err, errReadOnly) || l != nil {
 		t.Fatalf("read-only acquire = %v (lock=%v), want errReadOnly", err, l)
 	}
-	if err := l.release(); err != nil {
-		t.Fatalf("nil-lock release: %v", err)
+	if rerr := l.release(); rerr != nil {
+		t.Fatalf("nil-lock release: %v", rerr)
 	}
-	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("read-only acquire touched the disk: %v", err)
+	if _, serr := os.Stat(dir); !errors.Is(serr, os.ErrNotExist) {
+		t.Fatalf("read-only acquire touched the disk: %v", serr)
 	}
 	t.Setenv("LORE_READ_ONLY", "0")
 	l, err = acquireLock(filepath.Join(dir, "lock"))
