@@ -40,10 +40,11 @@ func teDRepoLine(t *testing.T, c *th.Clone) string {
 	return ""
 }
 
-// teDRepoRows counts the row files of table in c's work tree data folder.
-func teDRepoRows(t *testing.T, c *th.Clone, table string) int {
+// teDRepoRules counts the rule row files in c's work tree data folder (the
+// guards these tests check are on --to repo rule writes).
+func teDRepoRules(t *testing.T, c *th.Clone) int {
 	t.Helper()
-	ents, err := os.ReadDir(c.Dir + "/" + dataDir + "/" + table)
+	ents, err := os.ReadDir(c.Dir + "/" + dataDir + "/" + tblRules)
 	if os.IsNotExist(err) {
 		return 0
 	}
@@ -89,9 +90,9 @@ func TestTeD_RepoRoleMatrix(t *testing.T) {
 	if l := teDRepoLine(t, o.acme); !strings.Contains(l, teDRoleClient) {
 		t.Fatalf("repos: pattern is a client repo: %q", l)
 	}
-	before := teDRepoRows(t, o.acme, tblRules)
+	before := teDRepoRules(t, o.acme)
 	o.acme.Lore("rule", "add", "--body", teDInternalNote, "--to", "repo").Fails(t, th.ExitGuard, "E_LEAK_BLOCKED", "Nothing written")
-	if n := teDRepoRows(t, o.acme, tblRules); n != before {
+	if n := teDRepoRules(t, o.acme); n != before {
 		t.Fatalf("a blocked write leaves no rule file: %d -> %d", before, n)
 	}
 	o.acme.MustLore("rule", "add", "--body", "money is stored in minor units", "--to", "repo")
@@ -137,11 +138,11 @@ func TestTeD_RepoRoleUnreachableStoreFailsClosed(t *testing.T) {
 	o.tools.Lore("rule", "add", "--body", "plain words with no target").Fails(t, th.ExitLinkUnknown, "E_LINK_UNKNOWN", "--to")
 	o.tools.MustLore("rule", "add", "--body", "plain words for the repo", "--to", "repo")
 
-	before := teDRepoRows(t, o.acme, tblRules)
+	before := teDRepoRules(t, o.acme)
 	for _, body := range []string{"plain words for the client repo", teDInternalNote} {
 		o.acme.Lore("rule", "add", "--body", body, "--to", "repo").Fails(t, th.ExitGuard, "E_LEAK_BLOCKED", "cannot check")
 	}
-	if n := teDRepoRows(t, o.acme, tblRules); n != before {
+	if n := teDRepoRules(t, o.acme); n != before {
 		t.Fatalf("a write that cannot be checked writes nothing: %d -> %d", before, n)
 	}
 	// Reads keep working.
