@@ -10,7 +10,8 @@ package host
 // never lands alone, and readers see it on the live ref (refTargets).
 //
 //	live row ─► ref fields (TableDef) ─► target in live? held this run? skip
-//	          └► target in the work tree, not on origin/<default>
+//	          └► target in the work tree, not on origin/<default>,
+//	             not in HEAD (a local unpushed commit keeps it: F-ADDADD-2)
 //	             └► liveRows += target (Companion) ─► its own refs, same rule
 
 import (
@@ -156,6 +157,10 @@ func (b *liveBackend) carryUnlanded(ctx context.Context, s *liveSession, files m
 			if wt.Deleted || b.landed(ctx, s, k) {
 				continue
 			}
+			if b.committedHere(ctx, s, k) {
+				s.warn(k.Table + " " + k.ID + " is committed here but not on " + s.ref.RemoteName + "/" + s.defaultBranch(ctx) + ": it stays on this branch, not live; teammates read it once that commit reaches " + s.defaultBranch(ctx))
+				continue
+			}
 			f, err := liveFileFor(wt, nil, now, s)
 			if err != nil {
 				return nil, err
@@ -180,7 +185,8 @@ func (b *liveBackend) carryUnlanded(ctx context.Context, s *liveSession, files m
 //
 // Only a copy HEAD does not hold leaves (untracked, or staged but never
 // committed: the index entry goes too). A committed copy stays: removing
-// it would commit a delete of a row the live ref still carries.
+// it would commit a delete of a row the live ref still carries (and since
+// F-ADDADD-2 such a row is never carried: committedHere).
 // Best effort after the live write succeeded: a failure is one warning,
 // never a failed write.
 func (b *liveBackend) leaveWorkTree(ctx context.Context, s *liveSession, carried []live.RowKey) {
@@ -197,6 +203,27 @@ func (b *liveBackend) leaveWorkTree(ctx context.Context, s *liveSession, carried
 			s.warn("carried row " + k.String() + ": could not remove its work-tree copy: " + err.Error())
 		}
 	}
+}
+
+// committedHere (F-ADDADD-2) reports whether HEAD holds k's row file. A
+// row not on origin/<default> that HEAD holds sits in a local commit not
+// yet pushed (or not yet merged): it is NOT carried live. Carried, the
+// row would live in two places: that commit adds the file, and the
+// landing adds the live copy (newer after any edit, which goes live) on
+// main, so the user's `git pull --rebase` (or the branch's merge) meets an
+// add/add conflict on the row file, which the merge driver rightly refuses
+// with no base. The other ways out were weighed and rejected: removing the
+// file in a new commit does not help (the rebase replays the adding
+// commit first), rewriting the user's commit is not ours to do, and
+// teaching the landing or the merge driver that an add equal to an older
+// live version is "already landed" changes semantics teammates rely on.
+// Kept in git, the row travels with that commit and its edits stay on
+// the branch (it is not a live row); the cost is that a teammate meets
+// the id only once the commit reaches origin/<default>, which the warning
+// says. An unreadable HEAD counts as not holding it (the carry as before).
+func (b *liveBackend) committedHere(ctx context.Context, s *liveSession, k live.RowKey) bool {
+	_, ok, err := s.repo.ReadFile(ctx, "HEAD", mainDataPath(b.folder, k.Table+"/"+k.ID+rowFileExt))
+	return err == nil && ok
 }
 
 // landed reports whether k's row file is on the fetched origin/<default>
