@@ -110,13 +110,13 @@ const WarnImportIgnoredColumn = "W_IMPORT_IGNORED_COLUMN"
 
 // ImportIn is the input of task.import.
 type ImportIn struct {
-	File   string   `json:"file" arg:"0" desc:"the file to import"`
-	From   string   `json:"from,omitempty" flag:"from" desc:"csv | json (default: from the file extension)"`
-	Map    []string `json:"map,omitempty" flag:"map" desc:"rename columns: <file column>=<task field>[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name status estimate parent)"`
+	File string   `json:"file" arg:"0" desc:"the file to import"`
+	From string   `json:"from,omitempty" flag:"from" desc:"csv | json (default: from the file extension)"`
+	Map  []string `json:"map,omitempty" flag:"map" desc:"rename columns: <file column>=<task field>[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name status estimate parent)"`
 	// MapStatus renames the file's status values (TASK 19.1, G-TASK-3).
 	MapStatus []string `json:"map_status,omitempty" flag:"map-status" desc:"rename status values: <file value>=<status>[,…], e.g. 'In Review=in_progress' (statuses: todo in_progress done cancelled blocked)"`
 	DryRun    bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be created; write nothing"`
-	To     string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To        string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
 }
 
 // ImportRow is one task an import created (or would create).

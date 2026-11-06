@@ -22,9 +22,17 @@ func TestTimeEntriesTwoCopiesMerge(t *testing.T) {
 	h := opstest.New(t, repoClient(false))
 	id := add(h, "shared task", "")
 	path := filepath.Join(h.Repo, ".lore", "data", schema.TableTasks, id+".json")
+	rel := filepath.Join(".lore", "data", schema.TableTasks, id+".json")
 	read := func() []byte {
 		t.Helper()
-		b, err := os.ReadFile(path)
+		rt, err := os.OpenRoot(h.Repo) // the read stays inside the test's checkout
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := rt.ReadFile(rel)
+		if cerr := rt.Close(); err == nil {
+			err = cerr
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

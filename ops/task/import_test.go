@@ -119,15 +119,6 @@ func TestImportJSONTwiceIsDuplicate(t *testing.T) {
 	}
 }
 
-func contains(xs []string, x string) bool {
-	for _, s := range xs {
-		if s == x {
-			return true
-		}
-	}
-	return false
-}
-
 // XQ2: 25 rows over batch.preview_rows 20 ask first, listing 20; --yes
 // writes them. A bad row writes nothing. --dry-run writes nothing.
 func TestImportPreviewAndChecks(t *testing.T) {
