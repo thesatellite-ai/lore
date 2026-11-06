@@ -1,18 +1,18 @@
 # Use lore in CI
 
-**In short:** In CI (the machine that builds and tests your code after every push), you usually want lore to read, never write. Turn on read-only mode, hide the "run lore setup" hint, and use `lore doctor`'s exit code to stop the job when something is wrong.
+**In short:** In CI (the machine that builds and tests your code after every push), you usually want lore to read, never write. Turn on read-only mode and use `lore doctor`'s exit code to stop the job when something is wrong.
 
 ## What it is and when you want it
 
-CI runs your checks on a fresh machine with a fresh clone of the repo. A lore command there should never change notes: nobody reviews what CI writes, and two CI jobs at once would fight over the database. lore has three tools for this:
+CI runs your checks on a fresh machine with a fresh clone of the repo. A lore command there should never change notes: nobody reviews what CI writes, and two CI jobs at once would fight over the local cache. lore has these tools for this:
 
-- <!-- ds:block id=env-read-only-syjpe918 --> **Read-only mode** (`LORE_READ_ONLY=1` or `--read-only`): lore opens the database without taking its write lock (the "one writer at a time" sign on the door) and refuses every command that would change something.
-- <!-- ds:block id=env-no-stale-warn-ukunyu8f --> **`LORE_NO_STALE_WARN=1`**: hides the hint lore prints when its search index (the lookup table that makes search fast) is older than the lore version, so CI logs stay quiet.
+- <!-- ds:block id=env-read-only-syjpe918 --> **Read-only mode** (`LORE_READ_ONLY=1` or `--read-only`): lore reads without taking its write lock (the "one writer at a time" sign on the door) and refuses every command that would change something.
+- <!-- ds:block id=env-no-stale-warn-ukunyu8f --> **`LORE_NO_STALE_WARN=1`**: kept so older CI scripts still run; 0.1.18 has no "run lore setup" hint to hide (the local cache is built from the files and kept current by lore itself), so it changes nothing.
 - <!-- ds:block id=doctor-statuses-y6sro1m4 --> **`lore doctor` exit codes**: 0 healthy, 1 degraded, 2 broken (see [doctor](doctor.md#step-2--read-the-exit-code)).
 
 ## Before you start
 
-- The repo has lore set up and `.lore/data` committed. On a fresh clone the first lore command builds `.lore/lore.db` from those files by itself.
+- The repo has lore set up and `.lore/data` committed. On a fresh clone the first lore command builds the local cache `.lore/lore-cache.db` from those files by itself.
 - The CI machine has the `lore` binary on its `PATH` (install it the same way as on your laptop).
 
 ## Step 1 — Make every write fail
@@ -38,33 +38,13 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 
 Set the variable once for the whole job (in most CI systems: an `env:` entry at the top of the job).
 
-## Step 2 — Quiet the setup hint
+## Step 2 — Nothing to set up after an upgrade
 
-After an upgrade, lore warns on every command that opens its local database (`lore.db`) until someone runs `lore setup` to rebuild the search index; commands that only read the shared files, such as `lore rule list`, stay quiet. In CI that line is noise. `LORE_NO_STALE_WARN=1` hides it; `lore setup` fixes the cause:
-
-<!-- example: ops#stale-warning -->
-```console
-# alice, in website
-$ lore session list
-⚠ search index is out of date
-  run `lore setup` to rebuild
-(no sessions)
-$ lore session list
-(no sessions)
-$ lore setup
-⚠ search index is out of date
-  run `lore setup` to rebuild
-→ running ent schema migration...
-→ building FTS5 search index...
-✓ setup complete (registry fingerprint: 601d2850ffd047c2)
-$ lore session list
-(no sessions)
-```
-<!-- /example -->
+Older lore versions printed "search index is out of date, run `lore setup`" after an upgrade, and CI scripts set `LORE_NO_STALE_WARN=1` to hide it. In 0.1.18 the local cache `.lore/lore-cache.db` is built from `.lore/data` and the table definitions of the lore binary you run, and rebuilt when either changes, so there is no such hint and no setup step in CI. Leaving `LORE_NO_STALE_WARN=1` in a script does no harm.
 
 ## Step 3 — Look at the fresh clone
 
-A CI clone has the `.lore/data` files but not the local database, and not lore's git settings. The first lore command builds the database from the files, even in read-only mode (the database is only a local copy; no note changes), and wires git in the clone: lore's merge helper, the `.gitattributes` check and its hook blocks. That wiring runs after every command in a git checkout, read-only ones included, because it writes only git's own config and hook files, never your notes. There is no separate install step:
+A CI clone has the `.lore/data` files but not the local cache, and not lore's git settings. The first lore command builds the cache from the files, even in read-only mode (the cache is only a local copy; no note changes), and wires git in the clone: lore's merge helper, the `.gitattributes` check and its hook blocks. That wiring runs after every command in a git checkout, read-only ones included, because it writes only git's own config and hook files, never your notes. There is no separate install step:
 
 <!-- example: ops#ci only=1,2 keep=lore|rul_|Status|merge|exit -->
 ```console
@@ -73,15 +53,22 @@ $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_2ad3…f891 [must/always] Never put passwords in the code
 $ lore doctor; echo "doctor exit $?"
+  …
 Status: HEALTHY
   …
+  - this build checks the stores only (no lore.db checks)
+  - live: tracking refspec installed, not forced into refs/lore/*
+  …
+  -   act_7a67…9504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)
+  …
+  - context: .lore/LORE.md not rendered yet (lore render)
 doctor exit 0
 ```
 <!-- /example -->
 
 ## Step 4 — Fail the job when lore is not healthy
 
-Check the audit log, save the JSON report and act on the exit code. Read `status` from the JSON, not from the text output, because the JSON shape is fixed:
+Save the JSON report and act on the exit code. Read `status` from the JSON, not from the text output, because the JSON shape is fixed. `lore audit verify` works in CI too, but the audit log is per machine (see [The audit log](audit-log.md)), so on a fresh CI machine it holds nothing yet:
 
 <!-- example: ops#ci only=3,4,5 -->
 ```console
@@ -89,17 +76,17 @@ Check the audit log, save the JSON report and act on the exit code. Read `status
 $ lore audit verify
 ✓ audit chain intact (0 entries)
 $ lore doctor --json > doctor.json; echo "doctor exit $?"
+this machine only: local safety copies of rows sync removed (never shared)
 doctor exit 0
 $ grep '"status"' doctor.json
-  "status": "healthy",
+{"schema_version":1,"ok":true,"status":"healthy","db_ok":true,"wal_size_bytes":0,"identity":{"resolved":"","source":"","stable":false},"notes":["this build checks the stores only (no lore.db checks)","live: tracking refspec installed, not forced into refs/lore/*","live: last fetch 15s ago","live: post-commit and pre-push hook blocks installed","Team versions (newest save per writer and machine):","  act_7a67…9504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)"],"binary_version":"dev","exit_status":0}
 ```
 <!-- /example -->
 
 A complete CI step, as a shell script:
 
 ```sh
-export LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1
-lore audit verify                   # stops on a broken audit chain or an edit made outside lore
+export LORE_READ_ONLY=1
 lore doctor --json > doctor.json
 case $? in
   0) echo "lore is healthy" ;;
@@ -125,10 +112,9 @@ $ lore context --internal
 
 ## Pitfalls
 
-- **Only `1` turns a switch on.** `LORE_READ_ONLY=true` or `yes` is ignored and lore writes as usual. The same holds for `LORE_NO_STALE_WARN` and the `LORE_ALLOW_*` switches.
-- **Read-only still builds the local database.** On a fresh clone the first command builds `.lore/lore.db` from `.lore/data` even with `LORE_READ_ONLY=1`. That is a local copy, not a change to your notes; nothing is written to `.lore/data` or git.
+- **Only `1` turns a switch on.** `LORE_READ_ONLY=true` or `yes` is ignored and lore writes as usual. The same holds for the `LORE_ALLOW_*` switches.
+- **Read-only still builds the local cache.** On a fresh clone the first command builds `.lore/lore-cache.db` from `.lore/data` even with `LORE_READ_ONLY=1`. That is a local copy, not a change to your notes; nothing is written to `.lore/data` or git.
 - **There is no `lore sync install-git` in 0.1.18.** Older CI scripts ran it before anything else; drop that line. Any lore command, read-only ones included, wires git in the clone (Step 3). If doctor still says DEGRADED, decide on purpose whether exit 1 fails your job.
-- **Do not run `lore setup` in read-only mode.** It is a write and is refused; run it once on a normal machine and commit.
 
 ## Related
 

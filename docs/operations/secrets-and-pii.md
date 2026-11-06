@@ -39,10 +39,10 @@ When the match is not a real secret (a sample value like this one, a test string
 ```console
 # alice, in website
 $ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
-✓ mem_d431…313a
+✓ mem_b4f4…a5b0
   scope: [master]
 $ grep -rl AKIA .lore/data || echo 'not in .lore/data'
-.lore/data/memories/mem_d431…313a.json
+.lore/data/memories/mem_b4f4…a5b0.json
 ```
 <!-- /example -->
 
@@ -51,10 +51,8 @@ Delete the row (or edit the key out) before you commit:
 <!-- example: ops#allow-secrets only=3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_d431…313a --yes
-✓ mem_d431…313a moved to the trash (restore: lore trash restore mem_d431…313a)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
+$ lore memory delete mem_b4f4…a5b0 --yes
+✓ mem_b4f4…a5b0 moved to the trash (restore: lore trash restore mem_b4f4…a5b0)
 ```
 <!-- /example -->
 
@@ -141,7 +139,7 @@ rul_28f8…03df  Posts go out on Tuesdays  [shared]
 ## Related
 
 - [The audit log](audit-log.md)
-- [A damaged database](backup-restore-repair.md)
+- [A damaged cache](backup-restore-repair.md)
 - [Use lore in CI](ci.md)
 - [Rules, memories and decisions](../knowledge/rules-memories-decisions.md)
 - [Environment variables](../reference/environment.md)

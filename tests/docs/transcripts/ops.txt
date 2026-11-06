@@ -1,42 +1,32 @@
 
 ### doctor
 alice (work/website)$ lore doctor
+this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
-Binary: 0.1.0-dev
+Binary: dev
 
 [db]
   ok:       true
-  wal_size: 4152 bytes
-
-[sync]
-  baselined:        true
-  pending exports:  0
-  open conflicts:   0
-  file errors:      0
-  merge driver:     true
-  uncommitted:      0
+  wal_size: 0 bytes
 
 [identity]
-  resolved: human:alice@agency.example
-  source:   git config
-  stable:   yes
+  resolved: 
+  source:   
+  stable:   NO (ephemeral)
 
 Notes:
+  - this build checks the stores only (no lore.db checks)
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
+  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000001Z)
+
+Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 alice (work/website)$ lore doctor --json | head -8
-{
-  "schema_version": 1,
-  "ok": true,
-  "status": "healthy",
-  "db_ok": true,
-  "wal_size_bytes": 4152,
-  "identity": {
-    "resolved": "human:alice@agency.example",
+this machine only: local safety copies of rows sync removed (never shared)
+{"schema_version":1,"ok":true,"status":"healthy","db_ok":true,"wal_size_bytes":0,"identity":{"resolved":"","source":"","stable":false},"notes":["this build checks the stores only (no lore.db checks)","live: tracking refspec installed, not forced into refs/lore/*","live: last fetch 10s ago","live: post-commit and pre-push hook blocks installed","Team versions (newest save per writer and machine):","  act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000001Z)"],"binary_version":"dev","exit_status":0}
 
 ### audit log
 alice (work/website)$ lore rule add --body 'Never put passwords in the code'
@@ -46,72 +36,51 @@ alice (work/website)$ lore audit log
 2026-11-02T10:00:00Z  rules.write                  rules/rul_2ad3618e878ebbf527d34d446ef4f891  by act_7a670ae8548ed05bf57ad29ad0759504
 2026-11-02T10:00:00Z  memories.write               memories/mem_162df51b7f78b785c97c26b41ea89666  by act_7a670ae8548ed05bf57ad29ad0759504
 2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe984c9b495744c0217776765a28f2  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  repos.import                 repos/rep_05e99e22e9e86e96fe4daa7777994603  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  projects.import              projects/prj_c0f3c11a5724b0cfd74b256190d9b5b8  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  actors.import                actors/act_7a670ae8548ed05bf57ad29ad0759504  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  repos.write                  repos/rep_05e99e22e9e86e96fe4daa7777994603  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  policies.write               policies/pol_76bd560aff0771fab8457dbfa9823f10  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  projects.write               projects/prj_c0f3c11a5724b0cfd74b256190d9b5b8  by act_7a670ae8548ed05bf57ad29ad0759504
+2026-11-02T10:00:00Z  policies.write               policies/pol_05e99e22e9e86e96fe4daa7777994603  by act_7a670ae8548ed05bf57ad29ad0759504
+2026-11-02T10:00:00Z  repos.write                  repos/rep_c0f3c11a5724b0cfd74b256190d9b5b8  by act_7a670ae8548ed05bf57ad29ad0759504
+2026-11-02T10:00:00Z  projects.write               projects/prj_76bd560aff0771fab8457dbfa9823f10  by act_7a670ae8548ed05bf57ad29ad0759504
 2026-11-02T10:00:00Z  actors.write                 actors/act_7a670ae8548ed05bf57ad29ad0759504  by act_7a670ae8548ed05bf57ad29ad0759504
 alice (work/website)$ lore audit verify
-✓ audit chain intact (10 entries)
+✓ audit chain intact (7 entries)
 
 ### audit tamper
 alice (work/website)$ lore audit verify
-ERROR: [E_AUDIT_CHAIN_BROKEN] hash mismatch: 1 row(s) changed outside lore: rules/rul_54fe984c9b495744c0217776765a28f2
-  hint: inspect them (`lore <kind> show <id>`); the next lore command records them as external writes
+ERROR: [E_AUDIT_CHAIN_BROKEN] audit chain broken at aud_d4314eba822f1bf5908b2b8ded5f313a (an entry was edited or deleted)
+  hint: the chain is the audit_chain table of ~/.lore/state/machine.db; compare it with a backup of that file to investigate
 (exit 23)
-alice (work/website)$ lore rule list
-lore sync: rules/rul_54fe984c9b495744c0217776765a28f2.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
+alice$ cp ~/machine.db.copy ~/.lore/state/machine.db && rm ~/machine.db.copy
+alice (work/website)$ lore audit verify
+✓ audit chain intact (7 entries)
+
+### row file edit
+alice (work/website)$ sed -i 's/Run the tests before you push/Pushing without tests is fine/' .lore/data/rules/*.json && lore rule list
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Pushing without tests is fine
+rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
+alice (work/website)$ git status --short .lore/data
+ M .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
+?? .lore/data/rules/rul_2ad3618e878ebbf527d34d446ef4f891.json
+alice (work/website)$ lore audit verify
+✓ audit chain intact (7 entries)
+alice (work/website)$ git restore .lore/data && lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
-alice (work/website)$ lore sync
-· already in sync
-alice (work/website)$ lore audit log --limit 2
-2026-11-02T10:00:00Z  rules.external-write         rules/rul_54fe984c9b495744c0217776765a28f2  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  rules.write                  rules/rul_2ad3618e878ebbf527d34d446ef4f891  by act_7a670ae8548ed05bf57ad29ad0759504
-alice (work/website)$ lore audit verify
-✓ audit chain intact (11 entries)
-! 1 change(s) were made outside lore and later recorded (action *.external-write; see `lore audit log`)
 
 ### damaged database
 alice (work/website)$ lore rule list
+lore: the cache ~/work/website/.lore/lore-cache.db was damaged; moved it to ~/work/website/.lore/backups/lore-cache.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
-alice (work/website)$ lore doctor
-Status: BROKEN
-Binary: 0.1.0-dev
-
-[db]
-  ok:       false
-  wal_size: 0 bytes
-
-[identity]
-  resolved: human:alice@agency.example
-  source:   git config
-  stable:   yes
-
-Errors:
-  - E_DB_CORRUPT: DB file is corrupt (pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)); recover with `lore repair --tier=2 --confirm` (latest backup) — shared rows also rebuild from .lore/data
-
-Notes:
-  - Team versions (newest save per writer and machine):
-  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000002Z)
-  - v0.1.17 settings not checked: [E_INTERNAL] migrate: read .lore/lore.db: file is not a database (26)
-  - context: .lore/LORE.md not rendered yet (lore render)
-(exit 2)
+alice (work/website)$ lore doctor | grep '^Status'
+this machine only: local safety copies of rows sync removed (never shared)
+Status: HEALTHY
 
 ### rebuild from data
-alice (work/website)$ mv .lore/lore.db .lore/lore.db.old && rm -f .lore/lore.db-wal .lore/lore.db-shm
+alice (work/website)$ rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm
 alice (work/website)$ lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
-alice (work/website)$ lore sync
-lore sync: built .lore/lore.db from .lore/data (6 rows)
-lore sync: adopted .lore/data: imported 6, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-· already in sync
-alice (work/website)$ lore doctor | head -1
+alice (work/website)$ lore doctor | grep '^Status'
+this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 
 ### search rebuild
@@ -122,14 +91,10 @@ alice (work/website)$ lore sync conflicts | head -3
 
 ### support bundle
 alice (work/website)$ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (1894 bytes)
+ERROR: [E_UNSUPPORTED] support-bundle: not available in this build
+  hint: this build does not carry the render and context machinery yet; use the release binary
 alice (work/website)$ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
-  "binary_version": "0.1.0-dev",
-    "status": "healthy",
-    "binary_version": "0.1.0-dev",
-    "memories": 1,
-    "rules": 2,
-  "sanitized": true,
+grep: bundle.json: No such file or directory
 
 ### pii pattern
 alice (work/website)$ lore secrets rule add invoice-number --regex 'INV-[0-9]{6}' --description 'our invoice numbers' --yes
@@ -150,7 +115,7 @@ main
 alice (work/website)$ lore config list
 default_branch=main
 alice (work/website)$ lore config set team.note 'Ask Bob before changing the build'
-ERROR: [E_INVALID_INPUT] config key "team.note" is not a key lore reads (unknown key, ignored: line 2: field team not found in type lorecfg.Config)
+ERROR: [E_INVALID_INPUT] config key "team.note" is not a key lore reads (unknown key, ignored: line 2: field team not found in type wire.configKeys)
   hint: nothing written; team rules are set with `lore policy set`
 (exit 20)
 alice (work/website)$ lore config get color
@@ -178,56 +143,42 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
 (exit 23)
 
-### stale warning
-alice (work/website)$ lore session list
-⚠ search index is out of date
-  run `lore setup` to rebuild
-(no sessions)
-alice (work/website)$ lore session list
-(no sessions)
-alice (work/website)$ lore setup
-⚠ search index is out of date
-  run `lore setup` to rebuild
-→ running ent schema migration...
-→ building FTS5 search index...
-✓ setup complete (registry fingerprint: 601d2850ffd047c2)
-alice (work/website)$ lore session list
-(no sessions)
-
 ### ci
 alice (work/ci-clone)$ lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
-alice (work/ci-clone)$ lore doctor
-Status: BROKEN
-Binary: 0.1.0-dev
+alice (work/ci-clone)$ lore doctor; echo "doctor exit $?"
+this machine only: local safety copies of rows sync removed (never shared)
+Status: HEALTHY
+Binary: dev
 
 [db]
-  ok:       false
+  ok:       true
   wal_size: 0 bytes
 
 [identity]
-  resolved: human:alice@agency.example
-  source:   git config
-  stable:   yes
-
-Errors:
-  - resolve: projresolve: cwd is not an aicoder project root (no .lore/lore.db or lore.yaml)
+  resolved: 
+  source:   
+  stable:   NO (ephemeral)
 
 Notes:
+  - this build checks the stores only (no lore.db checks)
+  - live: tracking refspec installed, not forced into refs/lore/*
+  - live: last fetch 5s ago
+  - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000003Z)
-(exit 2)
-alice (work/ci-clone)$ lore sync install-git
-ERROR: [E_INVALID_INPUT] unknown command "install-git" for "lore sync"
-  hint: see `lore sync --help`
+  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)
+
+Context:
+  - context: .lore/LORE.md not rendered yet (lore render)
+doctor exit 0
 alice (work/ci-clone)$ lore audit verify
-ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
-  hint: run `lore init` here, or cd into a project root
+✓ audit chain intact (0 entries)
 alice (work/ci-clone)$ lore doctor --json > doctor.json; echo "doctor exit $?"
-doctor exit 2
+this machine only: local safety copies of rows sync removed (never shared)
+doctor exit 0
 alice (work/ci-clone)$ grep '"status"' doctor.json
-  "status": "broken",
+{"schema_version":1,"ok":true,"status":"healthy","db_ok":true,"wal_size_bytes":0,"identity":{"resolved":"","source":"","stable":false},"notes":["this build checks the stores only (no lore.db checks)","live: tracking refspec installed, not forced into refs/lore/*","live: last fetch 15s ago","live: post-commit and pre-push hook blocks installed","Team versions (newest save per writer and machine):","  act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)"],"binary_version":"dev","exit_status":0}
 alice (work/ci-clone)$ lore context --internal
 <!-- generated by lore; internal: never quote this content in client files, commits, PRs or chat -->
 (nothing internal or personal loads in this repo)
@@ -240,40 +191,34 @@ ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (aws_access_key) at li
 
 ### allow secrets
 alice (work/website)$ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
-✓ mem_d4314eba822f1bf5908b2b8ded5f313a
+✓ mem_b4f4765e593d51fd1352985e8af3a5b0
   scope: [master]
 alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'
-.lore/data/memories/mem_d4314eba822f1bf5908b2b8ded5f313a.json
-alice (work/website)$ lore memory delete mem_d4314eba822f1bf5908b2b8ded5f313a --yes
-✓ mem_d4314eba822f1bf5908b2b8ded5f313a moved to the trash (restore: lore trash restore mem_d4314eba822f1bf5908b2b8ded5f313a)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
+.lore/data/memories/mem_b4f4765e593d51fd1352985e8af3a5b0.json
+alice (work/website)$ lore memory delete mem_b4f4765e593d51fd1352985e8af3a5b0 --yes
+✓ mem_b4f4765e593d51fd1352985e8af3a5b0 moved to the trash (restore: lore trash restore mem_b4f4765e593d51fd1352985e8af3a5b0)
 alice (work/website)$ lore doctor
+this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
-Binary: 0.1.0-dev
+Binary: dev
 
 [db]
   ok:       true
-  wal_size: 107152 bytes
-
-[sync]
-  baselined:        true
-  pending exports:  0
-  open conflicts:   0
-  file errors:      0
-  merge driver:     true
-  uncommitted:      3
+  wal_size: 0 bytes
 
 [identity]
-  resolved: human:alice@agency.example
-  source:   git config
-  stable:   yes
+  resolved: 
+  source:   
+  stable:   NO (ephemeral)
 
 Notes:
+  - this build checks the stores only (no lore.db checks)
   - live: tracking refspec installed, not forced into refs/lore/*
-  - live: last fetch 0s ago
+  - live: last fetch 20s ago
   - live: post-commit and pre-push hook blocks installed
-  - Team versions (newest save per writer and machine):
-  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000003Z)
   - trash: 1 rows in the trash, 0 tombstones (kept forever); lore trash stats
+  - Team versions (newest save per writer and machine):
+  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)
+
+Context:
   - context: .lore/LORE.md not rendered yet (lore render)

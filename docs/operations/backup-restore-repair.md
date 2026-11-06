@@ -1,57 +1,55 @@
-# A damaged database: rebuild it from your files
+# A damaged cache: rebuilt from your files
 
-**In short:** your notes are the files in `.lore/data`, committed with your code. The database `.lore/lore.db` is only a local copy that lore builds from them, so when it is damaged or lost you move it out of the way and lore builds a new one. `lore search rebuild` rebuilds the search index from the same files. There is nothing to back up by hand.
+**In short:** your notes are the files in `.lore/data`, committed with your code. The cache `.lore/lore-cache.db` is only a local copy that lore builds from them, so when it is damaged lore moves it aside and builds a new one by itself, and when it is lost the next command builds it again. `lore search rebuild` rebuilds the search index from the same files. There is nothing to back up by hand.
 
 ## What it is and when you want it
 
-The database file is `.lore/lore.db` in your repo. It is not committed to git (it is listed in `.gitignore`), so it only exists on your machine. Think of it as an index card box built from the notebook: the notebook is `.lore/data`, which git keeps for you and your team.
+The cache file is `.lore/lore-cache.db` in your repo. It is not committed to git (it is listed in `.gitignore`), so it only exists on your machine. Think of it as an index card box built from the notebook: the notebook is `.lore/data`, which git keeps for you and your team.
 
-You want this page when `lore doctor` says BROKEN with `E_DB_CORRUPT`, when the database file was deleted, or when search answers look out of date.
+You want this page when lore says it moved a damaged cache aside, when the cache file was deleted, or when search answers look out of date.
 
 ## Before you start
 
 - lore is set up in the repo (`lore init`).
-- Commit your `.lore/data` changes when you can. Then git holds every shared note, and any clone can rebuild its database from them.
+- Commit your `.lore/data` changes when you can. Then git holds every shared note, and any clone can rebuild its cache from them.
 
-## Step 1 — See what still works
+## Step 1 — A damaged cache fixes itself
 
-Alice (an agency developer) finds her database damaged (here its first bytes were overwritten). Shared notes are read from `.lore/data`, so they still list; `lore doctor` says BROKEN and names the damaged file:
+Alice (an agency developer) finds her cache damaged (here its first bytes were overwritten). The next lore command notices, moves the broken file into `.lore/backups/`, rebuilds the cache from `.lore/data` and carries on; `lore doctor` says HEALTHY:
 
-<!-- example: ops#damaged-database keep=^(rul_|Status|\s+ok:|\s+-\sE_DB_CORRUPT) -->
+<!-- example: ops#damaged-database -->
 ```console
 # alice, in website
 $ lore rule list
+lore: the cache ~/work/website/.lore/lore-cache.db was damaged; moved it to ~/work/website/.lore/backups/lore-cache.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_2ad3…f891 [must/always] Never put passwords in the code
-$ lore doctor
-Status: BROKEN
-  …
-  ok:       false
-  …
-  - E_DB_CORRUPT: DB file is corrupt (pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)); recover with `lore repair --tier=2 --confirm` (latest backup) — shared rows also rebuild from .lore/data
-  …
-```
-<!-- /example -->
-
-## Step 2 — Rebuild from the files in git
-
-Move the database out of the way. The next `lore sync` builds a new one and fills it from `.lore/data`:
-
-<!-- example: ops#rebuild-from-data -->
-```console
-# alice, in website
-$ mv .lore/lore.db .lore/lore.db.old && rm -f .lore/lore.db-wal .lore/lore.db-shm
-$ lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push
-rul_2ad3…f891 [must/always] Never put passwords in the code
-$ lore sync
-· already in sync
-$ lore doctor | head -1
+$ lore doctor | grep '^Status'
+this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 ```
 <!-- /example -->
 
-Only shared notes come back this way. Things lore keeps on your machine only are not in `.lore/data` and start empty: the [audit log](audit-log.md) and this machine's settings in the database. Delete `.lore/lore.db.old` once you are happy.
+Nothing is lost: every note is in `.lore/data`. Delete the copy in `.lore/backups/` once you are happy; it is only kept so you can look at it.
+
+## Step 2 — Rebuild from the files in git
+
+You can also delete the cache yourself, for example to free space or to rule it out while you investigate something. The next command builds a new one from `.lore/data`:
+
+<!-- example: ops#rebuild-from-data -->
+```console
+# alice, in website
+$ rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm
+$ lore rule list
+rul_54fe…28f2 [must/always] Run the tests before you push
+rul_2ad3…f891 [must/always] Never put passwords in the code
+$ lore doctor | grep '^Status'
+this machine only: local safety copies of rows sync removed (never shared)
+Status: HEALTHY
+```
+<!-- /example -->
+
+The cache holds nothing of its own. What lore keeps on your machine only (the [audit log](audit-log.md), sessions, this machine's settings) lives in `~/.lore/state/machine.db`, not in the repo's cache, so a rebuild does not touch it.
 
 ## Step 3 — Rebuild the search index and check the result
 
@@ -69,10 +67,10 @@ $ lore sync conflicts | head -3
 
 ## Pitfalls
 
-- **The `.lore/lore.db.old` file is not ignored by git.** Do not commit it (it is a whole database, with private rows in it); delete it once you are happy with the result.
+- **`.lore/backups/` stays on your machine.** It is in `.gitignore`, and a moved-aside cache is a whole database, so delete it once you are happy with the result rather than copying it anywhere.
 - **Uncommitted notes still come back.** The rebuild reads the files in your working tree, committed or not. Only a file you deleted, or never wrote, is gone; get a deleted one back from git (see [Trash, restore from git and purge](../sync/trash-and-purge.md)).
-- **The database is per machine.** It is not in git, so a teammate never needs your copy. Shared notes reach them through `.lore/data`.
-- **There is no repair command.** Older lore versions had one, and an old doctor line may still name it; in 0.1.18 the cache is rebuilt from the row files, so follow Step 2 instead.
+- **The cache is per machine.** It is not in git, so a teammate never needs your copy. Shared notes reach them through `.lore/data`.
+- **There is no backup, restore or repair command.** Older lore versions had them for `.lore/lore.db`; in 0.1.18 the cache is rebuilt from the row files, so nothing else is needed. A v0.1.17 `.lore/lore.db` left in a repo is read only by `lore migrate run`.
 
 ## Related
 

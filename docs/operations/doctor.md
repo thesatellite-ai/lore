@@ -1,15 +1,15 @@
 # Check lore's health with `lore doctor`
 
-**In short:** `lore doctor` is a quick check-up for lore in one repo, like the warning lights on a car dashboard. It tells you if the notes database is fine, if your notes are in step with git, and who lore thinks you are. It ends with an exit code (0, 1 or 2) so a script can act on it.
+**In short:** `lore doctor` is a quick check-up for lore in one repo, like the warning lights on a car dashboard. It tells you if the local cache is fine, if your notes are in step with git, and who lore thinks you are. It ends with an exit code (0, 1 or 2) so a script can act on it.
 
 ## What it is and when you want it
 
-lore keeps your notes in a small database file, `.lore/lore.db`, inside the repo (a database here is just one file that holds all your rules, memories and tasks). It also writes a copy of the shared notes as plain files under `.lore/data`, so they travel with your git commits.
+lore keeps your shared notes as plain files under `.lore/data`, so they travel with your git commits, and builds a local cache from them, `.lore/lore-cache.db` (a database here is just one file that makes reads and search fast). What lore keeps for your machine only (the audit log, sessions) is in `~/.lore/state/machine.db`.
 
-`lore doctor` looks at all of that and gives one answer: **HEALTHY**, **DEGRADED** (it works, but something needs your attention) or **BROKEN** (lore cannot use the database). Run it:
+`lore doctor` looks at all of that and gives one answer: **HEALTHY**, **DEGRADED** (it works, but something needs your attention) or **BROKEN** (lore cannot read its notes or stores). Run it:
 
 - when a lore command prints an error you do not understand,
-- after you upgrade lore or rebuild the database,
+- after you upgrade lore or rebuild the cache,
 - in a script or CI job that should stop when lore is not healthy (see [Use lore in CI](ci.md)).
 
 It only reads. It never changes your notes.
@@ -27,28 +27,24 @@ Run `lore doctor` in the repo. It prints one block per area it checked:
 ```console
 # alice, in website
 $ lore doctor
+this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
-Binary: 0.1.0-dev
+Binary: dev
 [db]
   ok:       true
-  wal_size: 4152 bytes
-[sync]
-  baselined:        true
-  pending exports:  0
-  open conflicts:   0
-  file errors:      0
-  merge driver:     true
-  uncommitted:      0
+  wal_size: 0 bytes
 [identity]
-  resolved: human:alice@agency.example
-  source:   git config
-  stable:   yes
+  resolved: 
+  source:   
+  stable:   NO (ephemeral)
 Notes:
+  - this build checks the stores only (no lore.db checks)
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
+  -   act_7a67…9504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000001Z)
+Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 ```
 <!-- /example -->
@@ -84,14 +80,8 @@ In a shell, `echo $?` right after the command prints it.
 ```console
 # alice, in website
 $ lore doctor --json | head -8
-{
-  "schema_version": 1,
-  "ok": true,
-  "status": "healthy",
-  "db_ok": true,
-  "wal_size_bytes": 4152,
-  "identity": {
-    "resolved": "human:alice@agency.example",
+this machine only: local safety copies of rows sync removed (never shared)
+{"schema_version":1,"ok":true,"status":"healthy","db_ok":true,"wal_size_bytes":0,"identity":{"resolved":"","source":"","stable":false},"notes":["this build checks the stores only (no lore.db checks)","live: tracking refspec installed, not forced into refs/lore/*","live: last fetch 10s ago","live: post-commit and pre-push hook blocks installed","Team versions (newest save per writer and machine):","  act_7a67…9504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000001Z)"],"binary_version":"dev","exit_status":0}
 ```
 <!-- /example -->
 
@@ -101,49 +91,24 @@ $ lore doctor --json | head -8
 
 Doctor lists those links in its report, then `lore doctor --fix` turns each one around so the old row records the row that replaced it. A second `--fix` finds nothing left to change.
 
-## Try it: what DEGRADED and BROKEN look like
+## Try it: a damaged cache does not make lore BROKEN
 
-When the database file is damaged, doctor says BROKEN, exits 2 and names the fix:
+The cache is rebuilt from `.lore/data` whenever it is damaged or missing, so a damaged cache never leaves lore BROKEN: the next command moves it aside, rebuilds it and doctor reports HEALTHY:
 
 <!-- example: ops#damaged-database only=2 -->
 ```console
 # alice, in website
-$ lore doctor
-Status: BROKEN
-Binary: 0.1.0-dev
-[db]
-  ok:       false
-  wal_size: 0 bytes
-[identity]
-  resolved: human:alice@agency.example
-  source:   git config
-  stable:   yes
-Errors:
-  - E_DB_CORRUPT: DB file is corrupt (pragmas: apply "PRAGMA auto_vacuum=INCREMENTAL": file is not a database (26)); recover with `lore repair --tier=2 --confirm` (latest backup) — shared rows also rebuild from .lore/data
-Notes:
-  - Team versions (newest save per writer and machine):
-  -   act_7a67…9504 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000002Z)
-  - v0.1.17 settings not checked: [E_INTERNAL] migrate: read .lore/lore.db: file is not a database (26)
-  - context: .lore/LORE.md not rendered yet (lore render)
-(exit 2)
-```
-<!-- /example -->
-
-After a rebuild from `.lore/data`, doctor reports HEALTHY again. When a sync conflict is kept aside it says DEGRADED (exit 1) instead and names `lore sync conflicts`:
-
-<!-- example: ops#rebuild-from-data only=4 -->
-```console
-# alice, in website
-$ lore doctor | head -1
+$ lore doctor | grep '^Status'
+this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 ```
 <!-- /example -->
 
-The full story of that rebuild is in [A damaged database](backup-restore-repair.md). There is no repair command in 0.1.18 (an older BROKEN line may still name one); follow that page instead.
+When a sync conflict is kept aside doctor says DEGRADED (exit 1) and names `lore sync conflicts`; BROKEN (exit 2) means lore cannot read its notes at all, for example a row file under `.lore/data` that is not valid JSON. The full story of a cache rebuild is in [A damaged cache](backup-restore-repair.md).
 
 ## Look up an error code
 
-Every lore error starts with a code such as `E_DB_CORRUPT`. [Error codes](../reference/errors.md) explains each one and what to do; the generated [command and error reference](../reference/cli-commands.md#errors) lists every code with its exit status. Add `--json` to a failing command to get the code, exit status and hint as fields.
+Every lore error starts with a code such as `E_NOT_FOUND`. [Error codes](../reference/errors.md) explains each one and what to do; the generated [command and error reference](../reference/cli-commands.md#errors) lists every code with its exit status. Add `--json` to a failing command to get the code, exit status and hint as fields.
 
 The [error reference](../reference/errors.md) explains each code and its fix.
 
@@ -172,14 +137,14 @@ Without `--out` the bundle is printed to the screen. Read it before you send it;
 
 - **DEGRADED is not an error message.** Many things only degrade the status: a sync conflict kept aside, an uncommitted secret warning, a large journal. Read the `Warnings` block; each line names the command that clears it.
 - **`uncommitted` does not count against you.** Files in `.lore/data` that you have not committed yet are listed, not counted as a problem. Commit them with your change.
-- **Other lore commands may name a damaged file differently.** `lore doctor` reports a damaged database as `E_DB_CORRUPT`; a normal command on the same file can fail with `E_INTERNAL`. Trust doctor's answer and run the repair it names.
+- **A damaged cache is not reported, it is fixed.** Any lore command that finds `.lore/lore-cache.db` damaged moves it into `.lore/backups/` and rebuilds it, printing one line that says so; doctor then reports HEALTHY. A damaged row file under `.lore/data` is different: that is your notes, so doctor reports it and nothing is rebuilt over it.
 - **`--include-content` on the support bundle adds nothing today.** The flag only switches `sanitized` to `false`; no note text is added. Do not rely on it to share note text.
 - **The support bundle's `generated_at` is the real time,** even when you run lore with a test clock.
 - **Doctor checks one repo.** Run it in each repo you care about. Team checks (stores, live rows) show up in the same report when you use them; see [Troubleshooting for teams](../team/troubleshooting.md).
 
 ## Related
 
-- [A damaged database](backup-restore-repair.md)
+- [A damaged cache](backup-restore-repair.md)
 - [Use lore in CI](ci.md)
 - [The audit log](audit-log.md)
 - [Error reference](../reference/errors.md)

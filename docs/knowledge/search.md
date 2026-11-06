@@ -186,5 +186,5 @@ note: the core rebuilds a store's whole cache; --kind memory included
 - [Render and agent files](render-and-agent-files.md): what is pinned and what is left for search.
 - [Rules, memories and decisions](rules-memories-decisions.md)
 - [Multi-repo projects](../sync/multi-repo-projects.md): repos in one project.
-- [A damaged database](../operations/backup-restore-repair.md): rebuild the database and the search index.
+- [A damaged cache](../operations/backup-restore-repair.md): rebuild the cache and the search index.
 - [Knowledge guides index](README.md)

@@ -19,7 +19,7 @@ Each step builds on the one before. Every example is a script that runs the real
 | 5 | Bigger goals: missions, plans, plan files and handoffs | [Missions and plans](tasks/missions-and-plans.md) | [`missions`](../tests/docs/sections/missions.sh) ([output](../tests/docs/transcripts/missions.txt)) |
 | 6 | How notes travel with your commits, branches and pull requests | [How notes travel with git](sync/how-notes-travel-with-git.md), [Branches: peek and promote](sync/branches-peek-promote.md) | [`sync`](../tests/docs/sections/sync.sh) ([output](../tests/docs/transcripts/sync.txt)) |
 | 7 | When two people change the same note, and how to clean up duplicates | [Conflicts and duplicates](sync/conflicts-and-duplicates.md) | [`sync`](../tests/docs/sections/sync.sh) ([output](../tests/docs/transcripts/sync.txt)) |
-| 8 | Keep lore healthy: the doctor, rebuilding the database, the audit log, secrets | [Doctor](operations/doctor.md), [A damaged database](operations/backup-restore-repair.md) | [`ops`](../tests/docs/sections/ops.sh) ([output](../tests/docs/transcripts/ops.txt)) |
+| 8 | Keep lore healthy: the doctor, rebuilding the cache, the audit log, secrets | [Doctor](operations/doctor.md), [A damaged cache](operations/backup-restore-repair.md) | [`ops`](../tests/docs/sections/ops.sh) ([output](../tests/docs/transcripts/ops.txt)) |
 | 9 | A small team: tasks that reach a teammate at once, on any branch | [Getting started with teams](team/getting-started.md), [Small team in one repo](team/use-cases/small-team.md) | [`getting-started`](../tests/team/docs/transcripts/getting-started.txt), [`small-team`](../tests/team/docs/transcripts/small-team.txt) |
 | 10 | An agency and a client: an org, a private store, and notes the client never sees | [Agency with a client repo](team/use-cases/agency-client-repo.md), [How to lay out your stores](choosing/store-layout.md) | [`agency`](../tests/team/docs/transcripts/agency.txt) |
 | 11 | Several repos as one product, contractors, and two companies on one laptop | [Several repos as one product](team/use-cases/group-project.md), [Contractor](team/use-cases/contractor.md), [Two companies](team/use-cases/two-companies.md) | [`group`](../tests/team/docs/transcripts/group.txt), [`contractor`](../tests/team/docs/transcripts/contractor.txt), [`two-orgs`](../tests/team/docs/transcripts/two-orgs.txt) |
@@ -44,7 +44,7 @@ Each step builds on the one before. Every example is a script that runs the real
 | run several agents on one plan | [When to use agents, claims and gates](choosing/agents-claims-gates.md), [Agents on one mission](team/use-cases/agents-mission.md) | [`agents`](../tests/team/docs/transcripts/agents.txt) |
 | fix a merge conflict in a note | [Conflicts and duplicates](sync/conflicts-and-duplicates.md) | [`sync`](../tests/docs/sections/sync.sh) |
 | get a note back that I deleted | [Trash, restore from git and purge](sync/trash-and-purge.md) | [`sync`](../tests/docs/sections/sync.sh) |
-| recover from a broken database | [A damaged database](operations/backup-restore-repair.md) | [`ops`](../tests/docs/sections/ops.sh) |
+| recover from a damaged cache | [A damaged cache](operations/backup-restore-repair.md) | [`ops`](../tests/docs/sections/ops.sh) |
 | run lore in CI | [Use lore in CI](operations/ci.md) | [`ops`](../tests/docs/sections/ops.sh) |
 | find out what an error means | [Error codes and exit statuses](reference/errors.md), [Troubleshooting](team/troubleshooting.md) | [`reference`](../tests/docs/sections/reference.sh), [`errors`](../tests/team/docs/transcripts/errors.txt) |
 | look up one command, flag or setting | [Reference](reference/README.md), [Feature index](reference/features.md) | — |
@@ -90,7 +90,7 @@ Each step builds on the one before. Every example is a script that runs the real
 - [Keep lore healthy and safe](operations/README.md): the overview of this section.
 - [Doctor](operations/doctor.md): the health check, its exit codes, and a support bundle for bug reports.
 - [The audit log](operations/audit-log.md): who changed what, and a check that nobody changed it behind lore's back.
-- [A damaged database](operations/backup-restore-repair.md): rebuild the local database and the search index from git.
+- [A damaged cache](operations/backup-restore-repair.md): rebuild the local cache and the search index from git.
 - [Secrets and personal data](operations/secrets-and-pii.md): why passwords are refused, your own patterns, and the safety switches.
 - [Use lore in CI](operations/ci.md): read-only mode, quiet hints, and failing a job on a bad health check.
 - [Your settings and team rules](operations/plugins-and-db-config.md): `lore config` and `lore policy`.

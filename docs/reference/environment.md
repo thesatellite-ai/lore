@@ -90,7 +90,7 @@ rul_28f8…03df  Posts go out on Tuesdays  [shared]
 | `LORE_READ_ONLY` | `1` refuses every write in this shell with `E_READ_ONLY`, like `--read-only`; lore also takes no lock and changes no git settings. Useful in CI |
 | `LORE_ALLOW_ROOT` | `1` lets lore run as the root user. Refused by default, because files made as root stay unwritable for you (`E_ROOT_REFUSED`) |
 | `LORE_ALLOW_NETWORK_FS` | `1` lets the database sit on a network or cloud-synced drive. Refused by default, because the database file can break silently there (`E_NETWORK_FS`) |
-| `LORE_NO_STALE_WARN` | `1` hides the warning that asks you to run `lore setup` again after an upgrade (useful in CI) |
+| `LORE_NO_STALE_WARN` | ignored in 0.1.18: there is no "run `lore setup` again" warning to hide (the local cache is kept in step by lore itself); still accepted so older CI scripts run |
 
 <!-- example: reference#read-only only=1 -->
 ```console

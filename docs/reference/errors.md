@@ -66,7 +66,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
 | `E_DB_LOCKED` | 23 | another lore process held a store's database for too long | wait for the other command to finish, then run yours again |
-| `E_DB_CORRUPT` | 23 | the database file failed its health check | move `.lore/lore.db` away and run `lore sync`: lore rebuilds it from `.lore/data` ([how](../operations/backup-restore-repair.md)) |
+| `E_DB_CORRUPT` | 23 | the local cache holds a record lore cannot read (a cache file that cannot be opened at all is moved aside and rebuilt by itself) | delete `.lore/lore-cache.db`: the next command rebuilds it from `.lore/data` ([how](../operations/backup-restore-repair.md)) |
 | `E_DB_NOT_FOUND` | 23 | no database at the configured path. Not raised yet | check `--db` / `LORE_DB`, or run `lore init` |
 | `E_SCHEMA_VERSION_MISMATCH` | 23 | a newer lore changed this database's layout. Not raised yet | upgrade lore |
 | `E_MIGRATION_INCOMPLETE` | 23 | an upgrade of the database layout did not finish; `lore doctor` reports it | run `lore setup`; if that fails, move `.lore/lore.db` away and run `lore sync` |

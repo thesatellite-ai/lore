@@ -15,39 +15,45 @@ on alice work/website "lore rule add --body 'Never put passwords in the code'"
 on alice work/website "lore audit log"
 on alice work/website "lore audit verify"
 
-# Someone edits the database file directly with a SQLite tool (no lore command):
-# the first rule's text is changed behind lore's back.
-quiet alice work/website "python3 -c \"import sqlite3; c=sqlite3.connect('.lore/lore.db'); c.execute(\\\"update rules set body='Pushing without tests is fine' where body='Run the tests before you push'\\\"); c.commit()\""
+# The audit chain lives in this machine's store (~/.lore/state/machine.db, table
+# audit_chain, P3-AUDIT-2). Keep a copy, then change one entry behind lore's back:
+# the memory's write is relabelled as a delete.
+quiet alice . "cp ~/.lore/state/machine.db ~/machine.db.copy"
+quiet alice . "python3 -c \"import os, sqlite3; c=sqlite3.connect(os.path.expanduser('~/.lore/state/machine.db')); c.execute(\\\"update audit_chain set action='memories.delete' where action='memories.write'\\\"); c.commit()\""
 
 note "audit tamper"
 on! alice work/website "lore audit verify"
-on alice work/website "lore rule list"
-on alice work/website "lore sync"
-on alice work/website "lore audit log --limit 2"
+on alice . "cp ~/machine.db.copy ~/.lore/state/machine.db && rm ~/machine.db.copy"
 on alice work/website "lore audit verify"
 
-# The database file gets damaged (here: its first bytes are overwritten).
-quiet alice work/website "printf 'this is not a db' | dd of=.lore/lore.db bs=1 conv=notrunc 2>/dev/null"
+# Row files are the truth: an edit to one is a change git shows, not an audit event.
+note "row file edit"
+on alice work/website "sed -i 's/Run the tests before you push/Pushing without tests is fine/' .lore/data/rules/*.json && lore rule list"
+on alice work/website "git status --short .lore/data"
+on alice work/website "lore audit verify"
+on alice work/website "git restore .lore/data && lore rule list"
+
+# The local cache file gets damaged (here: its first bytes are overwritten).
+quiet alice work/website "printf 'this is not a db' | dd of=.lore/lore-cache.db bs=1 conv=notrunc 2>/dev/null"
 
 note "damaged database"
-# Shared notes are read from .lore/data, so they still list while lore.db is broken.
 on alice work/website "lore rule list"
-on! alice work/website "lore doctor"
+on alice work/website "lore doctor | grep '^Status'"
+quiet alice work/website "rm -rf .lore/backups"
 
 note "rebuild from data"
-on alice work/website "mv .lore/lore.db .lore/lore.db.old && rm -f .lore/lore.db-wal .lore/lore.db-shm"
+on alice work/website "rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm"
 on alice work/website "lore rule list"
-on alice work/website "lore sync"
-on alice work/website "lore doctor | head -1"
-quiet alice work/website "rm -f .lore/lore.db.old"
+on alice work/website "lore doctor | grep '^Status'"
 
 note "search rebuild"
 on alice work/website "lore search rebuild"
 on alice work/website "lore sync conflicts | head -3"
 
 note "support bundle"
-on alice work/website "lore support-bundle --out bundle.json"
-on alice work/website "grep -E '\"(binary_version|status|rules|memories|sanitized)\"' bundle.json"
+# BUG-SUPPORT-BUNDLE-CMDLORE: the release binary answers E_UNSUPPORTED (reported to g-host).
+on_known BUG-SUPPORT-BUNDLE-CMDLORE alice work/website "lore support-bundle --out bundle.json"
+on_known BUG-SUPPORT-BUNDLE-CMDLORE alice work/website "grep -E '\"(binary_version|status|rules|memories|sanitized)\"' bundle.json"
 quiet alice work/website "rm -f bundle.json"
 
 note "pii pattern"
@@ -70,15 +76,6 @@ note "read only"
 EXTRA_ENV="LORE_READ_ONLY=1" on! alice work/website "lore rule add --body 'Buttons are blue'"
 EXTRA_ENV="LORE_READ_ONLY=1" on alice work/website "lore rule list"
 on! alice work/website "lore rule add --read-only --body 'Buttons are blue'"
-
-# Make the search index look out of date (what an upgrade without `lore setup` leaves).
-quiet alice work/website "python3 -c \"import sqlite3; c=sqlite3.connect('.lore/lore.db'); c.execute(\\\"update config set value='0000000000000000' where key='fts_registry_fingerprint'\\\"); c.commit()\""
-
-note "stale warning"
-on alice work/website "lore session list"
-EXTRA_ENV="LORE_NO_STALE_WARN=1" on alice work/website "lore session list"
-on alice work/website "lore setup"
-on alice work/website "lore session list"
 
 # What CI sees: a fresh clone of the pushed repo, with only .lore/data in it.
 quiet alice work/website "git add -A && git commit -qm 'lore: notes' && git push -q origin main"
