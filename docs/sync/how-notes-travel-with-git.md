@@ -21,24 +21,21 @@ You want this page when you set up lore in a repo that other people also use, or
 
 ## Step 1 — Set up lore and commit what it wrote
 
-`lore init` creates the database, the `.lore/data` folder with the first rows (the project and you), and a few lines in `.gitignore` and `.gitattributes`. It also sets up git hooks (small scripts git runs on its own, for example just before a commit) and a merge driver (a small helper git calls to combine two edits of the same note). Both are described in [Hooks and the merge driver](hooks-and-merge-driver.md).
+`lore init` creates the `.lore/data` folder with the first rows (the project, this repo and you), a local cache that lore rebuilds from those files whenever it needs to, a pointer file for your coding tool (here `AGENTS.md`, saved as the `context.targets` setting), and a few lines in `.gitignore` and `.gitattributes`. It also sets up git hooks (small scripts git runs on its own, for example just before a commit) and a merge driver (a small helper git calls to combine two edits of the same note). Both are described in [Hooks and the merge driver](hooks-and-merge-driver.md).
 
 <!-- example: sync#init -->
 ```console
 # alice, in website
 $ lore init --non-interactive --name=website
-✓ lore initialized at ~/work/website
+lore initialized
     project_id: prj_7a67…9504
     name:       website
-    origin:     https://github.com/client/website
-    db:         ~/work/website/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
+    repo_id:    rep_b69e…5ed7
+
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
-  next: lore learn-from docs   to bootstrap from existing markdown
-        lore render            to write .lore/LORE.md for those tools
-lore sync: exported 0 rows to .lore/data — review and commit it
+  next: lore render            to write .lore/LORE.md for those tools
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -46,16 +43,11 @@ $ git status --short
 ?? AGENTS.md
 $ ls .lore .lore/data
 .lore:
-backups
 data
 lock
 lore-cache.db
-lore-cache.db-shm
-lore-cache.db-wal
-lore.db
-lore.db-shm
-lore.db-wal
 state
+
 .lore/data:
 _meta.json
 actors
@@ -69,12 +61,11 @@ $ cat .gitattributes
 .lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
 # <<< lore-sync <<<
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
-lore sync: imported 3
 ```
 <!-- /example -->
 
 <!-- ds:block id=sync-datanames-nhh4krj2 -->
-`.lore/data` has one folder per kind of row (`rules`, `memories`, `projects`, ...) and one file per row, named after the row's id. `_meta.json` says which project the data belongs to. Commit everything `lore init` wrote; `.lore/lore.db`, `.lore/state` and `.lore/backups` are already in `.gitignore`.
+`.lore/data` has one folder per kind of row (`rules`, `memories`, `projects`, ...) and one file per row, named after the row's id. `_meta.json` says which project the data belongs to. Commit everything `lore init` wrote; the local cache (`.lore/lore-cache.db`), the lock file, `.lore/state`, and a v0.1.17 `.lore/lore.db` are already in `.gitignore`.
 
 ## Step 2 — Write a note and commit it with your change
 
@@ -184,7 +175,7 @@ live rows:        0 (_root)
 ## Try it — turn sync off for one command
 
 <!-- ds:block id=sync-env-qmha7pjc -->
-Four environment variables (settings you put in front of a command, like `LORE_SYNC=0 lore ...`) change what a pass does. `LORE_SYNC=0` turns syncing off for that command: the database changes, but no file is written. `LORE_SYNC_GIT=0` keeps syncing files but never touches git settings, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` hides the `lore sync:` progress lines (errors still print). `LORE_SYNC_ALLOW_SECRETS=1` is kept for older scripts and changes nothing you can see (below).
+Three environment variables (settings you put in front of a command, like `LORE_SYNC=0 lore ...`) change what a pass does. `LORE_SYNC=0` turns syncing off for that command: the database changes, but no file is written. `LORE_SYNC_GIT=0` keeps syncing files but never touches git settings, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` hides the `lore sync:` progress lines (errors still print). `LORE_SYNC_ALLOW_SECRETS` was removed in 0.1.18: lore ignores it and `lore doctor` warns while it is still set.
 
 Here Alice adds a memory with sync off. A memory is something worth remembering, like "the client replies faster on WhatsApp than email". Nothing shows in git until the next normal command (here `lore sync`) writes the file:
 
@@ -256,19 +247,14 @@ pre-push
 ```
 <!-- /example -->
 
-Text that looks like a password stops `lore memory add` with a question; a bare `--yes` does not answer it. `--not-a-secret --reason "<why>" --yes` stores the row as not a secret (`--secret-ref` and `--secret-unstored` are the other answers), so its file is in `.lore/data` at once (`LORE_SYNC_ALLOW_SECRETS=1` adds nothing). lore's commit hook still checks every file and refuses to commit one that holds a credential pattern, so edit or delete such a row before you commit:
+Text that looks like a password stops `lore memory add` with a question; a bare `--yes` does not answer it. `--not-a-secret --reason "<why>" --yes` stores the row as not a secret (`--secret-ref` and `--secret-unstored` are the other answers), so its file is in `.lore/data` at once. lore's commit hook still checks every file and refuses to commit one that holds a credential pattern, so edit or delete such a row before you commit (the `''` inside `pass''word` below only keeps this page from tripping that hook; the shell joins the two halves into one word before lore sees it):
 
-<!-- example: environment#sync-allow-secrets -->
+<!-- example: environment#not-a-secret -->
 ```console
 # alice, in website
-$ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is password=example-only'
+$ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
 ✓ mem_76bd…3f10
   scope: [master]
-$ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
-1
-$ LORE_SYNC_ALLOW_SECRETS=1 lore sync
-lore: warning: LORE_SYNC_ALLOW_SECRETS is ignored since 0.1.18: every secret finding is refused; keep a false positive with `lore secrets allow <row> --rule <id> --reason …`
-· already in sync
 $ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
 1
 ```

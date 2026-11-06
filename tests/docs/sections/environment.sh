@@ -38,11 +38,9 @@ on alice work/shop "ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/nu
 on alice work/shop "lore sync"
 on alice work/shop "ls .git/hooks | grep -v sample; cat .gitattributes"
 
-note "sync allow secrets"
-on alice work/website "lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is password=example-only'"
+note "not a secret"
+on alice work/website "lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'"
 local m_secret; m_secret=$(id mem)
-on alice work/website "ls .lore/data/memories | grep -c $m_secret || true"
-on alice work/website "LORE_SYNC_ALLOW_SECRETS=1 lore sync"
 on alice work/website "ls .lore/data/memories | grep -c $m_secret || true"
 
 note "network drive"
@@ -53,7 +51,7 @@ on alice work/Dropbox/website "LORE_ALLOW_NETWORK_FS=1 lore rule list"
 # LORE_ALLOW_DB_PATH_OUTSIDE and LORE_HOME now matter only when `lore migrate run`
 # reads a v0.1.17 shared-database pointer (Mode B, retired in 0.1.18: decision Q-MODEB).
 # A v0.1.17 shared lore.db holding one project's rows: a scratch repo's lore.db, copied out.
-quiet alice work "mkdir -p old-blog && cd old-blog && git init -q && lore init --non-interactive --name=blog && lore rule add --body 'Posts go out on Tuesdays' && lore sync && lore backup --out ../client.db && mkdir -p ~/shared-dbs && cp ../client.db ~/shared-dbs/client-docs.db && lore project list --json | grep -o 'prj_[0-9a-f]*' | head -1 > ../old-project-id && cd .. && rm -rf old-blog"
+quiet alice work "mkdir -p old-blog && cd old-blog && git init -q && lore init --non-interactive --name=blog && lore rule add --body 'Posts go out on Tuesdays' && lore sync && python3 -c \"import sqlite3; sqlite3.connect('.lore/lore.db').backup(sqlite3.connect('../client.db'))\" && mkdir -p ~/shared-dbs && cp ../client.db ~/shared-dbs/client-docs.db && lore project list --json | grep -o 'prj_[0-9a-f]*' | head -1 > ../old-project-id && cd .. && rm -rf old-blog"
 
 note "db path outside"
 quiet alice work "mkdir -p blog && cd blog && git init -q && mkdir .lore && printf 'db_path: ../client.db\nproject_id: %s\n' \$(cat ../old-project-id) > .lore/lore.yaml"

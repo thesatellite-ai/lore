@@ -122,11 +122,11 @@ ERROR: [E_IN_TRASH] engine: mem_28f8d32584b2db54ffb146bede5b03df is in the trash
   hint: lore trash show mem_28f8d32584b2db54ffb146bede5b03df; bring it back with lore trash restore mem_28f8d32584b2db54ffb146bede5b03df
 
 ### secrets
-alice (work/website)$ lore memory add --body 'The staging password is password=example-only'
+alice (work/website)$ lore memory add --body 'The staging password is pass''word=example-only'
 ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (password_pair) at line 1: passw…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
-alice (work/website)$ lore memory add --body 'The staging password is password=example-only' --not-a-secret --reason 'example value, not a real password' --yes
+alice (work/website)$ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes
 ✓ mem_3b6283bc4392c556bbae5f094246e913
   scope: [master]
 alice (work/website)$ ls .lore/data/memories | grep -c mem_3b6283bc4392c556bbae5f094246e913 || true

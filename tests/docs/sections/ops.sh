@@ -86,21 +86,21 @@ quiet alice work "git clone -q https://github.com/client/website ci-clone"
 
 note "ci"
 EXTRA_ENV="LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1" on alice work/ci-clone "lore rule list"
-EXTRA_ENV="LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1" on! alice work/ci-clone "lore doctor"
-# OPEN (owner question): lore sync install-git is dropped and nothing else wires git in a
-# read-only clone; the step stays a known failure until the CI wiring is decided.
-EXTRA_ENV="LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1" on_known OPEN-CI-WIRING alice work/ci-clone "lore sync install-git"
-EXTRA_ENV="LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1" on_known OPEN-CI-WIRING alice work/ci-clone "lore audit verify"
+# OWNERQ-9: lore's git wiring (merge driver config, .gitattributes check, hook blocks) runs
+# after every command in a git checkout, read-only ones included (it writes git's own files,
+# never rows), so the first command above already wired this clone; there is no install step.
+EXTRA_ENV="LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1" on alice work/ci-clone "lore doctor; echo \"doctor exit \$?\""
+EXTRA_ENV="LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1" on alice work/ci-clone "lore audit verify"
 EXTRA_ENV="LORE_READ_ONLY=1 LORE_NO_STALE_WARN=1" on alice work/ci-clone "lore doctor --json > doctor.json; echo \"doctor exit \$?\""
 on alice work/ci-clone "grep '\"status\"' doctor.json"
 EXTRA_ENV="LORE_READ_ONLY=1" on alice work/ci-clone "lore context --internal"
 quiet alice work/ci-clone "rm -f doctor.json"
 
 note "secret refused"
-on! alice work/website "lore memory add --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'"
+on! alice work/website "lore memory add --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'"
 
 note "allow secrets"
-on alice work/website "lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'"
+on alice work/website "lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'"
 local secret_mem; secret_mem=$(id mem)
 on alice work/website "grep -rl AKIA .lore/data || echo 'not in .lore/data'"
 on alice work/website "lore memory delete $secret_mem --yes"

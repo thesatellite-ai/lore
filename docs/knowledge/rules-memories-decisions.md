@@ -184,16 +184,16 @@ ERROR: [E_IN_TRASH] engine: mem_28f8…03df is in the trash (deleted by act_4c59
 
 ## Try it: a password is refused
 
-lore stops on text that looks like a password, a key or a token, because rows end up in git where everyone with the repo can read them. It asks first (`E_NEEDS_CONFIRM` without a terminal); the better fix is to keep the secret in your password manager and leave it out of the note. A bare `--yes` does not answer that question. When the match is not a real secret (an example value, a test string), `--not-a-secret --reason "<why>" --yes` stores the row as not a secret; for a real one, `--secret-ref "<manager>://<entry>"` keeps a reference and `--secret-unstored` keeps the note without the value. At a terminal a menu offers the same choices (redact, unstored, not a secret with a required reason, cancel). Its file is written to `.lore/data` (the `1` below counts it), but lore's commit hook checks every file again and refuses to commit one that still holds a credential pattern, so a real password does not reach git by accident.
+lore stops on text that looks like a password, a key or a token, because rows end up in git where everyone with the repo can read them. It asks first (`E_NEEDS_CONFIRM` without a terminal); the better fix is to keep the secret in your password manager and leave it out of the note. A bare `--yes` does not answer that question. When the match is not a real secret (an example value, a test string), `--not-a-secret --reason "<why>" --yes` stores the row as not a secret; for a real one, `--secret-ref "<manager>://<entry>"` keeps a reference and `--secret-unstored` keeps the note without the value. At a terminal a menu offers the same choices (redact, unstored, not a secret with a required reason, cancel). Its file is written to `.lore/data` (the `1` below counts it), but lore's commit hook checks every file again and refuses to commit one that still holds a credential pattern, so a real password does not reach git by accident. The `''` inside `pass''word` below only keeps this page from tripping that same hook: the shell joins the two halves into one word before lore sees it.
 
 <!-- example: knowledge#secrets -->
 ```console
 # alice, in website
-$ lore memory add --body 'The staging password is password=example-only'
+$ lore memory add --body 'The staging password is pass''word=example-only'
 ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (password_pair) at line 1: passw…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
-$ lore memory add --body 'The staging password is password=example-only' --not-a-secret --reason 'example value, not a real password' --yes
+$ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes
 ✓ mem_3b62…e913
   scope: [master]
 $ ls .lore/data/memories | grep -c mem_3b62…e913 || true

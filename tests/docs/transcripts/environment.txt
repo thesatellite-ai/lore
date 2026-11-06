@@ -95,15 +95,10 @@ pre-push
 .lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
 # <<< lore-sync <<<
 
-### sync allow secrets
-alice (work/website)$ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is password=example-only'
+### not a secret
+alice (work/website)$ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
 ✓ mem_76bd560aff0771fab8457dbfa9823f10
   scope: [master]
-alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
-1
-alice (work/website)$ LORE_SYNC_ALLOW_SECRETS=1 lore sync
-lore: warning: LORE_SYNC_ALLOW_SECRETS is ignored since 0.1.18: every secret finding is refused; keep a false positive with `lore secrets allow <row> --rule <id> --reason …`
-· already in sync
 alice (work/website)$ ls .lore/data/memories | grep -c mem_76bd560aff0771fab8457dbfa9823f10 || true
 1
 

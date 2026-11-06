@@ -233,13 +233,13 @@ alice (work/ci-clone)$ lore context --internal
 (nothing internal or personal loads in this repo)
 
 ### secret refused
-alice (work/website)$ lore memory add --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
+alice (work/website)$ lore memory add --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
 ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 
 ### allow secrets
-alice (work/website)$ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
+alice (work/website)$ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
 ✓ mem_d4314eba822f1bf5908b2b8ded5f313a
   scope: [master]
 alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'

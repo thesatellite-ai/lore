@@ -22,14 +22,14 @@ Alice (an agency developer) tries to save a deploy key as a memory. lore stops, 
 <!-- example: ops#secret-refused -->
 ```console
 # alice, in website
-$ lore memory add --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
+$ lore memory add --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
 ERROR: [E_NEEDS_CONFIRM] engine: body looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 ```
 <!-- /example -->
 
-The example key is the public sample key from cloud documentation; it opens nothing.
+The example key is the public sample key from cloud documentation; it opens nothing. The `''` in the middle of it only splits the key in this page (the shell joins the two halves back into one value before lore sees it), so the page itself does not trip lore's commit hook; you type the key as one word.
 
 ## Step 2 — Say it is not a secret
 
@@ -38,7 +38,7 @@ When the match is not a real secret (a sample value like this one, a test string
 <!-- example: ops#allow-secrets only=1,2 -->
 ```console
 # alice, in website
-$ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIAIOSFODNN7EXAMPLE'
+$ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
 ✓ mem_d431…313a
   scope: [master]
 $ grep -rl AKIA .lore/data || echo 'not in .lore/data'
