@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/store"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -728,7 +729,10 @@ type RepoSetURLOut struct {
 	// Confirmed is the confirmed list now in _meta.json, newest first.
 	Confirmed []string     `json:"confirmed"`
 	Warnings  []URLWarning `json:"warnings,omitempty"`
-	human     string
+	// Links are the store-link lines of RepoLinkFollower (one per store
+	// folder updated, or a warning per folder that could not be).
+	Links []string `json:"links,omitempty"`
+	human string
 	// other is set for --repo naming a repo other than this checkout.
 	other bool
 }
@@ -824,8 +828,26 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 	if mode == repourl.SetPrimary && prev != key {
 		out.Previous = prev
 	}
+	if f, ok := upgrade.As[RepoLinkFollower](env); ok && own && changed && mode != repourl.SetRemove {
+		if pid, perr := env.Project(ctx); perr == nil {
+			out.Links = f.FollowRepoLinks(ctx, pid.String(), out.Confirmed)
+		}
+	}
 	out.human = setURLText(out)
 	return out, nil
+}
+
+// RepoLinkFollower is the optional Env upgrade that makes the org store
+// links follow a confirmed address (PROVENANCE 10.4, Q7): every store
+// folder that links this project under one of its confirmed addresses
+// gains a link for each confirmed address it lacks, so org rule 4 keeps
+// matching a renamed or mirrored repo. It never removes a link and never
+// fails the set-url (the repo's own record is already written): it
+// returns one line per folder updated and one "warning: …" line per
+// folder or store it could not update. An Env without it leaves the
+// links alone.
+type RepoLinkFollower interface {
+	FollowRepoLinks(ctx context.Context, projectID string, confirmed []string) []string
 }
 
 // otherRepo resolves `set-url --repo <name>` to a repo row of this
@@ -879,6 +901,9 @@ func setURLText(o RepoSetURLOut) string {
 		b.WriteString("  the repo row is updated; that checkout's .lore/data/_meta.json is not changed from here (run set-url there to update it)\n")
 	case o.Changed:
 		b.WriteString("  .lore/data/_meta.json updated; commit it with your next push\n")
+	}
+	for _, l := range o.Links {
+		b.WriteString(l + "\n")
 	}
 	return b.String()
 }
