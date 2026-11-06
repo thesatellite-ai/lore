@@ -16,15 +16,6 @@ import (
 	th "saas/cmd/cli/internal/teamharness"
 )
 
-// teABugLivePurgeList: on a repo with a live ref, `lore trash purge`
-// writes the tombstone to the live ref but lists the purged id only in the
-// working tree's untracked .lore/data/_purged.json (liveBackend.WritePurge
-// and Purged use the inner backend's list, never the live tree's
-// _live/purged.json). Right after the purge the purger's clone answers a
-// restore E_PURGED; after `lore sync`, it and every teammate answer
-// E_NOT_FOUND "was deleted (live, …)". Found by te-a; no owner yet.
-var teABugLivePurgeList = th.Bug{ID: "BUG-LIVE-PURGE-LIST", Owner: "wire/host live purge, unassigned", Open: true}
-
 // teATrashCaps is what the trash e2e needs beyond the repo team.
 var teATrashCaps = []th.Cap{
 	th.Cmd("trash", "list"), th.Cmd("trash", "restore"), th.Cmd("trash", "purge"),
@@ -146,8 +137,6 @@ func TestTeA_TaskTrash_SubtreeRestoreTwoClones(t *testing.T) {
 	// The purged parent never comes back, and both clones say so the same
 	// way after their syncs: E_PURGED (DELETION 3.6, DQ4).
 	for _, c := range []*th.Clone{rt.c1, rt.c2} {
-		r := c.Lore("trash", "restore", p)
-		teABugLivePurgeList.PendingOn(t, r, "E_NOT_FOUND", p, "was deleted (live")
-		r.Refused(t, "E_PURGED", p)
+		c.Lore("trash", "restore", p).Refused(t, "E_PURGED", p)
 	}
 }
