@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/rowref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -202,7 +203,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	out := ListOut{SchemaVersion: content.SchemaVersion, Kind: KindList, Data: []Record{}, Notes: notes}
 	for _, l := range rows {
-		out.Data = append(out.Data, recordOf(o.c.Labeler(), l.Source, l.Row))
+		out.Data = append(out.Data, withMeta(ctx, o.c.Env, recordOf(o.c.Labeler(), l.Source, l.Row), l.Row))
 	}
 	out.Count = len(out.Data)
 	return out, nil
@@ -218,7 +219,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: content.SchemaVersion, Kind: KindShow, Data: recordOf(o.c.Labeler(), src, r), Refs: refs}, nil
+	return ShowOut{SchemaVersion: content.SchemaVersion, Kind: KindShow, Data: withMeta(ctx, o.c.Env, recordOf(o.c.Labeler(), src, r), r), Refs: refs}, nil
 }
 
 // search matches the query in every attached store.
@@ -244,6 +245,8 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 			ID: f.Row.ID.String(), Score: f.Score, Snippet: f.Snippet, Store: content.SourceOf(o.c.Labeler(), f.Source), Label: content.Label(o.c.Labeler(), f.Source),
 			Row: HitRow{Body: content.Field(f.Row, content.FieldBody), Title: content.Field(f.Row, fieldTitle)},
 		})
+		hm := metashow.Row(ctx, o.c.Env, f.Row) // MQ13: metadata on every read
+		out.Data[len(out.Data)-1].Meta, out.Data[len(out.Data)-1].MetaMasked = hm.Meta, hm.MetaMasked
 	}
 	out.Count = len(out.Data)
 	return out, nil

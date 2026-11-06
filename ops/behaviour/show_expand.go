@@ -3,6 +3,7 @@ package behaviour
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 )
@@ -21,10 +22,6 @@ type ShowIn struct {
 // row after an audited ask (expand.ShowWith; SECRETS 2.7, SQ10, D18).
 func (o ops) showExpand(ctx context.Context, in ShowIn) (ShowOut, error) {
 	out, err := o.show(ctx, IDIn{ID: in.ID})
-	if me, ok := o.c.Env.(metashow.Env); ok && err == nil {
-		b := metashow.Of(ctx, me, in.ID) // MQ13: metadata on every read
-		out.Meta, out.MetaMasked = b.Meta, b.MetaMasked
-	}
 	if err != nil || (!in.Expand && !in.Reveal && !in.Force) {
 		return out, err
 	}
@@ -40,5 +37,13 @@ func (o ops) showExpand(ctx context.Context, in ShowIn) (ShowOut, error) {
 
 // Text is the human form of show, with the --expand block when set.
 func (o ShowOut) Text() string {
-	return o.baseText() + metashow.Text(o.Meta, o.MetaMasked) + expand.Text(o.Expanded, o.Refs) + expand.WarningText(o.Warning)
+	return o.baseText() + metashow.Text(o.Data.Meta, o.Data.MetaMasked) + expand.Text(o.Expanded, o.Refs) + expand.WarningText(o.Warning)
+}
+
+// withMeta is rec with the row's metadata (MQ13, METADATA 3.17: show,
+// list --json and search hits carry it; sensitive values masked).
+func withMeta(ctx context.Context, env metashow.Env, rec Record, r row.Row) Record {
+	b := metashow.Row(ctx, env, r)
+	rec.Meta, rec.MetaMasked = b.Meta, b.MetaMasked
+	return rec
 }

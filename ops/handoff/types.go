@@ -97,6 +97,11 @@ type Record struct {
 	Store       store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta / MetaMasked are the row's metadata by name, sensitive values
+	// masked (MQ13, METADATA 3.17/3.20; absent when the row has none, so
+	// v0.1.17's bytes stay for such rows).
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // IDIn is the input of the operations that take one handoff id.
@@ -117,10 +122,6 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
-	// Meta / MetaMasked are the row's metadata by name, sensitive values
-	// masked (MQ13, METADATA 3.17/3.20; absent when it has none).
-	Meta       map[string]string `json:"meta,omitempty"`
-	MetaMasked []string          `json:"meta_masked,omitempty"`
 	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
 	// expanded and refs"); empty without --expand.
 	Expanded map[string]string `json:"expanded,omitempty"`
@@ -191,6 +192,11 @@ type SearchHit struct {
 	Store   store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta / MetaMasked are the row's metadata by name, sensitive values
+	// masked (MQ13, METADATA 3.17/3.20; absent when the row has none, so
+	// v0.1.17's bytes stay for such rows).
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // HitRow is v0.1.17's handoff hit row (keys sorted).
