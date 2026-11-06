@@ -198,7 +198,7 @@ func (e *Engine) confirm(ctx context.Context, cl call, question string) error {
 		}
 		return errs.New(errs.Cancelled, "engine: not confirmed: "+question)
 	}
-	return errs.New(errs.NeedsConfirm, "engine: "+question).WithHint("ask the person, then rerun with --yes")
+	return errs.New(errs.NeedsConfirm, "engine: "+question).WithQuestion(question).WithHint("ask the person, then rerun with --yes")
 }
 
 // actorOf is the actor a write is stamped with: the caller's when a surface

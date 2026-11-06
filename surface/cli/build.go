@@ -371,7 +371,13 @@ func run(cmd *cobra.Command, e op.Entry, runner op.Runner, cfg config, d op.Deco
 		case caller.Yes:
 			return res, err
 		default:
-			if !ask(in, cmd.ErrOrStderr(), body.Message) {
+			// the question as written for the person; the message carries
+			// the package prefix (engine: …) and is the fallback only
+			q := body.Question
+			if q == "" {
+				q = body.Message
+			}
+			if !ask(in, cmd.ErrOrStderr(), q) {
 				return op.Result{}, errs.New(errs.NeedsConfirm, notConfirmed)
 			}
 			caller.Yes = true
