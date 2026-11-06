@@ -130,3 +130,28 @@ func TestParseDuration(t *testing.T) {
 		}
 	}
 }
+
+// TestWindowsUnsafeFolderNames (B-XOS-1): a store folder or org name that
+// Windows cannot check out (a device name in any case, with or without an
+// extension, or a trailing '.') is refused on every system; names that
+// only contain such a word pass.
+func TestWindowsUnsafeFolderNames(t *testing.T) {
+	t.Parallel()
+	for name, bad := range map[string]bool{
+		"con": true, "CON": true, "nul.txt": true, "Aux": true, "com1": true, "lpt9.x": true, "prn": true,
+		"web.": true, "a..": true,
+		"console": false, "nul-web": false, "com10": false, "lpt": false, "my.con": false, "web": false, "v1.2": false,
+	} {
+		err := orgconf.ValidateFolderName(name)
+		if (err != nil) != bad {
+			t.Errorf("ValidateFolderName(%q) = %v, want refused=%v", name, err, bad)
+		}
+		if bad && err != nil && !strings.Contains(err.Error(), "Windows") {
+			t.Errorf("ValidateFolderName(%q) = %v, want the Windows reason", name, err)
+		}
+	}
+	_, err := orgconf.Parse([]byte("orgs:\n  - name: nul\n    match: [\"github.com/x/*\"]\n    stores:\n      - url: git@github.com:x/s.git\n"))
+	if err == nil || !strings.Contains(err.Error(), "Windows") {
+		t.Errorf("org named nul: %v, want refused for Windows", err)
+	}
+}

@@ -323,6 +323,28 @@ var reservedOrgNames = map[string]string{
 	PersonalEverywhere: "it is the personal-store folder for notes that load everywhere",
 }
 
+// windowsDeviceNames are the file names Windows reserves for devices, in
+// any case and with any extension ("con", "NUL.txt", "com1"): a folder of
+// that name in a store cannot be checked out on Windows, so one teammate's
+// folder would break the store for every Windows clone (B-XOS-1).
+var windowsDeviceNames = map[string]bool{"con": true, "prn": true, "aux": true, "nul": true,
+	"com1": true, "com2": true, "com3": true, "com4": true, "com5": true, "com6": true, "com7": true, "com8": true, "com9": true,
+	"lpt1": true, "lpt2": true, "lpt3": true, "lpt4": true, "lpt5": true, "lpt6": true, "lpt7": true, "lpt8": true, "lpt9": true}
+
+// windowsUnsafeName says why name cannot be a folder on Windows ("" when
+// it can): a device name, or a trailing '.', which Windows strips, so
+// "web." and "web" would be one folder there.
+func windowsUnsafeName(name string) string {
+	stem, _, _ := strings.Cut(strings.ToLower(name), ".")
+	switch {
+	case windowsDeviceNames[stem]:
+		return fmt.Sprintf("%q is a reserved device name on Windows, where the folder could not be checked out", name)
+	case strings.HasSuffix(name, "."):
+		return "a name ending in '.' cannot be a folder on Windows"
+	}
+	return ""
+}
+
 // Validate reports every problem of the org part at once, each prefixed
 // with where it is (orgs[1] "northwind": stores[0].branch …).
 func (c *Config) Validate() error {
@@ -475,6 +497,9 @@ func validateOrgName(name string) error {
 	if why, bad := reservedOrgNames[name]; bad {
 		return fmt.Errorf("%q is reserved: %s", name, why)
 	}
+	if why := windowsUnsafeName(name); why != "" {
+		return errors.New(why)
+	}
 	return nil
 }
 
@@ -491,6 +516,9 @@ func ValidateFolderName(name string) error {
 		return errors.New("must be a folder name, not a relative path")
 	case !folderRe.MatchString(name):
 		return errors.New("one folder name: letters, digits, '.', '_' or '-' (no '/')")
+	}
+	if why := windowsUnsafeName(name); why != "" {
+		return errors.New(why)
 	}
 	return nil
 }
