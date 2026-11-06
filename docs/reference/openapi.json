@@ -1130,6 +1130,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -1556,6 +1568,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -1949,6 +1973,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -1983,18 +2019,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -3294,6 +3318,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -3706,6 +3742,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -4099,6 +4147,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "name": {
                           "type": "string"
                         },
@@ -4127,18 +4187,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -6479,6 +6527,18 @@
                           "language": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -6895,6 +6955,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -7295,6 +7367,18 @@
                         "language": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -7323,18 +7407,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -7858,6 +7930,18 @@
                           "last_validated_at": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -8344,6 +8428,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -8774,6 +8870,18 @@
                         "last_validated_at": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -8850,18 +8958,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -11151,6 +11247,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "mission_id": {
                             "type": "string"
                           },
@@ -11573,6 +11681,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -11966,6 +12086,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "mission_id": {
                           "type": "string"
                         },
@@ -12003,18 +12135,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -12741,6 +12861,18 @@
                           "last_validated_at": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "overrides_id": {
                             "type": "string"
                           },
@@ -13227,6 +13359,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -13653,6 +13797,18 @@
                         "last_validated_at": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "overrides_id": {
                           "type": "string"
                         },
@@ -13705,18 +13861,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -15045,6 +15189,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -15474,6 +15630,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -15867,6 +16035,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -15928,18 +16108,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -18775,6 +18943,18 @@
                           "last_validated_at": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -19269,6 +19449,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -19724,6 +19916,18 @@
                         "last_validated_at": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -19780,18 +19984,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -29514,6 +29706,18 @@
                           "last_validated_at": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -29960,6 +30164,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -30365,6 +30581,18 @@
                         "last_validated_at": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -30411,18 +30639,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -33508,6 +33724,18 @@
                           "last_validated_at": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -33933,6 +34161,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -34341,6 +34581,18 @@
                         "last_validated_at": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "name": {
                           "type": "string"
                         },
@@ -34378,18 +34630,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -36671,6 +36911,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -37091,6 +37343,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -37493,6 +37757,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "name": {
                           "type": "string"
                         },
@@ -37521,18 +37797,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -48248,6 +48512,18 @@
                           "last_validated_at": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "overrides_id": {
                             "type": "string"
                           },
@@ -48748,6 +49024,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -49210,6 +49498,18 @@
                         "last_validated_at": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "overrides_id": {
                           "type": "string"
                         },
@@ -49259,18 +49559,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -51285,6 +51573,18 @@
                               "in_trash": {
                                 "type": "boolean"
                               },
+                              "meta": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta_masked": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "pretty": {
                                 "type": "string"
                               },
@@ -51346,6 +51646,18 @@
                               },
                               "in_trash": {
                                 "type": "boolean"
+                              },
+                              "meta": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta_masked": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "pretty": {
                                 "type": "string"
@@ -54756,6 +55068,18 @@
                           "last_validated_at": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -55183,6 +55507,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -55585,6 +55921,18 @@
                         "last_validated_at": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -55628,18 +55976,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -58098,6 +58434,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -58513,6 +58861,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -58910,6 +59270,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -58941,18 +59313,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -78897,6 +79257,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -79302,6 +79674,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -79695,6 +80079,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "project_id": {
                           "type": "string"
                         },
@@ -79723,18 +80119,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -80199,6 +80583,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -80610,6 +81006,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -81010,6 +81418,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "name": {
                           "type": "string"
                         },
@@ -81041,18 +81461,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -84223,6 +84631,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -84631,6 +85051,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -85021,6 +85453,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "name": {
                           "type": "string"
                         },
@@ -85049,18 +85493,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
@@ -85519,6 +85951,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -85927,6 +86371,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "row": {
                             "type": "object",
                             "properties": {
@@ -86317,6 +86773,18 @@
                         "id": {
                           "type": "string"
                         },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "name": {
                           "type": "string"
                         },
@@ -86345,18 +86813,6 @@
                     },
                     "kind": {
                       "type": "string"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
-                    "meta_masked": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "refs": {
                       "type": "array",
