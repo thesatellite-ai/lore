@@ -57,9 +57,17 @@ var liveFlagTables = map[row.Table]bool{
 }
 
 // companionTables are supporting tables whose NEW rows ride live with the
-// content row that needs them (FLAG6, PASS3-A-1).
+// content row that needs them (FLAG6, PASS3-A-1). Task lists are one
+// (F-MOVE-2): `task add` creates the "default" list on demand (and
+// `secrets check` its "secrets" list) in the same run as a live task, so
+// the list must reach a teammate with the task or its tasklist_id
+// resolves nowhere there (E_NOT_FOUND on the next split or edit). Folder
+// scopes are the same class: `rule|memory add --live --scope <dir>`
+// creates the scope row on first use. A row no live row carries still
+// goes to the branch at the end of the run.
 var companionTables = map[row.Table]bool{
 	schema.TableActors: true, schema.TableMetaKeys: true, schema.TableMetaValues: true,
+	schema.TableTasklists: true, schema.TableScopes: true,
 }
 
 // liveBackend wraps the repo store's backend.
