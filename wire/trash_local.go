@@ -19,10 +19,10 @@ import (
 	"database/sql"
 	"errors"
 	"io/fs"
-	"net/url"
 	"os"
 	"path/filepath"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 )
@@ -64,7 +64,7 @@ func readLocalTrash(ctx context.Context, path string) ([]opstrash.LocalCopy, err
 	} else if err != nil {
 		return nil, errs.Wrap(errs.Internal, "trash --local: stat "+v017LoreDB, err)
 	}
-	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=ro"}).String()
+	dsn := fileuri.URL(path, "mode=ro")
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "trash --local: open "+v017LoreDB, err)
@@ -115,7 +115,7 @@ func (a *App) DropLocalCopies(ctx context.Context, rowIDs []string) (int, error)
 		return 0, errs.Wrap(errs.Internal, "trash purge: stat "+v017LoreDB, serr)
 	}
 	// mode=rw: never create the file; busy_timeout: wait for a v0.1.17 lore.
-	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=rw&_pragma=busy_timeout(" + localTrashBusyMS + ")"}).String()
+	dsn := fileuri.URL(path, "mode=rw&_pragma=busy_timeout("+localTrashBusyMS+")")
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return 0, errs.Wrap(errs.Internal, "trash purge: open "+v017LoreDB, err)

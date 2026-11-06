@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -61,7 +62,7 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 	}
 	if raw == "" {
 		dir := filepath.Join(a.opts.Home, personalStoresDir, opsstores.PersonalName)
-		raw = (&url.URL{Scheme: folder.Scheme, Path: filepath.ToSlash(dir)}).String()
+		raw = fileuri.URL(dir, "")
 	}
 	raw, err := cleanFileURL(raw)
 	if err != nil {
@@ -112,7 +113,7 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 		return rowfs.Marker{}, false, errs.New(errs.StoreScheme, "store init: the url does not parse")
 	}
 	if u.Scheme == folder.Scheme {
-		dir := filepath.FromSlash(u.Path)
+		dir := fileuri.OSPath(u.Path)
 		if old, rerr := rowfs.ReadMarker(dir); rerr == nil {
 			return old, true, nil
 		} else if !errs.Has(rerr, errs.NotAStore) {
@@ -540,7 +541,7 @@ func (a *App) storeDir(ctx context.Context, src attach.Store) (string, error) {
 		return "", errs.New(errs.StoreScheme, "wire: the store url does not parse")
 	}
 	if u.Scheme == folder.Scheme {
-		return filepath.FromSlash(u.Path), nil
+		return fileuri.OSPath(u.Path), nil
 	}
 	b, err := a.openStore(ctx, canon, src.URL)
 	if err != nil {
@@ -675,11 +676,11 @@ func cleanFileURL(raw string) (string, error) {
 	if u.Path == "" {
 		return "", errs.New(errs.StoreScheme, "store: a file url needs an absolute path (file:///abs/path)")
 	}
-	p, err := filepath.Abs(filepath.FromSlash(u.Path))
+	p, err := filepath.Abs(fileuri.OSPath(u.Path))
 	if err != nil {
 		return "", errs.Wrap(errs.BadPath, "store: the file url's path", err)
 	}
-	u.Path = filepath.ToSlash(filepath.Clean(p))
+	u.Path = fileuri.URLPath(filepath.Clean(p))
 	return u.String(), nil
 }
 
@@ -736,7 +737,7 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 		return errs.New(errs.StoreScheme, "wire: the store url does not parse")
 	}
 	if u.Scheme == folder.Scheme {
-		_, err = edit(filepath.FromSlash(u.Path))
+		_, err = edit(fileuri.OSPath(u.Path))
 		return err
 	}
 	b, err := a.openStore(ctx, canon, src.URL)

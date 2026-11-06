@@ -27,7 +27,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,6 +34,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/validate"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -76,7 +76,7 @@ func copyMachineLocal(ctx context.Context, eng *engine.Engine, path string, dryR
 		return nil, 0, errs.Wrap(errs.Internal, "migrate: stat "+v017LoreDB, err)
 	}
 	// read-only: v0.1.17 may still be using the file
-	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=ro"}).String()
+	dsn := fileuri.URL(path, "mode=ro")
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return nil, 0, errs.Wrap(errs.Internal, "migrate: open "+v017LoreDB, err)

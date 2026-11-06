@@ -20,6 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
@@ -39,7 +40,7 @@ func (a *App) localStoreDir(e opsstores.Entry) (dir string, isGit bool, err erro
 		return "", false, errs.New(errs.StoreScheme, "wire: the store url does not parse")
 	}
 	if u.Scheme == folder.Scheme {
-		return filepath.FromSlash(u.Path), false, nil
+		return fileuri.OSPath(u.Path), false, nil
 	}
 	r, err := git.RemoteOf(u)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -72,7 +72,7 @@ func (c machineConfig) localPersonalV017(home string) string {
 
 // fileURL is the file:// url of an absolute dir.
 func fileURL(dir string) string {
-	return (&url.URL{Scheme: folder.Scheme, Path: filepath.ToSlash(dir)}).String()
+	return fileuri.URL(dir, "")
 }
 
 // ensureLocalMarker gives the v0.1.17 local personal store a marker

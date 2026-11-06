@@ -14,16 +14,15 @@ package wire
 import (
 	"context"
 	"errors"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -146,7 +145,7 @@ func (a *App) MigrateModeB(ctx context.Context, dryRun bool) ([]string, int, err
 		return nil, 0, err
 	}
 	dir := filepath.Join(filepath.Dir(exp.DBPath), modeBStoresDir, exp.ProjectName)
-	raw := (&url.URL{Scheme: folder.Scheme, Path: filepath.ToSlash(dir)}).String()
+	raw := fileuri.URL(dir, "")
 	steps := make([]string, 0, len(changes)+3)
 	for _, c := range changes {
 		steps = append(steps, modeBStepPrefix+c.Row.Table.String()+"/"+c.Row.ID.String()+" → store "+ModeBStoreName+" ("+dir+")")

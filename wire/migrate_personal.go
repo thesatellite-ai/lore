@@ -22,7 +22,6 @@ import (
 	"errors"
 	"io/fs"
 	"maps"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -30,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 
 	"gopkg.in/yaml.v3"
@@ -137,7 +137,7 @@ func readV017Config(ctx context.Context, top string) ([]personalSetting, error) 
 	} else if err != nil {
 		return nil, errs.Wrap(errs.Internal, "migrate: stat "+v017LoreDB, err)
 	}
-	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=ro"}).String()
+	dsn := fileuri.URL(path, "mode=ro")
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "migrate: open "+v017LoreDB, err)

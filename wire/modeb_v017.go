@@ -32,7 +32,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -42,6 +41,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -125,7 +125,7 @@ func (V017ModeB) ExportModeB(ctx context.Context, pointerPath string) (_ ModeBEx
 	if _, serr := os.Stat(dbPath); serr != nil {
 		return ModeBExport{}, errs.Wrap(errs.NotFound, "migrate: the shared lore.db "+dbPath+" named by "+pointerPath+" is not there", serr)
 	}
-	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(dbPath), RawQuery: "mode=ro"}).String()
+	dsn := fileuri.URL(dbPath, "mode=ro")
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return ModeBExport{}, errs.Wrap(errs.Internal, "migrate: open "+dbPath, err)

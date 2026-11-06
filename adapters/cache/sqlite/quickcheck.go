@@ -3,8 +3,8 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"net/url"
-	"path/filepath"
+
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // QuickCheckOK is PRAGMA quick_check's one-row answer for a sound file.
@@ -17,8 +17,7 @@ const QuickCheckOK = "ok"
 // this check sees it (`lore doctor`, wire.DoctorCaches). The error is the
 // driver's own: IsCorrupt tells damage from a lock or permission problem.
 func QuickCheck(ctx context.Context, path string) (string, error) {
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path), RawQuery: "mode=ro"}
-	db, err := sql.Open(driverName, u.String())
+	db, err := sql.Open(driverName, fileuri.URL(path, "mode=ro"))
 	if err != nil {
 		return "", err
 	}

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"net/url"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	modernc "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -252,7 +252,7 @@ func (l *Lens) setup(ctx context.Context) error {
 		if err != nil {
 			return errs.Wrap(errs.BadPath, "sqlite lens: bad path", err)
 		}
-		uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(abs), RawQuery: "mode=ro"}).String()
+		uri := fileuri.URL(abs, "mode=ro")
 		ss, err := sqlForSource(i)
 		if err != nil {
 			return err

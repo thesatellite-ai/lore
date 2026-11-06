@@ -42,13 +42,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/auditchain"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 )
@@ -447,8 +447,7 @@ func ReadLegacyAuditLog(ctx context.Context, path string) (_ []auditchain.Record
 	if err != nil {
 		return nil, errs.Wrap(errs.BadPath, "audit chain: lore.db path", err)
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs), RawQuery: "mode=ro&_pragma=busy_timeout(" + strconv.Itoa(busyTimeoutMS) + ")"}
-	db, err := sql.Open(driverName, u.String())
+	db, err := sql.Open(driverName, fileuri.URL(abs, "mode=ro&_pragma=busy_timeout("+strconv.Itoa(busyTimeoutMS)+")"))
 	if err != nil {
 		return nil, dbErr("open lore.db for the audit import", err)
 	}
