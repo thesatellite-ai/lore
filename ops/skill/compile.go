@@ -271,7 +271,7 @@ func collectSkillSources(sourceDir string, globs []string) (map[string]string, i
 					fmt.Sprintf("read %s: %v", m, err))
 			}
 			rel, _ := filepath.Rel(sourceDir, m)
-			files[rel] = string(content)
+			files[filepath.ToSlash(rel)] = string(content) // one header spelling on every OS
 			totalBytes += len(content)
 		}
 	}
