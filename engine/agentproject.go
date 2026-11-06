@@ -62,7 +62,15 @@ func (e *Engine) agentOwner(ctx context.Context, id ids.ID[ids.Actor]) ids.ID[id
 			if e.stores[name].Client != clientPass {
 				continue
 			}
-			sr, _, err := e.getRow(ctx, name, schema.TableActors, id.Any())
+			// G-ENGINE-6: an actor row the running write staged in this store
+			// (a command's first write stages the caller's actor row with
+			// it) answers as the stored row will, so every write of one
+			// command maps the same way
+			sr, staged := e.stagedActor(name, id.Any())
+			var err error
+			if !staged {
+				sr, _, err = e.getRow(ctx, name, schema.TableActors, id.Any())
+			}
 			if errors.Is(err, store.ErrNotFound) || (err == nil && sr.Deleted) {
 				continue
 			}

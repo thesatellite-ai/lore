@@ -37,7 +37,8 @@ func (a *App) withActorRows(ctx context.Context, st *state, write func(context.C
 	sctx := engine.Staging(ctx)
 	w, err := write(sctx)
 	if err != nil {
-		undo() // the refused stage is dropped: nothing reaches the store
+		undo()
+		engine.Discard(sctx) // the refused stage is dropped: nothing reaches the store
 		return w, err
 	}
 	warns, err := engine.Commit(sctx)

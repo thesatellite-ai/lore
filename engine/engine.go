@@ -18,6 +18,7 @@ package engine
 import (
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -133,6 +134,13 @@ type IDSource interface {
 // Engine runs operations and their reads and writes. Safe for concurrent
 // use: it holds no mutable state of its own beyond the clock, which locks.
 type Engine struct {
+	// open is every stage (Staging) this engine writes into and that is
+	// not committed or discarded yet, so a lookup that has no context
+	// (ActorAs: agentOwner) still sees an actor row the running write
+	// staged (G-ENGINE-6).
+	openMu sync.Mutex
+	open   map[*stage]bool
+
 	stores    map[store.Source]Attached
 	order     []store.Source // stores.yaml order: precedence for lookups
 	target    store.Source   // default write target

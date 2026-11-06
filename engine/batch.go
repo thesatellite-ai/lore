@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -170,6 +171,63 @@ func SideRecord(ctx context.Context) context.Context {
 	return context.WithValue(unstaged(ctx), batchKey{}, Batch{})
 }
 
+// Discard closes ctx's open stage without writing anything (a refused
+// write's batch): the stage's rows are dropped and no later lookup sees
+// them. No stage, or one already closed: no-op.
+func Discard(ctx context.Context) {
+	s, ok := ctx.Value(stageKey{}).(*stage)
+	if !ok || s == nil {
+		return
+	}
+	s.mu.Lock()
+	e := s.e
+	s.closed = true
+	s.mu.Unlock()
+	if e != nil {
+		e.trackStage(s, false)
+	}
+}
+
+// trackStage adds (on) or removes s from the engine's open stages.
+func (e *Engine) trackStage(s *stage, on bool) {
+	e.openMu.Lock()
+	defer e.openMu.Unlock()
+	if !on {
+		delete(e.open, s)
+		return
+	}
+	if e.open == nil {
+		e.open = map[*stage]bool{}
+	}
+	e.open[s] = true
+}
+
+// stagedActor is the actors row id a still-open stage of this engine
+// writes into store name (its last staged change there), for lookups that
+// carry no context (agentOwner through ActorAs). ok is false when no open
+// stage holds it there.
+func (e *Engine) stagedActor(name store.Source, id ids.AnyID) (store.Row, bool) {
+	e.openMu.Lock()
+	stages := make([]*stage, 0, len(e.open))
+	for s := range e.open {
+		stages = append(stages, s)
+	}
+	e.openMu.Unlock()
+	for _, s := range stages {
+		s.mu.Lock()
+		if p, ok := s.bySrc[name]; ok {
+			for i := len(p.changes) - 1; i >= 0; i-- {
+				if r := p.changes[i].Row; r.Table == schema.TableActors && r.ID == id && !r.Deleted {
+					s.mu.Unlock()
+					return r, true
+				}
+			}
+		}
+		s.mu.Unlock()
+	}
+	return store.Row{}, false
+}
+
 // InStage reports whether ctx carries an open stage (Staging, not yet
 // committed): a caller that would open its own stage joins this one.
 func InStage(ctx context.Context) bool { return stageOf(ctx) != nil }
@@ -216,6 +274,7 @@ func unstaged(ctx context.Context) context.Context {
 func (s *stage) part(e *Engine, st Attached) *stagedStore {
 	if s.e == nil {
 		s.e = e
+		e.trackStage(s, true)
 	}
 	p, ok := s.bySrc[st.Name]
 	if !ok {
@@ -309,6 +368,7 @@ func Commit(ctx context.Context) ([]Warning, error) {
 	if e == nil {
 		return nil, nil
 	}
+	defer e.trackStage(s, false) // committed rows are read from the backend from now on
 	var touched []store.Source
 	for _, name := range order {
 		if len(s.bySrc[name].changes) > 0 {
