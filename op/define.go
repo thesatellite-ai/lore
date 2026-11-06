@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 )
 
 // Entry is the type-erased view of an operation that surfaces, the runner
@@ -29,6 +32,9 @@ type Op[In, Out any] struct {
 	run  func(context.Context, In) (Out, error)
 	in   []FieldInfo
 	out  []FieldInfo
+	// ask builds the operation's own confirm question (Asks); nil = the
+	// Runner's generic question.
+	ask func(context.Context, In) (string, error)
 }
 
 var _ Entry = (*Op[struct{}, struct{}])(nil)
@@ -92,6 +98,84 @@ func (o *Op[In, Out]) Invoke(ctx context.Context, in Input) (Result, error) {
 		return Result{}, err
 	}
 	return Result{v: reflect.ValueOf(&out).Elem(), fields: o.out}, nil
+}
+
+// Questioner is the optional Entry upgrade an operation with a confirm
+// rule uses to put its real question (a preview: what changes, where it
+// goes, who will see it) into the confirm step, so a person at a terminal
+// and an agent reading E_NEEDS_CONFIRM see the same text (CLI_REFERENCE
+// 2.7). The Runner calls it with the call's context before it asks; ""
+// keeps the generic question, an error is returned instead of asking (a
+// row that does not exist is reported, not confirmed).
+type Questioner interface {
+	Question(ctx context.Context, in Input) (string, error)
+}
+
+// Asks sets the operation's own confirm question (Questioner) and returns
+// the operation, so a definition reads op.Define(spec, run).Asks(q).
+func (o *Op[In, Out]) Asks(q func(context.Context, In) (string, error)) *Op[In, Out] {
+	o.ask = q
+	return o
+}
+
+// Question implements Questioner: "" when the operation set no question.
+func (o *Op[In, Out]) Question(ctx context.Context, in Input) (string, error) {
+	if o.ask == nil {
+		return "", nil
+	}
+	if in.op != o.spec.Name || in.v.Type() != reflect.TypeFor[In]() {
+		return "", errs.New(errs.Internal, "op: input of "+in.op+" passed to "+o.spec.Name)
+	}
+	// the type check above makes this assertion total (as in Invoke)
+	typed, ok := in.v.Interface().(In)
+	if !ok {
+		return "", errs.New(errs.Internal, "op: input type mismatch for "+o.spec.Name)
+	}
+	return o.ask(ctx, typed)
+}
+
+// IDArgs returns the input's positional argument values that are row ids
+// (prefix_ + 32 hex), in order, plus the --to target when the input has
+// one: the words of the Runner's generic confirm question ("memory delete
+// mem_…?"). Only ids and a store name: free text never reaches a question,
+// which E_NEEDS_CONFIRM carries in its message (no secret there).
+func (i Input) IDArgs() []string {
+	var pos []FieldInfo
+	to := ""
+	for _, f := range i.fields {
+		fv := i.v.FieldByIndex(f.index)
+		switch {
+		case f.Arg != NoArg && (f.Type == TypeString || f.Type == TypeStrings):
+			pos = append(pos, f)
+		case f.Name == "to" && f.Type == TypeString:
+			to = fv.String()
+		}
+	}
+	slices.SortStableFunc(pos, func(a, b FieldInfo) int { return a.Arg - b.Arg })
+	var out []string
+	for _, f := range pos {
+		fv := i.v.FieldByIndex(f.index)
+		if f.Type == TypeString {
+			out = appendID(out, fv.String())
+			continue
+		}
+		for j := range fv.Len() {
+			out = appendID(out, fv.Index(j).String())
+		}
+	}
+	if t := strings.TrimSpace(to); t != "" && !strings.ContainsAny(t, " \t\n") {
+		out = append(out, "--to "+t)
+	}
+	return out
+}
+
+// appendID appends s when it is a row id.
+func appendID(out []string, s string) []string {
+	s = strings.TrimSpace(s)
+	if _, err := ids.ParseAny(s); err != nil {
+		return out
+	}
+	return append(out, s)
 }
 
 // Input is a decoded input struct, read by the Runner (the scanner needs its

@@ -89,8 +89,12 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 			return op.Result{}, perr
 		}
 	}
-	if needsConfirm(spec, in) {
-		if err := e.confirm(ctx, cl, "run "+strings.ReplaceAll(spec.Name, ".", " ")+"?"); err != nil {
+	if needsConfirm(spec, in) && !cl.caller.Yes {
+		q, qerr := question(context.WithValue(ctx, callKey{}, cl), entry, in)
+		if qerr != nil {
+			return op.Result{}, qerr
+		}
+		if err := e.confirm(ctx, cl, q); err != nil {
 			return op.Result{}, err
 		}
 	}
@@ -125,6 +129,22 @@ func needsConfirm(spec op.Spec, in op.Input) bool {
 		return ok && v
 	}
 	return false
+}
+
+// question is the confirm question of entry for in: the operation's own
+// (op.Questioner: a preview of what it will do) when it has one, else the
+// operation's words and the row ids and --to target the input names
+// ("memory delete mem_…?", never free text: the question travels in
+// E_NEEDS_CONFIRM's message).
+func question(ctx context.Context, entry op.Entry, in op.Input) (string, error) {
+	if q, ok := entry.(op.Questioner); ok {
+		s, err := q.Question(ctx, in)
+		if err != nil || s != "" {
+			return s, err
+		}
+	}
+	words := append([]string{strings.ReplaceAll(entry.Spec().Name, ".", " ")}, in.IDArgs()...)
+	return strings.Join(words, " ") + "?", nil
 }
 
 // confirm settles one question: yes passes; an interactive caller with a
