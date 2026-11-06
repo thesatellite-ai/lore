@@ -8,20 +8,25 @@ package host
 //	         ─▶ (Around finish: push what landing changed on the live ref)
 //	land.run ─▶ the same landing pass
 //
-// v0.1.17's lore.db catch-up pass, store clone exchange, conflicts, trash,
-// peek and promote belong to the old binary's sync host; on cmd/lore they
-// answer E_UNSUPPORTED until they are ported.
+// v0.1.17's lore.db catch-up pass and store clone exchange belong to the
+// old binary's sync host. Conflicts and resolve work on the live rows'
+// conflict markers (G-SYNC-1); merge-rows, fix-projects, the trash and
+// purge pointers fall back to the core (wire/sync_rows.go).
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/merge3"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -204,7 +209,7 @@ func (l liveSync) SyncStatus(ctx context.Context, _ opssync.StatusIn) (opssync.S
 
 // SyncConflicts implements opssync.Env: the live rows of the cwd project
 // whose text fields hold conflict markers (F4: both edits kept, the row
-// cannot land until a person settles it with an edit). This binary keeps
+// cannot land until a person settles it: lore sync resolve or an edit). This binary keeps
 // no saved conflict copies, so --all adds nothing.
 func (l liveSync) SyncConflicts(ctx context.Context, _ opssync.ConflictsIn) (opssync.ConflictsOut, error) {
 	out := opssync.ConflictsOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindConflicts, Data: []opssync.Conflict{}}
@@ -225,7 +230,7 @@ func (l liveSync) SyncConflicts(ctx context.Context, _ opssync.ConflictsIn) (ops
 		}
 		at := p.File.Block.LiveSince.UTC().Format(time.RFC3339)
 		out.Data = append(out.Data, opssync.Conflict{ID: int64(len(out.Data) + 1), Table: p.Key.Table, RowID: p.Key.ID, Kept: conflictKeptBoth, At: at})
-		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, conflict markers in a text field; edit the row to settle it)", len(out.Data), p.Key.Table, p.Key.ID, conflictKeptBoth))
+		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, conflict markers in a text field; settle with lore sync resolve %d --take kept|other, or edit the row)", len(out.Data), p.Key.Table, p.Key.ID, conflictKeptBoth, len(out.Data)))
 	}
 	out.Count = len(out.Data)
 	if out.Count == 0 {
@@ -244,9 +249,198 @@ func isConflict(p landPlanRow) bool {
 	return p.Decision.Action == live.LandStay && strings.HasPrefix(p.Decision.Reason, "conflict")
 }
 
-// SyncResolve implements opssync.Env.
-func (liveSync) SyncResolve(context.Context, opssync.ResolveIn) (opssync.DoneOut, error) {
-	return opssync.DoneOut{}, unsupported("resolve")
+// Sides `lore sync resolve --take` names (G-SYNC-1): kept is the first
+// section of each conflict block (this machine's edit, merge3 "ours"),
+// other the second (the edit that met it, "theirs").
+const (
+	takeKept  = "kept"
+	takeOther = "other"
+)
+
+// SyncResolve implements opssync.Env (G-SYNC-1): conflict #n of `lore sync
+// conflicts` (the same numbering: the folder's conflicted live rows in
+// table/id order) is settled by keeping one side of every conflict block
+// in the row, and of every structured meta conflict entry; the settled row
+// is a new live version (pushed by the run's finish, then it may land). A
+// row still holding markers afterwards (nested or hand-made blocks) is
+// refused: edit it by hand.
+func (l liveSync) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssync.DoneOut, error) {
+	take := strings.TrimSpace(in.Take)
+	if take != takeKept && take != takeOther {
+		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "--take must be kept or other").
+			WithHint("kept keeps this machine's edit of each clash, other the edit that met it")
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(in.ID), "#"))
+	if err != nil || n < 1 {
+		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "name a conflict number (see lore sync conflicts)")
+	}
+	s, folder, err := l.here(ctx)
+	if err != nil {
+		return opssync.DoneOut{}, err
+	}
+	if s == nil {
+		return opssync.DoneOut{}, errs.New(errs.Unsupported, liveUnsupported)
+	}
+	if s.blocked != nil {
+		return opssync.DoneOut{}, errLiveBlocked()
+	}
+	plan, err := s.plan(ctx, folder, nil)
+	if err != nil {
+		return opssync.DoneOut{}, errs.Wrap(errs.Internal, "live conflicts", err)
+	}
+	var hit *landPlanRow
+	count := 0
+	for i := range plan {
+		if !isConflict(plan[i]) {
+			continue
+		}
+		if count++; count == n {
+			hit = &plan[i]
+			break
+		}
+	}
+	if hit == nil {
+		return opssync.DoneOut{}, errs.New(errs.NotFound, fmt.Sprintf("no open conflict #%d", n)).WithHint("lore sync conflicts lists them")
+	}
+	body := settleObject(hit.File.Body, take == takeOther)
+	prev := hit.File
+	next := live.NewVersion(&prev, body, s.clk.Now(), liveAnonymousWriter)
+	if next.HasConflictMarkers() {
+		return opssync.DoneOut{}, errs.New(errs.InvalidInput, hit.Key.Table+"/"+hit.Key.ID+" still holds conflict markers after keeping one side (nested or hand-made blocks)").
+			WithHint("edit the row by hand to settle it")
+	}
+	rows := map[live.RowKey]live.File{hit.Key: next}
+	if err = s.h.leakCheck(ctx, leakWhereLive, folder, rows); err != nil {
+		return opssync.DoneOut{}, err
+	}
+	res, err := s.ref.Write(ctx, live.WriteRequest{Folder: folder, Rows: rows, BinaryVersion: s.h.cfg.Version})
+	if err != nil {
+		return opssync.DoneOut{}, errs.Wrap(errs.Internal, "live: write the local live ref", err)
+	}
+	s.wrote += len(res.Written)
+	s.markFolder(folder)
+	done := fmt.Sprintf("resolved #%d %s/%s (took %s)", n, hit.Key.Table, hit.Key.ID, take)
+	return opssync.DoneOut{Done: done, Lines: []string{"✓ " + done}}, nil
+}
+
+// settleObject is body with every conflict settled to one side (other:
+// the second section, else the first): marker blocks in any string at any
+// depth, and structured meta conflict entries (METADATA 3.12).
+func settleObject(body canonjson.Object, other bool) canonjson.Object {
+	out := make(canonjson.Object, len(body))
+	for k, v := range body {
+		out[k] = settleValue(v, other)
+	}
+	if meta, ok := out[row.KeyMeta].AsObject(); ok {
+		out[row.KeyMeta] = canonjson.ObjectValue(settleMetaEntries(meta, other))
+	}
+	return out
+}
+
+// settleValue settles the marker blocks of every string inside v.
+func settleValue(v canonjson.Value, other bool) canonjson.Value {
+	if str, ok := v.AsString(); ok {
+		return canonjson.String(settleText(str, other))
+	}
+	if arr, ok := v.AsArray(); ok {
+		out := make([]canonjson.Value, len(arr))
+		for i, it := range arr {
+			out[i] = settleValue(it, other)
+		}
+		return canonjson.Array(out...)
+	}
+	if obj, ok := v.AsObject(); ok {
+		return canonjson.ObjectValue(settleObject(obj, other))
+	}
+	return v
+}
+
+// Structured meta conflict members (logic/merge entries.go, METADATA 3.12).
+const (
+	metaConflictKey = "conflict"
+	metaOursKey     = "ours"
+	metaTheirsKey   = "theirs"
+	metaValueKey    = "v"
+)
+
+// settleMetaEntries replaces each entry's {"conflict": {base, ours,
+// theirs}} with the chosen side's value; a side that removed the value
+// (null) removes the entry.
+func settleMetaEntries(meta canonjson.Object, other bool) canonjson.Object {
+	side := metaOursKey
+	if other {
+		side = metaTheirsKey
+	}
+	out := make(canonjson.Object, len(meta))
+	for id, e := range meta {
+		entry, ok := e.AsObject()
+		if !ok {
+			out[id] = e
+			continue
+		}
+		c, has := entry[metaConflictKey]
+		if !has {
+			out[id] = e
+			continue
+		}
+		sides, _ := c.AsObject()
+		chosen, present := sides[side]
+		if !present || chosen.Kind() == canonjson.KindNull {
+			continue
+		}
+		next := make(canonjson.Object, len(entry))
+		for k, v := range entry {
+			if k != metaConflictKey {
+				next[k] = v
+			}
+		}
+		next[metaValueKey] = chosen
+		out[id] = canonjson.ObjectValue(next)
+	}
+	return out
+}
+
+// settleText keeps one section of every complete marker block of s
+// (open "<<<<<<< ", split "=======", close ">>>>>>> ", git's shape);
+// an unfinished block is left as written.
+func settleText(s string, other bool) string {
+	if !merge3.ContainsConflictMarkers(s) {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	const (
+		outside = iota
+		first
+		second
+	)
+	state, start := outside, 0
+	var firstLines, secondLines []string
+	for i, line := range lines {
+		switch {
+		case state == outside && strings.HasPrefix(line, merge3.MarkerOurs[:8]):
+			state, start, firstLines, secondLines = first, i, nil, nil
+		case state == first && line == merge3.MarkerSplit:
+			state = second
+		case state == second && strings.HasPrefix(line, merge3.MarkerTheirs[:8]):
+			if other {
+				out = append(out, secondLines...)
+			} else {
+				out = append(out, firstLines...)
+			}
+			state = outside
+		case state == first:
+			firstLines = append(firstLines, line)
+		case state == second:
+			secondLines = append(secondLines, line)
+		default:
+			out = append(out, line)
+		}
+	}
+	if state != outside {
+		out = append(out, lines[start:]...) // an unfinished block stays as written
+	}
+	return strings.Join(out, "\n")
 }
 
 // SyncTrashList implements opssync.Env.

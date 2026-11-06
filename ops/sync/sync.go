@@ -121,7 +121,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(w(OpResolve, "Close a conflict, keeping the current version or the saved other one"), run(o, Env.SyncResolve)),
 		op.Define(r(OpTrashList, "Moved: lore trash --local (this spelling goes away in the next release)"), run(o, Env.SyncTrashList)),
 		op.Define(w(OpTrashRestore, "Moved: lore trash restore --local <n>"), run(o, Env.SyncTrashRestore)),
-		op.Define(w(OpPurge, "Durably remove rows archived before a cutoff (moved: lore trash purge --archived-before)"), run(o, Env.SyncPurge)),
+		op.Define(confirmed(w(OpPurge, "Durably remove rows archived before a cutoff (moved: lore trash purge --archived-before)")), run(o, Env.SyncPurge)),
 		op.Define(w(OpFixProjects, "Collapse several project rows into one (two parallel bootstraps met in a merge)"), run(o, Env.SyncFixProjects)),
 		op.Define(r(OpPeek, "List the lore rows another branch carries, without checking it out"), run(o, Env.SyncPeek)),
 		op.Define(w(OpPromote, "Commit rows onto another local branch (e.g. an urgent rule onto main)"), run(o, Env.SyncPromote)),
@@ -131,6 +131,13 @@ func Ops(env Env) []op.Entry {
 		op.Define(w(OpLand, "Write live rows to main now (finished rows land; open rows are copied and stay live)"), run(o, Env.Land)),
 		op.Define(r(OpExplain, "Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision"), run(o, Env.Explain)),
 	}
+}
+
+// confirmed adds E_NEEDS_CONFIRM to a durable verb's errors: sync purge
+// answers through `lore trash purge`, which refuses without --confirm.
+func confirmed(s op.Spec) op.Spec {
+	s.Errors = append(append([]errs.Code{}, s.Errors...), errs.NeedsConfirm)
+	return s
 }
 
 // ops binds the run functions to one Env (nil: no repo-sync host).

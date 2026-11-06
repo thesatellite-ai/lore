@@ -15,6 +15,8 @@ package wire
 //	                   (one bat_ batch) ─▶ _meta.json project_id = keep
 //	   sync trash   ─▶ stderr pointer (DELETION 3.10, OV31-a) ─▶ the same
 //	                   answer as `lore trash --local` / `restore --local <n>`
+//	   sync purge   ─▶ stderr pointer (FA-DEL-4) ─▶ the registered
+//	                   `lore trash purge --archived-before` operation
 //	   every other verb ─▶ the base host unchanged
 //
 // Owned by p3-refrewrite. The hook point in wire.go (`opssync.Ops(a.syncEnv())`)
@@ -161,6 +163,47 @@ func (s syncRows) SyncTrashRestore(ctx context.Context, in opssync.TrashRestoreI
 	// The outer run (sync.trash.restore, write access) already passed the
 	// Runner's checks; restore --local never writes (it refuses or points at git).
 	res, err := e.Invoke(ctx, tin)
+	if err != nil {
+		return opssync.DoneOut{}, err
+	}
+	text, _ := res.Text()
+	text = strings.TrimSpace(text)
+	return opssync.DoneOut{Done: text, Lines: []string{text}}, nil
+}
+
+// syncPurgePointer is the one stderr line of the old `lore sync purge`
+// spelling (FA-DEL-4, CLI_REFERENCE F71).
+const syncPurgePointer = "note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release"
+
+// SyncPurge implements opssync.Env: the old spelling of `lore trash purge
+// --archived-before <cutoff>` (FA-DEL-4), answered by that operation
+// itself, so its --confirm / --dry-run rules and refusals are the one path.
+func (s syncRows) SyncPurge(ctx context.Context, in opssync.PurgeIn) (opssync.DoneOut, error) {
+	out, err := s.Env.SyncPurge(ctx, in)
+	if !fallback(err) {
+		return out, err
+	}
+	s.app.notice(syncPurgePointer)
+	if strings.TrimSpace(in.ArchivedBefore) == "" {
+		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "sync purge: --archived-before is required").
+			WithHint("lore trash purge --archived-before <date|age> --confirm")
+	}
+	e, ok := s.app.reg.Lookup(opstrash.OpPurge)
+	if !ok {
+		return opssync.DoneOut{}, errs.New(errs.Internal, "sync purge: "+opstrash.OpPurge+" is not registered")
+	}
+	body, err := json.Marshal(opstrash.PurgeIn{ArchivedBefore: in.ArchivedBefore, Confirm: in.Confirm, DryRun: in.DryRun})
+	if err != nil {
+		return opssync.DoneOut{}, errs.Wrap(errs.Internal, "sync purge: encode", err)
+	}
+	pin, err := e.Decode(op.JSONDecoder{Body: body})
+	if err != nil {
+		return opssync.DoneOut{}, err
+	}
+	// The outer run (sync.purge, write access) already passed the Runner's
+	// checks; the purge op keeps its own confirm rule (no --confirm and no
+	// --dry-run is E_NEEDS_CONFIRM, nothing purged).
+	res, err := e.Invoke(ctx, pin)
 	if err != nil {
 		return opssync.DoneOut{}, err
 	}
