@@ -33,10 +33,10 @@ func TestAgentOwnerSeesStagedActorRow(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := apSetup(t, true)
-			call := call{caller: op.Caller{Actor: c.agent, Yes: true}}
+			cl := call{caller: op.Caller{Actor: c.agent, Yes: true}}
 			write := func(name string, withActor bool) {
 				t.Helper()
-				ctx := Staging(context.WithValue(context.Background(), callKey{}, call))
+				ctx := Staging(context.WithValue(context.Background(), callKey{}, cl))
 				if withActor { // the client projection of the agent, staged first
 					fields := map[string]value.Value{schema.FieldActorKind: txt(schema.ActorKindAgent), "display_name": txt("bot")}
 					if _, err := f.eng.CreateWithID(ctx, store.SourceRepo, schema.TableActors, c.agent.Any(), fields); err != nil {

@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -78,12 +80,18 @@ func TestInitAsAgentStampsEveryRow(t *testing.T) {
 			writers := map[string][]string{}
 			tables := map[string]bool{}
 			var actorKind string
-			root := filepath.Join(dir, ".lore", "data")
-			err = filepath.WalkDir(root, func(p string, d os.DirEntry, werr error) error {
-				if werr != nil || d.IsDir() || filepath.Base(p) == "_meta.json" {
+			// Walked and read through a root at .lore/data, so reads stay inside it.
+			rt, err := os.OpenRoot(filepath.Join(dir, ".lore", "data"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = rt.Close() }() // read-only; each read reports its own error
+			fsys := rt.FS()
+			err = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, werr error) error {
+				if werr != nil || d.IsDir() || path.Base(p) == "_meta.json" {
 					return werr
 				}
-				b, rerr := os.ReadFile(filepath.Clean(p))
+				b, rerr := fs.ReadFile(fsys, p)
 				if rerr != nil {
 					return rerr
 				}

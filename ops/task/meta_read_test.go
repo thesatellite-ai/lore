@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
-	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/ops/settings"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
 )
 
 // TestTaskMetaOnEveryRead (METADATA 3.17 "metadata on every read", MQ13,

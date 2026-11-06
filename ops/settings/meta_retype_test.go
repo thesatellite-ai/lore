@@ -16,34 +16,35 @@ import (
 // retypeKey is the key every retype test converts.
 const retypeKey = "rt_key"
 
-// metaJSON is the stored JSON of key on row id ("" when the row has none).
-func metaJSON(t *testing.T, h *opstest.H, id, key string) string {
+// retypedJSON is the stored JSON of retypeKey on row id ("" when the row
+// has none).
+func retypedJSON(t *testing.T, h *opstest.H, id string) string {
 	t.Helper()
 	var out settings.MetaGetOut
 	if err := json.Unmarshal([]byte(h.JSON(h.Must(settings.OpMetaGet, `{"id":`+opstest.Quote(id)+`}`))), &out); err != nil {
 		t.Fatal(err)
 	}
 	for _, v := range out.Data {
-		if v.Key == key {
+		if v.Key == retypeKey {
 			return v.JSON
 		}
 	}
 	return ""
 }
 
-// keyInfo is one key as meta keys --json lists it.
-func keyInfo(t *testing.T, h *opstest.H, name string) settings.MetaKey {
+// retypedKey is retypeKey as meta keys --json lists it.
+func retypedKey(t *testing.T, h *opstest.H) settings.MetaKey {
 	t.Helper()
 	var out settings.MetaKeysOut
 	if err := json.Unmarshal([]byte(h.JSON(h.Must(settings.OpMetaKeys, `{}`))), &out); err != nil {
 		t.Fatal(err)
 	}
 	for _, k := range out.Data {
-		if k.Name == name {
+		if k.Name == retypeKey {
 			return k
 		}
 	}
-	t.Fatalf("no key %s", name)
+	t.Fatalf("no key %s", retypeKey)
 	return settings.MetaKey{}
 }
 
@@ -133,25 +134,25 @@ func TestMetaRetypeConversionMatrix(t *testing.T) {
 			t.Parallel()
 			h := opstest.New(t)
 			id := seedKey(t, h, c.from, c.val)[0]
-			before := metaJSON(t, h, id, retypeKey)
+			before := retypedJSON(t, h, id)
 			if c.want == "" {
 				_, err := h.RunYes(settings.OpMetaEdit, retypeIn(retypeKey, c.to, ""))
 				if !errs.Has(err, errs.MetaType) || !strings.Contains(err.Error(), id) {
 					t.Fatalf("misfit with --yes: %v (want E_META_TYPE naming %s)", err, id)
 				}
-				if k := keyInfo(t, h, retypeKey); k.Type != c.from {
+				if k := retypedKey(t, h); k.Type != c.from {
 					t.Errorf("key type %s after a refused retype", k.Type)
 				}
-				if got := metaJSON(t, h, id, retypeKey); got != before {
+				if got := retypedJSON(t, h, id); got != before {
 					t.Errorf("row value %s -> %s after a refused retype", before, got)
 				}
 				return
 			}
 			h.MustYes(settings.OpMetaEdit, retypeIn(retypeKey, c.to, ""))
-			if k := keyInfo(t, h, retypeKey); k.Type != c.to {
+			if k := retypedKey(t, h); k.Type != c.to {
 				t.Errorf("key type %s, want %s", k.Type, c.to)
 			}
-			if got := metaJSON(t, h, id, retypeKey); got != c.want {
+			if got := retypedJSON(t, h, id); got != c.want {
 				t.Errorf("value %s -> %s, want %s", before, got, c.want)
 			}
 		})
@@ -209,7 +210,7 @@ func TestMetaRetypeRefusals(t *testing.T) {
 			if c.setup != nil {
 				c.setup(h)
 			}
-			before, typ := metaJSON(t, h, id, retypeKey), keyInfo(t, h, retypeKey).Type
+			before, typ := retypedJSON(t, h, id), retypedKey(t, h).Type
 			_, err := h.RunYes(settings.OpMetaEdit, c.in)
 			if err == nil {
 				t.Fatalf("%s: no error", c.in)
@@ -217,10 +218,10 @@ func TestMetaRetypeRefusals(t *testing.T) {
 			if c.code != "" && !errs.Has(err, c.code) {
 				t.Fatalf("%s: %v, want %s", c.in, err, c.code)
 			}
-			if got := keyInfo(t, h, retypeKey).Type; got != typ {
+			if got := retypedKey(t, h).Type; got != typ {
 				t.Errorf("key type %s -> %s after a refusal", typ, got)
 			}
-			if got := metaJSON(t, h, id, retypeKey); got != before {
+			if got := retypedJSON(t, h, id); got != before {
 				t.Errorf("row value %s -> %s after a refusal", before, got)
 			}
 		})
@@ -239,11 +240,11 @@ func TestMetaRetypeModes(t *testing.T) {
 	misfit := ids[len(ids)-1]
 	unchanged := func(what string) {
 		t.Helper()
-		if k := keyInfo(t, h, retypeKey); k.Type != "text" {
+		if k := retypedKey(t, h); k.Type != "text" {
 			t.Fatalf("%s: key type %s", what, k.Type)
 		}
 		for i, id := range ids {
-			if got := metaJSON(t, h, id, retypeKey); got != opstest.Quote(vals[i]) {
+			if got := retypedJSON(t, h, id); got != opstest.Quote(vals[i]) {
 				t.Fatalf("%s: row %d = %s", what, i, got)
 			}
 		}
@@ -273,15 +274,15 @@ func TestMetaRetypeModes(t *testing.T) {
 	if !strings.Contains(out, "7 values converted in batch bat_") {
 		t.Errorf("convert output:\n%s", out)
 	}
-	if k := keyInfo(t, h, retypeKey); k.Type != "number" {
+	if k := retypedKey(t, h); k.Type != "number" {
 		t.Fatalf("key type %s after --keep-as-text", k.Type)
 	}
 	for i, id := range ids[:7] {
-		if got := metaJSON(t, h, id, retypeKey); got != vals[i] {
+		if got := retypedJSON(t, h, id); got != vals[i] {
 			t.Errorf("row %d = %s, want %s", i, got, vals[i])
 		}
 	}
-	if got := metaJSON(t, h, misfit, retypeKey); got != `"about 8"` {
+	if got := retypedJSON(t, h, misfit); got != `"about 8"` {
 		t.Errorf("misfit kept as text: %s", got)
 	}
 }
@@ -333,11 +334,11 @@ func TestMetaRetypeUndoAndHistory(t *testing.T) {
 		t.Fatalf("no batch id in %s", h.JSON(res))
 	}
 	h.MustYes("batch.undo", `{"id":"`+bid+`"}`)
-	if k := keyInfo(t, h, retypeKey); k.Type != "text" {
+	if k := retypedKey(t, h); k.Type != "text" {
 		t.Errorf("undo: key type %s", k.Type)
 	}
 	for i, want := range []string{`"3"`, `"4.5"`} {
-		if got := metaJSON(t, h, ids[i], retypeKey); got != want {
+		if got := retypedJSON(t, h, ids[i]); got != want {
 			t.Errorf("undo: row %d = %s, want %s", i, got, want)
 		}
 	}
@@ -356,7 +357,7 @@ func TestMetaRetypeUndoAndHistory(t *testing.T) {
 			t.Errorf("type_history entry %v lacks until/by", e)
 		}
 	}
-	if got := metaJSON(t, h, ids[1], retypeKey); got != `"4.5"` {
+	if got := retypedJSON(t, h, ids[1]); got != `"4.5"` {
 		t.Errorf("round trip value %s", got)
 	}
 }
@@ -376,7 +377,7 @@ func TestMetaRetypeStoreKeyRowsEverywhere(t *testing.T) {
 		t.Fatalf("convert: %s", out)
 	}
 	for id, want := range map[string]string{repoRow: "7", storeRow: "8"} {
-		if got := metaJSON(t, h, id, retypeKey); got != want {
+		if got := retypedJSON(t, h, id); got != want {
 			t.Errorf("%s = %s, want %s", id, got, want)
 		}
 	}
