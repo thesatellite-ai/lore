@@ -77,8 +77,10 @@ var WriteErrors = []errs.Code{
 // DeleteErrors are WriteErrors plus E_HAS_DEPENDENTS and E_REASON_REQUIRED.
 var DeleteErrors = append(slices.Clone(WriteErrors), errs.HasDependents, errs.ReasonRequired)
 
-// ReadErrors are the codes a work read can return.
-var ReadErrors = []errs.Code{errs.InvalidInput, errs.InvalidID, errs.NotFound, errs.AmbiguousID, errs.StoreUnreachable, errs.OldLore, errs.Internal}
+// ReadErrors are the codes a work read can return. E_PURGED: a show of an
+// id on a purge list (the live ref's or the branch's) answers it instead
+// of E_NOT_FOUND (B-ERRS2-5, 49f2eabb).
+var ReadErrors = []errs.Code{errs.InvalidInput, errs.InvalidID, errs.NotFound, errs.Purged, errs.AmbiguousID, errs.StoreUnreachable, errs.OldLore, errs.Internal}
 
 // SearchErrors are the codes a work search can return.
 var SearchErrors = []errs.Code{errs.InvalidInput, errs.Unsupported, errs.DBCorrupt, errs.StoreUnreachable, errs.Internal}
