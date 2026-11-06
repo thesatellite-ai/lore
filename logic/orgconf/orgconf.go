@@ -355,6 +355,8 @@ func (c *Config) Validate() error {
 	if s := c.Personal.Store; s != "" && s != PersonalStoreLocal && !isFolderStoreURL(s) {
 		if _, err := repourl.Normalize(s); err != nil {
 			add(fmt.Errorf("personal.store %q: not %q and not a git URL: %w", s, PersonalStoreLocal, err))
+		} else if ferr := repourl.CheckFetchable(s); ferr != nil {
+			add(fmt.Errorf("personal.store %q: %w", s, ferr)) // the host/path id form is not an address (D-DOCS-1)
 		}
 	}
 	if k := c.Identity.Key; k != "" {
@@ -423,6 +425,8 @@ func (o *Org) validate() []error {
 		n, err := repourl.Normalize(s.URL)
 		if err != nil {
 			add(fmt.Errorf("%s.url %q: %w", w, s.URL, err))
+		} else if ferr := repourl.CheckFetchable(s.URL); ferr != nil {
+			add(fmt.Errorf("%s.url %q: %w", w, s.URL, ferr)) // the host/path id form is not an address (D-DOCS-1)
 		}
 		if s.Branch != "" {
 			if err := validateBranchName(s.Branch); err != nil {

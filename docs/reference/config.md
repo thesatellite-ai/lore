@@ -186,7 +186,7 @@ $ git fetch -q origin && git log --oneline origin/develop -2 && git log --onelin
 | `name` | required | the entry's name; also what you type after `--to`. Lowercase letters, digits, `.` or `-`, at most 64 characters. `repo`, `me` and `everywhere` are taken, and names may not start with `_` |
 | `identity.key` | required when the entry is used | who you are in this org: `human:<your email in this org>` |
 | `identity.name`, `identity.handle` | none | your name and `@handle` in this org |
-| `stores[].url` | required | a store repo of this org, such as `github.com/agency/notes` |
+| `stores[].url` | required | a store repo of this org, as an address git can fetch: `git@github.com:agency/notes` or `https://github.com/agency/notes` (or `ssh://…`). The bare form `github.com/agency/notes` is refused when the config is read |
 | `stores[].branch` | `main` | the store branch this entry uses; no `/` in the name. A branch other than the store's main branch makes this a staging entry |
 | `stores[].org_folder` | none | set on exactly one store: the folder that holds the org's people list (the roster), teams and company rules; `.` means the top of the store |
 | `own` | none | patterns for the org's own code repos, such as `github.com/agency/*` |

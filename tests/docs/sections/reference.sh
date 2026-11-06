@@ -39,7 +39,7 @@ orgs:
       name: Alice
       handle: alice
     stores:
-      - url: github.com/agency/notes
+      - url: git@github.com:agency/notes
         org_folder: "."
     own:
       - github.com/agency/*
@@ -94,7 +94,7 @@ orgs:
     identity:
       key: alice@agency.example
     stores:
-      - url: github.com/agency/notes
+      - url: git@github.com:agency/notes
         branch: team/staging
 lease:
   ttl: 5m
