@@ -24,8 +24,8 @@ const maxAge = 7 * 24 * time.Hour
 const autopushOff = th.EnvAutopush + "=0"
 
 // pushLiveFile writes one file onto a remote's live ref the way a stranger
-// with push access could (no lore involved), returning the new commit.
-func pushLiveFile(t *testing.T, c *th.Clone, ref, path, body string) string {
+// with push access could (no lore involved).
+func pushLiveFile(t *testing.T, c *th.Clone, ref, path, body string) {
 	t.Helper()
 	c.Git("fetch", "-q", "origin", "+"+ref+":refs/harness/live")
 	idx := c.Dir + "/.git/harness-index"
@@ -37,7 +37,6 @@ func pushLiveFile(t *testing.T, c *th.Clone, ref, path, body string) string {
 	tree := g.Git("write-tree")
 	sha := g.Git("commit-tree", tree, "-p", "refs/harness/live", "-m", "hand edit")
 	c.Git("push", "-q", "origin", sha+":"+ref)
-	return sha
 }
 
 // ---------------------------------------------------------------- F1 lookup
@@ -711,17 +710,17 @@ func TestSideEffect11_TombstoneLandsAsDeleteAndPurge(t *testing.T) {
 // ---------------------------------------------------------------- F6 ride-along
 
 // newProtectedTeam is a repo team whose origin refuses pushes to main.
-func newProtectedTeam(t *testing.T, caps ...th.Cap) *repoTeam {
+func newProtectedTeam(t *testing.T) *repoTeam {
 	t.Helper()
 	// Protected main only matters once rows land (ride-along, F6).
-	rt := newRepoTeam(t, append([]th.Cap{capLand}, caps...)...)
+	rt := newRepoTeam(t, capLand)
 	rt.app.ProtectMain()
 	return rt
 }
 
-// commitSubjects lists the clone's commit subjects, newest first.
-func commitSubjects(c *th.Clone, rev string, n int) []string {
-	return strings.Split(c.Git("log", "--format=%s", "-n", strconv.Itoa(n), rev), "\n")
+// commitSubjects lists the clone's last n commit subjects (HEAD), newest first.
+func commitSubjects(c *th.Clone, n int) []string {
+	return strings.Split(c.Git("log", "--format=%s", "-n", strconv.Itoa(n), "HEAD"), "\n")
 }
 
 // rideTask makes dev1 finish a task on feat/login of a protected repo and
@@ -744,7 +743,7 @@ func rideTask(t *testing.T, rt *repoTeam) string {
 func TestE04_RideAlongOnProtectedMain(t *testing.T) {
 	rt := newProtectedTeam(t)
 	id := rideTask(t, rt)
-	subj := commitSubjects(rt.c1, "HEAD", 2)
+	subj := commitSubjects(rt.c1, 2)
 	if !strings.HasPrefix(subj[0], "lore: land 1 row") || subj[1] != "fix login timeout" {
 		t.Fatalf("expected the ride commit on top of the user's commit: %v", subj)
 	}
@@ -782,7 +781,7 @@ func TestE04_ClosedPRRowStaysLiveAndRidesAgain(t *testing.T) {
 	rt.c1.Git("checkout", "-q", "-b", "feat/second-try")
 	rt.c1.WriteFile("src/other.go", "package src\n")
 	rt.c1.CommitAll("second try")
-	if !strings.HasPrefix(commitSubjects(rt.c1, "HEAD", 1)[0], "lore: land 1 row") {
+	if !strings.HasPrefix(commitSubjects(rt.c1, 1)[0], "lore: land 1 row") {
 		t.Fatal("the waiting row must ride again on the next branch")
 	}
 }
@@ -817,7 +816,7 @@ func TestF06_NoRideWhereItMustNotRide(t *testing.T) {
 			if tc.says != "" && !strings.Contains(r.Out(), tc.says) {
 				t.Fatalf("a skipped ride must say why: %s", r.Out())
 			}
-			if s := commitSubjects(rt.c1, "HEAD", 1)[0]; strings.HasPrefix(s, "lore: land") {
+			if s := commitSubjects(rt.c1, 1)[0]; strings.HasPrefix(s, "lore: land") {
 				t.Fatalf("no ride commit expected (%s)", tc.name)
 			}
 			if _, ok := rt.liveTask(t, id); !ok {
@@ -837,7 +836,7 @@ func TestF06_ResetDropsRideAndPrePushAddsItBack(t *testing.T) {
 	if r.Code == 0 || !strings.Contains(r.Out(), "git push again") {
 		t.Fatalf("pre-push must add the ride commit and stop this push: %s", r.Out())
 	}
-	if !strings.HasPrefix(commitSubjects(rt.c1, "HEAD", 1)[0], "lore: land 1 row") {
+	if !strings.HasPrefix(commitSubjects(rt.c1, 1)[0], "lore: land 1 row") {
 		t.Fatal("pre-push must have added a fresh ride commit")
 	}
 	rt.c1.Git("push", "-q", "-u", "origin", "feat/login")
@@ -860,7 +859,7 @@ func TestF06_NoVerifyPushLeavesRowsWaiting(t *testing.T) {
 	}
 	rt.c1.WriteFile("src/later.go", "package src\n")
 	rt.c1.CommitAll("later")
-	if !strings.HasPrefix(commitSubjects(rt.c1, "HEAD", 1)[0], "lore: land 1 row") {
+	if !strings.HasPrefix(commitSubjects(rt.c1, 1)[0], "lore: land 1 row") {
 		t.Fatal("the row rides on the next commit")
 	}
 }
@@ -873,7 +872,7 @@ func TestF06_OneRideCommitPerCommitNoReentry(t *testing.T) {
 	rt.c1.WriteFile("src/more.go", "package src\n")
 	rt.c1.CommitAll("more work")
 	n := 0
-	for _, s := range commitSubjects(rt.c1, "HEAD", 10) {
+	for _, s := range commitSubjects(rt.c1, 10) {
 		if strings.HasPrefix(s, "lore: land") {
 			n++
 		}
@@ -900,7 +899,7 @@ func TestSideEffect34_MonorepoOneRideCommitForAllProjects(t *testing.T) {
 	web.MustLore("task", "done", webTask)
 	rt.c1.WriteFile("src/x.go", "package src\n")
 	rt.c1.CommitAll("code")
-	if s := commitSubjects(rt.c1, "HEAD", 2); !strings.HasPrefix(s[0], "lore: land 2 rows") || strings.HasPrefix(s[1], "lore: land") {
+	if s := commitSubjects(rt.c1, 2); !strings.HasPrefix(s[0], "lore: land 2 rows") || strings.HasPrefix(s[1], "lore: land") {
 		t.Fatalf("one ride commit for both projects expected: %v", s)
 	}
 	changed := rt.c1.Git("show", "--name-only", "--format=", "HEAD")

@@ -267,7 +267,7 @@ func TestLeak_TrialF7_RideAlongStillPushesInClientRepo(t *testing.T) {
 	c.MustLore("task", "done", id).Says(t, "protected")
 	c.WriteFile("src/totals.ts", "export const cents = (n: number) => Math.round(n * 100)\n")
 	c.CommitAll("fix checkout totals")
-	if subj := commitSubjects(c, "HEAD", 1); !strings.HasPrefix(subj[0], "lore: land") {
+	if subj := commitSubjects(c, 1); !strings.HasPrefix(subj[0], "lore: land") {
 		t.Fatalf("expected the ride commit on top: %v", subj)
 	}
 	if r := c.TryGit("push", "-q", "-u", "origin", "feat/totals"); r.Code != 0 {

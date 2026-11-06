@@ -127,7 +127,8 @@ func mustID(t *testing.T, r th.Result, prefix string) string {
 }
 
 func storeLive(branch string) string    { return refLive + "/" + branch }
-func storeSignals(branch string) string { return refSignals + "/" + branch }
+// storeSignals is the store branch's signals ref.
+func storeSignals() string { return refSignals + "/" + storeBranch }
 
 // liveRowPath is a row's path inside a live ref's tree (§2: one folder per project).
 func liveRowPath(folder, table, id string) string { return folder + "/" + table + "/" + id + ".json" }

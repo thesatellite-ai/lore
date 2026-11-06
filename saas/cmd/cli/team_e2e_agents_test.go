@@ -860,8 +860,8 @@ func TestRecipe15_AgentOnAClientTask(t *testing.T) {
 	if len(a.app.Refs(refSignals)) != 0 {
 		t.Fatal("claims for a client task never sit on the client's signals ref")
 	}
-	if f := a.store.FilesMatching(storeSignals(storeBranch), folderAcme+"/"+claimsDir+"/"); len(f) != 1 {
-		t.Fatalf("the claim sits on the store's signals ref, folder acme/: %v", a.store.Files(storeSignals(storeBranch)))
+	if f := a.store.FilesMatching(storeSignals(), folderAcme+"/"+claimsDir+"/"); len(f) != 1 {
+		t.Fatalf("the claim sits on the store's signals ref, folder acme/: %v", a.store.Files(storeSignals()))
 	}
 	ac.MustLore("task", "note", id, "reproduced; root cause in rounding")
 	ac.MustLore("task", "done", id, "--pr", "88")

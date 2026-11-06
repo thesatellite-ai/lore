@@ -60,7 +60,7 @@ func teBCoordStore(t *testing.T) teBCoordCase {
 	c1, c2 := w1.Clone(a.app, "app"), w2.Clone(a.app, "app")
 	return teBCoordCase{parent: p, kids: kids, w1: w1, w2: w2, c1: c1, c2: c2, person: a.aliceApp,
 		claimOf: func(id string) (signal, bool) {
-			return readSignal(t, a.store, storeSignals(storeBranch), claimPath(folderAcme, id))
+			return readSignal(t, a.store, storeSignals(), claimPath(folderAcme, id))
 		}}
 }
 
