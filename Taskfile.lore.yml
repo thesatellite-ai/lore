@@ -93,7 +93,8 @@ tasks:
   test:all:
     desc: "Every Go test in the workspace modules (dbent, lace, saas), incl. the CLI end-to-end suite and the docs drift test"
     cmds:
-      - go test -count=1 ./dbent/... ./lace/... ./saas/...
+      # No -count=1: go test reruns a package when its code, the env vars or the files it reads change.
+      - go test ./dbent/... ./lace/... ./saas/...
 
   check:tidy:
     desc: "Fail when `go mod tidy` would change saas/go.mod or go.sum (leaves the files as they were)"
@@ -195,9 +196,11 @@ tasks:
       - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./saas/cmd/cli
       # go test -json → pass / FAIL / pending matrix; exits 1 only on real failures
       # (pipefail so a build failure of the test binary is not swallowed by the pipe).
+      # -count=1: the tests run the outside binary LORE_TEAM_BIN, which the test cache does not
+      # track, so a cached pass could hide a rebuilt binary's failure.
       - |
         set -o pipefail
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
           | go run ./saas/cmd/cli/internal/teamharness/matrix
 
   trial:github:
@@ -279,6 +282,7 @@ tasks:
         set -e
         dir=$(mktemp -d)
         unit=$(mktemp -d)
+        # -count=1 kept: the run must write fresh coverage files; a cache replay writes none.
         LORE_E2E_COVERDIR="$dir" go test -count=1 -cover -coverpkg=./saas/... ./saas/cmd/cli/... ./saas/pkg/aicoder/... -args -test.gocoverdir="$unit" >/dev/null
         go tool covdata textfmt -i="$dir,$unit" -o coverage.out
         go tool cover -func=coverage.out | tail -1
