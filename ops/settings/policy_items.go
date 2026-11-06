@@ -53,6 +53,8 @@ func (o ops) checkSetItems(d policy.KeyDef, items []string) error {
 					WithHint("for example " + map[policy.Key]string{policy.KeyClientRoutes: "rule=agency", policy.KeyMetaScopeAliases: "be=repo:acmehub_backend"}[d.Key])
 			}
 		}
+	default:
+		// every other key's value is checked by its KeyDef shape alone
 	}
 	return nil
 }
