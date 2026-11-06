@@ -168,8 +168,15 @@ func (cv *coordView) claim(id string) (signals.Signal, bool, bool) {
 // rows whatever project wrote them (the group's), the repo's own rows of
 // this project only (v0.1.17 projectDocs).
 func (cv *coordView) projectDocs(ctx context.Context, table row.Table) []coord.Doc {
+	return cv.projectDocsIn(ctx, table, cv.a.Stores())
+}
+
+// projectDocsIn is projectDocs over the stores srcs only (the lazy merged
+// check keeps the repo's rows alone when the linked store is out of reach,
+// E-FATES-4).
+func (cv *coordView) projectDocsIn(ctx context.Context, table row.Table, srcs []store.Source) []coord.Doc {
 	var out []coord.Doc
-	for _, src := range cv.a.Stores() {
+	for _, src := range srcs {
 		group := cv.w.spot.store && src != store.SourceRepo
 		rows, err := cv.a.List(ctx, src, table)
 		if err != nil {

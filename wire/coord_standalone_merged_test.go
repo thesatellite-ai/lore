@@ -9,11 +9,14 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -274,40 +277,42 @@ func TestCoordUnknownTaskLeavesTheHintToTheHost(t *testing.T) {
 	}
 }
 
-// TestMergedCheckWarnsWhenStoreUnreachable (later.md 606, port of v0.1.17
-// merge_unchecked_test.go): the lazy merged check must not look as if it
-// ran when the linked store could not be opened: one warning line says the
-// merge state was not checked and why; an unlinked checkout opens nothing
-// and says nothing, and a store that opens says nothing either.
+// TestMergedCheckWarnsWhenStoreUnreachable (later.md 606, E-FATES-4, port
+// of v0.1.17 merge_unchecked_test.go): the lazy merged check must not look
+// as if it ran on the linked store when that store could not be opened:
+// one warning line says its merge state was not checked and why, and the
+// check goes on over the rest (this repo's own rows, as v0.1.17's
+// lazyMergedCheck ran before groupMergedCheck). An unlinked checkout opens
+// nothing and says nothing; a store that opens says nothing either.
 func TestMergedCheckWarnsWhenStoreUnreachable(t *testing.T) {
 	t.Parallel()
 	unreachable := errors.New("fetch git@example.com:acme/store.git: connection refused\nexit status 128")
 	linked := orgresolve.Result{Links: []orgresolve.Link{{Entry: "acme"}}}
 	cases := []struct {
-		name               string
-		sit                orgresolve.Result
-		openErr            error
-		wantGo, wantOpened bool
+		name                     string
+		sit                      orgresolve.Result
+		openErr                  error
+		wantRepoOnly, wantOpened bool
 	}{
-		{"no links: nothing to open, silent", orgresolve.Result{}, unreachable, true, false},
-		{"client role without links: the store is opened", orgresolve.Result{Role: orgresolve.RoleClient}, unreachable, false, true},
-		{"linked, store opens: silent", linked, nil, true, true},
-		{"linked, store unreachable: one warning", linked, unreachable, false, true},
+		{"no links: nothing to open, silent", orgresolve.Result{}, unreachable, false, false},
+		{"client role without links: the store is opened", orgresolve.Result{Role: orgresolve.RoleClient}, unreachable, true, true},
+		{"linked, store opens: silent", linked, nil, false, true},
+		{"linked, store unreachable: one warning, the repo's rows still checked", linked, unreachable, true, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			var out strings.Builder
 			opened := false
-			goOn := linkedStoreOpens(&out, &coordWorld{sit: tc.sit}, func() error {
+			repoOnly := linkedStoreScope(&out, &coordWorld{sit: tc.sit}, func() error {
 				opened = true
 				return tc.openErr
 			})
 			got := out.String()
-			if goOn != tc.wantGo || opened != tc.wantOpened {
-				t.Fatalf("go on=%v opened=%v, want %v %v", goOn, opened, tc.wantGo, tc.wantOpened)
+			if repoOnly != tc.wantRepoOnly || opened != tc.wantOpened {
+				t.Fatalf("repo only=%v opened=%v, want %v %v", repoOnly, opened, tc.wantRepoOnly, tc.wantOpened)
 			}
-			if tc.wantGo {
+			if !tc.wantRepoOnly {
 				if got != "" {
 					t.Fatalf("want silence, got %q", got)
 				}
@@ -322,5 +327,61 @@ func TestMergedCheckWarnsWhenStoreUnreachable(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMergeCandidatesOfTheRepoWhenStoreUnreachable (E-FATES-4): with the
+// linked store out of reach the check still has this repo's own done,
+// unmerged tasks to look at, and leaves the store's rows alone (they are
+// neither checked nor stamped this time); with the store opened the
+// group's rows are candidates too. An open task is never a candidate.
+func TestMergeCandidatesOfTheRepoWhenStoreUnreachable(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo, _, _, _ := folderStoreRepo(t)
+	a := newTestApp(t, repo)
+	withProject(t, a)
+	add := func(input string) string {
+		t.Helper()
+		out, err := run(t, a, opstask.OpAdd, input, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var shown struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(out), &shown); err != nil || shown.Data.ID == "" {
+			t.Fatalf("task add output has no id: %s (%v)", out, err)
+		}
+		return shown.Data.ID
+	}
+	own, group := add(`{"title":"fix rounding"}`), add(`{"title":"ship the store side","to":"northwind"}`)
+	w := &coordWorld{a: a, sit: orgresolve.Result{Links: []orgresolve.Link{{Entry: "acme"}}}}
+	w.spot.store = true // the view of a linked checkout: the store's rows are the group's
+	if got := a.mergeCandidates(ctx, w, true); len(got) != 0 {
+		t.Fatalf("an open task is a candidate: %v", got)
+	}
+	for _, id := range []string{own, group} {
+		if _, err := run(t, a, opstask.OpDone, `{"id":"`+id+`","no_lesson":true}`, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := func(cs []mergewatch.Candidate) []string {
+		var out []string
+		for _, c := range cs {
+			out = append(out, c.TaskID)
+		}
+		sort.Strings(out)
+		return out
+	}
+	if got := ids(a.mergeCandidates(ctx, w, true)); !slices.Equal(got, []string{own}) {
+		t.Fatalf("store out of reach: candidates %v, want only the repo's %s", got, own)
+	}
+	want := []string{own, group}
+	sort.Strings(want)
+	if got := ids(a.mergeCandidates(ctx, w, false)); !slices.Equal(got, want) {
+		t.Fatalf("store opened: candidates %v, want %v", got, want)
 	}
 }

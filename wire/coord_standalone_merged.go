@@ -55,10 +55,8 @@ func (a *App) MergedCheck(ctx context.Context, out io.Writer) {
 	if err != nil {
 		return // no coordination here: nothing to say
 	}
-	if !linkedStoreOpens(out, w, func() error { return w.forTask(ctx, "") }) {
-		return
-	}
-	cands := a.mergeCandidates(ctx, w)
+	repoOnly := linkedStoreScope(out, w, func() error { return w.forTask(ctx, "") })
+	cands := a.mergeCandidates(ctx, w, repoOnly)
 	if len(cands) == 0 {
 		return
 	}
@@ -81,22 +79,26 @@ func (a *App) MergedCheck(ctx context.Context, out io.Writer) {
 // coord_store.go, word for word).
 const mergeUncheckedPrefix = "lore: warning: merge state not checked: "
 
-// linkedStoreOpens points a linked checkout's world at its store (open)
-// and reports whether the check can go on. A checkout with no link has
-// nothing to open (true, silent); a linked one whose store cannot be
-// opened gets one warning line on out, and the command still succeeds:
-// done tasks of the store keep showing "not merged yet" until a later
-// command reaches it (later.md 606, v0.1.17 groupMergedCheckIn).
-func linkedStoreOpens(out io.Writer, w *coordWorld, open func() error) bool {
+// linkedStoreScope points a linked checkout's world at its store (open)
+// and reports whether the check is left with this repo's own rows only
+// (repoOnly). A checkout with no link has nothing to open (false, silent);
+// a linked one whose store cannot be opened gets one warning line on out
+// and the check goes on over the repo's own rows (E-FATES-4, v0.1.17: its
+// lazyMergedCheck of the repo ran whatever groupMergedCheckIn then said
+// about the store). Never a refusal: done tasks of the store keep showing
+// "not merged yet" until a later command reaches it (later.md 606). A
+// checkout reaches one store (the org store its links resolve to), so
+// there is at most one warning per check.
+func linkedStoreScope(out io.Writer, w *coordWorld, open func() error) (repoOnly bool) {
 	if !w.linked() {
-		return true
+		return false
 	}
 	if err := open(); err != nil {
 		_, _ = fmt.Fprintf(out, "%sopen the linked store: %s; done tasks may show as not merged yet (the next lore command retries)\n",
 			mergeUncheckedPrefix, oneLine(err.Error())) // the output is gone: nothing left to report to
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 // hasMergeCandidates is the cheap first look: any done task without
@@ -128,14 +130,20 @@ func unmerged(d coord.Doc) bool {
 // mergeCandidates are the done, unmerged tasks this checkout's view shows
 // (coordView.projectDocs: the repo's rows of this project, a linked
 // store's rows of the group), each with the mount name of its repo.
-func (a *App) mergeCandidates(ctx context.Context, w *coordWorld) []mergewatch.Candidate {
+// repoOnly keeps the repo store's rows alone (the linked store could not
+// be opened: its rows are neither checked nor stamped this time).
+func (a *App) mergeCandidates(ctx context.Context, w *coordWorld, repoOnly bool) []mergewatch.Candidate {
 	cv := &coordView{a: a, w: w}
 	if p, err := a.Project(ctx); err == nil {
 		cv.project = p.String()
 	}
 	rows := engineRows{a: a}
 	var out []mergewatch.Candidate
-	for _, d := range cv.projectDocs(ctx, schema.TableTasks) {
+	srcs := a.Stores()
+	if repoOnly {
+		srcs = []store.Source{store.SourceRepo}
+	}
+	for _, d := range cv.projectDocsIn(ctx, schema.TableTasks, srcs) {
 		if !unmerged(d) {
 			continue
 		}
