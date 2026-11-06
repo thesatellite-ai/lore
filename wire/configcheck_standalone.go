@@ -57,8 +57,10 @@ const unknownKeyNeedle = "not found in type"
 
 // unknownKeyRe takes yaml.v3's unknown-key error apart ("line 2: field team
 // not found in type wire.configKeys"): the user is told the line and the key,
-// never lore's Go type name.
-var unknownKeyRe = regexp.MustCompile(`^(line \d+): field (.+) not found in type \S+$`)
+// never lore's Go type name. The type is anything to the end: a nested block
+// declared as an anonymous struct (store:) is named by its whole struct
+// literal, spaces and tags included, so `\S+` let that error through raw.
+var unknownKeyRe = regexp.MustCompile(`^(line \d+): field (.+?) not found in type .+$`)
 
 // unknownKeyText is the warning for one yaml.v3 unknown-key error: "line 2:
 // team" when it has yaml.v3's shape, else the error as it came.
