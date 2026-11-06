@@ -129,7 +129,13 @@ func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error
 // B-FLOW4-4). The code, hint and the rest of the text stay; a non-lore
 // error or an unreadable config is returned as it is.
 func redactQuietErr(home string, sit *orgcfg.Situation, err error) error {
-	if err == nil || !quietOutput() {
+	return redactOrgErr(home, sit, err, quietOutput())
+}
+
+// redactOrgErr is redactQuietErr with the quiet decision passed in (a
+// terminal shows the url: quiet false returns err as it is).
+func redactOrgErr(home string, sit *orgcfg.Situation, err error, quiet bool) error {
+	if err == nil || !quiet {
 		return err
 	}
 	var e *errs.Error
