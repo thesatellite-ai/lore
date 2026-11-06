@@ -218,6 +218,18 @@ func (r *liveRun) session(ctx context.Context, top string) *liveSession {
 	return s
 }
 
+// refetch refetches every session of the run that did not fetch (see
+// liveSession.refetch) and reports whether any did.
+func (r *liveRun) refetch(ctx context.Context) bool {
+	did := false
+	for _, s := range r.sessions {
+		if s != nil && s.refetch(ctx) {
+			did = true
+		}
+	}
+	return did
+}
+
 // finish ends every session of the run, in top-level order.
 func (r *liveRun) finish(ctx context.Context) {
 	defer r.h.holdLines(ctx)()
@@ -454,7 +466,16 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 			}
 		}
 	}
-	return next(ctx)
+	res, err := next(ctx)
+	if errs.Has(err, errs.LostClaim) && r.refetch(ctx) {
+		// The fence was explained from rows older than the remote's: run the
+		// operation once more on fresh rows. A fenced coordination op wrote
+		// nothing (the signals decision refused before any write), so the
+		// second run answers the same fence with the code the fresh task row
+		// gives (E_CANCELLED, E_REASSIGNED, or E_LOST_CLAIM again).
+		res, err = next(ctx)
+	}
+	return res, err
 }
 
 // refuse is the pre-run part of v0.1.17 livePreRun: the offline note, and

@@ -83,6 +83,8 @@ type liveSession struct {
 	agent bool
 	// fetchErr is the last fetch failure (offline).
 	fetchErr error
+	// fetched: this run fetched the remote successfully (refetch).
+	fetched bool
 	// blocked is set when the remote live ref was rewritten: no writes.
 	blocked  error
 	prepared bool
@@ -193,6 +195,11 @@ func (s *liveSession) prepare(ctx context.Context) {
 	}) {
 		s.fetch(ctx, now)
 	}
+	s.integrate(ctx)
+}
+
+// integrate is F3 step 3: the tracking ref into the local live ref.
+func (s *liveSession) integrate(ctx context.Context) {
 	res, err := s.ref.Integrate(ctx)
 	switch {
 	case errors.Is(err, live.ErrRemoteRewritten):
@@ -214,9 +221,30 @@ func (s *liveSession) fetch(ctx context.Context, now time.Time) {
 		s.fetchErr = err
 		return
 	}
+	s.fetched = true
 	if err := live.WriteFetchStamp(s.stateDir, now); err != nil {
 		s.warn(err.Error())
 	}
+}
+
+// refetch fetches and integrates once more for a run that did not fetch
+// (the last fetch was younger than live.fetch_ttl, or autopush is off),
+// and reports whether it did. A coordination op whose claim was fenced
+// explains the fence from the task row (coord classify: E_CANCELLED for a
+// task a person cancelled meanwhile, E_REASSIGNED), so that row must be the
+// remote's, not the one of the last command that fetched (TEAM F7, §7.4).
+// It fetches like a rejected push does (FetchAlways): the coordination op
+// already reached the remote for the signals ref.
+func (s *liveSession) refetch(ctx context.Context) bool {
+	if s.lock == nil || s.fetched || s.blocked != nil || s.ref.Remote == nil {
+		return false
+	}
+	s.fetch(ctx, s.clk.Now())
+	if !s.fetched {
+		return false
+	}
+	s.integrate(ctx)
+	return true
 }
 
 // fetchAge is how old the last successful fetch is ("" when never).
