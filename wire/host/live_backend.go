@@ -404,8 +404,9 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	}
 	// F-MOVE-2b: rows the live rows point at that only this work tree
 	// holds ride with them (companions), so no teammate meets a dangling id.
+	var carried []live.RowKey
 	if len(liveRows) > 0 {
-		if err = b.carryUnlanded(ctx, s, files, liveRows, changes, now); err != nil {
+		if carried, err = b.carryUnlanded(ctx, s, files, liveRows, changes, now); err != nil {
 			return err
 		}
 	}
@@ -448,6 +449,7 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		return errs.Wrap(errs.Internal, "live: write the local live ref", err)
 	}
 	s.dropCompanions(companions)
+	b.leaveWorkTree(ctx, s, carried)
 	s.wrote += len(res.Written)
 	s.markFolder(b.folder)
 	return nil

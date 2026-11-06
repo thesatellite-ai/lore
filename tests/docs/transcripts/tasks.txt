@@ -72,7 +72,7 @@ alice (work/website)$ lore task cancel tsk_162df51b7f78b785c97c26b41ea89666
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 cancelled
 lore live: (live, pushed)
 lore live: landed on main (86dbae4); leaves live once main is fetched
-lore live: 1 row(s) left live (main holds them)
+lore live: 2 row(s) left live (main holds them)
 alice (work/website)$ lore task list --status cancelled
 ✗ tsk_162df51b7f78b785c97c26b41ea89666 Update the footer year to 2027 [low] due:2026-11-20
 
@@ -125,6 +125,8 @@ alice (work/website)$ lore tasklist search launch
 tlt_d4314eba822f1bf5908b2b8ded5f313a Launch week
 alice (work/website)$ lore tasklist edit tlt_d4314eba822f1bf5908b2b8ded5f313a --status closed
 ✓ tasklist tlt_d4314eba822f1bf5908b2b8ded5f313a updated
+lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 
 ### task view
 alice (work/website)$ lore task view add open_todo --where 'status:todo'
@@ -140,6 +142,7 @@ alice (work/website)$ lore task list --view open_todo
 alice (work/website)$ lore task add 'Try a dark mode for the shop' --commitment someday
 ✓ tsk_3b6283bc4392c556bbae5f094246e913 — Try a dark mode for the shop [medium]
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore task add 'Add a FAQ page' --commitment proposed
 ✓ tsk_f147dd95f1aaf742dd4f5214843a5139 — Add a FAQ page [medium]
 lore live: (live, pushed)
@@ -229,31 +232,31 @@ alice (work/website)$ git pull -q --rebase origin main && git push -q origin mai
 
 ### link
 alice (work/website)$ lore link add --entity tsk_2ad3618e878ebbf527d34d446ef4f891 --commit HEAD
-✓ linked 9b40ce71 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891  (cml_6a866bb99ce08addfe04ea845052ed8c)
+✓ linked 05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891  (cml_6a866bb99ce08addfe04ea845052ed8c)
   message: Fix the Pro plan price on the pricing page
 alice (work/website)$ lore link list --entity tsk_2ad3618e878ebbf527d34d446ef4f891
-cml_6a866bb99ce08addfe04ea845052ed8c  9b40ce71 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
+cml_6a866bb99ce08addfe04ea845052ed8c  05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
 
 ### commit show
 alice (work/website)$ lore commit-show $(git rev-parse HEAD)
-Commit 9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91 — 1 linked entities:
+Commit 05513aa29b7881f12bc94eb06be8acf0d03eaed2 — 1 linked entities:
   tasks/tsk_2ad3618e878ebbf527d34d446ef4f891
 alice (work/website)$ lore commit-show HEAD
 (no entities linked to this commit)
 
 ### done with commit
 alice (work/website)$ lore task done tsk_2ad3618e878ebbf527d34d446ef4f891 --commit $(git rev-parse HEAD) --no-lesson
-✓ tsk_2ad3618e878ebbf527d34d446ef4f891 done (commit 9b40ce7); waiting for merge
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 done (commit 05513aa); waiting for merge
 lore live: (live, pushed)
-lore live: landed on main (05513aa); leaves live once main is fetched
+lore live: landed on main (dfd8dc8); leaves live once main is fetched
 alice (work/website)$ lore sync
 lore live: 1 row(s) left live (main holds them)
 lore live: pushed waiting live writes
 alice (work/website)$ lore task list --status done
-✓ tsk_2ad3618e878ebbf527d34d446ef4f891 merged 10:04 (found by: ancestry, 9b40ce7)
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 merged 10:04 (found by: ancestry, 05513aa)
 ✓ tsk_7a670ae8548ed05bf57ad29ad0759504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 Fix the typo on the pricing page [medium]  ✓ done · merged 10:04
-lore live: landed on main (dfd8dc8); leaves live once main is fetched
+lore live: landed on main (cf563f3); leaves live once main is fetched
 
 ### merged
 alice (work/website)$ lore task add 'Shrink the hero image'
@@ -263,14 +266,14 @@ lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore task done tsk_4f89f5fcb1d81152bdf3f52979ebb64b --no-lesson
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b done
 lore live: (live, pushed)
-lore live: landed on main (cf563f3); leaves live once main is fetched
+lore live: landed on main (df3a55c); leaves live once main is fetched
 alice (work/website)$ lore task merged tsk_4f89f5fcb1d81152bdf3f52979ebb64b
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b merged (marked by hand, 10:05)
-lore live: landed on main (df3a55c); leaves live once main is fetched
+lore live: landed on main (6d00426); leaves live once main is fetched
 
 ### link remove
 alice (work/website)$ lore link list
-cml_6a866bb99ce08addfe04ea845052ed8c  9b40ce71 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
+cml_6a866bb99ce08addfe04ea845052ed8c  05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
 alice (work/website)$ lore link remove cml_6a866bb99ce08addfe04ea845052ed8c
 ERROR: [E_NEEDS_CONFIRM] engine: link remove cml_6a866bb99ce08addfe04ea845052ed8c?
   hint: ask the person, then rerun with --yes

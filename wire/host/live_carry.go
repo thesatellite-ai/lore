@@ -16,8 +16,12 @@ package host
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -105,9 +109,12 @@ func texts(v value.Value) []string {
 
 // carryUnlanded adds to liveRows, as companions, every row the rows of the
 // write point at that only this work tree holds (not live, not held this
-// run, not on origin/<default>), and the rows those point at in turn.
-func (b *liveBackend) carryUnlanded(ctx context.Context, s *liveSession, files map[live.RowKey]live.File, liveRows map[live.RowKey]live.File, changes []store.Change, now time.Time) error {
+// run, not on origin/<default>), and the rows those point at in turn. It
+// returns the carried keys: once the live write succeeds, the caller hands
+// them to leaveWorkTree (F-ADDADD-1).
+func (b *liveBackend) carryUnlanded(ctx context.Context, s *liveSession, files map[live.RowKey]live.File, liveRows map[live.RowKey]live.File, changes []store.Change, now time.Time) ([]live.RowKey, error) {
 	defs := tableDefs()
+	var carried []live.RowKey
 	var queue []store.Row
 	for _, ch := range changes {
 		if _, ok := liveRows[keyOf(ch.Row)]; ok && !ch.Row.Deleted {
@@ -123,7 +130,7 @@ func (b *liveBackend) carryUnlanded(ctx context.Context, s *liveSession, files m
 		}
 		r, err := cur.Decode()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, k := range refIDs(def, r) {
 			if _, in := liveRows[k]; in {
@@ -144,21 +151,52 @@ func (b *liveBackend) carryUnlanded(ctx context.Context, s *liveSession, files m
 				continue
 			}
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if wt.Deleted || b.landed(ctx, s, k) {
 				continue
 			}
 			f, err := liveFileFor(wt, nil, now, s)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			f.Block.Companion = true
 			liveRows[k] = f
+			carried = append(carried, k)
 			queue = append(queue, wt)
 		}
 	}
-	return nil
+	return carried, nil
+}
+
+// leaveWorkTree (F-ADDADD-1): a carried row MOVES to the live ref; its
+// work-tree copy is removed, so the row lives in exactly one place. Kept,
+// the copy went stale at the first edit (edits of a live row go live) and
+// was committed with the user's next commit while the landing added the
+// row's newer copy on origin/<default>: the next `git pull --rebase` hit
+// an add/add conflict on the row file (docs tasks.sh link-commits). The
+// row stays readable here from the live ref, then from origin/<default>
+// once landed (read-through), then from the work tree after the pull.
+//
+// Only a copy HEAD does not hold leaves (untracked, or staged but never
+// committed: the index entry goes too). A committed copy stays: removing
+// it would commit a delete of a row the live ref still carries.
+// Best effort after the live write succeeded: a failure is one warning,
+// never a failed write.
+func (b *liveBackend) leaveWorkTree(ctx context.Context, s *liveSession, carried []live.RowKey) {
+	for _, k := range carried {
+		rel := mainDataPath(b.folder, k.Table+"/"+k.ID+rowFileExt)
+		if _, committed, err := s.repo.ReadFile(ctx, "HEAD", rel); err != nil || committed {
+			continue
+		}
+		if _, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rm", "--cached", "-f", "-q", "--ignore-unmatch", "--", rel}}); err != nil {
+			s.warn("carried row " + k.String() + ": could not unstage its work-tree copy: " + err.Error())
+			continue
+		}
+		if err := os.Remove(filepath.Join(b.top, filepath.FromSlash(rel))); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			s.warn("carried row " + k.String() + ": could not remove its work-tree copy: " + err.Error())
+		}
+	}
 }
 
 // landed reports whether k's row file is on the fetched origin/<default>
