@@ -498,9 +498,17 @@ type typeHistoryEntry struct {
 // typeHistory appends {old, at} to f's type_history.
 func typeHistory(f located, old, at string) (value.Value, error) {
 	var hist []typeHistoryEntry
-	if j, ok := f.Row.Fields[fTypeHistory].(value.JSON); ok {
-		if err := json.Unmarshal(j.Raw(), &hist); err != nil {
-			return nil, errs.Wrap(errs.ConfigInvalid, "field "+f.Row.ID.String()+": type_history is not a list", err)
+	// any stored shape: a row read back may hold the list as a value other
+	// than value.JSON, so read it through its JSON form
+	if raw, ok := f.Row.Fields[fTypeHistory]; ok && raw != nil {
+		b, merr := raw.MarshalJSON()
+		if merr != nil {
+			return nil, errs.Wrap(errs.ConfigInvalid, "field "+f.Row.ID.String()+": type_history", merr)
+		}
+		if string(b) != "null" {
+			if err := json.Unmarshal(b, &hist); err != nil {
+				return nil, errs.Wrap(errs.ConfigInvalid, "field "+f.Row.ID.String()+": type_history is not a list", err)
+			}
 		}
 	}
 	hist = append(hist, typeHistoryEntry{Type: old, At: at})
