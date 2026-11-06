@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding"
 	"encoding/json"
 	"fmt"
@@ -45,11 +46,25 @@ func masked(text string) string {
 	return sessionmask.Mask(text, sessionmask.EnvIDs(os.Getenv))
 }
 
+// envelopeKey is the first key of v0.1.17's --json envelope
+// {schema_version, kind, count, data}.
+const envelopeKey = "schema_version"
+
 // printJSON writes the result as one JSON object and a newline (--json).
+// An output carrying the v0.1.17 envelope (a schema_version field: whoami,
+// sync, inbox, the noun list/show/search, ...) is indented with two spaces
+// as v0.1.17's printJSON did, so those scripts see v0.1.17's bytes
+// (CLI_REFERENCE 1.4, OWNERQ-16); REST answers stay compact.
 func printJSON(w io.Writer, r op.Result) error {
 	b, err := r.JSON()
 	if err != nil {
 		return err
+	}
+	if _, ok := jsonField(r.Value(), envelopeKey); ok {
+		var ind bytes.Buffer
+		if json.Indent(&ind, b, "", indentStep) == nil {
+			b = ind.Bytes()
+		}
 	}
 	_, err = io.WriteString(w, masked(string(b))+"\n")
 	return err
