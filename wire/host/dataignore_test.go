@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,9 +16,7 @@ func dataIgnoreRepo(t *testing.T) string {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	root := t.TempDir()
-	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v %s", err, out)
-	}
+	gitT(t, root, "init", "-q")
 	if err := os.MkdirAll(filepath.Join(root, ".lore", "data", "tasks"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +63,7 @@ func TestEnsureDataNotIgnored(t *testing.T) {
 				writeIgnore(t, root, p, body)
 			}
 			gi := filepath.Join(root, ".gitignore")
-			before, berr := os.ReadFile(gi)
+			before, berr := os.ReadFile(filepath.Clean(gi))
 			changed, still, err := EnsureDataNotIgnored(context.Background(), root)
 			if err != nil {
 				t.Fatal(err)
@@ -78,7 +75,7 @@ func TestEnsureDataNotIgnored(t *testing.T) {
 			if (c.stillHas == "") != (len(still) == 0) || !strings.Contains(joined, c.stillHas) {
 				t.Fatalf("still ignored:\n%s\nwant one containing %q", joined, c.stillHas)
 			}
-			after, aerr := os.ReadFile(gi)
+			after, aerr := os.ReadFile(filepath.Clean(gi))
 			if c.gitignore == "" {
 				if (berr == nil) != (aerr == nil) || string(before) != string(after) {
 					t.Fatalf(".gitignore changed:\n%q\n->\n%q", before, after)

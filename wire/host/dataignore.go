@@ -22,7 +22,6 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -30,9 +29,14 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/schema"
 )
+
+// checkIgnoreNone is `git check-ignore`'s exit status when no path given
+// is ignored (0 = some are, 128 = a fatal error).
+const checkIgnoreNone = 1
 
 // dataRel is the committed data folder, relative to the project root.
 var dataRel = rowfs.LoreDir + "/" + rowfs.DataDir
@@ -80,12 +84,11 @@ func dataProbes() []string {
 // ignoredData maps each probe git ignores in root to the rule responsible
 // ("<source>:<line>:<pattern>"). A git that cannot run reports nothing.
 func ignoredData(ctx context.Context, root string) (map[string]string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "check-ignore", "-v", "--no-index", "--stdin", "-z")
-	cmd.Stdin = strings.NewReader(strings.Join(dataProbes(), "\x00") + "\x00")
-	out, err := cmd.Output()
-	var ee *exec.ExitError
-	if errors.As(err, &ee) && ee.ExitCode() == 1 {
-		return nil, nil // exit 1: nothing ignored
+	out, err := (gitref.Exec{}).Run(ctx, gitref.Invocation{Dir: root,
+		Args:  []string{"check-ignore", "-v", "--no-index", "--stdin", "-z"},
+		Stdin: []byte(strings.Join(dataProbes(), "\x00") + "\x00")})
+	if code, ok := gitref.ExitCode(err); ok && code == checkIgnoreNone {
+		return nil, nil
 	}
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "git check-ignore", err)
@@ -103,6 +106,21 @@ func ignoredData(ctx context.Context, root string) (map[string]string, error) {
 	return res, nil
 }
 
+// restoreGitignore puts root's .gitignore back as it was before the block
+// was added (existed false: it did not exist), inside root only.
+func restoreGitignore(root string, original []byte, existed bool) error {
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	if existed {
+		err = r.WriteFile(gitignoreName, original, gitignoreMode)
+	} else {
+		err = r.Remove(gitignoreName)
+	}
+	return errors.Join(err, r.Close())
+}
+
 // EnsureDataNotIgnored is the re-include step (see the file comment): it
 // returns whether .gitignore changed and what stays ignored, each as
 // "path (ignored by rule)", sorted.
@@ -118,8 +136,8 @@ func EnsureDataNotIgnored(ctx context.Context, root string) (bool, []string, err
 		return false, nil, errs.Wrap(errs.Internal, "read "+gitignoreName, rerr)
 	}
 	before := len(ignored)
-	if err := ensureFileBlock(gi, dataIgnoreMarker, dataUnignoreLines()); err != nil {
-		return false, nil, err
+	if berr := ensureFileBlock(gi, dataIgnoreMarker, dataUnignoreLines()); berr != nil {
+		return false, nil, berr
 	}
 	now, _ := os.ReadFile(filepath.Clean(gi))
 	changed := !bytes.Equal(now, original)
@@ -127,12 +145,7 @@ func EnsureDataNotIgnored(ctx context.Context, root string) (bool, []string, err
 		return changed, nil, err
 	}
 	if changed && len(ignored) >= before {
-		if existed {
-			err = os.WriteFile(gi, original, gitignoreMode)
-		} else {
-			err = os.Remove(gi)
-		}
-		if err != nil {
+		if err = restoreGitignore(root, original, existed); err != nil {
 			return true, nil, errs.Wrap(errs.Internal, "restore "+gitignoreName, err)
 		}
 		changed = false
