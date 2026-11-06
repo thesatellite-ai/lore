@@ -77,8 +77,8 @@ func TestLiveAtomic_StagesOnly(t *testing.T) {
 			if err != nil || !goesLive {
 				t.Fatalf("a new task routes live: %v %v", goesLive, err)
 			}
-			if err := b.Write(ctx, []store.Change{{Row: claim}}); err != nil {
-				t.Fatal(err)
+			if werr := b.Write(ctx, []store.Change{{Row: claim}}); werr != nil {
+				t.Fatal(werr)
 			}
 			staged, _ := s.ref.Snapshot(ctx)
 			if staged.Local == before.Local || staged.Local == "" {
