@@ -68,11 +68,11 @@ on alice work/scratch "lore project delete $prj_scratch --yes"
 on alice work/scratch "lore project list"
 
 # A v0.1.17 shared database for infra: a project's rows in a lore.db outside the repo,
-# and the two-line pointer file v0.1.17 wrote into .lore/. (The rows come from a
-# scratch repo whose lore.db is copied out, which is what v0.1.17 kept there; the copy
-# uses SQLite's own backup call, since `lore backup` is not in 0.1.18.)
-quiet alice work "mkdir -p old-infra && cd old-infra && git init -q && lore init --non-interactive --name=infra && lore rule add --body 'Terraform changes need a plan in the pull request.' && lore memory add --body 'The staging cluster sleeps at night.' && lore sync && mkdir -p ~/.lore && python3 -c \"import os, sqlite3; sqlite3.connect('.lore/lore.db').backup(sqlite3.connect(os.path.expanduser('~/.lore/client2.db')))\""
-quiet alice work/infra "mkdir -p .lore && printf 'db_path: \${HOME}/.lore/client2.db\nproject_id: %s\n' \$(cd ../old-infra && lore project list --json | grep -o 'prj_[0-9a-f]*' | head -1) > .lore/lore.yaml && rm -rf ../old-infra"
+# and the two-line pointer file v0.1.17 wrote into .lore/. (The rows are written in
+# v0.1.17's own table shapes by tests/docs/v017_shared_db.py: 0.1.18 never writes rows
+# into a lore.db.)
+quiet alice work "mkdir -p ~/.lore infra && python3 '$HERE/v017_shared_db.py' ~/.lore/client2.db infra 'rule:Terraform changes need a plan in the pull request.' 'memory:The staging cluster sleeps at night.' > old-infra-id"
+quiet alice work/infra "mkdir -p .lore && printf 'db_path: \${HOME}/.lore/client2.db\nproject_id: %s\n' \$(cat ../old-infra-id) > .lore/lore.yaml && rm ../old-infra-id"
 
 note "convert a shared database"
 on alice work/infra "cat .lore/lore.yaml"

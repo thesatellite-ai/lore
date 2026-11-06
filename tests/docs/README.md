@@ -42,4 +42,4 @@ A page marks a block with `<!-- example: <section>#<heading> -->` and `<!-- /exa
 
 `on_known BUG-…` marks an example that fails today because of a reported lore bug. The run prints it and does not fail; once the bug is fixed the run says `KNOWN FAILURE NOW PASSES` and the mark should be removed.
 
-Today: `BUG-SUPPORT-BUNDLE-CMDLORE` (ops: `lore support-bundle` answers `E_UNSUPPORTED` on the release binary; the doctor page keeps the earlier bundle output until it is fixed).
+Today: none.

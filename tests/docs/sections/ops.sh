@@ -51,9 +51,8 @@ on alice work/website "lore search rebuild"
 on alice work/website "lore sync conflicts | head -3"
 
 note "support bundle"
-# BUG-SUPPORT-BUNDLE-CMDLORE: the release binary answers E_UNSUPPORTED (reported to g-host).
-on_known BUG-SUPPORT-BUNDLE-CMDLORE alice work/website "lore support-bundle --out bundle.json"
-on_known BUG-SUPPORT-BUNDLE-CMDLORE alice work/website "grep -E '\"(binary_version|status|rules|memories|sanitized)\"' bundle.json"
+on alice work/website "lore support-bundle --out bundle.json"
+on alice work/website "grep -E '\"(binary_version|status|rules|memories|sanitized)\"' bundle.json"
 quiet alice work/website "rm -f bundle.json"
 
 note "pii pattern"

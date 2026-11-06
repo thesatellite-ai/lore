@@ -50,8 +50,9 @@ on alice work/Dropbox/website "LORE_ALLOW_NETWORK_FS=1 lore rule list"
 
 # LORE_ALLOW_DB_PATH_OUTSIDE and LORE_HOME now matter only when `lore migrate run`
 # reads a v0.1.17 shared-database pointer (Mode B, retired in 0.1.18: decision Q-MODEB).
-# A v0.1.17 shared lore.db holding one project's rows: a scratch repo's lore.db, copied out.
-quiet alice work "mkdir -p old-blog && cd old-blog && git init -q && lore init --non-interactive --name=blog && lore rule add --body 'Posts go out on Tuesdays' && lore sync && python3 -c \"import sqlite3; sqlite3.connect('.lore/lore.db').backup(sqlite3.connect('../client.db'))\" && mkdir -p ~/shared-dbs && cp ../client.db ~/shared-dbs/client-docs.db && lore project list --json | grep -o 'prj_[0-9a-f]*' | head -1 > ../old-project-id && cd .. && rm -rf old-blog"
+# A v0.1.17 shared lore.db holding one project's rows, in v0.1.17's own table shapes
+# (tests/docs/v017_shared_db.py; 0.1.18 never writes rows into a lore.db).
+quiet alice work "python3 '$HERE/v017_shared_db.py' client.db blog 'rule:Posts go out on Tuesdays' > old-project-id && mkdir -p ~/shared-dbs && cp client.db ~/shared-dbs/client-docs.db"
 
 note "db path outside"
 quiet alice work "mkdir -p blog && cd blog && git init -q && mkdir .lore && printf 'db_path: ../client.db\nproject_id: %s\n' \$(cat ../old-project-id) > .lore/lore.yaml"
