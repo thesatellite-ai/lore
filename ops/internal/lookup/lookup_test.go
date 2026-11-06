@@ -23,10 +23,22 @@ var lookupVerbs = []string{
 // policy.show's id is a policy key, resource kinds are addressed by name
 // with their own E_KIND_UNKNOWN, and secrets.rule.edit takes a scanner
 // rule id (a name such as aws-access-key, overriding the built-in rule
-// of that name); none is a row-id lookup.
+// of that name); pii_pattern.enable|disable are v0.1.17 spellings moved
+// to `lore secrets rule on|off`: they are Local and refuse with
+// E_INVALID_INPUT naming the replacement for every input, before anything
+// is opened, so the id they are given is never looked up (G-META-5);
+// actor.delete looks nothing up: it refuses every call, with or without
+// an id, naming `lore actor deactivate` (BATCH2 #8, DELETION 4.1), and it
+// runs on the roster's App, not the repo engine (infra.IsRosterOp), so a
+// repo lookup would answer for the wrong store; E_NOT_FOUND for an
+// unknown id would also let a script read "no such actor" as "an actor
+// could be deleted" (G-ORGMIG-5);
+// none is a row-id lookup.
 var notLookups = map[string]bool{
 	"commit.show": true, "policy.show": true, "secrets.rule.edit": true,
 	"resource.kind.show": true, "resource.kind.edit": true,
+	"pii_pattern.enable": true, "pii_pattern.disable": true,
+	"actor.delete": true,
 }
 
 // changeFields are the fields an edit is given so that its "nothing to
