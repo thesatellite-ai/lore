@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // v017Task and v017Link are real ids from a v0.1.17 run (lore 0.1.17:
@@ -161,8 +162,8 @@ func TestLinkCommitForms(t *testing.T) {
 }
 
 // TestLinkEntityChecks: a core table's target must be a live row (missing
-// and deleted are E_NOT_FOUND); a table not on the core is accepted as
-// v0.1.17 accepted it; an unknown prefix is refused.
+// and deleted are E_NOT_FOUND / E_IN_TRASH), a machine-local run included;
+// an unknown prefix is refused.
 func TestLinkEntityChecks(t *testing.T) {
 	h := opstest.New(t)
 	missing := "tsk_01a1a67b1b617dc7acc5f1af36e0e000"
@@ -182,14 +183,10 @@ func TestLinkEntityChecks(t *testing.T) {
 	if msg := h.Fails("link.add", `{"entity":"xyz_01a1a67b1b617dc7acc5f1af36e0e979","commit":"`+v017SHA+`"}`, errs.InvalidInput); !strings.Contains(msg, "unknown ID prefix") {
 		t.Fatalf("unknown prefix: %s", msg)
 	}
-	// runs are not on the core: accepted without a row (v0.1.17).
-	run := "run_01a1a67b1b617dc7acc5f1af36e0e979"
-	if _, err := h.Run("link.add", `{"entity":"`+run+`","commit":"`+v017SHA+`"}`); err != nil {
-		t.Fatalf("non-core table: %v", err)
-	}
-	if got := opstest.Text(h.Must("link.list", `{"entity":"`+run+`"}`)); !strings.Contains(got, "runs/"+run) {
-		t.Fatalf("non-core link not listed: %q", got)
-	}
+	// runs are on the core as machine-local rows (P3-LOCAL-2): a missing
+	// run is E_NOT_FOUND like any core table (v0.1.17 accepted any run id
+	// without a row); TestLinkMachineLocalRun covers a run that exists.
+	h.Fails("link.add", `{"entity":"run_01a1a67b1b617dc7acc5f1af36e0e979","commit":"`+v017SHA+`"}`, errs.NotFound)
 	// list --entity with a malformed id is v0.1.17's not-found.
 	h.Fails("link.list", `{"entity":"garbage"}`, errs.NotFound)
 	if got := opstest.Text(h.Must("link.list", `{"commit":"nope"}`)); got != "(no links)\n" {
@@ -265,4 +262,55 @@ func TestLinkMessageExcerpt(t *testing.T) {
 			t.Errorf("message %q:\n got %q\nwant suffix %q", msg, got, want)
 		}
 	}
+}
+
+// TestLinkMachineLocalRun: a run row lives in the machine store, which F15
+// places as internal. A link in an internal repo may name it and is listed;
+// in a client repo (or one whose class is unknown: fail closed) the link is
+// refused E_LEAK_BLOCKED and nothing is written.
+func TestLinkMachineLocalRun(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		client bool
+	}{{"internal repo", false}, {"client repo", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := tc.client
+			h := opstest.New(t, func(o *wire.Options) {
+				o.RepoIsClient = func(context.Context) (bool, error) { return client, nil }
+			})
+			run := seedRun(t, h)
+			in := `{"entity":"` + run + `","commit":"` + v017SHA + `"}`
+			if client {
+				h.Fails("link.add", in, errs.LeakBlocked)
+				if got := opstest.Text(h.Must("link.list", `{"entity":"`+run+`"}`)); got != "(no links)\n" {
+					t.Fatalf("refused link written: %q", got)
+				}
+				return
+			}
+			h.Must("link.add", in)
+			if got := opstest.Text(h.Must("link.list", `{"entity":"`+run+`"}`)); !strings.Contains(got, "runs/"+run) {
+				t.Fatalf("run link not listed: %q", got)
+			}
+		})
+	}
+}
+
+// seedRun writes an in-progress run to the machine store and returns its id.
+func seedRun(t *testing.T, h *opstest.H) string {
+	t.Helper()
+	kind, err := value.TextOf("agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := value.TextOf(schema.RunInProgress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := h.App.Create(context.Background(), store.SourceMachine, schema.TableRuns, map[string]value.Value{
+		schema.FieldRunKind: kind, schema.FieldRunStatus: status,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w.Row.ID.String()
 }
