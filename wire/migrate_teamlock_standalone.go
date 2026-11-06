@@ -44,20 +44,33 @@ type migrateTeamLock struct{ a *App }
 
 var _ opsmigrate.TeamLock = migrateTeamLock{}
 
-// open is the coordination world and its signals store; ok is false when
-// the repo has no remote (a solo repo: nobody to race, cookbook 1).
+// open is the coordination world and its signals store. The lock lives
+// where the checkout's holds live (forHolds): the repo's own signals ref,
+// or in a client repo linked to an org store the store's signals ref under
+// the link folder (D8: nothing is written to the client remote); a client
+// repo with no store link is refused there. ok is false when a non-client
+// repo has no remote (a solo repo: nobody to race, cookbook 1).
 func (l migrateTeamLock) open(ctx context.Context) (*coordWorld, *signals.Store, bool, error) {
 	w, err := standaloneCoord(l).openWorld(ctx)
 	if err != nil {
 		return nil, nil, false, err
 	}
-	if w.remote == nil {
-		return w, nil, false, nil
-	}
-	if err = w.forRepoOnly(); err != nil {
+	if err = w.forHolds(ctx); err != nil {
 		return nil, nil, false, err
 	}
+	if w.spot.remote == nil {
+		return w, nil, false, nil
+	}
 	return w, w.signalsStore(), true, nil
+}
+
+// lockPlace names where the team lock lives, for the run's lines: the
+// signals ref, and the store folder when it is a linked store's.
+func lockPlace(w *coordWorld) string {
+	if w.spot.store {
+		return w.spot.ref + " of the linked store (folder " + w.folder + ")"
+	}
+	return w.spot.ref
 }
 
 // Acquire implements opsmigrate.TeamLock.
@@ -87,9 +100,9 @@ func (l migrateTeamLock) Acquire(ctx context.Context) (func() error, string, err
 	if err != nil {
 		return nil, "", migrateLockError(err, l.a.opts.Wall())
 	}
-	line := "team lock: taken on " + signals.CodeRepoRef + " until " + held.Expires.UTC().Format(time.RFC3339) + " (renewed every " + migrateLockRenew.String() + ")"
+	line := "team lock: taken on " + lockPlace(w) + " until " + held.Expires.UTC().Format(time.RFC3339) + " (renewed every " + migrateLockRenew.String() + ")"
 	if held.RenewedSeq > 0 {
-		line = "team lock: renewed this machine's own hold on " + signals.CodeRepoRef
+		line = "team lock: renewed this machine's own hold on " + lockPlace(w)
 	}
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
@@ -135,7 +148,7 @@ func (l migrateTeamLock) Unlock(ctx context.Context) (opsmigrate.UnlockOut, erro
 	}
 	host, _ := os.Hostname() // no host name: only an expired hold can be cleared
 	path := signals.ResourcePath(w.folder, migrateLockName)
-	out := opsmigrate.UnlockOut{Line: "no team migration lock on " + signals.CodeRepoRef}
+	out := opsmigrate.UnlockOut{Line: "no team migration lock on " + lockPlace(w)}
 	_, err = st.Write(ctx, func(v signals.View) (signals.Change, error) {
 		s, present := v.Board[path]
 		if !present {
