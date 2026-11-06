@@ -27,8 +27,10 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/merge3"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -36,6 +38,7 @@ import (
 const (
 	brokenConflictMarkers = "conflict markers"
 	brokenInvalidJSON     = "invalid JSON"
+	brokenMetaConflict    = "unsettled metadata conflict in "
 )
 
 // brokenFilesHint is the next step of a refused pre-commit.
@@ -165,8 +168,25 @@ func withoutLiveRows(ctx context.Context, repo *gitref.Repo, root string, change
 
 // brokenLoreFile is why b cannot be committed as a lore file ("" = fine):
 // conflict markers in the text or in any string value (meta and fields
-// entries nest, METADATA_DESIGN 3.x), or not one JSON document.
+// entries nest, METADATA_DESIGN 3.x), not one JSON document, or a row
+// whose meta holds a structured conflict entry (METADATA 3.12: refused by
+// the pre-commit check until a person settles it; merge.MetaConflicts is
+// the one scanner). A file that is not a row (a folder's _meta.json) has
+// no meta to scan.
 func brokenLoreFile(b []byte) string {
+	if why := brokenLoreText(b); why != "" {
+		return why
+	}
+	if r, err := row.Decode(b); err == nil {
+		if ks := merge.MetaConflicts(r); len(ks) > 0 {
+			return brokenMetaConflict + strings.Join(ks, ", ")
+		}
+	}
+	return ""
+}
+
+// brokenLoreText is brokenLoreFile's byte-level half: markers or not JSON.
+func brokenLoreText(b []byte) string {
 	if merge3.ContainsConflictMarkers(string(b)) {
 		return brokenConflictMarkers
 	}
