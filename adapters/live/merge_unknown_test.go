@@ -72,7 +72,7 @@ const (
 // unkDoc is one side's row body in format ver ("v2" with _hlc at second
 // sec, "v1", or "bare" without `_v`), with key set to raw when raw is not "".
 func unkDoc(ver string, sec int, key, raw string) string {
-	ts := "2026-11-05T10:00:0" + string(rune('0'+sec)) + ".000Z"
+	ts := "2026-11-05T10:00:0" + strconv.Itoa(sec) + ".000Z"
 	head := ""
 	switch ver {
 	case "v1":
@@ -180,12 +180,12 @@ func unkMergedValue(t *testing.T, name string, b []byte, key string) (string, bo
 	if v2, ok := f.Body[lorerow.KeyVersion]; ok {
 		if n, _ := v2.AsNumber(); n == "2" {
 			// A v2 merge result must still be a row document.
-			body, err := f.EncodeBody()
-			if err != nil {
-				t.Fatal(err)
+			body, encErr := f.EncodeBody()
+			if encErr != nil {
+				t.Fatal(encErr)
 			}
-			if _, err := lorerow.Decode(body); err != nil {
-				t.Fatalf("%s: merged v2 body is not a row: %v", name, err)
+			if _, decErr := lorerow.Decode(body); decErr != nil {
+				t.Fatalf("%s: merged v2 body is not a row: %v", name, decErr)
 			}
 		}
 	}

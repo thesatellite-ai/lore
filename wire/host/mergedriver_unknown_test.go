@@ -12,6 +12,7 @@ package host
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -57,7 +58,7 @@ func mduCases(v, other string) []mduCase {
 // mduDoc is one side's memories row at second sec, version ver ("v2" with
 // _hlc, or "v1"), with key set to raw when raw is not "".
 func mduDoc(ver string, sec int, key, raw string) []byte {
-	ts := "2026-11-05T10:00:0" + string(rune('0'+sec)) + ".000Z"
+	ts := "2026-11-05T10:00:0" + strconv.Itoa(sec) + ".000Z"
 	head := `"_v":1,`
 	if ver == "v2" {
 		head = `"_v":2,"_hlc":"` + ts + `/0000/` + mdActorA.String() + `",`

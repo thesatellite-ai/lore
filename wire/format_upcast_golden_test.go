@@ -101,11 +101,11 @@ func TestUpcastGolden(t *testing.T) {
 		}
 		checkUpcastSemantics(t, c, got)
 		if *updateUpcast {
-			if err := os.MkdirAll(filepath.Dir(c.golden), 0o750); err != nil {
-				t.Fatal(err)
+			if mkErr := os.MkdirAll(filepath.Dir(c.golden), 0o750); mkErr != nil {
+				t.Fatal(mkErr)
 			}
-			if err := os.WriteFile(c.golden, got, 0o600); err != nil {
-				t.Fatal(err)
+			if wErr := os.WriteFile(c.golden, got, 0o600); wErr != nil {
+				t.Fatal(wErr)
 			}
 			continue
 		}
