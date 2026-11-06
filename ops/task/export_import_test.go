@@ -20,6 +20,7 @@ import (
 // row of that name, or several). The other repo's default list lands in
 // this repo's default list without a warning.
 func TestExportImportAcrossRepos(t *testing.T) {
+	t.Parallel()
 	a := opstest.New(t, repoClient(false))
 	list := a.ID(a.Must("tasklist.add", `{"title":"Backlog","body":"b"}`))
 	mis := a.ID(a.Must("mission.add", `{"title":"Launch"}`))
@@ -129,6 +130,7 @@ func TestExportImportAcrossRepos(t *testing.T) {
 // mission without an id gets the one mission of that name; a name with no
 // row drops with a note naming the reference as "(no id)".
 func TestImportByNameOnly(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	solo := h.ID(h.Must("mission.add", `{"title":"Solo"}`))
 	file := writeFile(t, "hand.json", `[{"title":"by name","mission_name":"Solo"},{"title":"unknown","mission_name":"Nope"}]`)

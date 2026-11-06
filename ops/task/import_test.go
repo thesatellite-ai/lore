@@ -50,6 +50,7 @@ func importIDs(h *opstest.H, res op.Result) []string {
 // XQ9 + PROVENANCE 5.1: a CSV import creates one task per row, each with
 // _o.import {source: csv, ext_id}, all in one bat_ batch of kind import.
 func TestImportCSV(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false)) // an own repo: a client repo drops _o.import without a src (PROVENANCE 8.1)
 	f := writeFile(t, "tasks.csv", "id,title,priority,notes\nAGY-1,Fix login,high,x\nAGY-2,Add export,,y\n")
 	in := `{"file":` + opstest.Quote(f) + `,"map":["notes=body"]}`
@@ -94,6 +95,7 @@ func TestImportCSV(t *testing.T) {
 // existing, names the first import's task, and no duplicate is left for
 // PROV9 to report.
 func TestImportJSONTwiceIsDuplicate(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false)) // an own repo: a client repo drops _o.import without a src (PROVENANCE 8.1)
 	f := writeFile(t, "plan.json", `[{"title":"Write docs","priority":"low"},{"title":"Ship","due":"2026-12-01"}]`)
 	in := `{"file":` + opstest.Quote(f) + `}`
@@ -122,6 +124,7 @@ func TestImportJSONTwiceIsDuplicate(t *testing.T) {
 // XQ2: 25 rows over batch.preview_rows 20 ask first, listing 20; --yes
 // writes them. A bad row writes nothing. --dry-run writes nothing.
 func TestImportPreviewAndChecks(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false)) // an own repo: a client repo drops _o.import without a src (PROVENANCE 8.1)
 	var b strings.Builder
 	b.WriteString("title\n")

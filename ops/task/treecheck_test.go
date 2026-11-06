@@ -43,6 +43,7 @@ var parentRe = regexp.MustCompile(`"` + schema.FieldTaskParent + `":\s*"[^"]*",?
 // ranks are each reported with their fix; --fix writes only the cycle's
 // shown result, and a second check finds the cycle gone (6.13).
 func TestTreeCheck(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	p := add(h, "parent", "")
 	add(h, "child", `"parent":"`+p+`"`)

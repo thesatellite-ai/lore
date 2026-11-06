@@ -16,6 +16,7 @@ import (
 // harmless, and an unknown column is E_INVALID_INPUT naming the real ones
 // (v0.1.17 failed with an E_INTERNAL sqlite error).
 func TestSearchColumns(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	inTitle := add(h, "zebra crossing", `"body":"plain words"`)
 	inBody := add(h, "plain title", `"body":"a zebra appears"`)

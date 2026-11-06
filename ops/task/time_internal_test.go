@@ -34,6 +34,7 @@ func span(t *testing.T, kind timeentry.Kind, d time.Duration) timeentry.Entry {
 // a decoded generic list (row file) and garbage (no entries, never an
 // error).
 func TestTimeEntriesReadsEveryShape(t *testing.T) {
+	t.Parallel()
 	e := span(t, timeentry.KindAgent, time.Hour)
 	raw, err := timeentry.Encode([]timeentry.Entry{e})
 	if err != nil {
@@ -80,6 +81,7 @@ func TestTimeEntriesReadsEveryShape(t *testing.T) {
 // TestWithTimeEntryAppends: the patch value is the old list plus the new
 // entry, ids kept, on a row with none and on a row with one.
 func TestWithTimeEntryAppends(t *testing.T) {
+	t.Parallel()
 	a, b := span(t, timeentry.KindAgent, time.Minute), span(t, timeentry.KindPerson, 2*time.Minute)
 	r := row.Row{Fields: map[string]value.Value{}}
 	v, err := WithTimeEntry(r, a)
@@ -101,6 +103,7 @@ func TestWithTimeEntryAppends(t *testing.T) {
 // TestTimeLine: the show line per kind mix; tombstoned entries do not
 // count and a list of only tombstones prints nothing.
 func TestTimeLine(t *testing.T) {
+	t.Parallel()
 	agent, person, manual := span(t, timeentry.KindAgent, 90*time.Minute), span(t, timeentry.KindPerson, 30*time.Second), span(t, timeentry.KindManual, 5*time.Minute)
 	dead := span(t, timeentry.KindAgent, 10*time.Hour)
 	dead.DeletedAt = "2026-11-04T12:00:00.000Z"
@@ -126,6 +129,7 @@ func TestTimeLine(t *testing.T) {
 // TestBriefLine: the v0.1.17 list line over status × due × commitment ×
 // deferral × store label, and the STATE column placement.
 func TestBriefLine(t *testing.T) {
+	t.Parallel()
 	id, err := ids.ParseAny("tsk_01a1a5aca7f57659be7320c5f4b70011")
 	if err != nil {
 		t.Fatal(err)

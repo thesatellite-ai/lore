@@ -59,6 +59,7 @@ func exportGitHub(t *testing.T, h *opstest.H, extra string) map[string]ghIssue {
 // --with-children adds sub-tasks flat with their parent; internal fields
 // never appear, --internal included.
 func TestExportGitHub(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	msn := addID(h, h.Must("mission.add", `{"title":"Release 1"}`))
 	open := add(h, "open one", `"body":"the body","priority":"high","mission":"`+msn+`","due":"2026-12-01"`)

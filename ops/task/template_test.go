@@ -33,6 +33,7 @@ task:
 // missing / unknown / typed args, idempotent --key), rename, snapshot
 // --from round trip, validation refusals, delete (TASK 11).
 func TestTemplates(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	dir := t.TempDir()
 	write := func(name, body string) string {

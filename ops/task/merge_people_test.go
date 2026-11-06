@@ -90,6 +90,7 @@ func checklistOf(t *testing.T, items ...[3]string) value.Value {
 // actor anew), the checklist merges item by item (an item both sides
 // added is kept, an item edited on both sides takes the newer edit).
 func TestTaskPeopleAndChecklistMerge(t *testing.T) {
+	t.Parallel()
 	a := mergeActor(t, "act_01936f0000007a1b8c2d3e4f5a6b7c8d")
 	b := mergeActor(t, "act_01936f0000007a1b8c2d3e4f5a6b7c8e")
 	p := merge.PolicyFor(tasksDef(t))
@@ -110,6 +111,7 @@ func TestTaskPeopleAndChecklistMerge(t *testing.T) {
 	for _, field := range []string{schema.FieldTaskAssignees, schema.FieldTaskWatchers} {
 		for _, c := range people {
 			t.Run(field+"/"+c.name, func(t *testing.T) {
+				t.Parallel()
 				base := taskSide(t, 0, a, map[string]value.Value{field: textList(t, c.base...)})
 				ours := taskSide(t, 10, a, map[string]value.Value{field: textList(t, c.ours...)})
 				theirs := taskSide(t, 20, b, map[string]value.Value{field: textList(t, c.theirs...)})
@@ -166,6 +168,7 @@ func TestTaskPeopleAndChecklistMerge(t *testing.T) {
 // assignees and watchers of a task are actor ids only (the client
 // projection), and task show --json carries no internal session id.
 func TestClientViewOfPeople(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(true))
 	ann := newActor(h, "Ann")
 	bob := newActor(h, "Bob")

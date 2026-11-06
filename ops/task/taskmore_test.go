@@ -14,6 +14,7 @@ import (
 // on done (TSQ14) with --tick-all and --force, import --from body with a
 // re-run adding nothing, and promote to a sub-task (TASK 7).
 func TestChecklistFlow(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	id := add(h, "export", `"body":"- [ ] from body\n- [x] already done"`)
 	h.Must(opstask.OpChecklistAdd, `{"id":"`+id+`","text":"stream rows","items":["BOM","test 50k"]}`)
@@ -57,6 +58,7 @@ func TestChecklistFlow(t *testing.T) {
 // TestEstimateRollup: --estimate parse, own vs children sums, unestimated
 // leaves, --clear-estimate, list fields (TASK 9.2).
 func TestEstimateRollup(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	p := add(h, "parent", `"estimate":"8"`)
 	add(h, "a", `"parent":"`+p+`","estimate":"3"`)

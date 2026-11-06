@@ -11,6 +11,7 @@ import (
 // TestShowWhoTouched: show --who lists the actors that wrote the task
 // (creation and history entries, AGENT_IDENTITY 6.2), with a change count.
 func TestShowWhoTouched(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	id := add(h, "who", "")
 	h.Must(opstask.OpStart, `{"id":"`+id+`"}`)

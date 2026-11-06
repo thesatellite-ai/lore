@@ -21,6 +21,7 @@ import (
 // progress is left alone; an edit that moves the child under a new parent
 // starts that new parent.
 func TestAutoStartParentMatrix(t *testing.T) {
+	t.Parallel()
 	type tc struct {
 		name, policy, parentStatus, how string
 		started                         bool
@@ -35,6 +36,7 @@ func TestAutoStartParentMatrix(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t, repoClient(false)) // time spans live in internal stores only (PC-LEAK-1)
 			if c.policy != "" {
 				h.MustYes(settings.OpPolicySet, `{"key":"tasks.auto_start_parent","value":"`+c.policy+`"}`)
@@ -71,6 +73,7 @@ func TestAutoStartParentMatrix(t *testing.T) {
 		})
 	}
 	t.Run("edit moves under a new todo parent", func(t *testing.T) {
+		t.Parallel()
 		h := opstest.New(t, repoClient(false))
 		h.MustYes(settings.OpPolicySet, `{"key":"tasks.auto_start_parent","value":"true"}`)
 		old := add(h, "old parent", "")
@@ -92,6 +95,7 @@ func TestAutoStartParentMatrix(t *testing.T) {
 // (the matching child is folded into its parent: 2 matched, 2 under them); every match and every sub-task go
 // in one batch that one restore brings back; no match deletes nothing.
 func TestDeleteWhere(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	p := add(h, "bulk parent", `"priority":"low"`)
 	c := add(h, "bulk child", `"parent":"`+p+`","priority":"low"`)

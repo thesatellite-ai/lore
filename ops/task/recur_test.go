@@ -15,6 +15,7 @@ import (
 // done of the same instance writes nothing new, skip / stop / cancel,
 // list --series, E_RECUR on a bad rule (TASK 10).
 func TestRecurSeries(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.Fails(opstask.OpAdd, `{"title":"x","recur":"every blue moon"}`, errs.Recur)
 	out := opstest.Text(h.Must(opstask.OpAdd, `{"title":"Rotate key","due":"2026-11-30","recur":"every month on last"}`))

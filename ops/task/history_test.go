@@ -27,6 +27,7 @@ func entriesN(n int) []HistoryEntry {
 // counts, re-fold sums the old summary, and two folds of the same entries
 // agree (deterministic summary id).
 func TestFoldHistory(t *testing.T) {
+	t.Parallel()
 	for _, maxN := range []int{defaultHistoryMax, ceilingHistoryMax} {
 		in := entriesN(maxN + 10)
 		got, err := foldHistory("tsk_x", in, maxN)
@@ -70,6 +71,7 @@ func TestFoldHistory(t *testing.T) {
 // TestDiffHistory: only tracked fields that change are recorded; null is
 // none; the note lands on the status entry.
 func TestDiffHistory(t *testing.T) {
+	t.Parallel()
 	cur := row.Row{Fields: map[string]value.Value{"status": txt("todo"), "priority": txt("high")}}
 	patch := map[string]value.Value{
 		"status": txt("done"), "priority": txt("high"), "title": txt("x"), "due_at": value.Null{},
@@ -94,6 +96,7 @@ func txt(s string) value.Value {
 // OV62: --git lines are the diffs of consecutive versions on the tracked
 // fields; a change the row's history already shows is printed once.
 func TestGitLinesDedup(t *testing.T) {
+	t.Parallel()
 	st := func(s string) row.Row {
 		v, err := value.TextOf(s)
 		if err != nil {

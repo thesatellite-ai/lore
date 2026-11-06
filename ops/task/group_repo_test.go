@@ -17,6 +17,7 @@ import (
 // search --repo <name> finds the store's task by that store's repos row
 // without creating anything, and a name no store has is E_NOT_FOUND.
 func TestRepoInTargetStore(t *testing.T) {
+	t.Parallel()
 	h := opstest.WithStores(t, []string{"agency"})
 	repoOf := func(id string) string {
 		t.Helper()

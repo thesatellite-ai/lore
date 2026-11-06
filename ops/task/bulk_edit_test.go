@@ -30,6 +30,7 @@ func priorities(h *opstest.H, ids []string) map[string]int {
 // limit it writes at once; a match of none says so and writes nothing;
 // tasks outside the filter are never touched.
 func TestBulkEditPreviewConfirm(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	var hits []string
 	for i := range 21 { // one over the default preview_rows (20)

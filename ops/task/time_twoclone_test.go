@@ -19,6 +19,7 @@ import (
 // copy merged with itself changes nothing. The repo is an own repo: in a
 // client repo time_entries (an internal field) never reaches the row file.
 func TestTimeEntriesTwoCopiesMerge(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	id := add(h, "shared task", "")
 	path := filepath.Join(h.Repo, ".lore", "data", schema.TableTasks, id+".json")

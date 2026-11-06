@@ -12,6 +12,7 @@ import (
 // parent's index, ids-less children named <parent ext>/<n>, and the
 // checklist kept with its done marks.
 func TestParseImportNested(t *testing.T) {
+	t.Parallel()
 	raw := []byte(`[
 	 {"title":"A","checklist":[{"text":"one","done":true},{"text":"two","done":false}],
 	  "children":[{"title":"A1","children":[{"title":"A1a"}]},{"id":"x9","title":"A2"}]},
@@ -45,6 +46,7 @@ func TestParseImportNested(t *testing.T) {
 // over the importer kind, a block without ext_id is not an import, and an
 // unreadable or absent `_o` is ignored rather than failing the check.
 func TestImportKeyOf(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, o    string
 		ok         bool

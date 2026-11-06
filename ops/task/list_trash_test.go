@@ -17,6 +17,7 @@ import (
 // flags combine with a status filter; nothing trashed lists nothing for
 // --deleted-only.
 func TestListTrashFlags(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	empty := listIDs(t, h, context.Background(), `{"deleted_only":true}`)
 	if len(empty) != 0 {

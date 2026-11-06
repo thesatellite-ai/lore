@@ -14,6 +14,7 @@ import (
 // only when --include-deleted / --deleted-only bring them in; a trashed
 // task is marked, and its time still counts.
 func TestListTimeFiltersWithTrash(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false)) // time data lives in internal stores only (PC-LEAK-1)
 	live := add(h, "live", "")
 	gone := add(h, "gone", "")

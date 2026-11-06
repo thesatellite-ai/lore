@@ -33,6 +33,7 @@ func (e *epochTeam) FenceHolder(_ context.Context, id string, epoch int) error {
 // delete keeps writing. Each case is checked after a trash restore of what
 // the delete took (the mission's cascade takes its tasks too).
 func TestDeleteFencesHolderOnTeamBoard(t *testing.T) {
+	t.Parallel()
 	const holder = "act_01936f0000007a1b8c2d3e4f5a6b7c8d"
 	type setup struct{ held, free, restore string }
 	cases := []struct {
@@ -62,6 +63,7 @@ func TestDeleteFencesHolderOnTeamBoard(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t, repoClient(false))
 			s, name, in := c.build(h)
 			ft := &epochTeam{fakeTeam: fakeTeam{board: &fakeBoard{claims: map[string]claim{s.held: {holder: holder, active: true}}}}}

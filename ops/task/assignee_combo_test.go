@@ -21,6 +21,7 @@ import (
 // --include-proposed and --commitment; an actor with no tasks lists
 // nothing and says so.
 func TestListAssigneeCombos(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	me := opstest.Actor
 	// the harness identity's actor row (a real first write creates it)

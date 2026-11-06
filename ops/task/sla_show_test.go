@@ -19,6 +19,7 @@ import (
 // "SLA breached", show has the sla: line and the JSON sla state, and
 // --where sla:… filters on it.
 func TestSLAShownOnRead(t *testing.T) {
+	t.Parallel()
 	base := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
 	var off atomic.Int64
 	h := opstest.New(t, repoClient(false), func(o *wire.Options) {

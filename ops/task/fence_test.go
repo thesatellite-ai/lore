@@ -39,6 +39,7 @@ func (f *fencingTeam) FenceHolder(_ context.Context, id string, epoch int) error
 // with E_LOST_CLAIM and writes nothing; list never asks; a host without
 // the upgrade (or no team) writes as before.
 func TestChecklistHolderFence(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	held := add(h, "held task", "")
 	lost := add(h, "lost task", "")
@@ -86,6 +87,7 @@ func TestChecklistHolderFence(t *testing.T) {
 // the raised epoch, so the holder's next fenced write is checked against
 // epoch 1 and stays refused until a release and a fresh claim.
 func TestTrashFencesHolderThroughRestore(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	held := add(h, "held", "")
 	free := add(h, "free", "")
@@ -116,6 +118,7 @@ func TestTrashFencesHolderThroughRestore(t *testing.T) {
 // delete batch ("fenced 1" line); a free task in the same cascade keeps 0
 // (checked through the holder fence after a trash restore).
 func TestGroupDeleteFencesClaimed(t *testing.T) {
+	t.Parallel()
 	const holder = "act_01936f0000007a1b8c2d3e4f5a6b7c8d"
 	cases := []struct {
 		name, group, link string
@@ -128,6 +131,7 @@ func TestGroupDeleteFencesClaimed(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t, repoClient(false))
 			g := h.ID(h.Must(c.group, `{"title":"grp","body":"b"}`))
 			held := add(h, "held", `"`+c.link+`":"`+g+`"`)

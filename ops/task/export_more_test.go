@@ -16,6 +16,7 @@ import (
 // refused in a client repo (and when the repo cannot be placed: fail
 // closed); a plain export works in both and never carries them.
 func TestExportInternalRefusedInClientRepo(t *testing.T) {
+	t.Parallel()
 	internal := opstest.New(t, repoClient(false))
 	id := add(internal, "billable", "")
 	internal.Must(opstask.OpTimeLog, `{"id":"`+id+`","duration":"1h","at":"2026-11-02"}`)
@@ -50,6 +51,7 @@ func TestExportInternalRefusedInClientRepo(t *testing.T) {
 // sub-task under its parent and every checklist item (text and done) on
 // the task that had it.
 func TestImportReadsChildrenAndChecklist(t *testing.T) {
+	t.Parallel()
 	a := opstest.New(t, repoClient(false))
 	parent := add(a, "Parent", "")
 	add(a, "Child", `"parent":"`+parent+`"`)

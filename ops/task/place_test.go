@@ -32,6 +32,7 @@ func childOrder(t *testing.T, h *opstest.H, parent string) string {
 // two placement flags, an anchor that is not a sibling (another parent's
 // child, the task itself) are E_INVALID_INPUT with nothing written.
 func TestPlaceAmongSiblings(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	p := add(h, "parent", "")
 	id := map[string]string{}

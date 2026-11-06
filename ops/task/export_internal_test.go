@@ -14,6 +14,7 @@ import (
 // TestExportWithChildren: --with-children adds every descendant once and
 // the json nests them under their parent (19.2, OV47).
 func TestExportWithChildren(t *testing.T) {
+	t.Parallel()
 	mk := func(id, parent string) row.Row {
 		x, err := ids.ParseAny(id)
 		if err != nil {
@@ -65,6 +66,7 @@ func TestExportWithChildren(t *testing.T) {
 // UTC (whatever zone it was given in), nothing when unset; both forms pass
 // the import's date check.
 func TestExportDateForms(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ in, want string }{
 		{"2026-12-01T00:00:00Z", "2026-12-01"},
 		{"2026-12-01T09:30:00Z", "2026-12-01T09:30:00Z"},

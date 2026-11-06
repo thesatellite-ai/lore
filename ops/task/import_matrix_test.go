@@ -60,6 +60,7 @@ func taskCount(h *opstest.H) int {
 // every row as existing with the first ids; an import into the org store
 // does not match the repo's rows and the other way round.
 func TestImportDedupeKeys(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false), withOrg(t))
 	csvFile := writeFile(t, "t.csv", "id,title\nK-1,One\nK-2,Two\n")
 	jsonFile := writeFile(t, "t.json", `[{"id":"K-1","title":"One"},{"id":"K-2","title":"Two"}]`)
@@ -98,6 +99,7 @@ func TestImportDedupeKeys(t *testing.T) {
 // names exactly that field as differing and writes nothing; an unchanged
 // record and a record without the column name none.
 func TestImportDiffersPerField(t *testing.T) {
+	t.Parallel()
 	base := map[string]string{"title": "T", "body": "B", "priority": "low", "commitment": "accepted", "status": "in_progress", "estimate": "3"}
 	enc := func(m map[string]string) string {
 		b, err := json.Marshal([]map[string]string{m})
@@ -117,6 +119,7 @@ func TestImportDiffersPerField(t *testing.T) {
 	changes := map[string]string{"title": "T2", "body": "B2", "priority": "high", "commitment": "someday", "status": "blocked", "estimate": "5"}
 	for col, v := range changes {
 		t.Run(col, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t, repoClient(false))
 			first := mustImport(t, h, writeFile(t, "d.json", enc(with("title", "T"))), "")
 			id := first.Rows[0].ID
@@ -149,6 +152,7 @@ func TestImportDiffersPerField(t *testing.T) {
 // open sub-task, by nesting or by the parent column, is refused before
 // any write; an unknown status is refused too.
 func TestImportStatusAndRefusal(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	out := mustImport(t, h, writeFile(t, "s.json", `[
 		{"id":"P","title":"parent","status":"done","children":[{"id":"C","title":"child","status":"done"}]},
@@ -187,6 +191,7 @@ func TestImportStatusAndRefusal(t *testing.T) {
 // a re-import whose parent record already exists links the new child to
 // the existing task.
 func TestImportParentColumn(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false), withOrg(t))
 	live := add(h, "live parent", "")
 	trashed := add(h, "trashed parent", "")
@@ -238,6 +243,7 @@ func TestImportParentColumn(t *testing.T) {
 // refuses ("2d", no day unit; "90m" under points) refuses the whole file
 // before any write.
 func TestImportEstimateColumn(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	out := mustImport(t, h, writeFile(t, "e.csv", "id,title,estimate\nA,a,3\nB,b,0.5\nC,c,\n"), "")
 	for ext, want := range map[string]string{"A": "3", "B": "0.5", "C": ""} {
@@ -271,6 +277,7 @@ func TestImportEstimateColumn(t *testing.T) {
 // however many rows carry a value; a column that is empty in every row
 // gives no line; the rows are imported.
 func TestImportIgnoredColumns(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	csv := "id,title,lead,created_at,completed_at\n" +
 		"A,a,act_01936f0000007a1b8c2d3e4f5a6b7c8d,2026-11-01T10:00:00Z,\n" +
@@ -296,6 +303,7 @@ func TestImportIgnoredColumns(t *testing.T) {
 // statuses; a pair without "=", with an empty file value or with a
 // target that is not a status is refused before any write.
 func TestImportMapStatus(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	file := writeFile(t, "j.csv", "Key,Summary,Status\nJ-1,review,In Review\nJ-2,closed,Closed\nJ-3,plain,todo\n")
 	out := mustImport(t, h, file, `,"map":["Key=id,Summary=title,Status=status"],"map_status":["In Review=in_progress","Closed=done"]`)
@@ -323,6 +331,7 @@ func TestImportMapStatus(t *testing.T) {
 // and estimates imported into another repo keeps status, estimate and the
 // parent link.
 func TestExportImportRoundTripStatus(t *testing.T) {
+	t.Parallel()
 	a := opstest.New(t, repoClient(false))
 	p := add(a, "parent", `"estimate":"5"`)
 	c := add(a, "child", `"parent":"`+p+`","estimate":"2"`)

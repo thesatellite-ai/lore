@@ -16,6 +16,7 @@ import (
 // free one, so after a restore each holder's next fenced write is checked
 // against epoch 1 while free tasks stay at 0.
 func TestGroupDeleteFencesClaimedTasks(t *testing.T) {
+	t.Parallel()
 	const holder = "act_01936f0000007a1b8c2d3e4f5a6b7c8d"
 	cases := []struct {
 		name   string
@@ -30,6 +31,7 @@ func TestGroupDeleteFencesClaimedTasks(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t, repoClient(false))
 			root := add(h, "root", "")
 			held := add(h, "held child", `"parent":"`+root+`"`)

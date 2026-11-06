@@ -17,6 +17,7 @@ import (
 // is E_TREE_WIDTH; a closed child still counts; a split checks every piece
 // before the first add (nothing is half written); top level never counts.
 func TestTreeWidthRefusals(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpPolicySet, `{"key":"tasks.max_children","value":"2"}`)
 	p := add(h, "parent", "")
@@ -72,6 +73,7 @@ func children(h *opstest.H, id string) int {
 // creates the default task list on demand, and the --meta values land on
 // the new task, never on that auto-created list.
 func TestAddMetaBindsToTheTask(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	id := add(h, "fresh", `"meta":["client=acme"]`)
 	_, tr := get(h, schema.TableTasks, id)

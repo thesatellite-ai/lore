@@ -101,6 +101,7 @@ func TestTimeSpentSampleQueries(t *testing.T) {
 // writes per-worker totals and says the policy chose it; --with-time
 // none overrides the policy; the entries never reach the client row.
 func TestMoveWithTimeIntoClientRepo(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, policy, withTime string
 		totals                 bool
@@ -113,6 +114,7 @@ func TestMoveWithTimeIntoClientRepo(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t, repoClient(true), withOrg(t))
 			if c.policy != "" {
 				h.MustYes("policy.set", `{"key":"time.client_share","value":"`+c.policy+`"}`)

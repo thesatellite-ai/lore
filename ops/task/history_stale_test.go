@@ -36,6 +36,7 @@ func historyOf(t *testing.T, entries ...[3]string) value.Value {
 // both (append-only entries by id: nothing is lost, nothing is a
 // conflict), whichever side is newer.
 func TestHistoryUnionOfConcurrentWrites(t *testing.T) {
+	t.Parallel()
 	a := mergeActor(t, "act_01936f0000007a1b8c2d3e4f5a6b7c8d")
 	b := mergeActor(t, "act_01936f0000007a1b8c2d3e4f5a6b7c8e")
 	p := merge.PolicyFor(tasksDef(t))
@@ -71,6 +72,7 @@ func TestHistoryUnionOfConcurrentWrites(t *testing.T) {
 // actors): no session id and no other internal detail reaches the rows
 // or task history --json.
 func TestHistoryClientProjection(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(true))
 	ann := newActor(h, "Ann")
 	id := add(h, "client task", "")
@@ -99,6 +101,7 @@ func TestHistoryClientProjection(t *testing.T) {
 // rule as written; --close --dry-run writes nothing and --close cancels
 // exactly the stale ones in one batch with close_reason stale.
 func TestStaleExclusions(t *testing.T) {
+	t.Parallel()
 	base := time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC)
 	var off atomic.Int64
 	h := opstest.New(t, func(o *wire.Options) {
@@ -182,6 +185,7 @@ func TestStaleExclusions(t *testing.T) {
 // 40-column terminal wraps a long title but never reorders or drops a
 // card; --json carries the same groups with empty task lists.
 func TestBoardLayoutSnapshot(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	add(h, "Release note", `"priority":"high"`)
 	b := add(h, "Download button with a title much longer than forty columns", `"priority":"low"`)

@@ -17,6 +17,7 @@ import (
 // stored row files, which is where the check was blind before (depsOf
 // only understood an engine-built value.JSON, never a decoded list).
 func TestEditAfterCycleMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false), withOrg(t))
 	toOrg := `"to":"` + orgStore + `"`
 	cases := []struct {

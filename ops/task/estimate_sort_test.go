@@ -13,6 +13,7 @@ import (
 // --where estimate>N compare it as a number. A text compare would put
 // "10" before "2.5" and "9", and estimate>3 would drop "10" ("1" < "3").
 func TestEstimateSortAndWhereNumeric(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	ten := add(h, "ten", `"estimate":"10"`)
 	nine := add(h, "nine", `"estimate":"9"`)

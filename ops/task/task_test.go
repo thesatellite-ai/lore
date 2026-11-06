@@ -19,6 +19,7 @@ import (
 // TestTextMatchesV017 drives one session of the human commands and checks
 // each Text() against the v0.1.17 lines.
 func TestTextMatchesV017(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	check := func(step, got, want string) {
 		t.Helper()
@@ -70,6 +71,7 @@ func TestTextMatchesV017(t *testing.T) {
 // TestShowDoneByAndJSON: a done task shows "done by" with the actor's
 // display name, and show --json keeps v0.1.17's taskFull key order.
 func TestShowDoneByAndJSON(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	id := add(h, "Second", `"body":"b","due":"2026-12-01"`)
 	h.Must(opstask.OpStart, `{"id":"`+id+`"}`)
@@ -97,6 +99,7 @@ func TestShowDoneByAndJSON(t *testing.T) {
 // TestNotFoundAndBadIDs: every id-taking op answers a missing task with
 // v0.1.17's message and a malformed id with E_INVALID_ID.
 func TestNotFoundAndBadIDs(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	gone := add(h, "gone", "")
 	h.MustYes(opstask.OpDelete, `{"id":"`+gone+`"}`)
@@ -130,6 +133,7 @@ func TestNotFoundAndBadIDs(t *testing.T) {
 // written. Delta: v0.1.17 stored any --priority text ("huge"); the core
 // checks the closed set (schema TaskPriorities).
 func TestAddValidation(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	cases := []struct {
 		name, in string
@@ -173,6 +177,7 @@ func TestAddValidation(t *testing.T) {
 // current actor, joins the project's "default" tasklist (created once per
 // store, on demand), and --timebox / --role are stored.
 func TestAddDefaults(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, withOrg(t))
 	a := add(h, "a", `"timebox":3600000000000,"role":"coordinator"`)
 	b := add(h, "b", "")
@@ -212,6 +217,7 @@ func TestAddDefaults(t *testing.T) {
 // TestKeyIdempotent: --key is idempotent per project and mission; a
 // different key or mission adds a new task.
 func TestKeyIdempotent(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	msn := addID(h, h.Must("mission.add", `{"title":"m"}`))
 	first := add(h, "k", `"key":"k1"`)
@@ -234,6 +240,7 @@ func TestKeyIdempotent(t *testing.T) {
 // merged across repos, takes explicit :done / :merged, dedupes, and edit
 // refuses a cycle (E_CYCLE) including a self edge.
 func TestAfterModesAndCycles(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	repoA := create(h, schema.TableRepos, map[string]value.Value{"project_id": ref(t, h.Project), "mount_name": text(t, "web")})
 	create(h, schema.TableRepos, map[string]value.Value{"project_id": ref(t, h.Project), "mount_name": text(t, "api")})
@@ -281,6 +288,7 @@ func TestAfterModesAndCycles(t *testing.T) {
 
 // TestListFilters walks the list filter matrix.
 func TestListFilters(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, withOrg(t))
 	actor := newActor(h, "Bob")
 	todo := add(h, "todo", "")
@@ -361,6 +369,7 @@ func TestListFilters(t *testing.T) {
 // repo scope and --limit after the filters, and loads relations (JSON
 // null when absent, keys in v0.1.17's order).
 func TestSearchFilters(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	create(h, schema.TableRepos, map[string]value.Value{"project_id": ref(t, h.Project), "mount_name": text(t, "web")})
 	master := add(h, "alpha master", "")
@@ -412,6 +421,7 @@ func TestSearchFilters(t *testing.T) {
 // an empty edit is refused. Delta: v0.1.17 printed "updated" for an
 // empty edit; the core refuses it (nothing to change).
 func TestEditMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	actor := newActor(h, "Ann")
 	msn := addID(h, h.Must("mission.add", `{"title":"m"}`))
@@ -453,6 +463,7 @@ func TestEditMatrix(t *testing.T) {
 // un-defers; done stamps completed_at, done_commit, done_pr, done_by and
 // the lesson memory lands in the task's store pointing at the task.
 func TestStartDoneStamps(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, withOrg(t))
 	id := add(h, "t", `"commitment":"someday","defer_until":"2099-01-01"`)
 	h.Must(opstask.OpStart, `{"id":"`+id+`"}`)

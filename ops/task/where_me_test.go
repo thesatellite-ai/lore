@@ -20,6 +20,7 @@ import (
 // assignee:@me follows its runner); it works in lead and watcher terms
 // and in bulk edit's --where too.
 func TestWhereMe(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	// The harness identity's actor row (a real first write would create
 	// it; the harness writes rows without one).

@@ -39,6 +39,7 @@ func projectedActor(t *testing.T, h *opstest.H, stableKey, display, kind string)
 // are ambiguous (E_INVALID_INPUT naming both), while their stable keys
 // each pick one.
 func TestAssigneeByStableKeyOnProjection(t *testing.T) {
+	t.Parallel()
 	// An internal repo: a client repo projects agent assignees to their
 	// owner (P2B-OLD-2), and the harness reads as client when unset.
 	h := opstest.New(t, repoClient(false))

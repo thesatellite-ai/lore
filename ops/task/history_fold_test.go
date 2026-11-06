@@ -23,6 +23,7 @@ import (
 // becomes one summary entry whose counts add up, and the new change is
 // recorded.
 func TestNextCoreWriteFoldsHistory(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpPolicySet, `{"key":"tasks.history_max","value":"3"}`)
 	id := add(h, "reassigned a lot", "")

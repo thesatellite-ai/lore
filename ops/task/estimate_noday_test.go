@@ -17,6 +17,7 @@ import (
 // still prints in days; switching the policy to hours makes writes work
 // again.
 func TestEstimateNoDayUnit(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	kept := add(h, "estimated before", `"estimate":"3"`)
 	for _, unit := range []string{"points", "hours"} {

@@ -20,6 +20,7 @@ import (
 // resolver refuse naming both ids, and the ttp_ id picks one; template
 // edit replaces the YAML so the next add uses the new form.
 func TestTemplateStoresAndEdit(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false), withOrg(t))
 	dir := t.TempDir()
 	write := func(name, body string) string {

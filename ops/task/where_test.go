@@ -14,6 +14,7 @@ import (
 // TestListWhereSort: task list --where reads the one filter grammar (XQ7)
 // and --sort the one sort grammar (XQ10), ANDed with the old flags.
 func TestListWhereSort(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	low := add(h, "low one", `"priority":"low","due":"2026-12-05"`)
 	high := add(h, "high one", `"priority":"high","due":"2026-11-20"`)

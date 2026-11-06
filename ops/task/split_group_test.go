@@ -17,6 +17,7 @@ import (
 // takes assign and due too. An empty positional title is refused (its
 // flags would vanish).
 func TestSplitPerChildFlags(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	ann := newActor(h, "Ann")
 	bob := newActor(h, "Bob")

@@ -16,6 +16,7 @@ import (
 // E_PARENT_MISSION, E_TREE_DEPTH at tasks.max_depth 4, E_CYCLE on a
 // re-parent, and the subtree delete asking and taking every child.
 func TestTaskTreeRules(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	p := add(h, "parent", `"priority":"high"`)
 	c1 := add(h, "one", `"parent":"`+p+`"`)

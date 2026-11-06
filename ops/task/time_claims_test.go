@@ -61,6 +61,7 @@ func TestTimeShowOpenClaim(t *testing.T) {
 // holder that is not an actor id (an old binary's) and a claim with no
 // start add nothing; an end before the start counts zero, never negative.
 func TestTimeShowOpenClaimMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	ann := newActor(h, "Ann")
 	since := time.Now().UTC().Add(-3 * time.Hour)

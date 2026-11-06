@@ -101,6 +101,7 @@ func hasItem(got map[string][]string, kind string, parts ...string) bool {
 // not one) or in a comment; and no child or mention item when I did the
 // same myself.
 func TestInboxItemKinds(t *testing.T) {
+	t.Parallel()
 	// Coordination needs a resolved person (wire openWorld), so the App's
 	// identity is a flag actor instead of the harness's fixed Options.Actor.
 	h := opstest.New(t, repoClient(false), func(o *wire.Options) { o.Actor, o.FlagActor = ids.ID[ids.Actor]{}, annKey })

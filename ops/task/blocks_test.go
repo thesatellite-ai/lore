@@ -12,6 +12,7 @@ import (
 // on B exactly the blocked_by value `task edit B --after A` writes, and
 // relate B --blocked-by A the same again; a second relate adds nothing.
 func TestRelateBlocksSameAsAfter(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	a := add(h, "upstream", "")
 	viaBlocks := add(h, "via blocks", "")

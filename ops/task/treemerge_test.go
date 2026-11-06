@@ -79,6 +79,7 @@ func viewOf(h *opstest.H, parents ...string) treeView {
 // rank orders by id and is reported as info, a subtree pushed over
 // tasks.max_depth is kept and reported, and nothing is repaired on read.
 func TestTreeMergeMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpPolicySet, `{"key":"tasks.max_depth","value":"2"}`)
 

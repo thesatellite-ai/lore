@@ -13,6 +13,7 @@ import (
 // every child sets for itself is not listed (the tasklist the test repo
 // gives every task is always inherited).
 func TestSplitInheritedLine(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	parent := add(h, "parent", `"priority":"high","commitment":"accepted"`)
 	cases := []struct {

@@ -29,6 +29,7 @@ func infer(t *testing.T, raw string) value.Value {
 // at most two decimals and |v| <= 1000 (OV15B-URG); anything else stops
 // the policy with E_CONFIG_INVALID (a broken row is never skipped).
 func TestUrgencyWeightShape(t *testing.T) {
+	t.Parallel()
 	key := policy.UrgencyKey("next_tag", "")
 	cases := []struct {
 		raw  string
@@ -77,6 +78,7 @@ func TestUrgencyWeightShape(t *testing.T) {
 // the nearest level that sets one wins (repo over folder over org),
 // whatever order the entries arrive in.
 func TestUrgencyWeightNearestWins(t *testing.T) {
+	t.Parallel()
 	key := policy.UrgencyKey("due", "")
 	org := policy.Entry{Level: policy.LevelOrg, Key: key, Value: infer(t, `1`)}
 	folder := policy.Entry{Level: policy.LevelFolder, Key: key, Value: infer(t, `2`)}
@@ -106,6 +108,7 @@ func TestUrgencyWeightNearestWins(t *testing.T) {
 // onto its own Weights field (a mapping slip would move one term's weight
 // onto another), and leaves the defaults when nothing is set.
 func TestUrgencyWeightsApplyEveryKey(t *testing.T) {
+	t.Parallel()
 	keys := policy.UrgencyKeys()
 	if len(keys) != 12 {
 		t.Fatalf("%d urgency keys, want 12 (4 priority levels + 8 terms)", len(keys))
@@ -168,6 +171,7 @@ func itoa2(n int) string {
 // task list --sort urgency and the points task show --why prints (the
 // seam from policy rows through the engine to the op).
 func TestUrgencyWeightsReachListAndWhy(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	high := add(h, "high", `"priority":"high"`)
 	low := add(h, "low", `"priority":"low"`)

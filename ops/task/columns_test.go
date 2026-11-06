@@ -48,6 +48,7 @@ func cellsFor(t listTable, id string) []string {
 // missing value prints "-"; dates print as a day, datetimes as a UTC minute;
 // the computed columns (tracked/time, elapsed, progress) are filled.
 func TestListColumnsTable(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false)) // time data lives in internal stores only (PC-LEAK-1)
 	a := add(h, "Café ünïcode", `"priority":"high","due":"2026-12-05","estimate":"3"`)
 	b := add(h, "b", `"priority":"low"`)
@@ -128,6 +129,7 @@ func TestListColumnsTable(t *testing.T) {
 // TestViewColumns: task view add/edit --columns stores the columns; a list
 // with --view uses them only when it gives no --columns of its own.
 func TestViewColumns(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	a := add(h, "alpha", `"priority":"high"`)
 	h.Must(opstask.OpViewAdd, `{"name":"hot","where":["priority=high"],"columns":["id","title"]}`)
@@ -161,6 +163,7 @@ func TestViewColumns(t *testing.T) {
 // a view saves and runs a meta term; task edit --where meta.<key> narrows
 // the bulk preview to the matching tasks only.
 func TestListWhereMeta(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	// points is a declared number key, so > compares numbers (METADATA 3.7).
 	h.MustYes(settings.OpMetaAdd, `{"name":"points","type":"number"}`)

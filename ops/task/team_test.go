@@ -85,6 +85,7 @@ func listIDs(t *testing.T, h *opstest.H, ctx context.Context, in string) []strin
 // with the roster's hint; mission/plan approvers are the mission
 // package's. Internal repo, so TEAM-030 does not apply.
 func TestAssignHandle(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	ann := newActor(h, "Ann")
 	team := newTeam(h, "@core", ann)
@@ -132,6 +133,7 @@ func TestAssignHandle(t *testing.T) {
 // org store, personal) × repo class (client, internal, no hook = client,
 // failing hook = client). A person is always allowed.
 func TestTeam030Matrix(t *testing.T) {
+	t.Parallel()
 	type repoKind struct {
 		name   string
 		opt    func(*wire.Options)
@@ -198,6 +200,7 @@ func checkTeam030(t *testing.T, step string, err error, refused bool) {
 // holder (@handle or actor reference); both need a host Team, and an
 // unreadable board fails them closed while a plain list still works.
 func TestMineAndClaimedBy(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false))
 	// The board's caller ("me") is an actor of the roster.
 	me := newActor(h, "Me")
@@ -260,6 +263,7 @@ func TestMineAndClaimedBy(t *testing.T) {
 // not merged yet"); human output only, and no column without a host
 // Team.
 func TestStateColumn(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(false), withOrg(t))
 	done := add(h, "Second", `"due":"2026-12-01"`)
 	h.Must(opstask.OpDone, `{"id":"`+done+`","no_lesson":true}`)
@@ -292,6 +296,7 @@ func TestStateColumn(t *testing.T) {
 // pointer writes nothing; show prints refs and "(not available here)" for
 // a qualified ref outside this checkout.
 func TestRefsF15(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(true), withOrg(t), withPersonal(t))
 	repoMem := h.ID(h.Must("memory.add", `{"body":"repo note"}`))
 	orgMem := h.ID(h.Must("memory.add", `{"body":"org note","to":"`+orgStore+`"}`))

@@ -51,6 +51,7 @@ func childrenOf(h *opstest.H, id string) map[string]string {
 // an --after edge between two tasks of the subtree points at the new
 // children, an edge leaving the subtree is dropped.
 func TestRecurCarry(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	outside := add(h, "outside work", "")
 	root := add(h, "Monthly close", `"due":"2026-11-30","recur":"every month on last","meta":["client=acme"]`)
@@ -94,6 +95,7 @@ func TestRecurCarry(t *testing.T) {
 // today's key rules refuse never blocks closing the instance: the next
 // instance is written without it and the output says so.
 func TestRecurCarryRefusedMeta(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"points","type":"number"}`)
 	// Not strict yet: a text value is a warning, so the root keeps it.

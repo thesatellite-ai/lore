@@ -23,6 +23,7 @@ import (
 // one (rows read back from the files); a ref into the repo store from the
 // folder is allowed (F15: internal → client is fine).
 func TestRefsInOrgFolderTarget(t *testing.T) {
+	t.Parallel()
 	h0 := opstest.WithStores(t, []string{"northwind"})
 	b, err := os.ReadFile(filepath.Join(h0.Repo, ".lore", "stores.yaml"))
 	if err != nil {
@@ -62,6 +63,7 @@ func TestRefsInOrgFolderTarget(t *testing.T) {
 // used to hide as "no such task"). The repo's own stores.yaml does not
 // attach the store (the org link is the only way in).
 func TestAfterInOrgLinkedFolder(t *testing.T) {
+	t.Parallel()
 	h0 := opstest.WithStores(t, []string{"northwind"})
 	cfgPath := filepath.Clean(filepath.Join(h0.Repo, ".lore", "stores.yaml"))
 	b, err := os.ReadFile(cfgPath)

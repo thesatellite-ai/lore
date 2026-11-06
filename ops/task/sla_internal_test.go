@@ -14,6 +14,7 @@ import (
 // TestSLADeferredTime: deferred time is left out of the SLA, blocked time
 // is not (18.4); the deferred_until history splits the span (OV47).
 func TestSLADeferredTime(t *testing.T) {
+	t.Parallel()
 	t0 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	hr := func(n int) time.Time { return t0.Add(time.Duration(n) * time.Hour) }
 	txt := func(x time.Time) string { return x.Format(time.RFC3339) }
@@ -57,6 +58,7 @@ func TestSLADeferredTime(t *testing.T) {
 // the limit, a priority without an SLA never listed, nothing with no SLA
 // policy at all.
 func TestSLALate(t *testing.T) {
+	t.Parallel()
 	t0 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	now := t0.Add(50 * time.Hour)
 	hours := map[string]int64{schema.TaskPriorityUrgent: 48, schema.TaskPriorityHigh: 60}

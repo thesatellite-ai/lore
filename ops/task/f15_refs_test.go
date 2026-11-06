@@ -14,6 +14,7 @@ import (
 // E_LEAK_BLOCKED and writes nothing; the same pointer from an org task is
 // allowed, and a repo row named from the client repo is allowed.
 func TestTaskParentRefsF15(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(true), withOrg(t))
 	orgMission := h.ID(h.Must("mission.add", `{"title":"org m","to":"`+orgStore+`"}`))
 	orgList := h.ID(h.Must("tasklist.add", `{"title":"org l","body":"b","to":"`+orgStore+`"}`))
@@ -43,6 +44,7 @@ func TestTaskParentRefsF15(t *testing.T) {
 // relation between two repo tasks, and from an org task to the repo
 // task, is allowed; add and edit --after carry the same edge check.
 func TestRelateLeakGuardF15(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, repoClient(true), withOrg(t))
 	orgTask := h.ID(h.Must(opstask.OpAdd, `{"title":"org task","to":"`+orgStore+`"}`))
 	orgMem := h.ID(h.Must("memory.add", `{"body":"org note","to":"`+orgStore+`"}`))

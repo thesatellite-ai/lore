@@ -62,6 +62,7 @@ func labelCases(to string) []labelCase {
 // "[" + org + "/" + folder + "]", and printed the same text at the end of
 // an external row's human line.
 func TestStoreLabelInOutputs(t *testing.T) {
+	t.Parallel()
 	h0 := opstest.WithStores(t, []string{"northwind"})
 	b, err := os.ReadFile(filepath.Join(h0.Repo, ".lore", "stores.yaml"))
 	if err != nil {
@@ -146,6 +147,7 @@ func sourceRE(store, folder, label string) *regexp.Regexp {
 // onto one line, never cut); the add lines of memory, rule and comment end
 // in the label, and in the repo at the id (no trailing space, 07bbe43).
 func TestExternalRowLines(t *testing.T) {
+	t.Parallel()
 	h0 := opstest.WithStores(t, []string{"northwind"})
 	b, err := os.ReadFile(filepath.Join(h0.Repo, ".lore", "stores.yaml"))
 	if err != nil {

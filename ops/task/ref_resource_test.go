@@ -16,6 +16,7 @@ import (
 // resources pointer; the same name under two kinds is
 // E_RESOURCE_AMBIGUOUS and writes nothing; add and edit declare that code.
 func TestRefResourceName(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"server"}`)
 	h.MustYes(settings.OpKindAdd, `{"kind":"database"}`)

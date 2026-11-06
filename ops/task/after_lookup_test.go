@@ -14,6 +14,7 @@ import (
 // missing answers E_INVALID_INPUT. The registry still lists them as
 // required (docs and OpenAPI read FieldInfo.Required).
 func TestRequiredAfterLookup(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	id := add(h, "has a checklist", `"due":"2026-11-30","recur":"every day"`)
 	h.Must(opstask.OpChecklistAdd, `{"id":"`+id+`","text":"one"}`)
