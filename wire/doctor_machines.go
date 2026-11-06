@@ -126,12 +126,14 @@ func (a *App) DoctorTeamVersions(ctx context.Context) ([]DoctorFinding, error) {
 			floor = d.MinLoreVersion
 		}
 	}
-	return teamVersionFindings(tvs, floor), nil
+	return teamVersionFindings(tvs, floor, a.teamActorNamer(ctx)), nil
 }
 
 // teamVersionFindings is the header note, one note per save and a warning
-// after each save below floor ("" = no floor).
-func teamVersionFindings(tvs []sqlite.TeamVersion, floor string) []DoctorFinding {
+// after each save below floor ("" = no floor). name shows a writer's actor
+// id as the person (doctor_teamnames.go); the save time shows as its date
+// (CLI_REFERENCE 3.7).
+func teamVersionFindings(tvs []sqlite.TeamVersion, floor string, name func(string) string) []DoctorFinding {
 	out := []DoctorFinding{{Check: DoctorCheckTeamVersions, Level: DoctorNote, Plain: true, Message: teamVersionsHeader}}
 	for _, tv := range tvs {
 		machine := codeRepoMachine
@@ -139,11 +141,11 @@ func teamVersionFindings(tvs []sqlite.TeamVersion, floor string) []DoctorFinding
 			machine = shortMachine(tv.Machine)
 		}
 		out = append(out, DoctorFinding{Check: DoctorCheckTeamVersions, Level: DoctorNote, Plain: true,
-			Message: fmt.Sprintf("  %s on %s: lore %s (last save %s)", tv.Actor, machine, tv.Version, tv.LastSeen)})
+			Message: fmt.Sprintf("  %s on %s: lore %s (last save %s)", name(tv.Actor), machine, tv.Version, saveDate(tv.LastSeen))})
 		if floor != "" && formatgate.VersionBelow(tv.Version, floor) {
 			out = append(out, DoctorFinding{Check: DoctorCheckTeamVersions, Level: DoctorWarning, Plain: true,
 				Message: fmt.Sprintf("%s on %s last wrote with lore %s, below min_lore_version %s: that lore is read-only here until it runs `%s upgrade`",
-					tv.Actor, machine, tv.Version, floor, doctorBinaryName)})
+					name(tv.Actor), machine, tv.Version, floor, doctorBinaryName)})
 		}
 	}
 	return out

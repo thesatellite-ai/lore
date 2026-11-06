@@ -41,7 +41,7 @@ func TestSharedMachineFindings(t *testing.T) {
 // save below the floor; no floor never warns; a dev build is never below.
 func TestTeamVersionFindings(t *testing.T) {
 	tvs := []sqlite.TeamVersion{
-		{Actor: "ana", Machine: "mch_0123456789abcdef", Version: "0.1.18", LastSeen: "2026-11-01T00:00:00Z"},
+		{Actor: "act_ana", Machine: "mch_0123456789abcdef", Version: "0.1.18", LastSeen: "2026-11-01T23:59:59.123456789Z"},
 		{Actor: "bob", Machine: "", Version: "0.1.17", LastSeen: "2026-10-01T00:00:00Z"},
 		{Actor: "cy", Machine: "mch_ff", Version: "0.1.17-dev", LastSeen: "2026-11-02T00:00:00Z"},
 	}
@@ -55,7 +55,15 @@ func TestTeamVersionFindings(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run("floor "+c.floor, func(t *testing.T) {
-			got := teamVersionFindings(tvs, c.floor)
+			// The writer shows as the person (act_ana -> ana); an id the
+			// roster lacks shows as stamped.
+			name := func(id string) string {
+				if id == "act_ana" {
+					return "ana"
+				}
+				return id
+			}
+			got := teamVersionFindings(tvs, c.floor, name)
 			var notes, warns []string
 			for _, f := range got {
 				if f.Check != DoctorCheckTeamVersions || !f.Plain {
@@ -71,9 +79,9 @@ func TestTeamVersionFindings(t *testing.T) {
 				}
 			}
 			wantNotes := []string{teamVersionsHeader,
-				"  ana on mch_01234567: lore 0.1.18 (last save 2026-11-01T00:00:00Z)",
-				"  bob on (code repo, no machine id): lore 0.1.17 (last save 2026-10-01T00:00:00Z)",
-				"  cy on mch_ff: lore 0.1.17-dev (last save 2026-11-02T00:00:00Z)"}
+				"  ana on mch_01234567: lore 0.1.18 (last save 2026-11-01)",
+				"  bob on (code repo, no machine id): lore 0.1.17 (last save 2026-10-01)",
+				"  cy on mch_ff: lore 0.1.17-dev (last save 2026-11-02)"}
 			if strings.Join(notes, "|") != strings.Join(wantNotes, "|") {
 				t.Fatalf("notes\n%q\nwant\n%q", notes, wantNotes)
 			}
