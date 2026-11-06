@@ -123,9 +123,19 @@ type LockWatch struct {
 }
 
 // WatchLockRanks starts a watch over w's locks; it stops at test cleanup.
+//
+// The first sample runs before it returns: it resolves every flock on the
+// machine (/proc/locks) to a path through its pid's /proc/<pid>/fd, and on a
+// shared host with ~1000 foreign locks that takes about a second, while later
+// samples reuse the (pid, inode) cache and take a few ms. Taken in the loop,
+// that slow first sample swallowed every hold a test made right after
+// starting the watch (TestLockOrderRanks saw no order at all); taken here, the
+// watch is warm and sampling every Interval when the caller's first lock is
+// taken.
 func (w *World) WatchLockRanks() *LockWatch {
 	lw := &LockWatch{root: w.Root, interval: DefaultLockWatchInterval, stop: make(chan struct{}), done: make(chan struct{}),
 		paths: map[procLock]string{}, prev: map[int]map[string]bool{}, orders: map[LockOrder]bool{}, observed: map[string]bool{}}
+	lw.sample()
 	go lw.loop()
 	w.T.Cleanup(lw.Stop)
 	return lw
