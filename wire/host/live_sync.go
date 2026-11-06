@@ -290,11 +290,6 @@ func (l liveSync) SyncInstallAction(ctx context.Context, in opssync.InstallActio
 	return l.repo().SyncInstallAction(ctx, in)
 }
 
-// Explain implements opssync.Env.
-func (liveSync) Explain(context.Context, opssync.ExplainIn) (opssync.DoneOut, error) {
-	return opssync.DoneOut{}, errs.New(errs.Unsupported, "lore explain is not available in this binary yet")
-}
-
 // landErr keeps a coded refusal of the landing pass (E_LEAK_BLOCKED, a
 // rewritten remote) as it is, and wraps any other failure as E_INTERNAL.
 func landErr(err error) error {
