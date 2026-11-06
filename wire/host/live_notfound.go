@@ -62,8 +62,12 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 		top, folder := livePlace(root)
 		if repo, rerr := gitref.Open(ctx, top, h.git()); rerr == nil && !repo.Bare() {
 			if s, serr := openLiveSession(ctx, h, repo, top, live.FetchCached); serr == nil {
-				if why := s.whyMissing(ctx, folder, id); why != "" {
-					return errs.New(errs.NotFound, why)
+				if code, why := s.whyMissingCode(ctx, folder, id); why != "" {
+					e := errs.New(code, why)
+					if code == errs.Purged {
+						e = e.WithHint(purgedHint)
+					}
+					return e
 				}
 				remote, branch = s.ref.RemoteName, s.defaultBranch(ctx)
 			}
@@ -73,10 +77,32 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 	return e.WithHint("it may have landed on " + branch + " while this branch is older: `" + peek + "`")
 }
 
-// whyMissing explains an id the live tree or origin/<default> knows about
-// ("" when neither does). An unreadable purge list is reported.
+// purgedHint is the hint of an E_PURGED answer, as the engine's purgedErr
+// gives it.
+const purgedHint = "write the content as a new row (a new id)"
+
+// whyMissing is whyMissingCode's message.
 func (s *liveSession) whyMissing(ctx context.Context, folder, id string) string {
+	_, why := s.whyMissingCode(ctx, folder, id)
+	return why
+}
+
+// whyMissingCode explains an id the live tree or origin/<default> knows
+// about ("" when neither does) and gives its code: E_PURGED for an id on
+// the live ref's purge list or main's _purged.json (DQ4: purged rows never
+// come back; a `lore trash purge` lists its ids on the live ref too,
+// BUG-LIVE-PURGE-LIST), checked first, since a purge wins over the
+// tombstone it may leave; E_NOT_FOUND for a live tombstone. An unreadable
+// purge list is reported (E_NOT_FOUND).
+func (s *liveSession) whyMissingCode(ctx context.Context, folder, id string) (errs.Code, string) {
 	if _, tree, err := s.ref.LocalTree(ctx); err == nil {
+		purged, perr := tree.Purged()
+		if perr != nil {
+			return errs.NotFound, id + ": the live purge list could not be read (" + perr.Error() + ")"
+		}
+		if purged[id] {
+			return errs.Purged, id + " was purged: deleted on purpose (`lore trash purge` or `lore live purge`); purged rows never come back (DQ4)"
+		}
 		rows, _ := tree.Rows(folder) // undecodable files say nothing about id
 		for k, f := range rows {
 			if k.ID == id && f.Deleted() {
@@ -84,26 +110,19 @@ func (s *liveSession) whyMissing(ctx context.Context, folder, id string) string 
 				if !f.Block.HLC.Wall.IsZero() {
 					when = ", " + f.Block.HLC.Wall.Format(time.DateOnly)
 				}
-				return id + " was deleted (live" + when + ")"
+				return errs.NotFound, id + " was deleted (live" + when + ")"
 			}
-		}
-		purged, perr := tree.Purged()
-		if perr != nil {
-			return id + ": the live purge list could not be read (" + perr.Error() + ")"
-		}
-		if purged[id] {
-			return id + " was deleted on purpose (`lore live purge`)"
 		}
 	}
 	trk, ok := gitremote.TrackingRef(s.ref.RemoteName, "refs/heads/"+s.defaultBranch(ctx))
 	if !ok {
-		return ""
+		return errs.NotFound, ""
 	}
 	b, found, err := s.repo.ReadFile(ctx, trk, mainDataPath(folder, purgedFileName))
 	if err == nil && found && strings.Contains(string(b), `"`+id+`"`) {
-		return id + " was deleted on purpose (listed in main's _purged.json)"
+		return errs.Purged, id + " was purged: deleted on purpose (listed in main's _purged.json); purged rows never come back (DQ4)"
 	}
-	return ""
+	return errs.NotFound, ""
 }
 
 // looksLikeRowID: <prefix>_<hex…>. Only such an argument gets the live

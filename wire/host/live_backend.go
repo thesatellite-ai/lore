@@ -701,8 +701,17 @@ func (b *liveBackend) ServesLiveRef() bool { return true }
 var _ engine.Purger = (*liveBackend)(nil)
 
 // WritePurge implements engine.Purger: changes go through the live routing
-// (Write), then purged is listed in the inner backend's _purged.json.
-// Without it every purge behind the wrapper was E_UNSUPPORTED.
+// (Write), then purged is listed in the inner backend's _purged.json and,
+// in a run with a live session, in the live ref's own _live/purged.json
+// (live.Ref.Purge, §6.6), which every clone integrates on its next fetch
+// (merge unions the lists). Without the live list the ids were listed only
+// in the working tree's untracked _purged.json: after `lore sync` the
+// purging clone and every teammate read the live tombstone and answered
+// E_NOT_FOUND "was deleted (live, …)" instead of E_PURGED (DQ4,
+// BUG-LIVE-PURGE-LIST). Live's Purge drops the ids' live files as well;
+// a purged id then reads as absent and the engine answers E_PURGED from
+// the list, naming the id alone (purgedErr). Without it every purge behind
+// the wrapper was E_UNSUPPORTED.
 func (b *liveBackend) WritePurge(ctx context.Context, changes []store.Change, purged []ids.AnyID) error {
 	noteStoreWrite(ctx, len(changes)+len(purged))
 	p, ok := b.inner.(engine.Purger)
@@ -714,15 +723,62 @@ func (b *liveBackend) WritePurge(ctx context.Context, changes []store.Change, pu
 			return err
 		}
 	}
-	return p.WritePurge(ctx, nil, purged)
+	if err := p.WritePurge(ctx, nil, purged); err != nil {
+		return err
+	}
+	s := b.session(ctx)
+	if s == nil || len(purged) == 0 {
+		return nil
+	}
+	if s.blocked != nil {
+		return rewrittenError(errs.StoreReadOnly, s.blocked)
+	}
+	list := make([]string, len(purged))
+	for i, id := range purged {
+		list[i] = id.String()
+	}
+	if _, err := s.ref.Purge(ctx, list, s.h.cfg.Version); err != nil {
+		return errs.Wrap(errs.Internal, "live: list the purged ids on the local live ref", err)
+	}
+	s.wrote += len(list)
+	s.markFolder(b.folder)
+	return nil
 }
 
-// Purged implements engine.Purger (the inner backend's list).
+// Purged implements engine.Purger: the inner backend's list joined with
+// the live ref's _live/purged.json (a purge made in any clone reaches this
+// one through the live ref, BUG-LIVE-PURGE-LIST).
 func (b *liveBackend) Purged(ctx context.Context) (map[string]bool, error) {
+	out := map[string]bool{}
 	if p, ok := b.inner.(engine.Purger); ok {
-		return p.Purged(ctx)
+		set, err := p.Purged(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for id := range set {
+			out[id] = true
+		}
 	}
-	return map[string]bool{}, nil
+	s := b.session(ctx)
+	if s == nil {
+		return out, nil
+	}
+	oid, ok, err := s.ref.Repo.ResolveRef(ctx, s.ref.Name)
+	if err != nil || !ok {
+		return out, err
+	}
+	tree, err := s.ref.ReadTree(ctx, oid)
+	if err != nil {
+		return nil, err
+	}
+	set, err := tree.Purged()
+	if err != nil {
+		return nil, err
+	}
+	for id := range set {
+		out[id] = true
+	}
+	return out, nil
 }
 
 // landedExpect is overLanded for a branch-bound change whose branch copy
