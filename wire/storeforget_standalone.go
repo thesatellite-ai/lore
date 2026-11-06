@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -32,7 +33,11 @@ const (
 )
 
 // standaloneClones implements opsstores.Cloner for cmd/lore.
-type standaloneClones struct{ home string }
+type standaloneClones struct {
+	home string
+	// now is the app clock for the clones' fetch stamps (nil = wall clock).
+	now func() time.Time
+}
 
 var _ opsstores.Cloner = (*standaloneClones)(nil)
 

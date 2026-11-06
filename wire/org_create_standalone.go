@@ -210,7 +210,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	}
 	doc := orgcfg.OrgFileDoc{Name: in.Org, Own: in.Own, Repos: in.Repos,
 		Stores: []orgcfg.OrgFileStore{{URL: url, OrgFolder: in.OrgFolder}}}
-	g := &orgcfg.GitLinks{Home: h.home, Config: cfg}
+	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall()}
 	res, err := g.WriteOrgFile(ctx, orgcfg.OrgFileWrite{URL: url, OrgFolder: in.OrgFolder, Doc: doc, Signature: storeSignature(&entry)})
 	if err != nil {
 		return opsorgcmd.Report{Lines: lines}, orgFileError(err, url)
@@ -248,7 +248,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
-	g := &orgcfg.GitLinks{Home: h.home, Config: cfg}
+	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall()}
 	sg, err := g.ReadSuggestion(ctx, in.URL, in.Branch)
 	if err != nil {
 		return opsorgcmd.Report{}, orgFileError(err, in.URL)

@@ -46,7 +46,7 @@ func (a *App) FollowRepoLinks(ctx context.Context, projectID string, confirmed [
 	if len(cfg.Orgs) == 0 {
 		return nil
 	}
-	g := &orgcfg.GitLinks{Home: a.opts.Home, Config: cfg, Always: true}
+	g := &orgcfg.GitLinks{Home: a.opts.Home, Config: cfg, Always: true, Now: a.opts.Wall} // fetch stamps on the app clock
 	res, err := g.Links(ctx, projectID, confirmed)
 	if err != nil {
 		return []string{repoLinkWarning + "store links not updated: " + err.Error()}

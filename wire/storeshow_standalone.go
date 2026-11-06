@@ -41,7 +41,7 @@ type configuredStore struct {
 
 // clonesFor is the inspector of the home (the git binary).
 func (c *standaloneClones) clonesFor() orgcfg.Clones {
-	return orgcfg.Clones{Home: c.home}
+	return orgcfg.Clones{Home: c.home, Now: c.now}
 }
 
 // configuredStores groups orgs[].stores by normalised url, in config order.

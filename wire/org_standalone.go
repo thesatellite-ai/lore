@@ -193,7 +193,7 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 		return opsorgcmd.Report{Lines: lines, Ask: "Continue?"}, nil
 	}
 	org := s.Config.FindOrg(plan.Entry)
-	g := &orgcfg.GitLinks{Home: h.home, Config: s.Config}
+	g := &orgcfg.GitLinks{Home: h.home, Config: s.Config, Now: h.wall()}
 	res, err := g.WriteLink(ctx, orgcfg.LinkWrite{Plan: plan, Signature: storeSignature(org), FolderProjectID: storeFolderProjectID})
 	if err != nil {
 		return opsorgcmd.Report{Lines: lines}, linkError(err)

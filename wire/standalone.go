@@ -71,7 +71,7 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	// resolution the write hooks use, so whoami shows what a write does.
 	o.OrgCommands = &standaloneOrg{home: home, res: res, reg: orgRegistrar{repoDir: repoDir, home: home, workDir: workDir, version: version}}
 	if o.Local.Clones == nil {
-		o.Local.Clones = &standaloneClones{home: home}
+		o.Local.Clones = &standaloneClones{home: home, now: res.now} // res.Now is set by cmd/lore later; read at each call
 	}
 	if o.Local.Config == nil {
 		o.Local.Config = standaloneConfig{home: home} // config check|set (P3-CFGCHECK)

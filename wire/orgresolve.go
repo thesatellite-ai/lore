@@ -89,7 +89,14 @@ func (r *OrgResolution) now() time.Time {
 // under home (~/.lore). links reads the org stores' links (F11); nil reads
 // none, which fails closed for any org with stores.
 func NewOrgResolution(home, dir string, links orgcfg.LinkSource) *OrgResolution {
-	return &OrgResolution{home: home, dir: dir, links: links}
+	r := &OrgResolution{home: home, dir: dir, links: links}
+	if g, ok := links.(*orgcfg.GitLinks); ok && g.Now == nil {
+		// the clone fetch stamps (`lore store show` last fetch) follow the
+		// same clock as the resolution's live decisions: r.Now, set by
+		// cmd/lore after this (LORE_NOW in a test build), read at each call
+		g.Now = r.now
+	}
+	return r
 }
 
 // FetchLinksAlways makes the link read of this process fetch every org

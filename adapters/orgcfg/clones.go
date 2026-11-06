@@ -61,6 +61,17 @@ var unpushedPairs = [][2]string{
 type Clones struct {
 	Home string
 	Run  func(ctx context.Context, args ...string) (string, error)
+	// Now is the clock of the fetch stamps (nil = time.Now); a host passes
+	// its app clock so LORE_NOW in a test build reaches `last fetch`.
+	Now func() time.Time
+}
+
+// now is c.Now, or the wall clock.
+func (c Clones) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
 }
 
 // CloneInfo is what one store clone looks like on this machine.
@@ -163,7 +174,7 @@ func (c Clones) Doctor(ctx context.Context, norm, url string, branches []string)
 	if err := fetch(ctx, dir); err != nil {
 		info.Problems = append(info.Problems, ProblemUnreachable)
 	} else {
-		recordFetch(ctx, dir, time.Now())
+		recordFetch(ctx, dir, c.now())
 	}
 	base := c.Inspect(ctx, norm)
 	info.Cloned, info.LastFetch, info.DefaultBranch = base.Cloned, base.LastFetch, base.DefaultBranch
@@ -216,7 +227,7 @@ func (c Clones) Open(ctx context.Context, norm, url, branch string) (dir, commit
 	if err = fetch(ctx, clone); err != nil {
 		return "", "", errs.Wrap(errs.Offline, "fetch the store", err).WithHint("retry when the store is reachable")
 	}
-	recordFetch(ctx, clone, time.Now())
+	recordFetch(ctx, clone, c.now())
 	tip, ok, err := c.tip(ctx, clone, branch)
 	if err != nil {
 		return "", "", errs.Wrap(errs.Internal, "read the store branch", err)

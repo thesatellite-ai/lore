@@ -18,7 +18,7 @@ import (
 // has not confirmed; the url is redacted when output is quiet (no TTY or
 // CI, §6.5).
 func (a *App) doctorUnpushedStores(ctx context.Context, warn func(string)) {
-	c := &standaloneClones{home: a.opts.Home}
+	c := &standaloneClones{home: a.opts.Home, now: a.opts.Wall}
 	list, err := c.configuredStores()
 	if err != nil {
 		return
