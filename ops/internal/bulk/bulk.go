@@ -155,5 +155,5 @@ func Ask(ctx context.Context, question string) error {
 	if engine.Confirmed(ctx) {
 		return nil
 	}
-	return errs.New(errs.NeedsConfirm, question).WithHint("ask the person, then rerun with --yes")
+	return errs.New(errs.NeedsConfirm, question).WithQuestion(question).WithHint("ask the person, then rerun with --yes")
 }
