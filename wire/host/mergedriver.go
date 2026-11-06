@@ -126,6 +126,12 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 		// teammate's edit never vanishes silently.
 		_, _ = fmt.Fprintf(stderr, "%s%s: both sides changed %s; kept the newer edit\n", mergeDriverPrefix, repoPath, strings.Join(res.NewerWins, ", ")) // stderr gone: the merge result stands
 	}
+	if res.Trash != "" {
+		// DELETION 3.7: a delete that lost to an edit (or two deletes) is
+		// a decision a person should hear about; `lore trash list
+		// --overruled` lists the rows kept alive.
+		_, _ = fmt.Fprintf(stderr, "%s%s: %s\n", mergeDriverPrefix, repoPath, res.Trash) // stderr gone: the merge result stands
+	}
 	if conflict {
 		_, _ = fmt.Fprintf(stderr, "%s%s needs a manual merge (markers are inside the JSON values)\n", mergeDriverPrefix, repoPath) // stderr gone: the exit status still tells git
 		return ExitStatus(1)
