@@ -235,7 +235,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -784,7 +784,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -18086,7 +18086,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -18465,7 +18465,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -26067,7 +26067,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -27774,7 +27774,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -32430,7 +32430,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -33480,7 +33480,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -36037,7 +36037,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -36559,7 +36559,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -38814,7 +38814,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -39649,7 +39649,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -62704,7 +62704,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -64347,7 +64347,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -65139,7 +65139,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -65930,7 +65930,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_TEMPLATE",
+            "description": "E_AMBIGUOUS_ID, E_PURGED, E_TEMPLATE",
             "content": {
               "application/json": {
                 "schema": {
@@ -66648,7 +66648,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -67812,7 +67812,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -68302,7 +68302,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -68976,7 +68976,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -70016,7 +70016,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -71037,7 +71037,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_PURGED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -72824,7 +72824,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_PURGED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -73112,7 +73112,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -73259,7 +73259,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -74275,7 +74275,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -74860,7 +74860,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -75925,7 +75925,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID",
+            "description": "E_AMBIGUOUS_ID, E_PURGED",
             "content": {
               "application/json": {
                 "schema": {
@@ -77654,7 +77654,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_PURGED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
