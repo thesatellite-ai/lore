@@ -96,4 +96,8 @@ func TestAskOutsideRun(t *testing.T) {
 	if err := Ask(context.Background(), "delete x?"); !errs.Has(err, errs.NeedsConfirm) || !strings.Contains(err.Error(), "delete x?") {
 		t.Fatalf("Ask = %v, want E_NEEDS_CONFIRM (no caller has said yes)", err)
 	}
+	// the question travels in the envelope (--json, REST: CLI_REFERENCE 1.4/1.7)
+	if q := errs.EnvelopeOf(Ask(context.Background(), "delete x?")).Error.Question; q != "delete x?" {
+		t.Fatalf("Ask question = %q, want %q", q, "delete x?")
+	}
 }

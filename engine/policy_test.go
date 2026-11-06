@@ -122,6 +122,9 @@ func TestPersonOnlyMatrix(t *testing.T) {
 			if !errs.Has(err, errs.PolicyDenied) || len(rows) != 0 {
 				t.Fatalf("want E_POLICY_DENIED and nothing written: err %v, rows %d", err, len(rows))
 			}
+			if !errs.EnvelopeOf(err).Error.NeedsPerson {
+				t.Fatalf("the refusal must set needs_person (the agent asks its person): %v", err)
+			}
 			msg := err.Error()
 			if !strings.Contains(msg, string(policy.KeyAgentsPersonOnly)) || !strings.Contains(msg, polID(t).String()) || !strings.Contains(msg, c.caller) {
 				t.Fatalf("the refusal must name the key, the row and the agent: %s", msg)
