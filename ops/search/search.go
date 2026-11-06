@@ -347,8 +347,16 @@ func (o RunOut) Text() string {
 	}
 	var b strings.Builder
 	n := len(o.Data.Hits)
+	// matched counts the tables with a live FTS hit; the trashed rows of
+	// --include-deleted and the external hits are not among them, so the
+	// listed hits' own tables are counted too (never "across 0").
+	seen := map[string]bool{}
+	for _, h := range o.Data.Hits {
+		seen[h.EntityTable] = true
+	}
+	types := max(o.matched, len(seen))
 	fmt.Fprintf(&b, "Found %d %s for %q across %d %s:\n\n", n, plural(n, "hit", "hits"), o.Data.Query,
-		o.matched, plural(o.matched, "entity type", "entity types"))
+		types, plural(types, "entity type", "entity types"))
 	for _, h := range o.Data.Hits {
 		pretty := h.Pretty
 		if pretty == "" {

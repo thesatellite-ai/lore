@@ -109,6 +109,10 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
+	// Meta / MetaMasked are the row's metadata by name, sensitive values
+	// masked (MQ13, METADATA 3.17/3.20; absent when it has none).
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
 	// expanded and refs"); empty without --expand.
 	Expanded map[string]string `json:"expanded,omitempty"`

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 )
 
 // ShowIn is the input of the show operation: the id flags plus --expand.
@@ -20,6 +21,10 @@ type ShowIn struct {
 // row after an audited ask (expand.ShowWith; SECRETS 2.7, SQ10, D18).
 func (o ops) showExpand(ctx context.Context, in ShowIn) (ShowOut, error) {
 	out, err := o.show(ctx, IDIn{ID: in.ID})
+	if me, ok := o.c.Env.(metashow.Env); ok && err == nil {
+		b := metashow.Of(ctx, me, in.ID) // MQ13: metadata on every read
+		out.Meta, out.MetaMasked = b.Meta, b.MetaMasked
+	}
 	if err != nil || (!in.Expand && !in.Reveal && !in.Force) {
 		return out, err
 	}
@@ -35,5 +40,5 @@ func (o ops) showExpand(ctx context.Context, in ShowIn) (ShowOut, error) {
 
 // Text is the human form of show, with the --expand block when set.
 func (o ShowOut) Text() string {
-	return o.baseText() + expand.Text(o.Expanded, o.ExpandedRefs) + expand.WarningText(o.Warning)
+	return o.baseText() + metashow.Text(o.Meta, o.MetaMasked) + expand.Text(o.Expanded, o.ExpandedRefs) + expand.WarningText(o.Warning)
 }

@@ -6,6 +6,7 @@ package prompt
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -122,6 +123,9 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	if err != nil {
 		return content.WriteOut{}, err
 	}
+	if err = checkArgsSchema("add", in.ArgsSchema); err != nil {
+		return content.WriteOut{}, err
+	}
 	fields, err := content.Texts(Noun, map[string]string{
 		content.FieldName: in.Title, fieldDescription: desc, content.FieldBody: body,
 		fieldArgsSchema: in.ArgsSchema,
@@ -176,6 +180,9 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 
 // edit patches the fields whose flags were given.
 func (o ops) edit(ctx context.Context, in EditIn) (content.WriteOut, error) {
+	if err := checkArgsSchema("edit", in.ArgsSchema); err != nil {
+		return content.WriteOut{}, err
+	}
 	patch, err := content.Texts(Noun, map[string]string{content.FieldName: in.Name, content.FieldBody: in.Body, fieldDescription: in.Description, fieldArgsSchema: in.ArgsSchema})
 	if err != nil {
 		return content.WriteOut{}, err
@@ -219,4 +226,22 @@ func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 		ArgsSchema: content.Field(r, fieldArgsSchema), CreatedByActorID: content.CreatedBy(r),
 		TagIDs: content.TagIDs(r), Store: content.SourceOf(lab, src), Label: content.Label(lab, src),
 	}
+}
+
+// checkArgsSchema refuses an --args-schema that is not a JSON object
+// (G-CONTENT-2): the field is the JSON schema of the {{args.x}}
+// placeholders, so text that no reader can parse is refused before
+// anything is written, as external-source --config is. "" (not given)
+// passes.
+func checkArgsSchema(verb, raw string) error {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return nil
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(s), &obj); err != nil {
+		return errs.New(errs.InvalidInput, "prompt "+verb+": --args-schema is not a JSON object").
+			WithHint(`give a JSON schema object, e.g. --args-schema '{"type":"object","properties":{"name":{"type":"string"}}}'`)
+	}
+	return nil
 }

@@ -15,13 +15,16 @@ package metalist
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/trash"
 
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/metafilter"
+	"github.com/thesatellite-ai/lore/logic/sortspec"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -35,7 +38,7 @@ import (
 type Flags struct {
 	Meta  []string `json:"meta_where,omitempty" flag:"meta" desc:"filter by metadata: key=value, key!=value, key~=text, key>n, key?, key!? (repeatable, all must match)"`
 	Place string   `json:"place,omitempty" flag:"place" desc:"narrow --meta names to one place: repo, project, org or a scope label (project:acme-hub)"`
-	Sort  string   `json:"sort,omitempty" flag:"sort" desc:"sort by a metadata key: meta.<key>, meta.<key>:asc or meta.<key>:desc (rows without it last)"`
+	Sort  string   `json:"sort,omitempty" flag:"sort" desc:"sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.<key> names the key), with :asc or :desc; rows without it last"`
 	// Archived keeps archived rows in the list and in --meta filters
 	// (METADATA 3.19, OV30-2: every list hides archived rows unless
 	// --archived; Select applies it, so every noun list behaves the same).
@@ -172,7 +175,17 @@ func Select(ctx context.Context, env Lister, f Flags, rows []row.Row) (Result, e
 		}
 		all = append(all, i)
 	}
+	byField, isField, err := fieldSort(f.Sort, rows)
+	if err != nil {
+		return Result{}, err
+	}
+	if isField {
+		f.Sort = "" // the metadata plan sorts nothing; the field order is applied last
+	}
 	if f.Empty() {
+		if isField {
+			sortByField(all, rows, byField)
+		}
 		return Result{Order: all}, nil
 	}
 	keys, err := Keys(ctx, env)
@@ -206,6 +219,9 @@ func Select(ctx context.Context, env Lister, f Flags, rows []row.Row) (Result, e
 		}
 	}
 	slices.SortStableFunc(res.Order, func(a, b int) int { return p.Compare(rows[a].Meta, rows[b].Meta) })
+	if isField {
+		sortByField(res.Order, rows, byField)
+	}
 	res.Notes = append(res.Notes, skipped...)
 	for _, id := range unchecked {
 		res.Notes = append(res.Notes, "note: 1 row not checked: "+id+" has quarantined metadata")
@@ -291,4 +307,108 @@ func columnKey(c string) string {
 		return strings.SplitN(last, ".", 2)[0]
 	}
 	return meta.TopSegment(strings.SplitN(last, "$", 2)[0])
+}
+
+// Envelope fields every row has outside Fields, sortable by name.
+const (
+	sortCreatedAt = "created_at"
+	sortUpdatedAt = "updated_at"
+)
+
+// metaSortPrefix names a metadata key explicitly in --sort (meta.<key>).
+const metaSortPrefix = "meta."
+
+// oldDescPrefix is v0.1.17's `--sort -key`, refused by sortspec (XQ10).
+const oldDescPrefix = "-"
+
+// fieldSort reads --sort as a field sort (CLI_REFERENCE 2.2: "a field or a
+// metadata key"; decision G-CONTENT-1). The key is a field when it is
+// created_at / updated_at or a field some listed row carries; a key named
+// meta.<key>, or one no row carries as a field, stays a metadata sort for
+// metafilter (so a name that is both is the field unless spelled meta.).
+// ok is false for "" and for metadata sorts.
+func fieldSort(raw string, rows []row.Row) (sortspec.Spec, bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.HasPrefix(raw, metaSortPrefix) {
+		return sortspec.Spec{}, false, nil
+	}
+	if _, err := sortspec.Parse([]string{raw}); err != nil && strings.HasPrefix(raw, oldDescPrefix) {
+		return sortspec.Spec{}, false, err // XQ10: `-key` fails with "use <key>:desc" for fields and keys alike
+	}
+	key, _, _ := strings.Cut(raw, ":")
+	if !isFieldKey(key, rows) {
+		return sortspec.Spec{}, false, nil
+	}
+	specs, err := sortspec.Parse([]string{raw})
+	if err != nil || len(specs) != 1 {
+		return sortspec.Spec{}, false, err
+	}
+	return specs[0], true, nil
+}
+
+// isFieldKey reports whether key is an envelope time or a field of a row.
+func isFieldKey(key string, rows []row.Row) bool {
+	if key == sortCreatedAt || key == sortUpdatedAt {
+		return true
+	}
+	for _, r := range rows {
+		if _, ok := r.Fields[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// sortByField orders the row indexes order by spec, stable (ties keep the
+// list's own order); rows without a value come last in both directions.
+func sortByField(order []int, rows []row.Row, spec sortspec.Spec) {
+	specs := []sortspec.Spec{spec}
+	slices.SortStableFunc(order, func(a, b int) int {
+		return sortspec.Compare(specs,
+			func(k string) sortspec.Value { return fieldValue(rows[a], k) },
+			func(k string) sortspec.Value { return fieldValue(rows[b], k) })
+	})
+}
+
+// fieldValue is a row's sortable value of key: the envelope times, else
+// the field by its kind (a number numerically, a date or a text that is an
+// RFC 3339 time by instant, a list by its first item, anything else as
+// text).
+func fieldValue(r row.Row, key string) sortspec.Value {
+	switch key {
+	case sortCreatedAt:
+		return sortspec.Time(r.CreatedAt)
+	case sortUpdatedAt:
+		return sortspec.Time(r.UpdatedAt)
+	}
+	return sortValue(r.Fields[key])
+}
+
+// sortValue is the sortable form of one field value (nil = Missing).
+func sortValue(v value.Value) sortspec.Value {
+	switch t := v.(type) {
+	case nil:
+		return sortspec.Missing
+	case value.Number:
+		n, err := strconv.ParseFloat(t.String(), 64)
+		if err != nil {
+			return sortspec.Text(t.String())
+		}
+		return sortspec.Number(n)
+	case value.Date:
+		return sortspec.Time(t.Time())
+	case value.DateTime:
+		return sortspec.Time(t.Time())
+	case value.List:
+		items := t.Items()
+		if len(items) == 0 {
+			return sortspec.Missing
+		}
+		return sortValue(items[0])
+	}
+	s := v.String()
+	if at, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return sortspec.Time(at)
+	}
+	return sortspec.Text(s)
 }
