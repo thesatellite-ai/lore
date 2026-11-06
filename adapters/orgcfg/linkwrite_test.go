@@ -205,3 +205,45 @@ func TestWriteOrgFileSameNameKeptOtherRefused(t *testing.T) {
 		t.Fatalf("lore-org.yaml:\n%s", body)
 	}
 }
+
+// TestWriteLinkAfterAStaleEmptyFetch (later 134): a clone made and fetched
+// while the store had no commit yet must not answer "no branch main" once
+// the store's first commit is pushed: WriteLink fetches every store before
+// it writes (the fetch refspecs force-update the tracking refs).
+func TestWriteLinkAfterAStaleEmptyFetch(t *testing.T) {
+	w := newLinkWorld(t)
+	ctx := context.Background()
+	empty := filepath.Join(filepath.Dir(w.origin), "fresh.git")
+	testGit(t, filepath.Dir(empty), "init", "-q", "--bare", "-b", "main", empty)
+	const freshURL = "https://github.com/agency/fresh"
+	cfg, err := orgconf.Parse([]byte("orgs:\n  - name: agency\n    stores:\n      - url: " + freshURL + "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := &GitLinks{Home: w.links.Home, Config: cfg}
+	dir := g.cloneDirOf("github.com/agency/fresh")
+	if err := ensureBare(ctx, dir, freshURL); err != nil {
+		t.Fatal(err)
+	}
+	if err := fetch(ctx, dir); err != nil {
+		t.Fatalf("fetch of the empty store: %v", err)
+	}
+	if _, ok := branchTip(ctx, dir, "main"); ok {
+		t.Fatal("an empty store has a main tip")
+	}
+	seed := filepath.Join(t.TempDir(), "seed")
+	testGit(t, filepath.Dir(seed), "clone", "-q", freshURL, seed)
+	writeFile(t, filepath.Join(seed, storeMarkerFile), "version: 2\n")
+	testGit(t, seed, "add", ".")
+	testGit(t, seed, "commit", "-q", "-m", "first")
+	testGit(t, seed, "push", "-q", "origin", "main")
+	plan := orgresolve.LinkPlan{Entry: "agency", StoreURL: "github.com/agency/fresh", Branch: "main", Folder: "acme", ProjectID: lwProject, Remote: lwRemote}
+	write := func() (LinkWriteResult, error) {
+		return g.WriteLink(ctx, LinkWrite{Plan: plan, Signature: gitref.Signature{Name: "Mira", Email: "mira@agency.example", When: time.Unix(1_800_000_000, 0)},
+			FolderProjectID: func(string, string, string) (string, error) { return lwFolderID, nil }})
+	}
+	res, err := write()
+	if err != nil || !res.Pushed || !res.CreatedFolder {
+		t.Fatalf("link after the store's first commit: %+v %v", res, err)
+	}
+}
