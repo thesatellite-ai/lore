@@ -126,7 +126,8 @@ func mustID(t *testing.T, r th.Result, prefix string) string {
 	return id
 }
 
-func storeLive(branch string) string    { return refLive + "/" + branch }
+func storeLive(branch string) string { return refLive + "/" + branch }
+
 // storeSignals is the store branch's signals ref.
 func storeSignals() string { return refSignals + "/" + storeBranch }
 
@@ -497,7 +498,7 @@ func initStore(w *th.World, a *th.Actor, name, url, branch string, extra ...stri
 	}
 	dir := filepath.Join(a.Home, "store-init", name)
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			w.T.Fatalf("store-init dir: %v", err)
 		}
 		w.Git(dir, "init", "-q", "-b", storeBranch)
