@@ -26,6 +26,8 @@ package migrate
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -112,6 +114,42 @@ type RunOut struct {
 	// BackupRef is the local backup of this run ("" for a dry run or a
 	// Rewriter without Journal).
 	BackupRef string `json:"backup_ref,omitempty"`
+}
+
+var _ op.Texter = RunOut{}
+
+// Text implements op.Texter: the human form of a run, one line per item
+// (FORMAT_EVOLUTION 4 example), never an empty "rows:" line. The count
+// line comes first ("Upgraded N rows", "Would upgrade N rows", or
+// "Nothing to migrate" when the run found nothing), then each row and
+// settings step indented, then the run's own journal lines.
+func (o RunOut) Text() string {
+	var b strings.Builder
+	verb := "Upgraded"
+	if o.DryRun {
+		verb = "Would upgrade"
+	}
+	switch {
+	case o.Count == 0 && len(o.Rows) == 0 && len(o.Steps) == 0:
+		b.WriteString("Nothing to migrate: every row is already in the current format.\n")
+	case o.Count == 1:
+		b.WriteString(verb + " 1 row\n")
+	default:
+		b.WriteString(verb + " " + strconv.Itoa(o.Count) + " rows\n")
+	}
+	for _, r := range o.Rows {
+		b.WriteString("  " + r + "\n")
+	}
+	for _, s := range o.Steps {
+		b.WriteString("  " + s + "\n")
+	}
+	for _, j := range o.Journal {
+		b.WriteString(j + "\n")
+	}
+	if o.DryRun {
+		b.WriteString("Nothing written (dry run).\n")
+	}
+	return b.String()
 }
 
 // OpEnable is `lore migrate enable <feature>`, POST /v1/migrate/enable.
