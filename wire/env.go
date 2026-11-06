@@ -61,6 +61,15 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 	if ferr := a.checkTarget(target); ferr != nil {
 		return engine.Written{}, ferr
 	}
+	// A machine-local row (this machine's session row) writes no actor row
+	// (ensureActor skips the machine store, P3-LOCAL-1), so it needs no
+	// batch, and it must not take actorMu: the audit of an actor-row write
+	// creates the session row while ensureActor holds actorMu (B-FLOW4-2).
+	if target == store.SourceMachine {
+		w, err := st.eng.Create(ctx, target, table, fields)
+		a.wroteTo(target, err)
+		return w, err
+	}
 	// G-ENGINE-2: the actor rows and the row land as one batch, so a refused
 	// create writes nothing (not even the caller's actor row)
 	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
