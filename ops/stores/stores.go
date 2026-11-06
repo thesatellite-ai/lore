@@ -342,10 +342,24 @@ func Ops(m Manager) []op.Entry {
 			if got == nil {
 				got = []Entry{}
 			}
+			ol, hasOrg := upgrade.As[OrgLister](m)
+			if hasOrg {
+				if got, err = withOrgStores(ctx, ol, got); err != nil {
+					return ListOut{}, err
+				}
+			}
 			if sr, ok := upgrade.As[StatusReader](m); ok {
 				for i := range got {
 					st := sr.StoreStatus(ctx, got[i])
 					got[i].Visibility, got[i].Reach = st.Visibility, st.Reach
+				}
+			}
+			// after the status reads, which need the real url
+			if hasOrg && ol.QuietOutput() {
+				for i := range got {
+					if got[i].Source == SourceOrg {
+						got[i].URL = redactedURL
+					}
 				}
 			}
 			return ListOut{Stores: got, Count: len(got)}, nil
@@ -410,6 +424,50 @@ func Ops(m Manager) []op.Entry {
 		}),
 		setURLOp(m),
 	}, cloneOps(m)...)
+}
+
+// OrgLister is the optional Manager upgrade behind store.list's org rows
+// (CLI_REFERENCE 3.21 "the stores that come from an org", G-CORE-8). It
+// is kept out of Manager.ListStores, whose other callers (migrate, the
+// private render, the repos-using-a-store record) read only stores.yaml
+// and me.
+type OrgLister interface {
+	// OrgStoreEntries lists the stores the repo's org brings, with their
+	// real urls and Source SourceOrg.
+	OrgStoreEntries(ctx context.Context) ([]Entry, error)
+	// QuietOutput reports output that must name nothing (no terminal,
+	// CI): store.list then prints an org store's url as redactedURL.
+	QuietOutput() bool
+}
+
+// redactedURL replaces an org store's url in quiet output.
+const redactedURL = "<redacted>"
+
+// withOrgStores appends the org's stores to got, skipping a name got
+// already holds (stores.yaml wins a name), before the personal store so
+// `me` stays last (BATCH 15).
+func withOrgStores(ctx context.Context, ol OrgLister, got []Entry) ([]Entry, error) {
+	org, err := ol.OrgStoreEntries(ctx)
+	if err != nil || len(org) == 0 {
+		return got, err
+	}
+	seen := map[string]bool{}
+	var head, personal []Entry
+	for _, e := range got {
+		seen[e.Name] = true
+		if e.Personal {
+			personal = append(personal, e)
+			continue
+		}
+		head = append(head, e)
+	}
+	for _, e := range org {
+		if !seen[e.Name] {
+			seen[e.Name] = true
+			head = append(head, e)
+		}
+	}
+	return append(head, personal...), nil
 }
 
 // Syncer is what SyncAll needs; the engine provides both methods.
