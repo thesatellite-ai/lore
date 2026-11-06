@@ -24,6 +24,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -53,6 +54,20 @@ type configKeys struct {
 // unknownKeyNeedle marks yaml.v3's KnownFields error for a key that is
 // not a field of the target struct.
 const unknownKeyNeedle = "not found in type"
+
+// unknownKeyRe takes yaml.v3's unknown-key error apart ("line 2: field team
+// not found in type wire.configKeys"): the user is told the line and the key,
+// never lore's Go type name.
+var unknownKeyRe = regexp.MustCompile(`^(line \d+): field (.+) not found in type \S+$`)
+
+// unknownKeyText is the warning for one yaml.v3 unknown-key error: "line 2:
+// team" when it has yaml.v3's shape, else the error as it came.
+func unknownKeyText(e string) string {
+	if m := unknownKeyRe.FindStringSubmatch(e); m != nil {
+		return m[1] + ": " + m[2]
+	}
+	return e
+}
 
 // ValidateConfig reports unknown keys, a value of the wrong type and a
 // broken rule of a candidate config.yaml (`lore config set`).
@@ -149,7 +164,7 @@ func configUnknownKeys(raw []byte) []string {
 	var out []string
 	for _, e := range te.Errors {
 		if strings.Contains(e, unknownKeyNeedle) {
-			out = append(out, "unknown key, ignored: "+e)
+			out = append(out, "unknown key, ignored: "+unknownKeyText(e))
 		}
 	}
 	return out
