@@ -8,10 +8,12 @@ package settings
 //	metaUses(row)  ─▶ every meta entry's string leaves ─▶ refs.Parse ─▶ SecretUse (field meta.<name>)
 //	metaRewrite(row) ─▶ rewriteText on each leaf ─▶ engine.MetaWrite JSON terms (key id = new v)
 //
-// A bare secret_ref value of a secret_ref-typed key is not read here (it
-// holds no ${secret:…} wrapper and its type lives in the key row);
-// `lore secrets link --at` numbers only field placeholders, so a meta
-// placeholder is listed (At 0) but linked by `lore meta set`.
+// A bare secret_ref value is never a metadata value: metadata has no
+// secret_ref type (METADATA RX8; meta add refuses it, G-META-11), a
+// ${secret:…} reference in a text value serves it. An unstored
+// ${secret:unstored} in a metadata value is numbered after the row's field
+// placeholders, so `lore secrets link --at` reaches it (SECRETS 7: --at is
+// the position `secrets list --unstored` prints).
 
 import (
 	"maps"
@@ -30,7 +32,7 @@ const metaFieldPrefix = "meta."
 
 // metaUses lists the ${secret:…} references in r's metadata values, keys
 // in id order.
-func metaUses(r row.Row, base SecretUse) []SecretUse {
+func metaUses(r row.Row, base SecretUse, unstored int) []SecretUse {
 	var out []SecretUse
 	for _, kid := range slices.SortedFunc(maps.Keys(r.Meta), func(a, b ids.ID[ids.MetaKey]) int { return compareText(a.String(), b.String()) }) {
 		en, err := meta.DecodeEntry(r.Meta[kid])
@@ -45,6 +47,10 @@ func metaUses(r row.Row, base SecretUse) []SecretUse {
 				for i, t := range p.Ref.Alternates {
 					u := useOf(base, metaFieldPrefix+en.Name, t)
 					u.Alt, u.Kind = i, useText
+					if t.Fixed == refs.TargetUnstored {
+						unstored++
+						u.At = unstored
+					}
 					out = append(out, u)
 				}
 			}

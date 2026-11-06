@@ -14,6 +14,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/secretmgr"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -1000,15 +1001,33 @@ func (o ops) secretsLink(ctx context.Context, in SecretsLinkIn) (SecretsBatchOut
 		return newT, true
 	}
 	only := secretRow{located: target.located, uses: target.uses}
-	only.Row.Fields = map[string]value.Value{field: target.Row.Fields[field]}
-	patch, n, err := rowPatch(only.Row, fix)
-	if err != nil {
-		return SecretsBatchOut{}, err
+	patch := map[string]value.Value{}
+	wctx := ctx
+	n := 0
+	if name, isMeta := strings.CutPrefix(field, metaFieldPrefix); isMeta {
+		// a placeholder in a metadata value (G-META-11): only that key's
+		// entry is rewritten, set back by its key id
+		only.Row.Meta = nil
+		for kid, j := range target.Row.Meta {
+			if en, derr := meta.DecodeEntry(j); derr == nil && en.Name == name {
+				only.Row.Meta = map[ids.ID[ids.MetaKey]]value.JSON{kid: j}
+			}
+		}
+		var mw engine.MetaWrite
+		if mw, n, err = metaRewrite(only.Row, fix); err != nil {
+			return SecretsBatchOut{}, err
+		}
+		wctx = engine.WithMeta(ctx, mw)
+	} else {
+		only.Row.Fields = map[string]value.Value{field: target.Row.Fields[field]}
+		if patch, n, err = rowPatch(only.Row, fix); err != nil {
+			return SecretsBatchOut{}, err
+		}
 	}
 	if n != 1 {
 		return SecretsBatchOut{}, errs.New(errs.Internal, "secrets link: placeholder not found in "+field)
 	}
-	if _, err = o.env.Update(ctx, engine.Ref{Store: target.Src, Table: target.Row.Table, ID: target.Row.ID}, patch); err != nil {
+	if _, err = o.env.Update(wctx, engine.Ref{Store: target.Src, Table: target.Row.Table, ID: target.Row.ID}, patch); err != nil {
 		return SecretsBatchOut{}, err
 	}
 	if err = o.auditBatch(ctx, engine.ActionSecretLinked, 1, refs.TargetUnstored, targetText(newT)); err != nil {

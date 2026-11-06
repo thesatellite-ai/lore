@@ -301,8 +301,17 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 	if utf8.RuneCountInString(in.Description) > maxMetaDescription {
 		return RowOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("--description has at most %d characters", maxMetaDescription))
 	}
+	// the engine's type words (meta.ParseType): ref and secret_ref are
+	// resource field types, not metadata types (METADATA RX8: a
+	// ${secret:…} reference in a text value serves it); a key the engine
+	// cannot read would be skipped and a same-name text key registered
+	// beside it on the first write (G-META-11)
 	if _, err := value.ParseKind(in.Type); err != nil || in.Type == string(value.KindNull) {
 		return RowOut{}, errs.New(errs.MetaType, "--type "+quote(in.Type)+" is not a metadata type")
+	}
+	if _, err := meta.ParseType(in.Type); err != nil {
+		return RowOut{}, errs.New(errs.MetaType, "--type "+quote(in.Type)+" is not a metadata type").
+			WithHint("a secret goes in a text value as ${secret:manager://entry}; ref and secret_ref are resource field types")
 	}
 	vals := splitList(in.Values)
 	if err := checkMetaValues(vals); err != nil {
