@@ -219,7 +219,11 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	// clobbered. Each tool file only receives an idempotent pointer block
 	// (stitchPointer below)
 
-	// Resolve symlinks (R27 #19): if the out file is a symlink, write to target
+	// Resolve symlinks (R27 #19): if the out file is a symlink, write to
+	// target, unless the link leads out of the repository.
+	if err = refuseOutsideLink(root, f.outPath); err != nil {
+		return err
+	}
 	resolvedOut := h.resolveSymlinkTarget(f.outPath)
 
 	// Skip rename if content unchanged (R29 #53) — but still re-stitch the
