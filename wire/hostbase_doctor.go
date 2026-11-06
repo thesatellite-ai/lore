@@ -11,6 +11,8 @@ package wire
 //	               │  unresolvable ─▶ warning, degraded
 //	               ├▶ PATH: every "lore" executable on $PATH; more than one
 //	               │  ─▶ warning, degraded
+//	               ├▶ [sync] (in a project): row files and git state of
+//	               │  .lore/data (hostbase_doctor_sync.go, E-GAPS-1 G4)
 //	               └▶ project rows (in a project only; v0.1.17's runDoctor
 //	                  steps 9-10b): repo addresses (PROV2, Q5), duplicate
 //	                  imports (PROV9), the sub-task tree (TASK 6.13),
@@ -86,6 +88,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 		return b, nil // not a lore project: the project rows have nothing to read
 	}
 	note := func(msg string) { b.Notes = append(b.Notes, msg) }
+	b.Sync = a.doctorSync(ctx, warn, note) // hostbase_doctor_sync.go (E-GAPS-1 G4)
 	b.RepoAddresses = a.doctorRepoAddresses(ctx, warn, note)
 	a.doctorDuplicateImports(ctx, warn)
 	a.doctorTaskTree(ctx, warn)

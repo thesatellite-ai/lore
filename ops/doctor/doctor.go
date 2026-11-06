@@ -91,24 +91,47 @@ type FileError struct {
 	Detail string `json:"detail"`
 }
 
-// Sync is the [sync] section (v0.1.17 keys), present only for projects
-// that sync through git.
+// File error kinds (v0.1.17's lsync kinds, the two a row-file scan finds).
+const (
+	FileErrorInvalid  = "invalid-file"
+	FileErrorConflict = "conflict-markers"
+)
+
+// Sync is the [sync] section (v0.1.17 keys), present only in a project.
+//
+// Field sources (E-GAPS-1 G4): the old binary fills every field from
+// lore.db's sync tables. A binary without lore.db (NoLoreDB) fills only
+// the fields with a source on disk or in git (wire/hostbase_doctor_sync.go):
+// data_dir_present, tracked_files (files git tracks under .lore/data),
+// open_conflicts (row files with conflict markers), file_errors,
+// project_files, uncommitted_files, data_dir_gitignored,
+// merge_driver_configured, in_git_repo. The lore.db counters below the
+// line (baselined, pending_exports, trash_rows, errors,
+// dangling_references, duplicate_groups) have no source there: they are
+// omitempty, so that report never shows a value it did not read, and the
+// text leaves their lines out. They go away with the old binary (Phase E).
 type Sync struct {
-	Baselined       bool        `json:"baselined"`
-	DataDirPresent  bool        `json:"data_dir_present"`
-	TrackedFiles    int         `json:"tracked_files"`
-	PendingExports  int         `json:"pending_exports"`
-	OpenConflicts   int         `json:"open_conflicts"`
-	TrashRows       int         `json:"trash_rows"`
+	DataDirPresent bool        `json:"data_dir_present"`
+	TrackedFiles   int         `json:"tracked_files"`
+	OpenConflicts  int         `json:"open_conflicts"`
+	ProjectFiles   int         `json:"project_files"`
+	FileErrors     []FileError `json:"file_errors,omitempty"`
+	Uncommitted    int         `json:"uncommitted_files"`
+	DataIgnored    bool        `json:"data_dir_gitignored"`
+	MergeDriverOK  bool        `json:"merge_driver_configured"`
+	InGitRepo      bool        `json:"in_git_repo"`
+
+	// lore.db counters (old binary only; see above).
+	Baselined       bool        `json:"baselined,omitempty"`
+	PendingExports  int         `json:"pending_exports,omitempty"`
+	TrashRows       int         `json:"trash_rows,omitempty"`
 	Errors          []FileError `json:"errors,omitempty"`
-	ProjectFiles    int         `json:"project_files"`
-	DanglingRefs    int         `json:"dangling_references"`
-	DuplicateGroups int         `json:"duplicate_groups"`
-	FileErrors      []FileError `json:"file_errors,omitempty"`
-	Uncommitted     int         `json:"uncommitted_files"`
-	DataIgnored     bool        `json:"data_dir_gitignored"`
-	MergeDriverOK   bool        `json:"merge_driver_configured"`
-	InGitRepo       bool        `json:"in_git_repo"`
+	DanglingRefs    int         `json:"dangling_references,omitempty"`
+	DuplicateGroups int         `json:"duplicate_groups,omitempty"`
+
+	// NoLoreDB is set by a host without lore.db: the text then prints the
+	// row-file lines instead of the lore.db ones.
+	NoLoreDB bool `json:"-"`
 }
 
 // Base is what Host.Base found.
@@ -122,7 +145,8 @@ type Base struct {
 	Warnings      []string
 	Notes         []string
 	Errors        []string
-	// Sync is nil when the project does not sync through git.
+	// Sync is nil outside a project (and in a repo store that is not row
+	// files).
 	Sync *Sync
 	// RepoAddresses is the "Repo addresses" report as JSON (nil: none).
 	RepoAddresses []byte
@@ -187,8 +211,7 @@ type Report struct {
 	Notes         []string `json:"notes,omitempty"`
 	Errors        []string `json:"errors,omitempty"`
 	BinaryVersion string   `json:"binary_version"`
-	// Sync is the [sync] section (absent when the project does not sync
-	// through git).
+	// Sync is the [sync] section (absent outside a project).
 	Sync RawJSON `json:"sync,omitempty"`
 	// RepoAddresses is the "Repo addresses" check (PROV2, Q5).
 	RepoAddresses RawJSON `json:"repo_addresses,omitempty"`
@@ -299,8 +322,7 @@ func (r Report) Text() string {
 		fmt.Fprintf(&b, "[db]\n  ok:       %v\n  wal_size: %d bytes\n\n", r.DBOK, r.WALSizeBytes)
 	}
 	if s := r.sync; s != nil {
-		fmt.Fprintf(&b, "[sync]\n  baselined:        %v\n  pending exports:  %d\n  open conflicts:   %d\n", s.Baselined, s.PendingExports, s.OpenConflicts)
-		fmt.Fprintf(&b, "  file errors:      %d\n  merge driver:     %v\n  uncommitted:      %d\n\n", len(s.FileErrors), s.MergeDriverOK, s.Uncommitted)
+		b.WriteString(s.text())
 	}
 	if r.local {
 		stable := "yes"
@@ -312,6 +334,24 @@ func (r Report) Text() string {
 	list(&b, "Errors:", r.Errors)
 	list(&b, "Notes:", r.Notes)
 	list(&b, "Warnings:", r.Warnings)
+	return b.String()
+}
+
+// text is the [sync] block: v0.1.17's lines, or, without lore.db, the
+// lines that have a source there (Sync's comment).
+func (s *Sync) text() string {
+	var b strings.Builder
+	b.WriteString("[sync]\n")
+	if s.NoLoreDB {
+		fmt.Fprintf(&b, "  in git repo:      %v\n  tracked files:    %d\n", s.InGitRepo, s.TrackedFiles)
+	} else {
+		fmt.Fprintf(&b, "  baselined:        %v\n  pending exports:  %d\n", s.Baselined, s.PendingExports)
+	}
+	fmt.Fprintf(&b, "  open conflicts:   %d\n  file errors:      %d\n  merge driver:     %v\n", s.OpenConflicts, len(s.FileErrors), s.MergeDriverOK)
+	if s.NoLoreDB {
+		fmt.Fprintf(&b, "  data gitignored:  %v\n", s.DataIgnored)
+	}
+	fmt.Fprintf(&b, "  uncommitted:      %d\n\n", s.Uncommitted)
 	return b.String()
 }
 

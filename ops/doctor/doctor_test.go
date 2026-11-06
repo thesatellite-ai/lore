@@ -154,3 +154,47 @@ func TestOpsSpec(t *testing.T) {
 		t.Fatalf("spec: %v %+v", ok, e.Spec())
 	}
 }
+
+// TestSyncWithoutLoreDB (E-GAPS-1 G4): a host without lore.db prints the
+// row-file lines of [sync] (in git repo, tracked files, data gitignored),
+// never the lore.db ones (baselined, pending exports), and its JSON has
+// no lore.db key. Break-verified: printing the old lines for every host
+// fails the text half; dropping omitempty fails the JSON half.
+func TestSyncWithoutLoreDB(t *testing.T) {
+	b := healthy()
+	b.Sync = &Sync{NoLoreDB: true, InGitRepo: true, DataDirPresent: true, TrackedFiles: 4, OpenConflicts: 1, ProjectFiles: 1,
+		FileErrors: []FileError{{Path: ".lore/data/memories/x.json", Kind: FileErrorConflict}}, Uncommitted: 2, MergeDriverOK: true}
+	r, err := Run(context.Background(), &fakeEnv{host: &fakeHost{base: b}}, RunIn{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]json.RawMessage
+	if err = json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	var s map[string]json.RawMessage
+	if err = json.Unmarshal(m["sync"], &s); err != nil {
+		t.Fatalf("sync key: %v in %s", err, data)
+	}
+	want := map[string]string{"in_git_repo": "true", "data_dir_present": "true", "tracked_files": "4", "open_conflicts": "1",
+		"project_files": "1", "uncommitted_files": "2", "merge_driver_configured": "true", "data_dir_gitignored": "false"}
+	for k, v := range want {
+		if string(s[k]) != v {
+			t.Errorf("sync.%s = %s, want %s (%s)", k, s[k], v, m["sync"])
+		}
+	}
+	for _, k := range []string{"baselined", "pending_exports", "trash_rows", "errors", "dangling_references", "duplicate_groups", "NoLoreDB"} {
+		if _, ok := s[k]; ok {
+			t.Errorf("sync carries %s: %s", k, m["sync"])
+		}
+	}
+	text := r.Text()
+	wantText := "[sync]\n  in git repo:      true\n  tracked files:    4\n  open conflicts:   1\n  file errors:      1\n  merge driver:     true\n  data gitignored:  false\n  uncommitted:      2\n\n"
+	if !strings.Contains(text, wantText) || strings.Contains(text, "baselined") || strings.Contains(text, "pending exports") {
+		t.Errorf("text:\n%s\nwant block:\n%s", text, wantText)
+	}
+}

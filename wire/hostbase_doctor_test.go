@@ -78,11 +78,11 @@ func TestLorePathBinaries(t *testing.T) {
 	}
 }
 
-// doctorBase runs the base with PATH limited to one lore (no PATH finding).
-func doctorBase(t *testing.T, a *App, fix bool) opsdoctor.Base {
+// doctorBase runs the base (no --fix) with PATH limited to one lore (no PATH finding).
+func doctorBase(t *testing.T, a *App) opsdoctor.Base {
 	t.Helper()
 	t.Setenv(pathEnv, filepath.Dir(gitBinary(t)))
-	b, err := a.CoreDoctorBase(background(), fix)
+	b, err := a.CoreDoctorBase(background(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestCoreDoctorBaseIdentityAndPath(t *testing.T) {
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)
-	b := doctorBase(t, a, false)
+	b := doctorBase(t, a)
 	if b.Identity.Resolved != testEmail || !b.Identity.Stable || b.Identity.Source == "" {
 		t.Errorf("identity = %+v, want %s stable", b.Identity, testEmail)
 	}
@@ -131,7 +131,7 @@ func TestCoreDoctorBaseIdentityAndPath(t *testing.T) {
 
 	t.Setenv(pathEnv, gitDir)
 	out := openWith(t, t.TempDir(), Options{})
-	b = doctorBase(t, out, false)
+	b = doctorBase(t, out)
 	if b.Identity.Resolved != testEmail || b.Status != opsdoctor.StatusHealthy {
 		t.Errorf("outside a project: %+v", b)
 	}
@@ -202,7 +202,7 @@ func TestDoctorVersionPin(t *testing.T) {
 				t.Errorf("note does not name the upgrade: %q", note)
 			}
 			if c.wantErr {
-				b := doctorBase(t, a, false)
+				b := doctorBase(t, a)
 				if b.Status != opsdoctor.StatusBroken || !hasLine(b.Errors, "below this project's min_lore_version") {
 					t.Errorf("base: status %s errors %v, want broken", b.Status, b.Errors)
 				}
