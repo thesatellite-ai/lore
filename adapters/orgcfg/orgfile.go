@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 )
 
 // orgFileMessage is the commit subject of WriteOrgFile (v0.1.17
@@ -171,6 +172,16 @@ type Suggestion struct {
 	StoreURL, Branch string
 }
 
+// parseOrgFileDoc decodes a store's lore-org.yaml: a value of the wrong
+// kind names its line and key path (yamlerr), never a Go type.
+func parseOrgFileDoc(raw string) (OrgFileDoc, error) {
+	var doc OrgFileDoc
+	if err := yamlerr.Decode([]byte(raw), &doc, yamlerr.Lenient); err != nil {
+		return OrgFileDoc{}, err
+	}
+	return doc, nil
+}
+
 // ReadSuggestion reads the org entry a store suggests: its lore-org.yaml
 // in the org folder its marker names, else "org", else the root. branch ""
 // is the store's default branch. An unreachable store is ErrStoreOffline;
@@ -205,8 +216,8 @@ func (g *GitLinks) ReadSuggestion(ctx context.Context, url, branch string) (Sugg
 		if rerr != nil {
 			continue // no lore-org.yaml in this folder
 		}
-		var doc OrgFileDoc
-		if perr := yaml.Unmarshal([]byte(raw), &doc); perr != nil {
+		doc, perr := parseOrgFileDoc(raw)
+		if perr != nil {
 			return Suggestion{}, fmt.Errorf("orgcfg: %s in %s: %w", orgFilePath(folder), norm, perr)
 		}
 		return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch}, nil
