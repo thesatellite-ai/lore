@@ -1,13 +1,9 @@
 package wire
 
 import (
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -19,65 +15,14 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// lsyncOwnedFile is the v0.1.17 module's single switch of core-owned
-// tables (saas/pkg/aicoder/lsync/owned.go). The two modules cannot import
-// each other in a test of this package (saas imports the core, not the
-// other way round), so the test reads the source.
-const lsyncOwnedFile = "../saas/pkg/aicoder/lsync/owned.go"
-
-// mapKeys returns the string keys of the map literal assigned to the
-// package-level var name in a parsed file.
-func mapKeys(t *testing.T, f *ast.File, name string) []string {
-	t.Helper()
-	var out []string
-	found := false
-	ast.Inspect(f, func(n ast.Node) bool {
-		vs, ok := n.(*ast.ValueSpec)
-		if !ok || len(vs.Names) != 1 || vs.Names[0].Name != name || len(vs.Values) != 1 {
-			return true
-		}
-		lit, ok := vs.Values[0].(*ast.CompositeLit)
-		if !ok {
-			t.Fatalf("%s is not a map literal", name)
-		}
-		found = true
-		for _, el := range lit.Elts {
-			kv, ok := el.(*ast.KeyValueExpr)
-			if !ok {
-				t.Fatalf("%s holds a non key-value element", name)
-			}
-			bl, ok := kv.Key.(*ast.BasicLit)
-			if !ok || bl.Kind != token.STRING {
-				t.Fatalf("%s holds a key that is not a string literal", name)
-			}
-			s, err := strconv.Unquote(bl.Value)
-			if err != nil {
-				t.Fatal(err)
-			}
-			out = append(out, s)
-		}
-		return false
-	})
-	if !found {
-		t.Fatalf("no var %s in %s", name, lsyncOwnedFile)
-	}
-	slices.Sort(out)
-	return out
-}
-
-// TestCoreTablesMatchLsyncCoreOwned: wire.CoreTables (what migrate run
-// rewrites and the core writes) and lsync's coreOwned (what the v0.1.17
-// writers leave alone) must name the same tables, or one side writes
-// `_v: 1` over the other's `_v: 2` rows. repoOwned (the roster and
-// project rows of the checkout) is a separate set and must not overlap.
-func TestCoreTablesMatchLsyncCoreOwned(t *testing.T) {
+// TestCoreTablesAreUniqueAndSynced: wire.CoreTables (what migrate run
+// rewrites and the core writes) names each table once and only synced
+// tables of the registry. Until phase E it was also compared with lsync's
+// coreOwned/repoOwned switch (saas/pkg/aicoder/lsync/owned.go), which kept
+// the old binary's writers off the core's `_v: 2` rows; that writer is
+// deleted with saas, so only the core's own invariant is left.
+func TestCoreTablesAreUniqueAndSynced(t *testing.T) {
 	t.Parallel()
-	f, err := parser.ParseFile(token.NewFileSet(), lsyncOwnedFile, nil, parser.SkipObjectResolution)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owned := mapKeys(t, f, "coreOwned")
-	repo := mapKeys(t, f, "repoOwned")
 	var core []string
 	for _, tb := range CoreTables() {
 		core = append(core, string(tb))
@@ -85,21 +30,6 @@ func TestCoreTablesMatchLsyncCoreOwned(t *testing.T) {
 	slices.Sort(core)
 	if !slices.Equal(core, slices.Compact(slices.Clone(core))) {
 		t.Fatalf("CoreTables names a table twice: %v", core)
-	}
-	for _, c := range core {
-		if !slices.Contains(owned, c) {
-			t.Errorf("%s is in wire.CoreTables but not in lsync coreOwned", c)
-		}
-	}
-	for _, o := range owned {
-		if !slices.Contains(core, o) {
-			t.Errorf("%s is in lsync coreOwned but not in wire.CoreTables", o)
-		}
-	}
-	for _, r := range repo {
-		if slices.Contains(core, r) {
-			t.Errorf("%s is both repoOwned and a core table", r)
-		}
 	}
 	reg, err := builtinRegistry()
 	if err != nil {
