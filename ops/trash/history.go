@@ -76,7 +76,7 @@ func historyItem(h HistoryRow) (Item, row.Row, bool) {
 	if it.at.IsZero() {
 		it.at = h.CommitAt
 	}
-	it.DeletedAt = it.at.Local().Format(timeLayout)
+	it.DeletedAt = it.at.UTC().Format(jsonTimeLayout)
 	sha := h.Commit
 	if len(sha) > shortSHA {
 		sha = sha[:shortSHA]

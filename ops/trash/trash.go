@@ -50,9 +50,12 @@ const (
 	OpPurge    = "trash.purge"
 	OpStats    = "trash.stats"
 	timeLayout = "2006-01-02 15:04"
-	dateLayout = "2006-01-02"
-	daySuffix  = "d"
-	hoursInDay = 24
+	// jsonTimeLayout is deleted_at in --json and REST: UTC RFC 3339 with
+	// milliseconds, like every row time (the text keeps timeLayout).
+	jsonTimeLayout = "2006-01-02T15:04:05.000Z07:00"
+	dateLayout     = "2006-01-02"
+	daySuffix      = "d"
+	hoursInDay     = 24
 	// titleCut bounds the title column.
 	titleCut = 40
 )
@@ -713,7 +716,7 @@ func itemOf(t engine.Trashed) Item {
 	it := Item{ID: t.Row.ID.String(), Table: t.Row.Table.String(), Store: string(t.Store), Title: titleOf(t.Row),
 		DeletedBy: t.Info.By, Reason: t.Info.Reason, Batch: t.Info.Batch, Dependent: t.Dependent, at: t.Info.At}
 	if !t.Info.At.IsZero() {
-		it.DeletedAt = t.Info.At.Local().Format(timeLayout)
+		it.DeletedAt = t.Info.At.UTC().Format(jsonTimeLayout)
 	}
 	return it
 }
@@ -839,12 +842,21 @@ func (o ListOut) Text() string {
 	return b.String()
 }
 
+// when is the deletion time as the text shows it (local, minutes); an
+// item decoded from JSON (no at) shows deleted_at as given.
+func (it Item) when() string {
+	if it.at.IsZero() {
+		return it.DeletedAt
+	}
+	return it.at.Local().Format(timeLayout)
+}
+
 // line is one row of `lore trash list`.
 func (it Item) line() string {
 	if it.Overruled != "" {
 		return it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  kept over a delete: " + it.Overruled + "\n"
 	}
-	s := it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  " + it.DeletedAt + "  by " + it.DeletedBy
+	s := it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  " + it.when() + "  by " + it.DeletedBy
 	if it.Reason != "" {
 		s += "  reason " + strconv.Quote(it.Reason)
 	}
@@ -855,13 +867,13 @@ func (it Item) line() string {
 func (o ShowOut) Text() string {
 	var b strings.Builder
 	if o.History {
-		b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  purged " + o.Data.DeletedAt + " by " + o.Data.DeletedBy + "\n")
+		b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  purged " + o.Data.when() + " by " + o.Data.DeletedBy + "\n")
 		b.WriteString("  from commit " + o.Data.LastIn + " (the last commit that had it)\n")
 		b.WriteString(fieldLines(o.Fields))
 		return b.String()
 	}
 	b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  in the trash\n")
-	b.WriteString("  deleted   " + o.Data.DeletedAt + " by " + o.Data.DeletedBy + " (store " + o.Data.Store + ")\n")
+	b.WriteString("  deleted   " + o.Data.when() + " by " + o.Data.DeletedBy + " (store " + o.Data.Store + ")\n")
 	if o.Data.Dependent {
 		b.WriteString("  dependent of another row of its batch\n")
 	}
@@ -894,7 +906,7 @@ func (o ListOut) historyText() string {
 	}
 	var b strings.Builder
 	for _, it := range o.Data {
-		b.WriteString(it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  purged " + it.DeletedAt + "  by " + it.DeletedBy + "  last content in " + it.LastIn + "\n")
+		b.WriteString(it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  purged " + it.when() + "  by " + it.DeletedBy + "  last content in " + it.LastIn + "\n")
 	}
 	b.WriteString(strconv.Itoa(o.Count) + " rows in git history; they never come back (read one: lore trash show <id> --from-history)\n")
 	return b.String()
