@@ -76,6 +76,10 @@ func GitignoreHook(workDir string) Hook {
 			}
 			if e := EnsureGitignore(ctx, root); e != nil {
 				err = errs.Wrap(errs.Internal, "update "+gitignoreName, e)
+				var refused *errs.Error
+				if errors.As(e, &refused) && refused.Code == errs.Refused {
+					err = refused // keep the refusal's code and hint
+				}
 			}
 		})
 		return err
@@ -97,9 +101,18 @@ func NeedsGitignore(run *Run) bool {
 // does not list and git does not already ignore. Nothing missing: the file
 // is not touched.
 func EnsureGitignore(ctx context.Context, root string) (err error) {
-	gi := filepath.Join(root, gitignoreName)
+	// Read and append through an os.Root on the repository: a cloned
+	// repository can commit .gitignore as a symlink, and a link leading
+	// out of the repository is refused instead of appended to (the
+	// .gitattributes wiring opens the same way). A link kept inside the
+	// repository still works.
+	dir, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, dir.Close()) }()
 	existing := ""
-	if b, rerr := os.ReadFile(filepath.Clean(gi)); rerr == nil {
+	if b, rerr := dir.ReadFile(gitignoreName); rerr == nil {
 		existing = string(b)
 	}
 	var add []string
@@ -112,8 +125,12 @@ func EnsureGitignore(ctx context.Context, root string) (err error) {
 	if len(add) == 0 {
 		return nil
 	}
-	f, err := os.OpenFile(filepath.Clean(gi), os.O_CREATE|os.O_WRONLY|os.O_APPEND, gitignoreMode)
+	f, err := dir.OpenFile(gitignoreName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, gitignoreMode)
 	if err != nil {
+		if fi, lerr := os.Lstat(filepath.Join(root, gitignoreName)); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return errs.Wrap(errs.Refused, "refusing to append to "+gitignoreName+": it is a symbolic link out of the repository", err).
+				WithHint("replace " + filepath.Join(root, gitignoreName) + " with a regular file (or a link inside the repository)")
+		}
 		return err
 	}
 	defer func() { err = errors.Join(err, f.Close()) }()
