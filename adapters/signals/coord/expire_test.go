@@ -17,11 +17,11 @@ import (
 	"github.com/thesatellite-ai/lore/model/timeentry"
 )
 
-// Valid core actor ids for the expiring holder and the writer (the span is
-// attributed only to a core actor id).
+// Valid core actor ids for the expiring holder and the writer agent that
+// stages the expiry (the span is attributed only to a core actor id).
 const (
 	expZombie = "act_0e45506e64357c94a87e70ef1c6bbba1"
-	expWriter = "act_0e45506e64357c94a87e70ef1c6bbba2"
+	expStager = "act_0e45506e64357c94a87e70ef1c6bbba2"
 )
 
 // expHeartbeat is when the zombie last renews its claim (a task claim).
@@ -81,7 +81,7 @@ func expireWorld(t *testing.T, subject string, writerHoldsTsk2 bool) (writer *ag
 	wd.addTask("tsk_2", nil)
 	zombie := wd.agent("zombie")
 	writer = wd.agent("writer")
-	zombie.env.Caller.ActorID, writer.env.Caller.ActorID = expZombie, expWriter
+	zombie.env.Caller.ActorID, writer.env.Caller.ActorID = expZombie, expStager
 	if _, err := Claim(ctx, zombie.env, subject, ClaimOptions{}); err != nil {
 		t.Fatal(err)
 	}
