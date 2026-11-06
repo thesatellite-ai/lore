@@ -178,7 +178,8 @@ func TestClientWriteProjectsAgentIDs(t *testing.T) {
 					t.Errorf("%s = %q, want %q", k, got, exp)
 				}
 			}
-			lists := map[want][2]string{keep: {p + ", " + id, id + ", " + p}, owner: {p + ", " + p, p + ", " + p}, nobody: {p, p}}[c.want]
+			// an agent and its owner in one list collapse to the owner once (G-COORD-1)
+			lists := map[want][2]string{keep: {p + ", " + id, id + ", " + p}, owner: {p, p}, nobody: {p, p}}[c.want]
 			if got := r.Fields[schema.FieldTaskAssignees].String(); got != lists[0] {
 				t.Errorf("assignees = %q, want %q", got, lists[0])
 			}

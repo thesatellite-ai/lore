@@ -125,10 +125,15 @@ func scalar(as Mapper, v value.Value) (value.Value, bool, bool) {
 	}
 }
 
-// list maps every item; an item naming nobody is dropped.
+// list maps every item; an item naming nobody is dropped. When mapping
+// changed the list, an item equal to an earlier one is dropped too: two
+// agents of one owner (or an agent and its owner) in assignees or watchers
+// become that owner once, not twice (v0.1.17 clientRows.ownersForAgents
+// collapsed duplicate owners; G-COORD-1). An unchanged list is returned as
+// it is.
 func list(as Mapper, l value.List) (value.Value, bool, bool) {
 	items := l.Items()
-	out := make([]value.Value, 0, len(items))
+	mapped := make([]value.Value, 0, len(items))
 	changed := false
 	for _, it := range items {
 		nv, drop, ch := Value(as, it)
@@ -136,10 +141,18 @@ func list(as Mapper, l value.List) (value.Value, bool, bool) {
 		if drop {
 			continue
 		}
-		out = append(out, nv)
+		mapped = append(mapped, nv)
 	}
 	if !changed {
 		return l, false, false
+	}
+	out := make([]value.Value, 0, len(mapped))
+	seen := make(map[string]bool, len(mapped))
+	for _, v := range mapped {
+		if k := v.String(); !seen[k] {
+			seen[k] = true
+			out = append(out, v)
+		}
 	}
 	nl, err := value.ListOf(l.Elem(), out...)
 	if err != nil {
