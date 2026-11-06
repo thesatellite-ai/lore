@@ -95,7 +95,11 @@ func (a *App) PurgedHistory(ctx context.Context) ([]opstrash.HistoryRow, error) 
 		}
 		rows = append(rows, got...)
 	}
-	for _, src := range liveSources(st) {
+	srcs, serr := liveSources(ctx, st)
+	if serr != nil {
+		return nil, serr
+	}
+	for _, src := range srcs {
 		if src.dir == "" {
 			continue
 		}

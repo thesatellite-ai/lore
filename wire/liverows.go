@@ -11,6 +11,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -246,7 +247,11 @@ func liveTables() map[row.Table]bool {
 // paths say which files to remove from the ref.
 func liveResourceNote(ctx context.Context, st *state) string {
 	var paths []string
-	for _, src := range liveSources(st) {
+	srcs, serr := liveSources(ctx, st)
+	if serr != nil {
+		return ""
+	}
+	for _, src := range srcs {
 		rows, err := readLiveRows(ctx, src.dir, src.refs, src.folder, map[row.Table]bool{schema.TableResources: true})
 		if err != nil {
 			return ""
@@ -279,9 +284,24 @@ type liveSource struct {
 	name   store.Source
 	dir    string   // where git runs (the repo top, the store worktree)
 	refs   []string // local ref and tracking copy
-	folder string   // "" = every folder (the repo store)
+	folder string   // the project's live folder (repoLiveFolder) or the attached store folder
 	branch string   // store branch ("" for the repo store)
 	v017   bool     // the store's marker is still v0.1.17 (lore-store.yaml v1)
+}
+
+// repoLiveFolder is the live folder of the project rooted at dir: `_root`
+// for the project at the git top level, else dir's path relative to it (a
+// monorepo sub-project, OWNERQ-1). Every project of a repo shares the one
+// refs/lore/live, so reading only this folder keeps one project's live rows
+// out of another's .lore/data. It is the rule the live writer files rows by
+// (wire/host livePlace, v0.1.17 liveRepoPlace), asked of git itself
+// (`rev-parse --show-prefix`), so a symlinked path names the same folder.
+func repoLiveFolder(ctx context.Context, dir string) (string, error) {
+	out, err := liveGit(ctx, dir, "rev-parse", "--show-prefix")
+	if err != nil {
+		return "", errs.Wrap(errs.CodeOf(err), "wire: the live folder of "+dir, err)
+	}
+	return live.FolderFor(strings.TrimSpace(string(out))), nil
 }
 
 // gitStoreBackend is a git store backend: its worktree and branch.
@@ -291,9 +311,14 @@ type gitStoreBackend interface {
 }
 
 // liveSources lists the live refs of the repo and of every attached git
-// store. A store attached at its root reads v0.1.17's `_root` folder.
-func liveSources(st *state) []liveSource {
-	out := []liveSource{{name: store.SourceRepo, dir: st.repoTop, refs: []string{liveRefLocal, liveRefTracking}}}
+// store. The repo reads only its project's folder (repoLiveFolder), a
+// store attached at its root reads v0.1.17's `_root` folder.
+func liveSources(ctx context.Context, st *state) ([]liveSource, error) {
+	folder, err := repoLiveFolder(ctx, st.repoTop)
+	if err != nil {
+		return nil, err
+	}
+	out := []liveSource{{name: store.SourceRepo, dir: st.repoTop, folder: folder, refs: []string{liveRefLocal, liveRefTracking}}}
 	for _, name := range st.eng.Stores() {
 		if name == store.SourceRepo {
 			continue
@@ -314,7 +339,7 @@ func liveSources(st *state) []liveSource {
 		out = append(out, liveSource{name: name, dir: gb.Dir(), folder: f, branch: b, v017: v017,
 			refs: []string{liveRefLocal + "/" + b, liveTrackingPrefix + b}})
 	}
-	return out
+	return out, nil
 }
 
 // liveTrackingPrefix + <branch> is where fetchStoreLive copies a store
@@ -338,7 +363,11 @@ func fetchStoreLive(ctx context.Context, src liveSource) {
 // nothing).
 func pendingLiveRows(ctx context.Context, st *state, fetchAll bool) ([]pendingLive, error) {
 	var out []pendingLive
-	for _, src := range liveSources(st) {
+	srcs, serr := liveSources(ctx, st)
+	if serr != nil {
+		return nil, serr
+	}
+	for _, src := range srcs {
 		if src.branch != "" && (fetchAll || src.v017) {
 			fetchStoreLive(ctx, src)
 		}
