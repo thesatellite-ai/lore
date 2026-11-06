@@ -419,7 +419,7 @@ func StoreOnlyRoster(ctx context.Context, opts Options, target store.Source) (*A
 	if err != nil {
 		return nil, false, err
 	}
-	st, err := openStoreOnly(ctx, opts, target)
+	st, err := openStoreOnly(ctx, a.opts, target) // a.opts: New filled the defaults (Wall)
 	if err != nil {
 		return nil, false, err
 	}
