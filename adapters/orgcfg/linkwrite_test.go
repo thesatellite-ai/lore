@@ -68,7 +68,7 @@ func newLinkWorld(t *testing.T) *linkWorld {
 func (w *linkWorld) link(t *testing.T, folder string) (LinkWriteResult, error) {
 	t.Helper()
 	return w.links.WriteLink(context.Background(), LinkWrite{
-		Plan: orgresolve.LinkPlan{Entry: "agency", StoreURL: lwStoreNorm, Branch: "main", Folder: folder, ProjectID: lwProject, Remote: lwRemote},
+		Plan:      orgresolve.LinkPlan{Entry: "agency", StoreURL: lwStoreNorm, Branch: "main", Folder: folder, ProjectID: lwProject, Remote: lwRemote},
 		Signature: gitref.Signature{Name: "Mira", Email: "mira@agency.example", When: time.Unix(1_800_000_000, 0)},
 		FolderProjectID: func(store, branch, f string) (string, error) {
 			if store != lwStoreNorm || branch != "main" || f != folder {
