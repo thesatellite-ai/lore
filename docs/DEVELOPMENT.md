@@ -8,26 +8,26 @@ Internal build / release notes. End-user docs live in the top-level [README](../
 
 | Layer | Detail |
 |-------|--------|
-| Storage | SQLite cache `.lore/lore.db` (pure-Go `modernc.org/sqlite`) mirrored to committed JSON row files under `.lore/data/` |
-| Sync | `saas/pkg/aicoder/lsync` reconciles both directions around every command; design in [LORE_SYNC_SPEC.md](../LORE_SYNC_SPEC.md) |
+| Storage | committed `_v: 2` JSON row files under `.lore/data/` are the truth; a SQLite cache (pure-Go `modernc.org/sqlite`, `adapters/cache/sqlite`) is built from them at run time; machine-local tables live in `~/.lore/state/machine.db` |
+| Sync | `adapters/live`, `adapters/reposync` and `ops/sync` carry rows between the working tree, the live ref and the store; row merge in `logic/merge`, `logic/merge3`, `logic/canonjson`; design in [LORE_SYNC_SPEC.md](../LORE_SYNC_SPEC.md) |
 | Search | SQLite FTS5 (built into the binary) + hybrid ranking |
 | Output | Compiles stored knowledge into `CLAUDE.md` / `AGENTS.md` / `.cursorrules` |
 | Agent loop | The lore skill (an instruction file the coding agent loads) captures corrections & decisions back into the db |
 
 ## Layout
 
-This is a Go **workspace** (`go.work`) stitching local modules:
+One Go module, `github.com/thesatellite-ai/lore`, at the repo root (no `go.work`; a clean clone builds from the module proxy). The packages are layered (`model`, `schema`, `logic`, `store`, `adapters`, `op`, `engine`, `ops`, `surface`, `wire`, `cmd`); `internal/layers` fails the build when a lower layer imports a higher one.
 
-| Module | Role |
-|--------|------|
-| `.` (`github.com/thesatellite-ai/lore`) | the 0.1.18 core; `cmd/lore` is the release `lore` binary (package `main`, built by `task lore:build` and `.goreleaser.yml`) |
-| `saas/cmd/cli` | the old v0.1.17-layout binary, kept while the old modules are emptied (`task lore:build:old` → `tmp/bin/lore-old`; the team e2e and docs-example tasks still build it) |
-| `saas/pkg/aicoder/*` | core domain logic (capture, search, render, fts5) |
-| `saas/pkg/aicoder/lsync` | git sync engine: table registry, change triggers, reconcile, bootstrap/adopt, merge driver, trash/conflicts |
-| `saas/pkg/aicoder/{canonjson,merge3,gitsetup}` | generic helpers sync is built on: byte-stable JSON, field-level 3-way merge, idempotent git wiring + plumbing |
-| `dbent` | Ent schema + generated client (local-only module) |
-| `lace/db` | pure-Go SQLite open/registration |
-| `github.com/khanakia/entx/enttui` | TUI engine (resolved from the module proxy) |
+| Path | Role |
+|------|------|
+| `cmd/lore` | the `lore` binary and the only release binary (package `main`, built by `task lore:build` and `.goreleaser.yml`) |
+| `wire/` | the composition root: picks the concrete backends, cache, scanner and identity |
+| `surface/cli`, `surface/rest`, `surface/tui`, `surface/docs` | CLI, local REST + OpenAPI (`lore api`), the TUI, and the generated reference |
+| `ops/<noun>` | one package per noun, each defining its operations |
+| `adapters/backend/{git,folder,rowfs}`, `adapters/cache/sqlite` | store backends and the run-time SQLite cache |
+| `tests/teame2e` | the team end-to-end suite (`task lore:test:team`, build tag `teame2e`) |
+
+The v0.1.17 modules `saas/`, `dbent/`, `lace/` and `go.work` were deleted in phase E (42dbef7a).
 
 ## Engine notes (0.1.18 core)
 
@@ -50,9 +50,9 @@ task lore:build:debug    # with debug symbols
 task lore:install:all    # build + install binary AND the lore skill locally
 task lore:skill:install  # (re)install the skill to ~/.claude/skills/lore
 task lore:test           # unit + integration tests (race detector)
-task lore:test:sync      # sync engine + CLI end-to-end suite (real git, real binary)
+task lore:test:sync      # git-sync tests: row merge, the live ref, branch sync, sync operations
+task lore:test:team      # team end-to-end suite (real binary, real git, many actors)
 task lore:test:cover     # coverage of unit AND end-to-end tests; lists functions no test reaches
-task lore:bench:sync     # sync performance at 1k / 10k rows
 ```
 
 ## The gate: `task check`, before every push
@@ -64,7 +64,7 @@ One command runs everything, in this order, and stops at the first failure:
 | `lore:build` | the binary builds |
 | `lore:lint` | `go vet`, `gofmt`, `staticcheck`, and a build for all six release targets (linux, darwin, windows × amd64, arm64) |
 | `lore:test` | unit and integration tests with the race detector |
-| `lore:test:all` | every Go test in `dbent`, `lace` and `saas`, including the CLI end-to-end suite (real git, real binary) and `TestDocsMatchCLI` (every `lore …` command in the README and `skills/*.md` exists with the flags shown) |
+| `lore:test:all` | every Go test of the root module, including `cmd/lore`'s docs drift test `TestDocsMatchCLI` (every `lore …` command in the README and `skills/*.md` exists with the flags shown) |
 | `lore:check:tidy` | `go mod tidy` changes nothing |
 | `lore:scenarios`, `lore:chaos` | the shell acceptance and failure-injection scripts in `tests/` (SC-21 needs root or sudo and skips otherwise) |
 | `lore:check:docs` | every docsync citation in the docs still matches the code (`ds check`) |
@@ -78,7 +78,7 @@ task lore:hooks:install  # once per clone: use the committed .githooks
 
 No gate step may modify tracked files: `task check` records the tracked tree when it starts (`check:begin`) and refuses to stamp if it changed by the end, naming the files. That is why `check:docs` puts `.ds/ledger.tsv` and `refs.tsv` back after `ds scan` (whose header records the commit and time of every scan): run `ds scan` yourself and commit when docs or citations change. Uncommitted changes to tracked files also make the stamp differ from the commit being pushed, so commit or `git stash` them before pushing.
 
-Adding an ent table? `saas/pkg/aicoder/lsync/registry.go` must classify it as synced or local — `TestRegistry_EveryTableClassified` fails until it does. A new unique index on a synced table also needs an entry in `saas/cmd/cli/natural_ids.go` (`TestNaturalIDSpecs_MatchRegistry`).
+Adding a table? Declare it once with `schema.Table(...)` in `schema/` (a synced row table or a machine-local one); that one definition drives the cache tables, foreign keys, indexes, CLI flags, REST routes and the docs. There is no code generation.
 
 Plain `go build`:
 
@@ -104,6 +104,8 @@ goreleaser check
 goreleaser release --snapshot --clean --skip=publish
 ```
 
+GoReleaser is pinned to v2.9.0 (`.github/workflows/release.yml`, and the gate uses the same version): v2.10.0 and later deprecate `brews`, and `goreleaser check` then fails on this config. `brews` is kept on purpose (decision GR-1): a formula also serves Linux Homebrew, and the shared tap `thesatellite-ai/homebrew-tap` holds every org tool's formula. Revisit the pin when the shared tap moves to casks or another layout: migrate `.goreleaser.yml` then, and unpin.
+
 ## Homebrew tap
 
 Formulae for all `thesatellite-ai` tools live in one shared tap repo: **`thesatellite-ai/homebrew-tap`**. GoReleaser writes `Formula/lore.rb` there on every release; users run `brew install thesatellite-ai/tap/lore`.
@@ -125,4 +127,4 @@ Future projects reuse the same tap — just add a `brews:` block pointing at `th
 
 ## Rebranding note
 
-Internal Go module/package names (`saas`, `dbent`, `lace`, `saas/pkg/aicoder/*`) intentionally keep their original identifiers — they are not user-visible and renaming them is pure churn. User-facing surfaces (binary `lore`, `.lore/` data dir, `lore.db`, `LORE_*` env vars, the skill) are all branded `lore`.
+The v0.1.17 internal module names (`saas`, `dbent`, `lace`) are gone since phase E; the code is the one module `github.com/thesatellite-ai/lore`. User-facing surfaces (binary `lore`, `.lore/` data dir, `lore.db`, `LORE_*` env vars, the skill) are all branded `lore`.
