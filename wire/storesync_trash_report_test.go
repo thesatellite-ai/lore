@@ -1,10 +1,10 @@
 package wire
 
-// storesync_trash_report_test.go — TE-F-1 (DELETION 3.7): a `lore sync` of
-// a git store says when a soft delete lost to a teammate's edit, or two
-// deletes met, as `lore merge-driver` says it for a repo row and a live
-// merge note for the live ref. Before TE-F-1 the store merger had no
-// report hook and the sync was silent.
+// storesync_trash_report_test.go — TE-F-1 (DELETION 3.7), TE-F-2: a `lore
+// sync` of a git store says what `lore merge-driver` says for a repo row:
+// a soft delete that lost to a teammate's edit, two deletes that met, and
+// a field both sides changed that the newer edit settled. Before TE-F-1
+// the store merger had no report hook and the sync was silent.
 
 import (
 	"slices"
@@ -17,11 +17,13 @@ import (
 )
 
 // TestStoreSyncReportsTrashOutcome: checkouts A and B share the git store
-// kb. A deletes two memories and syncs; B, before pulling, edits the first
-// and deletes the second, then syncs: B's sync merges both rows and its
+// kb. A deletes two memories, sets a third's kind and syncs; B, before
+// pulling, edits the first, deletes the second and sets the third's kind
+// to another value, then syncs: B's sync merges the three rows and its
 // notices name the store, each row and its outcome (kept alive by the
-// edit; deleted on both sides). A row nobody touched on B is not reported,
-// and the store url in the line carries no query.
+// edit; deleted on both sides; kind settled by the newer edit). A row
+// nobody touched on B is not reported, and the store url in the line
+// carries no query.
 func TestStoreSyncReportsTrashOutcome(t *testing.T) {
 	hosts := histGitWorld(t)
 	url, _ := bareStore(t, hosts, "acme/kb")
@@ -51,7 +53,7 @@ func TestStoreSyncReportsTrashOutcome(t *testing.T) {
 		}
 		return idOf(t, out)
 	}
-	edited, both, untouched := add("edited on B"), add("deleted on both"), add("deleted on A only")
+	edited, both, untouched, clash := add("edited on B"), add("deleted on both"), add("deleted on A only"), add("kind set on both")
 	sync(a, "A")
 	sync(b, "B")
 	for _, id := range []string{edited, both, untouched} {
@@ -59,7 +61,13 @@ func TestStoreSyncReportsTrashOutcome(t *testing.T) {
 			t.Fatalf("A delete %s: %v", id, err)
 		}
 	}
+	if _, err := run(t, a, opsmemory.OpEdit, `{"id":"`+clash+`","kind":"procedural"}`, true); err != nil {
+		t.Fatalf("A kind: %v", err)
+	}
 	sync(a, "A")
+	if _, err := run(t, b, opsmemory.OpEdit, `{"id":"`+clash+`","kind":"episodic"}`, true); err != nil {
+		t.Fatalf("B kind: %v", err)
+	}
 	if _, err := run(t, b, opsmemory.OpEdit, `{"id":"`+edited+`","body":"B kept this"}`, true); err != nil {
 		t.Fatalf("B edit: %v", err)
 	}
@@ -85,6 +93,10 @@ func TestStoreSyncReportsTrashOutcome(t *testing.T) {
 	}{
 		{edited, merge.TrashKeptEdit},
 		{both, merge.TrashDeletedBoth},
+		{clash, "both sides changed kind; kept the newer edit"},
+		// two deletes also clash on the trash fields; the merge result
+		// lists them as lore merge-driver prints them (TE-F-2: same report)
+		{both, "both sides changed deleted_at, deleted_batch; kept the newer edit"},
 	} {
 		want := "/" + w.id + ": " + string(w.outcome)
 		if !slices.ContainsFunc(got, func(n string) bool { return strings.HasSuffix(n, want) }) {
@@ -99,8 +111,8 @@ func TestStoreSyncReportsTrashOutcome(t *testing.T) {
 			t.Errorf("the line names the store by its url without query: %q", n)
 		}
 	}
-	if len(got) != 2 {
-		t.Errorf("want exactly 2 reports, got %q", got)
+	if len(got) != 4 {
+		t.Errorf("want exactly 4 reports, got %q", got)
 	}
 	notesA = nil
 	sync(a, "A")

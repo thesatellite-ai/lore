@@ -637,10 +637,10 @@ func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option,
 // storeMergeReportPrefix starts every line of a store sync's merge report.
 const storeMergeReportPrefix = "lore sync: store "
 
-// storeMergeReport is the merge report of one git store's sync (DELETION
-// 3.7, TE-F-1): a soft delete that lost to an edit, or two deletes that
-// met, is a decision a person should hear about, as `lore merge-driver`
-// says it for a repo row and a live merge note for the live ref. It names
+// storeMergeReport is the merge report of one git store's sync, the same
+// outcomes `lore merge-driver` prints for a repo row (TE-F-1, TE-F-2): a
+// field both sides changed that the newer edit settled, and a soft delete
+// that lost to an edit or two deletes that met (DELETION 3.7). It names
 // the store (its url without credentials or query), the row and the
 // outcome; `lore trash list --overruled` lists the rows kept alive. A row
 // whose merge left conflict markers is refused by the sync, so nothing is
@@ -653,10 +653,18 @@ func storeMergeReport(u *url.URL, notice func(string)) func(merge.Result) {
 	shown.User, shown.RawQuery, shown.Fragment = nil, "", ""
 	where := shown.String()
 	return func(res merge.Result) {
-		if res.Trash == "" || !res.Clean() {
+		if !res.Clean() {
 			return
 		}
-		notice(storeMergeReportPrefix + where + ": " + string(res.Row.Table) + "/" + res.Row.ID.String() + ": " + string(res.Trash))
+		at := storeMergeReportPrefix + where + ": " + string(res.Row.Table) + "/" + res.Row.ID.String() + ": "
+		if len(res.NewerWins) > 0 {
+			// TE-F-2: a field both sides changed is settled newer-wins;
+			// the teammate's older value never vanishes silently.
+			notice(at + "both sides changed " + strings.Join(res.NewerWins, ", ") + "; kept the newer edit")
+		}
+		if res.Trash != "" {
+			notice(at + string(res.Trash))
+		}
 	}
 }
 
