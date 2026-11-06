@@ -19,8 +19,10 @@ import (
 
 // Envelope kinds (v0.1.17 saas/pkg/constants/envelopes.go).
 const (
-	KindList   = "mission.list"
-	KindShow   = "mission.show"
+	KindList = "mission.list"
+	KindShow = "mission.show"
+	// KindAdd is mission add's envelope (v0.1.17 printJSON(KindMissionAdd)).
+	KindAdd    = "mission.add"
 	KindSearch = "mission.search"
 )
 

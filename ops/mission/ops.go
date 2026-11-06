@@ -127,6 +127,7 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 		for _, s := range all {
 			if work.Field(s.Row, work.FieldKey) == in.Key && work.Field(s.Row, work.FieldProject) == project.String() {
 				out, serr := o.showOf(ctx, s.Source, s.Row)
+				out.Kind = KindAdd
 				out.Human = work.Success + " " + s.Row.ID.String() + " — " + work.Field(s.Row, work.FieldTitle) + " (already added with --key " + in.Key + ")\n"
 				return out, serr
 			}
@@ -168,6 +169,7 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 		return ShowOut{}, err
 	}
 	out, err := o.showOf(ctx, src, w.Row)
+	out.Kind = KindAdd
 	label := ""
 	if l := work.Label(work.LabelerOf(o.env), src); l != "" {
 		label = " → " + l // v0.1.17: " → " + route.Label ("[northwind/acme]")
