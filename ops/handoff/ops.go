@@ -225,7 +225,7 @@ func (o ops) actor(ctx context.Context, raw string) (ids.AnyID, error) {
 	switch len(hits) {
 	case 0:
 		return ids.AnyID{}, errs.New(errs.NotFound, "no actor "+content.QuoteID(ref)).
-			WithHint("an actor row exists once that person or agent has written to lore; or pass an act_ id")
+			WithHint("people join with `lore actor register` (run by that person in a repo of the team); or pass an act_ id")
 	case 1:
 		return ids.ParseAny(hits[0])
 	}
