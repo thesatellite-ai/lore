@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -170,6 +171,11 @@ type Hit struct {
 	// InTrash marks a row in the trash, listed only with --include-deleted
 	// after the live hits (DELETION 2.9, FA-META-4).
 	InTrash bool `json:"in_trash,omitempty"`
+	// Meta / MetaMasked are the hit row's metadata by name, sensitive
+	// values masked (MQ13 / METADATA 3.17: search hits carry it; absent
+	// when the row has none, so v0.1.17's hit bytes stay for such rows).
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 	// Fallback is the terminal text when neither Snippet nor Body is set;
 	// never in --json, so the v0.1.17 envelope is unchanged.
 	Fallback string `json:"-"`
@@ -331,6 +337,15 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	hits := res.Hits
 	if hits == nil {
 		hits = []Hit{}
+	}
+	if me, ok := env.(metashow.Env); ok {
+		for i := range hits {
+			if hits[i].InTrash {
+				continue // a trashed row is read only by the trash commands
+			}
+			b := metashow.Of(ctx, me, hits[i].ID)
+			hits[i].Meta, hits[i].MetaMasked = b.Meta, b.MetaMasked
+		}
 	}
 	return RunOut{
 		SchemaVersion: SchemaVersion, Kind: KindGlobal, Count: len(hits),
