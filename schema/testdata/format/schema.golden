@@ -190,6 +190,7 @@ meta_keys.scope text required
 meta_keys.sensitive bool
 meta_keys.strict bool
 meta_keys.type text required
+meta_keys.type_history json
 meta_values.key_id ref required
 meta_values.label text
 meta_values.name text required

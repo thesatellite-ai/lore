@@ -255,6 +255,9 @@ func coreDefs() []TableDef {
 			// "available knowledge" index (CONTEXT_BUDGET 6.13, A-CTX-12;
 			// meta edit --context index|none).
 			Text("context", OneOf("index")),
+			// type_history: earlier types [{type, until, by}], appended by
+			// meta edit --type (METADATA 3.3, R12, G-META-7).
+			JSON("type_history", Describe("earlier types [{type, until, by}] (METADATA 3.3)")),
 			// changed_by: one entry per loosening (internal, sensitive or
 			// strict turned off), written only by meta edit after its
 			// confirmation; the pre-commit check relies on it (RX7, OV58).
