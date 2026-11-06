@@ -46,6 +46,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckOldSettings, a.DoctorUnclassifiedSettings},
 		{DoctorCheckRepoClass, a.DoctorRepoClass},
 		{DoctorCheckSLA, a.DoctorSLA},
+		{DoctorCheckProjects, a.DoctorProjects}, // doctor_projects.go
 	}
 	out := make([]opsdoctor.CheckRun, 0, len(checks))
 	for _, c := range checks {

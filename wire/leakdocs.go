@@ -178,7 +178,11 @@ func leakBlocked(where string, fs []leakcheck.Finding, explain bool) error {
 		if f.Rule == leakcheck.RuleActor {
 			continue // its detail says what to remove; `lore actor delete` is refused (v0.1.17 leakFix gives none)
 		}
-		if h := leakFix(where, f.Path); !seen[h] {
+		h := leakFix(where, f.Path)
+		if f.Detail == leakcheck.DetailOtherProject {
+			h = otherProjectFix // two project rows: re-point, never move or delete the row (b-flow3)
+		}
+		if !seen[h] {
 			seen[h] = true
 			hints = append(hints, h)
 		}
@@ -226,6 +230,11 @@ func leakFix(where, path string) string {
 	}
 	return "move the row to the org (`lore move <id> --to <org>`) or delete it; the rows stay on the live ref until then"
 }
+
+// otherProjectFix is the fix of a "row of another project" finding: the
+// repo holds a second project row (two `lore init`s merged), and the rows
+// are re-pointed by fix-projects, not moved to the org or deleted.
+const otherProjectFix = "this repository holds rows of a second project (two `lore init`s merged?): run `" + fixProjectsCommand + "` to keep one project and re-point its rows, then commit again"
 
 // repoRowPathRe matches a row file of this repo's .lore/data (any project
 // folder of a monorepo): .lore/data/<table>/<id>.json.

@@ -528,6 +528,11 @@ func allowedRows(it Item, idx *Index) map[string]bool {
 	return out
 }
 
+// DetailOtherProject is the detail of a row whose project_id is not the
+// repo's project (callers match it to name `lore sync fix-projects`: two
+// project rows after two inits were merged).
+const DetailOtherProject = "row of another project"
+
 // checkRowFile applies the id rule to one row file.
 func checkRowFile(it Item, table, id string, idx *Index, o Options) []Finding {
 	var out []Finding
@@ -558,7 +563,7 @@ func checkRowFile(it Item, table, id string, idx *Index, o Options) []Finding {
 		if idx != nil {
 			label = idx.ProjectIDs[pid]
 		}
-		out = append(out, Finding{Rule: RuleID, Where: it.Where, RowID: id, Label: label, Detail: "row of another project"})
+		out = append(out, Finding{Rule: RuleID, Where: it.Where, RowID: id, Label: label, Detail: DetailOtherProject})
 	}
 	if idx != nil {
 		refs := refsIn(doc)
