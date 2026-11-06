@@ -13,6 +13,7 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -27,6 +28,8 @@ import (
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 )
 
@@ -94,12 +97,41 @@ func (w *standaloneWhoami) hookModel(ctx context.Context, a *agentdetect.Result)
 	}
 }
 
-// SetMachineLabel implements opswhoami.Host: not wired in cmd/lore yet
-// (it runs machine.label through the registry, which this host does not
-// hold).
-func (w *standaloneWhoami) SetMachineLabel(context.Context, string) (opswhoami.MachineLabel, []string, error) {
-	return opswhoami.MachineLabel{}, nil, errs.New(errs.Unsupported, "lore whoami --machine-label is not wired in this binary yet").
-		WithHint("run `lore machine label <label>`")
+// SetMachineLabel implements opswhoami.Host: `whoami --machine-label`
+// runs machine.label through the bound App's registry, exactly as
+// `lore machine label <label>` does (same target store, refusals and
+// audit), and hands back its result (P3-CMDLORE-4; v0.1.17
+// setMachineLabel).
+func (w *standaloneWhoami) SetMachineLabel(ctx context.Context, label string) (opswhoami.MachineLabel, []string, error) {
+	var app *App
+	if w.app != nil {
+		app = w.app.boundApp()
+	}
+	if app == nil {
+		return opswhoami.MachineLabel{}, nil, errs.New(errs.Internal, "whoami: no App to set the machine label through")
+	}
+	e, ok := app.Registry().Lookup(opsinfra.OpMachineLabel)
+	if !ok {
+		return opswhoami.MachineLabel{}, nil, errs.New(errs.Internal, opsinfra.OpMachineLabel+" is not registered")
+	}
+	in, err := json.Marshal(opsinfra.MachineLabelIn{Label: label})
+	if err != nil {
+		return opswhoami.MachineLabel{}, nil, errs.Wrap(errs.Internal, "whoami: encode the machine label", err)
+	}
+	res, err := app.Run(ctx, e, op.JSONDecoder{Body: in}, op.Caller{Interactive: isTerminal(os.Stdin)})
+	if err != nil {
+		return opswhoami.MachineLabel{}, nil, err
+	}
+	raw, err := res.JSON()
+	if err != nil {
+		return opswhoami.MachineLabel{}, nil, errs.Wrap(errs.Internal, "whoami: encode the machine.label result", err)
+	}
+	var out opsinfra.MachineLabelOut
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return opswhoami.MachineLabel{}, nil, errs.Wrap(errs.Internal, "whoami: decode the machine.label result", err)
+	}
+	return opswhoami.MachineLabel{ID: out.ID, Label: out.Label, Store: out.Store, Changed: out.Changed},
+		strings.Split(strings.TrimRight(out.Text(), "\n"), "\n"), nil
 }
 
 // whoamiMachine is this machine's id ("" when none can be had).
