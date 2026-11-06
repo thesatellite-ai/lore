@@ -35,6 +35,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 )
 
 // Names fixed by v0.1.17's config format.
@@ -245,15 +246,16 @@ const yamlSyntaxPrefix = "yaml: "
 // are an empty config.
 func Parse(b []byte) (*Config, error) {
 	c := &Config{}
-	if err := yaml.Unmarshal(b, c); err != nil {
+	if err := yamlerr.Decode(b, c, yamlerr.Lenient); err != nil {
 		// Only a syntax error (yaml's own "yaml: line 1: …") is "not valid
-		// YAML"; a bad value (a *yaml.TypeError, or a Duration's "line 2:
-		// invalid duration …") names its line and key as it is.
+		// YAML"; a value of the wrong kind (a *yaml.TypeError) is named by
+		// its line and key path in the user's words (yamlerr), and a
+		// Duration's "line 2: invalid duration …" is kept as it is.
 		var te *yaml.TypeError
 		switch {
 		case errors.As(err, &te):
-			return nil, fmt.Errorf("orgconf: %s%s: %s", TeamFileBase, ExtYAML, strings.Join(te.Errors, "; "))
-		case strings.HasPrefix(err.Error(), yamlSyntaxPrefix):
+			return nil, fmt.Errorf("orgconf: %s%s: %w", TeamFileBase, ExtYAML, err)
+		case strings.HasPrefix(errors.Unwrap(err).Error(), yamlSyntaxPrefix):
 			return nil, fmt.Errorf("orgconf: %s%s is not valid YAML: %w", TeamFileBase, ExtYAML, err)
 		default:
 			return nil, fmt.Errorf("orgconf: %s%s: %w", TeamFileBase, ExtYAML, err)
@@ -289,7 +291,7 @@ func (f *OrgFile) Validate() error {
 // ParseOrgFile decodes and validates org.yaml bytes.
 func ParseOrgFile(b []byte) (*OrgFile, error) {
 	f := &OrgFile{}
-	if err := yaml.Unmarshal(b, f); err != nil {
+	if err := yamlerr.Decode(b, f, yamlerr.Lenient); err != nil { // line + key, never a Go type
 		return nil, fmt.Errorf("orgconf: %s%s is not valid YAML: %w", OrgFileBase, ExtYAML, err)
 	}
 	if err := f.Validate(); err != nil {
