@@ -275,17 +275,6 @@ func (w *coordWorld) forTask(ctx context.Context, id string) error {
 	return w.useStore(ctx)
 }
 
-// forRepoOnly refuses a client repo for a verb that only has the repo's
-// own ref (the migrate team lock): its coordination belongs on the store
-// (D8). Holds use forHolds, which reaches the linked store.
-func (w *coordWorld) forRepoOnly() error {
-	if w.sit.Role == orgresolve.RoleClient {
-		return errs.New(errs.Unsupported, "this is a client repo: its coordination belongs on the linked store's signals ref, and this verb only uses the repo's own ref").
-			WithHint("never written into the client repo (D8)")
-	}
-	return nil
-}
-
 // forHolds points the world at where this checkout's holds live: the
 // repo's own signals ref, or, in a client repo linked to an org store, the
 // linked store's signals ref under the link folder (D8: coordination data

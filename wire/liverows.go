@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -414,11 +415,42 @@ func (a *App) LiveNote(ctx context.Context) string {
 	return liveNote(ctx, st)
 }
 
+// LiveOverlay is implemented by a repo-store backend wrapper that serves
+// the repo's live ref itself (cmd/lore's wire/host liveBackend): the
+// repo's live rows are then 0.1.18 live rows, never rows waiting for
+// `lore migrate run`.
+type LiveOverlay interface {
+	ServesLiveRef() bool
+}
+
+// servesLiveRef reports whether b, or any wrapper on the way to its
+// concrete backend, is a LiveOverlay that serves the live ref.
+func servesLiveRef(b store.Backend) bool {
+	for b != nil {
+		if o, ok := b.(LiveOverlay); ok && o.ServesLiveRef() {
+			return true
+		}
+		u, ok := b.(Unwrapper)
+		if !ok {
+			return false
+		}
+		b = u.Unwrap()
+	}
+	return false
+}
+
 // liveNote is LiveNote for an opened state (App.state calls it while it
 // holds the App's lock, so it must not call back into the App).
 func liveNote(ctx context.Context, st *state) string {
 	warn := liveResourceNote(ctx, st)
 	p, err := pendingLiveRows(ctx, st, false)
+	if servesLiveRef(st.byName[store.SourceRepo]) {
+		// The repo store's live overlay (cmd/lore) shows the repo's live
+		// rows to every command that opens a live session; a run without
+		// one (a git hook, a skipped-live op such as task heartbeat) only
+		// misses them for itself. Not "not visible yet": no note.
+		p = slices.DeleteFunc(p, func(x pendingLive) bool { return x.source == store.SourceRepo })
+	}
 	if err != nil || len(p) == 0 {
 		return warn
 	}

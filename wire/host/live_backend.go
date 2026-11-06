@@ -687,6 +687,13 @@ func (b *liveBackend) Close() error { return b.inner.Close() }
 // Unwrap implements wire.Unwrapper.
 func (b *liveBackend) Unwrap() store.Backend { return b.inner }
 
+var _ wire.LiveOverlay = (*liveBackend)(nil)
+
+// ServesLiveRef implements wire.LiveOverlay: this wrapper serves the repo's
+// live ref, so its rows are never reported as v0.1.17 rows waiting for
+// `lore migrate run` (wire liveNote), also in a run without a live session.
+func (b *liveBackend) ServesLiveRef() bool { return true }
+
 // ---------------------------------------------------------------- purge
 
 var _ engine.Purger = (*liveBackend)(nil)
