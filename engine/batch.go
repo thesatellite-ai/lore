@@ -159,6 +159,20 @@ func stageOf(ctx context.Context) *stage {
 	return s
 }
 
+// unstaged returns ctx with its open stage hidden (every other value
+// kept). A side record made in the middle of a staged batch, such as the
+// secret audit of an import row, is not one of the batch's rows: whatever
+// its sink writes with ctx (cmd/lore's first audit event of a process
+// writes the session row to the machine store) goes straight to its own
+// store, so it can neither join the caller's batch nor make it span two
+// stores (E_INVALID_INPUT "one batch cannot write to two stores").
+func unstaged(ctx context.Context) context.Context {
+	if stageOf(ctx) == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, stageKey{}, (*stage)(nil))
+}
+
 // part returns (making it) the staged part of store st.
 func (s *stage) part(e *Engine, st Attached) *stagedStore {
 	if s.e == nil {

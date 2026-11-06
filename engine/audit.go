@@ -107,7 +107,8 @@ func (e *Engine) AuditSecret(ctx context.Context, action Action, a SecretAudit) 
 	if b, ok := BatchOf(ctx); ok {
 		ev.Batch = b
 	}
-	if err := e.audit.Record(ctx, ev); err != nil {
+	// recorded now, mid-write: never part of a staged batch (unstaged)
+	if err := e.audit.Record(unstaged(ctx), ev); err != nil {
 		return errs.Wrap(errs.Internal, "engine: secret audit record failed", err)
 	}
 	return nil
