@@ -97,7 +97,13 @@ type MachineShowIn struct {
 
 // MachineLabelIn is the input of machine.label.
 type MachineLabelIn struct {
-	Label string `json:"label" arg:"0" desc:"the label; \"\" clears it (one line, no control characters)"`
+	// Label is required in the help and docs, but checked by the
+	// operation (required:"after-lookup"), because "" is a value here: it
+	// clears the label (`lore machine label ""`, `whoami --machine-label
+	// ""`), and the decoder would refuse it as missing. A missing argument
+	// reads as "" too (the operation cannot tell them apart); clearing a
+	// label is harmless and undone by setting it again (G-ORGMIG-9).
+	Label string `json:"label,omitempty" arg:"0" required:"after-lookup" desc:"the label; \"\" clears it (one line, no control characters)"`
 	To    string `json:"to,omitempty" flag:"to" desc:"the store holding the profile (default the first own store)"`
 }
 
