@@ -217,6 +217,11 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
+	if d.Shape == policy.ShapeSet {
+		if err = o.checkSetItems(d, splitList(in.Value)); err != nil { // policy_items.go
+			return RowOut{}, err
+		}
+	}
 	if d.Key == policy.KeyTasksEstimateUnit && display(v) == string(estimate.Days) {
 		// OWNERQ-21: no day unit. "days" stays a choice only so a policy
 		// row written by an earlier build still reads (its estimates read,
