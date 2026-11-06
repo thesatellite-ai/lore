@@ -488,10 +488,20 @@ func (a *App) checkUnused(ctx context.Context, name string, place attach.Store) 
 }
 
 // samePlace reports whether two store entries name the same place: the
-// same canonical url and branch, and the same folder (the store root
-// spelled "" or rowfs.FolderRoot).
+// same repo (canonical url, or one remote spelled two ways git accepts:
+// https, ssh, scp, with or without .git, as repourl.Normalize reads them;
+// the clone of both is the same folder), the same branch, and the same
+// folder (the store root spelled "" or rowfs.FolderRoot).
 func samePlace(a, b attach.Store) bool {
-	return sameURL(a, b) && rootFolder(a.Folder) == rootFolder(b.Folder)
+	if rootFolder(a.Folder) != rootFolder(b.Folder) {
+		return false
+	}
+	if sameURL(a, b) {
+		return true
+	}
+	na, ea := repourl.Normalize(a.URL)
+	nb, eb := repourl.Normalize(b.URL)
+	return ea == nil && eb == nil && na == nb && a.Branch == b.Branch
 }
 
 // rootFolder is a folder with its slashes trimmed, the store root as "".
