@@ -83,7 +83,7 @@ brews:
     directory: Formula
     homepage: "https://github.com/thesatellite-ai/lore"
     description: "Local-first knowledge & context store for AI coding agents"
-    license: "PolyForm-Perimeter-1.0.0"
+    license: "Apache-2.0"
     skip_upload: auto
     install: |
       bin.install "lore"

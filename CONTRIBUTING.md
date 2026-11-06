@@ -1,6 +1,6 @@
 # Contributing to lore
 
-Thanks for your interest. `lore` is source-available under the [PolyForm Perimeter License 1.0.0](LICENSE) — commercial use is fine; only providing a product that competes with `lore` is disallowed. The license is perpetual (it does not convert to a permissive license over time). Contributions are welcome, with the licensing terms below.
+Thanks for your interest. `lore` is open source under the [Apache License 2.0](LICENSE) (releases up to v0.1.17 were published under the PolyForm Perimeter License 1.0.0). Contributions are welcome, with the licensing terms below.
 
 ## Before you start
 
@@ -32,7 +32,7 @@ Before a release, or after changing sync, leak checks, claims or landing, also r
 By submitting a contribution you agree that:
 
 1. You have the right to submit it (it's your original work or you have permission), and
-2. You license your contribution to the project under the same [PolyForm Perimeter License 1.0.0](LICENSE) terms, and grant the project owner the right to distribute it as part of the Software.
+2. You license your contribution to the project under the [Apache License 2.0](LICENSE), as described in its section 5.
 
 If you can't agree to this, please don't submit a PR — open an issue instead.
 
