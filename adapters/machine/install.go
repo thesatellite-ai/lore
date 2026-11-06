@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/formatgate"
 )
 
 // InstallMethod is the closed set of ways lore was installed, the
@@ -42,7 +44,11 @@ func DetectInstall(exe, version string) InstallMethod {
 	switch {
 	case strings.Contains(p, brewCellarMarker):
 		return InstallHomebrew
-	case version == "" || strings.HasSuffix(version, "-dev") || strings.Contains(version, "snapshot") || gitDescribe.MatchString(version):
+	// formatgate.DevBuild (FMT-DEV) also covers the bare "dev" stamp of an
+	// unstamped `go build ./cmd/lore`: seen as a script install, `lore
+	// upgrade` swapped such a build for the newest release without asking,
+	// even in a project the release cannot write.
+	case version == "" || formatgate.DevBuild(version) || gitDescribe.MatchString(version):
 		return InstallSource
 	}
 	for _, m := range versionManagerMarkers {
