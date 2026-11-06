@@ -302,11 +302,15 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 }
 
 // ensureBare makes an empty bare clone with origin and lore's refspecs
-// when dir is not one yet. Two processes racing here both succeed: a
-// second `remote add` finding origin is fine.
+// when dir is not one yet, and points an existing clone's origin at url
+// when the configured address changed (a moved store, or a config whose
+// earlier url git could not fetch): without that the clone kept fetching
+// the old address and the store read as offline forever. The git store
+// backend does the same (adapters/backend/git ensureRemote). Two processes
+// racing here both succeed: a second `remote add` finding origin is fine.
 func ensureBare(ctx context.Context, dir, url string) error {
 	if fi, err := os.Stat(filepath.Join(dir, "HEAD")); err == nil && fi.Mode().IsRegular() {
-		return nil
+		return ensureOrigin(ctx, dir, url)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, cloneStateDir), cloneDirMode); err != nil {
 		return fmt.Errorf("orgcfg: create clone dir: %w", err)
@@ -335,6 +339,25 @@ func fetch(ctx context.Context, dir string) error {
 	args := append([]string{"-C", dir, "fetch", "--quiet", "--prune", remoteName}, fetchRefspecs...)
 	_, err := gitRun(ctx, args...)
 	return err
+}
+
+// ensureOrigin sets origin's url to url when it differs (an existing
+// clone made from an earlier config). An origin that cannot be read is
+// added again.
+func ensureOrigin(ctx context.Context, dir, url string) error {
+	cur, err := gitRun(ctx, "-C", dir, "config", "--get", "remote."+remoteName+".url")
+	if err == nil && strings.TrimSpace(cur) == url {
+		return nil
+	}
+	if err != nil {
+		if _, aerr := gitRun(ctx, "-C", dir, "remote", "add", remoteName, url); aerr == nil {
+			return nil
+		}
+	}
+	if _, serr := gitRun(ctx, "-C", dir, "remote", "set-url", remoteName, url); serr != nil {
+		return serr
+	}
+	return nil
 }
 
 // recordFetch writes the fetch stamp and the store's HEAD branch (best
