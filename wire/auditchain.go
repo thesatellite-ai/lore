@@ -300,12 +300,19 @@ func (c *chainAudit) AuditLog(ctx context.Context, limit int) ([]opsaudit.Entry,
 // AuditVerify implements opsaudit.Env: the chain check (cmd/lore keeps no
 // lore.db rows, so there is no "changed outside lore" check here).
 func (c *chainAudit) AuditVerify(ctx context.Context) (opsaudit.Report, error) {
-	recs, err := c.records(ctx)
+	var rep opsaudit.Report
+	var recs []auditchain.Record
+	err := c.withChain(ctx, func(ch *sqlite.AuditChain, key string) error {
+		var verr error
+		if rep.BrokenAt, rep.Entries, verr = ch.Verify(ctx, key); verr != nil { // links + head anchor (P3-AUDIT-3)
+			return verr
+		}
+		recs, verr = ch.Records(ctx, key)
+		return verr
+	})
 	if err != nil {
 		return opsaudit.Report{}, err
 	}
-	var rep opsaudit.Report
-	rep.BrokenAt, rep.Entries = auditchain.Verify(recs)
 	rep.ExternalWrites = ExternalWrites(recs)
 	return rep, nil
 }

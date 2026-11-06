@@ -10,7 +10,22 @@ package sqlite
 //	Import(chain, source, recs) ─▶ once per chain (marker row): the v0.1.17 rows, verbatim, in order
 //	Append(chain, e)            ─▶ BEGIN IMMEDIATE · head · prev = auditchain.Hash(head) · insert pos+1
 //	Records(chain)              ─▶ oldest first (pos order)
-//	Verify(chain)               ─▶ auditchain.Verify(Records)
+//	Verify(chain)               ─▶ auditchain.Verify(Records) + the head anchor
+//
+// The head anchor (P3-AUDIT-3): the links prove every entry but the newest,
+// which nothing after it hashes, and they cannot show the newest entries
+// were cut off. So each Append/Import also moves audit_chain_head (pos, id
+// and hash of the newest entry), a separate table written in the same
+// transaction. Verify then needs the newest row to be at the anchored pos
+// with the anchored hash: an edited newest entry, a deleted one (tail
+// truncation) and a deleted anchor are each reported as broken. A write
+// whose chain no longer matches its anchor never moves the anchor, so a
+// tamper stays reported after later writes (it is never laundered into a
+// fresh anchor). A chain written before the anchor existed (unreleased
+// 0.1.18 builds only; v0.1.17 rows arrive through Import, which anchors)
+// reports as broken at its newest entry. This guards against edits of the
+// machine store file with a SQLite tool; it is not a defence against
+// someone who rewrites both tables together.
 //
 // It is not an engine table on purpose: the chain needs the head read and
 // the insert in one write transaction (two processes must never fork it)
@@ -52,6 +67,11 @@ const (
 		prev_log_hash TEXT NOT NULL DEFAULT '', PRIMARY KEY (chain, pos), UNIQUE (chain, id))`
 	auditImportsDDL = `CREATE TABLE IF NOT EXISTS audit_chain_imports (
 		chain TEXT PRIMARY KEY, source TEXT NOT NULL, rows INTEGER NOT NULL, at TEXT NOT NULL)`
+	auditHeadDDL = `CREATE TABLE IF NOT EXISTS audit_chain_head (
+		chain TEXT PRIMARY KEY, pos INTEGER NOT NULL, id TEXT NOT NULL, hash TEXT NOT NULL)`
+	auditAnchorGet = `SELECT pos, id, hash FROM audit_chain_head WHERE chain = ?`
+	auditAnchorSet = `INSERT INTO audit_chain_head (chain, pos, id, hash) VALUES (?, ?, ?, ?)
+		ON CONFLICT (chain) DO UPDATE SET pos = excluded.pos, id = excluded.id, hash = excluded.hash`
 	auditCols   = `id, created_at, acting_project_id, target_project_id, actor_id, action, target_table, target_id, override, before_hash, after_hash, reason, session_id, confirmed, prev_log_hash`
 	auditHead   = `SELECT pos, ` + auditCols + ` FROM audit_chain WHERE chain = ? ORDER BY pos DESC LIMIT 1`
 	auditAll    = `SELECT pos, ` + auditCols + ` FROM audit_chain WHERE chain = ? ORDER BY pos`
@@ -82,7 +102,7 @@ func OpenAuditChain(ctx context.Context, path string) (*AuditChain, error) {
 		return nil, dbErr("open audit chain", err)
 	}
 	db.SetMaxOpenConns(1)
-	if err := execTx(ctx, db, auditDDL, auditImportsDDL); err != nil {
+	if err := execTx(ctx, db, auditDDL, auditImportsDDL, auditHeadDDL); err != nil {
 		return nil, errors.Join(dbErr("create audit chain tables", err), db.Close())
 	}
 	return &AuditChain{db: db}, nil
@@ -123,13 +143,22 @@ func (a *AuditChain) Import(ctx context.Context, chain, source string, recs []au
 	if marked > 0 {
 		return 0, tx.Commit()
 	}
-	pos, _, err := chainHead(ctx, tx, chain)
+	pos, head, err := chainHead(ctx, tx, chain)
+	if err != nil {
+		return 0, err
+	}
+	anchored, err := headAnchored(ctx, tx, chain, pos, head)
 	if err != nil {
 		return 0, err
 	}
 	for _, r := range recs {
 		pos++
 		if err = insertRecord(ctx, tx, chain, pos, r); err != nil {
+			return 0, err
+		}
+	}
+	if anchored && len(recs) > 0 {
+		if err = setAnchor(ctx, tx, chain, pos, recs[len(recs)-1]); err != nil {
 			return 0, err
 		}
 	}
@@ -163,12 +192,21 @@ func (a *AuditChain) Append(ctx context.Context, chain string, e auditchain.Reco
 	if err != nil {
 		return auditchain.Record{}, err
 	}
+	anchored, err := headAnchored(ctx, tx, chain, pos, head)
+	if err != nil {
+		return auditchain.Record{}, err
+	}
 	e.ID, e.CreatedAt, e.PrevLogHash = id.String(), now.UTC().Format(time.RFC3339), "" // v0.1.17 showed seconds
 	if pos > 0 {
 		e.PrevLogHash = auditchain.Hash(head)
 	}
 	if err = insertRecord(ctx, tx, chain, pos+1, e); err != nil {
 		return auditchain.Record{}, err
+	}
+	if anchored {
+		if err = setAnchor(ctx, tx, chain, pos+1, e); err != nil {
+			return auditchain.Record{}, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return auditchain.Record{}, dbErr("audit chain: commit", err)
@@ -198,15 +236,86 @@ func (a *AuditChain) Records(ctx context.Context, chain string) (_ []auditchain.
 	return out, nil
 }
 
-// Verify walks chain in insertion order (auditchain.Verify): the id of the
-// first entry whose link is wrong ("" = intact) and the count verified.
+// Verify walks chain in insertion order (auditchain.Verify), then checks
+// the newest entry against the head anchor (see the file comment): the id
+// of the first entry found wrong ("" = intact; the anchored id when the
+// newest entries were deleted) and the count verified.
 func (a *AuditChain) Verify(ctx context.Context, chain string) (string, int, error) {
 	recs, err := a.Records(ctx, chain)
 	if err != nil {
 		return "", 0, err
 	}
 	broken, n := auditchain.Verify(recs)
+	if broken != "" {
+		return broken, n, nil
+	}
+	anc, has, err := readAnchor(a.db.QueryRowContext(ctx, auditAnchorGet, chain))
+	if err != nil {
+		return "", 0, err
+	}
+	broken, n = checkAnchor(recs, anc, has)
 	return broken, n, nil
+}
+
+// anchor is the audit_chain_head row of one chain.
+type anchor struct {
+	pos  int64
+	id   string
+	hash string
+}
+
+// checkAnchor compares the newest of recs (already link-verified) with the
+// anchor: ("", len) when they agree or the chain and anchor are both empty.
+func checkAnchor(recs []auditchain.Record, anc anchor, has bool) (string, int) {
+	n := len(recs)
+	switch {
+	case n == 0 && !has:
+		return "", 0
+	case n == 0:
+		return anc.id, 0 // every entry deleted
+	case !has:
+		return recs[n-1].ID, n - 1 // no anchor: the newest entry is unproven
+	case int64(n) < anc.pos:
+		return anc.id, n // the newest entries were deleted
+	case int64(n) > anc.pos || recs[n-1].ID != anc.id || auditchain.Hash(recs[n-1]) != anc.hash:
+		return recs[n-1].ID, n - 1
+	}
+	return "", n
+}
+
+// readAnchor scans one auditAnchorGet row (has false: no anchor).
+func readAnchor(row *sql.Row) (anchor, bool, error) {
+	var anc anchor
+	err := row.Scan(&anc.pos, &anc.id, &anc.hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return anchor{}, false, nil
+	}
+	if err != nil {
+		return anchor{}, false, dbErr("audit chain: read the head anchor", err)
+	}
+	return anc, true, nil
+}
+
+// headAnchored reports whether the anchor may move with the next write:
+// the chain is empty with no anchor, or its head (pos, record) is exactly
+// the anchored one. Anything else is a tamper the anchor keeps showing.
+func headAnchored(ctx context.Context, tx *sql.Tx, chain string, pos int64, head auditchain.Record) (bool, error) {
+	anc, has, err := readAnchor(tx.QueryRowContext(ctx, auditAnchorGet, chain))
+	if err != nil {
+		return false, err
+	}
+	if !has {
+		return pos == 0, nil
+	}
+	return pos > 0 && anc.pos == pos && anc.id == head.ID && anc.hash == auditchain.Hash(head), nil
+}
+
+// setAnchor records r at pos as chain's newest entry.
+func setAnchor(ctx context.Context, tx *sql.Tx, chain string, pos int64, r auditchain.Record) error {
+	if _, err := tx.ExecContext(ctx, auditAnchorSet, chain, pos, r.ID, auditchain.Hash(r)); err != nil {
+		return dbErr("audit chain: move the head anchor", err)
+	}
+	return nil
 }
 
 // chainHead is the last position of chain and its record (0 when empty).
