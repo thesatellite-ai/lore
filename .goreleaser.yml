@@ -77,6 +77,9 @@ release:
 # HOMEBREW_TAP_GITHUB_TOKEN (PAT with contents:write on the tap repo) —
 # the default GITHUB_TOKEN cannot push to a different repository.
 # Users: `brew install thesatellite-ai/tap/lore`.
+# `brews` stays (GR-1): a formula serves macOS and Linux Homebrew from the
+# shared tap. goreleaser v2.10.0+ reports it as deprecated and `goreleaser
+# check` fails there, so release.yml and the gate pin goreleaser v2.9.0.
 brews:
   - name: lore
     repository:
