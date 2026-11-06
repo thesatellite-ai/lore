@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -77,11 +78,19 @@ type GraphOut struct {
 	Depth int         `json:"depth"`
 	Nodes []GraphNode `json:"nodes"`
 	Links []GraphLink `json:"links,omitempty"`
-	Tree  string      `json:"-"`
+	// Notes: the last good definition warning of each conflicted kind the
+	// index read (RES 3.13).
+	Notes []string `json:"notes,omitempty"`
+	Tree  string   `json:"-"`
 }
 
 // Text implements op.Texter.
-func (o GraphOut) Text() string { return o.Tree }
+func (o GraphOut) Text() string {
+	if len(o.Notes) == 0 {
+		return o.Tree
+	}
+	return o.Tree + strings.Join(o.Notes, "\n") + "\n"
+}
 
 func (o ops) graphOps() []op.Entry {
 	return []op.Entry{
@@ -108,24 +117,37 @@ type resIndex struct {
 	nodes    map[string]resNode
 	out, in  map[string][]resEdge
 	kindByID map[string]string
+	// notes are the RES 3.13 last good warnings of conflicted kinds.
+	notes []string
 }
 
 // buildIndex reads every resource and decodes its ref fields (rule 2:
 // every ref field of every kind counts; fields narrows to some names).
 func (o ops) buildIndex(ctx context.Context, fields []string) (resIndex, error) {
 	idx := resIndex{nodes: map[string]resNode{}, out: map[string][]resEdge{}, in: map[string][]resEdge{}, kindByID: map[string]string{}}
-	kinds, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableKinds)
+	kinds, err := liveDefRows(ctx, o.env, o.env.Stores(), schema.TableKinds)
 	if err != nil {
 		return idx, err
 	}
 	refField := map[string]string{} // fld_ id → name, ref fields only
 	for _, k := range kinds {
-		idx.kindByID[k.Row.ID.String()] = text(k.Row, kName)
-		fs, ferr := o.fieldsOf(ctx, k)
-		if ferr != nil {
-			return idx, ferr
+		// A conflicted kind reads its last good definition (RES 3.13). One
+		// never seen good is skipped with a note: its marked rows are never
+		// used, and one broken kind does not hide every other kind's graph.
+		d, derr := o.kindDefRead(ctx, k.Row.ID.String())
+		if errs.Has(derr, errs.KindConflict) {
+			idx.kindByID[k.Row.ID.String()] = k.Row.ID.String() // its name may hold the markers
+			idx.addNote("warning: skipped kind " + k.Row.ID.String() + " (its ref fields are not walked): " + errMessage(derr))
+			continue
 		}
-		for _, f := range fs {
+		if derr != nil {
+			return idx, derr
+		}
+		idx.kindByID[k.Row.ID.String()] = d.name()
+		for _, n := range d.noteLines() {
+			idx.addNote(n)
+		}
+		for _, f := range d.fieldList() {
 			n := text(f.Row, kName)
 			if text(f.Row, fType) == string(value.KindRef) && (len(fields) == 0 || slices.Contains(fields, n)) {
 				refField[f.Row.ID.String()] = n
@@ -165,6 +187,24 @@ func (o ops) buildIndex(ctx context.Context, fields []string) (resIndex, error) 
 		}
 	}
 	return idx, nil
+}
+
+// addNote keeps one copy of each note (a kind copied into a nearer
+// place is read once per place).
+func (idx *resIndex) addNote(n string) {
+	if !slices.Contains(idx.notes, n) {
+		idx.notes = append(idx.notes, n)
+	}
+}
+
+// errMessage is err's message without its code (the error itself when it
+// is not an errs.Error).
+func errMessage(err error) string {
+	var e *errs.Error
+	if errors.As(err, &e) {
+		return e.Message
+	}
+	return err.Error()
 }
 
 // label is "<kind> <name>" of a node, or "? <id> (not in this view)".
@@ -324,7 +364,7 @@ func (o ops) resGraph(ctx context.Context, in GraphIn) (GraphOut, error) {
 		return GraphOut{}, err
 	}
 	nodes, tree := idx.walk(root.Row.ID.String(), walkOpts{up: in.Up, noArchived: in.NoArchived, depth: depth})
-	return GraphOut{Root: root.Row.ID.String(), Depth: depth, Nodes: nodes, Tree: tree}, nil
+	return GraphOut{Root: root.Row.ID.String(), Depth: depth, Nodes: nodes, Notes: idx.notes, Tree: tree}, nil
 }
 
 // resImpact: graph --up as a list by hops, then the open tasks and
@@ -371,7 +411,7 @@ func (o ops) resImpact(ctx context.Context, in ImpactIn) (GraphOut, error) {
 		}
 		b.WriteString("  open  " + strings.Join(parts, ", ") + "\n")
 	}
-	return GraphOut{Root: rootID, Depth: depth, Nodes: nodes, Links: links, Tree: b.String()}, nil
+	return GraphOut{Root: rootID, Depth: depth, Nodes: nodes, Links: links, Notes: idx.notes, Tree: b.String()}, nil
 }
 
 func nodeIDs(ns []GraphNode) []string {

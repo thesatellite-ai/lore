@@ -38,8 +38,11 @@ type AdoptIn struct {
 type AdoptOut struct {
 	Kinds  []string `json:"kinds"`
 	Fields int      `json:"fields"`
-	Store  string   `json:"store"`
-	Human  string   `json:"-"`
+	// Skipped: each kind (with its field rows) or lone field row left in
+	// --from because a row holds conflict markers (RES 3.13).
+	Skipped []string `json:"skipped,omitempty"`
+	Store   string   `json:"store"`
+	Human   string   `json:"-"`
 }
 
 // Text implements op.Texter.
@@ -62,12 +65,17 @@ type RehomeItem struct {
 type RehomeOut struct {
 	Clashes []string     `json:"clashes"`
 	Missing []RehomeItem `json:"missing"`
-	Store   string       `json:"store"`
+	// Notes: one warning per kind skipped for conflict markers (RES 3.13).
+	Notes []string `json:"notes,omitempty"`
+	Store string   `json:"store"`
 }
 
 // Text implements op.Texter.
 func (o RehomeOut) Text() string {
 	var b strings.Builder
+	for _, n := range o.Notes {
+		b.WriteString(n + "\n")
+	}
 	if len(o.Clashes) == 0 && len(o.Missing) == 0 {
 		fmt.Fprintf(&b, "✓ every kind and ref of %s is visible from here\n", place(store.Source(o.Store)))
 		return b.String()
@@ -109,14 +117,19 @@ func (o ops) adopt(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 	if from == to {
 		return AdoptOut{}, errs.New(errs.InvalidInput, "--from and --to name the same place")
 	}
-	kinds, err := liveRows(ctx, o.env, []store.Source{from}, schema.TableKinds)
+	kinds, err := liveDefRows(ctx, o.env, []store.Source{from}, schema.TableKinds)
 	if err != nil {
 		return AdoptOut{}, err
 	}
-	fields, err := liveRows(ctx, o.env, []store.Source{from}, schema.TableKindFields)
+	fields, err := liveDefRows(ctx, o.env, []store.Source{from}, schema.TableKindFields)
 	if err != nil {
 		return AdoptOut{}, err
 	}
+	// RES 3.13: a kind or field row with conflict markers refuses every
+	// write of its kind, and moving it is one: such a kind stays where it
+	// is with all its field rows (never split from them), is named in
+	// Skipped, and the clean kinds move.
+	kinds, fields, skipped := skipConflicted(kinds, fields)
 	have, err := liveRows(ctx, o.env, []store.Source{to}, schema.TableKinds)
 	if err != nil {
 		return AdoptOut{}, err
@@ -135,6 +148,11 @@ func (o ops) adopt(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 			WithHint("rename one of the kinds first (lore resource kind rename); nothing written")
 	}
 	if len(kinds) == 0 && len(fields) == 0 {
+		if len(skipped) > 0 {
+			return AdoptOut{}, errs.New(errs.KindConflict, "resource adopt: "+strings.Join(skipped, "; ")+
+				"; writes of a conflicted kind are refused until it is resolved; nothing moved").
+				WithHint("resolve the conflict in the row file, then run lore sync")
+		}
 		return AdoptOut{}, errs.New(errs.NotFound, "no kind or field rows in "+string(from))
 	}
 	if err = bulk.Ask(ctx, fmt.Sprintf("move %d kinds (%s) and %d field rows from %s into %s?", len(kinds), strings.Join(names, ", "), len(fields), from, place(to))); err != nil {
@@ -145,8 +163,39 @@ func (o ops) adopt(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 			return AdoptOut{}, err
 		}
 	}
-	return AdoptOut{Kinds: append([]string{}, names...), Fields: len(fields), Store: string(to),
-		Human: fmt.Sprintf("✓ adopted %d kinds (%s) and %d field rows from %s into %s; ids unchanged\n", len(kinds), strings.Join(names, ", "), len(fields), from, place(to))}, nil
+	human := fmt.Sprintf("✓ adopted %d kinds (%s) and %d field rows from %s into %s; ids unchanged\n", len(kinds), strings.Join(names, ", "), len(fields), from, place(to))
+	for _, sk := range skipped {
+		human += "warning: skipped " + sk + "; resolve it, then adopt again\n"
+	}
+	return AdoptOut{Kinds: append([]string{}, names...), Fields: len(fields), Skipped: skipped, Store: string(to), Human: human}, nil
+}
+
+// skipConflicted splits adopt's rows (RES 3.13): a kind whose kind row or
+// any field row holds conflict markers keeps all its rows out of the move
+// and is described in skipped; a marked field row whose kind is not among
+// kinds is skipped alone. kinds and fields keep their order.
+func skipConflicted(kinds, fields []located) (keepK, keepF []located, skipped []string) {
+	bad := map[string]bool{}
+	for _, k := range kinds {
+		kid := k.Row.ID.String()
+		if m := markedRows(k, where(fields, map[string]string{fKindID: kid})); len(m) > 0 {
+			bad[kid] = true
+			skipped = append(skipped, "kind "+text(k.Row, kName)+" ("+strings.Join(m, ", ")+" holds conflict markers)")
+			continue
+		}
+		keepK = append(keepK, k)
+	}
+	for _, f := range fields {
+		if bad[text(f.Row, fKindID)] {
+			continue
+		}
+		if m := markedRows(f, nil); len(m) > 0 {
+			skipped = append(skipped, "field row "+m[0]+" (holds conflict markers)")
+			continue
+		}
+		keepF = append(keepF, f)
+	}
+	return keepK, keepF, skipped
 }
 
 // rehome reports what the place's resources can no longer see after its
@@ -163,8 +212,23 @@ func (o ops) rehome(ctx context.Context, in RehomeIn) (RehomeOut, error) {
 	}
 	byName := map[string][]located{}
 	visible := map[string]located{}
+	// conflictedKinds: kinds with a row holding conflict markers (RES 3.13).
+	// They stay visible (their resources do not count as missing a kind),
+	// but their marked rows are never used: no name clash, no ref check.
+	conflictedKinds := map[string]bool{}
 	for _, k := range kinds {
 		visible[k.Row.ID.String()] = k
+		raw, ferr := o.rawFieldsOf(ctx, k)
+		if ferr != nil {
+			return RehomeOut{}, ferr
+		}
+		if m := markedRows(k, raw); len(m) > 0 {
+			if !conflictedKinds[k.Row.ID.String()] {
+				out.Notes = append(out.Notes, "warning: skipped kind "+k.Row.ID.String()+": "+strings.Join(m, ", ")+" holds conflict markers; its refs are not checked")
+			}
+			conflictedKinds[k.Row.ID.String()] = true
+			continue
+		}
 		byName[text(k.Row, kName)] = append(byName[text(k.Row, kName)], k)
 	}
 	for name, ks := range byName {
@@ -194,6 +258,9 @@ func (o ops) rehome(ctx context.Context, in RehomeIn) (RehomeOut, error) {
 		if !ok {
 			item.What, item.ID = "kind", text(r.Row, rKind)
 			out.Missing = append(out.Missing, item)
+			continue
+		}
+		if conflictedKinds[k.Row.ID.String()] {
 			continue
 		}
 		raw, ferr := o.rawFieldsOf(ctx, k)

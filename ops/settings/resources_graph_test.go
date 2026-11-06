@@ -6,6 +6,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/ops/settings"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // TestResourceGraphImpact: graph --down / --up over every ref field, a
@@ -41,5 +42,36 @@ func TestResourceGraphImpact(t *testing.T) {
 	h.MustYes(settings.OpResEdit, `{"id":"loop_a","set":["parent=loop_b"]}`)
 	if c := opstest.Text(h.Must(settings.OpResGraph, `{"id":"loop_a"}`)); !strings.Contains(c, "parent  host loop_a   (cycle)") {
 		t.Fatalf("cycle:\n%s", c)
+	}
+}
+
+// TestResourceGraphConflictedKind (RES 3.13): a kind whose row holds
+// conflict markers is walked with its last good definition and a note
+// naming it; on a machine that never saw it good it is skipped with a
+// note, and the rest of the graph still answers.
+func TestResourceGraphConflictedKind(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
+	h.MustYes(settings.OpKindAdd, `{"kind":"service"}`)
+	h.MustYes(settings.OpFieldAdd, `{"kind":"service","field":"runs_on","type":"ref","ref_kind":"host"}`)
+	h.MustYes(settings.OpResAdd, `{"kind":"host","name":"hub_prod"}`)
+	h.MustYes(settings.OpResAdd, `{"kind":"service","name":"hub_api","set":["runs_on=hub_prod"]}`)
+	h.Must(settings.OpResGraph, `{"id":"hub_prod","up":true}`)
+	kid := kindID(t, h, "service")
+	markRow(t, h, schema.TableKinds, kid)
+	warm := h.Reopen()
+	up := opstest.Text(warm.Must(settings.OpResGraph, `{"id":"hub_prod","up":true}`))
+	if !strings.Contains(up, "runs_on ← service hub_api") || !strings.Contains(up, "showing its last good definition") || !strings.Contains(up, kid) {
+		t.Errorf("warm graph:\n%s", up)
+	}
+	cold := h.ReopenCold()
+	res := cold.Must(settings.OpResGraph, `{"id":"hub_prod","up":true}`)
+	s := opstest.Text(res)
+	if !strings.Contains(s, "skipped kind "+kid) || strings.Contains(s, "runs_on ←") || strings.Contains(s, "<<<<<<<") {
+		t.Errorf("cold graph:\n%s", s)
+	}
+	if imp := opstest.Text(cold.Must(settings.OpResImpact, `{"id":"hub_prod"}`)); !strings.Contains(imp, "skipped kind "+kid) {
+		t.Errorf("cold impact:\n%s", imp)
 	}
 }

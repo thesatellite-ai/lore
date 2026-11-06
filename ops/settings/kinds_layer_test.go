@@ -1,11 +1,15 @@
 package settings_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/settings"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // TestKindLayering: an org kind is extended from a nearer folder (a new field and
@@ -66,5 +70,40 @@ func TestAdoptAndRehome(t *testing.T) {
 	}
 	if got := h.JSON(h.Must(settings.OpResRehome, `{}`)); !strings.Contains(got, `"clashes":[]`) {
 		t.Errorf("rehome %s", got)
+	}
+}
+
+// TestAdoptSkipsConflictedKind (RES 3.13): adopt leaves a kind whose kind
+// row holds conflict markers where it is, with its field rows, names it in
+// skipped, and still moves the clean kind; rehome skips the conflicted
+// kind with a note instead of reading its marked rows.
+func TestAdoptSkipsConflictedKind(t *testing.T) {
+	t.Parallel()
+	h := multiStore(t)
+	h.MustYes(settings.OpKindAdd, `{"kind":"svc"}`)
+	h.MustYes(settings.OpFieldAdd, `{"kind":"svc","field":"port","type":"number"}`)
+	h.MustYes(settings.OpKindAdd, `{"kind":"box"}`)
+	h.MustYes(settings.OpFieldAdd, `{"kind":"box","field":"os","type":"text"}`)
+	h.Must(settings.OpKinds, `{}`)
+	bad := kindID(t, h, "box")
+	markRow(t, h, schema.TableKinds, bad)
+	h = h.Reopen()
+	reh := h.Must(settings.OpResRehome, `{}`)
+	if j := h.JSON(reh); !strings.Contains(j, "skipped kind "+bad) || !strings.Contains(j, `"clashes":[]`) {
+		t.Errorf("rehome with a conflicted kind %s", j)
+	}
+	if s := opstest.Text(reh); strings.Contains(s, "<<<<<<<") {
+		t.Errorf("rehome used the marked row: %s", s)
+	}
+	out := h.JSON(h.MustYes(settings.OpResAdopt, `{"from":"repo","to":"kb/org"}`))
+	if !strings.Contains(out, `"kinds":["svc"]`) || !strings.Contains(out, `"fields":1`) || !strings.Contains(out, "kind box ("+bad) {
+		t.Fatalf("adopt %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(h.Repo, ".lore", "data", schema.TableKinds, bad+".json")); err != nil {
+		t.Errorf("the conflicted kind row left the repo: %v", err)
+	}
+	// only the conflicted kind is left: nothing to move, refused naming it
+	if msg := h.Fails(settings.OpResAdopt, `{"from":"repo","to":"kb/org"}`, errs.KindConflict); !strings.Contains(msg, bad) {
+		t.Errorf("adopt of only a conflicted kind: %s", msg)
 	}
 }
