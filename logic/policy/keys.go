@@ -387,7 +387,7 @@ func Keys() []KeyDef {
 			Doc: "when a parent's last open sub-task closes: off, suggest (print the close command) or on (close it in the same write) (TSQ2)"},
 		// TSQ4: a unit has no "stricter"; a declared order (points, hours, days) so levels join.
 		{Key: KeyTasksEstimateUnit, Shape: ShapeRank, Choices: []string{"points", "hours", "days"}, Default: mustText("points"),
-			Doc: "unit of a task's estimate: points, hours or days (TSQ4)"},
+			Doc: "unit of a task's estimate: points or hours (TSQ4; days is read on rows from an earlier build, never set: OWNERQ-21)"},
 		// OV12-2: auto watching is the flag's strict value (more people told).
 		{Key: KeyTasksAutoWatch, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(true),
 			Doc: "creators and assignees watch a task by default (TASK 14.4)"},

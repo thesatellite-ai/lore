@@ -212,12 +212,16 @@ func TestEstimateUnitNote(t *testing.T) {
 	}
 	h.Seed("tasks", map[string]string{"title": `"a"`, "estimate": `"3"`})
 	h.Seed("tasks", map[string]string{"title": `"b"`})
-	h.Fails(settings.OpPolicySet, setIn("tasks.estimate_unit", "days", ""), errs.NeedsConfirm)
-	got := opstest.Text(h.MustYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "days", "")))
-	if !strings.Contains(got, "1 task estimate(s) "+line+": they now read as days, not hours") {
+	// OWNERQ-21: days is never set any more (stored rows still read)
+	if _, err := h.RunYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "days", "")); !errs.Has(err, errs.InvalidInput) {
+		t.Fatalf("policy set tasks.estimate_unit days: %v, want E_INVALID_INPUT", err)
+	}
+	h.Fails(settings.OpPolicySet, setIn("tasks.estimate_unit", "points", ""), errs.NeedsConfirm)
+	got := opstest.Text(h.MustYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "points", "")))
+	if !strings.Contains(got, "1 task estimate(s) "+line+": they now read as points, not hours") {
 		t.Fatalf("unit change: %q", got)
 	}
-	if got = opstest.Text(h.MustYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "days", ""))); strings.Contains(got, line) {
+	if got = opstest.Text(h.MustYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "points", ""))); strings.Contains(got, line) {
 		t.Fatalf("same unit again, got a note: %q", got)
 	}
 }

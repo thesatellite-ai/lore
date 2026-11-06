@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/estimate"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -215,6 +216,13 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	v, err := policyValue(d, in.Value)
 	if err != nil {
 		return RowOut{}, err
+	}
+	if d.Key == policy.KeyTasksEstimateUnit && display(v) == string(estimate.Days) {
+		// OWNERQ-21: no day unit. "days" stays a choice only so a policy
+		// row written by an earlier build still reads (its estimates read,
+		// new ones are refused); nothing sets it any more.
+		return RowOut{}, errs.New(errs.InvalidInput, "policy set tasks.estimate_unit: days is not a unit any more (estimates are points or hours; OWNERQ-21)").
+			WithHint("lore policy set tasks.estimate_unit hours (hours also take 90m), or points")
 	}
 	level := storeLevel(o.env, target)
 	if _, err = policy.Resolve([]policy.Entry{{Level: level, Key: d.Key, Value: v}}); err != nil {
