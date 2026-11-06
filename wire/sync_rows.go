@@ -222,8 +222,15 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 		}
 		return out, serr
 	}
+	if len(out.Lines) == 0 && len(out.Data.Stores) == 0 {
+		out.Lines = []string{syncAlreadyInSync} // v0.1.17: nothing landed, no store, nothing written
+	}
 	return out, nil
 }
+
+// syncAlreadyInSync is v0.1.17's line for a `lore sync` with nothing to do
+// (stdout only; the --json report is unchanged).
+const syncAlreadyInSync = "· already in sync"
 
 // storeRefusalNext is the next step of a refused store push.
 const storeRefusalNext = "the commits wait in the local clone: fix what the store's push rule names (or ask its owner), then run `lore sync`"
