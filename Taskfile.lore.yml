@@ -281,6 +281,13 @@ tasks:
     cmds:
       - go test ./saas/pkg/aicoder/lsync/ -run xxx -bench . -benchtime 3x
 
+  bench:meta:
+    desc: "Metadata cache bench (METADATA 4, OQ6): generated store, rows x 20 keys; fails when first build, cache size or a warm two-filter search exceed the gate in metabench_test.go. ROWS=N overrides the row count"
+    vars:
+      ROWS: '{{.ROWS | default ""}}'
+    cmds:
+      - LORE_BENCH_META=1 {{if .ROWS}}LORE_BENCH_META_ROWS={{.ROWS}} {{end}}go test ./adapters/cache/sqlite/ -run '^TestMetaBench$' -v -timeout 60m
+
   test:cover:
     desc: "Coverage of unit AND end-to-end tests (the e2e binary is built with -cover); lists functions no test reaches"
     cmds:
