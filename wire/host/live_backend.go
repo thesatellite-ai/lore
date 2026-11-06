@@ -215,7 +215,7 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 			return ch.Row, nil
 		}
 	}
-	if s == nil || !liveReadable(s, table) {
+	if s == nil || !readsLive(s, table) {
 		return b.inner.Get(ctx, table, id)
 	}
 	_, files, err := b.liveFiles(ctx, s)
@@ -268,7 +268,7 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 	}
 	lives := map[store.Key]store.Row{}
 	for k, f := range files {
-		if !liveReadable(s, row.Table(k.Table)) {
+		if !readsLive(s, row.Table(k.Table)) {
 			continue
 		}
 		lr, err := liveStoreRow(k, f)
@@ -399,6 +399,13 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 			return ferr
 		}
 		liveRows[k] = f
+	}
+	// F-MOVE-2b: rows the live rows point at that only this work tree
+	// holds ride with them (companions), so no teammate meets a dangling id.
+	if len(liveRows) > 0 {
+		if err = b.carryUnlanded(ctx, s, files, liveRows, changes, now); err != nil {
+			return err
+		}
 	}
 	// F16: the live ref and the branch of a client repo are readable by the
 	// client. Checked before any row of the batch is written, so a refusal

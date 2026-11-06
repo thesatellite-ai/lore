@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/clock"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -99,6 +100,9 @@ type liveSession struct {
 	// run carries them (FLAG6); companionInner writes any left over.
 	companions     map[live.RowKey]store.Change
 	companionInner store.Backend
+	// targets caches refTargets (F-MOVE-2b): the tables a carried
+	// companion may belong to.
+	targets map[row.Table]bool
 	// atomicMark is the local live ref before a coordination write put its
 	// rows there for the atomic signals push (live_stage.go); atomicOpen
 	// while that push is not confirmed.
