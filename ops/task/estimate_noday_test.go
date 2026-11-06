@@ -28,7 +28,13 @@ func TestEstimateNoDayUnit(t *testing.T) {
 			t.Fatalf("%s: a refused estimate wrote a row", unit)
 		}
 	}
-	h.MustYes("policy.set", `{"key":"tasks.estimate_unit","value":"days"}`)
+	// a policy row from an earlier build: policy set refuses days now
+	// (OWNERQ-21, G-META-8), so the legacy row is seeded as it is stored,
+	// in a repo that has no estimate_unit row yet (a seed over the hours
+	// row above would be a stale write)
+	h = opstest.New(t, repoClient(false))
+	kept = add(h, "estimated before", `"estimate":"3"`)
+	h.Seed("policies", map[string]string{"key": `"tasks.estimate_unit"`, "value": `"days"`, "scope": `"repo"`})
 	for _, raw := range []string{"2", "2d", "16h"} {
 		_, err := h.Run(opstask.OpAdd, `{"title":"x","estimate":"`+raw+`"}`)
 		if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "no day unit") || !strings.Contains(hintOf(err), "tasks.estimate_unit hours") {

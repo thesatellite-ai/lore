@@ -22813,7 +22813,7 @@
       },
       "patch": {
         "operationId": "meta.edit",
-        "summary": "Edit a metadata key (strict, internal, allowed values)",
+        "summary": "Edit a metadata key (strict, internal, allowed values, type)",
         "tags": [
           "meta"
         ],
@@ -22836,6 +22836,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "all": {
+                    "type": "boolean",
+                    "description": "with --type: list every converted value"
+                  },
                   "context": {
                     "type": "string",
                     "description": "index: count this key's rows in the rendered available-knowledge index; none clears"
@@ -22852,9 +22856,17 @@
                     "type": "boolean",
                     "description": "new writes warn (refused on a strict key)"
                   },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --type: report what converts and what does not fit, write nothing"
+                  },
                   "internal": {
                     "type": "boolean",
                     "description": "mark it internal"
+                  },
+                  "keep_as_text": {
+                    "type": "boolean",
+                    "description": "with --type: keep values that do not fit as text values instead of refusing"
                   },
                   "label": {
                     "type": "string",
@@ -22916,6 +22928,10 @@
                     "type": "boolean",
                     "description": "turn mismatches into refusals"
                   },
+                  "type": {
+                    "type": "string",
+                    "description": "change the key's type and convert every stored value (asks; nothing written while a value does not fit)"
+                  },
                   "value_label": {
                     "type": "array",
                     "description": "label an allowed value: name=label (repeatable)",
@@ -22973,7 +22989,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_META_KEY, E_META_TYPE",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_META_KEY, E_META_TYPE, E_META_VALUE",
             "content": {
               "application/json": {
                 "schema": {
@@ -47222,6 +47238,23 @@
                         "dir": {
                           "type": "string"
                         },
+                        "folder": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ]
+                        },
                         "git": {
                           "type": "object",
                           "properties": {
@@ -47295,6 +47328,7 @@
                         }
                       },
                       "required": [
+                        "folder",
                         "repo",
                         "project",
                         "git",
@@ -56407,19 +56441,10 @@
                     "name": {
                       "type": "string"
                     },
-                    "personal": {
-                      "type": "boolean"
-                    },
-                    "reach": {
-                      "type": "string"
-                    },
                     "read_only": {
                       "type": "boolean"
                     },
                     "url": {
-                      "type": "string"
-                    },
-                    "visibility": {
                       "type": "string"
                     }
                   },
@@ -56724,7 +56749,7 @@
                 "properties": {
                   "url": {
                     "type": "string",
-                    "description": "the store url whose clone this machine drops"
+                    "description": "the store url (or a store name this repo attaches) whose clone this machine drops"
                   }
                 },
                 "required": [
@@ -56995,7 +57020,7 @@
                   },
                   "url": {
                     "type": "string",
-                    "description": "the store url (any form a configured store uses)"
+                    "description": "the store url (any form a configured store uses) or a store name this repo attaches"
                   }
                 },
                 "required": [
@@ -57154,19 +57179,10 @@
                     "name": {
                       "type": "string"
                     },
-                    "personal": {
-                      "type": "boolean"
-                    },
-                    "reach": {
-                      "type": "string"
-                    },
                     "read_only": {
                       "type": "boolean"
                     },
                     "url": {
-                      "type": "string"
-                    },
-                    "visibility": {
                       "type": "string"
                     }
                   },
@@ -60484,6 +60500,16 @@
           },
           "409": {
             "description": "E_READ_ONLY, E_STALE, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -72266,7 +72292,7 @@
     "/v1/tasks/export": {
       "post": {
         "operationId": "task.export",
-        "summary": "Export tasks as CSV, JSON (the import shape) or Markdown",
+        "summary": "Export tasks as CSV, JSON (the import shape), Markdown or a GitHub issue list",
         "tags": [
           "task"
         ],
@@ -72279,7 +72305,7 @@
                 "properties": {
                   "format": {
                     "type": "string",
-                    "description": "csv | json | markdown (default json); json is the shape task import --from json reads"
+                    "description": "csv | json | markdown | github (default json); json is the shape task import --from json reads; github is an issue list for gh scripts"
                   },
                   "internal": {
                     "type": "boolean",

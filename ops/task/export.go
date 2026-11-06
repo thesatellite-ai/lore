@@ -1,6 +1,6 @@
 package task
 
-// lore task export --format csv|json|markdown [--where …] [--tree] (TASK 19.2)
+// lore task export --format csv|json|markdown|github [--where …] [--tree] (TASK 19.2)
 //
 //	export ─► matchWhere (every task, or the --where set)
 //	       ─► json: the exact shape task import --from json reads (round trip;
@@ -44,10 +44,14 @@ const (
 	FormatCSV      = "csv"
 	FormatJSON     = "json"
 	FormatMarkdown = "markdown"
+	// FormatGitHub is a JSON array of issues ready for `gh` scripts
+	// (19.2, G-TASK-2): a file only; nothing is sent anywhere (task push
+	// is the later connector).
+	FormatGitHub = "github"
 )
 
 // ExportFormats lists the formats.
-func ExportFormats() []string { return []string{FormatCSV, FormatJSON, FormatMarkdown} }
+func ExportFormats() []string { return []string{FormatCSV, FormatJSON, FormatMarkdown, FormatGitHub} }
 
 // Extra CSV columns beyond the import shape.
 const (
@@ -61,7 +65,7 @@ const (
 
 // ExportIn is the input of task.export.
 type ExportIn struct {
-	Format string   `json:"format,omitempty" flag:"format" desc:"csv | json | markdown (default json); json is the shape task import --from json reads"`
+	Format string   `json:"format,omitempty" flag:"format" desc:"csv | json | markdown | github (default json); json is the shape task import --from json reads; github is an issue list for gh scripts"`
 	Where  []string `json:"where,omitempty" flag:"where" desc:"only tasks matching this filter (the task list --where grammar; repeatable)"`
 	Tree   bool     `json:"tree,omitempty" flag:"tree" desc:"markdown: nest sub-tasks under their parent"`
 	// 19.2: the subtree, the checklist and internal fields on request.
@@ -89,7 +93,7 @@ func (o ExportOut) Text() string { return o.Content }
 func exportOps(o ops) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpExport, Summary: "Export tasks as CSV, JSON (the import shape) or Markdown",
+			Name: OpExport, Summary: "Export tasks as CSV, JSON (the import shape), Markdown or a GitHub issue list",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 			Examples: []op.Example{{Title: "export a mission as CSV", CLI: "lore task export --where 'status:todo' --format csv", Want: "title"}},
 		}, o.export),
@@ -139,6 +143,8 @@ func (o ops) export(ctx context.Context, in ExportIn) (ExportOut, error) {
 		content, err = exportCSV(rows, opt)
 	case FormatMarkdown:
 		content = exportMarkdown(rows, in.Tree || in.WithChildren, in.WithChecklist)
+	case FormatGitHub:
+		content, err = exportGitHub(rows, opt)
 	default:
 		content, err = exportJSON(rows, opt)
 	}
@@ -494,4 +500,84 @@ func exportMarkdown(rows []row.Row, tree, checklist bool) string {
 		walkTree(r, 0)
 	}
 	return b.String()
+}
+
+// GitHub issue states and state reasons (the REST issue fields).
+const (
+	ghOpen          = "open"
+	ghClosed        = "closed"
+	ghCompleted     = "completed"
+	ghNotPlanned    = "not_planned"
+	ghLabelPriority = "priority:"
+	ghLabelStatus   = "status:"
+	ghLabelProposed = "proposed"
+)
+
+// ghIssue is one task in the github export (G-TASK-2): the fields of a
+// GitHub issue a `gh issue create` / `gh api` script sets, plus the lore
+// ids so the script can map issues back (parent for sub-issues). No
+// internal or sensitive field, no assignee (lore actors are not GitHub
+// logins).
+type ghIssue struct {
+	LoreID      string   `json:"lore_id"`
+	Parent      string   `json:"parent,omitempty"`
+	Title       string   `json:"title"`
+	Body        string   `json:"body"`
+	State       string   `json:"state"`
+	StateReason string   `json:"state_reason,omitempty"`
+	Labels      []string `json:"labels"`
+	Milestone   string   `json:"milestone,omitempty"`
+	Due         string   `json:"due,omitempty"`
+}
+
+// exportGitHub writes the github export: one issue per task, flat (the
+// parent id names the sub-issue link); --with-checklist appends the
+// checklist to the body as a GitHub task list.
+func exportGitHub(rows []row.Row, opt exportOpt) (string, error) {
+	out := make([]ghIssue, 0, len(rows))
+	for _, r := range rows {
+		status := work.Field(r, work.FieldStatus)
+		is := ghIssue{
+			LoreID: r.ID.String(), Parent: work.Field(r, fieldParent),
+			Title: work.Field(r, work.FieldTitle), Body: work.Field(r, work.FieldBody),
+			State: ghOpen, Labels: []string{},
+			Due: exportDate(r, fieldDue),
+		}
+		switch status {
+		case schema.TaskStatusDone:
+			is.State, is.StateReason = ghClosed, ghCompleted
+		case schema.TaskStatusCancelled:
+			is.State, is.StateReason = ghClosed, ghNotPlanned
+		}
+		if p := work.Field(r, fieldPriority); p != "" {
+			is.Labels = append(is.Labels, ghLabelPriority+p)
+		}
+		if status != "" {
+			is.Labels = append(is.Labels, ghLabelStatus+status)
+		}
+		if work.Field(r, fieldCommitment) == schema.TaskCommitmentProposed {
+			is.Labels = append(is.Labels, ghLabelProposed)
+		}
+		if m := work.Field(r, work.FieldMission); m != "" {
+			is.Milestone = opt.names[m]
+		}
+		if opt.checklist {
+			var b strings.Builder
+			for _, it := range Checklist(r) {
+				b.WriteString("- " + box(it.Done) + " " + it.Text + "\n")
+			}
+			if b.Len() > 0 {
+				if is.Body != "" {
+					is.Body += "\n\n"
+				}
+				is.Body += b.String()
+			}
+		}
+		out = append(out, is)
+	}
+	raw, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "task export: encode github", err)
+	}
+	return string(raw) + "\n", nil
 }
