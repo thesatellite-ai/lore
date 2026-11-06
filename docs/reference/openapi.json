@@ -23938,6 +23938,9 @@
                           "key_id": {
                             "type": "string"
                           },
+                          "label": {
+                            "type": "string"
+                          },
                           "scope": {
                             "type": "string"
                           },
@@ -24129,6 +24132,9 @@
                             "type": "string"
                           },
                           "key_id": {
+                            "type": "string"
+                          },
+                          "label": {
                             "type": "string"
                           },
                           "scope": {
@@ -25873,6 +25879,18 @@
                                 "lead": {
                                   "type": "string"
                                 },
+                                "meta": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "meta_masked": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "mission_id": {
                                   "type": "string"
                                 },
@@ -26315,6 +26333,18 @@
                               },
                               "lead": {
                                 "type": "string"
+                              },
+                              "meta": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta_masked": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "mission_id": {
                                 "type": "string"
@@ -27482,6 +27512,18 @@
                               },
                               "lead": {
                                 "type": "string"
+                              },
+                              "meta": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta_masked": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "mission_id": {
                                 "type": "string"
@@ -61291,7 +61333,7 @@
             }
           },
           "409": {
-            "description": "E_UNSUPPORTED",
+            "description": "E_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -70664,6 +70706,18 @@
                           "lead": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "mission_id": {
                             "type": "string"
                           },
@@ -71489,6 +71543,18 @@
                         },
                         "lead": {
                           "type": "string"
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "mission_id": {
                           "type": "string"
@@ -72432,6 +72498,18 @@
                                 "lead": {
                                   "type": "string"
                                 },
+                                "meta": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "meta_masked": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "mission_id": {
                                   "type": "string"
                                 },
@@ -72702,6 +72780,18 @@
                           },
                           "lead": {
                             "type": "string"
+                          },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "mission_id": {
                             "type": "string"
@@ -73842,6 +73932,18 @@
                           "lead": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "mission_id": {
                             "type": "string"
                           },
@@ -74130,6 +74232,18 @@
                           "lead": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "mission_id": {
                             "type": "string"
                           },
@@ -74402,6 +74516,18 @@
                           },
                           "lead": {
                             "type": "string"
+                          },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "mission_id": {
                             "type": "string"
@@ -74987,6 +75113,18 @@
                         },
                         "lead": {
                           "type": "string"
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "mission_id": {
                           "type": "string"

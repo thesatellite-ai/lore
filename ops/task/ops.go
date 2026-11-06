@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/pointer"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
@@ -916,6 +917,8 @@ func (o ops) viewWith(ctx context.Context, only, project string, state func(row.
 			continue
 		}
 		b := BriefOf(work.LabelerOf(o.env), s.Source, s.Row)
+		mb := metashow.Row(ctx, o.env, s.Row) // METADATA 3.17: list --json rows carry it
+		b.Meta, b.MetaMasked = mb.Meta, mb.MetaMasked
 		if o.deco != nil {
 			o.deco(&b, s.Row)
 		}
@@ -980,6 +983,8 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		return ShowOut{}, err
 	}
 	full := fullOf(work.LabelerOf(o.env), src, r)
+	mb := metashow.Row(ctx, o.env, r) // METADATA 3.17: metadata on every read
+	full.Meta, full.MetaMasked = mb.Meta, mb.MetaMasked
 	if err = o.showTree(ctx, &full, r, in.Tree); err != nil {
 		return ShowOut{}, err
 	}

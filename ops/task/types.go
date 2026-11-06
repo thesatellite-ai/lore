@@ -152,6 +152,11 @@ type Brief struct {
 	Store store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta / MetaMasked are the task's metadata, sensitive values masked
+	// (METADATA 3.17 "metadata on every read", MQ13; metashow.Row): absent
+	// for a task without metadata, so v0.1.17's brief is unchanged.
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 	// Cells are the --columns table cells, in ListOut.Columns order.
 	Cells []string `json:"cells,omitempty"`
 	// Line is the v0.1.17 human list line.
@@ -213,7 +218,12 @@ type Full struct {
 	Relations ShowRelations `json:"relations,omitzero"`
 	// TreeWarnings are E_PARENT_CYCLE warnings of the merged tree (6.13).
 	TreeWarnings []Warning `json:"tree_warnings,omitempty"`
-	CreatedAt    string    `json:"created_at"`
+	// Meta / MetaMasked are the task's metadata as every noun's show prints
+	// it (METADATA 3.17, MQ13, G-META-10: <key>_label beside a labelled
+	// allowed value, sensitive values masked and named in meta_masked).
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
+	CreatedAt  string            `json:"created_at"`
 	// TagIDs is new in 0.1.18 (O11; absent when untagged).
 	TagIDs []string        `json:"tag_ids,omitempty"`
 	Store  store.SourceRef `json:"_source,omitempty,omitzero"`

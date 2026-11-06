@@ -7,6 +7,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/row"
 	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -133,7 +134,9 @@ func withSLAColumn(t Brief) string {
 
 // Text prints v0.1.17's task show: id, the fields, a blank line and the
 // body.
-func (o ShowOut) Text() string { return o.baseText() + rowexpand.Text(o.Expanded, o.ExpandedRefs) }
+func (o ShowOut) Text() string {
+	return o.baseText() + metashow.Text(o.Data.Meta, o.Data.MetaMasked) + rowexpand.Text(o.Expanded, o.ExpandedRefs)
+}
 
 func (o ShowOut) baseText() string {
 	t := o.Data
