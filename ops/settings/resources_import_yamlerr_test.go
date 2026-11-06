@@ -3,6 +3,7 @@ package settings_test
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -40,7 +41,7 @@ func TestResourceImportYAMLWrongKindNamesLineAndKey(t *testing.T) {
 		{"two problems", "resources:\n  - kind: [host]\n    name: [web]\n", []string{"line 2: resources[0].kind: expected text, got a list", "line 3: resources[0].name: expected text, got a list"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			p := filepath.Join(dir, "bad"+string(rune('a'+i))+".yaml")
+			p := filepath.Join(dir, "bad"+strconv.Itoa(i)+".yaml")
 			if err := os.WriteFile(p, []byte(c.body), 0o600); err != nil {
 				t.Fatal(err)
 			}

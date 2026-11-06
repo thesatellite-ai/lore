@@ -25,18 +25,18 @@ func TestFindRow(t *testing.T) {
 	put := func(folder string, id ids.AnyID) {
 		t.Helper()
 		p := filepath.Join(dir, filepath.FromSlash(folder), LoreDir, DataDir, filepath.FromSlash(RowPath(memories, id)))
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
+		if merr := os.MkdirAll(filepath.Dir(p), 0o750); merr != nil {
+			t.Fatal(merr)
 		}
-		if err := os.WriteFile(p, []byte("{}\n"), 0o600); err != nil {
-			t.Fatal(err)
+		if werr := os.WriteFile(p, []byte("{}\n"), 0o600); werr != nil {
+			t.Fatal(werr)
 		}
 	}
 	newID := func() ids.AnyID {
 		t.Helper()
-		id, err := ids.New[ids.Memory]()
-		if err != nil {
-			t.Fatal(err)
+		id, nerr := ids.New[ids.Memory]()
+		if nerr != nil {
+			t.Fatal(nerr)
 		}
 		return id.Any()
 	}
@@ -61,12 +61,12 @@ func TestFindRow(t *testing.T) {
 		if c.folder != "" {
 			put(c.folder, id)
 		}
-		got, found, err := r.FindRow(memories, id)
-		if err != nil || found != c.found || got != c.want {
-			t.Errorf("row in %q: %q found=%v err=%v, want %q found=%v", c.folder, got, found, err, c.want, c.found)
+		got, found, ferr := r.FindRow(memories, id)
+		if ferr != nil || found != c.found || got != c.want {
+			t.Errorf("row in %q: %q found=%v err=%v, want %q found=%v", c.folder, got, found, ferr, c.want, c.found)
 		}
-		if _, found, err = r.FindRow("tasks", id); err != nil || found {
-			t.Errorf("row in %q under another table: found=%v err=%v", c.folder, found, err)
+		if _, found, ferr = r.FindRow("tasks", id); ferr != nil || found {
+			t.Errorf("row in %q under another table: found=%v err=%v", c.folder, found, ferr)
 		}
 	}
 
@@ -83,8 +83,7 @@ func TestFindRow(t *testing.T) {
 	}
 	if err = os.Chmod(locked, 0); err != nil {
 		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(locked, 0o750) }) // let TempDir remove it
+	} // an empty folder: TempDir removes it whatever its mode
 	if _, found, ferr := r.FindRow(memories, newID()); ferr == nil || found || !errs.Has(ferr, errs.Internal) {
 		t.Errorf("an unreadable folder: found=%v err=%v, want an error", found, ferr)
 	}
