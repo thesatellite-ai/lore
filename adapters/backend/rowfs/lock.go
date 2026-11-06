@@ -69,6 +69,9 @@ func acquireFile(ctx context.Context, path string, wait time.Duration) (*fileLoc
 		if err == nil {
 			return l, nil
 		}
+		if errs.CodeOf(err) == errs.SymlinkDB {
+			return nil, err
+		}
 		if !errors.Is(err, errLockBusy) {
 			return nil, errs.Wrap(errs.Internal, "rowfs: take the store lock", err)
 		}
@@ -83,6 +86,22 @@ func acquireFile(ctx context.Context, path string, wait time.Duration) (*fileLoc
 		case <-t.C:
 		}
 	}
+}
+
+// refuseLinkedLock refuses a lock file that is a symbolic link
+// (E_SYMLINK_DB). Taking the lock truncates the file and writes the holder
+// line into it, and .lore/lock sits inside the repository, where a cloned
+// repository can commit a symlink (a .gitignore entry does not stop a
+// committed file): following it would overwrite whatever file it points
+// at. The per-OS tryLock calls this before opening; on Unix the open also
+// carries O_NOFOLLOW, so a link swapped in after this check still fails.
+func refuseLinkedLock(path string) error {
+	fi, err := os.Lstat(path)
+	if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		return nil // missing: created as a regular file; other errors: the open reports them
+	}
+	return errs.New(errs.SymlinkDB, "rowfs: refusing the store lock "+path+": it is a symbolic link").
+		WithHint("lore never writes its lock through a link; remove " + path + " (lore creates a plain one)")
 }
 
 // lockedErr is the E_STORE_LOCKED error after waiting wait.

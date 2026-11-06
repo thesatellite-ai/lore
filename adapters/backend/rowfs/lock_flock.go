@@ -13,7 +13,10 @@ import (
 // belongs to the open file description, so two handles in one process
 // exclude each other as two processes do.
 func tryLock(path string) (*fileLock, error) {
-	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_RDWR, fileMode)
+	if err := refuseLinkedLock(path); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, fileMode)
 	if err != nil {
 		return nil, err
 	}

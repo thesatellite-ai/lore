@@ -26,6 +26,9 @@ func lockOverlapped() *windows.Overlapped {
 
 // tryLock opens path and takes an exclusive, non-blocking LockFileEx lock.
 func tryLock(path string) (*fileLock, error) {
+	if err := refuseLinkedLock(path); err != nil {
+		return nil, err
+	}
 	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_RDWR, fileMode)
 	if err != nil {
 		return nil, err
