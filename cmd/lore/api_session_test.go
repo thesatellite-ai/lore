@@ -37,7 +37,7 @@ func apiServer(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := rest.New(app.Registry(), &apiRunner{inner: hosthooks.NewRunner(app, hooks)}, rest.Options{Token: apiTestToken, Actor: actor, LoreVersion: version})
+	srv, err := rest.New(app.Registry(), &apiRunner{inner: hosthooks.NewRunner(app, hooks)}, rest.Options{Token: apiTestToken, Actor: actor, LoreVersion: version, Kinds: apiKinds{app: app}})
 	if err != nil {
 		t.Fatal(err)
 	}
