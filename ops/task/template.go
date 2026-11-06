@@ -16,7 +16,6 @@ package task
 // task tree (11.2).
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/checklist"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -228,11 +228,16 @@ func readTemplateFile(path string) (TemplateFile, error) {
 	if err != nil {
 		return TemplateFile{}, errs.Wrap(errs.InvalidInput, "task template: read "+path, err)
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
-	dec.KnownFields(true)
+	// Strict: a template's keys are all lore's, so a typo is refused with
+	// its line and key path (yamlerr), never yaml's Go type names.
 	var f TemplateFile
-	if err = dec.Decode(&f); err != nil {
-		return TemplateFile{}, errs.Wrap(errs.Template, "task template: "+path+" is not a template YAML form", err)
+	if err = yamlerr.Decode(raw, &f, yamlerr.Strict); err != nil {
+		return TemplateFile{}, errs.Wrap(errs.Template, "task template: "+path+" is not a template YAML form: "+err.Error(), err)
+	}
+	// An empty (or comments-only) file decodes to nothing: refused as
+	// before, rather than saved as a template with an empty tree.
+	if f.Name == "" && f.Description == "" && len(f.Args) == 0 && f.Task.Title == "" && len(f.Task.Children) == 0 {
+		return TemplateFile{}, errs.New(errs.Template, "task template: "+path+" is not a template YAML form: the file is empty")
 	}
 	return f, nil
 }
