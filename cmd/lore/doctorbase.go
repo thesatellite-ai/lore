@@ -17,10 +17,10 @@ import (
 // lateDoctor forwards opsdoctor.Host to the app set after it is built.
 type lateDoctor struct{ app *wire.App }
 
-// Base implements opsdoctor.Host (fix: nothing in the base to repair).
-func (l *lateDoctor) Base(ctx context.Context, _ bool) (opsdoctor.Base, error) {
+// Base implements opsdoctor.Host (fix: the reversed --supersedes links).
+func (l *lateDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) {
 	if l.app == nil {
 		return opsdoctor.Base{}, errs.New(errs.Internal, "doctor host not set")
 	}
-	return l.app.CoreDoctorBase(ctx), nil
+	return l.app.CoreDoctorBase(ctx, fix)
 }

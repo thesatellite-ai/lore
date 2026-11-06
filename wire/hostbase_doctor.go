@@ -59,8 +59,9 @@ const (
 )
 
 // CoreDoctorBase is the doctor base of a binary without lore.db
-// (opsdoctor.Host.Base; fix has nothing to repair here).
-func (a *App) CoreDoctorBase(ctx context.Context) opsdoctor.Base {
+// (opsdoctor.Host.Base); fix repairs reversed --supersedes links after the
+// caller's confirmation (E_NEEDS_CONFIRM without it).
+func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, error) {
 	b := opsdoctor.Base{Status: opsdoctor.StatusHealthy, DBOK: true}
 	warn := func(msg string) {
 		b.Warnings = append(b.Warnings, msg)
@@ -80,8 +81,9 @@ func (a *App) CoreDoctorBase(ctx context.Context) opsdoctor.Base {
 		b.PathConflicts = found
 		warn(fmt.Sprintf(doctorPathWarning, strings.Join(found, ", ")))
 	}
+	a.doctorUnpushedStores(ctx, warn) // hostbase_doctor_stores.go (machine-wide, so outside a project too)
 	if _, err := a.Engine(ctx); err != nil {
-		return b // not a lore project: the project rows have nothing to read
+		return b, nil // not a lore project: the project rows have nothing to read
 	}
 	note := func(msg string) { b.Notes = append(b.Notes, msg) }
 	b.RepoAddresses = a.doctorRepoAddresses(ctx, warn, note)
@@ -91,13 +93,23 @@ func (a *App) CoreDoctorBase(ctx context.Context) opsdoctor.Base {
 	a.doctorSecretRulesOff(ctx, note)
 	a.doctorCIPins(ctx, warn)
 	a.doctorClaudeLocal(ctx, warn)
+	a.doctorSignals(ctx, warn, func(msg string) { b.Warnings = append(b.Warnings, msg) }) // hostbase_doctor_signals.go
 	if pin, floorErr := a.doctorVersionPin(ctx); floorErr != "" {
 		b.Errors = append(b.Errors, floorErr)
 		b.Status = opsdoctor.StatusBroken
 	} else if pin != "" {
 		note(pin)
 	}
-	return b
+	fail := func(msg string) {
+		b.Errors = append(b.Errors, msg)
+		if b.Status == opsdoctor.StatusHealthy {
+			b.Status = opsdoctor.StatusDegraded
+		}
+	}
+	if err := a.doctorSupersedes(ctx, fix, warn, note, fail); err != nil { // hostbase_doctor_supersede.go
+		return opsdoctor.Base{}, err
+	}
+	return b, nil
 }
 
 // doctorRepoAddresses is the "Repo addresses" check (PROV2, Q5): an
@@ -263,7 +275,7 @@ func lorePathBinaries(path string) []string {
 		if seen[p] {
 			continue
 		}
-		info, err := os.Stat(p)
+		info, err := fs.Stat(os.DirFS(dir), name) // name is the fixed binary name: the read stays in dir
 		if err != nil || !info.Mode().IsRegular() || (runtime.GOOS != windowsGOOS && info.Mode().Perm()&execBits == 0) {
 			continue
 		}
@@ -322,7 +334,7 @@ func (a *App) doctorVersionPin(ctx context.Context) (note, floorErr string) {
 	metaRel := rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.MetaFileName
 	pin, source := strings.TrimSpace(os.Getenv(envVersionPin)), envVersionPin
 	if pin == "" {
-		raw, rerr := os.ReadFile(filepath.Join(top, filepath.FromSlash(metaRel)))
+		raw, rerr := fs.ReadFile(os.DirFS(top), metaRel) // a fixed path inside the checkout
 		var m pinMeta
 		if rerr != nil || json.Unmarshal(raw, &m) != nil || strings.TrimSpace(m.Pin) == "" {
 			return "", ""
