@@ -574,7 +574,7 @@ func (o ops) kindShow(ctx context.Context, in KindRef) (KindOut, error) {
 }
 
 func (o ops) kindList(ctx context.Context, in KindsIn) (KindsOut, error) {
-	ks, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableKinds)
+	ks, err := liveDefRows(ctx, o.env, o.env.Stores(), schema.TableKinds)
 	if err != nil {
 		return KindsOut{}, err
 	}

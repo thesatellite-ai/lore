@@ -48,7 +48,7 @@ func nearer(env Env, target, def store.Source) bool {
 // (freshness, RES 3.6: the caller decides whether that matters).
 func (o ops) kindRows(ctx context.Context) (rows []located, unreadable []store.Source, err error) {
 	for _, src := range o.env.Stores() {
-		got, lerr := liveRows(ctx, o.env, []store.Source{src}, schema.TableKinds)
+		got, lerr := liveDefRows(ctx, o.env, []store.Source{src}, schema.TableKinds)
 		if errs.Has(lerr, errs.StoreUnreachable) {
 			unreadable = append(unreadable, src)
 			continue
@@ -132,7 +132,7 @@ func (o ops) kindNameClash(ctx context.Context, name string, target store.Source
 // rawFieldsOf are the live kind_fields rows of kind k (plain and
 // extension rows) in every store, nearest first.
 func (o ops) rawFieldsOf(ctx context.Context, k located) ([]located, error) {
-	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableKindFields)
+	rows, err := liveDefRows(ctx, o.env, o.env.Stores(), schema.TableKindFields)
 	if err != nil {
 		return nil, err
 	}

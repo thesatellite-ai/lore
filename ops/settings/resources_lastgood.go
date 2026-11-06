@@ -32,6 +32,57 @@ type lastGooder interface {
 	LastGoodKind(ctx context.Context, source store.Source, kindID string) (kind row.Row, fields []row.Row, ok bool, err error)
 }
 
+// refusedRower is the optional Env upgrade wire implements (wire
+// RefusedRows): the rows of a table whose files the import refused because
+// a field value holds conflict markers, read as they are on disk. A marked
+// kind or field row never reaches the cache (STORE_SERVER_SPEC 11 rule 2),
+// so without it a conflicted kind would vanish (E_KIND_UNKNOWN) instead of
+// falling back to its last good definition (RES 3.13).
+type refusedRower interface {
+	RefusedRows(ctx context.Context, source store.Source, table row.Table) ([]row.Row, error)
+}
+
+// withRefused adds src's refused-on-import rows of table to rows (its live
+// rows), replacing a cached row of the same id: the file on disk is the
+// truth, and its markers make markedRows name it.
+func withRefused(ctx context.Context, env Env, src store.Source, table row.Table, rows []located) ([]located, error) {
+	rr, ok := upgrade.As[refusedRower](env)
+	if !ok {
+		return rows, nil
+	}
+	refused, err := rr.RefusedRows(ctx, src, table)
+	if err != nil || len(refused) == 0 {
+		return rows, err
+	}
+	out := slices.Clone(rows)
+	for _, r := range refused {
+		if i := slices.IndexFunc(out, func(l located) bool { return l.Row.ID == r.ID }); i >= 0 {
+			out[i] = located{Src: src, Row: r}
+			continue
+		}
+		out = append(out, located{Src: src, Row: r})
+	}
+	return out, nil
+}
+
+// liveDefRows is liveRows for kinds and kind_fields: each store's live
+// rows with its refused-on-import marked rows added (withRefused), so
+// every reader of a kind definition sees a conflicted row and names it.
+func liveDefRows(ctx context.Context, env Env, srcs []store.Source, table row.Table) ([]located, error) {
+	var out []located
+	for _, src := range srcs {
+		got, err := liveRows(ctx, env, []store.Source{src}, table)
+		if err != nil {
+			return nil, err
+		}
+		if got, err = withRefused(ctx, env, src, table, got); err != nil {
+			return nil, err
+		}
+		out = append(out, got...)
+	}
+	return out, nil
+}
+
 // markedRows lists the ids of rows among k and fs whose values hold
 // unresolved conflict markers.
 func markedRows(k located, fs []located) []string {
