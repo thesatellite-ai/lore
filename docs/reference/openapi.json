@@ -10951,7 +10951,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -11072,7 +11072,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -12512,7 +12512,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_NOT_IMPLEMENTED, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_NOT_IMPLEMENTED, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -12624,7 +12624,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -73687,7 +73687,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -76702,7 +76702,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_POLICY_DENIED, E_REFUSED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -76848,7 +76848,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -77358,7 +77358,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_OPEN_ITEMS, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_OPEN_ITEMS, E_POLICY_DENIED, E_REFUSED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -77489,7 +77489,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -77779,7 +77779,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -77922,7 +77922,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -78061,7 +78061,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -78365,7 +78365,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -78486,7 +78486,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
