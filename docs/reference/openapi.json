@@ -982,10 +982,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -1983,6 +1983,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -3174,10 +3186,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -4115,6 +4127,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -6344,10 +6368,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -7300,6 +7324,18 @@
                     "kind": {
                       "type": "string"
                     },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "refs": {
                       "type": "array",
                       "items": {
@@ -7725,10 +7761,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -8815,6 +8851,18 @@
                     "kind": {
                       "type": "string"
                     },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "refs": {
                       "type": "array",
                       "items": {
@@ -9702,6 +9750,10 @@
                   "fix": {
                     "type": "boolean",
                     "description": "repair what doctor can fix safely (reversed --supersedes links, a task lead missing from assignees)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "additionalProperties": false
@@ -9811,6 +9863,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -9972,10 +10034,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -10981,10 +11043,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -11942,6 +12004,18 @@
                     "kind": {
                       "type": "string"
                     },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "refs": {
                       "type": "array",
                       "items": {
@@ -12570,10 +12644,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -13631,6 +13705,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -14851,10 +14937,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -15842,6 +15928,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -18564,10 +18662,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -19682,6 +19780,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -25416,10 +25526,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -29244,10 +29354,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -30301,6 +30411,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -31802,10 +31924,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -33263,10 +33385,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -34256,6 +34378,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -36420,10 +36554,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -37388,6 +37522,18 @@
                     "kind": {
                       "type": "string"
                     },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "refs": {
                       "type": "array",
                       "items": {
@@ -38094,10 +38240,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -47996,10 +48142,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -49113,6 +49259,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -54481,10 +54639,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -55470,6 +55628,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -57820,10 +57990,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -58771,6 +58941,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -68075,10 +68257,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -78607,10 +78789,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -79542,6 +79724,18 @@
                     "kind": {
                       "type": "string"
                     },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "refs": {
                       "type": "array",
                       "items": {
@@ -79894,10 +80088,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -80847,6 +81041,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
@@ -83912,10 +84118,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -84844,6 +85050,18 @@
                     "kind": {
                       "type": "string"
                     },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "refs": {
                       "type": "array",
                       "items": {
@@ -85196,10 +85414,10 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)",
+            "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last",
             "schema": {
               "type": "string",
-              "description": "sort by a metadata key: meta.\u003ckey\u003e, meta.\u003ckey\u003e:asc or meta.\u003ckey\u003e:desc (rows without it last)"
+              "description": "sort by a field (created_at, updated_at or a field of the rows) or a metadata key (meta.\u003ckey\u003e names the key), with :asc or :desc; rows without it last"
             }
           },
           {
@@ -86127,6 +86345,18 @@
                     },
                     "kind": {
                       "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "refs": {
                       "type": "array",
