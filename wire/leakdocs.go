@@ -67,6 +67,13 @@ const (
 // action in the refusal ("landing", "live write"). res is the binary's org
 // resolution (StandaloneOptionsOrg).
 func (a *App) LeakCheckDocs(ctx context.Context, res *OrgResolution, where string, docs map[string][]byte) error {
+	return a.LeakCheckDocsExplain(ctx, res, where, docs, false)
+}
+
+// LeakCheckDocsExplain is LeakCheckDocs whose refusal, with explain, names
+// each finding's rule, its full detail and the internal row's source
+// (`lore check leaks|pr-body --explain`, v0.1.17 leakBlockedError).
+func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, where string, docs map[string][]byte, explain bool) error {
 	if len(docs) == 0 || res == nil {
 		return nil
 	}
@@ -102,7 +109,11 @@ func (a *App) LeakCheckDocs(ctx context.Context, res *OrgResolution, where strin
 	}
 	items := make([]leakcheck.Item, 0, len(docs))
 	for p, b := range docs {
-		items = append(items, leakcheck.Item{Where: where + " " + p, Path: p, Content: b})
+		label := where + " " + p
+		if p == where {
+			label = where // a PR body is one text, named once
+		}
+		items = append(items, leakcheck.Item{Where: label, Path: p, Content: b})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
 	fs := leakcheck.Blocking(a.leakCheckByProject(ctx, items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client})) // per monorepo project folder (leakdocs_projects.go)
@@ -111,9 +122,9 @@ func (a *App) LeakCheckDocs(ctx context.Context, res *OrgResolution, where strin
 		return nil
 	}
 	if moved {
-		return leakBlocked(leakWhereMove, fs)
+		return leakBlocked(leakWhereMove, fs, explain)
 	}
-	return leakBlocked(where, fs)
+	return leakBlocked(where, fs, explain)
 }
 
 // leakWhereMove names a write that carries an internal row to the client
@@ -150,17 +161,23 @@ func withoutSelfMatches(fs []leakcheck.Finding, rows []leakcheck.IndexRow) ([]le
 // leakBlocked is the F16 refusal: one line per finding, the fix as hint
 // (one per finding, by action). A text finding names the internal note it
 // matched by id, never its text.
-func leakBlocked(where string, fs []leakcheck.Finding) error {
+func leakBlocked(where string, fs []leakcheck.Finding, explain bool) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "blocked, this %s would share internal content with the client repo:", where)
 	var hints []string
 	seen := map[string]bool{}
 	for _, f := range fs {
 		detail := f.Detail
-		if f.Rule == leakcheck.RuleText {
+		if f.Rule == leakcheck.RuleText && !explain {
 			detail = fmt.Sprintf("matches internal note %s (%d words)", f.RowID, f.Words)
 		}
+		if explain {
+			detail = fmt.Sprintf("[%s rule] %s %s", f.Rule, detail, f.Label)
+		}
 		fmt.Fprintf(&b, "\n  %-40s %s", f.Where, detail)
+		if f.Rule == leakcheck.RuleActor {
+			continue // its detail says what to remove; `lore actor delete` is refused (v0.1.17 leakFix gives none)
+		}
 		if h := leakFix(where, f.Path); !seen[h] {
 			seen[h] = true
 			hints = append(hints, h)
@@ -176,6 +193,9 @@ func leakBlocked(where string, fs []leakcheck.Finding) error {
 const (
 	LeakWherePush   = "push"
 	LeakWhereCommit = checkWhereCommit
+	// LeakWherePRBody is a pull request body or comment (`lore check
+	// pr-body`, opscheck.WherePRBody).
+	LeakWherePRBody = "PR body"
 )
 
 // leakWritesNothing are the actions refused before anything is written.
@@ -192,6 +212,8 @@ func leakFix(where, path string) string {
 			return fmt.Sprintf("%s (a %s in this repo) is in a commit you are pushing: rewrite that commit without it (git commit --amend, or git rebase), then keep it internal: lore move %s --to <org>", id, singularKind(table), id)
 		}
 		return "Remove the internal text from " + path + " and rewrite the commit(s) that carry it (git commit --amend, or git rebase) before pushing"
+	case LeakWherePRBody:
+		return "Remove the internal text before posting"
 	case LeakWhereCommit:
 		if isRow {
 			k := singularKind(table)

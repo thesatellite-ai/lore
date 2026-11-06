@@ -63,7 +63,7 @@ func (l *standaloneLeaks) CheckText(ctx context.Context, in opscheck.TextIn) err
 	if err != nil {
 		return err
 	}
-	return a.LeakCheckDocs(ctx, l.res, in.Where, map[string][]byte{in.Where: in.Body})
+	return a.LeakCheckDocsExplain(ctx, l.res, in.Where, map[string][]byte{in.Where: in.Body}, in.Explain)
 }
 
 // CheckLeaks implements opscheck.Checker.
@@ -109,7 +109,7 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	if serr := a.HookSecrets(ctx, root, checkWhereCommit, docs); serr != nil {
 		return opscheck.LeaksOut{}, serr
 	}
-	return opscheck.LeaksOut{}, a.LeakCheckDocs(ctx, l.res, checkWhereCommit, docs) // silent when clean
+	return opscheck.LeaksOut{}, a.LeakCheckDocsExplain(ctx, l.res, checkWhereCommit, docs, in.Explain) // silent when clean
 }
 
 // checkCI is F16's CI mode over the checked-out tree's .lore/data.
