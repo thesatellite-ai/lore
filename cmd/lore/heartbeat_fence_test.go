@@ -16,7 +16,12 @@ var fenceTaskID = regexp.MustCompile(`tsk_[0-9a-f]{32}`)
 // installs call the lore on PATH, which is not this build).
 func fenceGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "core.hooksPath=/dev/null"}, args...)...)
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the resolved git binary, every argument its own argv entry, no shell
+	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin, "-C", dir, "-c", "core.hooksPath=/dev/null"}, args...)}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v %s", args, err, out)
 	}

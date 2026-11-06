@@ -65,7 +65,9 @@ func TestMergedStampAsksForTheLiveRef(t *testing.T) {
 	// ref, so the repo needs a reachable origin.
 	bare := t.TempDir()
 	for _, args := range [][]string{{"init", "-q", "--bare", bare}, {"-C", repo, "remote", "add", "origin", bare}} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+		git := gitBinary(t)
+		// the resolved git binary, every argument its own argv entry, no shell
+		if out, err := (&exec.Cmd{Path: git, Args: append([]string{git}, args...)}).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v %s", args, err, out)
 		}
 	}

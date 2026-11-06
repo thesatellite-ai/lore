@@ -46,7 +46,7 @@ func TestDecodeProblems(t *testing.T) {
 		{"unknown key, top level", Strict, "name: a\nnaem: b\n", []string{"line 2: unknown key naem"}},
 		{"unknown key, nested", Strict, "inner:\n  port: 1\n  prot: 2\n", []string{"line 3: unknown key inner.prot"}},
 		{"unknown key, in a list item", Strict, "entries:\n  - name: kb\n    urll: x\n", []string{"line 3: unknown key entries[0].urll"}},
-		{"unknown key, second list item", Strict, "entries:\n  - name: a\n  - name: b\n    nmae: c\n", []string{"line 4: unknown key entries[1].nmae"}},
+		{"unknown key, second list item", Strict, "entries:\n  - name: a\n  - name: b\n    zname: c\n", []string{"line 4: unknown key entries[1].zname"}},
 		{"unknown key with a space", Strict, "my key: 1\n", []string{"line 1: unknown key my key"}},
 		{"unknown key ignored when lenient", Lenient, "naem: b\n", nil},
 		{"text for a whole number", Lenient, "inner:\n  port: soon\n", []string{"line 2: inner.port: expected a whole number, got text"}},

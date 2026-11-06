@@ -22,7 +22,7 @@ func TestTemplateFileTypoNamesLineAndKey(t *testing.T) {
 		body string
 		want string
 	}{
-		{"unknown key, top level", "name: ship\ndescriptoin: x\ntask:\n  title: Ship\n", "line 2: unknown key descriptoin"},
+		{"unknown key, top level", "name: ship\ndescr_x: x\ntask:\n  title: Ship\n", "line 2: unknown key descr_x"},
 		{"unknown key, in the task", head + "  priorty: high\n", "line 4: unknown key task.priorty"},
 		{"unknown key, in a child", head + "  children:\n    - title: a\n    - title: b\n      chekclist: [x]\n", "line 7: unknown key task.children[1].chekclist"},
 		{"unknown key, in an arg", "name: ship\nargs:\n  who:\n    type: string\n    requird: true\n" + "task:\n  title: Ship\n", "line 5: unknown key args.who.requird"},

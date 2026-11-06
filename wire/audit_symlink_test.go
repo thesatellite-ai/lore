@@ -29,7 +29,7 @@ func TestAuditAppendRefusesSymlink(t *testing.T) {
 	if err := appendAuditLine(linked, 0o700, []byte(`{"op":"x"}`)); errs.CodeOf(err) != errs.SymlinkDB {
 		t.Fatalf("append through a symlinked audit file: got %v, want E_SYMLINK_DB", err)
 	}
-	if got, err := os.ReadFile(victim); err != nil || string(got) != keep {
+	if got, err := os.ReadFile(filepath.Clean(victim)); err != nil || string(got) != keep {
 		t.Fatalf("the linked file was written: %q (%v)", got, err)
 	}
 	plain := filepath.Join(dir, "state", "plain.jsonl")
@@ -38,7 +38,7 @@ func TestAuditAppendRefusesSymlink(t *testing.T) {
 			t.Fatalf("append to a regular file: %v", err)
 		}
 	}
-	if got, err := os.ReadFile(plain); err != nil || string(got) != "{\"op\":\"x\"}\n{\"op\":\"x\"}\n" {
+	if got, err := os.ReadFile(filepath.Clean(plain)); err != nil || string(got) != "{\"op\":\"x\"}\n{\"op\":\"x\"}\n" {
 		t.Fatalf("regular file content %q (%v)", got, err)
 	}
 }
