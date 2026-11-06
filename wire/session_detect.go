@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/machine"
 	"github.com/thesatellite-ai/lore/adapters/procwalk"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -130,6 +131,8 @@ func agentPID() int {
 // repo has no project row yet (the write is still audited, only without
 // the link).
 func (a *App) CurrentSession(ctx context.Context) (string, error) {
+	// bookkeeping beside the caller's write: never in its batch (G-ENGINE-3)
+	ctx = engine.SideRecord(ctx)
 	pl, err := a.sessionPlace(ctx)
 	if err != nil {
 		return "", err

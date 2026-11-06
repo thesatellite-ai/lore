@@ -160,6 +160,16 @@ func stageOf(ctx context.Context) *stage {
 	return s
 }
 
+// SideRecord returns ctx for a machine bookkeeping write made while a
+// caller's write runs (cmd/lore's session row, written or touched by the
+// first audit event of a process): its open stage and its bulk action
+// (batch) are hidden, every other value kept, so the bookkeeping row is
+// neither part of the caller's store batch nor listed (and undone, or
+// counted as "changed after the batch") by `lore batch show|undo`.
+func SideRecord(ctx context.Context) context.Context {
+	return context.WithValue(unstaged(ctx), batchKey{}, Batch{})
+}
+
 // InStage reports whether ctx carries an open stage (Staging, not yet
 // committed): a caller that would open its own stage joins this one.
 func InStage(ctx context.Context) bool { return stageOf(ctx) != nil }
