@@ -421,15 +421,33 @@ func (a *App) ListStores(ctx context.Context) ([]opsstores.Entry, error) {
 		return nil, err
 	}
 	var out []opsstores.Entry
+	seen := map[string]bool{}
 	for _, s := range cfg.Stores {
-		out = append(out, opsstores.Entry{Name: string(s.Name), URL: s.URL, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch})
+		seen[string(s.Name)] = true
+		out = append(out, opsstores.Entry{Name: string(s.Name), URL: s.URL, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch, Source: opsstores.SourceStoresFile})
+	}
+	// CLI_REFERENCE 3.21: the stores that come from the repo's org are
+	// listed too, after stores.yaml (which wins a name, renameOrgClashes),
+	// each named by its source (G-CORE-8). Their urls live in the person's
+	// own config, so output that must name nothing (no terminal, CI) hides
+	// them as it hides other internal places (quietOutput).
+	for _, s := range orgStores(ctx, a.opts, top) {
+		if seen[string(s.Name)] {
+			continue
+		}
+		seen[string(s.Name)] = true
+		u := s.URL
+		if quietOutput() {
+			u = redactedText
+		}
+		out = append(out, opsstores.Entry{Name: string(s.Name), URL: u, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch, Source: opsstores.SourceOrg})
 	}
 	mc, err := readMachineConfig(a.opts.Home)
 	if err != nil {
 		return nil, err
 	}
 	if p := mc.personalURL(); p != "" {
-		out = append(out, opsstores.Entry{Name: opsstores.PersonalName, URL: p, Personal: true})
+		out = append(out, opsstores.Entry{Name: opsstores.PersonalName, URL: p, Personal: true, Source: opsstores.SourcePersonal})
 	}
 	return out, nil
 }
@@ -448,6 +466,15 @@ func (a *App) checkUnused(ctx context.Context, name string) error {
 		if string(s.Name) == name {
 			return errs.New(errs.InvalidInput, "store: the name "+name+" is already used in "+attach.FileName).
 				WithHint("pick another name, or `lore store remove " + name + "` first")
+		}
+	}
+	// CLI_REFERENCE 3.21 <name>: a name a store of the repo's org already
+	// answers is taken too (G-CORE-8), else `--to <name>` would mean two
+	// places.
+	for _, s := range rawOrgStores(ctx, a.opts) {
+		if string(s.Name) == name {
+			return errs.New(errs.InvalidInput, "store: the name "+name+" is already used by a store of this repo's org").
+				WithHint("pick another name; `lore store list` shows every name in use")
 		}
 	}
 	return nil

@@ -43,6 +43,16 @@ const (
 	OpFolderAdd = "store.folder.add"
 )
 
+// Where a listed store comes from (Entry.Source).
+const (
+	// SourceStoresFile is the repo's committed .lore/stores.yaml.
+	SourceStoresFile = "stores.yaml"
+	// SourceOrg is the repo's org (its link or patterns in ~/.lore/config.yaml).
+	SourceOrg = "org"
+	// SourcePersonal is personal.store in ~/.lore/config.yaml.
+	SourcePersonal = "personal"
+)
+
 // PersonalName is the reserved name of the personal store (`--to me`).
 const PersonalName = attach.ReservedMe
 
@@ -88,6 +98,10 @@ type Entry struct {
 	Branch string `json:"branch,omitempty"`
 	// Personal marks `me` (from ~/.lore/config.yaml, not stores.yaml).
 	Personal bool `json:"personal,omitempty"`
+	// Source says where the entry comes from (store.list only, CLI_REFERENCE
+	// 3.21 "each named by its source"): SourceStoresFile, SourceOrg or
+	// SourcePersonal.
+	Source string `json:"source,omitempty"`
 	// Visibility and Reach are filled by store.list only (StatusReader).
 	Visibility string `json:"visibility,omitempty"`
 	Reach      Reach  `json:"reach,omitempty"`

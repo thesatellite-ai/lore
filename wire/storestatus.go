@@ -57,7 +57,18 @@ func (a *App) localStoreDir(e opsstores.Entry) (dir string, isGit bool, err erro
 
 // StoreStatus implements opsstores.StatusReader from local reads only.
 // A marker without a visibility reads as internal (CFG4 default).
-func (a *App) StoreStatus(_ context.Context, e opsstores.Entry) opsstores.Status {
+func (a *App) StoreStatus(ctx context.Context, e opsstores.Entry) opsstores.Status {
+	if e.Source == opsstores.SourceOrg && e.URL == redactedText {
+		// ListStores hid an org store's url from quiet output (G-CORE-8):
+		// read the status from the url the org gives that name.
+		top, _ := a.repoTop(ctx) // no top: no renamed clash names to match
+		for _, s := range orgStores(ctx, a.opts, top) {
+			if string(s.Name) == e.Name {
+				e.URL = s.URL
+				break
+			}
+		}
+	}
 	dir, isGit, err := a.localStoreDir(e)
 	if err != nil {
 		if isGit {
