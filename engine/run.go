@@ -90,7 +90,7 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		}
 	}
 	if needsConfirm(spec, in) && !cl.caller.Yes {
-		q, qerr := question(context.WithValue(ctx, callKey{}, cl), entry, in)
+		q, qerr := e.question(context.WithValue(ctx, callKey{}, cl), entry, in)
 		if qerr != nil {
 			return op.Result{}, qerr
 		}
@@ -135,16 +135,49 @@ func needsConfirm(spec op.Spec, in op.Input) bool {
 // (op.Questioner: a preview of what it will do) when it has one, else the
 // operation's words and the row ids and --to target the input names
 // ("memory delete mem_…?", never free text: the question travels in
-// E_NEEDS_CONFIRM's message).
-func question(ctx context.Context, entry op.Entry, in op.Input) (string, error) {
+// E_NEEDS_CONFIRM's message). A generic question is asked only about rows
+// that exist: an id that names no row answers E_NOT_FOUND and a trashed
+// one E_IN_TRASH first, as every lookup does (the lookup matrices), so
+// nobody confirms a write that cannot happen (G-ENGINE-4).
+func (e *Engine) question(ctx context.Context, entry op.Entry, in op.Input) (string, error) {
 	if q, ok := entry.(op.Questioner); ok {
 		s, err := q.Question(ctx, in)
 		if err != nil || s != "" {
 			return s, err
 		}
 	}
-	words := append([]string{strings.ReplaceAll(entry.Spec().Name, ".", " ")}, in.IDArgs()...)
+	args := in.IDArgs()
+	for _, a := range args {
+		if err := e.mustExist(ctx, a); err != nil {
+			return "", err
+		}
+	}
+	words := append([]string{strings.ReplaceAll(entry.Spec().Name, ".", " ")}, args...)
 	return strings.Join(words, " ") + "?", nil
+}
+
+// mustExist is nil when arg is not the id of a registered table's row, or
+// names a live row; else the lookup's answer: E_IN_TRASH for a trashed row,
+// the engine's not-found (or E_PURGED) for any other.
+func (e *Engine) mustExist(ctx context.Context, arg string) error {
+	id, err := ids.ParseAny(arg)
+	if err != nil {
+		return nil
+	}
+	if _, ok := e.reg.ByPrefix(id.Prefix()); !ok {
+		return nil // a bat_ id or another id that is not a row
+	}
+	_, r, gerr := e.Get(ctx, Ref{ID: id})
+	if gerr == nil && !r.Deleted {
+		return nil
+	}
+	if terr := e.InTrash(ctx, Ref{ID: id}); terr != nil {
+		return terr
+	}
+	if gerr != nil {
+		return gerr
+	}
+	return errs.New(errs.NotFound, "engine: "+id.String()+" is deleted")
 }
 
 // confirm settles one question: yes passes; an interactive caller with a
