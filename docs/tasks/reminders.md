@@ -63,13 +63,11 @@ Delete only for mistakes. lore asks first; without a terminal it stops with `E_N
 ```console
 # alice, in website
 $ lore reminder delete rmd_0aae…a61f
-ERROR: [E_NEEDS_CONFIRM] engine: run reminder delete?
+ERROR: [E_NEEDS_CONFIRM] engine: reminder delete rmd_0aae…a61f?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore reminder delete rmd_0aae…a61f --yes
 ✓ rmd_0aae…a61f moved to the trash (restore: lore trash restore rmd_0aae…a61f)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ```
 <!-- /example -->
 

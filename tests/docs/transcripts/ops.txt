@@ -1,7 +1,6 @@
 
 ### doctor
 alice (work/website)$ lore doctor
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 Binary: dev
 
@@ -10,36 +9,41 @@ Binary: dev
   wal_size: 0 bytes
 
 [identity]
-  resolved: 
-  source:   
-  stable:   NO (ephemeral)
+  resolved: human:alice@agency.example
+  source:   git config user.email
+  stable:   yes
 
 Notes:
-  - this build checks the stores only (no lore.db checks)
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000001Z)
+  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
 
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 alice (work/website)$ lore doctor --json | head -8
-this machine only: local safety copies of rows sync removed (never shared)
-{"schema_version":1,"ok":true,"status":"healthy","db_ok":true,"wal_size_bytes":0,"identity":{"resolved":"","source":"","stable":false},"notes":["this build checks the stores only (no lore.db checks)","live: tracking refspec installed, not forced into refs/lore/*","live: last fetch 10s ago","live: post-commit and pre-push hook blocks installed","Team versions (newest save per writer and machine):","  act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000001Z)"],"binary_version":"dev","exit_status":0}
+{
+  "schema_version": 1,
+  "ok": true,
+  "status": "healthy",
+  "db_ok": true,
+  "wal_size_bytes": 0,
+  "identity": {
+    "resolved": "human:alice@agency.example",
 
 ### audit log
 alice (work/website)$ lore rule add --body 'Never put passwords in the code'
-✓ rul_2ad3618e878ebbf527d34d446ef4f891
+✓ rul_7a670ae8548ed05bf57ad29ad0759504
   scope: [master] severity: must
 alice (work/website)$ lore audit log
-2026-11-02T10:00:00Z  rules.write                  rules/rul_2ad3618e878ebbf527d34d446ef4f891  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  memories.write               memories/mem_162df51b7f78b785c97c26b41ea89666  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe984c9b495744c0217776765a28f2  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  policies.write               policies/pol_05e99e22e9e86e96fe4daa7777994603  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  repos.write                  repos/rep_c0f3c11a5724b0cfd74b256190d9b5b8  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  projects.write               projects/prj_76bd560aff0771fab8457dbfa9823f10  by act_7a670ae8548ed05bf57ad29ad0759504
-2026-11-02T10:00:00Z  actors.write                 actors/act_7a670ae8548ed05bf57ad29ad0759504  by act_7a670ae8548ed05bf57ad29ad0759504
+2026-11-02T10:00:00Z  rules.write                  rules/rul_7a670ae8548ed05bf57ad29ad0759504  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  memories.write               memories/mem_162df51b7f78b785c97c26b41ea89666  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe984c9b495744c0217776765a28f2  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  policies.write               policies/pol_05e99e22e9e86e96fe4daa7777994603  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  repos.write                  repos/rep_c0f3c11a5724b0cfd74b256190d9b5b8  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  projects.write               projects/prj_76bd560aff0771fab8457dbfa9823f10  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  actors.write                 actors/act_2ad3618e878ebbf527d34d446ef4f891  by act_2ad3618e878ebbf527d34d446ef4f891
 alice (work/website)$ lore audit verify
 ✓ audit chain intact (7 entries)
 
@@ -55,32 +59,30 @@ alice (work/website)$ lore audit verify
 ### row file edit
 alice (work/website)$ sed -i 's/Run the tests before you push/Pushing without tests is fine/' .lore/data/rules/*.json && lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Pushing without tests is fine
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ git status --short .lore/data
  M .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
-?? .lore/data/rules/rul_2ad3618e878ebbf527d34d446ef4f891.json
+?? .lore/data/rules/rul_7a670ae8548ed05bf57ad29ad0759504.json
 alice (work/website)$ lore audit verify
 ✓ audit chain intact (7 entries)
 alice (work/website)$ git restore .lore/data && lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 
 ### damaged database
 alice (work/website)$ lore rule list
 lore: the cache ~/work/website/.lore/lore-cache.db was damaged; moved it to ~/work/website/.lore/backups/lore-cache.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ lore doctor | grep '^Status'
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 
 ### rebuild from data
 alice (work/website)$ rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm
 alice (work/website)$ lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ lore doctor | grep '^Status'
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 
 ### search rebuild
@@ -91,10 +93,14 @@ alice (work/website)$ lore sync conflicts | head -3
 
 ### support bundle
 alice (work/website)$ lore support-bundle --out bundle.json
-ERROR: [E_UNSUPPORTED] support-bundle: not available in this build
-  hint: this build does not carry the render and context machinery yet; use the release binary
+✓ wrote support bundle to bundle.json (1376 bytes)
 alice (work/website)$ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
-grep: bundle.json: No such file or directory
+  "binary_version": "dev",
+    "binary_version": "dev",
+    "status": "healthy",
+    "memories": 1,
+    "rules": 2,
+  "sanitized": true,
 
 ### pii pattern
 alice (work/website)$ lore secrets rule add invoice-number --regex 'INV-[0-9]{6}' --description 'our invoice numbers' --yes
@@ -115,7 +121,7 @@ main
 alice (work/website)$ lore config list
 default_branch=main
 alice (work/website)$ lore config set team.note 'Ask Bob before changing the build'
-ERROR: [E_INVALID_INPUT] config key "team.note" is not a key lore reads (unknown key, ignored: line 2: field team not found in type wire.configKeys)
+ERROR: [E_INVALID_INPUT] config key "team.note" is not a key lore reads (unknown key, ignored: line 2: team)
   hint: nothing written; team rules are set with `lore policy set`
 (exit 20)
 alice (work/website)$ lore config get color
@@ -137,7 +143,7 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 (exit 23)
 alice (work/website)$ lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ lore rule add --read-only --body 'Buttons are blue'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
@@ -146,9 +152,8 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 ### ci
 alice (work/ci-clone)$ lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/ci-clone)$ lore doctor; echo "doctor exit $?"
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 Binary: dev
 
@@ -157,17 +162,16 @@ Binary: dev
   wal_size: 0 bytes
 
 [identity]
-  resolved: 
-  source:   
-  stable:   NO (ephemeral)
+  resolved: human:alice@agency.example
+  source:   git config user.email
+  stable:   yes
 
 Notes:
-  - this build checks the stores only (no lore.db checks)
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)
+  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
 
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
@@ -175,10 +179,9 @@ doctor exit 0
 alice (work/ci-clone)$ lore audit verify
 ✓ audit chain intact (0 entries)
 alice (work/ci-clone)$ lore doctor --json > doctor.json; echo "doctor exit $?"
-this machine only: local safety copies of rows sync removed (never shared)
 doctor exit 0
 alice (work/ci-clone)$ grep '"status"' doctor.json
-{"schema_version":1,"ok":true,"status":"healthy","db_ok":true,"wal_size_bytes":0,"identity":{"resolved":"","source":"","stable":false},"notes":["this build checks the stores only (no lore.db checks)","live: tracking refspec installed, not forced into refs/lore/*","live: last fetch 15s ago","live: post-commit and pre-push hook blocks installed","Team versions (newest save per writer and machine):","  act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)"],"binary_version":"dev","exit_status":0}
+  "status": "healthy",
 alice (work/ci-clone)$ lore context --internal
 <!-- generated by lore; internal: never quote this content in client files, commits, PRs or chat -->
 (nothing internal or personal loads in this repo)
@@ -198,7 +201,6 @@ alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'
 alice (work/website)$ lore memory delete mem_b4f4765e593d51fd1352985e8af3a5b0 --yes
 ✓ mem_b4f4765e593d51fd1352985e8af3a5b0 moved to the trash (restore: lore trash restore mem_b4f4765e593d51fd1352985e8af3a5b0)
 alice (work/website)$ lore doctor
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 Binary: dev
 
@@ -207,18 +209,17 @@ Binary: dev
   wal_size: 0 bytes
 
 [identity]
-  resolved: 
-  source:   
-  stable:   NO (ephemeral)
+  resolved: human:alice@agency.example
+  source:   git config user.email
+  stable:   yes
 
 Notes:
-  - this build checks the stores only (no lore.db checks)
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 20s ago
   - live: post-commit and pre-push hook blocks installed
   - trash: 1 rows in the trash, 0 tombstones (kept forever); lore trash stats
   - Team versions (newest save per writer and machine):
-  -   act_7a670ae8548ed05bf57ad29ad0759504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)
+  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
 
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)

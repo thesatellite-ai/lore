@@ -19,7 +19,7 @@ This page is for one person and one repo, with no team set up. Alice (an agency 
 ```console
 # alice, in website
 $ lore --version
-lore version 0.1.0-dev
+lore version dev
 ```
 <!-- /example -->
 
@@ -31,18 +31,14 @@ Run `lore init` once in the top folder of the repo. It creates a `.lore/data` fo
 ```console
 # alice, in website
 $ lore init --non-interactive --name=website
-✓ lore initialized at ~/work/website
+lore initialized
     project_id: prj_7a67…9504
     name:       website
-    origin:     https://github.com/client/website
-    db:         ~/work/website/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
+    repo_id:    rep_2ad3…f891
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
-  next: lore learn-from docs   to bootstrap from existing markdown
-        lore render            to write .lore/LORE.md for those tools
-lore sync: exported 0 rows to .lore/data — review and commit it
+  next: lore render            to write .lore/LORE.md for those tools
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -65,10 +61,10 @@ A *rule* is a hard "always" or "never", like a sign on the office wall. Give the
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
-✓ rul_2ad3…f891
+✓ rul_162d…9666
   scope: [master] severity: must
 $ lore rule list
-rul_2ad3…f891 [must/always] Run the tests before you push
+rul_162d…9666 [must/always] Run the tests before you push
 ```
 <!-- /example -->
 
@@ -102,8 +98,8 @@ Commit the rows, the rendered file and the pointer like any other change. Anyone
 ```console
 # alice, in website
 $ git add -A && git commit -qm 'lore: first rule' && git log --oneline
-86dbae4 lore: first rule
-9b40ce7 init
+601d285 lore: first rule
+86dbae4 init
 ```
 <!-- /example -->
 
@@ -116,27 +112,22 @@ $ git add -A && git commit -qm 'lore: first rule' && git log --oneline
 # alice, in website
 $ lore doctor
 Status: HEALTHY
-Binary: 0.1.0-dev
+Binary: dev
 [db]
   ok:       true
-  wal_size: 4152 bytes
-[sync]
-  baselined:        true
-  pending exports:  0
-  open conflicts:   0
-  file errors:      0
-  merge driver:     true
-  uncommitted:      0
+  wal_size: 0 bytes
 [identity]
   resolved: human:alice@agency.example
-  source:   git config
+  source:   git config user.email
   stable:   yes
 Notes:
   - live: tracking refspec installed, not forced into refs/lore/*
-  - live: last fetch 5s ago
+  - live: last fetch 35s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   act_162d…9666 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
+  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
+  -   alice on mch_fac0df3a: lore dev (last save 2026-11-02)
+Context:
   - context: .lore/LORE.md 2554 of 16000 bytes (15%, profile codex); warn at 80%
 ```
 <!-- /example -->

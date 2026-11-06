@@ -115,8 +115,6 @@ alice (work/website)$ lore memory add --body 'Lunch is at noon'
   scope: [master]
 alice (work/website)$ lore memory delete mem_28f8d32584b2db54ffb146bede5b03df --yes
 ✓ mem_28f8d32584b2db54ffb146bede5b03df moved to the trash (restore: lore trash restore mem_28f8d32584b2db54ffb146bede5b03df)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 alice (work/website)$ lore memory show mem_28f8d32584b2db54ffb146bede5b03df || true
 ERROR: [E_IN_TRASH] engine: mem_28f8d32584b2db54ffb146bede5b03df is in the trash (deleted by act_4c590afb2a0cc7ae1b97b7e4e62d6c38 on 2026-11-02 10:02)
   hint: lore trash show mem_28f8d32584b2db54ffb146bede5b03df; bring it back with lore trash restore mem_28f8d32584b2db54ffb146bede5b03df
@@ -133,8 +131,6 @@ alice (work/website)$ ls .lore/data/memories | grep -c mem_3b6283bc4392c556bbae5
 1
 alice (work/website)$ lore memory delete mem_3b6283bc4392c556bbae5f094246e913 --yes
 ✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore mem_3b6283bc4392c556bbae5f094246e913)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 
 ### hotfix
 alice (work/website)$ lore hotfix add --title 'Checkout button is broken on Safari' --body 'Use the old button until the fix ships.' --severity critical
@@ -251,8 +247,6 @@ alice (work/website)$ lore memory add --body 'The client pays invoices on the fi
 ✓ mem_d7c7956f4acfc4409bcde8bcf2627fe6
   scope: [master]
 alice (work/website)$ rm .ai/notes.md && git status --short
- M .lore/LORE.full.md
- M .lore/LORE.md
 ?? .lore/data/memories/mem_d7c7956f4acfc4409bcde8bcf2627fe6.json
 ?? .lore/data/rules/rul_78c802586e1d1bcbd68d3bc11b965b6c.json
 

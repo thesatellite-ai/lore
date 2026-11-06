@@ -44,7 +44,7 @@ $ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only refs/lore/live | g
   …
   "id": "tsk_7a67…9504",
   …
-  "project_id": "prj_05e9…4603",
+  "project_id": "prj_54fe…28f2",
   "status": "todo",
   …
   "title": "fix header",
@@ -153,13 +153,13 @@ If two entries match at the same rule, that is an error (`E_ORG_AMBIGUOUS`): lor
 $ lore whoami --explain
 org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
-repo       no org  (fallback identity, personal everywhere/ notes only)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+repo       no org  (fallback identity)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_c0f3…b5b8
 remotes    github.com/someone/tool
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: everywhere/
+personal   me -> ~/.lore/personal
 org resolution (first rule that answers wins):
   ✗ 1. LORE_ORG         LORE_ORG is not set
   ✗ 2. lore org use     no `lore org use` choice for prj_c0f3…b5b8

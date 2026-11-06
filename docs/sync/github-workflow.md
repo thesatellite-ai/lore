@@ -34,8 +34,7 @@ $ lore sync ci-merge --base origin/main
   .lore/data/rules/rul_b4f4…a5b0.json
   commit 9b40ce71af28 — push it to update the pull request
 $ lore rule list
-lore sync: imported 1
-rul_2ad3…f891 [must/always] Run the tests before you push.
+rul_162d…9666 [must/always] Run the tests before you push.
 rul_76bd…3f10 [must/always] Never put passwords in the code.
 rul_b4f4…a5b0 [should/always] Buttons are blue, links are green.
 $ lore sync ci-merge --base origin/main

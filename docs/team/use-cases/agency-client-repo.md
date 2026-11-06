@@ -37,9 +37,7 @@ Once per company: turn a new, empty repo into the store. Run `lore store init <n
 ```console
 # alice, in tools
 $ lore store init agency git@github.com:agency/notes --yes
-name: agency
-url: git@github.com:agency/notes
-id: sto_7a67…9504
+✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 ```
 <!-- /example -->
 
@@ -52,41 +50,41 @@ $ lore whoami
 org        agency  (matched by: repos pattern github.com/client/* of agency)
 identity   Alice Doe <human:alice@agency.example>   act_2ad3…f891  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_162d…9666
 remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 $ lore org link agency --project client
+Continue? [y/N] y
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_162d…9666 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-Continue? [y/N] y
 ✓ github.com/client/website (prj_162d…9666, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 $ git status --short
 $ lore actor register
-✓ act_2ad3…f891 Alice Doe (@alice) registered in agency org/
+✓ act_2ad3…f891 Alice Doe (@alice) registered in <redacted>
 
 # bob, in website
 $ lore actor register
-✓ act_54fe…28f2 Bob Roe (@bob) registered in agency org/
+✓ act_54fe…28f2 Bob Roe (@bob) registered in <redacted>
 
 # alice, in website
 $ lore whoami
 org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
 identity   Alice Doe <human:alice@agency.example>   act_2ad3…f891  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_162d…9666
 remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch main  (org folder org)
 internal   github.com/agency/notes client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 ```
 <!-- /example -->
 
@@ -172,11 +170,9 @@ If someone pastes internal text into a file of the client's repo, the commit is 
 # alice, in website
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
-ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
-  src/notes.ts:1                           matches internal note mem_05e9…4603 (10 words)
-Remove the internal text from src/notes.ts
-To give the client an internal note on purpose: lore move <id> --to repo (it keeps the id; it shows the text and asks)
-(a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
+ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
+  commit src/notes.ts                      matches internal note mem_05e9…4603 (10 words)
+  hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
 <!-- /example -->
@@ -194,11 +190,9 @@ Agents check a pull request body or comment before posting it. The same text is 
 # alice, in website
 $ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on WhatsApp first.\n' > pr.md
 $ lore check pr-body pr.md
-ERROR: [E_LEAK_BLOCKED] lore: blocked, this text would share internal content with the client repo:
+ERROR: [E_LEAK_BLOCKED] blocked, this PR body would share internal content with the client repo:
   PR body                                  matches internal note mem_05e9…4603 (11 words)
-Remove the internal text before posting
-To give the client an internal note on purpose: lore move <id> --to repo (it keeps the id; it shows the text and asks)
-(a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
+  hint: Remove the internal text before posting
 (exit 19)
 $ printf 'Fixes checkout totals for INR.\n' | lore check pr-body -
 ✓ nothing internal found (a copy-paste check: a paraphrase passes it)
@@ -211,7 +205,7 @@ Agents must say where a rule goes in a client repo. Lore refuses to guess for th
 ```console
 # alice, in website
 $ lore agent start --label agent-backend --owner @alice
-✓ act_28f8…03df agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_28f8…03df agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 $ lore rule add --body 'require prepayment from this client'
 ERROR: [E_INVALID_INPUT] stores: this write needs an explicit --to: a rule written by an agent in a client repo must pass --to (repo or agency); nothing written
@@ -234,14 +228,14 @@ $ lore task list
 (no tasks)
 $ lore whoami
 org        none  (matched by: nothing matched)
-identity   carol <human:carol@client.example>   act_3b62…e913  (from: git config)
-repo       no org  (fallback identity, personal everywhere/ notes only)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+identity   carol <human:carol@client.example>   act_3b62…e913  (from: git config user.email)
+repo       no org  (fallback identity)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_162d…9666
 remotes    github.com/client/website
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
-personal   local: everywhere/
+personal   not set
 config     ~/.lore/config.yaml does not exist (no orgs configured)
 $ git fetch -q origin '+refs/*:refs/remotes/all/*' && git grep -i -c whatsapp $(git for-each-ref --format='%(refname)' refs/remotes/all) -- . || echo 'no match in any ref'
 no match in any ref

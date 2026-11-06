@@ -9,7 +9,7 @@ tasks:
   - {key: proxy,    title: "allow /invite on the proxy", repo: infra}
   - {key: deploy,   title: "deploy to staging",          role: coordinator, after: [frontend, proxy], gate: required}
 alice (work/api)$ lore agent start --label agent-coord --owner @alice
-✓ act_7a670ae8548ed05bf57ad29ad0759504 agent agent-coord (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
+✓ act_7a670ae8548ed05bf57ad29ad0759504 agent agent-coord (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 agent-coord (work/api)$ lore mission apply invite.yaml
 ✓ msn_2ad3618e878ebbf527d34d446ef4f891 Invite landing page (created) → [agency/client2]
@@ -28,11 +28,7 @@ agent-coord (work/api)$ lore task claim msn_2ad3618e878ebbf527d34d446ef4f891
 
 ### workers start
 alice (work/agents/api)$ lore agent start --label agent-backend --owner @alice
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/agents/api/.git/hooks)
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/agents/api/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-✓ act_76bd560aff0771fab8457dbfa9823f10 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
+✓ act_76bd560aff0771fab8457dbfa9823f10 agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 agent-backend (work/agents/api)$ lore inbox
 (inbox empty)
@@ -40,22 +36,14 @@ agent-backend (work/agents/api)$ lore task next --mission msn_2ad3618e878ebbf527
 ✓ claimed tsk_162df51b7f78b785c97c26b41ea89666 send the invite email from the API (lease 20m, token ct_cb04f…) on refs/lore/signals/main
   read its notes: lore task show tsk_162df51b7f78b785c97c26b41ea89666
 alice (work/agents/app)$ lore agent start --label agent-frontend --owner @alice
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/agents/app/.git/hooks)
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/agents/app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-✓ act_d4314eba822f1bf5908b2b8ded5f313a agent agent-frontend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
+✓ act_d4314eba822f1bf5908b2b8ded5f313a agent agent-frontend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 agent-frontend (work/agents/app)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page: waits for tsk_162df51b7f78b785c97c26b41ea89666 to be merged (claimed by agent:agent-backend)
 (exit 10)
 alice (work/agents/infra)$ lore agent start --label agent-infra --owner @alice
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/agents/infra/.git/hooks)
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/agents/infra/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-✓ act_b4f4765e593d51fd1352985e8af3a5b0 agent agent-infra (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
+✓ act_b4f4765e593d51fd1352985e8af3a5b0 agent agent-infra (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 export LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 agent-infra (work/agents/infra)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo infra --owns nginx/sites/invite.conf
 ✓ claimed tsk_05e99e22e9e86e96fe4daa7777994603 allow /invite on the proxy (lease 20m, token ct_87f6f…) on refs/lore/signals/main
@@ -87,9 +75,9 @@ ERROR: [E_NO_WORK] nothing ready:
 (exit 10)
 alice (work/api)$ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 alice (work/api)$ lore task list
-lore: tsk_162df51b7f78b785c97c26b41ea89666 merged 10:23 (found by: ancestry, 86dbae4) but it could not be recorded: write tsk_162df51b7f78b785c97c26b41ea89666: signals: push: gitremote: invalid request: destination "" is not a full ref; the next lore command retries
+✓ tsk_162df51b7f78b785c97c26b41ea89666 merged 10:23 (found by: ancestry, 86dbae4)
 ○ tsk_54fe984c9b495744c0217776765a28f2 build the invite page [medium]  [agency/client2]
-○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging [medium]  [agency/client2]
+○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 agent-frontend (work/agents/app)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
 ✓ claimed tsk_54fe984c9b495744c0217776765a28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
   read its notes: lore task show tsk_54fe984c9b495744c0217776765a28f2
@@ -108,11 +96,7 @@ msn_2ad3618e878ebbf527d34d446ef4f891 Invite landing page   4 tasks · 2 done · 
   expired   tsk_54fe984c9b495744c0217776765a28f2  build the invite page        agent-frontend work branch agent-frontend/invite-route 0s (timebox 1h)
   waiting   tsk_c0f3c11a5724b0cfd74b256190d9b5b8  deploy to staging                         waits for tsk_54fe984c9b495744c0217776765a28f2 to be merged (in_progress)
 alice (work/agents/fe2/app)$ lore agent start --label agent-frontend-2 --owner @alice
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/agents/fe2/app/.git/hooks)
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/agents/fe2/app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-✓ act_2537f9b2f7de77bfe5ca958860216bbb agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
+✓ act_2537f9b2f7de77bfe5ca958860216bbb agent agent-frontend-2 (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 agent-frontend-2 (work/agents/fe2/app)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
 ✓ claimed tsk_54fe984c9b495744c0217776765a28f2 build the invite page (lease 20m, token ct_d57ca…) on refs/lore/signals/main; reclaim, attempt 2; previous holder agent-frontend timed out
@@ -128,11 +112,7 @@ agent-frontend-2 (work/agents/fe2/app)$ git switch -q -c agent-frontend-2/invite
 ✓ tsk_54fe984c9b495744c0217776765a28f2 done (commit 05513aa); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 alice (work/app)$ git pull -q && git merge -q --no-ff --no-edit origin/agent-frontend-2/invite-route && git push -q origin main && lore task list >/dev/null
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 ✓ tsk_54fe984c9b495744c0217776765a28f2 merged 11:02 (found by: ancestry, dfd8dc8)
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
 
 ### merged by hand
 agent-coord (work/api)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator
@@ -140,10 +120,6 @@ ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging: waits for tsk_05e99e22e9e86e96fe4daa7777994603 to be merged (done, merge unknown)
 (exit 10)
 alice (work/infra)$ lore task merged tsk_05e99e22e9e86e96fe4daa7777994603
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/infra/.git/hooks)
-lore sync: built .lore/lore.db from .lore/data (3 rows)
-lore sync: adopted .lore/data: imported 3, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/infra/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 merged (marked by hand, 11:04)
 
 ### gate

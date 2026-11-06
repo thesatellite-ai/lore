@@ -49,6 +49,10 @@ Browse every table of the attached stores in the terminal (read-only)
 Usage:
   lore tui
 
+Examples:
+  lore tui
+  lore tui --kind decision
+
 Flags:
       --kind string   table to open first (e.g. memory, task, decision); default the tables screen
 ```

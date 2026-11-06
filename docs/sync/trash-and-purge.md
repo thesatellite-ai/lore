@@ -48,7 +48,10 @@ If `.lore/data` is deleted, the notes are gone from lists until the files are ba
 ```console
 # alice, in website
 $ rm -rf .lore/data && lore sync status
+meta quarantined: 0
 live rows:        0 (_root)
+conflicted files: 0
+refused pushes:   0
 $ git checkout -q HEAD -- .lore/data && git status --short
 ```
 <!-- /example -->

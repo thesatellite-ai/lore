@@ -26,20 +26,17 @@ Alice (an agency developer) has client 2's repos in `~/work`. In the first repo 
 ```console
 # alice, in app
 $ lore store init client2 file://$HOME/stores/client2
-name: client2
-url: file://~/stores/client2
-id: sto_76bd…3f10
+✓ created store client2 (sto_76bd…3f10) at file://~/stores/client2; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in api
 $ lore store add client2 file://$HOME/stores/client2
-name: client2
-url: file://~/stores/client2
+✓ attached store client2 (whole store, folder backend, internal) in .lore/stores.yaml; commit it to share
 
 # alice, in app
 $ lore store list
 stores:
-  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  VISIBILITY  REACH
-  client2  file://~/stores/client2          false              false     internal    ok
+  NAME     URL                                                                                                       FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH
+  client2  file://~/stores/client2          false              false     stores.yaml  internal    ok
 count: 1
 ```
 <!-- /example -->
@@ -54,13 +51,11 @@ The attachment is recorded in the repo's `.lore/stores.yaml`.
 ```console
 # alice, in app
 $ lore rule add --to client2 --body 'Every screen works on a phone.'
-lore sync: imported 3
 ✓ rul_d431…313a [client2]
   scope: [master] severity: must
 
 # alice, in api
 $ lore rule add --to client2 --body 'Every change comes with a test.'
-lore sync: imported 3
 ✓ rul_b4f4…a5b0 [client2]
   scope: [master] severity: must
 $ lore rule add --body 'The API answers in JSON only.'
@@ -93,7 +88,6 @@ $ git status --short
 ```console
 # alice, in scratch
 $ lore project list
-lore sync: imported 3
 prj_4c59…6c38  scratch  https://github.com/client2/scratch
 $ lore project archive prj_4c59…6c38
 ✓ scratch archived
@@ -102,13 +96,11 @@ prj_4c59…6c38  scratch  https://github.com/client2/scratch [archived]
 $ lore project unarchive prj_4c59…6c38
 ✓ scratch unarchived
 $ lore project delete prj_4c59…6c38
-ERROR: [E_NEEDS_CONFIRM] engine: run project delete?
+ERROR: [E_NEEDS_CONFIRM] engine: project delete prj_4c59…6c38?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore project delete prj_4c59…6c38 --yes
 ✓ scratch (and this repo's row) moved to the trash (batch bat_3b62…e913; restore: lore trash restore bat_3b62…e913)
-lore sync: trashed rows 2
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 $ lore project list
 (no projects)
 ```
@@ -129,20 +121,24 @@ ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lo
   hint: `lore migrate run --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)
 $ lore migrate run --dry-run
-dry_run: true
-count: 3
-rows: 
-steps: mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aae…a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+Would upgrade 2 rows
+  mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra)
+  mode-b: rules/rul_b69e…5ed7 → store shared (~/.lore/stores/infra)
+  mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
+  mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+Nothing written (dry run).
 $ lore migrate run
-count: 3
-rows: 
-steps: mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e…5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aae…a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-journal: team lock: taken on refs/lore/signals until 2026-11-02T10:13:00Z (renewed every 2m0s), backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
-backup_ref: refs/lore-backup/migrate/2026-11-02
+Upgraded 2 rows
+  mode-b: memories/mem_2537…6bbb → store shared (~/.lore/stores/infra)
+  mode-b: rules/rul_b69e…5ed7 → store shared (~/.lore/stores/infra)
+  mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
+  mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+team lock: taken on refs/lore/signals until 2026-11-02T10:13:00Z (renewed every 2m0s)
+backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
+undo: lore migrate rollback
+team lock released
 $ ls .lore; cat .lore/stores.yaml
 lore-cache.db
-lore-cache.db-shm
-lore-cache.db-wal
 lore.yaml.migrated
 state
 stores.yaml
@@ -150,7 +146,7 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 $ lore rule list; lore memory list
-rul_0aae…a61f  Terraform changes need a plan in the pull request.  [shared]
+rul_b69e…5ed7  Terraform changes need a plan in the pull request.  [shared]
 mem_2537…6bbb  The staging cluster sleeps at night.  [shared]
 ```
 <!-- /example -->

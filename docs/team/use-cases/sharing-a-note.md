@@ -22,10 +22,11 @@ $ lore memory add --body 'checkout must support INR and USD'
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [master]
 $ lore move mem_4c59…6c38 --to repo
-This becomes visible to everyone with access to store repo:
-  "checkout must support INR and USD"
-Move it? [y/N] y
-✓ mem_4c59…6c38 moved to store repo (same id; the old copy is tombstoned)
+y
+This becomes visible to everyone with access to repo (client):
+  "checkout must support INR and USD" (mem_4c59…6c38, id kept), now in agency
+  kept back: internal metadata, internal and sensitive resource fields, time entries and claim state (listed after the move)
+Move it? [y/N] ✓ mem_4c59…6c38 moved to store repo (same id; the old copy is tombstoned)
 $ git status --short
 ?? .lore/LORE.full.md
 ?? .lore/LORE.md

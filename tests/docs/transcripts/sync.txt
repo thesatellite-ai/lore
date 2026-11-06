@@ -1,21 +1,15 @@
 
 ### init
 alice (work/website)$ lore init --non-interactive --name=website
-✓ lore initialized at ~/work/website
+lore initialized
     project_id: prj_7a670ae8548ed05bf57ad29ad0759504
     name:       website
-    origin:     https://github.com/client/website
-    db:         ~/work/website/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
+    repo_id:    rep_2ad3618e878ebbf527d34d446ef4f891
 
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
-  next: lore learn-from docs   to bootstrap from existing markdown
-        lore render            to write .lore/LORE.md for those tools
-lore sync: exported 0 rows to .lore/data — review and commit it
-lore sync: backup of lore.db before bootstrap: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+  next: lore render            to write .lore/LORE.md for those tools
 alice (work/website)$ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -23,15 +17,9 @@ alice (work/website)$ git status --short
 ?? AGENTS.md
 alice (work/website)$ ls .lore .lore/data
 .lore:
-backups
 data
 lock
 lore-cache.db
-lore-cache.db-shm
-lore-cache.db-wal
-lore.db
-lore.db-shm
-lore.db-wal
 state
 
 .lore/data:
@@ -47,78 +35,64 @@ alice (work/website)$ cat .gitattributes
 .lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
 # <<< lore-sync <<<
 alice (work/website)$ git add -A && git commit -qm 'lore: init' && git push -q origin main
-lore sync: imported 3
 
 ### first rule
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
-✓ rul_2ad3618e878ebbf527d34d446ef4f891
+✓ rul_162df51b7f78b785c97c26b41ea89666
   scope: [master] severity: must
 alice (work/website)$ git status --short
 ?? .lore/data/rules/
-alice (work/website)$ cat .lore/data/rules/rul_2ad3618e878ebbf527d34d446ef4f891.json
+alice (work/website)$ cat .lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.json
 {
-  "_hlc": "2026-11-02T10:00:30.000Z/0000/act_162df51b7f78b785c97c26b41ea89666",
+  "_hlc": "2026-11-02T10:00:30.000Z/0000/act_54fe984c9b495744c0217776765a28f2",
   "_o": {
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "466cc836cfd224b3cc7fb90a872673cc43608b7e",
+      "commit": "796667b5e5814e64d25afa278afffc07afed3662",
       "state": "branch"
     },
-    "repo": "rep_54fe984c9b495744c0217776765a28f2",
+    "project": "prj_7a670ae8548ed05bf57ad29ad0759504",
+    "repo": "rep_2ad3618e878ebbf527d34d446ef4f891",
     "store": "repo"
   },
   "_table": "rules",
   "_v": 2,
   "_w": {
-    "v": "0.1.0-dev"
+    "v": "dev"
   },
   "activation": "always",
   "body": "Run the tests before you push.",
   "created_at": "2026-11-02T10:00:00.000000001Z",
-  "created_by": "act_162df51b7f78b785c97c26b41ea89666",
-  "id": "rul_2ad3618e878ebbf527d34d446ef4f891",
+  "created_by": "act_54fe984c9b495744c0217776765a28f2",
+  "id": "rul_162df51b7f78b785c97c26b41ea89666",
   "project_id": "prj_7a670ae8548ed05bf57ad29ad0759504",
   "severity": "must",
   "source_kind": "manual",
   "trust_score": 0.5,
   "updated_at": "2026-11-02T10:00:00.000000001Z",
-  "updated_by": "act_162df51b7f78b785c97c26b41ea89666"
+  "updated_by": "act_54fe984c9b495744c0217776765a28f2"
 }
 alice (work/website)$ lore sync status
-baselined:        true
-data dir present: true
-tracked files:    4
-pending exports:  0
-open conflicts:   0
-trash rows:       0
-uncommitted:      1
 meta quarantined: 0
 live rows:        0 (_root)
+conflicted files: 0
+refused pushes:   0
 alice (work/website)$ git add -A && git commit -qm 'lore: test rule' && git push -q origin main
 
 ### teammate clone
 bob (work)$ git clone -q https://github.com/client/website
 bob (work/website)$ lore rule list
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push.
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 
 ### sync by hand
 bob (work/website)$ lore sync
-lore sync: built .lore/lore.db from .lore/data (4 rows)
-lore sync: adopted .lore/data: imported 4, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
 · already in sync
 bob (work/website)$ lore sync status
-baselined:        true
-data dir present: true
-tracked files:    4
-pending exports:  0
-open conflicts:   0
-trash rows:       0
-uncommitted:      0
 meta quarantined: 0
 live rows:        0 (_root)
+conflicted files: 0
+refused pushes:   0
 
 ### sync off
 alice (work/website)$ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
@@ -127,7 +101,7 @@ alice (work/website)$ LORE_SYNC=0 lore memory add --body 'The client replies fas
 alice (work/website)$ git status --short
 ?? .lore/data/memories/
 alice (work/website)$ lore sync
-lore sync: imported 1
+· already in sync
 alice (work/website)$ git status --short
 ?? .lore/data/memories/
 alice (work/website)$ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin main
@@ -150,13 +124,13 @@ mem_c0f3c11a5724b0cfd74b256190d9b5b8 [retrieved] We use Stripe for payments.
 ### peek
 bob (work/website)$ git fetch -q origin
 bob (work/website)$ lore sync peek origin/feature/payments
-actors             act_162df51b7f78b785c97c26b41ea89666  
+actors             act_54fe984c9b495744c0217776765a28f2  
 memories           mem_05e99e22e9e86e96fe4daa7777994603  The client replies faster on WhatsApp than email.
 memories           mem_c0f3c11a5724b0cfd74b256190d9b5b8  We use Stripe for payments.
 policies           pol_d4314eba822f1bf5908b2b8ded5f313a  context.targets
 projects           prj_7a670ae8548ed05bf57ad29ad0759504  website
-repos              rep_54fe984c9b495744c0217776765a28f2  
-rules              rul_2ad3618e878ebbf527d34d446ef4f891  Run the tests before you push.
+repos              rep_2ad3618e878ebbf527d34d446ef4f891  
+rules              rul_162df51b7f78b785c97c26b41ea89666  Run the tests before you push.
 rules              rul_76bd560aff0771fab8457dbfa9823f10  Never put passwords in the code.
 bob (work/website)$ lore sync peek origin/feature/payments memories
 memories           mem_05e99e22e9e86e96fe4daa7777994603  The client replies faster on WhatsApp than email.
@@ -172,7 +146,7 @@ alice (work/website)$ git log --oneline -2 main
 86dbae4 lore: whatsapp memory
 alice (work/website)$ git push -q origin main
 bob (work/website)$ git pull -q && lore rule list
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push.
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Never put passwords in the code.
 
 ### merge by field
@@ -192,7 +166,7 @@ From /srv/git/github.com/client/website
 Auto-merging .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 Merge made by the 'ort' strategy.
 bob (work/website)$ lore rule list
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push.
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Never put passwords in the code.
 rul_b4f4765e593d51fd1352985e8af3a5b0 [must/always] Buttons are blue, links are green.
 bob (work/website)$ git push -q origin main
@@ -210,24 +184,20 @@ CONFLICT (content): Merge conflict in .lore/data/rules/rul_b4f4765e593d51fd13529
 Automatic merge failed; fix conflicts and then commit the result.
 (exit 1)
 alice (work/website)$ grep body .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
-  "body": "<<<<<<< 2026-11-02T10:03:45.000Z/0000/act_28f8d32584b2db54ffb146bede5b03df\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:40.000Z/0000/act_162df51b7f78b785c97c26b41ea89666",
+  "body": "<<<<<<< 2026-11-02T10:03:45.000Z/0000/act_28f8d32584b2db54ffb146bede5b03df\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:40.000Z/0000/act_54fe984c9b495744c0217776765a28f2",
 alice (work/website)$ lore sync status
-baselined:        true
-data dir present: true
-tracked files:    8
-pending exports:  0
-open conflicts:   0
-trash rows:       3
-uncommitted:      1
+lore: invalid-file store repo: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; it is left out of every read (lore doctor)
 meta quarantined: 0
 live rows:        0 (_root)
+conflicted files: 1
+  .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (git conflict markers; lore sync conflicts)
+refused pushes:   0
 alice (work/website)$ git commit -qam 'merge'
-lore sync: imported 1
-lore sync: conflict-markers rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: unresolved conflict markers in "body" — settle it with a lore edit of that row, or by editing the file
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (conflict-markers), .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (conflict markers in body)
-  hint: resolve the conflict markers (or `lore sync resolve`), then commit again
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (conflict markers in a value)
+  hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
 (exit 1)
 alice (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are blue.'
+lore: invalid-file store repo: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; it is left out of every read (lore doctor)
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 alice (work/website)$ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main
 
@@ -244,22 +214,19 @@ bob (work/website)$ lore memory list | grep -i invoice
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 mem_3b6283bc4392c556bbae5f094246e913 [retrieved] send the invoice reminder before the demo on friday.
 bob (work/website)$ lore sync merge-rows memories --keep mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 --drop mem_3b6283bc4392c556bbae5f094246e913
-ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: merge-rows of memories is not done in lore.db (the row files are the truth): keep mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 (edit it with its lore command if it should carry the other's text), then delete mem_3b6283bc4392c556bbae5f094246e913 with its lore command
-(exit 20)
-bob (work/website)$ lore memory delete mem_3b6283bc4392c556bbae5f094246e913 --yes
-✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore mem_3b6283bc4392c556bbae5f094246e913)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
+✓ merged mem_3b6283bc4392c556bbae5f094246e913 into mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 (0 row(s) re-pointed; mem_3b6283bc4392c556bbae5f094246e913 is in the trash, batch bat_f147dd95f1aaf742dd4f5214843a5139)
 bob (work/website)$ lore memory list
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The client replies faster on WhatsApp than email.
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
+bob (work/website)$ lore trash list
+mem_3b6283bc4392c556bbae5f094246e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:04  by act_28f8d32584b2db54ffb146bede5b03df  reason "merged into mem_4c590afb2a0cc7ae1b97b7e4e62d6c38"  bat_f147dd95f1aaf742dd4f5214843a5139
+1 rows in the trash
 bob (work/website)$ git add -A && git commit -qm 'lore: fold duplicate memory' && git push -q origin main
 
 ### file and database conflict
 alice (work/website)$ git pull -q --no-rebase origin main
 alice (work/website)$ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 alice (work/website)$ lore memory list
-lore sync: imported 1
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The client replies faster on WhatsApp than email or phone.
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 alice (work/website)$ lore sync
@@ -271,18 +238,7 @@ alice (work/website)$ git add -A && git commit -qm 'lore: whatsapp wording' && g
 ### trash
 alice (work/website)$ git rm -q .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 alice (work/website)$ lore memory list
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
-alice (work/website)$ lore trash list --local
-this machine only: local safety copies of rows sync removed (never shared)
-#4 memories/mem_05e99e22e9e86e96fe4daa7777994603  2026-11-02T10:05:40Z  (file deleted)
-#3 memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8  2026-11-02T10:02:50Z  (file deleted)
-#2 rules/rul_76bd560aff0771fab8457dbfa9823f10  2026-11-02T10:02:00Z  (file deleted)
-#1 memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8  2026-11-02T10:02:00Z  (file deleted)
-alice (work/website)$ lore trash restore 4 --local
-ERROR: [E_INVALID_INPUT] lsync: owned by the 0.1.18 core: a trash restore of memories is not done in lore.db (the row files are the truth): restore the file from git (`git checkout HEAD -- .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json`, or from the commit before the one that deleted it: `git log --diff-filter=D -- .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json`)
-(exit 20)
 alice (work/website)$ git checkout HEAD -- .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 alice (work/website)$ lore memory list
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The client replies faster on WhatsApp than email or phone.
@@ -291,16 +247,10 @@ alice (work/website)$ git add -A && git status --short
 
 ### export
 alice (work/website)$ rm -rf .lore/data && lore sync status
-baselined:        true
-data dir present: false
-tracked files:    9
-pending exports:  0
-open conflicts:   0
-trash rows:       4
-uncommitted:      12
 meta quarantined: 0
 live rows:        0 (_root)
-lore sync: ~/work/website/.lore/data is missing (a branch without lore data, or deleted): lore.db is left untouched; run `lore sync export --all` to recreate it
+conflicted files: 0
+refused pushes:   0
 alice (work/website)$ git checkout -q HEAD -- .lore/data && git status --short
 
 ### purge
@@ -328,8 +278,6 @@ alice (work/website)$ cat .lore/data/_purged.json
 alice (work/website)$ git add -A && git status --short && git commit -qm 'lore: purge archived rows' && git push -q origin main
 A  .lore/data/_purged.json
 M  .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 
 ### hooks
 alice (work/website)$ lore sync status >/dev/null
@@ -355,9 +303,8 @@ alice (work/website)$ cat .git/hooks/pre-commit
 ### commit refused
 alice (work/website)$ printf '{ broken' > .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json && git add .lore
 alice (work/website)$ git commit -m 'oops'
-lore sync: invalid-file rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: canonjson: decode: invalid character 'b' looking for beginning of value
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (invalid-file), .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (invalid JSON)
-  hint: fix the JSON syntax of the files marked invalid JSON; fix or restore the files marked invalid-file or import-failed (`git checkout -- <file>` drops a hand edit), then commit again
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (invalid JSON)
+  hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
 (exit 1)
 alice (work/website)$ git checkout -q HEAD -- .lore/data && git status --short
 
@@ -418,8 +365,7 @@ bob (work/website)$ lore sync ci-merge --base origin/main
   .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
   commit 9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91 — push it to update the pull request
 bob (work/website)$ lore rule list
-lore sync: imported 1
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push.
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Never put passwords in the code.
 rul_b4f4765e593d51fd1352985e8af3a5b0 [should/always] Buttons are blue, links are green.
 bob (work/website)$ lore sync ci-merge --base origin/main
@@ -427,41 +373,23 @@ bob (work/website)$ lore sync ci-merge --base origin/main
 
 ### fix projects
 alice (work/app)$ git checkout -q -b alice-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (alice)'
-lore sync: exported 0 rows to .lore/data — review and commit it
-lore sync: backup of lore.db before bootstrap: ~/work/app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
-lore sync: imported 3
 bob (work)$ git clone -q https://github.com/client2/app && cd app && git checkout -q -b bob-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (bob)' && git push -q -u origin bob-setup
-lore sync: exported 0 rows to .lore/data — review and commit it
-lore sync: backup of lore.db before bootstrap: ~/work/app/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
-lore sync: imported 3
 alice (work/app)$ git checkout -q main && git merge -q alice-setup
 alice (work/app)$ git fetch -q origin && git merge --no-edit origin/bob-setup
-lore merge-driver: .lore/data/_meta.json needs a manual merge (markers are inside the JSON values)
 Auto-merging .lore/data/_meta.json
-CONFLICT (add/add): Merge conflict in .lore/data/_meta.json
 Auto-merging .lore/data/policies/pol_d4314eba822f1bf5908b2b8ded5f313a.json
-Automatic merge failed; fix conflicts and then commit the result.
+ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
+  commit .lore/data/repos/rep_2537f9b2f7de77bfe5ca958860216bbb.json row of another project
+  hint: this repository holds rows of a second project (two `lore init`s merged?): run `lore sync fix-projects` to keep one project and re-point its rows, then commit again
+Not committing merge; use 'git commit' to complete the merge.
 (exit 1)
 alice (work/app)$ lore project list
-lore sync: imported 3
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-prj_f147dd95f1aaf742dd4f5214843a5139  app  https://github.com/client2/app
-prj_2537f9b2f7de77bfe5ca958860216bbb  app  https://github.com/client2/app
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
+prj_b69e8368dd4986838455061d5d9e5ed7  app  https://github.com/client2/app
+prj_0aaebe6aca5bb46cc521869f5ba2a61f  app  https://github.com/client2/app
 alice (work/app)$ lore sync fix-projects --dry-run
-2 project row(s); 1 would be merged
+2 project row(s): would keep prj_b69e8368dd4986838455061d5d9e5ed7 and merge prj_0aaebe6aca5bb46cc521869f5ba2a61f (1 row(s) to re-point)
 alice (work/app)$ lore sync fix-projects
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-lore sync: re-pointed 2 row file(s) from local project prj_2537f9b2f7de77bfe5ca958860216bbb to shared project prj_f147dd95f1aaf742dd4f5214843a5139
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-lore sync: repos/rep_b69e8368dd4986838455061d5d9e5ed7.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-✓ kept prj_f147dd95f1aaf742dd4f5214843a5139, merged prj_2537f9b2f7de77bfe5ca958860216bbb
+✓ kept prj_b69e8368dd4986838455061d5d9e5ed7, merged prj_0aaebe6aca5bb46cc521869f5ba2a61f (1 row(s) re-pointed)
 alice (work/app)$ lore project list
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-prj_f147dd95f1aaf742dd4f5214843a5139  app  https://github.com/client2/app
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
+prj_b69e8368dd4986838455061d5d9e5ed7  app  https://github.com/client2/app
 alice (work/app)$ git add -A && git commit -qm 'lore: one project' && git push -q origin main
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`

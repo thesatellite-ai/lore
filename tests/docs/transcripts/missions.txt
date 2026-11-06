@@ -147,16 +147,16 @@ ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task o
 alice (work/website)$ lore actor register
 ✓ act_4c590afb2a0cc7ae1b97b7e4e62d6c38 alice (@alice) already registered (refreshed) in this repo
 lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 
 ### handoff
 alice (work/website)$ lore task add 'Write the about page'
 ✓ tsk_3b6283bc4392c556bbae5f094246e913 — Write the about page [medium]
 lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore handoff add --for @alice --task tsk_3b6283bc4392c556bbae5f094246e913 'Two of the three sections are written; the team photo is still missing'
 ✓ handoff hnd_f147dd95f1aaf742dd4f5214843a5139 for @alice
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore inbox
 -  handoff  @alice       tsk_3b6283bc4392c556bbae5f094246e913  Two of the three sections are written; the team photo is still missing
 
@@ -172,5 +172,5 @@ hnd_f147dd95f1aaf742dd4f5214843a5139 [acked] Two of the three sections are writt
 ### handoff unknown
 alice (work/website)$ lore handoff add --for @dave 'The logo files are in the shared drive'
 ERROR: [E_NOT_FOUND] no actor "@dave"
-  hint: an actor row exists once that person or agent has written to lore; or pass an act_ id
+  hint: people join with `lore actor register` (run by that person in a repo of the team); or pass an act_ id
 (exit 27)

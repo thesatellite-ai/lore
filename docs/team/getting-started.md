@@ -12,7 +12,7 @@ The team features are part of the normal `lore` binary. There is nothing extra t
 ```console
 # alice, in notes-app
 $ lore --version
-lore version 0.1.0-dev
+lore version dev
 ```
 <!-- /example -->
 
@@ -26,20 +26,15 @@ In a repo that has a remote (here `github.com/alice/notes-app`), run `lore init`
 ```console
 # alice, in notes-app
 $ lore init --non-interactive --name=notes-app
-✓ lore initialized at ~/work/notes-app
+lore initialized
     project_id: prj_7a67…9504
     name:       notes-app
-    origin:     https://github.com/alice/notes-app
-    db:         ~/work/notes-app/.lore/lore.db
-    identity:   human:alice@example.com (git config)
+    repo_id:    rep_2ad3…f891
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/notes-app/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
-  next: lore learn-from docs   to bootstrap from existing markdown
-        lore render            to write .lore/LORE.md for those tools
-lore sync: exported 0 rows to .lore/data — review and commit it
+  next: lore render            to write .lore/LORE.md for those tools
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
-lore sync: imported 3
 ```
 <!-- /example -->
 
@@ -54,14 +49,14 @@ With no config at all, there is no org. Your identity comes from your git email:
 # alice, in notes-app
 $ lore whoami
 org        none  (matched by: nothing matched)
-identity   alice <human:alice@example.com>   act_2ad3…f891  (from: git config)
-repo       no org  (fallback identity, personal everywhere/ notes only)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+identity   alice <human:alice@example.com>   act_162d…9666  (from: git config user.email)
+repo       no org  (fallback identity)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
-personal   local: everywhere/
+personal   not set
 config     ~/.lore/config.yaml does not exist (no orgs configured)
 ```
 <!-- /example -->
@@ -74,10 +69,10 @@ Tasks are live by default. Adding one writes it to a hidden list on GitHub that 
 ```console
 # alice, in notes-app
 $ lore task add 'fix login timeout'
-✓ tsk_162d…9666 — fix login timeout [medium]
+✓ tsk_54fe…28f2 — fix login timeout [medium]
 lore live: (live, pushed)
 $ lore task list
-○ tsk_162d…9666 fix login timeout [medium]
+○ tsk_54fe…28f2 fix login timeout [medium]
 $ git status --short
 ?? .lore/data/task_lists/
 $ git ls-remote origin
@@ -85,7 +80,7 @@ $ git ls-remote origin
 601d2850ffd0	refs/heads/main
 86dbae476bd6	refs/lore/live
 $ lore live show
-tasks      tsk_162d…9666     live      since 2026-11-02 10:00
+tasks      tsk_54fe…28f2     live      since 2026-11-02 10:00
 1 live rows in _root (epoch 1)
 ```
 <!-- /example -->
@@ -99,8 +94,8 @@ Finishing a task lands it. Lore writes it to `main`'s `.lore/data` with a commit
 <!-- example: getting-started#first-landing -->
 ```console
 # alice, in notes-app
-$ lore task done tsk_162d…9666
-✓ tsk_162d…9666 done
+$ lore task done tsk_54fe…28f2
+✓ tsk_54fe…28f2 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: landed on main (9b40ce7); leaves live once main is fetched
@@ -109,11 +104,11 @@ $ git fetch -q origin && git log --oneline origin/main
 601d285 lore: init
 05513aa init
 $ lore live show
-tasks      tsk_162d…9666     live      since 2026-11-02 10:00
+tasks      tsk_54fe…28f2     live      since 2026-11-02 10:00
 1 live rows in _root (epoch 1)
 $ lore sync
-· already in sync
 lore live: 1 row(s) left live (main holds them)
+lore live: pushed waiting live writes
 $ lore live show
 0 live rows in _root (epoch 1)
 ```
@@ -136,10 +131,10 @@ source:      ~/.lore/identity.yaml
 stable:      yes
 warning: ~/.lore/identity.yaml is from v0.1.17 and is read only while identity: in ~/.lore/config.yaml is unset: `lore migrate run` moves it into identity:
 $ lore migrate run
-count: 0
-rows: 
-steps: identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
-journal: team lock: taken on refs/lore/signals until 2026-11-02T10:11:20Z (renewed every 2m0s), team lock released
+Upgraded 0 rows
+  identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
+team lock: taken on refs/lore/signals until 2026-11-02T10:11:20Z (renewed every 2m0s)
+team lock released
 
 # alice, in ~
 $ ls ~/.lore; cat ~/.lore/config.yaml
@@ -202,22 +197,20 @@ $ lore config check
 
 # alice, in tools
 $ lore store init agency git@github.com:agency/notes --yes
-name: agency
-url: git@github.com:agency/notes
-id: sto_05e9…4603
+✓ created store agency (sto_76bd…3f10) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 $ lore whoami
 org        agency  (matched by: own pattern github.com/agency/* of agency)
-identity   Alice Doe <human:alice@agency.example>   act_c0f3…b5b8  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@agency.example>   act_d431…313a  @alice  (from: org entry (config.yaml))
 repo       own repo  (no client guards)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
-project    prj_54fe…28f2
+project    prj_05e9…4603
 remotes    github.com/agency/tools
 stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 $ lore actor register
-✓ act_c0f3…b5b8 Alice Doe (@alice) registered in agency org/
+✓ act_d431…313a Alice Doe (@alice) registered in <redacted>
 ```
 <!-- /example -->
 
@@ -230,14 +223,14 @@ Repos outside the org keep your fallback identity, never a company one:
 # alice, in notes-app
 $ lore whoami
 org        none  (matched by: nothing matched)   hint: lore org use agency
-identity   Alice Doe <human:alice@example.com>   act_2ad3…f891  (from: top-level identity (config.yaml))
-repo       no org  (fallback identity, personal everywhere/ notes only)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+identity   Alice Doe <human:alice@example.com>   act_162d…9666  (from: top-level identity (config.yaml))
+repo       no org  (fallback identity)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
-personal   local: everywhere/
+personal   me -> ~/.lore/personal
 ```
 <!-- /example -->
 

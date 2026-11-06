@@ -45,7 +45,7 @@ From /srv/git/github.com/client/website
 Auto-merging .lore/data/rules/rul_b4f4…a5b0.json
 Merge made by the 'ort' strategy.
 $ lore rule list
-rul_2ad3…f891 [must/always] Run the tests before you push.
+rul_162d…9666 [must/always] Run the tests before you push.
 rul_76bd…3f10 [must/always] Never put passwords in the code.
 rul_b4f4…a5b0 [must/always] Buttons are blue, links are green.
 ```
@@ -73,7 +73,7 @@ CONFLICT (content): Merge conflict in .lore/data/rules/rul_b4f4…a5b0.json
 Automatic merge failed; fix conflicts and then commit the result.
 (exit 1)
 $ grep body .lore/data/rules/rul_b4f4…a5b0.json
-  "body": "<<<<<<< 2026-11-02T10:03:45.000Z/0000/act_28f8…03df\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:40.000Z/0000/act_162d…9666",
+  "body": "<<<<<<< 2026-11-02T10:03:45.000Z/0000/act_28f8…03df\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:40.000Z/0000/act_54fe…28f2",
 ```
 <!-- /example -->
 
@@ -83,12 +83,11 @@ The commit is refused while the markers are there. The pre-commit hook (a small 
 ```console
 # alice, in website
 $ git commit -qam 'merge'
-lore sync: imported 1
-lore sync: conflict-markers rules/rul_b4f4…a5b0.json: unresolved conflict markers in "body" — settle it with a lore edit of that row, or by editing the file
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4…a5b0.json (conflict-markers), .lore/data/rules/rul_b4f4…a5b0.json (conflict markers in body)
-  hint: resolve the conflict markers (or `lore sync resolve`), then commit again
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4…a5b0.json (conflict markers in a value)
+  hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
 (exit 1)
 $ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue.'
+lore: invalid-file store repo: .lore/data/rules/rul_b4f4…a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4…a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; it is left out of every read (lore doctor)
 ✓ rul_b4f4…a5b0 updated
 $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main
 ```
@@ -142,12 +141,12 @@ $ lore memory list | grep -i invoice
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 mem_3b62…e913 [retrieved] send the invoice reminder before the demo on friday.
 $ lore sync merge-rows memories --keep mem_4c59…6c38 --drop mem_3b62…e913
-✓ merged mem_3b62…e913 into mem_4c59…6c38 (0 row(s) re-pointed; mem_3b62…e913 is in the trash, batch bat_…)
+✓ merged mem_3b62…e913 into mem_4c59…6c38 (0 row(s) re-pointed; mem_3b62…e913 is in the trash, batch bat_f147…5139)
 $ lore memory list
 mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ lore trash list
-mem_3b62…e913  memories  "send the invoice reminder before the demo on friday."  …  reason "merged into mem_4c59…6c38"  bat_…
+mem_3b62…e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:04  by act_28f8…03df  reason "merged into mem_4c59…6c38"  bat_f147…5139
 1 rows in the trash
 ```
 <!-- /example -->
@@ -160,33 +159,23 @@ If two people ran `lore init` on separate branches before either was merged, eac
 ```console
 # alice, in app
 $ git fetch -q origin && git merge --no-edit origin/bob-setup
-lore merge-driver: .lore/data/_meta.json needs a manual merge (markers are inside the JSON values)
 Auto-merging .lore/data/_meta.json
-CONFLICT (add/add): Merge conflict in .lore/data/_meta.json
 Auto-merging .lore/data/policies/pol_d431…313a.json
-Automatic merge failed; fix conflicts and then commit the result.
+ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
+  commit .lore/data/repos/rep_2537…6bbb.json row of another project
+  hint: this repository holds rows of a second project (two `lore init`s merged?): run `lore sync fix-projects` to keep one project and re-point its rows, then commit again
+Not committing merge; use 'git commit' to complete the merge.
 (exit 1)
 $ lore project list
-lore sync: imported 3
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-prj_f147…5139  app  https://github.com/client2/app
-prj_2537…6bbb  app  https://github.com/client2/app
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
+prj_b69e…5ed7  app  https://github.com/client2/app
+prj_0aae…a61f  app  https://github.com/client2/app
 $ lore sync fix-projects --dry-run
-2 project row(s); 1 would be merged
+2 project row(s): would keep prj_b69e…5ed7 and merge prj_0aae…a61f (1 row(s) to re-point)
 $ lore sync fix-projects
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-lore sync: re-pointed 2 row file(s) from local project prj_2537…6bbb to shared project prj_f147…5139
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-lore sync: repos/rep_b69e…5ed7.json: lore.db change not written (this table's files are owned by the 0.1.18 core; change it with the core's commands, e.g. `lore memory`)
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-✓ kept prj_f147…5139, merged prj_2537…6bbb
+✓ kept prj_b69e…5ed7, merged prj_0aae…a61f (1 row(s) re-pointed)
 $ lore project list
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-prj_f147…5139  app  https://github.com/client2/app
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
+prj_b69e…5ed7  app  https://github.com/client2/app
 $ git add -A && git commit -qm 'lore: one project' && git push -q origin main
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
 ```
 <!-- /example -->
 

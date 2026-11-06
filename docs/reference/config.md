@@ -127,30 +127,30 @@ When two org entries match a repo, `lore org use` records this machine's choice 
 $ lore whoami
 org        refused  (the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance))
 identity   (not resolved: the org is refused above)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
-project    prj_d431…313a
+project    prj_76bd…3f10
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: everywhere/
+personal   not set
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance)
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore org use agency
-✓ prj_d431…313a uses org agency on this machine
+✓ prj_76bd…3f10 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 
 # alice, in ~
 $ grep -A3 repo_orgs ~/.lore/config.yaml
 repo_orgs:
-  prj_d431…313a: {org: agency, remotes: [github.com/client/website]}
+    prj_76bd…3f10: {org: agency, remotes: [github.com/client/website]}
 
 # alice, in website
 $ lore org link agency --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_d431…313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_d431…313a, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  link: project prj_76bd…3f10 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_76bd…3f10, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 ```
 <!-- /example -->
@@ -165,10 +165,10 @@ default_branch: develop
 
 # alice, in website
 $ lore task add 'Fix the footer links'
-✓ tsk_05e9…4603 — Fix the footer links [medium]
+✓ tsk_54fe…28f2 — Fix the footer links [medium]
 lore live: (live, pushed)
-$ lore task done tsk_05e9…4603
-✓ tsk_05e9…4603 done
+$ lore task done tsk_54fe…28f2
+✓ tsk_54fe…28f2 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: landed on develop (601d285); leaves live once develop is fetched
@@ -294,7 +294,7 @@ A typing mistake that YAML itself cannot read, such as a bad duration, is report
 ```console
 # alice, in website
 $ lore config check
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: orgconf: config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
   hint: fix the problems listed; nothing else in lore reads an invalid config
 (exit 20)
 ```
@@ -330,9 +330,7 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 ```console
 # alice, in website
 $ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
-name: agency
-url: git@github.com:agency/notes
-id: sto_c0f3…b5b8
+✓ created store agency (sto_05e9…4603) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 $ cat .lore/stores.yaml
 stores:
     - name: agency

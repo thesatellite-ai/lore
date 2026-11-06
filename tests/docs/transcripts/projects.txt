@@ -42,9 +42,8 @@ ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
 
 ### archive a repo
 alice (work/website)$ lore repo archive help
-ERROR: [E_NOT_FOUND] repo: "help" is not a repo id (rep_…)
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main repos`
-(exit 27)
+ERROR: [E_INVALID_ID] repo: "help" is not a repo id (rep_…)
+(exit 20)
 alice (work/website)$ lore repo archive rep_54fe984c9b495744c0217776765a28f2
 ✓ help archived
 alice (work/website)$ lore repo list
@@ -57,25 +56,20 @@ alice (work/website)$ git add -A && git commit -qm 'lore: repos' && git push -q 
 
 ### one store
 alice (work/app)$ lore store init client2 file://$HOME/stores/client2
-name: client2
-url: file://~/stores/client2
-id: sto_76bd560aff0771fab8457dbfa9823f10
+✓ created store client2 (sto_76bd560aff0771fab8457dbfa9823f10) at file://~/stores/client2; recorded in .lore/stores.yaml; commit it to share
 alice (work/api)$ lore store add client2 file://$HOME/stores/client2
-name: client2
-url: file://~/stores/client2
+✓ attached store client2 (whole store, folder backend, internal) in .lore/stores.yaml; commit it to share
 alice (work/app)$ lore store list
 stores:
-  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  VISIBILITY  REACH
-  client2  file://~/stores/client2          false              false     internal    ok
+  NAME     URL                                                                                                       FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH
+  client2  file://~/stores/client2          false              false     stores.yaml  internal    ok
 count: 1
 
 ### shared notes
 alice (work/app)$ lore rule add --to client2 --body 'Every screen works on a phone.'
-lore sync: imported 3
 ✓ rul_d4314eba822f1bf5908b2b8ded5f313a [client2]
   scope: [master] severity: must
 alice (work/api)$ lore rule add --to client2 --body 'Every change comes with a test.'
-lore sync: imported 3
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 [client2]
   scope: [master] severity: must
 alice (work/api)$ lore rule add --body 'The API answers in JSON only.'
@@ -96,7 +90,6 @@ alice (work/app)$ git status --short
 
 ### archive a project
 alice (work/scratch)$ lore project list
-lore sync: imported 3
 prj_4c590afb2a0cc7ae1b97b7e4e62d6c38  scratch  https://github.com/client2/scratch
 alice (work/scratch)$ lore project archive prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 ✓ scratch archived
@@ -105,13 +98,11 @@ prj_4c590afb2a0cc7ae1b97b7e4e62d6c38  scratch  https://github.com/client2/scratc
 alice (work/scratch)$ lore project unarchive prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 ✓ scratch unarchived
 alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
-ERROR: [E_NEEDS_CONFIRM] engine: run project delete?
+ERROR: [E_NEEDS_CONFIRM] engine: project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38?
   hint: ask the person, then rerun with --yes
 (exit 26)
 alice (work/scratch)$ lore project delete prj_4c590afb2a0cc7ae1b97b7e4e62d6c38 --yes
 ✓ scratch (and this repo's row) moved to the trash (batch bat_3b6283bc4392c556bbae5f094246e913; restore: lore trash restore bat_3b6283bc4392c556bbae5f094246e913)
-lore sync: trashed rows 2
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 alice (work/scratch)$ lore project list
 (no projects)
 
@@ -120,25 +111,28 @@ alice (work/infra)$ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
 project_id: prj_f147dd95f1aaf742dd4f5214843a5139
 alice (work/infra)$ lore rule list
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/infra/.git/hooks)
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`
   hint: `lore migrate run --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)
 alice (work/infra)$ lore migrate run --dry-run
-dry_run: true
-count: 3
-rows: 
-steps: mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aaebe6aca5bb46cc521869f5ba2a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+Would upgrade 2 rows
+  mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra)
+  mode-b: rules/rul_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra)
+  mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
+  mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+Nothing written (dry run).
 alice (work/infra)$ lore migrate run
-count: 3
-rows: 
-steps: mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra), mode-b: repos/rep_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra), mode-b: rules/rul_0aaebe6aca5bb46cc521869f5ba2a61f → store shared (~/.lore/stores/infra), mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-journal: team lock: taken on refs/lore/signals until 2026-11-02T10:13:00Z (renewed every 2m0s), backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
-backup_ref: refs/lore-backup/migrate/2026-11-02
+Upgraded 2 rows
+  mode-b: memories/mem_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/.lore/stores/infra)
+  mode-b: rules/rul_b69e8368dd4986838455061d5d9e5ed7 → store shared (~/.lore/stores/infra)
+  mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
+  mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+team lock: taken on refs/lore/signals until 2026-11-02T10:13:00Z (renewed every 2m0s)
+backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
+undo: lore migrate rollback
+team lock released
 alice (work/infra)$ ls .lore; cat .lore/stores.yaml
 lore-cache.db
-lore-cache.db-shm
-lore-cache.db-wal
 lore.yaml.migrated
 state
 stores.yaml
@@ -146,7 +140,7 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 alice (work/infra)$ lore rule list; lore memory list
-rul_0aaebe6aca5bb46cc521869f5ba2a61f  Terraform changes need a plan in the pull request.  [shared]
+rul_b69e8368dd4986838455061d5d9e5ed7  Terraform changes need a plan in the pull request.  [shared]
 mem_2537f9b2f7de77bfe5ca958860216bbb  The staging cluster sleeps at night.  [shared]
 
 ### errors

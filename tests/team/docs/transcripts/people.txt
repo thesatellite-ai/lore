@@ -4,7 +4,7 @@ alice (work/website)$ lore identity show
 resolved:    human:alice@agency.example
 display:     alice
 kind:        human
-source:      git config
+source:      git config user.email
 stable:      yes
 alice$ lore identity set alice@example.com
 ✓ identity persisted: alice@example.com
@@ -21,7 +21,7 @@ alice (work/website)$ lore identity show
 resolved:    human:alice@agency.example
 display:     alice
 kind:        human
-source:      git config
+source:      git config user.email
 stable:      yes
 
 ### identity per org
@@ -55,8 +55,9 @@ This adds to ~/.lore/config.yaml:
         - github.com/agency/*
     repos:
         - github.com/client/*
+
 ✓ added org entry agency
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Bob Roe (@bob) registered in agency org/
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Bob Roe (@bob) registered in <redacted>
 bob$ cat ~/.lore/config.yaml
 orgs:
     - name: agency
@@ -75,14 +76,14 @@ bob (work/website)$ lore whoami
 org        agency  (matched by: link in <redacted>, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_7a670ae8548ed05bf57ad29ad0759504  @bob  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_2ad3618e878ebbf527d34d446ef4f891
 remotes    github.com/client/website
 stores     <redacted> on branch main  (org folder <redacted>)
 internal   <redacted> <redacted>/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   not set
 
 ### org set
 alice (work/tools)$ lore org set agency --commit
@@ -97,16 +98,11 @@ ERROR: [E_INVALID_INPUT] refusing to write .lore/org.yaml: .lore/org.yaml names 
 
 ### move
 alice (work/website)$ lore memory add --body 'the client replies faster on WhatsApp than email' --to repo
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 ✓ mem_162df51b7f78b785c97c26b41ea89666
   scope: [master]
 alice (work/website)$ lore move mem_162df51b7f78b785c97c26b41ea89666 --to agency --yes
-This becomes visible to everyone with access to store agency:
-  "the client replies faster on WhatsApp than email"
 ✓ mem_162df51b7f78b785c97c26b41ea89666 moved to store agency (same id; the old copy is tombstoned)
 alice (work/website)$ lore memory list
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 mem_162df51b7f78b785c97c26b41ea89666  the client replies faster on WhatsApp than email  [agency/client]
 
 ### store open and forget
@@ -117,11 +113,8 @@ client
 lore-store.yaml
 org
 bob$ lore store forget git@github.com:agency/notes
-✓ forgot <redacted> (removed ~/.lore/clones-v017/github.com/agency/notes.git; the next command that needs it clones it again)
+✓ forgot <redacted> (removed ~/.lore/clones/github.com/agency/notes; the next command that needs it clones it again)
 
 ### cache prune
 alice$ lore cache prune --dry-run
-cache files no repo on this machine attaches:
-  ~/.lore/cache/stores/sto_54fe984c9b495744c0217776765a28f2/main/root.db  2.5 MB
-1 file(s), 2.5 MB
---dry-run: nothing removed
+nothing to prune: every cache file belongs to a store a repo on this machine attaches

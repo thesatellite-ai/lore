@@ -23,9 +23,8 @@ Alice (an agency developer) finds her cache damaged (here its first bytes were o
 $ lore rule list
 lore: the cache ~/work/website/.lore/lore-cache.db was damaged; moved it to ~/work/website/.lore/backups/lore-cache.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_2ad3…f891 [must/always] Never put passwords in the code
+rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore doctor | grep '^Status'
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 ```
 <!-- /example -->
@@ -42,9 +41,8 @@ You can also delete the cache yourself, for example to free space or to rule it 
 $ rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_2ad3…f891 [must/always] Never put passwords in the code
+rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore doctor | grep '^Status'
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 ```
 <!-- /example -->

@@ -34,7 +34,6 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-lore live: 2 row(s) left live (main holds them)
 ○ tsk_162d…9666 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
@@ -47,16 +46,13 @@ Every command refuses to run while `~/.lore/config.yaml` is broken. `lore config
 ```console
 # alice, in ~
 $ lore config check
-✗ ~/.lore/config.yaml
-  - orgs[0] "agency": stores[0].branch "release/2026": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: fix the problems listed above; nothing else in lore reads an invalid config
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: orgs[0] "agency": stores[0].branch "release/2026": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+  hint: fix the problems listed; nothing else in lore reads an invalid config
 (exit 20)
 
 # alice, in website
 $ lore whoami
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lorecfg: load ~/.lore/config.yaml: cfgkit: 1 problem(s):
-orgs[0] "agency": stores[0].branch "release/2026": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: orgs[0] "agency": stores[0].branch "release/2026": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
   hint: run `lore config check` for every problem with its location
 (exit 20)
 ```
@@ -74,17 +70,14 @@ A **store** is a separate private repo that holds only lore notes, like a locked
 ```console
 # alice, in website
 $ lore whoami
-ERROR: [E_NOT_A_STORE] <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json and 1 more)
-  hint: create one with `lore store init <name> <url>` in a new empty repo (0.1.18); a v0.1.17 store is converted with `lore migrate run`
+ERROR: [E_NOT_A_STORE] <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
+  hint: point stores: at a repo made with `lore store init <name> <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 
 # alice, in ~
 $ lore store doctor
-! <redacted>  (entries agency; branches main)
-    <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json and 1 more)
-✓ <redacted>  (entries agency; branches main)
-  direct pushes to a store branch are confirmed on the next write; a refusal is reported there
-ERROR: [E_INVALID_INPUT] 1 store(s) need attention
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention: <redacted>: [E_NOT_A_STORE] <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
+  hint: fix each problem, then run `lore store doctor` again
 (exit 20)
 ```
 <!-- /example -->
@@ -101,12 +94,12 @@ An **org** is one company setup in your config: its stores, its people and the r
 $ lore whoami
 org        refused  (the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3))
 identity   (not resolved: the org is refused above)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_7a67…9504
 remotes    github.com/client/blog
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: everywhere/
+personal   me -> ~/.lore/personal
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
@@ -149,10 +142,7 @@ A staging entry (or a typo in `branch:`) names a store branch that does not exis
 ```console
 # alice, in website
 $ LORE_ORG=agency-stag lore org link agency-stag --project client --yes
-This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
-and the leak guards turn on for everyone in agency-stag.
-  link: project prj_54fe…28f2 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
-ERROR: [E_INVALID_INPUT] stores: store branch does not exist: github.com/agency/notes has no branch staging (0.1.18 makes a store with `lore store init <name> <url>`; v0.1.17 stores branches are no longer created)
+ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
   hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: `lore migrate run`)
 (exit 20)
 ```
@@ -168,12 +158,9 @@ A **claim** is an agent putting its name on a task, like writing your name on a 
 ```console
 # alice, in website
 $ lore task claim tsk_2ad3…f891
-ERROR: [E_OFFLINE] could not confirm the coordination write (store unreachable): gitremote: fetch: gitremote: remote did not confirm the push: fatal: '/srv/git/github.com/agency/notes' does not appear to be a git repository
-fatal: Could not read from remote repository.
-Please make sure you have the correct access rights
-and the repository exists.
-  hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
-(exit 15)
+ERROR: [E_LINK_UNKNOWN] cannot tell whether this repo is a client repo; refusing to write coordination data
+  hint: `lore whoami` shows the link status; fetch the store and retry
+(exit 18)
 ```
 <!-- /example -->
 
@@ -198,11 +185,9 @@ A **leak** is internal or personal content reaching something the client can rea
 ```console
 # alice, in website
 $ git commit -m 'add notes'
-ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
-  src/notes.ts:1                           matches internal note mem_05e9…4603 (10 words)
-Remove the internal text from src/notes.ts
-To give the client an internal note on purpose: lore move <id> --to repo (it keeps the id; it shows the text and asks)
-(a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
+ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
+  commit src/notes.ts                      matches internal note mem_05e9…4603 (10 words)
+  hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
 <!-- /example -->
@@ -227,15 +212,14 @@ Lore shares live rows through a hidden list on the remote that is not a branch (
 ```console
 # bob, in portal
 $ lore task add 'set up the portal CI'
-lore sync: imported 3
-✓ tsk_05e9…4603 — set up the portal CI [medium]
+✓ tsk_54fe…28f2 — set up the portal CI [medium]
 lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
 local     601d2850ffd0
 tracking  (none)
 seen      (none)
 pending   1 write(s) not confirmed by the remote
-  _root/tasks/tsk_05e9…4603.json
+  _root/tasks/tsk_54fe…28f2.json
 lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: tracking refspec installed, not forced into refs/lore/*
@@ -245,6 +229,7 @@ $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
   - live: post-commit and pre-push hook blocks installed
   - live: the remote refused a push to refs/lore/live, so live rows stay on this machine (the host may allow only branches and tags): [remote rejected] (pre-receive hook declined)
+lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 ```
 <!-- /example -->
 
@@ -262,14 +247,14 @@ $ lore whoami
 org        agency  (matched by: link in <redacted>, project id + remote)
 identity   Alice Doe <human:alice@agency.example>   act_2ad3…f891  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_162d…9666
 remotes    github.com/client/website
 stores     <redacted> on branch main  (org folder <redacted>)
 internal   <redacted> <redacted>/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 ```
 <!-- /example -->
 

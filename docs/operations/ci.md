@@ -28,7 +28,7 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 (exit 23)
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_2ad3…f891 [must/always] Never put passwords in the code
+rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore rule add --read-only --body 'Buttons are blue'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
@@ -51,15 +51,13 @@ A CI clone has the `.lore/data` files but not the local cache, and not lore's gi
 # alice, in ci-clone
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
-rul_2ad3…f891 [must/always] Never put passwords in the code
+rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore doctor; echo "doctor exit $?"
-  …
 Status: HEALTHY
   …
-  - this build checks the stores only (no lore.db checks)
   - live: tracking refspec installed, not forced into refs/lore/*
   …
-  -   act_7a67…9504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)
+  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   …
   - context: .lore/LORE.md not rendered yet (lore render)
 doctor exit 0
@@ -76,10 +74,9 @@ Save the JSON report and act on the exit code. Read `status` from the JSON, not 
 $ lore audit verify
 ✓ audit chain intact (0 entries)
 $ lore doctor --json > doctor.json; echo "doctor exit $?"
-this machine only: local safety copies of rows sync removed (never shared)
 doctor exit 0
 $ grep '"status"' doctor.json
-{"schema_version":1,"ok":true,"status":"healthy","db_ok":true,"wal_size_bytes":0,"identity":{"resolved":"","source":"","stable":false},"notes":["this build checks the stores only (no lore.db checks)","live: tracking refspec installed, not forced into refs/lore/*","live: last fetch 15s ago","live: post-commit and pre-push hook blocks installed","Team versions (newest save per writer and machine):","  act_7a67…9504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000002Z)"],"binary_version":"dev","exit_status":0}
+  "status": "healthy",
 ```
 <!-- /example -->
 

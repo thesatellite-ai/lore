@@ -27,23 +27,21 @@ Run `lore doctor` in the repo. It prints one block per area it checked:
 ```console
 # alice, in website
 $ lore doctor
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 Binary: dev
 [db]
   ok:       true
   wal_size: 0 bytes
 [identity]
-  resolved: 
-  source:   
-  stable:   NO (ephemeral)
+  resolved: human:alice@agency.example
+  source:   git config user.email
+  stable:   yes
 Notes:
-  - this build checks the stores only (no lore.db checks)
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   act_7a67…9504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000001Z)
+  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 ```
@@ -80,8 +78,14 @@ In a shell, `echo $?` right after the command prints it.
 ```console
 # alice, in website
 $ lore doctor --json | head -8
-this machine only: local safety copies of rows sync removed (never shared)
-{"schema_version":1,"ok":true,"status":"healthy","db_ok":true,"wal_size_bytes":0,"identity":{"resolved":"","source":"","stable":false},"notes":["this build checks the stores only (no lore.db checks)","live: tracking refspec installed, not forced into refs/lore/*","live: last fetch 10s ago","live: post-commit and pre-push hook blocks installed","Team versions (newest save per writer and machine):","  act_7a67…9504 on (code repo, no machine id): lore dev (last save 2026-11-02T10:00:00.000000001Z)"],"binary_version":"dev","exit_status":0}
+{
+  "schema_version": 1,
+  "ok": true,
+  "status": "healthy",
+  "db_ok": true,
+  "wal_size_bytes": 0,
+  "identity": {
+    "resolved": "human:alice@agency.example",
 ```
 <!-- /example -->
 
@@ -99,7 +103,6 @@ The cache is rebuilt from `.lore/data` whenever it is damaged or missing, so a d
 ```console
 # alice, in website
 $ lore doctor | grep '^Status'
-this machine only: local safety copies of rows sync removed (never shared)
 Status: HEALTHY
 ```
 <!-- /example -->
@@ -120,11 +123,11 @@ When you report a problem, attach a support bundle: one JSON file with the docto
 ```console
 # alice, in website
 $ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (1894 bytes)
+✓ wrote support bundle to bundle.json (1376 bytes)
 $ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
-  "binary_version": "0.1.0-dev",
+  "binary_version": "dev",
+    "binary_version": "dev",
     "status": "healthy",
-    "binary_version": "0.1.0-dev",
     "memories": 1,
     "rules": 2,
   "sanitized": true,

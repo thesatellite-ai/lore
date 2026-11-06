@@ -43,15 +43,9 @@ Alice creates the three stores (from a plain folder of hers, `stores`, which att
 ```console
 # alice, in stores
 $ lore store init agency git@github.com:agency/notes --yes && lore store init client git@github.com:agency/notes-client --yes && lore store init client2 git@github.com:agency/notes-client2 --yes
-name: agency
-url: git@github.com:agency/notes
-id: sto_7a67…9504
-name: client
-url: git@github.com:agency/notes-client
-id: sto_2ad3…f891
-name: client2
-url: git@github.com:agency/notes-client2
-id: sto_162d…9666
+✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store client (sto_2ad3…f891) at git@github.com:agency/notes-client; recorded in .lore/stores.yaml; commit it to share
+✓ created store client2 (sto_162d…9666) at git@github.com:agency/notes-client2; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
 $ lore org link agency --project client --store git@github.com:agency/notes-client --yes
@@ -61,7 +55,7 @@ and the leak guards turn on for everyone in agency.
 ✓ github.com/client/website (prj_54fe…28f2, github.com/client/website) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
-✓ act_05e9…4603 Alice Doe (@alice) registered in agency ./
+✓ act_05e9…4603 Alice Doe (@alice) registered in <redacted>
 $ lore memory add --body 'the client staging database is restored every Sunday night'
 ✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
@@ -81,7 +75,7 @@ $ lore whoami
 org        agency  (matched by: link in github.com/agency/notes-client client/, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_d431…313a  @bob  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_54fe…28f2
 remotes    github.com/client/website
@@ -89,9 +83,9 @@ stores     git@github.com:agency/notes on branch main  (org folder .)
            git@github.com:agency/notes-client on branch main
 internal   github.com/agency/notes-client client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 $ lore actor register
-✓ act_d431…313a Bob Roe (@bob) registered in agency ./
+✓ act_d431…313a Bob Roe (@bob) registered in <redacted>
 $ lore memory list
 mem_c0f3…b5b8  the client staging database is restored every Sunday night  [agency/client]
 

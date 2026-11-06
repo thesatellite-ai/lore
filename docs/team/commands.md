@@ -16,18 +16,25 @@ Show the resolved org, what decided it, your identity and what loads here
 ```text
 Usage:
   lore whoami
+  lore whoami <command>
 
 Examples:
   lore whoami
-  lore whoami --explain        # every org rule with hit or miss
+  # every org rule with hit or miss
+  lore whoami --explain
+  # as if the org were agency-stag
   LORE_ORG=agency-stag lore whoami
   lore whoami --json
-  lore whoami --machine-label "tomas desktop"   # synced label of this machine ("" clears)
+  # synced label of this machine ("" clears)
+  lore whoami --machine-label "tomas desktop"
+
+Available Commands:
+  show        Show the resolved org, what decided it, your identity and what loads here
 
 Flags:
       --explain                print every org rule with hit or miss and why
-      --json                   machine-readable output
-      --machine-label string   set this machine's label, synced with its profile to our own stores (MACHINE LABEL)
+      --json                   print the result (or the error) as JSON
+      --machine-label string   set this machine's label, synced with its profile to our own stores ("" clears)
       --share                  on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)
 ```
 <!-- /help -->
@@ -81,21 +88,25 @@ Link this repo to an internal project in the org's store
 
 ```text
 Usage:
-  lore org link <org> --project <folder>
+  lore org link <org>
 
 Examples:
+  # link to an internal project
   lore org link agency --project client
+  # one of the org's own repos
   lore org link agency --project lore-tools --own
+  # the default link of a repo with several, checked first
   lore org link agency --project client2 --default --dry-run
 
 Flags:
-      --default --to <org>   the link --to <org> uses when this repo has several
-      --dry-run              validate and show the link, write nothing
-      --own                  this is one of the org's own repos (only for own: patterns)
-      --project string       the internal project folder in the store (required)
-      --remote string        which remote, when the repo has several
-      --store string         which of the org's stores (default: the first)
-      --yes                  confirm without a prompt
+      --default          the link --to <org> uses when this repo has several
+      --dry-run          validate and show the link, write nothing
+      --json             print the result (or the error) as JSON
+      --own              this is one of the org's own repos (only for own: patterns)
+      --project string   the internal project folder in the store (required)
+      --remote string    which remote, when the repo has several
+      --store string     which of the org's stores (default: the first)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -106,32 +117,38 @@ Choose the org entry for this project on this machine (not committed)
 
 ```text
 Usage:
-  lore org use <entry>
+  lore org use [entry]
 
 Examples:
-  lore org use agency-stag     # work against the staging store branch here
-  lore org use --clear             # back to automatic resolution
+  # work against the staging store branch here
+  lore org use agency-stag
+  # back to automatic resolution
+  lore org use --clear
 
 Flags:
       --clear   forget the choice for this project
+      --json    print the result (or the error) as JSON
 ```
 <!-- /help -->
 
 ### `lore org set`
 
 <!-- help: org set -->
-Writes .lore/org.yaml so every teammate's lore picks the org in this repo with no config of their own. Names only, never URLs. Accepted only when the repo's remote matches the org's own: patterns; refused in client repos. Commit the file with git afterwards.
+Write the committed .lore/org.yaml (only in the org's own repos)
 
 ```text
 Usage:
-  lore org set <org> --commit
+  lore org set <org>
 
 Examples:
+  # name the org for every teammate
   lore org set agency --commit
+  # the org and its internal project
   lore org set agency --commit --project lore-tools
 
 Flags:
       --commit           confirm writing the committed .lore/org.yaml
+      --json             print the result (or the error) as JSON
       --project string   the internal project folder (optional)
 ```
 <!-- /help -->
@@ -143,19 +160,22 @@ Adopt the org entry a team suggests in its store, with your identity, and join i
 
 ```text
 Usage:
-  lore org import <store-url>
+  lore org import <url>
 
 Examples:
-  lore org import git@github.com:agency/notes --key human:me@agency.example --name "Me" --handle me
-  lore org import git@github.com:agency/notes --as agency-2
+  # join an org
+  lore org import git@github.com:agency/notes --key human:me@agency.example --name Me --handle me
+  # the suggested entry name is taken here
+  lore org import git@github.com:agency/notes --key human:me@agency.example --name Me --as agency-2
 
 Flags:
       --as string       entry name, when the suggested one is taken
       --branch string   store branch to read the suggestion from (default: the store's default branch)
       --handle string   your @handle on the roster
-      --key string      your identity key in this org: human:<your email there>
-      --name string     your display name
-      --yes             confirm without a prompt
+      --json            print the result (or the error) as JSON
+      --key string      your identity key in this org: human:<your email there> (required)
+      --name string     your display name (required)
+      --yes             answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -391,8 +411,8 @@ $ git push -q origin :refs/lore/live && git ls-remote origin
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main
 $ lore task add 'close the books for Q1'
-ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it: live: the remote live ref was deleted or rewritten (local copy kept as refs/lore-backup/live/20261102T100020)
-  hint: your local copy is kept under refs/lore-backup/live/; run `lore live restore` to put it back
+ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it (your local copy is kept as refs/lore-backup/live/20261102T100020)
+  hint: run `lore live restore` to put your live rows back on the remote
 (exit 23)
 $ lore doctor | grep 'remote live ref'
   - live: the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`
@@ -437,7 +457,11 @@ Write live rows to main now (finished rows land; open rows are copied and stay l
 
 ```text
 Usage:
-  lore land run [id]
+  lore land [id]
+  lore land <command>
+
+Available Commands:
+  run         Write live rows to main now (finished rows land; open rows are copied and stay live)
 
 Flags:
       --all              every live row of this project
@@ -455,7 +479,11 @@ Show every copy of a row (live, this branch, the default branch), which one wins
 
 ```text
 Usage:
-  lore explain run <id>
+  lore explain <id>
+  lore explain <command>
+
+Available Commands:
+  run         Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision
 
 Flags:
       --json   print the result (or the error) as JSON
@@ -467,23 +495,19 @@ Flags:
 ### `lore move`
 
 <!-- help: move -->
-Move a row to another store (same id for rows on the core; asks first)
+Move any row to another store, keeping its id (the old copy is tombstoned)
 
 ```text
 Usage:
-  lore move <id> --to <target>
-
-Examples:
-  lore move mem_0b77 --to agency
-  lore move tsk_0201 --to repo --drop-internal
+  lore move <id>
 
 Flags:
-      --drop-internal      into a client repo: remove the row's internal metadata values instead of refusing (MQ11)
-      --json               print the result as JSON (rows on the 0.1.18 core)
-      --to string          the target: repo | <org> | <org>/<folder> | me (required)
-      --with-children      a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14)
-      --with-time string   totals | none (default none): time totals for a task moved into a client repo (TQ3; totals not built yet)
-      --yes                confirm without a prompt
+      --drop-internal      into a client repo: remove the row's internal metadata values instead of refusing (MQ11, BATCH 7)
+      --json               print the result (or the error) as JSON
+      --to string          the target store: repo | me | <store>[/<folder>] (required)
+      --with-children      a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14, B7)
+      --with-time string   totals | none: per-worker time totals for a task moved into a client repo (TQ3; default: the time.client_share policy, none)
+      --yes                answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -661,7 +685,7 @@ Flags:
       --defer-until string       snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM); hides from active list until then
       --dry-run                  with --template: show the tasks that would be added, write nothing
       --due string               due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)
-      --estimate string          estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit); hours also take 90m, days 2d
+      --estimate string          estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit: points or hours); hours also take 90m; no day unit (OWNERQ-21)
       --json                     print the result (or the error) as JSON
       --key string               idempotency key: a re-run with the same key (in the same mission) adds nothing
       --lead string              the lead (@handle or actor); added to the assignees if missing

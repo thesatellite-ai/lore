@@ -38,7 +38,7 @@ $ lore live purge tsk_7a67…9504
 ✓ purged tsk_7a67…9504 from live; run `lore live compact` to drop them from the ref's history too
 lore live: (live, pushed)
 $ lore live compact --dry-run
-refs/lore/live has 2 commits (threshold 1000); compacting would keep 3 files, epoch 1 → 2
+refs/lore/live has 2 commits (threshold 1000); compacting would keep 4 files, epoch 1 → 2
 $ lore live compact
 ✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log

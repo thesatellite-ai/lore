@@ -20,7 +20,7 @@ $ lore identity show
 resolved:    human:alice@agency.example
 display:     alice
 kind:        human
-source:      git config
+source:      git config user.email
 stable:      yes
 ```
 <!-- /example -->
@@ -53,7 +53,7 @@ $ lore identity show
 resolved:    human:alice@agency.example
 display:     alice
 kind:        human
-source:      git config
+source:      git config user.email
 stable:      yes
 ```
 <!-- /example -->
@@ -111,7 +111,7 @@ This adds to ~/.lore/config.yaml:
     repos:
         - github.com/client/*
 ✓ added org entry agency
-✓ act_7a67…9504 Bob Roe (@bob) registered in agency org/
+✓ act_7a67…9504 Bob Roe (@bob) registered in <redacted>
 $ cat ~/.lore/config.yaml
 orgs:
     - name: agency
@@ -132,14 +132,14 @@ $ lore whoami
 org        agency  (matched by: link in <redacted>, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_7a67…9504  @bob  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
 stores     <redacted> on branch main  (org folder <redacted>)
 internal   <redacted> <redacted>/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   not set
 ```
 <!-- /example -->
 
@@ -175,12 +175,8 @@ $ lore memory add --body 'the client replies faster on WhatsApp than email' --to
 ✓ mem_162d…9666
   scope: [master]
 $ lore move mem_162d…9666 --to agency --yes
-This becomes visible to everyone with access to store agency:
-  "the client replies faster on WhatsApp than email"
 ✓ mem_162d…9666 moved to store agency (same id; the old copy is tombstoned)
 $ lore memory list
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 mem_162d…9666  the client replies faster on WhatsApp than email  [agency/client]
 ```
 <!-- /example -->
@@ -203,7 +199,7 @@ org
 
 # bob, in ~
 $ lore store forget git@github.com:agency/notes
-✓ forgot <redacted> (removed ~/.lore/clones-v017/github.com/agency/notes.git; the next command that needs it clones it again)
+✓ forgot <redacted> (removed ~/.lore/clones/github.com/agency/notes; the next command that needs it clones it again)
 ```
 <!-- /example -->
 
@@ -215,10 +211,7 @@ Lore keeps a cache file per attached store in `~/.lore/cache`. `lore cache prune
 ```console
 # alice, in ~
 $ lore cache prune --dry-run
-cache files no repo on this machine attaches:
-  ~/.lore/cache/stores/sto_54fe…28f2/main/root.db  2.5 MB
-1 file(s), 2.5 MB
---dry-run: nothing removed
+nothing to prune: every cache file belongs to a store a repo on this machine attaches
 ```
 <!-- /example -->
 

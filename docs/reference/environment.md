@@ -38,16 +38,19 @@ Older lore could point a repo at a shared database file with a pointer, `.lore/l
 # alice, in docs
 $ cat .lore/lore.yaml
 db_path: ${LORE_HOME}/client-docs.db
-project_id: prj_d431…313a
+project_id: prj_b4f4…a5b0
 $ lore migrate run --dry-run
-ERROR: [E_INTERNAL] internal error
-(exit 1)
+ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
+(exit 27)
 $ LORE_HOME=~/shared-dbs lore migrate run
-count: 2
-rows: 
-steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/shared-dbs/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/shared-dbs/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-journal: team lock: this repo has no remote origin; nobody to race, none taken, backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
-backup_ref: refs/lore-backup/migrate/2026-11-02
+Upgraded 1 row
+  mode-b: rules/rul_28f8…03df → store shared (~/shared-dbs/stores/blog)
+  mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
+  mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+team lock: this repo has no remote origin; nobody to race, none taken
+backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
+undo: lore migrate rollback
+team lock released
 $ lore rule list
 rul_28f8…03df  Posts go out on Tuesdays  [shared]
 
@@ -68,16 +71,20 @@ A `..` in `db_path` is refused until `LORE_ALLOW_DB_PATH_OUTSIDE=1` is set for t
 # alice, in blog
 $ cat .lore/lore.yaml
 db_path: ../client.db
-project_id: prj_d431…313a
+project_id: prj_b4f4…a5b0
 $ lore migrate run --dry-run
-ERROR: [E_INTERNAL] internal error
-(exit 1)
+ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
+  hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
+(exit 20)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
-count: 2
-rows: 
-steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-journal: team lock: this repo has no remote origin; nobody to race, none taken, backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
-backup_ref: refs/lore-backup/migrate/2026-11-02
+Upgraded 1 row
+  mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog)
+  mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
+  mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+team lock: this repo has no remote origin; nobody to race, none taken
+backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
+undo: lore migrate rollback
+team lock released
 $ lore rule list
 rul_28f8…03df  Posts go out on Tuesdays  [shared]
 ```
@@ -148,6 +155,7 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 $ LORE_LIVE=0 lore task add 'Update the privacy page'
 ✓ tsk_7a67…9504 — Update the privacy page [medium]
 $ git status --short
+ M .lore/data/_meta.json
 ?? .lore/data/task_lists/
 ?? .lore/data/tasks/
 $ lore task add 'Check the contact form on a phone'
@@ -207,11 +215,11 @@ $ LORE_LIVE_REMOTE=upstream lore task list
 # alice, in website
 $ LORE_TRACE=1 lore task list 2>&1 | grep '^trace:' | head -6
 trace: git rev-parse --is-bare-repository --show-object-format (<time>, ok)
-trace: git rev-parse --show-toplevel (<time>, ok)
 trace: git rev-parse --path-format=absolute --git-common-dir (<time>, ok)
 trace: git config --get remote.origin.url (<time>, ok)
 trace: git config --get user.name (<time>, ok)
 trace: git config --get user.email (<time>, ok)
+trace: git config --get-all remote.origin.fetch (<time>, ok)
 ```
 <!-- /example -->
 
@@ -241,7 +249,7 @@ Into a pipe lore prints no colours; `FORCE_COLOR` turns them on (`cat -v` shows 
 $ unset NO_COLOR; lore doctor | head -1 | cat -v
 Status: HEALTHY
 $ unset NO_COLOR; FORCE_COLOR=1 lore doctor | head -1 | cat -v
-Status: ^[[92mHEALTHY^[[0m
+Status: HEALTHY
 $ NO_COLOR=1 FORCE_COLOR=1 lore doctor | head -1 | cat -v
 Status: HEALTHY
 ```

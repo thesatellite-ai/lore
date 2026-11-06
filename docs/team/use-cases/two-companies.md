@@ -41,39 +41,39 @@ $ lore whoami
 org        agency  (matched by: link in <redacted>, project id + remote)
 identity   Alice Doe <human:alice@agency.example>   act_7a67…9504  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
 stores     <redacted> on branch main  (org folder <redacted>)
 internal   <redacted> <redacted>/
 links      known  1 link(s) for this repo (stores of 2 entries scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 
 # alice, in client3-api
 $ lore whoami
 org        client3  (matched by: own pattern github.com/client3/* of client3)
 identity   Alice Doe <human:alice@client3.example>   act_162d…9666  @alice  (from: org entry (config.yaml))
 repo       own repo  (no client guards)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_54fe…28f2
 remotes    github.com/client3/api
 stores     <redacted> on branch main  (org folder <redacted>)
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: client3/, everywhere/
+personal   me -> ~/.lore/personal
 
 # alice, in forked-tool
 $ lore whoami
 org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
-repo       no org  (fallback identity, personal everywhere/ notes only)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+repo       no org  (fallback identity)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_c0f3…b5b8
 remotes    github.com/someone/tool
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: everywhere/
+personal   me -> ~/.lore/personal
 ```
 <!-- /example -->
 

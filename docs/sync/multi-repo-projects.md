@@ -91,9 +91,8 @@ Archiving hides a repo or project without losing anything; unarchive brings it b
 ```console
 # alice, in website
 $ lore repo archive help
-ERROR: [E_NOT_FOUND] repo: "help" is not a repo id (rep_…)
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main repos`
-(exit 27)
+ERROR: [E_INVALID_ID] repo: "help" is not a repo id (rep_…)
+(exit 20)
 $ lore repo archive rep_54fe…28f2
 ✓ help archived
 $ lore repo list

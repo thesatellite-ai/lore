@@ -263,6 +263,7 @@ A handoff is for someone on the repo's *roster* (the list of people and agents l
 $ lore actor register
 ✓ act_4c59…6c38 alice (@alice) already registered (refreshed) in this repo
 lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -274,11 +275,10 @@ lore already knew Alice from `lore init`, so it says `already registered (refres
 $ lore task add 'Write the about page'
 ✓ tsk_3b62…e913 — Write the about page [medium]
 lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
 $ lore handoff add --for @alice --task tsk_3b62…e913 'Two of the three sections are written; the team photo is still missing'
 ✓ handoff hnd_f147…5139 for @alice
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
 $ lore inbox
 -  handoff  @alice       tsk_3b62…e913  Two of the three sections are written; the team photo is still missing
 ```
@@ -346,7 +346,7 @@ ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task o
 # alice, in website
 $ lore handoff add --for @dave 'The logo files are in the shared drive'
 ERROR: [E_NOT_FOUND] no actor "@dave"
-  hint: an actor row exists once that person or agent has written to lore; or pass an act_ id
+  hint: people join with `lore actor register` (run by that person in a repo of the team); or pass an act_ id
 (exit 27)
 ```
 <!-- /example -->

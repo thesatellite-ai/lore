@@ -113,16 +113,20 @@ A pointer file whose `db_path` climbs out with `..`, refused and then let throug
 # alice, in blog
 $ cat .lore/lore.yaml
 db_path: ../client.db
-project_id: prj_d431…313a
+project_id: prj_b4f4…a5b0
 $ lore migrate run --dry-run
-ERROR: [E_INTERNAL] internal error
-(exit 1)
+ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
+  hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
+(exit 20)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
-count: 2
-rows: 
-steps: mode-b: repos/rep_b4f4…a5b0 → store shared (~/work/stores/blog), mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog), mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog, mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-journal: team lock: this repo has no remote origin; nobody to race, none taken, backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed), undo: lore migrate rollback, team lock released
-backup_ref: refs/lore-backup/migrate/2026-11-02
+Upgraded 1 row
+  mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog)
+  mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
+  mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
+team lock: this repo has no remote origin; nobody to race, none taken
+backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
+undo: lore migrate rollback
+team lock released
 $ lore rule list
 rul_28f8…03df  Posts go out on Tuesdays  [shared]
 ```

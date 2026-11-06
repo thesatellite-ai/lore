@@ -109,17 +109,17 @@ Use it when you started a task and cannot finish it. The task is free at once, s
 ```console
 # alice, in website
 $ lore task add 'send the invoice reminder before Friday' --to agency
-✓ tsk_162d…9666 — send the invoice reminder before Friday [medium] → [agency/client]
+✓ tsk_54fe…28f2 — send the invoice reminder before Friday [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_162d…9666
-✓ claimed tsk_162d…9666 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
-$ lore task release tsk_162d…9666
-✓ released tsk_162d…9666
+$ lore task claim tsk_54fe…28f2
+✓ claimed tsk_54fe…28f2 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+$ lore task release tsk_54fe…28f2
+✓ released tsk_54fe…28f2
 
 # alice, in website
-$ lore task show tsk_162d…9666
-tsk_162d…9666
+$ lore task show tsk_54fe…28f2
+tsk_54fe…28f2
   title:    send the invoice reminder before Friday
   status:   in_progress
   priority: medium
@@ -141,20 +141,20 @@ Use it when an agent holds a task it should not work on any more. The agent's ne
 ```console
 # alice, in website
 $ lore agent start --label agent-backend --owner @alice
-✓ act_54fe…28f2 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_05e9…4603 agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 
 # agent-backend, in website
-$ lore task claim tsk_162d…9666
-✓ claimed tsk_162d…9666 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
+$ lore task claim tsk_54fe…28f2
+✓ claimed tsk_54fe…28f2 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
 
 # alice, in website
-$ lore task revoke tsk_162d…9666
-✓ revoked the claim on tsk_162d…9666 (was held by agent-backend)
+$ lore task revoke tsk_54fe…28f2
+✓ revoked the claim on tsk_54fe…28f2 (was held by agent-backend)
 
 # agent-backend, in website
-$ lore task done tsk_162d…9666
-ERROR: [E_LOST_CLAIM] tsk_162d…9666: your claim (token ct_cb04f…) was revoked by act_05e9…4603 at 10:17AM
+$ lore task done tsk_54fe…28f2
+ERROR: [E_LOST_CLAIM] tsk_54fe…28f2: your claim (token ct_cb04f…) was revoked by act_2ad3…f891 at 10:16AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 ```
@@ -180,7 +180,7 @@ $ lore task reassign tsk_c0f3…b5b8 --assign @alice
 
 # bob, in website
 $ lore task done tsk_c0f3…b5b8
-ERROR: [E_REASSIGNED] tsk_c0f3…b5b8 was reassigned while you held it; stop work on it (now assigned to act_05e9…4603)
+ERROR: [E_REASSIGNED] tsk_c0f3…b5b8 was reassigned while you held it; stop work on it (now assigned to act_2ad3…f891)
   hint: stop work on this task; `lore task next` finds other work
 (exit 14)
 ```
@@ -199,10 +199,9 @@ $ lore actor list
 act_7a67…9504 [human] bob
 act_2ad3…f891 [human] alice
 $ lore task add 'make the buttons blue' --assign @bob
+✓ tsk_162d…9666 — make the buttons blue [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
-lore live: (live, pushed)
-✓ tsk_162d…9666 — make the buttons blue [medium]
 
 # bob, in billing
 $ lore task list
@@ -220,11 +219,11 @@ Some things break when two runs use them together, like one shared test database
 ```console
 # alice, in billing
 $ lore hold claim full-suite --ttl 30m
-✓ holding full-suite until 2026-11-02T10:35:50Z
+✓ holding full-suite until 2026-11-02T10:34:40Z
 
 # bob, in billing
 $ lore hold claim full-suite --ttl 30m
-ERROR: [E_CONTENDED] full-suite is held by alice since 10:05AM (lease until 10:35AM)
+ERROR: [E_CONTENDED] full-suite is held by alice since 10:04AM (lease until 10:34AM)
   hint: retry after the hold ends, or pick other work with `lore task next`
 (exit 11)
 
@@ -234,7 +233,7 @@ $ lore hold release full-suite
 
 # bob, in billing
 $ lore hold claim full-suite --ttl 30m
-✓ holding full-suite until 2026-11-02T10:39:20Z
+✓ holding full-suite until 2026-11-02T10:38:10Z
 ```
 <!-- /example -->
 

@@ -33,9 +33,7 @@ Alice (an agency developer) creates the staging branch once (from her `stores` f
 ```console
 # alice, in stores
 $ lore store init agency_stag 'git@github.com:agency/notes?branch=staging' --yes
-name: agency_stag
-url: git@github.com:agency/notes?branch=staging
-id: sto_7a67…9504
+✓ created store agency_stag (sto_7a67…9504) at git@github.com:agency/notes?branch=staging; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
 $ lore org use agency-stag
@@ -45,13 +43,13 @@ $ lore whoami
 org        agency-stag  (matched by: lore org use (this machine))
 identity   Alice Doe <human:alice@agency.example>   act_162d…9666  @alice  (from: org entry (config.yaml))
 repo       client repo  (guards on)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
+machine    mch_fac0df3a
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
 stores     <redacted> on branch staging  (org folder <redacted>)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
-personal   local: agency-stag/, everywhere/
+personal   me -> ~/.lore/personal
 $ lore org link agency-stag --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency-stag.

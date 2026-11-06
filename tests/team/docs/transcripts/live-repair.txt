@@ -10,8 +10,8 @@ alice (work/billing)$ git push -q origin :refs/lore/live && git ls-remote origin
 601d2850ffd047c2890d2472633cc4dbdabe12fd	HEAD
 601d2850ffd047c2890d2472633cc4dbdabe12fd	refs/heads/main
 alice (work/billing)$ lore task add 'close the books for Q1'
-ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it: live: the remote live ref was deleted or rewritten (local copy kept as refs/lore-backup/live/20261102T100020)
-  hint: your local copy is kept under refs/lore-backup/live/; run `lore live restore` to put it back
+ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it (your local copy is kept as refs/lore-backup/live/20261102T100020)
+  hint: run `lore live restore` to put your live rows back on the remote
 (exit 23)
 alice (work/billing)$ lore doctor | grep 'remote live ref'
   - live: the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`

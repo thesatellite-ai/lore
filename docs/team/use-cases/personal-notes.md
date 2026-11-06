@@ -28,7 +28,6 @@ $ lore memory add --body 'I always forget the staging VPN profile' --to me
 
 # alice, in scratch
 $ lore memory add --body 'I prefer tabs over spaces' --to me
-lore sync: imported 3
 ✓ mem_2ad3…f891 [me/everywhere]
   scope: [master]
 
@@ -56,10 +55,7 @@ To sync between machines, make a private repo of your own into a store (a lore-o
 ```console
 # alice, in scratch
 $ lore store init me git@github.com:alice/lore-me --yes
-name: me
-url: git@github.com:alice/lore-me
-personal: true
-id: sto_162d…9666
+✓ created store me (sto_162d…9666) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 
 # alice, in website
 $ lore memory add --body 'my invoice template lives in the shared drive' --to me

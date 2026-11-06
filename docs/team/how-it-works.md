@@ -58,7 +58,7 @@ Live always wins over branch data. So you see a teammate's edit on live, whateve
 $ lore explain tsk_162d…9666
 tsk_162d…9666 in ~/work/billing (folder _root)
   fetched 50s ago
-  live (local df3a55c): row, live since 2026-11-02T10:00:15Z, hlc 2026-11-02T10:00:40.000Z/0000/act_7a67…9504
+  live (local 6d00426): row, live since 2026-11-02T10:00:15Z, hlc 2026-11-02T10:00:40.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: present
   wins: the live copy (rule 4: if a row id is in live, live wins)
@@ -98,7 +98,6 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-lore live: 2 row(s) left live (main holds them)
 ○ tsk_162d…9666 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
@@ -124,15 +123,14 @@ Your branch, your staged files and your working folder are never touched. Lore b
 ```console
 # bob, in portal
 $ lore task add 'set up the portal CI'
-lore sync: imported 3
-✓ tsk_05e9…4603 — set up the portal CI [medium]
+✓ tsk_54fe…28f2 — set up the portal CI [medium]
 lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
 local     601d2850ffd0
 tracking  (none)
 seen      (none)
 pending   1 write(s) not confirmed by the remote
-  _root/tasks/tsk_05e9…4603.json
+  _root/tasks/tsk_54fe…28f2.json
 lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 ```
 <!-- /example -->
@@ -184,14 +182,14 @@ $ lore sync >/dev/null && lore task done tsk_05e9…4603
 lore live: (live, pushed)
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-lore: added "lore: land 2 rows (_root)" to feat/login (act_2ad3…f891, tsk_05e9…4603)
-[feat/login 34ee210] fix login timeout
+lore: added "lore: land 1 row (_root)" to feat/login (tsk_05e9…4603)
+[feat/login 7898daa] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 $ git log --oneline -3
-7898daa lore: land 2 rows (_root)
-34ee210 fix login timeout
-86dbae4 fix the checkout page on phones
+ccfb0bb lore: land 1 row (_root)
+7898daa fix login timeout
+9b40ce7 fix the checkout page on phones
 ```
 <!-- /example -->
 
@@ -219,7 +217,7 @@ Every live write is a commit, so the live list's history keeps growing. **Compac
 ```console
 # alice, in website
 $ lore live compact --dry-run
-refs/lore/live has 2 commits (threshold 1000); compacting would keep 3 files, epoch 1 → 2
+refs/lore/live has 2 commits (threshold 1000); compacting would keep 4 files, epoch 1 → 2
 $ lore live compact
 ✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
@@ -270,7 +268,7 @@ $ cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p refs/lor
   "kind": "claim",
   "task": "tsk_76bd…3f10",
   "project": "client",
-  "holder": "act_3b62…e913",
+  "holder": "act_f147…5139",
   "holder_label": "agent:agent-backend",
   "session": "s-10e90368",
   "claim_token": "ct_a5f6f…",
@@ -346,9 +344,9 @@ ERROR: [E_NO_WORK] nothing ready:
 # alice, in api
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 $ lore task list
-lore: tsk_162d…9666 merged 10:23 (found by: ancestry, 86dbae4) but it could not be recorded: write tsk_162d…9666: signals: push: gitremote: invalid request: destination "" is not a full ref; the next lore command retries
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 86dbae4)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
-○ tsk_c0f3…b5b8 deploy to staging [medium]  [agency/client2]
+○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
@@ -397,16 +395,17 @@ $ git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client/.lor
 {
   "_v": 1,
   "features": [
-    "hlc"
+    "hlc",
+    "task_tree"
   ],
   "links": [
     {
-      "project_id": "prj_05e9…4603",
+      "project_id": "prj_54fe…28f2",
       "remote": "github.com/client/website"
     }
   ],
   "min_lore_version": "0.1.18",
-  "project_id": "prj_4c59…6c38"
+  "project_id": "prj_3b62…e913"
 }
 ```
 <!-- /example -->
@@ -441,11 +440,9 @@ A **leak** is internal or personal content reaching anything the client can read
 # alice, in website
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
-ERROR: [E_LEAK_BLOCKED] lore: blocked, this commit would share internal content with the client repo:
-  src/notes.ts:1                           matches internal note mem_05e9…4603 (10 words)
-Remove the internal text from src/notes.ts
-To give the client an internal note on purpose: lore move <id> --to repo (it keeps the id; it shows the text and asks)
-(a copy-paste check, not a wall: it cannot see paraphrase; see `lore check leaks --explain`)
+ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
+  commit src/notes.ts                      matches internal note mem_05e9…4603 (10 words)
+  hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
 <!-- /example -->

@@ -174,8 +174,6 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 # alice, in website
 $ lore memory delete mem_28f8…03df --yes
 ✓ mem_28f8…03df moved to the trash (restore: lore trash restore mem_28f8…03df)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 $ lore memory show mem_28f8…03df || true
 ERROR: [E_IN_TRASH] engine: mem_28f8…03df is in the trash (deleted by act_4c59…6c38 on 2026-11-02 10:02)
   hint: lore trash show mem_28f8…03df; bring it back with lore trash restore mem_28f8…03df
@@ -200,8 +198,6 @@ $ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
 $ lore memory delete mem_3b62…e913 --yes
 ✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ```
 <!-- /example -->
 

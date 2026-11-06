@@ -30,8 +30,7 @@ $ lore init --non-interactive --name=website
 lore initialized
     project_id: prj_7a67…9504
     name:       website
-    repo_id:    rep_b69e…5ed7
-
+    repo_id:    rep_2ad3…f891
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
@@ -47,7 +46,6 @@ data
 lock
 lore-cache.db
 state
-
 .lore/data:
 _meta.json
 actors
@@ -75,50 +73,46 @@ Add a rule. lore writes the row file at once and reminds you that it is not comm
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
-✓ rul_2ad3…f891
+✓ rul_162d…9666
   scope: [master] severity: must
 $ git status --short
 ?? .lore/data/rules/
-$ cat .lore/data/rules/rul_2ad3…f891.json
+$ cat .lore/data/rules/rul_162d…9666.json
 {
-  "_hlc": "2026-11-02T10:00:30.000Z/0000/act_162d…9666",
+  "_hlc": "2026-11-02T10:00:30.000Z/0000/act_54fe…28f2",
   "_o": {
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "466cc836cfd2",
+      "commit": "796667b5e581",
       "state": "branch"
     },
-    "repo": "rep_54fe…28f2",
+    "project": "prj_7a67…9504",
+    "repo": "rep_2ad3…f891",
     "store": "repo"
   },
   "_table": "rules",
   "_v": 2,
   "_w": {
-    "v": "0.1.0-dev"
+    "v": "dev"
   },
   "activation": "always",
   "body": "Run the tests before you push.",
   "created_at": "2026-11-02T10:00:00.000000001Z",
-  "created_by": "act_162d…9666",
-  "id": "rul_2ad3…f891",
+  "created_by": "act_54fe…28f2",
+  "id": "rul_162d…9666",
   "project_id": "prj_7a67…9504",
   "severity": "must",
   "source_kind": "manual",
   "trust_score": 0.5,
   "updated_at": "2026-11-02T10:00:00.000000001Z",
-  "updated_by": "act_162d…9666"
+  "updated_by": "act_54fe…28f2"
 }
 $ lore sync status
-baselined:        true
-data dir present: true
-tracked files:    4
-pending exports:  0
-open conflicts:   0
-trash rows:       0
-uncommitted:      1
 meta quarantined: 0
 live rows:        0 (_root)
+conflicted files: 0
+refused pushes:   0
 $ git add -A && git commit -qm 'lore: test rule' && git push -q origin main
 ```
 <!-- /example -->
@@ -136,7 +130,7 @@ $ git clone -q https://github.com/client/website
 
 # bob, in website
 $ lore rule list
-rul_2ad3…f891 [must/always] Run the tests before you push.
+rul_162d…9666 [must/always] Run the tests before you push.
 ```
 <!-- /example -->
 
@@ -152,15 +146,10 @@ From now on, `git pull`, `git checkout`, `git merge` and `git rebase` just chang
 $ lore sync
 · already in sync
 $ lore sync status
-baselined:        true
-data dir present: true
-tracked files:    4
-pending exports:  0
-open conflicts:   0
-trash rows:       0
-uncommitted:      0
 meta quarantined: 0
 live rows:        0 (_root)
+conflicted files: 0
+refused pushes:   0
 ```
 <!-- /example -->
 
@@ -188,7 +177,7 @@ $ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than
 $ git status --short
 ?? .lore/data/memories/
 $ lore sync
-lore sync: imported 1
+· already in sync
 $ git status --short
 ?? .lore/data/memories/
 $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin main
@@ -215,22 +204,18 @@ $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsAp
 ```console
 # alice, in shop
 $ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
-✓ lore initialized at ~/work/shop
+lore initialized
     project_id: prj_c0f3…b5b8
     name:       shop
-    origin:     https://github.com/client/shop
-    db:         ~/work/shop/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
+    repo_id:    rep_76bd…3f10
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/shop/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
-  next: lore learn-from docs   to bootstrap from existing markdown
-        lore render            to write .lore/LORE.md for those tools
-lore sync: exported 0 rows to .lore/data — review and commit it
+  next: lore render            to write .lore/LORE.md for those tools
 $ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)
 $ lore sync
-lore sync: imported 3
+· already in sync
 $ ls .git/hooks | grep -v sample; cat .gitattributes
 commit-msg
 post-checkout
@@ -253,9 +238,9 @@ Text that looks like a password stops `lore memory add` with a question; a bare 
 ```console
 # alice, in website
 $ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
-✓ mem_76bd…3f10
+✓ mem_d431…313a
   scope: [master]
-$ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
+$ ls .lore/data/memories | grep -c mem_d431…313a || true
 1
 ```
 <!-- /example -->

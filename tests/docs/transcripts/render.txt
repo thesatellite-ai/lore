@@ -1,21 +1,15 @@
 
 ### init
 alice (work/website)$ lore init --non-interactive --name=website
-✓ lore initialized at ~/work/website
+lore initialized
     project_id: prj_7a670ae8548ed05bf57ad29ad0759504
     name:       website
-    origin:     https://github.com/client/website
-    db:         ~/work/website/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
+    repo_id:    rep_2ad3618e878ebbf527d34d446ef4f891
 
 · context targets: claude_code (CLAUDE.md) (detected in this repo; change with --target <profile>)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
-  next: lore learn-from docs   to bootstrap from existing markdown
-        lore render            to write .lore/LORE.md for those tools
-lore sync: exported 0 rows to .lore/data — review and commit it
-lore sync: backup of lore.db before bootstrap: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+  next: lore render            to write .lore/LORE.md for those tools
 
 ### render
 alice (work/website)$ lore render
@@ -114,14 +108,14 @@ alice (work/website)$ head -3 AGENTS.md
 
 ### why context
 alice (work/website)$ lore why-context
-render_id:    rnd_2ad3618e878ebbf527d34d446ef4f891
+render_id:    rnd_162df51b7f78b785c97c26b41ea89666
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
 total_bytes:  2769
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
 scope:        {"included":{"rules":1,"hotfixes":1,"memories":0},"cut_summary":{"file":".lore/LORE.md","profile":"claude_code","budget":32000,"before":520,"after":2769,"budget_exceeded":false,"index_collapsed":false,"entries":[]}}
 alice (work/website)$ lore why-context --rendered | head -8
-render_id:    rnd_2ad3618e878ebbf527d34d446ef4f891
+render_id:    rnd_162df51b7f78b785c97c26b41ea89666
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
 total_bytes:  2769

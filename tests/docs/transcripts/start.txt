@@ -1,44 +1,31 @@
 
 ### version
 alice (work/website)$ lore --version
-lore version 0.1.0-dev
+lore version dev
 
 ### init
 alice (work/website)$ lore init --non-interactive --name=website
-✓ lore initialized at ~/work/website
+lore initialized
     project_id: prj_7a670ae8548ed05bf57ad29ad0759504
     name:       website
-    origin:     https://github.com/client/website
-    db:         ~/work/website/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
+    repo_id:    rep_2ad3618e878ebbf527d34d446ef4f891
 
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
-  next: lore learn-from docs   to bootstrap from existing markdown
-        lore render            to write .lore/LORE.md for those tools
-lore sync: exported 0 rows to .lore/data — review and commit it
-lore sync: backup of lore.db before bootstrap: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+  next: lore render            to write .lore/LORE.md for those tools
 alice (work/website)$ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
 ?? AGENTS.md
 
-### setup
-alice (work/website)$ lore setup
-lore sync: imported 3
-→ running ent schema migration...
-→ building FTS5 search index...
-✓ setup complete (registry fingerprint: 601d2850ffd047c2)
-
 ### first rule
 alice (work/website)$ lore rule add --body 'Run the tests before you push'
-✓ rul_2ad3618e878ebbf527d34d446ef4f891
+✓ rul_162df51b7f78b785c97c26b41ea89666
   scope: [master] severity: must
 alice (work/website)$ lore rule list
-rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Run the tests before you push
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
 
 ### render
 alice (work/website)$ lore render
@@ -52,37 +39,32 @@ Read `.lore/LORE.md` (at the repository root) before answering: it holds this pr
 
 ### commit
 alice (work/website)$ git add -A && git commit -qm 'lore: first rule' && git log --oneline
-86dbae4 lore: first rule
-9b40ce7 init
+601d285 lore: first rule
+86dbae4 init
 
 ### doctor
 alice (work/website)$ lore doctor
 Status: HEALTHY
-Binary: 0.1.0-dev
+Binary: dev
 
 [db]
   ok:       true
-  wal_size: 4152 bytes
-
-[sync]
-  baselined:        true
-  pending exports:  0
-  open conflicts:   0
-  file errors:      0
-  merge driver:     true
-  uncommitted:      0
+  wal_size: 0 bytes
 
 [identity]
   resolved: human:alice@agency.example
-  source:   git config
+  source:   git config user.email
   stable:   yes
 
 Notes:
   - live: tracking refspec installed, not forced into refs/lore/*
-  - live: last fetch 5s ago
+  - live: last fetch 35s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   act_162df51b7f78b785c97c26b41ea89666 on (code repo, no machine id): lore 0.1.0-dev (last save 2026-11-02T10:00:00.000000001Z)
+  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
+  -   alice on mch_fac0df3a: lore dev (last save 2026-11-02)
+
+Context:
   - context: .lore/LORE.md 2554 of 16000 bytes (15%, profile codex); warn at 80%
 
 ### sql

@@ -13,7 +13,7 @@ The list below is written by `tests/docs/commands_index.py` from `lore --help` a
 Three hidden commands are left out on purpose: `lore merge-driver`, `lore sync hook` and `lore task hook commit-msg`. Git runs them from the hooks and the merge setting that lore installs; you never run them by hand.
 
 <!-- commands -->
-504 commands, 428 of them leaf commands (the ones you run; a command marked … only groups others).
+527 commands, 437 of them leaf commands (the ones you run; a command marked … only groups others).
 
 Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [architecturenote](#lore-architecturenote) · [audit](#lore-audit) · [batch](#lore-batch) · [behaviour](#lore-behaviour) · [cache](#lore-cache) · [check](#lore-check) · [comment](#lore-comment) · [commit](#lore-commit) · [completion](#lore-completion) · [config](#lore-config) · [context](#lore-context) · [cookbookrecipe](#lore-cookbookrecipe) · [decision](#lore-decision) · [directive](#lore-directive) · [doctor](#lore-doctor) · [explain](#lore-explain) · [external-source](#lore-external-source) · [gate](#lore-gate) · [handoff](#lore-handoff) · [hold](#lore-hold) · [hotfix](#lore-hotfix) · [identity](#lore-identity) · [inbox](#lore-inbox) · [incident](#lore-incident) · [init](#lore-init) · [land](#lore-land) · [link](#lore-link) · [lint](#lore-lint) · [live](#lore-live) · [machine](#lore-machine) · [memory](#lore-memory) · [meta](#lore-meta) · [migrate](#lore-migrate) · [mission](#lore-mission) · [move](#lore-move) · [org](#lore-org) · [pattern](#lore-pattern) · [pii-pattern](#lore-pii-pattern) · [pin](#lore-pin) · [plan](#lore-plan) · [playbook](#lore-playbook) · [policy](#lore-policy) · [project](#lore-project) · [prompt](#lore-prompt) · [reminder](#lore-reminder) · [render](#lore-render) · [repo](#lore-repo) · [resource](#lore-resource) · [row](#lore-row) · [rule](#lore-rule) · [run](#lore-run) · [scope](#lore-scope) · [search](#lore-search) · [secrets](#lore-secrets) · [session](#lore-session) · [setup](#lore-setup) · [show](#lore-show) · [skill](#lore-skill) · [snapshot](#lore-snapshot) · [spec](#lore-spec) · [sql](#lore-sql) · [store](#lore-store) · [suggestion](#lore-suggestion) · [support-bundle](#lore-support-bundle) · [sync](#lore-sync) · [tag](#lore-tag) · [task](#lore-task) · [tasklist](#lore-tasklist) · [tastepref](#lore-tastepref) · [techdoc](#lore-techdoc) · [trash](#lore-trash) · [tui](#lore-tui) · [upgrade](#lore-upgrade) · [vars](#lore-vars) · [version](#lore-version) · [whoami](#lore-whoami) · [why-context](#lore-why-context) · [workflow](#lore-workflow) · [workspace](#lore-workspace)
 
@@ -33,7 +33,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore agent` … | Agent sessions (one actor per session label) | — |
-| `lore agent start` | Register an agent actor for this session and print its environment | [team/commands › lore agent start](../../docs/team/commands.md#lore-agent-start) |
+| `lore agent start` | Register an agent actor for this session and print its environment; --tool: record a tool session's details (session hook) | [team/commands › lore agent start](../../docs/team/commands.md#lore-agent-start) |
 
 ### lore api
 
@@ -60,8 +60,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore audit` … | Inspect and verify the hash-chained audit log of knowledge changes | — |
-| `lore audit log` | Show recent audit entries, newest first | [operations/audit-log › Step 2 — Catch a change made outside lore](../../docs/operations/audit-log.md#step-2--catch-a-change-made-outside-lore) |
-| `lore audit verify` | Check the audit chain and look for rows changed outside lore | [operations/audit-log › Step 2 — Catch a change made outside lore](../../docs/operations/audit-log.md#step-2--catch-a-change-made-outside-lore) |
+| `lore audit log` | Show recent audit entries, newest first | [operations/audit-log › Step 2 — Catch a change to the log](../../docs/operations/audit-log.md#step-2--catch-a-change-to-the-log) |
+| `lore audit verify` | Check that the audit chain is unbroken (every entry links to the one before) | [operations/audit-log › Step 2 — Catch a change to the log](../../docs/operations/audit-log.md#step-2--catch-a-change-to-the-log) |
 
 ### lore batch
 
@@ -70,7 +70,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore batch` … | Bulk changes: list, show and undo a batch | — |
 | `lore batch list` | List bulk actions (batches) run on this machine | — |
 | `lore batch show` | Show one batch: its kind, who ran it and the rows it wrote | — |
-| `lore batch undo` | Undo a bulk action: restore a delete batch, or move the rows a create batch added to the trash | — |
+| `lore batch undo` | Undo a bulk action: restore a delete batch, put the rows an edit batch changed back, or move the rows a create batch added to the trash | — |
 
 ### lore behaviour
 
@@ -96,7 +96,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore check` … | Leak checks: internal or personal content must never reach the client | — |
-| `lore check leaks` | Check staged files and the commit message (hooks), or the tree structure (--ci) | [team/commands › lore check leaks](../../docs/team/commands.md#lore-check-leaks) |
+| `lore check leaks` | Check staged files and the commit message (hooks), or the tree structure (--ci), for internal or personal content | [team/commands › lore check leaks](../../docs/team/commands.md#lore-check-leaks) |
 | `lore check pr-body` | Check a pull request body or comment before posting it (agents: always) | [team/commands › lore check pr-body](../../docs/team/commands.md#lore-check-pr-body) |
 
 ### lore comment
@@ -126,17 +126,18 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore config` … | Get/set keys of ~/.lore/config.yaml | [operations/plugins-and-db-config › Step 2 — Read and write database settings](../../docs/operations/plugins-and-db-config.md#step-2--read-and-write-database-settings) |
+| `lore config` … | Get/set keys of ~/.lore/config.yaml | [operations/plugins-and-db-config › Step 1 — Read and write your settings](../../docs/operations/plugins-and-db-config.md#step-1--read-and-write-your-settings) |
 | `lore config check` | Validate ~/.lore/config.yaml (orgs, stores, live settings) and list every problem | [reference/config › What lore config check refuses](../../docs/reference/config.md#what-lore-config-check-refuses) |
-| `lore config get` | Get a key of ~/.lore/config.yaml (a dotted path, e.g. live.autopush) | [operations/plugins-and-db-config › Step 2 — Read and write database settings](../../docs/operations/plugins-and-db-config.md#step-2--read-and-write-database-settings) |
-| `lore config list` | List every key set in ~/.lore/config.yaml | [operations/plugins-and-db-config › Step 2 — Read and write database settings](../../docs/operations/plugins-and-db-config.md#step-2--read-and-write-database-settings) |
-| `lore config set` | Set a key of ~/.lore/config.yaml (keeps comments and order) | [operations/plugins-and-db-config › Step 2 — Read and write database settings](../../docs/operations/plugins-and-db-config.md#step-2--read-and-write-database-settings) |
+| `lore config get` | Get a key of ~/.lore/config.yaml (a dotted path, e.g. live.autopush) | [operations/plugins-and-db-config › Step 1 — Read and write your settings](../../docs/operations/plugins-and-db-config.md#step-1--read-and-write-your-settings) |
+| `lore config list` | List every key set in ~/.lore/config.yaml | [operations/plugins-and-db-config › Step 1 — Read and write your settings](../../docs/operations/plugins-and-db-config.md#step-1--read-and-write-your-settings) |
+| `lore config set` | Set a key of ~/.lore/config.yaml (keeps comments and order) | [operations/plugins-and-db-config › Step 1 — Read and write your settings](../../docs/operations/plugins-and-db-config.md#step-1--read-and-write-your-settings) |
 
 ### lore context
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore context` | Print the rules, hotfixes and notes for a file, topic or prompt (the agent's fetch command) | [operations/ci › Step 5 — Give tools the notes they cannot import](../../docs/operations/ci.md#step-5--give-tools-the-notes-they-cannot-import) |
+| `lore context` … | Print the rules, hotfixes and notes for a file, task, topic or prompt (the agent's fetch command) | [operations/ci › Step 5 — Give tools the notes they cannot import](../../docs/operations/ci.md#step-5--give-tools-the-notes-they-cannot-import) |
+| `lore context fetch` | Print the rules, hotfixes and notes for a file, task, topic or prompt (the agent's fetch command) | [operations/ci › Step 5 — Give tools the notes they cannot import](../../docs/operations/ci.md#step-5--give-tools-the-notes-they-cannot-import) |
 
 ### lore cookbookrecipe
 
@@ -176,13 +177,15 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore doctor` | Run health checks; exit 0 healthy, 1 degraded, 2 broken | [operations/doctor › Check lore's health with lore doctor](../../docs/operations/doctor.md#check-lores-health-with-lore-doctor) |
+| `lore doctor` … | Run health checks; exit 0 healthy, 1 degraded, 2 broken | [operations/doctor › Check lore's health with lore doctor](../../docs/operations/doctor.md#check-lores-health-with-lore-doctor) |
+| `lore doctor run` | Run health checks; exit 0 healthy, 1 degraded, 2 broken | [operations/doctor › Check lore's health with lore doctor](../../docs/operations/doctor.md#check-lores-health-with-lore-doctor) |
 
 ### lore explain
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore explain` | Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision | [team/commands › lore explain](../../docs/team/commands.md#lore-explain) |
+| `lore explain` … | Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision | [team/commands › lore explain](../../docs/team/commands.md#lore-explain) |
+| `lore explain run` | Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision | [team/commands › lore explain](../../docs/team/commands.md#lore-explain) |
 
 ### lore external-source
 
@@ -249,7 +252,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore inbox` | What needs you: assignments, handoffs, gates, expired claims, blocked tasks, findings | [tasks/missions-and-plans › Step 7 — Leave a handoff and read your inbox](../../docs/tasks/missions-and-plans.md#step-7--leave-a-handoff-and-read-your-inbox) |
+| `lore inbox` … | What needs you: assignments, handoffs, gates, expired claims, blocked tasks, findings | [tasks/missions-and-plans › Step 7 — Leave a handoff and read your inbox](../../docs/tasks/missions-and-plans.md#step-7--leave-a-handoff-and-read-your-inbox) |
+| `lore inbox show` | What needs you: assignments, handoffs, gates, expired claims, blocked tasks, findings | [tasks/missions-and-plans › Step 7 — Leave a handoff and read your inbox](../../docs/tasks/missions-and-plans.md#step-7--leave-a-handoff-and-read-your-inbox) |
 
 ### lore incident
 
@@ -267,13 +271,14 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore init` | Initialize a new lore project at the given path (default cwd) | [knowledge/first-project › Step 1 — Set up lore in the repo](../../docs/knowledge/first-project.md#step-1--set-up-lore-in-the-repo) |
+| `lore init` | Initialize a lore project in this repository (project row and repo id) | [knowledge/first-project › Step 1 — Set up lore in the repo](../../docs/knowledge/first-project.md#step-1--set-up-lore-in-the-repo) |
 
 ### lore land
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore land` | Write live rows to main now (finished rows land; open rows are copied and stay live) | [team/commands › lore land](../../docs/team/commands.md#lore-land) |
+| `lore land` … | Write live rows to main now (finished rows land; open rows are copied and stay live) | [team/commands › lore land](../../docs/team/commands.md#lore-land) |
+| `lore land run` | Write live rows to main now (finished rows land; open rows are copied and stay live) | [team/commands › lore land](../../docs/team/commands.md#lore-land) |
 
 ### lore link
 
@@ -288,7 +293,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore lint` | Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, unknown metadata keys, stored secrets) | — |
+| `lore lint` … | Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, unknown metadata keys, stored secrets) | — |
+| `lore lint run` | Report problems in the attached stores (dangling references, shadowed variables, task cycles, long time spans, duplicate imports, unknown metadata keys, stored secrets) | — |
 
 ### lore live
 
@@ -306,7 +312,10 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore machine` | List the machine profiles of the attached stores | — |
+| `lore machine` … | List the machine profiles of the attached stores | — |
+| `lore machine label` | Set (or clear with "") this machine's synced label and refresh its profile | — |
+| `lore machine list` | List the machine profiles of the attached stores | — |
+| `lore machine show` | Show one machine profile in full | — |
 
 ### lore memory
 
@@ -333,7 +342,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore meta adopt` | Move another place's metadata key rows into this place (ids kept) | — |
 | `lore meta delete` | Delete a metadata key and its allowed values | — |
 | `lore meta describe` | Set a metadata key's description | — |
-| `lore meta edit` | Edit a metadata key (strict, internal, allowed values) | — |
+| `lore meta edit` | Edit a metadata key (strict, internal, allowed values, type) | — |
 | `lore meta export` | Export metadata values as CSV or JSON lines (id,key,value) | — |
 | `lore meta forget` | Remove unused metadata keys for good (tombstones kept) | — |
 | `lore meta get` | Show a row's metadata (sensitive values masked unless --show-sensitive) | — |
@@ -384,7 +393,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore move` | Move a row to another store (same id for rows on the core; asks first) | [team/identity-and-stores › Step 6 — Move a note to where it belongs: lore move](../../docs/team/identity-and-stores.md#step-6--move-a-note-to-where-it-belongs-lore-move) |
+| `lore move` | Move a row to another store (same id; asks first) | [team/identity-and-stores › Step 6 — Move a note to where it belongs: lore move](../../docs/team/identity-and-stores.md#step-6--move-a-note-to-where-it-belongs-lore-move) |
 
 ### lore org
 
@@ -416,11 +425,11 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore pii-pattern` … | Old spelling of lore secrets rule (custom secret detection patterns) | [operations/secrets-and-pii › Add your own patterns](../../docs/operations/secrets-and-pii.md#add-your-own-patterns) |
-| `lore pii-pattern add` | Replaced by `lore secrets rule add` | [operations/secrets-and-pii › Add your own patterns](../../docs/operations/secrets-and-pii.md#add-your-own-patterns) |
-| `lore pii-pattern disable` | Replaced by `lore secrets rule off` | [operations/secrets-and-pii › Add your own patterns](../../docs/operations/secrets-and-pii.md#add-your-own-patterns) |
-| `lore pii-pattern enable` | Replaced by `lore secrets rule on` | [operations/secrets-and-pii › Add your own patterns](../../docs/operations/secrets-and-pii.md#add-your-own-patterns) |
-| `lore pii-pattern list` | List PII patterns | [operations/secrets-and-pii › Add your own patterns](../../docs/operations/secrets-and-pii.md#add-your-own-patterns) |
+| `lore pii-pattern` … | Old spelling of lore secrets rule (custom secret detection patterns) | — |
+| `lore pii-pattern add` | Replaced by `lore secrets rule add` | — |
+| `lore pii-pattern disable` | Replaced by `lore secrets rule off` | — |
+| `lore pii-pattern enable` | Replaced by `lore secrets rule on` | — |
+| `lore pii-pattern list` | List PII patterns | — |
 
 ### lore pin
 
@@ -506,7 +515,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore render` | Render .lore/LORE.md from scoped knowledge and point your AI tools at it | [knowledge/render-and-agent-files › Step 5 — Point another tool](../../docs/knowledge/render-and-agent-files.md#step-5--point-another-tool) |
+| `lore render` … | Render .lore/LORE.md from scoped knowledge and point your AI tools at it | [knowledge/render-and-agent-files › Step 5 — Point another tool](../../docs/knowledge/render-and-agent-files.md#step-5--point-another-tool) |
+| `lore render run` | Render .lore/LORE.md from scoped knowledge and point your AI tools at it | [knowledge/render-and-agent-files › Step 5 — Point another tool](../../docs/knowledge/render-and-agent-files.md#step-5--point-another-tool) |
 
 ### lore repo
 
@@ -587,10 +597,10 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore run` … | Log agent runs (start, end, cancel) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
-| `lore run cancel` | Cancel a run (alias for `end --outcome=cancelled`) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
-| `lore run end` | Close a run with outcome (success \| partial \| failed \| cancelled) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
-| `lore run start` | Open a run (records what agent is attempting which task with which model) | [tasks/run-log › Step 2 — Log the steps](../../docs/tasks/run-log.md#step-2--log-the-steps) |
+| `lore run` … | Log agent runs (start, end, cancel) | [tasks/run-log › Step 1 — Start a run](../../docs/tasks/run-log.md#step-1--start-a-run) |
+| `lore run cancel` | Cancel a run (end it with outcome cancelled) | [tasks/run-log › Step 1 — Start a run](../../docs/tasks/run-log.md#step-1--start-a-run) |
+| `lore run end` | Close a run with an outcome (success \| partial \| failed \| cancelled) | [tasks/run-log › Step 1 — Start a run](../../docs/tasks/run-log.md#step-1--start-a-run) |
+| `lore run start` | Open a run (records what agent is attempting which task with which model) | [tasks/run-log › Step 1 — Start a run](../../docs/tasks/run-log.md#step-1--start-a-run) |
 
 ### lore scope
 
@@ -606,8 +616,9 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore search` … | Unified full-text search across all entities (fans out per entity + RRF-merges) | [knowledge/search › Try it: whole words, prefixes and several words](../../docs/knowledge/search.md#try-it-whole-words-prefixes-and-several-words) |
-| `lore search rebuild` | Drop + recreate FTS5 tables and reindex from source rows | [knowledge/search › Keep the index healthy](../../docs/knowledge/search.md#keep-the-index-healthy) |
-| `lore search status` | Per-entity FTS5 row counts + drift health | [knowledge/search › Keep the index healthy](../../docs/knowledge/search.md#keep-the-index-healthy) |
+| `lore search rebuild` | Rebuild the search index: every attached store's cache, from its row files | [knowledge/search › Keep the index healthy](../../docs/knowledge/search.md#keep-the-index-healthy) |
+| `lore search run` | Unified full-text search across all entities (fans out per entity + RRF-merges) | [knowledge/search › Try it: whole words, prefixes and several words](../../docs/knowledge/search.md#try-it-whole-words-prefixes-and-several-words) |
+| `lore search status` | Per-entity full-text index row counts and drift of the core cache | [knowledge/search › Keep the index healthy](../../docs/knowledge/search.md#keep-the-index-healthy) |
 
 ### lore secrets
 
@@ -624,11 +635,11 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore secrets relabel` | Rewrite each reference's holder label from its holder id (one batch) | — |
 | `lore secrets rename-entry` | Rewrite an entry name everywhere (a renamed vault entry; one batch) | — |
 | `lore secrets rule` … | Secret detection rules on top of the defaults (add, edit, off, on) | — |
-| `lore secrets rule add` | Add a lore secret rule on top of the defaults | — |
+| `lore secrets rule add` | Add a lore secret rule on top of the defaults | [operations/secrets-and-pii › Add your own patterns](../../docs/operations/secrets-and-pii.md#add-your-own-patterns) |
 | `lore secrets rule edit` | Change a secret rule (lore defaults and gitleaks ids included) | — |
 | `lore secrets rule off` | Switch a secret rule off at a level, with a reason | — |
 | `lore secrets rule on` | Switch a secret rule back on at a level | — |
-| `lore secrets rules` | List secret rule rows (added, changed or off) with their level | — |
+| `lore secrets rules` | List secret rule rows (added, changed or off) with their level | [operations/secrets-and-pii › Add your own patterns](../../docs/operations/secrets-and-pii.md#add-your-own-patterns) |
 | `lore secrets show` | Show a secret reference or a row's references; --reveal prints the value (asks every time) | — |
 
 ### lore session
@@ -636,13 +647,14 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore session` … | Inspect this machine's agent sessions (local only, never synced) | — |
-| `lore session list` | List agent sessions on this machine: tool, session, model, version, place | [tasks/run-log › Pitfalls](../../docs/tasks/run-log.md#pitfalls) |
+| `lore session list` | List this machine's agent sessions: actor, tool, tool session, writes, new keys, flags (local only) | [tasks/run-log › Pitfalls](../../docs/tasks/run-log.md#pitfalls) |
 
 ### lore setup
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore setup` | Run one-time migrations after install/upgrade (FTS index + future migrations) | [knowledge/first-project › Step 2 — Run setup once](../../docs/knowledge/first-project.md#step-2--run-setup-once) *(brief)* |
+| `lore setup` … | Update the local database schema after install or upgrade; --agent-hooks: install the tools' session and context hooks | [knowledge/first-project › Step 2 — Nothing else to set up](../../docs/knowledge/first-project.md#step-2--nothing-else-to-set-up) *(brief)* |
+| `lore setup run` | Update the local database schema after install or upgrade; --agent-hooks: install the tools' session and context hooks | [knowledge/first-project › Step 2 — Nothing else to set up](../../docs/knowledge/first-project.md#step-2--nothing-else-to-set-up) *(brief)* |
 
 ### lore show
 
@@ -700,7 +712,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore store open` | Check out a store branch for browsing (detached, under ~/.lore/worktrees) | [team/identity-and-stores › Step 7 — Look inside a store, or drop your copy: lore store open and forget](../../docs/team/identity-and-stores.md#step-7--look-inside-a-store-or-drop-your-copy-lore-store-open-and-forget) |
 | `lore store remove` | Detach a store from this repo (its rows stay in the store); asks first | — |
 | `lore store set-url` | Record a store's new address (the store repo moved or was renamed); its id and rows stay | — |
-| `lore store show` | List the configured stores, their clones and (with --links) the link index | [team/commands › lore store show](../../docs/team/commands.md#lore-store-show) |
+| `lore store show` | List the configured v0.1.17 org stores, their clones and (with --links) the link index | [team/commands › lore store show](../../docs/team/commands.md#lore-store-show) |
 | `lore store visibility` | Set whether a store's rows may reach client repos and committed files (internal or shareable) | — |
 
 ### lore suggestion
@@ -719,7 +731,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore support-bundle` | Produce a sanitized incident-report bundle | [operations/doctor › Send a support bundle with a bug report](../../docs/operations/doctor.md#send-a-support-bundle-with-a-bug-report) *(brief)* |
+| `lore support-bundle` … | Produce a sanitized incident-report bundle (no row text) | [operations/doctor › Send a support bundle with a bug report](../../docs/operations/doctor.md#send-a-support-bundle-with-a-bug-report) *(brief)* |
+| `lore support-bundle run` | Produce a sanitized incident-report bundle (no row text) | [operations/doctor › Send a support bundle with a bug report](../../docs/operations/doctor.md#send-a-support-bundle-with-a-bug-report) *(brief)* |
 
 ### lore sync
 
@@ -733,11 +746,13 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore sync merge-rows` | Fold a duplicate row into another (references move, the dropped row is trashed) | [sync/conflicts-and-duplicates › Step 4 — The same fact written twice](../../docs/sync/conflicts-and-duplicates.md#step-4--the-same-fact-written-twice) |
 | `lore sync peek` | List the lore rows another branch carries, without checking it out | [sync/branches-peek-promote › Step 2 — Peek at a teammate's branch](../../docs/sync/branches-peek-promote.md#step-2--peek-at-a-teammates-branch) |
 | `lore sync promote` | Commit rows onto another local branch (e.g. an urgent rule onto main) | [sync/branches-peek-promote › Step 3 — Promote one rule to main](../../docs/sync/branches-peek-promote.md#step-3--promote-one-rule-to-main) |
-| `lore sync purge` | Durably remove rows archived before a cutoff | [sync/trash-and-purge › Step 3 — Purge archived notes for good](../../docs/sync/trash-and-purge.md#step-3--purge-archived-notes-for-good) |
+| `lore sync purge` | Durably remove rows archived before a cutoff (moved: lore trash purge --archived-before) | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
 | `lore sync resolve` | Close a conflict, keeping the current version or the saved other one | [sync/conflicts-and-duplicates › Step 3 — The file and your database both changed](../../docs/sync/conflicts-and-duplicates.md#step-3--the-file-and-your-database-both-changed) |
-| `lore sync status` | Show sync state: baseline, pending exports, conflicts, broken files | [sync/how-notes-travel-with-git › Step 4 — Run a pass by hand when you want to see it](../../docs/sync/how-notes-travel-with-git.md#step-4--run-a-pass-by-hand-when-you-want-to-see-it) |
-| `lore sync trash` … | Moved: lore trash --local (this spelling goes away in the next release) | [sync/trash-and-purge › Step 1 — Get back a note whose file disappeared](../../docs/sync/trash-and-purge.md#step-1--get-back-a-note-whose-file-disappeared) |
-| `lore sync trash restore` | Moved: lore trash restore --local <n> | [sync/trash-and-purge › Step 1 — Get back a note whose file disappeared](../../docs/sync/trash-and-purge.md#step-1--get-back-a-note-whose-file-disappeared) |
+| `lore sync run` | Sync now: exchange every store, reconcile .lore/data, and print what changed | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
+| `lore sync status` | Show sync state: baseline, pending exports, conflicts, broken files, live rows | [sync/how-notes-travel-with-git › Step 4 — Run a pass by hand when you want to see it](../../docs/sync/how-notes-travel-with-git.md#step-4--run-a-pass-by-hand-when-you-want-to-see-it) |
+| `lore sync trash` … | Moved: lore trash --local (this spelling goes away in the next release) | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
+| `lore sync trash list` | Moved: lore trash --local (this spelling goes away in the next release) | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
+| `lore sync trash restore` | Moved: lore trash restore --local <n> | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
 
 ### lore tag
 
@@ -774,15 +789,15 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore task delete` | Delete a task and its sub-tasks (it goes to the trash; lore trash restore brings it back) | [tasks/tasks › Step 8 — Cancel or delete a task](../../docs/tasks/tasks.md#step-8--cancel-or-delete-a-task) |
 | `lore task done` | Mark a task done (with the code that finished it) | [tasks/tasks › Step 6 — Finish a task](../../docs/tasks/tasks.md#step-6--finish-a-task) |
 | `lore task edit` | Edit task fields (only flags you pass are applied) | [tasks/tasks › Step 5 — Change a task](../../docs/tasks/tasks.md#step-5--change-a-task) |
-| `lore task export` | Export tasks as CSV, JSON (the import shape) or Markdown | — |
+| `lore task export` | Export tasks as CSV, JSON (the import shape), Markdown or a GitHub issue list | — |
 | `lore task heartbeat` | Renew your claim's lease (alive, not progress) | [team/commands › lore task heartbeat](../../docs/team/commands.md#lore-task-heartbeat) |
 | `lore task history` | Show a task's activity history (field changes, claims; --git for older versions) | — |
 | `lore task import` | Import tasks from a CSV or JSON file (one batch) | — |
 | `lore task list` | List tasks | [tasks/tasks › Step 2 — See your list](../../docs/tasks/tasks.md#step-2--see-your-list) |
-| `lore task merged` | Mark a done task as merged by hand (when lore cannot see the merge) | [tasks/link-commits › Step 5 — Mark a task merged by hand](../../docs/tasks/link-commits.md#step-5--mark-a-task-merged-by-hand) |
+| `lore task merged` | Record that a done task's work reached the default branch | [tasks/link-commits › Step 5 — Mark a task merged by hand](../../docs/tasks/link-commits.md#step-5--mark-a-task-merged-by-hand) |
 | `lore task next` | Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency) | [team/commands › lore task next](../../docs/team/commands.md#lore-task-next) |
 | `lore task note` | Record a progress note on a task (pushes your work branch) | [team/commands › lore task note](../../docs/team/commands.md#lore-task-note) |
-| `lore task reassign` | Assign a task to someone else, dropping any claim (human override) | [team/agents › Step 3 — Give the task to someone else: lore task reassign](../../docs/team/agents.md#step-3--give-the-task-to-someone-else-lore-task-reassign) |
+| `lore task reassign` | Assign a task to someone else, dropping any claim (human override); --from reassigns every open task of a person as one batch | [team/agents › Step 3 — Give the task to someone else: lore task reassign](../../docs/team/agents.md#step-3--give-the-task-to-someone-else-lore-task-reassign) |
 | `lore task recur` … | A repeating task's schedule (show, edit, skip, stop) | — |
 | `lore task recur edit` | Change the recurrence rule (this and later instances) | — |
 | `lore task recur show` | Show a recurring task's rule, series and next dates | — |
@@ -863,19 +878,25 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore trash` | List the rows in the trash | — |
+| `lore trash` … | List the rows in the trash | — |
+| `lore trash list` | List the rows in the trash | — |
+| `lore trash purge` | Remove rows from the trash for good (a tombstone stays forever); needs --confirm | — |
+| `lore trash restore` | Bring a row (with its dependents) or a whole batch back from the trash, same ids | — |
+| `lore trash show` | Show one row in the trash, body included (sensitive values masked) | — |
+| `lore trash stats` | Count the trash per type, store and deleter, rows past retention, and tombstones | — |
 
 ### lore tui
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore tui` | Browse the knowledge DB in an interactive terminal UI | [knowledge/tui › Step 1 — Open it](../../docs/knowledge/tui.md#step-1--open-it) *(brief)* |
+| `lore tui` | Browse every table of the attached stores in the terminal (read-only) | [knowledge/tui › Step 1 — Open it](../../docs/knowledge/tui.md#step-1--open-it) *(brief)* |
 
 ### lore upgrade
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore upgrade` | Install the newest lore release (or this project's pinned version) | — |
+| `lore upgrade` … | Install the newest lore release (or this project's pinned version, or exactly --version) | — |
+| `lore upgrade run` | Install the newest lore release (or this project's pinned version, or exactly --version) | — |
 
 ### lore vars
 
@@ -899,13 +920,15 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore whoami` | Show the resolved org, what decided it, your identity and what loads here | [team/commands › lore whoami](../../docs/team/commands.md#lore-whoami) |
+| `lore whoami` … | Show the resolved org, what decided it, your identity and what loads here | [team/commands › lore whoami](../../docs/team/commands.md#lore-whoami) |
+| `lore whoami show` | Show the resolved org, what decided it, your identity and what loads here | [team/commands › lore whoami](../../docs/team/commands.md#lore-whoami) |
 
 ### lore why-context
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore why-context` | Show the last rendered context (what the coding tool saw) | [knowledge/render-and-agent-files › Try it: what did the tool read?](../../docs/knowledge/render-and-agent-files.md#try-it-what-did-the-tool-read) |
+| `lore why-context` … | Show the last rendered context (what the coding tool saw) | [knowledge/render-and-agent-files › Try it: what did the tool read?](../../docs/knowledge/render-and-agent-files.md#try-it-what-did-the-tool-read) |
+| `lore why-context show` | Show the last rendered context (what the agent saw); --cut: what the render moved out of the core of LORE.md, and why | [knowledge/render-and-agent-files › Try it: what did the tool read?](../../docs/knowledge/render-and-agent-files.md#try-it-what-did-the-tool-read) |
 
 ### lore workflow
 

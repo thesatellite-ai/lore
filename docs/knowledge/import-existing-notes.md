@@ -41,8 +41,6 @@ $ lore memory add --body 'The client pays invoices on the first Monday of the mo
 ✓ mem_d7c7…7fe6
   scope: [master]
 $ rm .ai/notes.md && git status --short
- M .lore/LORE.full.md
- M .lore/LORE.md
 ?? .lore/data/memories/mem_d7c7…7fe6.json
 ?? .lore/data/rules/rul_78c8…5b6c.json
 ```

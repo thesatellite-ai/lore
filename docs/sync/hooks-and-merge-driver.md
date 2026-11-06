@@ -79,9 +79,8 @@ Alice breaks a note file by hand and tries to commit it. The pre-commit hook sto
 # alice, in website
 $ printf '{ broken' > .lore/data/rules/rul_b4f4…a5b0.json && git add .lore
 $ git commit -m 'oops'
-lore sync: invalid-file rules/rul_b4f4…a5b0.json: canonjson: decode: invalid character 'b' looking for beginning of value
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_b4f4…a5b0.json (invalid-file), .lore/data/rules/rul_b4f4…a5b0.json (invalid JSON)
-  hint: fix the JSON syntax of the files marked invalid JSON; fix or restore the files marked invalid-file or import-failed (`git checkout -- <file>` drops a hand edit), then commit again
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4…a5b0.json (invalid JSON)
+  hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
 (exit 1)
 $ git checkout -q HEAD -- .lore/data && git status --short
 ```

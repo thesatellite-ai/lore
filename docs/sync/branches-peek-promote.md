@@ -48,13 +48,13 @@ Bob (another agency developer) is on main. He fetches and peeks at Alice's branc
 # bob, in website
 $ git fetch -q origin
 $ lore sync peek origin/feature/payments
-actors             act_162d…9666  
+actors             act_54fe…28f2  
 memories           mem_05e9…4603  The client replies faster on WhatsApp than email.
 memories           mem_c0f3…b5b8  We use Stripe for payments.
 policies           pol_d431…313a  context.targets
 projects           prj_7a67…9504  website
-repos              rep_54fe…28f2  
-rules              rul_2ad3…f891  Run the tests before you push.
+repos              rep_2ad3…f891  
+rules              rul_162d…9666  Run the tests before you push.
 rules              rul_76bd…3f10  Never put passwords in the code.
 $ lore sync peek origin/feature/payments memories
 memories           mem_05e9…4603  The client replies faster on WhatsApp than email.
@@ -90,7 +90,7 @@ $ git push -q origin main
 
 # bob, in website
 $ git pull -q && lore rule list
-rul_2ad3…f891 [must/always] Run the tests before you push.
+rul_162d…9666 [must/always] Run the tests before you push.
 rul_76bd…3f10 [must/always] Never put passwords in the code.
 ```
 <!-- /example -->

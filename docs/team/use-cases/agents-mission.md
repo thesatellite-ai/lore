@@ -40,7 +40,7 @@ tasks:
 ```console
 # alice, in api
 $ lore agent start --label agent-coord --owner @alice
-✓ act_7a67…9504 agent agent-coord (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
+✓ act_7a67…9504 agent agent-coord (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 
 # agent-coord, in api
@@ -69,7 +69,7 @@ Each worker registers, reads its inbox and asks for the next ready task of its r
 ```console
 # alice, in agents/api
 $ lore agent start --label agent-backend --owner @alice
-✓ act_76bd…3f10 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
+✓ act_76bd…3f10 agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 
 # agent-backend, in agents/api
@@ -81,7 +81,7 @@ $ lore task next --mission msn_2ad3…f891 --repo api
 
 # alice, in agents/app
 $ lore agent start --label agent-frontend --owner @alice
-✓ act_d431…313a agent agent-frontend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
+✓ act_d431…313a agent agent-frontend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 
 # agent-frontend, in agents/app
@@ -92,7 +92,7 @@ ERROR: [E_NO_WORK] nothing ready:
 
 # alice, in agents/infra
 $ lore agent start --label agent-infra --owner @alice
-✓ act_b4f4…a5b0 agent agent-infra (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
+✓ act_b4f4…a5b0 agent agent-infra (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 export LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 
 # agent-infra, in agents/infra
@@ -149,9 +149,9 @@ ERROR: [E_NO_WORK] nothing ready:
 # alice, in api
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 $ lore task list
-lore: tsk_162d…9666 merged 10:23 (found by: ancestry, 86dbae4) but it could not be recorded: write tsk_162d…9666: signals: push: gitremote: invalid request: destination "" is not a full ref; the next lore command retries
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 86dbae4)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
-○ tsk_c0f3…b5b8 deploy to staging [medium]  [agency/client2]
+○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
@@ -190,7 +190,7 @@ A replacement agent, `agent-frontend-2`, takes the task over (attempt 2), fetche
 ```console
 # alice, in agents/fe2/app
 $ lore agent start --label agent-frontend-2 --owner @alice
-✓ act_2537…6bbb agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
+✓ act_2537…6bbb agent agent-frontend-2 (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 
 # agent-frontend-2, in agents/fe2/app

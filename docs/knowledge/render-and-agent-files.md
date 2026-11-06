@@ -56,18 +56,14 @@ Here the repo already had a `CLAUDE.md` with hand-written notes before lore arri
 ```console
 # alice, in website
 $ lore init --non-interactive --name=website
-✓ lore initialized at ~/work/website
+lore initialized
     project_id: prj_7a67…9504
     name:       website
-    origin:     https://github.com/client/website
-    db:         ~/work/website/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
+    repo_id:    rep_2ad3…f891
 · context targets: claude_code (CLAUDE.md) (detected in this repo; change with --target <profile>)
 ✓ ~/work/website/CLAUDE.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
-  next: lore learn-from docs   to bootstrap from existing markdown
-        lore render            to write .lore/LORE.md for those tools
-lore sync: exported 0 rows to .lore/data — review and commit it
+  next: lore render            to write .lore/LORE.md for those tools
 ```
 <!-- /example -->
 
@@ -201,7 +197,7 @@ $ head -3 AGENTS.md
 ```console
 # alice, in website
 $ lore why-context
-render_id:    rnd_2ad3…f891
+render_id:    rnd_162d…9666
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
 total_bytes:  2769

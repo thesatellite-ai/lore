@@ -52,15 +52,14 @@ Two developers, one repo, two branches. Bob (an agency developer) gives Alice (a
 <!-- example: small-team#assign-across-branches only=1,3 -->
 ```console
 # bob, in billing
-$ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
+$ git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
 ✓ tsk_162d…9666 — check the checkout page on a phone [medium]
 lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
 
 # alice, in billing
 $ lore sync && lore task list --mine
 · already in sync
-lore live: 2 row(s) left live (main holds them)
 ○ tsk_162d…9666 check the checkout page on a phone [medium]
 ```
 <!-- /example -->

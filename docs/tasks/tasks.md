@@ -259,7 +259,6 @@ tvw_4c59…6c38  open_todo  where "status:todo"
 $ lore task view list
 tvw_4c59…6c38  open_todo  where "status:todo"
 $ lore task list --view open_todo
-lore sync: imported 1
 ○ tsk_c0f3…b5b8 Write the welcome email [medium]
 ○ tsk_76bd…3f10 Send the welcome email [medium]
 ○ tsk_b4f4…a5b0 Check every link on the home page [medium]

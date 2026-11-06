@@ -84,8 +84,8 @@ $ lore task done tsk_2ad3…f891 --commit $(git rev-parse HEAD) --no-lesson
 lore live: (live, pushed)
 lore live: landed on main (05513aa); leaves live once main is fetched
 $ lore sync
-· already in sync
 lore live: 1 row(s) left live (main holds them)
+lore live: pushed waiting live writes
 $ lore task list --status done
 ✓ tsk_2ad3…f891 merged 10:04 (found by: ancestry, 9b40ce7)
 ✓ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
@@ -127,13 +127,11 @@ Merged matters when another task waits for this one with `--after <id>:merged` (
 $ lore link list
 cml_6a86…ed8c  9b40ce71 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
 $ lore link remove cml_6a86…ed8c
-ERROR: [E_NEEDS_CONFIRM] engine: run link remove?
+ERROR: [E_NEEDS_CONFIRM] engine: link remove cml_6a86…ed8c?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore link remove cml_6a86…ed8c --yes
 ✓ link cml_6a86…ed8c removed
-lore sync: trashed rows 1
-lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `lore trash restore --local <id>`)
 ```
 <!-- /example -->
 
