@@ -172,7 +172,17 @@ func (h *liveHost) hookSession(ctx context.Context) (*liveRun, *liveSession) {
 	}
 	top, _ := livePlace(cwd)
 	r := &liveRun{h: h, sessions: map[string]*liveSession{}}
-	return r, r.session(ctx, top)
+	return r, r.session(withRun(ctx, r), top)
+}
+
+// withRun is ctx carrying r, the way LiveHook's Around runs an operation.
+// A git hook reads rows through the app (the F16 leak check of a ride or a
+// push): without the run in its ctx the repo store's live overlay sees no
+// session, live-only rows look missing, and the app's open printed the
+// v0.1.17 "live rows not visible yet; run `lore migrate run`" note in
+// every `git commit` / `git push` of a repo with open live rows.
+func withRun(ctx context.Context, r *liveRun) context.Context {
+	return context.WithValue(ctx, liveRunKey{}, r)
 }
 
 // postCommit is `lore sync hook post-commit`. It never fails the commit:
@@ -182,6 +192,7 @@ func (h *liveHost) postCommit(ctx context.Context) {
 	if s == nil {
 		return
 	}
+	ctx = withRun(ctx, r)
 	defer r.finish(ctx)
 	branch, ok := s.rideBranch(ctx)
 	if !ok {
@@ -209,8 +220,17 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 	if err != nil {
 		return errs.Wrap(errs.Internal, "read the pre-push input", err)
 	}
+	// The check reads rows through the app: with live rows on, it runs
+	// under this hook's run (withRun) so live-only rows are seen. A refused
+	// push only drops the lock: nothing of the run is pushed.
+	var r *liveRun
+	if !liveDisabled() {
+		r = &liveRun{h: h, sessions: map[string]*liveSession{}}
+		ctx = withRun(ctx, r)
+	}
 	// First F16 over what the push sends (live_prepush.go; fails closed).
-	if cwd, cerr := os.Getwd(); cerr == nil {
+	cwd, cerr := os.Getwd()
+	if cerr == nil {
 		top, _ := livePlace(cwd)
 		if repo, oerr := gitref.Open(ctx, top, h.git()); oerr == nil && !repo.Bare() {
 			remote := ""
@@ -218,18 +238,22 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 				remote = args[0]
 			}
 			if lerr := h.prePushLeakCheck(ctx, repo, remote, parsePushUpdates(in)); lerr != nil {
+				if r != nil {
+					r.release()
+				}
 				return lerr
 			}
 		}
 	}
-	if liveDisabled() {
-		return nil
-	}
-	r, s := h.hookSession(ctx)
-	if s == nil {
+	if r == nil || cerr != nil {
 		return nil
 	}
 	defer r.finish(ctx)
+	top, _ := livePlace(cwd)
+	s := r.session(ctx, top)
+	if s == nil {
+		return nil
+	}
 	branch, ok := s.rideBranch(ctx)
 	if !ok {
 		return nil

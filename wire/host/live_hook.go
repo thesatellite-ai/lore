@@ -199,6 +199,17 @@ func (r *liveRun) finish(ctx context.Context) {
 	}
 }
 
+// release drops every session's live lock without finishing the run
+// (nothing is pushed or landed): a git hook that refuses (a pre-push leak
+// refusal) stops here.
+func (r *liveRun) release() {
+	for _, s := range r.sessions {
+		if s != nil {
+			s.release()
+		}
+	}
+}
+
 // LiveHook is the live-rows hook (see the file comment). The old binary
 // keeps its own live wiring until it is deleted, so this hook is not in
 // Default: cmd/lore adds it.
