@@ -119,7 +119,7 @@ func (b *Backend) syncClone(ctx context.Context) (rep store.SyncReport, err erro
 		case pushOffline:
 			rep.Offline = true
 		case pushRefused:
-			rep.Refused = append(rep.Refused, store.Refusal{Code: errs.PolicyDenied, Reason: "the remote refused the push: " + msg})
+			rep.Refused = append(rep.Refused, b.refusedRows(ctx, remote, h, "the remote refused the push: "+msg)...)
 		case pushLostRace:
 			if attempt+1 < MaxPushAttempts {
 				continue
@@ -130,6 +130,35 @@ func (b *Backend) syncClone(ctx context.Context) (rep store.SyncReport, err erro
 		break
 	}
 	return b.count(ctx, rep, before, pushedOver, pushed)
+}
+
+// refusedRows is one Refusal per row the refused push carried (row files
+// that differ between the remote tip and the local tip, any folder), so a
+// caller can say which rows wait; when they cannot be listed (no remote
+// tip, git failed, no row file in the range) it is one Refusal with no id.
+func (b *Backend) refusedRows(ctx context.Context, remote, tip, reason string) []store.Refusal {
+	whole := []store.Refusal{{Code: errs.PolicyDenied, Reason: reason}}
+	if remote == "" {
+		return whole
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"diff", "--name-only", "-z", "--no-renames", remote, tip}})
+	if err != nil {
+		return whole
+	}
+	var rows []store.Refusal
+	for _, p := range splitZ(out) {
+		rel, ok := rowRel(p)
+		if !ok {
+			continue
+		}
+		if _, id, ok := rowfs.ParseRowPath(rel); ok {
+			rows = append(rows, store.Refusal{ID: id, Code: errs.PolicyDenied, Reason: reason})
+		}
+	}
+	if len(rows) == 0 {
+		return whole
+	}
+	return rows
 }
 
 // count fills Received (rows changed between the local tip before the sync

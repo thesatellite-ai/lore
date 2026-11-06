@@ -440,6 +440,7 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	}
 	out := SyncOut{Stores: []Report{}}
 	var problems []string
+	pushRefused := true // every refusal is a push the remote refused (not a merge refusal)
 	for _, n := range names {
 		if n == store.SourceRepo {
 			continue
@@ -451,11 +452,16 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, Merged: len(rep.Merged),
 			Refused: len(rep.Refused), Offline: rep.Offline}
 		for _, x := range rep.Refused {
+			pushRefused = pushRefused && x.Code == errs.PolicyDenied
 			p := string(x.Code) + " " + x.ID.String() + ": " + x.Reason
 			r.Problems = append(r.Problems, p)
 			problems = append(problems, string(n)+": "+p)
 		}
 		out.Stores = append(out.Stores, r)
+	}
+	if len(problems) > 0 && pushRefused {
+		return out, errs.New(errs.Stale, "sync: "+strings.Join(problems, "; ")).
+			WithHint("the store refused the push; the commits wait in the local clone: `lore sync status` shows the rows and the next step")
 	}
 	if len(problems) > 0 {
 		return out, errs.New(errs.Stale, "sync: "+strings.Join(problems, "; ")).
