@@ -172,6 +172,12 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		// hides. Not a whole-row validation: a row the source accepted (a
 		// v0.1.17 row with extra columns) still moves.
 		typed := retype(def, cur.Fields)
+		// F-MOVE-1: a container only the source holds is left behind,
+		// never carried as a dangling id the next hop cannot resolve.
+		var left []Warning
+		if typed, left, err = e.leaveContainers(ctx, src, to, def, typed); err != nil {
+			return Written{}, err
+		}
 		if dst.Client {
 			if err = refuseSecretRefs(row.Row{ID: cur.ID, Fields: typed}); err != nil {
 				return Written{}, err
@@ -183,7 +189,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 					return Written{}, err
 				}
 			}
-			if typed, err = e.rehomeProject(ctx, to, def, typed); err != nil {
+			if typed, err = e.rehomeProject(ctx, to, def, typed, true); err != nil {
 				return Written{}, err
 			}
 			if cur.Meta, dropped, err = e.internalMeta(ctx, cur, opt.DropInternal); err != nil {
@@ -203,13 +209,26 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 					return Written{}, err
 				}
 			}
-		} else if n, secs := movedTime(typed); n > 0 {
-			// TIME 11.5 (FA-LTASK-4): the entries travel with the row; the
-			// line tells the old project its history went too.
-			dropped = append(dropped, Warning{Code: WarnTimeMoved, Field: fieldTimeEntries,
-				Message: strconv.Itoa(n) + " time entries (" + timeentry.FormatSeconds(secs) + ") moved with the task"})
+		} else {
+			// F-MOVE-1: the row belongs to the place it moved to when that
+			// place has one project; otherwise its project stays as it was.
+			if typed, err = e.rehomeProject(ctx, to, def, typed, false); err != nil {
+				return Written{}, err
+			}
+			if n, secs := movedTime(typed); n > 0 {
+				// TIME 11.5 (FA-LTASK-4): the entries travel with the row; the
+				// line tells the old project its history went too.
+				dropped = append(dropped, Warning{Code: WarnTimeMoved, Field: fieldTimeEntries,
+					Message: strconv.Itoa(n) + " time entries (" + timeentry.FormatSeconds(secs) + ") moved with the task"})
+			}
 		}
+		dropped = append(dropped, left...)
 		names := slices.Sorted(maps.Keys(typed))
+		if !dst.Client { // F-MOVE-1: a kept parent_id nobody here holds is carried (TASK 6.8)
+			if names, err = e.carriedEdges(ctx, def, typed, names); err != nil {
+				return Written{}, err
+			}
+		}
 		if err = e.checkRefs(ctx, to, def, typed, names); err != nil {
 			return Written{}, err
 		}
@@ -446,12 +465,14 @@ func withMove(origin value.JSON, at hlc.HLC, by, from, to string) (value.JSON, e
 // table: schema.Builtin).
 const projectField = "project_id"
 
-// rehomeProject points a row moving into the client repo to at that
-// store's project: the source's project is an internal store folder's,
-// whose id must not reach the client (and F15 refuses it). A row whose
-// project already lives in to is unchanged; to must hold exactly one live
-// project, else the move is refused (nothing written).
-func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.TableDef, fields map[string]value.Value) (map[string]value.Value, error) {
+// rehomeProject points a row moving into to at that store's project. For
+// a client repo (strict) the source's project is an internal store
+// folder's, whose id must not reach the client (and F15 refuses it), so to
+// must hold exactly one live project, else the move is refused (nothing
+// written). For our own places (not strict, F-MOVE-1) the row takes to's
+// project when to holds exactly one and keeps its own otherwise. A row
+// whose project already lives in to is unchanged either way.
+func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.TableDef, fields map[string]value.Value, strict bool) (map[string]value.Value, error) {
 	f, ok := def.Field(projectField)
 	cur, has := fields[projectField]
 	if !ok || !has || f.RefTable != schema.TableProjects {
@@ -467,6 +488,9 @@ func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.
 		return nil, err
 	}
 	if len(projects) != 1 {
+		if !strict {
+			return fields, nil
+		}
 		return nil, errs.New(errs.Unsupported, "engine: store "+string(to)+" holds "+strconv.Itoa(len(projects))+" projects; a row moving into it needs exactly one to belong to").
 			WithHint("run `lore init` in the client repo first")
 	}
