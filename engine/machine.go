@@ -21,6 +21,7 @@ package engine
 // and search order are unchanged by its presence.
 
 import (
+	"context"
 	"slices"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -111,9 +112,12 @@ func (e *Engine) listSource(source store.Source, table row.Table) store.Source {
 
 // refuseMachineMove is a move's machine-store rule (P3-LOCAL-1): a
 // machine-local row never travels to a store, and the machine store takes
-// no moved row. Both are E_INVALID_INPUT, said before any lookup, so the
-// answer is the rule and not a misleading E_NOT_FOUND.
-func (e *Engine) refuseMachineMove(ref Ref, to store.Source) error {
+// no moved row. Both are E_INVALID_INPUT. A move into the machine store is
+// refused before any lookup (the rule holds for every id). A machine-local
+// id is looked up in the machine store first, so an id that names no row
+// is E_NOT_FOUND and a trashed one E_IN_TRASH, as every lookup answers
+// (G-CORE-2, the lookup parity matrices); only a live row gets the rule.
+func (e *Engine) refuseMachineMove(ctx context.Context, ref Ref, to store.Source) error {
 	if to == store.SourceMachine {
 		return errs.New(errs.InvalidInput, "engine: the machine store keeps only machine-local rows; nothing moves into it").
 			WithHint("move to the repo or an attached store")
@@ -124,8 +128,19 @@ func (e *Engine) refuseMachineMove(ref Ref, to store.Source) error {
 			table = def.Name
 		}
 	}
-	if e.IsMachineLocal(table) {
-		return errs.New(errs.InvalidInput, "engine: "+string(table)+" rows are machine-local: they stay on this machine and never move to a store")
+	if !e.IsMachineLocal(table) {
+		return nil
 	}
-	return nil
+	src, cur, err := e.locate(ctx, Ref{Table: table, ID: ref.ID})
+	if err != nil {
+		return err
+	}
+	if cur.Deleted {
+		st, aerr := e.attached(src)
+		if aerr != nil {
+			return aerr
+		}
+		return deletedErr(ctx, st, cur, "is deleted")
+	}
+	return errs.New(errs.InvalidInput, "engine: "+string(table)+" rows are machine-local: they stay on this machine and never move to a store")
 }
