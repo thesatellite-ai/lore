@@ -14,20 +14,17 @@
 package attach
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
@@ -73,10 +70,11 @@ type Config struct {
 // (E_CONFIG_INVALID), naming the entry by position and name.
 func Parse(b []byte) (Config, error) {
 	var c Config
-	dec := yaml.NewDecoder(bytes.NewReader(b))
-	dec.KnownFields(true)
-	if err := dec.Decode(&c); err != nil && !errors.Is(err, io.EOF) { // an empty file lists no stores
-		return Config{}, errs.Wrap(errs.ConfigInvalid, "attach: "+FileName+" is not valid", err)
+	// Strict: every key of stores.yaml is lore's, so a typo is refused with
+	// its line and key path (yamlerr), never yaml's Go type names; an empty
+	// file lists no stores.
+	if err := yamlerr.Decode(b, &c, yamlerr.Strict); err != nil {
+		return Config{}, errs.Wrap(errs.ConfigInvalid, "attach: "+FileName+" is not valid: "+err.Error(), err)
 	}
 	var problems []string
 	seen := map[store.Source]bool{}
