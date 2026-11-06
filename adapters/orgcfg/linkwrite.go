@@ -64,6 +64,9 @@ var (
 	ErrFolderElsewhere = errors.New("orgcfg: folder exists in another store")
 	// ErrLinkRace: every push lost a race.
 	ErrLinkRace = errors.New("orgcfg: store push still rejected")
+	// ErrStoreRefused: the store answered and refused the push for a
+	// reason other than a lost race (a hook decline, branch protection).
+	ErrStoreRefused = errors.New("orgcfg: the store refused the push")
 )
 
 // LinkWrite is one link to write.
@@ -205,7 +208,12 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 			_ = moveRef(ctx, repo, trackingRef(branch), oid) // the next fetch sets it anyway
 			return res, nil
 		}
-		if !pushRejected(out, perr) {
+		switch outcome, summary := classifyPush(out); outcome {
+		case pushLostRace:
+			continue // fetch and rebuild on the remote's new tip
+		case pushRefused:
+			return res, fmt.Errorf("%w: %s %s: %s", ErrStoreRefused, target, branch, summary)
+		case pushUnreachable:
 			res.Offline = true // unreachable: the next write or fetch pushes the local commit
 			return res, nil
 		}
@@ -380,16 +388,61 @@ func moveRef(ctx context.Context, repo *gitref.Repo, ref, oid string) error {
 	return repo.UpdateRef(ctx, ref, oid, old)
 }
 
-// pushRejected reports whether a failed push was refused by the remote
-// (a lost race: fetch and rebuild) rather than unreachable.
-func pushRejected(out string, err error) bool {
-	msg := out + " " + err.Error()
-	for _, s := range []string{"[rejected]", "non-fast-forward", "fetch first", "stale info", "! "} {
-		if strings.Contains(msg, s) {
-			return true
+// pushOutcome is what a failed store push means for commitStore.
+type pushOutcome int
+
+const (
+	// pushUnreachable: no ref verdict came back (the remote could not be
+	// reached): keep the commit locally, the next write or fetch pushes it.
+	pushUnreachable pushOutcome = iota
+	// pushLostRace: another push moved the branch first: fetch and rebuild.
+	pushLostRace
+	// pushRefused: the remote answered and refused for another reason.
+	pushRefused
+)
+
+// porcelainRejected is the `git push --porcelain` flag of a refused ref
+// line "<flag>\t<from>:<to>\t<summary>" (git-push(1) "Output").
+const porcelainRejected = "!"
+
+// lostRaceReasons are rejection reasons meaning another push moved the
+// branch first: the client-side "fetch first" / "non-fast-forward" /
+// "stale info", and receive-pack's compare-and-swap losses, which are the
+// same race found one step later on the server ("[remote rejected]
+// (reference already exists)" when the other push still held the ref
+// lock, "failed to update ref", "incorrect old value provided", ...; the
+// same list as adapters/backend/git and adapters/gitremote). Hook declines
+// and protection refusals carry other reasons and never match. A server
+// race that is not retried would be reported as offline and lose the
+// write (F11 race: one of two concurrent links vanished under load).
+var lostRaceReasons = []string{
+	"non-fast-forward", "fetch first", "stale info",
+	"incorrect old value provided", "cannot lock ref", "failed to lock", "reference already exists",
+	"atomic transaction failed", "failed to update ref", "unable to update local ref",
+}
+
+// classifyPush reads a failed push's porcelain stdout: a refused ref line
+// whose reason is a lost race is pushLostRace, any other refused ref line
+// is pushRefused (with its summary), no refused ref line is
+// pushUnreachable.
+func classifyPush(out string) (pushOutcome, string) {
+	for _, line := range strings.Split(out, "\n") {
+		flag, rest, ok := strings.Cut(line, "\t")
+		if !ok || flag != porcelainRejected {
+			continue
 		}
+		_, summary, ok := strings.Cut(rest, "\t")
+		if !ok {
+			continue
+		}
+		for _, r := range lostRaceReasons {
+			if strings.Contains(summary, r) {
+				return pushLostRace, summary
+			}
+		}
+		return pushRefused, summary
 	}
-	return false
+	return pushUnreachable, ""
 }
 
 // Clone lock: an O_EXCL file in the clone's state folder, polled; a lock

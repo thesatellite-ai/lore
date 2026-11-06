@@ -254,6 +254,13 @@ func linkError(err error) error {
 		return errs.New(errs.Offline, err.Error()).WithHint("retry when the store is reachable")
 	case errors.Is(err, orgcfg.ErrFolderElsewhere):
 		return errs.New(errs.InvalidInput, err.Error())
+	case errors.Is(err, orgcfg.ErrStoreRefused):
+		// The store answered and said no (a hook, branch protection): the
+		// git backend's remote refusal code (adapters/backend/git sync).
+		return errs.New(errs.PolicyDenied, err.Error()).
+			WithHint("the commit stays in the local clone; ask the store's owner why the push was refused")
+	case errors.Is(err, orgcfg.ErrLinkRace):
+		return errs.New(errs.BusyTimeout, err.Error()).WithHint("other writers keep moving the store branch: run the command again")
 	}
 	var le *errs.Error
 	if errors.As(err, &le) {
