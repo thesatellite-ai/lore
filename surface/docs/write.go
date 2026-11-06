@@ -40,6 +40,10 @@ const (
 // newFileMode is the mode of a generated file Update creates.
 const newFileMode fs.FileMode = 0o644
 
+// newDirMode is the mode of the --out folder Update creates for a new
+// generated file (openapi.json into a folder that does not exist yet).
+const newDirMode fs.FileMode = 0o750
+
 // RegenerateCommand is what a person runs to refresh stale files; named in
 // the CheckStale failure.
 const RegenerateCommand = "lore spec docs && lore spec openapi"
@@ -123,6 +127,9 @@ func Update(reg *op.Registry, paths ...string) error {
 		if bytes.Equal(current, want) {
 			continue
 		}
+		if err := os.MkdirAll(filepath.Dir(p), newDirMode); err != nil {
+			return errs.Wrap(errs.Internal, "docs: create the folder of "+p, err)
+		}
 		if err := os.WriteFile(p, want, mode); err != nil {
 			return errs.Wrap(errs.Internal, "docs: write "+p, err)
 		}
@@ -136,6 +143,12 @@ func readFile(p string) ([]byte, fs.FileMode, error) {
 	b, err := os.ReadFile(filepath.Clean(p))
 	if errors.Is(err, fs.ErrNotExist) && filepath.Ext(p) == extJSON {
 		return nil, newFileMode, nil
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		// a markdown file is only ever updated between its markers: the
+		// hand-written page has to exist first
+		return nil, 0, errs.Wrap(errs.NotFound, "docs: "+p+" does not exist", err).
+			WithHint("run it in the lore repo with the default --out, or pass --out <folder> holding a page with the " + markerBegin + BlockCommands + markerClose + " and " + markerBegin + BlockErrors + markerClose + " blocks")
 	}
 	if err != nil {
 		return nil, 0, errs.Wrap(errs.NotFound, "docs: read "+p, err)

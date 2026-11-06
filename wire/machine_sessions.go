@@ -78,6 +78,10 @@ func sessionTextFields(d SessionDetails) map[string]string {
 // creating the row on first use and otherwise moving ended_at to now and
 // filling the fields still empty; it never clears a filled field.
 func (a *App) FindOrCreateSession(ctx context.Context, projectID string, d SessionDetails) (string, error) {
+	// A session touch is the caller's bookkeeping, never part of the bulk
+	// action whose command touched it: without this, `lore batch show`
+	// listed the session row and `lore batch undo` put its ended_at back.
+	ctx = engine.WithBatch(ctx, engine.Batch{})
 	at := value.DateTimeFrom(a.opts.Wall())
 	all, err := a.Sessions(ctx, 0)
 	if err != nil {
