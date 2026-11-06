@@ -119,7 +119,7 @@ func Ops(env work.Env) []op.Entry {
 	return append([]op.Entry{
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Add a new task",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported}, treeAddErrors...)...),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported, errs.ResourceAmbiguous}, treeAddErrors...)...),
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
 				{Title: "add a task", CLI: `lore task add "Fix the login redirect" --priority high`, Want: "tsk_"},
@@ -137,7 +137,7 @@ func Ops(env work.Env) []op.Entry {
 		}, o.show),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit task fields (only flags you pass are applied)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported, errs.Cycle, errs.OpenChildren}, treeAddErrors...)...),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported, errs.OpenChildren, errs.ResourceAmbiguous}, treeAddErrors...)...),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.editOp),
 		op.Define(op.Spec{
@@ -193,6 +193,8 @@ func Ops(env work.Env) []op.Entry {
 }
 
 // treeAddErrors are the refusals of placing a task in the tree (TASK 24).
+// add and edit also list E_RESOURCE_AMBIGUOUS: --ref takes a resource name
+// (RES 3.11, rowref.Parse) and two live resources of that name refuse.
 var treeAddErrors = []errs.Code{errs.Cycle, errs.ParentClosed, errs.ParentMission, errs.ParentProject, errs.TreeDepth, errs.TreeWidth}
 
 // ops binds the run functions to one Env. deco, set per call on the value

@@ -70543,7 +70543,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -71529,7 +71529,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -75327,7 +75327,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_OPEN_CHILDREN, E_PARENT_CLOSED, E_PARENT_MISSION, E_PARENT_PROJECT, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_TREE_DEPTH, E_TREE_WIDTH, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -83354,11 +83354,8 @@
                         "org": {
                           "type": "string"
                         },
-                        "personal_folders": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
+                        "personal_store": {
+                          "type": "string"
                         },
                         "project_id": {
                           "type": "string"
@@ -83434,7 +83431,7 @@
                         "identity",
                         "remotes",
                         "stores",
-                        "personal_folders",
+                        "personal_store",
                         "link_status",
                         "trace",
                         "warnings",
