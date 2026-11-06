@@ -13,6 +13,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/logic/metafilter"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -638,15 +639,24 @@ type MetaGetOut struct {
 	Data  []MetaValue `json:"data"`
 	// Masked names the keys printed as ••• (META 3.14/3.20 meta_masked).
 	Masked []string `json:"meta_masked,omitempty"`
-	ids    bool
+	// Quarantined lists each problem of quarantined metadata with its fix
+	// (METADATA 3.13, CLI_REFERENCE meta show: a line, not an exit).
+	Quarantined []string `json:"quarantined,omitempty"`
+	ids         bool
 }
 
 // Text implements op.Texter (the `meta show` sample of 3.2).
 func (o MetaGetOut) Text() string {
+	var b strings.Builder
+	for _, q := range o.Quarantined {
+		b.WriteString(string(errs.MetaQuarantined) + "  " + q + "\n")
+	}
 	if len(o.Data) == 0 {
+		if b.Len() > 0 {
+			return b.String()
+		}
 		return "(no metadata)\n"
 	}
-	var b strings.Builder
 	for _, v := range o.Data {
 		if v.Label != "" {
 			v.Value = v.Label // an allowed value by its label in text (3.17)
@@ -809,10 +819,18 @@ func (o ops) metaGet(ctx context.Context, in MetaGetIn) (MetaGetOut, error) {
 		return MetaGetOut{}, err
 	}
 	out := MetaGetOut{ID: r.ID.String(), Data: []MetaValue{}, ids: in.IDs}
+	for _, p := range metafilter.Quarantine(r.Meta) {
+		fix := "fix the row file, or lore meta unset " + r.ID.String() + " " + p.Key
+		if p.Key == "" {
+			fix = "move content out of the row's metadata (lore meta unset " + r.ID.String() + " <key>)"
+		}
+		out.Quarantined = append(out.Quarantined, p.Text+"; "+fix)
+	}
+	slices.Sort(out.Quarantined)
 	for kid, j := range r.Meta {
 		en, derr := meta.DecodeEntry(j)
 		if derr != nil {
-			return MetaGetOut{}, derr
+			continue // listed in Quarantined above
 		}
 		en.Sensitive = en.Sensitive || sens[kid.String()] // 3.20: entry OR registry
 		if in.Key != "" && en.Name != in.Key && kid.String() != in.Key {

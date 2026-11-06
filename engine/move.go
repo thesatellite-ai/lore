@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/metafilter"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/logic/timecalc"
@@ -120,6 +121,12 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	}
 	if cur.Deleted {
 		return Written{}, deletedErr(ctx, srcSt, cur, "is deleted")
+	}
+	// METADATA 3.13 / 6 (X19): a row whose metadata is quarantined never
+	// travels; it is fixed first with the commands lore meta show prints
+	if probs := metafilter.Quarantine(cur.Meta); len(probs) > 0 {
+		return Written{}, errs.New(errs.MetaQuarantined, "engine: "+cur.ID.String()+" has quarantined metadata ("+probs[0].Text+"); it is not moved until it is fixed").
+			WithHint("lore meta show " + cur.ID.String() + " prints each problem and its fix")
 	}
 	def, err := e.tableDef(cur.Table)
 	if err != nil {
