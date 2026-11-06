@@ -83,3 +83,50 @@ func TestTeD_RepoIgnoreRuleCannotHideDataFromTeammate(t *testing.T) {
 		t.Fatalf("carol's commands leave the committed .gitignore alone: %s", out)
 	}
 }
+
+// TestE2E_SameRowMergeDriverAndConflict, ported to two clones: bob and
+// carol edit different fields of one rule in their own clones; git's
+// merge (lore's driver, installed by their first lore command) keeps both.
+// The same field edited on both sides is a conflict whose markers keep
+// both texts, and the pre-commit guard refuses to commit the marker text.
+func TestTeD_MergeDriverAcrossClones(t *testing.T) {
+	bc, carol := teDSoloPair(t)
+	bc.MustLore("init", "--non-interactive", "--name=tool")
+	id := mustID(t, bc.MustLore("rule", "add", "--body", "use JWT for the api", "--severity", "must"), "rul")
+	bc.CommitAll("lore")
+	bc.AdminPush("origin", "main")
+	cc := carol.Clone(bc.Remote, "tool")
+	cc.MustLore("rule", "list")
+
+	bc.MustLore("rule", "edit", id, "--severity", "should")
+	bc.CommitAll("bob: severity")
+	bc.AdminPush("origin", "main")
+	cc.MustLore("rule", "edit", id, "--body", "use JWT for the public api")
+	cc.CommitAll("carol: body")
+	if res := cc.TryGit("pull", "-q", "--no-rebase", "--no-edit"); res.Code != 0 {
+		t.Fatalf("different fields of one row merge cleanly: %s", res)
+	}
+	cc.MustLore("rule", "show", id).Says(t, "use JWT for the public api", "should")
+	cc.AdminPush("origin", "main")
+	bc.Git("pull", "-q", "--no-rebase", "--no-edit")
+	bc.MustLore("rule", "show", id).Says(t, "use JWT for the public api", "should")
+
+	bc.MustLore("rule", "edit", id, "--body", "bob: JWT everywhere")
+	bc.CommitAll("bob: body")
+	bc.AdminPush("origin", "main")
+	cc.MustLore("rule", "edit", id, "--body", "carol: JWT on the public api only")
+	cc.CommitAll("carol: body again")
+	if res := cc.TryGit("pull", "-q", "--no-rebase", "--no-edit"); res.Code == 0 {
+		t.Fatalf("the same field edited on both sides must conflict: %s", res)
+	}
+	body, _ := cc.ReadFile(dataDir + "/" + tblRules + "/" + id + ".json")
+	for _, want := range []string{"<<<<<<< ", "bob: JWT everywhere", "carol: JWT on the public api only", ">>>>>>> "} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("the conflict keeps both sides with markers (%q): %s", want, body)
+		}
+	}
+	cc.Git("add", "-A")
+	if res := cc.TryGit("commit", "-qm", "markers"); res.Code == 0 {
+		t.Fatalf("a row with conflict markers is refused at commit: %s", res)
+	}
+}
