@@ -131,6 +131,10 @@ type Facts struct {
 	Folder string
 	// Repo is the rep_ id of the checkout the command ran in; "" absent.
 	Repo string
+	// Project is the prj_ id of the lore place the command ran in (its
+	// _meta.json project_id); "" absent (PROVENANCE 5.1). ClientFilter
+	// keeps it only when it is the client repo's own project id.
+	Project string
 	// Dir is the working folder relative to the repo root, forward
 	// slashes; "" at the root (RelDir builds it).
 	Dir string
@@ -152,6 +156,7 @@ func Build(f Facts) (value.JSON, error) {
 	add(KeyStore, f.Store)
 	add(KeyFolder, f.Folder)
 	add(KeyRepo, f.Repo)
+	add(KeyProject, f.Project)
 	add(KeyDir, f.Dir)
 	if f.Git.State != "" {
 		g, err := gitObject(f.Git)

@@ -125,6 +125,7 @@ type OriginBlock struct {
 	Recorded bool   `json:"recorded"`
 	Cmd      string `json:"cmd,omitempty"`
 	Store    string `json:"store,omitempty"`
+	Folder   Named  `json:"folder,omitzero"`
 	Repo     Named  `json:"repo,omitzero"`
 	Project  Named  `json:"project,omitzero"`
 	Dir      string `json:"dir,omitempty"`
@@ -348,6 +349,7 @@ func (o ops) expand(ctx context.Context, r row.Row, rf expand.RevealFlag, out *S
 type rawOrigin struct {
 	Cmd        string `json:"cmd"`
 	Store      string `json:"store"`
+	Folder     string `json:"folder"`
 	Repo       string `json:"repo"`
 	Project    string `json:"project"`
 	Dir        string `json:"dir"`
@@ -377,6 +379,9 @@ func (o ops) origin(ctx context.Context, r row.Row) (Origin, error) {
 		}
 		if ro.Project != "" {
 			out.Origin.Project = o.named(ctx, ro.Project, fName)
+		}
+		if ro.Folder != "" {
+			out.Origin.Folder = o.named(ctx, ro.Folder, fName)
 		}
 		out.Lineage.CopiedFrom = ro.CopiedFrom
 		if ro.Moves != nil {
@@ -502,6 +507,9 @@ func (g Origin) text() string {
 	} else {
 		b.WriteString("origin (written once)\n")
 		line("store", g.Origin.Store)
+		if f := g.Origin.Folder; f.ID != "" {
+			line("folder", label(f))
+		}
 		if p := g.Origin.Project; p.ID != "" {
 			line("project", label(p))
 		}

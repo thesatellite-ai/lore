@@ -58,6 +58,11 @@ func (p *provenance) Place(ctx context.Context) origin.Facts {
 	if id, ok := repoIDAt(ctx, p.repoTop); ok {
 		f.Repo = id
 	}
+	// `_o.project`: the project the command ran in (PROVENANCE 5.1), read
+	// on every create like the repo id (`lore init` writes it first).
+	if pid, ok := repoMetaProjectID(p.repoTop); ok {
+		f.Project = pid
+	}
 	return f
 }
 
