@@ -13,6 +13,7 @@ import (
 	// The pure-Go SQLite driver (no CGO); FTS5 and JSON1 are built in.
 	_ "modernc.org/sqlite"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -115,7 +116,7 @@ func fileDSN(path string) (string, error) {
 	if err := refuseSymlinks(abs); err != nil {
 		return "", err
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
+	u := url.URL{Scheme: fileuri.Scheme, Path: fileuri.URLPath(abs)} // file:///C:/... on Windows, never C: as a host
 	q := url.Values{}
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "synchronous(NORMAL)")
