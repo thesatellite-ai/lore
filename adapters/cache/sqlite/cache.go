@@ -112,6 +112,9 @@ func fileDSN(path string) (string, error) {
 	if err != nil {
 		return "", errs.Wrap(errs.BadPath, "sqlite cache: bad path", err)
 	}
+	if err := refuseSymlinks(abs); err != nil {
+		return "", err
+	}
 	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
 	q := url.Values{}
 	q.Add("_pragma", "journal_mode(WAL)")

@@ -55,7 +55,7 @@ func newCaches() *caches { return &caches{by: map[store.Source]*sqlite.Cache{}} 
 func (c *caches) open(ctx context.Context, source store.Source, path string, reg *schema.Registry, exp sqlite.Expander) error {
 	f, err := c.openHealing(ctx, path, reg, exp)
 	if err != nil {
-		return errs.Wrap(errs.CodeOf(err), "wire: open the cache of store "+string(source), err)
+		return wrapOpen(err, "wire: open the cache of store "+string(source))
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -70,7 +70,7 @@ func (c *caches) open(ctx context.Context, source store.Source, path string, reg
 func (c *caches) openCombined(ctx context.Context, names []store.Source, path string, reg *schema.Registry, exp sqlite.Expander) error {
 	f, err := c.openHealing(ctx, path, reg, exp)
 	if err != nil {
-		return errs.Wrap(errs.CodeOf(err), "wire: open the combined store cache", err)
+		return wrapOpen(err, "wire: open the combined store cache")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -80,6 +80,18 @@ func (c *caches) openCombined(ctx context.Context, names []store.Source, path st
 	}
 	c.combined = f
 	return nil
+}
+
+// wrapOpen wraps a cache open failure under msg, keeping its code and the
+// hint of the refusal inside it: the CLI prints the outermost error only,
+// so without this an E_SYMLINK_DB refusal would lose the file it names.
+func wrapOpen(err error, msg string) error {
+	w := errs.Wrap(errs.CodeOf(err), msg, err)
+	var in *errs.Error
+	if errors.As(err, &in) && in.Hint != "" {
+		return w.WithHint(in.Hint)
+	}
+	return w
 }
 
 // corruptSuffix names a damaged cache file moved aside:
