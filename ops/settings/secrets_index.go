@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/ops/internal/reveal"
@@ -139,6 +140,12 @@ func fieldTexts(v value.Value) []string {
 		return jsonStrings(t.Raw()) // OV13b: secrets_json.go
 	case value.List:
 		if t.Elem() != value.KindText {
+			// a json field holding a list of objects (time entries) reads
+			// back from its row file as a list of json items: its string
+			// leaves are the same through the JSON form
+			if raw, ok := value.JSONForm(t); ok {
+				return jsonStrings(raw)
+			}
 			return nil
 		}
 		var out []string
@@ -314,6 +321,23 @@ func rowPatch(r row.Row, fix rewriter) (map[string]value.Value, int, error) {
 			}
 		case value.List:
 			if t.Elem() != value.KindText {
+				// a json list of objects read back from its row file: rewrite
+				// it through its JSON form, as a json value
+				raw, ok := value.JSONForm(t)
+				if !ok {
+					continue
+				}
+				j, jerr := value.JSONOf(raw)
+				if jerr != nil {
+					return nil, 0, errs.Wrap(errs.Internal, "secrets: field "+f+" as json", jerr)
+				}
+				nv, n, err := jsonRewrite(j, fix)
+				if err != nil {
+					return nil, 0, err
+				}
+				if n > 0 {
+					patch[f], total = nv, total+n
+				}
 				continue
 			}
 			items, changed := []string{}, 0
