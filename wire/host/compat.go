@@ -122,6 +122,7 @@ func CompatFlagsHook(o CompatOptions) Hook {
 		nouns = CompatNouns
 	}
 	return Hook{Name: HookCompat, Command: func(root *cobra.Command, r *Runner) {
+		recorded := map[*cobra.Command]bool{}
 		for _, noun := range nouns {
 			g, _, err := root.Find([]string{noun})
 			if err != nil || g.Name() != noun {
@@ -136,12 +137,30 @@ func CompatFlagsHook(o CompatOptions) Hook {
 				}
 				addCompatFlags(c, r, o)
 				recordCommand(c, r)
+				recorded[c] = true
 				if o.Wrap != nil {
 					o.Wrap(c)
 				}
 			}
 		}
+		// The F1 not-found explanation reads the running command's
+		// arguments for EVERY core noun (later 112.2), not only the
+		// v0.1.17 nouns that take the compat flags (resource, kind, … are
+		// 0.1.18 nouns).
+		recordAll(root, r, recorded)
 	}}
+}
+
+// recordAll records the arguments of every generated operation command
+// under c that is not recorded yet.
+func recordAll(c *cobra.Command, r *Runner, recorded map[*cobra.Command]bool) {
+	for _, sub := range c.Commands() {
+		if cli.Generated(sub) && sub.RunE != nil && !recorded[sub] {
+			recordCommand(sub, r)
+			recorded[sub] = true
+		}
+		recordAll(sub, r, recorded)
+	}
 }
 
 // recordCommand records the running command and its arguments on the
