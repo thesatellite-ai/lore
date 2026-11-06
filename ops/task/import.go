@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/estimate"
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/model/checklist"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -300,6 +301,19 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	target := store.Source(in.To)
 	if target == "" {
 		target = store.SourceRepo
+	}
+	// G-TASK-3: every estimate is checked in the target's unit before the
+	// first write, so a bad one never leaves a half-written import.
+	unit, err := o.estimateUnit(ctx, target)
+	if err != nil {
+		return ImportOut{}, err
+	}
+	for _, r := range recs {
+		if raw := r.cols[colEstimate]; raw != "" {
+			if _, perr := estimate.Parse(raw, unit); perr != nil {
+				return ImportOut{}, errors.Join(perr, errs.New(errs.InvalidInput, "task import: in "+r.extID))
+			}
+		}
 	}
 	// G-TASK-3 (TSQ8 dedupe by external id): a record whose (source,
 	// external id) a live task in the target already carries adds nothing.
@@ -765,22 +779,85 @@ func parseImport(from, base string, raw []byte, rename map[string]string) ([]imp
 		} else if ext == "" {
 			ext = out[jr.parent].extID + extIDKidSep + strconv.Itoa(kids[jr.parent])
 		}
-		rec := importRecord{extID: ext, cols: cols, parent: jr.parent, checklist: jr.checklist}
-		// G-TASK-3: a parent column (task export --format csv) naming an
-		// earlier record of the file links to it like a nested child; any
-		// other value is a task id the add checks in the target.
-		if p := strings.TrimSpace(cols[colParent]); p != "" && rec.parent < 0 {
-			for j := range out {
-				if out[j].extID == p {
-					rec.parent = j
-					delete(rec.cols, colParent)
-					break
-				}
-			}
-		}
-		out = append(out, rec)
+		out = append(out, importRecord{extID: ext, cols: cols, parent: jr.parent, checklist: jr.checklist})
+	}
+	out, err := linkParentColumn(out)
+	if err != nil {
+		return nil, nil, err
 	}
 	return out, ignored, nil
+}
+
+// linkParentColumn links a parent column (task export --format csv) that
+// names another record of the file, before or after it, like a nested
+// child (G-TASK-3); any other value stays a task id the import checks in
+// the target. The records are then ordered parents first (file order
+// otherwise kept), so a parent exists when its child is added; a cycle
+// in the file is refused.
+func linkParentColumn(recs []importRecord) ([]importRecord, error) {
+	byExt := map[string]int{}
+	for i, r := range recs {
+		if _, dup := byExt[r.extID]; !dup {
+			byExt[r.extID] = i
+		}
+	}
+	linked := false
+	for i := range recs {
+		p := strings.TrimSpace(recs[i].cols[colParent])
+		if p == "" || recs[i].parent >= 0 {
+			continue
+		}
+		if j, ok := byExt[p]; ok && j != i {
+			recs[i].parent = j
+			delete(recs[i].cols, colParent)
+			linked = true
+		}
+	}
+	if !linked {
+		return recs, nil
+	}
+	const (
+		unseen = iota
+		visiting
+		placed
+	)
+	state := make([]int, len(recs))
+	newIdx := make([]int, len(recs))
+	order := make([]int, 0, len(recs))
+	var place func(i int) error
+	place = func(i int) error {
+		switch state[i] {
+		case placed:
+			return nil
+		case visiting:
+			return errs.New(errs.InvalidInput, "task import: the parent column makes a cycle at "+recs[i].extID).
+				WithHint("give each task a parent that is not its own sub-task")
+		}
+		state[i] = visiting
+		if p := recs[i].parent; p >= 0 {
+			if err := place(p); err != nil {
+				return err
+			}
+		}
+		state[i] = placed
+		newIdx[i] = len(order)
+		order = append(order, i)
+		return nil
+	}
+	for i := range recs {
+		if err := place(i); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]importRecord, len(recs))
+	for at, i := range order {
+		r := recs[i]
+		if r.parent >= 0 {
+			r.parent = newIdx[r.parent]
+		}
+		out[at] = r
+	}
+	return out, nil
 }
 
 // jsonRow is one task object of a JSON import, flattened in pre-order.
