@@ -122,15 +122,24 @@ func TestHeartbeatAfterCancelWithinFetchTTL(t *testing.T) {
 	if code, out = fenceLore(t, holder, "task", "note", id, "progress"); code != 0 || !strings.Contains(out, "note") {
 		t.Fatalf("note on a task added after the last fetch: exit %d %s", code, out)
 	}
-	// task show, done and cancel too (B-ERRS2-3): each on a task added
-	// after the holder's previous command, still within fetch_ttl.
-	for _, c := range []struct{ args []string }{{[]string{"show"}}, {[]string{"done"}}, {[]string{"cancel", "--yes"}}} {
-		code, out = fenceLore(t, person, "task", "add", "added before "+c.args[0])
+	// Every other operation on a task id too: show, done, cancel
+	// (B-ERRS2-3) and edit, start, watch, unwatch, history, checklist, time,
+	// delete (B-ERRS2-4), each on a task added after the holder's previous
+	// command, still within fetch_ttl.
+	for _, c := range []struct{ verb, rest []string }{
+		{[]string{"show"}, nil}, {[]string{"done"}, nil}, {[]string{"cancel"}, []string{"--yes"}},
+		{[]string{"edit"}, []string{"--title", "renamed"}}, {[]string{"start"}, nil},
+		{[]string{"watch"}, nil}, {[]string{"unwatch"}, nil}, {[]string{"history"}, nil},
+		{[]string{"checklist", "add"}, []string{"item one"}}, {[]string{"time", "log"}, []string{"5m"}},
+		{[]string{"delete"}, []string{"--yes"}},
+	} {
+		code, out = fenceLore(t, person, "task", "add", "added before "+strings.Join(c.verb, " "))
 		if id = fenceTaskID.FindString(out); code != 0 || id == "" {
 			t.Fatalf("task add: %d %s", code, out)
 		}
-		if code, out = fenceLore(t, holder, append([]string{"task", c.args[0], id}, c.args[1:]...)...); code != 0 || !strings.Contains(out, id) {
-			t.Fatalf("task %s of a task added after the last fetch: exit %d %s", c.args[0], code, out)
+		args := append(append(append([]string{"task"}, c.verb...), id), c.rest...)
+		if code, out = fenceLore(t, holder, args...); code != 0 {
+			t.Fatalf("task %v of a task added after the last fetch: exit %d %s", c.verb, code, out)
 		}
 	}
 	if code, out = fenceLore(t, holder, "task", "claim", "tsk_01a1a681c07e7dfe8ec01fc44d487e86"); code != 27 || !strings.Contains(out, "E_NOT_FOUND") {

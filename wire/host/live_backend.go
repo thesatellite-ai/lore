@@ -314,6 +314,7 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 // the copy a reader sees, then each row goes where rowroute places it.
 // Branch rows first (all-or-none), then the live rows in one commit.
 func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
+	noteStoreWrite(ctx, len(changes))
 	s := b.session(ctx)
 	if s == nil {
 		if err := b.noSessionLeakCheck(ctx, changes); err != nil {
@@ -592,6 +593,7 @@ func (s *liveSession) runAgent() bool { return s.agent }
 // plain Write when any row may go live (the engine records the audit after
 // it), else the inner journal's one batch.
 func (b *liveBackend) WriteAudited(ctx context.Context, changes []store.Change, recs []store.AuditRecord) error {
+	noteStoreWrite(ctx, len(changes)+len(recs))
 	j, ok := b.inner.(store.AuditJournal)
 	if !ok {
 		return b.Write(ctx, changes)
@@ -702,6 +704,7 @@ var _ engine.Purger = (*liveBackend)(nil)
 // (Write), then purged is listed in the inner backend's _purged.json.
 // Without it every purge behind the wrapper was E_UNSUPPORTED.
 func (b *liveBackend) WritePurge(ctx context.Context, changes []store.Change, purged []ids.AnyID) error {
+	noteStoreWrite(ctx, len(changes)+len(purged))
 	p, ok := b.inner.(engine.Purger)
 	if !ok {
 		return errs.New(errs.Unsupported, "this store cannot record purged ids")

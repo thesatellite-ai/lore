@@ -182,6 +182,20 @@ type liveRun struct {
 	kind     live.FetchKind
 	agent    bool
 	sessions map[string]*liveSession
+	// storeWrites counts the store writes this run asked a liveBackend for
+	// (Write, WriteAudited, WritePurge with at least one change or purged
+	// id), counted before any routing or check: staleRowsAnswer reruns an
+	// operation only while it is 0, so an operation that wrote anything
+	// before its E_NOT_FOUND is never run twice (B-ERRS2-4).
+	storeWrites int
+}
+
+// noteStoreWrite records a store write of the run on ctx (no-op outside a
+// hooked run).
+func noteStoreWrite(ctx context.Context, n int) {
+	if r := runFrom(ctx); r != nil && n > 0 {
+		r.storeWrites++
+	}
 }
 
 type liveRunKey struct{}
@@ -468,7 +482,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		}
 	}
 	res, err := next(ctx)
-	if staleRowsAnswer(spec.Name, err) && r.refetch(ctx) {
+	if staleRowsAnswer(run.Entry, err, r.storeWrites) && r.refetch(ctx) {
 		// The answer came from rows older than the remote's: run the
 		// operation once more on fresh rows. Nothing was written (see
 		// staleRowsAnswer), so the second run answers with what the fresh
@@ -478,34 +492,50 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	return res, err
 }
 
-// refetchOnNotFound are the operations on one task id whose E_NOT_FOUND is
-// answered before any write: the id lookup comes first. The coordination
-// ops (B-ERRS2-1, B-ERRS2-2), and task show, done and cancel (B-ERRS2-3):
-// done looks the task up in closeTree before the held close or any batch;
-// cancel's held close (coord OverrideChecked) and its row read both look
-// the row up before writing.
-var refetchOnNotFound = map[string]bool{
-	opscoord.OpTaskClaim: true, opscoord.OpTaskHeartbeat: true, opscoord.OpTaskMerged: true,
-	opscoord.OpTaskNote: true, opscoord.OpTaskRelease: true, opscoord.OpTaskRevoke: true,
-	opscoord.OpTaskReassign: true, opscoord.OpGateRequest: true, opscoord.OpGateApprove: true,
-	opstask.OpShow: true, opstask.OpDone: true, opstask.OpCancel: true,
+// refetchNouns are the nouns whose operations on one id refetch on
+// E_NOT_FOUND: task (with its sub-nouns task.checklist, task.time,
+// task.recur, ...) and gate, whose id is a task id.
+var refetchNouns = map[string]bool{opstask.Noun: true, opscoord.NounGate: true}
+
+// idArg is the input field of an operation's id positional.
+const idArg = "id"
+
+// refetchesOnNotFound reports whether e is an operation on one task id: its
+// noun is in refetchNouns and its first positional input is named id. The
+// rule is read from the registry entry, not from a list of names, so a new
+// task-id operation is covered without anyone adding it
+// (TestTaskIDOpsRefetchOnNotFound walks the registry; B-ERRS2-4).
+func refetchesOnNotFound(e op.Entry) bool {
+	if !refetchNouns[noun(e.Spec().Name)] {
+		return false
+	}
+	for _, f := range e.InputFields() {
+		if f.Arg == 0 {
+			return f.Name == idArg
+		}
+	}
+	return false
 }
 
 // staleRowsAnswer reports whether err may only reflect live rows older
 // than the remote's, so a run that did not fetch should refetch and run
-// the operation again (B-ERRS2-1):
+// the operation again (B-ERRS2-1 .. B-ERRS2-4):
 //   - E_LOST_CLAIM: a claim fence is explained from the task row
 //     (E_CANCELLED for a task a person cancelled meanwhile, E_REASSIGNED,
 //     TEAM F7 §7.4); a fenced op wrote nothing (the signals decision
 //     refused before any write), so the rerun gives the fresh row's code
 //     (or E_LOST_CLAIM again after a revoke);
-//   - E_NOT_FOUND of a refetchOnNotFound op: a task a teammate added after
-//     this clone's last fetch is not in the local rows yet.
-func staleRowsAnswer(name string, err error) bool {
+//   - E_NOT_FOUND of an operation on one task id (refetchesOnNotFound)
+//     that asked the store for no write (storeWrites 0): a task a teammate
+//     added after this clone's last fetch is not in the local rows yet.
+//     The coordination ops' signals writes do not go through the store;
+//     each of them looks its task up before writing the signals ref
+//     (B-ERRS2-2), as task done/cancel's held close does (B-ERRS2-3).
+func staleRowsAnswer(e op.Entry, err error, storeWrites int) bool {
 	if errs.Has(err, errs.LostClaim) {
 		return true
 	}
-	return refetchOnNotFound[name] && errs.Has(err, errs.NotFound)
+	return storeWrites == 0 && refetchesOnNotFound(e) && errs.Has(err, errs.NotFound)
 }
 
 // refuse is the pre-run part of v0.1.17 livePreRun: the offline note, and
