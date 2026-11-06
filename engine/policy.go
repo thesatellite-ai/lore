@@ -75,8 +75,12 @@ func personOnly(pol policy.Set, spec op.Spec, in op.Input, c op.Caller) error {
 	if eff, ok := pol.Get(policy.KeyAgentsPersonOnly); ok && !eff.Source.IsZero() {
 		where = " (policy " + eff.Source.String() + ", level " + string(eff.Level) + ")"
 	}
-	return errs.New(errs.PolicyDenied, "engine: "+string(policy.KeyAgentsPersonOnly)+" lists "+hit+where+"; this looks like "+strconv.Quote(c.Agent)).
+	// needs_person (CLI_REFERENCE 1.4): the agent asks its human to run
+	// it; the refusal is not a dead end for the person.
+	e := errs.New(errs.PolicyDenied, "engine: "+string(policy.KeyAgentsPersonOnly)+" lists "+hit+where+"; this looks like "+strconv.Quote(c.Agent)).
 		WithHint("a person runs it in their own terminal")
+	e.NeedsPerson = true
+	return e
 }
 
 // inputSets reports whether the input field named flag is set: a bool
