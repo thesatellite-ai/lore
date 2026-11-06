@@ -77,7 +77,7 @@ func OpenMachineStore(ctx context.Context, path string, readOnly bool) (*Machine
 	}
 	db.SetMaxOpenConns(1)
 	if err := execTx(ctx, db, machineRowsDDL, machineSeqIdx, machinePurgedDDL); err != nil {
-		return nil, errors.Join(dbErr("create machine store tables", err), db.Close())
+		return nil, errors.Join(explainOpen(path, dbErr("create machine store tables", err), FreeBytes), db.Close()) // E-FATES-3
 	}
 	return &MachineStore{db: db, readOnly: readOnly}, nil
 }

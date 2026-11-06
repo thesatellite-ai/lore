@@ -109,7 +109,7 @@ func OpenAuditChain(ctx context.Context, path string) (*AuditChain, error) {
 	}
 	db.SetMaxOpenConns(1)
 	if err := execTx(ctx, db, auditDDL, auditImportsDDL, auditHeadDDL, auditAnchoredDDL); err != nil {
-		return nil, errors.Join(dbErr("create audit chain tables", err), db.Close())
+		return nil, errors.Join(explainOpen(path, dbErr("create audit chain tables", err), FreeBytes), db.Close()) // E-FATES-3
 	}
 	return &AuditChain{db: db}, nil
 }

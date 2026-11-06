@@ -77,7 +77,7 @@ func OpenLocalState(ctx context.Context, path string) (*LocalState, error) {
 	}
 	db.SetMaxOpenConns(1)
 	if _, err := db.ExecContext(ctx, localDDL); err != nil {
-		return nil, errors.Join(dbErr("create local_state", err), db.Close())
+		return nil, errors.Join(explainOpen(path, dbErr("create local_state", err), FreeBytes), db.Close()) // E-FATES-3
 	}
 	if err := moveLegacyTables(ctx, db); err != nil {
 		return nil, errors.Join(err, db.Close())

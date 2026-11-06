@@ -84,7 +84,16 @@ var _ store.Cache = (*Cache)(nil)
 //
 // On open every typed table whose definition changed since the file was
 // written is dropped and refilled from `_rows`.
+//
+// A file SQLite cannot open on a disk with less than lowSpaceBytes free is
+// E_DISK_FULL (explainOpen, E-FATES-3), answered before anything is written.
 func Open(ctx context.Context, path string, reg *schema.Registry, exp Expander) (*Cache, error) {
+	return openCache(ctx, path, reg, exp, FreeBytes)
+}
+
+// openCache is Open with the free-space probe as a parameter (a test says
+// "the disk is full" without filling one).
+func openCache(ctx context.Context, path string, reg *schema.Registry, exp Expander, free freeBytesFunc) (*Cache, error) {
 	if reg == nil || exp == nil {
 		return nil, errs.New(errs.InvalidInput, "sqlite cache: Open needs a registry and an expander")
 	}
@@ -99,7 +108,7 @@ func Open(ctx context.Context, path string, reg *schema.Registry, exp Expander) 
 	db.SetMaxOpenConns(1)
 	c := &Cache{db: db, base: reg, exp: exp}
 	if err := c.init(ctx); err != nil {
-		return nil, errors.Join(err, db.Close())
+		return nil, errors.Join(explainOpen(path, err, free), db.Close())
 	}
 	return c, nil
 }
