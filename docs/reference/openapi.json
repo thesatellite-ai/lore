@@ -2483,7 +2483,7 @@
     "/v1/audits/verify": {
       "post": {
         "operationId": "audit.verify",
-        "summary": "Check the audit chain and look for rows changed outside lore",
+        "summary": "Check that the audit chain is unbroken (every entry links to the one before)",
         "tags": [
           "audit"
         ],

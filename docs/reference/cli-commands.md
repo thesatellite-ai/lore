@@ -21,7 +21,7 @@ This file is generated from the operation registry of the 0.1.18 core (the `op.D
 | `lore architecturenote search <query>` | Full-text search across architecture note title + body | `--column` `--limit` `--include-archived` `--all-repos` `--master-only` `--no-inherit` `--repo` `--project` | `POST /v1/architecturenotes/search` | read | `E_INVALID_INPUT` `E_UNSUPPORTED` `E_DB_CORRUPT` `E_STORE_UNREACHABLE` `E_INTERNAL` |
 | `lore architecturenote show <id>` | Show architecture note details | `--expand` `--reveal` `--force` | `GET /v1/architecturenotes/{id}` | read | `E_INVALID_ID` `E_NOT_FOUND` `E_AMBIGUOUS_ID` `E_STORE_UNREACHABLE` `E_OLD_LORE` `E_INTERNAL` `E_INVALID_INPUT` `E_NEEDS_CONFIRM` `E_REF_SCHEME` `E_SECRET_UNAVAILABLE` |
 | `lore audit log` | Show recent audit entries, newest first | `--limit` `--all` | `POST /v1/audits/log` | read | `E_AUDIT_CHAIN_BROKEN` `E_NOT_IMPLEMENTED` `E_NOT_A_STORE` `E_INTERNAL` |
-| `lore audit verify` | Check the audit chain and look for rows changed outside lore |  | `POST /v1/audits/verify` | read | `E_AUDIT_CHAIN_BROKEN` `E_NOT_IMPLEMENTED` `E_NOT_A_STORE` `E_INTERNAL` |
+| `lore audit verify` | Check that the audit chain is unbroken (every entry links to the one before) |  | `POST /v1/audits/verify` | read | `E_AUDIT_CHAIN_BROKEN` `E_NOT_IMPLEMENTED` `E_NOT_A_STORE` `E_INTERNAL` |
 | `lore batch list` | List bulk actions (batches) run on this machine | `--by` `--since` `--kind` | `GET /v1/batches` | read | `E_INVALID_INPUT` `E_INVALID_ID` `E_NOT_FOUND` `E_INTERNAL` |
 | `lore batch show <id>` | Show one batch: its kind, who ran it and the rows it wrote | `--all` | `GET /v1/batches/{id}` | read | `E_INVALID_INPUT` `E_INVALID_ID` `E_NOT_FOUND` `E_INTERNAL` |
 | `lore batch undo <id>` | Undo a bulk action: restore a delete batch, put the rows an edit batch changed back, or move the rows a create batch added to the trash |  | `POST /v1/batches/{id}/undo` | write | `E_INVALID_INPUT` `E_NOT_FOUND` `E_UNSUPPORTED` `E_STALE` `E_NEEDS_CONFIRM` `E_CANCELLED` `E_PARENT_DELETED` `E_INTERNAL` |
@@ -458,7 +458,7 @@ This file is generated from the operation registry of the 0.1.18 core (the `op.D
 | `E_CONTENDED` | 11 | `coordination` | 409 | every claim attempt lost a race; retry after a short wait |
 | `E_CYCLE` | 19 | `guard` | 403 | the write would create a cycle |
 | `E_DATE` | 20 | `bad_input` | 400 | a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days |
-| `E_DB_CORRUPT` | 23 | `refused` | 409 | DB file failed quick_check; move .lore/lore.db away, run `lore sync` to rebuild it from .lore/data, then `lore search rebuild` |
+| `E_DB_CORRUPT` | 23 | `refused` | 409 | the local cache holds a record lore cannot read; delete .lore/lore-cache.db: the next command rebuilds it from .lore/data |
 | `E_DB_LOCKED` | 23 | `refused` | 409 | another lore process is holding the DB write lock |
 | `E_DB_NOT_FOUND` | 23 | `refused` | 409 | DB file does not exist at the configured path |
 | `E_DISK_FULL` | 23 | `refused` | 409 | no space left on device for write or backup |

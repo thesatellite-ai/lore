@@ -184,7 +184,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: OpLog, Summary: "Show recent audit entries, newest first", Permission: op.PermRead, Access: op.AccessRead, Errors: errorCodes,
 			Examples: []op.Example{{Title: "the last 200 entries as JSON", CLI: "lore audit log --limit 200 --json", Want: `"data"`}}},
 			func(ctx context.Context, in LogIn) (LogOut, error) { return logRun(ctx, env, in) }),
-		op.Define(op.Spec{Name: OpVerify, Summary: "Check the audit chain and look for rows changed outside lore", Permission: op.PermRead, Access: op.AccessRead, Errors: errorCodes,
+		op.Define(op.Spec{Name: OpVerify, Summary: "Check that the audit chain is unbroken (every entry links to the one before)", Permission: op.PermRead, Access: op.AccessRead, Errors: errorCodes,
 			Examples: []op.Example{{Title: "check the chain", CLI: "lore audit verify", Want: "audit chain intact"}}},
 			func(ctx context.Context, _ VerifyIn) (VerifyOut, error) { return verify(ctx, env) }),
 	}
