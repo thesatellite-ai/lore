@@ -56289,6 +56289,9 @@
                           "read_only": {
                             "type": "boolean"
                           },
+                          "source": {
+                            "type": "string"
+                          },
                           "url": {
                             "type": "string"
                           },
@@ -72507,6 +72510,13 @@
                   "map": {
                     "type": "array",
                     "description": "rename columns: \u003cfile column\u003e=\u003ctask field\u003e[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name status estimate parent)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "map_status": {
+                    "type": "array",
+                    "description": "rename status values: \u003cfile value\u003e=\u003cstatus\u003e[,…], e.g. 'In Review=in_progress' (statuses: todo in_progress done cancelled blocked)",
                     "items": {
                       "type": "string"
                     }

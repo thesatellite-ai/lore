@@ -113,7 +113,9 @@ type ImportIn struct {
 	File   string   `json:"file" arg:"0" desc:"the file to import"`
 	From   string   `json:"from,omitempty" flag:"from" desc:"csv | json (default: from the file extension)"`
 	Map    []string `json:"map,omitempty" flag:"map" desc:"rename columns: <file column>=<task field>[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name status estimate parent)"`
-	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be created; write nothing"`
+	// MapStatus renames the file's status values (TASK 19.1, G-TASK-3).
+	MapStatus []string `json:"map_status,omitempty" flag:"map-status" desc:"rename status values: <file value>=<status>[,…], e.g. 'In Review=in_progress' (statuses: todo in_progress done cancelled blocked)"`
+	DryRun    bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be created; write nothing"`
 	To     string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
 }
 
@@ -264,6 +266,15 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	recs, ignored, err := parseImport(from, filepath.Base(in.File), raw, rename)
 	if err != nil {
 		return ImportOut{}, err
+	}
+	statusMap, err := importStatusMap(in.MapStatus)
+	if err != nil {
+		return ImportOut{}, err
+	}
+	for _, r := range recs {
+		if to, ok := statusMap[strings.TrimSpace(r.cols[colStatus])]; ok {
+			r.cols[colStatus] = to
+		}
 	}
 	if err = checkStatusTree(recs); err != nil {
 		return ImportOut{}, err
@@ -635,6 +646,26 @@ func importSource(from, file string) (string, error) {
 	}
 	return "", errs.New(errs.InvalidInput, "task import: --from "+strconv.Quote(from)+" is not a built-in source: use csv or json").
 		WithHint("plugin sources (github, linear, jira) are not in this release")
+}
+
+// importStatusMap parses --map-status into file value → status; every
+// target must be a task status (G-TASK-3).
+func importStatusMap(items []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, item := range items {
+		for _, pair := range strings.Split(item, ",") {
+			from, to, ok := strings.Cut(pair, "=")
+			from, to = strings.TrimSpace(from), strings.TrimSpace(to)
+			if !ok || from == "" {
+				return nil, errs.New(errs.InvalidInput, "task import: --map-status "+strconv.Quote(pair)+" is not <file value>=<status>")
+			}
+			if err := work.OneOf(Noun, "map-status", to, schema.TaskStatuses()); err != nil {
+				return nil, err
+			}
+			out[from] = to
+		}
+	}
+	return out, nil
 }
 
 // importMap parses --map into file column → task field.
