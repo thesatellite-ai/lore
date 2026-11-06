@@ -166,7 +166,7 @@ ERROR: [E_INVALID_INPUT] refusing to write .lore/org.yaml: .lore/org.yaml names 
 
 ## Step 6 — Move a note to where it belongs: `lore move`
 
-Alice wrote a note into the client's repo by mistake, where the client can read it. `lore move` copies it to the agency's internal project with a new id and deletes the original:
+Alice wrote a note into the client's repo by mistake, where the client can read it. `lore move` moves it to the agency's internal project, keeping its id; the client repo keeps only a deletion marker. It shows what would move and asks first (see [Sharing an internal note](use-cases/sharing-a-note.md) for what the question lists):
 
 <!-- example: people#move -->
 ```console
@@ -189,7 +189,7 @@ If the original was already pushed or committed, the client may have seen it; se
 
 ## Step 7 — Look inside a store, or drop your copy: `lore store open` and `forget`
 
-Lore never needs a working folder of a store; it reads and writes the store itself. To browse the files, `lore store open` makes a read-only folder. `lore store forget` deletes this machine's copy of a store. The next command that needs it downloads it again:
+Lore never needs a working folder of a store; it reads and writes the store itself. To browse the files, `lore store open` makes a read-only folder. `lore store forget` deletes this machine's copy of a store. The next command that needs it downloads it again. Both take the store's url, or the name this repo attaches it under (a name from `.lore/stores.yaml`, or `me` for your personal store); a name this repo does not attach is `E_NOT_FOUND`:
 
 <!-- example: people#store-open-and-forget -->
 ```console
@@ -230,6 +230,10 @@ cache files no repo on this machine attaches:
 - **`lore move` is refused for agents with `--yes`.** Moving a note is a person's decision.
 - **`lore store forget` refuses while the copy holds work that is not pushed yet.** Run `lore sync` first.
 - **Never edit the folder `lore store open` made.** Lore writes the store branch itself; your edits there are not picked up.
+- **`lore store list` shows where each store comes from.** The SOURCE column says `stores.yaml` (attached by this repo), `org` (brought by the repo's org) or `personal`. A store url from the org is printed as `<redacted>` where output must name nothing (no terminal, CI); its visibility is still worked out from the real url. A name the org already uses cannot be taken again by `lore store init` or `lore store add` (`E_INVALID_INPUT`).
+- **A store url never keeps a login in `.lore/stores.yaml`.** `lore store init`, `add` and `set-url` drop the user part of an `https://user@host/…` url before writing it, because git hosts treat that user as a token, and refuse a url with a password or token in it (`E_URL_CREDENTIALS`). An ssh login such as `git@github.com:…` is kept.
+- **0.1.18 stores are git repos or folders.** A url with another scheme (`s3://`, `postgres://`, `lore://`) is refused with `E_STORE_SCHEME` before anything is written: use a git url or `file:///<absolute path>`.
+- **`lore store init me` works anywhere.** It makes your personal store and records it in `~/.lore/config.yaml`, so it needs no repo; every other `lore store` command runs inside a repo.
 
 ## Related
 

@@ -2,7 +2,7 @@
 
 **In short:** each section below starts with an error message you may see. It says what causes it in plain words and gives the fix. The questions people ask most are at the end.
 
-Every error below is real: it was produced on purpose by `tests/team/docs/run-examples.sh errors`.
+Every example output below is real: it was produced on purpose by `tests/team/docs/run-examples.sh errors`. A few sections have no example; their text is checked against the code instead.
 
 First steps for anything odd:
 
@@ -63,6 +63,8 @@ orgs[0] "agency": stores[0].branch "release/2026": a store branch may not contai
 <!-- /example -->
 
 Fix the listed key (here: a store branch may not contain `/`) and run `lore config check` again.
+
+The same check refuses an org name, a store's project folder name or a personal-store folder name that Windows cannot check out: a device name in any case, with or without an extension (`con`, `prn`, `aux`, `nul`, `com1` to `com9`, `lpt1` to `lpt9`, so `NUL.txt` too), or a name ending in `.` (Windows drops the dot, so `web.` and `web` would be one folder). It is refused on every system, because a store is shared and one teammate's folder would break every Windows clone of it. Pick another name. A folder of such a name that already exists in a store stays readable where it is. Names that differ only in upper and lower case (`App` and `app`) are not refused; avoid them yourself, because Windows and macOS see them as one folder.
 
 ## `E_NOT_A_STORE`
 
@@ -180,9 +182,13 @@ Fix: reconnect and run the command again. Ordinary writes behave differently:
 - A memory or task written while the store is unreachable is committed in the local clone and pushed by a later command ("1 file(s) offline: committed in the local clone, pushed by the next command").
 - Live writes in a code repo wait as "(live, not pushed yet: N waiting)".
 
+`E_CONTENDED` (exit 11) on the same commands is different: the remote answered every time, but another writer got in first on every retry. Nothing was written; wait a few seconds and run the command again.
+
 ## `E_LOST_CLAIM`, `E_CANCELLED`, `E_REASSIGNED`
 
 Your claim on a task is gone. Either the lease (the time a claim lasts without a heartbeat) ran out and another agent took the task over, or a person revoked, cancelled or reassigned it. The message says who holds it now. Stop working on that task; see [Agents](agents.md#fail-closed-errors-and-what-to-do).
+
+`E_REFUSED` (exit 23) on a claim, cancel, reassign, revoke or done is not about the network: a fixed rule or the task's state says no. An agent tried something only a person may do (cancelling, reassigning or revoking, or finishing someone else's claim; the `--json` error has `"needs_person": true`), the WIP limit is reached, the task is poisoned (its claim ran out too many times, so it needs a person), or it is no longer open. Retrying will not help: hand it to a person, or pick other work.
 
 ## `E_LEAK_BLOCKED`
 
@@ -208,6 +214,10 @@ To give the client an internal note on purpose: lore move <id> --to repo (it kee
 - `lore check leaks --explain` shows the rule and the matched words.
 
 The same check runs again at push (the `pre-push` hook), on every commit the push would send; there the fix is to rewrite the commits that carry the text (`git commit --amend`, or `git rebase`). Never bypass either check with `git commit --no-verify` or `git push --no-verify` in a client repo: they skip every local check, and only `lore check leaks --ci` in the client's CI (ids, not sentences) is left. If something already reached the client, follow [Cleaning up after a leak](use-cases/leak-cleanup.md).
+
+## `E_META_STORE_UNREADABLE`
+
+In a client repo, a write that carries metadata (`--meta` on an add or edit, `lore meta set`, `lore meta unset`) is refused while an org store has no local copy and cannot be reached. Lore has to check the metadata against the store's own keys, so an internal key never ends up in the client repo, and with the store unreadable it cannot. Nothing is written. Go online once (or run `lore sync`) so the store is kept locally, then write again. The same write without metadata answers `E_LEAK_BLOCKED` ("cannot check") for the same reason.
 
 ## "live, not pushed yet": the host refuses `refs/lore/*`
 
@@ -264,6 +274,14 @@ personal   local: agency/, everywhere/
 <!-- /example -->
 
 On your own terminal they are printed. `--share` prints them on a terminal on purpose.
+
+## `E_INVALID_ID`
+
+The id you typed does not have the shape of a lore id (a prefix, `_`, then 32 hex characters, such as `tsk_…`): usually a typo or an id cut short. Lore says so (exit 20) instead of answering "not found", so a script can tell a bad id from a row that is really gone (`E_NOT_FOUND`). Copy the id again from `list` output.
+
+## `E_SYMLINK_DB`: a lore file is a symbolic link
+
+Lore never writes its own files through a symbolic link, because a repository can carry a link that points anywhere on your disk. It refuses (exit 23) when any of these is a link: the local cache (`.lore/lore-cache.db` and its side files), the machine store and local state under `~/.lore`, the store lock `.lore/lock`, and the audit files (`.lore/state/audit-v2.jsonl` and the per-store and batch logs). Delete the link; lore rebuilds the cache from `.lore/data` on the next command. Two related files answer `E_REFUSED` instead: `.lore/LORE.md` may be a link only while it stays inside the repository, and `.gitignore` is never written through a link that leads out of it. A folder above these files that is a link (your own layout, such as a repo under a linked `~/work`) is fine.
 
 ## "Database is locked" and slow commands
 
