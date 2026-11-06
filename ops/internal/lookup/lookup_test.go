@@ -33,12 +33,20 @@ var lookupVerbs = []string{
 // repo lookup would answer for the wrong store; E_NOT_FOUND for an
 // unknown id would also let a script read "no such actor" as "an actor
 // could be deleted" (G-ORGMIG-5);
+// live.show reads one file of the live ref (refs/lore/live), not a store
+// row: it needs the host's live session, which this harness does not
+// wire, so it answers E_UNSUPPORTED (v0.1.17's "live rows are not
+// available here") before any id is read, for every input; where live
+// rows apply, any id the live folder lacks is E_NOT_FOUND, pinned over
+// the same kinds of ids by wire/host TestLiveShowUnknownIDIsNotFound
+// (G-HOST-1);
 // none is a row-id lookup.
 var notLookups = map[string]bool{
 	"commit.show": true, "policy.show": true, "secrets.rule.edit": true,
 	"resource.kind.show": true, "resource.kind.edit": true,
 	"pii_pattern.enable": true, "pii_pattern.disable": true,
 	"actor.delete": true,
+	"live.show":    true,
 }
 
 // changeFields are the fields an edit is given so that its "nothing to
