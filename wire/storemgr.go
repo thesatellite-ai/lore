@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -576,12 +577,20 @@ const homeTilde = "~"
 // init, add, set-url), so it is also the add-time credential check: a url
 // holding a password or a token-shaped user is refused (E_URL_USERINFO,
 // attach.NormalizeURL; the url never appears in the error), because the
-// value would be written into the committed stores.yaml. Other urls pass
-// unchanged.
+// value would be written into the committed stores.yaml; any other https
+// user part is dropped (G-CORE-6). Other urls pass unchanged.
 func cleanFileURL(raw string) (string, error) {
 	if !strings.HasPrefix(raw, folder.Scheme+"://") {
 		if _, err := attach.NormalizeURL(raw); errs.Has(err, errs.URLUserinfo) {
 			return "", err
+		}
+		// G-CORE-6: a user part that is not refused (an https user name,
+		// which git hosts treat as a token) is dropped before the url is
+		// written into the committed stores.yaml; read time strips it
+		// anyway (attach.CleanURL), so the written url is the one used.
+		// An ssh login user (git@) is kept, as Strip keeps it.
+		if clean, _, serr := repourl.Strip(raw); serr == nil {
+			return clean, nil
 		}
 		return raw, nil
 	}
