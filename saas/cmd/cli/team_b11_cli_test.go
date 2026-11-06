@@ -373,7 +373,7 @@ func TestB11_SupersedesMarksTheOldRow(t *testing.T) {
 		before := b11Count(t, c, kc.kind)
 		for _, bad := range []struct{ id, code string }{
 			{old, "E_INVALID_INPUT"},
-			{prefix + "_00000000000000000000000000000000", "E_NOT_FOUND"},
+			{prefix + "_00000000000000000000000000000000", "E_INVALID_ID"}, // B-ERRS-1: no UUIDv7
 			{prefix + "_01a1a681c07e7dfe8ec01fc44d487e86", "E_NOT_FOUND"},
 		} {
 			c.Lore(append(append([]string{kc.kind, "add"}, kc.add...), "--supersedes", bad.id)...).Refused(t, bad.code)
@@ -383,7 +383,7 @@ func TestB11_SupersedesMarksTheOldRow(t *testing.T) {
 		}
 	}
 	rul := mustID(t, c.MustLore("rule", "add", "--body", "another rule"), "rul")
-	c.Lore("hotfix", "add", "--title", "x", "--body", "y", "--supersedes", rul).Refused(t, "E_NOT_FOUND")
+	c.Lore("hotfix", "add", "--title", "x", "--body", "y", "--supersedes", rul).Refused(t, "E_INVALID_ID") // another noun's id (B-ERRS-1)
 }
 
 // TestB11_IdentitySetRefusesABareName (old cmd_fixes_test.go

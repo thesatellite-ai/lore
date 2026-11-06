@@ -36,8 +36,10 @@ func TestF01_TaskShowWalksEverySource(t *testing.T) {
 	// A done store task is still found.
 	g.beClone.MustLore("task", "done", g.t30, "--pr", "412")
 	g.aliceFE.MustLore("task", "show", g.t30).Says(t, "invite mutation", "done")
-	// An unknown id is still E_NOT_FOUND; 0.1.18 exits 27 for it (DOCS O4).
-	g.aliceFE.Lore("task", "show", "tsk_00000000000000000000000000").Fails(t, th.ExitNotFound, "E_NOT_FOUND")
+	// A well-formed unknown id is still E_NOT_FOUND; 0.1.18 exits 27 for it
+	// (DOCS O4). A malformed one is E_INVALID_ID, exit 20 (BATCH2 #11, B-ERRS-1).
+	g.aliceFE.Lore("task", "show", "tsk_01a1a681c07e7dfe8ec01fc44d487e86").Fails(t, th.ExitNotFound, "E_NOT_FOUND")
+	g.aliceFE.Lore("task", "show", "tsk_00000000000000000000000000").Fails(t, 20, "E_INVALID_ID")
 }
 
 // BUG-D4: `mission status` names every agent by its label, also agents
