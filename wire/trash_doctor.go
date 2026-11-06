@@ -21,7 +21,7 @@ func (a *App) DoctorTrash(ctx context.Context) ([]DoctorFinding, error) {
 	if _, standalone := a.opts.OrgCommands.(*standaloneOrg); !standalone {
 		return nil, nil // the old binary's own doctor prints this row
 	}
-	warnings, notes, err := opstrash.Doctor(ctx, a)
+	warnings, notes, err := opstrash.Doctor(ctx, quietTrashEnv{a}) // no --local listing heading in doctor (trash_doctor_quiet.go)
 	if err != nil {
 		return nil, err
 	}
