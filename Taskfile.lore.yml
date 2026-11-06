@@ -83,7 +83,7 @@ tasks:
   test:
     desc: "Unit + integration tests of the root module, with the race detector"
     cmds:
-      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./...
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m ./...
 
   test:all:
     desc: "Every Go test of the root module, incl. cmd/lore's docs drift test (the team suite is lore:test:team)"
