@@ -109,8 +109,40 @@ func (r *OrgResolution) FetchLinksAlways() {
 func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error) {
 	r.once.Do(func() {
 		r.sit, r.err = orgcfg.Gather(ctx, orgcfg.In{Home: r.home, Dir: r.dir, EnvOrg: os.Getenv(orgcfg.EnvOrg), Links: r.links})
+		r.err = redactQuietErr(r.home, r.sit, r.err)
 	})
 	return r.sit, r.err
+}
+
+// redactQuietErr hides every configured org store url in err when output
+// must name nothing (no terminal, CI; quietOutput): a gather error such as
+// E_NOT_A_STORE names the store url, and every command of a client repo
+// prints it, so a client's CI log or an agent's transcript would carry the
+// agency's internal store url (v0.1.17 redactIfQuiet in stores_wiring.go,
+// B-FLOW4-4). The code, hint and the rest of the text stay; a non-lore
+// error or an unreadable config is returned as it is.
+func redactQuietErr(home string, sit *orgcfg.Situation, err error) error {
+	if err == nil || !quietOutput() {
+		return err
+	}
+	var e *errs.Error
+	if !errors.As(err, &e) {
+		return err
+	}
+	if sit == nil {
+		cfg, _, cerr := orgcfg.LoadConfig(home)
+		if cerr != nil || cfg == nil {
+			return err
+		}
+		sit = &orgcfg.Situation{Config: cfg}
+	}
+	red := newWhoamiRedactor(sit, false)
+	c := *e
+	c.Message, c.Hint = red.str(c.Message), red.str(c.Hint)
+	if c.Cause != nil {
+		c.Cause = errors.New(red.str(c.Cause.Error()))
+	}
+	return &c
 }
 
 // Apply sets the org hooks of o from r (the hooks o already sets win, so
