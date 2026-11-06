@@ -60,6 +60,50 @@ func hasInput(e op.Entry, name string) bool {
 	return false
 }
 
+// fieldProjectID is the project column a content table may carry.
+const fieldProjectID = "project_id"
+
+// walkKind is the resource kind the walk creates for resource.list.
+const walkKind = "walk_box"
+
+// walkListSetups prepares the lists whose input has a required field:
+// it returns the fields to seed the row with (JSON literals, as
+// opstest.H.Seed takes them) and the base input members (no braces) every
+// run of the list carries. A list needing input without an entry here
+// fails the walk, so a new one cannot slip past it.
+var walkListSetups = map[string]func(h *opstest.H) (map[string]string, string){
+	// resource.list lists one kind (lore resource list <kind>).
+	"resource.list": func(h *opstest.H) (map[string]string, string) {
+		kind := h.ID(h.Must("resource.kind.add", `{"kind":"`+walkKind+`"}`))
+		return map[string]string{"kind": opstest.Quote(kind)}, `"kind":"` + walkKind + `"`
+	},
+}
+
+// walkInput joins the base members and extra into one JSON object.
+func walkInput(base, extra string) string {
+	switch {
+	case base == "":
+		return "{" + extra + "}"
+	case extra == "":
+		return "{" + base + "}"
+	}
+	return "{" + base + "," + extra + "}"
+}
+
+// hasField reports whether table defines a field named name.
+func hasField(reg *schema.Registry, table row.Table, name string) bool {
+	def, ok := reg.Table(table)
+	if !ok {
+		return false
+	}
+	for _, f := range def.Fields {
+		if f.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // TestDeletedRowHiddenOnEveryList is DELETION 3.2's command-tree walk over
 // wire's real registry: for every noun list that offers --include-deleted,
 // one row of the noun's table is written and moved to the trash; the
@@ -85,14 +129,27 @@ func TestDeletedRowHiddenOnEveryList(t *testing.T) {
 			t.Errorf("%s offers --include-deleted but no table matches noun %q", name, noun)
 			continue
 		}
-		if needs := requiredInputs(e); len(needs) > 0 {
-			t.Logf("%s skipped: needs %v", name, needs)
+		setup, hasSetup := walkListSetups[name]
+		if needs := requiredInputs(e); len(needs) > 0 && !hasSetup {
+			t.Errorf("%s needs %v: give it an entry in walkListSetups so the walk can run it", name, needs)
 			continue
 		}
 		t.Run(name, func(t *testing.T) {
-			id := h.Seed(table, nil)
-			if live, lerr := h.Run(name, ``); lerr != nil || !strings.Contains(h.JSON(live), id) {
-				t.Skipf("%s does not list a freshly seeded %s row (%v): the walk cannot judge it", name, table, lerr)
+			set, base := map[string]string{}, ""
+			if hasSetup {
+				set, base = setup(h)
+			}
+			// A table with a project column gets the repo's project: a
+			// list without --project shows the repo project's rows only
+			// (playbook.list, as v0.1.17's list did), so a row with no
+			// project would never be listed and the walk could not judge it.
+			if _, given := set[fieldProjectID]; !given && hasField(reg, table, fieldProjectID) {
+				set[fieldProjectID] = opstest.Quote(h.Project)
+			}
+			id := h.Seed(table, set)
+			input := func(extra string) string { return walkInput(base, extra) }
+			if live, lerr := h.Run(name, input(``)); lerr != nil || !strings.Contains(h.JSON(live), id) {
+				t.Fatalf("%s does not list a freshly seeded %s row (%v): %s", name, table, lerr, h.JSON(live))
 			}
 			x, perr := ids.ParseAny(id)
 			if perr != nil {
@@ -101,18 +158,18 @@ func TestDeletedRowHiddenOnEveryList(t *testing.T) {
 			if _, derr := h.App.Delete(context.Background(), engine.Ref{Store: store.SourceRepo, Table: table, ID: x}); derr != nil {
 				t.Fatalf("delete %s: %v", id, derr)
 			}
-			plain, rerr := h.Run(name, ``)
+			plain, rerr := h.Run(name, input(``))
 			if rerr != nil {
 				t.Fatalf("%s: %v", name, rerr)
 			}
 			if strings.Contains(h.JSON(plain), id) {
 				t.Fatalf("%s shows the trashed row %s", name, id)
 			}
-			for _, in := range []string{`{"include_deleted":true}`, `{"deleted_only":true}`} {
-				if in == `{"deleted_only":true}` && !hasInput(e, "deleted_only") {
+			for _, in := range []string{`"include_deleted":true`, `"deleted_only":true`} {
+				if in == `"deleted_only":true` && !hasInput(e, "deleted_only") {
 					continue
 				}
-				res, ierr := h.Run(name, in)
+				res, ierr := h.Run(name, input(in))
 				if ierr != nil {
 					t.Fatalf("%s %s: %v", name, in, ierr)
 				}
