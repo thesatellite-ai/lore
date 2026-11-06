@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -70,7 +71,11 @@ func privWorld(t *testing.T, srcs []privSrc, files map[string]string) (*wire.App
 		t.Fatal(err)
 	}
 	for rel, body := range files {
-		if err := os.WriteFile(filepath.Join(repo, filepath.FromSlash(rel)), []byte(body), 0o600); err != nil {
+		path := filepath.Join(repo, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -326,6 +331,73 @@ func TestPrivateRepoKey(t *testing.T) {
 		}
 		if _, err = os.Stat(filepath.Join(home, renderDirName, before.projectID)); !os.IsNotExist(err) {
 			t.Errorf("a render dir under the project id exists too: %v", err)
+		}
+	})
+}
+
+// TestRenderPrivateTargets (later:258, FQ13 / P2-CTX-1): every target
+// profile with a private file gets the import lines in it. claude_code +
+// cursor (both pointer files present) writes CLAUDE.local.md and the
+// Cursor private rule (with its frontmatter); once cursor is no longer a
+// target its private rule, holding only lore lines, is removed while
+// CLAUDE.local.md stays; a codex-only repo writes no private file.
+func TestRenderPrivateTargets(t *testing.T) {
+	ctx := context.Background()
+	claude, cursor, codex := builtin(t, toolprofile.NameClaudeCode), builtin(t, toolprofile.NameCursor), builtin(t, toolprofile.NameCodex)
+	inner := func(t *testing.T) []privSrc {
+		return []privSrc{{name: "inner", url: internalStoreAt(t, privMatrixInnerID, rowfs.VisibilityInternal), word: "innerword"}}
+	}
+	exists := func(repo, rel string) bool {
+		_, err := os.Stat(filepath.Join(repo, filepath.FromSlash(rel)))
+		return err == nil
+	}
+
+	t.Run("claude_code and cursor, then cursor dropped", func(t *testing.T) {
+		a, repo := privWorld(t, inner(t), map[string]string{claude.PointerFile: "# repo\n", cursor.PointerFile: "x\n"})
+		h := New(Options{App: a, Home: t.TempDir()})
+		var w strings.Builder
+		if err := h.renderPrivate(ctx, &w, repo, false, false); err != nil {
+			t.Fatal(err)
+		}
+		line := privMatrixInnerID + privateFileExt
+		for _, rel := range []string{claude.PrivateFile, cursor.PrivateFile} {
+			b, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(rel)))
+			if err != nil || !strings.Contains(string(b), line) {
+				t.Fatalf("%s = %q (%v), want the import of %s", rel, b, err, line)
+			}
+		}
+		if b, _ := os.ReadFile(filepath.Join(repo, filepath.FromSlash(cursor.PrivateFile))); !strings.HasPrefix(string(b), "---\n") {
+			t.Errorf("%s has no frontmatter: %q", cursor.PrivateFile, b)
+		}
+		if err := os.Remove(filepath.Join(repo, filepath.FromSlash(cursor.PointerFile))); err != nil {
+			t.Fatal(err)
+		}
+		w.Reset()
+		if err := h.renderPrivate(ctx, &w, repo, false, false); err != nil {
+			t.Fatal(err)
+		}
+		if exists(repo, cursor.PrivateFile) {
+			t.Errorf("%s kept after cursor stopped being a target", cursor.PrivateFile)
+		}
+		if !exists(repo, claude.PrivateFile) {
+			t.Errorf("%s removed although claude_code is still a target", claude.PrivateFile)
+		}
+	})
+
+	t.Run("codex only", func(t *testing.T) {
+		a, repo := privWorld(t, inner(t), map[string]string{codex.PointerFile: "# repo\n"})
+		h := New(Options{App: a, Home: t.TempDir()})
+		var w strings.Builder
+		if err := h.renderPrivate(ctx, &w, repo, false, false); err != nil {
+			t.Fatal(err)
+		}
+		for _, rel := range []string{claude.PrivateFile, cursor.PrivateFile} {
+			if exists(repo, rel) {
+				t.Errorf("codex-only repo wrote %s", rel)
+			}
+		}
+		if !strings.Contains(w.String(), "no target tool has a private file") {
+			t.Errorf("summary line %q", w.String())
 		}
 	})
 }
