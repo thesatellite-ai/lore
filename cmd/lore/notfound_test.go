@@ -19,6 +19,10 @@ import (
 // peekHint finds the table a not-found hint names.
 var peekHint = regexp.MustCompile("`lore sync peek [^ ]+ ([a-z_]+)`")
 
+// ownPrefix reads the expected prefix from a malformed-id answer
+// (lookup.BadID: `… is not a memory id (mem_…)`).
+var ownPrefix = regexp.MustCompile(`\(([a-z]+)_…\)`)
+
 // showNouns are the top-level nouns with a `show` verb that takes an id.
 func showNouns(t *testing.T) []string {
 	t.Helper()
@@ -42,14 +46,26 @@ func TestNotFoundHintNamesTheRealTable(t *testing.T) {
 			tables[string(d.Name)] = d.Prefix
 		}
 	}
-	const hex = "_00000000000000000000000000000000"
+	// a well-formed id no row has (an all-zero id is malformed: no UUIDv7)
+	const hex = "_01a1a5aca7f57659be7320c5f4b7f00d"
 	hinted := 0
 	for _, noun := range showNouns(t) {
 		t.Run(noun, func(t *testing.T) {
+			// B-ERRS-1: a malformed id is E_INVALID_ID with no peek hint;
+			// its message names the noun's own prefix ("(mem_…)").
 			_, _, errOut := runCaptured(t, noun, "show", "zzz"+hex)
+			// (a noun whose show takes a name, resource, answers a name miss)
+			if strings.Contains(errOut, "[E_INVALID_ID]") && peekHint.MatchString(errOut) {
+				t.Fatalf("a malformed id got the peek hint:\n%s", errOut)
+			}
+			own := ownPrefix.FindStringSubmatch(errOut)
+			if own == nil {
+				return // this noun answers a bad id its own way (actor, project, trash, …)
+			}
+			_, _, errOut = runCaptured(t, noun, "show", own[1]+hex)
 			m := peekHint.FindStringSubmatch(errOut)
 			if m == nil {
-				return // this noun answers a missing id its own way (actor, project, trash, …)
+				return // no live not-found answer for this noun
 			}
 			hinted++
 			table := m[1]
@@ -57,9 +73,8 @@ func TestNotFoundHintNamesTheRealTable(t *testing.T) {
 			if !ok {
 				t.Fatalf("hint names %q, which is no table:\n%s", table, errOut)
 			}
-			_, _, errOut = runCaptured(t, noun, "show", string(prefix)+hex)
-			if m := peekHint.FindStringSubmatch(errOut); m == nil || m[1] != table {
-				t.Fatalf("own-kind id %s_…: want the peek hint naming %s:\n%s", prefix, table, errOut)
+			if string(prefix) != own[1] {
+				t.Fatalf("own-kind id %s_…: the peek hint names %s (%s_…):\n%s", own[1], table, prefix, errOut)
 			}
 			other := "rul" + hex
 			if table == "rules" {

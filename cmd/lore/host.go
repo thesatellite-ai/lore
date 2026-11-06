@@ -7,14 +7,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/surface/docs"
 	"github.com/thesatellite-ai/lore/surface/rest"
 	"github.com/thesatellite-ai/lore/wire"
@@ -29,8 +28,6 @@ const (
 	specDefaultDir   = "docs/reference"
 	specCommandsFile = "cli-commands.md"
 	specOpenAPIFile  = "openapi.json"
-	errorPrefix      = "ERROR: "
-	hintPrefix       = "  hint: "
 )
 
 // host holds what the host commands share: the app and the lore home.
@@ -189,15 +186,14 @@ func (h *host) versionCommand() *cobra.Command {
 	return cmd
 }
 
-// printHostError prints an error no generated command printed, in the
-// surface's format (ERROR: [code] message, then the hint), and returns its
-// class exit (exit 1 for an error with no lore code).
+// printHostError prints an error no generated command printed (E_ROOT_REFUSED
+// before the tree, a failed wire.New, an error cobra returned unprinted)
+// in the surface's format: with --json among the process arguments the
+// one-document error envelope on stdout, else ERROR: [code] message and
+// the hint on stderr (cli.PrintError, the generated commands' printer).
+// It returns the class exit (exit 1 for an error with no lore code). It
+// reads os.Args, not run's args: the process arguments are what the
+// caller asked for (run strips an init <path> but never --json).
 func printHostError(err error) int {
-	env := errs.EnvelopeOf(err)
-	line := errorPrefix + "[" + string(env.Error.Code) + "] " + env.Error.Message + "\n"
-	if env.Error.Hint != "" {
-		line += hintPrefix + env.Error.Hint + "\n"
-	}
-	_, _ = io.WriteString(os.Stderr, line) // stderr gone: nothing left to report to
-	return env.Error.Exit
+	return cli.PrintError(os.Stdout, os.Stderr, err, cli.JSONRequested(os.Args[1:]))
 }

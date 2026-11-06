@@ -212,8 +212,10 @@ func TestHostErrorPrintedOnce(t *testing.T) {
 	}{
 		{"unknown flag", "", []string{"memory", "list", "--bogus"}, 20, "E_INVALID_INPUT"},
 		{"bad value", "", []string{"task", "list", "--status", "bogus"}, 20, "E_INVALID_INPUT"},
-		{"not found", "", []string{"memory", "show", "mem_00000000000000000000000000000000"}, 27, "E_NOT_FOUND"},
-		{"shortcut not found", "", []string{"show", "mem_00000000000000000000000000000000"}, 27, "E_NOT_FOUND"},
+		{"not found", "", []string{"memory", "show", "mem_01a1a5aca7f57659be7320c5f4b7f00d"}, 27, "E_NOT_FOUND"},
+		{"shortcut not found", "", []string{"show", "mem_01a1a5aca7f57659be7320c5f4b7f00d"}, 27, "E_NOT_FOUND"},
+		// B-ERRS-1: an all-zero id is no UUIDv7, so malformed, never not found
+		{"malformed id", "", []string{"memory", "show", "mem_00000000000000000000000000000000"}, 20, "E_INVALID_ID"},
 		{"host hook refusal", "nosuchrepo", []string{"memory", "add", "--body", "x"}, -1, "nosuchrepo"},
 		{"refused verb", "", []string{"actor", "delete", "act_00000000000000000000000000000000"}, 23, "E_REFUSED"},
 	}
