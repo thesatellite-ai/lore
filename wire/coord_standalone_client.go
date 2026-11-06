@@ -73,11 +73,7 @@ var _ coord.Rows = clientRows{}
 // agent_details decides internal).
 func clientRowsFor(w *coordWorld) clientRows {
 	internal := w.sit.Org == nil || w.sit.Org.EffectiveAgentDetails() != orgconf.AgentDetailsClient
-	src := store.Source("")
-	if w.sit.Org != nil {
-		src = store.Source(w.sit.Org.Name)
-	}
-	return clientRows{engineRows: engineRows{a: w.a}, store: src, internal: internal}
+	return clientRows{engineRows: engineRows{a: w.a}, store: w.orgStore, internal: internal}
 }
 
 // linkedID is the store-side linked row's id: derived from the client

@@ -160,7 +160,7 @@ func (h standaloneCoord) clientTaskNote(ctx context.Context, src store.Source, t
 	if err != nil {
 		return opscoord.Report{}, true, err
 	}
-	wr, err := h.a.Create(ctx, store.Source(w.sit.Org.Name), schema.TableComments, fields)
+	wr, err := h.a.Create(ctx, w.orgStore, schema.TableComments, fields)
 	if err != nil {
 		return opscoord.Report{}, true, err
 	}

@@ -78,6 +78,12 @@ type coordWorld struct {
 	actorID    string
 	// sit is the org resolution of this checkout (links, role, org).
 	sit orgresolve.Result
+	// orgStore is the attached name of the org store at this repo's linked
+	// folder: the bare org name, or "<org>/<folder>" when the repo's
+	// stores.yaml already attaches the bare name at the store root
+	// (renameOrgClashes). "" with no org. Every write and claim of a
+	// client task on the linked store goes here (D8), never to the root.
+	orgStore store.Source
 	// spot is where claims go: this repo's own signals ref, or the linked
 	// store's (useStore, D8).
 	spot sigSpot
@@ -150,6 +156,12 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	}
 	if rel, rerr := filepath.Rel(top, a.projectDir()); rerr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
 		w.folder = filepath.ToSlash(rel)
+	}
+	if sit.Result.Org != nil {
+		w.orgStore = store.Source(sit.Result.Org.Name)
+		if linked, ok := linkedFolderName(ctx, a.opts, top, sit.Result.Org.Name); ok {
+			w.orgStore = linked
+		}
 	}
 	w.settings(sit.Config, sit.Result.Org)
 	if _, rerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + w.remoteName + ".url"}}); rerr == nil {
@@ -280,7 +292,7 @@ func (w *coordWorld) useStore(ctx context.Context) error {
 		return errs.New(errs.Unsupported, "this repo is linked but no org entry resolved; its claims live on the store's signals ref").
 			WithHint("`lore whoami` shows the org resolution")
 	}
-	dir, branch, folder, ok := w.a.storeClone(ctx, store.Source(w.sit.Org.Name))
+	dir, branch, folder, ok := w.a.storeClone(ctx, w.orgStore)
 	if !ok {
 		return errs.New(errs.Unsupported, "the linked store of "+w.sit.Org.Name+" is not a git clone here: its signals ref cannot be reached").
 			WithHint("`lore stores show` lists the attached stores")
