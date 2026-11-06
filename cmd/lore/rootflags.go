@@ -20,6 +20,11 @@ import (
 // envNoColor turns colour off under --color auto (https://no-color.org).
 const envNoColor = "NO_COLOR"
 
+// envForceColor turns colour on under --color auto for a stream that is not
+// a terminal (https://force-color.org, CLI_REFERENCE 1.1); NO_COLOR still
+// wins when both are set.
+const envForceColor = "FORCE_COLOR"
+
 // rootFlags are the parsed global flags; the generated commands and the
 // render host read them per call, because the root parses them after the
 // command tree is built.
@@ -47,17 +52,19 @@ func addRootFlags(root *cobra.Command, f *rootFlags) {
 		}
 		return nil
 	}
-	root.PersistentFlags().Var(&f.color, cli.FlagColor, "color output: auto (a terminal with NO_COLOR unset), always or never")
+	root.PersistentFlags().Var(&f.color, cli.FlagColor, "color output: auto (a terminal or FORCE_COLOR set, with NO_COLOR unset), always or never")
 }
 
 // palette is the colour of one output stream under --color: auto colours
-// it only when that stream is a terminal and NO_COLOR is unset.
+// it only when that stream is a terminal (or FORCE_COLOR is set) and
+// NO_COLOR is unset.
 func (f *rootFlags) palette(s cli.Stream) cli.Palette {
 	file := os.Stdout
 	if s == cli.StreamErr {
 		file = os.Stderr
 	}
-	return cli.Palette{On: cli.ColorOn(f.color.Mode(), term.IsTerminal(int(file.Fd())), os.Getenv(envNoColor))}
+	terminal := term.IsTerminal(int(file.Fd())) || os.Getenv(envForceColor) != ""
+	return cli.Palette{On: cli.ColorOn(f.color.Mode(), terminal, os.Getenv(envNoColor))}
 }
 
 // renderDecor colours render, why-context and context lines like the
