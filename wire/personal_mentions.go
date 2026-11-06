@@ -13,9 +13,9 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
-	"gopkg.in/yaml.v3"
 )
 
 // F17's warn rule under STORE TARGETS (PL-PORT-1). v0.1.17 asked before an
@@ -130,8 +130,8 @@ func knownOrgNames(home string) ([]string, error) {
 		return nil, errs.Wrap(errs.Internal, "wire: read "+ConfigFile, err)
 	}
 	var c orgPatterns
-	if err = yaml.Unmarshal(b, &c); err != nil {
-		return nil, errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+	if err = yamlerr.Decode(b, &c, yamlerr.Lenient); err != nil {
+		return nil, configYAMLErr(err)
 	}
 	set := map[string]bool{}
 	for _, o := range c.Orgs {

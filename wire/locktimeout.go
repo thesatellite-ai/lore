@@ -15,8 +15,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -43,8 +42,8 @@ func readLockTimeout(home string) (time.Duration, error) {
 		return 0, errs.Wrap(errs.Internal, "wire: read "+ConfigFile, err)
 	}
 	var doc lockTimeoutDoc
-	if err = yaml.Unmarshal(b, &doc); err != nil {
-		return 0, errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+	if err = yamlerr.Decode(b, &doc, yamlerr.Lenient); err != nil {
+		return 0, configYAMLErr(err)
 	}
 	if doc.Store.LockTimeout == "" {
 		return 0, nil

@@ -28,6 +28,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 )
@@ -49,8 +50,8 @@ func machinePolicy(home string) ([]policy.Entry, []string, error) {
 		return nil, nil, errs.Wrap(errs.Internal, "wire: read "+ConfigFile, err)
 	}
 	var doc machinePolicyDoc
-	if err := yaml.Unmarshal(b, &doc); err != nil {
-		return nil, nil, errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+	if err := yamlerr.Decode(b, &doc, yamlerr.Lenient); err != nil {
+		return nil, nil, configYAMLErr(err)
 	}
 	keys := make([]string, 0, len(doc.Policies))
 	for k := range doc.Policies {

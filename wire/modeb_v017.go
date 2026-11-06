@@ -39,9 +39,8 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/thesatellite-ai/lore/logic/fileuri"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -168,13 +167,13 @@ func readModeBPointerFile(path string) (modeBPointer, error) {
 	if strings.HasSuffix(path, modeBTOMLExt) {
 		p, err = parseModeBTOML(b)
 	} else {
-		err = yaml.Unmarshal(b, &p)
+		err = yamlerr.Decode(b, &p, yamlerr.Lenient) // line + key, never a Go type
 	}
 	if err == nil && (p.DBPath == "" || p.ProjectID == "") {
 		err = errors.New("db_path and project_id are both required")
 	}
 	if err != nil {
-		return modeBPointer{}, errs.Wrap(errs.InvalidInput, "migrate: "+path+" is not a Mode B pointer", err)
+		return modeBPointer{}, errs.Wrap(errs.InvalidInput, "migrate: "+path+" is not a Mode B pointer: "+err.Error(), err)
 	}
 	return p, nil
 }

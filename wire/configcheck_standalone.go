@@ -31,6 +31,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsconfig "github.com/thesatellite-ai/lore/ops/config"
 	"github.com/thesatellite-ai/lore/schema"
@@ -76,7 +77,7 @@ func unknownKeyText(e string) string {
 func (standaloneConfig) ValidateConfig(_ context.Context, raw []byte) (opsconfig.Verdict, error) {
 	v := opsconfig.Verdict{Unknown: configUnknownKeys(raw)}
 	var c orgconf.Config
-	if err := yaml.Unmarshal(raw, &c); err != nil {
+	if err := yamlerr.Decode(raw, &c, yamlerr.Lenient); err != nil { // line + key, never a Go type
 		v.Decode = err
 		return v, nil
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -60,8 +61,8 @@ func readMachineConfig(home string) (machineConfig, error) {
 	if err != nil {
 		return c, errs.Wrap(errs.Internal, "wire: read "+ConfigFile, err)
 	}
-	if err := yaml.Unmarshal(b, &c); err != nil {
-		return c, errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+	if err := yamlerr.Decode(b, &c, yamlerr.Lenient); err != nil {
+		return c, configYAMLErr(err)
 	}
 	return c, nil
 }
@@ -326,8 +327,8 @@ func agentDetailsOf(home, org string) (string, error) {
 		return "", errs.Wrap(errs.Internal, "wire: read "+ConfigFile, err)
 	}
 	var c orgAgentDetails
-	if err = yaml.Unmarshal(b, &c); err != nil {
-		return "", errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+	if err = yamlerr.Decode(b, &c, yamlerr.Lenient); err != nil {
+		return "", configYAMLErr(err)
 	}
 	for _, o := range c.Orgs {
 		if o.Name != org {
@@ -364,7 +365,7 @@ func (a *App) ToolProfiles(context.Context) ([]toolprofile.Profile, error) {
 			Profiles []toolprofile.Profile `yaml:"profiles,omitempty"`
 		} `yaml:"context,omitempty"`
 	}
-	if err := yaml.Unmarshal(b, &c); err != nil {
+	if err := yamlerr.Decode(b, &c, yamlerr.Lenient); err != nil { // line + key, never a Go type
 		return nil, errs.New(errs.ConfigInvalid, "wire: "+ConfigFile+" context.profiles: "+err.Error()).
 			WithHint("check it with `lore config check`")
 	}
