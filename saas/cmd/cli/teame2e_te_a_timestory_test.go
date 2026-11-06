@@ -24,16 +24,6 @@ var teAStoryCaps = []th.Cap{
 	capTime, capLand, th.Cmd("task", "heartbeat"), th.Cmd("live", "compact"), th.Cmd("move"),
 }
 
-// teABugMoveClientLeak: after F-MOVE-1 (d91e9dfd) a done task with time
-// entries, moved from the own repo to a store project, then from the
-// store project's client checkout into the client repo with --with-time
-// totals (with or without --drop-internal), is refused E_LEAK_BLOCKED
-// "live write _root/tasks/<id>.json names a row of store northwind". The
-// preview keeps back time entries and claim state; the row still names
-// org rows (candidates: project_id of the store project, watchers).
-// Found by te-a; f-move owns move into a client repo.
-var teABugMoveClientLeak = th.Bug{ID: "BUG-MOVE-CLIENT-LEAK", Owner: "f-move", Open: true}
-
 // teAReports are the time reports compared on every clone: the entries
 // view (canon) and the per-person, per-source and per-day groupings.
 var teAReports = [][]string{
@@ -172,12 +162,10 @@ func TestTeA_TimeStory_ThreeClones(t *testing.T) {
 
 	// Move on into the client repo with per-worker totals: every clone of
 	// the client repo, the client's own included, reports the same effort.
-	// The own repo's task list stays behind on the first hop (F-MOVE-1).
-	// Pending on BUG-MOVE-CLIENT-LEAK: the client-repo write still names a
-	// row of the org store, so the leak guard blocks the move.
-	r := cr.aliceApp.Lore("move", id, "--to", "repo", "--with-time", "totals", "--yes")
-	teABugMoveClientLeak.PendingOn(t, r, "E_LEAK_BLOCKED", "names a row of store "+orgNorthwind)
-	r.OK(t)
+	// The own repo's task list stays behind on the first hop (F-MOVE-1);
+	// the move is no leak (12a955d8, BUG-MOVE-CLIENT-LEAK); the entries
+	// stay behind and the carried totals are the effort (F-MOVE-3).
+	cr.aliceApp.MustLore("move", id, "--to", "repo", "--with-time", "totals", "--yes")
 	clientV := teASameEverywhere(t, "after the move to the client repo", id, doneAt.Add(3*time.Minute), append(people, cr.acmedev), cr.aliceApp, cr.dev1App, cr.acmeApp)
 	if clientV.Data.Effort != v.Data.Effort {
 		t.Fatalf("the client repo's totals give the same effort as before (%d): %s", v.Data.Effort, clientV.canon(t))
