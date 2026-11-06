@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/store"
@@ -72,8 +73,8 @@ func ParseMarker(b []byte) (Marker, error) {
 		return Marker{}, errs.New(errs.ConfigInvalid, "rowfs: "+MarkerFile+" is too large")
 	}
 	var w markerWire
-	if err := yaml.Unmarshal(b, &w); err != nil {
-		return Marker{}, errs.Wrap(errs.ConfigInvalid, "rowfs: "+MarkerFile+" is not valid YAML", err)
+	if err := yamlerr.Decode(b, &w, yamlerr.Lenient); err != nil { // line + key, never a Go type
+		return Marker{}, errs.Wrap(errs.ConfigInvalid, "rowfs: "+MarkerFile+" is not valid: "+err.Error(), err)
 	}
 	if w.LoreStore < 1 {
 		return Marker{}, errs.New(errs.ConfigInvalid, "rowfs: "+MarkerFile+": lore_store must be a positive version")
