@@ -67,9 +67,9 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 |---|---|---|---|
 | `E_DB_LOCKED` | 23 | another lore process held a store's database for too long | wait for the other command to finish, then run yours again |
 | `E_DB_CORRUPT` | 23 | the local cache holds a record lore cannot read (a cache file that cannot be opened at all is moved aside and rebuilt by itself) | delete `.lore/lore-cache.db`: the next command rebuilds it from `.lore/data` ([how](../operations/backup-restore-repair.md)) |
-| `E_DB_NOT_FOUND` | 23 | no database at the configured path. Not raised yet | check `--db` / `LORE_DB`, or run `lore init` |
+| `E_DB_NOT_FOUND` | 23 | a store's cache file could not be opened for a search across stores | run the command again (lore rebuilds a cache from the row files); `lore doctor` checks the caches |
 | `E_SCHEMA_VERSION_MISMATCH` | 23 | a newer lore changed this database's layout. Not raised yet | upgrade lore |
-| `E_MIGRATION_INCOMPLETE` | 23 | an upgrade of the database layout did not finish; `lore doctor` reports it | run `lore setup` (safe to repeat); for the repo cache, delete `.lore/lore-cache.db` and the next command rebuilds it |
+| `E_MIGRATION_INCOMPLETE` | 23 | a `lore migrate run` of v0.1.17 data did not finish; `lore doctor` reports it | run `lore migrate run` again (it resumes where it stopped), or `lore migrate rollback` to undo it; for the repo cache, delete `.lore/lore-cache.db` and the next command rebuilds it |
 | `E_NETWORK_FS` | 23 | the database sits on a network or cloud-synced drive, where it can break silently | move the project to a local folder (git still shares the notes), or set `LORE_ALLOW_NETWORK_FS=1` |
 | `E_INODE_MISMATCH` | 23 | the database file was replaced while lore had it open. Not raised yet | check what else touches the file |
 | `E_DISK_FULL` | 23 | the disk is full; nothing was changed | free some space and run the command again |
@@ -93,11 +93,11 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_INVALID_ID` | 20 | an id does not have the right shape. Not raised yet | copy the id from `list` output |
+| `E_INVALID_ID` | 20 | an id does not have the right shape (a typo, an id cut short); lore never reports a malformed id as `E_NOT_FOUND` | copy the id from `list` output |
 | `E_INVALID_INPUT` | 20 | a flag or value is not allowed (the most common error) | read the message; it names the value |
 | `E_EMPTY_BODY` | 20 | the text is empty after trimming spaces | give some text |
-| `E_INVALID_UTF8` | 1 | the text is not valid UTF-8. Not raised yet | save the text as UTF-8 |
-| `E_BODY_TOO_LARGE` | 20 | the text is too long. Not raised yet | shorten it |
+| `E_INVALID_UTF8` | 1 | the text is not valid UTF-8 | save the text as UTF-8 |
+| `E_BODY_TOO_LARGE` | 20 | a row file is larger than 4 MB | shorten the text, or keep the long part in a file and link to it |
 | `E_INVALID_IDENTIFIER` | 20 | a project or repo name has a character that is not allowed | use letters, digits, `-` and `_` |
 
 ### Security
@@ -106,7 +106,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 |---|---|---|---|
 | `E_SECRET_DETECTED` | 23 | the text looks like it holds a password or key, so lore will not store it | remove the secret; in 0.1.18 a write asks first instead (`E_NEEDS_CONFIRM`, [below](#when-a-write-looks-like-it-holds-a-secret)); a bare `--yes` is not enough: say `--not-a-secret --reason "<why>" --yes`, `--secret-ref` or `--secret-unstored` |
 | `E_ROOT_REFUSED` | 23 | lore will not run as the root user | run as your normal user, or set `LORE_ALLOW_ROOT=1` |
-| `E_SYMLINK_DB` | 23 | `.lore/lore.db` is a symbolic link (a shortcut to another file) | delete the link; the next lore command rebuilds the database from `.lore/data` |
+| `E_SYMLINK_DB` | 23 | a file lore writes is a symbolic link (a shortcut to another file): the cache `.lore/lore-cache.db` or its side files, the machine store or local state under `~/.lore`, the store lock `.lore/lock`, or an audit file | delete the link; the next lore command rebuilds the cache from `.lore/data` |
 | `E_SYMLINK_LOOP` | 23 | a folder walk went round in a loop of links. Not raised yet | remove the looping link |
 | `E_UID_MISMATCH` | 23 | lore runs as a different user than the owner of your home folder. Not raised yet | run without `sudo` |
 
@@ -114,9 +114,9 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_LOCK_HELD` | 23 | another lore process holds the project lock. Not raised yet | wait and run the command again |
+| `E_LOCK_HELD` | 23 | another lore process holds a lock lore needs (for example another `lore upgrade` still running) | wait and run the command again |
 | `E_READ_ONLY` | 23 | the command wants to write, but read-only mode is on | drop `--read-only` and unset `LORE_READ_ONLY` |
-| `E_BUSY_TIMEOUT` | 23 | the database stayed busy too long. Not raised yet | wait and run the command again |
+| `E_BUSY_TIMEOUT` | 23 | other writers kept moving the store branch, or the database stayed busy too long | wait and run the command again |
 
 ### Audit and sync
 
@@ -146,7 +146,7 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 | `E_CANCELLED` | 13 | a person cancelled the task while you held it | stop working on this task |
 | `E_REASSIGNED` | 14 | a person reassigned the task while you held it | stop working on this task |
 | `E_OFFLINE` | 15 | a coordination write could not be confirmed by the server; nothing was queued | check the network and try again |
-| `E_AMBIGUOUS_ID` | 16 | the id exists in two loaded places. Not raised yet | name one with `--from` |
+| `E_AMBIGUOUS_ID` | 16 | the id exists in two loaded places | name one with `--from` |
 | `E_ORG_AMBIGUOUS` | 17 | two org entries match this repo equally well | choose one with `lore org use <entry>` |
 | `E_ORG_DISAGREES` | 17 | `LORE_ORG` or `lore org use` names another org than the store's link for this repo | fix the choice, or pass `--force-org` |
 | `E_LINK_UNKNOWN` | 18 | the store cannot be reached and no saved link list exists, so lore cannot tell whether this is a client repo | pass `--to`, or try again online (`lore store doctor`) |
