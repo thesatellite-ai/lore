@@ -107,6 +107,12 @@ type MetaEditIn struct {
 	// Context: CONTEXT_BUDGET 6.13 (A-CTX-12), "index" puts the key's row
 	// count in the rendered "available knowledge" index.
 	Context string `json:"context,omitempty" flag:"context" desc:"index: count this key's rows in the rendered available-knowledge index; none clears"`
+	// Type converts every stored value of the key (METADATA 3.3, R12,
+	// G-META-7); it runs on its own, asks first, one meta batch.
+	Type       string `json:"type,omitempty" flag:"type" desc:"change the key's type and convert every stored value (asks; nothing written while a value does not fit)"`
+	DryRun     bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"with --type: report what converts and what does not fit, write nothing"`
+	KeepAsText bool   `json:"keep_as_text,omitempty" flag:"keep-as-text" desc:"with --type: keep values that do not fit as text values instead of refusing"`
+	All        bool   `json:"all,omitempty" flag:"all" desc:"with --type: list every converted value"`
 }
 
 // MetaDescribeIn is the input of meta.describe.
@@ -212,8 +218,8 @@ func (o ops) metaOps() []op.Entry {
 		op.Define(op.Spec{Name: OpMetaAdd, Summary: "Add a metadata key to a place's registry", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
 			Examples: []op.Example{{Title: "a closed set", CLI: "lore meta add release_window --type text --strict --values spring,summer", Want: "mky_"}}}, o.metaAdd),
-		op.Define(op.Spec{Name: OpMetaEdit, Summary: "Edit a metadata key (strict, internal, allowed values)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.MetaKey, errs.MetaType, errs.MetaInUse, errs.MetaRetired, errs.MetaConflict), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST}, o.metaEdit),
+		op.Define(op.Spec{Name: OpMetaEdit, Summary: "Edit a metadata key (strict, internal, allowed values, type)", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.MetaKey, errs.MetaType, errs.MetaInUse, errs.MetaRetired, errs.MetaConflict, errs.MetaValue), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST}, o.metaEdit),
 		op.Define(op.Spec{Name: OpMetaDescribe, Summary: "Set a metadata key's description", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST}, o.metaDescribe),
 		op.Define(op.Spec{Name: OpMetaRename, Summary: "Rename a metadata key (a label change; the id stays)", Permission: op.PermWrite, Access: op.AccessWrite,

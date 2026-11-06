@@ -64,6 +64,9 @@ func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	if in.MergeInto != "" {
+		if in.Type != "" {
+			return RowOut{}, errs.New(errs.InvalidInput, "meta edit --type runs on its own").WithHint("change the type first, then fold with --merge-into")
+		}
 		return o.metaMergeInto(ctx, k, in.MergeInto)
 	}
 	name := text(k.Row, mName)
@@ -80,6 +83,17 @@ func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 	if err = o.everydayPatch(k, in, patch); err != nil {
 		return RowOut{}, err
 	}
+	if in.Type != "" {
+		// --type runs on its own (G-META-7): a conversion batch mixed with
+		// other key changes would make the confirmation and undo unclear.
+		if len(patch) > 0 || in.Values != "" || len(in.ValueLabel) > 0 || in.RenameValue != "" || in.RemoveValue != "" {
+			return RowOut{}, errs.New(errs.InvalidInput, "meta edit --type runs on its own").WithHint("change the type first, then the other fields in a second meta edit")
+		}
+		return o.metaRetype(ctx, k, in)
+	}
+	if in.DryRun || in.KeepAsText || in.All {
+		return RowOut{}, errs.New(errs.InvalidInput, "--dry-run, --keep-as-text and --all go with --type")
+	}
 	var notes []string
 	vnotes, err := o.editValues(ctx, k, in)
 	if err != nil {
@@ -88,7 +102,7 @@ func (o ops) metaEdit(ctx context.Context, in MetaEditIn) (RowOut, error) {
 	notes = append(notes, vnotes...)
 	if len(patch) == 0 && len(notes) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta edit: nothing to change").
-			WithHint("give --strict, --internal, --sensitive (or --no-…), --values, --value-label, --rename-value, --remove-value, --merge-into, --label, --required-on, --pattern, --min, --max, --default, --default-on, --deprecated, --replaced-by or --context")
+			WithHint("give --strict, --internal, --sensitive (or --no-…), --values, --value-label, --rename-value, --remove-value, --merge-into, --label, --required-on, --pattern, --min, --max, --default, --default-on, --deprecated, --replaced-by, --context or --type")
 	}
 	human := strings.Join(notes, "")
 	if len(patch) > 0 {
