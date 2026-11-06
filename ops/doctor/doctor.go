@@ -209,7 +209,10 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRun, Summary: "Run health checks; exit 0 healthy, 1 degraded, 2 broken",
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
-			Errors:   []errs.Code{errs.Internal},
+			// --fix of reversed --supersedes links asks first (the host answers
+			// E_NEEDS_CONFIRM until the caller said yes).
+			Confirm:  op.ConfirmRule{MayAsk: true},
+			Errors:   []errs.Code{errs.Internal, errs.NeedsConfirm},
 			Examples: []op.Example{{Title: "check this repo and its stores", CLI: "lore doctor", Want: ""}},
 		}, func(ctx context.Context, in RunIn) (Report, error) {
 			return Run(ctx, env, in)
