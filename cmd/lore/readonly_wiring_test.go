@@ -1,9 +1,11 @@
 package main
 
 import (
-	"os/exec"
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 )
 
 // TestReadOnlyCommandWiresGit: OWNERQ-9 / G-DECIDE-9 (a): the git wiring
@@ -15,7 +17,7 @@ func TestReadOnlyCommandWiresGit(t *testing.T) {
 	root := envScopeRepo(t) // runs `lore init`
 	gitIn(t, root, "config", "--local", "--remove-section", "merge.lore")
 	driver := func() string {
-		out, _ := exec.Command("git", "-C", root, "config", "--local", "--get", "merge.lore.driver").Output()
+		out, _ := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: root, Args: []string{"config", "--local", "--get", "merge.lore.driver"}}) // unset = exit 1: an empty driver
 		return strings.TrimSpace(string(out))
 	}
 	if driver() != "" {

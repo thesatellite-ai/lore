@@ -118,7 +118,7 @@ func (h *host) initCommand(wd string) *cobra.Command {
 					undo()
 				}
 			}()
-			if pid, err := h.app.Project(ctx); err == nil {
+			if pid, perr := h.app.Project(ctx); perr == nil {
 				if local {
 					return errs.New(errs.AlreadyInitialized, "a lore project already exists here ("+pid.String()+")")
 				}
@@ -130,8 +130,8 @@ func (h *host) initCommand(wd string) *cobra.Command {
 				ok = true
 				_, err = fmt.Fprintf(cmd.OutOrStdout(), "✓ adopted the shared lore project at %s\n    project_id: %s\n", wd, pid)
 				return err
-			} else if !errs.Has(err, errs.NotFound) {
-				return err
+			} else if !errs.Has(perr, errs.NotFound) {
+				return perr
 			}
 			if sharedErr != nil { // a new project would take a second id (G-MONO-1)
 				return sharedErr

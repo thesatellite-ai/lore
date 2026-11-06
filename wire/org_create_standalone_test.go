@@ -3,13 +3,13 @@ package wire
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
@@ -30,8 +30,7 @@ const (
 
 func orgGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	out, err := cmd.CombinedOutput()
+	out, err := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: dir, Args: args})
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -207,8 +206,8 @@ func TestOrgCreateImportRenameOnCmdLore(t *testing.T) {
 	// Import, outside any repo (store-only roster, BUG-T3).
 	bob := w.home(t, "bob")
 	out := filepath.Join(w.root, "outside")
-	if err := os.MkdirAll(out, 0o700); err != nil {
-		t.Fatal(err)
+	if merr := os.MkdirAll(out, 0o700); merr != nil {
+		t.Fatal(merr)
 	}
 	hb := orgHostAt(t, out, bob)
 	imp := opsorgcmd.ImportIn{URL: orgTestImport, Key: "human:bob@agency.example", Name: "Bob Roe", Handle: "bob"}
@@ -241,8 +240,8 @@ func TestOrgCreateImportRenameOnCmdLore(t *testing.T) {
 
 	// Rename on mira's machine, inside the repo (the org folder's id).
 	w.home(t, "mira")
-	if _, err := h.Use(ctx, opsorgcmd.UseIn{Entry: "agency"}); err != nil {
-		t.Fatalf("org use: %v", err)
+	if _, uerr := h.Use(ctx, opsorgcmd.UseIn{Entry: "agency"}); uerr != nil {
+		t.Fatalf("org use: %v", uerr)
 	}
 	_, err = h.Rename(ctx, opsorgcmd.RenameIn{Old: "nope", New: "x"})
 	wantCode(t, err, errs.NotFound, "rename of an unknown entry")

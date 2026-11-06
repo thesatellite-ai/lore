@@ -36,10 +36,10 @@ const orgFileMessage = "lore: org %s"
 const fallbackOrgFolder = "org"
 
 var (
-	// ErrOrgFileExists: the org folder already holds a lore-org.yaml naming
+	// ErrOrgFileExists is returned when the org folder already holds a lore-org.yaml naming
 	// another org (WriteOrgFile never overwrites a team's suggestion).
 	ErrOrgFileExists = errors.New("orgcfg: the org folder already has a lore-org.yaml")
-	// ErrNoOrgFile: the store suggests no org entry.
+	// ErrNoOrgFile is returned when the store suggests no org entry.
 	ErrNoOrgFile = errors.New("orgcfg: this store has no lore-org.yaml suggesting an org entry")
 )
 

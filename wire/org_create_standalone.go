@@ -194,8 +194,8 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	entry := orgconf.Org{Name: in.Org, Own: in.Own, Repos: in.Repos,
 		Stores:   []orgconf.Store{{URL: url, OrgFolder: in.OrgFolder}},
 		Identity: orgconf.OrgIdentity{Key: in.Key, Name: in.Name, Handle: in.Handle}}
-	if err := needIdentity(entry); err != nil {
-		return opsorgcmd.Report{}, err
+	if ierr := needIdentity(entry); ierr != nil {
+		return opsorgcmd.Report{}, ierr
 	}
 	lines, err := orgEntryLines(fmt.Sprintf("This writes %s/.lore/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:", in.OrgFolder), entry)
 	if err != nil {
@@ -205,8 +205,8 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 		return opsorgcmd.Report{Lines: lines, Ask: askCreate}, nil
 	}
 	// The entry must validate before anything reaches the store.
-	if _, err := orgConfigWith(h.home, func(root *yaml.Node) error { return appendOrgNode(root, entry) }); err != nil {
-		return opsorgcmd.Report{Lines: lines}, err
+	if _, verr := orgConfigWith(h.home, func(root *yaml.Node) error { return appendOrgNode(root, entry) }); verr != nil {
+		return opsorgcmd.Report{Lines: lines}, verr
 	}
 	doc := orgcfg.OrgFileDoc{Name: in.Org, Own: in.Own, Repos: in.Repos,
 		Stores: []orgcfg.OrgFileStore{{URL: url, OrgFolder: in.OrgFolder}}}
@@ -274,8 +274,8 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 		entry.Defaults.ClientRepos = sg.Doc.Defaults.ClientRepos
 	}
 	entry.Identity = orgconf.OrgIdentity{Key: in.Key, Name: in.Name, Handle: in.Handle}
-	if err := needIdentity(entry); err != nil {
-		return opsorgcmd.Report{}, err
+	if ierr := needIdentity(entry); ierr != nil {
+		return opsorgcmd.Report{}, ierr
 	}
 	lines, err := orgEntryLines("This adds to ~/.lore/config.yaml:", entry)
 	if err != nil {
@@ -450,6 +450,8 @@ func renameOrgNode(root *yaml.Node, oldName, newName, id string, out *opsorgcmd.
 					o.Value = newName
 					out.RepoOrgs++
 				}
+			case yaml.DocumentNode, yaml.SequenceNode, yaml.AliasNode:
+				// not a repo_orgs value lore writes (a name or an {org, ...} map): left as it is
 			}
 		}
 	}

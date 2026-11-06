@@ -107,10 +107,10 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 	cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(target), Store: target, Branch: w.Plan.Branch, NoPush: res.NoPush,
 		Message: fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature,
 		Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
-			put, created, changed, err := linkChange(ctx, repo, tip, target, w)
+			put, created, changed, cerr := linkChange(ctx, repo, tip, target, w)
 			res.CreatedFolder = res.CreatedFolder || created
 			res.Changed = res.Changed || changed
-			return put, err
+			return put, cerr
 		}})
 	res.Pushed, res.Offline = cr.Pushed, cr.Offline
 	return res, err
