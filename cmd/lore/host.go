@@ -77,7 +77,7 @@ func (h *host) apiCommand() *cobra.Command {
 			if h.runner != nil {
 				runner = &apiRunner{inner: h.runner}
 			}
-			srv, err := rest.New(h.app.Registry(), runner, rest.Options{Token: tok, Actor: actor, LoreVersion: version})
+			srv, err := rest.New(h.app.Registry(), runner, rest.Options{Token: tok, Actor: actor, LoreVersion: version, Kinds: apiKinds{app: h.app}})
 			if err != nil {
 				return err
 			}
