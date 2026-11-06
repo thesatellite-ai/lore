@@ -60,6 +60,10 @@ func TestLookupInTrashMatrix(t *testing.T) {
 			}
 			_, err := h.RunYes(name, inputFor(e, id))
 			switch {
+			case moveRefusesMachineLocal(reg, name, id):
+				if !isMachineMoveRule(err) {
+					t.Errorf("%s %s (%s): %v, want the machine-local move refusal", name, id, def.Name, err)
+				}
 			case errs.Has(err, errs.InTrash):
 				hits[name] = true
 				if !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore "+id) {
