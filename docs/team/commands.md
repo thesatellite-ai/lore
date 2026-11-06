@@ -382,7 +382,7 @@ Flags:
 ```
 <!-- /help -->
 
-Someone deleted `refs/lore/live` on the server. From then on every live write fails with `E_READ_ONLY` and `lore doctor` says why; `lore live restore` pushes the local copy back:
+Someone deleted `refs/lore/live` on the server. From then on every live write, `lore sync` and `lore land` fail with `E_READ_ONLY` and `lore doctor` says why; `lore live restore` pushes the local copy back:
 
 <!-- example: live-repair#live-ref-deleted only=3,4,5 -->
 ```console

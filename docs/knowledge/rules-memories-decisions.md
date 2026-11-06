@@ -167,7 +167,7 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 
 ## Step 8 — Delete a row for good
 
-`delete` removes a row with no undo, so it asks first; `--yes` answers for you (a script or an agent has no terminal to answer on). lore keeps a small marker of the deleted row, so an old copy of it never comes back. Archive is usually what you want.
+`delete` moves a row to the trash, and it asks first; `--yes` answers for you (a script or an agent has no terminal to answer on). `lore trash restore <id>` brings it back; `delete --purge --confirm` (or `lore trash purge <id> --confirm` later) removes it for good, keeping only a small marker so an old copy never comes back. Archive is usually what you want.
 
 <!-- example: knowledge#delete only=2,3 -->
 ```console
@@ -210,7 +210,7 @@ lore sync: rows whose file disappeared are kept in `lore trash --local` (undo: `
 - **Archived rows are hidden from lists.** `lore rule list` and `lore memory list` skip archived rows; pass `--archived` to see them with an `[archived]` mark.
 - **An invalidated memory is still listed and still found by search.** `invalidate` records the end date (`valid-until` in `lore memory show`); it does not hide the row. Archive it as well if you want it out of the way.
 - **Rows written by older lore versions point the other way.** Before this was fixed, `--supersedes` stored the old id on the new row and left the old row unchanged. `lore doctor` lists such pairs and `lore doctor --fix` turns them around once (a second run changes nothing).
-- **`delete` takes `--yes`.** Without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`. The old spelling `--confirm` is refused with a hint to use `--yes`.
+- **`delete` takes `--yes`.** Without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`. The old spelling `--confirm` still works on a delete: it moves the row to the trash like `--yes` and prints a hint at `lore trash purge`. `--purge` needs `--confirm`.
 - **Shell quotes.** Wrap the body in single quotes so the shell does not touch `$` or `!` in your text. You can also pipe the body in: `echo 'Run the tests before you push' | lore rule add`.
 - **`--not-a-secret` does not put the secret in git.** It records that you looked and the text is not a secret; the commit hook still refuses a file that holds a credential pattern. Fix the row (`edit`) or delete it before you commit.
 - **Not committed yet.** A new or changed row is a file in `.lore/data`. It is safe on your machine, but nobody else sees it until you commit `.lore/data` (`git status` lists it).

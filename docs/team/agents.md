@@ -73,15 +73,17 @@ Words used below:
 | Exit | Code | What it means | What the agent does |
 |---|---|---|---|
 | 10 | `E_NO_WORK` | nothing is ready; the message lists why each task waits (dependency not merged, gate, claimed by someone) | stop, or wait and ask again later; report to the coordinator if a dependency looks stuck |
-| 11 | `E_CONTENDED` | ready work exists but other agents won every claim | wait a few seconds (with some randomness) and run `task next` again |
+| 11 | `E_CONTENDED` | ready work exists but other agents won every claim, or another writer won every attempt to push a claim, heartbeat or other coordination write | wait a few seconds (with some randomness) and run the command again (`task next` for a claim) |
 | 12 | `E_LOST_CLAIM` | your claim is gone: the lease expired and another agent took the task, or it was revoked | **stop working on that task at once**; do not push more to it; run `task next` for other work |
 | 13 | `E_CANCELLED` | a person cancelled the task while you held it | stop; do not finish it |
 | 14 | `E_REASSIGNED` | a person gave the task to someone else | stop; leave a note or handoff if you have useful state |
-| 15 | `E_OFFLINE` | the remote could not confirm the write; nothing was queued | retry when the network is back; never assume the write happened |
+| 15 | `E_OFFLINE` | the remote could not be reached, so it could not confirm the write; nothing was queued | retry when the network is back; never assume the write happened |
 | 16 | `E_AMBIGUOUS_ID` | the id exists in two sources | repeat with `--from repo` or `--from <org>/<folder>` |
 | 17 | `E_ORG_AMBIGUOUS` | two orgs match this repo | ask a person; never pick one yourself |
 | 18 | `E_LINK_UNKNOWN` | lore cannot tell if this is a client repo (store unreachable) | retry later; do not work around it with `--to repo` unless a person said so |
 | 19 | `E_LEAK_BLOCKED` | the commit, write or PR text would put internal content where the client can read it | remove the internal text; never bypass with `--no-verify`; ask a person if the text must be shared |
+| 20 | `E_INVALID_ID` | an id does not have the right shape (a typo, a cut-off id); lore never reports it as "not found" | copy the id again from `list` or `task next` output |
+| 23 | `E_REFUSED` | a fixed rule or the task's state says no: a person-only override (cancel, reassign, revoke, finishing someone else's claim; the `--json` error has `"needs_person": true`), the WIP limit is reached, the task is poisoned, or the task is no longer open | do not retry; tell your person (the owner in `lore agent start --owner`) and take other work |
 
 A real one, from the worked example: the crashed `agent-frontend` woke up after `agent-frontend-2` had taken its task over.
 

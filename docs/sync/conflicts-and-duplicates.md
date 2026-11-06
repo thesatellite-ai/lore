@@ -96,6 +96,12 @@ $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin m
 
 You can also edit the value in the file by hand; the next lore command reads it in.
 
+Or let lore pick one side for you. `lore sync conflicts` lists every row that still holds conflict markers, numbered: first the live rows (tasks shared before they land), then the row files of this repo that a git merge left with markers (with the file path; for those `kept` reads "both" until you choose). `lore sync status` counts the conflicted files too. `lore sync resolve <number> --take kept` keeps the first side of every marker block in that row (your edit; for a git merge, the branch you are on), `--take other` keeps the second (the edit that met it; for a git merge, the branch you merged in). It only ever chooses between texts already there, never writes new text:
+
+- A row file is written back in place and the local cache refreshed; you still `git add` and commit the merge yourself, lore never commits it for you.
+- A live row gets a new live version, pushed like any other live edit.
+- If the result would still hold markers (nested or hand-made blocks), or a file would not be a valid row afterwards, resolve refuses with `E_INVALID_INPUT` and writes nothing: edit that row by hand. An unknown number is `E_NOT_FOUND`.
+
 ## Step 3 — The file and your database both changed
 
 For shared notes (rules, memories, tasks and the other core notes) the file is the only truth: lore reads them straight from `.lore/data`, and `lore.db` is just a local copy. So an edit of the file, by hand or by git, simply wins, and there is no second version to conflict with it:
@@ -114,7 +120,7 @@ $ lore sync conflicts
 ```
 <!-- /example -->
 
-A conflict between the file and `lore.db` can still happen for the few rows `lore.db` owns (for example project settings changed with sync turned off). The pass keeps one version, saves the other and says so; `lore sync conflicts` shows it, `lore sync resolve <number> --take kept` accepts what the pass kept and `--take other` puts the saved one back. `lore sync conflicts --all` also lists conflicts you already resolved.
+Lore 0.1.18 keeps no second copy in `lore.db` that could disagree with the file, so this kind of conflict cannot happen any more. The only conflicts left are conflict markers inside a row, from Step 2 or from a live row two people edited at once; `lore sync conflicts` and `lore sync resolve` settle those.
 
 ## Step 4 — The same fact written twice
 
@@ -190,7 +196,8 @@ lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a 
 - **A clone that never ran lore has no driver.** If someone merges in a fresh clone before running any lore command, git falls back to line merging. Run `lore sync` once after cloning.
 - **Conflict markers in a value are imported, not hidden.** Until you settle them, `lore rule list` shows the markers in the text, and every command repeats the warning. That is deliberate, so the conflict is not forgotten.
 - **lore does not look for duplicates for you.** Find them with `lore search` or `lore memory list`; "We use Stripe" and "Payments go through Stripe" are the same fact to you, not to lore. Then fold them with `lore sync merge-rows`.
-- **Resolve numbers are per machine.** `#1` in `lore sync conflicts` is a local number, not a row id; it means nothing on a teammate's machine.
+- **Resolve numbers are per machine.** `#1` in `lore sync conflicts` is a local number, not a row id; it means nothing on a teammate's machine. Run `lore sync conflicts` again before each `resolve`: the numbers shift once a conflict is settled.
+- **Resolve works on this repo only.** Files of an attached store's clone are settled by `lore sync`'s own merge, not by `lore sync resolve`.
 
 ## Related
 

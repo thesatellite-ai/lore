@@ -266,6 +266,19 @@ lore sync: imported 1
 ```
 <!-- /example -->
 
+## Step 12 — Move tasks in and out with files
+
+`lore task export` prints your tasks as a file; `--where` picks which (the `lore task list` grammar), `--with-children` adds their sub-tasks and `--with-checklist` their checklists:
+
+- `--format json` (the default) is the shape `lore task import` reads back, status, estimate and parent included, so export then import round-trips them.
+- `--format csv` has the same columns plus a few for reading (`lead`, `created_at`, `completed_at`); import reads past those with one warning each.
+- `--format markdown` prints `- [ ] title (id)` lines, nested by parent with `--tree`.
+- `--format github` prints a JSON list of issues for your own `gh` scripts: title, body (with `--with-checklist`, the checklist as a GitHub task list), `state` open or closed (`state_reason` completed for done, not_planned for cancelled), labels `priority:<p>` and `status:<s>` (and `proposed`), the mission's title as milestone, the due date, and the lore id and parent id so a script can link sub-issues. It names no assignees (lore people are not GitHub logins) and no internal or sensitive field. It only writes the file: nothing is sent to GitHub.
+
+`lore task import <file>` (`--from csv|json`, otherwise read from the extension) adds the file's tasks; `--dry-run` lists what it would create, and it asks before writing (`--yes` in scripts). It reads the columns `status`, `estimate` (in the unit of the store it writes to) and `parent` (another record of the file, before or after it, or a task id the store already has; anything else is dropped with a warning), and `--map-status 'In Review=in_progress,Shipped=done'` renames another tool's status values. A file where a done or cancelled task still has an open sub-task, or where parents form a loop, is refused before anything is written.
+
+Importing the same file twice does not duplicate anything. Each record is matched by its source and external id; a record already imported adds nothing and is listed as "already imported as <id>", and fields whose value changed in the file since are listed as "differs, not written". Import never overwrites a task: change it with `lore task edit`.
+
 ## Try it
 
 After the steps above, the open list holds the task in progress and the tasks still to do (this is the same run, a few steps later):
@@ -313,7 +326,7 @@ $ git pull -q --rebase origin main && git push -q origin main
 Other traps:
 
 - **Search misses a done task.** `lore task search` looks at open tasks only. Add `--all`.
-- **Deleting needs a yes.** Without a terminal, `task delete` stops with `E_NEEDS_CONFIRM` until you add `--yes`; the old spelling `--confirm` is refused. To keep the task but stop it, use `lore task cancel` instead.
+- **Deleting needs a yes.** Without a terminal, `task delete` stops with `E_NEEDS_CONFIRM` until you add `--yes` (the old spelling `--confirm` works the same on a delete; the task goes to the trash, `lore trash restore` brings it back). To keep the task but stop it, use `lore task cancel` instead.
 - **`lore tasklist list` and `lore tasklist show` print only `TA` and the id**, not the title. Use `lore tasklist search <word>` to see titles.
 - **`lore task show` does not list the tasks a task in this repo waits for.** Use `lore mission status` for that: it prints "waits for <id> to be done" next to the task. (For a task kept in an org's notes store, `task show` does print an `after:` line.)
 - **Ids are long on purpose.** Copy them from `lore task list` or `--json` output rather than typing them.

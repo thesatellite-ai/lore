@@ -247,7 +247,8 @@ Compaction runs by itself past `live.compact_after` (1000) commits, at most once
    fetch refs/lore/signals ─▶ copy every unexpired file, apply the change
    ─▶ commit with NO parent ("lore: signals") ─▶ push --force-with-lease=<what I fetched>
         rejected (someone else wrote) → decide again from a fresh fetch (never merge)
-        offline / retries used up     → E_OFFLINE, exit 15 (never queued)
+        remote unreachable            → E_OFFLINE, exit 15 (never queued)
+        lost the race on every retry  → E_CONTENDED, exit 11 (never queued)
 ```
 
 Signals are short-lived facts, mostly claims. A **claim** is an agent putting its name on a task, like writing your name on a whiteboard job. A **lease** is how long the claim lasts: it runs out after a set time unless the agent keeps saying it is alive (a **heartbeat**), like a parking ticket.
@@ -495,5 +496,5 @@ Agents get the private text through `lore context` and the session hooks; nothin
 
 ## Pitfalls
 
-- **Never edit lore's hidden lists by hand** (`refs/lore/live`, `refs/lore/signals`). Lore writes them itself. If the remote's live list is deleted or replaced (a mirror push, a mistaken delete), lore stops writing to it and keeps a local backup. `lore live restore` pushes that backup back.
+- **Never edit lore's hidden lists by hand** (`refs/lore/live`, `refs/lore/signals`). Lore writes them itself. If the remote's live list is deleted or replaced (a mirror push, a mistaken delete), lore stops writing to it and keeps a local backup: every live write, `lore sync` and `lore land` refuse with `E_READ_ONLY` (exit 23) until then, and that sync exchanges nothing with the attached stores either, so it never reports success it could not deliver. `lore live restore` pushes that backup back.
 - **A protected `main` delays landing.** Finished rows wait and ride on your next commit to another branch. `lore explain <id>` says why a row has not landed yet.
