@@ -877,6 +877,12 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 	evs = append(evs, Event{Op: e.callOf(ctx).op, Action: putAction(expect, r), Store: st.Name, Table: r.Table, ID: r.ID, HLC: r.HLC, Actor: r.UpdatedBy})
 	evs = append(evs, out.allowEvents(e.callOf(ctx).op, st.Name)...)
 	if s := stageOf(ctx); s != nil { // FB-RES-1: held until Commit
+		// The backend checks Expect only at Commit; a write that would be
+		// stale there is stale now, so the callers' ErrStale paths (the
+		// natural-id re-create, the field merge) run as for a direct write.
+		if err := staleNow(ctx, st, sr, expect); err != nil {
+			return stored{}, err
+		}
 		kept, err := s.addWrite(e, st, changes, evs)
 		if err != nil {
 			return stored{}, err
@@ -890,6 +896,27 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 		return stored{}, err
 	}
 	return out, nil
+}
+
+// staleNow is the backend's Expect check of one change made before a
+// staged write: a create (zero expect) over any stored row, live or
+// tombstone, or an edit whose row is gone or carries another HLC, is
+// store.ErrStale. A row the same stage already writes is checked at
+// Commit as before (addWrite).
+func staleNow(ctx context.Context, st Attached, sr store.Row, expect hlc.HLC) error {
+	cur, err := st.Backend.Get(ctx, sr.Table, sr.ID)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		if expect.IsZero() {
+			return nil
+		}
+		return store.ErrStale
+	case err != nil:
+		return err
+	case expect.IsZero() || cur.HLC.Compare(expect) != 0:
+		return store.ErrStale
+	}
+	return nil
 }
 
 // putAction is the action a put records in the backend's audit journal
