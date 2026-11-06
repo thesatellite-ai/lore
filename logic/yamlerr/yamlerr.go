@@ -2,9 +2,10 @@
 // .lore/stores.yaml, task templates, mission plans, …) and turns yaml.v3's
 // decode errors into text a person can act on: every problem names its line
 // and the key it sits under ("line 3: unknown key stores[0].urll", "line 2:
-// lease.ttl: expected a whole number, got text `soon`"), and never a Go type
+// lease.ttl: expected a whole number, got text"), and never a Go type
 // ("not found in type attach.Entry", "into orgconf.Live" are lore's
-// internals, not the user's file).
+// internals, not the user's file). A value is never echoed (it may be a
+// token pasted under the wrong key).
 //
 // The decode target's type is known to Decode (a type parameter), so a
 // named Go type in yaml's message is mapped back to the kind of value it
@@ -81,7 +82,7 @@ func Problems[T any](raw []byte, err error) []string {
 // value of the wrong kind, and the syntax errors' prefix.
 var (
 	unknownRe   = regexp.MustCompile(`^line (\d+): field (.+?) not found in type .+$`)
-	mismatchRe  = regexp.MustCompile("^line (\\d+): cannot unmarshal (!!\\w+)(?: `(.*)`)? into (.+)$")
+	mismatchRe  = regexp.MustCompile("^line (\\d+): cannot unmarshal (!!\\w+)(?: `.*`)? into (.+)$")
 	syntaxStart = "yaml: "
 )
 
@@ -107,12 +108,12 @@ func problem(root *yaml.Node, m string, kinds map[string]reflect.Kind) string {
 	}
 	if g := mismatchRe.FindStringSubmatch(m); g != nil {
 		line, _ := strconv.Atoi(g[1]) // \d+ always parses
-		got := gotText(g[2], g[3])
+		got := gotText(g[2])
 		where := valuePath(root, line, g[2])
 		if where == "" {
 			where = "the file"
 		}
-		return "line " + g[1] + ": " + where + ": expected " + wantText(g[4], kinds) + ", got " + got
+		return "line " + g[1] + ": " + where + ": expected " + wantText(g[3], kinds) + ", got " + got
 	}
 	return m // an UnmarshalYAML method's own message (lore's own words)
 }
@@ -190,8 +191,11 @@ func walk(n *yaml.Node, path string, visit func(n *yaml.Node, path string, isKey
 	return false
 }
 
-// gotText names what the file holds: yaml's tag, with a scalar's text.
-func gotText(tag, value string) string {
+// gotText names what the file holds by yaml's tag only. The value itself
+// is never echoed: a mistyped scalar may be a url with a token or a
+// secret pasted under the wrong key, and the line and key already point
+// at it.
+func gotText(tag string) string {
 	names := map[string]string{
 		"!!str": "text", "!!int": "a whole number", "!!float": "a number", "!!bool": "true or false",
 		"!!seq": "a list", "!!map": "a mapping", "!!null": "nothing", "!!timestamp": "a date", "!!binary": "binary data",
@@ -199,9 +203,6 @@ func gotText(tag, value string) string {
 	name, ok := names[tag]
 	if !ok {
 		name = "a " + strings.TrimPrefix(tag, "!!") + " value"
-	}
-	if value != "" {
-		return name + " `" + value + "`"
 	}
 	return name
 }

@@ -34,8 +34,8 @@ type (
 )
 
 // TestDecodeProblems: every problem names its line and the key path it sits
-// under, says what was expected and what the file holds, and never prints a
-// Go type or yaml's internal wording.
+// under, says what was expected and what kind of value the file holds, and
+// never prints a Go type, yaml's internal wording or the value itself.
 func TestDecodeProblems(t *testing.T) {
 	cases := []struct {
 		name string
@@ -49,19 +49,20 @@ func TestDecodeProblems(t *testing.T) {
 		{"unknown key, second list item", Strict, "entries:\n  - name: a\n  - name: b\n    nmae: c\n", []string{"line 4: unknown key entries[1].nmae"}},
 		{"unknown key with a space", Strict, "my key: 1\n", []string{"line 1: unknown key my key"}},
 		{"unknown key ignored when lenient", Lenient, "naem: b\n", nil},
-		{"text for a whole number", Lenient, "inner:\n  port: soon\n", []string{"line 2: inner.port: expected a whole number, got text `soon`"}},
+		{"text for a whole number", Lenient, "inner:\n  port: soon\n", []string{"line 2: inner.port: expected a whole number, got text"}},
 		{"list for text", Lenient, "name:\n  - a\n", []string{"line 2: name: expected text, got a list"}},
 		{"mapping for true/false", Lenient, "inner:\n  debug:\n    x: 1\n", []string{"line 3: inner.debug: expected true or false, got a mapping"}},
-		{"text for a list", Lenient, "inner:\n  tags: one\n", []string{"line 2: inner.tags: expected a list, got text `one`"}},
+		{"text for a list", Lenient, "inner:\n  tags: one\n", []string{"line 2: inner.tags: expected a list, got text"}},
 		{"list for a named text type", Lenient, "inner:\n  level: [a]\n", []string{"line 2: inner.level: expected text, got a list"}},
-		{"text for a named struct", Lenient, "inner: off\n", []string{"line 1: inner: expected a mapping (key: value lines), got text `off`"}},
-		{"text for a list of mappings", Lenient, "entries: none\n", []string{"line 1: entries: expected a list, got text `none`"}},
-		{"list item not a mapping", Lenient, "entries:\n  - kb\n", []string{"line 2: entries[0]: expected a mapping (key: value lines), got text `kb`"}},
+		{"text for a named struct", Lenient, "inner: off\n", []string{"line 1: inner: expected a mapping (key: value lines), got text"}},
+		{"text for a list of mappings", Lenient, "entries: none\n", []string{"line 1: entries: expected a list, got text"}},
+		{"list item not a mapping", Lenient, "entries:\n  - kb\n", []string{"line 2: entries[0]: expected a mapping (key: value lines), got text"}},
 		{"list for a map", Lenient, "labels: [a]\n", []string{"line 1: labels: expected a mapping (key: value lines), got a list"}},
-		{"text for a number", Lenient, "ratio: half\n", []string{"line 1: ratio: expected a number, got text `half`"}},
+		{"a url under the wrong key is never echoed", Lenient, "inner: https://user:pw@example.com/x\n", []string{"line 1: inner: expected a mapping (key: value lines), got text"}},
+		{"text for a number", Lenient, "ratio: half\n", []string{"line 1: ratio: expected a number, got text"}},
 		{"bad duration", Lenient, "wait: [1]\n", []string{"line 1: wait: expected a duration such as 30s, got a list"}},
 		{"the file is a list", Lenient, "- a\n- b\n", []string{"line 1: the file: expected a mapping (key: value lines), got a list"}},
-		{"two problems, both reported", Strict, "naem: a\ninner:\n  port: x\n", []string{"line 1: unknown key naem", "line 3: inner.port: expected a whole number, got text `x`"}},
+		{"two problems, both reported", Strict, "naem: a\ninner:\n  port: x\n", []string{"line 1: unknown key naem", "line 3: inner.port: expected a whole number, got text"}},
 		{"syntax error keeps yaml's line", Lenient, "a: [\n", []string{"line 1: did not find expected node content"}},
 		{"empty file", Strict, "", nil},
 		{"comments only", Strict, "# nothing\n", nil},
@@ -84,7 +85,7 @@ func TestDecodeProblems(t *testing.T) {
 				t.Fatalf("problems:\n%s\nwant:\n%s", strings.Join(e.Problems, "\n"), strings.Join(c.want, "\n"))
 			}
 			for _, p := range e.Problems {
-				for _, leak := range []string{"not found in type", "cannot unmarshal", "yamlerr.", "!!", "yaml: "} {
+				for _, leak := range []string{"not found in type", "cannot unmarshal", "yamlerr.", "!!", "yaml: ", "`"} {
 					if strings.Contains(p, leak) {
 						t.Errorf("problem %q leaks %q", p, leak)
 					}
@@ -121,7 +122,7 @@ func TestProblemsOfAnotherDecode(t *testing.T) {
 	raw := []byte("inner:\n  port: x\n")
 	var f file
 	err := yaml.Unmarshal(raw, &f)
-	if got := Problems[file](raw, err); len(got) != 1 || got[0] != "line 2: inner.port: expected a whole number, got text `x`" {
+	if got := Problems[file](raw, err); len(got) != 1 || got[0] != "line 2: inner.port: expected a whole number, got text" {
 		t.Fatalf("Problems = %q", got)
 	}
 	if got := Problems[file](raw, errors.New("boom")); len(got) != 1 || got[0] != "boom" {
