@@ -51,6 +51,7 @@ func Peek(ctx context.Context, dir, ref, table string) ([]PeekRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	dir = projectDir(top, dir) // E-FATES-6
 	base := PathPrefix(top, dir) + dataRel
 	prefix := base
 	if table != "" {
@@ -162,6 +163,7 @@ func Promote(ctx context.Context, o PromoteOptions) (PromoteResult, error) {
 	if err != nil {
 		return res, err
 	}
+	o.Dir = projectDir(top, o.Dir) // E-FATES-6
 	dataDir := filepath.Join(o.Dir, filepath.FromSlash(dataRel))
 	prefix := PathPrefix(top, o.Dir)
 	files := map[string][]byte{}

@@ -251,6 +251,7 @@ func installSyncAction(ctx context.Context, dir string, o syncActionOptions) (Ac
 	if err != nil {
 		return ActionResult{}, errs.Wrap(errs.Unsupported, "install-action needs a git repository", err)
 	}
+	dir = projectDir(top, dir) // from a subfolder: the project's one workflow (E-FATES-6)
 	prefix := PathPrefix(top, dir)
 	file := filepath.Join(top, filepath.FromSlash(syncActionFileRel(prefix)))
 	if o, err = resolveSyncActionTriggers(top, prefix, file, o); err != nil {
@@ -641,6 +642,7 @@ func refreshSyncActionPin(ctx context.Context, top, root, own string) (PinRefres
 	if target == "" {
 		return PinRefresh{}, nil // a development build has no release to pin to
 	}
+	root = projectDir(top, root) // a subfolder's command refreshes the project's file (E-FATES-6)
 	prefix := PathPrefix(top, root)
 	file := filepath.Join(top, filepath.FromSlash(syncActionFileRel(prefix)))
 	b, err := os.ReadFile(filepath.Clean(file))

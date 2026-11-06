@@ -123,6 +123,7 @@ func CIMerge(ctx context.Context, o CIMergeOptions) (CIMergeResult, error) {
 	if err != nil {
 		return res, errs.Wrap(errs.Unsupported, "lore sync ci-merge needs a git repository", err)
 	}
+	o.Dir = projectDir(top, o.Dir) // E-FATES-6
 	clean, err := isClean(ctx, o.Dir)
 	if err != nil {
 		return res, errs.Wrap(errs.Internal, "git status", err)
