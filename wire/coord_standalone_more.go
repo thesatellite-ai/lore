@@ -188,6 +188,7 @@ func (h standaloneCoord) TaskMerged(ctx context.Context, in opscoord.MergedIn) (
 	if err := refuseFrom(opscoord.OpTaskMerged, in.From); err != nil {
 		return opscoord.Report{}, err
 	}
+	ctx = mergedStampLive(ctx) // the same stamp by hand: live ref, then a landing
 	w, err := h.openWorldFor(ctx, in.ID)
 	if err != nil {
 		return opscoord.Report{}, err

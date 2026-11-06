@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/signals"
 	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Task fields the merged check reads.
@@ -151,12 +152,26 @@ func (a *App) mergeCandidates(ctx context.Context, w *coordWorld) []mergewatch.C
 // where the task is coordinated (openWorldFor: the repo's own signals ref
 // or the linked store's), through stampMergedRow.
 func (h standaloneCoord) stampMerged(ctx context.Context, f mergewatch.Found) (recorded bool, err error) {
+	ctx = mergedStampLive(ctx)
 	w, err := h.openWorldFor(ctx, f.TaskID)
 	if err != nil {
 		return false, err
 	}
 	env := w.env(ctx)
 	return stampMergedRow(ctx, env.Rows, env.Signals, f.TaskID, f.Finding.At)
+}
+
+// mergedStampLive routes a merged stamp of this repo's task through the
+// live ref (v0.1.17 recordMergedLive): the row usually sits in main's data
+// already (it landed and left live before the merge), and an edit of a
+// branch row would otherwise stay with the code, leaving an uncommitted
+// .lore/data change in a checkout that only listed its tasks (trial F5,
+// TestMerged_StampTravelsAndCheckoutsStayClean). With no live session
+// (LORE_LIVE off, no git remote) the choice routes nothing and the stamp
+// is a branch write, as v0.1.17 recordMergedBranch; a store task is
+// written by its store and never reads the choice.
+func mergedStampLive(ctx context.Context) context.Context {
+	return store.WithLiveChoice(ctx, store.LiveChoice{Mode: store.LiveOn, Table: schema.TableTasks})
 }
 
 // signalsWriter is the one signals.Store call the stamp makes (a seam for
