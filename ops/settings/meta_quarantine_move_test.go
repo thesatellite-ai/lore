@@ -32,14 +32,21 @@ func TestMoveRefusesQuarantinedMeta(t *testing.T) {
 	if file == "" {
 		t.Fatalf("no row file for %s", id)
 	}
-	good, err := os.ReadFile(filepath.Clean(file))
+	// the row file is read and written through an os.Root on its folder
+	dir, err := os.OpenRoot(filepath.Dir(file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dir.Close() })
+	name := filepath.Base(file)
+	good, err := dir.ReadFile(name)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(good), `"v": "HUB-1"`) {
 		t.Fatalf("row file shape changed: %s", good)
 	}
-	if err = os.WriteFile(file, []byte(strings.Replace(string(good), `"v": "HUB-1"`, `"x": "HUB-1"`, 1)), 0o600); err != nil {
+	if err = dir.WriteFile(name, []byte(strings.Replace(string(good), `"v": "HUB-1"`, `"x": "HUB-1"`, 1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h = h.Reopen()
@@ -51,7 +58,7 @@ func TestMoveRefusesQuarantinedMeta(t *testing.T) {
 	if !errs.Has(err, errs.MetaQuarantined) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore meta show "+id) {
 		t.Fatalf("move of a quarantined row: %v, want E_META_QUARANTINED", err)
 	}
-	if err = os.WriteFile(file, good, 0o600); err != nil {
+	if err = dir.WriteFile(name, good, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h = h.Reopen()
