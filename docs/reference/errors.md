@@ -131,7 +131,7 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_NOT_FOUND` | 27 | no row with that id | check the id; it may have landed on main while your branch is older |
+| `E_NOT_FOUND` | 27 | no row with that id | check the id; it may have landed on main while your branch is older. A task or gate command whose first argument is the id has already fetched once and retried before answering this ([team troubleshooting](../team/troubleshooting.md#e_not_found-on-a-task-id-a-teammate-just-added)) |
 | `E_INTERNAL` | 1 | something failed inside lore | run `lore support-bundle` and file a bug report with it |
 | `E_NOT_IMPLEMENTED` | 23 | this option exists but this build cannot do it yet | read the message; it says what to use instead |
 | `E_UNSUPPORTED` | 23 | the command does not work here, for example outside a git repo | run it inside a git repo |
@@ -264,7 +264,7 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 |---|---|---|---|
 | `E_NO_WORK` | 10 | `lore task next` found no ready task; the message says why each one is blocked | wait, or unblock a task |
 | `E_CONTENDED` | 11 | ready work exists but every claim lost the race to another agent, or another writer won every attempt to push a coordination write | wait a moment and try again |
-| `E_LOST_CLAIM` | 12 | your claim is no longer on the server (it ran out or was taken back) | stop working on this task |
+| `E_LOST_CLAIM` | 12 | your claim is no longer on the server (it ran out or was taken back); lore fetched once and retried before answering this, so it is not stale | stop working on this task |
 | `E_CANCELLED` | 13 | a person cancelled the task while you held it | stop working on this task |
 | `E_REASSIGNED` | 14 | a person reassigned the task while you held it | stop working on this task |
 | `E_OFFLINE` | 15 | the server could not be reached to confirm a coordination write; nothing was queued | check the network and try again |

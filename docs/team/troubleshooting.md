@@ -175,6 +175,12 @@ Fix: reconnect and run the command again. Ordinary writes behave differently:
 
 Your claim on a task is gone. Either the lease (the time a claim lasts without a heartbeat) ran out and another agent took the task over, or a person revoked, cancelled or reassigned it. The message says who holds it now. Stop working on that task; see [Agents](agents.md#fail-closed-errors-and-what-to-do).
 
+Before you see `E_LOST_CLAIM`, lore has already checked it is not stale. Lore reuses a fetch for `live.fetch_ttl` (60 seconds by default), so the run may not have fetched. When a coordination command (claim, heartbeat, merged, note, release, revoke, reassign, gate request, gate approve) gets `E_LOST_CLAIM` in such a run, lore fetches once, takes in the teammates' changes and runs the command again. The answer then comes from the remote's task row: `E_CANCELLED` after a person's cancel, `E_REASSIGNED` after a reassign, `E_LOST_CLAIM` again after a revoke (with the revoke's detail). The retry is safe because a refused command wrote nothing.
+
+## `E_NOT_FOUND` on a task id a teammate just added
+
+A task a teammate added after your clone's last fetch is not missing for long. When a command on one task or gate id (claim, heartbeat, merged, note, release, revoke, reassign, gate request and approve, `task show`, `task done`, `task cancel`, checklist, time and recur commands, and every other task or gate command whose first argument is the id) answers `E_NOT_FOUND` in a run that did not fetch, lore fetches once, takes in the teammates' changes and runs the command again. It happens only on that failure path and only once, and never after the command has written anything (the id is looked up before any write). A well-formed id that no row has stays `E_NOT_FOUND` (exit 27) after that one fetch: check the id, or run `lore sync`.
+
 `E_REFUSED` (exit 23) on a claim, cancel, reassign, revoke or done is not about the network: a fixed rule or the task's state says no. An agent tried something only a person may do (cancelling, reassigning or revoking, or finishing someone else's claim; the `--json` error has `"needs_person": true`), the WIP limit is reached, the task is poisoned (its claim ran out too many times, so it needs a person), or it is no longer open. Retrying will not help: hand it to a person, or pick other work.
 
 ## `E_LEAK_BLOCKED`
