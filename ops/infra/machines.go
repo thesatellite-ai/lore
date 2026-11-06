@@ -151,7 +151,7 @@ type CPU struct {
 type MachineListOut struct {
 	SchemaVersion int       `json:"schema_version"`
 	Kind          string    `json:"kind"`
-	Count         int       `json:"count"`
+	Count         int       `json:"count,omitempty"`
 	Data          []Machine `json:"data"`
 }
 

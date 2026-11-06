@@ -142,7 +142,7 @@ type MachineLabel struct {
 type Out struct {
 	SchemaVersion int          `json:"schema_version"`
 	Kind          string       `json:"kind"`
-	Count         int          `json:"count"`
+	Count         int          `json:"count,omitempty"`
 	Data          Data         `json:"data,omitzero"`
 	Label         MachineLabel `json:"label,omitzero"`
 	// Lines is the human output, built by the host.

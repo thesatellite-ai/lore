@@ -124,7 +124,7 @@ type ListIn struct{}
 type ListOut struct {
 	SchemaVersion int       `json:"schema_version"`
 	Kind          string    `json:"kind"`
-	Count         int       `json:"count"`
+	Count         int       `json:"count,omitempty"`
 	Data          []Pattern `json:"data"`
 }
 
