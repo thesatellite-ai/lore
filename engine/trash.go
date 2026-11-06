@@ -829,8 +829,33 @@ func (e *Engine) checkParents(ctx context.Context, r row.Row, set map[ids.AnyID]
 					WithHint("give it a new home in the same restore: lore trash restore " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
 			}
 		}
+		if !found {
+			// A purge that also drops the tombstone (the live ref's
+			// purge list) leaves only the listed id: still E_PARENT_PURGED.
+			if perr := e.parentPurgedListed(ctx, r, pid); perr != nil {
+				return perr
+			}
+		}
 		if !found { // DELETION 4.2: the old parent is in no attached store; never restore an orphan
 			return errs.New(errs.NotFound, "engine: "+r.ID.String()+"'s parent "+pid.String()+" is not in any attached store").
+				WithHint("give it a new home in the same restore: lore trash restore " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
+		}
+	}
+	return nil
+}
+
+// parentPurgedListed is E_PARENT_PURGED when some attached store lists
+// pid as purged although no store holds its row or tombstone (a live
+// ref's purge drops the file and keeps the id on its list, DQ4); nil when
+// no store lists it. An unreadable purge list is an error.
+func (e *Engine) parentPurgedListed(ctx context.Context, r row.Row, pid ids.AnyID) error {
+	for _, name := range e.allStores() {
+		set, err := purgedSet(ctx, e.stores[name])
+		if err != nil {
+			return err
+		}
+		if set[pid.String()] {
+			return errs.New(errs.ParentPurged, "engine: "+pid.String()+" was deleted for good; "+r.ID.String()+" cannot come back under it").
 				WithHint("give it a new home in the same restore: lore trash restore " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
 		}
 	}
