@@ -469,8 +469,8 @@ func (r *OrgResolution) decide(ctx context.Context, explicit bool, kind string, 
 	if r.Interactive != nil {
 		in.TTY = r.Interactive()
 	}
-	if r.IsAgent != nil {
-		in.Agent = r.IsAgent(ctx)
+	if r.IsAgent != nil && res.Role == orgresolve.RoleClient && !explicit {
+		in.Agent = r.IsAgent(ctx) // read only where F14 uses it (identity resolution walks processes)
 	}
 	if explicit {
 		in.To = orgresolve.ToRepo

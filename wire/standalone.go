@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // envOn is the value that turns a boolean LORE_* variable on.
@@ -93,6 +94,19 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 	// after this (their WrapBackend calls this one first).
 	if o.WrapBackend == nil {
 		o.WrapBackend = storePushWrap(res)
+	}
+	// F14: an agent names the target of a rule or decision in a client
+	// repo even at a terminal (LORE_ACTOR=agent:… or a detected agent;
+	// LORE_HUMAN=1 wins inside the identity chain). Without it an agent
+	// at a TTY wrote into the client repo by default (B-FLOW4-5). An
+	// identity that cannot be resolved answers yes (fail closed: the
+	// write then needs --to).
+	if res.IsAgent == nil {
+		idOpts := o
+		res.IsAgent = func(ctx context.Context) bool {
+			id, err := resolveIdentity(ctx, idOpts)
+			return err != nil || id.Kind == schema.ActorKindAgent
+		}
 	}
 	return o, res
 }
