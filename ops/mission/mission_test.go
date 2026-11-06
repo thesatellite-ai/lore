@@ -112,7 +112,7 @@ func TestMissionRefusals(t *testing.T) {
 	h := opstest.New(t)
 	h.Fails("mission.add", `{"title":"   "}`, errs.InvalidInput)
 	h.Fails("mission.add", `{"title":"x","target":"next week"}`, errs.Date) // TASK 12: phrase table, E_DATE
-	h.Fails("mission.add", `{"title":"x","plan":"tsk_01a1a68b3b5f788ea696d4323f621ff6"}`, errs.NotFound)
+	h.Fails("mission.add", `{"title":"x","plan":"tsk_01a1a68b3b5f788ea696d4323f621ff6"}`, errs.InvalidID)
 	if _, err := h.Run("mission.add", `{"title":"x","approvers":["@alice"]}`); err == nil {
 		t.Fatal("@handle approver accepted without a roster")
 	}
@@ -128,7 +128,7 @@ func TestMissionRefusals(t *testing.T) {
 		h.Must("mission.edit", `{"id":"`+id+`","status":"`+ok+`"}`)
 	}
 	h.Fails("mission.edit", `{"id":"`+id+`"}`, errs.InvalidInput)
-	h.Fails("mission.show", `{"id":"msn_bad"}`, errs.NotFound)
+	h.Fails("mission.show", `{"id":"msn_bad"}`, errs.InvalidID)
 	pln := h.Seed(schema.TablePlans, nil)
 	withPlan := addMission(t, h, `{"title":"carries a plan","plan":"`+pln+`"}`)
 	if !strings.Contains(h.JSON(h.Must("mission.show", `{"id":"`+withPlan+`"}`)), `"plan_id":"`+pln+`"`) {

@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -159,9 +160,13 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 // checkSupersedes validates --supersedes before anything is written.
 func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], raw string) (ids.AnyID, store.Source, error) {
 	id, src, r, err := o.c.Live(ctx, raw)
-	// v0.1.17 parity: a malformed or other-noun id is E_NOT_FOUND here,
-	// like a well-formed unknown one (plain id arguments keep E_INVALID_ID).
-	if errs.Has(err, errs.NotFound) || errs.Has(err, errs.InvalidID) || (err == nil && content.Field(r, content.FieldProject) != project.String()) {
+	// B-ERRS-1 (owner BATCH2 #11, CLI_REFERENCE 5 names --supersedes): a
+	// malformed or other-noun id is E_INVALID_ID; a well-formed id naming
+	// no live pattern of this project is E_NOT_FOUND.
+	if errs.Has(err, errs.InvalidID) {
+		return ids.AnyID{}, "", lookup.BadID("--supersedes "+content.QuoteID(raw)+": not a pattern id (pat_…)", err)
+	}
+	if errs.Has(err, errs.NotFound) || (err == nil && content.Field(r, content.FieldProject) != project.String()) {
 		return ids.AnyID{}, "", errs.New(errs.NotFound, "--supersedes "+content.QuoteID(raw)+": no pattern with that id in this project").
 			WithHint("run `lore pattern list` to see the ids")
 	}

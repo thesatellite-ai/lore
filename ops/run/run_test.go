@@ -211,7 +211,7 @@ func TestEndRefusesUnknownOutcomeAndRun(t *testing.T) {
 		t.Fatalf("bad outcome: %v", err)
 	}
 	for _, id := range []string{"run_00000000000000000000000000000001", "tsk_0e45506e64357c94a87e70ef1c6bbba9", "nope"} {
-		if _, err := o.cancel(ctx, CancelIn{ID: id}); !errs.Has(err, errs.NotFound) {
+		if _, err := o.cancel(ctx, CancelIn{ID: id}); !errs.Has(err, errs.InvalidID) { // malformed or another prefix (B-ERRS-1)
 			t.Fatalf("%s: %v", id, err)
 		}
 	}

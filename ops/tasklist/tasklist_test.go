@@ -9,8 +9,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
-// addID adds a tasklist and returns its id (the add output is the show
-// envelope, as in v0.1.17).
+// addID adds a tasklist and returns its id (the add output is v0.1.17's
+// printJSON(constants.KindTasklistAdd, row): kind tasklist.add).
 func addID(t *testing.T, h *opstest.H, in string) string {
 	t.Helper()
 	var w struct {
@@ -24,8 +24,8 @@ func addID(t *testing.T, h *opstest.H, in string) string {
 	if err := json.Unmarshal([]byte(h.JSON(res)), &w); err != nil {
 		t.Fatal(err)
 	}
-	if w.Kind != "taskList.show" || w.Data.StatusStr != "active" {
-		t.Fatalf("add envelope %s (v0.1.17: kind taskList.show, status_str active)", h.JSON(res))
+	if w.Kind != "tasklist.add" || w.Data.StatusStr != "active" {
+		t.Fatalf("add envelope %s (v0.1.17: kind tasklist.add, status_str active)", h.JSON(res))
 	}
 	if got := opstest.Text(res); got != "✓ "+w.Data.ID+"\n" {
 		t.Fatalf("add text %q", got)
@@ -83,6 +83,6 @@ func TestTasklistRefusals(t *testing.T) {
 	id := addID(t, h, `{"title":"t","body":"b"}`)
 	h.Fails("tasklist.edit", `{"id":"`+id+`"}`, errs.InvalidInput)
 	for _, bad := range []string{"tlt_bad", "pln_01a1a684b528751aa2fc45745b154d16"} {
-		h.Fails("tasklist.show", `{"id":"`+bad+`"}`, errs.NotFound)
+		h.Fails("tasklist.show", `{"id":"`+bad+`"}`, errs.InvalidID)
 	}
 }

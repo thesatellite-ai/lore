@@ -98,9 +98,9 @@ func TestShowKindAndRows(t *testing.T) {
 	if _, err = o.show(ctx, ShowIn{ID: mustBatch(t).String()}); !errs.Has(err, errs.NotFound) {
 		t.Fatalf("unknown batch: %v", err)
 	}
-	// The one lookup rule (ops/internal/lookup, TestLookupNotFoundMatrix):
-	// a value that cannot be a bat_ id is E_NOT_FOUND, never E_INVALID_ID.
-	if _, err = o.show(ctx, ShowIn{ID: "tsk_x"}); !errs.Has(err, errs.NotFound) {
+	// The one lookup rule (ops/internal/lookup, TestLookupIDMatrix,
+	// B-ERRS-1): a value that cannot be a bat_ id is E_INVALID_ID.
+	if _, err = o.show(ctx, ShowIn{ID: "tsk_x"}); !errs.Has(err, errs.InvalidID) {
 		t.Fatalf("bad id: %v", err)
 	}
 }

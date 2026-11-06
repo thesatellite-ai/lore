@@ -181,6 +181,14 @@ func Parse(ctx context.Context, env Env, raw []string) ([]Ref, error) {
 					out = append(out, res)
 					continue
 				}
+				// B-ERRS-1: an unqualified value is a resource name
+				// unless it starts with a registered id prefix, so a
+				// name no resource has is not found; only a value that
+				// can only be an id (tsk_01) is a malformed id.
+				if p, _, ok := strings.Cut(rawID, "_"); !ok || !ids.Prefix(p).Registered() {
+					return nil, errs.New(errs.NotFound, "--ref "+r+": no resource named "+r+" and not a row id or commit:<sha>").
+						WithHint("run `lore resource list` to see the names")
+				}
 			}
 			return nil, lookup.BadID("--ref "+r+": not a row id, a resource name or commit:<sha>", perr)
 		}

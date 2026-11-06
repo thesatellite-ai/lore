@@ -460,12 +460,13 @@ func checkIDs(t *testing.T, s Spec, r Runner) {
 			code errs.Code
 		}{
 			"empty": {"", errs.InvalidInput},
-			// a lookup id that cannot name a row is E_NOT_FOUND like an
-			// unknown one (v0.1.17 parity, ops/internal/lookup)
-			"garbage":      {"not-an-id", errs.NotFound},
-			"wrong prefix": {fakeID(other), errs.NotFound},
-			"huge":         {strings.Repeat("z", 5000), errs.NotFound},
-			"all zeros":    {string(s.Prefix) + "_" + strings.Repeat("0", 32), errs.NotFound},
+			// a lookup id that cannot name a row is E_INVALID_ID; only a
+			// well-formed unknown id is E_NOT_FOUND (B-ERRS-1, owner
+			// BATCH2 #11, ops/internal/lookup)
+			"garbage":      {"not-an-id", errs.InvalidID},
+			"wrong prefix": {fakeID(other), errs.InvalidID},
+			"huge":         {strings.Repeat("z", 5000), errs.InvalidID},
+			"all zeros":    {string(s.Prefix) + "_" + strings.Repeat("0", 32), errs.InvalidID},
 			"unknown":      {fakeID(s.Prefix), errs.NotFound},
 		} {
 			_, err := r.RunYes(s.Noun+"."+verb, `{"id":`+Quote(c.id)+`}`)

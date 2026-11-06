@@ -176,7 +176,7 @@ func TestNounID(t *testing.T) {
 			}
 			continue
 		}
-		if !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "is not a rule id (rul_…)") {
+		if !errs.Has(err, errs.InvalidID) || !strings.Contains(err.Error(), "is not a rule id (rul_…)") {
 			t.Fatalf("%q: %v", c.in, err)
 		}
 	}
@@ -326,9 +326,10 @@ func TestSupersedesRefusals(t *testing.T) {
 		{gone, errs.NotFound},
 		{foreign, errs.NotFound},
 		{"rul_01a1a5aca7f57659be7320c5f4b70099", errs.NotFound},
-		{"dec_01a1a5aca7f57659be7320c5f4b70011", errs.NotFound},
-		{"rul_zz", errs.NotFound},
-		{"nope", errs.NotFound},
+		// B-ERRS-1: another noun's prefix or a malformed value is E_INVALID_ID
+		{"dec_01a1a5aca7f57659be7320c5f4b70011", errs.InvalidID},
+		{"rul_zz", errs.InvalidID},
+		{"nope", errs.InvalidID},
 	} {
 		n := env.next
 		if _, _, _, err := Add(ctx, env, rules, Create{Texts: map[string]string{FieldBody: "x"}, Supersedes: c.raw}); !errs.Has(err, c.code) {

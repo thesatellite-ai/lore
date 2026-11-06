@@ -182,9 +182,9 @@ func TestTagBindRefusals(t *testing.T) {
 	}
 	h.Fails("tag.attach", `{"on_table":"bogus","on_id":"`+task+`","tag":"other"}`, errs.Unsupported)
 	h.Fails("tag.attach", `{"on_table":"Bad Name","on_id":"`+task+`","tag":"other"}`, errs.InvalidInput)
-	h.Fails("tag.attach", `{"on_table":"tasks","on_id":"tsk_bad","tag":"other"}`, errs.NotFound)
+	h.Fails("tag.attach", `{"on_table":"tasks","on_id":"tsk_bad","tag":"other"}`, errs.InvalidID)
 	mem := h.Seed(schema.TableMemories, nil)
-	h.Fails("tag.attach", `{"on_table":"tasks","on_id":"`+mem+`","tag":"other"}`, errs.NotFound)
+	h.Fails("tag.attach", `{"on_table":"tasks","on_id":"`+mem+`","tag":"other"}`, errs.InvalidID)
 	h.Fails("tag.attach", `{"on_table":"tasks","on_id":"tsk_01a1a67b1b617dc7acc5f1af36e0e000","tag":"other"}`, errs.NotFound)
 	h.MustYes("task.delete", `{"id":"`+task+`"}`)
 	if msg := h.Fails("tag.attach", `{"on_table":"tasks","on_id":"`+task+`","tag":"other"}`, errs.InTrash); !strings.Contains(msg, "in the trash") {

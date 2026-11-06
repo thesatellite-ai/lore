@@ -138,11 +138,11 @@ func TestAddRefusals(t *testing.T) {
 		{`{"body":"x","tags":[""]}`, errs.InvalidInput},
 		{`{"body":"x","repo":"nope"}`, errs.NotFound},
 		{`{"body":"x","project":"nope"}`, errs.NotFound},
-		{`{"body":"x","created_by":"nope"}`, errs.NotFound},
-		{`{"body":"x","created_by":"mem_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound},
-		{`{"body":"x","supersedes":"nope"}`, errs.NotFound}, // --supersedes: v0.1.17 parity
-		{`{"body":"x","supersedes":"rul_zz"}`, errs.NotFound},
-		{`{"body":"x","supersedes":"dec_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound},
+		{`{"body":"x","created_by":"nope"}`, errs.InvalidID},
+		{`{"body":"x","created_by":"mem_01a1a5aca7f57659be7320c5f4b70011"}`, errs.InvalidID},
+		{`{"body":"x","supersedes":"nope"}`, errs.InvalidID}, // --supersedes malformed: B-ERRS-1
+		{`{"body":"x","supersedes":"rul_zz"}`, errs.InvalidID},
+		{`{"body":"x","supersedes":"dec_01a1a5aca7f57659be7320c5f4b70011"}`, errs.InvalidID},
 		{`{"body":"x","supersedes":"rul_01a1a5aca7f57659be7320c5f4b70011"}`, errs.NotFound},
 	}
 	before := h.Must(rule.OpList, ``)
@@ -185,9 +185,9 @@ func TestIDErrors(t *testing.T) {
 		id   string
 		code errs.Code
 	}{
-		{"nope", errs.NotFound},
+		{"nope", errs.InvalidID},
 		{"", errs.InvalidInput}, // a required field left empty
-		{"dec_01a1a679339b7c56896a5b5dd2cace7d", errs.NotFound},
+		{"dec_01a1a679339b7c56896a5b5dd2cace7d", errs.InvalidID},
 		{"rul_01a1a5aca7f57659be7320c5f4b70099", errs.NotFound},
 	} {
 		for _, name := range []string{rule.OpShow, rule.OpArchive, rule.OpUnarchive} {

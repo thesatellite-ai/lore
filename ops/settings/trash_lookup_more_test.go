@@ -31,7 +31,7 @@ func TestSettingsInTrashMatrix(t *testing.T) {
 		{"meta get trashed row", settings.OpMetaGet, `{"id":"` + mem + `","key":"client"}`, false, errs.InTrash},
 		{"meta unset trashed row", settings.OpMetaUnset, `{"id":"` + mem + `","key":"client"}`, true, errs.InTrash},
 		{"secrets allow rm trashed", settings.OpSecretAllowRm, `{"id":"` + allow + `"}`, true, errs.InTrash},
-		{"meta show never", settings.OpMetaShow, `{"id":"never_was"}`, false, errs.NotFound},
+		{"meta show never", settings.OpMetaShow, `{"id":"never_was"}`, false, errs.InvalidID}, // not a row id (B-ERRS-1)
 	}
 	for _, c := range cases {
 		if c.yes {

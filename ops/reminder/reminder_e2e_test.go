@@ -101,7 +101,7 @@ func TestReminderAddRefusals(t *testing.T) {
 		{`{"message":"x","due":"   "}`, errs.InvalidInput, `required flag(s) "due" not set`},
 		{`{"message":"x"}`, errs.InvalidInput, "due"},
 		{`{"message":"   ","due":"2099-01-01"}`, errs.EmptyBody, "message is empty"},
-		{`{"message":"x","due":"2099-01-01","created_by":"nope"}`, errs.NotFound, ""},
+		{`{"message":"x","due":"2099-01-01","created_by":"nope"}`, errs.InvalidID, ""},
 	}
 	for _, c := range cases {
 		if msg := h.Fails("reminder.add", c.in, c.code); !strings.Contains(msg, c.want) {

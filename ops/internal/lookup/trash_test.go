@@ -66,8 +66,11 @@ func TestLookupInTrashMatrix(t *testing.T) {
 					t.Errorf("%s %s: %v: no restore hint", name, id, err)
 				}
 			case errs.Has(err, errs.NotFound):
+			case errs.Has(err, errs.InvalidID):
+				// another table's id given to this op: B-ERRS-1 (the
+				// own-prefix answers are pinned by TestLookupIDMatrix)
 			default:
-				t.Errorf("%s %s (%s): %v, want E_IN_TRASH or E_NOT_FOUND", name, id, def.Name, err)
+				t.Errorf("%s %s (%s): %v, want E_IN_TRASH, E_NOT_FOUND or E_INVALID_ID", name, id, def.Name, err)
 			}
 		}
 	}

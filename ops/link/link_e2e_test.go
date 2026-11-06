@@ -231,8 +231,8 @@ func TestLinkRemoveThenReAdd(t *testing.T) {
 	}
 	h.Fails("link.remove", `{"id":""}`, errs.InvalidInput)
 	for _, bad := range []string{" ", "tsk_01a1a67b1b617dc7acc5f1af36e0e979", "cml_zz"} {
-		if _, err := h.RunYes("link.remove", `{"id":`+opstest.Quote(bad)+`}`); !errs.Has(err, errs.NotFound) {
-			t.Errorf("remove %q: %v, want E_NOT_FOUND", bad, err)
+		if _, err := h.RunYes("link.remove", `{"id":`+opstest.Quote(bad)+`}`); !errs.Has(err, errs.InvalidID) {
+			t.Errorf("remove %q: %v, want E_INVALID_ID", bad, err)
 		}
 	}
 }

@@ -56,9 +56,9 @@ func TestParseMatrix(t *testing.T) {
 	}{
 		{"empty project", ":" + visibleID, errs.InvalidInput},
 		{"project not an id", "acme/app:" + visibleID, errs.InvalidInput},
-		{"empty id after project", qualProject + ":", errs.NotFound},
+		{"empty id after project", qualProject + ":", errs.InvalidID},
 		{"space inside", "a:b c", errs.InvalidInput},
-		{"not an id", "tsk_01", errs.NotFound},
+		{"not an id", "tsk_01", errs.InvalidID}, // B-ERRS-1: malformed, never not found
 		{"empty commit", "commit:", errs.InvalidInput},
 		{"commit with space", "commit:ab cd", errs.InvalidInput},
 		{"commit with slash", "commit:a/b", errs.InvalidInput},

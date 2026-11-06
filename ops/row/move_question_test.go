@@ -61,7 +61,7 @@ func TestMoveQuestionMatrix(t *testing.T) {
 	}
 	// a row that does not exist and a bad id answer before anything is asked
 	h.Fails(row.OpMove, `{"id":"mem_0e45506e64357c94a87e70ef1c6bb0ff","to":"kb"}`, errs.NotFound)
-	h.Fails(row.OpMove, `{"id":"not-an-id","to":"kb"}`, errs.NotFound) // lookup.BadID: as the move itself answers
+	h.Fails(row.OpMove, `{"id":"not-an-id","to":"kb"}`, errs.InvalidID) // lookup.BadID (B-ERRS-1)
 }
 
 // TestMoveQuestionIntoClientRepo: a move into a client repo says what

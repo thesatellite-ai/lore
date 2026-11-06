@@ -35,7 +35,9 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -363,6 +365,10 @@ func page(rows []Item, limit, pg int) ([]Item, int, error) {
 	return rows[start:end], start + 1, nil
 }
 
+// maxShownID bounds how much of a malformed id an error quotes (head and
+// tail runes), so a huge value never floods the terminal.
+const maxShownID = 48
+
 // show is trash.show: one trashed row with its fields.
 func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if in.FromHistory {
@@ -373,6 +379,10 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		return ShowOut{}, err
 	}
 	id := strings.TrimSpace(in.ID)
+	// B-ERRS-1: a malformed id is E_INVALID_ID, never "not in the trash".
+	if _, perr := ids.ParseAny(id); perr != nil {
+		return ShowOut{}, lookup.BadID("trash: "+strconv.Quote(textcut.Cut(id, maxShownID, maxShownID))+" is not a row id", perr)
+	}
 	for _, t := range all {
 		if t.Row.ID.String() != id {
 			continue

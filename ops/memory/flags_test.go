@@ -47,9 +47,10 @@ func TestSupersedesRefusals(t *testing.T) {
 		{gone, "no memory with that id in this project", errs.NotFound},
 		{foreign, "no memory with that id in this project", errs.NotFound},
 		{fakeIDs[7], "no memory with that id in this project", errs.NotFound},
-		{"nope", "--supersedes nope: no memory with that id in this project", errs.NotFound},
-		{"mem_zz", "no memory with that id", errs.NotFound},
-		{"rul_01a1a5aca7f57659be7320c5f4b70011", "no memory with that id", errs.NotFound},
+		// B-ERRS-1: malformed or another noun's prefix is E_INVALID_ID
+		{"nope", "--supersedes nope: not a memory id (mem_…)", errs.InvalidID},
+		{"mem_zz", "not a memory id", errs.InvalidID},
+		{"rul_01a1a5aca7f57659be7320c5f4b70011", "not a memory id", errs.InvalidID},
 	} {
 		n := env.next
 		_, err := call[WriteOut](t, env, OpAdd, `{"body":"x","supersedes":"`+c.raw+`"}`)
@@ -105,7 +106,7 @@ func TestActorFlags(t *testing.T) {
 	} {
 		n := env.next
 		_, err := call[WriteOut](t, env, OpAdd, in)
-		if !errs.Has(err, errs.NotFound) || env.next != n || !utf8.ValidString(err.Error()) {
+		if !errs.Has(err, errs.InvalidID) || env.next != n || !utf8.ValidString(err.Error()) {
 			t.Fatalf("%s: %v", in, err)
 		}
 	}

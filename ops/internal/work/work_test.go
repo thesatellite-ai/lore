@@ -52,13 +52,13 @@ func TestParseIDAndRefTo(t *testing.T) {
 	}
 	bad := []string{"", "xyz", "mem_01a1a5aca7f57659be7320c5f4b70011", "tsk_01a1a5", "TSK_01a1a5aca7f57659be7320c5f4b70011", strings.Repeat("x", 200)}
 	for _, in := range bad {
-		if _, err := ParseID("task", ids.PrefixTask, in); !errs.Has(err, errs.NotFound) {
+		if _, err := ParseID("task", ids.PrefixTask, in); !errs.Has(err, errs.InvalidID) {
 			t.Errorf("ParseID(%q): %v", in, err)
 		}
 		if in == "" {
 			continue
 		}
-		if _, err := RefTo("task", "after", ids.PrefixTask, in); !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "--after") {
+		if _, err := RefTo("task", "after", ids.PrefixTask, in); !errs.Has(err, errs.InvalidID) || !strings.Contains(err.Error(), "--after") {
 			t.Errorf("RefTo(%q): %v", in, err)
 		}
 	}

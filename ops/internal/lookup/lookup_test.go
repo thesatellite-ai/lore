@@ -49,6 +49,22 @@ var notLookups = map[string]bool{
 	"live.show":    true,
 }
 
+// nameOrID are lookup ops whose "id" input also takes a NAME (or a
+// unique prefix, or a secret reference), per their own input
+// description: a value that is not id-shaped is looked up as that name,
+// so a miss is E_NOT_FOUND, not a malformed id (B-ERRS-1 covers values
+// that can only be ids). vars (name or var_), meta keys (name or mky_),
+// resources and their kinds (name), tags (name), projects (name), actors
+// (handle), machines (unique hex prefix of at least 8), time entries
+// (unique prefix/suffix), secrets.show (a reference or a row id).
+var nameOrID = map[string]bool{
+	"vars.show": true, "vars.rm": true,
+	"meta.edit": true, "meta.delete": true, "meta.move": true,
+	"resource.show": true, "resource.edit": true, "resource.delete": true, "resource.check": true, "resource.archive": true,
+	"tag.edit": true, "project.show": true, "actor.show": true, "machine.show": true,
+	"task.time.rm": true, "task.time.edit": true, "secrets.show": true,
+}
+
 // changeFields are the fields an edit is given so that its "nothing to
 // change" check (an input error that holds for any id) does not answer
 // before the lookup; the first one the op takes is used.
@@ -93,25 +109,30 @@ func isLookup(e op.Entry) bool {
 	return false
 }
 
-// TestLookupNotFoundMatrix is the coordinator's parity decision as a
-// matrix over every registered op × every kind of id that names no row:
-// malformed text, a huge value, and for EVERY table prefix an all-zero id
-// and a well-formed unknown id (so each op sees its own prefix and every
-// wrong one). Each answers E_NOT_FOUND (exit 27), as v0.1.17 did; never
-// E_INVALID_ID, which is kept for ids given to a NEW row.
-func TestLookupNotFoundMatrix(t *testing.T) {
+// TestLookupIDMatrix pins B-ERRS-1 (owner BATCH2 #11) over every
+// registered lookup op: a MALFORMED id (junk text, a bad prefix case, a
+// huge value, unicode, and an all-zero id of EVERY table prefix, which is
+// no UUIDv7) answers E_INVALID_ID (exit 20), never E_NOT_FOUND; a
+// WELL-FORMED unknown id answers E_NOT_FOUND for the op's own prefix (at
+// least one prefix per op, every prefix for an op that takes any row)
+// and E_INVALID_ID for a prefix the op does not take; no other code.
+func TestLookupIDMatrix(t *testing.T) {
 	h := opstest.New(t)
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bad := []string{"not-an-id", "rul_zz", "RUL_01a1a5aca7f57659be7320c5f4b70011", strings.Repeat("z", 3000), "ünïcode_id"}
+	malformed := []string{"not-an-id", "rul_zz", "RUL_01a1a5aca7f57659be7320c5f4b70011", strings.Repeat("z", 3000), "ünïcode_id"}
+	// batches have an id prefix but no table of their own (batch.show)
+	wellFormed := []string{"bat_01a1a5aca7f57659be7320c5f4b7f00d"}
+	malformed = append(malformed, "bat_"+strings.Repeat("0", 32))
 	for _, def := range reg.Tables() {
 		if def.Prefix == "" || def.Kind != (schema.TableDef{}).Kind {
 			continue
 		}
 		p := string(def.Prefix)
-		bad = append(bad, p+"_"+strings.Repeat("0", 32), p+"_01a1a5aca7f57659be7320c5f4b7f00d")
+		malformed = append(malformed, p+"_"+strings.Repeat("0", 32))
+		wellFormed = append(wellFormed, p+"_01a1a5aca7f57659be7320c5f4b7f00d")
 	}
 	n := 0
 	for _, e := range h.App.Registry().Entries() {
@@ -120,20 +141,32 @@ func TestLookupNotFoundMatrix(t *testing.T) {
 		}
 		n++
 		name := e.Spec().Name
-		for _, id := range bad {
-			in := inputFor(e, id)
-			_, err := h.RunYes(name, in)
-			if err == nil {
-				t.Errorf("%s %.40q: no error", name, id)
-				continue
+		for _, id := range malformed {
+			if nameOrID[name] {
+				break
 			}
-			if !errs.Has(err, errs.NotFound) {
-				t.Errorf("%s %.40q: %v, want E_NOT_FOUND", name, id, err)
+			_, err := h.RunYes(name, inputFor(e, id))
+			if !errs.Has(err, errs.InvalidID) {
+				t.Errorf("%s malformed %.40q: %v, want E_INVALID_ID", name, id, err)
 			}
+		}
+		found := 0
+		for _, id := range wellFormed {
+			_, err := h.RunYes(name, inputFor(e, id))
+			switch {
+			case errs.Has(err, errs.NotFound):
+				found++
+			case errs.Has(err, errs.InvalidID):
+			default:
+				t.Errorf("%s well-formed %.40q: %v, want E_NOT_FOUND (own prefix) or E_INVALID_ID (another prefix)", name, id, err)
+			}
+		}
+		if found == 0 {
+			t.Errorf("%s: no well-formed unknown id answered E_NOT_FOUND (its own prefix must)", name)
 		}
 	}
 	if n < 40 {
 		t.Fatalf("only %d lookup ops found: the registry walk is broken", n)
 	}
-	t.Logf("%d lookup ops × %d ids", n, len(bad))
+	t.Logf("%d lookup ops × %d malformed + %d well-formed ids", n, len(malformed), len(wellFormed))
 }

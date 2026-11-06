@@ -362,14 +362,14 @@ func (o ops) createKeyed(ctx context.Context, to store.Source, id ids.AnyID, fie
 
 // checkSupersedes validates --supersedes before anything is written.
 func (o ops) checkSupersedes(ctx context.Context, project ids.ID[ids.Project], raw string) (ids.ID[ids.Memory], store.Source, row.Row, error) {
-	// v0.1.17 parity: any value that does not name a live memory of this
-	// project (well-formed unknown, malformed, another noun's prefix) is
-	// E_NOT_FOUND here; plain id arguments keep E_INVALID_ID.
+	// B-ERRS-1 (owner BATCH2 #11, CLI_REFERENCE 5 names --supersedes): a
+	// malformed value or another noun's prefix is E_INVALID_ID; a
+	// well-formed id naming no live memory of this project is E_NOT_FOUND.
 	notFound := errs.New(errs.NotFound, "--supersedes "+textcut.Cut(strings.TrimSpace(raw), maxQuotedID, maxQuotedID)+": no memory with that id in this project").
 		WithHint("run `lore memory list` to see the ids")
 	id, err := memoryID(raw)
 	if err != nil {
-		return ids.ID[ids.Memory]{}, "", row.Row{}, notFound
+		return ids.ID[ids.Memory]{}, "", row.Row{}, lookup.BadID("--supersedes "+textcut.Cut(strings.TrimSpace(raw), maxQuotedID, maxQuotedID)+": not a memory id (mem_…)", err)
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{Table: table, ID: id.Any()})
 	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || field(r, fieldProject) != project.String())) {

@@ -246,14 +246,15 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 
 // checkSupersedes validates --supersedes before anything is written.
 func checkSupersedes(ctx context.Context, env Env, n Noun, project ids.ID[ids.Project], raw string) (ids.AnyID, store.Source, row.Row, error) {
-	// v0.1.17 parity: any value that does not name a live row of this noun
-	// in this project (well-formed unknown, malformed, another noun's
-	// prefix) is E_NOT_FOUND here; plain id arguments keep E_INVALID_ID.
+	// B-ERRS-1 (owner BATCH2 #11, CLI_REFERENCE 5 names --supersedes): a
+	// malformed value or another noun's prefix is E_INVALID_ID; a
+	// well-formed id naming no live row of this noun in this project is
+	// E_NOT_FOUND.
 	notFound := errs.New(errs.NotFound, "--supersedes "+textcut.Cut(strings.TrimSpace(raw), maxQuoted, maxQuoted)+": no "+n.Name+" with that id in this project").
 		WithHint("run `lore " + n.Name + " list` to see the ids")
 	id, err := n.ID(raw)
 	if err != nil {
-		return ids.AnyID{}, "", row.Row{}, notFound
+		return ids.AnyID{}, "", row.Row{}, lookup.BadID("--supersedes "+textcut.Cut(strings.TrimSpace(raw), maxQuoted, maxQuoted)+": not a "+n.Name+" id ("+string(n.Prefix)+"_…)", err)
 	}
 	src, r, err := env.Get(ctx, engine.Ref{Table: n.Table, ID: id})
 	if errs.Has(err, errs.NotFound) || (err == nil && (r.Deleted || Field(r, FieldProject) != project.String())) {

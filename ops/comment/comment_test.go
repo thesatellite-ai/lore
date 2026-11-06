@@ -106,8 +106,8 @@ func TestCommentTargets(t *testing.T) {
 		code      errs.Code
 	}{
 		{"tasks", "tsk_01a1a67b1b617dc7acc5f1af36e0e000", errs.NotFound},
-		{"tasks", mem, errs.NotFound},
-		{"tasks", "garbage", errs.NotFound},
+		{"tasks", mem, errs.InvalidID},
+		{"tasks", "garbage", errs.InvalidID},
 		{"tasks", "", errs.InvalidInput}, // required field
 		{"Not A Table", task, errs.InvalidInput},
 		{"", task, errs.InvalidInput},

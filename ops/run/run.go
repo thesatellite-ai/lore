@@ -335,7 +335,7 @@ func (o ops) lookup(ctx context.Context, id string) (engine.Ref, row.Row, error)
 	id = strings.TrimSpace(id)
 	aid, err := ids.ParseAny(id)
 	if err != nil || aid.Prefix() != ids.PrefixRun {
-		return engine.Ref{}, row.Row{}, lookup.BadID("run "+strconv.Quote(id)+" not found (want run_…)", err)
+		return engine.Ref{}, row.Row{}, lookup.BadID("run: "+strconv.Quote(id)+" is not a run id (run_…)", err)
 	}
 	ref := engine.Ref{Table: schema.TableRuns, ID: aid}
 	src, r, err := o.env.Get(ctx, ref)

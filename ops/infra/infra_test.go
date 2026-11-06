@@ -197,7 +197,7 @@ func TestIDRefusals(t *testing.T) {
 	h := opstest.New(t)
 	for _, o := range []string{infra.OpRepoArchive, infra.OpRepoUnarchive, infra.OpProjectArchive, infra.OpProjectUnarchive} {
 		for _, bad := range []string{"rep_0000", "", "mem_01a1a679339b7c56896a5b5dd2cace7d", "prj_zz", "x"} {
-			if _, err := h.RunYes(o, `{"id":`+opstest.Quote(bad)+`}`); !errs.Has(err, errs.NotFound) && !errs.Has(err, errs.InvalidInput) {
+			if _, err := h.RunYes(o, `{"id":`+opstest.Quote(bad)+`}`); !errs.Has(err, errs.InvalidID) && !errs.Has(err, errs.InvalidInput) {
 				t.Errorf("%s %q: %v", o, bad, err)
 			}
 		}

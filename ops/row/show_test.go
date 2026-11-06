@@ -85,10 +85,10 @@ func TestShowErrors(t *testing.T) {
 		name, input string
 		code        errs.Code
 	}{
-		// a value that is not an id is "not found" (lookup.BadID, as every
-		// lookup answers it)
-		{"not an id", `{"id":"nope"}`, errs.NotFound},
-		{"empty", `{"id":"   "}`, errs.NotFound},
+		// a value that is not an id is E_INVALID_ID (lookup.BadID,
+		// B-ERRS-1); only a well-formed unknown id is not found
+		{"not an id", `{"id":"nope"}`, errs.InvalidID},
+		{"empty", `{"id":"   "}`, errs.InvalidID},
 		{"unknown memory", `{"id":"mem_01a1a5aca7f57659be7320c5f4b7f00d"}`, errs.NotFound},
 		{"force without reveal", `{"id":"` + h.ID(h.Must("memory.add", `{"body":"f"}`)) + `","force":true}`, errs.InvalidInput},
 	}
