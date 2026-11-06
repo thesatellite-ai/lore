@@ -151,8 +151,8 @@ func (r *Ref) compactOnce(ctx context.Context, dryRun bool) (CompactResult, erro
 		compactedAtPath: []byte(r.now().Format(time.RFC3339) + "\n"),
 	}}
 	dropped := 0
-	for p := range tree {
-		if _, k, ok := ParseRowPath(p); ok && purged[k.ID] {
+	for p, b := range tree {
+		if dropsPurged(p, b, purged) {
 			ch.Delete = append(ch.Delete, p)
 			dropped++
 		}
@@ -192,6 +192,38 @@ func (r *Ref) compactOnce(ctx context.Context, dryRun bool) (CompactResult, erro
 	}
 	res.Status = out.Status
 	return res, nil
+}
+
+// ListPurged adds ids to _live/purged.json and leaves their files alone:
+// the path of `lore trash purge` on a repo with a live ref, whose engine
+// write already put a tombstone (no content) in live. The tombstone stays
+// until it lands as a file delete plus a _purged.json id on main
+// (LORE_TEAM_SPEC side effect 11, DQ4), and the list reaches every clone on
+// its next fetch (merge unions it), so each answers E_PURGED for the ids
+// (BUG-LIVE-PURGE-LIST, F-TOMB-1). Purge is the §6.6 path that also drops
+// the files. It writes the local ref only; the caller pushes.
+func (r *Ref) ListPurged(ctx context.Context, ids []string, version string) (WriteResult, error) {
+	for attempt := 0; ; attempt++ {
+		_, tree, err := r.LocalTree(ctx)
+		if err != nil {
+			return WriteResult{}, err
+		}
+		set, err := tree.Purged()
+		if err != nil {
+			return WriteResult{}, err
+		}
+		for _, id := range ids {
+			set[id] = true
+		}
+		b, err := encodePurged(set)
+		if err != nil {
+			return WriteResult{}, err
+		}
+		res, err := r.writeOnce(ctx, WriteRequest{Folder: RootFolder, Raw: map[string][]byte{PurgedPath: b}, BinaryVersion: version})
+		if err == nil || !errors.Is(err, gitref.ErrRefMoved) || attempt >= casRetries {
+			return res, err
+		}
+	}
 }
 
 // Purge removes rows from live for good (§6.6 leak cleanup): their files

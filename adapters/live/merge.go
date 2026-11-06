@@ -50,7 +50,8 @@ type MergeNote struct {
 //     last_copy_at);
 //   - _live/epoch: the higher number;
 //   - _live/purged.json: set union, and every purged id is removed from the
-//     result so a stale side can never bring it back;
+//     result so a stale side can never bring it back (its tombstone stays,
+//     dropsPurged);
 //   - _live/meta.json and any other file: the side that changed it, theirs
 //     when both did.
 //
@@ -399,13 +400,31 @@ func unionPurged(trees ...Tree) (map[string]bool, error) {
 	return out, nil
 }
 
-// dropPurged removes every row file whose id is purged.
+// dropPurged removes every row file whose id is purged, except a
+// tombstone (dropsPurged).
 func dropPurged(t Tree, purged map[string]bool) {
-	for p := range t {
-		if _, k, ok := ParseRowPath(p); ok && purged[k.ID] {
+	for p, b := range t {
+		if dropsPurged(p, b, purged) {
 			delete(t, p)
 		}
 	}
+}
+
+// dropsPurged reports whether the live file at p (bytes b) goes because
+// its id is purged. A tombstone stays: it holds no content (§3.3), and a
+// `lore trash purge` lists its ids on _live/purged.json while its
+// tombstone must stay in live until it lands as a file delete plus a
+// _purged.json id on main (LORE_TEAM_SPEC side effect 11, DQ4: purge
+// leaves a tombstone; F-TOMB-1). Every other file of a purged id goes, so
+// a stale clone can never bring content back (§6.6). An undecodable file
+// goes too: nothing shows it is a tombstone.
+func dropsPurged(p string, b []byte, purged map[string]bool) bool {
+	_, k, ok := ParseRowPath(p)
+	if !ok || !purged[k.ID] {
+		return false
+	}
+	f, err := DecodeFile(b)
+	return err != nil || !f.Deleted()
 }
 
 // Describe renders a note the way commands print it.

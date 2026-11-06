@@ -718,15 +718,15 @@ var _ engine.Purger = (*liveBackend)(nil)
 // WritePurge implements engine.Purger: changes go through the live routing
 // (Write), then purged is listed in the inner backend's _purged.json and,
 // in a run with a live session, in the live ref's own _live/purged.json
-// (live.Ref.Purge, §6.6), which every clone integrates on its next fetch
+// (live.Ref.ListPurged), which every clone integrates on its next fetch
 // (merge unions the lists). Without the live list the ids were listed only
 // in the working tree's untracked _purged.json: after `lore sync` the
 // purging clone and every teammate read the live tombstone and answered
 // E_NOT_FOUND "was deleted (live, …)" instead of E_PURGED (DQ4,
-// BUG-LIVE-PURGE-LIST). Live's Purge drops the ids' live files as well;
-// a purged id then reads as absent and the engine answers E_PURGED from
-// the list, naming the id alone (purgedErr). Without it every purge behind
-// the wrapper was E_UNSUPPORTED.
+// BUG-LIVE-PURGE-LIST). The tombstone Write put in live stays (never
+// live.Ref.Purge, the §6.6 path that drops the files): it lands as a file
+// delete plus a _purged.json id on main (LORE_TEAM_SPEC side effect 11,
+// F-TOMB-1). Without it every purge behind the wrapper was E_UNSUPPORTED.
 func (b *liveBackend) WritePurge(ctx context.Context, changes []store.Change, purged []ids.AnyID) error {
 	noteStoreWrite(ctx, len(changes)+len(purged))
 	p, ok := b.inner.(engine.Purger)
@@ -752,7 +752,7 @@ func (b *liveBackend) WritePurge(ctx context.Context, changes []store.Change, pu
 	for i, id := range purged {
 		list[i] = id.String()
 	}
-	if _, err := s.ref.Purge(ctx, list, s.h.cfg.Version); err != nil {
+	if _, err := s.ref.ListPurged(ctx, list, s.h.cfg.Version); err != nil {
 		return errs.Wrap(errs.Internal, "live: list the purged ids on the local live ref", err)
 	}
 	s.wrote += len(list)
