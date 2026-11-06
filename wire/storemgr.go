@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/schema"
@@ -796,4 +797,25 @@ func (a *App) AddFolder(ctx context.Context, in opsstores.FolderAddIn) (opsstore
 		return opsstores.FolderAddOut{}, err
 	}
 	return out, nil
+}
+
+// personalInitOutsideRepo reports whether e is `lore store init me` run
+// outside any git work tree (G-CORE-7): it writes only the personal store
+// and ~/.lore/config.yaml (never stores.yaml, never a row through the
+// engine), so it runs without the repo-only engine (runDirect) instead of
+// failing E_NOT_A_STORE. Every other store operation keeps needing a repo.
+func (a *App) personalInitOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder) bool {
+	if e.Spec().Name != opsstores.OpInit || insideWorkTree(ctx, a.opts.RepoDir) {
+		return false
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return false // the normal path reports the decode error
+	}
+	for _, tv := range in.Texts() {
+		if tv.Field == storeNameField {
+			return tv.Text == opsstores.PersonalName
+		}
+	}
+	return false
 }
