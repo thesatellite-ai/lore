@@ -1,0 +1,14 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "secret_allows",
+  "_v": 2,
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "field": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "id": "sal_01a1a59b891c70b78914000000000020",
+  "match_hash": 3,
+  "reason": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "row_id": "mem_01a1a59b891c70b78914000000000010",
+  "rule_id": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

@@ -1,0 +1,19 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "handoffs",
+  "_v": 2,
+  "body": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "from_actor_id": "act_01a1a59b891c70b78914000000000001",
+  "id": "hnd_01a1a59b891c70b78914000000000009",
+  "mission_id": "msn_01a1a59b891c70b78914000000000013",
+  "project_id": "prj_01a1a59b891c70b78914000000000018",
+  "status_str": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "tag_ids": [
+    "tag_01a1a59b891c70b78914000000000024"
+  ],
+  "task_id": "tsk_01a1a59b891c70b78914000000000028",
+  "to_actor_id": "act_01a1a59b891c70b78914000000000001",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

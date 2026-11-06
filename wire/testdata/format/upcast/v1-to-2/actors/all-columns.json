@@ -1,0 +1,21 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "actors",
+  "_v": 2,
+  "active": true,
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "display_name": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "handle": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "id": "act_01a1a59b891c70b78914000000000001",
+  "kind": "human",
+  "label": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "left_at": "2026-11-04T08:09:56.252002659Z",
+  "merged_into": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "owner_actor_id": "act_01a1a59b891c70b78914000000000001",
+  "stable_key": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "tag_ids": [
+    "tag_01a1a59b891c70b78914000000000024"
+  ],
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

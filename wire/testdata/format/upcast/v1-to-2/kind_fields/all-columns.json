@@ -1,0 +1,48 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "kind_fields",
+  "_v": 2,
+  "changed_at": "2026-11-04T08:09:56.252002659Z",
+  "changed_by": "act_01a1a59b891c70b78914000000000001",
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "default": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "deprecated": true,
+  "description": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "extends": "fld_01a1a59b891c70b7891400000000000c",
+  "id": "fld_01a1a59b891c70b7891400000000000c",
+  "in_list": true,
+  "internal": true,
+  "kind_id": "knd_01a1a59b891c70b7891400000000000d",
+  "label": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "max": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "min": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "name": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "pattern": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "ref_kind": "knd_01a1a59b891c70b7891400000000000d",
+  "remind_before": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "replaced_by": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "required": true,
+  "sensitive": true,
+  "strict": true,
+  "type": "text",
+  "type_history": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9",
+  "value_ids": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "values": [
+    "fixture café — 日本 <b>&</b> \"q\"\ttab"
+  ],
+  "widget": "text"
+}

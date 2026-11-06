@@ -1,0 +1,30 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "hotfixes",
+  "_v": 2,
+  "archived_at": "2026-11-04T08:09:56.252002659Z",
+  "body": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "confidence": 3,
+  "context_pin": "full",
+  "context_pinned_at": "2026-11-04T08:09:56.252002659Z",
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "created_by_actor_id": "act_01a1a59b891c70b78914000000000001",
+  "id": "hfx_01a1a59b891c70b7891400000000000a",
+  "last_validated_at": "2026-11-04T08:09:56.252002659Z",
+  "overrides_id": "hfx_01a1a59b891c70b7891400000000000a",
+  "project_id": "prj_01a1a59b891c70b78914000000000018",
+  "repo_id": "rep_01a1a59b891c70b7891400000000001b",
+  "scope_id": "scp_01a1a59b891c70b7891400000000001f",
+  "severity": "low",
+  "source_kind": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "source_ref": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "summary": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "superseded_by_id": "hfx_01a1a59b891c70b7891400000000000a",
+  "tag_ids": [
+    "tag_01a1a59b891c70b78914000000000024"
+  ],
+  "title": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "trust_score": 3,
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

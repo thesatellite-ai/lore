@@ -1,0 +1,17 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "teams",
+  "_v": 2,
+  "active": true,
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "display_name": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "handle": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "id": "tem_01a1a59b891c70b7891400000000002a",
+  "left_at": "2026-11-04T08:09:56.252002659Z",
+  "member_actor_ids": [
+    "act_01a1a59b891c70b78914000000000001"
+  ],
+  "project_id": "prj_01a1a59b891c70b78914000000000018",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

@@ -1,0 +1,18 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "secret_rules",
+  "_v": 2,
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "description": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "entropy": 3,
+  "id": "srl_01a1a59b891c70b78914000000000021",
+  "keywords": [
+    "fixturenever-"
+  ],
+  "reason": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "regex": "FIXTURENEVER-[0-9]{40}",
+  "rule_id": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "state": "on",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

@@ -1,0 +1,17 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "reminders",
+  "_v": 2,
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "created_by_actor_id": "act_01a1a59b891c70b78914000000000001",
+  "done_at": "2026-11-04T08:09:56.252002659Z",
+  "due_at": "2026-11-04T08:09:56.252002659Z",
+  "id": "rmd_01a1a59b891c70b7891400000000001a",
+  "message": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "project_id": "prj_01a1a59b891c70b78914000000000018",
+  "recurrence": "7d",
+  "target_id": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "target_table": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}
