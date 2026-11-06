@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 )
 
 // ShowIn is the input of the show operation: the id flags plus --expand.
@@ -35,5 +36,5 @@ func (o ops) showExpand(ctx context.Context, in ShowIn) (ShowOut, error) {
 
 // Text is the human form of show, with the --expand block when set.
 func (o ShowOut) Text() string {
-	return o.baseText() + expand.Text(o.Expanded, o.Refs) + expand.WarningText(o.Warning)
+	return o.baseText() + metashow.Text(o.Data.Meta, o.Data.MetaMasked) + expand.Text(o.Expanded, o.Refs) + expand.WarningText(o.Warning)
 }

@@ -78,6 +78,10 @@ type Summary struct {
 	Store       store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta / MetaMasked: the mission's metadata on list --json too
+	// (METADATA 3.17, MQ13); absent without metadata.
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // Record is the ent Mission JSON plus its tasks (v0.1.17 missionShowJSON).
@@ -105,6 +109,11 @@ type Record struct {
 	Store    store.SourceRef         `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta / MetaMasked are the row's metadata (METADATA 3.17 "metadata
+	// on every read", MQ13, G-META-10 via metashow.Row): absent for a row
+	// without metadata, so v0.1.17's record is unchanged.
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // Edges is ent's edges object: v0.1.17 printed it empty.

@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -106,6 +107,11 @@ type Record struct {
 	Store            store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta / MetaMasked are the row's metadata (METADATA 3.17 "metadata
+	// on every read", MQ13, G-META-10 via metashow.Row): absent for a row
+	// without metadata, so v0.1.17's record is unchanged.
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // Edges is ent's edges object: v0.1.17 printed it empty.
@@ -304,7 +310,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	out := ListOut{SchemaVersion: work.SchemaVersion, Kind: KindList, Data: []Record{}, Notes: notes}
 	for _, s := range all {
 		if project == "" || work.Field(s.Row, work.FieldProject) == project {
-			out.Data = append(out.Data, recordOf(work.LabelerOf(o.env), s.Source, s.Row))
+			out.Data = append(out.Data, withMeta(ctx, o.env, recordOf(work.LabelerOf(o.env), s.Source, s.Row), s.Row))
 		}
 	}
 	out.Count = len(out.Data)
@@ -321,7 +327,15 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: recordOf(work.LabelerOf(o.env), src, r)}, nil
+	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: withMeta(ctx, o.env, recordOf(work.LabelerOf(o.env), src, r), r)}, nil
+}
+
+// withMeta is rec with the row's metadata (METADATA 3.17, MQ13: show and
+// list --json carry it; sensitive values masked).
+func withMeta(ctx context.Context, env metashow.Env, rec Record, r row.Row) Record {
+	b := metashow.Row(ctx, env, r)
+	rec.Meta, rec.MetaMasked = b.Meta, b.MetaMasked
+	return rec
 }
 
 // edit patches the fields whose flags were given.

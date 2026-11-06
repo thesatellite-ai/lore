@@ -25812,6 +25812,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "starts_at": {
                             "type": "string"
                           },
@@ -26254,6 +26266,18 @@
                         },
                         "idempotency_key": {
                           "type": "string"
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "plan_id": {
                           "type": "string"
@@ -27433,6 +27457,18 @@
                         },
                         "idempotency_key": {
                           "type": "string"
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "plan_id": {
                           "type": "string"
@@ -32273,6 +32309,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -32507,6 +32555,18 @@
                         },
                         "id": {
                           "type": "string"
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "project_id": {
                           "type": "string"
@@ -33251,6 +33311,18 @@
                         },
                         "id": {
                           "type": "string"
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "project_id": {
                           "type": "string"
@@ -68747,6 +68819,18 @@
                           "id": {
                             "type": "string"
                           },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "meta_masked": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "project_id": {
                             "type": "string"
                           },
@@ -68974,6 +69058,18 @@
                         },
                         "id": {
                           "type": "string"
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "project_id": {
                           "type": "string"
@@ -69715,6 +69811,18 @@
                         },
                         "id": {
                           "type": "string"
+                        },
+                        "meta": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "meta_masked": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "project_id": {
                           "type": "string"

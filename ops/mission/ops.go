@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
@@ -297,6 +298,8 @@ func (o ops) showOf(ctx context.Context, src store.Source, r row.Row) (ShowOut, 
 		IdempotencyKey: work.Field(r, work.FieldKey), PlanID: work.Field(r, work.FieldPlan), TagIDs: work.TagIDs(r),
 		Tasks: tasks, Estimate: est, Store: work.SourceOf(work.LabelerOf(o.env), src), Label: work.Label(work.LabelerOf(o.env), src),
 	}
+	mb := metashow.Row(ctx, o.env, r) // METADATA 3.17: metadata on every read
+	rec.Meta, rec.MetaMasked = mb.Meta, mb.MetaMasked
 	if rec.CreatedByActorID == "" && !r.CreatedBy.IsZero() {
 		rec.CreatedByActorID = r.CreatedBy.String()
 	}
@@ -368,6 +371,8 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			TargetDate: work.TimeText(s.Row, fieldTarget), StartsAt: work.TimeText(s.Row, fieldStartsAt), CompletedAt: work.TimeText(s.Row, work.FieldCompleted),
 			CreatedAt: s.Row.CreatedAt.UTC().Format(work.TimeLayout), Tasks: tasks, Store: work.SourceOf(work.LabelerOf(o.env), s.Source), Label: work.Label(work.LabelerOf(o.env), s.Source),
 		})
+		mb := metashow.Row(ctx, o.env, s.Row) // METADATA 3.17: list --json rows carry it
+		out.Data[len(out.Data)-1].Meta, out.Data[len(out.Data)-1].MetaMasked = mb.Meta, mb.MetaMasked
 	}
 	out.Count = len(out.Data)
 	return out, nil
