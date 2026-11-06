@@ -1,6 +1,9 @@
 package task
 
 import (
+	"encoding/json"
+
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -64,4 +67,29 @@ func TimeLine(list []timeentry.Entry) string {
 		line += ", manual " + timeentry.FormatSeconds(m)
 	}
 	return line + ")"
+}
+
+// FieldTimeTotals is the time_totals object a move into a client repo
+// writes with --with-time totals (TQ3, TIME 8 point 4): the task's
+// entries stay behind, these totals come with it.
+const FieldTimeTotals = "time_totals"
+
+// TimeCarried decodes the time_totals of a task row (F-MOVE-3): what a
+// move into this client repo carried of the task's time. ok is false for
+// a task without totals or with a value that does not decode (a read
+// never fails on it; lint reports it).
+func TimeCarried(r row.Row) (engine.TimeTotalsDoc, bool) {
+	v := r.Fields[FieldTimeTotals]
+	if v == nil || v.Kind() == value.KindNull {
+		return engine.TimeTotalsDoc{}, false
+	}
+	raw, err := v.MarshalJSON()
+	if err != nil {
+		return engine.TimeTotalsDoc{}, false
+	}
+	var tt engine.TimeTotalsDoc
+	if err = json.Unmarshal(raw, &tt); err != nil || tt.EffortSeconds <= 0 {
+		return engine.TimeTotalsDoc{}, false
+	}
+	return tt, true
 }

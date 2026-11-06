@@ -124,6 +124,9 @@ type TimeData struct {
 	Workers        []TimeWorker      `json:"workers"`
 	Entries        []timeentry.Entry `json:"entries,omitempty"`
 	Open           []timeentry.Open  `json:"open,omitempty"`
+	// Carried is the time_totals a move into this client repo brought
+	// (F-MOVE-3); its effort is part of EffortSeconds.
+	Carried engine.TimeTotalsDoc `json:"carried_totals,omitzero"`
 	// OpenClaims is the claim still on the board, counted live (5.1 rule 1).
 	OpenClaims []TimeClaim `json:"open_claims,omitempty"`
 	// InTrash: read with --include-deleted from the trash (DQ10).
@@ -418,6 +421,14 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 	}
 	res := timecalc.Compute(spans)
 	d.EffortSeconds, d.ElapsedSeconds, d.ManualSeconds = res.Effort, res.Elapsed, res.Manual
+	// F-MOVE-3: a task moved into this client repo with --with-time totals
+	// left its entries behind; the totals it carried count as effort, and
+	// time logged here since adds to them (TIME 8 point 3).
+	if tt, ok := TimeCarried(r); ok {
+		d.Carried = tt
+		d.EffortSeconds += tt.EffortSeconds
+		d.Notes = append(d.Notes, "effort includes "+timeentry.FormatSeconds(tt.EffortSeconds)+" carried as totals by the move into this repo ("+tt.From+" to "+tt.To+")")
+	}
 	if group == groupWorker || group == groupPerson {
 		incl := map[string]int64{}
 		for _, ot := range res.Owners {

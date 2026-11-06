@@ -198,6 +198,9 @@ func (o ops) timeIndex(ctx context.Context, q timeQuery) func(row.Row) taskTime 
 			add(s.ActorID.String(), "", s.StartTime().Format(timeentry.DayLayout), timecalc.Span{Start: s.StartTime(), End: now, Open: true})
 		}
 		res := timecalc.Compute(spans)
+		if tt, ok := TimeCarried(r); ok { // F-MOVE-3: totals a client move carried
+			res.Effort += tt.EffortSeconds
+		}
 		t := taskTime{TimeBrief: TimeBrief{EffortSeconds: res.Effort, ElapsedSeconds: res.Elapsed, ManualSeconds: res.Manual}, worked: worked}
 		memo[r.ID.String()] = t
 		return t
