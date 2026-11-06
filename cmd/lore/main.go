@@ -127,10 +127,13 @@ func run(ctx context.Context, args []string) int {
 	// after `lore sync`: private renders rebuilt, scope rename hints (syncrender.go).
 	hooks = append(hooks, syncRenderHook(rend, wd))
 	base.Context.Render, base.Context.RenderHistory, base.Context.Fetch, base.Context.Setup = rend, rend, rend, &lateSetup{r: rend}
+	doc := &lateDoctor{} // doctorbase.go: [identity] and PATH of `lore doctor`
+	base.Context.Doctor = doc
 	app, err := wire.New(hosthooks.Options(base, hooks))
 	if err != nil {
 		return printHostError(err)
 	}
+	doc.app = app
 	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now, External: renderhost.CoreExternal(app), Decor: renderDecor(flags)})
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
