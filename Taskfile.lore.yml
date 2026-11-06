@@ -27,6 +27,12 @@ vars:
   CHECK_BEGIN: "lore-check-begin"
   # Prints the tree id of the tracked files as they are in the work tree.
   TRACKED_TREE: "{{.TASKFILE_DIR}}/.githooks/lib/tracked-tree.sh"
+  # Extra compiler flags for every -race run. -race also turns on checkptr for every package;
+  # modernc.org's SQLite is C transpiled to Go by ccgo (generated, not hand-written) and does
+  # pointer arithmetic on every statement, so checkptr alone made each cache open about 3x slower
+  # (an ops test harness: 16.5 s -> 5.2 s). It is off for modernc.org/... only: the race detector
+  # still instruments every package and checkptr stays on for lore's own code.
+  RACE_GCFLAGS: "modernc.org/...=-d=checkptr=0"
 
 tasks:
   build:
@@ -87,8 +93,8 @@ tasks:
   test:
     desc: "Unit + integration tests for mini's code"
     cmds:
-      - go test -race ./saas/cmd/cli/... ./saas/pkg/aicoder/...
-      - go test -race ./dbent/schema/...
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./saas/cmd/cli/... ./saas/pkg/aicoder/...
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./dbent/schema/...
 
   test:all:
     desc: "Every Go test in the workspace modules (dbent, lace, saas), incl. the CLI end-to-end suite and the docs drift test"
@@ -178,7 +184,7 @@ tasks:
   test:sync:
     desc: "Git-sync tests only: lsync engine, merge3, canonjson, gitsetup, ids + the CLI e2e suite (real git, real binary)"
     cmds:
-      - go test -race ./saas/pkg/aicoder/lsync/... ./saas/pkg/aicoder/merge3/... ./saas/pkg/aicoder/canonjson/... ./saas/pkg/aicoder/gitsetup/... ./saas/pkg/aicoder/ids/...
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./saas/pkg/aicoder/lsync/... ./saas/pkg/aicoder/merge3/... ./saas/pkg/aicoder/canonjson/... ./saas/pkg/aicoder/gitsetup/... ./saas/pkg/aicoder/ids/...
       - go test ./saas/cmd/cli/...
 
   test:team:
