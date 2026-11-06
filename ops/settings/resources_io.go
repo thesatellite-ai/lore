@@ -19,6 +19,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/origin"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -284,8 +285,8 @@ func decodeDoc(format string, raw []byte, doc *importDoc) error {
 			Fields map[string]yaml.Node `yaml:"fields"`
 		} `yaml:"resources"`
 	}
-	if err := yaml.Unmarshal(raw, &y); err != nil {
-		return errs.Wrap(errs.InvalidInput, "resource import: yaml", err)
+	if err := yamlerr.Decode(raw, &y, yamlerr.Lenient); err != nil { // line + key, never a Go type
+		return errs.Wrap(errs.InvalidInput, "resource import: the YAML is not valid: "+err.Error(), err)
 	}
 	for _, e := range y.Resources {
 		el := importElem{Kind: e.Kind, Name: e.Name, Fields: map[string]json.RawMessage{}}

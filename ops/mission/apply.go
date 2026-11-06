@@ -8,8 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -84,7 +83,7 @@ func (in ApplyIn) TargetName() (string, error) {
 		return "", err
 	}
 	var p File
-	if err := yaml.Unmarshal(raw, &p); err != nil {
+	if err := yamlerr.Decode(raw, &p, yamlerr.Lenient); err != nil { // line + key, never a Go type
 		return "", err
 	}
 	return strings.TrimSpace(p.Mission.To), nil
@@ -132,8 +131,8 @@ func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		return ApplyOut{}, errs.Wrap(errs.InvalidInput, "read plan", err)
 	}
 	var p File
-	if yerr := yaml.Unmarshal(raw, &p); yerr != nil {
-		return ApplyOut{}, errs.Wrap(errs.InvalidInput, "plan is not valid YAML", yerr)
+	if yerr := yamlerr.Decode(raw, &p, yamlerr.Lenient); yerr != nil { // line + key, never a Go type
+		return ApplyOut{}, errs.Wrap(errs.InvalidInput, "plan is not valid: "+yerr.Error(), yerr)
 	}
 	if s := strings.TrimSpace(p.Mission.StartsAt); s != "" {
 		if _, derr := time.Parse(work.DateLayout, s); derr != nil {
