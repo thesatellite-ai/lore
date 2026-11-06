@@ -140,7 +140,12 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 	want := map[Code]bool{}
 	for _, c := range in.Code {
 		if !slices.Contains(Codes(), Code(c)) && !slices.Contains(ContextCodes(), Code(c)) {
-			return RunOut{}, errs.New(errs.InvalidInput, "lint: unknown code "+strconv.Quote(c))
+			known := make([]string, 0, len(Codes())+len(ContextCodes()))
+			for _, k := range append(Codes(), ContextCodes()...) {
+				known = append(known, string(k))
+			}
+			return RunOut{}, errs.New(errs.InvalidInput, "lint: unknown code "+strconv.Quote(c)).
+				WithHint("known codes: " + strings.Join(known, ", "))
 		}
 		want[Code(c)] = true
 	}
