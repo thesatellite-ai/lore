@@ -285,7 +285,8 @@ func finishSupersedes(ctx context.Context, env Env, n Noun, oldSrc store.Source,
 	if err == nil {
 		return nil
 	}
-	if _, derr := env.Delete(ctx, engine.Ref{Store: newSrc, Table: n.Table, ID: newID}); derr != nil {
+	// the rolled-back row is purged, not trashed: "nothing was kept" (later 498)
+	if _, derr := env.Delete(engine.WithPurge(ctx, &engine.PurgeRequest{Asked: true, Confirmed: true}), engine.Ref{Store: newSrc, Table: n.Table, ID: newID}); derr != nil {
 		return errs.Wrap(errs.CodeOf(err), n.Name+" add: could not mark "+old.String()+" superseded by "+newID.String(), err).
 			WithHint("the new " + n.Name + " " + newID.String() + " was written but could not be removed again; delete it with `lore " + n.Name + " delete " + newID.String() + " --yes`")
 	}
