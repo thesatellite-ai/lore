@@ -42,13 +42,16 @@ const (
 	// CLI_REFERENCE sample shows a few ids, then the --all hint).
 	sampleRows = 10
 	timeLayout = "2006-01-02 15:04"
-	dateLayout = "2006-01-02"
-	handleSign = "@"
-	fieldHand  = "handle"
-	fieldName  = "display_name"
-	fieldKey   = "stable_key"
-	hoursInDay = 24
-	daySuffix  = "d"
+	// jsonTimeLayout is at in --json and REST: UTC RFC 3339 with
+	// milliseconds, like every row time (the text keeps timeLayout).
+	jsonTimeLayout = "2006-01-02T15:04:05.000Z07:00"
+	dateLayout     = "2006-01-02"
+	handleSign     = "@"
+	fieldHand      = "handle"
+	fieldName      = "display_name"
+	fieldKey       = "stable_key"
+	hoursInDay     = 24
+	daySuffix      = "d"
 )
 
 // Kind is a batch's kind (bulk.Kind, re-exported so the composition root,
@@ -110,6 +113,9 @@ type Summary struct {
 	Actions []Count `json:"actions"`
 	// stores and actions are the tallies Stores and Actions are built from.
 	stores, actions map[string]int
+	// shown is At as the text prints it (local, minutes); "" for a
+	// summary decoded from JSON, which prints At as given.
+	shown string
 }
 
 // Count is how many rows of a batch one store (or one action) holds.
@@ -241,7 +247,7 @@ func summarize(evs []Event) []summary {
 		s, ok := by[ev.Batch]
 		if !ok {
 			s = &summary{Summary: Summary{ID: ev.Batch.String(), Kind: string(ev.Kind), Op: ev.Op, Actor: ev.Actor.String(),
-				At: ev.At.Local().Format(timeLayout), stores: map[string]int{}, actions: map[string]int{}}, at: ev.At}
+				At: ev.At.UTC().Format(jsonTimeLayout), shown: ev.At.Local().Format(timeLayout), stores: map[string]int{}, actions: map[string]int{}}, at: ev.At}
 			by[ev.Batch] = s
 			order = append(order, ev.Batch)
 		}
@@ -343,7 +349,11 @@ func (o ListOut) Text() string {
 
 // line is the CLI_REFERENCE 3.10 header line of a batch.
 func (s Summary) line() string {
-	return "batch " + s.ID + "  " + s.Kind + "  " + strings.ReplaceAll(s.Op, ".", " ") + "  by " + s.Actor + "  " + s.At + "  " +
+	at := s.shown
+	if at == "" {
+		at = s.At
+	}
+	return "batch " + s.ID + "  " + s.Kind + "  " + strings.ReplaceAll(s.Op, ".", " ") + "  by " + s.Actor + "  " + at + "  " +
 		strconv.Itoa(s.Rows) + " rows (" + counts(s.Stores) + ")\n"
 }
 
