@@ -49,14 +49,14 @@ func teBCoordStore(t *testing.T) teBCoordCase {
 	t.Helper()
 	a := newAgency(t, append(append([]th.Cap{}, crewCaps...), th.Cmd("task", "split"), th.Flag("coordinate", "task", "claim"), th.Flag("to", "task", "add"))...)
 	p := mustID(t, a.aliceApp.MustLore("task", "add", "invoices export", "--to", orgNorthwind), "tsk")
-	if _, ok := a.storeLiveRow(t, folderAcme, tblTasks, p); !ok {
+	if _, ok := readRow(t, a.store, storeLiveRef, liveRowPath(folderAcme, tblTasks, p)); !ok {
 		if _, ok := a.storeMainRow(t, folderAcme, tblTasks, p); !ok {
 			t.Fatalf("premise: the parent is an org store row of acme/ (live: %v)", a.store.Files(storeLiveRef))
 		}
 	}
 	_, kids := splitIDs(t, a.aliceApp, p, "export query", "download button")
-	w1 := startAgent(t, a.alice, a.aliceApp, "w-1", "alice")
-	w2 := startAgent(t, a.alice, a.aliceApp, "w-2", "alice")
+	w1 := startAgent(t, a.alice, a.aliceApp, "w-1")
+	w2 := startAgent(t, a.alice, a.aliceApp, "w-2")
 	c1, c2 := w1.Clone(a.app, "app"), w2.Clone(a.app, "app")
 	return teBCoordCase{parent: p, kids: kids, w1: w1, w2: w2, c1: c1, c2: c2, person: a.aliceApp,
 		claimOf: func(id string) (signal, bool) {

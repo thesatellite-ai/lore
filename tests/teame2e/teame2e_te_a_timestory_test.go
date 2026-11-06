@@ -83,7 +83,7 @@ func TestTeA_TimeStory_ThreeClones(t *testing.T) {
 	tomas.SetNow(t0)
 	tomasC := tomas.Clone(cr.tools, "tools-tomas")
 	tomasC.MustLore("task", "list")
-	codex := startAgent(t, tomas, tomasC, "codex-1", "dev1")
+	codex := startAgentFor(t, tomas, tomasC, "codex-1", "dev1")
 	codex.SetNow(t0)
 	codexC := codex.Clone(cr.tools, "tools-codex")
 	codexC.MustLore("task", "list")

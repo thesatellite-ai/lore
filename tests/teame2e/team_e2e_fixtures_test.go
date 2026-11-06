@@ -587,7 +587,15 @@ const agentOwnerHandle = "alice"
 // LORE_ACTOR / LORE_SESSION (§7.5 step 2, F18).
 func startAgent(t *testing.T, owner *th.Actor, dir *th.Clone, label string) *th.Actor {
 	t.Helper()
-	r := dir.As(owner).MustLore("agent", "start", "--label", label, "--owner", "@"+agentOwnerHandle)
+	return startAgentFor(t, owner, dir, label, agentOwnerHandle)
+}
+
+// startAgentFor is startAgent for an agent whose roster owner is not alice
+// (ownerHandle without the @): a story where another person runs the agent
+// must register it under that person, or the owner checks are not exercised.
+func startAgentFor(t *testing.T, owner *th.Actor, dir *th.Clone, label, ownerHandle string) *th.Actor {
+	t.Helper()
+	r := dir.As(owner).MustLore("agent", "start", "--label", label, "--owner", "@"+ownerHandle)
 	m := agentEnvRe.FindStringSubmatch(r.Out())
 	if m == nil {
 		t.Fatalf("agent start must print LORE_ACTOR=… LORE_SESSION=…: %s", r)

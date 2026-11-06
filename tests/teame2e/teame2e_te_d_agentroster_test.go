@@ -40,7 +40,7 @@ func TestTeD_AgentRosterMissOnCachedFetchSyncsOnce(t *testing.T) {
 	}
 
 	// On her laptop alice starts the agent; the roster row is pushed.
-	ag := startAgent(t, a.alice, a.aliceApp, "frontend-2", "alice")
+	ag := startAgent(t, a.alice, a.aliceApp, "frontend-2")
 	onBox := box.Agent("frontend-2")
 	onBox.SetEnv(th.EnvLoreActor, ag.Env(th.EnvLoreActor))
 	onBox.SetEnv(th.EnvLoreSession, ag.Env(th.EnvLoreSession))
