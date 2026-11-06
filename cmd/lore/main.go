@@ -11,9 +11,8 @@
 //	     ──▶ ExecuteContext ──▶ exit code (surface/cli.ExitCode, or the
 //	                              error's class exit for a host command)
 //
-// The release binary is still saas/cmd/cli until this one reaches parity
-// (the gap list is in the old-code removal plan); both stamp `version`
-// through the same ldflag (-X main.version=…).
+// This is the only release binary (goreleaser builds ./cmd/lore); the
+// release stamps `version` through the ldflag -X main.version=….
 package main
 
 import (
@@ -38,8 +37,8 @@ import (
 	"github.com/thesatellite-ai/lore/wire/renderhost"
 )
 
-// version is stamped at build time (-ldflags "-X main.version=…"), like
-// saas/cmd/cli's; "dev" for a plain go build.
+// version is stamped at build time (-ldflags "-X main.version=…");
+// "dev" for a plain go build.
 var version = "dev"
 
 // unresolvedHome is the lore home used when the user's home cannot be read

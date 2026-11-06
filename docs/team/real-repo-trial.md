@@ -47,7 +47,7 @@ task lore:trial:github
 | `LORE_BIN` | a lore binary to drive instead of building one from this checkout |
 | `LORE_TRIAL_ADOPT` | one or more remote URLs (space-separated) that may be wiped once although they carry no marker; see below |
 
-The task builds lore from the checkout (`go build ./saas/cmd/cli`), puts it first on `PATH` so the git hooks lore installs call it, and leaves the work directory in place so you can read the logs: `logs/trial.log` (every command and its output, plus each check), `logs/clientcheck.log` (each client scan) and `logs/heartbeat-agent-b.log`. Every git call the trial makes itself uses `GIT_SSH_COMMAND="ssh -o ConnectTimeout=20"` and up to five tries.
+The task builds lore from the checkout (`go build ./cmd/lore`), puts it first on `PATH` so the git hooks lore installs call it, and leaves the work directory in place so you can read the logs: `logs/trial.log` (every command and its output, plus each check), `logs/clientcheck.log` (each client scan) and `logs/heartbeat-agent-b.log`. Every git call the trial makes itself uses `GIT_SSH_COMMAND="ssh -o ConnectTimeout=20"` and up to five tries.
 
 Without both variables it refuses before doing anything:
 

@@ -34,7 +34,6 @@ logs/*
 tmp/
 
 ignore.md
-saas/cmd/test
 
 .github/.secrets
 .github/.secrets.**
