@@ -112,8 +112,8 @@ func readToken(home string) (string, error) {
 	if !st.Mode().IsRegular() {
 		return "", errs.New(errs.ConfigInvalid, p+" is not a regular file").WithHint("remove it; lore creates a new token")
 	}
-	if err := checkTokenMode(runtime.GOOS, p, st.Mode().Perm()); err != nil {
-		return "", err
+	if modeErr := checkTokenMode(runtime.GOOS, p, st.Mode().Perm()); modeErr != nil {
+		return "", modeErr
 	}
 	b, err := os.ReadFile(filepath.Clean(p))
 	if err != nil {

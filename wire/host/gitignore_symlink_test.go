@@ -30,7 +30,7 @@ func TestEnsureGitignoreRefusesLinkOutOfTheRepo(t *testing.T) {
 		if err := EnsureGitignore(ctx, root); errs.CodeOf(err) != errs.Refused {
 			t.Fatalf("a .gitignore linked out of the repository: got %v, want E_REFUSED", err)
 		}
-		if got, err := os.ReadFile(victim); err != nil || string(got) != keep {
+		if got, err := os.ReadFile(filepath.Clean(victim)); err != nil || string(got) != keep {
 			t.Fatalf("the linked file was written: %q (%v)", got, err)
 		}
 	})
@@ -50,7 +50,7 @@ func TestEnsureGitignoreRefusesLinkOutOfTheRepo(t *testing.T) {
 		if err := EnsureGitignore(ctx, root); err != nil {
 			t.Fatal(err)
 		}
-		if got, err := os.ReadFile(shared); err != nil || !strings.Contains(string(got), ".lore/lock\n") {
+		if got, err := os.ReadFile(filepath.Clean(shared)); err != nil || !strings.Contains(string(got), ".lore/lock\n") {
 			t.Fatalf("the in-repo link target did not get the lines: %q (%v)", got, err)
 		}
 	})

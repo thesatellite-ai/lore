@@ -40,11 +40,11 @@ func TestLockRefusesSymlinkedLockFile(t *testing.T) {
 		}
 		t.Fatalf("lock through a symlinked .lore/lock: got %v, want E_SYMLINK_DB", lerr)
 	}
-	if got, rerr := os.ReadFile(victim); rerr != nil || string(got) != keep {
+	if got, rerr := os.ReadFile(filepath.Clean(victim)); rerr != nil || string(got) != keep {
 		t.Fatalf("the linked file was written: %q (%v)", got, rerr)
 	}
-	if err := os.Remove(p); err != nil {
-		t.Fatal(err)
+	if rmErr := os.Remove(p); rmErr != nil {
+		t.Fatal(rmErr)
 	}
 	l, err := r.Lock(context.Background())
 	if err != nil {
