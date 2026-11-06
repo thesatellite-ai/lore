@@ -544,7 +544,8 @@ func TestUC_Tasks_ArchiveUnarchive(t *testing.T) {
 
 // archiveHelpers checks archive/unarchive's flags on one kind: list hides
 // an archived row and --archived shows it, --db is refused (0.1.18: row
-// files, never lore.db), --read-only refuses, unknown ids are E_NOT_FOUND.
+// files, never lore.db), --read-only refuses, a well-formed unknown id is E_NOT_FOUND and a
+// malformed one E_INVALID_ID.
 func archiveHelpers(t *testing.T, c *clone, table, kind, prefix, mem string) {
 	t.Helper()
 	c.lore(kind, "archive", mem)
@@ -577,10 +578,15 @@ func archiveHelpers(t *testing.T, c *clone, table, kind, prefix, mem string) {
 	if r := c.loreAny(kind, "unarchive", mem, "--read-only"); r.code == 0 || !strings.Contains(r.stderr, "E_READ_ONLY") {
 		t.Fatalf("unarchive --read-only: %d %s", r.code, r.stderr)
 	}
-	for _, bad := range []string{prefix + "_00000000000070008000000000000000", "not-an-id"} {
+	// A well-formed id no row has is not found; a malformed one is not an
+	// id at all (B-ERRS-1/B-ERRS-5).
+	for _, bad := range []struct{ id, code string }{
+		{prefix + "_00000000000070008000000000000000", "E_NOT_FOUND"},
+		{"not-an-id", "E_INVALID_ID"},
+	} {
 		for _, verb := range []string{"archive", "unarchive"} {
-			if r := c.loreAny(kind, verb, bad); r.code == 0 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
-				t.Fatalf("%s %s %s: %d %s", kind, verb, bad, r.code, r.stderr)
+			if r := c.loreAny(kind, verb, bad.id); r.code == 0 || !strings.Contains(r.stderr, bad.code) {
+				t.Fatalf("%s %s %s: want %s, got %d %s", kind, verb, bad.id, bad.code, r.code, r.stderr)
 			}
 		}
 	}

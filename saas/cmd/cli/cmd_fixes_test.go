@@ -197,8 +197,8 @@ func TestFix_SupersedesMarksTheOldRow(t *testing.T) {
 		before := strings.Count(c.lore(kc.kind, "list", "--json").stdout, `"id"`)
 		for _, bad := range []struct{ id, code string }{
 			{old, "E_INVALID_INPUT"},
-			{kc.prefix + "_00000000000000000000000000000000", "E_NOT_FOUND"}, // unparseable: v0.1.17 says not found
-			{kc.prefix + "_01a1a681c07e7dfe8ec01fc44d487e86", "E_NOT_FOUND"}, // well-formed, unknown
+			{kc.prefix + "_00000000000000000000000000000000", "E_INVALID_ID"}, // all-zero: not an id (B-ERRS-5)
+			{kc.prefix + "_01a1a681c07e7dfe8ec01fc44d487e86", "E_NOT_FOUND"},  // well-formed, unknown
 		} {
 			r := c.w.run(c.dir, c.env, e2eBin, append(supersedeArgs(kc.kind), "--supersedes", bad.id)...)
 			if r.code == 0 || !strings.Contains(r.stderr, bad.code) {
@@ -209,9 +209,9 @@ func TestFix_SupersedesMarksTheOldRow(t *testing.T) {
 			t.Fatalf("%s: a refused --supersedes wrote a row (%d → %d)", kc.kind, before, after)
 		}
 	}
-	// Another kind's id is not a row of this kind.
+	// Another kind's id is not an id of this kind at all (B-ERRS-5).
 	rul := idOf(t, c.lore("rule", "list").stdout, "rul")
-	if r := c.loreAny("hotfix", "add", "--title", "x", "--body", "y", "--supersedes", rul); r.code == 0 || !strings.Contains(r.stderr, "E_NOT_FOUND") {
+	if r := c.loreAny("hotfix", "add", "--title", "x", "--body", "y", "--supersedes", rul); r.code == 0 || !strings.Contains(r.stderr, "E_INVALID_ID") {
 		t.Fatalf("cross-kind --supersedes: %d %s", r.code, r.stderr)
 	}
 }
