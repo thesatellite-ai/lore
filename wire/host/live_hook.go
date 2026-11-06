@@ -37,6 +37,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
+	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -477,13 +478,17 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	return res, err
 }
 
-// refetchOnNotFound are the coordination operations on one task id whose
-// E_NOT_FOUND is answered before any write: the id lookup comes first
-// (B-ERRS2-1).
+// refetchOnNotFound are the operations on one task id whose E_NOT_FOUND is
+// answered before any write: the id lookup comes first. The coordination
+// ops (B-ERRS2-1, B-ERRS2-2), and task show, done and cancel (B-ERRS2-3):
+// done looks the task up in closeTree before the held close or any batch;
+// cancel's held close (coord OverrideChecked) and its row read both look
+// the row up before writing.
 var refetchOnNotFound = map[string]bool{
 	opscoord.OpTaskClaim: true, opscoord.OpTaskHeartbeat: true, opscoord.OpTaskMerged: true,
 	opscoord.OpTaskNote: true, opscoord.OpTaskRelease: true, opscoord.OpTaskRevoke: true,
 	opscoord.OpTaskReassign: true, opscoord.OpGateRequest: true, opscoord.OpGateApprove: true,
+	opstask.OpShow: true, opstask.OpDone: true, opstask.OpCancel: true,
 }
 
 // staleRowsAnswer reports whether err may only reflect live rows older
