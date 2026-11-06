@@ -28,7 +28,7 @@ func TestPushHonoursCommittedAllow(t *testing.T) {
 	other := "AKIA" + strings.Repeat("Z", 16)
 	memID := h.ID(h.Must("memory.add", `{"body":"target"}`))
 	memFile := allowRowFile(t, h.Repo, "memories", memID)
-	b, err := os.ReadFile(memFile)
+	b, err := os.ReadFile(filepath.Clean(memFile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +87,13 @@ func allowRowFile(t *testing.T, repo, table, id string) string {
 
 func allowGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// built directly (as wire's gitRun does): the program is the resolved
+	// git binary and every argument is its own argv entry, no shell
+	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...), Dir: dir}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v %s", args, err, out)
 	}
