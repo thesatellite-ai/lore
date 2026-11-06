@@ -145,6 +145,15 @@ func addPurged(existing []byte, add []string) ([]byte, error) {
 // liveLayout is lore's branch layout of a live folder (§3.6).
 var liveLayout = live.Layout{DataPath: mainDataPath, AddPurged: addPurged}
 
+// layout is liveLayout with this binary's version, so a landing or a
+// ride-along into a folder whose branch _meta.json this lore may not
+// write is refused E_OLD_LORE (FORMAT_EVOLUTION rule 2, OV48).
+func (s *liveSession) layout() live.Layout {
+	l := liveLayout
+	l.BinaryVersion = s.h.cfg.Version
+	return l
+}
+
 // mainPurged reads the ids in ref's _purged.json for folder (an absent ref
 // or file is an empty set; anything unreadable is an error).
 func (s *liveSession) mainPurged(ctx context.Context, ref, folder string) (map[string]bool, error) {
@@ -305,7 +314,7 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 		if err := s.h.leakCheck(ctx, leakWhereLanding, folder, docs); err != nil {
 			return out, err
 		}
-		res, err := s.ref.Land(ctx, live.LandRequest{Branch: out.Branch, Items: items, Layout: liveLayout})
+		res, err := s.ref.Land(ctx, live.LandRequest{Branch: out.Branch, Items: items, Layout: s.layout()})
 		if err != nil {
 			return out, err
 		}

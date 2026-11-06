@@ -365,7 +365,7 @@ func (s *liveSession) rideCommit(ctx context.Context, branch, head string, items
 		}
 	}
 	read := func(p string) ([]byte, bool, error) { return s.repo.ReadFile(ctx, head, p) }
-	ch, changed, err := live.BuildLanding(ctx, read, items, liveLayout)
+	ch, changed, err := live.BuildLanding(ctx, read, items, s.layout())
 	if err != nil {
 		return "", err
 	}

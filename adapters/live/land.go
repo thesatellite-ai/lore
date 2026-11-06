@@ -2,6 +2,7 @@ package live
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/logic/formatgate"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // LandAction is what ShouldLand decides for one live row (F5 "when").
@@ -154,6 +157,53 @@ type Layout struct {
 	// AddPurged returns new _purged.json bytes: existing (nil when absent)
 	// plus ids, in lore's canonical format.
 	AddPurged func(existing []byte, ids []string) ([]byte, error)
+	// BinaryVersion, when set, is this lore's version: BuildLanding then
+	// refuses (E_OLD_LORE) to write a folder whose branch _meta.json this
+	// binary may not write (FORMAT_EVOLUTION rule 2 "read-only on every
+	// path": a landing or ride-along commit is a write to the branch's
+	// folder, so it asks the same formatgate.Check as an engine write).
+	// Empty skips the check (callers that predate it).
+	BinaryVersion string
+}
+
+// branchMetaFile is a folder's format declaration on the branch, beside
+// its rows (rowfs MetaFileName).
+const branchMetaFile = "_meta.json"
+
+// branchFormat is the declaration part of a branch folder's _meta.json
+// (rowfs MetaKeyFeatures, MetaKeyMinLore: file format, must not change).
+type branchFormat struct {
+	Features       []string `json:"features"`
+	MinLoreVersion string   `json:"min_lore_version"`
+}
+
+// checkBranchFormat refuses a landing into a folder whose branch
+// _meta.json this binary may not write. A missing file declares nothing;
+// one that does not decode (conflict markers, a hand edit) fails closed,
+// as rowfs does for the checkout's copy.
+func checkBranchFormat(read func(path string) ([]byte, bool, error), layout Layout, folders []string) error {
+	if layout.BinaryVersion == "" {
+		return nil
+	}
+	for _, f := range folders {
+		p := layout.DataPath(f, branchMetaFile)
+		b, has, err := read(p)
+		if err != nil {
+			return err
+		}
+		if !has {
+			continue
+		}
+		var d branchFormat
+		if err := json.Unmarshal(b, &d); err != nil {
+			return formatgate.Unreadable(p, "not a JSON object with features and min_lore_version")
+		}
+		v := formatgate.Check(layout.BinaryVersion, formatgate.Declared{Features: d.Features, MinLoreVersion: d.MinLoreVersion})
+		if gerr := v.Err(); gerr != nil {
+			return errs.Wrap(errs.OldLore, "live: landing into "+p, gerr).WithHint("lore upgrade")
+		}
+	}
+	return nil
 }
 
 // purgedFile is the name of the purged-id list inside .lore/data.
@@ -274,6 +324,9 @@ func (r *Ref) landChanges(ctx context.Context, base string, req LandRequest) (gi
 // already holds are left out.
 func BuildLanding(_ context.Context, read func(path string) ([]byte, bool, error), items []LandItem, layout Layout) (gitref.Changes, []LandItem, error) {
 	ch := gitref.Changes{Put: map[string][]byte{}}
+	if err := checkBranchFormat(read, layout, landFolders(items)); err != nil {
+		return ch, nil, err
+	}
 	purge := map[string][]string{} // folder → ids
 	// purgeOnly are tombstones whose file main never had: they change main
 	// only if their id is new in _purged.json.
@@ -331,6 +384,20 @@ func BuildLanding(_ context.Context, read func(path string) ([]byte, bool, error
 	}
 	sort.Strings(ch.Delete)
 	return ch, changed, nil
+}
+
+// landFolders lists the distinct folders of items, sorted.
+func landFolders(items []LandItem) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, it := range items {
+		if !seen[it.Folder] {
+			seen[it.Folder] = true
+			out = append(out, it.Folder)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // LandMessage is the fixed message of a landing or ride-along commit (F5
