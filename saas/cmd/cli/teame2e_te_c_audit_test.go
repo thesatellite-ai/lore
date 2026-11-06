@@ -15,8 +15,9 @@ package main
 // hashes on cmd/lore, so nothing here compares before/after hashes.
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -44,17 +45,23 @@ func teCReadAuditLog(t *testing.T, c *th.Clone) teCAuditLog {
 	return v
 }
 
-// teCTamperChain runs one SQL statement on the actor's machine store.
+// teCTamperChain runs one SQL statement on the actor's machine store, the
+// way an attacker with file access would (a plain SQLite connection, no
+// lore code), and fails unless it changed a row.
 func teCTamperChain(t *testing.T, a *th.Actor, sqlText string) {
 	t.Helper()
-	if _, err := exec.LookPath("python3"); err != nil {
-		t.Fatal("python3 is needed to edit the machine store like an attacker would")
+	path := a.LorePath("state", "machine.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open %s: %v", path, err)
 	}
-	db := a.LorePath("state", "machine.db")
-	out, err := exec.Command("python3", "-c",
-		"import sqlite3,sys;c=sqlite3.connect(sys.argv[1]);n=c.execute(sys.argv[2]).rowcount;c.commit();print(n)", db, sqlText).CombinedOutput()
-	if err != nil || strings.TrimSpace(string(out)) == "0" {
-		t.Fatalf("tamper %s: %v %s", db, err, out)
+	defer func() { _ = db.Close() }() // read-only use after Exec; a close error changes nothing
+	res, err := db.ExecContext(context.Background(), sqlText)
+	if err != nil {
+		t.Fatalf("tamper %s: %v", path, err)
+	}
+	if n, nerr := res.RowsAffected(); nerr != nil || n == 0 {
+		t.Fatalf("tamper %s changed no row (%v)", path, nerr)
 	}
 }
 
