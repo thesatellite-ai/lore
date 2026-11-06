@@ -30,6 +30,7 @@ package sync
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -124,7 +125,7 @@ func Ops(env Env) []op.Entry {
 	// sync.run is read access: v0.1.17 ran `lore sync` under LORE_READ_ONLY
 	// too (the pass then refreshes the cache and writes no files).
 	return []op.Entry{
-		op.Define(r(OpRun, "Sync now: exchange every store, reconcile .lore/data, and print what changed"), run(o, Env.SyncRun)),
+		op.Define(liveRef(r(OpRun, "Sync now: exchange every store, reconcile .lore/data, and print what changed")), run(o, Env.SyncRun)),
 		op.Define(r(OpStatus, "Show sync state: baseline, pending exports, conflicts, broken files, live rows"), run(o, Env.SyncStatus)),
 		op.Define(r(OpConflicts, "List versions kept aside when both sides edited the same row"), run(o, Env.SyncConflicts)),
 		op.Define(w(OpResolve, "Close a conflict, keeping the current version or the saved other one"), run(o, Env.SyncResolve)),
@@ -137,7 +138,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(w(OpMergeRows, "Fold a duplicate row into another (references move, the dropped row is trashed)"), run(o, Env.SyncMergeRows)),
 		op.Define(w(OpCIMerge, "Merge a base branch into this branch when only lore data conflicts (for CI)"), run(o, Env.SyncCIMerge)),
 		op.Define(w(OpInstallAction, "Add a GitHub workflow that merges lore data in pull requests (opt-in)"), run(o, Env.SyncInstallAction)),
-		op.Define(w(OpLand, "Write live rows to main now (finished rows land; open rows are copied and stay live)"), run(o, Env.Land)),
+		op.Define(liveRef(w(OpLand, "Write live rows to main now (finished rows land; open rows are copied and stay live)")), run(o, Env.Land)),
 		op.Define(r(OpExplain, "Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision"), run(o, Env.Explain)),
 	}
 }
@@ -146,6 +147,17 @@ func Ops(env Env) []op.Entry {
 // answers through `lore trash purge`, which refuses without --confirm.
 func confirmed(s op.Spec) op.Spec {
 	s.Errors = append(append([]errs.Code{}, s.Errors...), errs.NeedsConfirm)
+	return s
+}
+
+// liveRef adds E_READ_ONLY to a verb that pushes the live ref: it
+// refuses while the remote live ref was deleted or rewritten (G-SYNC-3,
+// `lore live restore` first).
+func liveRef(s op.Spec) op.Spec {
+	if slices.Contains(s.Errors, errs.ReadOnly) {
+		return s
+	}
+	s.Errors = append(append([]errs.Code{}, s.Errors...), errs.ReadOnly)
 	return s
 }
 

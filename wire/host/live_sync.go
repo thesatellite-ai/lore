@@ -70,7 +70,16 @@ func (l liveSync) pushAndLand(ctx context.Context) ([]string, error) {
 	if err != nil || s == nil {
 		return nil, err
 	}
+	if s.blocked != nil {
+		// G-SYNC-3: the remote live ref was deleted or rewritten; nothing
+		// can be delivered, so sync refuses as every live write does
+		// (never "· already in sync"), naming the backup and the restore.
+		return nil, rewrittenError(errs.ReadOnly, s.blocked)
+	}
 	if !s.push(ctx) || s.ref.Remote == nil {
+		if s.blocked != nil { // the push found it rewritten
+			return nil, rewrittenError(errs.ReadOnly, s.blocked)
+		}
 		return nil, nil
 	}
 	out, err := s.landPass(ctx, folder, nil, true)
@@ -136,7 +145,13 @@ func (l liveSync) Land(ctx context.Context, in opssync.LandIn) (opssync.DoneOut,
 		}
 		return opssync.DoneOut{Lines: lines}, nil
 	}
+	if s.blocked != nil {
+		return opssync.DoneOut{}, rewrittenError(errs.ReadOnly, s.blocked) // G-SYNC-3
+	}
 	if !s.push(ctx) {
+		if s.blocked != nil {
+			return opssync.DoneOut{}, rewrittenError(errs.ReadOnly, s.blocked)
+		}
 		return opssync.DoneOut{}, errs.New(errs.Offline, "the live ref could not be pushed; nothing was landed").WithHint("run `lore land` again when the remote is reachable")
 	}
 	out, err := s.landPass(ctx, folder, sel, false)
