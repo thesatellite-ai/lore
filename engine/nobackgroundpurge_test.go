@@ -29,11 +29,6 @@ var purgeCallers = map[string]bool{
 	// lore live purge (§6.6): the live signals ref, an explicit command.
 	"ops/live/live.go#purge":      true,
 	"wire/host/live_ref.go#Purge": true,
-	// The live backend's engine.Purger write: it lists the ids of a purge
-	// on the live ref's purge list (BUG-LIVE-PURGE-LIST). Its only caller
-	// is the engine's writePurge, reached from the purge entry points above
-	// (lore trash purge, delete --purge), never from a background path.
-	"wire/host/live_backend.go#WritePurge": true,
 	// lore meta forget --confirm (key rows only).
 	"ops/settings/meta_maint.go#metaForget": true,
 	// lore trash purge <target|--older-than|--expired|--archived-before> --confirm.
