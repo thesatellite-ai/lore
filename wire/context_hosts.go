@@ -25,12 +25,14 @@ type RenderHistory interface {
 }
 
 // ContextHosts are the binary-supplied parts behind the context commands
-// (Options.Context). Each nil part is E_UNSUPPORTED.
+// (Options.Context). Each nil part is E_UNSUPPORTED, except SupportBundle
+// (the core's own) and Doctor (the core checks only).
 type ContextHosts struct {
 	RenderHistory RenderHistory
 	// Setup is `lore setup` (schema update, --agent-hooks).
 	Setup opssetup.Host
-	// SupportBundle is the lore.db and doctor parts of `lore support-bundle`.
+	// SupportBundle is the lore.db and doctor parts of `lore support-bundle`
+	// (nil: the core's own bundle, never E_UNSUPPORTED).
 	SupportBundle opssupportbundle.Host
 	// Fetch is `lore context` (the agent's fetch command and the hooks).
 	Fetch contextop.Host
@@ -64,10 +66,12 @@ func (a *App) SetupHost(_ context.Context) (opssetup.Host, error) {
 	return a.opts.Context.Setup, nil
 }
 
-// SupportHost is Options.Context.SupportBundle (opssupportbundle.Env).
+// SupportHost is Options.Context.SupportBundle (opssupportbundle.Env), or
+// the core's own bundle when the binary supplies none (cmd/lore,
+// supportbundle_core.go): every part it needs lives in the core.
 func (a *App) SupportHost(_ context.Context) (opssupportbundle.Host, error) {
 	if a.opts.Context.SupportBundle == nil {
-		return nil, hostMissing("support-bundle")
+		return coreSupportBundle{a: a}, nil
 	}
 	return a.opts.Context.SupportBundle, nil
 }
