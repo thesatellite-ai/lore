@@ -33,7 +33,7 @@ Bob, on `feat/payments`, gives Alice a task. Alice, on `feat/login`, sees it. He
 <!-- example: small-team#assign-across-branches -->
 ```console
 # bob, in billing
-$ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
+$ git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
 ✓ tsk_162d…9666 — check the checkout page on a phone [medium]
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
@@ -141,7 +141,7 @@ $ git status --short
 ## Pitfalls
 
 - **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
-- **Register first.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your clone has fetched since.
+- **Register first, then branch from a fresh main.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your branch holds her roster entry. A roster entry lands on main at once and then leaves the live list, so a branch cut before it landed does not see it: `git pull` main before `git switch -c`, or `git merge origin/main` into an existing branch (the same rule as any row that left live, see `lore sync peek`).
 - **Rules, decisions and memories travel with the code.** That is on purpose: most rules belong with the change that needs them. Use `lore sync promote <id> --to main` for the one that cannot wait.
 - **`git push --no-verify`** skips every local check lore runs at push: the ride-along (the rows simply wait and ride on a later push) and, in a client repo, the push leak check (see [Agency with a client repo](agency-client-repo.md)).
 - **Unprotected `main`** receives small `lore: land N rows` commits directly. They change only files under `.lore/data`.

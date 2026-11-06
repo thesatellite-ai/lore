@@ -197,7 +197,7 @@ s_small_team() {
   on bob work/billing "lore actor register"
 
   note "assign across branches"
-  on bob work/billing "git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice"
+  on bob work/billing "git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice"
   local t1; t1=$(id tsk)
   on alice work/billing "git switch -q -c feat/login && lore task list --mine"
   on alice work/billing "lore sync && lore task list --mine"
@@ -503,7 +503,7 @@ s_personal() {
     sed -i 's#^  store: local#  store: git@github.com:alice/lore-me#' "$HOMES/$who/.lore/config.yaml"
   done
   on alice work/scratch "lore store init me git@github.com:alice/lore-me --yes"
-  on alice work/website "lore memory add --body 'the client invoice template lives in the shared drive' --to me"
+  on alice work/website "lore memory add --body 'my invoice template lives in the shared drive' --to me"
   quiet alice-devbox work "git clone -q https://github.com/client/website website"
   on alice-devbox work/website "lore memory list"
 }

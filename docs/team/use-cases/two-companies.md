@@ -112,9 +112,9 @@ $ lore memory list
 ## What happened
 
 ```text
- ~/work/website      → agency   alice@agency.example   agency/notes   personal: agency/, everywhere/
- ~/work/client3-api  → client3  alice@client3.example  client3/notes  personal: client3/, everywhere/
- ~/work/forked-tool  → none     alice@example.com      (no store)     personal: everywhere/
+ ~/work/website      → agency   alice@agency.example   agency/notes   personal: me (notes filed under me/agency)
+ ~/work/client3-api  → client3  alice@client3.example  client3/notes  personal: me (notes filed under me/client3)
+ ~/work/forked-tool  → none     alice@example.com      (no store)     personal: me
 ```
 
 ## Pitfalls

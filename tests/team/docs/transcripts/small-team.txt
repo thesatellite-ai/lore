@@ -11,7 +11,7 @@ lore sync: backup of lore.db before adopt: ~/work/billing/.lore/backups/20261102
 lore live: (live, pushed)
 
 ### assign across branches
-bob (work/billing)$ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
+bob (work/billing)$ git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/billing/.git/hooks)
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 — check the checkout page on a phone [medium]
 lore live: (live, pushed)

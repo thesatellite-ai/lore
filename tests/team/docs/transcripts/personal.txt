@@ -26,9 +26,9 @@ name: me
 url: git@github.com:alice/lore-me
 personal: true
 id: sto_162df51b7f78b785c97c26b41ea89666
-alice (work/website)$ lore memory add --body 'the client invoice template lives in the shared drive' --to me
+alice (work/website)$ lore memory add --body 'my invoice template lives in the shared drive' --to me
 ✓ mem_54fe984c9b495744c0217776765a28f2 [me]
   scope: [master]
 alice-devbox (work/website)$ lore memory list
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
-mem_54fe984c9b495744c0217776765a28f2  the client invoice template lives in the shared drive  [me]
+mem_54fe984c9b495744c0217776765a28f2  my invoice template lives in the shared drive  [me]
