@@ -38,6 +38,13 @@ func (s *trailerSpy) WritePurge(ctx context.Context, changes []store.Change, pur
 	return s.Backend.WritePurge(ctx, changes, purged)
 }
 
+// WritePurgeAudited: a purge writes its audit records in its own batch
+// (later 542), so it reaches the backend here.
+func (s *trailerSpy) WritePurgeAudited(ctx context.Context, changes []store.Change, purged []ids.AnyID, recs []store.AuditRecord) error {
+	s.got = append(s.got, store.CommitTrailers(ctx))
+	return s.Backend.WritePurgeAudited(ctx, changes, purged, recs)
+}
+
 // TestTrashTrailers (DELETION 2.1, 2.6, 3.3): a soft delete commits with
 // Lore-Delete-Batch: <bat>, its restore with Lore-Restore: <bat>, and a
 // purge from the trash with Lore-Purge: <day> <bat>.

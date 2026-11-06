@@ -557,7 +557,7 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 		}
 		var werr error
 		if p, ok := st.Backend.(Purger); purge && ok && len(purged) > 0 {
-			werr = p.WritePurge(ctx, changes, purged)
+			werr = e.writePurge(ctx, st, p, changes, purged, events) // later 542: audit in the purge's batch
 		} else {
 			werr = e.writeChanges(ctx, st, changes, events) // CLEANUP Qs: audit in the same batch
 		}
@@ -970,7 +970,13 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 	for _, ev := range evs {
 		ev = e.auditView(ctx, source, ev)
 		key := store.Key{Table: ev.Table, ID: ev.ID}
+		// the journal record of ev carries ev.HLC (journalRecord); a row doc
+		// of this write names it too. A purge of a trashed row has no doc
+		// (later 542), so the event's own HLC is the record's.
 		h, ours := mine[key]
+		if !ours && !ev.HLC.IsZero() {
+			h, ours = ev.HLC, true
+		}
 		rerr := e.audit.Record(ctx, ev)
 		if rerr == nil {
 			if j != nil && ours {
@@ -982,7 +988,7 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 			pending = map[store.Key]bool{}
 			if recs, perr := j.PendingAudit(ctx); perr == nil {
 				for _, rc := range recs {
-					if mine[rc.Key].Compare(rc.HLC) == 0 {
+					if rc.Key == key && rc.HLC.Compare(h) == 0 || mine[rc.Key].Compare(rc.HLC) == 0 {
 						pending[rc.Key] = true
 					}
 				}
@@ -1031,6 +1037,36 @@ func auditFailed(id ids.AnyID, cause error) error {
 		WithHint("do not rerun the write (it would store the row again); fix the cause, then check `lore audit verify`")
 }
 
+// writePurge is WritePurge plus, when the backend can
+// (store.PurgeAuditJournal), the audit records of evs in the SAME batch as
+// the tombstones and the purged ids (later 542): all land or none does.
+// Other backends get WritePurge and finishW records the audit after it.
+func (e *Engine) writePurge(ctx context.Context, st Attached, p Purger, changes []store.Change, purged []ids.AnyID, evs []Event) error {
+	pj, ok := st.Backend.(store.PurgeAuditJournal)
+	if !ok || len(evs) == 0 {
+		return p.WritePurge(ctx, changes, purged)
+	}
+	recs, err := e.journalRecords(ctx, st, evs)
+	if err != nil {
+		return err
+	}
+	return pj.WritePurgeAudited(ctx, changes, purged, recs)
+}
+
+// journalRecords are the journal records of evs as written to st.
+func (e *Engine) journalRecords(ctx context.Context, st Attached, evs []Event) ([]store.AuditRecord, error) {
+	recs := make([]store.AuditRecord, 0, len(evs))
+	machine := e.thisMachine()
+	for _, ev := range evs {
+		rec, err := journalRecord(e.auditView(ctx, st.Name, ev), machine)
+		if err != nil {
+			return nil, err
+		}
+		recs = append(recs, rec)
+	}
+	return recs, nil
+}
+
 // writeChanges writes changes and, when the backend can (store.AuditJournal),
 // the audit records of evs in the SAME batch: both land or neither does
 // (CLEANUP Qs). Other backends get a plain Write and finish records the
@@ -1041,14 +1077,9 @@ func (e *Engine) writeChanges(ctx context.Context, st Attached, changes []store.
 	if !ok || len(evs) == 0 {
 		return st.Backend.Write(ctx, changes)
 	}
-	recs := make([]store.AuditRecord, 0, len(evs))
-	machine := e.thisMachine()
-	for _, ev := range evs {
-		rec, err := journalRecord(e.auditView(ctx, st.Name, ev), machine)
-		if err != nil {
-			return err
-		}
-		recs = append(recs, rec)
+	recs, err := e.journalRecords(ctx, st, evs)
+	if err != nil {
+		return err
 	}
 	return j.WriteAudited(ctx, changes, recs)
 }

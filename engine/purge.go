@@ -86,10 +86,10 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 	if err := e.gate(ctx, st, cur); err != nil {
 		return Written{}, err
 	}
-	if err := p.WritePurge(ctx, changes, []ids.AnyID{cur.ID}); err != nil {
+	ev := Event{Op: cl.op, Action: ActionPurge, Store: src, Table: cur.Table, ID: cur.ID, HLC: cur.HLC, Actor: e.actorOf(cl)}
+	if err := e.writePurge(ctx, st, p, changes, []ids.AnyID{cur.ID}, []Event{ev}); err != nil { // later 542
 		return Written{}, err
 	}
-	ev := Event{Op: cl.op, Action: ActionPurge, Store: src, Table: cur.Table, ID: cur.ID, HLC: cur.HLC, Actor: e.actorOf(cl)}
 	aw, err := e.finishW(ctx, src, docs, ev)
 	return Written{Row: cur, Warnings: aw}, err
 }

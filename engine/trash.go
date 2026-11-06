@@ -858,7 +858,9 @@ func (e *Engine) purgeRows(ctx context.Context, res TrashResult) (TrashResult, e
 	}
 	ctx = withPurgeTrailer(ctx, e.clock.Now(hlc.HLC{}).Wall, res.Batch) // 2.6
 	for _, t := range res.Rows {
-		if _, err := e.remove(ctx, t.Store, t.Row, true); err != nil {
+		w, err := e.remove(ctx, t.Store, t.Row, true)
+		out.Warnings = append(out.Warnings, w.Warnings...) // W_AUDIT_DEFERRED reaches the person (later 542)
+		if err != nil {
 			return out, err
 		}
 		out.Rows = append(out.Rows, t)
