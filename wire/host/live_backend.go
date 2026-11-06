@@ -420,7 +420,7 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		return nil
 	}
 	if s.blocked != nil {
-		return errs.Wrap(errs.StoreReadOnly, "the remote live ref was rewritten; lore stopped writing to it", s.blocked)
+		return rewrittenError(errs.StoreReadOnly, s.blocked)
 	}
 	res, err := s.ref.Write(ctx, live.WriteRequest{Folder: b.folder, Rows: liveRows, BinaryVersion: s.h.cfg.Version})
 	if err != nil {

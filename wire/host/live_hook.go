@@ -426,8 +426,7 @@ func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) err
 		return nil // reads, and `lore live …` (restore is the repair), always run
 	}
 	if s.blocked != nil {
-		return errs.Wrap(errs.ReadOnly, "the remote live ref was deleted or rewritten; lore stopped writing to it", s.blocked).
-			WithHint("your local copy is kept under " + live.RefBackupPrefix + "; run `lore live restore` to put it back")
+		return rewrittenError(errs.ReadOnly, s.blocked)
 	}
 	if err := s.ref.CheckFloor(ctx, h.cfg.Version); errors.Is(err, live.ErrBelowFloor) {
 		return errs.Wrap(errs.OldLore, "this lore is too old to write live rows here (read-only)", err).
