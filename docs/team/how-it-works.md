@@ -265,7 +265,7 @@ $ lore task claim tsk_76bd…3f10
 # alice, in ~
 $ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
 client/claims/tsk_76bd…3f10.json
-86dbae4 lore: signals
+9b40ce7 lore: signals
 $ cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
@@ -289,7 +289,7 @@ $ lore task heartbeat tsk_76bd…3f10
 
 # alice, in ~
 $ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main
-9b40ce7 lore: signals
+05513aa lore: signals
 ```
 <!-- /example -->
 

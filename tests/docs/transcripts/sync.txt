@@ -50,7 +50,7 @@ alice (work/website)$ cat .lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "1e65cc227e91be0471bc78bcb4a553eca62b13d9",
+      "commit": "601d2850ffd047c2890d2472633cc4dbdabe12fd",
       "state": "branch"
     },
     "project": "prj_7a670ae8548ed05bf57ad29ad0759504",
@@ -142,10 +142,10 @@ memories           mem_c0f3c11a5724b0cfd74b256190d9b5b8  We use Stripe for payme
 alice (work/website)$ lore sync promote rul_76bd560aff0771fab8457dbfa9823f10 --to main --dry-run
 would commit .lore/data/rules/rul_76bd560aff0771fab8457dbfa9823f10.json onto main
 alice (work/website)$ lore sync promote rul_76bd560aff0771fab8457dbfa9823f10 --to main
-✓ committed 1 file(s) onto main (601d2850ffd0) — not pushed
+✓ committed 1 file(s) onto main (86dbae476bd6) — not pushed
 alice (work/website)$ git log --oneline -2 main
-601d285 lore: promote rul_76bd560aff0771fab8457dbfa9823f10
-86dbae4 lore: whatsapp memory
+86dbae4 lore: promote rul_76bd560aff0771fab8457dbfa9823f10
+9b40ce7 lore: whatsapp memory
 alice (work/website)$ git push -q origin main
 bob (work/website)$ git pull -q && lore rule list
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
@@ -366,7 +366,7 @@ bob (work/website)$ git fetch -q origin && lore sync ci-merge --base origin/main
 bob (work/website)$ lore sync ci-merge --base origin/main
 ✓ merged and committed origin/main: 1 lore file(s) settled field by field
   .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
-  commit 9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91 — push it to update the pull request
+  commit 05513aa29b7881f12bc94eb06be8acf0d03eaed2 — push it to update the pull request
 bob (work/website)$ lore rule list
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Never put passwords in the code.

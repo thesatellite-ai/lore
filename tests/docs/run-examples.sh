@@ -24,7 +24,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 OUT="$HERE/transcripts"
 SECTIONS="$HERE/sections"
-SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/lore-docs-core.XXXXXX")"
+# The worlds live under /tmp, never under $TMPDIR: lore prints real paths (a file:// store url
+# under ~) and aligns table columns to them, and clean() shortens the home folder to "~"
+# only afterwards, so the padding left in a transcript follows the length of this path. A
+# fixed-length root keeps every run (any TMPDIR, any gate step) byte-identical.
+SCRATCH="$(mktemp -d "/tmp/lore-docs-core.XXXXXX")"
 if [ -n "${KEEP:-}" ]; then echo "keeping worlds in $SCRATCH" >&2; else trap 'rm -rf "$SCRATCH"' EXIT; fi
 
 if [ -z "${LORE_BIN:-}" ]; then

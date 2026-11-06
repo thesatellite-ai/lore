@@ -32,7 +32,7 @@ $ git fetch -q origin && lore sync ci-merge --base origin/main --dry-run
 $ lore sync ci-merge --base origin/main
 ✓ merged and committed origin/main: 1 lore file(s) settled field by field
   .lore/data/rules/rul_b4f4…a5b0.json
-  commit 9b40ce71af28 — push it to update the pull request
+  commit 05513aa29b78 — push it to update the pull request
 $ lore rule list
 rul_162d…9666 [must/always] Run the tests before you push.
 rul_76bd…3f10 [must/always] Never put passwords in the code.

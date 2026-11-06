@@ -27,8 +27,10 @@ TOKEN = re.compile(
     r"|\bct_(?P<ct>[0-9a-f]{5})"
     r"|\bs-(?P<sess>[0-9a-f]{8})\b"
     # git object ids and fingerprints: 7–64 hex digits standing alone between spaces,
-    # brackets, commas or a tab ("[branch sha]" too); dates, times and paths never match.
-    r"|(?:(?<=^)|(?<=[\s(,\[]))(?P<sha>[0-9a-f]{7,64})(?=$|[\s),;:…\]])"
+    # brackets, commas or a tab ("[branch sha]" too), or as a whole JSON string (the
+    # provenance "git": {"commit": "…"} of a row file: the commit's tree holds random
+    # row ids, so its sha differs on every run); dates, times and paths never match.
+    r'|(?:(?<=^)|(?<=[\s(,\["]))(?P<sha>[0-9a-f]{7,64})(?=$|[\s),;:…\]"])'
 )
 # Wall-clock times lore records with nanoseconds (created_at / updated_at of a row):
 # the test clock does not reach them, so each distinct one gets a stable stand-in.

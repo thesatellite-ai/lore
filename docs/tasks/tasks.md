@@ -156,7 +156,7 @@ $ lore task cancel tsk_162d…9666
 ✓ tsk_162d…9666 cancelled
 lore live: (live, pushed)
 lore live: landed on main (86dbae4); leaves live once main is fetched
-lore live: 1 row(s) left live (main holds them)
+lore live: 2 row(s) left live (main holds them)
 $ lore task list --status cancelled
 ✗ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
 ```
@@ -241,6 +241,8 @@ $ lore tasklist search launch
 tlt_d431…313a Launch week
 $ lore tasklist edit tlt_d431…313a --status closed
 ✓ tasklist tlt_d431…313a updated
+lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 

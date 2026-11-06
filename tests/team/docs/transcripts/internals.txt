@@ -37,7 +37,7 @@ carol (work/app)$ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only re
     "cmd": "task add",
     "git": {
       "branch": "main",
-      "commit": "113da9aef0421005961031841c89cdb245cc5201",
+      "commit": "86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a",
       "state": "branch"
     },
     "project": "prj_05e99e22e9e86e96fe4daa7777994603",
@@ -112,7 +112,7 @@ agent-backend (work/website)$ lore task claim tsk_76bd560aff0771fab8457dbfa9823f
 ✓ claimed tsk_76bd560aff0771fab8457dbfa9823f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
 client/claims/tsk_76bd560aff0771fab8457dbfa9823f10.json
-86dbae4 lore: signals
+9b40ce7 lore: signals
 alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
@@ -132,7 +132,7 @@ alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p ref
 agent-backend (work/website)$ lore task heartbeat tsk_76bd560aff0771fab8457dbfa9823f10
 ✓ tsk_76bd560aff0771fab8457dbfa9823f10 renewed until 2026-11-02T10:21:25Z (seq 1)
 alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main
-9b40ce7 lore: signals
+05513aa lore: signals
 
 ### hooks
 alice (work/website)$ ls .git/hooks | grep -v sample; grep -h 'lore' .git/hooks/pre-commit | head -5

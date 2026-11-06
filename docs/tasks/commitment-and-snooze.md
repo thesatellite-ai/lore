@@ -27,6 +27,7 @@ Pass `--commitment` when you add the task. Neither task shows up in `lore task l
 $ lore task add 'Try a dark mode for the shop' --commitment someday
 ✓ tsk_3b62…e913 — Try a dark mode for the shop [medium]
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 $ lore task add 'Add a FAQ page' --commitment proposed
 ✓ tsk_f147…5139 — Add a FAQ page [medium]
 lore live: (live, pushed)

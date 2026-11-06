@@ -61,7 +61,7 @@ alice (work/api)$ lore store add client2 file://$HOME/stores/client2
 ✓ attached store client2 (whole store, folder backend, internal) in .lore/stores.yaml; commit it to share
 alice (work/app)$ lore store list
 stores:
-  NAME     URL                                                                                                       FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH
+  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH
   client2  file://~/stores/client2          false              false     stores.yaml  internal    ok
 count: 1
 

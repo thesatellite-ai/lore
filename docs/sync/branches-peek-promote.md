@@ -74,10 +74,10 @@ The rule "Never put passwords in the code" should apply on every branch today. A
 $ lore sync promote rul_76bd…3f10 --to main --dry-run
 would commit .lore/data/rules/rul_76bd…3f10.json onto main
 $ lore sync promote rul_76bd…3f10 --to main
-✓ committed 1 file(s) onto main (601d2850ffd0) — not pushed
+✓ committed 1 file(s) onto main (86dbae476bd6) — not pushed
 $ git log --oneline -2 main
-601d285 lore: promote rul_76bd…3f10
-86dbae4 lore: whatsapp memory
+86dbae4 lore: promote rul_76bd…3f10
+9b40ce7 lore: whatsapp memory
 ```
 <!-- /example -->
 

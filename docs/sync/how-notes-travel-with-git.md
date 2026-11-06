@@ -84,7 +84,7 @@ $ cat .lore/data/rules/rul_162d…9666.json
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "1e65cc227e91",
+      "commit": "601d2850ffd0",
       "state": "branch"
     },
     "project": "prj_7a67…9504",

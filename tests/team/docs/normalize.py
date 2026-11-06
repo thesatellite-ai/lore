@@ -24,8 +24,10 @@ TOKEN = re.compile(
     # anonymous-mode actor ids (anon: + 12 hex, random per `lore identity anonymize on`).
     r"|\banon:(?P<anon>[0-9a-f]{12})\b"
     # git object ids: any 7–40 hex digits (a short id can be all digits) standing alone
-    # between spaces, brackets, commas or a tab ("[branch sha]" too); dates, times and paths never match.
-    r"|(?:(?<=^)|(?<=[\s(,\[]))(?P<sha>[0-9a-f]{7,40})(?=$|[\s),;:…\]])"
+    # between spaces, brackets, commas or a tab ("[branch sha]" too), or as a whole JSON
+    # string (the provenance "git": {"commit": "…"} of a row file: the commit's tree holds
+    # random row ids, so its sha differs on every run); dates, times and paths never match.
+    r'|(?:(?<=^)|(?<=[\s(,\["]))(?P<sha>[0-9a-f]{7,40})(?=$|[\s),;:…\]"])'
 )
 # Wall-clock times lore records with nanoseconds (created_at / updated_at of a row):
 # the test clock does not reach them, so each distinct one gets a stable stand-in.
