@@ -33,6 +33,20 @@ type rootFlags struct {
 // addRootFlags registers the root's global flags into f.
 func addRootFlags(root *cobra.Command, f *rootFlags) {
 	root.PersistentFlags().BoolVar(&f.trace, hosthooks.FlagTrace, false, "print every git command lore runs for live rows, with timing (same as LORE_TRACE=1)")
+	// --trace also traces the signals writes (wire signalsTrace reads
+	// LORE_TRACE): the flag sets the variable for this process once parsed.
+	prev := root.PersistentPreRunE
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if f.trace {
+			if err := os.Setenv(hosthooks.EnvTrace, envOn); err != nil {
+				return err
+			}
+		}
+		if prev != nil {
+			return prev(cmd, args)
+		}
+		return nil
+	}
 	root.PersistentFlags().Var(&f.color, cli.FlagColor, "color output: auto (a terminal with NO_COLOR unset), always or never")
 }
 

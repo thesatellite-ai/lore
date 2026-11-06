@@ -319,6 +319,13 @@ func liveProjectRoot(dir string) string {
 // only, or hold their own locks (migrate takes M, ranked before L).
 var liveSkip = []string{"init", "config", "identity", "whoami", "org", "migrate", "stores", "version", "spec"}
 
+// liveSkipOps are single operations that never touch the live ref although
+// their noun does: task heartbeat renews claims on the signals ref only
+// (coord.Renew stages no row), and its --daemon form runs for the whole
+// agent session, so holding the live lock for it would block every other
+// lore command in the checkout until the session ends.
+var liveSkipOps = map[string]bool{"task.heartbeat": true}
+
 // fetchAlways are the operations that always fetch (TEAM-025).
 var fetchAlways = map[string]bool{
 	"sync.run": true, "sync.status": true, "land.run": true,
@@ -346,6 +353,9 @@ func noun(name string) string {
 }
 
 func skipLive(name string) bool {
+	if liveSkipOps[name] {
+		return true
+	}
 	noun, _, _ := strings.Cut(name, ".")
 	for _, s := range liveSkip {
 		if noun == s {
