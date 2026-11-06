@@ -123,7 +123,7 @@ func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top st
 	}
 	sig, ok := repo.GitIdentity(ctx)
 	if !ok {
-		sig = liveSignatureFallback
+		sig = h.loreSignature(ctx)
 	}
 	s.ref = &live.Ref{
 		Repo: repo, Name: live.RefLive, Remote: remote, RemoteName: remoteName,
@@ -131,6 +131,22 @@ func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top st
 		IgnoreKeys: []string{updatedAtKey}, PushRetries: cfg.PushRetries, Backoff: liveBackoff,
 	}
 	return s, nil
+}
+
+// loreSignature signs live commits when git has no identity (FLAG4): the
+// lore identity from LiveConfig.Signer, else liveSignatureFallback (no
+// Signer, an unresolved identity, or a name/e-mail git would refuse or
+// mis-parse in an author line).
+func (h *liveHost) loreSignature(ctx context.Context) gitref.Signature {
+	if h.cfg.Signer == nil {
+		return liveSignatureFallback
+	}
+	name, email, ok := h.cfg.Signer(ctx)
+	name, email = strings.TrimSpace(name), strings.TrimSpace(email)
+	if !ok || name == "" || email == "" || strings.ContainsAny(name+email, "\n\r<>") {
+		return liveSignatureFallback
+	}
+	return gitref.Signature{Name: name, Email: email}
 }
 
 // liveBackoff is the pause before push retry n: base × n plus jitter, so

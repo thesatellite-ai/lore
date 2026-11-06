@@ -65,6 +65,12 @@ type LiveConfig struct {
 	// address notices and the ask-once question), run at the start of
 	// every sync; cmd/lore passes wire.App.SyncRepoAddresses. nil skips it.
 	RepoAddresses func(ctx context.Context)
+	// Signer is the lore identity (`lore whoami`) that signs live commits
+	// when the repo's git has no user.name/user.email (FLAG4: an existing
+	// git identity always wins, git config is never changed); cmd/lore
+	// passes wire.App.LoreSignature, the signer of every core store commit
+	// (r3-sign). nil, or ok=false, signs as liveSignatureFallback.
+	Signer func(ctx context.Context) (name, email string, ok bool)
 	// MetaStatus gives the metadata lines of `lore sync status`
 	// (quarantined rows, registries past their key cap; FA-META-11);
 	// cmd/lore passes wire.App.MetaStatusLines. nil prints none.
