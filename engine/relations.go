@@ -134,6 +134,9 @@ func (e *Engine) holders(ctx context.Context, t validate.Target) ([]store.Source
 	var out []store.Source
 	for _, name := range e.lookupStores(table) { // P3-LOCAL-1
 		got, _, err := e.getRow(ctx, name, table, t.ID)
+		if staged, ok := stagedLive(ctx, name, table, t.ID); ok && (errors.Is(err, store.ErrNotFound) || err == nil && got.Deleted) {
+			got, err = staged, nil // written by the same stage, before this write (InStage)
+		}
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		}

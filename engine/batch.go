@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -157,6 +158,34 @@ func stageOf(ctx context.Context) *stage {
 		return nil
 	}
 	return s
+}
+
+// InStage reports whether ctx carries an open stage (Staging, not yet
+// committed): a caller that would open its own stage joins this one.
+func InStage(ctx context.Context) bool { return stageOf(ctx) != nil }
+
+// stagedLive is the row a stage holds for (name, table, id) when its last
+// staged change there is a live row (a create or an edit waiting for
+// Commit), so a reference to it from a later write of the same stage
+// resolves (checkRefs, holders): the wire writes the caller's actor row
+// and the row that names it as one batch.
+func stagedLive(ctx context.Context, name store.Source, table row.Table, id ids.AnyID) (store.Row, bool) {
+	s := stageOf(ctx)
+	if s == nil {
+		return store.Row{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.bySrc[name]
+	if !ok {
+		return store.Row{}, false
+	}
+	for i := len(p.changes) - 1; i >= 0; i-- {
+		if r := p.changes[i].Row; r.Table == table && r.ID == id {
+			return r, !r.Deleted
+		}
+	}
+	return store.Row{}, false
 }
 
 // unstaged returns ctx with its open stage hidden (every other value

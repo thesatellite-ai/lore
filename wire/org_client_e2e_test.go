@@ -126,17 +126,14 @@ func TestOrgLinkClientLeakSmoke(t *testing.T) {
 	if !errs.Has(err, errs.LeakBlocked) {
 		t.Fatalf("client repo row tagged with an internal tag: %v, want E_LEAK_BLOCKED", err)
 	}
-	// The refused write adds no row; the only data file it may leave is
-	// the caller's client projection in actors/ (display name and kind,
-	// no handle, no stable key: what every client repo row's *_by needs).
+	// The refused write adds nothing, not even the caller's actor row
+	// (G-ENGINE-2: the actor row and the row are one batch).
 	data := filepath.Join(".lore", "data") + string(filepath.Separator)
 	for rel, body := range treeFiles(t, w.repo) {
 		if _, ok := beforeWrite[rel]; ok || !strings.HasPrefix(rel, data) {
 			continue
 		}
-		if !strings.HasPrefix(rel, data+"actors"+string(filepath.Separator)) || strings.Contains(body, "stable_key") || strings.Contains(body, `"handle"`) {
-			t.Fatalf("a refused write left %s:\n%s", rel, body)
-		}
+		t.Fatalf("a refused write left %s:\n%s", rel, body)
 	}
 	out, err := run(t, app, opsmemory.OpAdd, `{"body":"rotate the staging password","tags":["staging_creds"],"to":"agency"}`, true)
 	if err != nil || !strings.Contains(out, `"store":"agency/acme"`) {

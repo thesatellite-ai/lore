@@ -61,15 +61,19 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 	if ferr := a.checkTarget(target); ferr != nil {
 		return engine.Written{}, ferr
 	}
-	if aerr := a.ensureActor(ctx, st, target); aerr != nil {
-		return engine.Written{}, aerr
-	}
-	if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
-		return engine.Written{}, aerr
-	}
-	w, err := st.eng.Create(ctx, target, table, fields)
-	a.wroteTo(target, err)
-	return w, err
+	// G-ENGINE-2: the actor rows and the row land as one batch, so a refused
+	// create writes nothing (not even the caller's actor row)
+	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+		if aerr := a.ensureActor(ctx, st, target); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		w, err := st.eng.Create(ctx, target, table, fields)
+		a.wroteTo(target, err)
+		return w, err
+	})
 }
 
 // Update implements opsmemory.Env.
@@ -456,15 +460,17 @@ func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.T
 	if ferr := a.checkTarget(target); ferr != nil {
 		return engine.Written{}, ferr
 	}
-	if aerr := a.ensureActor(ctx, st, target); aerr != nil {
-		return engine.Written{}, aerr
-	}
-	if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
-		return engine.Written{}, aerr
-	}
-	w, err := st.eng.CreateWithID(ctx, target, table, id, fields)
-	a.wroteTo(target, err)
-	return w, err
+	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) { // G-ENGINE-2
+		if aerr := a.ensureActor(ctx, st, target); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		w, err := st.eng.CreateWithID(ctx, target, table, id, fields)
+		a.wroteTo(target, err)
+		return w, err
+	})
 }
 
 // explicitTarget is the target a write into an existing row's store names:
