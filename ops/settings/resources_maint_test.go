@@ -14,6 +14,7 @@ import (
 // every value first, and delete --with-dependents takes the impact set in
 // one batch (RES 3.4, 3.6, 3.14, 3.23).
 func TestResourceMaint(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"os","type":"text"}`)
@@ -70,6 +71,7 @@ func TestResourceMaint(t *testing.T) {
 // TestResourceListMeta: resource list --meta filters by the row's
 // metadata (CLI_REFERENCE 3.2).
 func TestResourceListMeta(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpResAdd, `{"kind":"host","name":"a1","meta":["client=acme"]}`)

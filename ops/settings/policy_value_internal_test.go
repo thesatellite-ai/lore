@@ -22,6 +22,7 @@ func textValue(t *testing.T, s string) value.Value {
 // other text stays text and fails the shape check later; a non-flag key
 // keeps "on" as text.
 func TestPolicyValueFlagSpellings(t *testing.T) {
+	t.Parallel()
 	flag, ok := policy.Lookup(policy.KeyContextDirFiles)
 	if !ok {
 		t.Fatal("context.dir_files is not a key")

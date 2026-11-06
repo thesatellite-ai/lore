@@ -44,6 +44,7 @@ var policyCases = []policyCase{
 // level (from the attached store, later.md orgcore2 / r4), so the company
 // folder above it limits it.
 func TestPolicyLooseningMatrix(t *testing.T) {
+	t.Parallel()
 	pairs := []struct{ higher, nearer string }{
 		{"kb", "repo"},
 		{"kb/org", "kb/web"},
@@ -54,6 +55,7 @@ func TestPolicyLooseningMatrix(t *testing.T) {
 	}
 	for _, p := range pairs {
 		t.Run(strings.ReplaceAll(p.higher+"_to_"+p.nearer, "/", "-"), func(t *testing.T) {
+			t.Parallel()
 			h := multiStore(t)
 			for _, c := range policyCases {
 				h.MustYes(settings.OpPolicySet, setIn(c.key, c.base, p.higher))
@@ -83,6 +85,7 @@ func TestPolicyLooseningMatrix(t *testing.T) {
 // store root, so `--to team` refuse then `--to company` ask was refused
 // as looser and show labelled the row store_root.
 func TestPolicyHigherMayBeLooser(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	h.MustYes(settings.OpPolicySet, setIn("secrets.on_detect", "refuse", "agency"))
 	h.MustYes(settings.OpPolicySet, setIn("secrets.on_detect", "ask", "agency/org"))
@@ -104,6 +107,7 @@ func TestPolicyHigherMayBeLooser(t *testing.T) {
 
 // TestPolicySetRefusals: invalid input never writes.
 func TestPolicySetRefusals(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	cases := []struct {
 		in   string
@@ -141,6 +145,7 @@ func TestPolicySetRefusals(t *testing.T) {
 // TestPolicySetUpdatesOneRow: setting a key twice at one level edits the
 // same row (one policies row per key and place).
 func TestPolicySetUpdatesOneRow(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	a := h.ID(h.MustYes(settings.OpPolicySet, setIn("meta.max_bytes", "50", "")))
 	res := h.MustYes(settings.OpPolicySet, setIn("meta.max_bytes", "40", ""))
@@ -164,6 +169,7 @@ func TestPolicySetUpdatesOneRow(t *testing.T) {
 // TestPolicyShowText: the CLI_REFERENCE 3.11 lines (key, value or
 // "(unset)", source), sorted by key, a prefix filter, and the empty case.
 func TestPolicyShowText(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	// Q-R2-3 added context.targets (unset by default: detect from files);
 	// XQ2 added batch.preview_rows (default 20); RQ2/RQ4 resources.allowed_in, warn_bytes;
@@ -205,6 +211,7 @@ func showRules(t *testing.T, h *opstest.H, prefix string) map[string]settings.Po
 // were not converted; the same unit again, or a project without
 // estimates, prints no such line.
 func TestEstimateUnitNote(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	const line = "were not converted"
 	if got := opstest.Text(h.MustYes(settings.OpPolicySet, setIn("tasks.estimate_unit", "hours", ""))); strings.Contains(got, line) {
@@ -232,9 +239,11 @@ func TestEstimateUnitNote(t *testing.T) {
 // blank text is refused with nothing written; time.client_key shows its
 // default, tasks.triage_owner has no value (unset = nobody).
 func TestPolicyTextShape(t *testing.T) {
+	t.Parallel()
 	const key = "tasks.triage_owner"
 	for _, order := range [][2]string{{"kb", "repo"}, {"repo", "kb"}} {
 		t.Run(order[0]+"_first", func(t *testing.T) {
+			t.Parallel()
 			h := multiStore(t)
 			if r := showRules(t, h, "tasks.triage")[key]; r.Source != "default" || r.Value != "" {
 				t.Errorf("default %+v", r)

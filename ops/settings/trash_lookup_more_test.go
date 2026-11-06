@@ -14,6 +14,7 @@ import (
 // meta get / set / unset on a trashed row, secrets allow rm of a trashed
 // allow entry; a name that never existed stays E_NOT_FOUND.
 func TestSettingsInTrashMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"client","type":"text"}`)
 	mem := h.ID(h.MustYes("memory.add", `{"body":"x","meta":["client=acme"]}`))

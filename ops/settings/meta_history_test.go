@@ -12,6 +12,7 @@ import (
 // key hidden by any version or its key row today is masked on both sides,
 // even where the old version did not say sensitive (OV49-H2).
 func TestMetaDiff(t *testing.T) {
+	t.Parallel()
 	newKey := func() ids.ID[ids.MetaKey] {
 		k, err := ids.New[ids.MetaKey]()
 		if err != nil {
@@ -51,6 +52,7 @@ func TestMetaDiff(t *testing.T) {
 // OV62: --git resource diffs mask a field the kind no longer defines
 // (its flags are unknown); the row's own list (unknownHidden false) does not.
 func TestFieldChangesUnknownMasked(t *testing.T) {
+	t.Parallel()
 	d := kindDef{byID: map[string]located{}, byName: map[string]located{}}
 	prev := resValues{vals: map[string]json.RawMessage{"fld_gone": json.RawMessage(`"old"`)}, names: map[string]string{"fld_gone": "token"}}
 	next := resValues{vals: map[string]json.RawMessage{"fld_gone": json.RawMessage(`"new"`)}, names: map[string]string{"fld_gone": "token"}}

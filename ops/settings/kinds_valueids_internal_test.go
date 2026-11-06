@@ -42,6 +42,7 @@ func valueField(t *testing.T, names []string, es []ValueEntry) row.Row {
 // labels apply last (trimmed) and must name an allowed value; a malformed
 // label pair is refused.
 func TestSyncValueIDs(t *testing.T) {
+	t.Parallel()
 	prev := []ValueEntry{{ID: "val_a", Name: "prod", Label: "Production"}, {ID: "val_b", Name: "dev"}, {ID: "val_c", Name: "old"}}
 	got, err := syncValueIDs("host.env", prev, []string{"production", "dev", "stag"}, []valueRename{{old: "prod", new: "production"}}, []string{"stag= Staging "})
 	if err != nil {
@@ -61,6 +62,7 @@ func TestSyncValueIDs(t *testing.T) {
 // TestNormaliseValue: an allowed name stays, a label (any case) or a
 // val_ id maps to the name, anything else comes back unchanged.
 func TestNormaliseValue(t *testing.T) {
+	t.Parallel()
 	f := valueField(t, []string{"prod", "dev"}, []ValueEntry{{ID: "val_a", Name: "prod", Label: "Production"}, {ID: "val_b", Name: "dev"}})
 	for in, want := range map[string]string{"prod": "prod", "Production": "prod", "PRODUCTION": "prod", "val_b": "dev", "staging": "staging", "": ""} {
 		if got := normaliseValue(f, in); got != want {
@@ -76,6 +78,7 @@ func TestNormaliseValue(t *testing.T) {
 // both ways; a name or id without an entry, a field without entries, or
 // an empty list is "not mapped" (false), stored and read as given.
 func TestValueIDsRoundTrip(t *testing.T) {
+	t.Parallel()
 	f := valueField(t, []string{"prod", "dev"}, []ValueEntry{{ID: "val_a", Name: "prod"}, {ID: "val_b", Name: "dev"}})
 	cases := []struct{ names, ids string }{
 		{`"prod"`, `"val_a"`},
@@ -110,6 +113,7 @@ func TestValueIDsRoundTrip(t *testing.T) {
 // name the base already has keeps the base's entry; no extension entries
 // leave the row as it is.
 func TestFoldValueIDs(t *testing.T) {
+	t.Parallel()
 	base := valueField(t, []string{"prod"}, []ValueEntry{{ID: "val_a", Name: "prod"}})
 	ext := valueField(t, []string{"prod", "edge"}, []ValueEntry{{ID: "val_x", Name: "prod"}, {ID: "val_e", Name: "edge", Label: "Edge"}})
 	got, err := foldValueIDs(base, ext)

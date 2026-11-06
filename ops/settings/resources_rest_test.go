@@ -19,6 +19,7 @@ import (
 // /v1/resources edits every match; the by-id routes and the newer resource
 // ops (check with a note, history, report) answer.
 func TestResourceRESTBulkAndOps(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},

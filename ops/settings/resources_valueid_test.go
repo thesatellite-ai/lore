@@ -17,6 +17,7 @@ import (
 // new name, label or the same id; the old name is refused
 // (E_INVALID_INPUT); the value keeps its id across the rename.
 func TestResourceValueIDsEndToEnd(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"env","type":"text","values":"prod,dev"}`)

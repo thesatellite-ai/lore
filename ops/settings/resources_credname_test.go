@@ -13,6 +13,7 @@ import (
 // add and on rename (the rename is the other way to get such a name), in
 // ordinary names pass; upper case is refused by the snake_case rule.
 func TestCredentialFieldNames(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"svc"}`)
 	refused := []string{"password", "db_password", "passwd", "api_key", "apikey", "client_secret", "auth_token", "private_key", "credentials"}

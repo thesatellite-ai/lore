@@ -56,6 +56,7 @@ func rowID(t *testing.T, h *opstest.H, out op.Result) string {
 // --rewrite-rows rewrites every referrer now in one batch, touching no row
 // that refs another resource.
 func TestResourceRenameRewriteRows(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpKindAdd, `{"kind":"service"}`)

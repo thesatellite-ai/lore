@@ -13,6 +13,7 @@ import (
 // table, --place narrows by level, set --where --dry-run --all lists rows,
 // --all without --dry-run is refused, delete --reason is accepted.
 func TestMetaKeysFiltersAndAll(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"jira","type":"text"}`)
 	h.MustYes(settings.OpMetaAdd, `{"name":"cost","type":"number"}`)

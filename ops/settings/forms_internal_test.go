@@ -40,6 +40,7 @@ func listOf(t *testing.T, items ...string) value.Value {
 // JSON array and the inferred file form; a scalar is one item; absent and
 // empty give none.
 func TestTextsBothForms(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		v    value.Value
@@ -75,6 +76,7 @@ func TestTextsBothForms(t *testing.T) {
 // TestFromJSONAndDisplayBothForms: a json field (a variable's value, a
 // policy value) prints the same whichever form it was read in.
 func TestFromJSONAndDisplayBothForms(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		raw  string

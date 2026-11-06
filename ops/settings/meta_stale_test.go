@@ -50,6 +50,7 @@ func withFresh(known bool, age time.Duration, client bool) func(*wire.Options) {
 // (repo:key=v), a key that already exists, and meta.stale_after 0 all
 // pass. The refusal writes nothing.
 func TestMetaStale(t *testing.T) {
+	t.Parallel()
 	const stale, fresh = 200 * time.Hour, 100 * time.Hour
 	cases := []struct {
 		name     string
@@ -73,6 +74,7 @@ func TestMetaStale(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := multiStore(t, withFresh(c.known, c.age, c.client))
 			if c.policy != "" {
 				h.MustYes(settings.OpPolicySet, setIn("meta.stale_after", c.policy, "repo"))

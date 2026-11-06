@@ -16,6 +16,7 @@ import (
 // cycle) still import as one batch, both refs resolved (RES 3.20; a ref
 // cycle is valid data, RES 3.4 and section 10).
 func TestResourceImportYAMLAndCycle(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},
@@ -66,6 +67,7 @@ func TestResourceImportYAMLAndCycle(t *testing.T) {
 // it leaves out on every write that creates a resource there (add, clone,
 // import), naming the level that set it, and an allowed place still works.
 func TestResourcesAllowedIn(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, ownRepo)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpResAdd, `{"kind":"host","name":"h1"}`)

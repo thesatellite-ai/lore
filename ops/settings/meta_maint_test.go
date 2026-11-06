@@ -18,6 +18,7 @@ const memAdd = "memory.add"
 // normal key and refuses on a strict one, min/max bound numbers,
 // deprecation warns (METADATA 3.19).
 func TestMetaEverydayRules(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"jira","type":"text"}`)
 	h.MustYes(settings.OpMetaEdit, `{"id":"jira","required_on":"memories","pattern":"^HUB-[0-9]+$"}`)
@@ -48,6 +49,7 @@ func TestMetaEverydayRules(t *testing.T) {
 // label/remove (refused while used), bulk set/unset --where with one batch,
 // fold with --merge-into, export → import round trip, lint.
 func TestMetaMaintenance(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"env","type":"text","values":"prod,dev"}`)
 	h.MustYes(settings.OpMetaAdd, `{"name":"unused_one","type":"text"}`)

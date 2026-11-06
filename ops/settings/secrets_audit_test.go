@@ -48,6 +48,7 @@ func secretEvents(t *testing.T, h *opstest.H) ([]secretEvent, string) {
 // state, never the matched text; `rule on` of a default rule (its off row
 // removed) records state=default, of a rule this level added state=on.
 func TestSecretAuditEvents(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	match := "probe-match-" + strings.Repeat("x", 12)
 	// the default rule's id, joined so the repo's own leak scan does not

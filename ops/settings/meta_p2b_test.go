@@ -54,6 +54,7 @@ func labelOf(t *testing.T, r row.Row, keyID string) string {
 // trashed row are left alone; the count names only changed rows; plain
 // rename leaves labels to refresh later.
 func TestMetaRenameRewriteRows(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	kid := h.ID(h.MustYes(settings.OpMetaAdd, `{"name":"clnt","type":"text"}`))
 	a := h.ID(h.MustYes(memAdd, `{"body":"a","meta":["clnt=acme"]}`))
@@ -105,6 +106,7 @@ func TestMetaRenameRewriteRows(t *testing.T) {
 // the names), the survivor takes the protective flags, the old key is
 // retired; folding a store-level key into a repo-level key works the same.
 func TestMetaFoldWithValues(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t, ownRepo)
 	h.MustYes(settings.OpMetaAdd, `{"name":"tier","type":"text","values":"gold,silver"}`)
 	h.MustYes(settings.OpMetaAdd, `{"name":"level","type":"text","values":"silver,bronze","to":"kb","sensitive":true}`)
@@ -132,6 +134,7 @@ func TestMetaFoldWithValues(t *testing.T) {
 // matches any element, and a JSON-lines import writes every record in one
 // batch (an unknown field refuses the whole file).
 func TestMetaBulkListKeyAndJSONLines(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"pages","type":"list"}`)
 	a := h.ID(h.MustYes(memAdd, `{"body":"a","meta":["pages=invoices,billing"]}`))
@@ -186,6 +189,7 @@ func allSame(xs []string) bool {
 // whichever says so. A row whose entry predates the key turning sensitive
 // (or whose entry kept its old flags through a fold) must still print •••.
 func TestMetaGetMasksRegistrySensitive(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"vpn_host","type":"text"}`)
 	id := h.ID(h.MustYes(memAdd, `{"body":"a","meta":["vpn_host=vpn-7-probe"]}`))
@@ -232,6 +236,7 @@ func TestMetaGetMasksRegistrySensitive(t *testing.T) {
 // TestMetaHistoryFolderStore pins OV62: meta history needs git history; on
 // a plain folder store it is E_UNSUPPORTED.
 func TestMetaHistoryFolderStore(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	id := h.ID(h.MustYes(memAdd, `{"body":"in the folder store","to":"kb","meta":["client=acme"]}`))
 	h.Fails(settings.OpMetaHistory, `{"id":"`+id+`"}`, errs.Unsupported)
@@ -241,6 +246,7 @@ func TestMetaHistoryFolderStore(t *testing.T) {
 // TestMetaAdoptWithValues pins OV58: adopt moves a place's key rows with
 // their allowed values (the moved key still takes its values by name).
 func TestMetaAdoptWithValues(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t, ownRepo)
 	h.MustYes(settings.OpMetaAdd, `{"name":"env","type":"text","values":"prod,dev","to":"kb/web"}`)
 	a := h.ID(h.MustYes(memAdd, `{"body":"a","meta":["env=prod"]}`))

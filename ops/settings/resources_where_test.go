@@ -14,6 +14,7 @@ import (
 // TestResourceListWhereSort: resource list reads the one --where grammar
 // (XQ7) and the one --sort grammar (XQ10) over every field kind.
 func TestResourceListWhereSort(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},

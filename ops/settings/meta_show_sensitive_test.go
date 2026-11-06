@@ -18,6 +18,7 @@ import (
 // refusal carries no value) and, with --yes, prints the values and
 // meta_masked is gone.
 func TestMetaShowSensitive(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"vpn_host","type":"text","sensitive":true}`)
 	h.MustYes(settings.OpMetaAdd, `{"name":"later_secret","type":"text"}`)

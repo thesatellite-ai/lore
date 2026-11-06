@@ -17,6 +17,7 @@ import (
 // place's key rows (refused on a name clash); rehome reports a clash
 // (METADATA 3.9, 3.18, OV58).
 func TestMetaMoveAdoptRehome(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t, ownRepo) // a client repo refuses store keys' values (FA-META-7)
 	id := h.ID(h.MustYes(settings.OpMetaAdd, `{"name":"retry_count","type":"text","values":"one,two","to":"kb/web"}`))
 	h.MustYes(memAdd, `{"body":"a","meta":["retry_count=one"]}`)
@@ -45,6 +46,7 @@ func TestMetaMoveAdoptRehome(t *testing.T) {
 // TestMetaLoosenAndTrashUse: --no-internal asks and writes a changed_by
 // entry; a key used only by a trashed row is still used (OV58, RX7).
 func TestMetaLoosenAndTrashUse(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	id := h.ID(h.MustYes(settings.OpMetaAdd, `{"name":"margin","type":"text","to":"kb"}`))
 	h.Fails(settings.OpMetaEdit, `{"id":"margin","no_internal":true}`, errs.NeedsConfirm)

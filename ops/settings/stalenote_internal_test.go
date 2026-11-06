@@ -60,6 +60,7 @@ func staleAfter(t *testing.T, h int64) policy.Set {
 // add nothing; only the store holding the kind row is asked; the note
 // never refuses.
 func TestStaleNote(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
 	const commit = "0123456789abcdef0123456789abcdef01234567"
 	cases := []struct {

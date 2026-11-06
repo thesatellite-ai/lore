@@ -9,6 +9,7 @@ import (
 )
 
 func TestSecretRefUnknownManager(t *testing.T) {
+	t.Parallel()
 	if _, err := secretRefValue("host h1: field ssh", "nope://acme/x", ""); !errs.Has(err, errs.RefScheme) {
 		t.Fatalf("unknown manager: %v", err)
 	}
@@ -18,6 +19,7 @@ func TestSecretRefUnknownManager(t *testing.T) {
 }
 
 func TestRewriteTextKeepsTheRest(t *testing.T) {
+	t.Parallel()
 	in := "a $${secret:x} b ${var:h} ${secret:gopass://a/b%20c?holder=mch_1&label=m.x|env://K} ${secret:unstored}"
 	out, n := rewriteText(in, func(t refs.SecretTarget) (refs.SecretTarget, bool) {
 		if t.Manager != "gopass" {
@@ -41,6 +43,7 @@ type bareEnv struct{ Env }
 // TestChecksWithoutLocalState (later 50): an Env without LocalStateSource
 // stores nothing and lists no state (no error, uses unchanged).
 func TestChecksWithoutLocalState(t *testing.T) {
+	t.Parallel()
 	o := ops{env: bareEnv{}}
 	us := []SecretUse{{Manager: "env", Locator: "K", State: "present"}, {Manager: "env", Locator: "J"}}
 	if err := o.saveChecks(t.Context(), us, time.Now()); err != nil {

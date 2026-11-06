@@ -16,6 +16,7 @@ import (
 // fields not already given; an unknown field is E_RESOURCE_INVALID; an
 // empty prompt list asks nothing and the add goes through.
 func TestResourcePromptNonInteractive(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"ip","type":"text","required":true,"sensitive":true}`)
@@ -45,6 +46,7 @@ func TestResourcePromptNonInteractive(t *testing.T) {
 // resource is E_RESOURCE_ARCHIVED, its hint naming the replacement when
 // repoint recorded one and "unarchive" otherwise.
 func TestResourceRefusalCodes(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	vals := make([]string, 201)
@@ -81,6 +83,7 @@ func TestResourceRefusalCodes(t *testing.T) {
 // them from resources outside the set (an archived referrer is left out);
 // without --project/--meta the report has no inbound line.
 func TestResourceReportOffboarding(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"client","type":"text"}`)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)

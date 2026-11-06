@@ -24,6 +24,7 @@ const restToken = "test-token-settings"
 // one, and the routes work end to end with it: policy set asks first and
 // writes with "yes", the read routes see the row.
 func TestRESTRouteMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	actor, err := ids.Parse[ids.Actor](opstest.Actor)
 	if err != nil {

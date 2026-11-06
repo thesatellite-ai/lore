@@ -8,6 +8,7 @@ import (
 )
 
 func TestInferType(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		vals []string
 		want string
@@ -35,6 +36,7 @@ func TestInferType(t *testing.T) {
 }
 
 func TestRowSeesPlace(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		row, place store.Source
 		want       bool

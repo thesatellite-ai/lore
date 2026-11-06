@@ -7,6 +7,7 @@ import (
 )
 
 func TestCheckKeyLoosening(t *testing.T) {
+	t.Parallel()
 	head := `{"name":"margin_pct","internal":true,"strict":true,"changed_by":[{"id":"the_1","field":"internal","to":false,"at":"x"}]}`
 	cases := []struct {
 		name, staged string

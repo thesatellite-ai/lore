@@ -14,6 +14,7 @@ import (
 // echoed, a sensitive secret_ref is masked, and a credential-looking field
 // name must be a secret_ref (RESOURCES 3.1, 3.5, 3.8).
 func TestResourceSecretRef(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	if s := opstest.Text(h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"ssh","type":"secret_ref"}`)); !strings.Contains(s, "internal by default") {

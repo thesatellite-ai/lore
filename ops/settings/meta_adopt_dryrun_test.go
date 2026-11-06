@@ -11,6 +11,7 @@ import (
 // --dry-run names the keys that would move and writes nothing (needs no
 // --yes); the real run then moves them.
 func TestMetaAdoptDryRun(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t, ownRepo)
 	h.MustYes(settings.OpMetaAdd, `{"name":"env","type":"text","values":"prod,dev","to":"kb/web"}`)
 	h.MustYes(settings.OpMetaAdd, `{"name":"tier","type":"text","to":"kb/web"}`)

@@ -16,6 +16,7 @@ import (
 // rows, past meta.max_keys_per_registry M" finding with the hint, in text
 // and --json; RegistriesOverCap reports the same.
 func TestMetaLintRegistryCap(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	for _, k := range []string{"a_key", "b_key", "c_key"} {
 		h.MustYes(settings.OpMetaAdd, `{"name":"`+k+`","type":"text"}`)

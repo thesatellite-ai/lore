@@ -38,6 +38,7 @@ func canonical(t *testing.T, raw []byte) string {
 // value with no reference to change is returned untouched; unicode and
 // "&" in strings survive the round trip.
 func TestJSONFieldRefs(t *testing.T) {
+	t.Parallel()
 	want := "${secret:gopass://acme/db?holder=mch_1&label=mira.box}"
 	cases := []struct {
 		name    string
@@ -95,6 +96,7 @@ func TestJSONFieldRefs(t *testing.T) {
 // TestRowPatchJSONField: rowPatch rewrites a json field beside a text
 // field and leaves a field without references out of the patch.
 func TestRowPatchJSONField(t *testing.T) {
+	t.Parallel()
 	j, err := value.JSONOf([]byte(`{"dsn":"` + jsonRef + `","port":5432}`))
 	if err != nil {
 		t.Fatal(err)

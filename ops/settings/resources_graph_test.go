@@ -12,6 +12,7 @@ import (
 // node reached twice prints (seen above), a cycle prints (cycle), and
 // impact lists dependents by hops (RESOURCES 3.21).
 func TestResourceGraphImpact(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"parent","type":"ref","ref_kind":"host"}`)

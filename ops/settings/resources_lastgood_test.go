@@ -69,6 +69,7 @@ func lastGoodHarness(t *testing.T) *opstest.H {
 // definition with a warning note, while add and edit of that kind are
 // refused with E_KIND_CONFLICT naming the row.
 func TestKindLastGoodFallback(t *testing.T) {
+	t.Parallel()
 	h := lastGoodHarness(t)
 	kid := kindID(t, h, "host")
 	markRow(t, h, schema.TableKinds, kid)
@@ -107,6 +108,7 @@ func TestKindLastGoodFallback(t *testing.T) {
 // TestKindLastGoodMarkedField: a marked field row of the kind falls back
 // and refuses the same way.
 func TestKindLastGoodMarkedField(t *testing.T) {
+	t.Parallel()
 	h := lastGoodHarness(t)
 	var fid string
 	paths, err := filepath.Glob(filepath.Join(h.Repo, ".lore", "data", schema.TableKindFields, "*.json"))
@@ -128,6 +130,7 @@ func TestKindLastGoodMarkedField(t *testing.T) {
 // fresh clone of an already-conflicted store), reads refuse too: load
 // nothing rather than guess (RES 3.13).
 func TestKindNeverSeenGood(t *testing.T) {
+	t.Parallel()
 	h := lastGoodHarness(t)
 	markRow(t, h, schema.TableKinds, kindID(t, h, "host"))
 	h = h.ReopenCold()
@@ -141,6 +144,7 @@ func TestKindNeverSeenGood(t *testing.T) {
 // naming the row; on a machine that never saw it good they show the rows
 // as stored, with a warning saying so, so a person sees what to resolve.
 func TestKindShowLastGood(t *testing.T) {
+	t.Parallel()
 	h := lastGoodHarness(t)
 	kid := kindID(t, h, "host")
 	markRow(t, h, schema.TableKinds, kid)

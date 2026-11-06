@@ -13,6 +13,7 @@ import (
 // sensitive key "= •••", a dotted field of an object key that field's
 // value (later 516), a list key its items.
 func TestMetaSetEcho(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"client","type":"text"}`)
 	h.MustYes(settings.OpMetaAdd, `{"name":"vpn_host","type":"text","sensitive":true}`)
@@ -39,6 +40,7 @@ func TestMetaSetEcho(t *testing.T) {
 // k=v` with no other flag is a real change on every noun: it writes the
 // value (meta get reads it back) instead of answering "nothing to change".
 func TestEditOnlyMetaEveryNoun(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpMetaAdd, `{"name":"client","type":"text"}`)
 	nouns := []struct{ noun, add string }{

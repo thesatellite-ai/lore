@@ -37,6 +37,7 @@ func runCLI(t *testing.T, h *opstest.H, args ...string) (int, string) {
 // ResValueFlags), check --note, field edit --no-internal and --clear are
 // real CLI flags that reach the operation; an unknown flag exits 20.
 func TestResourceFlagsReachCLI(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},

@@ -55,6 +55,7 @@ func fieldRow(t *testing.T, h *opstest.H, field string) map[string]json.RawMessa
 // clear it; show prints "note:"; a row never given a note carries no
 // check_note member at all (no null is written).
 func TestResourceCheckNote(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},
@@ -118,6 +119,7 @@ func TestResourceCheckNote(t *testing.T) {
 // bound) stamps changed_at and changed_by on the field row; a tightening
 // and a plain label edit stamp nothing.
 func TestFieldLooseningStamps(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, add, edit string
 		stamp           bool
@@ -135,6 +137,7 @@ func TestFieldLooseningStamps(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t)
 			seedActor(t, h)
 			h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
@@ -186,6 +189,7 @@ func seedActor(t *testing.T, h *opstest.H) {
 // loosening: changed_at is stamped and changed_by is left out, instead of
 // the edit failing on a dangling actor ref.
 func TestFieldLooseningNoActorRow(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"f","type":"text","sensitive":true}`)
@@ -203,6 +207,7 @@ func TestFieldLooseningNoActorRow(t *testing.T) {
 // min or max asks first; --clear X with --X in one edit and an unknown
 // name are refused; clearing a rule that is not set changes nothing.
 func TestFieldEditClear(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"svc"}`},
@@ -261,6 +266,7 @@ func TestFieldEditClear(t *testing.T) {
 // field add; resource add refuses a value outside the bounds and accepts
 // the bounds themselves (inclusive).
 func TestDurationBounds(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"job"}`)
 	for _, bad := range []string{
@@ -291,6 +297,7 @@ func TestDurationBounds(t *testing.T) {
 // another is E_RESOURCE_KIND_MISMATCH naming both kinds, and writes
 // nothing.
 func TestRepointAcrossKinds(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},

@@ -13,6 +13,7 @@ import (
 // show/list/lint mark them, report counts kinds, unchecked and quarantined
 // (RES 3.15, 3.22, OV49).
 func TestResourceHistoryQuarantineReport(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"os","type":"text"}`)

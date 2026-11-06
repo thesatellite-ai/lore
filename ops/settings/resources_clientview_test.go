@@ -18,6 +18,7 @@ import (
 // report and lint never surface the store's rows, even with the store
 // attached on this machine.
 func TestClientReadsNoStoreResources(t *testing.T) {
+	t.Parallel()
 	team := newStore(t, teamStoreID)
 	own := opstest.Bare(t, ownRepo)
 	if err := os.MkdirAll(filepath.Join(own.Repo, ".lore"), 0o750); err != nil {

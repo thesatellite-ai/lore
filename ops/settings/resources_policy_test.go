@@ -20,6 +20,7 @@ import (
 // warning (RQ4), check and edit stamp checked_by (RQ8), and --set-json
 // sets a list field (RES-OQ4).
 func TestResourcePolicyAndInputs(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"provider","type":"text"}`)
@@ -54,6 +55,7 @@ func TestResourcePolicyAndInputs(t *testing.T) {
 // RESOURCES 3.13/R4): show lists it, an edit of another field keeps it,
 // and --set on that field settles it with a plain {name, v}.
 func TestResourceConflictEntry(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"provider","type":"text"}`)

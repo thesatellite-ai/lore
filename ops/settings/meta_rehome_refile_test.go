@@ -23,6 +23,7 @@ import (
 // batch, after which every key the rows use is visible and the values
 // read the same.
 func TestMetaRehomeRefile(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t, ownRepo) // an own repo takes store keys' values (FA-META-7)
 	h.MustYes(settings.OpMetaAdd, `{"name":"client","type":"text","to":"kb/web"}`)
 	h.MustYes(settings.OpMetaAdd, `{"name":"env","type":"text","to":"kb/web"}`)

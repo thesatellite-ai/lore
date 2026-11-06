@@ -13,6 +13,7 @@ import (
 // resources must honour them, and every loosening or retype from a nearer
 // level is E_KIND_CONFLICT before anything is written (RES 3.6, RQ9).
 func TestKindLayering(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host","to":"kb/org"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"region","type":"text","to":"kb/org"}`)
@@ -50,6 +51,7 @@ func TestKindLayering(t *testing.T) {
 // asks first, refuses a name defined under another id), and rehome lists
 // a kind clash in the view without writing (RES 3.6, R6).
 func TestAdoptAndRehome(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	id := h.ID(h.MustYes(settings.OpKindAdd, `{"kind":"svc","to":"kb/web"}`))
 	h.MustYes(settings.OpFieldAdd, `{"kind":"svc","field":"port","type":"number"}`)

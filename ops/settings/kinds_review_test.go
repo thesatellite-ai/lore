@@ -33,6 +33,7 @@ func runAsErr(t *testing.T, h *opstest.H, agent, name, input string) error {
 // --reviewed is refused E_POLICY_DENIED (needs a person) and changes
 // nothing; a person's own kind is never unreviewed.
 func TestKindsUnreviewed(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	runAs(t, h, "codex", settings.OpKindAdd, `{"kind":"vpn"}`)
 	runAs(t, h, "", settings.OpKindAdd, `{"kind":"host"}`)

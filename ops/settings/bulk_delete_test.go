@@ -17,6 +17,7 @@ import (
 // --dry-run writes nothing; --yes deletes the 25 (not the non-matching
 // row) under one bat_ batch whose log names the kind delete and the rows.
 func TestResourceBulkDelete(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"provider","type":"text"}`)

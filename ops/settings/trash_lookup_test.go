@@ -13,6 +13,7 @@ import (
 // id); a name nobody ever used stays E_NOT_FOUND; meta show of a trashed
 // row is E_IN_TRASH too.
 func TestSettingsInTrash(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	res := h.ID(h.MustYes(settings.OpResAdd, `{"kind":"host","name":"h1"}`))

@@ -14,6 +14,7 @@ import (
 // an unknown one with E_INVALID_INPUT naming it, writing nothing; the
 // fields init writes are the same row shape.
 func TestPolicySetContextTargets(t *testing.T) {
+	t.Parallel()
 	h := opstest.Bare(t)
 	h.MustYes(settings.OpPolicySet, setIn("context.targets", "cursor,codex", ""))
 	r := showRules(t, h, "context.targets")["context.targets"]

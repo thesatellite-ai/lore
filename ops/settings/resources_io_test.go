@@ -21,6 +21,7 @@ import (
 // export that masks sensitive values and whose ••• is refused on
 // re-import, repoint moving refs and archiving the old row, and clone.
 func TestResourceImportExportRepointClone(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"ip","type":"ip","sensitive":true}`)
@@ -83,6 +84,7 @@ func TestResourceImportExportRepointClone(t *testing.T) {
 // the same E_RESOURCE_INVALID as the CLI on an unknown field (ONE
 // OPERATION SPEC); a res_ id stays the show route.
 func TestRESTDynamicKind(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"region","type":"text"}`)

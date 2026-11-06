@@ -14,6 +14,7 @@ import (
 // "filtered on a sensitive field" note (text and --json notes); a filter
 // on a plain field, no filter, and --show-sensitive --yes add no note.
 func TestResourceListSensitiveFilterNote(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"ip","type":"text","sensitive":true}`)

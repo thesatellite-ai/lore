@@ -15,6 +15,7 @@ import (
 // another store's folder, and store root->org are E_INVALID_INPUT; a name
 // clash in the target is E_META_TAKEN before the level check.
 func TestMetaMoveLevelMatrix(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, from, to string
 		clash          bool
@@ -30,6 +31,7 @@ func TestMetaMoveLevelMatrix(t *testing.T) {
 	}
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := multiStore(t)
 			key := "mk_" + strconv.Itoa(i)
 			id := h.ID(h.MustYes(settings.OpMetaAdd, `{"name":"`+key+`","type":"text","to":"`+c.from+`"}`))

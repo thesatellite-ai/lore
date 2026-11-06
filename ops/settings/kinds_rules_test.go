@@ -14,6 +14,7 @@ import (
 // refused, a deprecated field warns naming its replacement, a loosening
 // asks, and --secret-manager changes what a bare secret_ref path means.
 func TestFieldRuleOptions(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpKindAdd, `{"kind":"service","secret_manager":"op"}`)
 	h.MustYes(settings.OpFieldAdd, `{"kind":"service","field":"port","type":"number","min":"1","max":"65535","default":"8080"}`)

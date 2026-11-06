@@ -53,6 +53,7 @@ func actions(out settings.ResImportOut) map[string]string {
 //   - in a client repo (no import slot is kept) a re-import never
 //     overwrites: E_RESOURCE_TAKEN.
 func TestResourceReimportMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, ownRepo)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},

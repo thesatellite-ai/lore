@@ -18,6 +18,7 @@ import (
 // Each case starts from one existing host "old" and checks the peer of every
 // named row after the import, or that the host count did not move.
 func TestResourceImportRefMatrix(t *testing.T) {
+	t.Parallel()
 	type row struct{ name, peer string } // peer "" = no ref
 	cases := []struct {
 		name     string
@@ -40,6 +41,7 @@ func TestResourceImportRefMatrix(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t)
 			mustAll(t, h,
 				[2]string{settings.OpKindAdd, `{"kind":"host"}`},

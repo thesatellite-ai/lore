@@ -52,6 +52,7 @@ func errString(err error) string {
 // rename / remove, with every refusal (snake_case, closed sets, taken
 // names, ref without ref-kind, tri-state flags, in-use values).
 func TestKindsAndFields(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	add := h.MustYes(settings.OpKindAdd, `{"kind":"server","description":"a box","name_format":"dns"}`)
 	if got := opstest.IDPattern(opstest.Text(add)); got != "added kind knd_…"+h.ID(add)[len(h.ID(add))-4:]+" server in this repo\n" {
@@ -107,6 +108,7 @@ func TestKindsAndFields(t *testing.T) {
 // TestFieldValuesInUse: a closed-set value or a field holding values on
 // resources is refused while in use, removable with --drop.
 func TestFieldValuesInUse(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"server","name_format":"dns"}`},
@@ -134,6 +136,7 @@ func TestFieldValuesInUse(t *testing.T) {
 // archive / delete, every value-type and name-format refusal, ref fields
 // resolving by name, sensitive values masked unless confirmed.
 func TestResourcesMatrix(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"server","name_format":"dns"}`},
@@ -264,6 +267,7 @@ func resID(t *testing.T, h *opstest.H, name string) string {
 // wins across places, type checks, and an update keeping what it was not
 // told to change.
 func TestVarsMatrix(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	add := h.MustYes(settings.OpVarsSet, `{"name":"api_url","value":"https://x.example","type":"url"}`)
 	if got := opstest.Text(add); got != "Added var_…"+h.ID(add)[len(h.ID(add))-4:]+" api_url = https://x.example (url) in repo (not shareable: clients see ${var:<name>}).\n" {
@@ -324,6 +328,7 @@ func TestVarsMatrix(t *testing.T) {
 // (CONFIG_GUIDE VARS ARE DATA). It used to reset shareable to false and
 // the type to text, silently changing who sees the value.
 func TestVarsUpdateKeepsShareable(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.MustYes(settings.OpVarsSet, `{"name":"u","value":"https://a.example","type":"url","shareable":true,"description":"staging"}`)
 	got := opstest.Text(h.MustYes(settings.OpVarsSet, `{"name":"u","value":"https://b.example"}`))
@@ -352,6 +357,7 @@ func varOf(t *testing.T, h *opstest.H, name string) settings.Var {
 // TestVarsRefuseSecrets: a variable never holds a secret (D22): the
 // scanner checks the value; without a yes the write stops.
 func TestVarsRefuseSecrets(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	tok := "ghp_" + strings.Repeat("aB3dE6gH9", 4) // built at runtime: no literal token in source
 	msg := h.Fails(settings.OpVarsSet, `{"name":"tok","value":"`+tok+`"}`, errs.NeedsConfirm)
@@ -364,6 +370,7 @@ func TestVarsRefuseSecrets(t *testing.T) {
 // TestMetaMatrix: meta add / edit --values (a diff) / describe / rename /
 // keys / value add / value rename / delete.
 func TestMetaMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	add := h.MustYes(settings.OpMetaAdd, `{"name":"tier","type":"text","values":"gold, silver","strict":true}`)
 	if got := opstest.Text(add); got != "added mky_…"+h.ID(add)[len(h.ID(add))-4:]+" tier (text, strict, values gold, silver) to this repo (not internal)\n" {
@@ -441,6 +448,7 @@ func metaValueIDs(t *testing.T, h *opstest.H, key string) map[string]string {
 // (same row) → on (row kept: it carries a regex); off for a built-in
 // rule id → on removes the row; every refusal.
 func TestSecretRuleStateMachine(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	if got := opstest.Text(h.Must(settings.OpSecretRules, ``)); got != "(no rule rows: gitleaks defaults and lore's own pack apply)\n" {
 		t.Errorf("empty rules %q", got)
@@ -495,6 +503,7 @@ func TestSecretRuleStateMachine(t *testing.T) {
 // add` is part of the scanner the next process builds (each CLI command
 // is one process): a memory holding a match then stops for a yes.
 func TestSecretRuleAppliesOnNextOpen(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	sample := "acme_" + strings.Repeat("0123456789abcdef", 1)
 	h.MustYes(settings.OpSecretRuleAdd, `{"id":"acme-key","regex":"acme_[a-z0-9]{16}"}`)
@@ -508,6 +517,7 @@ func TestSecretRuleAppliesOnNextOpen(t *testing.T) {
 // TestSecretAllow: an allow entry stores only the hash of the matched
 // text (never the text), on the store that holds the row; every refusal.
 func TestSecretAllow(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mem := h.ID(h.Must("memory.add", `{"body":"the sample key is sample_0123 in the docs"}`))
 	checkRefusals(t, h, []refusal{
@@ -557,6 +567,7 @@ func mustID(t *testing.T, s string) ids.AnyID {
 // E_META_TAKEN), the same key in another place is a separate row, and a
 // tombstoned key is free again.
 func TestLiveNaturalKeyRefusal(t *testing.T) {
+	t.Parallel()
 	h := multiStore(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"server"}`},
@@ -586,6 +597,7 @@ func TestLiveNaturalKeyRefusal(t *testing.T) {
 // in the next, cold (every row decoded from its file) (row files decode json and list fields as plain values, not
 // value.JSON; a reader that only accepts value.JSON would see nothing).
 func TestReadBackFromDisk(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"app"}`},

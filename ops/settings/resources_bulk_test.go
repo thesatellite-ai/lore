@@ -13,6 +13,7 @@ import (
 // batch (dry run writes nothing), --archive and check --where stamp every
 // match, non-matching rows stay, and --meta is refused in the bulk form.
 func TestResourceBulkEditCheck(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},

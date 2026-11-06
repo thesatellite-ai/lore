@@ -123,6 +123,7 @@ func TestSecretsOffboarding(t *testing.T) {
 // method value) from exactly one function in lore's whole source, the --reveal printer in ops/internal/reveal
 // (SECRETS_AND_REFERENCES 10.2).
 func TestExposeOneCaller(t *testing.T) {
+	t.Parallel()
 	n, where := 0, []string{}
 	root := os.DirFS(filepath.Join("..", ".."))
 	err := fs.WalkDir(root, ".", func(p string, d fs.DirEntry, werr error) error {

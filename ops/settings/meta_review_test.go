@@ -33,6 +33,7 @@ func runAs(t *testing.T, h *opstest.H, agent, name, input string) {
 // a person's own key never is; the list matches `meta keys --unreviewed`
 // (AGENT_IDENTITY 8.3, MQ7).
 func TestUnreviewedKeys(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	runAs(t, h, "codex", settings.OpMetaAdd, `{"name":"renewal_risk","type":"text"}`)
 	runAs(t, h, "codex", settings.OpMetaAdd, `{"name":"customer_tier","type":"text"}`)

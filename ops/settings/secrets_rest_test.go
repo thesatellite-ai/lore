@@ -21,6 +21,7 @@ import (
 // secret. The answer travels in headers only: body fields such as
 // "secret_unstored" are not part of memory.add's input.
 func TestRESTSecretChoice(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, ownRepo) // a client repo refuses secret references (BATCH 5)
 	actor, err := ids.Parse[ids.Actor](opstest.Actor)
 	if err != nil {

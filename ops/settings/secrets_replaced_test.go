@@ -15,6 +15,7 @@ import (
 // from gitleaks.Covers (or "lore only"), in text and in --json; without
 // the flag the replaced block is absent from both.
 func TestSecretRulesReplaced(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	pack := gitleaks.Pack()
 	covers := gitleaks.Covers()

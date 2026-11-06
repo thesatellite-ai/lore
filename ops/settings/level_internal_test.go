@@ -51,6 +51,7 @@ func (e levelEnv) StoreLevel(src store.Source) (policy.Level, bool) {
 // answer). The org-attached linked folder `agency` is the case the name
 // rule gets wrong (it reads as a store root).
 func TestStoreLevel(t *testing.T) {
+	t.Parallel()
 	byName := map[store.Source]policy.Level{
 		store.SourceRepo: policy.LevelRepo, "me": policy.LevelPersonal, "kb/org": policy.LevelOrg,
 		"kb/web": policy.LevelFolder, "kb/a/b": policy.LevelFolder, "kb": policy.LevelStoreRoot,
@@ -75,6 +76,7 @@ func TestStoreLevel(t *testing.T) {
 
 // TestScopeOf: the `scope` word of a settings row per place (spec 4.3).
 func TestScopeOf(t *testing.T) {
+	t.Parallel()
 	for src, want := range map[store.Source]string{
 		"": "repo", store.SourceRepo: "repo", "kb": "store", "kb/web": "web", "kb/org": "org", "kb/a/b": "a/b", "me": "store",
 	} {
@@ -87,6 +89,7 @@ func TestScopeOf(t *testing.T) {
 // TestPolicySetRefusesPersonal: a personal store holds no team rules,
 // refused before anything is read or written.
 func TestPolicySetRefusesPersonal(t *testing.T) {
+	t.Parallel()
 	o := ops{env: nameEnv{stores: []store.Source{store.SourceRepo, "me"}}}
 	for _, to := range []string{"me"} {
 		_, err := o.policySet(context.Background(), PolicySetIn{Key: string(policy.KeyOnDetect), Value: "refuse", To: to})

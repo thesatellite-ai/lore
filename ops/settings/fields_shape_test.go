@@ -86,6 +86,7 @@ func sqlLines(t *testing.T, h *opstest.H, q string) []string {
 // rename keep the values (by fld_ id) and an edit re-writes the entry's
 // name; --where filters on a field; remove --drop drops only that entry.
 func TestResourceFieldsSpecShape(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"server"}`},
@@ -163,6 +164,7 @@ func TestResourceFieldsSpecShape(t *testing.T) {
 // object) is refused by every reader with E_RESOURCE_INVALID naming the
 // row, never shown as unset.
 func TestResourceFieldsWrongShapeFailsLoudly(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	mustAll(t, h,
 		[2]string{settings.OpKindAdd, `{"kind":"server"}`},

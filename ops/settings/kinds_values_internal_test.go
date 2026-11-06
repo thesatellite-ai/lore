@@ -15,6 +15,7 @@ import (
 // allowed and a new value already allowed are E_INVALID_INPUT naming the
 // field and never touching the caller's list.
 func TestRenamePairs(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		raw      []string
