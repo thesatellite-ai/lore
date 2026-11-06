@@ -114,7 +114,7 @@ func TestStorePushWrite(t *testing.T) {
 		{"write refused, autopush off", false, boom, store.SyncReport{}, nil, true, 0, ""},
 		{"push error: note", true, nil, store.SyncReport{}, boom, false, 1, "pushing failed"},
 		{"offline: note", true, nil, store.SyncReport{Offline: true}, nil, false, 1, "unreachable"},
-		{"remote refused rows: note", true, nil, store.SyncReport{Refused: []store.Refusal{{Reason: "x"}, {Reason: "y"}}}, nil, false, 1, "refused 2 row(s)"},
+		{"remote refused rows: note", true, nil, store.SyncReport{Refused: []store.Refusal{{Reason: "x"}, {Reason: "y"}}}, nil, false, 1, "refused the push (`lore sync status`"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

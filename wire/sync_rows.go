@@ -225,6 +225,41 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 	return out, nil
 }
 
+// storeRefusalNext is the next step of a refused store push.
+const storeRefusalNext = "the commits wait in the local clone: fix what the store's push rule names (or ask its owner), then run `lore sync`"
+
+// SyncStatus implements opssync.Env: the host's status, then, for a host
+// that leaves the stores to the core (opssync.CoreStores), every store
+// whose last push the remote refused (storepush_refused.go) with its rows,
+// reason and next step. A local state that cannot be read adds a note line
+// instead (status still answers).
+func (s syncRows) SyncStatus(ctx context.Context, in opssync.StatusIn) (opssync.StatusOut, error) {
+	out, err := s.Env.SyncStatus(ctx, in)
+	if err != nil {
+		return out, err
+	}
+	if c, ok := s.Env.(opssync.CoreStores); !ok || !c.CoreStores() {
+		return out, nil
+	}
+	refused, rerr := s.app.StorePushRefusals(ctx)
+	if rerr != nil {
+		out.Lines = append(out.Lines, "store pushes:     unknown (local state: "+rerr.Error()+")")
+		return out, nil
+	}
+	out.Lines = append(out.Lines, fmt.Sprintf("refused pushes:   %d", len(refused)))
+	for _, r := range refused {
+		rows := "the whole push"
+		if len(r.Rows) > 0 {
+			rows = strconv.Itoa(len(r.Rows)) + " row(s): " + strings.Join(r.Rows, ", ")
+		}
+		out.Data.StoreRefusals = append(out.Data.StoreRefusals, opssync.StoreRefusal{Store: r.Store, Code: r.Code, Reason: r.Reason,
+			Rows: r.Rows, At: r.At, Next: storeRefusalNext})
+		out.Lines = append(out.Lines, "  store "+r.Store+": "+r.Code+" at "+r.At+": "+r.Reason,
+			"    waiting: "+rows, "    next: "+storeRefusalNext)
+	}
+	return out, nil
+}
+
 // syncPurgePointer is the one stderr line of the old `lore sync purge`
 // spelling (FA-DEL-4, CLI_REFERENCE F71).
 const syncPurgePointer = "note: lore sync purge is now lore trash purge --archived-before; this spelling goes away in the next release"

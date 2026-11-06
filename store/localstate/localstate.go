@@ -40,10 +40,15 @@ const (
 	// unreachable (TIME 4.3, 11.9), replayed on the next reachable write;
 	// key = span id, so a replay is idempotent.
 	TimeOutbox Table = "time_outbox"
+	// StorePushRefusals records the last push of a store clone that the
+	// remote refused (a server-side hook, branch protection, permission):
+	// key = store name, doc = the rows that wait, the reason and when.
+	// `lore sync status` lists it; a later push that lands clears it.
+	StorePushRefusals Table = "store_push_refusals"
 )
 
 // Tables is every machine-local table, created at open.
-func Tables() []Table { return []Table{Usage, SecretChecks, TimeOutbox} }
+func Tables() []Table { return []Table{Usage, SecretChecks, TimeOutbox, StorePushRefusals} }
 
 // Valid reports whether t is one of Tables.
 func (t Table) Valid() bool {

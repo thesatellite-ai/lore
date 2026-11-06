@@ -19,7 +19,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/live"
@@ -59,6 +58,9 @@ type storePush struct {
 	stateDir string
 	// fetched: the once-per-command read sync was decided.
 	fetched bool
+	// earlier is what this command's read fetch and push-after-write syncs
+	// did, added to the next Sync's report (lore sync's store lines).
+	earlier store.SyncReport
 	// pushFailed: this command's push already failed and said so (FLAG4:
 	// one note; later writes commit locally for `lore sync`).
 	pushFailed bool
@@ -111,6 +113,8 @@ func (b *storePush) refresh(ctx context.Context) {
 		return
 	}
 	rep, err := b.inner.Sync(ctx)
+	b.carry(rep, err)
+	b.observeSync(ctx, rep, err)
 	if err != nil || rep.Offline || b.stateDir == "" {
 		return
 	}
@@ -127,13 +131,15 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 		return
 	}
 	rep, err := b.inner.Sync(ctx)
+	b.carry(rep, err)
+	b.observeSync(ctx, rep, err)
 	switch {
 	case err != nil:
 		b.note("pushing failed")
 	case rep.Offline:
 		b.note("the store is unreachable")
 	case len(rep.Refused) > 0:
-		b.note("the store refused " + strconv.Itoa(len(rep.Refused)) + " row(s)")
+		b.note("the store refused the push (`lore sync status` shows the rows and why)")
 	default:
 		return
 	}
@@ -166,8 +172,32 @@ func (b *storePush) Get(ctx context.Context, table row.Table, id ids.AnyID) (sto
 	return b.inner.Get(ctx, table, id)
 }
 
-// Sync implements store.Backend.
-func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) { return b.inner.Sync(ctx) }
+// Sync implements store.Backend. The report also counts what this
+// command's earlier syncs (the read fetch, the push after a write) sent,
+// received and merged, so `lore sync` reports the rows it delivered even
+// when its first read already pushed them.
+func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
+	rep, err := b.inner.Sync(ctx)
+	b.observeSync(ctx, rep, err)
+	if err != nil {
+		return rep, err
+	}
+	rep.Sent += b.earlier.Sent
+	rep.Received += b.earlier.Received
+	rep.Merged = append(b.earlier.Merged, rep.Merged...)
+	b.earlier = store.SyncReport{}
+	return rep, nil
+}
+
+// carry adds a sync's counts to earlier (reported by the next Sync).
+func (b *storePush) carry(rep store.SyncReport, err error) {
+	if err != nil {
+		return
+	}
+	b.earlier.Sent += rep.Sent
+	b.earlier.Received += rep.Received
+	b.earlier.Merged = append(b.earlier.Merged, rep.Merged...)
+}
 
 // Capabilities implements store.Backend.
 func (b *storePush) Capabilities() store.Capabilities { return b.inner.Capabilities() }

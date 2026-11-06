@@ -167,6 +167,21 @@ type StatusData struct {
 	GitError          string      `json:"git_error,omitempty"`
 	MetaQuarantined   []string    `json:"meta_quarantined,omitempty"`
 	MetaRegistriesCap []string    `json:"meta_registries_over_cap,omitempty"`
+	// StoreRefusals are the stores whose last push the remote refused
+	// (the commits wait in the local clone; a later push that lands
+	// clears the entry).
+	StoreRefusals []StoreRefusal `json:"store_refusals,omitempty"`
+}
+
+// StoreRefusal is one store push the remote refused.
+type StoreRefusal struct {
+	Store  string   `json:"store"`
+	Code   string   `json:"code"`
+	Reason string   `json:"reason"`
+	Rows   []string `json:"rows,omitempty"`
+	At     string   `json:"at"`
+	// Next is the step that settles it.
+	Next string `json:"next"`
 }
 
 // StatusOut is the output of sync.status (envelope kind sync.status).
