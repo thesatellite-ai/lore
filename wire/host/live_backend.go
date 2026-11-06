@@ -363,7 +363,9 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 		}
 		if place != rowroute.PlaceLive {
 			if !inLive {
-				ch = b.overLanded(ctx, s, ch, branchRow, inBranch)
+				if ch, err = b.overLanded(ctx, s, ch, branchRow, inBranch); err != nil {
+					return err
+				}
 			}
 			branch = append(branch, ch)
 			continue
@@ -809,7 +811,7 @@ func (b *liveBackend) landedExpect(ctx context.Context, s *liveSession, files ma
 	if berr != nil && !errors.Is(berr, store.ErrNotFound) {
 		return ch, berr
 	}
-	return b.overLanded(ctx, s, ch, branchRow, berr == nil), nil
+	return b.overLanded(ctx, s, ch, branchRow, berr == nil)
 }
 
 // overLanded rewrites the Expect of a branch-bound edit of a row Get read
@@ -818,22 +820,29 @@ func (b *liveBackend) landedExpect(ctx context.Context, s *liveSession, files ma
 // older copy (found) or none, so the branch write would refuse it as
 // stale (t-old2: `memory archive` after a committed local delete of a
 // row still on origin/main was E_STALE). Only an Expect that names exactly
-// the landed copy is rewritten; a stale read stays stale. v0.1.17
+// the landed copy is rewritten. Any other Expect is E_STALE here, against
+// the copy a reader sees, as the live path checks it: the branch write
+// alone would accept an Expect naming the older work-tree copy and the
+// edit would overwrite the newer landed version it never read (F-STALE-1);
+// the engine re-reads the landed copy, merges and retries. v0.1.17
 // live_core.go materialiseLanded / overLanded.
-func (b *liveBackend) overLanded(ctx context.Context, s *liveSession, ch store.Change, branchRow store.Row, found bool) store.Change {
+func (b *liveBackend) overLanded(ctx context.Context, s *liveSession, ch store.Change, branchRow store.Row, found bool) (store.Change, error) {
 	if ch.Expect.IsZero() {
-		return ch
+		return ch, nil
 	}
 	landed, ok := b.landedCopy(ctx, s, keyOf(ch.Row), branchRow, found)
-	if !ok || landed.HLC.Compare(ch.Expect) != 0 {
-		return ch
+	if !ok {
+		return ch, nil
+	}
+	if landed.HLC.Compare(ch.Expect) != 0 {
+		return ch, errs.Wrap(errs.Stale, "row "+keyOf(ch.Row).String()+" changed since it was read (a newer copy is on the default branch)", store.ErrStale)
 	}
 	if found {
 		ch.Expect = branchRow.HLC
 	} else {
 		ch.Expect = hlc.HLC{}
 	}
-	return ch
+	return ch, nil
 }
 
 // noSessionLeakCheck is F16 on a branch write that has no live session: live
