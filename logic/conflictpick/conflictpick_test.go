@@ -32,6 +32,7 @@ func TestText(t *testing.T) {
 		{"unicode sides", block("été ✓", "日本"), "été ✓", "日本"},
 		// An unfinished block (no close) is not a complete conflict: left as written.
 		{"unfinished block", "<<<<<<< HEAD\nmine\n=======\ntheirs", "<<<<<<< HEAD\nmine\n=======\ntheirs", "<<<<<<< HEAD\nmine\n=======\ntheirs"},
+		{"nested block: unchanged", "<<<<<<< HEAD\n" + block("x", "y") + "\n=======\nz\n>>>>>>> feat", "<<<<<<< HEAD\n" + block("x", "y") + "\n=======\nz\n>>>>>>> feat", "<<<<<<< HEAD\n" + block("x", "y") + "\n=======\nz\n>>>>>>> feat"},
 		{"complete then unfinished", block("a", "b") + "\n<<<<<<< HEAD\nx\n=======\ny", "a\n<<<<<<< HEAD\nx\n=======\ny", "b\n<<<<<<< HEAD\nx\n=======\ny"},
 	}
 	for _, c := range cases {
