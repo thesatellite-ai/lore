@@ -465,9 +465,27 @@ func (w *coordWorld) signalsStore() *signals.Store {
 		},
 		Autopush: w.autopush && sp.remote != nil, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
 		Trace: signalsTrace(os.Stderr),
-		// Gate (FORMAT_EVOLUTION rule 2, E_OLD_LORE) is left nil: the
-		// engine's own format floor refuses the row half of every fenced
-		// write in a project this binary may not write.
+		// FORMAT_EVOLUTION rule 2 (OV48): no claim, renew or release on a
+		// project this lore may not write. The engine's floor alone
+		// refused only the row half, after the signal was already pushed.
+		Gate: w.formatGate(sp),
+	}
+}
+
+// formatGate is the signals.Store.Gate of spot: the format declaration of
+// the project the signals belong to decides (the repo's _meta.json, or the
+// linked store folder's), the same check as every engine write.
+func (w *coordWorld) formatGate(sp sigSpot) func(context.Context) error {
+	name := store.SourceRepo
+	if sp.store {
+		name = w.orgStore
+	}
+	return func(ctx context.Context) error {
+		st, err := w.a.state(ctx)
+		if err != nil {
+			return err
+		}
+		return st.eng.FormatGate(ctx, name)
 	}
 }
 

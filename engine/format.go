@@ -80,3 +80,17 @@ func (e *Engine) binaryVersion() string {
 	v, _ := e.prov.Writer()
 	return v
 }
+
+// FormatGate refuses (E_OLD_LORE) when this binary may not write the
+// named store's folder: the same check as every engine write, for the
+// write paths that change no row through the engine, such as a claim,
+// renew or release on a signals ref (FORMAT_EVOLUTION rule 2 "read-only
+// on every path", OV48). It must run before the path changes anything. An
+// unknown name is not gated (nothing to declare).
+func (e *Engine) FormatGate(ctx context.Context, name store.Source) error {
+	st, ok := e.stores[name]
+	if !ok {
+		return nil
+	}
+	return e.gate(ctx, st)
+}
