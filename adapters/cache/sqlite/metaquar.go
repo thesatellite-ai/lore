@@ -64,13 +64,24 @@ func refreshMetaQuarantine(ctx context.Context, tx *sql.Tx, source store.Source,
 		}
 		texts := make([]string, 0, len(probs))
 		for _, p := range probs {
-			texts = append(texts, p.Text)
+			texts = append(texts, problemText(p))
 		}
 		if _, err := tx.ExecContext(ctx, metaQuarInsert, string(source), sr.Table.String(), sr.ID.String(), strings.Join(texts, problemSep)); err != nil {
 			return dbErr("record meta quarantine", err)
 		}
 	}
 	return nil
+}
+
+// problemText is one stored problem: an entry's problem names its key id
+// first ("key mky_…: the entry has no v"), so a reader of lore sync status
+// or lore doctor knows which entry to fix or unset even when the entry has
+// no readable name; a whole-row problem (entry count, size) stands alone.
+func problemText(p metafilter.Problem) string {
+	if p.Key == "" {
+		return p.Text
+	}
+	return "key " + p.Key + ": " + p.Text
 }
 
 // MetaQuarantined lists every row whose metadata is quarantined, in every
