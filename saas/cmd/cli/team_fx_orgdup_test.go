@@ -144,12 +144,12 @@ func TestUnknownHandleRefusalLeavesTheStoreUntouched(t *testing.T) {
 		{"agent start, no roster yet", []string{"agent", "start", "--label", "agent-x", "--owner", "@nobody"}},
 		{"handoff add, no roster yet", []string{"handoff", "add", "pick this up", "--for", "@nobody"}},
 	} {
-		before := r.store.Rev(refMain) + r.store.Rev(storeLive(storeBranch))
+		before := r.store.Rev(refMain) + r.store.Rev(storeLiveRef)
 		if res := r.dev1.Lore(c.args...).Says(t, "@nobody"); res.Code == 0 {
 			t.Errorf("%s: an unknown handle must be refused: %s", c.name, res)
 		}
 		r.dev1.MustLore("whoami") // pushes anything a refusal left committed
-		if r.store.Rev(refMain)+r.store.Rev(storeLive(storeBranch)) != before {
+		if r.store.Rev(refMain)+r.store.Rev(storeLiveRef) != before {
 			t.Errorf("%s: a refused handle changed the store: %v", c.name, r.store.Log(refMain)[:1])
 		}
 	}
@@ -163,12 +163,12 @@ func TestUnknownHandleRefusalLeavesTheStoreUntouched(t *testing.T) {
 		{"agent start", []string{"agent", "start", "--label", "agent-x", "--owner", "@nobody"}},
 		{"task reassign", []string{"task", "reassign", id, "--assign", "@nobody"}},
 	} {
-		before := r.store.Rev(refMain) + r.store.Rev(storeLive(storeBranch))
+		before := r.store.Rev(refMain) + r.store.Rev(storeLiveRef)
 		if res := r.dev1.Lore(c.args...).Says(t, "@nobody"); res.Code == 0 {
 			t.Errorf("%s: an unknown handle must be refused: %s", c.name, res)
 		}
 		r.dev1.MustLore("whoami")
-		if r.store.Rev(refMain)+r.store.Rev(storeLive(storeBranch)) != before {
+		if r.store.Rev(refMain)+r.store.Rev(storeLiveRef) != before {
 			t.Errorf("%s: a refused handle changed the store: %v", c.name, r.store.Log(refMain)[:1])
 		}
 	}

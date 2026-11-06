@@ -126,7 +126,9 @@ func mustID(t *testing.T, r th.Result, prefix string) string {
 	return id
 }
 
-func storeLive(branch string) string { return refLive + "/" + branch }
+// storeLiveRef is the store's live ref: the store's work happens on its
+// one branch, storeBranch.
+const storeLiveRef = refLive + "/" + storeBranch
 
 // storeSignals is the store branch's signals ref.
 func storeSignals() string { return refSignals + "/" + storeBranch }
@@ -526,7 +528,7 @@ var nonSnake = regexp.MustCompile(`[^a-z0-9_]`)
 // storeRow reads a row of a store project from the store's live ref.
 func (a *agency) storeLiveRow(t *testing.T, folder, table, id string) (rowDoc, bool) {
 	t.Helper()
-	return readRow(t, a.store, storeLive(storeBranch), liveRowPath(folder, table, id))
+	return readRow(t, a.store, storeLiveRef, liveRowPath(folder, table, id))
 }
 
 // storeMainRow reads a row of a store project from the store branch.

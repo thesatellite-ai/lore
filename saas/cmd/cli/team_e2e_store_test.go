@@ -29,7 +29,7 @@ const internalNote = "client is slow to pay so always send the estimate before t
 // its live ref or its store branch.
 func (a *agency) storeHas(t *testing.T, folder, text string) bool {
 	t.Helper()
-	for _, ref := range []string{storeLive(storeBranch), refMain} {
+	for _, ref := range []string{storeLiveRef, refMain} {
 		for _, f := range a.store.Files(ref) {
 			if !strings.HasPrefix(f, folder+"/") {
 				continue
@@ -310,7 +310,7 @@ func TestRecipe14_OneStorePerClient(t *testing.T) {
 	c.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--store", acmeStore.URL(), "--yes")
 	c.MustLore("memory", "add", "--body", "NDA client note")
 	found := false
-	for _, ref := range []string{storeLive(storeBranch), refMain} {
+	for _, ref := range []string{storeLiveRef, refMain} {
 		for _, f := range acmeStore.Files(ref) {
 			if body, _ := acmeStore.Read(ref, f); strings.HasPrefix(f, folderAcme+"/") && strings.Contains(body, "NDA client note") {
 				found = true
@@ -491,7 +491,7 @@ func TestF16_CIModeCatchesForeignIdsAndNamesNothingInternal(t *testing.T) {
 	memID := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", internalNote), "mem")
 	a.aliceApp.MustLore("sync") // 0.1.18 pushes store writes on sync (spec 6.1)
 	var body string
-	for _, ref := range []string{refMain, storeLive(storeBranch)} {
+	for _, ref := range []string{refMain, storeLiveRef} {
 		for _, f := range a.store.FilesMatching(ref, memID) {
 			body, _ = a.store.Read(ref, f)
 		}
@@ -588,7 +588,7 @@ func TestLeak_LoreCommitsAreAuthoredByTheOrgIdentity(t *testing.T) {
 	c.MustLore("actor", "register")
 	id := mustID(t, c.MustLore("task", "add", "internal chore", "--to", orgNorthwind), "tsk")
 	c.MustLore("task", "done", id)
-	for _, ref := range []string{refMain, storeLive(storeBranch)} {
+	for _, ref := range []string{refMain, storeLiveRef} {
 		for _, au := range a.store.Authors(ref) {
 			if strings.Contains(au, "gmail.example") {
 				t.Fatalf("%s carries a personal email: %s", ref, au)

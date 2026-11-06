@@ -120,7 +120,7 @@ func TestTeC_GateReadOnlyEveryPath(t *testing.T) {
 			rt.c2.AdminPush("origin", "main")
 			rt.c1.Git("pull", "-q", "--ff-only", "origin", "main")
 
-			before := teCRefs(rt.app, refMain, storeLive("main"), refLive, storeSignals(), refSignals)
+			before := teCRefs(rt.app, refMain, storeLiveRef, refLive, storeSignals(), refSignals)
 			status := rt.c1.Status()
 
 			writes := [][]string{
@@ -198,7 +198,7 @@ func TestTeC_GateReadOnlyStoreProject(t *testing.T) {
 			sc.CommitAll("declare a future format")
 			sc.AdminPush("origin", "main")
 
-			before := teCRefs(a.store, refMain, storeLive(storeBranch), storeSignals())
+			before := teCRefs(a.store, refMain, storeLiveRef, storeSignals())
 			for _, w := range [][]string{
 				{"task", "add", "another", "--tasklist", a.tl},
 				{"task", "edit", id, "--priority", "high"},

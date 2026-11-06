@@ -51,7 +51,7 @@ func teBCoordStore(t *testing.T) teBCoordCase {
 	p := mustID(t, a.aliceApp.MustLore("task", "add", "invoices export", "--to", orgNorthwind), "tsk")
 	if _, ok := a.storeLiveRow(t, folderAcme, tblTasks, p); !ok {
 		if _, ok := a.storeMainRow(t, folderAcme, tblTasks, p); !ok {
-			t.Fatalf("premise: the parent is an org store row of acme/ (live: %v)", a.store.Files(storeLive(storeBranch)))
+			t.Fatalf("premise: the parent is an org store row of acme/ (live: %v)", a.store.Files(storeLiveRef))
 		}
 	}
 	_, kids := splitIDs(t, a.aliceApp, p, "export query", "download button")

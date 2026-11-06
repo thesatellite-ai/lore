@@ -106,7 +106,7 @@ func TestRecipe15_NoteOnATaskNotHeldGoesToTheStore(t *testing.T) {
 			// acme/.lore/data/comments/ (STORE_SERVER_SPEC 6.1, DECISIONS_LOG
 			// 18 STORE TARGETS), so both refs and both layouts count.
 			found := false
-			for _, ref := range []string{storeLive(storeBranch), refMain} {
+			for _, ref := range []string{storeLiveRef, refMain} {
 				for _, f := range a.store.Files(ref) {
 					if !strings.HasPrefix(f, folderAcme+"/") || !strings.Contains(f, "/"+tblComments+"/") {
 						continue
@@ -117,7 +117,7 @@ func TestRecipe15_NoteOnATaskNotHeldGoesToTheStore(t *testing.T) {
 				}
 			}
 			if !found {
-				t.Fatalf("the note must be a comment row of the store project %s/: live %v main %v", folderAcme, a.store.Files(storeLive(storeBranch)), a.store.Files(refMain))
+				t.Fatalf("the note must be a comment row of the store project %s/: live %v main %v", folderAcme, a.store.Files(storeLiveRef), a.store.Files(refMain))
 			}
 			if f := a.clientSees(t, tc.note); len(f) != 0 {
 				t.Fatalf("a work note must never reach the client repo: %v", f)
