@@ -63,11 +63,11 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 		if repo, rerr := gitref.Open(ctx, top, h.git()); rerr == nil && !repo.Bare() {
 			if s, serr := openLiveSession(ctx, h, repo, top, live.FetchCached); serr == nil {
 				if code, why := s.whyMissingCode(ctx, folder, id); why != "" {
-					e := errs.New(code, why)
+					explained := errs.New(code, why)
 					if code == errs.Purged {
-						e = e.WithHint(purgedHint)
+						explained = explained.WithHint(purgedHint)
 					}
-					return e
+					return explained
 				}
 				remote, branch = s.ref.RemoteName, s.defaultBranch(ctx)
 			}
