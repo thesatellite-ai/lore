@@ -182,8 +182,16 @@ func (b *browser) tables(defs []schema.TableDef) error {
 	}
 }
 
-// rows lists the live rows of table in every store, in store order.
+// rows lists the live rows of table in every store, in store order; a
+// resource row's sensitive field values are masked here (resmask.go).
 func (b *browser) rows(table row.Table) ([]hit, error) {
+	var kf map[string]kindFieldInfo
+	if table == schema.TableResources {
+		var err error
+		if kf, err = b.kindFields(); err != nil {
+			return nil, err
+		}
+	}
 	var out []hit
 	for _, s := range b.src.Stores() {
 		rs, err := b.src.List(b.ctx, s, table)
@@ -191,9 +199,13 @@ func (b *browser) rows(table row.Table) ([]hit, error) {
 			return nil, err
 		}
 		for _, r := range rs {
-			if !r.Deleted {
-				out = append(out, hit{src: s, r: r})
+			if r.Deleted {
+				continue
 			}
+			if kf != nil {
+				r = maskResource(kf, r)
+			}
+			out = append(out, hit{src: s, r: r})
 		}
 	}
 	return out, nil
