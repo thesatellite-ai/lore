@@ -199,6 +199,9 @@ func (r *Ref) changesFor(tree Tree, req WriteRequest) (gitref.Changes, []RowKey,
 		ch.Put[p] = b
 		written = append(written, k)
 	}
+	if err := raiseMeta(tree, ch, req.Rows, written); err != nil {
+		return gitref.Changes{}, nil, err
+	}
 	for _, k := range sortedRowKeys(req.Exact) {
 		b, err := req.Exact[k].Encode()
 		if err != nil {
@@ -287,6 +290,38 @@ func addRefFiles(tree Tree, ch gitref.Changes) error {
 			ch.Put[MetaPath] = b
 		}
 	}
+	return nil
+}
+
+// raiseMeta adds the features the written rows use to _live/meta.json in
+// the same commit as the rows (FORMAT_EVOLUTION rule 2: "in _live/meta.json
+// in the SAME live commit as the row"), raising min_lore_version to their
+// Since. Without it a lore that predates a feature passes the floor check
+// and rewrites the row without the fields it does not know
+// (F-COMPAT-LIVE-1: v0.1.17 dropped parent_id, lead and assignees).
+func raiseMeta(tree Tree, ch gitref.Changes, rows map[RowKey]File, written []RowKey) error {
+	files := make([]File, 0, len(written))
+	for _, k := range written {
+		if f, ok := rows[k]; ok {
+			files = append(files, f)
+		}
+	}
+	need := rowFeatures(files)
+	if len(need) == 0 {
+		return nil
+	}
+	cur, has := ch.Put[MetaPath]
+	if !has {
+		cur, has = tree[MetaPath]
+	}
+	if !has {
+		cur = nil
+	}
+	b, changed, err := raiseMetaFile(cur, need)
+	if err != nil || !changed {
+		return err
+	}
+	ch.Put[MetaPath] = b
 	return nil
 }
 

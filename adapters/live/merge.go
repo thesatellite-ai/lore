@@ -52,8 +52,10 @@ type MergeNote struct {
 //   - _live/purged.json: set union, and every purged id is removed from the
 //     result so a stale side can never bring it back (its tombstone stays,
 //     dropsPurged);
-//   - _live/meta.json and any other file: the side that changed it, theirs
-//     when both did.
+//   - _live/meta.json: features as a set and min_lore_version the higher
+//     version when both sides hold one (FORMAT_EVOLUTION rule 2), so a
+//     raised floor is never lost to a side that did not raise it;
+//   - any other file: the side that changed it, theirs when both did.
 //
 // The result is a whole tree; notes list every row both sides changed.
 func MergeTrees(base, ours, theirs Tree, strategies StrategySource) (Tree, []MergeNote, error) {
@@ -79,6 +81,16 @@ func MergeTrees(base, ours, theirs Tree, strategies StrategySource) (Tree, []Mer
 			continue
 		case PurgedPath:
 			continue // unioned below
+		case MetaPath:
+			if inO && inT && string(o) != string(t) {
+				// An unreadable side falls back to the plain rule below: the
+				// write gate (checkFloor) refuses on it anyway, and a read
+				// (fetch, integrate) must not fail on a hand-mangled file.
+				if m, err := mergeMetaFiles(o, t); err == nil {
+					out[p] = m
+					continue
+				}
+			}
 		}
 		folder, key, isRow := ParseRowPath(p)
 		if !isRow {

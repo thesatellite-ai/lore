@@ -20,9 +20,11 @@ carol (work/app)$ git log --oneline refs/lore/live
 carol (work/app)$ git cat-file -p refs/lore/live:_live/meta.json; echo; git cat-file -p refs/lore/live:_live/epoch
 {
   "features": [
-    "live"
+    "hlc",
+    "live",
+    "task_tree"
   ],
-  "min_lore_version": "0.1.0"
+  "min_lore_version": "0.1.18"
 }
 
 1

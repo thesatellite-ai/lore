@@ -42,6 +42,9 @@ const (
 	// (lsync decodeDoc): the person is told to upgrade.
 	oldNewerFormat = "file written by a newer lore format"
 	oldUpgrade     = "upgrade lore"
+	// oldLiveFloor is v0.1.17's refusal of any write verb once the live
+	// ref's min_lore_version is above it (its live_flags.go command gate).
+	oldLiveFloor = "this lore is too old to write live rows here"
 )
 
 // The v0.1.17 build is shared by every test of this process (one build of
@@ -214,6 +217,11 @@ func TestFinCompat_V017FreshCloneRefusesTreeRows(t *testing.T) {
 	old.WriteConfig(th.Config{Live: th.FreshFetch()})
 	co := old.Clone(rt.app, "app")
 	before := compatRowFiles(t, co, p, ch, l)
+	// Writes stop first at the live floor: dev1's `actor register` put its
+	// actor row on the live ref, which raised _live/meta.json to 0.1.18
+	// (FORMAT_EVOLUTION rule 2, F-COMPAT-LIVE-1), and v0.1.17 checks that
+	// floor before any write verb.
+	writes := map[string]bool{"edit": true, "add": true}
 	for _, args := range [][]string{
 		{"task", "list", "--json"},
 		{"task", "show", ch, "--json"},
@@ -223,8 +231,12 @@ func TestFinCompat_V017FreshCloneRefusesTreeRows(t *testing.T) {
 		{"sync"},
 	} {
 		r := runOld(t, co, args...)
-		if r.Code == 0 || !strings.Contains(r.Out(), oldNewerFormat) || !strings.Contains(r.Out(), oldUpgrade) {
-			t.Fatalf("%s %v in a fresh clone of a 0.1.18 repo stops and says %q / %q:\n%s", oldLoreTag, args, oldNewerFormat, oldUpgrade, r)
+		say := oldNewerFormat
+		if len(args) > 1 && writes[args[1]] {
+			say = oldLiveFloor
+		}
+		if r.Code == 0 || !strings.Contains(r.Out(), say) || !strings.Contains(r.Out(), oldUpgrade) {
+			t.Fatalf("%s %v in a fresh clone of a 0.1.18 repo stops and says %q / %q:\n%s", oldLoreTag, args, say, oldUpgrade, r)
 		}
 		if strings.Contains(r.Stdout, p) || strings.Contains(r.Stdout, l) {
 			t.Fatalf("%s %v printed a 0.1.18 row it cannot read:\n%s", oldLoreTag, args, r)
@@ -310,11 +322,18 @@ func TestFinCompat_V017ExistingCloneSkipsTreeRows(t *testing.T) {
 		runOld(t, co, "task", "show", id, "--json").Fails(t, th.ExitError, "E_NOT_FOUND", oldNewerFormat)
 	}
 	// Writes through v0.1.17: an edit of a row it holds from before (now a
-	// child with a lead on 0.1.18) and of a row it cannot read; a new task
-	// of its own; a sync.
-	mustOld(co, "task", "edit", legacy, "--priority", "high", "--no-live")
-	runOld(t, co, "task", "edit", ch, "--priority", "high", "--no-live").Fails(t, th.ExitError, "E_NOT_FOUND")
-	mine := mustID(t, mustOld(co, "task", "add", "old one", "--tasklist", tl, "--no-live"), "tsk")
+	// child with a lead on 0.1.18) and of a row it cannot read, and a new
+	// task of its own, all stop with E_OLD_LORE: dev1's `actor register`
+	// put its actor row on the live ref, which raised _live/meta.json to
+	// 0.1.18 (FORMAT_EVOLUTION rule 2, F-COMPAT-LIVE-1), and v0.1.17 checks
+	// that floor before every write verb. A sync still runs.
+	for _, args := range [][]string{
+		{"task", "edit", legacy, "--priority", "high", "--no-live"},
+		{"task", "edit", ch, "--priority", "high", "--no-live"},
+		{"task", "add", "old one", "--tasklist", tl, "--no-live"},
+	} {
+		runOld(t, co, args...).Fails(t, th.ExitGuard, "E_OLD_LORE", oldLiveFloor, oldUpgrade)
+	}
 	runOld(t, co, "sync").Says(t, oldNewerFormat)
 	requireFilesUnchanged(t, co, before, "after its edits and sync")
 
@@ -328,5 +347,4 @@ func TestFinCompat_V017ExistingCloneSkipsTreeRows(t *testing.T) {
 	if v := compatShow(t, c1, legacy); v.Data.Priority == "high" {
 		t.Fatalf("a v0.1.17 edit of a `_v: 2` row reached the file: %+v", v.Data)
 	}
-	compatShow(t, c1, mine) // v0.1.17's own new row still reads on 0.1.18
 }
