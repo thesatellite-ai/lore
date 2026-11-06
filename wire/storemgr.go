@@ -337,6 +337,12 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 	m, _ := b.(markerOf)
 	_ = b.Close() // only opened to check it is a store
 	if m == nil || m.Marker().Version == 0 {
+		if in.Branch != "" && a.isStoreAt(ctx, attach.Store{Name: s.Name, URL: s.URL}) {
+			// the default branch is a store: the pinned branch is what is
+			// missing (D3), not the marker (G-CORE-5)
+			return opsstores.Entry{}, errs.New(errs.NotFound, "store add: the store has no branch "+in.Branch+" (its default branch is a lore store)").
+				WithHint("create the branch in the store repo from its default branch (git push origin <default>:" + in.Branch + "), then attach it")
+		}
 		return opsstores.Entry{}, errs.Wrap(errs.NotAStore, "store add: "+in.Name+" has no "+rowfs.MarkerFile, store.ErrNotAStore).
 			WithHint("make it a store first: lore store init " + in.Name + " <url>")
 	}
@@ -358,6 +364,22 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 		return opsstores.Entry{}, err
 	}
 	return opsstores.Entry{Name: in.Name, URL: in.URL, Folder: in.Folder, ReadOnly: in.ReadOnly, Branch: in.Branch}, nil
+}
+
+// isStoreAt reports whether s (its default branch) opens as a 0.1.18
+// store; any error is false (the caller keeps its own refusal).
+func (a *App) isStoreAt(ctx context.Context, s attach.Store) bool {
+	canon, err := canonical(s)
+	if err != nil {
+		return false
+	}
+	b, err := a.openStore(ctx, canon, s.URL)
+	if err != nil {
+		return false
+	}
+	m, _ := b.(markerOf)
+	_ = b.Close()
+	return m != nil && m.Marker().Version != 0
 }
 
 // RemoveStore implements opsstores.Manager.

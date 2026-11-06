@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 )
@@ -64,13 +65,13 @@ type DoctorIn struct{}
 
 // OpenIn is the input of store.open.
 type OpenIn struct {
-	URL    string `json:"url" arg:"0" desc:"the store url (any form a configured store uses)"`
+	URL    string `json:"url" arg:"0" desc:"the store url (any form a configured store uses) or a store name this repo attaches"`
 	Branch string `json:"branch,omitempty" flag:"branch" desc:"store branch (default: the entry's branch)"`
 }
 
 // ForgetIn is the input of store.forget.
 type ForgetIn struct {
-	URL string `json:"url" arg:"0" desc:"the store url whose clone this machine drops"`
+	URL string `json:"url" arg:"0" desc:"the store url (or a store name this repo attaches) whose clone this machine drops"`
 }
 
 // CloneLink is one link of a store's cached link index (--links).
@@ -212,6 +213,29 @@ func cloner(m Manager, cmd string) (Cloner, error) {
 	return c, nil
 }
 
+// storeNamed resolves a store NAME given to store open|forget (a
+// stores.yaml name or me, as `lore store remove` tells the person to run
+// `lore store forget <name>`; G-CORE-5) to its entry. A url (anything that
+// is not a snake_case name) is left as it is (named false). A name this
+// repo does not see is E_NOT_FOUND; outside a repo there are no names, so
+// a name is refused the same way with the url form in the hint.
+func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, error) {
+	name := strings.TrimSpace(raw)
+	if !row.ValidName(name) {
+		return Entry{}, false, nil
+	}
+	list, err := m.ListStores(ctx)
+	if err == nil {
+		for _, e := range list {
+			if e.Name == name {
+				return e, true, nil
+			}
+		}
+	}
+	return Entry{}, false, errs.New(errs.NotFound, "store "+cmd+": no store named "+name+" in this repo").
+		WithHint("run `lore store list`, or give the store url (lore store " + cmd + " <url>)")
+}
+
 // cloneOps are the clone commands bound to m.
 func cloneOps(m Manager) []op.Entry {
 	return []op.Entry{
@@ -236,6 +260,16 @@ func cloneOps(m Manager) []op.Entry {
 			if err != nil {
 				return OpenOut{}, err
 			}
+			e, named, err := storeNamed(ctx, m, "open", in.URL)
+			if err != nil {
+				return OpenOut{}, err
+			}
+			if named {
+				in.URL = e.URL
+				if in.Branch == "" {
+					in.Branch = e.Branch
+				}
+			}
 			return c.OpenClone(ctx, in)
 		}),
 		op.Define(op.Spec{
@@ -248,6 +282,13 @@ func cloneOps(m Manager) []op.Entry {
 			c, err := cloner(m, "forget")
 			if err != nil {
 				return ForgetOut{}, err
+			}
+			e, named, err := storeNamed(ctx, m, "forget", in.URL)
+			if err != nil {
+				return ForgetOut{}, err
+			}
+			if named {
+				in.URL = e.URL
 			}
 			return c.ForgetClone(ctx, in)
 		}),

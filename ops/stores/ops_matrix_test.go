@@ -76,7 +76,7 @@ func (f *fakeEnv) OpenClone(_ context.Context, in OpenIn) (OpenOut, error) {
 }
 
 func (f *fakeEnv) ForgetClone(_ context.Context, in ForgetIn) (ForgetOut, error) {
-	if in.URL == "none" {
+	if in.URL == "git@h:none" {
 		return ForgetOut{URL: in.URL, Shown: in.URL}, nil
 	}
 	return ForgetOut{URL: in.URL, Removed: "/c/" + in.URL, Shown: in.URL}, nil
@@ -145,8 +145,11 @@ func TestOpsMatrix(t *testing.T) {
 		{"set-url no url", OpSetURL, `{"name":"kit"}`, "", nil, "", errs.InvalidInput},
 		{"open", OpOpen, `{"url":"git@h:a/n"}`, "", []string{`"commit":"0123456789abcdef0123"`},
 			"✓ /w/git@h:a/n at main (0123456789ab, detached; read-only by convention — lore writes the branch itself)\n", ""},
-		{"forget", OpForget, `{"url":"u"}`, "", []string{`"removed":"/c/u"`}, "✓ forgot u (removed /c/u; the next command that needs it clones it again)\n", ""},
-		{"forget none", OpForget, `{"url":"none"}`, "", nil, "no clone of none on this machine; nothing to forget\n", ""},
+		{"forget", OpForget, `{"url":"git@h:u"}`, "", []string{`"removed":"/c/git@h:u"`}, "✓ forgot git@h:u (removed /c/git@h:u; the next command that needs it clones it again)\n", ""},
+		{"forget none", OpForget, `{"url":"git@h:none"}`, "", nil, "no clone of git@h:none on this machine; nothing to forget\n", ""},
+		// a store name resolves to its stores.yaml url (G-CORE-5); an unknown name is refused
+		{"forget by name", OpForget, `{"url":"kit"}`, "", []string{`"removed":"/c/file:///s/kit"`}, "", ""},
+		{"forget unknown name", OpForget, `{"url":"nope"}`, "", nil, "", errs.NotFound},
 		{"show", OpShow, `{}`, "", []string{`"stores":[{`, `"unpushed":[]`, `"problems":[]`}, "", ""},
 	}
 	for _, c := range cases {
