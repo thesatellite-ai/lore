@@ -57,6 +57,7 @@ func StandaloneOptionsOrg(repoDir, home, workDir, version string) (Options, *Org
 		WorkDir:        workDir,
 		Version:        version,
 		AllowNetworkFS: os.Getenv(rowfs.AllowNetworkFSEnv) == envOn,
+		ModeB:          V017ModeB{}, // `lore migrate run` converts a v0.1.17 Mode B repo (Q-MODEB)
 	}
 	dir := workDir
 	if dir == "" {
