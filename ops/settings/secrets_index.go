@@ -127,7 +127,7 @@ func (o ops) rowUses(l located) []SecretUse {
 			}
 		}
 	}
-	return out
+	return append(out, metaUses(l.Row, base)...) // later 508: metadata values too (secrets_meta.go)
 }
 
 // fieldTexts are the texts of a text, text-list or json field (a json

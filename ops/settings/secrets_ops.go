@@ -586,11 +586,18 @@ func (o ops) rewriteRow(ctx context.Context, r secretRow, fix rewriter) (int, er
 		return n, err
 	}
 	patch, n, err := rowPatch(r.Row, fix)
-	if err != nil || n == 0 {
+	if err != nil {
 		return 0, err
 	}
+	mw, mn, err := metaRewrite(r.Row, fix) // later 508: references in metadata values (secrets_meta.go)
+	if err != nil || n+mn == 0 {
+		return 0, err
+	}
+	if mn > 0 {
+		ctx = engine.WithMeta(ctx, mw)
+	}
 	_, err = o.env.Update(ctx, ref, patch)
-	return n, err
+	return n + mn, err
 }
 
 // bareRewrite applies fix to a bare manager://… value.
