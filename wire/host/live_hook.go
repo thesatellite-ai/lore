@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/clock"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
@@ -71,6 +72,12 @@ type LiveConfig struct {
 	// passes wire.App.LoreSignature, the signer of every core store commit
 	// (r3-sign). nil, or ok=false, signs as liveSignatureFallback.
 	Signer func(ctx context.Context) (name, email string, ok bool)
+	// OrgLive is the `live:` block of the org entry this repo resolves to
+	// (orgs[].live in config.yaml; nil when no org or no block): its keys
+	// override the top-level live: ones for this command (P3-MODEB-2,
+	// CONFIG_GUIDE "overridden per org entry"). cmd/lore passes the org
+	// resolution's entry; nil reads only the top level.
+	OrgLive func(ctx context.Context) *orgconf.Live
 	// MetaStatus gives the metadata lines of `lore sync status`
 	// (quarantined rows, registries past their key cap; FA-META-11);
 	// cmd/lore passes wire.App.MetaStatusLines. nil prints none.

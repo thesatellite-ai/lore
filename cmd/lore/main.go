@@ -30,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/wire"
@@ -111,7 +112,14 @@ func run(ctx context.Context, args []string) int {
 		RepoAddresses: func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) },
 		// FLAG4: live commits fall back to the lore identity, as store commits do.
 		Signer:     func(ctx context.Context) (string, string, bool) { return app.LoreSignature(ctx) },
-		MetaStatus: func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) }})
+		MetaStatus: func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) },
+		// P3-MODEB-2: the resolved org entry's live: block overrides the top level.
+		OrgLive: func(ctx context.Context) *orgconf.Live {
+			if sit, err := org.Situation(ctx); err == nil && sit != nil && sit.Result.Org != nil {
+				return sit.Result.Org.Live
+			}
+			return nil
+		}})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
 	// F9: the lazy done -> merged check before task list / next, inbox and
 	// mission status, inside the live hook (mergedcheck.go).

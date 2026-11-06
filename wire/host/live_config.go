@@ -2,8 +2,9 @@ package host
 
 // live_config.go — the `live:`, `lease.push_retries` and `default_branch`
 // keys of ~/.lore/config.yaml that live rows read (LORE_TEAM_SPEC §1
-// "Config"; v0.1.17 lorecfg.LiveFor). Only the top-level blocks are read:
-// the per-org `live:` override is not wired for cmd/lore yet (P3-MODEB-2).
+// "Config"; v0.1.17 lorecfg.LiveFor): the top-level blocks, then the
+// repo's org entry's `live:` block per key (liveSettings.override,
+// P3-MODEB-2).
 
 import (
 	"os"
@@ -103,4 +104,31 @@ func loadLiveSettings(home string) liveSettings {
 	}
 	s.DefaultBranch = f.DefaultBranch
 	return s
+}
+
+// override applies an org entry's live: block over s, key by key (a key
+// the entry leaves unset keeps the top level's value; defaults merge per
+// kind), as v0.1.17 lorecfg.LiveFor(org) did. nil changes nothing.
+func (s *liveSettings) override(l *orgconf.Live) {
+	if l == nil {
+		return
+	}
+	for k, v := range l.Defaults {
+		s.Defaults[k] = v
+	}
+	if l.FetchTTL != nil {
+		s.FetchTTL = l.FetchTTL.D()
+	}
+	if l.MaxAge != nil {
+		s.MaxAge = l.MaxAge.D()
+	}
+	if l.Autopush != nil {
+		s.Autopush = *l.Autopush
+	}
+	if l.CompactAfter != nil {
+		s.CompactAfter = *l.CompactAfter
+	}
+	if l.Remote != "" {
+		s.Remote = l.Remote
+	}
 }

@@ -108,6 +108,9 @@ func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top st
 		return nil, fmt.Errorf("locate .git: %w", err)
 	}
 	cfg := loadLiveSettings(h.cfg.Home)
+	if h.cfg.OrgLive != nil {
+		cfg.override(h.cfg.OrgLive(ctx)) // P3-MODEB-2: the repo's org entry wins per key
+	}
 	s := &liveSession{
 		h: h, top: top, repo: repo, cfg: cfg, clk: h.clock(), kind: kind,
 		stateDir: filepath.Join(strings.TrimSpace(string(out)), liveStateDirName),
