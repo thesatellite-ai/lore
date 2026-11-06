@@ -15,8 +15,17 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
+
+// missingPersonalStore is the engine's not-found text for `--to me` with
+// no personal store attached (engine.Attached: "no store named me is
+// attached").
+const missingPersonalStore = "no store named " + orgconf.TargetMe + " is attached"
+
+// personalStoreHint is what a person runs before `--to me` works.
+const personalStoreHint = "your personal store is not set up: run `lore store init me` (a local folder) or `lore store init me <url>`, then run the command again"
 
 // purgedFileName is the branch's list of ids deleted on purpose.
 const purgedFileName = "_purged.json"
@@ -24,10 +33,19 @@ const purgedFileName = "_purged.json"
 // explainNotFound is LiveHook's OnError.
 func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) error {
 	var e *errs.Error
-	if len(run.Args) == 0 || !errors.As(err, &e) || e.Code != errs.NotFound || e.Hint != "" || !looksLikeRowID(run.Args[0]) {
+	if !errors.As(err, &e) || e.Code != errs.NotFound || e.Hint != "" {
+		return err
+	}
+	if strings.Contains(e.Message, missingPersonalStore) {
+		return e.WithHint(personalStoreHint) // the TARGET is missing, not the row
+	}
+	if len(run.Args) == 0 || !looksLikeRowID(run.Args[0]) {
 		return err
 	}
 	id := run.Args[0]
+	if !strings.Contains(e.Message, id) {
+		return err // not-found of something else (a target store, a parent): the row was found
+	}
 	noun, _, _ := strings.Cut(run.Entry.Spec().Name, ".")
 	table, idKnown := tableOfID(id)
 	nounTable, nounKnown := tableOfNoun(noun)

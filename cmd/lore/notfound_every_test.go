@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -64,3 +65,41 @@ func TestNotFoundHintForEveryCoreNoun(t *testing.T) {
 		t.Fatalf("only %d nouns checked: the noun walk is broken", checked)
 	}
 }
+
+// TestNotFoundHintOnlyForTheRow (t-e2e6): a not-found about the TARGET of
+// a found row is never answered with the row's peek hint: `--to me` with
+// no personal store names `lore store init me`, an unknown store name gets
+// no peek hint; a missing row id still gets it.
+func TestNotFoundHintOnlyForTheRow(t *testing.T) {
+	asPerson(t)
+	envScopeRepo(t)
+	code, out, errOut := runCaptured(t, "memory", "add", "--body", "a note to move")
+	if code != 0 {
+		t.Fatalf("memory add: %d %s", code, errOut)
+	}
+	id := memIDRe.FindString(out + errOut)
+	if id == "" {
+		t.Fatalf("no id in %q", out)
+	}
+	cases := []struct {
+		name    string
+		args    []string
+		want    string // substring of stderr
+		notWant string
+	}{
+		{"to me, no personal store", []string{"move", id, "--to", "me"}, "lore store init me", "lore sync peek"},
+		{"to an unknown store", []string{"move", id, "--to", "nosuchstore"}, "no store named nosuchstore", "lore sync peek"},
+		{"missing row", []string{"move", "mem_01a1a5aca7f57659be7320c5f4b7f00d", "--to", "repo"}, "lore sync peek", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			code, _, errOut := runCaptured(t, c.args...)
+			if code == 0 || !strings.Contains(errOut, c.want) || (c.notWant != "" && strings.Contains(errOut, c.notWant)) {
+				t.Fatalf("exit %d, stderr:\n%s\nwant %q, not %q", code, errOut, c.want, c.notWant)
+			}
+		})
+	}
+}
+
+// memIDRe finds a memory id in command output.
+var memIDRe = regexp.MustCompile(`mem_[0-9a-f]{32}`)
