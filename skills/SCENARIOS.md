@@ -78,7 +78,7 @@ lore render
 ### B.5 User: "I keep forgetting that ent regen wipes resolver/ helpers"
 ```bash
 lore hotfix add --severity=high --title="ent regen wipes resolver/ helpers" \
-    --body="ent regen wipes hand-written code in resolver/. Keep helpers in internal/, lace/, or saas/pkg/."
+    --body="ent regen wipes hand-written code in resolver/. Keep helpers in internal/ or pkg/."
 lore render
 ```
 
@@ -132,7 +132,7 @@ lore render
 ```bash
 lore suggestion add \
     --title="Rate-limit /api/* endpoints" \
-    --body="Public endpoints currently uncapped. Suggest: 100req/min per IP, 1000req/min per API key. Use lace/ratelimit pkg."
+    --body="Public endpoints currently uncapped. Suggest: 100req/min per IP, 1000req/min per API key. Use the shared ratelimit pkg."
 lore render
 ```
 

@@ -43,8 +43,8 @@ A monotonically-increasing per-project integer per entity kind. Lets users say `
 ## doctor
 Health-check command. Exits 0 (healthy), 1 (degraded), 2 (broken). Returns structured JSON with `--json`. Probes: DB integrity, schema presence, identity resolution, WAL size.
 
-## ent
-The ORM used by lore. Schema-first (Go), code-gen'd. Schemas at `dbent/schema/`. Generated code at `dbent/gen/ent/` — never edit by hand.
+## TableDef
+The one Go definition of a table (fields, relations, on-delete rules), declared with `schema.Table(...)` in the `schema/` package. It drives the cache tables, foreign keys, indexes, CLI flags, REST routes and the docs. No code generation: the SQLite cache is built from the TableDefs at run time (`adapters/cache/sqlite`). lore v0.1.17 used the ent ORM; 0.1.18 removed it.
 
 ## entity_table / entity_id
 The polymorphic FK pattern for `comments` and `entity_tags` tables. `entity_table` is the literal table name (e.g., `"memories"`), `entity_id` is the opaque ID.
@@ -104,7 +104,7 @@ Reusable code shape captured for future reference.
 Reusable multi-step procedure (different from this docs' playbooks file — same idea, different scope).
 
 ## Prefix
-The 3-character identifier prefix on every opaque ID. `mem_` = memory, `rul_` = rule, `dec_` = decision, etc. 32 registered prefixes; see `saas/pkg/lore/ids/registry.go`.
+The 3-character identifier prefix on every opaque ID. `mem_` = memory, `rul_` = rule, `dec_` = decision, etc. 86 registered prefixes; see `model/ids/prefixes.go`.
 
 ## Project
 The top-level scope in lore. One project per `lore init`. Has many repos.

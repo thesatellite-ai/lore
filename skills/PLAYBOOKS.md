@@ -71,7 +71,7 @@ User: "ugh, ent regen wiped my resolver helpers AGAIN."
 lore hotfix add \
     --severity=high \
     --title="ent regen overwrites resolver/" \
-    --body="ent regen overwrites resolver/ files — keep helpers in internal/, lace/, or saas/pkg/"
+    --body="ent regen overwrites resolver/ files — keep helpers in internal/ or pkg/"
 lore render
 ```
 
