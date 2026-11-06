@@ -310,8 +310,14 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 			return opstask.Assignee{TeamID: x.ID}, nil
 		}
 	}
-	return opstask.Assignee{}, errs.New(errs.NotFound, "no person or team with handle @"+h).
-		WithHint("people join with `lore actor register`")
+	// An org roster's miss keeps its sync hint (the store copy may predate
+	// a teammate's registration, v0.1.17 rosterMissHint); the repo's own
+	// roster has no copy to be stale, so it only says to register.
+	hint := "people join with `lore actor register`"
+	if r.src != store.SourceRepo {
+		hint = r.missHint()
+	}
+	return opstask.Assignee{}, errs.New(errs.NotFound, "no person or team with handle @"+h).WithHint(hint)
 }
 
 // coordRoster is the roster @handles resolve on (repoRoster's place,
