@@ -18,8 +18,29 @@ import (
 )
 
 // markerStart is the cheap pre-check: no document without it can hold a
-// conflict block, so the fields are only walked when the bytes have it.
-var markerStart = []byte("<<<<<<< ")
+// conflict block written with a raw '<', so the fields are only walked
+// when the bytes have it, or when the document escapes '<' (escapedLess).
+var markerStart = []byte("<<<<<<<")
+
+// escapedLess is '<' as a JSON escape (\u003c, any hex case). lore's own
+// writers emit a raw '<', but other JSON encoders (Go's json.Marshal by
+// default) write \u003c, so "<<<<<<< " never appears in the bytes while the
+// decoded text still holds the markers: such a document is walked too.
+var escapedLess = [][]byte{[]byte(`\u003c`), []byte(`\u003C`)}
+
+// mayHoldMarkers is the pre-check on the raw bytes: a raw marker start, or
+// any escaped '<' (case-insensitive hex).
+func mayHoldMarkers(doc []byte) bool {
+	if bytes.Contains(doc, markerStart) {
+		return true
+	}
+	for _, e := range escapedLess {
+		if bytes.Contains(doc, e) {
+			return true
+		}
+	}
+	return false
+}
 
 // decodeImportable is DecodeRowFile for the import path (Read, Problems):
 // a document whose text field, or any string inside a meta entry, still
@@ -33,7 +54,7 @@ var markerStart = []byte("<<<<<<< ")
 // file as it is, so a person or `lore sync` can show and resolve it.
 func decodeImportable(rel string, doc []byte) (store.Row, error) {
 	r, err := DecodeRowFile(rel, doc)
-	if err != nil || !bytes.Contains(doc, markerStart) {
+	if err != nil || !mayHoldMarkers(doc) {
 		return r, err
 	}
 	full, err := row.Decode(doc)
