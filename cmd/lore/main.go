@@ -126,6 +126,9 @@ func run(ctx context.Context, args []string) int {
 			return nil
 		}})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
+	// E-FATES-5: after an upgrade, a writing command or `lore sync` moves an
+	// auto-pinned lore-sync-merge workflow to this release (v0.1.17 notice).
+	hooks = append(hooks, hosthooks.PinRefreshHook(wd, version, os.Stderr))
 	// F9: the lazy done -> merged check before task list / next, inbox and
 	// mission status, inside the live hook (mergedcheck.go).
 	hooks = append(hooks, mergedCheckHook(func(ctx context.Context) { app.MergedCheck(ctx, os.Stderr) }))
