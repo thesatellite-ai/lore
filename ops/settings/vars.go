@@ -153,7 +153,7 @@ func (o ops) varOps() []op.Entry {
 			Errors: readErrors}, o.varsList),
 		op.Define(op.Spec{Name: OpVarsShow, Summary: "Show one variable", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors}, o.varsShow),
 		op.Define(op.Spec{Name: OpVarsSet, Summary: "Set a variable (adds it, or changes its value in that place)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true},
+			Errors: append(slices.Clone(writeErrors), errs.RefDangling, errs.RefCycle), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "a dns variable", CLI: "lore vars set db_host db.example.com --type dns", Want: "var_"}}}, o.varsSet),
 		op.Define(op.Spec{Name: OpVarsRename, Summary: "Rename a variable (the old name stays an alias)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors}, o.varsRename),
@@ -242,6 +242,12 @@ func (o ops) varsSet(ctx context.Context, in VarsSetIn) (RowOut, error) {
 		in.Value = v
 	}
 	if err := refs.Validate(in.Value); err != nil {
+		return RowOut{}, err
+	}
+	// SEC 8.3 / CLI_REFERENCE vars set: a value that would close a loop of
+	// variables is refused now, not at the first expansion (always, also
+	// with --allow-dangling: a dangling name cannot close a loop)
+	if err := o.checkVarCycle(ctx, in.Name, in.Value); err != nil {
 		return RowOut{}, err
 	}
 	if !in.AllowDangling {
@@ -406,6 +412,77 @@ func readStdinValue() (string, error) {
 
 // checkVarRefs refuses a value citing a variable no store this repo sees
 // defines (2.8). A variable citing itself is a cycle, refused the same way.
+// varRefNames are the ${var:…} names a value refers to directly.
+func varRefNames(val string) []string {
+	var names []string
+	for _, r := range refs.References(val) {
+		if r.Scheme == refs.SchemeVar && r.Modifier == refs.ModNone {
+			names = append(names, r.Target)
+		}
+	}
+	return names
+}
+
+// checkVarCycle refuses E_REF_CYCLE when self's new value val reaches self
+// again through the variables every attached store holds (by name, id or
+// alias: an alias and its name count as one, SEC 8.3); the message prints
+// the chain (var:a -> var:b -> var:a).
+func (o ops) checkVarCycle(ctx context.Context, self, val string) error {
+	if len(varRefNames(val)) == 0 {
+		return nil
+	}
+	rows, err := liveRows(ctx, o.env, o.env.Stores(), schema.TableVars)
+	if err != nil {
+		return err
+	}
+	canon := map[string]string{} // name, id or alias -> name
+	values := map[string]string{}
+	for _, l := range rows {
+		n := text(l.Row, vName)
+		canon[n], canon[l.Row.ID.String()] = n, n
+		for _, a := range texts(l.Row, vAliases) {
+			canon[a] = n
+		}
+		if _, seen := values[n]; !seen { // nearest store first
+			values[n] = display(fromJSON(l.Row.Fields[vValue]))
+		}
+	}
+	if c, ok := canon[self]; ok {
+		self = c
+	}
+	canon[self] = self
+	values[self] = val
+	var walk func(n string, chain []string) []string
+	visited := map[string]bool{}
+	walk = func(n string, chain []string) []string {
+		for _, r := range varRefNames(values[n]) {
+			next, ok := canon[r]
+			if !ok {
+				continue // dangling: checkVarRefs' question
+			}
+			if next == self {
+				return append(chain, next)
+			}
+			if visited[next] {
+				continue
+			}
+			visited[next] = true
+			if got := walk(next, append(chain, next)); got != nil {
+				return got
+			}
+		}
+		return nil
+	}
+	if chain := walk(self, []string{self}); chain != nil {
+		for i, n := range chain {
+			chain[i] = "var:" + n
+		}
+		return errs.New(errs.RefCycle, "variables refer to each other in a loop: "+strings.Join(chain, " -> ")).
+			WithHint("break the chain: give one of them a plain value; nothing written")
+	}
+	return nil
+}
+
 func (o ops) checkVarRefs(ctx context.Context, self, val string) error {
 	var names []string
 	for _, r := range refs.References(val) {
