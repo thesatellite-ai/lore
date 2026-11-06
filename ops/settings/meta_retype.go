@@ -199,9 +199,17 @@ func (o ops) retypeAllowed(ctx context.Context, k located, name string, old, nt 
 // appended.
 func (o ops) metaTypeHistory(ctx context.Context, k located, old string) (value.Value, error) {
 	var hist []metaTypeHistoryEntry
-	if j, ok := k.Row.Fields[mTypeHistory].(value.JSON); ok {
-		if err := json.Unmarshal(j.Raw(), &hist); err != nil {
-			return nil, errs.Wrap(errs.ConfigInvalid, "meta key "+k.Row.ID.String()+": type_history is not a list", err)
+	// any stored shape (the cache may hand back a value other than
+	// value.JSON): read it through its JSON form, as loosen reads changed_by
+	if raw, ok := k.Row.Fields[mTypeHistory]; ok && raw != nil {
+		b, merr := raw.MarshalJSON()
+		if merr != nil {
+			return nil, errs.Wrap(errs.ConfigInvalid, "meta key "+k.Row.ID.String()+": type_history", merr)
+		}
+		if string(b) != "null" {
+			if err := json.Unmarshal(b, &hist); err != nil {
+				return nil, errs.Wrap(errs.ConfigInvalid, "meta key "+k.Row.ID.String()+": type_history is not a list", err)
+			}
 		}
 	}
 	by := ""
