@@ -23,16 +23,16 @@ func conflictBlock(ours, theirs string) string {
 	return "<<<<<<< ours\n" + ours + "\n=======\n" + theirs + "\n>>>>>>> theirs"
 }
 
-// markLive rewrites the live file of table/id with title (a conflict
+// markLive rewrites the live file of task id with title (a conflict
 // block or plain text) as a new live version, the way a live merge
 // leaves a text clash (F4).
-func (f ltFixture) markLive(t *testing.T, table, id, title string) {
+func (f ltFixture) markLive(t *testing.T, id, title string) {
 	t.Helper()
 	_, files, err := f.b.liveFiles(f.ctx, f.s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	k := live.RowKey{Table: table, ID: id}
+	k := live.RowKey{Table: schema.TableTasks, ID: id}
 	prev, ok := files[k]
 	if !ok {
 		t.Fatalf("fixture: %s is not live", k)
@@ -45,14 +45,14 @@ func (f ltFixture) markLive(t *testing.T, table, id, title string) {
 	}
 }
 
-// liveTitle is the live title of table/id.
-func (f ltFixture) liveTitle(t *testing.T, table, id string) string {
+// liveTitle is the live title of task id.
+func (f ltFixture) liveTitle(t *testing.T, id string) string {
 	t.Helper()
 	_, files, err := f.b.liveFiles(f.ctx, f.s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return files[live.RowKey{Table: table, ID: id}].Body.Str("title")
+	return files[live.RowKey{Table: schema.TableTasks, ID: id}].Body.Str("title")
 }
 
 // twoConflicts is a live fixture with two conflicted tasks (A, B, in
@@ -66,8 +66,8 @@ func twoConflicts(t *testing.T) ltFixture {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	f.markLive(t, schema.TableTasks, ltTaskA, conflictBlock("A mine", "A theirs"))
-	f.markLive(t, schema.TableTasks, ltTaskB, "before\n"+conflictBlock("B mine", "B theirs")+"\nafter")
+	f.markLive(t, ltTaskA, conflictBlock("A mine", "A theirs"))
+	f.markLive(t, ltTaskB, "before\n"+conflictBlock("B mine", "B theirs")+"\nafter")
 	return f
 }
 
@@ -105,10 +105,10 @@ func TestLiveSyncConflictsAndResolve(t *testing.T) {
 			if !strings.Contains(out.Done, "took "+c.take) {
 				t.Fatalf("done line: %q", out.Done)
 			}
-			if got := f.liveTitle(t, schema.TableTasks, ltTaskA); got != c.wantA {
+			if got := f.liveTitle(t, ltTaskA); got != c.wantA {
 				t.Fatalf("A title %q, want %q", got, c.wantA)
 			}
-			if got := f.liveTitle(t, schema.TableTasks, ltTaskB); got != c.wantB {
+			if got := f.liveTitle(t, ltTaskB); got != c.wantB {
 				t.Fatalf("B title %q, want %q", got, c.wantB)
 			}
 			after, err := l.SyncConflicts(f.ctx, opssync.ConflictsIn{})
@@ -141,12 +141,12 @@ func TestLiveSyncResolveRefusals(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := twoConflicts(t)
-			before, wrote := f.liveTitle(t, schema.TableTasks, ltTaskA), f.s.wrote
+			before, wrote := f.liveTitle(t, ltTaskA), f.s.wrote
 			_, err := liveSync{h: f.s.h}.SyncResolve(f.ctx, opssync.ResolveIn{ID: c.n, Take: c.take})
 			if !errs.Has(err, c.code) {
 				t.Fatalf("err = %v, want %s", err, c.code)
 			}
-			if got := f.liveTitle(t, schema.TableTasks, ltTaskA); got != before || f.s.wrote != wrote {
+			if got := f.liveTitle(t, ltTaskA); got != before || f.s.wrote != wrote {
 				t.Fatalf("a refusal wrote: title %q wrote %d -> %d", got, wrote, f.s.wrote)
 			}
 		})
@@ -161,12 +161,12 @@ func TestLiveSyncResolveRefusesLeftoverMarkers(t *testing.T) {
 		t.Fatal(err)
 	}
 	nested := "<<<<<<< ours\n" + conflictBlock("x", "y") + "\n=======\nz\n>>>>>>> theirs"
-	f.markLive(t, schema.TableTasks, ltTaskA, nested)
+	f.markLive(t, ltTaskA, nested)
 	_, err := liveSync{h: f.s.h}.SyncResolve(f.ctx, opssync.ResolveIn{ID: "1", Take: "other"})
 	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "still holds conflict markers") {
 		t.Fatalf("err = %v", err)
 	}
-	if got := f.liveTitle(t, schema.TableTasks, ltTaskA); got != nested {
+	if got := f.liveTitle(t, ltTaskA); got != nested {
 		t.Fatalf("a refused resolve changed the row: %q", got)
 	}
 }
@@ -178,12 +178,12 @@ func TestLiveSyncResolveLeakCheckRefuses(t *testing.T) {
 	f := twoConflicts(t)
 	blocked := errs.New(errs.LeakBlocked, "test leak check")
 	f.s.h.cfg.LeakCheck = func(context.Context, string, map[string][]byte) error { return blocked }
-	before := f.liveTitle(t, schema.TableTasks, ltTaskA)
+	before := f.liveTitle(t, ltTaskA)
 	_, err := liveSync{h: f.s.h}.SyncResolve(f.ctx, opssync.ResolveIn{ID: "1", Take: "kept"})
 	if !errors.Is(err, blocked) {
 		t.Fatalf("err = %v, want the leak refusal", err)
 	}
-	if got := f.liveTitle(t, schema.TableTasks, ltTaskA); got != before {
+	if got := f.liveTitle(t, ltTaskA); got != before {
 		t.Fatalf("a leak-refused resolve wrote: %q", got)
 	}
 }
