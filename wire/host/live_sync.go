@@ -23,10 +23,8 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/live"
-	"github.com/thesatellite-ai/lore/logic/canonjson"
-	"github.com/thesatellite-ai/lore/logic/merge3"
+	"github.com/thesatellite-ai/lore/logic/conflictpick"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/model/row"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -310,7 +308,7 @@ func (l liveSync) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 	if hit == nil {
 		return opssync.DoneOut{}, errs.New(errs.NotFound, fmt.Sprintf("no open conflict #%d", n)).WithHint("lore sync conflicts lists them")
 	}
-	body := settleObject(hit.File.Body, take == takeOther)
+	body := conflictpick.Object(hit.File.Body, take == takeOther)
 	prev := hit.File
 	next := live.NewVersion(&prev, body, s.clk.Now(), liveAnonymousWriter)
 	if next.HasConflictMarkers() {
@@ -329,126 +327,6 @@ func (l liveSync) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 	s.markFolder(folder)
 	done := fmt.Sprintf("resolved #%d %s/%s (took %s)", n, hit.Key.Table, hit.Key.ID, take)
 	return opssync.DoneOut{Done: done, Lines: []string{"✓ " + done}}, nil
-}
-
-// settleObject is body with every conflict settled to one side (other:
-// the second section, else the first): marker blocks in any string at any
-// depth, and structured meta conflict entries (METADATA 3.12).
-func settleObject(body canonjson.Object, other bool) canonjson.Object {
-	out := make(canonjson.Object, len(body))
-	for k, v := range body {
-		out[k] = settleValue(v, other)
-	}
-	if meta, ok := out[row.KeyMeta].AsObject(); ok {
-		out[row.KeyMeta] = canonjson.ObjectValue(settleMetaEntries(meta, other))
-	}
-	return out
-}
-
-// settleValue settles the marker blocks of every string inside v.
-func settleValue(v canonjson.Value, other bool) canonjson.Value {
-	if str, ok := v.AsString(); ok {
-		return canonjson.String(settleText(str, other))
-	}
-	if arr, ok := v.AsArray(); ok {
-		out := make([]canonjson.Value, len(arr))
-		for i, it := range arr {
-			out[i] = settleValue(it, other)
-		}
-		return canonjson.Array(out...)
-	}
-	if obj, ok := v.AsObject(); ok {
-		return canonjson.ObjectValue(settleObject(obj, other))
-	}
-	return v
-}
-
-// Structured meta conflict members (logic/merge entries.go, METADATA 3.12).
-const (
-	metaConflictKey = "conflict"
-	metaOursKey     = "ours"
-	metaTheirsKey   = "theirs"
-	metaValueKey    = "v"
-)
-
-// settleMetaEntries replaces each entry's {"conflict": {base, ours,
-// theirs}} with the chosen side's value; a side that removed the value
-// (null) removes the entry.
-func settleMetaEntries(meta canonjson.Object, other bool) canonjson.Object {
-	side := metaOursKey
-	if other {
-		side = metaTheirsKey
-	}
-	out := make(canonjson.Object, len(meta))
-	for id, e := range meta {
-		entry, ok := e.AsObject()
-		if !ok {
-			out[id] = e
-			continue
-		}
-		c, has := entry[metaConflictKey]
-		if !has {
-			out[id] = e
-			continue
-		}
-		sides, _ := c.AsObject()
-		chosen, present := sides[side]
-		if !present || chosen.Kind() == canonjson.KindNull {
-			continue
-		}
-		next := make(canonjson.Object, len(entry))
-		for k, v := range entry {
-			if k != metaConflictKey {
-				next[k] = v
-			}
-		}
-		next[metaValueKey] = chosen
-		out[id] = canonjson.ObjectValue(next)
-	}
-	return out
-}
-
-// settleText keeps one section of every complete marker block of s
-// (open "<<<<<<< ", split "=======", close ">>>>>>> ", git's shape);
-// an unfinished block is left as written.
-func settleText(s string, other bool) string {
-	if !merge3.ContainsConflictMarkers(s) {
-		return s
-	}
-	lines := strings.Split(s, "\n")
-	out := make([]string, 0, len(lines))
-	const (
-		outside = iota
-		first
-		second
-	)
-	state, start := outside, 0
-	var firstLines, secondLines []string
-	for i, line := range lines {
-		switch {
-		case state == outside && strings.HasPrefix(line, merge3.MarkerOurs[:8]):
-			state, start, firstLines, secondLines = first, i, nil, nil
-		case state == first && line == merge3.MarkerSplit:
-			state = second
-		case state == second && strings.HasPrefix(line, merge3.MarkerTheirs[:8]):
-			if other {
-				out = append(out, secondLines...)
-			} else {
-				out = append(out, firstLines...)
-			}
-			state = outside
-		case state == first:
-			firstLines = append(firstLines, line)
-		case state == second:
-			secondLines = append(secondLines, line)
-		default:
-			out = append(out, line)
-		}
-	}
-	if state != outside {
-		out = append(out, lines[start:]...) // an unfinished block stays as written
-	}
-	return strings.Join(out, "\n")
 }
 
 // SyncTrashList implements opssync.Env.

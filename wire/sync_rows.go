@@ -232,6 +232,102 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 // (stdout only; the --json report is unchanged).
 const syncAlreadyInSync = "· already in sync"
 
+// coreHost reports whether the sync host leaves the core's own parts
+// (stores, row files) to the core (opssync.CoreStores: cmd/lore).
+func (s syncRows) coreHost() bool {
+	c, ok := s.Env.(opssync.CoreStores)
+	return ok && c.CoreStores()
+}
+
+// branchConflictKept is the kept field of a marked row file: both sides
+// are in the file until one is chosen.
+const branchConflictKept = "both"
+
+// SyncConflicts implements opssync.Env: the host's conflicts, then the
+// repo's row files a git merge left with conflict markers (G-SYNC-2),
+// numbered after them.
+func (s syncRows) SyncConflicts(ctx context.Context, in opssync.ConflictsIn) (opssync.ConflictsOut, error) {
+	out, err := s.hostConflicts(ctx, in)
+	if err != nil || !s.coreHost() {
+		return out, err
+	}
+	files, ferr := s.app.BranchConflicts(ctx)
+	if ferr != nil {
+		return out, ferr
+	}
+	if len(files) == 0 {
+		return out, nil
+	}
+	if out.Count == 0 {
+		out.Lines = nil // drop "· no conflicts"
+	}
+	for _, f := range files {
+		n := len(out.Data) + 1
+		out.Data = append(out.Data, opssync.Conflict{ID: int64(n), Table: f.Table, RowID: f.RowID, Kept: branchConflictKept})
+		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (%s: git conflict markers; settle with lore sync resolve %d --take kept|other, or fix the file)",
+			n, f.Table, f.RowID, branchConflictKept, f.Place, n))
+	}
+	out.Count = len(out.Data)
+	return out, nil
+}
+
+// SyncResolve implements opssync.Env: a number past the host's conflicts
+// names a marked row file (SyncConflicts' numbering); kept keeps the first
+// side of each block (git's HEAD), other the second.
+func (s syncRows) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssync.DoneOut, error) {
+	if !s.coreHost() {
+		return s.Env.SyncResolve(ctx, in)
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(in.ID), "#"))
+	if err != nil || n < 1 {
+		return s.Env.SyncResolve(ctx, in) // the host's own refusal
+	}
+	host, err := s.hostConflicts(ctx, opssync.ConflictsIn{})
+	if err != nil {
+		return opssync.DoneOut{}, err
+	}
+	if n <= host.Count {
+		return s.Env.SyncResolve(ctx, in)
+	}
+	take := strings.TrimSpace(in.Take)
+	if take != resolveKept && take != resolveOther {
+		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "--take must be kept or other").
+			WithHint("kept keeps the first side of each clash (this branch), other the second (the branch merged in)")
+	}
+	files, err := s.app.BranchConflicts(ctx)
+	if err != nil {
+		return opssync.DoneOut{}, err
+	}
+	i := n - host.Count - 1
+	if i >= len(files) {
+		return opssync.DoneOut{}, errs.New(errs.NotFound, fmt.Sprintf("no open conflict #%d", n)).WithHint("lore sync conflicts lists them")
+	}
+	f := files[i]
+	if err = s.app.ResolveBranchConflict(ctx, f, take == resolveOther); err != nil {
+		return opssync.DoneOut{}, err
+	}
+	done := fmt.Sprintf("resolved #%d %s/%s (took %s); commit %s", n, f.Table, f.RowID, take, f.Place)
+	return opssync.DoneOut{Done: done, Lines: []string{"✓ " + done}}, nil
+}
+
+// hostConflicts is the host's conflict list; a core host with no live
+// rows here (not a git repo, LORE_LIVE=0: E_UNSUPPORTED) has none, so the
+// marked row files are still listed.
+func (s syncRows) hostConflicts(ctx context.Context, in opssync.ConflictsIn) (opssync.ConflictsOut, error) {
+	out, err := s.Env.SyncConflicts(ctx, in)
+	if err != nil && s.coreHost() && fallback(err) {
+		return opssync.ConflictsOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindConflicts, Data: []opssync.Conflict{},
+			Lines: []string{"· no conflicts"}}, nil
+	}
+	return out, err
+}
+
+// --take values of sync resolve (G-SYNC-1, G-SYNC-2).
+const (
+	resolveKept  = "kept"
+	resolveOther = "other"
+)
+
 // storeRefusalNext is the next step of a refused store push.
 const storeRefusalNext = "the commits wait in the local clone: fix what the store's push rule names (or ask its owner), then run `lore sync`"
 
@@ -245,8 +341,15 @@ func (s syncRows) SyncStatus(ctx context.Context, in opssync.StatusIn) (opssync.
 	if err != nil {
 		return out, err
 	}
-	if c, ok := s.Env.(opssync.CoreStores); !ok || !c.CoreStores() {
+	if !s.coreHost() {
 		return out, nil
+	}
+	if files, ferr := s.app.BranchConflicts(ctx); ferr == nil { // G-SYNC-2; an unreadable folder is doctor's to report
+		out.Data.OpenConflicts += len(files)
+		out.Lines = append(out.Lines, fmt.Sprintf("conflicted files: %d", len(files)))
+		for _, f := range files {
+			out.Lines = append(out.Lines, "  "+f.Place+" (git conflict markers; lore sync conflicts)")
+		}
 	}
 	refused, rerr := s.app.StorePushRefusals(ctx)
 	if rerr != nil {
