@@ -72,7 +72,8 @@ func TestRenderPrivateFiles(t *testing.T) {
 	a, repo := privApp(t)
 	home := t.TempDir()
 	h := New(Options{App: a, Home: home})
-	local := filepath.Join(repo, "CLAUDE.local.md")
+	const localName = "CLAUDE.local.md"
+	local := filepath.Join(repo, localName)
 	const userLines = "# my notes\nuse the staging db\n"
 	if err := os.WriteFile(local, []byte(userLines), 0o600); err != nil {
 		t.Fatal(err)
@@ -88,7 +89,7 @@ func TestRenderPrivateFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, renderDirName)); !os.IsNotExist(err) {
 		t.Fatalf("dry run created the render dir: %v", err)
 	}
-	if got, _ := os.ReadFile(local); string(got) != userLines {
+	if got, _ := readUnder(t, repo, localName); string(got) != userLines {
 		t.Fatalf("dry run changed CLAUDE.local.md: %q", got)
 	}
 
@@ -126,11 +127,23 @@ func TestRenderPrivateFiles(t *testing.T) {
 	if _, err = os.Stat(mine); err != nil {
 		t.Fatalf("a file lore does not own was removed: %v", err)
 	}
-	if got, _ := os.ReadFile(local); string(got) != userLines {
+	if got, _ := readUnder(t, repo, localName); string(got) != userLines {
 		t.Fatalf("non-target CLAUDE.local.md changed: %q", got)
 	}
 	line := w.String()
 	if !strings.Contains(line, "private context") || strings.Contains(line, "CLAUDE.local.md") || !strings.Contains(line, "no target tool has a private file") {
 		t.Fatalf("summary line %q", line)
 	}
+}
+
+// readUnder reads rel through a root at dir, so a test read stays inside
+// the test's own temp folder.
+func readUnder(t *testing.T, dir, rel string) ([]byte, error) {
+	t.Helper()
+	rt, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rt.Close() }() // a read-only root; the read reports its own error
+	return rt.ReadFile(rel)
 }

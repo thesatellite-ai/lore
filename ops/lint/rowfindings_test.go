@@ -99,6 +99,8 @@ func TestTaskTimeFindings(t *testing.T) {
 				if f.ID != tid || f.Fix != "split the task: lore task split "+tid || !strings.HasPrefix(f.Message, strconv.Itoa(c.live+boolInt(c.longLive))+" time entries") {
 					t.Errorf("%s: time_entries_many finding %+v", c.name, f)
 				}
+			default:
+				// sameCodes above already refused any other code.
 			}
 		}
 	}

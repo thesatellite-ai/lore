@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -188,7 +187,7 @@ func TestContextPlanner(t *testing.T) {
 		{"no mode", contextFlags{}, errs.InvalidInput},
 	} {
 		f := c.f
-		if _, err := h.contextAnswer(ctx, &f, nil); errs.CodeOf(err) != c.code {
+		if _, err = h.contextAnswer(ctx, &f, nil); errs.CodeOf(err) != c.code {
 			t.Fatalf("%s: err %v, want %s", c.name, err, c.code)
 		}
 	}
@@ -284,7 +283,7 @@ func TestContextHookPlanner(t *testing.T) {
 	if err != nil || ans.Text != "" {
 		t.Fatalf("hook error through contextAnswer: %+v %v", ans, err)
 	}
-	log, rerr := os.ReadFile(filepath.Join(home, ".lore", "logs", "hooks.log"))
+	log, rerr := readUnder(t, home, filepath.Join(".lore", "logs", "hooks.log"))
 	if rerr != nil || !strings.Contains(string(log), "lore context --hook:") {
 		t.Fatalf("hooks.log %q %v", log, rerr)
 	}

@@ -8,7 +8,6 @@ package wire
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -38,10 +37,7 @@ func TestChainAuditFileInTheProjectFolder(t *testing.T) {
 			if real, err := filepath.EvalSymlinks(top); err == nil {
 				top = real
 			}
-			cmd := exec.Command("git", "init", "-q", top)
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("git init: %v %s", err, out)
-			}
+			gitIn(t, top, nil, "init", "-q")
 			for _, p := range c.projects {
 				if err := os.MkdirAll(filepath.Join(top, p, repoMarkerDir), 0o750); err != nil {
 					t.Fatal(err)

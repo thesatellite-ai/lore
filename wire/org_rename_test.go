@@ -87,8 +87,8 @@ func TestOrgRenameKeepsCommentsAndJSON(t *testing.T) {
 	if strings.Contains(got, "agency") {
 		t.Fatalf("the old label is still in config.yaml:\n%s", got)
 	}
-	if fi, err := os.Stat(configPath(home)); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Fatalf("config.yaml mode after rename: %v %v", fi, err)
+	if fi, serr := os.Stat(configPath(home)); serr != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("config.yaml mode after rename: %v %v", fi, serr)
 	}
 	if out.RepoOrgs != 2 || out.Defaults != 2 || out.IDRecorded || out.ID != "" {
 		t.Fatalf("rename counts: %+v", out)

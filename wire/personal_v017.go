@@ -61,7 +61,9 @@ func (c machineConfig) localPersonalV017(home string) string {
 	case PersonalLocalV017:
 		return dir
 	case "":
-		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+		// Looked up by its fixed name inside home (fs.ValidPath holds for
+		// it), following a symlinked folder the way os.Stat would.
+		if fi, err := fs.Stat(os.DirFS(home), personalDirV017); err == nil && fi.IsDir() {
 			return dir
 		}
 	}

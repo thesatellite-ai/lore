@@ -101,9 +101,9 @@ func TestProvenanceViewsLens(t *testing.T) {
 			`SELECT group_concat(source || ':' || kind || ':' || other_id, ',') FROM (SELECT * FROM row_lineage_all ORDER BY source)`:               "agency:shared_as:mem_a,repo:copied_from:mem_src",
 			`SELECT COUNT(*) FROM repo_urls_all`:                                                                                                    "0",
 		} {
-			res, err := l.Query(f.ctx, q)
-			if err != nil {
-				t.Fatalf("mask=%v %s: %v", mask, q, err)
+			res, qerr := l.Query(f.ctx, q)
+			if qerr != nil {
+				t.Fatalf("mask=%v %s: %v", mask, q, qerr)
 			}
 			if got := res.Rows[0][0].String(); got != want {
 				t.Errorf("mask=%v %s = %q, want %q", mask, q, got, want)

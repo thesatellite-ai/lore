@@ -126,8 +126,8 @@ func TestWriteLinkOnlyMetaJSON(t *testing.T) {
 				t.Fatalf("_meta.json %v", doc)
 			}
 			var links []linkRecord
-			if err := json.Unmarshal(doc[metaLinksKey], &links); err != nil || len(links) != 1 || links[0].ProjectID != lwProject || links[0].Remote != lwRemote {
-				t.Fatalf("links %s %v", doc[metaLinksKey], err)
+			if uerr := json.Unmarshal(doc[metaLinksKey], &links); uerr != nil || len(links) != 1 || links[0].ProjectID != lwProject || links[0].Remote != lwRemote {
+				t.Fatalf("links %s %v", doc[metaLinksKey], uerr)
 			}
 			if len(doc) != 3 {
 				t.Fatalf("_meta.json keys %v, want _v, project_id, links", doc)

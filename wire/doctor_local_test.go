@@ -139,10 +139,10 @@ func TestDoctorLocalRows(t *testing.T) {
 	}
 	got, err = a.DoctorTimeOutbox(ctx)
 	mustNone("empty outbox", got, err)
-	if err := ls.Put(ctx, localstate.TimeOutbox, "span-1", []byte(`{}`)); err != nil {
+	if err = ls.Put(ctx, localstate.TimeOutbox, "span-1", []byte(`{}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := ls.Close(); err != nil {
+	if err = ls.Close(); err != nil {
 		t.Fatal(err)
 	}
 	got, err = a.DoctorTimeOutbox(ctx)

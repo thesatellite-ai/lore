@@ -23,13 +23,13 @@ func withMeta(t *testing.T, r store.Row, entries ...string) (store.Row, []ids.ID
 	full.Meta = map[ids.ID[ids.MetaKey]]value.JSON{}
 	keys := make([]ids.ID[ids.MetaKey], 0, len(entries))
 	for _, e := range entries {
-		k, err := ids.New[ids.MetaKey]()
-		if err != nil {
-			t.Fatal(err)
+		k, kerr := ids.New[ids.MetaKey]()
+		if kerr != nil {
+			t.Fatal(kerr)
 		}
-		j, err := value.JSONOf([]byte(e))
-		if err != nil {
-			t.Fatal(err)
+		j, jerr := value.JSONOf([]byte(e))
+		if jerr != nil {
+			t.Fatal(jerr)
 		}
 		full.Meta[k] = j
 		keys = append(keys, k)

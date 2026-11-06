@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -129,8 +128,8 @@ func TestDoctorTriageOwner(t *testing.T) {
 	}
 	setOwner := func(v string) {
 		t.Helper()
-		if _, err := run(t, a, opssettings.OpPolicySet, `{"key":"tasks.triage_owner","value":"`+v+`","to":"repo"}`, true); err != nil {
-			t.Fatal(err)
+		if _, serr := run(t, a, opssettings.OpPolicySet, `{"key":"tasks.triage_owner","value":"`+v+`","to":"repo"}`, true); serr != nil {
+			t.Fatal(serr)
 		}
 	}
 	setOwner("@nobody-here")
@@ -198,13 +197,7 @@ func TestEditAfterPurge(t *testing.T) {
 	rel := filepath.ToSlash(filepath.Join(".lore", "data", "memories", id.String()+".json"))
 	git := func(args ...string) string {
 		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		out, gerr := cmd.CombinedOutput()
-		if gerr != nil {
-			t.Fatalf("git %v: %v %s", args, gerr, out)
-		}
-		return strings.TrimSpace(string(out))
+		return gitIn(t, dir, nil, args...)
 	}
 	commit := func(r row.Row, msg string) string {
 		t.Helper()

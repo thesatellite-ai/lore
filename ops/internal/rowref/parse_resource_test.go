@@ -59,10 +59,17 @@ func TestParseResourceName(t *testing.T) {
 	}}
 	env.rows["agency"] = append(env.rows["agency"], resRow(t, "dup", false))
 
-	for name, want := range map[string]ids.AnyID{"hub_prod": hub.ID, " hub_prod ": hub.ID, "fd00::1": v6.ID} {
-		refs, err := Parse(ctx, env, []string{name})
-		if err != nil || len(refs) != 1 || refs[0].Table != schema.TableResources || refs[0].ID != want {
-			t.Fatalf("Parse(%q) = %+v, %v; want resources/%s", name, refs, err, want)
+	for _, c := range []struct {
+		name string
+		want ids.AnyID
+	}{
+		{"hub_prod", hub.ID},
+		{" hub_prod ", hub.ID}, // surrounding spaces are trimmed
+		{"fd00::1", v6.ID},
+	} {
+		refs, err := Parse(ctx, env, []string{c.name})
+		if err != nil || len(refs) != 1 || refs[0].Table != schema.TableResources || refs[0].ID != c.want {
+			t.Fatalf("Parse(%q) = %+v, %v; want resources/%s", c.name, refs, err, c.want)
 		}
 	}
 	if refs, err := Parse(ctx, env, []string{visibleID}); err != nil || len(refs) != 1 || refs[0].ID.String() != visibleID {

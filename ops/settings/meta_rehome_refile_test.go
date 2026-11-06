@@ -2,6 +2,7 @@ package settings_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +44,11 @@ func TestMetaRehomeRefile(t *testing.T) {
 		}
 		kept = append(kept, lines[i])
 	}
-	if err := os.WriteFile(filepath.Join(h.Repo, filepath.FromSlash(attach.FileName)), []byte(strings.Join(kept, "\n")), 0o600); err != nil {
+	rt, err := os.OpenRoot(h.Repo) // the rewrite stays inside the test's checkout
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = errors.Join(rt.WriteFile(filepath.FromSlash(attach.FileName), []byte(strings.Join(kept, "\n")), 0o600), rt.Close()); err != nil {
 		t.Fatal(err)
 	}
 	h = h.Reopen(ownRepo)

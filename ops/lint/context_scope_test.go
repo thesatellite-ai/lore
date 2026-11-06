@@ -68,11 +68,11 @@ func (e topEnv) RepoTop(context.Context) (string, error) { return e.top, e.err }
 func TestScopeMissing(t *testing.T) {
 	top := t.TempDir()
 	for _, d := range []string{"src/booking", "src/a/b"} {
-		if err := os.MkdirAll(filepath.Join(top, filepath.FromSlash(d)), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(top, filepath.FromSlash(d)), 0o750); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(top, "README"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(top, "README"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	n := byte(0)
