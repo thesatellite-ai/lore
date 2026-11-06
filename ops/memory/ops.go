@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/tagref"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
@@ -488,7 +489,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	listed := make([]row.Row, 0, len(sel.Order))
 	for _, i := range sel.Order {
-		out.Data = append(out.Data, recordOf(LabelerOf(o.env), keptSrc[i], kept[i]))
+		out.Data = append(out.Data, withMeta(ctx, o.env, recordOf(LabelerOf(o.env), keptSrc[i], kept[i]), kept[i]))
 		listed = append(listed, kept[i])
 	}
 	out.Notes = sel.Notes
@@ -510,7 +511,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if r.Deleted { // DELETION 3.2: E_IN_TRASH for a trashed memory
 		return ShowOut{}, lookup.Gone(ctx, o.env, engine.Ref{Store: src, Table: table, ID: id.Any()}, errs.New(errs.NotFound, "memory "+id.String()+" is deleted"))
 	}
-	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(LabelerOf(o.env), src, r)}, nil
+	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: withMeta(ctx, o.env, recordOf(LabelerOf(o.env), src, r), r)}, nil
 }
 
 // edit patches the fields whose flags were given.
@@ -685,6 +686,8 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 			continue
 		}
 		out.Data = append(out.Data, hitOf(LabelerOf(o.env), src, h, r))
+		hm := metashow.Row(ctx, o.env, r) // MQ13: metadata on every read
+		out.Data[len(out.Data)-1].Meta, out.Data[len(out.Data)-1].MetaMasked = hm.Meta, hm.MetaMasked
 	}
 	out.Count = len(out.Data)
 	return out, nil

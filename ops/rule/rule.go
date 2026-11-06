@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -262,6 +263,11 @@ type Record struct {
 	Store                store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta / MetaMasked are the row's metadata by name, sensitive values
+	// masked (MQ13, METADATA 3.17/3.20; absent when the row has none, so
+	// v0.1.17's bytes stay for such rows).
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // IDIn is the input of the operations that take one rule id.
@@ -288,10 +294,6 @@ type ShowOut struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 	Data          Record `json:"data"`
-	// Meta / MetaMasked are the row's metadata by name, sensitive values
-	// masked (MQ13, METADATA 3.17/3.20; absent when it has none).
-	Meta       map[string]string `json:"meta,omitempty"`
-	MetaMasked []string          `json:"meta_masked,omitempty"`
 	// Expanded / Refs are --expand's additions (SECRETS 12: "--json adds
 	// expanded and refs"); empty without --expand.
 	Expanded map[string]string `json:"expanded,omitempty"`
@@ -375,6 +377,11 @@ type SearchHit struct {
 	Store   store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta / MetaMasked are the row's metadata by name, sensitive values
+	// masked (MQ13, METADATA 3.17/3.20; absent when the row has none, so
+	// v0.1.17's bytes stay for such rows).
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 }
 
 // HitRow is the row map v0.1.17 printed (keys sorted, as json.Marshal of
@@ -443,7 +450,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, Notes: notes}
 	for _, it := range items {
-		out.Data = append(out.Data, recordOf(kn.LabelerOf(o.env), it.Source, it.Row))
+		out.Data = append(out.Data, withMeta(ctx, o.env, recordOf(kn.LabelerOf(o.env), it.Source, it.Row), it.Row))
 	}
 	out.Count = len(out.Data)
 	return out, nil
@@ -455,7 +462,7 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: recordOf(kn.LabelerOf(o.env), it.Source, it.Row)}, nil
+	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: withMeta(ctx, o.env, recordOf(kn.LabelerOf(o.env), it.Source, it.Row), it.Row)}, nil
 }
 
 // edit patches the given fields.
@@ -543,6 +550,8 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 			ID: r.ID.String(), Score: f.Hit.Score, Snippet: f.Hit.Snippet, Store: kn.SourceOf(kn.LabelerOf(o.env), f.Source), Label: kn.Label(kn.LabelerOf(o.env), f.Source),
 			Row: HitRow{Activation: kn.Field(r, fieldActivation), Body: kn.Field(r, kn.FieldBody), Severity: kn.Field(r, fieldSeverity), SourceKind: kn.Field(r, kn.FieldSourceKind)},
 		})
+		hm := metashow.Row(ctx, o.env, r) // MQ13: metadata on every read
+		out.Data[len(out.Data)-1].Meta, out.Data[len(out.Data)-1].MetaMasked = hm.Meta, hm.MetaMasked
 	}
 	out.Count = len(out.Data)
 	return out, nil
