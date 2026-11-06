@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -119,7 +120,7 @@ func writeAtomic(full string, b []byte) (err error) {
 	if err = f.Close(); err != nil {
 		return errs.Wrap(errs.Internal, "rowfs: close a tmp file", err)
 	}
-	if err = os.Rename(tmp, full); err != nil {
+	if err = osrename.Rename(tmp, full); err != nil {
 		return errs.Wrap(errs.Internal, "rowfs: rename a row file into place", err)
 	}
 	if err = syncDir(dir); err != nil {

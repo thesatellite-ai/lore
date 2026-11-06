@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -125,7 +126,7 @@ func RecordUse(cacheRoot, repoTop string, uses []Use) error {
 		werr = os.Chmod(name, useFileMode)
 	}
 	if werr == nil && cerr == nil {
-		werr = os.Rename(name, path)
+		werr = osrename.Rename(name, path)
 	}
 	if joined := errors.Join(werr, cerr); joined != nil {
 		_ = os.Remove(name) // the write already failed; that error is the one to report

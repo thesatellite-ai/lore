@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -91,7 +92,7 @@ func RotateToken(home string) (string, error) {
 	if err := f.Close(); err != nil {
 		return "", errs.Wrap(errs.Internal, "rest: close token file", err)
 	}
-	if err := os.Rename(tmp, TokenPath(home)); err != nil {
+	if err := osrename.Rename(tmp, TokenPath(home)); err != nil {
 		return "", errs.Wrap(errs.Internal, "rest: install token file", err)
 	}
 	ok = true

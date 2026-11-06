@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -254,7 +255,7 @@ func retireLegacyIdentity(home string) (string, error) {
 		return "", nil
 	}
 	to := from + LegacyMigratedSuffix
-	if err := os.Rename(from, to); err != nil {
+	if err := osrename.Rename(from, to); err != nil {
 		return "", errs.Wrap(errs.Internal, "wire: move "+identity.LegacyFile+" aside", err)
 	}
 	return to, nil
@@ -280,7 +281,7 @@ func writeFileAtomic(path string, b []byte, mode os.FileMode) error {
 		_ = os.Remove(name) // best effort: the write error is what matters
 		return errs.Wrap(errs.Internal, "wire: write "+filepath.Base(path), err)
 	}
-	if err := os.Rename(name, path); err != nil {
+	if err := osrename.Rename(name, path); err != nil {
 		_ = os.Remove(name) // best effort
 		return errs.Wrap(errs.Internal, "wire: write "+filepath.Base(path), err)
 	}

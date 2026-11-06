@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 )
 
 // Lease is the claim timing (§1 config keys `lease.*`), already merged from
@@ -151,7 +153,7 @@ func (s SeenStore) Save(_ context.Context, ref string, o Observations) error {
 		_ = os.Remove(name) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("signals: chmod observations: %w", err)
 	}
-	if err := os.Rename(name, s.Path); err != nil {
+	if err := osrename.Rename(name, s.Path); err != nil {
 		_ = os.Remove(name) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("signals: save observations: %w", err)
 	}

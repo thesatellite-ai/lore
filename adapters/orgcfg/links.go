@@ -29,6 +29,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -369,7 +370,7 @@ func writeState(dir, name, value string) {
 	tmp := f.Name()
 	_, werr := f.WriteString(value)
 	cerr := f.Close()
-	if errors.Join(werr, cerr, os.Chmod(tmp, cloneFileMode)) != nil || os.Rename(tmp, filepath.Join(sdir, name)) != nil {
+	if errors.Join(werr, cerr, os.Chmod(tmp, cloneFileMode)) != nil || osrename.Rename(tmp, filepath.Join(sdir, name)) != nil {
 		_ = os.Remove(tmp) // best effort cleanup of a failed stamp
 	}
 }

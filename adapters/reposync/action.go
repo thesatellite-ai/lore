@@ -46,6 +46,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -376,7 +377,7 @@ func writeSyncActionFile(file, content string) error {
 		_ = os.Remove(name)
 		return err
 	}
-	return os.Rename(name, file)
+	return osrename.Rename(name, file)
 }
 
 // legacySyncActionFor returns the shared root-named workflow (the only name

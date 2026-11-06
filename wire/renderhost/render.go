@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 
@@ -615,7 +616,7 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("close temp: %w", closeErr)
 	}
 
-	if renameErr := os.Rename(tmpName, path); renameErr != nil {
+	if renameErr := osrename.Rename(tmpName, path); renameErr != nil {
 		cleanup()
 		return fmt.Errorf("rename: %w", renameErr)
 	}

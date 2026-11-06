@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -205,7 +206,7 @@ func (a *App) WriteRepoProjectID(ctx context.Context, pid ids.ID[ids.Project]) e
 	if err := os.WriteFile(tmp, doc, repoMetaMode); err != nil {
 		return errs.Wrap(errs.Internal, "wire: write "+rowfs.RepoMetaPath, err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := osrename.Rename(tmp, path); err != nil {
 		return errs.Wrap(errs.Internal, "wire: write "+rowfs.RepoMetaPath, errors.Join(err, os.Remove(tmp)))
 	}
 	return nil

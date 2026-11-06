@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 )
 
 // HeldRecord is what one session remembers about a claim it took, kept in
@@ -108,7 +110,7 @@ func (h HeldStore) write(f heldFile, now time.Time) error {
 		_ = os.Remove(tmp.Name()) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("coord: write held: %w", errors.Join(werr, cerr))
 	}
-	if err := os.Rename(tmp.Name(), h.Path); err != nil {
+	if err := osrename.Rename(tmp.Name(), h.Path); err != nil {
 		_ = os.Remove(tmp.Name()) // a leftover temp file is harmless; the write error is the one to report
 		return fmt.Errorf("coord: save held: %w", err)
 	}

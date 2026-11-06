@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 )
@@ -99,7 +100,7 @@ func writeCache(home string, w cacheWire) error {
 		werr = os.Chmod(tmp.Name(), cacheMode)
 	}
 	if werr == nil {
-		werr = os.Rename(tmp.Name(), filepath.Join(home, CacheFile))
+		werr = osrename.Rename(tmp.Name(), filepath.Join(home, CacheFile))
 	}
 	if werr != nil {
 		_ = os.Remove(tmp.Name())

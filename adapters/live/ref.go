@@ -12,6 +12,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/logic/clock"
 )
 
@@ -476,7 +477,7 @@ func writeState(path string, b []byte) error {
 	if err := os.WriteFile(tmp, b, stateFileMode); err != nil {
 		return fmt.Errorf("live: write %s: %w", filepath.Base(path), err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := osrename.Rename(tmp, path); err != nil {
 		return fmt.Errorf("live: write %s: %w", filepath.Base(path), err)
 	}
 	return nil
