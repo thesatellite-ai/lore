@@ -67,15 +67,18 @@ func liveDisabled() bool {
 
 // liveSession is one repository's live state for one run.
 type liveSession struct {
-	h        *liveHost
-	top      string
-	repo     *gitref.Repo
-	ref      *live.Ref
-	cfg      liveSettings
-	clk      clock.Clock
-	stateDir string
-	autopush bool
-	kind     live.FetchKind
+	// quietPush: the push after autoLand reports only a push that did not
+	// go through (v0.1.17 push(ctx, false))
+	quietPush bool
+	h         *liveHost
+	top       string
+	repo      *gitref.Repo
+	ref       *live.Ref
+	cfg       liveSettings
+	clk       clock.Clock
+	stateDir  string
+	autopush  bool
+	kind      live.FetchKind
 	// agent: an agent runs the operation (D8: never named in a live hlc).
 	agent bool
 	// fetchErr is the last fetch failure (offline).
@@ -260,6 +263,9 @@ func (s *liveSession) finish(ctx context.Context) {
 		return
 	}
 	s.autoLand(ctx)
+	// the landing's own push repeats no "(live, pushed)": v0.1.17 reported
+	// it only when it did not go through (push(ctx, false) in live_wire.go)
+	s.quietPush = true
 	if s.push(ctx) {
 		s.autoCompact(ctx)
 	}
@@ -328,7 +334,9 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.warn("push: " + err.Error())
 		return false
 	}
-	s.reportPush(out)
+	if !s.quietPush || out.Status != live.PushDone {
+		s.reportPush(out)
+	}
 	return out.Pushed()
 }
 
