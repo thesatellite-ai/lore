@@ -52,6 +52,13 @@ type LiveConfig struct {
 	Version string
 	// Stderr receives the live status lines; nil is os.Stderr.
 	Stderr io.Writer
+	// HoldFinishLines keeps the lines a CLI operation's end-of-run push and
+	// landing print (`lore live: (live, pushed)`, "landed on main …") until
+	// Live.FlushHeld, so they follow the command's own result as in
+	// v0.1.17 (the run finishes inside the operation, before the surface
+	// prints). A `lore api` request never holds. cmd/lore sets it and
+	// flushes after the command; false prints at once.
+	HoldFinishLines bool
 	// Clock stamps live versions and fetch ages; nil is the wall clock.
 	// Test builds pass a fixed clock (LORE_NOW).
 	Clock clock.Clock
@@ -132,6 +139,9 @@ func (h *liveHost) leakCheckBranch(ctx context.Context, folder string, changes [
 type liveHost struct {
 	cfg LiveConfig
 	mu  sync.Mutex // serialises status lines of concurrent `lore api` runs
+	// holding sends line() to held (a CLI run's finish, live_holdlines.go).
+	holding bool
+	held    []string
 }
 
 func (h *liveHost) clock() clock.Clock {
@@ -156,6 +166,10 @@ func (h *liveHost) line(text string) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.holding {
+		h.held = append(h.held, text)
+		return
+	}
 	_, _ = io.WriteString(w, text+"\n") // a status line that cannot be printed is lost, the write is not
 }
 
@@ -204,6 +218,7 @@ func (r *liveRun) session(ctx context.Context, top string) *liveSession {
 
 // finish ends every session of the run, in top-level order.
 func (r *liveRun) finish(ctx context.Context) {
+	defer r.h.holdLines(ctx)()
 	tops := make([]string, 0, len(r.sessions))
 	for t := range r.sessions {
 		tops = append(tops, t)

@@ -109,7 +109,8 @@ func run(ctx context.Context, args []string) int {
 	flags := &rootFlags{} // rootflags.go: --trace, --color
 	liveGit := hosthooks.TraceGit{Inner: gitref.Exec{}, On: hosthooks.TraceOn(&flags.trace), W: os.Stderr}
 	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak, Git: liveGit,
-		RepoAddresses: func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) },
+		HoldFinishLines: true, // the run's push/landing lines follow the result (flushed after Execute)
+		RepoAddresses:   func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) },
 		// FLAG4: live commits fall back to the lore identity, as store commits do.
 		Signer:     func(ctx context.Context) (string, string, bool) { return app.LoreSignature(ctx) },
 		MetaStatus: func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) },
@@ -164,6 +165,7 @@ func run(ctx context.Context, args []string) int {
 	}
 	root.SetArgs(args)
 	if err := root.ExecuteContext(ctx); err != nil {
+		defer liveRows.FlushHeld() // after the error line, as after a result
 		var status hosthooks.ExitStatus
 		if errors.As(err, &status) {
 			return int(status) // a chosen exit with no error line (merge driver conflict)
@@ -173,6 +175,7 @@ func run(ctx context.Context, args []string) int {
 		}
 		return printHostError(sqlite.ExplainDiskFull(err))
 	}
+	liveRows.FlushHeld() // v0.1.17 order: the result, then `lore live: …`
 	// Once-a-day new-release notice (or opt-in auto_upgrade) after the
 	// command's output, on stderr; quiet in CI, without a tty, for --json
 	// (FORMAT_EVOLUTION 8.6, 8.7; wire.UpgradeNotice).
