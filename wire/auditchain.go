@@ -187,6 +187,19 @@ func (c *chainAudit) Session(ctx context.Context) (string, error) {
 	return c.ses, c.sesErr
 }
 
+// ToolSessionIDs implements ToolSessionSource (OV11, later 434): the raw
+// tool session ids this machine's session rows know, so cmd/lore's write
+// scanner refuses one in row text at write time (RuleSessionID), as the
+// old binary's lore.db sink did; nil before New bound an App.
+func (c *chainAudit) ToolSessionIDs(ctx context.Context) ([]string, error) {
+	if c.app == nil {
+		return nil, nil
+	}
+	return c.app.KnownToolSessionIDs(ctx)
+}
+
+var _ ToolSessionSource = (*chainAudit)(nil)
+
 // NewChainAudit is the repo audit sink of a binary with no chain of its
 // own (cmd/lore, StandaloneOptions): the project is the nearest folder at
 // or above dir holding .lore, never above the git top.
