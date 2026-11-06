@@ -52,13 +52,16 @@ func setURLOp(m Manager) op.Entry {
 		Name: OpSetURL, Summary: "Record a store's new address (the store repo moved or was renamed); its id and rows stay",
 		Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
 		Confirm:  op.ConfirmRule{MayAsk: true}, // CFG7: the url lands in stores.yaml, as for add
-		Examples: []op.Example{{Title: "the store repo was renamed", CLI: "lore store set-url agency git@github.com:agency/lore-notes", Want: "url:"}},
+		Examples: []op.Example{{Title: "the store repo was renamed", CLI: "lore store set-url agency git@github.com:agency/lore-notes", Want: "is now at"}},
 	}, func(ctx context.Context, in SetURLIn) (SetURLOut, error) {
 		if err := CheckName(in.Name, true); err != nil {
 			return SetURLOut{}, err
 		}
 		if in.URL == "" {
 			return SetURLOut{}, errs.New(errs.InvalidInput, "store set-url: the new url is missing; usage: lore store set-url <store> <url>")
+		}
+		if err := CheckScheme(in.URL); err != nil {
+			return SetURLOut{}, err
 		}
 		us, ok := upgrade.As[URLSetter](m)
 		if !ok {

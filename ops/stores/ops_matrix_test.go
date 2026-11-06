@@ -85,7 +85,7 @@ func (f *fakeEnv) ForgetClone(_ context.Context, in ForgetIn) (ForgetOut, error)
 // invoke runs the named op on f and returns its JSON and its own text (""
 // when the output has no Text). It calls the op directly, so the Runner's
 // up-front ConfirmRule (remove's Always) is not in play here; the wire
-// tests cover it through App.Run.
+// tests cover it through App.Run (remove asks itself, G-CORE-4).
 func invoke(t *testing.T, f Manager, name, body string) (string, string, error) {
 	t.Helper()
 	for _, e := range Ops(f) {
@@ -131,7 +131,10 @@ func TestOpsMatrix(t *testing.T) {
 			[]string{`"folder":"tips"`, `"read_only":true`, `"branch":"staging"`}, "", ""},
 		{"add no url", OpAdd, `{"name":"tips"}`, "", nil, "", errs.InvalidInput},
 		{"add me", OpAdd, `{"name":"me","url":"file:///x"}`, "", nil, "", errs.InvalidInput},
-		{"remove", OpRemove, `{"name":"tips"}`, "remove tips", []string{`"name":"tips"`}, "", ""},
+		// outside Run nothing is confirmed: remove reads the list, then asks
+		// for an attached name and refuses an unknown one (G-CORE-4).
+		{"remove asks", OpRemove, `{"name":"kit"}`, "", nil, "", errs.NeedsConfirm},
+		{"remove unknown", OpRemove, `{"name":"tips"}`, "", nil, "", errs.NotFound},
 		{"remove me", OpRemove, `{"name":"me"}`, "", nil, "", errs.InvalidInput},
 		{"list", OpList, `{}`, "list", []string{`"count":2`, `"reach":"ok"`, `"reach":"no_local_copy"`, `"visibility":"internal"`}, "", ""},
 		{"visibility shareable asks", OpVisibility, `{"name":"kit","visibility":"shareable"}`, "", nil, "", errs.NeedsConfirm},
@@ -152,7 +155,7 @@ func TestOpsMatrix(t *testing.T) {
 				clones: ClonesOut{Stores: []CloneView{{URL: "git@h:a/n", Entries: []string{"agency"}, Branches: []string{"main"}, Cloned: true, Clone: "/c/x", DefaultBranch: "main"}}}}
 			raw, txt, err := invoke(t, f, c.op, c.body)
 			if c.code != "" {
-				if !errs.Has(err, c.code) || len(f.calls) != 0 {
+				if !errs.Has(err, c.code) || len(f.calls) > 1 || len(f.calls) == 1 && f.calls[0] != "list" {
 					t.Fatalf("err %v (want %s), calls %v", err, c.code, f.calls)
 				}
 				return
