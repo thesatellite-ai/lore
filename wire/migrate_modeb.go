@@ -312,7 +312,7 @@ func (a *App) attachModeBStore(ctx context.Context, top, raw string) error {
 			return nil
 		}
 	}
-	if err := a.checkUnused(ctx, ModeBStoreName); err != nil {
+	if err := a.checkUnused(ctx, ModeBStoreName, attach.Store{URL: raw}); err != nil {
 		return errs.Wrap(errs.CodeOf(err), "migrate: name the converted store", err).
 			WithHint("detach or rename the store named " + ModeBStoreName + " in " + attach.FileName + ", then run `lore migrate run` again")
 	}

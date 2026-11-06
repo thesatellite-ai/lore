@@ -68,7 +68,7 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 		return opsstores.InitOut{}, err
 	}
 	if in.Name != opsstores.PersonalName {
-		if err = a.checkUnused(ctx, in.Name); err != nil {
+		if err = a.checkUnused(ctx, in.Name, attach.Store{URL: raw}); err != nil {
 			return opsstores.InitOut{}, err
 		}
 	}
@@ -319,7 +319,7 @@ func (a *App) openStore(ctx context.Context, canon, raw string) (store.Backend, 
 
 // AddStore implements opsstores.Manager.
 func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry, error) {
-	if err := a.checkUnused(ctx, in.Name); err != nil {
+	if err := a.checkUnused(ctx, in.Name, attach.Store{URL: in.URL, Folder: in.Folder, Branch: in.Branch}); err != nil {
 		return opsstores.Entry{}, err
 	}
 	raw, err := cleanFileURL(in.URL)
@@ -421,26 +421,8 @@ func (a *App) ListStores(ctx context.Context) ([]opsstores.Entry, error) {
 		return nil, err
 	}
 	var out []opsstores.Entry
-	seen := map[string]bool{}
 	for _, s := range cfg.Stores {
-		seen[string(s.Name)] = true
 		out = append(out, opsstores.Entry{Name: string(s.Name), URL: s.URL, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch, Source: opsstores.SourceStoresFile})
-	}
-	// CLI_REFERENCE 3.21: the stores that come from the repo's org are
-	// listed too, after stores.yaml (which wins a name, renameOrgClashes),
-	// each named by its source (G-CORE-8). Their urls live in the person's
-	// own config, so output that must name nothing (no terminal, CI) hides
-	// them as it hides other internal places (quietOutput).
-	for _, s := range orgStores(ctx, a.opts, top) {
-		if seen[string(s.Name)] {
-			continue
-		}
-		seen[string(s.Name)] = true
-		u := s.URL
-		if quietOutput() {
-			u = redactedText
-		}
-		out = append(out, opsstores.Entry{Name: string(s.Name), URL: u, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch, Source: opsstores.SourceOrg})
 	}
 	mc, err := readMachineConfig(a.opts.Home)
 	if err != nil {
@@ -452,8 +434,33 @@ func (a *App) ListStores(ctx context.Context) ([]opsstores.Entry, error) {
 	return out, nil
 }
 
+var _ opsstores.OrgLister = (*App)(nil)
+
+// OrgStoreEntries implements opsstores.OrgLister: the stores the repo's
+// org brings (Options.OrgStores, with stores.yaml clashes renamed as the
+// open does), real urls (G-CORE-8).
+func (a *App) OrgStoreEntries(ctx context.Context) ([]opsstores.Entry, error) {
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []opsstores.Entry
+	for _, s := range orgStores(ctx, a.opts, top) {
+		out = append(out, opsstores.Entry{Name: string(s.Name), URL: s.URL, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch, Source: opsstores.SourceOrg})
+	}
+	return out, nil
+}
+
+// QuietOutput implements opsstores.OrgLister (quietOutput: no terminal, CI).
+func (a *App) QuietOutput() bool { return quietOutput() }
+
 // checkUnused refuses a name another store of this repo already uses (CFG2).
-func (a *App) checkUnused(ctx context.Context, name string) error {
+// place is the store the name is about to stand for: an org store of the
+// same name at the same place (url, branch and folder) is not a clash, it is
+// the org's own store being made or attached here by its org name, the way
+// the team docs make it (`lore store init <org> <org store url>` in the
+// org's own repo; renameOrgClashes leaves such an entry as is).
+func (a *App) checkUnused(ctx context.Context, name string, place attach.Store) error {
 	top, err := a.repoTop(ctx)
 	if err != nil {
 		return err
@@ -472,12 +479,28 @@ func (a *App) checkUnused(ctx context.Context, name string) error {
 	// answers is taken too (G-CORE-8), else `--to <name>` would mean two
 	// places.
 	for _, s := range rawOrgStores(ctx, a.opts) {
-		if string(s.Name) == name {
+		if string(s.Name) == name && !samePlace(s, place) {
 			return errs.New(errs.InvalidInput, "store: the name "+name+" is already used by a store of this repo's org").
 				WithHint("pick another name; `lore store list` shows every name in use")
 		}
 	}
 	return nil
+}
+
+// samePlace reports whether two store entries name the same place: the
+// same canonical url and branch, and the same folder (the store root
+// spelled "" or rowfs.FolderRoot).
+func samePlace(a, b attach.Store) bool {
+	return sameURL(a, b) && rootFolder(a.Folder) == rootFolder(b.Folder)
+}
+
+// rootFolder is a folder with its slashes trimmed, the store root as "".
+func rootFolder(f string) string {
+	f = strings.Trim(f, "/")
+	if f == rowfs.FolderRoot {
+		return ""
+	}
+	return f
 }
 
 // folderExists reports whether the store at raw has the data folder f.
