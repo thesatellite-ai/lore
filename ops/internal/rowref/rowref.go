@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -58,12 +59,14 @@ const (
 	fieldDstTable   = "dst_table"
 	fieldDstID      = "dst_id"
 	fieldDstProject = "dst_project_id"
-	fieldRelation   = "relation"
-	fieldConfidence = "confidence"
-	fieldSHA        = "sha"
-	fieldProject    = "project_id"
-	tableRefs       = row.Table(schema.TableKnowledgeRefs)
-	tableCommits    = row.Table(schema.TableCommitLinks)
+	// fieldResourceName is resources.name (RES 3.11 --ref by name).
+	fieldResourceName = "name"
+	fieldRelation     = "relation"
+	fieldConfidence   = "confidence"
+	fieldSHA          = "sha"
+	fieldProject      = "project_id"
+	tableRefs         = row.Table(schema.TableKnowledgeRefs)
+	tableCommits      = row.Table(schema.TableCommitLinks)
 )
 
 // relationWord is MQ10/R13's snake_case identifier rule for --relation.
@@ -153,14 +156,33 @@ func Parse(ctx context.Context, env Env, raw []string) ([]Ref, error) {
 		project, rawID := "", r
 		if p, rest, ok := strings.Cut(r, projectSep); ok {
 			if _, perr := ids.Parse[ids.Project](p); perr != nil {
-				return nil, errs.New(errs.InvalidInput, "--ref "+r+": want <id>, <prj_…>:<id> or commit:<sha>")
+				// an IPv6 resource name holds ':' too (RES 3.11)
+				res, found, rerr := resourceNamed(ctx, env, r)
+				if rerr != nil {
+					return nil, rerr
+				}
+				if found {
+					out = append(out, res)
+					continue
+				}
+				return nil, errs.New(errs.InvalidInput, "--ref "+r+": want <id>, <prj_…>:<id>, a resource name or commit:<sha>")
 			}
 			project, rawID = p, rest
 		}
 		id, perr := ids.ParseAny(rawID)
 		def, known := reg.ByPrefix(id.Prefix())
 		if perr != nil || !known {
-			return nil, lookup.BadID("--ref "+r+": not a row id or commit:<sha>", perr)
+			if project == "" { // RES 3.11: --ref hub_prod names a resource
+				res, found, rerr := resourceNamed(ctx, env, r)
+				if rerr != nil {
+					return nil, rerr
+				}
+				if found {
+					out = append(out, res)
+					continue
+				}
+			}
+			return nil, lookup.BadID("--ref "+r+": not a row id, a resource name or commit:<sha>", perr)
 		}
 		if project == "" {
 			// PRINCIPLE EXACT ERRORS / FLAG5: Get looks in every attached
@@ -198,6 +220,38 @@ func Parse(ctx context.Context, env Env, raw []string) ([]Ref, error) {
 		out = append(out, Ref{Table: def.Name, ID: id, Project: project})
 	}
 	return out, nil
+}
+
+// resourceNamed finds the live resource named name in the attached stores
+// (RES 3.11: `--ref hub_prod`). No row: found false, so the caller keeps
+// its own "not an id" error. Two rows (two levels or two kinds, RES 3.4)
+// refuse with E_RESOURCE_AMBIGUOUS naming both ids. A store that cannot
+// be listed refuses too (fail closed: it might hold a second match).
+func resourceNamed(ctx context.Context, env Env, name string) (Ref, bool, error) {
+	var hits []ids.AnyID
+	for _, src := range env.Stores() {
+		rows, err := env.List(ctx, src, schema.TableResources)
+		if err != nil {
+			return Ref{}, false, err
+		}
+		for _, r := range rows {
+			if !r.Deleted && r.Fields[fieldResourceName] != nil && r.Fields[fieldResourceName].String() == name {
+				hits = append(hits, r.ID)
+			}
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return Ref{}, false, nil
+	case 1:
+		return Ref{Table: schema.TableResources, ID: hits[0]}, true, nil
+	}
+	names := make([]string, len(hits))
+	for i, h := range hits {
+		names[i] = h.String()
+	}
+	return Ref{}, false, errs.New(errs.ResourceAmbiguous, "--ref "+name+": "+strconv.Itoa(len(hits))+" resources have this name ("+strings.Join(names, ", ")+")").
+		WithHint("name it by its res_ id (lore resource list shows them)")
 }
 
 // Check applies F15 (ops/internal/pointer) to every row pointer as stored
