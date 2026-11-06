@@ -149,6 +149,14 @@ func appendAuditLine(path string, dirMode os.FileMode, line []byte) error {
 	if mkErr := os.MkdirAll(filepath.Dir(path), dirMode); mkErr != nil {
 		return errs.Wrap(errs.Internal, "wire: create the audit folder", mkErr)
 	}
+	// The repo's file (.lore/state/audit-v2.jsonl) sits inside the
+	// checkout, where a cloned repository can commit a symlink: appending
+	// through it would write into whatever file it names, so a link is
+	// refused (E_SYMLINK_DB) and lore writes only a regular file.
+	if fi, lerr := os.Lstat(path); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return errs.New(errs.SymlinkDB, "wire: refusing the audit file "+path+": it is a symbolic link").
+			WithHint("lore never appends its audit through a link; remove " + path + " (lore creates a plain one)")
+	}
 	// path is built by the caller from the lore home and a store id, never
 	// from row data; Clean normalises it before the open.
 	fh, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_WRONLY|os.O_APPEND, auditFileMode)
