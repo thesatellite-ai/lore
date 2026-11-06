@@ -141,14 +141,7 @@ func (o ops) showHistory(ctx context.Context, in ShowIn) (ShowOut, error) {
 		if !ok {
 			return out, nil
 		}
-		def, _ := o.env.TableSchema(ctx, r.Table)
-		for k, v := range r.Fields {
-			if f, has := def.Field(k); has && f.Sensitive && !in.ShowSensitive {
-				out.Fields[k] = "(sensitive, hidden)" // 3.11
-				continue
-			}
-			out.Fields[k] = v.String()
-		}
+		out.Fields = o.shownFields(ctx, r, in.ShowSensitive) // 3.11
 		return out, nil
 	}
 	return ShowOut{}, errs.New(errs.NotFound, "trash: "+strconv.Quote(id)+" is not in this place's git history as a purged or deleted row").

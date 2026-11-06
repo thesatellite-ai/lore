@@ -374,28 +374,39 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		if t.Row.ID.String() != id {
 			continue
 		}
-		out := ShowOut{Data: itemOf(t), Fields: map[string]string{}}
-		def, _ := o.env.TableSchema(ctx, t.Row.Table)
-		for k, v := range t.Row.Fields {
-			if f, ok := def.Field(k); ok && f.Sensitive && !in.ShowSensitive {
-				out.Fields[k] = "(sensitive, hidden)" // 3.11: protections stay in the trash
-				continue
-			}
-			out.Fields[k] = v.String()
-		}
-		if _, has := out.Fields[resmask.FieldsField]; has && t.Row.Table == schema.TableResources && !in.ShowSensitive {
-			// a resource kind's own sensitive fields (3.11, RQ1); every value
-			// stays hidden unless the kind fields can be read (fail closed)
-			out.Fields[resmask.FieldsField] = "(sensitive, hidden)"
-			if getter, canGet := o.env.(resmask.Getter); canGet {
-				if m, _, ok := resmask.Fields(ctx, getter, t.Row, "(sensitive, hidden)"); ok {
-					out.Fields[resmask.FieldsField] = m
-				}
-			}
-		}
-		return out, nil
+		return ShowOut{Data: itemOf(t), Fields: o.shownFields(ctx, t.Row, in.ShowSensitive)}, nil
 	}
 	return ShowOut{}, errs.New(errs.NotFound, "trash: "+strconv.Quote(id)+" is not in the trash").WithHint("lore trash list")
+}
+
+// hiddenValue replaces a sensitive value in `lore trash show`.
+const hiddenValue = "(sensitive, hidden)"
+
+// shownFields is the field map `lore trash show` prints for r, from the
+// trash or from git history (DELETION 3.11: protections stay in the trash
+// and in history): a field the table marks sensitive is hidden, and so is
+// each sensitive entry of a resource's "fields" JSON (a resource kind's own
+// fields, RQ1), unless showSensitive. The resource fields are hidden whole
+// when the kind fields cannot be read (fail closed).
+func (o ops) shownFields(ctx context.Context, r row.Row, showSensitive bool) map[string]string {
+	out := map[string]string{}
+	def, _ := o.env.TableSchema(ctx, r.Table)
+	for k, v := range r.Fields {
+		if f, ok := def.Field(k); ok && f.Sensitive && !showSensitive {
+			out[k] = hiddenValue
+			continue
+		}
+		out[k] = v.String()
+	}
+	if _, has := out[resmask.FieldsField]; has && r.Table == schema.TableResources && !showSensitive {
+		out[resmask.FieldsField] = hiddenValue
+		if getter, canGet := o.env.(resmask.Getter); canGet {
+			if m, _, ok := resmask.Fields(ctx, getter, r, hiddenValue); ok {
+				out[resmask.FieldsField] = m
+			}
+		}
+	}
+	return out
 }
 
 // restore is trash.restore (DELETION 3.3): the engine clears the delete
