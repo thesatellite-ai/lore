@@ -46,7 +46,7 @@ orgs:
       name: Alice
       handle: alice
     stores:
-      - url: github.com/agency/notes
+      - url: git@github.com:agency/notes
         org_folder: "."
     own:
       - github.com/agency/*
@@ -173,7 +173,7 @@ $ lore task done tsk_54fe…28f2
 lore live: (live, pushed)
 lore live: landed on develop (601d285); leaves live once develop is fetched
 $ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
-601d285 lore: land 1 row (_root)
+601d285 lore: land 2 rows (_root)
 86dbae4 lore: init
 86dbae4 lore: init
 ```
