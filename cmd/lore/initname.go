@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 )
 
 // gitOriginURLKey is the git config key of origin's configured URL. The raw
@@ -43,4 +44,22 @@ func projectNameFromURL(url string) string {
 		return url[i+1:]
 	}
 	return url
+}
+
+// projectOriginField is the projects row field init fills from origin.
+const projectOriginField = "origin_url"
+
+// projectOriginURL is origin's URL as the project row records it, with any
+// user:token part removed (the row file is committed and shared); "" when
+// there is no origin or the URL cannot be read.
+func projectOriginURL(ctx context.Context, dir string) string {
+	raw := gitOriginURL(ctx, dir)
+	if raw == "" {
+		return ""
+	}
+	clean, _, err := repourl.StripCredentials(raw)
+	if err != nil {
+		return ""
+	}
+	return clean
 }

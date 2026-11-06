@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
@@ -54,5 +55,42 @@ func TestDefaultProjectName(t *testing.T) {
 	plain := filepath.Join(t.TempDir(), "Plain")
 	if got := defaultProjectName(ctx, plain); got != "plain" {
 		t.Fatalf("not a git folder: %q", got)
+	}
+}
+
+// TestProjectOriginURL: init records origin's URL on the project row (as
+// v0.1.17 did) without any user:token part (the row file is committed);
+// no origin or no git gives "". The token is built at run time (CLAUDE.md
+// conv. 8).
+func TestProjectOriginURL(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	git := func(dir string, args ...string) {
+		t.Helper()
+		if _, err := (gitref.Exec{}).Run(ctx, gitref.Invocation{Dir: dir, Args: args}); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, gitref.Stderr(err))
+		}
+	}
+	secret := "tok" + strings.Repeat("x", 12)
+	for _, c := range []struct {
+		name, url, want string
+	}{
+		{"scp form", "git@github.com:acme/widget.git", "git@github.com:acme/widget.git"},
+		{"https", "https://github.com/acme/widget.git", "https://github.com/acme/widget.git"},
+		{"https with a token", "https://bob:" + secret + "@github.com/acme/widget.git", "https://github.com/acme/widget.git"},
+		{"no origin", "", ""},
+	} {
+		dir := filepath.Join(t.TempDir(), "r")
+		git(filepath.Dir(dir), "init", "-q", dir)
+		if c.url != "" {
+			git(dir, "remote", "add", "origin", c.url)
+		}
+		got := projectOriginURL(ctx, dir)
+		if got != c.want || strings.Contains(got, secret) {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	if got := projectOriginURL(ctx, filepath.Join(t.TempDir(), "plain")); got != "" {
+		t.Errorf("not a git folder: %q", got)
 	}
 }

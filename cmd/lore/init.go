@@ -144,7 +144,15 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			if err != nil {
 				return errs.Wrap(errs.InvalidInput, "init: project name", err)
 			}
-			w, err := h.app.Create(ctx, store.SourceRepo, schema.TableProjects, map[string]value.Value{projectNameField: t})
+			fields := map[string]value.Value{projectNameField: t}
+			if origin := projectOriginURL(ctx, wd); origin != "" { // v0.1.17 wrote origin_url too (project list/show)
+				ov, oerr := value.TextOf(origin)
+				if oerr != nil {
+					return errs.Wrap(errs.InvalidInput, "init: origin url", oerr)
+				}
+				fields[projectOriginField] = ov
+			}
+			w, err := h.app.Create(ctx, store.SourceRepo, schema.TableProjects, fields)
 			if err != nil {
 				return err
 			}
