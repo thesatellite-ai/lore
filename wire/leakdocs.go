@@ -31,6 +31,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/logic/meta"
@@ -117,7 +119,7 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
 	fs := leakcheck.Blocking(a.leakCheckByProject(ctx, items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client})) // per monorepo project folder (leakdocs_projects.go)
-	fs, moved := withoutSelfMatches(fs, rows)
+	fs, moved := withoutSelfMatches(where, fs, rows)
 	if len(fs) == 0 {
 		return nil
 	}
@@ -136,18 +138,21 @@ const leakWhereMove = "move"
 // the id, shows the text and asks), which is not a leak of another note.
 // moved reports whether any checked file is such a move; its remaining
 // findings (it also quotes another note) get the move's advice.
-func withoutSelfMatches(fs []leakcheck.Finding, rows []leakcheck.IndexRow) ([]leakcheck.Finding, bool) {
-	internal := make(map[string]bool, len(rows))
+//
+// where is the action (leakRowFileOf: which paths are row files); a move keeps
+// the row's table, so the internal row must be of the file's table too.
+func withoutSelfMatches(where string, fs []leakcheck.Finding, rows []leakcheck.IndexRow) ([]leakcheck.Finding, bool) {
+	internal := make(map[string]string, len(rows))
 	for _, r := range rows {
 		if !r.RepoKey {
-			internal[r.ID] = true
+			internal[r.ID] = r.Table
 		}
 	}
 	out := fs[:0:0]
 	moved := false
 	for _, f := range fs {
-		id, _, isRow := repoRowOf(f.Path)
-		if isRow && internal[id] {
+		id, table, isRow := leakRowFileOf(where, f.Path)
+		if t, ok := internal[id]; isRow && ok && t == table {
 			moved = true
 			if f.RowID == id {
 				continue
@@ -203,7 +208,7 @@ const (
 )
 
 // leakWritesNothing are the actions refused before anything is written.
-var leakWritesNothing = map[string]bool{"live write": true, "repo write": true, leakWhereMove: true}
+var leakWritesNothing = map[string]bool{leakWhereLiveWrite: true, "repo write": true, leakWhereMove: true}
 
 // leakFix is the advice for one finding at path (v0.1.17 check_cmd.go
 // leakFix): a repo row is moved to the org or deleted; a pushed commit is
@@ -239,6 +244,30 @@ const otherProjectFix = "this repository holds rows of a second project (two `lo
 // repoRowPathRe matches a row file of this repo's .lore/data (any project
 // folder of a monorepo): .lore/data/<table>/<id>.json.
 var repoRowPathRe = regexp.MustCompile(`(?:^|/)\.lore/data/([a-z_]+)/([a-z]{3}_[0-9a-f]{32})\.json$`)
+
+// liveRowPathRe matches a row on the live ref: <folder>/<table>/<id>.json
+// (adapters/live RowPath; a monorepo folder may hold slashes).
+var liveRowPathRe = regexp.MustCompile(`^(.+)/([a-z_]+)/([a-z]{3}_[0-9a-f]{32})\.json$`)
+
+// leakWhereLiveWrite is the action whose docs are live-ref paths (wire/host
+// leakWhereLive): only there is <folder>/<table>/<id>.json a row file.
+const leakWhereLiveWrite = "live write"
+
+// leakRowFileOf is the row id and table of a doc path that is a real row file
+// of the write named where: a .lore/data row file for every action, and for
+// a live write also a live-ref row file whose folder is one a project may
+// use (live.ValidateFolder). Any other file (docs/tasks/tsk_….json in a
+// commit) is not a row, so it never reads as a move nor gets row advice.
+func leakRowFileOf(where, p string) (id, table string, ok bool) {
+	if id, table, ok = repoRowOf(p); ok || where != leakWhereLiveWrite {
+		return id, table, ok
+	}
+	m := liveRowPathRe.FindStringSubmatch(p)
+	if m == nil || strings.Contains(m[1], rowfs.LoreDir) || live.ValidateFolder(m[1]) != nil {
+		return "", "", false
+	}
+	return m[3], m[2], true
+}
 
 // repoRowOf is the row id and table of a repo row file path.
 func repoRowOf(path string) (id, table string, ok bool) {
