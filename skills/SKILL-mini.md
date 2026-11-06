@@ -83,7 +83,7 @@ Examples of NON-triggers (no capture command — respond in prose):
 | "I'm wondering if we should drop the cron job." | Discuss. NO `lore add`. |
 | "Should we move to gRPC?" | Discuss. NO `lore add`. |
 | "What if we cached the auth lookups?" | Discuss. NO `lore add`. |
-| "My commands keep failing with E_DB_LOCKED — **what's the right way to handle this?**" | Explain retry/backoff. NO `lore hotfix add` — it's a HOW-question, not a recurring trap report. |
+| "My commands keep failing with E_STORE_LOCKED — **what's the right way to handle this?**" | Explain retry/backoff. NO `lore hotfix add` — it's a HOW-question, not a recurring trap report. |
 | "**How do I** bootstrap lore?" / "**What's the procedure** for X?" | Answer with the command sequence in prose/bash. NO capture. |
 
 vs. real triggers (emit capture command):
@@ -143,7 +143,7 @@ Examples:
 |---|---|
 | "Delete the .lore dir entirely — wipe everything." | check `git status .lore/data` is clean first, then warn: "This is irreversible. Confirm and I'll proceed." Do NOT emit `rm -rf .lore` without confirmation. |
 | "Drop all rules." | suggest `lore rule list --json` to review, then `lore rule archive` per rule (or `rule delete --yes`, which moves it to the trash). |
-| "Reset the DB." | `lore doctor` first; the DB is a cache of `.lore/data`: `mv .lore/lore.db .lore/lore.db.old && lore sync` rebuilds it. |
+| "Reset the DB." | `lore doctor` first; the DB is a cache of `.lore/data`: `rm -f .lore/lore-cache.db*`: the next command rebuilds it. |
 | "Start completely fresh." | Same as "delete": commit first, confirm, then proceed. |
 
 Never emit a bare `rm -rf .lore` or `DROP TABLE` or destructive SQL.
@@ -288,7 +288,7 @@ T[what decisions about X?]               → decision list --json | jq '.data[]|
 T[who am I | what identity | whoami in lore]
                                           → lore identity show
 T[DB is broken | rebuild the DB | E_DB_CORRUPT]
-                                          → mv .lore/lore.db .lore/lore.db.old && lore sync   (rebuilds from .lore/data)
+                                          → rm -f .lore/lore-cache.db*   (the next command rebuilds from .lore/data)
 
 T[remove my persisted identity | go back to auto-detected | unset identity | reset identity file]
                                           → lore identity unset
@@ -298,8 +298,8 @@ T[file a bug | make a support bundle | generate a bundle for the issue]
                                           → lore support-bundle --out=/tmp/lore-bundle.tar.gz
                                           # (default omits memory/rule content; pass --include-content if rule bodies should be in the bundle)
 T[who modified X | audit trail for X | who changed X | when was X last edited]
-                                          → sqlite3 .lore/lore.db "SELECT tx_at,actor_id,op,entity_id FROM audit_log WHERE entity_id='<X>' OR entity_table='<X>' ORDER BY tx_at DESC LIMIT 20"
-                                          # (raw SQL — no dedicated CLI verb yet for audit log)
+                                          → lore audit log --limit 0 --json | jq '.data[] | select(.target_id == "<X>" or .target_table == "<X>")'
+                                          # newest first; lore audit verify checks the chain
 T[why did you do X?]                     → why-context --rendered
 T[show me mem_<id> | tsk_<id> | rul_<id> | dec_<id>]        → <kind> show <code>
 
@@ -429,7 +429,7 @@ P6  notes shared by sibling projects (a store; Mode B is retired)
 
 P7  disaster recovery
     lore doctor --json
-    mv .lore/lore.db .lore/lore.db.old && lore sync   # rebuild the DB from .lore/data
+    rm -f .lore/lore-cache.db*   # the next command rebuilds the cache from .lore/data
     lore search rebuild
     # .lore/data itself deleted: git checkout HEAD -- .lore/data
     lore render
@@ -503,8 +503,7 @@ P17 export project knowledge
     done
 
 P18 audit log forensics
-    sqlite3 .lore/lore.db \
-      "SELECT tx_at,actor_id,op,entity_id FROM audit_log WHERE entity_table='rules' ORDER BY tx_at DESC LIMIT 20"
+    lore audit log --limit 0 --json | jq '.data[] | select(.target_table == "rules")' | head -40
 
 P19 render slice (budget control)
     (cd web && lore render)
@@ -513,9 +512,9 @@ P19 render slice (budget control)
 
 P20 migrate to new lore version
     git status --porcelain -- .lore/data   # commit first
-    lore version --json | jq '.schema_version'
+    lore upgrade                           # nothing else to run: the cache rebuilds itself
+    lore migrate run --dry-run && lore migrate run   # only for v0.1.17 data
     lore doctor
-    lore render
 ```
 
 ## TEAMS (orgs, live rows, agents)
@@ -539,20 +538,24 @@ lore task done tsk_30 --pr 412 --lesson "what you learned"
 ## TOP ERROR CODES
 
 ```
-E_DB_LOCKED            another lore process holds write lock; wait or kill stale process
-E_LOCK_HELD            project flock held; check for stale lore procs
-E_DB_CORRUPT           mv .lore/lore.db away and run lore sync (rebuilds from .lore/data)
-E_DB_NOT_FOUND         DB missing; run lore init or check LORE_DB env
-E_MIGRATION_INCOMPLETE run lore doctor (triggers auto-migrate)
+E_NEEDS_CONFIRM        show the person error.question; rerun with --yes only after they agree (exit 26)
+needs_person: true     (E_POLICY_DENIED, E_REFUSED) stop; the person runs it in their own terminal
+E_INVALID_ID           malformed id; copy it from list --json, never guess (exit 20)
+E_STORE_LOCKED         another lore command holds the store lock; wait and retry
+E_CONTENDED            another writer won every attempt; retry after a short wait
+E_OFFLINE              remote unreachable; nothing queued, retry online
+E_META_STORE_UNREADABLE  metadata write in a client repo, org store unreachable; nothing written, retry online
+E_META_QUARANTINED     lore meta show <id> prints each problem and its fix
+E_DB_CORRUPT           rm -f .lore/lore-cache.db* (the next command rebuilds it from .lore/data)
 E_NOT_PROJECT_ROOT     cd to project root (--db is refused on row commands)
-E_AMBIGUOUS_PROJECT    both lore.db and lore.toml exist; remove one
+E_AMBIGUOUS_PROJECT    the repo holds several projects; pass --project
 E_SECRET_DETECTED      strip secret, or --secret-ref "<mgr>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes (bare --yes does not store it)
-E_ROOT_REFUSED         set MINI_ALLOW_ROOT=1 only if truly needed
-E_SYMLINK_DB           DB is a symlink; delete it, the next command rebuilds it
+E_ROOT_REFUSED         run as your user; LORE_ALLOW_ROOT=1 only if truly needed
+E_SYMLINK_DB           a database, lock or audit file is a symlink; delete the link, lore recreates the file
 E_READ_ONLY            drop --read-only or unset LORE_READ_ONLY
-E_NETWORK_FS           DB on iCloud/Dropbox/NFS; move to local disk
-E_NOT_FOUND            no row by that id/code
-E_NOT_IMPLEMENTED      v0.2 feature; inform user, don't retry
+E_NETWORK_FS           project on iCloud/Dropbox/NFS; move it to a local disk
+E_NOT_FOUND            well-formed id/name that does not exist here (exit 27)
+E_NOT_IMPLEMENTED      not in this release; inform user, don't retry
 E_INVALID_INPUT        check flag values against ENUMS section above
 ```
 
@@ -615,7 +618,7 @@ You: (User already gave the opaque ID. Do NOT pipeline `pattern list | jq | xarg
 User: DB feels slow lately, queries are taking longer — what should I check first?
 You: (Symptom + "what should I check?" → DIAGNOSTIC question. Do NOT capture as a hotfix; emit doctor + investigation steps.)
   lore doctor
-  # also worth checking: WAL size, query plans via EXPLAIN, recent schema migrations
+  # also worth checking: the doctor notes, the size of .lore/data, attached stores (lore store list)
   # if confirmed real, THEN capture: lore hotfix add --severity=high "<specific finding>"
 
 User: I have a 'commit-msg' prompt template saved. Use it to draft a commit message for X.
@@ -720,19 +723,19 @@ You: (No size flag exists. Preview the body and trim by re-scoping or down-sever
   lore render --dry-run | wc -c
 
 
-User: My commands keep failing with E_DB_LOCKED — what's the right way to handle this in a script?
+User: My commands keep failing with E_STORE_LOCKED — what's the right way to handle this in a script?
 You: (NO capture — this is a HOW-question)
-  E_DB_LOCKED means another lore process holds the write lock. In a script,
+  E_STORE_LOCKED means another lore command held the store lock. In a script,
   retry with backoff: sleep 0.5s, try again; give up after ~5 attempts.
   ```bash
   for i in 1 2 3 4 5; do
-    lore rule add "<text>" && break sleep 0.5
+    lore rule add "<text>" && break; sleep 0.5
   done
   ```
 
 User: Scratch the previous rule about avoiding globals — we DO use a single global request-id context now.
 You: (REVERSING a captured rule requires search + archive + new-add in ONE response. Emit ALL THREE commands together, using `$(…)` to chain. Do NOT stop after the search.)
-  RID=$(lore rule search "globals" --json | jq -r '.data[0].code')
+  RID=$(lore rule search "globals" --json | jq -r '.data[0].id')
   lore rule archive "$RID"
   lore rule add --severity=should --body="A single global request-id context is allowed for tracing"
   lore render

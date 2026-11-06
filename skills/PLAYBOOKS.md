@@ -144,15 +144,15 @@ User: "everything's broken."
 # 1. Diagnose
 lore doctor --json | jq '.db_ok, .errors'
 
-# 2. The DB is a cache of .lore/data: move it away and let lore rebuild it
-mv .lore/lore.db .lore/lore.db.old && lore sync
-lore search rebuild
+# 2. The cache is built from .lore/data: delete it, the next command rebuilds it
+rm -f .lore/lore-cache.db*
+lore doctor
 
 # 3. If .lore/data itself was deleted, git has it
 git checkout HEAD -- .lore/data
 ```
 
-Only machine-local things (the audit trail, sessions) start empty after a rebuild. Keep `.lore/data` committed and nothing shared can be lost.
+Machine-local things (the audit log, sessions) live in `~/.lore/state/machine.db` and are not touched by a rebuild. Keep `.lore/data` committed and nothing shared can be lost.
 
 ---
 
@@ -258,15 +258,16 @@ lore memory list
 # 4. Alice opens her coding tool of choice — CLAUDE.md @imports the same .lore/LORE.md
 ```
 
-Shared knowledge lives in `.lore/data/` — one committed JSON file per row — and travels with the code: it follows branches, merges with PRs, and arrives on `git pull` (the post-merge hook imports it immediately). `.lore/lore.db` is a gitignored per-developer cache rebuilt from those files. Alice's captures are exported to `.lore/data/` as she makes them and reach the team when she commits and pushes them.
+Shared knowledge lives in `.lore/data/` — one committed JSON file per row — and travels with the code: it follows branches, merges with PRs, and arrives on `git pull` (the post-merge hook imports it immediately). `.lore/lore-cache.db` is a gitignored per-developer cache rebuilt from those files. Alice's captures are exported to `.lore/data/` as she makes them and reach the team when she commits and pushes them.
 
 ### P13b — Roll sync out to a team that already uses lore
 
-Each developer has an old, never-shared `lore.db`.
+Each developer has v0.1.17 data (an old `.lore/lore.db`, or `_v: 1` row files).
 
 ```bash
 # 1. One person, on main, after upgrading lore:
-lore memory list                      # first command: backs up lore.db, exports everything to .lore/data
+lore migrate run --dry-run            # what moves; then:
+lore migrate run                      # converts the v0.1.17 data (keeps a local backup ref; lore migrate rollback undoes it)
 git add .lore/data .gitattributes && git commit -m "lore: shared knowledge" && git push
 
 # 2. Everyone else, after upgrading:
@@ -309,14 +310,14 @@ Started as a soft fact; turns out the team really enforces it.
 
 ```bash
 # Find the memory
-M=$(lore memory search "stdlib errors" --json | jq -r '.results[0].id')
+M=$(lore memory search "stdlib errors" --json | jq -r '.data[0].id')
 
 # Capture the same content as a rule
 BODY=$(lore memory show $M --json | jq -r '.data.body')
 lore rule add --severity=must --body="$BODY"
 
 # Archive the original memory
-sqlite3 .lore/lore.db "UPDATE memories SET archived_at=datetime('now') WHERE id='$M'"
+lore memory archive "$M"
 
 lore render
 ```
@@ -332,7 +333,7 @@ R=$(lore rule list --json | jq -r '.data[] | select(.body | test("stdlib errors"
 BODY=$(lore rule show $R --json | jq -r '.data.body')
 
 lore memory add --body="(formerly rule) $BODY"
-sqlite3 .lore/lore.db "UPDATE rules SET archived_at=datetime('now') WHERE id='$R'"
+lore rule archive "$R"
 lore render
 ```
 
@@ -394,7 +395,7 @@ lore audit log --limit 0 --json | jq '.data[] | select(.target_table == "rules" 
 lore audit verify
 ```
 
-Every change to a shared row is an entry: `<table>.write` (a lore command), `<table>.import` (arrived from teammates via .lore/data), `<table>.merge` (both sides edited), `<table>.external-write` (found in lore.db, not made by lore — e.g. sqlite3). Entries are hash-chained: editing or deleting one breaks `audit verify`. Run `audit verify` FIRST when investigating: any other lore command synchronises the DB and records outside changes as external writes.
+Every change lore makes on this machine is an entry (action `create`, `update`, `delete`, `purge`, or a `secret.*` action), with the row, the actor and the hashes before and after; the log lives in `~/.lore/state/machine.db`. Entries are hash-chained: editing or deleting one breaks `audit verify` (`E_AUDIT_CHAIN_BROKEN`). Changes that arrive from teammates through git are in `git log -- .lore/data`, not in this log.
 
 ---
 
@@ -420,16 +421,18 @@ When the rendered knowledge grows large and you want a focused view:
 # 1. Commit current state
 git status --porcelain -- .lore/data   # empty = everything is in git
 
-# 2. Check the new binary's schema vs the DB's schema
-lore version --json | jq '.schema_version'
-sqlite3 .lore/lore.db "SELECT MAX(version) FROM schema_migrations"
+# 2. Install the new binary
+lore upgrade                 # or brew / the install script
 
-# 3. If new binary expects a newer schema, run migration (auto on next open)
-lore doctor   # triggers auto-migrate
+# 3. Nothing else to run: the cache and search index rebuild themselves from
+#    .lore/data and the machine store updates when it is opened.
+#    Only a repo with v0.1.17 data needs one step:
+lore migrate status          # the row format of every place
+lore migrate run --dry-run && lore migrate run
 
 # 4. Verify
 lore doctor --json | jq '.status, .db_ok'
 lore render   # confirm output unchanged
 ```
 
-If the new binary expects an OLDER schema (downgrade), lore refuses with `E_SCHEMA_VERSION_MISMATCH`. Use the matching binary version, or move `.lore/lore.db` away so the new binary rebuilds it from `.lore/data`.
+A binary below the project's `min_lore_version` (or one that does not know a format feature the project uses) refuses writes with `E_OLD_LORE` (reads still work): run `lore upgrade`. `lore setup` is optional (safe to repeat; `--agent-hooks` installs the coding tools' hooks).

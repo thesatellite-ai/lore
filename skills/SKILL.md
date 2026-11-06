@@ -78,7 +78,7 @@ After capture, **always** run `lore render`. Without render, the captured knowle
 | **[DECISION-TREE.md](./DECISION-TREE.md)** | The user's intent is ambiguous (memory vs rule vs decision? task vs reminder? rebuild the DB or restore a file from git?). Walk the tree top-down. |
 | **[PLAYBOOKS.md](./PLAYBOOKS.md)** | The user's request needs multiple steps. 20 worked recipes (P1–P20): bootstrap, multi-repo, recovery, CI, onboarding, promotion, periodic review, migration, …. |
 | **[SCENARIOS.md](./SCENARIOS.md)** | Concrete "the user said X" → "you run Y" — 60+ situations across 15 sections (first contact, capture, work tracking, search, render, recovery, scope, Mode B, tags, identity, CI, migration, inspection, edge cases, what to refuse). |
-| **[ERRORS.md](./ERRORS.md)** | A command failed with `E_*` code. Full registry of 37 codes + recovery decision tree. |
+| **[ERRORS.md](./ERRORS.md)** | A command failed with `E_*` code. Exit statuses, the error envelope, every code + recovery decision tree. |
 | **[GLOSSARY.md](./GLOSSARY.md)** | You're unsure what a term means (activation, canary, master scope, polymorphic FK, mode A/B, etc.). |
 | **[SKILL-mini.md](./SKILL-mini.md)** | Compressed (~16KB) bundle for small-context / weak-instruction-following models. Same teaching as SKILL.md in trigger-DSL form. Regenerate via `lore skill compile --target=mini`. |
 | **[examples/01-bootstrap.md](./examples/01-bootstrap.md)** | Setting up lore for the first time in an existing project. |
@@ -218,7 +218,7 @@ Hedging signal words that DEFEAT capture triggers (treat the utterance as discus
 | "I'm wondering if we should drop the cron job." | Discuss. NO `lore add`. |
 | "Should we move to gRPC?" | Discuss. NO `lore add`. |
 | "What if we cached the auth lookups?" | Discuss. NO `lore add`. |
-| "My commands keep failing with E_DB_LOCKED — **what's the right way to handle this**?" | Explain retry/backoff in prose + bash. NO `lore hotfix add` — it's a HOW-question, not a recurring-trap report. |
+| "My commands keep failing with E_STORE_LOCKED — **what's the right way to handle this**?" | Explain retry/backoff in prose + bash. NO `lore hotfix add` — it's a HOW-question, not a recurring-trap report. |
 | "**How do I** bootstrap lore?" / "**What's the procedure** for X?" | Answer with the command sequence. NO capture. |
 
 vs. real triggers (emit capture command):
@@ -371,7 +371,7 @@ When the user wants to flag, revisit, or update an EXISTING capture, do NOT crea
 When the user asks to **revise**, **scratch**, **reverse**, or **update** an existing rule, the workflow is `search → archive → (optionally add new)`. Emit it as ONE atomic shell script using `$(…)` command substitution — do NOT split into "Step 1 / Step 2" commands, because weak models stop after the search.
 
 ```bash
-RID=$(lore rule search "globals" --json | jq -r '.data[0].code')
+RID=$(lore rule search "globals" --json | jq -r '.data[0].id')
 lore rule archive "$RID"
 lore rule add --severity=should --body="A single global request-id context is allowed for tracing"
 lore render
@@ -496,7 +496,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "show mem_<id>" | `lore memory show mem_<id> [--json]` (includes archived_at, valid_until, superseded_by) |
 | "is search working / how healthy is the index" | `lore search status` — per-entity row counts + drift detection |
 | "rebuild the search index" | `lore search rebuild [--kind=<entity>]` |
-| "who modified X / audit trail for X / when was X last changed" | `sqlite3 .lore/lore.db "SELECT tx_at,actor_id,op,entity_id FROM audit_log WHERE entity_id='X' OR entity_table='X' ORDER BY tx_at DESC LIMIT 20"` (raw SQL — no dedicated CLI verb yet) |
+| "who modified X / audit trail for X / when was X last changed" | `lore audit log --limit 0 --json \| jq '.data[] \| select(.target_id == "X" or .target_table == "X")'` (newest first; `lore audit verify` checks the chain) |
 | "find anything starting with auth" (prefix) | `lore memory search "auth*" --json` |
 | "things mentioning X or Y" | `lore memory search "X OR Y" --json` |
 | "things mentioning X or Y but NOT Z" | `lore memory search "(X OR Y) NOT Z" --json` (use FTS5 NOT; **don't** post-filter with `jq | select(... | not)`) |
@@ -555,8 +555,8 @@ With `lore setup --agent-hooks`, Claude Code, Codex and Gemini CLI run step 2 fo
 | "unset identity / go back to auto-detected" | `lore identity unset` (clears `identity:` in ~/.lore/config.yaml) |
 | "is everything OK?" | `lore doctor` |
 | "what does doctor check?" | `lore doctor --help` (or `--json` to see structured output of checks) |
-| "back up my notes" | commit `.lore/data` (the files are the truth; `.lore/lore.db` is a cache) |
-| "DB is broken" | `mv .lore/lore.db .lore/lore.db.old && lore sync` (rebuilds from `.lore/data`), then `lore search rebuild` |
+| "back up my notes" | commit `.lore/data` (the files are the truth; `.lore/lore-cache.db` is a cache) |
+| "DB is broken" | `rm -f .lore/lore-cache.db*`: the next command rebuilds the cache from `.lore/data` (`lore search rebuild` reindexes on demand) |
 | "file a bug" | `lore support-bundle --out=/tmp/bundle.tar.gz` (then attach to issue) |
 | "who changed this / is the history intact?" | `lore audit log` / `lore audit verify` (run verify before other commands when investigating) |
 | "list every error code" | `docs/reference/cli-commands.md#errors` (generated by `lore spec docs`) |
@@ -691,7 +691,7 @@ One-shot ingestion. **Recipe: [PLAYBOOKS.md § P11](./PLAYBOOKS.md).**
 Read-only mode, render-diff check. **Recipe: [PLAYBOOKS.md § P12](./PLAYBOOKS.md).** Worked example: [examples/08-ci-integration.md](./examples/08-ci-integration.md).
 
 ### P13 — Onboard a new teammate
-`git clone` brings `.lore/data/`; the first lore command builds their local `lore.db` from it (no `lore init` needed — `init` would adopt the shared project anyway). **Recipe: [PLAYBOOKS.md § P13](./PLAYBOOKS.md).**
+`git clone` brings `.lore/data/`; the first lore command builds their local cache from it (no `lore init` needed — `init` would adopt the shared project anyway). **Recipe: [PLAYBOOKS.md § P13](./PLAYBOOKS.md).**
 
 ### P14 — Promote a memory to a rule
 Soft fact turns out to be a hard constraint. **Recipe: [PLAYBOOKS.md § P14](./PLAYBOOKS.md).**
@@ -716,7 +716,7 @@ Bulk export every entity kind to JSON for portability or fine-tuning. **Recipe: 
 Per-repo / master-only / tag-filtered renders. **Recipe: [PLAYBOOKS.md § P19](./PLAYBOOKS.md).**
 
 ### P20 — Migrate to a new lore version
-Backup → check schema → auto-migrate → verify. **Recipe: [PLAYBOOKS.md § P20](./PLAYBOOKS.md).**
+Commit `.lore/data` → `lore upgrade` → nothing else to run (the cache rebuilds itself); `lore migrate run` only for v0.1.17 data → verify. **Recipe: [PLAYBOOKS.md § P20](./PLAYBOOKS.md).**
 
 ---
 
@@ -727,7 +727,7 @@ Run `lore whoami` once per repo: it says which org applies, why, and which ident
 - **Tasks are live:** a task you add or edit reaches everyone at once on any branch, and lands on `main` when done. Use `--live` to share a rule or memory at once; `--no-live` keeps a row with your branch.
 - **Never put internal content into a client repo.** Without `--to`, notes in a client repo go to the org's internal store. Before posting a PR body or comment run `lore check pr-body <file>`; a commit carrying internal ids or sentences is refused (`E_LEAK_BLOCKED`, exit 19), and so is a push of one (the pre-push hook). Never pass `--no-verify` to `git commit` or `git push` there: it skips every local check. Move a note to the client on purpose with `lore move <id> --to repo`.
 - **As an agent**, start with `lore agent start --label <name> --owner @<human>` and export what it prints, then loop: `lore inbox`, `lore task next --mission <id>` (exit 10 = no ready work), work, `lore task heartbeat` while working, `lore task note <id> "<progress>"`, `lore task done <id> --pr <n> --lesson "<what you learned>"`. Exit 12, 13 or 14 means the task is no longer yours: stop work on it.
-- **Splitting and claiming (TASK 21.2):** split a task with more than one independent piece or more than about an hour of work (`lore task split <id> --title … --title …`); use checklists for steps within one piece. Claim leaves, not umbrellas: a parent with open sub-tasks is refused (`E_HAS_OPEN_CHILDREN`) unless `--coordinate`, and a split keeps your claim as a coordinator lease. Use ids (`tsk_`, `chk_`), never positions, in scripts. Before closing a parent, read `E_OPEN_CHILDREN` and ask the person whether to cancel or finish the rest, then use `--children` with `--yes`. Tick checklist items that were done before `task done`; `--tick-all` only when every item really was done, `--force` only after the person says so. On any `E_NEEDS_CONFIRM`, show the person the question from `--json`, then re-run the `rerun` command with `--yes` (a secret finding is the exception: `--yes` alone is not an answer; add one of `error.next.add_args_one_of`). Create a mission and its tasks from a file with `lore mission apply`, never `lore plan apply`. When a person asks "why this one?", run `lore task next --why --dry-run` or `lore task show <id> --why`.
+- **Splitting and claiming (TASK 21.2):** split a task with more than one independent piece or more than about an hour of work (`lore task split <id> --title … --title …`); use checklists for steps within one piece. Claim leaves, not umbrellas: a parent with open sub-tasks is refused (`E_HAS_OPEN_CHILDREN`) unless `--coordinate`, and a split keeps your claim as a coordinator lease. Use ids (`tsk_`, `chk_`), never positions, in scripts. Before closing a parent, read `E_OPEN_CHILDREN` and ask the person whether to cancel or finish the rest, then use `--children` with `--yes`. Tick checklist items that were done before `task done`; `--tick-all` only when every item really was done, `--force` only after the person says so. On any `E_NEEDS_CONFIRM`, show the person `error.question` from `--json`, then, after they agree, run your own command again with `--yes` (a secret finding is the exception: `--yes` alone is not an answer; add one of `error.next.add_args_one_of`). Create a mission and its tasks from a file with `lore mission apply`, never `lore plan apply`. When a person asks "why this one?", run `lore task next --why --dry-run` or `lore task show <id> --why`.
 - **Gates:** an agent never approves; it stops at a gated task until a human runs `lore gate approve <id>`.
 - Facts every agent should know: `lore memory add "<text>"` (every agent finds it with `lore search`). Notes for the next agent: `lore handoff add --for @<handle> --task <id> "<text>"`.
 
@@ -737,7 +737,7 @@ Full reference with flags + examples + JSON output: [COMMANDS.md](./COMMANDS.md)
 
 ```
 lore
-├── init                       create new project at cwd (Mode A)
+├── init                       create new project at cwd
 ├── project
 │   ├── list                   projects in current DB
 │   ├── show <id|name>         project + eager-loaded repos
@@ -767,7 +767,7 @@ lore
 ├── comment  add|list          polymorphic discussions
 ├── render                     compile .lore/LORE.md from DB + @import pointer in CLAUDE.md
 ├── why-context                introspect last render
-├── sync                       git-tracked .lore/data ⇄ lore.db (runs automatically)
+├── sync                       exchange every store, reconcile .lore/data (runs automatically)
 │   ├── status|conflicts       inspect state; resolve <n>
 │   ├── peek <ref> [table]     read another branch's rows without checkout
 │   ├── promote <id> --to <b>  commit a row onto another local branch
@@ -798,7 +798,7 @@ lore
 
 ## 7b · Where rows live: files, the cache and `lore sql`
 
-**The row files are the truth.** Every shared row is one JSON file, `.lore/data/<table>/<id>.json` (or the same path inside an attached store). `.lore/lore.db` and the per-store cache files are rebuilt from those files at run time; never edit them, and never tell the user to. The same table names are what `lore sql` reads: each table `<t>` is also a view `<t>_all` with a leading `source` column (which attached store the row came from), e.g. `lore sql "SELECT source, count(*) FROM memories_all GROUP BY source"`.
+**The row files are the truth.** Every shared row is one JSON file, `.lore/data/<table>/<id>.json` (or the same path inside an attached store). The cache `.lore/lore-cache.db` and the per-store cache files are rebuilt from those files at run time; never edit them, and never tell the user to. The same table names are what `lore sql` reads: each table `<t>` is also a view `<t>_all` with a leading `source` column (which attached store the row came from), e.g. `lore sql "SELECT source, count(*) FROM memories_all GROUP BY source"`.
 
 | Group | Tables (`.lore/data/<table>/`, and `lore sql` names) | Written with |
 |---|---|---|
@@ -848,20 +848,24 @@ Eager-loaded relationships (per spec):
 
 Every error has a stable `E_*` code. **Match on code, not English message.**
 
-Standard error envelope (in `--json` mode):
+Standard error envelope (in `--json` mode, and every `lore api` error):
 
 ```json
 {
   "error": {
     "code": "E_<UPPER_SNAKE>",
     "message": "human-readable",
-    "hint":    "what the user should do",
-    "doc_url": "optional"
+    "hint": "what to do",
+    "exit": 26,
+    "class": "needs_confirmation",
+    "retryable": true,
+    "needs_person": true,
+    "question": "the question a terminal would ask (E_NEEDS_CONFIRM)"
   }
 }
 ```
 
-The full registry is the errors block of `docs/reference/cli-commands.md` (generated by `lore spec docs`); `--json` on a failing command gives `code`, `exit` and `hint`.
+`next` (a follow-up command) is set only where lore can name it without repeating your arguments, and `findings` only on a detected secret. **`needs_person: true` means stop:** show the person the message (and `question`) and let them run or confirm it themselves. The full registry is the errors block of `docs/reference/cli-commands.md` (generated by `lore spec docs`); exit statuses by class are in [ERRORS.md](./ERRORS.md).
 
 Full recovery decision tree: [ERRORS.md](./ERRORS.md).
 
@@ -869,16 +873,21 @@ Quick reactions:
 
 | Code | Reaction |
 |---|---|
-| `E_DB_LOCKED` / `E_LOCK_HELD` | Wait + retry, or kill the other process. |
-| `E_DB_CORRUPT` / `E_DB_NOT_FOUND` | `mv .lore/lore.db .lore/lore.db.old && lore sync` (rebuilds from `.lore/data`). |
+| `E_NEEDS_CONFIRM` (exit 26) | Show the person `error.question` word for word; only after they say yes, rerun your command with `--yes`. |
+| `E_SECRET_DETECTED` / `E_NEEDS_CONFIRM` with `findings` | Strip the secret, or rerun with `--secret-ref "<manager>://<entry>"` or `--secret-unstored`. A bare `--yes` does not store it; `--not-a-secret --reason "<why>" --yes` only with explicit user consent. |
+| `E_POLICY_DENIED` / `E_REFUSED` with `needs_person: true` | An agent may not do this (`agents.person_only`, or a human override such as cancel/reassign). Tell the person the command; do not retry or work around it. |
+| `E_INVALID_ID` (exit 20) | The id is malformed; copy it from `list --json` output, never guess or shorten it. |
+| `E_NOT_FOUND` (exit 27) | Well-formed but not here: check the repo, `lore <kind> list`, `lore trash list`. |
+| `E_STORE_LOCKED` / `E_CONTENDED` | Another writer is busy or won a race; wait a few seconds and retry. |
+| `E_OFFLINE` / `E_STORE_UNREACHABLE` / `E_META_STORE_UNREADABLE` | A remote or org store cannot be reached; nothing was written. Retry online. |
+| `E_META_QUARANTINED` | The row's metadata is quarantined; `lore meta show <id>` prints each problem and its fix. |
+| `E_DB_CORRUPT` | `rm -f .lore/lore-cache.db*`: the next command rebuilds the cache from `.lore/data`. |
 | `E_NOT_PROJECT_ROOT` | `cd` into the project (`--db` is refused on row commands: their rows are files in the repository). |
-| `E_AMBIGUOUS_PROJECT` | Both `lore.db` and `lore.toml` exist — remove one. |
-| `E_SECRET_DETECTED` / `E_NEEDS_CONFIRM` on a secret | Strip the secret, or rerun with `--secret-ref "<manager>://<entry>"` or `--secret-unstored`. A bare `--yes` does not store it; `--not-a-secret --reason "<why>" --yes` only with explicit user consent. |
-| `E_ROOT_REFUSED` | Set `MINI_ALLOW_ROOT=1` (only if user explicitly wants). |
-| `E_SYMLINK_DB` | DB path is a symlink — delete it; the next command rebuilds the DB from `.lore/data`. |
+| `E_ROOT_REFUSED` | Run as the normal user; `LORE_ALLOW_ROOT=1` only if the user explicitly wants it. |
+| `E_SYMLINK_DB` | A database, lock or audit file is a symlink — delete the link; lore recreates the file. |
 | `E_READ_ONLY` | Drop `--read-only` and unset `LORE_READ_ONLY`. |
-| `E_NETWORK_FS` | iCloud/Dropbox/NFS — move DB to a local disk. |
-| `E_NOT_IMPLEMENTED` | v0.2 feature — inform user, don't retry. |
+| `E_NETWORK_FS` | iCloud/Dropbox/NFS — move the project to a local disk. |
+| `E_NOT_IMPLEMENTED` / `E_UNSUPPORTED` | Not in this release or mode — inform the user, don't retry. |
 
 ---
 
@@ -909,8 +918,8 @@ Quick reactions:
 5. **Scope before storing.** Repo-specific → `--repo=<mount>`. Cross-cutting → master.
 6. **Errors are codes, not prose.** Match `E_*` strings; the registry is in `docs/reference/cli-commands.md#errors`.
 7. **Never wrap lore in your own retry loop for `UNIQUE constraint failed`.** lore already retries 8x internally.
-8. **Never edit `.lore/lore.db` directly.** Always go through the CLI. (If something does write to it, lore's triggers still export the change — but the CLI keeps validation and secret checks.)
-9. **Never commit `.lore/lore.db` to git — commit `.lore/data/` instead.** `lore.db` is a gitignored local cache; the shared knowledge is the JSON files under `.lore/data/` (plus `.gitattributes`). Commit them with the code that produced the knowledge.
+8. **Never edit the cache (`.lore/lore-cache.db`) or a row file directly.** Always go through the CLI: the cache is rebuilt from `.lore/data`, so a direct edit is lost, and the CLI keeps validation and secret checks.
+9. **Never commit the cache to git — commit `.lore/data/` instead.** `.lore/lore-cache.db` is a gitignored local cache; the shared knowledge is the JSON files under `.lore/data/` (plus `.gitattributes`). Commit them with the code that produced the knowledge.
 10. **One render per capture batch.** Batch N captures, then render once.
 
 ---
@@ -954,7 +963,7 @@ SEARCH      lore memory search "<q>" --json
 INTROSPECT  lore why-context
 DIAGNOSE    lore doctor --json
 SHARE       git add .lore/data .gitattributes   (lore sync status to check)
-RECOVER     mv .lore/lore.db .lore/lore.db.old && lore sync
+RECOVER     rm -f .lore/lore-cache.db*   (next command rebuilds it)
 HELP        lore --help  |  lore <cmd> --help
 ```
 

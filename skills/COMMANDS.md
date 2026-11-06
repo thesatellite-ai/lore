@@ -9,7 +9,7 @@ Every command takes `--color auto|always|never` and `--trace`; most take `--json
 ## Bootstrap
 
 ### `lore init [path]`
-Initializes a Mode A project at cwd. Creates `.lore/lore.db`, applies schema, registers project, auto-adds `lore.db` to `.gitignore`, and writes the first sync pass to `.lore/data/` (commit it). In a clone that already has `.lore/data/` it adopts the shared project instead of minting a new one.
+Initializes a project at cwd: writes the project and repo rows to `.lore/data/` (commit it), adds the local cache (`.lore/lore-cache.db`) and machine files to `.gitignore`, and writes `.lore/LORE.md` and the tool pointer file. In a clone that already has `.lore/data/` it adopts the shared project instead of minting a new one.
 
 ```bash
 lore init --non-interactive --name=my-app
@@ -395,10 +395,10 @@ lore link list --commit=abc1234      # entities linked to a sha
 lore link list --json
 
 # Reverse lookup
-lore commit-show abc1234             # all entities for this sha
+lore commit show abc1234             # all entities for this sha
 
 # Remove
-lore link remove cml_xxx --confirm
+lore link remove cml_xxx --yes      # asks first; --yes after the person agrees
 ```
 
 **Note**: `--commit=HEAD` runs `git rev-parse HEAD` + `git log -1 --format=...` to capture full sha, message, author, and committed-at automatically. Pass a literal sha if you're outside the repo or want a specific commit.
@@ -608,8 +608,8 @@ lore doctor --fix                 # repair what doctor can fix safely (reversed 
 # read-only SQL over every table (counts, joins); sensitive values masked
 lore sql "SELECT count(*) FROM rules"
 
-# a damaged or lost .lore/lore.db: the files in .lore/data are the truth
-mv .lore/lore.db .lore/lore.db.old && lore sync   # rebuilds the database from .lore/data
+# a damaged or lost cache: the files in .lore/data are the truth
+rm -f .lore/lore-cache.db*   # the next command rebuilds the cache from .lore/data
 lore search rebuild                               # rebuilds the search index from the row files
 git checkout HEAD -- .lore/data                   # a deleted .lore/data comes back from git
 
@@ -843,21 +843,21 @@ Error kinds in `errors[]`: `invalid-file`, `conflict-markers`, `newer-format` (u
 
 ## Audit
 
-Every change to a shared row is appended to a hash-chained log by the sync passes: `<table>.write` (this lore command), `<table>.import` (from .lore/data), `<table>.merge`, `<table>.external-write` (found in lore.db, made by something other than lore).
+Every change lore makes is appended to a hash-chained log in `~/.lore/state/machine.db` (this machine only): action `create`, `update`, `delete`, `purge` or a `secret.*` action, each with the row, the actor and the hashes before and after. Teammates' changes are in `git log -- .lore/data`.
 
 ```bash
-lore audit verify [--json]          # exit 1 + E_AUDIT_CHAIN_BROKEN on an edited/deleted entry, or "hash mismatch" for rows changed outside lore
+lore audit verify [--json]          # E_AUDIT_CHAIN_BROKEN (exit 23) on an edited or deleted entry
 lore audit log [--limit 50] [--json]  # newest first; --limit 0 = all
 ```
 
-`audit verify` and `audit log` open the DB without a sync pass, so run `verify` first when investigating — any other lore command records outside changes as external writes.
+A log written by an older 0.1.18 development build (before the chain had an anchor) is adopted by its first new write when its links are intact; a broken link is never adopted.
 
 ## Safety refusals
 
 | Code | When | Override |
 |---|---|---|
-| `E_ROOT_REFUSED` | running as root (files would end up root-owned) | `LORE_ALLOW_ROOT=1` (legacy `MINI_ALLOW_ROOT=1`) |
+| `E_ROOT_REFUSED` | running as root (files would end up root-owned) | `LORE_ALLOW_ROOT=1` |
 | `E_NETWORK_FS` | project or DB inside iCloud/Dropbox/OneDrive/Google Drive, or on NFS/SMB | `LORE_ALLOW_NETWORK_FS=1` |
 | `E_DISK_FULL` | the disk is full; nothing was written | free space, re-run |
-| `E_MIGRATION_INCOMPLETE` (doctor) | a schema update was interrupted | `lore setup` (safe to repeat) |
+| `E_OLD_LORE` | this binary is below the project's `min_lore_version` (reads still work) | `lore upgrade` |
 

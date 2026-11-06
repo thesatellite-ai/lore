@@ -14,7 +14,7 @@ The identity behind any write. Resolved via 8-step fallback chain (flag → env 
 A file name several coding tools read for agent context. `lore render --target=AGENTS.md` stitches the `@import` pointer into `AGENTS.md` instead of `CLAUDE.md`; the generated knowledge still lives in `.lore/LORE.md`.
 
 ## Audit log
-Append-only, hash-chained ledger of every change to a shared row (lore writes, imports from .lore/data, merges, and external writes found in the DB). `lore audit verify` checks the chain and flags rows changed outside lore; `lore audit log` lists entries.
+Append-only, hash-chained log of every change lore makes on this machine (create, update, delete, purge, secret reveals), kept in `~/.lore/state/machine.db`. `lore audit verify` checks the chain (`E_AUDIT_CHAIN_BROKEN` on an edited or deleted entry); `lore audit log` lists entries. Teammates' changes are in `git log -- .lore/data`.
 
 ## BM25
 Ranking function used by SQLite FTS5. Orders search hits by term frequency × inverse document frequency. Better hits = lower bm25() values; lore flips sign so "higher score = better" for callers.
@@ -71,13 +71,13 @@ Free-form learned fact. The lightest-weight capture shape. No rationale, no seve
 A container for tasks. Used to group related work items under one initiative with a target date.
 
 ## Mode A
-Local DB mode. One `.lore/lore.db` per project root. The default. Mode A projects sync through git via `.lore/data/` (see Row file).
+The v0.1.17 name for the default: one project per repo, its rows under `.lore/data/` (see Row file), shared through git. In 0.1.18 every repo works this way; the local cache is `.lore/lore-cache.db`.
 
 ## Row file
-`.lore/data/<table>/<id>.json` — one canonical JSON file per shared row (sorted keys, UTC timestamps, `_v` format version, `_table`). The committed source of truth; `lore.db` is a cache of these files plus machine-local tables.
+`.lore/data/<table>/<id>.json` — one canonical JSON file per shared row (sorted keys, UTC timestamps, `_v` format version, `_table`). The committed source of truth; `.lore/lore-cache.db` is a cache of these files (machine-local state lives in `~/.lore/state/machine.db`).
 
 ## Bootstrap / Adopt
-The first sync pass. **Bootstrap** (no `.lore/data` yet): back up `lore.db`, export every shared row, write `_meta.json`. **Adopt** (`.lore/data` exists but this DB never synced — a teammate's pull, a fresh clone, a restore): switch to the shared project id, import files, export private rows, keep losing versions of clashing rows as conflicts.
+The v0.1.17 first sync pass (0.1.18 writes the row files directly; v0.1.17 data converts with `lore migrate run`). **Bootstrap** (no `.lore/data` yet): back up `lore.db`, export every shared row, write `_meta.json`. **Adopt** (`.lore/data` exists but this DB never synced — a teammate's pull, a fresh clone, a restore): switch to the shared project id, import files, export private rows, keep losing versions of clashing rows as conflicts.
 
 ## Sync trash
 Rows deleted because their file disappeared (revert, `git clean`, stash) are copied to the trash first; `lore trash list --local` lists them; core rows come back from git (`git checkout HEAD -- <file>`).
@@ -134,7 +134,7 @@ The triple `(project_id, repo_id, master?)` that determines who sees a row. Flag
 Pre-write check that refuses bodies containing credential patterns (AWS keys, GitHub PATs, JWTs, OpenAI keys, Stripe keys, etc.). The write stops with `E_NEEDS_CONFIRM` (the JSON error carries `findings[]` and `next.add_args_one_of`); a bare `--yes` does not store it. The choices are `--secret-ref "<manager>://<entry>"`, `--secret-unstored`, or `--not-a-secret --reason "<why>" --yes` (after the person confirms); at a terminal a menu offers redact / unstored / not a secret (reason required) / cancel. The commit hook still refuses a credential.
 
 ## Symlink protection
-lore refuses to open `.lore/lore.db` if it's a symlink (O_NOFOLLOW semantics). Prevents an attacker with write access to `.lore/` from redirecting writes to `/etc/passwd` etc.
+lore refuses to write a database file (the cache and its sidecars, the machine store), the store lock `.lore/lock` or an audit file through a symbolic link (`E_SYMLINK_DB`); `.lore/LORE.md` may be a link only when it stays inside the repository. Prevents an attacker with write access to `.lore/` from redirecting writes to `/etc/passwd` etc.
 
 ## Tag
 Polymorphic label. Created once (`tag add --name=…`), then attached to many entities via `tag attach --on-table=… --on-id=…`.
@@ -158,4 +158,4 @@ Timestamp-prefixed UUID variant. lore uses UUIDv7 for all IDs so insert order �
 Introspection command. Shows what the most recent render included/excluded and why. Use when "the agent seems to be missing X."
 
 ## WAL
-SQLite's Write-Ahead Log mode. lore uses it via PRAGMA for crash safety + concurrent readers. Sidecar files: `lore.db-wal`, `lore.db-shm`.
+SQLite's Write-Ahead Log mode. lore uses it via PRAGMA for crash safety + concurrent readers. Sidecar files: `lore-cache.db-wal`, `lore-cache.db-shm`.

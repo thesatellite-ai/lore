@@ -31,10 +31,11 @@ lore render     # writes .lore/LORE.md from existing DB + creates CLAUDE.md with
 ### A.4 User says "set this up like my other project"
 ```bash
 lore init --non-interactive
-# Copy memories/rules from the other project:
-sqlite3 ../other-project/.lore/lore.db ".dump memories rules decisions" \
-    | sqlite3 .lore/lore.db
-# (NOTE: project_id differs; you may need to UPDATE project_id after dump.)
+# Rules both projects follow belong in a store both repos attach
+# (PLAYBOOKS.md P6), not in a copy: in the other repo, once,
+#   lore store init shared file:///<absolute path>   (or a git url)
+# then here:
+lore store add shared <url>
 lore render
 ```
 
@@ -289,9 +290,9 @@ lore doctor --json | jq '.warnings, .errors'
 
 ### F.3 "DB is corrupt"
 ```bash
-# the DB is a cache of .lore/data: move it away, lore rebuilds it
-mv .lore/lore.db .lore/lore.db.old && lore sync
-lore search rebuild
+# the cache is built from .lore/data: delete it, the next command rebuilds it
+rm -f .lore/lore-cache.db*
+lore doctor
 ```
 
 ### F.4 "I deleted .lore/data"
@@ -306,9 +307,9 @@ git add .lore/data && git status --short .lore/data   # commit them; no separate
 
 ### F.6 "DB is locked, another process is running"
 ```bash
-# Either wait, or find + kill the other process:
-lsof .lore/lore.db   # see PID
-# If stale (process is dead), lore auto-reclaims on next attempt.
+# E_STORE_LOCKED: another lore command held the store lock past
+# store.lock_timeout. Wait a few seconds and run the command again.
+# A lock left by a dead process is taken over on the next attempt.
 ```
 
 ### F.7 "Open a bug — capture state"
@@ -523,62 +524,57 @@ lore memory add --body "<...>" --not-a-secret --reason "<why>" --yes    # the co
 LORE_ALLOW_ROOT=1 lore init
 ```
 
-### N.3 .lore/lore.db is a symlink
+### N.3 A lore file is a symlink
 ```bash
-# Refused with E_SYMLINK_DB. Inspect the target, then delete the link;
-# the next command rebuilds the DB from .lore/data.
-ls -la .lore/lore.db
-rm .lore/lore.db
-lore sync
+# Refused with E_SYMLINK_DB: lore never writes a database, the store lock
+# (.lore/lock) or an audit file through a symbolic link. The message names
+# the file. Inspect the target, then delete the link; lore recreates the file.
+ls -la .lore/lore-cache.db
+rm .lore/lore-cache.db
+lore doctor
 ```
 
 ### N.4 Two lore processes running concurrently
 ```bash
-# Each holds a process flock during write. Second writer waits or returns
-# E_LOCK_HELD if --read-only is off and the lock is held.
-# Default: wait + retry up to 5s.
+# Writers take the store lock in turn; a second writer waits up to
+# store.lock_timeout, then answers E_STORE_LOCKED (retry). Readers never wait.
 ```
 
 ### N.5 DB on iCloud / Dropbox / OneDrive
 ```bash
 # lore detects cloud-sync folders by path and network filesystems by fs type,
-# and returns E_NETWORK_FS. Best fix: move the whole project to a local disk
-# and share knowledge through git (.lore/data). Or keep the project and move
-# only the DB to a local path (git sync is then off for this project):
-mv .lore/lore.db $HOME/local-lore/$(basename $PWD).db
-mkdir -p .lore
-ln -s $HOME/local-lore/$(basename $PWD).db .lore/lore.db
-# (NOTE: symlink will be refused — instead use --db flag or LORE_DB env.)
-echo "LORE_DB=$HOME/local-lore/$(basename $PWD).db" >> .envrc
+# and returns E_NETWORK_FS. Fix: move the whole project to a local disk
+# and share knowledge through git (.lore/data). --db / LORE_DB are refused
+# on row commands, and a symlinked cache is refused (E_SYMLINK_DB).
+# LORE_ALLOW_NETWORK_FS=1 overrides at the user's own risk.
 ```
 
 ### N.6 User: "I want to delete a memory"
 ```bash
-# v0.1: no `memory delete` command. Direct SQL (advanced):
-sqlite3 .lore/lore.db "DELETE FROM memories WHERE id=7"
-# OR set archived_at to soft-delete:
-sqlite3 .lore/lore.db "UPDATE memories SET archived_at=datetime('now') WHERE id=7"
-lore render    # rerender without archived rows
+lore memory delete mem_<id> --reason "<why>"   # to the trash; asks first
+lore trash restore mem_<id>                    # undo
+# or keep it out of the context without deleting:
+lore memory archive mem_<id>
 ```
 
 ### N.7 User: "edit memory mem_<id>"
 ```bash
-# v0.1: no `memory edit`. Add a new one + archive the old:
-sqlite3 .lore/lore.db "UPDATE memories SET archived_at=datetime('now') WHERE id=3"
-lore memory add --body="<corrected text>"
-lore render
+lore memory edit mem_<id> --body "<corrected text>"
+# or record that the old one is wrong and add the replacement:
+lore memory add --body "<corrected text>" --supersedes mem_<id>
 ```
 
 ### N.8 User: "rename the project"
 ```bash
-sqlite3 .lore/lore.db "UPDATE projects SET name='newname' WHERE id=(SELECT id FROM projects)"
+# 0.1.18 has no project rename command; tell the user. Never edit the
+# cache (.lore/lore-cache.db): it is rebuilt from .lore/data.
 ```
 
 ### N.9 User: "I deleted .lore/ by accident"
 ```bash
 # If .lore/data was committed, git brings everything shared back:
 git checkout HEAD -- .lore
-lore sync                  # rebuilds .lore/lore.db from .lore/data
+lore doctor                # the next command rebuilds the cache from .lore/data
 ```
 
 ### N.10 User: "audit log is corrupted"
@@ -598,10 +594,10 @@ lore audit log --limit 50  # who changed what, newest first
 **Refuse by default.** Suggest: chown the directory to the user.
 
 ### O.3 User: "delete the audit log"
-**Refuse.** Audit log is forensic. Suggest: archive the DB and start fresh if needed.
+**Refuse.** Audit log is forensic (it lives in `~/.lore/state/machine.db` and is hash-chained). Suggest `lore audit log` to read it.
 
-### O.4 User: "edit .lore/lore.db directly with sqlite3"
-**Discourage** for normal operations. Suggest the CLI. **Allow** for documented surgery (rename, delete, archive) with clear caveats — see N.6 / N.7 / N.8 above.
+### O.4 User: "edit the lore database directly with sqlite3"
+**Refuse.** The cache `.lore/lore-cache.db` is rebuilt from `.lore/data`, so a direct edit is lost and skips validation and the secret checks. Use the CLI (N.6 / N.7); for read-only questions `lore sql "<SELECT …>"`.
 
 ### O.5 User: "skip the migration check"
-**Refuse.** Schema mismatch + skip = data corruption. Suggest: upgrade lore OR pin DB to old version.
+**Refuse.** There is no migration check to skip in 0.1.18: the cache rebuilds itself. v0.1.17 data is converted once with `lore migrate run`; `E_OLD_LORE` means `lore upgrade`.

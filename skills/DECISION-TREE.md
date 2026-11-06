@@ -91,7 +91,7 @@ Diagnose first:  lore doctor --json
     │
     .lore/data present?  ls .lore/data
     │
-    ├── Yes  → mv .lore/lore.db .lore/lore.db.old && lore sync   (rebuild from the files)
+    ├── Yes  → rm -f .lore/lore-cache.db*   (the next command rebuilds it from the files)
     │
     └── No:
         │
@@ -188,7 +188,7 @@ install agent directive    directive install [--target=CLAUDE.md,AGENTS.md]
 inspect render             why-context
 recompile context          render
 diagnose                   doctor
-fix DB                     mv .lore/lore.db away + sync (rebuild from .lore/data)
+fix DB                     rm -f .lore/lore-cache.db* (next command rebuilds from .lore/data)
 rebuild search             search rebuild
 back up notes              commit .lore/data
 report bug                 support-bundle
