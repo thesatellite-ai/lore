@@ -66295,6 +66295,46 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "carried_totals": {
+                          "type": "object",
+                          "properties": {
+                            "effort_seconds": {
+                              "type": "integer"
+                            },
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            },
+                            "workers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "seconds": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "label",
+                                  "kind",
+                                  "seconds"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "workers",
+                            "effort_seconds"
+                          ]
+                        },
                         "effort_seconds": {
                           "type": "integer"
                         },
@@ -66588,6 +66628,7 @@
                         "manual_seconds",
                         "group_by",
                         "workers",
+                        "carried_totals",
                         "subtree"
                       ]
                     },
