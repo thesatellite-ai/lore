@@ -177,7 +177,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 		paths = append(paths, filepath.Join(dir, n))
 	}
 	sort.Strings(names)
-	fp := wiringFingerprint(bin, rel, paths)
+	fp := wiringFingerprint(s.h.cfg.Version, bin, rel, paths)
 	stamp := filepath.Join(s.stateDir, gitWiringStamp)
 	if b, rerr := os.ReadFile(filepath.Clean(stamp)); rerr == nil && strings.TrimSpace(string(b)) == fp {
 		return
@@ -224,19 +224,23 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 		s.warn("git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed):\n  " + strings.Join(still, "\n  "))
 	}
 	if err := os.MkdirAll(s.stateDir, liveStateMode); err == nil {
-		_ = os.WriteFile(stamp, []byte(wiringFingerprint(bin, rel, paths)+"\n"), liveNoteMode) // a lost stamp only means the next command checks again
+		_ = os.WriteFile(stamp, []byte(wiringFingerprint(s.h.cfg.Version, bin, rel, paths)+"\n"), liveNoteMode) // a lost stamp only means the next command checks again
 	}
 }
 
 // decimal is the base the fingerprint prints sizes and times in.
 const decimal = 10
 
-// wiringFingerprint hashes what is installed and the size and mtime of
-// every wired file: equal fingerprints mean nobody touched them since
-// lore last wired, so no git process is spawned.
-func wiringFingerprint(bin, rel string, paths []string) string {
+// wiringFingerprint hashes what is installed, the running lore's version
+// and the size and mtime of every wired file: equal fingerprints mean
+// nobody touched them since this lore last wired, so no git process is
+// spawned. The version is in it (E-FATES-2, v0.1.17 wiringVersion): a
+// binary replaced at the same path re-wires the clone once rather than
+// keep hooks and driver config an older lore wrote (re-wiring is
+// idempotent, so a no-op upgrade costs one check).
+func wiringFingerprint(loreVersion, bin, rel string, paths []string) string {
 	var b strings.Builder // a Builder never fails a write; the hash is taken once
-	b.WriteString(gitWiringVersion + "\n" + bin + "\n" + rel + "\n")
+	b.WriteString(gitWiringVersion + "\n" + loreVersion + "\n" + bin + "\n" + rel + "\n")
 	for _, l := range gitAttributeLines {
 		b.WriteString(l + "\n")
 	}
