@@ -94,9 +94,6 @@ func TestStoreSyncReportsTrashOutcome(t *testing.T) {
 		{edited, merge.TrashKeptEdit},
 		{both, merge.TrashDeletedBoth},
 		{clash, "both sides changed kind; kept the newer edit"},
-		// two deletes also clash on the trash fields; the merge result
-		// lists them as lore merge-driver prints them (TE-F-2: same report)
-		{both, "both sides changed deleted_at, deleted_batch; kept the newer edit"},
 	} {
 		want := "/" + w.id + ": " + string(w.outcome)
 		if !slices.ContainsFunc(got, func(n string) bool { return strings.HasSuffix(n, want) }) {
@@ -111,8 +108,15 @@ func TestStoreSyncReportsTrashOutcome(t *testing.T) {
 			t.Errorf("the line names the store by its url without query: %q", n)
 		}
 	}
-	if len(got) != 4 {
-		t.Errorf("want exactly 4 reports, got %q", got)
+	for _, n := range got {
+		// TE-F-3: the trash line is the one statement about the delete
+		// fields a soft-delete rule settled.
+		if strings.Contains(n, "deleted_") {
+			t.Errorf("a settled delete is not also a newer-wins clash: %q", n)
+		}
+	}
+	if len(got) != 3 {
+		t.Errorf("want exactly 3 reports, got %q", got)
 	}
 	notesA = nil
 	sync(a, "A")

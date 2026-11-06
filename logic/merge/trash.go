@@ -64,6 +64,7 @@ func settleTrash(res *Result, base, ours, theirs, newer row.Row) {
 		}
 		setDelete(&res.Row, win)
 		res.Trash = TrashDeletedBoth
+		dropSettledTrashFields(res)
 	case dO != dT:
 		del, alive := ours, theirs
 		if dT {
@@ -73,11 +74,28 @@ func settleTrash(res *Result, base, ours, theirs, newer row.Row) {
 		case dB && !sameDelete(del, base): // restored vs deleted again
 			keepAlive(&res.Row, del, alive, newer)
 			res.Trash = TrashKeptRestore
+			dropSettledTrashFields(res)
 		case !dB && edited(base, alive): // deleted vs edited: the edit wins
 			keepAlive(&res.Row, del, alive, newer)
 			res.Trash = TrashKeptEdit
+			dropSettledTrashFields(res)
 		}
 	}
+}
+
+// dropSettledTrashFields removes the delete fields from res.NewerWins once
+// a soft-delete rule settled them (TE-F-3): the Trash outcome is the one
+// statement about them, so the report never says "kept the newer edit"
+// for fields the rule decided otherwise (two deletes keep the EARLIER
+// one). A clash on any other field of the row is still reported.
+func dropSettledTrashFields(res *Result) {
+	var kept []string
+	for _, k := range res.NewerWins {
+		if !isTrashField(k) {
+			kept = append(kept, k)
+		}
+	}
+	res.NewerWins = kept
 }
 
 // edited reports whether side changed a field other than the delete and
