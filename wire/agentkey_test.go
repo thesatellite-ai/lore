@@ -56,6 +56,7 @@ func agentRow(t *testing.T, key string, owner ids.ID[ids.Actor]) (ids.AnyID, sto
 // 10-hex row keeps 10 even where the colliding row is not visible; an
 // explicit LORE_ACTOR key is never touched.
 func TestSettleAgentKey(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	env := map[string]string{"CODEX_THREAD_ID": "t-1"}
 	who, err := identity.Resolve(ctx, identity.Inputs{Home: t.TempDir(), Getenv: func(k string) string { return env[k] },

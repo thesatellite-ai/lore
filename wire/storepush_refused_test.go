@@ -46,6 +46,7 @@ func refusalsAt(t *testing.T, home string) []StorePushRefusal {
 // TestStorePushRefusalRecordAndClear: the record follows the last sync's
 // verdict, whichever path ran it.
 func TestStorePushRefusalRecordAndClear(t *testing.T) {
+	t.Parallel()
 	m1, m2 := refusedIDs(t)
 	refused := store.SyncReport{Refused: []store.Refusal{
 		{ID: m2, Code: errs.PolicyDenied, Reason: "the remote refused the push: hook declined"},
@@ -73,6 +74,7 @@ func TestStorePushRefusalRecordAndClear(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			res := pushRes(t)
 			f := &fakePushBackend{caps: store.Capabilities{Remote: true}}
 			for i, rep := range c.steps {
@@ -128,6 +130,7 @@ func TestStorePushRefusalRecordAndClear(t *testing.T) {
 // TestStorePushRefusalNeverCreatesLocalDB: a clear (a push that landed)
 // and the listing never create local.db on a machine that has none.
 func TestStorePushRefusalNeverCreatesLocalDB(t *testing.T) {
+	t.Parallel()
 	res := pushRes(t)
 	f := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: store.SyncReport{Sent: 1}}
 	b := &storePush{inner: f, name: "kb", res: res, notes: &bytes.Buffer{}}
@@ -144,6 +147,7 @@ func TestStorePushRefusalNeverCreatesLocalDB(t *testing.T) {
 
 // TestStorePushRefusalsSorted: two stores list by name.
 func TestStorePushRefusalsSorted(t *testing.T) {
+	t.Parallel()
 	res := pushRes(t)
 	rep := store.SyncReport{Refused: []store.Refusal{{Code: errs.PolicyDenied, Reason: "no"}}}
 	for _, name := range []store.Source{"zeta", "alpha"} {
@@ -162,6 +166,7 @@ func TestStorePushRefusalsSorted(t *testing.T) {
 // push after a write already sent are in the next Sync's report once
 // (lore sync's "sent N" line; it said 0 when the first read had pushed).
 func TestStorePushSyncCountsEarlierSends(t *testing.T) {
+	t.Parallel()
 	m1, _ := refusedIDs(t)
 	f := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: store.SyncReport{Sent: 3, Received: 1, Merged: []ids.AnyID{m1}}}
 	b := &storePush{inner: f, name: "kb", res: pushRes(t), notes: &bytes.Buffer{}}

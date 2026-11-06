@@ -12,6 +12,7 @@ import (
 // engine, the step line names the field and says to rotate, no output or
 // file keeps the token, and a second run changes nothing.
 func TestMigrateURLCredentials(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)

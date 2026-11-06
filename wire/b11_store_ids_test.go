@@ -14,6 +14,7 @@ import (
 )
 
 func TestStoreFolderProjectIDIsOnePerFolder(t *testing.T) {
+	t.Parallel()
 	const st, br, fo = "github.com/northwind/lore", "main", "org"
 	first, err := storeFolderProjectID(st, br, fo)
 	if err != nil {

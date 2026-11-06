@@ -21,12 +21,14 @@ import (
 // team` land in acme, `--to northwind/.` in the root, `--to company` in
 // org/.
 func TestOrgTargetMatrix(t *testing.T) {
+	t.Parallel()
 	for _, clash := range []bool{false, true} {
 		name := "linked only"
 		if clash {
 			name = "stores.yaml attaches the root too"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 			dir := strings.TrimPrefix(orgURL, "file://")
 			hook := func(context.Context) ([]attach.Store, error) {
@@ -60,6 +62,7 @@ func TestOrgTargetMatrix(t *testing.T) {
 // "<store>/<folder>" name, an unknown name and an unopened App keep the
 // name as it is.
 func TestStoreLabel(t *testing.T) {
+	t.Parallel()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	hook := func(context.Context) ([]attach.Store, error) {
 		return []attach.Store{{Name: "northwind", URL: orgURL, Folder: "acme"}, {Name: "northwind/org", URL: orgURL, Folder: "org"}}, nil

@@ -16,6 +16,7 @@ const referenceDir = "../docs/reference"
 // registry renders. A changed Summary, flag, route or error code fails
 // here until `lore spec docs && lore spec openapi` is run.
 func TestReferenceIsCurrent(t *testing.T) {
+	t.Parallel()
 	a := newTestApp(t, t.TempDir())
 	docs.CheckStale(t, a.Registry(),
 		filepath.Join(referenceDir, "cli-commands.md"),

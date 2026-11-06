@@ -9,6 +9,7 @@ import (
 
 // TestLeakProjectFolder: which project folder a repo-relative path names.
 func TestLeakProjectFolder(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		path, folder string
 		ok           bool
@@ -34,6 +35,7 @@ func TestLeakProjectFolder(t *testing.T) {
 // every doc that is not a row file, stays with the command's project (fail
 // closed: the rule keeps applying as before).
 func TestGroupLeakItems(t *testing.T) {
+	t.Parallel()
 	projects := map[string]string{"": "prj_top", "web": "prj_web", "services/billing": "prj_bill", "broken": ""}
 	projectOf := func(f string) (string, bool) {
 		p, ok := projects[f]
@@ -116,6 +118,7 @@ func TestGroupLeakItems(t *testing.T) {
 // of the sub-project filed at the top still is for the top (the split
 // narrows nothing).
 func TestGroupLeakItemsKeepsTheRule(t *testing.T) {
+	t.Parallel()
 	projectOf := func(f string) (string, bool) { return map[string]string{"web": "prj_web"}[f], f == "web" }
 	row := func(path, pid string) leakcheck.Item {
 		return leakcheck.Item{Where: "commit " + path, Path: path, Content: []byte(`{"_v":2,"id":"tsk_01a1acc2ce5776b79cd587677332acfe","project_id":"` + pid + `"}`)}

@@ -44,6 +44,7 @@ func piiRules(t *testing.T, a *App) map[string]string {
 // step says so; a pattern that does not compile is E_CONFIG_INVALID
 // naming the line but never the pattern, and nothing is written.
 func TestMigratePIIPatterns(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	home := t.TempDir()
 	path := filepath.Join(home, piiPatternsFile)

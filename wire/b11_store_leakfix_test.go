@@ -16,6 +16,7 @@ import (
 // the internal note it matched), the file otherwise; a move refusal never
 // tells the user to move again.
 func TestLeakFixNamesTheActionableRow(t *testing.T) {
+	t.Parallel()
 	const (
 		mem = "mem_0b770000000000000000000000000001"
 		rul = "rul_0d000000000000000000000000000003"
@@ -54,6 +55,7 @@ func TestLeakFixNamesTheActionableRow(t *testing.T) {
 // task id>` trailer in a client commit message points at an internal row
 // and IS blocked; only git's "#" comment lines are dropped.
 func TestCommitMessageTrailerIsChecked(t *testing.T) {
+	t.Parallel()
 	const storeTask = "tsk_0b770000000000000000000000000001"
 	idx := leakcheck.NewIndex([]leakcheck.IndexRow{{ID: storeTask, Table: "tasks", Label: "[northwind/acme]", Texts: []string{"invite mutation"}}}, nil)
 	cases := []struct {

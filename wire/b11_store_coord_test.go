@@ -22,6 +22,7 @@ import (
 // for the lead and one for the assignees (sorted, comma-joined) on top of
 // the existing history; an unchanged field records nothing.
 func TestAppendReassignHistory(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
 	read := func(d coord.Doc) []opstask.HistoryEntry {
 		s, err := canonjson.CompactValue(d[schema.FieldTaskHistory])
@@ -65,6 +66,7 @@ func TestAppendReassignHistory(t *testing.T) {
 // created_by, so the inbox and the mission owner see one author for both
 // writers (F07 poison task).
 func TestDocOfRowAuthor(t *testing.T) {
+	t.Parallel()
 	env, err := ids.New[ids.Actor]()
 	if err != nil {
 		t.Fatal(err)

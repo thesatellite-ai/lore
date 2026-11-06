@@ -22,6 +22,7 @@ const toolSession = "0199aaaa-bbbb-cccc-dddd-eeeeffff0000"
 // newest first and survives a reopen; KnownToolSessionIDs leaves out short
 // ids and synthetic keys (P3-LOCAL-5, AGENT_IDENTITY 6.2).
 func TestSessionsThroughTheMachineStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	h := opstest.New(t)
 	d := wire.SessionDetails{ActorID: opstest.Actor, Tool: "codex", ToolSessionID: toolSession, Model: "",
@@ -84,6 +85,7 @@ func TestSessionsThroughTheMachineStore(t *testing.T) {
 // machine store, raw ids in the rows (session.list redacts), counts zero,
 // and never reveals raw tool session ids (P3-COORD-SESS-1).
 func TestDefaultSessionHostReadsTheMachineStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	h := opstest.New(t)
 	id, err := h.App.FindOrCreateSession(ctx, "prj_a", wire.SessionDetails{ActorID: opstest.Actor, Tool: "codex", ToolSessionID: toolSession, Model: "gpt-5"})

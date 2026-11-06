@@ -13,6 +13,7 @@ import (
 // .gitleaks.toml lets a write through that the same text without the
 // file is refused for; a [[rules]] table in it adds nothing.
 func TestRepoGitleaksAllow(t *testing.T) {
+	t.Parallel()
 	key := "AKIA" + strings.Repeat("Q", 16)
 	repo := gitRepo(t)
 	file := "[[rules]]\nid = \"x\"\nregex = '''docsonly'''\n\n[[allowlists]]\nregexes = ['''^AKIAQQQQ''']\n"

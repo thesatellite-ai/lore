@@ -27,6 +27,7 @@ import (
 // TestLeakIndexesClass pins which store classes feed the leak index for a
 // client repo and for any other checked repo (v0.1.17's split).
 func TestLeakIndexesClass(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		class  direction.Class
 		client bool
@@ -71,6 +72,7 @@ func leakTestRow(t *testing.T, id string, fields map[string]string) row.Row {
 // not, tombstones are skipped, and the indexed text is what the text rule
 // then matches in a client file.
 func TestLeakIndexRows(t *testing.T) {
+	t.Parallel()
 	const (
 		memID   = "mem_01a1a67a33b7777587cca0cfc9e5d82b"
 		taskID  = "tsk_01a1a67a33b7777587cca0cfc9e5d82c"
@@ -169,6 +171,7 @@ func leakNote(s store.Source) string { return "a note that lives in " + string(s
 // client repo and for any other checked repo (CFG6: a shareable store is
 // never internal; repo and client stores are what the client reads).
 func TestLeakRowsStoreChoice(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		client bool
 		want   []string
@@ -204,6 +207,7 @@ func TestLeakRowsStoreChoice(t *testing.T) {
 // "cannot check" and no partial index, for a client repo and an own repo
 // alike; with every named store attached the check runs.
 func TestLeakRowsFailsClosed(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		client   bool
@@ -217,6 +221,7 @@ func TestLeakRowsFailsClosed(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			a := leakWorld(t, tc.client)
 			got, err := a.leakRows(background(), tc.client, tc.expected)
 			if !tc.refused {
@@ -270,6 +275,7 @@ func (f faultyLeakReader) List(ctx context.Context, src store.Source, t row.Tabl
 // partial index) instead of counting as empty; a failure in a store the
 // index does not read changes nothing.
 func TestLeakRowsFailsClosedOnReadFailures(t *testing.T) {
+	t.Parallel()
 	boom := errors.New("disk on fire")
 	cases := []struct {
 		name    string

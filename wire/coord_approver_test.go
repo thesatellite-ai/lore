@@ -45,6 +45,7 @@ func (g getFault) Get(ctx context.Context, table row.Table, id ids.AnyID) (store
 // with no mission, a mission with no list, an approver on the list and a
 // mission row that does not exist (no list to check).
 func TestCheckApproverFailsClosed(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	fail := map[string]error{}
 	a := openWith(t, gitRepo(t), Options{

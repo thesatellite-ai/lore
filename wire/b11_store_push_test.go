@@ -62,6 +62,7 @@ func pushRes(t *testing.T) *OrgResolution {
 }
 
 func TestStorePushWrapsOnlyRemoteStores(t *testing.T) {
+	t.Parallel()
 	remote := &fakePushBackend{caps: store.Capabilities{Remote: true}, dir: "/x/clone/work"}
 	local := &fakePushBackend{}
 	cases := []struct {
@@ -150,6 +151,7 @@ func TestStorePushWrite(t *testing.T) {
 // TestStorePushNoteOnce (FLAG4): one command that writes twice to a store
 // whose push fails prints the note once and does not retry the push.
 func TestStorePushNoteOnce(t *testing.T) {
+	t.Parallel()
 	f := &fakePushBackend{caps: store.Capabilities{Remote: true}, syncErr: errors.New("boom")}
 	var notes bytes.Buffer
 	b := &storePush{inner: f, name: "agency", res: pushRes(t), notes: &notes}

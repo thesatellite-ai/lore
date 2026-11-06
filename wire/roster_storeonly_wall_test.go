@@ -12,6 +12,7 @@ import (
 // New filled in, so a host that leaves Wall nil still gets a working
 // store-only App (no "engine: missing wall clock").
 func TestStoreOnlyRosterDefaultsWall(t *testing.T) {
+	t.Parallel()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	hook := func(context.Context) ([]attach.Store, error) {
 		return []attach.Store{{Name: rosterStore, URL: orgURL, Folder: "org"}}, nil

@@ -15,6 +15,7 @@ import (
 // stay; a file with nothing to clean is never touched; a second run finds
 // nothing left to do.
 func TestCleanStoresFileURLs(t *testing.T) {
+	t.Parallel()
 	tok := "ghp_" + strings.Repeat("B", 20)
 	cases := []struct {
 		name      string

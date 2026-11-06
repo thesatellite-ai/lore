@@ -16,6 +16,7 @@ import (
 // push) writes the same row file, never a second project; a team put
 // reuses that row.
 func TestRosterRegisterGivesTheFolderItsProjectRow(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	a := rosterApp(t, orgURL, false)
@@ -57,6 +58,7 @@ func TestRosterRegisterGivesTheFolderItsProjectRow(t *testing.T) {
 // resolves to the row _meta.json names, and the open notice names the
 // stray row and the one in use.
 func TestRosterProjectPrefersMetaOverStrayRows(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	a := rosterApp(t, folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal), false)
 	if _, _, err := a.RosterRegister(ctx, rosterStore, RosterActor{Kind: schema.ActorKindHuman, StableKey: "mailto:ana@example.com", Name: "Ana", Handle: "ana"}); err != nil {

@@ -66,6 +66,7 @@ func tagIDsOf(t *testing.T, a *App, id string) []string {
 // counts the rows written; a second run changes nothing a user can see
 // (the same tag_ids). The entity_tags files stay for v0.1.17 readers.
 func TestMigrateTagsFlow(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)

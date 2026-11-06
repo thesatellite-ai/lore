@@ -42,6 +42,7 @@ func tableFiles(t *testing.T, repo string, table string) []string {
 // then writes the actor row with the row (the refusal left no "already
 // written" mark behind).
 func TestRefusedCreateWritesNoActorRow(t *testing.T) {
+	t.Parallel()
 	who, err := identity.ActorID(testEmail)
 	if err != nil {
 		t.Fatal(err)
@@ -62,6 +63,7 @@ func TestRefusedCreateWritesNoActorRow(t *testing.T) {
 	}{{"own repo", false}, {"client repo", true}} {
 		for _, r := range refusals {
 			t.Run(class.name+"/"+r.name, func(t *testing.T) {
+				t.Parallel()
 				repo := gitRepo(t)
 				client := class.client
 				a := openWith(t, repo, Options{RepoIsClient: func(context.Context) (bool, error) { return client, nil }})
@@ -95,6 +97,7 @@ func TestRefusedCreateWritesNoActorRow(t *testing.T) {
 // together with the task; the same create refused by the secret check
 // writes neither the projection nor the task.
 func TestClientProjectionLandsWithTheRow(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	repo := gitRepo(t)
 	kb := folderStoreAt(t, "sto_0e45506e64357c94a87e70ef1c6b0001", "internal")

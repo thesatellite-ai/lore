@@ -42,6 +42,7 @@ func textValues(t *testing.T, kv map[string]string) map[string]value.Value {
 // client repo, keeps its own id. An agent with no owner on any roster
 // keeps its id (v0.1.17).
 func TestAgentWritesInClientRepoStampTheOwner(t *testing.T) {
+	t.Parallel()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	home := t.TempDir()
 	internal := func(context.Context) (bool, error) { return false, nil }
@@ -156,6 +157,7 @@ func TestAgentWritesInClientRepoStampTheOwner(t *testing.T) {
 // the open with E_CONFIG_INVALID, never silently picking a side. An org
 // entry of another name does not apply.
 func TestAgentDetailsSwitch(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		config  string // config.yaml body; "" writes none
@@ -171,6 +173,7 @@ func TestAgentDetailsSwitch(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 			home := t.TempDir()
 			isClient := func(context.Context) (bool, error) { return true, nil }

@@ -15,6 +15,7 @@ import (
 // the CLI) is set, as v0.1.17 honoured the override; with it a core write
 // works.
 func TestAllowNetworkFS(t *testing.T) {
+	t.Parallel()
 	for _, allow := range []bool{false, true} {
 		repo := filepath.Join(t.TempDir(), "Dropbox", "repo")
 		if err := os.MkdirAll(repo, 0o750); err != nil {

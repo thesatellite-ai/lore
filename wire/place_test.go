@@ -31,6 +31,7 @@ func placeAt(t *testing.T, dir, name string, n store.Source) string {
 // written, across a folder rename; the store root is the bare sto_ id; an unreadable
 // _meta.json falls back to "<sto_>/<folder name>" instead of failing.
 func TestPlaceOf(t *testing.T) {
+	t.Parallel()
 	url := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
 	dir := strings.TrimPrefix(url, "file://")
 
@@ -80,6 +81,7 @@ func TestPlaceOf(t *testing.T) {
 // TestPlaceOfNoMarker: a backend without a store marker (the repo store)
 // has no place id; Open keeps the attached name.
 func TestPlaceOfNoMarker(t *testing.T) {
+	t.Parallel()
 	if got := placeOf(background(), engine.Attached{Name: store.SourceRepo, Backend: nil}); got != "" {
 		t.Fatalf("no-marker place = %q", got)
 	}

@@ -14,6 +14,7 @@ import (
 // name), never the raw act_ id, and the save by its date; a save with no
 // recorded writer is named as such, not left blank.
 func TestTeamVersionsNameTheWriter(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	home := t.TempDir()
 	a := openWith(t, repo, Options{Home: home, Version: "0.1.18", OrgCommands: &standaloneOrg{home: home}})
@@ -47,6 +48,7 @@ func TestTeamVersionsNameTheWriter(t *testing.T) {
 // an actor id), '(no writer recorded)' for an empty writer; a person seen
 // twice is looked up once and named the same.
 func TestTeamActorNamerMatrix(t *testing.T) {
+	t.Parallel()
 	a := openWith(t, gitRepo(t), Options{})
 	withProject(t, a)
 	ctx := background()

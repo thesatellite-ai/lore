@@ -110,6 +110,7 @@ func memPath(repo, id string) string {
 // backends, cache and engine: a v2 row file with _hlc, list, search, edit,
 // delete (tombstone), and a fresh App sees the same rows.
 func TestMemoryEndToEnd(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -152,6 +153,7 @@ func TestMemoryEndToEnd(t *testing.T) {
 // TestSecretNotWritten: a key-shaped body (built at run time) is refused
 // for a caller that cannot confirm, and no row file appears.
 func TestSecretNotWritten(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -169,6 +171,7 @@ func TestSecretNotWritten(t *testing.T) {
 // a memory added from one is listed by the other with no sync step, and
 // deleting every cache file loses nothing.
 func TestFolderStoreSharedWithoutSync(t *testing.T) {
+	t.Parallel()
 	storeDir := t.TempDir()
 	sid, err := ids.Parse[ids.Store](folderStore)
 	if err != nil {
@@ -280,12 +283,14 @@ func projectID(t *testing.T, a *App) string {
 // 0.1.18 write ask (E_NEEDS_CONFIRM naming lore migrate run); after the
 // migration, writes go through. Rows by the caller alone never ask.
 func TestFormatQuestion(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		by   string
 		ask  bool
 	}{{"teammate wrote v1", otherActor, true}, {"only my rows", testActor, false}, {"unknown writer", "", false}} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			seed := newTestApp(t, repo)
 			withProject(t, seed)
@@ -335,6 +340,7 @@ func removeV2Projects(t *testing.T, repo, project string) {
 // and the only keys that change are _v and _hlc; a dry run changes nothing;
 // a second run finds nothing to do.
 func TestMigrateChangesOnlyTheFormat(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -373,6 +379,7 @@ func TestMigrateChangesOnlyTheFormat(t *testing.T) {
 // TestCanonical: the scp form becomes ssh://, a folder becomes ?folder=,
 // a password is cleaned on read (OV4), a file url stays a file url.
 func TestCanonical(t *testing.T) {
+	t.Parallel()
 	secret := "pw" + strings.Repeat("x", 6)
 	for _, c := range []struct {
 		in   attach.Store
@@ -405,6 +412,7 @@ func TestCanonical(t *testing.T) {
 // never enter the origin, a file:// store has no origin, and the first of
 // two spellings of one remote wins.
 func TestOriginsOf(t *testing.T) {
+	t.Parallel()
 	got := originsOf(
 		"git@github.com:acme/kb.git",
 		"ssh://git@host.example/srv/kb.git",

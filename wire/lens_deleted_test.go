@@ -99,6 +99,7 @@ func TestSQLIncludeDeleted(t *testing.T) {
 // sources, the most SQLite attaches; the deleted-rows file would be the
 // 11th.
 func TestSQLIncludeDeletedAttachLimit(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	var b strings.Builder
 	b.WriteString("stores:\n")

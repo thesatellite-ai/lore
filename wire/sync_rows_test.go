@@ -74,6 +74,7 @@ func memProject(t *testing.T, a *App, id ids.AnyID) string {
 // with "merged into <keep>"; a second run has nothing to fix. --keep names
 // the kept one; an unknown --keep is E_NOT_FOUND.
 func TestFixProjectsFoldsIntoOne(t *testing.T) {
+	t.Parallel()
 	a, first, second, memFirst, memSecond := syncRowsWorld(t)
 	ctx := background()
 	if _, err := a.FixProjects(ctx, "prj_00000000000000000000000000000000", false); !errs.Has(err, errs.NotFound) {
@@ -119,6 +120,7 @@ func TestFixProjectsFoldsIntoOne(t *testing.T) {
 // verb to the core, which merges; no host at all registers nil (every
 // sync verb E_UNSUPPORTED, P3-SYNC-1).
 func TestSyncRowsFallsBackOnlyOnUnsupported(t *testing.T) {
+	t.Parallel()
 	a, first, second, memFirst, _ := syncRowsWorld(t)
 	ctx := background()
 	if a.syncEnv() != nil {
@@ -159,6 +161,7 @@ func (s stubSync) SyncTrashRestore(context.Context, opssync.TrashRestoreIn) (ops
 // restore <n>` prints its pointer and gets trash restore --local's own
 // answer (no such copy: E_NOT_FOUND naming the listing).
 func TestSyncTrashPointsAtTrashLocal(t *testing.T) {
+	t.Parallel()
 	var notes []string
 	unsupported := stubSync{err: errs.New(errs.Unsupported, "not here")}
 	a := openWith(t, gitRepo(t), Options{Sync: unsupported, Notice: func(m string) { notes = append(notes, m) }, RepoIsClient: func(context.Context) (bool, error) { return false, nil }})

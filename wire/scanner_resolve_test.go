@@ -27,6 +27,7 @@ func entry(src store.Source, level policy.Level, id, state, regex string) ruleEn
 // a personal change of a default never reaches the shared scanner, a
 // personal ADDED rule does; same-level rows tie-break by store name.
 func TestResolveRulesMatrix(t *testing.T) {
+	t.Parallel()
 	base := []scan.Rule{{ID: "aws-access-token"}, {ID: "github-pat"}}
 	const on, off, changed = schema.SecretRuleOn, schema.SecretRuleOff, schema.SecretRuleChanged
 	cases := []struct {
@@ -106,6 +107,7 @@ func TestResolveRulesMatrix(t *testing.T) {
 // while a `lore api` write stamped as someone else (a shared server) is
 // still refused for the same text.
 func TestPersonalOffOnlyCoversOwnWrites(t *testing.T) {
+	t.Parallel()
 	a := scannerRulesApp(t)
 	withProject(t, a)
 	// both rules that match a GitHub token: gitleaks' and lore's own

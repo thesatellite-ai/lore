@@ -15,6 +15,7 @@ import (
 // org store's url (folder and branch ignored) and nothing for another
 // store, a missing hook or a failing hook (FLAG4 then signs).
 func TestStoreSignerOwnerMatchesOrgStores(t *testing.T) {
+	t.Parallel()
 	org := OrgSigner{Name: "Northwind", Email: "lore@northwind.invalid", StoreURLs: []string{"git@github.com:northwind/lore.git"}}
 	signers := func(context.Context) ([]OrgSigner, error) { return []OrgSigner{org}, nil }
 	s := storeIdentityFunc(Options{OrgSigners: signers})
@@ -44,6 +45,7 @@ func TestStoreSignerOwnerMatchesOrgStores(t *testing.T) {
 // store's worktree is signed by the org identity even when git has one; in
 // any other store the git identity wins (FLAG4).
 func TestStoreSignerEnvForOrgStoreWorktree(t *testing.T) {
+	t.Parallel()
 	org := OrgSigner{Name: "Northwind", Email: "lore@northwind.invalid", StoreURLs: []string{"git@github.com:northwind/lore.git"}}
 	s := storeIdentityFunc(Options{OrgSigners: func(context.Context) ([]OrgSigner, error) { return []OrgSigner{org}, nil }})
 	ctx := context.Background()
@@ -75,6 +77,7 @@ func TestStoreSignerEnvForOrgStoreWorktree(t *testing.T) {
 // same signer as a core store commit. A human key with an e-mail signs with
 // that e-mail; an agent key signs with a synthetic address.
 func TestLoreSignatureIsStoreFallback(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ actor, email string }{
 		{testEmail, "alice@example.com"},
 		{"agent:frontend_2", "agent.frontend_2@"},

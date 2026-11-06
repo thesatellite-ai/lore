@@ -23,6 +23,7 @@ const restToken = "test-token"
 // narrowing) and the resource report; retype without yes needs
 // confirmation (428), as on the CLI.
 func TestRESTResourceHistoryReportKeepAsText(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	srv, err := rest.New(h.App.Registry(), h.App, rest.Options{Token: restToken})
 	if err != nil {

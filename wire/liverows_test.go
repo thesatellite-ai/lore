@@ -97,6 +97,7 @@ func fieldString(t *testing.T, f map[string]json.RawMessage, key string) string 
 // changes nothing, the note names the rows until the run, a second run
 // is a no-op.
 func TestMigrateLiveRepo(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -211,6 +212,7 @@ func jsonEqual(x, y map[string]json.RawMessage) bool {
 // <folder…>/<table>/<id>.json; `_live/` is the ref's own; `_root` is the
 // top project; nested folders keep every segment).
 func TestLiveRowPaths(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		path   string
 		table  row.Table
@@ -241,6 +243,7 @@ func TestLiveRowPaths(t *testing.T) {
 // stamp (from updated_at); text
 // that is not a JSON object is E_INVALID_INPUT.
 func TestDecodeLiveRow(t *testing.T) {
+	t.Parallel()
 	// With no live stamp the v1 upcast derives the HLC from updated_at
 	// (hlc.FromUpdate; no updated_by, so no actor).
 	const fromUpdate = "2026-11-04T08:09:56.252Z/0000/"
@@ -282,6 +285,7 @@ func TestDecodeLiveRow(t *testing.T) {
 // keep a field only one side holds, and never undo a tombstone, whatever
 // the argument order.
 func TestMergeRowNewerWins(t *testing.T) {
+	t.Parallel()
 	project := "prj_01a1a5aca7f57659be7320c5f4b70009"
 	decode := func(doc string) row.Row {
 		t.Helper()

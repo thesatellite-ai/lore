@@ -51,8 +51,10 @@ func addPolicy(t *testing.T, a *App, key policy.Key, raw string) {
 // (default on_detect), and a secrets.on_detect=refuse policy row then makes
 // it refuse; a later rule-off row lets it through again.
 func TestSettingsAddedWhileTheAppRunsApplyToTheNextWrite(t *testing.T) {
+	t.Parallel()
 	for _, via := range []string{"same App", "another process"} {
 		t.Run(via, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			long := newTestApp(t, repo)
 			withProject(t, long)
@@ -99,6 +101,7 @@ func TestSettingsAddedWhileTheAppRunsApplyToTheNextWrite(t *testing.T) {
 // at that moment (a row added after open included), and the row lands in
 // the store the hook answers. A create naming its target skips the hook.
 func TestClientRoutesReachTheWriteHook(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	var seen []map[string]string
 	actor, err := ids.Parse[ids.Actor](testActor)
@@ -141,6 +144,7 @@ func TestClientRoutesReachTheWriteHook(t *testing.T) {
 // stamped with), so ops reading their time through opclock agree with
 // created_at; New fills a nil Wall with time.Now.
 func TestNowIsTheEngineWall(t *testing.T) {
+	t.Parallel()
 	fixed := time.Date(2026, 11, 4, 9, 30, 0, 0, time.UTC)
 	a, err := New(Options{RepoDir: t.TempDir(), Home: t.TempDir(), Wall: func() time.Time { return fixed }})
 	if err != nil {

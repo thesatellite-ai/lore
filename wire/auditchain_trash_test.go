@@ -20,6 +20,7 @@ import (
 // purge one memory; the log holds one entry per step with its action, in
 // order, and verify stays intact.
 func TestChainAuditTrashRestorePurge(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t, withChainAudit)
 	mem := h.ID(h.Must(opsmemory.OpAdd, `{"body":"to be purged"}`))
 	h.MustYes(opsmemory.OpDelete, `{"id":"`+mem+`"}`)

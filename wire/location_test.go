@@ -12,6 +12,7 @@ import (
 // gives a different one. The root is the same whether written "", "." or
 // carried in the url's ?folder=.
 func TestAttachLocationMatrix(t *testing.T) {
+	t.Parallel()
 	const gitURL = "https://example.com/acme/store.git"
 	scp := "git@example.com:acme/store.git"
 	at := func(s attach.Store, f string) string {

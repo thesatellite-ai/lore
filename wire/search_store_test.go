@@ -18,6 +18,7 @@ import (
 // id) in --json and the [store] label in text; a repo hit carries neither;
 // archived and deleted store rows are left out; every id is listed once.
 func TestSearchAttachedStoreHits(t *testing.T) {
+	t.Parallel()
 	a := combinedApp(t, 1)
 	for _, src := range []store.Source{store.SourceRepo, "s0"} {
 		name, err := value.TextOf("prj-" + string(src))
@@ -99,6 +100,7 @@ func TestSearchAttachedStoreHits(t *testing.T) {
 // TestSearchStoreLabel (later 78): "[store]" for a store root, "[store/folder]"
 // inside a folder.
 func TestSearchStoreLabel(t *testing.T) {
+	t.Parallel()
 	if got := opssearch.StoreLabel(store.SourceRef{Store: "agency"}); got != "[agency]" {
 		t.Errorf("root: %q", got)
 	}

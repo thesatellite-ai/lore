@@ -23,6 +23,7 @@ const unstoredTaskTitle = "Store the secret redacted from %s, then rotate it"
 // and a refused write add no task. The engine side of the hook is pinned in
 // engine; this pins the wiring (App.state's SetRedactHook).
 func TestRedactHookBound(t *testing.T) {
+	t.Parallel()
 	sid := "0f8e2c1a-77b4-4c55-9d0e-" + strings.Repeat("b", 12)
 	secretBody := "resume with claude --resume " + sid + " later"
 	cases := []struct {

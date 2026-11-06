@@ -70,6 +70,7 @@ func sqlRows(t *testing.T, a *App, q string) []string {
 // stores, `source` is each store's name, and every table of the registry
 // has its <table>_all view.
 func TestLensOverStores(t *testing.T) {
+	t.Parallel()
 	a := lensRepo(t, func(context.Context) (bool, error) { return false, nil })
 	got := sqlRows(t, a, `SELECT source, name FROM projects_all ORDER BY source`)
 	if want := []string{"agency|prj-agency", "golang|prj-golang", "repo|prj-repo"}; !slices.Equal(got, want) {
@@ -101,6 +102,7 @@ func TestLensOverStores(t *testing.T) {
 // answer can be client: the hook says so, the hook fails, no hook (fail
 // closed). Only a positive "not a client" answer opens the stores.
 func TestLensClientRepoSeesOnlyRepo(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		hook   func(context.Context) (bool, error)
@@ -113,6 +115,7 @@ func TestLensClientRepoSeesOnlyRepo(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			a := lensRepo(t, c.hook)
 			got := sqlRows(t, a, `SELECT source, name FROM projects_all ORDER BY source`)
 			want := []string{"repo|prj-repo"}
@@ -155,6 +158,7 @@ func kindWorld(t *testing.T, a *App) {
 // registered sql.run op, the sensitive field is masked, and
 // --show-sensitive asks first (E_NEEDS_CONFIRM) and shows it with yes.
 func TestSQLSpec15Check(t *testing.T) {
+	t.Parallel()
 	a := lensRepo(t, func(context.Context) (bool, error) { return false, nil })
 	kindWorld(t, a)
 	out, err := run(t, a, opssql.OpRun, `{"query":"SELECT name, ip FROM res_server ORDER BY name"}`, false)
@@ -218,6 +222,7 @@ func runRows(t *testing.T, out string) []string {
 // TestSQLRefusesWrites: every write shape is refused through the op and
 // nothing changes.
 func TestSQLRefusesWrites(t *testing.T) {
+	t.Parallel()
 	a := lensRepo(t, func(context.Context) (bool, error) { return false, nil })
 	for _, q := range []string{
 		`INSERT INTO projects (id) VALUES ('x')`,
@@ -249,6 +254,7 @@ func TestSQLRefusesWrites(t *testing.T) {
 // TestLensCombinedCache: past MaxStoreCaches the lens is the repo file
 // plus the one combined file, and `source` is still each store's name.
 func TestLensCombinedCache(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	var yaml strings.Builder
 	yaml.WriteString("stores:\n")

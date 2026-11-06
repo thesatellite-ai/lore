@@ -81,13 +81,16 @@ func collect(t *testing.T, st *signals.Store) (warns, reports []string) {
 // that accepts it (the no-op lease push) is quiet. Break-verified: with the
 // ErrAtomicUnsupported check inverted the refusing and accepting cases swap.
 func TestDoctorSignalsRows(t *testing.T) {
+	t.Parallel()
 	t.Run("small fresh board", func(t *testing.T) {
+		t.Parallel()
 		w, r := collect(t, newSignalsFixture(t, 3, 0, false).store(t, nil))
 		if len(w)+len(r) != 0 {
 			t.Errorf("warns %v reports %v, want none", w, r)
 		}
 	})
 	t.Run("more than the limit", func(t *testing.T) {
+		t.Parallel()
 		w, r := collect(t, newSignalsFixture(t, signalsRefLargeFiles+1, 0, false).store(t, nil))
 		if len(w) != 1 || !strings.Contains(w[0], fmt.Sprintf("holds %d signal files", signalsRefLargeFiles+1)) {
 			t.Errorf("warns = %v, want the size warning", w)
@@ -97,12 +100,14 @@ func TestDoctorSignalsRows(t *testing.T) {
 		}
 	})
 	t.Run("at the limit", func(t *testing.T) {
+		t.Parallel()
 		w, _ := collect(t, newSignalsFixture(t, signalsRefLargeFiles, 0, false).store(t, nil))
 		if len(w) != 0 {
 			t.Errorf("warns = %v, want none at exactly the limit", w)
 		}
 	})
 	t.Run("expired claims", func(t *testing.T) {
+		t.Parallel()
 		w, r := collect(t, newSignalsFixture(t, 5, 2, false).store(t, nil))
 		if len(w) != 0 {
 			t.Errorf("warns = %v, want none (expired only reports)", w)
@@ -112,6 +117,7 @@ func TestDoctorSignalsRows(t *testing.T) {
 		}
 	})
 	t.Run("nothing fetched", func(t *testing.T) {
+		t.Parallel()
 		repo := gitRepo(t)
 		rp, err := gitref.Open(background(), repo, nil)
 		if err != nil {
@@ -125,6 +131,7 @@ func TestDoctorSignalsRows(t *testing.T) {
 	})
 	for _, refuse := range []bool{true, false} {
 		t.Run(fmt.Sprintf("atomic refused=%v", refuse), func(t *testing.T) {
+			t.Parallel()
 			f := newSignalsFixture(t, 1, 0, true)
 			r, err := gitref.Open(background(), f.repo, nil)
 			if err != nil {

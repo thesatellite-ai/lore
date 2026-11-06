@@ -12,6 +12,7 @@ import (
 // <home>/state/local.db, App.LocalState opens it there (creating the
 // folder), and a value written through one handle is read by the next.
 func TestLocalStatePath(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	if got, want := LocalStatePath(home), filepath.Join(home, "state", "local.db"); got != want {
 		t.Fatalf("LocalStatePath = %q, want %q", got, want)

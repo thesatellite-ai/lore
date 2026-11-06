@@ -33,6 +33,7 @@ func (nopAudit) Record(context.Context, engine.Event) error { return nil }
 // file (seen again by a fresh open of it) and never in the repo store.
 // Without a machine-local table nothing is opened (P3-LOCAL-2).
 func TestOpenMachineAttachesTheHomeFile(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	home := t.TempDir()
 	var shared []schema.TableDef // the built-ins without their machine-local tables

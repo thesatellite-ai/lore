@@ -29,6 +29,7 @@ import (
 // finding fixed; a second run finds nothing; a task whose lead is listed,
 // or that has no lead, is never reported.
 func TestDoctorTaskLeads(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)
@@ -116,6 +117,7 @@ func TestDoctorTaskLeads(t *testing.T) {
 // matching no actor warns with the policy fix; the caller's own actor by
 // id (with @ and case changed) is silent.
 func TestDoctorTriageOwner(t *testing.T) {
+	t.Parallel()
 	a := openWith(t, gitRepo(t), Options{})
 	withProject(t, a)
 	ctx := background()
@@ -148,6 +150,7 @@ func TestDoctorTriageOwner(t *testing.T) {
 // TestDoctorStoreLocks (later 586): a held store lock names its holder
 // (pid of the holder line) once; a free lock is silent.
 func TestDoctorStoreLocks(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	url := folderStoreAt(t, "sto_01a1a5aca7f57659be7320c5f4b72a01", rowfs.VisibilityInternal)
 	writeStoresYAML(t, repo, "stores:\n  - name: kb\n    url: "+url+"\n")
@@ -181,6 +184,7 @@ func TestDoctorStoreLocks(t *testing.T) {
 // holds a live version with a higher HLC is one warning naming that commit;
 // an older live version, or no history, finds nothing.
 func TestEditAfterPurge(t *testing.T) {
+	t.Parallel()
 	dir := gitRepo(t)
 	actor, err := ids.New[ids.Actor]()
 	if err != nil {

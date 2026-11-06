@@ -15,6 +15,7 @@ import (
 )
 
 func TestMigrateNoopSecondRunKeepsJournal(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)

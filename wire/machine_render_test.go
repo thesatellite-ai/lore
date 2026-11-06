@@ -17,6 +17,7 @@ import (
 // every repo, P3-LOCAL-2), comes back oldest first, and a record missing
 // a required field is refused (P3-LOCAL-5).
 func TestRenderHistoryThroughTheMachineStore(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	h := opstest.New(t)
 	first := wire.RenderRecord{ProjectID: "prj_a", RepoID: "rep_1", TargetPath: ".lore/LORE.md", Text: "# one",

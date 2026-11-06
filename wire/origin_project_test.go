@@ -20,6 +20,7 @@ import (
 // prints it; a row created in a client repo has no `_o.project`; with no
 // _meta.json project_id the key is left out.
 func TestOriginProjectOwnVsClient(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		client bool
@@ -32,6 +33,7 @@ func TestOriginProjectOwnVsClient(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			client := c.client
 			a := openWith(t, repo, Options{RepoIsClient: func(context.Context) (bool, error) { return client, nil }})
@@ -56,7 +58,14 @@ func TestOriginProjectOwnVsClient(t *testing.T) {
 			if err = json.Unmarshal([]byte(out), &w); err != nil {
 				t.Fatal(err)
 			}
-			raw, err := os.ReadFile(filepath.Join(repo, ".lore", "data", schema.TableMemories, w.ID+".json"))
+			rt, err := os.OpenRoot(repo) // the read stays inside the test's checkout
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := rt.ReadFile(filepath.Join(".lore", "data", schema.TableMemories, w.ID+".json"))
+			if cerr := rt.Close(); err == nil {
+				err = cerr
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

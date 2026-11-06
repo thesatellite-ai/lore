@@ -61,6 +61,7 @@ func writeConfig(t *testing.T, home, body string) {
 // old file kept as config.yaml.migrated), a fresh open reads the root, and
 // a second run changes nothing.
 func TestV017LocalPersonalStore(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	cfg := "# my settings\npersonal:\n  store: local\n"
 	writeConfig(t, home, cfg)
@@ -150,6 +151,7 @@ func TestV017LocalPersonalStore(t *testing.T) {
 // with no personal store configured and no ~/.lore/personal, nothing is
 // attached; a 0.1.18 personal.store url is not treated as v0.1.17's.
 func TestV017LocalPersonalPlacement(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	writeV017Personal(t, home, "agency", v017OrgMem, "agency note") // no config.yaml: v0.1.17's default is local
 	writeV017Personal(t, home, personalEverywhereV017, v017PersonalMem, "everywhere note")

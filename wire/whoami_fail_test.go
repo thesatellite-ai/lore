@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -34,6 +33,7 @@ func lineOf(lines []string, label string) (string, bool) {
 // TestWhoamiLinesFailMatrix: the human lines for a refused org, an
 // identity error and a success, and the machine row's three shapes.
 func TestWhoamiLinesFailMatrix(t *testing.T) {
+	t.Parallel()
 	ok := identity.Resolved{DisplayName: "Alice", StableKey: "human:alice@agency.example"}
 	own := orgresolve.Result{Org: &orgconf.Org{Name: "agency"}, Role: orgresolve.RoleOwn, MatchedBy: "own pattern"}
 	refused := &orgresolve.Error{Kind: orgresolve.KindAmbiguous, Message: "the patterns of 2 org entries match this repo (one, two)"}
@@ -85,9 +85,7 @@ func whoamiRepo(t *testing.T, config string) (repo, home string) {
 	t.Setenv("LORE_ORG", "")
 	t.Setenv("LORE_HUMAN", "1")
 	repo = gitRepo(t)
-	if out, err := exec.Command("git", "-C", repo, "remote", "add", "origin", "git@github.com:acme/app.git").CombinedOutput(); err != nil {
-		t.Fatalf("git remote add: %v %s", err, out)
-	}
+	gitIn(t, repo, nil, "remote", "add", "origin", "git@github.com:acme/app.git")
 	home = filepath.Join(t.TempDir(), ".lore")
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		t.Fatal(err)

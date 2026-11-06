@@ -76,6 +76,7 @@ func openWith(t *testing.T, repo string, opts Options) *App {
 // org's own repo (identity resolved in an org); a no-org repo keeps the
 // projection, as v0.1.17 did.
 func TestRepoIsClientHook(t *testing.T) {
+	t.Parallel()
 	boom := errors.New("org store unreachable")
 	cases := []struct {
 		name     string
@@ -94,6 +95,7 @@ func TestRepoIsClientHook(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			opts := Options{RepoIsClient: c.hook}
 			if c.name == "org own repo" {
@@ -161,6 +163,7 @@ func mustRead(t *testing.T, p string) []byte {
 // pointing at the store's project is refused in a client repo and allowed
 // in an internal one (the hook reaches the engine's F15 check).
 func TestRepoClassDecidesF15(t *testing.T) {
+	t.Parallel()
 	for _, client := range []bool{true, false} {
 		repo := gitRepo(t)
 		writeStoresYAML(t, repo, "stores:\n  - name: agency\n    url: "+folderStoreAt(t, folderStore, rowfs.VisibilityInternal)+"\n")
@@ -204,6 +207,7 @@ func projectIn(t *testing.T, a *App, n store.Source) string {
 // (machine id, session salt) or any unknown kind is written as human, as
 // v0.1.17 did, so `lore init` works with no USER and no git email.
 func TestActorKindOf(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		schema.ActorKindHuman: schema.ActorKindHuman, schema.ActorKindAgent: schema.ActorKindAgent,
 		schema.ActorKindSystem: schema.ActorKindSystem, identity.KindAuto: schema.ActorKindHuman,
@@ -219,6 +223,7 @@ func TestActorKindOf(t *testing.T) {
 // the same from the engine's in-memory list and from a row file's form (a
 // List of texts, or a JSON array that Infer left as JSON).
 func TestListFieldsInEveryForm(t *testing.T) {
+	t.Parallel()
 	inMem, err := value.ListOf(value.KindText, mustText(t, "akia"), mustText(t, "aws"))
 	if err != nil {
 		t.Fatal(err)

@@ -71,6 +71,7 @@ func mapKeys(t *testing.T, f *ast.File, name string) []string {
 // `_v: 1` over the other's `_v: 2` rows. repoOwned (the roster and
 // project rows of the checkout) is a separate set and must not overlap.
 func TestCoreTablesMatchLsyncCoreOwned(t *testing.T) {
+	t.Parallel()
 	f, err := parser.ParseFile(token.NewFileSet(), lsyncOwnedFile, nil, parser.SkipObjectResolution)
 	if err != nil {
 		t.Fatal(err)
@@ -128,6 +129,7 @@ const (
 // returned; a table without tag_ids or unknown to the core is ignored (its
 // v0.1.17 readers keep entity_tags).
 func TestMergeTagLinks(t *testing.T) {
+	t.Parallel()
 	reg, err := builtinRegistry()
 	if err != nil {
 		t.Fatal(err)
@@ -203,6 +205,7 @@ func v1Row(t *testing.T, repo string, table row.Table, id, body string) {
 // the fields kept, plans' status_str turned into the closed status; a
 // second run finds nothing.
 func TestRewriteV1EveryCoreTableFamily(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)

@@ -26,6 +26,7 @@ const (
 // sources with ONE id; only shareable markers are shareable, and a marker
 // without a visibility counts as internal (fail closed).
 func TestStoreIdentitiesAndShareable(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	shareURL := folderStoreAt(t, shareStoreID, rowfs.VisibilityShareable)
 	innerURL := folderStoreAt(t, innerStoreID, rowfs.VisibilityInternal)
@@ -126,8 +127,10 @@ func setVisibilityLine(t *testing.T, url, vis string) {
 // internal or shareable never opens (E_CONFIG_INVALID), so it can never be
 // read as shareable.
 func TestUnknownVisibilityRefused(t *testing.T) {
+	t.Parallel()
 	for _, vis := range []string{"public", "Shareable", "shared", "yes", "internal,shareable"} {
 		t.Run(vis, func(t *testing.T) {
+			t.Parallel()
 			u := folderStoreAt(t, shareStoreID, rowfs.VisibilityShareable)
 			setVisibilityLine(t, u, vis)
 			repo := gitRepo(t)

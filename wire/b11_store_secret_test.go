@@ -20,6 +20,7 @@ import (
 )
 
 func TestNoteAndLessonUseTheCoreSecretRules(t *testing.T) {
+	t.Parallel()
 	a, _, id := standaloneTask(t)
 	if _, err := run(t, a, opssettings.OpSecretRuleAdd, `{"id":"acme-token","regex":"ACMETOK-[0-9]{12}"}`, true); err != nil {
 		t.Fatal(err)

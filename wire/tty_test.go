@@ -10,6 +10,7 @@ import (
 // a regular file, a pipe and a nil file are never a terminal, so a command
 // with stdin </dev/null or piped answers without asking (P3-TTY-1).
 func TestIsTerminalNonTTY(t *testing.T) {
+	t.Parallel()
 	devnull, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Fatal(err)

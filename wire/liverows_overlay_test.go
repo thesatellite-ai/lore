@@ -31,6 +31,7 @@ func (p plainWrap) Unwrap() store.Backend { return p.Backend }
 // (a git hook, task heartbeat) only misses for itself, so no note. An
 // overlay that says it does not serve the live ref keeps the note.
 func TestLiveNoteOverlay(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		wrap func(store.Backend) store.Backend
@@ -46,6 +47,7 @@ func TestLiveNoteOverlay(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			opts := Options{RepoIsClient: func(context.Context) (bool, error) { return false, nil }}
 			if c.wrap != nil {

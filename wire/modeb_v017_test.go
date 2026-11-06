@@ -122,11 +122,13 @@ func exportDocs(t *testing.T, exp ModeBExport) map[string]map[string]json.RawMes
 // last_accessed_at left out), a comment with no entity_project_id moves
 // with its memory, and only the exported rows' entity_tags become links.
 func TestV017ModeBExport(t *testing.T) {
+	t.Parallel()
 	for _, form := range []struct{ name, file, body string }{
 		{"yaml", "lore.yaml", "db_path: SHARED/lore.db\nproject_id: " + v17ProjA + "\n"},
 		{"toml", "lore.toml", "# v0.1.17 pointer\ndb_path = \"SHARED/lore.db\"\nproject_id = '" + v17ProjA + "' # kept\n"},
 	} {
 		t.Run(form.name, func(t *testing.T) {
+			t.Parallel()
 			_, shared, pointer := v017ModeBRepo(t, form.file, form.body)
 			exp, err := V017ModeB{}.ExportModeB(context.Background(), pointer)
 			if err != nil {
@@ -174,6 +176,7 @@ func TestV017ModeBExport(t *testing.T) {
 // TestV017ModeBExportRefusals: a pointer that is not one, a missing shared
 // file, a project not in it and a ".." path each answer their code.
 func TestV017ModeBExportRefusals(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, file, body string
 		want             errs.Code
@@ -190,6 +193,7 @@ func TestV017ModeBExportRefusals(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			_, _, pointer := v017ModeBRepo(t, tc.file, tc.body)
 			if _, err := (V017ModeB{}).ExportModeB(context.Background(), pointer); !errs.Has(err, tc.want) {
 				t.Fatalf("err = %v, want %s", err, tc.want)
@@ -238,6 +242,7 @@ func TestExpandModeBPath(t *testing.T) {
 // TestV017Cell: every field kind against every cell shape json_object
 // gives (NULL, number, text), and the cells a kind refuses.
 func TestV017Cell(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		kind    value.Kind
 		cell    string
@@ -291,6 +296,7 @@ func TestV017Cell(t *testing.T) {
 // the comment moved with its memory, nothing of project B, the rows
 // readable through the store, and a second run a no-op.
 func TestV017ModeBMigrateRun(t *testing.T) {
+	t.Parallel()
 	repo, shared, pointer := v017ModeBRepo(t, "lore.yaml", "db_path: SHARED/lore.db\nproject_id: "+v17ProjA+"\n")
 	actor, err := ids.Parse[ids.Actor](testActor)
 	if err != nil {
@@ -349,6 +355,7 @@ func TestV017ModeBMigrateRun(t *testing.T) {
 // reader, so `lore migrate run` converts a Mode B repo on the release
 // binary instead of answering "this build cannot read the shared lore.db".
 func TestStandaloneOptionsReadModeB(t *testing.T) {
+	t.Parallel()
 	o := StandaloneOptions(t.TempDir(), t.TempDir(), "", "test")
 	if _, ok := o.ModeB.(V017ModeB); !ok {
 		t.Fatalf("StandaloneOptions ModeB = %T, want V017ModeB", o.ModeB)

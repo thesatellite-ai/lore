@@ -17,6 +17,7 @@ import (
 // no org step and keeps the id. (v1 roster rows → _v: 2 are not covered
 // here: see the report.)
 func TestMigrateOrgMarker(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeV1Marker(t, dir)
 	url := "file://" + dir

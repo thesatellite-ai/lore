@@ -24,6 +24,7 @@ const unreachableURL = "http://127.0.0.1:1/northwind.git"
 // org store itself is its E_STORE_UNREACHABLE. A committed stores.yaml
 // entry that cannot be reached still fails the open.
 func TestUnreachableOrgStore(t *testing.T) {
+	t.Parallel()
 	org := func(context.Context) ([]attach.Store, error) {
 		return []attach.Store{{Name: "northwind", URL: unreachableURL, Folder: "acme"}}, nil
 	}
@@ -37,6 +38,7 @@ func TestUnreachableOrgStore(t *testing.T) {
 		{"internal", func(context.Context) (bool, error) { return false, nil }, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			a := openWith(t, repo, Options{OrgStores: org, RepoIsClient: c.isClient})
 			withProject(t, a)

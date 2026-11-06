@@ -32,6 +32,7 @@ func node(id, project, next string, m int) supersedeNode {
 // the new row cleared), a link into another project or to an unknown row
 // (ignored), and the plan of a repaired set is empty.
 func TestPlanSupersedeRepairMatrix(t *testing.T) {
+	t.Parallel()
 	type want struct {
 		fixes []supersedeFix
 		set   map[string]string
@@ -123,6 +124,7 @@ func successor(t *testing.T, a *App, tbl, id string) (next, status string) {
 // to superseded) and a second run finds nothing. Break-verified: with the
 // op.Confirmed check removed the refusal case writes.
 func TestDoctorSupersedesRepair(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)

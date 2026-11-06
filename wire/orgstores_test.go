@@ -27,6 +27,7 @@ const orgStoreID = "sto_01a1a5aca7f57659be7320c5f4b70003"
 // when it is a company entry, a root entry, has no clash, or stores.yaml
 // cannot be read.
 func TestRenameOrgClashes(t *testing.T) {
+	t.Parallel()
 	const urlA, urlB = "file:///srv/agency", "file:///srv/other"
 	cases := []struct {
 		name   string
@@ -84,6 +85,7 @@ func TestRenameOrgClashes(t *testing.T) {
 // name Options.OrgStores gave, then point at the name the entry is
 // attached under (after a rename).
 func TestOrgAliasesByOriginalName(t *testing.T) {
+	t.Parallel()
 	const url = "file:///srv/agency"
 	top := t.TempDir()
 	writeStoresYAML(t, top, "stores:\n  - name: agency\n    url: "+url+"\n")
@@ -109,6 +111,7 @@ func TestOrgAliasesByOriginalName(t *testing.T) {
 // --to team / --to company reach the org folders while a repo without an
 // org refuses them.
 func TestOrgStoresAttach(t *testing.T) {
+	t.Parallel()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	hook := func(context.Context) ([]attach.Store, error) {
 		return []attach.Store{{Name: "agency", URL: orgURL, Folder: "acme"}, {Name: "agency/org", URL: orgURL, Folder: "org"}}, nil

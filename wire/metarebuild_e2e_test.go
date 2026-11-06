@@ -41,6 +41,7 @@ func keyRowFile(t *testing.T, repo string) (abs, id string) {
 // readable copy anywhere is "damaged", refused; a row deleted and committed
 // is rebuilt from history with its id, per-ref absent counts reported.
 func TestMetaRebuildE2E(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)
@@ -141,6 +142,7 @@ func TestMetaRebuildE2E(t *testing.T) {
 // branch but present on another local branch is "not lost" and the refusal
 // names that branch (3.18 step 2: every local and fetched ref).
 func TestMetaRebuildFindsOtherBranch(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)
@@ -183,6 +185,7 @@ func TestMetaRebuildFindsOtherBranch(t *testing.T) {
 // store's lock (OV64-HOLD), a second holder (another process's sync) waits
 // and gives up at its deadline; after release it gets the lock.
 func TestHoldStoreBlocksSecondHolder(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)
@@ -233,6 +236,7 @@ func withProjectNoop(t *testing.T, b *App) {
 // unstaged work-tree edit (not seen by the index check), and a meta_values
 // file (not a key row).
 func TestKeyLooseningsMatrix(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	dir := t.TempDir()
 	write := func(rel, s string) {

@@ -24,6 +24,7 @@ const (
 // kept; a second run lists no roster step and leaves the files as the
 // first run wrote them.
 func TestMigrateOrgV1RosterRows(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeV1Marker(t, dir)
 	hook := func(context.Context) ([]attach.Store, error) {

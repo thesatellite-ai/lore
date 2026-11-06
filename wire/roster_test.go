@@ -48,6 +48,7 @@ func findActor(t *testing.T, a *App, id string) (RosterActor, bool) {
 // re-register refreshes the fields; deactivate keeps the row (active
 // false, left_at set) and a later register brings it back active.
 func TestRosterRegister(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	a := rosterApp(t, orgURL, false)
@@ -109,6 +110,7 @@ func countID(list []RosterActor, id string) int {
 // customer repos), bad ids are E_INVALID_INPUT, and deactivating an actor
 // that is not on the roster is E_NOT_FOUND. Nothing is written by any.
 func TestRosterRefusals(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	a := rosterApp(t, orgURL, true)
@@ -160,6 +162,7 @@ func TestRosterRefusals(t *testing.T) {
 // updates members and keeps the id, an empty name keeps the old name, and
 // teams list sorted by handle.
 func TestRosterTeamPut(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	a := rosterApp(t, folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal), false)
 	ana, _, err := a.RosterRegister(ctx, rosterStore, RosterActor{Kind: schema.ActorKindHuman, StableKey: "mailto:ana@example.com", Name: "Ana", Handle: "ana"})

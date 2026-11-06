@@ -19,6 +19,7 @@ import (
 // file once, and doctor is broken (exit 2) naming it; once the file is
 // fixed both are quiet again and the row reads.
 func TestBrokenRowFileIsReported(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name    string
@@ -30,6 +31,7 @@ func TestBrokenRowFileIsReported(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			home := t.TempDir()
 			actor, aerr := ids.Parse[ids.Actor](testActor)

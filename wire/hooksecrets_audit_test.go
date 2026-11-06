@@ -22,6 +22,7 @@ import (
 // per finding (hook, path, rule; never the value or its masked preview),
 // a check of anything else records none, and a clean check records none.
 func TestHookRefusedAudit(t *testing.T) {
+	t.Parallel()
 	key := "AKIA" + strings.Repeat("Q", 16)
 	cases := []struct {
 		name, where string
@@ -37,6 +38,7 @@ func TestHookRefusedAudit(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			h := opstest.New(t)
 			ctx := context.Background()
 			docs := map[string][]byte{}

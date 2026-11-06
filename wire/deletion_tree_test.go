@@ -208,6 +208,7 @@ func alive(h *opstest.H, table row.Table, id string) error {
 // table added without a delete operation, or without a reason in
 // deleteExceptions, fails the test.
 func TestEveryTableDeleteTrashRestorePurge(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {

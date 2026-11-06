@@ -11,6 +11,7 @@ import (
 // rows, torn lines and session-less events are skipped; a session is
 // confirmed when any of its writes was; a missing file is no lines.
 func TestWhoFromAuditFile(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "audit.jsonl")
 	body := `{"action":"create","id":"tsk_1","session_id":"ses_a"}
 {"action":"update","id":"tsk_2","session_id":"ses_b"}

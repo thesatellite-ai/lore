@@ -55,6 +55,7 @@ func folderStoreRepo(t *testing.T) (repo, storeDir, yamlPath, yaml string) {
 // attaches the recorded target. team/ and company/ with no org are refused
 // before anything is written.
 func TestFolderTargetConfirmThenCreate(t *testing.T) {
+	t.Parallel()
 	repo, storeDir, yamlPath, yaml := folderStoreRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -133,6 +134,7 @@ func TestFolderTargetConfirmThenCreate(t *testing.T) {
 // attaches the same url at its root (the store loads once, under the
 // stores.yaml name); the same url at a folder, or another url, keeps `me`.
 func TestPersonalStoreLoadedOnce(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		yaml    func(url string) string
@@ -148,6 +150,7 @@ func TestPersonalStoreLoadedOnce(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo, storeDir, yamlPath, _ := folderStoreRepo(t)
 			url := "file://" + filepath.ToSlash(storeDir)
 			if c.yaml == nil {

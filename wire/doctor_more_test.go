@@ -63,6 +63,7 @@ func damagePastHeader(t *testing.T, p string) {
 // absent and a sound cache are no finding; a cache damaged past its first
 // pages (it opens, only quick_check sees it) is named with the fix.
 func TestCacheFinding(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	p := filepath.Join(t.TempDir(), "c.db")
 	if got := cacheFinding(ctx, p); got != "" {
@@ -82,6 +83,7 @@ func TestCacheFinding(t *testing.T) {
 // cache under <home>/cache is one error line (v0.1.17 text), status
 // broken, exit 2; a sound one beside it is not named.
 func TestDoctorCachesBreaksDoctor(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	repo := gitRepo(t)
 	home := t.TempDir()
@@ -125,6 +127,7 @@ func TestDoctorCachesBreaksDoctor(t *testing.T) {
 // archived (not purged) row is never named; once the file is gone the
 // finding goes away.
 func TestDoctorNamesResurrectedRows(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)

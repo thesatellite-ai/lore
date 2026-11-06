@@ -71,6 +71,7 @@ func commitAll(t *testing.T, repo, msg string) {
 // listed id and an unknown one; show of an id that is not in history is
 // E_NOT_FOUND.
 func TestFromHistoryMatrix(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)
@@ -160,6 +161,7 @@ func TestFromHistoryMatrix(t *testing.T) {
 // (no error); a shallow clone is E_UNSUPPORTED naming git fetch
 // --unshallow, so an incomplete history is never shown as complete.
 func TestFromHistoryShallowAndEmpty(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)

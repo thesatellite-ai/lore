@@ -20,6 +20,7 @@ import (
 // folder: `<store>/.` still never asks (the root holds the marker) and the
 // row lands in the root's data folder. A missing real folder still asks.
 func TestStoreRootTarget(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, folderLine string
 	}{{"attached at root", ""}, {"attached at a folder", "    folder: acme\n"}} {

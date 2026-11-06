@@ -96,6 +96,7 @@ func TestStandaloneOrgHooks(t *testing.T) {
 // TestOrgResolutionApplyKeepsSetHooks: a hook the embedder already set
 // wins; unset hooks are filled.
 func TestOrgResolutionApplyKeepsSetHooks(t *testing.T) {
+	t.Parallel()
 	mine := func(context.Context) (*identity.Org, error) { return &identity.Org{Name: "mine"}, nil }
 	o := Options{Org: mine}
 	NewOrgResolution(t.TempDir(), t.TempDir(), nil).Apply(&o)
@@ -114,6 +115,7 @@ func TestOrgResolutionApplyKeepsSetHooks(t *testing.T) {
 // F16 write check with the repo root and the row's kind; a kind F14 does
 // not route is never checked.
 func TestGuardRepoWriteClientRepo(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	home, dir := orgTestRepo(t, "https://github.com/client/app", orgTestConfig)
 	r := StandaloneOrgResolution(home, dir)

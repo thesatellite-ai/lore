@@ -17,6 +17,7 @@ import (
 // (ActorAs), pinned by engine TestClientWriteProjectsAgentIDs, so here it
 // only has to pass through.
 func TestRedactClientCopy(t *testing.T) {
+	t.Parallel()
 	full := coord.Doc{
 		"id": canonjson.String("tsk_1"), "status": canonjson.String("done"),
 		"claim_epoch": canonjson.Int(3), "attempts": canonjson.Int(2),

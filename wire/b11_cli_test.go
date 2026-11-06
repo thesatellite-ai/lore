@@ -76,6 +76,7 @@ func TestCoordErrExitCodes(t *testing.T) {
 // LORE_ALLOW_NETWORK_FS=1) still works, so the check is a refusal, not a
 // lost feature.
 func TestNetworkFSRefusesBeforeWriting(t *testing.T) {
+	t.Parallel()
 	for _, allow := range []bool{false, true} {
 		repo := filepath.Join(t.TempDir(), "Dropbox", "site")
 		data := filepath.Join(repo, ".lore", "data")

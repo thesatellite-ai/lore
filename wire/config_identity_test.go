@@ -14,6 +14,7 @@ import (
 // keeps the other keys and moves a v0.1.17 identity.yaml aside; unset
 // clears it; unset --org of an unknown org is E_NOT_FOUND.
 func TestSetUnsetIdentity(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	cfg := filepath.Join(home, ConfigFile)
 	if err := os.WriteFile(cfg, []byte("live:\n  autopush: false\norgs:\n  - name: agency\n    identity:\n      key: human:a@agency.example\n"), 0o600); err != nil {

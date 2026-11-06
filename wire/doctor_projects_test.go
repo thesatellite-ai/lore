@@ -16,6 +16,7 @@ import (
 // one (two `lore init`s merged) is a warning naming both ids and `lore
 // sync fix-projects`; after fix-projects the warning is gone.
 func TestDoctorProjects(t *testing.T) {
+	t.Parallel()
 	a := openWith(t, gitRepo(t), Options{})
 	withProject(t, a)
 	ctx := background()
@@ -48,6 +49,7 @@ func TestDoctorProjects(t *testing.T) {
 // for a "row of another project" names `lore sync fix-projects`, never
 // `lore move` / delete of that row; other findings keep their own fix.
 func TestLeakBlockedOtherProjectNamesFixProjects(t *testing.T) {
+	t.Parallel()
 	path := ".lore/data/memories/mem_01a1a6841fc0784d92a62b0acf148b28.json"
 	other := leakcheck.Finding{Rule: leakcheck.RuleID, Where: "commit " + path, RowID: "mem_01a1a6841fc0784d92a62b0acf148b28", Path: path, Detail: leakcheck.DetailOtherProject}
 	for _, where := range []string{LeakWhereCommit, LeakWherePush} {

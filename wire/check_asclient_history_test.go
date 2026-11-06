@@ -11,6 +11,7 @@ import (
 // git top: the top itself, a monorepo sub-folder at any depth, and a root
 // outside the top (falls back to the top's folder).
 func TestAsClientDataPrefix(t *testing.T) {
+	t.Parallel()
 	top := t.TempDir()
 	cases := []struct{ root, want string }{
 		{top, ".lore/data/"},
@@ -30,6 +31,7 @@ func TestAsClientDataPrefix(t *testing.T) {
 // deleted since, on any branch), never another project's rows in the same
 // repo; a repo with no commits has no history.
 func TestResourceHistoryMonorepoPrefix(t *testing.T) {
+	t.Parallel()
 	top := t.TempDir()
 	git := func(args ...string) {
 		t.Helper()

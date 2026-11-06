@@ -26,6 +26,7 @@ func showGit(t *testing.T, dir string, args ...string) {
 }
 
 func TestStandaloneStoreShowOpenDoctor(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	root := t.TempDir()
 	origin := filepath.Join(root, "origin.git")

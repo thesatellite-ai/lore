@@ -34,6 +34,7 @@ func (u unwrappingBackend) Unwrap() store.Backend { return u.Backend }
 // without Unwrap, or a nil one, is refused at open (fail closed: hiding
 // the marker would silently change row ids); a nil hook changes nothing.
 func TestWrapBackend(t *testing.T) {
+	t.Parallel()
 	url := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
 	yaml := "stores:\n  - name: agency\n    url: " + url + "\n"
 	var writes atomic.Int64

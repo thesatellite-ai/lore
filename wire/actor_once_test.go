@@ -24,6 +24,7 @@ import (
 // second write and after a fresh App's write; a store never written to
 // gets none; the attached (non-client) stores keep the full row.
 func TestActorRowOncePerStore(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	kb := folderStoreAt(t, "sto_0e45506e64357c94a87e70ef1c6b0001", "internal")
 	kb2 := folderStoreAt(t, "sto_0e45506e64357c94a87e70ef1c6b0002", "internal")

@@ -55,6 +55,7 @@ func listPII(t *testing.T, env opspii.Env) (opspii.ListOut, string) {
 // v0.1.17 on/off text. Before the copy the list is empty, never an error;
 // a rerun copies nothing twice.
 func TestPIIPatternsMachineLocal(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	found := false
 	for _, d := range schema.Builtin() {

@@ -18,6 +18,7 @@ import (
 // aws-secrets: secrets.holder_for_shared is off, SQ9), and writes a typed
 // --holder as given for either.
 func TestSecretsLinkHolder(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	// an internal repo: a client repo refuses every secret reference (BATCH 5)
 	a := openWith(t, gitRepo(t), Options{RepoIsClient: func(context.Context) (bool, error) { return false, nil }})

@@ -40,6 +40,7 @@ func (t trailerTap) Unwrap() store.Backend { return t.Backend }
 // permanent rep_ id (the client file never names the hop, so our side's
 // history is stitched by that id), never by the local name "repo".
 func TestMoveIntoClientRepoTrailer(t *testing.T) {
+	t.Parallel()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	var (
 		mu  sync.Mutex
@@ -101,6 +102,7 @@ func TestMoveIntoClientRepoTrailer(t *testing.T) {
 // repo`, which the v0.1.17 leak check reads (leakcheck originIsRepo); only
 // a marked store's sto_ id replaces the attached name in _o (r3-origin).
 func TestRepoPlaceKeepsOriginStore(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	mintRepoID(t, repo)
 	a := openWith(t, repo, Options{RepoIsClient: func(context.Context) (bool, error) { return false, nil }})

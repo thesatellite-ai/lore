@@ -15,6 +15,7 @@ import (
 // (P3-CFGCHECK): absent and valid files pass with their orgs and warnings;
 // every broken rule is E_CONFIG_INVALID naming the file and the rule.
 func TestStandaloneConfigCheck(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		body     string // "" = no file
@@ -81,6 +82,7 @@ func TestStandaloneConfigCheck(t *testing.T) {
 
 // TestStandaloneConfigValidate pins the verdict `lore config set` reads.
 func TestStandaloneConfigValidate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	v, err := standaloneConfig{}.ValidateConfig(ctx, []byte("live:\n  autopush: false\n"))
 	if err != nil || v.Decode != nil || v.Invalid != nil || len(v.Unknown) != 0 {
@@ -100,6 +102,7 @@ func TestStandaloneConfigValidate(t *testing.T) {
 // TestStandaloneOptionsCarryConfigSchema: cmd/lore's options supply the
 // schema, so config check never answers E_UNSUPPORTED there.
 func TestStandaloneOptionsCarryConfigSchema(t *testing.T) {
+	t.Parallel()
 	o := StandaloneOptions(t.TempDir(), t.TempDir(), "", "test")
 	if o.Local.Config == nil {
 		t.Fatal("StandaloneOptions leaves Local.Config nil: config check is E_UNSUPPORTED on cmd/lore")

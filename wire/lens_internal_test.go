@@ -20,6 +20,7 @@ import (
 )
 
 func TestLensClientShareableInternal(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		client       bool
@@ -34,6 +35,7 @@ func TestLensClientShareableInternal(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			writeStoresYAML(t, repo, "stores:\n"+
 				"  - name: agency\n    url: "+folderStoreAt(t, folderStore, rowfs.VisibilityShareable)+"\n"+

@@ -23,6 +23,7 @@ import (
 )
 
 func TestMigrateEnableListsWritersBelow(t *testing.T) {
+	t.Parallel()
 	const mate = "act_0e45506e64357c94a87e70ef1c6b0ae7"
 	const machine = "mch_93aa33bc2e8a70b1b3d8110909fcc62f"
 	cases := []struct {
@@ -40,6 +41,7 @@ func TestMigrateEnableListsWritersBelow(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			a := newTestApp(t, repo)
 			withProject(t, a)

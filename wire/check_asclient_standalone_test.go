@@ -134,6 +134,7 @@ func TestCheckAsClient(t *testing.T) {
 // TestCheckAsClientNeedsProject: outside a project (no _meta.json) the
 // check refuses E_INVALID_INPUT instead of passing.
 func TestCheckAsClientNeedsProject(t *testing.T) {
+	t.Parallel()
 	h := opstest.Bare(t)
 	if err := h.App.CheckAsClient(context.Background(), h.Repo, false); !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("want E_INVALID_INPUT, got %v", err)

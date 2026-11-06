@@ -25,6 +25,7 @@ import (
 // actor row is back in kb afterwards, for restore, purge <id>, purge
 // --older-than and purge --archived-before. A dry run writes no actor row.
 func TestTrashWritesActorRowFirst(t *testing.T) {
+	t.Parallel()
 	who, err := identity.ActorID(testEmail)
 	if err != nil {
 		t.Fatal(err)
@@ -46,6 +47,7 @@ func TestTrashWritesActorRowFirst(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			kb := folderStoreAt(t, "sto_0e45506e64357c94a87e70ef1c6b0001", "internal")
 			writeStoresYAML(t, repo, "stores:\n  - name: kb\n    url: "+kb+"\n")

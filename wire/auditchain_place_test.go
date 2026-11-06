@@ -17,6 +17,7 @@ import (
 // legacy lore.db resolve for each place a command can run from, in a
 // monorepo with a top project, without one, and in a single-project repo.
 func TestChainAuditFileInTheProjectFolder(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		projects []string // folders (relative to the git top) holding .lore

@@ -60,6 +60,7 @@ func routingRows(t *testing.T, a *App) (int, string) {
 // lore-org.yaml.migrated; a second run writes no second row and leaves
 // the .migrated copy as the ORIGINAL text.
 func TestOrgDefaultsToPolicy(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	dir := strings.TrimPrefix(orgURL, "file://")
@@ -120,6 +121,7 @@ func TestOrgDefaultsToPolicy(t *testing.T) {
 // store that is not attached each write nothing (the unattached store
 // says so on a real run).
 func TestOrgDefaultsToPolicyNothingToMove(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	dir := strings.TrimPrefix(orgURL, "file://")

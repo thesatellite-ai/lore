@@ -39,8 +39,10 @@ func combinedApp(t *testing.T, n int) *App {
 // doctor notes the combined cache; at MaxStoreCaches stores there is no
 // combined cache and no note.
 func TestCombinedCacheSearchAndDoctor(t *testing.T) {
+	t.Parallel()
 	for _, n := range []int{MaxStoreCaches, MaxStoreCaches + 1} {
 		t.Run(strconv.Itoa(n)+" stores", func(t *testing.T) {
+			t.Parallel()
 			a := combinedApp(t, n)
 			combined := n > MaxStoreCaches
 			if a.Combined() != combined {

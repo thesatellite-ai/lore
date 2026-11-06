@@ -19,6 +19,7 @@ import (
 // bad name, a name used twice, an add of a folder that is not a store,
 // remove of a name never attached.
 func TestStoreOpsFolderMatrix(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	const comment = "# kept: the team's stores\n"

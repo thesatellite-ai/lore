@@ -11,6 +11,7 @@ import (
 // note, a failed check a warning naming the cause; a check that answered
 // (client or not) prints nothing. DoctorChecks runs the row.
 func TestDoctorRepoClass(t *testing.T) {
+	t.Parallel()
 	boom := errors.New("org links unreadable")
 	cases := []struct {
 		name  string
@@ -26,6 +27,7 @@ func TestDoctorRepoClass(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			a := openWith(t, gitRepo(t), Options{RepoIsClient: c.hook})
 			got, err := a.DoctorRepoClass(background())
 			if err != nil {

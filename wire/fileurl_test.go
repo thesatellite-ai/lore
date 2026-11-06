@@ -13,6 +13,7 @@ import (
 // home; relative paths are made absolute; non-file urls pass unchanged; a
 // file url with no path is E_STORE_SCHEME.
 func TestCleanFileURLMatrix(t *testing.T) {
+	t.Parallel()
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip("no home folder on this machine")

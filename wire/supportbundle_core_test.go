@@ -24,6 +24,7 @@ func bundleSecrets() (gh, aws, pass string) {
 // are kept. Break-verified: with textMasker.text returning its input
 // unchanged the test fails on every planted value.
 func TestMaskBundleJSONPlanted(t *testing.T) {
+	t.Parallel()
 	gh, aws, pass := bundleSecrets()
 	credURL := "https://bob:" + pass + "@git.example.com/acme/repo.git"
 	q := func(s string) string {
@@ -78,6 +79,7 @@ func TestMaskBundleJSONPlanted(t *testing.T) {
 // secret is replaced wherever it sits; overlapping or adjacent matches leave
 // no part of either; empty text stays empty.
 func TestMaskSecretTextMatrix(t *testing.T) {
+	t.Parallel()
 	gh, aws, pass := bundleSecrets()
 	m := newTextMasker()
 	if m.sc == nil {
@@ -116,6 +118,7 @@ func TestMaskSecretTextMatrix(t *testing.T) {
 // TestMaskBundleJSONInvalid: a doctor report that is not JSON is dropped
 // (null in the bundle), never copied in unmasked.
 func TestMaskBundleJSONInvalid(t *testing.T) {
+	t.Parallel()
 	gh, _, _ := bundleSecrets()
 	for _, in := range []string{"", "not json " + gh, `{"a":`, `["x",`, `"unterminated`} {
 		if out := maskBundleJSON([]byte(in)); out != nil {
@@ -130,6 +133,7 @@ func TestMaskBundleJSONInvalid(t *testing.T) {
 // v0.1.17 count keys with the live memory counted, and no row text; outside
 // a project the counts are empty and the bundle is still produced.
 func TestCoreSupportBundle(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})

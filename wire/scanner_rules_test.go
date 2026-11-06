@@ -50,6 +50,7 @@ func writeScanner(t *testing.T, a *App) *liveScanner {
 // decides, so a shared `lore api` write (someone else's) keeps the rule.
 // A personal added rule still applies.
 func TestScannerPersonalOffKeepsWriteRule(t *testing.T) {
+	t.Parallel()
 	a := scannerRulesApp(t)
 	me := store.Source(opsstores.PersonalName)
 	putRule(t, a, me, map[string]string{"rule_id": "github-pat", "state": schema.SecretRuleOff})
@@ -75,6 +76,7 @@ func TestScannerPersonalOffKeepsWriteRule(t *testing.T) {
 // says off and another on, on wins in the scanner (the engine's IsOff
 // still applies the off to writes).
 func TestScannerSameRuleTwoStores(t *testing.T) {
+	t.Parallel()
 	a := scannerRulesApp(t)
 	putRule(t, a, store.SourceRepo, map[string]string{"rule_id": "github-pat", "state": schema.SecretRuleOff})
 	putRule(t, a, "kb", map[string]string{"rule_id": "github-pat", "state": schema.SecretRuleOff})

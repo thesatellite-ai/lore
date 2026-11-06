@@ -24,6 +24,7 @@ func storesYAMLPath(repo string) string {
 // × yes; plus `me` (never written into stores.yaml) and an internal repo,
 // which never ask.
 func TestCFG7ConfirmMatrix(t *testing.T) {
+	t.Parallel()
 	client := func(context.Context) (bool, error) { return true, nil }
 	internal := func(context.Context) (bool, error) { return false, nil }
 	failing := func(context.Context) (bool, error) { return false, errors.New("hook down") }
@@ -45,6 +46,7 @@ func TestCFG7ConfirmMatrix(t *testing.T) {
 					name += "/yes"
 				}
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
 					repo := gitRepo(t)
 					storeDir := t.TempDir()
 					if opName == opsstores.OpAdd {
@@ -88,6 +90,7 @@ func TestCFG7ConfirmMatrix(t *testing.T) {
 // (the personal store lives in ~/.lore/config.yaml), so even a client repo
 // with a failing hook does not ask.
 func TestCFG7NeverAsksForMe(t *testing.T) {
+	t.Parallel()
 	for _, hook := range []func(context.Context) (bool, error){
 		func(context.Context) (bool, error) { return true, nil },
 		func(context.Context) (bool, error) { return false, errors.New("hook down") },

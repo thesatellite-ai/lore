@@ -46,6 +46,7 @@ func withFolderStores(t *testing.T, repo string, names ...string) map[string]str
 // and from a fresh App), two stores keep separate rows, and the repo
 // store keeps RepoID's rule (an unknown name is E_NOT_FOUND, nothing made).
 func TestGroupRepoID(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	dirs := withFolderStores(t, repo, "northwind", "acme")
 	a := newTestApp(t, repo)

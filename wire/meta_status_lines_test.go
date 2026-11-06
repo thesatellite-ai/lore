@@ -11,6 +11,7 @@ import (
 // lines name a registry past meta.max_keys_per_registry, and none at the
 // cap; no quarantined row gives no quarantine line.
 func TestMetaStatusLines(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	for _, k := range []string{"a_key", "b_key", "c_key"} {
 		h.MustYes("meta.add", `{"name":"`+k+`","type":"text"}`)

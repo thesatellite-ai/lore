@@ -10,6 +10,7 @@ import (
 // TestPatternOwner: the literal owner (and name) of every repo pattern form
 // config.yaml takes; a wildcard segment is never a name (PL-PORT-1).
 func TestPatternOwner(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ pat, owner, name string }{
 		{"github.com/betalabs/*", "betalabs", ""},
 		{"github.com/Acme/App", "acme", "app"},
@@ -30,6 +31,7 @@ func TestPatternOwner(t *testing.T) {
 
 // TestMentions: whole words only, any case, sorted, deduplicated.
 func TestMentions(t *testing.T) {
+	t.Parallel()
 	names := []string{"betalabs", "acme", "acme/app", "Betalabs", ""}
 	for _, c := range []struct {
 		text string
@@ -50,6 +52,7 @@ func TestMentions(t *testing.T) {
 // TestKnownOrgNames: org names plus literal owners of own:/repos:; a
 // missing config lists nothing; bad YAML is refused.
 func TestKnownOrgNames(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	if got, err := knownOrgNames(home); err != nil || len(got) != 0 {
 		t.Fatalf("no config: %v %v", got, err)

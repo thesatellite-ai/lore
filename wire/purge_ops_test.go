@@ -24,6 +24,7 @@ var purgeExempt = map[string]string{
 // shared purge and confirm inputs (the CLI flags and the REST fields come
 // from them), and no exemption is stale.
 func TestDeleteOpsTakePurgeFlags(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	for _, e := range h.App.Registry().Entries() {
 		name := e.Spec().Name
@@ -53,6 +54,7 @@ func TestDeleteOpsTakePurgeFlags(t *testing.T) {
 // trash); purge with confirm tombstones ("purged for good", the row is not
 // in the trash). The bulk form's refusal names "every matching row".
 func TestDeletePurgeMatrix(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	h.Must("resource.kind.add", `{"kind":"host"}`)
 	h.Must("resource.field.add", `{"kind":"host","field":"provider","type":"text"}`)

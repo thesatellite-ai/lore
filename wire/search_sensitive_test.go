@@ -19,6 +19,7 @@ import (
 )
 
 func TestSearchSensitiveConditionsMatchAndMask(t *testing.T) {
+	t.Parallel()
 	a := openWith(t, gitRepo(t), Options{})
 	withProject(t, a)
 	steps := []struct{ op, in string }{

@@ -17,6 +17,7 @@ import (
 // rule with the masked preview (never the matched text) and the exact
 // allow command; an allow entry for that finding makes the check clean.
 func TestRescanRowsFindsOldRowsWithNewRules(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	a := openWith(t, gitRepo(t), Options{Home: t.TempDir()})
 	wantClean(t, a, "empty repo")

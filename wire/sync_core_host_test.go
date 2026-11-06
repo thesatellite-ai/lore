@@ -166,6 +166,7 @@ func showMemBody(t *testing.T, a *App, id string) string {
 // after the host's live conflicts, counted in status, settled by resolve
 // with either side, and readable at once afterwards.
 func TestSyncConflictsMarkedFiles(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		mark     func(t *testing.T, path string)
@@ -228,6 +229,7 @@ func slicesHas(lines []string, want string) bool {
 // TestSyncResolveMarkedFileRefusals: a side that is not valid JSON, a
 // bad --take, a number past the list: refused, the file unchanged.
 func TestSyncResolveMarkedFileRefusals(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, n, take string
 		mark          func(t *testing.T, path string)
@@ -260,6 +262,7 @@ func TestSyncResolveMarkedFileRefusals(t *testing.T) {
 // (E_UNSUPPORTED) still lists and resolves the marked files, numbered
 // from 1.
 func TestSyncConflictsMarkedFilesLiveOff(t *testing.T) {
+	t.Parallel()
 	var notes []string
 	a, repo := coreHostApp(t, coreStub{unsupported: true}, &notes)
 	id := addMemory(t, a, "base")
@@ -281,6 +284,7 @@ func TestSyncConflictsMarkedFilesLiveOff(t *testing.T) {
 // printed nothing and no store reported; an attached store prints its
 // line instead; a host that does not leave stores to the core is untouched.
 func TestSyncRunCoreStoresLines(t *testing.T) {
+	t.Parallel()
 	var notes []string
 	a, _ := coreHostApp(t, coreStub{}, &notes)
 	out, err := a.syncEnv().SyncRun(background(), opssync.RunIn{})
@@ -314,6 +318,7 @@ func TestSyncRunCoreStoresLines(t *testing.T) {
 // TestSyncPurgePointer (FA-DEL-4): the old spelling prints its pointer and
 // answers as `lore trash purge --archived-before` (confirm, dry run, purge).
 func TestSyncPurgePointer(t *testing.T) {
+	t.Parallel()
 	var notes []string
 	a, repo := coreHostApp(t, coreStub{}, &notes)
 	id := addMemory(t, a, "old note")

@@ -21,6 +21,7 @@ import (
 // E_NOT_A_STORE; inside a work tree StoreOnlyRoster declines, so the
 // normal App (and its repo) is used.
 func TestStoreOnlyRosterOutsideARepo(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	hook := func(context.Context) ([]attach.Store, error) {

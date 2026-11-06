@@ -24,6 +24,7 @@ import (
 // explicit), an error refuses with nothing written, an unattached answer
 // is refused, and an explicit target never asks.
 func TestDefaultTargetMatrix(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	cases := []struct {
 		name      string
@@ -43,6 +44,7 @@ func TestDefaultTargetMatrix(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 			var asked []WriteQuery
 			guarded := 0

@@ -107,6 +107,7 @@ const v017CopyRunsDDL = `CREATE TABLE copy_runs (id TEXT PRIMARY KEY, created_at
 // without writing, a rerun copies nothing, and a row trashed since is not
 // brought back (P3-LOCAL-3).
 func TestCopyMachineLocalOnce(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "lore.db")
@@ -165,6 +166,7 @@ func TestCopyMachineLocalOnce(t *testing.T) {
 // table, copies nothing; a row that does not fit is skipped with a line
 // naming it, in a dry run too, never dropped silently (P3-LOCAL-4).
 func TestCopyMachineLocalNothingToDo(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dir := t.TempDir()
 	eng := newCopyEngine(t, filepath.Join(dir, "home"))

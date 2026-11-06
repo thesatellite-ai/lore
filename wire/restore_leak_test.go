@@ -24,6 +24,7 @@ import (
 // guard allows, the same restore succeeds. A row restored into another
 // store never asks the repo guard.
 func TestRestoreRunsClientLeakCheck(t *testing.T) {
+	t.Parallel()
 	const marker = "zephyr-internal-pricing"
 	cases := []struct {
 		name      string

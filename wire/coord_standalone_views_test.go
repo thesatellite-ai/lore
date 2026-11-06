@@ -125,6 +125,7 @@ func inboxItems(t *testing.T, a *App) []opscoord.InboxItem {
 // me), a finding bob wrote names bob, a handoff to me from bob shows, and
 // bob, who owns nothing, sees none of them.
 func TestInboxAuthorsFromTheEnvelope(t *testing.T) {
+	t.Parallel()
 	f := newViewFixture(t)
 	mission := f.create(t, f.me, schema.TableMissions, map[string]string{"title": "ship billing", "status": schema.MissionStatusActive})
 	f.create(t, f.bob, schema.TableMemories, map[string]string{"kind": schema.MemoryKindCore, "body": "the cache key misses the tenant",
@@ -167,6 +168,7 @@ func TestInboxAuthorsFromTheEnvelope(t *testing.T) {
 // not; --ack hides it until the next forced reveal; without a chain
 // (no sink) the inbox lists none and does not fail.
 func TestInboxListsForcedReveals(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	home := t.TempDir()
 	notClient := func(context.Context) (bool, error) { return false, nil }
@@ -377,6 +379,7 @@ func TestMissionSLAColumn(t *testing.T) {
 // about its own change), and bob making me lead is an "assigned" item that
 // names bob.
 func TestInboxWatchedAndAssignedE2E(t *testing.T) {
+	t.Parallel()
 	f := newViewFixture(t)
 	out, err := run(t, f.me, opstask.OpAdd, `{"title":"rotate keys"}`, true)
 	if err != nil {

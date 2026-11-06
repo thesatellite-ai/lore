@@ -17,6 +17,7 @@ import (
 )
 
 func TestCloseWorldFailsClosedOnOtherErrors(t *testing.T) {
+	t.Parallel()
 	a, _, id := standaloneTask(t)
 	ctx := background()
 	team := standaloneTeam{a: a}

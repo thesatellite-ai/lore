@@ -86,6 +86,7 @@ func originOfFile(t *testing.T, path string) (o map[string]json.RawMessage, w ma
 // dropped (PROV8). A repo row's `_w` is `{v}` either way: no machine id in
 // any code repo (Q-R3-9; store rows keep m, engine tests).
 func TestOriginDirInMonorepoFolder(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	commit := gitCommit(t, repo)
 	sub := filepath.Join(repo, "services", "billing")
@@ -133,6 +134,7 @@ func TestOriginDirInMonorepoFolder(t *testing.T) {
 // provenance facts at hand and a legacy source_ref in the row, which it
 // never reads into one.
 func TestMigrateWritesNoOrigin(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	gitCommit(t, repo)
 	a := newOriginApp(t, repo, repo, false)

@@ -24,6 +24,7 @@ var b11GitEnv = []string{"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
 // merged (a branch left over from an earlier task) would make the merged
 // check report "merged" at once, with a merge time before the done time.
 func TestWorkBranchHead_NeverRecordsMergedHEAD(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	root := t.TempDir()
 	origin := filepath.Join(root, "origin.git")

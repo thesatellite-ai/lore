@@ -67,6 +67,7 @@ func hasInput(e op.Entry, name string) bool {
 // A new noun list therefore cannot forget the rule. The walk must reach a
 // minimum number of lists, so it can never pass by finding none.
 func TestDeletedRowHiddenOnEveryList(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
@@ -140,6 +141,7 @@ var purgeModes = []string{`{"target":"%s"}`, `{"older_than":"0d"}`, `{"expired":
 // next, and removes nothing. An unknown purge-like operation fails the
 // test until its modes are listed here.
 func TestEveryPurgePathRefusesYes(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	id := h.ID(h.Must("memory.add", `{"body":"stays in the trash"}`))
 	h.MustYes("memory.delete", `{"id":"`+id+`"}`)

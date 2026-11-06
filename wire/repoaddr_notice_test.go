@@ -16,6 +16,7 @@ import (
 // first records the address, and only in a terminal (ported from the old
 // binary's sync_core_repoid_test.go).
 func TestAskAddressOnlyFirstRunInTerminal(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ isNew, terminal, want bool }{
 		{true, true, true}, {true, false, false}, {false, true, false}, {false, false, false},
 	}
@@ -30,6 +31,7 @@ func TestAskAddressOnlyFirstRunInTerminal(t *testing.T) {
 // difference names set-url and never `lore repo fork`; a real change
 // offers all three commands.
 func TestAddressNoticeCaseOnlyOffersNoFork(t *testing.T) {
+	t.Parallel()
 	c := wire.AddressNotice("rep_x", opsinfra.AddressNotice{Key: "github.com/Agency/x", Recorded: "github.com/agency/x", CaseOnly: true})
 	if strings.Contains(c, "fork") || !strings.Contains(c, "lore repo set-url github.com/Agency/x") {
 		t.Fatalf("case-only notice: %s", c)
@@ -49,6 +51,7 @@ func TestAddressNoticeCaseOnlyOffersNoFork(t *testing.T) {
 // and answering 2 records it as a mirror, so the next run is silent
 // (PROVENANCE_DESIGN 10.3, PROV2, Q2).
 func TestSyncRepoAddressesAsksOnceInTerminal(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	ctx := context.Background()
 	git := func(cmd *exec.Cmd) {

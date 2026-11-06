@@ -211,6 +211,7 @@ func taskRowFile(t *testing.T, repo, id string) []byte {
 // merged_at, the merge commit's date, and their two copies merge on the
 // next pull without a conflict (the core orders copies by _hlc).
 func TestRecordMergedBranch_TwoClonesWriteTheSameRow(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	a, repoA, id := standaloneTask(t)
 	if _, err := run(t, a, opstask.OpDone, `{"id":"`+id+`","no_lesson":true}`, true); err != nil {

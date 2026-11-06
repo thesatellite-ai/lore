@@ -17,6 +17,7 @@ import (
 )
 
 func TestOrgEntryBranchAttach(t *testing.T) {
+	t.Parallel()
 	const url = "git@github.com:acme/notes.git"
 	cases := []struct {
 		name, branch, want string

@@ -39,6 +39,7 @@ func (c *countingSink) builds() int {
 // running a read builds no detector; the first write builds it and still
 // scans (a token is caught on that very write).
 func TestWriteScannerLazy(t *testing.T) {
+	t.Parallel()
 	sink := &countingSink{}
 	actor, err := ids.Parse[ids.Actor](testActor)
 	if err != nil {
@@ -77,6 +78,7 @@ func TestWriteScannerLazy(t *testing.T) {
 // repo .gitleaks.toml) the whole non-empty text is a finding, never an
 // unscanned pass.
 func TestLazyScanFailsClosed(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, repoGitleaksFile), []byte("[allowlist\nbroken"), 0o600); err != nil {
 		t.Fatal(err)

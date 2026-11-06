@@ -21,6 +21,7 @@ import (
 // question and nothing written; an attached name asks first, naming the
 // store and its url; --yes detaches it.
 func TestStoreRemoveLooksUpBeforeAsking(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	kit := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
 	writeStoresYAML(t, repo, "stores:\n  - name: kit\n    url: "+kit+"\n")
@@ -160,6 +161,7 @@ func TestStoreInitMeOutsideRepo(t *testing.T) {
 // name an org store answers at another place; the org's own store at the
 // same place is not a clash (B-FLOW4-1).
 func TestOrgStoresStayOutOfListStores(t *testing.T) {
+	t.Parallel()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	hook := func(context.Context) ([]attach.Store, error) {
 		return []attach.Store{{Name: "agency", URL: orgURL}, {Name: rosterStore, URL: orgURL, Folder: "org"}}, nil
@@ -220,6 +222,7 @@ func TestStoreAddMissingBranch(t *testing.T) {
 // the resolution's clock, read at each call, so cmd/lore's Now (set after
 // construction, LORE_NOW in a test build) reaches the fetch stamps.
 func TestOrgResolutionClockReachesLinks(t *testing.T) {
+	t.Parallel()
 	g := &orgcfg.GitLinks{Home: t.TempDir()}
 	r := NewOrgResolution(t.TempDir(), t.TempDir(), g)
 	fixed := time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)

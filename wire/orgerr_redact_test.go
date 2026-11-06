@@ -43,6 +43,7 @@ func orgRedactHome(t *testing.T) string {
 // a non-lore error and for nil the error is returned as it is. A url
 // nobody configured (the client's own repo) is not touched.
 func TestRedactOrgErr(t *testing.T) {
+	t.Parallel()
 	home := orgRedactHome(t)
 	urls := []string{
 		"git@github.com:agency/notes",
@@ -73,7 +74,7 @@ func TestRedactOrgErr(t *testing.T) {
 				t.Fatalf("message/hint not kept around the redaction: %q / %q", body.Message, body.Hint)
 			}
 			// a terminal shows it
-			if same := redactOrgErr(home, nil, in, false); same != error(in) {
+			if same := redactOrgErr(home, nil, in, false); !errors.Is(same, in) || same.Error() != in.Error() {
 				t.Fatalf("terminal: %v, want the error unchanged", same)
 			}
 		})
@@ -92,7 +93,7 @@ func TestRedactOrgErr(t *testing.T) {
 	}
 	// non-lore errors and nil pass through; an unreadable config changes nothing
 	plain := errors.New("git@github.com:agency/notes broke")
-	if got := redactOrgErr(home, nil, plain, true); got != plain {
+	if got := redactOrgErr(home, nil, plain, true); !errors.Is(got, plain) || got.Error() != plain.Error() {
 		t.Fatalf("non-lore error rewritten: %v", got)
 	}
 	if got := redactOrgErr(home, nil, nil, true); got != nil {
@@ -103,7 +104,7 @@ func TestRedactOrgErr(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := errs.New(errs.NotAStore, "git@github.com:agency/notes is not a store")
-	if got := redactOrgErr(bad, nil, in, true); got != error(in) {
+	if got := redactOrgErr(bad, nil, in, true); !errors.Is(got, in) || got.Error() != in.Error() {
 		t.Fatalf("unreadable config: %v", got)
 	}
 }

@@ -20,6 +20,7 @@ import (
 // pointer), replaces only a value equal to the shortcut, and leaves a
 // named (non-embedded) struct field and other json names alone.
 func TestSetTargetEmbedded(t *testing.T) {
+	t.Parallel()
 	type target struct {
 		To string `json:"to,omitempty"`
 	}
@@ -59,6 +60,7 @@ func TestSetTargetEmbedded(t *testing.T) {
 // shortcuts name; with no org both are refused E_NOT_FOUND naming
 // `lore org link`, and nothing is written.
 func TestPolicySetOrgShortcuts(t *testing.T) {
+	t.Parallel()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	hook := func(context.Context) ([]attach.Store, error) {
 		return []attach.Store{{Name: "agency", URL: orgURL, Folder: "acme"}, {Name: "agency/org", URL: orgURL, Folder: "org"}}, nil

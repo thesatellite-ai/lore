@@ -58,6 +58,7 @@ func noteLines(t *testing.T, a *App, input string) ([]string, error) {
 // non-task id, a missing task and --to anything but repo are refused with
 // nothing written; --to repo is the one deliberate share (one more comment).
 func TestStandaloneNote(t *testing.T) {
+	t.Parallel()
 	a, _, id := standaloneTask(t)
 	lines, err := noteLines(t, a, `{"id":"`+id+`","text":["route","done"]}`)
 	if err != nil || len(lines) != 1 || !strings.HasPrefix(lines[0], "✓ note cmt_") || !strings.HasSuffix(lines[0], " on "+id) {
@@ -133,6 +134,7 @@ func writeTrackedClaim(t *testing.T, repo, id, holder, session string) {
 // does not stop the note. The board also fills the STATE column and Claim
 // answers.
 func TestStandaloneNoteFencedForHolder(t *testing.T) {
+	t.Parallel()
 	a, repo, id := standaloneTask(t)
 	me, err := a.Actor(background())
 	if err != nil {
@@ -172,6 +174,7 @@ func TestStandaloneNoteFencedForHolder(t *testing.T) {
 // roster's; an empty handle is invalid. A host with its own Coord keeps
 // its context as is.
 func TestStandaloneResolveHandle(t *testing.T) {
+	t.Parallel()
 	a, _, _ := standaloneTask(t)
 	ctx := background()
 	id, _, err := a.RosterRegister(ctx, store.SourceRepo, RosterActor{Kind: schema.ActorKindHuman, StableKey: "mailto:dev3@acme.example", Name: "dev3", Handle: "dev3", Active: true})

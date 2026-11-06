@@ -36,6 +36,7 @@ func (s *sinkLog) Record(_ context.Context, ev engine.Event) error {
 // the sink in order, with store, table, id and
 // actor, and AuditFile is never written.
 func TestAuditSinkInjected(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	sink := &sinkLog{}
 	a := openWith(t, repo, Options{Audit: sink, RepoIsClient: func(context.Context) (bool, error) { return false, nil }})
@@ -66,6 +67,7 @@ func TestAuditSinkInjected(t *testing.T) {
 // JSON line each, owner-only, and no line carries a field value (the
 // project's name never appears, only names, ids and counts).
 func TestAuditFileFallback(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{RepoIsClient: func(context.Context) (bool, error) { return false, nil }})
 	id := auditWrites(t, a)
@@ -146,6 +148,7 @@ func actions(as []engine.Action) []string {
 // (injected or fallback) never sees the attached event chained; a repo
 // write still reaches it as before.
 func TestAttachedStoreAuditMachineLocal(t *testing.T) {
+	t.Parallel()
 	for _, injected := range []bool{false, true} {
 		repo := gitRepo(t)
 		home := t.TempDir()
@@ -232,6 +235,7 @@ func TestAttachedStoreAuditMachineLocal(t *testing.T) {
 // TestStoreAuditStem: a store without a sto_ id gets name-<sanitised name>
 // (render_private's stem), always one path element.
 func TestStoreAuditStem(t *testing.T) {
+	t.Parallel()
 	r := newRoutedAudit(&sinkLog{}, t.TempDir(), nil)
 	for in, want := range map[store.Source]string{"me": "name-me", "org/a b": "name-org_a_b", "../x": "name-.._x"} {
 		if got := r.stem(in); got != want {

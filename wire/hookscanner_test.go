@@ -30,6 +30,7 @@ func hits(sc scan.Scanner, rule, text string) bool {
 // switch it off in HookScanner; a rule the personal store adds still
 // applies to the hooks.
 func TestHookScannerKeepsTeamRules(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	repo := gitRepo(t)
 	home := t.TempDir()

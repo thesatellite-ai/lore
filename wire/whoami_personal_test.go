@@ -18,6 +18,7 @@ import (
 )
 
 func TestWhoamiPersonalLine(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		config string // config.yaml ("" = none)

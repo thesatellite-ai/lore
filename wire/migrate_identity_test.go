@@ -15,6 +15,7 @@ import (
 // identity.yaml.migrated with its bytes unchanged; it never deletes it.
 // A dry run moves nothing, and a second run has no identity step.
 func TestMigrateKeepsLegacyIdentityAside(t *testing.T) {
+	t.Parallel()
 	const legacyDoc = "stable_key: human:old@x.io\ndisplay_name: Old\n"
 	for _, preset := range []bool{false, true} {
 		name := "no identity in config.yaml"

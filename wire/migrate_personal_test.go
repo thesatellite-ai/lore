@@ -18,6 +18,7 @@ const (
 )
 
 func TestMigratePersonalSettings(t *testing.T) {
+	t.Parallel()
 	ps := func(from, k, v string) personalSetting { return personalSetting{Key: k, Value: v, From: from} }
 	cases := []struct {
 		name    string
@@ -82,6 +83,7 @@ func TestMigratePersonalSettings(t *testing.T) {
 	for _, c := range cases {
 		for _, dry := range []bool{true, false} {
 			t.Run(c.name+map[bool]string{true: " (dry run)", false: ""}[dry], func(t *testing.T) {
+				t.Parallel()
 				a := newTestApp(t, gitRepo(t))
 				if c.config != "" {
 					if err := os.WriteFile(configPath(a.opts.Home), []byte(c.config), 0o600); err != nil {
@@ -131,6 +133,7 @@ func TestMigratePersonalSettings(t *testing.T) {
 // the value the run wrote (and the parent mapping it leaves empty), keeps
 // and lists a key changed since, and ignores a key already gone.
 func TestRollbackPersonalConfigKeys(t *testing.T) {
+	t.Parallel()
 	a := newTestApp(t, gitRepo(t))
 	cfg := "live:\n  autopush: true\nlease:\n  ttl: 30m\n  grace: 1m\n# mine\nother: kept\n"
 	if err := os.WriteFile(configPath(a.opts.Home), []byte(cfg), 0o600); err != nil {

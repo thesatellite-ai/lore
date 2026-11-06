@@ -70,6 +70,7 @@ func writeWithin(t *testing.T, d time.Duration, what string, fn func()) {
 // leak rule now knows the raw tool session id (a row holding it is
 // refused). Run it with -race.
 func TestSessionWriteFromInsideTheAuditSink(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	sink := &sessionSink{}
 	h := opstest.New(t, func(o *wire.Options) { o.Audit = sink })

@@ -28,6 +28,7 @@ const (
 // bindings to it and deletes the other; a dry run writes nothing; a second
 // run finds nothing to do.
 func TestMigrateTagsSnakeCase(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -86,6 +87,7 @@ func engineList(t *testing.T, a *App, table row.Table) ([]row.Row, error) {
 // 0.1.18 home is reported and left in place; a second run writes no
 // second row.
 func TestMigrateDBSettings(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)

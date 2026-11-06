@@ -42,6 +42,7 @@ const (
 // integer bytes convert, the raw tool session id is kept (the row exists
 // to hold it, OQ14), and a rerun copies nothing.
 func TestCopyMachineLocalBuiltins(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "lore.db")

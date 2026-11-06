@@ -252,6 +252,7 @@ func copyTree(t *testing.T, files map[string][]byte) string {
 // rewrites each core table's fixture to a `_v: 2` file (the v2 fixture) that
 // keeps every field.
 func TestFixturesCoverEveryTable(t *testing.T) {
+	t.Parallel()
 	defs := fixtureTables(t)
 	idOf := fixtureIDs(defs)
 	for _, def := range defs {
@@ -319,6 +320,7 @@ func TestFixturesCoverEveryTable(t *testing.T) {
 // unrelated row and rebuilding the caches leave every fixture file
 // byte-identical; the only new file is the written row.
 func TestUntouchedRowsStayByteIdentical(t *testing.T) {
+	t.Parallel()
 	repo, before := fixtureRepo(t)
 	a := newTestApp(t, repo)
 	eng, err := a.Engine(background())

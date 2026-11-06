@@ -10,6 +10,7 @@ import (
 // first line above the doctor report on cmd/lore); the --local listing
 // itself (App.LocalTrash) still prints it.
 func TestDoctorTrashPrintsNoLocalHeading(t *testing.T) {
+	t.Parallel()
 	var notes []string
 	home := t.TempDir()
 	a := openWith(t, gitRepo(t), Options{Home: home, Version: "0.1.18", OrgCommands: &standaloneOrg{home: home},

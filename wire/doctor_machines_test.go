@@ -12,6 +12,7 @@ import (
 // mch_ plus 8 hex (a short id kept whole), "(this machine)" only on this
 // machine's id, hosts joined in order; none in, none out.
 func TestSharedMachineFindings(t *testing.T) {
+	t.Parallel()
 	if got := sharedMachineFindings(nil); len(got) != 0 {
 		t.Fatalf("no shared ids: %+v", got)
 	}
@@ -40,6 +41,7 @@ func TestSharedMachineFindings(t *testing.T) {
 // without a machine id named as a code repo save), and a warning after each
 // save below the floor; no floor never warns; a dev build is never below.
 func TestTeamVersionFindings(t *testing.T) {
+	t.Parallel()
 	tvs := []sqlite.TeamVersion{
 		{Actor: "act_ana", Machine: "mch_0123456789abcdef", Version: "0.1.18", LastSeen: "2026-11-01T23:59:59.123456789Z"},
 		{Actor: "bob", Machine: "", Version: "0.1.17", LastSeen: "2026-10-01T00:00:00Z"},
@@ -102,6 +104,7 @@ func TestTeamVersionFindings(t *testing.T) {
 // StandaloneOptionsOrg built they run: a saved row gives the Team versions
 // header and its writer, and no shared machine id gives no warning.
 func TestDoctorMachineRowsOnlyInCmdLore(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	old := openWith(t, repo, Options{Version: "0.1.18"})
 	withProject(t, old)

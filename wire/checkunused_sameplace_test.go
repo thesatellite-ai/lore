@@ -17,6 +17,7 @@ import (
 // "." or "/"). A name stores.yaml already uses is refused whatever the
 // place (CFG2), and an unused name is free.
 func TestCheckUnusedOrgStoreSamePlace(t *testing.T) {
+	t.Parallel()
 	const (
 		scp   = "git@github.com:agency/notes"
 		other = "git@github.com:agency/other"

@@ -36,6 +36,7 @@ func storeDir(url string) string { return strings.TrimPrefix(url, "file://") }
 // unknown store is E_NOT_FOUND; a value outside internal|shareable is
 // refused before anything is read.
 func TestSetVisibility(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	url := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
 	writeStoresYAML(t, repo, "stores:\n  - name: kb\n    url: "+url+"\n")
@@ -92,6 +93,7 @@ func TestSetVisibility(t *testing.T) {
 // says already and keeps the id; a bad folder name is refused and
 // creates nothing.
 func TestAddFolder(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	url := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
 	writeStoresYAML(t, repo, "stores:\n  - name: kb\n    url: "+url+"\n")
@@ -148,6 +150,7 @@ func copyStore(t *testing.T, url string) string {
 // opens is re-pointed with a note; a folder that is no store is
 // E_NOT_A_STORE; the same url is a no-op; an unknown name E_NOT_FOUND.
 func TestSetStoreURL(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	url := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
 	const comment = "# our knowledge base\n"

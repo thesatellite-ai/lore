@@ -17,6 +17,7 @@ import (
 // no fix hint (`lore actor delete` is refused; its detail says what to
 // remove).
 func TestLeakBlockedExplainAndHints(t *testing.T) {
+	t.Parallel()
 	text := leakcheck.Finding{Rule: leakcheck.RuleText, Where: LeakWherePRBody, RowID: "mem_1", Words: 9, Label: "store agency: memories/mem_1", Detail: "9 words match internal note mem_1"}
 	actor := leakcheck.Finding{Rule: leakcheck.RuleActor, Where: "push .lore/data/actors/act_1.json", RowID: "act_1", Path: ".lore/data/actors/act_1.json", Detail: "actor file carries stable_key, email: remove them"}
 	cases := []struct {

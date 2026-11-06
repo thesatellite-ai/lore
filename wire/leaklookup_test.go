@@ -29,6 +29,7 @@ import (
 //
 // and App.LocateHidden reports the store and folder the row is in.
 func TestLocateHiddenLeakEndToEnd(t *testing.T) {
+	t.Parallel()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
 	internal := func(context.Context) (bool, error) { return false, nil }
 	client := func(context.Context) (bool, error) { return true, nil }

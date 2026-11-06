@@ -21,6 +21,7 @@ const journalMemID = "mem_01a1a59b891c70b789144cd3e711fd01"
 // second rollback has nothing to undo; a run that changes nothing keeps no
 // backup.
 func TestMigrateBackupRollbackLocal(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -61,6 +62,7 @@ func TestMigrateBackupRollbackLocal(t *testing.T) {
 // TestMigrateRollbackLoses: a migrated row edited after the run blocks the
 // rollback (E_MIGRATE_ROLLBACK_LOSES naming the file), and nothing changes.
 func TestMigrateRollbackLoses(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -87,6 +89,7 @@ func TestMigrateRollbackLoses(t *testing.T) {
 // only the team-lock line (OV38: the run says no team lock guarded it on a
 // surface without one, a no-op run included).
 func TestMigrateNothingKeepsNoBackup(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)
@@ -108,6 +111,7 @@ func TestMigrateNothingKeepsNoBackup(t *testing.T) {
 // TestMigrateUnlock (7.2): a lock whose process is gone is released; a lock
 // held by a running process (this test) is E_MIGRATE_LOCKED.
 func TestMigrateUnlock(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)

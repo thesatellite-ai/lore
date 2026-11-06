@@ -14,6 +14,7 @@ import (
 // HLC, not commit time; one edit seen on both is kept once; At/By come from
 // the row's audit fields.
 func TestOrderVersions(t *testing.T) {
+	t.Parallel()
 	actor, err := ids.New[ids.Actor]()
 	if err != nil {
 		t.Fatal(err)

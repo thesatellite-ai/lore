@@ -22,6 +22,7 @@ import (
 // handle). No row or no label gives the id alone, never an error; the id
 // is the same in every case (it comes from ~/.lore/machine.json).
 func TestThisHolder(t *testing.T) {
+	t.Parallel()
 	ctx := background()
 	a := newTestApp(t, gitRepo(t))
 	withProject(t, a)

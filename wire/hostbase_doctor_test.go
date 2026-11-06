@@ -34,6 +34,7 @@ func fakeLoreDir(t *testing.T) string {
 // in PATH order and once each; a non-executable file, a folder named lore,
 // a missing folder and an empty PATH entry are not binaries.
 func TestLorePathBinaries(t *testing.T) {
+	t.Parallel()
 	mk := func(exec bool, dir bool) string {
 		t.Helper()
 		d := t.TempDir()
@@ -214,6 +215,7 @@ func TestDoctorVersionPin(t *testing.T) {
 // floor warns with file:line; a pin at or above it, a file outside
 // .github/workflows and no floor say nothing.
 func TestDoctorCIPins(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)
@@ -247,6 +249,7 @@ func TestDoctorCIPins(t *testing.T) {
 // TestDoctorClaudeLocal: one import line is quiet; more lines, a git-tracked
 // file and a symlink each warn; no file is quiet.
 func TestDoctorClaudeLocal(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		setup   func(t *testing.T, repo string)
@@ -272,6 +275,7 @@ func TestDoctorClaudeLocal(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			repo := gitRepo(t)
 			a := openWith(t, repo, Options{})
 			withProject(t, a)
@@ -302,6 +306,7 @@ func writeLocal(t *testing.T, repo, s string) {
 // TestDoctorSecretRulesOff: a rule switched off is a note naming the level,
 // the reason and the command that turns it back on; with none off, none.
 func TestDoctorSecretRulesOff(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := openWith(t, repo, Options{})
 	withProject(t, a)
@@ -325,6 +330,7 @@ func TestDoctorSecretRulesOff(t *testing.T) {
 // redacted (tests run without a TTY: quiet output) and never named; once
 // the tracking ref holds it, nothing; a store not cloned here, nothing.
 func TestDoctorUnpushedStores(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	url := "https://example.com/agency/notes"
 	if err := os.WriteFile(orgcfg.ConfigPath(home), []byte("orgs:\n  - name: agency\n    stores:\n      - url: "+url+"\n"), 0o600); err != nil {

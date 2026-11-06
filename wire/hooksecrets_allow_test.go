@@ -22,6 +22,7 @@ import (
 // and is refused again for a second credential the entry does not cover
 // (another hash) and for the same credential outside a .lore/data row.
 func TestPushHonoursCommittedAllow(t *testing.T) {
+	t.Parallel()
 	h := opstest.New(t)
 	ctx := context.Background()
 	key := "AKIA" + strings.Repeat("Q", 16)

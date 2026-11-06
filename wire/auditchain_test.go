@@ -67,6 +67,7 @@ func legacyLoreDB(t *testing.T, repo string) []auditchain.Record {
 // append-only AuditFile is still written, and editing a chain row in the
 // machine store fails verify with E_AUDIT_CHAIN_BROKEN (P3-LOCAL-7).
 func TestChainAuditOnTheStandaloneSink(t *testing.T) {
+	t.Parallel()
 	var legacy []auditchain.Record
 	h := opstest.New(t, withChainAudit, func(o *wire.Options) { legacy = legacyLoreDB(t, o.RepoDir) })
 	mem := h.ID(h.Must("memory.add", `{"body":"chained"}`))

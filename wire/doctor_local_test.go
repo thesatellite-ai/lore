@@ -25,6 +25,7 @@ const (
 // oldest entry wherever it sits in the list, in minutes under an hour and
 // hours from an hour on.
 func TestTimeOutboxFindings(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
 	at := func(d time.Duration) localstate.Entry { return localstate.Entry{Key: "k", UpdatedAt: now.Add(-d)} }
 	cases := []struct {
@@ -109,6 +110,7 @@ func writePurged(t *testing.T, repo, body string) {
 // v0.1.17 key with no 0.1.18 home is one note. DoctorChecks runs all
 // three, and the old binary (no standalone org) prints none of them.
 func TestDoctorLocalRows(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	home := t.TempDir()
 	a := openWith(t, repo, Options{Home: home, Version: "0.1.18", OrgCommands: &standaloneOrg{home: home}})

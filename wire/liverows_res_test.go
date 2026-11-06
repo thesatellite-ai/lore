@@ -13,6 +13,7 @@ const liveResID = "res_01a1a59b891c70b789144cd3e711fb09"
 // TestLiveResourcesRefused (RQ2): a resources file on the live ref is
 // never brought in by lore migrate run, and the live note names it.
 func TestLiveResourcesRefused(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)

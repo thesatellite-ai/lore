@@ -13,6 +13,7 @@ import (
 // is a notice, a value its key's shape refuses (or a map) is
 // E_CONFIG_INVALID naming policies.<key>; a valid map and no file pass.
 func TestCheckMachinePolicy(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, yaml string
 		notice     string // a notice must contain this ("" = none)

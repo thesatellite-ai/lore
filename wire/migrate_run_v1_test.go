@@ -77,6 +77,7 @@ func v1Body(t *testing.T, def schema.TableDef, prj string) (body, keep string) {
 // makes it readable through the core; a second run lists nothing and
 // leaves every file byte-identical.
 func TestMigrateRunRewritesEveryV1Family(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)

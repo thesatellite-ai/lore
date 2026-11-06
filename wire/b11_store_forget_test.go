@@ -72,6 +72,7 @@ func coreCloneFixture(t *testing.T, home string) string {
 }
 
 func TestStoreForgetRefusesUnpushedWork(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		mess func(t *testing.T, base string)
@@ -135,6 +136,7 @@ func TestStoreForgetRefusesUnpushedWork(t *testing.T) {
 // clone, or a store never cloned finds none; a url lore cannot place is an
 // error, never "forgot".
 func TestStoreForgetCoversEverySpelling(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	base := coreCloneFixture(t, home)
 	if err := os.MkdirAll(filepath.Join(base+"@staging", "work"), 0o700); err != nil {

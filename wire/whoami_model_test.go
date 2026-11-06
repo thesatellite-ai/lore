@@ -12,6 +12,7 @@ import (
 // variable, or "(not exposed by the tool)"; a hook-sourced model with no
 // value reads as not exposed; no agent prints no model line at all.
 func TestWhoamiModelLine(t *testing.T) {
+	t.Parallel()
 	modelLine := func(lines []string) string {
 		for _, l := range lines {
 			if strings.HasPrefix(l, "model ") {

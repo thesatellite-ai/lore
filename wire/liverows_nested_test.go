@@ -40,6 +40,7 @@ func nestedMemID(last string) string {
 // .lore/data, and leaves every other project's row out; webx/ (no project
 // there) reaches nobody.
 func TestMigrateLiveNestedProjectFolder(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	type proj struct {
 		rel, folder, mem string

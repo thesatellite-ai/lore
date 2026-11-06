@@ -14,6 +14,7 @@ import (
 // with only read-only own stores there is nothing to write (E_REFUSED,
 // which the refresh after a write treats as "nothing to do").
 func TestMachineTargetSkipsReadOnly(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	ro := folderStoreAt(t, shareStoreID, rowfs.VisibilityInternal)
 	rw := folderStoreAt(t, innerStoreID, rowfs.VisibilityInternal)

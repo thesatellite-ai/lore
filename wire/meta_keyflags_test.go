@@ -10,6 +10,7 @@ import (
 // TestMetaKeyFlags: a key added sensitive, and one made sensitive later,
 // are flagged by id; a plain key and an unknown id are not.
 func TestMetaKeyFlags(t *testing.T) {
+	t.Parallel()
 	a := openWith(t, gitRepo(t), Options{})
 	withProject(t, a)
 	id := func(out string) string {

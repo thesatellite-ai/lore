@@ -14,6 +14,7 @@ import (
 // nothing; with tasks.sla.urgent set, an open urgent task past the limit
 // is one note naming it (never a warning), a done one is not listed.
 func TestDoctorSLA(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	a := newTestApp(t, repo)
 	withProject(t, a)

@@ -106,6 +106,7 @@ func migrateOut(t *testing.T, raw string) opsmigrate.RunOut {
 // are then readable through the store; a re-run is a no-op (count 0, no
 // steps).
 func TestModeBMigration(t *testing.T) {
+	t.Parallel()
 	repo, storeDir, pointer, open, fake := modeBRepo(t)
 	pointerBytes := mustRead(t, pointer)
 	a := open()
@@ -182,6 +183,7 @@ func TestModeBMigration(t *testing.T) {
 // place) resumes without overwriting: count is the rows written this time
 // (0), the store entry is not added twice, and the pointer is then kept.
 func TestModeBResumedRunWritesOnlyMissingRows(t *testing.T) {
+	t.Parallel()
 	repo, _, pointer, open, _ := modeBRepo(t)
 	pointerBytes := mustRead(t, pointer)
 	if _, err := run(t, open(), opsmigrate.OpRun, `{}`, false); err != nil {

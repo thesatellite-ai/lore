@@ -24,6 +24,7 @@ import (
 // actors.kind and column values itself (it imports model only); they must
 // stay the schema's.
 func TestActorProjectionKindsMatchSchema(t *testing.T) {
+	t.Parallel()
 	if actorproject.KindAgent != schema.ActorKindAgent || actorproject.FieldKind != actorFieldKind || actorproject.FieldDisplayName != actorFieldDisplay {
 		t.Fatal("logic/actorproject constants drifted from the schema")
 	}
@@ -36,6 +37,7 @@ func TestActorProjectionKindsMatchSchema(t *testing.T) {
 // store updates the copy; an agent named while agent_details is internal
 // gets no copy at all.
 func TestClientRepoNamedActorIsTheProjection(t *testing.T) {
+	t.Parallel()
 	repo := gitRepo(t)
 	writeStoresYAML(t, repo, "stores:\n  - name: kb\n    url: "+folderStoreAt(t, "sto_0e45506e64357c94a87e70ef1c6b0001", "internal")+"\n")
 	a := openWith(t, repo, Options{RepoIsClient: func(context.Context) (bool, error) { return true, nil }})
