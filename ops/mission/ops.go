@@ -468,7 +468,8 @@ func (o ops) setStatus(ctx context.Context, raw, status, label string) (work.Wri
 	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" "+label+"\n")
 }
 
-// delete tombstones the mission; its tasks' mission_id is cleared.
+// delete tombstones the mission; its tasks go with it (tasks.mission_id is
+// a Cascade relation, schema/builtin_work.go), claimed ones fenced first.
 func (o ops) delete(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	bulkForm, err := wheredel.Form(Noun, in.ID, in.Where, in.DryRun)
