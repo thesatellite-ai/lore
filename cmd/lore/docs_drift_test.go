@@ -73,6 +73,7 @@ func driftRoot(t *testing.T) *cobra.Command {
 	mountShortcuts(root)
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
+	h.mountTaskHook(root)
 	if sync := find(root, opssync.Noun); sync != nil {
 		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, nil))
 	}
@@ -80,6 +81,7 @@ func driftRoot(t *testing.T) *cobra.Command {
 	// them now so docs that run them are checked like any other command.
 	root.InitDefaultHelpCmd()
 	root.InitDefaultCompletionCmd()
+	classifyUsageErrors(root) // as run does, after the last command is added
 	docsRootCmd = root
 	return root
 }
