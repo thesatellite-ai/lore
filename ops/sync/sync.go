@@ -98,6 +98,15 @@ type Env interface {
 	Explain(ctx context.Context, in ExplainIn) (DoneOut, error)
 }
 
+// CoreStores is an optional upgrade of Env: a host that answers true
+// leaves the attached stores' exchange and the queued run time (TIME 11.9)
+// of `lore sync` to the core, which runs them after the host's own pass
+// (cmd/lore's live-only host; the old binary's host does both itself and
+// does not implement it).
+type CoreStores interface {
+	CoreStores() bool
+}
+
 // Ops returns the sync, land and explain operations bound to env. A nil
 // env (a binary without a repo-sync host) registers the same operations,
 // so the reference and REST routes stay whole, and each answers

@@ -37,7 +37,15 @@ const syncPassLive = "live"
 // liveSync implements opssync.Env over LiveHook's runs.
 type liveSync struct{ h *liveHost }
 
-var _ opssync.Env = liveSync{}
+var (
+	_ opssync.Env        = liveSync{}
+	_ opssync.CoreStores = liveSync{}
+)
+
+// CoreStores implements opssync.CoreStores: this host syncs live rows only,
+// so `lore sync` exchanges the attached stores and flushes queued run time
+// through the core after it (wire syncRows.SyncRun).
+func (liveSync) CoreStores() bool { return true }
 
 // unsupported is the answer of a sync verb this host has not ported.
 func unsupported(verb string) error {

@@ -17,6 +17,8 @@ package wire
 //	                   answer as `lore trash --local` / `restore --local <n>`
 //	   sync purge   ─▶ stderr pointer (FA-DEL-4) ─▶ the registered
 //	                   `lore trash purge --archived-before` operation
+//	   sync run     ─▶ the base host's pass, then (opssync.CoreStores hosts)
+//	                   every attached store and the queued run time
 //	   every other verb ─▶ the base host unchanged
 //
 // Owned by p3-refrewrite. The hook point in wire.go (`opssync.Ops(a.syncEnv())`)
@@ -35,6 +37,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	opsrun "github.com/thesatellite-ai/lore/ops/run"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/schema"
@@ -169,6 +172,57 @@ func (s syncRows) SyncTrashRestore(ctx context.Context, in opssync.TrashRestoreI
 	text, _ := res.Text()
 	text = strings.TrimSpace(text)
 	return opssync.DoneOut{Done: text, Lines: []string{text}}, nil
+}
+
+// syncStoreOffline follows a store line whose remote could not be reached.
+const syncStoreOffline = " (offline: local changes kept, sent on the next sync)"
+
+// SyncRun implements opssync.Env: the host's pass, then, for a host that
+// leaves them to the core (opssync.CoreStores: cmd/lore's live-only host),
+// every attached store is exchanged (spec 6.1, STORE_SERVER_SPEC 5.3:
+// `lore sync` delivers the store writes made offline) and the run time
+// queued while a store was unreachable is written (TIME 11.9), as the old
+// binary's host does. Refused rows end in E_STALE (both sides kept); the
+// report lines are printed first on stderr, since a failed run has no
+// stdout.
+func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut, error) {
+	out, err := s.Env.SyncRun(ctx, in)
+	if err != nil {
+		return out, err
+	}
+	if c, ok := s.Env.(opssync.CoreStores); !ok || !c.CoreStores() {
+		return out, nil
+	}
+	res, serr := s.app.SyncStores(ctx, "")
+	for _, r := range res.Stores {
+		out.Data.Stores = append(out.Data.Stores, opssync.StoreReport{Store: r.Store, Sent: r.Sent, Received: r.Received,
+			Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline})
+		line := fmt.Sprintf("store %s: sent %d, received %d, merged %d, refused %d", r.Store, r.Sent, r.Received, r.Merged, r.Refused)
+		if r.Offline {
+			line += syncStoreOffline
+		}
+		out.Lines = append(out.Lines, line)
+		for _, p := range r.Problems {
+			out.Lines = append(out.Lines, "  "+p)
+		}
+	}
+	if serr == nil {
+		if f := opsrun.FlushOutbox(ctx, s.app); f.Written > 0 || f.Failed != "" {
+			if f.Failed != "" {
+				s.app.notice("! " + f.Failed)
+			}
+			if f.Written > 0 {
+				out.Lines = append(out.Lines, fmt.Sprintf("lore sync: wrote %d queued run time span(s)", f.Written))
+			}
+		}
+	}
+	if serr != nil {
+		for _, l := range out.Lines {
+			s.app.notice(l)
+		}
+		return out, serr
+	}
+	return out, nil
 }
 
 // syncPurgePointer is the one stderr line of the old `lore sync purge`
