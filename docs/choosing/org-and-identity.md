@@ -7,7 +7,7 @@
 | Setup | What you write | What lore does | Choose it when |
 |---|---|---|---|
 | **No config** | nothing | uses your git name and email; every repo is "no org" | you work alone, or in a team with no client and no private notes |
-| **A fallback identity** | `lore identity set` (saved in `~/.lore/identity.yaml`) | uses that email everywhere outside an org | your git email is not the one you want on your notes |
+| **A fallback identity** | `lore identity set` (saved in `identity:` of `~/.lore/config.yaml`) | uses that email everywhere outside an org | your git email is not the one you want on your notes |
 | **One org** | one entry under `orgs:` with `identity`, `stores`, `own:` and `repos:` | in matching repos: your company email, its roster (the list of people and agents) and its store (its private notes repo) | you work for one company |
 | **Joining an org someone set up** | `lore org import` | copies the suggested entry from the store, adds your identity, puts you on the roster | your company already uses lore |
 | **Two or more orgs** | one entry per company, each with its own `identity` | picks the org from the repo you are in; orgs never mix | you work for two companies, with a different email at each |

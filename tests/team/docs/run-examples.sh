@@ -121,10 +121,13 @@ s_getting_started() {
   on alice work/notes-app "lore sync"
   on alice work/notes-app "lore live show"
 
-  note "toml migration"
-  quiet alice . "mkdir -p .lore && printf 'stable_key = \"human:alice@example.com\"\ndisplay_name = \"Alice Doe\"\n' > .lore/identity.toml"
-  on alice work/notes-app "lore whoami"
-  on alice . "ls ~/.lore; cat ~/.lore/identity.yaml"
+  note "old identity file"
+  # A v0.1.17 ~/.lore/identity.yaml: read until `lore migrate run` moves it into
+  # identity: of config.yaml (CFG9); the old file is kept as .migrated (OWNERQ-8).
+  quiet alice . "mkdir -p .lore && printf 'stable_key: human:alice@example.com\ndisplay_name: Alice Doe\n' > .lore/identity.yaml"
+  on alice work/notes-app "lore identity show"
+  on alice work/notes-app "lore migrate run"
+  on alice . "ls ~/.lore; cat ~/.lore/config.yaml"
 
   note "first config"
   config alice <<'Y'
@@ -829,8 +832,6 @@ s_people() {
   on alice work/website "lore identity show"
   on alice . "lore identity set alice@example.com"
   on alice work/website "lore identity show"
-  on alice . "lore identity anonymize on"
-  on alice . "lore identity anonymize off"
   on alice . "lore identity unset"
   on alice work/website "lore identity show"
 

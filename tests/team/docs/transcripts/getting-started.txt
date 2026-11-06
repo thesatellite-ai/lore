@@ -71,27 +71,28 @@ lore live: 1 row(s) left live (main holds them)
 alice (work/notes-app)$ lore live show
 0 live rows in _root (epoch 1)
 
-### toml migration
-alice (work/notes-app)$ lore whoami
-lore: migrated ~/.lore/identity.toml → identity.yaml (old file kept as identity.toml.migrated)
-org        none  (matched by: nothing matched)
-identity   Alice Doe <human:alice@example.com>   act_2ad3618e878ebbf527d34d446ef4f891  (from: identity.yaml)
-repo       no org  (fallback identity, personal everywhere/ notes only)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
-agent      none  (no coding agent detected)
-project    prj_7a670ae8548ed05bf57ad29ad0759504
-remotes    github.com/alice/notes-app
-links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
-personal   local: everywhere/
-config     ~/.lore/config.yaml does not exist (no orgs configured)
-alice$ ls ~/.lore; cat ~/.lore/identity.yaml
+### old identity file
+alice (work/notes-app)$ lore identity show
+resolved:    human:alice@example.com
+display:     Alice Doe
+kind:        human
+source:      ~/.lore/identity.yaml
+stable:      yes
+warning: ~/.lore/identity.yaml is from v0.1.17 and is read only while identity: in ~/.lore/config.yaml is unset: `lore migrate run` moves it into identity:
+alice (work/notes-app)$ lore migrate run
+count: 0
+rows: 
+steps: identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
+journal: team lock: taken on refs/lore/signals until 2026-11-02T10:11:20Z (renewed every 2m0s), team lock released
+alice$ ls ~/.lore; cat ~/.lore/config.yaml
 cache
-identity.toml.migrated
-identity.yaml
+config.yaml
+identity.yaml.migrated
 machine.json
 state
-display_name: Alice Doe
-stable_key: human:alice@example.com
+identity:
+    key: human:alice@example.com
+    name: Alice Doe
 
 ### first config
 alice$ cat ~/.lore/config.yaml

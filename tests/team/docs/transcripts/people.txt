@@ -15,10 +15,6 @@ display:     alice@example.com
 kind:        human
 source:      top-level identity (config.yaml)
 stable:      yes
-alice$ lore identity anonymize on
-✓ anon mode enabled. Future writes use anon:d5c5677250d8
-alice$ lore identity anonymize off
-✓ anon mode disabled
 alice$ lore identity unset
 ✓ identity: unset (next session will fall through chain)
 alice (work/website)$ lore identity show

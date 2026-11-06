@@ -121,39 +121,40 @@ $ lore live show
 
 Right after the landing the rows are still live ("leaves live once main is fetched"). The next command that fetches (here `lore sync`) sees that `main` holds the same content. It then removes them from live. If your `main` is protected, the landing rides along on your next push instead. See [Small team in one repo](use-cases/small-team.md#when-main-is-protected).
 
-## 6. Old TOML identity files move to YAML by themselves
+## 6. A v0.1.17 identity file moves into config.yaml
 
-If you used lore before, your identity may be in `~/.lore/identity.toml`. The first command of the new version moves it to `identity.yaml`. It keeps the old file:
+If you used lore v0.1.17, your identity may be in `~/.lore/identity.yaml`. 0.1.18 still reads it, but only while `identity:` in `~/.lore/config.yaml` is empty, and `lore identity show` warns about it. `lore migrate run` moves it into `config.yaml` and keeps the old file as `identity.yaml.migrated`:
 
-<!-- example: getting-started#toml-migration -->
+<!-- example: getting-started#old-identity-file -->
 ```console
 # alice, in notes-app
-$ lore whoami
-lore: migrated ~/.lore/identity.toml → identity.yaml (old file kept as identity.toml.migrated)
-org        none  (matched by: nothing matched)
-identity   Alice Doe <human:alice@example.com>   act_2ad3…f891  (from: identity.yaml)
-repo       no org  (fallback identity, personal everywhere/ notes only)
-machine    mch_fac0df3a  (mch_fac0df3a618f3d99d93273abc59a9ece0b7cedbb24ea7cd8e8af24a257cfe1bc)
-agent      none  (no coding agent detected)
-project    prj_7a67…9504
-remotes    github.com/alice/notes-app
-links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
-personal   local: everywhere/
-config     ~/.lore/config.yaml does not exist (no orgs configured)
+$ lore identity show
+resolved:    human:alice@example.com
+display:     Alice Doe
+kind:        human
+source:      ~/.lore/identity.yaml
+stable:      yes
+warning: ~/.lore/identity.yaml is from v0.1.17 and is read only while identity: in ~/.lore/config.yaml is unset: `lore migrate run` moves it into identity:
+$ lore migrate run
+count: 0
+rows: 
+steps: identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
+journal: team lock: taken on refs/lore/signals until 2026-11-02T10:11:20Z (renewed every 2m0s), team lock released
 
 # alice, in ~
-$ ls ~/.lore; cat ~/.lore/identity.yaml
+$ ls ~/.lore; cat ~/.lore/config.yaml
 cache
-identity.toml.migrated
-identity.yaml
+config.yaml
+identity.yaml.migrated
 machine.json
 state
-display_name: Alice Doe
-stable_key: human:alice@example.com
+identity:
+    key: human:alice@example.com
+    name: Alice Doe
 ```
 <!-- /example -->
 
-Nothing else is needed. The same happens to a project's shared-database pointer, `.lore/lore.toml`, which becomes `.lore/lore.yaml` (commit the rename if it is tracked).
+An identity file from before v0.1.17 (`~/.lore/identity.toml`) is not read at all: set who you are with `lore identity set <email>`, and `lore identity unset` removes the old file. A project's v0.1.17 shared-database pointer (`.lore/lore.yaml`, or the older `.lore/lore.toml`) is read only by `lore migrate run`, which converts the project to row files (see [Shared database (Mode B)](../sync/shared-database-mode-b.md)).
 
 Your **identity key** is your email address with `human:` in front (`human:alice@example.com`). Lore uses it, not your name, to tell people apart. So keep it the same on every machine.
 

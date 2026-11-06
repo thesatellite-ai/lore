@@ -27,9 +27,9 @@ stable:      yes
 
 ## Step 2 — Set or remove your own identity: `lore identity set` and `unset`
 
-Outside any company, `lore identity set` saves a fallback identity in `~/.lore/identity.yaml`. Use your email: your **identity key** is your email address with `human:` in front, and lore uses it, not your display name, to tell people apart. `lore identity unset` removes the file, and lore goes back to your git settings:
+Outside any company, `lore identity set` saves a fallback identity in `identity:` of `~/.lore/config.yaml`. Use your email: your **identity key** is your email address with `human:` in front, and lore uses it, not your display name, to tell people apart. `lore identity unset` removes the file, and lore goes back to your git settings:
 
-<!-- example: people#identity only=2,3,6,7 -->
+<!-- example: people#identity only=2,3,4,5 -->
 ```console
 # alice, in ~
 $ lore identity set alice@example.com
@@ -225,7 +225,6 @@ cache files no repo on this machine attaches:
 ## Pitfalls
 
 - **The identity key is an email, never a name.** `lore identity set "Alice Doe"` is refused (`E_INVALID_INPUT`), because the same person on another machine with another spelling would become a second person. To keep a display name, pass the email too: `lore identity set "Alice Doe <alice@example.com>"` or `lore identity set "Alice Doe" --key human:alice@example.com`.
-- **`lore identity show` does not show anonymous mode.** After `anonymize on` it still prints your normal identity; the `anon:…` name is used only for the writes that follow.
 - **`lore org import` asks before risky defaults.** A suggested entry that sends rows into client repos, or a pattern that matches a whole host, needs your yes. `--yes` accepts it without a prompt, so read the printed entry first.
 - **`lore org set` is refused in client repos.** Use `lore org use <org>` there: it is a choice for your machine only and is never committed.
 - **`lore move` is refused for agents with `--yes`.** Moving a note is a person's decision.

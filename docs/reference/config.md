@@ -20,7 +20,7 @@ A **store** is a separate repo that holds only lore notes, so private notes neve
 
 ## How the files are read
 
-- **Format.** Every file is YAML. Older lore versions wrote TOML (`config.toml`, `identity.toml`, `lore.toml`). When lore finds only the `.toml` file, it converts it to `.yaml` once, keeps the old file as `<name>.toml.migrated`, and prints one line. When both exist, the `.yaml` file wins and lore warns that the `.toml` file is ignored.
+- **Format.** Every file is YAML. lore 0.1.18 reads no TOML file: a pre-0.1.17 `~/.lore/identity.toml` is ignored (`lore identity show` warns, `lore identity unset` removes it), and an old `.lore/lore.toml` shared-database pointer is read only by `lore migrate run`. A v0.1.17 `~/.lore/identity.yaml` is read until `lore migrate run` moves it into `identity:` of `config.yaml` (the old file is kept as `identity.yaml.migrated`).
 - **Durations** (how long something lasts) are written like `60s`, `20m`, `1h30m` or a whole number of days such as `7d`. A plain number means seconds. A mix of days and another unit, such as `1d12h`, is refused: write `36h` instead. Negative values are refused.
 - **Org settings win over top-level settings.** The blocks `live`, `lease`, `agents` and `merge_check` can be set at the top of the file and again inside one `orgs:` entry. The org entry's value wins for repos of that org; anything it does not set comes from the top level, then from the built-in default.
 - **A bad file stops reads and writes.** When `~/.lore/config.yaml` has a mistake, lore cannot tell which stores a note may come from, so it fails closed: reading and writing notes both stop with `E_CONFIG_INVALID` until you fix the file.
@@ -302,7 +302,7 @@ ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lorecfg: load ~/.lor
 
 ## `~/.lore/identity.yaml` (v0.1.17)
 
-v0.1.17 kept your fallback identity here (`display_name`, `stable_key`). 0.1.18 keeps it only in `identity:` of `~/.lore/config.yaml`: `lore identity set` and `lore identity unset` edit that block, and `lore migrate run` moves an old `identity.yaml` into it and removes the file. If `identity:` is already set, that value is kept and the migration report names the dropped one.
+v0.1.17 kept your fallback identity here (`display_name`, `stable_key`). 0.1.18 keeps it in `identity:` of `~/.lore/config.yaml`: `lore identity set` and `lore identity unset` edit that block. An old `identity.yaml` is still read while that block is empty (`lore identity show` warns), and `lore migrate run` moves it into the block and keeps the old file as `identity.yaml.migrated`. If `identity:` is already set, that value is kept and the migration report names the dropped one.
 
 ## `.lore/org.yaml`
 
