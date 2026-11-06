@@ -48,6 +48,9 @@ const (
 	// KindSearch is lowercase: v0.1.17's search envelope used the FTS entity name
 	// (tasklist), unlike its list/show envelopes.
 	KindSearch = "tasklist.search"
+	// KindAdd is tasklist add's envelope, lowercase like v0.1.17's
+	// printJSON(constants.KindTasklistAdd).
+	KindAdd = "tasklist.add"
 )
 
 // Defaults and names.
@@ -266,7 +269,7 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: recordOf(work.LabelerOf(o.env), src, w.Row), Human: work.Success + " " + w.Row.ID.String() + "\n"}, nil
+	return ShowOut{SchemaVersion: work.SchemaVersion, Kind: KindAdd, Data: recordOf(work.LabelerOf(o.env), src, w.Row), Human: work.Success + " " + w.Row.ID.String() + "\n"}, nil
 }
 
 // list returns the tasklists of every attached store.
