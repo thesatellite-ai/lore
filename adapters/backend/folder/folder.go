@@ -321,6 +321,27 @@ func (b *Backend) WriteAudited(ctx context.Context, changes []store.Change, recs
 	return joinRelease(err, lock)
 }
 
+var _ store.PurgeAuditJournal = (*Backend)(nil)
+
+// WritePurgeAudited implements store.PurgeAuditJournal (later 542): under
+// the store lock, the purge's tombstones, its _purged.json ids and its
+// audit records (pending journal), all or none
+// (rowfs.Folder.ApplyPurgeAudited).
+func (b *Backend) WritePurgeAudited(ctx context.Context, changes []store.Change, purged []ids.AnyID, recs []store.AuditRecord) error {
+	if err := b.usable(ctx); err != nil {
+		return err
+	}
+	if b.readOnly {
+		return store.ErrReadOnly
+	}
+	lock, err := b.root.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = b.folder.ApplyPurgeAudited(ctx, changes, purged, recs)
+	return joinRelease(err, lock)
+}
+
 // PendingAudit implements store.AuditJournal.
 func (b *Backend) PendingAudit(ctx context.Context) ([]store.AuditRecord, error) {
 	if err := b.usable(ctx); err != nil {

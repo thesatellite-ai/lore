@@ -123,6 +123,36 @@ func (f *Folder) ApplyAudited(ctx context.Context, changes []store.Change, recs 
 	if err := ValidateBatch(changes); err != nil {
 		return nil, err
 	}
+	return f.withJournal(recs, func() (*Applied, error) { return f.Apply(ctx, changes) })
+}
+
+// ApplyPurgeAudited is ApplyPurge with recs appended to the pending journal
+// in the same batch (store.PurgeAuditJournal.WritePurgeAudited, later 542):
+// the tombstones, the _purged.json ids and the purge's audit records land
+// all or none. The caller holds the lock. changes may be empty (an id whose
+// tombstone is already written is only listed), as for ApplyPurge.
+func (f *Folder) ApplyPurgeAudited(ctx context.Context, changes []store.Change, purged []ids.AnyID, recs []store.AuditRecord) (*Applied, error) {
+	if len(recs) == 0 {
+		return f.ApplyPurge(ctx, changes, purged)
+	}
+	if len(purged) == 0 {
+		return nil, errs.New(errs.InvalidInput, "rowfs: a purge names no id")
+	}
+	if len(changes) > 0 {
+		if err := ValidateBatch(changes); err != nil {
+			return nil, err
+		}
+	}
+	return f.withJournal(recs, func() (*Applied, error) { return f.ApplyPurge(ctx, changes, purged) })
+}
+
+// withJournal appends recs to the pending journal, then runs apply; when
+// apply fails the journal is restored, so neither is kept. The journal is
+// written first: a crash between the two leaves a pending record of a
+// write that may not have landed (the engine's replay records it), never a
+// stored row without its record. On success the journal's undo step is
+// the last one Undo restores.
+func (f *Folder) withJournal(recs []store.AuditRecord, apply func() (*Applied, error)) (*Applied, error) {
 	add, err := encodeJournal(recs)
 	if err != nil {
 		return nil, err
@@ -137,7 +167,7 @@ func (f *Folder) ApplyAudited(ctx context.Context, changes []store.Change, recs 
 		return nil, errs.Wrap(errs.Internal, "rowfs: write the audit journal", werr)
 	}
 	journal := undoStep{full: full, prev: prev}
-	a, err := f.Apply(ctx, changes)
+	a, err := apply()
 	if err != nil {
 		return nil, errors.Join(err, (&Applied{undo: []undoStep{journal}}).Undo())
 	}

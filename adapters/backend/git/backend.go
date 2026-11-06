@@ -256,6 +256,23 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 // commit, adds purged to the folder's _purged.json (rowfs.Folder.ApplyPurge;
 // engine.Purger). Repo mode writes files only, as Write does.
 func (b *Backend) WritePurge(ctx context.Context, changes []store.Change, purged []ids.AnyID) error {
+	return b.writePurge(ctx, changes, purged, nil)
+}
+
+var _ store.PurgeAuditJournal = (*Backend)(nil)
+
+// WritePurgeAudited implements store.PurgeAuditJournal (later 542): the
+// purge's tombstones, its _purged.json ids and its audit records in one
+// batch. Clone mode: the records go to the pending journal outside the
+// worktree and the files into the purge's ONE commit; a failed commit
+// restores the files and the journal. Repo mode: files and journal, all
+// or none.
+func (b *Backend) WritePurgeAudited(ctx context.Context, changes []store.Change, purged []ids.AnyID, recs []store.AuditRecord) error {
+	return b.writePurge(ctx, changes, purged, recs)
+}
+
+// writePurge is WritePurge with optional audit records (WritePurgeAudited).
+func (b *Backend) writePurge(ctx context.Context, changes []store.Change, purged []ids.AnyID, recs []store.AuditRecord) error {
 	if err := b.usable(ctx); err != nil {
 		return err
 	}
@@ -266,7 +283,7 @@ func (b *Backend) WritePurge(ctx context.Context, changes []store.Change, purged
 	if err != nil {
 		return err
 	}
-	applied, err := b.folder.ApplyPurge(ctx, changes, purged)
+	applied, err := b.folder.ApplyPurgeAudited(ctx, changes, purged, recs)
 	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {
 		subj := changes
 		if len(subj) == 0 {

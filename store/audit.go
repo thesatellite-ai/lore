@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/thesatellite-ai/lore/model/hlc"
+	"github.com/thesatellite-ai/lore/model/ids"
 )
 
 // Audit records in the row's own batch (owner decision CLEANUP Qs): the
@@ -43,4 +44,17 @@ type AuditJournal interface {
 	// AckAudit drops the pending records matching recs (by Key and HLC);
 	// a record that is not pending is ignored.
 	AckAudit(ctx context.Context, recs []AuditRecord) error
+}
+
+// PurgeAuditJournal is the purge half of AuditJournal (later 542): a
+// backend that keeps a purged-id list (engine.Purger) and an audit journal
+// writes a purge's tombstones, its listed ids and its audit records in one
+// batch. A backend without it gets WritePurge and the engine records the
+// audit after it, as before.
+type PurgeAuditJournal interface {
+	// WritePurgeAudited is WritePurge plus recs in the same batch: on
+	// success the changes are stored, every id of purged is listed and
+	// every record is pending; on any error none of them is kept. changes
+	// may be empty (the tombstones are already written); purged may not.
+	WritePurgeAudited(ctx context.Context, changes []Change, purged []ids.AnyID, recs []AuditRecord) error
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/hlc"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -99,6 +100,81 @@ func testAuditJournal(t *testing.T, f Fixture) {
 	}
 	if seen := pending(t, other); len(seen) != 1 || !sameRec(seen[0], rd) {
 		t.Fatalf("second handle pending = %+v, want d", seen)
+	}
+}
+
+// purgedLister is the read half of the engine's Purger (engine.Purger is
+// above this package's layer, so the method is named here).
+type purgedLister interface {
+	Purged(ctx context.Context) (map[string]bool, error)
+}
+
+// testPurgeAuditJournal is the store.PurgeAuditJournal contract (later
+// 542). It runs only for a backend that implements it (and AuditJournal,
+// whose PendingAudit it reads, and the Purged list).
+//
+//	WritePurgeAudited ok     → tombstone stored, id listed, record pending
+//	WritePurgeAudited stale  → no tombstone, no id, no record
+//	list only (no change)    → id listed, record pending
+func testPurgeAuditJournal(t *testing.T, f Fixture) {
+	b, g, ctx := open(t, f, store.OpenOptions{}), newGen(t), context.Background()
+	pj, ok := b.(store.PurgeAuditJournal)
+	if !ok {
+		t.Logf("%T does not implement store.PurgeAuditJournal: optional, nothing to check", b)
+		return
+	}
+	j, jok := b.(store.AuditJournal)
+	pl, lok := b.(purgedLister)
+	if !jok || !lok {
+		t.Fatalf("%T implements PurgeAuditJournal without AuditJournal (%v) or Purged (%v)", b, jok, lok)
+	}
+	listed := func(id ids.AnyID) bool {
+		t.Helper()
+		set, err := pl.Purged(ctx)
+		if err != nil {
+			t.Fatalf("Purged: %v", err)
+		}
+		return set[id.String()]
+	}
+	live := g.row(newID(t), 1, hlc.HLC{})
+	if err := b.Write(ctx, []store.Change{{Row: live}}); err != nil {
+		t.Fatal(err)
+	}
+	tomb := g.tombstone(live.ID, live.HLC)
+	rec := store.AuditRecord{Key: tomb.Key(), HLC: tomb.HLC, Line: []byte(`{"ev":"purge"}`)}
+
+	// stale: nothing of the three is kept
+	err := pj.WritePurgeAudited(ctx, []store.Change{{Row: tomb, Expect: g.clock.Now()}}, []ids.AnyID{live.ID}, []store.AuditRecord{rec})
+	if !errors.Is(err, store.ErrStale) {
+		t.Fatalf("stale purge: err = %v, want ErrStale", err)
+	}
+	if got, gerr := b.Get(ctx, live.Table, live.ID); gerr != nil || got.Deleted {
+		t.Fatalf("a refused purge touched the row: %v deleted=%v", gerr, got.Deleted)
+	}
+	if listed(live.ID) || len(pending(t, j)) != 0 {
+		t.Fatalf("a refused purge kept the id (%v) or a record (%d)", listed(live.ID), len(pending(t, j)))
+	}
+
+	if err = pj.WritePurgeAudited(ctx, []store.Change{{Row: tomb, Expect: live.HLC}}, []ids.AnyID{live.ID}, []store.AuditRecord{rec}); err != nil {
+		t.Fatalf("WritePurgeAudited: %v", err)
+	}
+	got, err := b.Get(ctx, live.Table, live.ID)
+	if err != nil {
+		t.Fatalf("tombstone missing: %v", err)
+	}
+	sameRow(t, got, tomb)
+	if p := pending(t, j); !listed(live.ID) || len(p) != 1 || !sameRec(p[0], rec) {
+		t.Fatalf("after purge: listed %v, pending %+v", listed(live.ID), p)
+	}
+
+	// list only: an id whose tombstone is already written
+	other := newID(t)
+	orec := store.AuditRecord{Key: store.Key{Table: tomb.Table, ID: other}, HLC: g.clock.Now(), Line: []byte(`{"ev":"list"}`)}
+	if err = pj.WritePurgeAudited(ctx, nil, []ids.AnyID{other}, []store.AuditRecord{orec}); err != nil {
+		t.Fatalf("list-only WritePurgeAudited: %v", err)
+	}
+	if p := pending(t, j); !listed(other) || len(p) != 2 || !sameRec(p[1], orec) {
+		t.Fatalf("after list-only purge: listed %v, pending %+v", listed(other), p)
 	}
 }
 
