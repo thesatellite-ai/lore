@@ -61,7 +61,7 @@ func Decode[T any](raw []byte, dst *T, mode Mode) error {
 	if err == nil || errors.Is(err, io.EOF) {
 		return nil
 	}
-	return &Error{Problems: problems(raw, err, kindsOf(reflect.TypeFor[T]())), cause: err}
+	return &Error{Problems: problems(raw, err, reflect.TypeFor[T]()), cause: err}
 }
 
 // Problems returns the user-facing lines of err, a yaml.v3 error from
@@ -75,7 +75,7 @@ func Problems[T any](raw []byte, err error) []string {
 	if errors.As(err, &e) {
 		return e.Problems
 	}
-	return problems(raw, err, kindsOf(reflect.TypeFor[T]()))
+	return problems(raw, err, reflect.TypeFor[T]())
 }
 
 // yaml.v3's message shapes (decode.go): an unknown key under KnownFields, a
@@ -86,22 +86,24 @@ var (
 	syntaxStart = "yaml: "
 )
 
-// problems maps every message of err to its user line.
-func problems(raw []byte, err error, kinds map[string]reflect.Kind) []string {
+// problems maps every message of err, from a decode into target, to its
+// user line.
+func problems(raw []byte, err error, target reflect.Type) []string {
 	var te *yaml.TypeError
 	if !errors.As(err, &te) {
 		return []string{strings.TrimPrefix(err.Error(), syntaxStart)}
 	}
 	root := parseNode(raw)
+	kinds := kindsOf(target)
 	out := make([]string, 0, len(te.Errors))
 	for _, m := range te.Errors {
-		out = append(out, problem(root, m, kinds))
+		out = append(out, problem(root, m, target, kinds))
 	}
 	return out
 }
 
 // problem is one TypeError message in the user's words.
-func problem(root *yaml.Node, m string, kinds map[string]reflect.Kind) string {
+func problem(root *yaml.Node, m string, target reflect.Type, kinds map[string]reflect.Kind) string {
 	if g := unknownRe.FindStringSubmatch(m); g != nil {
 		line, _ := strconv.Atoi(g[1]) // \d+ always parses
 		return "line " + g[1] + ": unknown key " + keyPath(root, line, g[2])
@@ -109,7 +111,7 @@ func problem(root *yaml.Node, m string, kinds map[string]reflect.Kind) string {
 	if g := mismatchRe.FindStringSubmatch(m); g != nil {
 		line, _ := strconv.Atoi(g[1]) // \d+ always parses
 		got := gotText(g[2])
-		where := valuePath(root, line, g[2])
+		where := valuePath(root, target, line, g[2], g[3])
 		if where == "" {
 			where = "the file"
 		}
@@ -131,7 +133,7 @@ func parseNode(raw []byte) *yaml.Node {
 // key alone when the file cannot be walked.
 func keyPath(root *yaml.Node, line int, key string) string {
 	p, ok := "", false
-	walk(root, "", func(n *yaml.Node, path string, isKey bool) bool {
+	walk(root, "", nil, func(n *yaml.Node, path string, _ reflect.Type, isKey bool) bool {
 		if isKey && n.Line == line && n.Value == key {
 			p, ok = path, true
 			return true
@@ -144,28 +146,103 @@ func keyPath(root *yaml.Node, line int, key string) string {
 	return p
 }
 
-// valuePath is the path of the first value node (document order) with tag
-// on line; "" for the document itself or when none is found.
-func valuePath(root *yaml.Node, line int, tag string) string {
-	p := ""
-	walk(root, "", func(n *yaml.Node, path string, isKey bool) bool {
-		if !isKey && n.Line == line && n.ShortTag() == tag {
-			p = path
+// valuePath is the path of the value node with tag on line that yaml
+// decoded into the Go type named into: several nodes can share a line and
+// a tag (`- kind: [host]` holds the list the entry is in and the list under
+// kind; `x: [[a]]` two lists), so the candidate whose target type, walked
+// down from the decode target, is into wins; with none, the first in
+// document order. "" for the document itself or when none is found.
+func valuePath(root *yaml.Node, target reflect.Type, line int, tag, into string) string {
+	first, typed, found := "", "", false
+	walk(root, "", target, func(n *yaml.Node, path string, t reflect.Type, isKey bool) bool {
+		if isKey || n.Line != line || n.ShortTag() != tag {
+			return false
+		}
+		if !found {
+			first, found = path, true
+		}
+		if t != nil && t.String() == into {
+			typed = path
 			return true
 		}
 		return false
 	})
-	return p
+	if typed != "" {
+		return typed
+	}
+	return first
+}
+
+// fieldType is the type a mapping key decodes into under t: a struct's
+// field by its yaml name (inline structs searched too), a map's value
+// type; nil when unknown (an interface, a yaml.Node, a key t lacks).
+func fieldType(t reflect.Type, key string) reflect.Type {
+	t = deref(t)
+	if t == nil {
+		return nil
+	}
+	switch t.Kind() {
+	case reflect.Map:
+		return t.Elem()
+	case reflect.Struct:
+		for i := range t.NumField() {
+			f := t.Field(i)
+			name, opts, _ := strings.Cut(f.Tag.Get("yaml"), ",")
+			if name == "-" || !f.IsExported() {
+				continue
+			}
+			if strings.Contains(","+opts+",", ",inline,") {
+				if ft := fieldType(f.Type, key); ft != nil {
+					return ft
+				}
+				continue
+			}
+			if name == "" {
+				name = strings.ToLower(f.Name) // yaml.v3's default key
+			}
+			if name == key {
+				return f.Type
+			}
+		}
+	default:
+	}
+	return nil
+}
+
+// elemType is the type a list item decodes into under t; nil when unknown.
+func elemType(t reflect.Type) reflect.Type {
+	t = deref(t)
+	if t == nil || (t.Kind() != reflect.Slice && t.Kind() != reflect.Array) {
+		return nil
+	}
+	return t.Elem()
+}
+
+// nodeType is yaml.v3's raw node: it takes any value, so nothing under it
+// is a decode target.
+var nodeType = reflect.TypeFor[yaml.Node]()
+
+// deref follows pointers; nil stays nil, and so does a yaml.Node (its Go
+// fields are not keys of the file).
+func deref(t reflect.Type) reflect.Type {
+	for t != nil && t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t == nodeType {
+		return nil
+	}
+	return t
 }
 
 // walk visits n and its descendants in document order with their paths
-// (a.b, list[0].c); a mapping key is visited with the path it opens. visit
-// returns true to stop.
-func walk(n *yaml.Node, path string, visit func(n *yaml.Node, path string, isKey bool) bool) bool {
+// (a.b, list[0].c) and the Go type each decodes into under t (nil when
+// unknown or t is nil); a mapping key is visited with the path it opens.
+// visit returns true to stop.
+func walk(n *yaml.Node, path string, t reflect.Type, visit func(n *yaml.Node, path string, t reflect.Type, isKey bool) bool) bool {
 	if n == nil {
 		return false
 	}
-	if visit(n, path, false) {
+	if visit(n, path, t, false) {
 		return true
 	}
 	switch n.Kind {
@@ -176,13 +253,14 @@ func walk(n *yaml.Node, path string, visit func(n *yaml.Node, path string, isKey
 			if path != "" {
 				child = path + "." + k.Value
 			}
-			if visit(k, child, true) || walk(v, child, visit) {
+			ft := fieldType(t, k.Value)
+			if visit(k, child, ft, true) || walk(v, child, ft, visit) {
 				return true
 			}
 		}
 	case yaml.SequenceNode:
 		for i, v := range n.Content {
-			if walk(v, path+"["+strconv.Itoa(i)+"]", visit) {
+			if walk(v, path+"["+strconv.Itoa(i)+"]", elemType(t), visit) {
 				return true
 			}
 		}

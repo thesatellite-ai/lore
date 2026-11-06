@@ -23,7 +23,15 @@ type (
 		Name string `yaml:"name"`
 		URL  string `yaml:"url"`
 	}
+	// base is inlined into file (yaml ",inline"): its keys sit at the top.
+	base struct {
+		Owner string `yaml:"owner"`
+	}
 	file struct {
+		base    `yaml:",inline"`
+		Plain   string            // no tag: yaml.v3's default key "plain"
+		Groups  [][]string        `yaml:"groups"`
+		Note    yaml.Node         `yaml:"note"`
 		Name    string            `yaml:"name"`
 		Inner   inner             `yaml:"inner"`
 		Entries []entry           `yaml:"entries"`
@@ -63,6 +71,14 @@ func TestDecodeProblems(t *testing.T) {
 		{"bad duration", Lenient, "wait: [1]\n", []string{"line 1: wait: expected a duration such as 30s, got a list"}},
 		{"the file is a list", Lenient, "- a\n- b\n", []string{"line 1: the file: expected a mapping (key: value lines), got a list"}},
 		{"two problems, both reported", Strict, "naem: a\ninner:\n  port: x\n", []string{"line 1: unknown key naem", "line 3: inner.port: expected a whole number, got text"}},
+		{"list on a list item's first line", Lenient, "entries:\n  - name: [kb]\n", []string{"line 2: entries[0].name: expected text, got a list"}},
+		{"mapping on a list item's first line", Lenient, "entries:\n  - name: {a: 1}\n", []string{"line 2: entries[0].name: expected text, got a mapping"}},
+		{"nested list too deep", Lenient, "groups: [[a], [[b]]]\n", []string{"line 1: groups[1][0]: expected text, got a list"}},
+		{"nested list item is text", Lenient, "groups: [a, [b]]\n", []string{"line 1: groups[0]: expected a list, got text"}},
+		{"outer list where text is wanted", Lenient, "name: [[a]]\n", []string{"line 1: name: expected text, got a list"}},
+		{"inline struct key", Lenient, "owner: [a]\n", []string{"line 1: owner: expected text, got a list"}},
+		{"untagged field key", Lenient, "plain: {a: 1}\n", []string{"line 1: plain: expected text, got a mapping"}},
+		{"anything under a yaml.Node", Strict, "note:\n  value: [x]\n  kind: {a: 1}\n", nil},
 		{"syntax error keeps yaml's line", Lenient, "a: [\n", []string{"line 1: did not find expected node content"}},
 		{"empty file", Strict, "", nil},
 		{"comments only", Strict, "# nothing\n", nil},
