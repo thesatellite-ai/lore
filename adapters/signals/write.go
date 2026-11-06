@@ -128,6 +128,10 @@ type OfflineError struct {
 	// lost races".
 	Reason string
 	Err    error
+	// RacesLost is true when every attempt reached the remote and another
+	// writer won each time (the retries ran out, nothing was unreachable):
+	// a caller may report that as contention rather than as offline.
+	RacesLost bool
 }
 
 func (e *OfflineError) Error() string {
@@ -349,7 +353,7 @@ func (s *Store) Write(ctx context.Context, decide Decide) (Result, error) {
 		}
 		last = res.Old
 		if attempt > retries {
-			return res, &OfflineError{Reason: fmt.Sprintf("gave up after %d lost races on %s (last seen %s)", attempt, s.Ref, short(last))}
+			return res, &OfflineError{Reason: fmt.Sprintf("gave up after %d lost races on %s (last seen %s)", attempt, s.Ref, short(last)), RacesLost: true}
 		}
 		s.trace(fmt.Sprintf("signals: lost race on %s (attempt %d), re-deciding", s.Ref, attempt))
 		if err := s.backoff(ctx, attempt); err != nil {

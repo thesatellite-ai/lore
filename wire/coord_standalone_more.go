@@ -235,7 +235,7 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.forRepoOnly(); err != nil {
+	if err = w.forHolds(ctx); err != nil {
 		return opscoord.Report{}, err
 	}
 	st := w.signalsStore()
@@ -268,7 +268,7 @@ func (h standaloneCoord) HoldRelease(ctx context.Context, in opscoord.HoldReleas
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.forRepoOnly(); err != nil {
+	if err = w.forHolds(ctx); err != nil {
 		return opscoord.Report{}, err
 	}
 	_, err = w.signalsStore().Write(ctx, func(v signals.View) (signals.Change, error) {
@@ -387,14 +387,23 @@ func (h standaloneCoord) GateApprove(ctx context.Context, in opscoord.GateIn) (o
 }
 
 // checkApprover enforces the mission's approvers list, when it has one.
+// It fails closed: a task or mission that cannot be read refuses the
+// approval (the list may name someone else); only a task with no mission,
+// or a mission row that does not exist (no list to check), passes.
 func (h standaloneCoord) checkApprover(ctx context.Context, id, actorID string) error {
 	rows := engineRows{a: h.a}
 	task, ok, err := rows.Get(ctx, id)
-	if err != nil || !ok || task.Str(fieldMissionID) == "" {
-		return nil // no mission (or unreadable here): no list to check
+	if err != nil {
+		return errs.Wrap(errs.CodeOf(err), "gate approve: read "+id+" to check its mission's approvers", err)
+	}
+	if !ok || task.Str(fieldMissionID) == "" {
+		return nil // no mission: no list to check (an unknown id is refused by the approval itself)
 	}
 	m, ok, err := rows.Get(ctx, task.Str(fieldMissionID))
-	if err != nil || !ok {
+	if err != nil {
+		return errs.Wrap(errs.CodeOf(err), "gate approve: read mission "+task.Str(fieldMissionID)+" to check its approvers", err)
+	}
+	if !ok {
 		return nil
 	}
 	approvers := m.Strs(fieldApprovers)

@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -275,13 +276,32 @@ func (w *coordWorld) forTask(ctx context.Context, id string) error {
 }
 
 // forRepoOnly refuses a client repo for a verb that only has the repo's
-// own ref (hold claim/release): its coordination belongs on the store (D8).
+// own ref (the migrate team lock): its coordination belongs on the store
+// (D8). Holds use forHolds, which reaches the linked store.
 func (w *coordWorld) forRepoOnly() error {
 	if w.sit.Role == orgresolve.RoleClient {
-		return errs.New(errs.Unsupported, "this is a client repo: its holds belong on the linked store's signals ref, which this binary does not reach for holds").
-			WithHint("never written into the client repo (D8); run it with the release binary")
+		return errs.New(errs.Unsupported, "this is a client repo: its coordination belongs on the linked store's signals ref, and this verb only uses the repo's own ref").
+			WithHint("never written into the client repo (D8)")
 	}
 	return nil
+}
+
+// forHolds points the world at where this checkout's holds live: the
+// repo's own signals ref, or, in a client repo linked to an org store, the
+// linked store's signals ref under the link folder (D8: coordination data
+// is never written into the client repo; the hold path is
+// <folder>/resources/<name>.json there, like a client task's claim). A
+// client repo with no store link (client by a repos: pattern only) has
+// no store to keep the hold on and is refused, writing nothing.
+func (w *coordWorld) forHolds(ctx context.Context) error {
+	if w.sit.Role != orgresolve.RoleClient {
+		return nil
+	}
+	if len(w.sit.Links) == 0 {
+		return errs.New(errs.Unsupported, "this is a client repo with no store link: its holds belong on a linked store's signals ref, and none is linked").
+			WithHint("never written into the client repo (D8); link it with `lore org link <org> --project <folder>`")
+	}
+	return w.useStore(ctx)
 }
 
 // useStore points the world at the linked store's signals ref: the store
@@ -455,10 +475,29 @@ func (w *coordWorld) signalsStore() *signals.Store {
 			return gitref.Signature{Name: name, Email: email, When: at}
 		},
 		Autopush: w.autopush && sp.remote != nil, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
+		Trace: signalsTrace(os.Stderr),
 		// Gate (FORMAT_EVOLUTION rule 2, E_OLD_LORE) is left nil: the
 		// engine's own format floor refuses the row half of every fenced
 		// write in a project this binary may not write.
 	}
+}
+
+// envTrace is the trace switch of CLI_REFERENCE 1.1 (`LORE_TRACE=1`, set
+// by cmd/lore for `--trace` too): the signals writes print their fetches,
+// pushes and lost-race retries (LORE_TEAM_SPEC "pushes and retries").
+const envTrace = "LORE_TRACE"
+
+// envTraceOn is the value of envTrace that turns tracing on.
+const envTraceOn = "1"
+
+// signalsTrace is signals.Store.Trace: nil unless LORE_TRACE=1, else each
+// line goes to w as "trace: <line>" (v0.1.17 traceFunc). The lines name
+// refs and counts only, never row content.
+func signalsTrace(w io.Writer) func(string) {
+	if os.Getenv(envTrace) != envTraceOn {
+		return nil
+	}
+	return func(line string) { _, _ = fmt.Fprintln(w, "trace: "+line) } // stderr gone: nothing left to report to
 }
 
 // signatureEmail turns a stable key into a commit e-mail; agents get a
@@ -882,6 +921,10 @@ func coordErr(err error) error {
 			code = errs.LostClaim
 		}
 		return errs.New(code, fe.Error()).WithHint("stop work on this task; `lore task next` finds other work")
+	case errors.As(err, &off) && off.RacesLost:
+		// Reachable, but another writer won every attempt: contention, not
+		// a network problem (the remote answered each push).
+		return errs.New(errs.Contended, off.Error()).WithHint("other writers kept winning the signals ref; retry after a short wait")
 	case errors.As(err, &off):
 		return errs.New(errs.Offline, off.Error()).
 			WithHint("coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again")

@@ -9,6 +9,7 @@ package wire
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -118,13 +119,9 @@ func (h standaloneCoord) hereRepo(ctx context.Context, w *coordWorld) string {
 }
 
 // TaskHeartbeat implements opscoord.Host: renew one claim, or every claim
-// of this session (rate limited to renew_every). --daemon keeps a process
-// alive past the command, which this host does not run.
+// of this session (rate limited to renew_every), or keep renewing them
+// (--daemon, heartbeatDaemon).
 func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.HeartbeatIn) (opscoord.Report, error) {
-	if in.Daemon {
-		return opscoord.Report{}, errs.New(errs.Unsupported, "task heartbeat --daemon needs the release binary").
-			WithHint("run `lore task heartbeat` every lease.renew_every instead")
-	}
 	w, err := h.openWorld(ctx)
 	if err != nil {
 		return opscoord.Report{}, err
@@ -139,6 +136,9 @@ func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.Heartbea
 		if len(ids) == 0 {
 			return opscoord.Report{Lines: []string{"no claims held by this session"}}, nil
 		}
+	}
+	if in.Daemon {
+		return w.heartbeatDaemon(ctx, ids)
 	}
 	var lines []string
 	for _, id := range ids {
@@ -155,6 +155,73 @@ func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.Heartbea
 		lines = append(lines, fmt.Sprintf("%s %s renewed until %s (seq %d)", markOK, id, s.Expires.UTC().Format(time.RFC3339), s.RenewedSeq))
 	}
 	return opscoord.Report{Lines: lines}, nil
+}
+
+// daemonParentPoll is how often the heartbeat daemon checks that the
+// process that started it (the agent session) is still alive, so the
+// daemon never outlives the session (v0.1.17 daemonParentPoll).
+const daemonParentPoll = 5 * time.Second
+
+// heartbeatDaemon is `task heartbeat --daemon` (F7, v0.1.17
+// heartbeatDaemon): it renews every claim in ids each lease.renew_every and
+// pushes the work branch after a renewal (§7.4), until
+//   - ctx ends or the parent process exits: stops quietly (exit 0);
+//   - a claim is fenced out or gone (any refusal other than offline or
+//     contended): that error, so the session stops work on it;
+//   - renewals of a claim kept failing offline/contended until its held
+//     expiry minus the lease grace: E_LOST_CLAIM ("stop work").
+//
+// Renewals write the signals ref only (coord.Renew stages no rows).
+func (w *coordWorld) heartbeatDaemon(ctx context.Context, ids []string) (opscoord.Report, error) {
+	parent := os.Getppid()
+	tick := time.NewTicker(daemonParentPoll)
+	defer tick.Stop()
+	next := w.a.Now()
+	renewals := 0
+	for {
+		if !w.a.Now().Before(next) {
+			for _, id := range ids {
+				if err := w.renewOnce(ctx, id); err != nil {
+					if !errs.Has(err, errs.Offline) && !errs.Has(err, errs.Contended) {
+						return opscoord.Report{}, err
+					}
+					if rec, ok := w.held().Get(w.session(), id); ok && w.a.Now().After(rec.Expires.Add(-w.lease.Grace)) {
+						return opscoord.Report{}, errs.Wrap(errs.LostClaim, fmt.Sprintf("%s: renewals kept failing; the lease ends at %s, stop work", id, rec.Expires.UTC().Format(time.Kitchen)), err)
+					}
+					continue
+				}
+				renewals++
+				if b := w.workBranch(ctx); b != "" {
+					w.pushWorkBranch(ctx, b) // best effort; mission status reports an unpushed branch
+				}
+			}
+			next = w.a.Now().Add(w.lease.RenewEvery)
+		}
+		select {
+		case <-ctx.Done():
+			return w.daemonStopped(renewals), nil
+		case <-tick.C:
+			if os.Getppid() != parent {
+				return w.daemonStopped(renewals), nil // the session that started us is gone
+			}
+		}
+	}
+}
+
+// renewOnce renews one claim on the ref it was taken on.
+func (w *coordWorld) renewOnce(ctx context.Context, id string) error {
+	if err := w.forHeld(ctx, id); err != nil {
+		return err
+	}
+	if _, err := coord.Renew(ctx, w.env(ctx), id); err != nil {
+		return coordErr(err)
+	}
+	return nil
+}
+
+// daemonStopped is the daemon's closing line.
+func (w *coordWorld) daemonStopped(renewals int) opscoord.Report {
+	return opscoord.Report{Lines: []string{fmt.Sprintf("heartbeat daemon stopped after %d renewal(s)", renewals)}}
 }
 
 // renewedRecently is the hook form's rate limit: the last renewal
