@@ -1,6 +1,6 @@
 package wire
 
-// doctor_base_core.go — the base section of `lore doctor` for a binary
+// hostbase_doctor.go — the base section of `lore doctor` for a binary
 // without lore.db (cmd/lore): the [identity] section and the PATH check of
 // v0.1.17's runDoctor (saas/cmd/cli/doctor.go steps 3 and 4), which the
 // old binary's doctorHost supplies. cmd/lore hands it to the app as
