@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -615,6 +616,10 @@ type MetaValue struct {
 	Value     string `json:"value"`
 	JSON      string `json:"json,omitempty"`
 	Sensitive bool   `json:"sensitive,omitempty"`
+	// Label is an allowed value's display label (METADATA 3.17, G-META-10):
+	// text prints it instead of the name; "" when the value has none or is
+	// masked.
+	Label string `json:"label,omitempty"`
 }
 
 // MetaGetOut is the output of meta.get.
@@ -634,6 +639,9 @@ func (o MetaGetOut) Text() string {
 	}
 	var b strings.Builder
 	for _, v := range o.Data {
+		if v.Label != "" {
+			v.Value = v.Label // an allowed value by its label in text (3.17)
+		}
 		if o.ids {
 			fmt.Fprintf(&b, "%s\t%s\t%s\n", v.KeyID, v.Key, v.Value)
 			continue
@@ -811,6 +819,11 @@ func (o ops) metaGet(ctx context.Context, in MetaGetIn) (MetaGetOut, error) {
 			v.Value, v.JSON = meta.Show(shown), string(en.V)
 		default:
 			out.Masked = append(out.Masked, en.Name)
+		}
+		if !v.Sensitive || in.ShowSensitive {
+			shown := en
+			shown.Sensitive = false
+			v.Label = metashow.Label(ctx, o.env, shown)
 		}
 		out.Data = append(out.Data, v)
 	}

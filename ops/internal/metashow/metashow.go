@@ -83,22 +83,35 @@ func Row(ctx context.Context, env Env, r row.Row) Block {
 			b.Meta = map[string]string{}
 		}
 		b.Meta[en.Name] = meta.Show(en)
-		if !en.Sensitive && len(en.VName) > 0 {
-			if l := valueLabel(ctx, env, en.V); l != "" {
-				labels[en.Name] = l
-			}
+		if l := Label(ctx, env, en); l != "" {
+			labels[en.Name] = l
 		}
 	}
-	// METADATA 3.17 (G-META-10): an allowed value keeps its name in meta
-	// and adds "<name>_label"; a real key of that name on the row wins
-	// (its value stays, no label is added for that key).
-	for n, l := range labels {
-		if _, real := b.Meta[n+LabelSuffix]; !real {
-			b.Meta[n+LabelSuffix] = l
-		}
-	}
+	AddLabels(b.Meta, labels)
 	slices.Sort(b.MetaMasked)
 	return b
+}
+
+// Label is the display label of entry en's allowed value (a list: labels
+// joined " | ", an item without one by its name); "" when en is no
+// allowed value, is sensitive, or no value of it has a label (METADATA
+// 3.17, G-META-10).
+func Label(ctx context.Context, env Env, en meta.Entry) string {
+	if en.Sensitive || len(en.VName) == 0 || env == nil {
+		return ""
+	}
+	return valueLabel(ctx, env, en.V)
+}
+
+// AddLabels adds "<name>_label" to values for each labelled name (the
+// --json form of METADATA 3.17); a real key of that name already in
+// values wins (its value stays, no label is added for that key).
+func AddLabels(values, labels map[string]string) {
+	for n, l := range labels {
+		if _, real := values[n+LabelSuffix]; !real {
+			values[n+LabelSuffix] = l
+		}
+	}
 }
 
 // LabelSuffix marks the display label of an allowed value in a Block's
@@ -166,16 +179,11 @@ func keySensitive(ctx context.Context, env Env, kid ids.ID[ids.MetaKey]) bool {
 	return ok && v.Bool()
 }
 
-// Text is the block under a show: "meta:" then one "  name: value" line
-// per key, sorted by name, a masked value marked (sensitive). "" when the
-// row has no metadata.
-func Text(values map[string]string, masked []string) string {
-	if len(values) == 0 {
-		return ""
-	}
-	// an allowed value prints its label (METADATA 3.17); its "<name>_label"
-	// entry is the json form only and gets no line of its own
-	shown := map[string]string{}
+// Display is the text form of a Block's Meta: an allowed value shows its
+// label (METADATA 3.17) and its "<name>_label" entry, the json form only,
+// gets no line of its own; masked names are left as they are.
+func Display(values map[string]string, masked []string) map[string]string {
+	shown := make(map[string]string, len(values))
 	for n, v := range values {
 		if base, isLabel := strings.CutSuffix(n, LabelSuffix); isLabel {
 			if _, has := values[base]; has && !slices.Contains(masked, base) {
@@ -187,7 +195,17 @@ func Text(values map[string]string, masked []string) string {
 			shown[n] = l
 		}
 	}
-	values = shown
+	return shown
+}
+
+// Text is the block under a show: "meta:" then one "  name: value" line
+// per key, sorted by name, a masked value marked (sensitive). "" when the
+// row has no metadata.
+func Text(values map[string]string, masked []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	values = Display(values, masked)
 	names := make([]string, 0, len(values))
 	for n := range values {
 		names = append(names, n)

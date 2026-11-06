@@ -20,6 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -280,6 +281,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			out.MetaMasked = append(out.MetaMasked, names...)
 		}
 	}
+	labels := map[string]string{}
 	for kid, j := range r.Meta {
 		en, derr := meta.DecodeEntry(j)
 		if derr != nil || en.Name == "" {
@@ -305,7 +307,11 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			out.MetaMasked = append(out.MetaMasked, en.Name)
 		}
 		out.Meta[en.Name] = meta.Show(en)
+		if l := metashow.Label(ctx, o.env, en); l != "" {
+			labels[en.Name] = l
+		}
 	}
+	metashow.AddLabels(out.Meta, labels) // METADATA 3.17, G-META-10
 	slices.Sort(out.MetaMasked)
 	if in.Force && !in.Reveal {
 		return ShowOut{}, errs.New(errs.InvalidInput, "--force goes with --reveal")
@@ -479,8 +485,9 @@ func (o ShowOut) Text() string {
 			b.WriteString("  " + k + ": " + v + "\n")
 		}
 	}
-	for _, k := range slices.Sorted(maps.Keys(o.Meta)) {
-		b.WriteString("  meta " + k + ": " + o.Meta[k] + "\n")
+	shown := metashow.Display(o.Meta, o.MetaMasked) // an allowed value by its label
+	for _, k := range slices.Sorted(maps.Keys(shown)) {
+		b.WriteString("  meta " + k + ": " + shown[k] + "\n")
 	}
 	b.WriteString(expand.RefsText(o.Refs))
 	b.WriteString(expand.WarningText(o.Warning))
