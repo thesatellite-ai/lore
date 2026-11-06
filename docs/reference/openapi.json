@@ -18039,7 +18039,6 @@
                   "required": [
                     "schema_version",
                     "kind",
-                    "count",
                     "data"
                   ]
                 }
@@ -21769,7 +21768,7 @@
             }
           },
           "403": {
-            "description": "E_META_FOREIGN_KEY, E_OLD_LORE",
+            "description": "E_META_FOREIGN_KEY, E_META_STORE_UNREADABLE, E_OLD_LORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -23967,6 +23966,12 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "quarantined": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -24159,6 +24164,12 @@
                       "type": "string"
                     },
                     "meta_masked": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "quarantined": {
                       "type": "array",
                       "items": {
                         "type": "string"
@@ -24561,7 +24572,7 @@
             }
           },
           "403": {
-            "description": "E_META_FOREIGN_KEY, E_OLD_LORE",
+            "description": "E_META_FOREIGN_KEY, E_META_STORE_UNREADABLE, E_OLD_LORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -24751,7 +24762,7 @@
             }
           },
           "403": {
-            "description": "E_META_FOREIGN_KEY, E_OLD_LORE",
+            "description": "E_META_FOREIGN_KEY, E_META_STORE_UNREADABLE, E_OLD_LORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -31436,7 +31447,6 @@
                   "required": [
                     "schema_version",
                     "kind",
-                    "count",
                     "data"
                   ]
                 }
@@ -43702,6 +43712,12 @@
                         "type": "string"
                       }
                     },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "store": {
                       "type": "string"
                     }
@@ -44863,6 +44879,12 @@
                           "what",
                           "id"
                         ]
+                      }
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "store": {
@@ -46757,6 +46779,12 @@
                         ]
                       }
                     },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "root": {
                       "type": "string"
                     }
@@ -47158,6 +47186,12 @@
                           "hops",
                           "via"
                         ]
+                      }
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "root": {
@@ -48186,7 +48220,7 @@
             }
           },
           "409": {
-            "description": "E_NOT_IMPLEMENTED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "description": "E_META_QUARANTINED, E_NOT_IMPLEMENTED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -83473,7 +83507,7 @@
             }
           },
           "400": {
-            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT, E_REF_CYCLE, E_REF_DANGLING",
             "content": {
               "application/json": {
                 "schema": {
@@ -84465,7 +84499,6 @@
                   "required": [
                     "schema_version",
                     "kind",
-                    "count",
                     "data",
                     "label"
                   ]

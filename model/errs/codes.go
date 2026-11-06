@@ -243,7 +243,7 @@ var table = map[Code]entry{
 	DBCorrupt:             {class: ClassRefused, desc: "the local cache holds a record lore cannot read; delete .lore/lore-cache.db: the next command rebuilds it from .lore/data"},
 	DBNotFound:            {class: ClassRefused, desc: "DB file does not exist at the configured path"},
 	SchemaVersionMismatch: {class: ClassRefused, desc: "DB was migrated by a newer lore; upgrade or use a different DB"},
-	MigrationIncomplete:   {class: ClassRefused, desc: "a schema migration did not finish; run `lore setup`"},
+	MigrationIncomplete:   {class: ClassRefused, desc: "a data migration did not finish; run `lore migrate run` to finish it (it resumes), or `lore migrate rollback` to undo it"},
 	NetworkFS:             {class: ClassRefused, desc: "DB path or store is on a network/cloud-sync filesystem (silent corruption risk); set LORE_ALLOW_NETWORK_FS=1 to override"},
 	InodeMismatch:         {class: ClassRefused, desc: "DB file inode changed since last open"},
 	DiskFull:              {class: ClassRefused, desc: "no space left on device for write or backup"},
