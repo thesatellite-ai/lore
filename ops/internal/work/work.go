@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -494,8 +495,24 @@ type SearchHit struct {
 	Store     store.SourceRef `json:"_source,omitempty,omitzero"`
 	// Label is v0.1.17's `_label`: "[<store label>]" (opsmemory.Label).
 	Label string `json:"_label,omitempty"`
+	// Meta and MetaMasked are the row's metadata as every read carries it
+	// (METADATA 3.17 MQ13, G-CONTENT-3, G-META-10): name → display value,
+	// "<name>_label" beside an allowed value with a label, sensitive values
+	// masked and named in meta_masked (metashow.Row, the knowledge nouns'
+	// one masker). Absent for a row without metadata, so a v0.1.17 hit is
+	// unchanged.
+	Meta       map[string]string `json:"meta,omitempty"`
+	MetaMasked []string          `json:"meta_masked,omitempty"`
 	// Human is the hit's v0.1.17 human line.
 	Human string `json:"-"`
+}
+
+// WithMeta fills h's metadata from its row r (WithMeta of every search
+// hit of a work noun: task, mission, plan, tasklist).
+func WithMeta(ctx context.Context, env Env, h SearchHit, r row.Row) SearchHit {
+	b := metashow.Row(ctx, env, r)
+	h.Meta, h.MetaMasked = b.Meta, b.MetaMasked
+	return h
 }
 
 // Relations is the task search hit's eager-loaded references; each is
@@ -637,7 +654,7 @@ func SearchTable(ctx context.Context, env Env, table row.Table, kind, query stri
 		if project != "" && Field(h.Row, FieldProject) != project {
 			continue
 		}
-		out.Data = append(out.Data, HitOf(LabelerOf(env), h, withStatus, cols...))
+		out.Data = append(out.Data, WithMeta(ctx, env, HitOf(LabelerOf(env), h, withStatus, cols...), h.Row))
 	}
 	out.Count = len(out.Data)
 	return out, nil

@@ -1657,7 +1657,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (work.SearchEnvelope, erro
 			Mission:  op.SomeIf(work.BriefOf(ctx, o.env, schema.TableMissions, work.Field(r, work.FieldMission), true)),
 			Plan:     op.SomeIf(work.BriefOf(ctx, o.env, schema.TablePlans, work.Field(r, work.FieldPlan), false)),
 		}
-		out.Data = append(out.Data, hit)
+		out.Data = append(out.Data, work.WithMeta(ctx, o.env, hit, r)) // MQ13: metadata on every read
 	}
 	out.Count = len(out.Data)
 	return out, nil
