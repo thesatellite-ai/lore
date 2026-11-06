@@ -308,6 +308,15 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		if err != nil {
 			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr)), cause: err}
 		}
+		// P3-ORG-G-3: an output printed in full may still fail
+		// (op.Failer, whoami's org refusal): the error line goes to
+		// stderr in human mode; with --json the data already holds it.
+		if ferr := res.Failure(); ferr != nil {
+			if *asJSON {
+				return &exitError{code: errs.EnvelopeOf(ferr).Error.Exit, cause: ferr}
+			}
+			return &exitError{code: printError(out, cmd.ErrOrStderr(), ferr, false, cfg.color(StreamErr)), cause: ferr}
+		}
 		// P3-MISC-8: a successful result may carry its own exit status
 		// (op.ExitStatuser, lore doctor's 1 degraded / 2 broken); it is
 		// already printed, so only the status goes back.

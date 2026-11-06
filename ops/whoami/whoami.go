@@ -147,7 +147,14 @@ type Out struct {
 	Label         MachineLabel `json:"label,omitzero"`
 	// Lines is the human output, built by the host.
 	Lines []string `json:"-"`
+	// Fail is the error whoami fails with AFTER its output is printed (an
+	// org refusal or an identity error: whoami is the diagnostic for
+	// both, v0.1.17); nil = success. Data.Error carries its text.
+	Fail error `json:"-"`
 }
+
+// Failure implements op.Failer.
+func (o Out) Failure() error { return o.Fail }
 
 // Text implements op.Texter.
 func (o Out) Text() string {

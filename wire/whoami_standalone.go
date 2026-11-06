@@ -55,19 +55,25 @@ type standaloneWhoami struct {
 
 var _ opswhoami.Host = (*standaloneWhoami)(nil)
 
-// Whoami implements opswhoami.Host. A resolution or identity error is the
-// operation's error (P3-ORG-G-3).
+// Whoami implements opswhoami.Host. whoami is the diagnostic for a
+// resolution that fails, so an org refusal (E_ORG_AMBIGUOUS,
+// E_ORG_DISAGREES, …) or an identity error still prints every line it can
+// (org refused, identity, machine, agent, project, remotes, links,
+// personal) and the --json data with "error", then fails with that error
+// through Out.Fail (v0.1.17 printed, then exited 17; P3-ORG-G-3). Only a
+// situation that cannot be gathered at all (an unreadable config) is a
+// plain error.
 func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (opswhoami.Out, error) {
 	s, err := w.res.Situation(ctx)
 	if err != nil {
 		return opswhoami.Out{}, err
 	}
+	var id identity.Resolved
+	var idErr, fail error
 	if s.ResolveErr != nil {
-		return opswhoami.Out{}, orgcfg.ResolveError(s.ResolveErr)
-	}
-	id, err := resolveIdentity(ctx, w.opts)
-	if err != nil {
-		return opswhoami.Out{}, err
+		fail = orgcfg.ResolveError(s.ResolveErr)
+	} else if id, idErr = resolveIdentity(ctx, w.opts); idErr != nil {
+		fail = idErr
 	}
 	red := newWhoamiRedactor(s, in.Share)
 	det, derr := DetectAgent()
@@ -77,7 +83,11 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 		w.hookModel(ctx, agent)
 	}
 	m, personal := whoamiMachine(w.opts.Home), whoamiPersonal(w.opts.Home)
-	return opswhoami.Out{Data: whoamiData(s, id, red, agent, m, personal), Lines: whoamiLines(s, id, in.Explain, red, agent, m, personal)}, nil
+	d := whoamiData(s, id, red, agent, m, personal)
+	if fail != nil {
+		d.Error = red.str(errs.EnvelopeOf(fail).Error.Message) // the code is in the exit status and the CLI's error line
+	}
+	return opswhoami.Out{Data: d, Lines: whoamiLines(s, id, idErr, in.Explain, red, agent, m, personal), Fail: fail}, nil
 }
 
 // hookModel fills a model the environment did not expose from the one
@@ -330,34 +340,48 @@ func orgUseHint(cfg *orgconf.Config) string {
 }
 
 // whoamiLines are the human lines (v0.1.17 printWhoami without colour).
-func whoamiLines(s *orgcfg.Situation, id identity.Resolved, explain bool, red whoamiRedactor, agent *agentdetect.Result, m, personal string) []string {
+// idErr is the identity error ("missing" line); a refused org
+// (s.ResolveErr) prints "refused" and no identity or repo role.
+func whoamiLines(s *orgcfg.Situation, id identity.Resolved, idErr error, explain bool, red whoamiRedactor, agent *agentdetect.Result, m, personal string) []string {
 	var out []string
 	row := func(label, value string) { out = append(out, fmt.Sprintf("%-*s %s", whoamiLabelWidth, label, value)) }
 	r := s.Result
-	if r.Org == nil {
+	switch {
+	case s.ResolveErr != nil:
+		row("org", "refused  ("+red.str(s.ResolveErr.Error())+")")
+	case r.Org == nil:
 		v := "none  (matched by: " + red.str(r.MatchedBy) + ")"
 		if h := orgUseHint(s.Config); h != "" {
 			v += "   hint: " + h
 		}
 		row("org", v)
-	} else {
+	default:
 		row("org", r.Org.Name+"  (matched by: "+red.str(r.MatchedBy)+")")
 	}
-	v := fmt.Sprintf("%s <%s>   %s", id.DisplayName, id.StableKey, whoamiActorID(id.StableKey))
-	if id.Handle != "" {
-		v += "  @" + id.Handle
-	}
-	if ses := os.Getenv(identity.EnvSession); ses != "" {
-		v += "  session " + ses
-	}
-	row("identity", v+"  (from: "+string(id.Step)+")")
-	switch r.Role {
-	case orgresolve.RoleClient:
-		row("repo", "client repo  (guards on)")
-	case orgresolve.RoleOwn:
-		row("repo", "own repo  (no client guards)")
+	switch {
+	case s.ResolveErr != nil:
+		row("identity", "(not resolved: the org is refused above)")
+	case idErr != nil:
+		row("identity", "missing  "+red.str(idErr.Error()))
 	default:
-		row("repo", "no org  (fallback identity)")
+		v := fmt.Sprintf("%s <%s>   %s", id.DisplayName, id.StableKey, whoamiActorID(id.StableKey))
+		if id.Handle != "" {
+			v += "  @" + id.Handle
+		}
+		if ses := os.Getenv(identity.EnvSession); ses != "" {
+			v += "  session " + ses
+		}
+		row("identity", v+"  (from: "+string(id.Step)+")")
+	}
+	if s.ResolveErr == nil {
+		switch r.Role {
+		case orgresolve.RoleClient:
+			row("repo", "client repo  (guards on)")
+		case orgresolve.RoleOwn:
+			row("repo", "own repo  (no client guards)")
+		default:
+			row("repo", "no org  (fallback identity)")
+		}
 	}
 	if m == "" {
 		row("machine", "(no OS machine id readable here)")

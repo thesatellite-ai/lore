@@ -50,7 +50,7 @@ func TestWhoamiPersonalLine(t *testing.T) {
 				t.Fatalf("whoamiPersonal = %q, want %q", got, want)
 			}
 			s := &orgcfg.Situation{Config: &orgconf.Config{}, Result: orgresolve.Result{Org: &orgconf.Org{Name: "agency"}, Role: orgresolve.RoleOwn}}
-			lines := whoamiLines(s, identity.Resolved{DisplayName: "Alice", StableKey: "human:alice@agency.example"}, false, whoamiRedactor{}, nil, "", got)
+			lines := whoamiLines(s, identity.Resolved{DisplayName: "Alice", StableKey: "human:alice@agency.example"}, nil, false, whoamiRedactor{}, nil, "", got)
 			line := ""
 			for _, l := range lines {
 				if strings.HasPrefix(l, "personal ") {

@@ -161,6 +161,30 @@ type ExitStatuser interface {
 	ExitStatus() int
 }
 
+// Failer is the optional failure of an output that is printed in full
+// and THEN fails (P3-ORG-G-3: `lore whoami` with an ambiguous org prints
+// every diagnostic line, then E_ORG_AMBIGUOUS, as v0.1.17 did). The CLI
+// prints the result as usual (its --json data carries the error text in
+// its own field), then exits with the error's status, printing the error
+// line on stderr in human mode only, so --json stays one document. REST
+// answers the data as a success, like ExitStatuser. A nil Failure() is
+// success.
+type Failer interface {
+	Failure() error
+}
+
+// Failure is the output's Failer error, nil when the output has none.
+func (r Result) Failure() error {
+	if !r.v.IsValid() || !r.v.CanInterface() {
+		return nil
+	}
+	// Interface() is the reflect boundary; it is narrowed at once.
+	if f, ok := r.v.Interface().(Failer); ok {
+		return f.Failure()
+	}
+	return nil
+}
+
 // ExitStatus is the output's ExitStatuser value, 0 when the output has
 // none.
 func (r Result) ExitStatus() int {
