@@ -63,15 +63,21 @@ func hasLocalState(wd string) bool {
 
 // initScope narrows o to what `lore init` needs, as v0.1.17's
 // initCoreOptions did: the org (so the rows init writes carry the person)
-// and the repo-write guard stay; the org's stores, its entry stores, the
-// client-repo role and the default target go. Init writes only the repo
-// store, and the org's stores may have no local copy yet or be broken: a
-// code repo listed as a store is refused by every later command
-// (E_NOT_A_STORE, F12), but it must not stop the repo from being set up.
+// and the repo-write guard stay; the org's stores, its entry stores and
+// the default target go. Init writes only the repo store, and the org's
+// stores may have no local copy yet or be broken: a code repo listed as a
+// store is refused by every later command (E_NOT_A_STORE, F12), but it
+// must not stop the repo from being set up.
+//
+// The client-repo role stays (G-ORGMIG-8): without it the repo store is a
+// client by default (fail closed), and in a repo with no org a detected
+// agent's id was then projected to its owner, which init's own minimal
+// actor row does not name, so the repos and context.targets rows of the
+// same init were written by nobody. The role check reads the org's links
+// and fails closed to client on a broken store, which never stops init.
 func initScope(o *wire.Options) {
 	o.OrgStores = nil
 	o.OrgEntryStore = nil
-	o.RepoIsClient = nil
 	o.DefaultTarget = nil
 }
 
