@@ -236,7 +236,12 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	if err = o.refuseClientTeam(ctx, assign.first(), store.Source(in.To)); err != nil {
+	// The route of a create naming no --to reads the task's text (F14).
+	routeFields, err := work.Texts(Noun, map[string]string{work.FieldTitle: strings.TrimSpace(in.Title), work.FieldBody: in.Body})
+	if err != nil {
+		return AddOut{}, err
+	}
+	if err = o.refuseClientTeam(ctx, assign.first(), store.Source(in.To), routeFields); err != nil {
 		return AddOut{}, err
 	}
 	pe, err := o.peopleFlags(ctx, assign, in.Lead, in.AssignedTo, nil, nil, nil, nil)
@@ -1154,7 +1159,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	if err = o.refuseClientTeam(ctx, assign.first(), curSrc); err != nil {
+	if err = o.refuseClientTeam(ctx, assign.first(), curSrc, nil); err != nil {
 		return work.WriteOut{}, err
 	}
 	refs, err := o.parseRefs(ctx, in.Ref)

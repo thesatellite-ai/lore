@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/thesatellite-ai/lore/logic/direction"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -32,4 +34,30 @@ func (a *App) RepoClassNote(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return st.repoClassNote, nil
+}
+
+// CreateClass is StoreClass for a create of table with fields: one naming
+// no --to lands where Options.DefaultTarget routes it (F14: a linked client
+// repo files a task in the org store's linked folder), so it has that
+// store's class, never the repo store's by default (TEAM-030 add then
+// agrees with an edit of the same row). A named target is StoreClass's.
+func (a *App) CreateClass(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (direction.Class, error) {
+	if target == "" && a.opts.DefaultTarget != nil {
+		st, err := a.state(ctx)
+		if err != nil {
+			return "", err
+		}
+		q, err := a.writeQuery(st, table, fields)
+		if err != nil {
+			return "", err
+		}
+		to, err := a.opts.DefaultTarget(ctx, q)
+		if err != nil {
+			return "", err
+		}
+		if to != store.SourceRepo {
+			target = to
+		}
+	}
+	return a.StoreClass(ctx, target)
 }

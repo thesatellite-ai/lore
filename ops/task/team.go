@@ -217,15 +217,25 @@ func HasTeam(ctx context.Context) bool { _, ok := work.TeamFrom(ctx); return ok 
 // refuseClientTeam is TEAM-030 (LORE_TEAM_SPEC §7.2, ADR TEAM-030): a team
 // is never assigned on a task written into a linked client repo, because
 // team names are internal. target is the store the task is (or will be)
-// in ("" = the default target). An Env that cannot place stores counts the
-// repo store and the default target as client (fail closed, like
-// ops/internal/pointer). The message and hint are v0.1.17's.
-func (o ops) refuseClientTeam(ctx context.Context, a work.Assignee, target store.Source) error {
+// in ("" = the default target). fields are a create's fields (nil for an
+// edit): with target "" an Env that routes creates (createClassifier)
+// places the row where it will really land, so a task a linked client
+// repo files in the org store's linked folder (F14) is internal there, as
+// with --to <org>, and add agrees with an edit of that row. An Env that
+// cannot place stores counts the repo store and the default target as
+// client (fail closed, like ops/internal/pointer). The message and hint
+// are v0.1.17's.
+func (o ops) refuseClientTeam(ctx context.Context, a work.Assignee, target store.Source, fields map[string]value.Value) error {
 	if a.TeamID == "" {
 		return nil
 	}
 	class := direction.Client
-	if c, ok := o.env.(pointer.Classifier); ok {
+	if c, ok := o.env.(createClassifier); ok && fields != nil {
+		var err error
+		if class, err = c.CreateClass(ctx, target, table, fields); err != nil {
+			return err
+		}
+	} else if c, ok := o.env.(pointer.Classifier); ok {
 		var err error
 		if class, err = c.StoreClass(ctx, target); err != nil {
 			return err
@@ -238,4 +248,11 @@ func (o ops) refuseClientTeam(ctx context.Context, a work.Assignee, target store
 	}
 	return errs.New(errs.InvalidInput, "a team cannot be assigned in a linked client repo: team names are internal (TEAM-030)").
 		WithHint("assign a person (--assign @handle), or keep the task internal with --to <org>")
+}
+
+// createClassifier is the optional Env upgrade that places a create naming
+// no --to in the store it will really land in (wire: Options.DefaultTarget,
+// the F14 route), then classes it as pointer.Classifier does.
+type createClassifier interface {
+	CreateClass(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (direction.Class, error)
 }
