@@ -6,9 +6,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
-	opsrow "github.com/thesatellite-ai/lore/ops/row"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -95,29 +93,6 @@ func isLookup(e op.Entry) bool {
 	return false
 }
 
-// moveRefusesMachineLocal reports whether op name given id is a move of a
-// machine-local table's row. P3-LOCAL-1 (engine refuseMachineMove,
-// 3055b914) answers such a move with its rule before any lookup: a
-// machine-local row never moves to a store, whether it is missing,
-// trashed or live, so the rule's refusal is the answer there, not the
-// lookup's E_NOT_FOUND or E_IN_TRASH.
-func moveRefusesMachineLocal(reg *schema.Registry, name, id string) bool {
-	if name != opsrow.OpMove {
-		return false
-	}
-	aid, err := ids.ParseAny(id) // text that is no row id names no table: E_NOT_FOUND
-	if err != nil {
-		return false
-	}
-	def, found := reg.ByPrefix(aid.Prefix())
-	return found && def.MachineLocal
-}
-
-// isMachineMoveRule reports whether err is P3-LOCAL-1's move refusal.
-func isMachineMoveRule(err error) bool {
-	return errs.Has(err, errs.InvalidInput) && strings.Contains(err.Error(), "rows are machine-local")
-}
-
 // TestLookupNotFoundMatrix is the coordinator's parity decision as a
 // matrix over every registered op × every kind of id that names no row:
 // malformed text, a huge value, and for EVERY table prefix an all-zero id
@@ -150,12 +125,6 @@ func TestLookupNotFoundMatrix(t *testing.T) {
 			_, err := h.RunYes(name, in)
 			if err == nil {
 				t.Errorf("%s %.40q: no error", name, id)
-				continue
-			}
-			if moveRefusesMachineLocal(reg, name, id) {
-				if !isMachineMoveRule(err) {
-					t.Errorf("%s %.40q: %v, want the machine-local move refusal", name, id, err)
-				}
 				continue
 			}
 			if !errs.Has(err, errs.NotFound) {
