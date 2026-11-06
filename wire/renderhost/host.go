@@ -61,8 +61,9 @@ type Options struct {
 	ProjectID func(ctx context.Context) (string, error)
 	// Profiles are the user's own tool profiles (nil: App.ToolProfiles).
 	Profiles func(ctx context.Context) ([]toolprofile.Profile, error)
-	// RepoIsClient answers whether the repo is a client repo (nil: false,
-	// no client-repo handling).
+	// RepoIsClient answers whether the repo is a client repo (nil: the
+	// app's App.ClientRepo, so cmd/lore keeps folder files off in a client
+	// repo until its client turns context.dir_files on, CQ10).
 	RepoIsClient func(ctx context.Context) (bool, error)
 	// Redact masks repo references in non-terminal output (nil: as is).
 	Redact func(string) string
@@ -142,10 +143,15 @@ func (h *Host) profiles(ctx context.Context) ([]toolprofile.Profile, error) {
 	return h.app.ToolProfiles(ctx)
 }
 
-// repoIsClient is Options.RepoIsClient (false when unset).
+// repoIsClient is Options.RepoIsClient, else the app's own answer
+// (App.ClientRepo: the repo store's client class, CQ10 on cmd/lore), else
+// false (no app).
 func (h *Host) repoIsClient(ctx context.Context) (bool, error) {
 	if h.opts.RepoIsClient == nil {
-		return false, nil
+		if h.app == nil {
+			return false, nil
+		}
+		return h.app.ClientRepo(ctx)
 	}
 	return h.opts.RepoIsClient(ctx)
 }

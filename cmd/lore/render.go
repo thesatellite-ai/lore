@@ -45,8 +45,9 @@ func (l *lateRender) LastRender(ctx context.Context) (opswhycontext.Record, erro
 	return l.h.LastRender(ctx)
 }
 
-// Fetch implements contextop.Host (lore context; --internal is
-// E_UNSUPPORTED on this binary until it reads the attached stores' rows).
+// Fetch implements contextop.Host (lore context; --internal reads the
+// attached internal and personal stores' rows through
+// renderhost.CoreExternal, set in main).
 func (l *lateRender) Fetch(ctx context.Context, in contextop.FetchIn, hookIn io.Reader) (contextop.Answer, error) {
 	if l.h == nil {
 		return contextop.Answer{}, errRenderUnset()
