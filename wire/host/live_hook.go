@@ -20,6 +20,7 @@ package host
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -34,6 +35,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -342,11 +344,52 @@ func liveProjectRoot(dir string) string {
 var liveSkip = []string{"init", "config", "identity", "whoami", "org", "migrate", "stores", "version", "spec"}
 
 // liveSkipOps are single operations that never touch the live ref although
-// their noun does: task heartbeat renews claims on the signals ref only
-// (coord.Renew stages no row), and its --daemon form runs for the whole
-// agent session, so holding the live lock for it would block every other
-// lore command in the checkout until the session ends.
-var liveSkipOps = map[string]bool{"task.heartbeat": true}
+// their noun does. None today: see skipLiveRun for task heartbeat.
+var liveSkipOps = map[string]bool{}
+
+// daemonFlag is the --daemon flag / "daemon" body key of task heartbeat
+// (ops/coord HeartbeatIn.Daemon).
+const daemonFlag = "daemon"
+
+// skipLiveRun is skipLive plus the one input-dependent skip: task heartbeat
+// --daemon runs for the whole agent session, so holding the live lock for
+// it would block every other lore command in the checkout until the
+// session ends. A one-shot heartbeat runs under the live session like any
+// other command: coord.Renew stages no row (nothing is pushed), but a
+// fencing failure is explained from the task row (E_CANCELLED for a task a
+// person cancelled meanwhile, §7.4), so that row must be as fresh as the
+// fetch rules make it, not the one of the last command that fetched.
+func skipLiveRun(run *Run) bool {
+	name := run.Entry.Spec().Name
+	if skipLive(name) {
+		return true
+	}
+	return name == opscoord.OpTaskHeartbeat && daemonRun(run)
+}
+
+// daemonRun reports whether a task heartbeat run asks for --daemon. An
+// input it cannot read counts as the daemon form, the side that never holds
+// the live lock for a session's lifetime.
+func daemonRun(run *Run) bool {
+	if run.Cmd != nil {
+		f := run.Cmd.Flags().Lookup(daemonFlag)
+		return f == nil || f.Value.String() == "true"
+	}
+	d, ok := run.Decoder.(op.JSONDecoder)
+	if !ok {
+		return true
+	}
+	if len(strings.TrimSpace(string(d.Body))) == 0 {
+		return false
+	}
+	var in struct {
+		Daemon bool `json:"daemon"`
+	}
+	if err := json.Unmarshal(d.Body, &in); err != nil {
+		return true
+	}
+	return in.Daemon
+}
 
 // fetchAlways are the operations that always fetch (TEAM-025).
 var fetchAlways = map[string]bool{
@@ -393,7 +436,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if leakExemptOps[noun(spec.Name)] {
 		ctx = context.WithValue(ctx, leakExemptKey{}, true)
 	}
-	if liveDisabled() || skipLive(spec.Name) {
+	if liveDisabled() || skipLiveRun(run) {
 		return next(ctx)
 	}
 	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != ""}
