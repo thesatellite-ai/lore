@@ -112,6 +112,16 @@ func TestHeartbeatAfterCancelWithinFetchTTL(t *testing.T) {
 	if code, out = fenceLore(t, holder, "task", "claim", id); code != 0 || !strings.Contains(out, "claimed") {
 		t.Fatalf("claim of a task added after the last fetch: exit %d %s", code, out)
 	}
+	// The same holds for the other coordination ops on a task id (B-ERRS2-2):
+	// a note on a task added after the claim's refetch, still within
+	// fetch_ttl, lands instead of E_NOT_FOUND.
+	code, out = fenceLore(t, person, "task", "add", "added after the claim")
+	if id = fenceTaskID.FindString(out); code != 0 || id == "" {
+		t.Fatalf("task add: %d %s", code, out)
+	}
+	if code, out = fenceLore(t, holder, "task", "note", id, "progress"); code != 0 || !strings.Contains(out, "note") {
+		t.Fatalf("note on a task added after the last fetch: exit %d %s", code, out)
+	}
 	if code, out = fenceLore(t, holder, "task", "claim", "tsk_01a1a681c07e7dfe8ec01fc44d487e86"); code != 27 || !strings.Contains(out, "E_NOT_FOUND") {
 		t.Fatalf("claim of an unknown id: exit %d %s, want 27 E_NOT_FOUND", code, out)
 	}
