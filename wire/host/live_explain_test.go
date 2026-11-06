@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -103,6 +104,52 @@ func TestExplain_Refusals(t *testing.T) {
 			}
 			if strings.Contains(e.Message, "not available in this binary") {
 				t.Fatalf("still the unported answer: %v", err)
+			}
+		})
+	}
+}
+
+// TestSyncStatusMetaLines: `lore sync status` on cmd/lore prints the
+// metadata lines (FA-META-11, v0.1.17 wording) from LiveConfig.MetaStatus:
+// the quarantine count always, one line per quarantined row and per
+// registry past its key cap; nil MetaStatus prints none of them.
+func TestSyncStatusMetaLines(t *testing.T) {
+	cases := map[string]struct {
+		q, cap []string
+		nilFn  bool
+		want   []string
+		absent []string
+	}{
+		"none":        {want: []string{"meta quarantined: 0"}, absent: []string{"meta registry:"}},
+		"quarantined": {q: []string{"tsk_1 (bad meta)"}, want: []string{"meta quarantined: 1", "  tsk_1 (bad meta)"}},
+		"over cap":    {cap: []string{"this repo: 3 key rows"}, want: []string{"meta registry: this repo: 3 key rows"}},
+		"not wired":   {nilFn: true, absent: []string{"meta quarantined", "meta registry"}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newLiveFixture(t)
+			h := f.s.h
+			h.cfg.MetaStatus = func(context.Context) ([]string, []string) { return c.q, c.cap }
+			if c.nilFn {
+				h.cfg.MetaStatus = nil
+			}
+			out, err := liveSync{h: h}.SyncStatus(f.ctx, opssync.StatusIn{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			joined := strings.Join(out.Lines, "\n")
+			for _, w := range c.want {
+				if !strings.Contains(joined, w) {
+					t.Errorf("missing %q in\n%s", w, joined)
+				}
+			}
+			for _, a := range c.absent {
+				if strings.Contains(joined, a) {
+					t.Errorf("unexpected %q in\n%s", a, joined)
+				}
+			}
+			if len(out.Data.MetaQuarantined) != len(c.q) || len(out.Data.MetaRegistriesCap) != len(c.cap) {
+				t.Errorf("data %v %v, want %v %v", out.Data.MetaQuarantined, out.Data.MetaRegistriesCap, c.q, c.cap)
 			}
 		})
 	}

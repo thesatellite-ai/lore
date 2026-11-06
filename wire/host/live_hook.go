@@ -65,6 +65,10 @@ type LiveConfig struct {
 	// address notices and the ask-once question), run at the start of
 	// every sync; cmd/lore passes wire.App.SyncRepoAddresses. nil skips it.
 	RepoAddresses func(ctx context.Context)
+	// MetaStatus gives the metadata lines of `lore sync status`
+	// (quarantined rows, registries past their key cap; FA-META-11);
+	// cmd/lore passes wire.App.MetaStatusLines. nil prints none.
+	MetaStatus func(ctx context.Context) (quarantined, overCap []string)
 }
 
 // Leak check actions (the refusal names them).

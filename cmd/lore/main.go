@@ -108,7 +108,8 @@ func run(ctx context.Context, args []string) int {
 	flags := &rootFlags{} // rootflags.go: --trace, --color
 	liveGit := hosthooks.TraceGit{Inner: gitref.Exec{}, On: hosthooks.TraceOn(&flags.trace), W: os.Stderr}
 	liveRows := hosthooks.NewLive(hosthooks.LiveConfig{Home: home, WorkDir: wd, Version: version, Clock: clk, LeakCheck: leak, Git: liveGit,
-		RepoAddresses: func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) }})
+		RepoAddresses: func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) },
+		MetaStatus:    func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) }})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
 	// F9: the lazy done -> merged check before task list / next, inbox and
 	// mission status, inside the live hook (mergedcheck.go).

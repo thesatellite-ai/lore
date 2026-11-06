@@ -159,6 +159,16 @@ func (l liveSync) SyncStatus(ctx context.Context, _ opssync.StatusIn) (opssync.S
 	if s == nil {
 		return out, errs.New(errs.Unsupported, liveUnsupported)
 	}
+	if l.h.cfg.MetaStatus != nil { // METADATA 3.13, FA-META-11 (v0.1.17 sync status lines)
+		out.Data.MetaQuarantined, out.Data.MetaRegistriesCap = l.h.cfg.MetaStatus(ctx)
+		out.Lines = append(out.Lines, fmt.Sprintf("meta quarantined: %d", len(out.Data.MetaQuarantined)))
+		for _, q := range out.Data.MetaQuarantined {
+			out.Lines = append(out.Lines, "  "+q)
+		}
+		for _, r := range out.Data.MetaRegistriesCap {
+			out.Lines = append(out.Lines, "meta registry: "+r)
+		}
+	}
 	plan, err := s.plan(ctx, folder, nil)
 	if err != nil {
 		return out, errs.Wrap(errs.Internal, "live status", err)
