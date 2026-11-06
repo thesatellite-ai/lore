@@ -57,6 +57,10 @@ const (
 // sinceLayout is the "since" column of `lore live show`.
 const sinceLayout = "2006-01-02 15:04"
 
+// sinceJSONLayout is "since" in --json and REST: UTC RFC 3339 with
+// milliseconds, like every row time (the text keeps sinceLayout).
+const sinceJSONLayout = "2006-01-02T15:04:05.000Z07:00"
+
 // noRef is what `lore live diff` prints for a ref that does not exist.
 const noRef = "(none)"
 
@@ -188,6 +192,9 @@ type ShowRow struct {
 	ID    string `json:"id"`
 	State string `json:"state"`
 	Since string `json:"since"`
+	// shown is Since as the text prints it (v0.1.17's column); "" for a
+	// row decoded from JSON, which prints Since as given.
+	shown string
 }
 
 // Text prints v0.1.17's listing, or the file as stored.
@@ -197,7 +204,11 @@ func (o ShowOut) Text() string {
 	}
 	var b strings.Builder
 	for _, r := range o.Rows {
-		fmt.Fprintf(&b, "%-10s %-40s %-9s since %s\n", r.Table, r.ID, r.State, r.Since)
+		since := r.shown
+		if since == "" {
+			since = r.Since
+		}
+		fmt.Fprintf(&b, "%-10s %-40s %-9s since %s\n", r.Table, r.ID, r.State, since)
 	}
 	fmt.Fprintf(&b, "%d live rows in %s (epoch %d)\n", o.Count, o.Folder, o.Epoch)
 	return b.String()
@@ -377,7 +388,7 @@ func show(ctx context.Context, env Env, in ShowIn) (ShowOut, error) {
 	}
 	out := ShowOut{Folder: l.Folder, Epoch: l.Epoch, Rows: make([]ShowRow, 0, len(l.Rows)), Count: len(l.Rows)}
 	for _, x := range l.Rows {
-		out.Rows = append(out.Rows, ShowRow{Table: x.Table, ID: x.ID, State: x.State, Since: x.Since.Format(sinceLayout)})
+		out.Rows = append(out.Rows, ShowRow{Table: x.Table, ID: x.ID, State: x.State, Since: x.Since.UTC().Format(sinceJSONLayout), shown: x.Since.Format(sinceLayout)})
 	}
 	return out, nil
 }
