@@ -13,6 +13,7 @@ package metashow
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 
@@ -66,6 +67,7 @@ func Of(ctx context.Context, env Env, id string) Block {
 // Row is Of for a row already read.
 func Row(ctx context.Context, env Env, r row.Row) Block {
 	var b Block
+	labels := map[string]string{}
 	for kid, j := range r.Meta {
 		en, err := meta.DecodeEntry(j)
 		if err != nil || en.Name == "" {
@@ -81,9 +83,77 @@ func Row(ctx context.Context, env Env, r row.Row) Block {
 			b.Meta = map[string]string{}
 		}
 		b.Meta[en.Name] = meta.Show(en)
+		if !en.Sensitive && len(en.VName) > 0 {
+			if l := valueLabel(ctx, env, en.V); l != "" {
+				labels[en.Name] = l
+			}
+		}
+	}
+	// METADATA 3.17 (G-META-10): an allowed value keeps its name in meta
+	// and adds "<name>_label"; a real key of that name on the row wins
+	// (its value stays, no label is added for that key).
+	for n, l := range labels {
+		if _, real := b.Meta[n+LabelSuffix]; !real {
+			b.Meta[n+LabelSuffix] = l
+		}
 	}
 	slices.Sort(b.MetaMasked)
 	return b
+}
+
+// LabelSuffix marks the display label of an allowed value in a Block's
+// Meta: "<name>_label" beside "<name>" (METADATA 3.17 --json form).
+const LabelSuffix = "_label"
+
+// fieldLabel is the meta_values field that holds a value's display label.
+const fieldLabel = "label"
+
+// valueLabel is the display label of a stored allowed value: the value
+// id(s) in v (one val_ id, or a list of them) → their meta_values labels,
+// a list joined as meta.Show joins one; "" when no value has a label.
+func valueLabel(ctx context.Context, env Env, v []byte) string {
+	var vids []string
+	if err := json.Unmarshal(v, &vids); err != nil {
+		var one string
+		if json.Unmarshal(v, &one) != nil {
+			return ""
+		}
+		vids = []string{one}
+	}
+	parts := make([]string, 0, len(vids))
+	hasLabel := false
+	for _, s := range vids {
+		id, err := ids.ParseAny(s)
+		if err != nil {
+			return ""
+		}
+		_, r, err := env.Get(ctx, engine.Ref{Table: schema.TableMetaValues, ID: id})
+		if err != nil {
+			return ""
+		}
+		l := ""
+		if t, ok := r.Fields[fieldLabel].(value.Text); ok {
+			l = t.String()
+		}
+		if l == "" {
+			l = fieldName(r)
+		} else {
+			hasLabel = true
+		}
+		parts = append(parts, l)
+	}
+	if !hasLabel {
+		return ""
+	}
+	return strings.Join(parts, " | ")
+}
+
+// fieldName is a meta_values row's name ("" when absent).
+func fieldName(r row.Row) string {
+	if t, ok := r.Fields["name"].(value.Text); ok {
+		return t.String()
+	}
+	return ""
 }
 
 // keySensitive reports the key row's sensitive flag (false when unread).
@@ -103,6 +173,21 @@ func Text(values map[string]string, masked []string) string {
 	if len(values) == 0 {
 		return ""
 	}
+	// an allowed value prints its label (METADATA 3.17); its "<name>_label"
+	// entry is the json form only and gets no line of its own
+	shown := map[string]string{}
+	for n, v := range values {
+		if base, isLabel := strings.CutSuffix(n, LabelSuffix); isLabel {
+			if _, has := values[base]; has && !slices.Contains(masked, base) {
+				continue
+			}
+		}
+		shown[n] = v
+		if l, has := values[n+LabelSuffix]; has && !slices.Contains(masked, n) {
+			shown[n] = l
+		}
+	}
+	values = shown
 	names := make([]string, 0, len(values))
 	for n := range values {
 		names = append(names, n)
