@@ -135,8 +135,12 @@ func TestSupersedes(t *testing.T) {
 	if len(f.deleted) != 1 {
 		t.Fatalf("rollback deleted %v, want the new pattern", f.deleted)
 	}
-	if _, err := h.Run("pattern.show", `{"id":"`+f.deleted[0]+`"}`); !errs.Has(err, errs.InTrash) {
-		t.Errorf("the rolled-back pattern is still live: %v", err)
+	// purged, not trashed (later 498: "nothing was kept")
+	if _, err := h.Run("pattern.show", `{"id":"`+f.deleted[0]+`"}`); !errs.Has(err, errs.NotFound) {
+		t.Errorf("the rolled-back pattern is still live or in the trash: %v", err)
+	}
+	if strings.Contains(h.JSON(h.Must("trash.list", `{}`)), f.deleted[0]) {
+		t.Errorf("the rolled-back pattern is in the trash")
 	}
 	if got := contenttest.Str(t, h.JSON(h.Must("pattern.show", `{"id":"`+next+`"}`)), "data", "superseded_by_id"); got != "" {
 		t.Errorf("old pattern marked %q although the mark failed", got)

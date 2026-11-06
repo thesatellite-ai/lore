@@ -395,7 +395,8 @@ func (o ops) finishSupersedes(ctx context.Context, oldSrc store.Source, old ids.
 	if err == nil {
 		return nil
 	}
-	if _, derr := o.env.Delete(ctx, engine.Ref{Store: newSrc, Table: table, ID: newID}); derr != nil {
+	// the rolled-back row is purged, not trashed: "nothing was kept" (later 498)
+	if _, derr := o.env.Delete(engine.WithPurge(ctx, &engine.PurgeRequest{Asked: true, Confirmed: true}), engine.Ref{Store: newSrc, Table: table, ID: newID}); derr != nil {
 		return errs.Wrap(errs.CodeOf(err), "memory add: could not mark "+old.String()+" superseded by "+newID.String(), err).
 			WithHint("the new memory " + newID.String() + " was written but could not be removed again; delete it with `lore memory delete " + newID.String() + "`")
 	}
