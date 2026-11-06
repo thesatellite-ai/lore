@@ -191,6 +191,9 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		return RunOut{}, err
 	}
 	defer func() { _ = unlock() }() // a failed release leaves a lock file `lore migrate unlock` clears
+	if !in.DryRun {
+		ctx = WithRun(ctx) // F-MIGRATE-1: this run's own writes answer the O6 question, never ask it
+	}
 	pushes := !in.DryRun && !in.NoPush && !in.Offline
 	releaseTeam, teamLine, err := takeTeamLock(ctx, pushes)
 	if err != nil {

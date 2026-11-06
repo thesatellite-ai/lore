@@ -513,6 +513,10 @@ func (a *App) MigrateLive(ctx context.Context, dryRun bool) ([]string, error) {
 			}
 			expect = x.cur.HLC
 		}
+		// audit_fields (step 9) for a live row, as the branch rewrite does
+		// for a v1 row: written here as _v: 2, the audit_fields step (run
+		// before this one) would only fill it on the next run (F-MIGRATE-1).
+		r, _ = auditfill.Defaults(r)
 		sr, err := store.FromRow(r)
 		if err != nil {
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: live row "+x.live.path, err)

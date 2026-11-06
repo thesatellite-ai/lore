@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -355,7 +356,10 @@ func (a *App) writeState(ctx context.Context) (*state, error) {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if err := st.format.check(); err != nil {
+	// F-MIGRATE-1: `lore migrate run` is the answer to the O6 question,
+	// so its own writes (the machine-local copy, the session row its first
+	// audited write creates, …) pass; every other write still asks.
+	if err := st.format.check(); err != nil && !opsmigrate.InRun(ctx) {
 		return nil, err
 	}
 	return st, nil
