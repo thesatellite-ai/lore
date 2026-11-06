@@ -157,6 +157,10 @@ func (l liveSync) Land(ctx context.Context, in opssync.LandIn) (opssync.DoneOut,
 	return opssync.DoneOut{Done: string(out.Status)}, nil
 }
 
+// statusLiveOff is the live line of `lore sync status` where live rows do
+// not apply.
+const statusLiveOff = "live rows:        off here (LORE_LIVE=0, or not a git repo)"
+
 // SyncStatus implements opssync.Env: the live rows of the cwd project and
 // why each waits (v0.1.17 printLiveStatus, side effect 13). This binary
 // keeps no lore.db sync state, so the file counters stay zero; open
@@ -167,9 +171,6 @@ func (l liveSync) SyncStatus(ctx context.Context, _ opssync.StatusIn) (opssync.S
 	if err != nil {
 		return out, err
 	}
-	if s == nil {
-		return out, errs.New(errs.Unsupported, liveUnsupported)
-	}
 	if l.h.cfg.MetaStatus != nil { // METADATA 3.13, FA-META-11 (v0.1.17 sync status lines)
 		out.Data.MetaQuarantined, out.Data.MetaRegistriesCap = l.h.cfg.MetaStatus(ctx)
 		out.Lines = append(out.Lines, fmt.Sprintf("meta quarantined: %d", len(out.Data.MetaQuarantined)))
@@ -179,6 +180,13 @@ func (l liveSync) SyncStatus(ctx context.Context, _ opssync.StatusIn) (opssync.S
 		for _, r := range out.Data.MetaRegistriesCap {
 			out.Lines = append(out.Lines, "meta registry: "+r)
 		}
+	}
+	if s == nil {
+		// No live rows here (LORE_LIVE=0, or no git repo): status still
+		// answers; the core adds the stores, refused pushes and conflicted
+		// files (wire syncRows.SyncStatus).
+		out.Lines = append(out.Lines, statusLiveOff)
+		return out, nil
 	}
 	plan, err := s.plan(ctx, folder, nil)
 	if err != nil {
