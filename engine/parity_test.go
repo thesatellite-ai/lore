@@ -291,7 +291,7 @@ func mustPrefix(t *testing.T, w *f15World, table row.Table) ids.Prefix {
 // value the scanner flags is masked in the message (never repeated).
 func TestStaleMessageMasksSecrets(t *testing.T) {
 	f := setup(t)
-	msg := f.eng.staleErr(f.project, nil, schema.TableDef{}).Error()
+	msg := f.eng.staleErr(context.Background(), f.project, nil, schema.TableDef{}).Error()
 	if !strings.Contains(msg, f.project.String()) {
 		t.Fatalf("no id: %s", msg)
 	}

@@ -393,7 +393,7 @@ func (e *Engine) putMerging(ctx context.Context, st Attached, def schema.TableDe
 			WithHint("restore it from the trash first if the edit should stand")
 	}
 	if !res.Clean() {
-		return stored{}, false, e.staleErr(base.ID, res.Conflicts, def)
+		return stored{}, false, e.staleErr(ctx, base.ID, res.Conflicts, def)
 	}
 	m := res.Row
 	rest, overruled := setAsideOverruled(m.Fields) // a merge's note, not a table field (overruled.go)
@@ -431,13 +431,14 @@ func (c *Conflict) Error() string {
 
 // staleErr builds the E_STALE error of a text clash. The message carries
 // both values of every clashing field (newer side first) so a person can
-// pick one; a sensitive field shows no values, and a value the scanner
+// pick one; a sensitive field, a resource's entry fields and a sensitive
+// metadata entry show no values (staleHidden), and a value the scanner
 // flags is masked (scan.Mask), so the error never leaks a secret.
-func (e *Engine) staleErr(id ids.AnyID, fs []merge.FieldConflict, def schema.TableDef) error {
+func (e *Engine) staleErr(ctx context.Context, id ids.AnyID, fs []merge.FieldConflict, def schema.TableDef) error {
 	c := &Conflict{ID: id}
 	parts := make([]string, 0, len(fs))
 	for _, f := range fs {
-		if fd, ok := def.Field(f.Field); ok && fd.Sensitive {
+		if e.staleHidden(ctx, f, def) {
 			f.Newer, f.Older = nil, nil
 			parts = append(parts, f.Field+" (sensitive: values not shown)")
 		} else {
