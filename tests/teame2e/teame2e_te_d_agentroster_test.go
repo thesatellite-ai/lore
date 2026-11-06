@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 569 (BUG-T6) on cmd/lore: the agent roster check (F18) of
 // coordination syncs a cached store copy once on a miss. Needs the
@@ -11,7 +11,7 @@ package main
 import (
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // BUG-T6 itself (stores.RosterCheck in v0.1.17): an agent started a moment

@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // te-c nested conflicts (later 461, OV14 tests; METADATA 3.12, META-B8-GIT):
 // a conflict that sits INSIDE a row — a strict metadata key two teammates
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teCMetaKeyID adds a strict number key in c's repo and returns its id.

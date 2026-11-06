@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // OV59 (TASK 17.2, TSQ10) on real git with two people: `task reassign`
 // appends history entries without applying tasks.history_max, so a task
@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teBHistoryMax is the cap the test sets (small, so a few reassigns pass it).

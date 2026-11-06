@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 229 (render golden, TE-D-3) on cmd/lore: the committed render
 // of a two-clone team repo. Every line of the golden below was read
@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDGoldenLore is .lore/LORE.md with ids and the canary as {NAME}

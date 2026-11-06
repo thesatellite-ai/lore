@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // TASK_SYSTEM_DESIGN 10.4 / 10.5 (TSQ12, OV15c) on real git with the real
 // binary: two machines finish the same instance of a recurring task while
@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teARecurCaps is what the double completion test needs beyond the repo team.

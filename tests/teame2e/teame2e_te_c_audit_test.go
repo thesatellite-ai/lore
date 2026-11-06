@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // te-c audit: `lore audit log|verify` on a team with a real remote and a
 // real external git write (later 611, ported from sync_e2e
@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teCAuditLog is `lore audit log --json`'s envelope (the fields read here).

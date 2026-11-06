@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 259 (F20, T-TEAME2E): after `lore render` in a client repo, for
 // every tool profile the repo can target, nothing internal or personal is
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDPersonalNote is a personal note (the `me` store).

@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 607 (b11-sync ports) on cmd/lore with two clones: the git
 // wiring a teammate's first lore command installs guards her commits, and
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDSoloPair is bob's clone of the loose repo and carol, both on no-org

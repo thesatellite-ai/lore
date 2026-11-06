@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // te-c gates: the format gate (FORMAT_EVOLUTION rule 2, OV48) seen by a
 // team with a real remote. A project whose _meta.json declares a feature
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teCFutureFeature is a feature name no lore build knows: declaring it in a

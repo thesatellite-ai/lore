@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // TEAM-030 (LORE_TEAM_SPEC 7.2) as a matrix on the real binary:
 // add and edit × target (default, repo, org store) × repo class (the
@@ -15,7 +15,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 func TestTeB_Team030Matrix(t *testing.T) {

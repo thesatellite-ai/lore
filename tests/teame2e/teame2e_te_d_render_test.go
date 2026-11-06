@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 617 on cmd/lore: `lore setup` is re-runnable and leaves search
 // working (the v0.1.17 lore.db registry fingerprint stamp is retired with
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDUnlistedLine is render's note for a wired CLAUDE.md that

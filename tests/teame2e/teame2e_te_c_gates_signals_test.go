@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // te-c signals gates smoke with a remote (later 507, OV48, TE-C-1): a claim
 // taken while the project was writable, then a teammate pushes a format
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 func TestTeC_SignalsGateSmokeWithARemote(t *testing.T) {

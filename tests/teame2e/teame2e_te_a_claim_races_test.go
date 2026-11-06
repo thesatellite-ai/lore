@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // Two-clone git races over an expired claim on the real binary
 // (TIME_TRACKING_DESIGN 4.2, TASK_SYSTEM_DESIGN OV7, LORE_TEAM_SPEC F7 /
@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teARaceRounds is how many independent worlds run each simultaneous race:

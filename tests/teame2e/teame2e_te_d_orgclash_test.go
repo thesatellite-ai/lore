@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 288 (renameOrgClashes e2e, the r4 repro) on cmd/lore with two
 // clones: a repo whose committed .lore/stores.yaml already uses the org's
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 func TestTeD_OrgNameClashWithCommittedStoresYAML(t *testing.T) {

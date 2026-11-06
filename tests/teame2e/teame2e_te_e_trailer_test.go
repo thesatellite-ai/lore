@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 607 (sync_wire_test.go TestHookLinesCommitMsgCarriesTrailerThenLeakCheck,
 // trailer half) on the cmd/lore team binary: the commit-msg hook a
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teETrailer is the trailer line the hook adds for task id.

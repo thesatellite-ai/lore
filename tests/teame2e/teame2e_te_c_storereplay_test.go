@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // te-c store replay race (later 461, OV14 tests; METADATA 3.12 "store
 // replay through the merge rules"): two machines change the metadata of
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 func TestTeC_StoreReplayRaceMergesMetaPerKey(t *testing.T) {

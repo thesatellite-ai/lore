@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // te-c delete overruled by an edit (later 525, OV63; DELETION 3.7): dev1
 // moves a row to the trash while dev2 edits the same row. When the two
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teCOverruledIDs runs trash list --overruled --json in c and returns the

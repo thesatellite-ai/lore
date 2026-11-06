@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 288 (migrateOrg v1 roster rows) on cmd/lore across machines: a
 // v0.1.17 roster row in the org folder of the team's store becomes `_v: 2`
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDV1Actor is a v0.1.17 roster row id (act_ + 32 hex).

@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 229 (clientrepo, T-TEAME2E): the repo's role (client or own) as
 // cmd/lore decides it (wire.OrgResolution.RepoIsClient, fail closed), proved
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDInternalNote is internal text (14 words); a run of 8 of its words in a

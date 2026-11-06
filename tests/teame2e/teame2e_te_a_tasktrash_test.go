@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // TASK_SYSTEM_DESIGN 6.15 E2E (the rest of the two-clone task story) on
 // real git with the real binary: dev1 deletes a parent with its sub-tasks,
@@ -13,7 +13,7 @@ package main
 import (
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teATrashCaps is what the trash e2e needs beyond the repo team.

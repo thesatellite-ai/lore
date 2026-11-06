@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // TASK_SYSTEM_DESIGN 6.13 and 6.15 end to end on real git with the real
 // binary: two developers change the sub-task tree offline, both sync, and
@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teBTreeFinding is one finding of `lore task tree check --json`

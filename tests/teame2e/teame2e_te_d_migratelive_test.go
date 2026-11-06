@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 288 (MigrateLive e2e) on cmd/lore with two clones: memory rows
 // a v0.1.17 teammate kept on the repo's live ref (refs/lore/live, `_v: 1`
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDLiveMem is a memory row that exists only on the v0.1.17 live ref.

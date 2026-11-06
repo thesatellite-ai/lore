@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 570 (BUG-T1, BUG-T3), 569 (BUG-T6) and 288 (org rename) on
 // cmd/lore, across clones and machines: the roster a person joins is the
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDSoloConfig is a no-org machine whose person has a handle.

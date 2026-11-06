@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // TASK_SYSTEM_DESIGN 6.9 with a remote: a claim of a parent with open
 // sub-tasks is refused E_HAS_OPEN_CHILDREN (naming the ready children)
@@ -14,7 +14,7 @@ package main
 import (
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teBCoordCase is one place a parent task can live.

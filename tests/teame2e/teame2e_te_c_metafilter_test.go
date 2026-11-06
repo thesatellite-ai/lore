@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // te-c per-noun metadata filters (later 461, OV14 tests; METADATA 3.7):
 // every noun whose list takes --meta filters by it, on a teammate's clone
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teCFilterNoun is one noun's add arguments; "X" is replaced by a per-row

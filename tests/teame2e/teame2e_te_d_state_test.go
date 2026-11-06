@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 229 (r3 STATE e2e) on cmd/lore: the task list STATE column a
 // person sees in her own clone is built from what agents did in theirs:
@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teDStateLine is the `task list --all` line naming id.

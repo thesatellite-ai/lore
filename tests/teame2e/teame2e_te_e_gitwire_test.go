@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // later.md 607 (b11-sync ports, the part te-d left) on the cmd/lore team
 // binary: the per-clone git wiring a teammate's first lore command
@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teEHooks are the hooks every wired clone carries (v0.1.17

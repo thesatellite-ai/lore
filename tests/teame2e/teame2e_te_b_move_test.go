@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // TASK_SYSTEM_DESIGN 6.8 and 6.14 on real git with two people: a sub-task
 // tree moved with --with-children from the org store's org/ folder into its
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teBTreeOf is the ids `lore task show <id> --tree` prints under a parent.

@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // TIME_TRACKING_DESIGN build step 11 on real git with the real binary: the
 // three-clone story. mira (alice, Northwind's own repo), tomas (dev1, his
@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // teAStoryCaps is what the story needs beyond the crew.

@@ -1,6 +1,6 @@
 //go:build teame2e
 
-package main
+package teame2e
 
 // te-f store sync trash report (TE-F-1, DELETION 3.7): a memory in the org
 // store is deleted on one machine while a teammate, offline from the
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	th "saas/cmd/cli/internal/teamharness"
+	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 func TestTeF_StoreSyncSaysTheDeleteLost(t *testing.T) {
