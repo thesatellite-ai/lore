@@ -60,6 +60,9 @@ func run(ctx context.Context, args []string) int {
 	if err := refuseRoot(); err != nil { // guard.go: E_ROOT_REFUSED unless LORE_ALLOW_ROOT=1
 		return printHostError(err)
 	}
+	if err := refuseRelativeHome(); err != nil { // home.go: E_INVALID_INPUT for a relative HOME (E-GAPS-1 S2)
+		return printHostError(err)
+	}
 	// `lore init <path>` runs the whole command in that folder (initpath.go).
 	if p, rest, ok := initPathArg(args); ok {
 		if err := enterInitDir(p); err != nil {
