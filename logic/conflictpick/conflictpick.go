@@ -95,8 +95,9 @@ func metaEntries(meta canonjson.Object, other bool) canonjson.Object {
 }
 
 // Text keeps one section of every complete marker block of s
-// (open "<<<<<<< ", split "=======", close ">>>>>>> ", git's shape);
-// an unfinished block is left as written.
+// (open "<<<<<<< ", split "=======", close ">>>>>>> ", git's shape; the
+// base section of git's diff3 style, "||||||| " up to the split, is never
+// kept); an unfinished block is left as written.
 func Text(s string, other bool) string {
 	if !merge3.ContainsConflictMarkers(s) {
 		return s
@@ -106,6 +107,7 @@ func Text(s string, other bool) string {
 	const (
 		outside = iota
 		first
+		base
 		second
 	)
 	state, start := outside, 0
@@ -114,8 +116,12 @@ func Text(s string, other bool) string {
 		switch {
 		case state == outside && strings.HasPrefix(line, merge3.MarkerOurs[:8]):
 			state, start, firstLines, secondLines = first, i, nil, nil
-		case state == first && line == merge3.MarkerSplit:
+		case state == first && strings.HasPrefix(line, diff3Base):
+			state = base
+		case (state == first || state == base) && line == merge3.MarkerSplit:
 			state = second
+		case state == base:
+			// the common ancestor's lines: neither side
 		case state == second && strings.HasPrefix(line, merge3.MarkerTheirs[:8]):
 			if other {
 				out = append(out, secondLines...)
@@ -136,6 +142,9 @@ func Text(s string, other bool) string {
 	}
 	return strings.Join(out, "\n")
 }
+
+// diff3Base opens the base section of git's diff3 conflict style.
+const diff3Base = "||||||| "
 
 // HasMarkers reports whether any string of body (object keys included, at
 // any depth) holds a complete conflict block, or meta holds a structured
