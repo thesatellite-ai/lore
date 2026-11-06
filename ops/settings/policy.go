@@ -182,6 +182,34 @@ func policyValue(d policy.KeyDef, raw string) (value.Value, error) {
 	return inferText(raw)
 }
 
+// policyTakes says, per key shape, what value a key accepts: the hint of
+// a refused policy set, so a person or an agent learns the key's value
+// type from the refusal instead of guessing (G-META-13). It follows the
+// shape rules of logic/policy (Shape* docs, check in resolve).
+func policyTakes(d policy.KeyDef) string {
+	switch d.Shape {
+	case policy.ShapeRank:
+		return "one of: " + strings.Join(d.Choices, ", ")
+	case policy.ShapeAllow:
+		return "a comma-separated list from: " + strings.Join(d.Choices, ", ")
+	case policy.ShapeFlag:
+		return "true or false (" + flagOn + " or " + flagOff + ")"
+	case policy.ShapeLimit:
+		if d.Ceiling > 0 {
+			return "a whole number from 0 to " + strconv.FormatInt(d.Ceiling, 10)
+		}
+		return "a whole number, 0 or more"
+	case policy.ShapeWeight:
+		c := strconv.FormatInt(d.Ceiling, 10)
+		return "a number with at most two decimals, from -" + c + " to " + c
+	case policy.ShapeSet:
+		return "a comma-separated list"
+	case policy.ShapeText:
+		return "text"
+	}
+	return "a value of shape " + string(d.Shape)
+}
+
 // flagOn / flagOff are the on|off spellings a flag key accepts.
 const (
 	flagOn  = "on"
@@ -231,7 +259,8 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	}
 	level := storeLevel(o.env, target)
 	if _, err = policy.Resolve([]policy.Entry{{Level: level, Key: d.Key, Value: v}}); err != nil {
-		return RowOut{}, errs.Wrap(errs.InvalidInput, "policy set "+in.Key+": "+quote(in.Value)+" is not a valid value", err)
+		return RowOut{}, errs.Wrap(errs.InvalidInput, "policy set "+in.Key+": "+quote(in.Value)+" is not a valid value", err).
+			WithHint(in.Key + " takes " + policyTakes(d))
 	}
 	entries, where, err := o.policyEntries(ctx)
 	if err != nil {
