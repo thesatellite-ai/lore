@@ -8,6 +8,7 @@ package decision
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
 
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -41,6 +43,11 @@ const (
 	OpSearch    = "decision.search"
 )
 
+// refErrors are add's and edit's: the write errors plus
+// E_RESOURCE_AMBIGUOUS, since --ref takes a resource name (RES 3.11,
+// rowref.Parse) and two live resources of that name refuse.
+var refErrors = append(slices.Clone(kn.WriteErrors), errs.ResourceAmbiguous)
+
 // Envelope kinds (v0.1.17 constants.KindDecision*).
 const (
 	KindList   = "decision.list"
@@ -63,7 +70,7 @@ func Ops(env kn.Env) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Add a new decision (context + chosen + alternatives + reasoning)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: refErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "record a decision", CLI: `lore decision add --title="Use SQLite" --body="Local first; no server."`, Want: "dec_"}},
 		}, o.add),
@@ -77,7 +84,7 @@ func Ops(env kn.Env) []op.Entry {
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit decision fields (only the flags given change)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: refErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{

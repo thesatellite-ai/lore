@@ -8162,7 +8162,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -9140,7 +9140,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -15242,7 +15242,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -16134,7 +16134,7 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_RESOURCE_AMBIGUOUS, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {

@@ -23,6 +23,11 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
+// refErrors are add's and edit's: the write errors plus
+// E_RESOURCE_AMBIGUOUS, since --ref takes a resource name (RES 3.11,
+// rowref.Parse) and two live resources of that name refuse.
+func refErrors() []errs.Code { return append(content.WriteErrors(), errs.ResourceAmbiguous) }
+
 // Operation names (incident.add → `lore incident add`, POST /v1/incidents).
 const (
 	Noun     = "incident"
@@ -50,7 +55,7 @@ func Ops(env content.Env) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Add a new incident",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: refErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
 				{Title: "add a incident", CLI: `lore incident add --title "First" --body "the body"`, Want: "inc_"},
@@ -58,7 +63,7 @@ func Ops(env content.Env) []op.Entry {
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit incident fields or add --ref pointers (only the flags given change)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: refErrors(),
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "link an incident to a row", CLI: "lore incident edit inc_… --ref res_… --relation affects", Want: "updated"}},
 		}, o.edit),
