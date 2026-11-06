@@ -46,7 +46,8 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckOldSettings, a.DoctorUnclassifiedSettings},
 		{DoctorCheckRepoClass, a.DoctorRepoClass},
 		{DoctorCheckSLA, a.DoctorSLA},
-		{DoctorCheckProjects, a.DoctorProjects}, // doctor_projects.go
+		{DoctorCheckProjects, a.DoctorProjects},    // doctor_projects.go
+		{DoctorCheckKindRoute, a.DoctorKindRoutes}, // doctor_kindroutes.go (G-META-9)
 	}
 	out := make([]opsdoctor.CheckRun, 0, len(checks))
 	for _, c := range checks {
