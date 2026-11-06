@@ -614,6 +614,9 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		}
 	}
 	if opsstores.IsStoreOp(e.Spec().Name) {
+		if a.personalInitOutsideRepo(ctx, e, d) { // G-CORE-7: no repo needed
+			return runDirect(ctx, e, d)
+		}
 		if err := a.confirmClientStoresFile(ctx, e, d, c); err != nil {
 			return op.Result{}, err
 		}
