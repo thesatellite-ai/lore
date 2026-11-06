@@ -83,11 +83,11 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 	}
 	// FORMAT_EVOLUTION rule 2: a purge is a write too, so a lore below the
 	// folder's floor (or missing one of its features) is refused here.
-	if err := e.gate(ctx, st, cur); err != nil {
+	if err = e.gate(ctx, st, cur); err != nil {
 		return Written{}, err
 	}
 	ev := Event{Op: cl.op, Action: ActionPurge, Store: src, Table: cur.Table, ID: cur.ID, HLC: cur.HLC, Actor: e.actorOf(cl)}
-	if err := e.writePurge(ctx, st, p, changes, []ids.AnyID{cur.ID}, []Event{ev}); err != nil { // later 542
+	if err = e.writePurge(ctx, st, p, changes, []ids.AnyID{cur.ID}, []Event{ev}); err != nil { // later 542
 		return Written{}, err
 	}
 	aw, err := e.finishW(ctx, src, docs, ev)

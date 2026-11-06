@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -48,10 +49,10 @@ func TestStagingCommitBothBackends(t *testing.T) {
 		fields func(f *fixture, i int) map[string]value.Value
 	}{
 		{"memory store", store.SourceRepo, schema.TableMemories, func(f *fixture, i int) map[string]value.Value {
-			return f.memFields("staged " + string(rune('a'+i)))
+			return f.memFields("staged " + strconv.Itoa(i))
 		}},
 		{"folder store with journal", kbStore, schema.TableMetaKeys, func(_ *fixture, i int) map[string]value.Value {
-			return metaKeyFields("staged-" + string(rune('a'+i)))
+			return metaKeyFields("staged-" + strconv.Itoa(i))
 		}},
 	}
 	for _, c := range cases {

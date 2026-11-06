@@ -540,9 +540,9 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 			if next, err = e.stampWrite(st, next); err != nil { // a set_null clear changes content: _w (OQ7)
 				return Written{}, err
 			}
-			sr, err := store.FromRow(next)
-			if err != nil {
-				return Written{}, err
+			sr, ferr := store.FromRow(next)
+			if ferr != nil {
+				return Written{}, ferr
 			}
 			changes = append(changes, store.Change{Row: sr, Expect: s.row.HLC})
 			rows = append(rows, sr)
@@ -561,11 +561,11 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 		} else {
 			werr = e.writeChanges(ctx, st, changes, events) // CLEANUP Qs: audit in the same batch
 		}
-		if err := werr; err != nil {
-			if errors.Is(err, store.ErrStale) {
-				return Written{}, errs.Wrap(errs.Stale, "engine: a row changed while "+cur.ID.String()+" was deleted", err).WithHint("rerun the command")
+		if werr != nil {
+			if errors.Is(werr, store.ErrStale) {
+				return Written{}, errs.Wrap(errs.Stale, "engine: a row changed while "+cur.ID.String()+" was deleted", werr).WithHint("rerun the command")
 			}
-			return Written{}, err
+			return Written{}, werr
 		}
 		aw, err := e.finishW(ctx, name, rows, events...)
 		w.Warnings = append(w.Warnings, aw...)
