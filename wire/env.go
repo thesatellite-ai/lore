@@ -500,7 +500,9 @@ func explicitTarget(src store.Source) store.Source {
 //     the links, which cannot be read: E_LINK_UNKNOWN (exit 18);
 //   - the repo store of a client repo (RepoIsClient true, or unknown: fail
 //     closed): the write-time leak check cannot run: E_LEAK_BLOCKED
-//     "cannot check";
+//     "cannot check"; a write that carries metadata answers
+//     E_META_STORE_UNREADABLE instead (METADATA 3.11 rule 2, section 6:
+//     a key it registers could shadow a store key, G-META-12);
 //   - the unreachable store itself: its own E_STORE_UNREACHABLE (a store
 //     with no local copy, spec 5.4).
 //
@@ -524,6 +526,13 @@ func (a *App) unreachableGuard(ctx context.Context, st *state, target store.Sour
 			WithHint("go online once (the store is then kept locally), or name the target: --to repo or --to <store>")
 	case store.SourceRepo:
 		if client, _ := repoIsClient(ctx, a.opts); client {
+			if engine.MetaBound(ctx) {
+				// METADATA 3.11 rule 2 / 6: a metadata write in a client
+				// repo may register a key the unreadable store already
+				// defines (an internal one): refused until it can be read
+				return errs.New(errs.MetaStoreUnreadable, "cannot check this metadata write against the store's keys: org store "+which+" has no local copy and cannot be reached").
+					WithHint("make the store readable (go online once, or lore sync in the store), then write again; nothing written")
+			}
 			return errs.New(errs.LeakBlocked, "cannot check this write for internal content: org store "+which+" has no local copy and cannot be reached").
 				WithHint("go online once so the store is kept locally, then write again")
 		}
