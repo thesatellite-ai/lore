@@ -165,6 +165,9 @@ func importShape(r row.Row, names map[string]string) map[string]string {
 		colDue: exportDate(r, fieldDue), colDeferUntil: exportDate(r, fieldDeferred),
 		colTasklist: work.Field(r, work.FieldTasklist), colMission: work.Field(r, work.FieldMission),
 		colPlan: work.Field(r, work.FieldPlan), colRole: work.Field(r, fieldRole),
+		// G-TASK-3: status, estimate and parent round-trip through import.
+		colStatus: work.Field(r, work.FieldStatus), colEstimate: work.Field(r, fieldEstimate),
+		colParent: work.Field(r, schema.FieldTaskParent),
 	}
 	for _, rc := range refColumns() {
 		if id := m[rc.col]; id != "" {
@@ -407,7 +410,7 @@ func byRank(a, c row.Row) int {
 // --internal appends the internal fields (their JSON text).
 func csvColumns(internal bool) []string {
 	cols := slices.DeleteFunc(importColumns(), func(c string) bool { return c == colKey })
-	cols = append(cols, colStatus, colParent, colEstimate, colLead, colCreated, colCompleted)
+	cols = append(cols, exportOnlyColumns()...)
 	if internal {
 		cols = append(cols, internalFields()...)
 	}
@@ -423,9 +426,6 @@ func exportCSV(rows []row.Row, opt exportOpt) (string, error) {
 	}
 	for _, r := range rows {
 		m := importShape(r, opt.names)
-		m[colStatus] = work.Field(r, work.FieldStatus)
-		m[colParent] = work.Field(r, schema.FieldTaskParent)
-		m[colEstimate] = work.Field(r, fieldEstimate)
 		m[colLead] = work.Field(r, fieldAssigned)
 		m[colCreated] = createdText(r)
 		m[colCompleted] = work.Field(r, work.FieldCompleted)

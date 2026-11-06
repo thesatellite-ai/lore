@@ -39675,6 +39675,12 @@
                     "key": {
                       "type": "string"
                     },
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "mode": {
                       "type": "string"
                     },
@@ -60840,6 +60846,42 @@
                         "pending_exports": {
                           "type": "integer"
                         },
+                        "store_refusals": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "at": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "next": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "rows": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "store": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "store",
+                              "code",
+                              "reason",
+                              "at",
+                              "next"
+                            ]
+                          }
+                        },
                         "tracked_files": {
                           "type": "integer"
                         },
@@ -72464,7 +72506,7 @@
                   },
                   "map": {
                     "type": "array",
-                    "description": "rename columns: \u003cfile column\u003e=\u003ctask field\u003e[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name)",
+                    "description": "rename columns: \u003cfile column\u003e=\u003ctask field\u003e[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name status estimate parent)",
                     "items": {
                       "type": "string"
                     }
@@ -72510,6 +72552,15 @@
                         "properties": {
                           "checklist": {
                             "type": "integer"
+                          },
+                          "differs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "existing": {
+                            "type": "boolean"
                           },
                           "ext_id": {
                             "type": "string"

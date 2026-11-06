@@ -89,8 +89,10 @@ func TestImportCSV(t *testing.T) {
 }
 
 // A JSON import without an id column names ext ids <file>:<row>; a second
-// import of the same file is reported as duplicate_import (PROV9), oldest
-// kept, with the delete command for the newer copy.
+// import of the same file adds nothing (G-TASK-3, TSQ8 dedupe by external
+// id: behaviour changed from "reported as duplicate_import"): every row is
+// existing, names the first import's task, and no duplicate is left for
+// PROV9 to report.
 func TestImportJSONTwiceIsDuplicate(t *testing.T) {
 	h := opstest.New(t, repoClient(false)) // an own repo: a client repo drops _o.import without a src (PROVENANCE 8.1)
 	f := writeFile(t, "plan.json", `[{"title":"Write docs","priority":"low"},{"title":"Ship","due":"2026-12-01"}]`)
@@ -99,25 +101,21 @@ func TestImportJSONTwiceIsDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = runImport(h, in, false); err != nil {
+	second, err := runImport(h, in, false)
+	if err != nil {
 		t.Fatal(err)
+	}
+	firstIDs, secondIDs := importIDs(h, first), importIDs(h, second)
+	if len(firstIDs) != 2 || strings.Join(secondIDs, ",") != strings.Join(firstIDs, ",") ||
+		strings.Count(h.JSON(second), `"existing":true`) != 2 {
+		t.Fatalf("second import: %s (first %v)", h.JSON(second), firstIDs)
 	}
 	dups, err := opstask.FindDuplicateImports(context.Background(), h.App)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(dups) != 2 || dups[0].Source != "json" || !strings.HasPrefix(dups[0].ExtID, "plan.json:") {
+	if len(dups) != 0 {
 		t.Fatalf("dups = %+v", dups)
-	}
-	firstIDs := importIDs(h, first)
-	for _, d := range dups {
-		if len(d.IDs) != 2 || !contains(firstIDs, d.IDs[0]) {
-			t.Fatalf("oldest must be the first import's row: %+v (first %v)", d, firstIDs)
-		}
-		fix := d.FixCommand()
-		if len(fix) != 1 || fix[0] != "lore task delete "+d.IDs[1]+" --yes" {
-			t.Fatalf("fix = %v", fix)
-		}
 	}
 }
 

@@ -16,7 +16,7 @@ func TestParseImportNested(t *testing.T) {
 	 {"title":"A","checklist":[{"text":"one","done":true},{"text":"two","done":false}],
 	  "children":[{"title":"A1","children":[{"title":"A1a"}]},{"id":"x9","title":"A2"}]},
 	 {"title":"B"}]`)
-	recs, err := parseImport(FromJSON, "f.json", raw, nil)
+	recs, _, err := parseImport(FromJSON, "f.json", raw, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestParseImportNested(t *testing.T) {
 	if cl := recs[0].checklist; len(cl) != 2 || !cl[0].Done || cl[1].Done || cl[1].Text != "two" {
 		t.Errorf("checklist = %+v", cl)
 	}
-	if _, err := parseImport(FromJSON, "f.json", []byte(`[{"title":"A","checklist":"x"}]`), nil); err == nil {
+	if _, _, err := parseImport(FromJSON, "f.json", []byte(`[{"title":"A","checklist":"x"}]`), nil); err == nil {
 		t.Error("a checklist that is not [{text, done}] must be refused")
 	}
 }

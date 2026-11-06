@@ -96,14 +96,23 @@ const (
 // importColumns lists every column an import reads, in a fixed order.
 func importColumns() []string {
 	return []string{colExtID, colTitle, colBody, colPriority, colCommitment, colDue, colDeferUntil, colTasklist, colMission, colPlan, colRole, colKey,
-		colTasklistName, colMissionName, colPlanName}
+		colTasklistName, colMissionName, colPlanName, colStatus, colEstimate, colParent}
 }
+
+// exportOnlyColumns are the CSV export columns an import reads past
+// (G-TASK-3): a lead is an actor of the exporting org and the two
+// timestamps are the exporter's record, so they are not set on the new
+// row; each one present is named once in a W_IMPORT_IGNORED_COLUMN line.
+func exportOnlyColumns() []string { return []string{colLead, colCreated, colCompleted} }
+
+// WarnImportIgnoredColumn names an export-only column an import read past.
+const WarnImportIgnoredColumn = "W_IMPORT_IGNORED_COLUMN"
 
 // ImportIn is the input of task.import.
 type ImportIn struct {
 	File   string   `json:"file" arg:"0" desc:"the file to import"`
 	From   string   `json:"from,omitempty" flag:"from" desc:"csv | json (default: from the file extension)"`
-	Map    []string `json:"map,omitempty" flag:"map" desc:"rename columns: <file column>=<task field>[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name)"`
+	Map    []string `json:"map,omitempty" flag:"map" desc:"rename columns: <file column>=<task field>[,…] (fields: id title body priority commitment due defer_until tasklist mission plan role key tasklist_name mission_name plan_name status estimate parent)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be created; write nothing"`
 	To     string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
 }
@@ -117,6 +126,12 @@ type ImportRow struct {
 	ParentExtID string `json:"parent_ext_id,omitempty"`
 	// Checklist is how many checklist items the task got.
 	Checklist int `json:"checklist,omitempty"`
+	// Existing is set when a live task in the target already carries this
+	// (source, external id) (G-TASK-3): nothing is added for it, and
+	// Differs names the file's fields whose value is not the task's (not
+	// written; lore task edit changes them).
+	Existing bool     `json:"existing,omitempty"`
+	Differs  []string `json:"differs,omitempty"`
 }
 
 // ImportOut is the output of task.import.
@@ -141,17 +156,49 @@ const WarnImportDroppedRef = "W_IMPORT_DROPPED_REF"
 func (o ImportOut) Text() string {
 	if o.DryRun {
 		var b strings.Builder
-		b.WriteString("would import " + strconv.Itoa(o.Count) + " tasks from " + o.Source + " (dry run, nothing written)\n")
+		b.WriteString("would import " + strconv.Itoa(o.Count-o.existing()) + " tasks from " + o.Source + " (dry run, nothing written)\n")
 		for _, r := range o.Rows {
-			b.WriteString("  " + r.ExtID + "  " + r.Title + "\n")
+			b.WriteString("  " + r.ExtID + "  " + r.Title + r.existingNote() + "\n")
 		}
 		o.warnLines(&b)
 		return b.String()
 	}
 	var b strings.Builder
-	b.WriteString(work.Success + " " + strconv.Itoa(o.Count) + " tasks imported from " + o.Source + " (batch " + o.Batch + ")\n")
+	if n := o.Count - o.existing(); n > 0 || o.existing() == 0 {
+		b.WriteString(work.Success + " " + strconv.Itoa(n) + " tasks imported from " + o.Source + " (batch " + o.Batch + ")\n")
+	}
+	if e := o.existing(); e > 0 {
+		b.WriteString("  " + strconv.Itoa(e) + " already imported, nothing added for them:\n")
+		for _, r := range o.Rows {
+			if r.Existing {
+				b.WriteString("    " + r.ExtID + "  " + r.Title + r.existingNote() + "\n")
+			}
+		}
+	}
 	o.warnLines(&b)
 	return b.String()
+}
+
+// existing counts the rows already imported (G-TASK-3).
+func (o ImportOut) existing() int {
+	n := 0
+	for _, r := range o.Rows {
+		if r.Existing {
+			n++
+		}
+	}
+	return n
+}
+
+// existingNote is the line suffix of an already imported row.
+func (r ImportRow) existingNote() string {
+	if !r.Existing {
+		return ""
+	}
+	if len(r.Differs) == 0 {
+		return "  (already imported as " + r.ID + ")"
+	}
+	return "  (already imported as " + r.ID + "; differs, not written: " + strings.Join(r.Differs, ", ") + ")"
 }
 
 // warnLines writes one "  W_…: message" line per warning.
@@ -214,11 +261,18 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	if err != nil {
 		return ImportOut{}, err
 	}
-	recs, err := parseImport(from, filepath.Base(in.File), raw, rename)
+	recs, ignored, err := parseImport(from, filepath.Base(in.File), raw, rename)
 	if err != nil {
 		return ImportOut{}, err
 	}
+	if err = checkStatusTree(recs); err != nil {
+		return ImportOut{}, err
+	}
 	out := ImportOut{Source: from, DryRun: in.DryRun, Rows: make([]ImportRow, 0, len(recs))}
+	for _, c := range ignored {
+		out.Warnings = append(out.Warnings, Warning{Code: WarnImportIgnoredColumn, Field: c,
+			Message: "column " + strconv.Quote(c) + " is the exporter's record; not set on the imported tasks"})
+	}
 	items := make([]bulk.Item, 0, len(recs))
 	for _, r := range recs {
 		if err = checkRecord(r); err != nil {
@@ -232,17 +286,49 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		items = append(items, bulk.Item{ID: r.extID, Label: strings.TrimSpace(r.cols[colTitle])})
 	}
 	out.Count = len(recs)
-	// PC-TASK-1: a tasklist / mission / plan id the target does not hold
-	// (an export from another repo) is dropped with a warning and a note.
-	// G-DECIDE-5: an id the target does not hold falls back to the
-	// export's name column before it is dropped.
 	target := store.Source(in.To)
 	if target == "" {
 		target = store.SourceRepo
 	}
+	// G-TASK-3 (TSQ8 dedupe by external id): a record whose (source,
+	// external id) a live task in the target already carries adds nothing.
+	known, err := o.importedIn(ctx, target)
+	if err != nil {
+		return ImportOut{}, err
+	}
+	for i, r := range recs {
+		if s, ok := known[origin.Import{Source: from, ExtID: r.extID}.Key()]; ok {
+			out.Rows[i].ID, out.Rows[i].Existing = s.Row.ID.String(), true
+			out.Rows[i].Differs = importDiffers(r, s.Row)
+		}
+	}
+	// PC-TASK-1: a tasklist / mission / plan id the target does not hold
+	// (an export from another repo) is dropped with a warning and a note.
+	// G-DECIDE-5: an id the target does not hold falls back to the
+	// export's name column before it is dropped.
 	dropped, err := o.resolveRefs(ctx, recs, target)
 	if err != nil {
 		return ImportOut{}, err
+	}
+	// G-TASK-3: a parent column naming no record of the file must be a
+	// task the target holds; any other value is dropped like a missing
+	// tasklist (PC-TASK-1), never a half-written import.
+	for i, r := range recs {
+		p := strings.TrimSpace(r.cols[colParent])
+		if p == "" || r.parent >= 0 {
+			continue
+		}
+		if id, perr := ids.ParseAny(p); perr == nil {
+			src, _, gerr := o.env.Get(ctx, engine.Ref{Table: table, ID: id})
+			if gerr == nil && src == target {
+				continue
+			}
+			if gerr != nil && !errs.Has(gerr, errs.NotFound) && !errs.Has(gerr, errs.InTrash) {
+				return ImportOut{}, gerr
+			}
+		}
+		delete(r.cols, colParent)
+		dropped[i] = append(dropped[i], droppedRef{field: fieldParent, id: p})
 	}
 	for i, ds := range dropped {
 		for _, d := range ds {
@@ -250,7 +336,7 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 				Message: recs[i].extID + ": dropped " + d.field + " " + d.text()})
 		}
 	}
-	if in.DryRun || len(recs) == 0 {
+	if in.DryRun || len(recs) == out.existing() {
 		return out, nil
 	}
 	if err = bulk.Preview(ctx, o.env, target, "task import", items); err != nil {
@@ -272,12 +358,16 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		return ImportOut{}, err
 	}
 	for i, r := range recs {
+		if out.Rows[i].Existing {
+			continue
+		}
 		// XQ9 / PROVENANCE 5.1: the row's _o.import names the importer
 		// kind and the external id (no ext_ source record for a file).
 		rctx := engine.WithImport(bctx, origin.Import{Source: from, ExtID: r.extID})
 		add := AddIn{Title: r.cols[colTitle], Body: r.cols[colBody], Priority: r.cols[colPriority], Commitment: r.cols[colCommitment],
 			Due: r.cols[colDue], DeferUntil: r.cols[colDeferUntil], Tasklist: orDefault(r.cols[colTasklist], defList),
-			Mission: r.cols[colMission], Plan: r.cols[colPlan], Role: r.cols[colRole], Key: r.cols[colKey], To: in.To}
+			Mission: r.cols[colMission], Plan: r.cols[colPlan], Role: r.cols[colRole], Key: r.cols[colKey], To: in.To,
+			Estimate: r.cols[colEstimate], Parent: r.cols[colParent]}
 		if r.parent >= 0 {
 			// TASK 6.5: a child without its own tasklist inherits the
 			// parent's instead of the import default.
@@ -300,7 +390,83 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 			}
 		}
 	}
+	// G-TASK-3: a status other than todo is set after every task exists,
+	// children before parents (pre-order reversed), so a done parent finds
+	// its sub-tasks already closed (checkStatusTree refused the rest).
+	for i := len(recs) - 1; i >= 0; i-- {
+		st := recs[i].cols[colStatus]
+		if out.Rows[i].Existing || st == "" || st == schema.TaskStatusTodo {
+			continue
+		}
+		rctx := engine.WithImport(bctx, origin.Import{Source: from, ExtID: recs[i].extID})
+		if _, err = o.edit(rctx, EditIn{ID: out.Rows[i].ID, Status: st}); err != nil {
+			return ImportOut{}, errors.Join(err, errs.New(errs.InvalidInput, "task import: setting status "+st+" on "+recs[i].extID+
+				" failed; the tasks written are in batch "+out.Batch))
+		}
+	}
 	return out, nil
+}
+
+// importedIn maps each import key (source, external id) that a live task
+// of target carries to that task (G-TASK-3; the oldest wins when PROV9
+// duplicates exist, as lore doctor keeps the oldest).
+func (o ops) importedIn(ctx context.Context, target store.Source) (map[origin.ImportKey]work.Sourced, error) {
+	rows, err := work.ListAll(ctx, o.env, table, "")
+	if err != nil {
+		return nil, err
+	}
+	out := map[origin.ImportKey]work.Sourced{}
+	for _, s := range rows {
+		if s.Source != target {
+			continue
+		}
+		k, ok := importKey(s.Row)
+		if !ok {
+			continue
+		}
+		if prev, seen := out[k]; seen && prev.Row.ID.String() < s.Row.ID.String() {
+			continue
+		}
+		out[k] = s
+	}
+	return out, nil
+}
+
+// importDiffers names the file columns of r whose value is not the
+// existing task's (G-TASK-3: reported, never written).
+func importDiffers(r importRecord, cur row.Row) []string {
+	fields := []struct{ col, field string }{
+		{colTitle, work.FieldTitle}, {colBody, work.FieldBody}, {colPriority, fieldPriority},
+		{colCommitment, fieldCommitment}, {colStatus, work.FieldStatus}, {colEstimate, fieldEstimate},
+	}
+	var out []string
+	for _, f := range fields {
+		v, ok := r.cols[f.col]
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(v) != work.Field(cur, f.field) {
+			out = append(out, f.col)
+		}
+	}
+	return out
+}
+
+// checkStatusTree refuses a file whose done or cancelled task has an open
+// sub-task in the same file (G-TASK-3): the import could not close the
+// parent (E_OPEN_CHILDREN) and would stop half written.
+func checkStatusTree(recs []importRecord) error {
+	closed := func(st string) bool { return st == schema.TaskStatusDone || st == schema.TaskStatusCancelled }
+	for _, r := range recs {
+		if r.parent < 0 || closed(r.cols[colStatus]) {
+			continue
+		}
+		if p := recs[r.parent]; closed(p.cols[colStatus]) {
+			return errs.New(errs.InvalidInput, "task import: "+p.extID+" is "+p.cols[colStatus]+" but its sub-task "+r.extID+" is open").
+				WithHint("close the sub-task in the file too (status done or cancelled), or leave the parent open")
+		}
+	}
+	return nil
 }
 
 // droppedRef is one reference an import dropped (PC-TASK-1).
@@ -514,12 +680,12 @@ func readImportFile(path string) ([]byte, error) {
 // parseImport turns the file into records with renamed columns. A record
 // without an id column gets ext_id "<file>:<row>" (row 1 = the first
 // record), so importing the same file again names the same external ids.
-func parseImport(from, base string, raw []byte, rename map[string]string) ([]importRecord, error) {
+func parseImport(from, base string, raw []byte, rename map[string]string) ([]importRecord, []string, error) {
 	var rows []jsonRow
 	if from == FromCSV {
 		flat, err := csvRows(raw)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, m := range flat {
 			rows = append(rows, jsonRow{cols: m, parent: -1})
@@ -527,13 +693,14 @@ func parseImport(from, base string, raw []byte, rename map[string]string) ([]imp
 	} else {
 		var objs []map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &objs); err != nil {
-			return nil, errs.Wrap(errs.InvalidInput, "task import: the JSON must be an array of objects", err)
+			return nil, nil, errs.Wrap(errs.InvalidInput, "task import: the JSON must be an array of objects", err)
 		}
 		var err error
 		if rows, err = jsonRows(objs, -1, nil); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
+	var ignored []string
 	out := make([]importRecord, 0, len(rows))
 	top := 0
 	kids := map[int]int{} // children seen so far per parent index
@@ -544,8 +711,14 @@ func parseImport(from, base string, raw []byte, rename map[string]string) ([]imp
 			if to, ok := rename[k]; ok {
 				k = to
 			}
+			if slices.Contains(exportOnlyColumns(), k) {
+				if v != "" && !slices.Contains(ignored, k) {
+					ignored = append(ignored, k)
+				}
+				continue
+			}
 			if !slices.Contains(importColumns(), k) {
-				return nil, errs.New(errs.InvalidInput, "task import: unknown column "+strconv.Quote(k)+
+				return nil, nil, errs.New(errs.InvalidInput, "task import: unknown column "+strconv.Quote(k)+
 					"; map it with --map "+k+"=<field> (fields: "+strings.Join(importColumns(), ", ")+")")
 			}
 			cols[k] = v
@@ -561,9 +734,22 @@ func parseImport(from, base string, raw []byte, rename map[string]string) ([]imp
 		} else if ext == "" {
 			ext = out[jr.parent].extID + extIDKidSep + strconv.Itoa(kids[jr.parent])
 		}
-		out = append(out, importRecord{extID: ext, cols: cols, parent: jr.parent, checklist: jr.checklist})
+		rec := importRecord{extID: ext, cols: cols, parent: jr.parent, checklist: jr.checklist}
+		// G-TASK-3: a parent column (task export --format csv) naming an
+		// earlier record of the file links to it like a nested child; any
+		// other value is a task id the add checks in the target.
+		if p := strings.TrimSpace(cols[colParent]); p != "" && rec.parent < 0 {
+			for j := range out {
+				if out[j].extID == p {
+					rec.parent = j
+					delete(rec.cols, colParent)
+					break
+				}
+			}
+		}
+		out = append(out, rec)
 	}
-	return out, nil
+	return out, ignored, nil
 }
 
 // jsonRow is one task object of a JSON import, flattened in pre-order.
@@ -664,6 +850,11 @@ func checkRecord(r importRecord) error {
 	}
 	if p := r.cols[colPriority]; p != "" {
 		if err := work.OneOf(Noun, colPriority, p, schema.TaskPriorities()); err != nil {
+			return errors.Join(err, errs.New(errs.InvalidInput, "task import: in "+r.extID))
+		}
+	}
+	if st := r.cols[colStatus]; st != "" {
+		if err := work.OneOf(Noun, colStatus, st, schema.TaskStatuses()); err != nil {
 			return errors.Join(err, errs.New(errs.InvalidInput, "task import: in "+r.extID))
 		}
 	}
