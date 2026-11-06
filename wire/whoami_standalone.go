@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
@@ -386,7 +387,14 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, idErr error, explain
 	if m == "" {
 		row("machine", "(no OS machine id readable here)")
 	} else {
-		row("machine", m)
+		// PROV4 / AGENT_IDENTITY 6.8: the short form (mch_ + 8 hex, like a
+		// git short hash), as the design's whoami sample; --json, stored
+		// data and `lore machine show` keep the full id.
+		short := m
+		if id, err := ids.ParseMachine(m); err == nil {
+			short = id.Short()
+		}
+		row("machine", short)
 	}
 	out = append(out, agentLines(agent)...)
 	project := s.ProjectID
