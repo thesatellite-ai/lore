@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -25,6 +26,10 @@ const (
 	homeMode fs.FileMode = 0o700
 	// groupOtherBits are the permission bits that must be clear.
 	groupOtherBits fs.FileMode = 0o077
+	// goosWindows is runtime.GOOS on Windows, where permission bits do not
+	// exist: os.Stat reports every writable file as 0666 whatever its ACL,
+	// so a mode check there would refuse every token lore itself wrote.
+	goosWindows = "windows"
 	// tempFilePattern names the temporary file a new token is written to
 	// before the atomic rename.
 	tempFilePattern = ".api-token-*"
@@ -106,9 +111,8 @@ func readToken(home string) (string, error) {
 	if !st.Mode().IsRegular() {
 		return "", errs.New(errs.ConfigInvalid, p+" is not a regular file").WithHint("remove it; lore creates a new token")
 	}
-	if st.Mode().Perm()&groupOtherBits != 0 {
-		return "", errs.New(errs.ConfigInvalid, p+" has mode "+strconv.FormatUint(uint64(st.Mode().Perm()), 8)+"; other users could read it").
-			WithHint("run: chmod 600 " + p + " (or lore api token rotate)")
+	if err := checkTokenMode(runtime.GOOS, p, st.Mode().Perm()); err != nil {
+		return "", err
 	}
 	b, err := os.ReadFile(filepath.Clean(p))
 	if err != nil {
@@ -122,4 +126,17 @@ func readToken(home string) (string, error) {
 		return "", errs.New(errs.ConfigInvalid, p+" does not hold a lore api token").WithHint("run: lore api token rotate")
 	}
 	return tok, nil
+}
+
+// checkTokenMode refuses a token file whose group or other permission bits
+// are set. On Windows it accepts any mode: Go reports synthetic bits there
+// (0666, or 0444 when read-only), the file's ACL is what guards it, and the
+// token lives in the user's own profile directory. goos is a parameter so
+// the Windows branch is tested on every platform.
+func checkTokenMode(goos, p string, perm fs.FileMode) error {
+	if goos == goosWindows || perm&groupOtherBits == 0 {
+		return nil
+	}
+	return errs.New(errs.ConfigInvalid, p+" has mode "+strconv.FormatUint(uint64(perm), 8)+"; other users could read it").
+		WithHint("run: chmod 600 " + p + " (or lore api token rotate)")
 }

@@ -409,6 +409,27 @@ func TestToken(t *testing.T) {
 	}
 }
 
+// TestCheckTokenMode: group/other bits refuse the token on unix-likes; on
+// Windows the synthetic modes Go reports (0666 writable, 0444 read-only)
+// are accepted, or `lore api` would refuse the token it just wrote.
+func TestCheckTokenMode(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		goos string
+		perm os.FileMode
+		ok   bool
+	}{
+		{"linux", 0o600, true}, {"linux", 0o400, true}, {"linux", 0o640, false}, {"linux", 0o604, false}, {"linux", 0o666, false},
+		{"darwin", 0o600, true}, {"darwin", 0o660, false},
+		{goosWindows, 0o666, true}, {goosWindows, 0o444, true}, {goosWindows, 0o600, true},
+	} {
+		err := checkTokenMode(c.goos, "tok", c.perm)
+		if (err == nil) != c.ok || (err != nil && !errs.Has(err, errs.ConfigInvalid)) {
+			t.Errorf("%s %o: err %v, want ok=%v", c.goos, c.perm, err, c.ok)
+		}
+	}
+}
+
 // TestServe: Listen(0) binds 127.0.0.1 on a free port, Serve announces it,
 // answers a real HTTP request (401 without token, 200 with), and returns
 // when the context ends.
