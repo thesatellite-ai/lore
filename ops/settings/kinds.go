@@ -426,6 +426,9 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 	if err := checkName("kind", in.Kind); err != nil {
 		return RowOut{}, err
 	}
+	if err := o.checkKindRoute(in.Kind); err != nil {
+		return RowOut{}, err
+	}
 	if err := checkOneOf("name-format", in.NameFormat, NameFormats()); err != nil {
 		return RowOut{}, err
 	}
@@ -592,6 +595,9 @@ func (o ops) kindList(ctx context.Context, in KindsIn) (KindsOut, error) {
 
 func (o ops) kindRename(ctx context.Context, in RenameIn) (RowOut, error) {
 	if err := checkName("kind", in.New); err != nil {
+		return RowOut{}, err
+	}
+	if err := o.checkKindRoute(in.New); err != nil {
 		return RowOut{}, err
 	}
 	k, err := o.kindByName(ctx, in.Old)

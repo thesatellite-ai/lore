@@ -45,6 +45,9 @@ const (
 	lintDeprecated = "deprecated_field"
 	lintRemind     = "remind"
 	lintDuplicate  = "duplicate"
+	// lintKindRoute: a kind (from an earlier build or a hand edit) named
+	// like a fixed resource command, so its REST route collides (G-META-9).
+	lintKindRoute = "kind_route_collision"
 )
 
 // ResRenameIn is the input of resource.rename.
@@ -362,6 +365,17 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 			if perr = o.updateResource(ctx, d, r, patch); perr != nil {
 				return ResLintOut{}, perr
 			}
+		}
+	}
+	kinds, _, err := o.kindRows(ctx)
+	if err != nil {
+		return ResLintOut{}, err
+	}
+	reserved := reservedKindNames(o.env)
+	for _, k := range kinds {
+		if n := text(k.Row, kName); slices.Contains(reserved, n) {
+			out.Findings = append(out.Findings, LintFinding{Check: lintKindRoute, Row: k.Row.ID.String(), Kind: n,
+				Detail: "kind " + quote(n) + " has the name of a resource command, so its REST route " + resourcesRoutePrefix + n + " runs lore resource " + n + "; rename it: lore resource kind rename " + n + " <new_name>"})
 		}
 	}
 	out.Count = len(out.Findings)
