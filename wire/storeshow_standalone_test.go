@@ -68,6 +68,12 @@ func TestStandaloneStoreShowOpenDoctor(t *testing.T) {
 	clone := orgcfg.Clones{Home: home}.Dir("example.com/agency/notes")
 	showGit(t, root, "init", "-q", "--bare", clone)
 	showGit(t, clone, "remote", "add", "origin", origin)
+	// The clone follows the configured url (orgcfg ensureOrigin, f0c765e9),
+	// so the test's example.com spellings must reach the local origin: git
+	// rewrites each to it in this clone's own config (longest match wins).
+	for _, u := range []string{"https://example.com/agency/notes", "https://example.com/agency/notes.git", "git@example.com:agency/notes.git"} {
+		showGit(t, clone, "config", "--add", "url."+origin+".insteadOf", u)
+	}
 
 	doc, err := c.doctorClones(ctx)
 	if err != nil {
