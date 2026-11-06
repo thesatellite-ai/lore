@@ -279,7 +279,14 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row, newerSide side) 
 
 	reserved := map[string]value.Value{}
 	for _, k := range keys(base.Reserved, ours.Reserved, theirs.Reserved) {
-		if v, _ := pick(base.Reserved, ours.Reserved, theirs.Reserved, newer.Reserved, k); v != nil {
+		v, how := pick(base.Reserved, ours.Reserved, theirs.Reserved, newer.Reserved, k)
+		if how == pickedNewer {
+			// An underscore key this lore does not model (a future "_w")
+			// is settled like any non-text field, and reported the same
+			// way, so the older side's value never vanishes silently.
+			res.NewerWins = append(res.NewerWins, k)
+		}
+		if v != nil {
 			reserved[k] = v
 		}
 	}
