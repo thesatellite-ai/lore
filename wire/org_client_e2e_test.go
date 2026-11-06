@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,22 +22,28 @@ import (
 func treeFiles(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	files := map[string]string{}
-	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+	// Walked and read through a root at dir, so every read stays inside it.
+	rt, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rt.Close() }() // read-only; each read reports its own error
+	fsys := rt.FS()
+	err = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() && d.Name() == ".git" {
-			return filepath.SkipDir
+			return fs.SkipDir
 		}
 		if d.IsDir() {
 			return nil
 		}
-		b, rerr := os.ReadFile(filepath.Clean(p))
+		b, rerr := fs.ReadFile(fsys, p)
 		if rerr != nil {
 			return rerr
 		}
-		rel, _ := filepath.Rel(dir, p) // p is under dir
-		files[rel] = string(b)
+		files[filepath.FromSlash(p)] = string(b)
 		return nil
 	})
 	if err != nil {

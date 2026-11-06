@@ -126,7 +126,7 @@ func TestCommitStoreReportsAHookRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(falseBin, filepath.Join(origin, "hooks", "pre-receive")); err != nil {
+	if err = os.Symlink(falseBin, filepath.Join(origin, "hooks", "pre-receive")); err != nil {
 		t.Fatal(err)
 	}
 	res, err := commitStore(context.Background(), putCommit(clone, func(int) {}))

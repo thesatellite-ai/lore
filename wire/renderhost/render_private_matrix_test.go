@@ -51,8 +51,13 @@ func v017StoreAt(t *testing.T) string {
 // gitIn runs git in dir and fails the test on error.
 func gitIn(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
+	bin, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Built directly (as context_scope_rename_test does): the program is the
+	// resolved git binary and every argument is its own argv entry, no shell.
+	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...), Dir: dir}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v %s", args, err, out)
 	}
@@ -151,7 +156,7 @@ func TestRenderPrivateStoresMatrix(t *testing.T) {
 		t.Fatalf("render dir holds %v, want %d store files + %s", names, len(want), privateIndexFile)
 	}
 	for file, words := range want {
-		b, rerr := os.ReadFile(filepath.Join(p.dir, file))
+		b, rerr := readUnder(t, p.dir, file)
 		if rerr != nil {
 			t.Fatalf("%s: %v", file, rerr)
 		}
@@ -169,7 +174,7 @@ func TestRenderPrivateStoresMatrix(t *testing.T) {
 			t.Errorf("%s does not start with the private header", file)
 		}
 	}
-	idx, err := os.ReadFile(filepath.Join(p.dir, privateIndexFile))
+	idx, err := readUnder(t, p.dir, privateIndexFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,14 +215,14 @@ func TestRenderPrivateLocalFile(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := user + "@" + privateImportDir + p.repoKey + "/" + privMatrixInnerID + privateFileExt + "\n"
-		got, err := os.ReadFile(filepath.Join(repo, local))
+		got, err := readUnder(t, repo, local)
 		if err != nil || string(got) != want {
 			t.Fatalf("%s = %q (%v), want %q", local, got, err, want)
 		}
 		if !strings.Contains(w.String(), local+" holds only the import lines") {
 			t.Errorf("summary line %q does not name %s", w.String(), local)
 		}
-		ex, err := os.ReadFile(filepath.Join(repo, ".git", "info", "exclude"))
+		ex, err := readUnder(t, repo, filepath.Join(".git", "info", "exclude"))
 		if err != nil || !strings.Contains(string(ex), local) {
 			t.Errorf(".git/info/exclude %q (%v) does not exclude %s", ex, err, local)
 		}
@@ -225,7 +230,7 @@ func TestRenderPrivateLocalFile(t *testing.T) {
 		if err = h.renderPrivate(ctx, &w, repo, false, false); err != nil {
 			t.Fatal(err)
 		}
-		if again, _ := os.ReadFile(filepath.Join(repo, local)); string(again) != want {
+		if again, _ := readUnder(t, repo, local); string(again) != want {
 			t.Errorf("second render changed %s: %q", local, again)
 		}
 	})
@@ -244,7 +249,7 @@ func TestRenderPrivateLocalFile(t *testing.T) {
 		if err := h.renderPrivate(ctx, &w, repo, false, false); !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), "symlink") {
 			t.Fatalf("render over a symlinked %s: %v, want E_LEAK_BLOCKED naming the symlink", local, err)
 		}
-		if got, _ := os.ReadFile(elsewhere); string(got) != user {
+		if got, _ := readUnder(t, filepath.Dir(elsewhere), filepath.Base(elsewhere)); string(got) != user {
 			t.Errorf("the symlink target was written: %q", got)
 		}
 	})
@@ -257,7 +262,7 @@ func TestRenderPrivateLocalFile(t *testing.T) {
 		if err := h.renderPrivate(ctx, &w, repo, false, false); !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), "git tracks it") {
 			t.Fatalf("render over a tracked %s: %v, want E_LEAK_BLOCKED naming git", local, err)
 		}
-		if got, _ := os.ReadFile(filepath.Join(repo, local)); string(got) != user {
+		if got, _ := readUnder(t, repo, local); string(got) != user {
 			t.Errorf("the tracked file was written: %q", got)
 		}
 	})
@@ -361,12 +366,12 @@ func TestRenderPrivateTargets(t *testing.T) {
 		}
 		line := privMatrixInnerID + privateFileExt
 		for _, rel := range []string{claude.PrivateFile, cursor.PrivateFile} {
-			b, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(rel)))
+			b, err := readUnder(t, repo, filepath.FromSlash(rel))
 			if err != nil || !strings.Contains(string(b), line) {
 				t.Fatalf("%s = %q (%v), want the import of %s", rel, b, err, line)
 			}
 		}
-		if b, _ := os.ReadFile(filepath.Join(repo, filepath.FromSlash(cursor.PrivateFile))); !strings.HasPrefix(string(b), "---\n") {
+		if b, _ := readUnder(t, repo, filepath.FromSlash(cursor.PrivateFile)); !strings.HasPrefix(string(b), "---\n") {
 			t.Errorf("%s has no frontmatter: %q", cursor.PrivateFile, b)
 		}
 		if err := os.Remove(filepath.Join(repo, filepath.FromSlash(cursor.PointerFile))); err != nil {

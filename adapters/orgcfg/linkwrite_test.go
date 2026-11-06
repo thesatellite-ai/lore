@@ -222,10 +222,10 @@ func TestWriteLinkAfterAStaleEmptyFetch(t *testing.T) {
 	}
 	g := &GitLinks{Home: w.links.Home, Config: cfg}
 	dir := g.cloneDirOf("github.com/agency/fresh")
-	if err := ensureBare(ctx, dir, freshURL); err != nil {
+	if err = ensureBare(ctx, dir, freshURL); err != nil {
 		t.Fatal(err)
 	}
-	if err := fetch(ctx, dir); err != nil {
+	if err = fetch(ctx, dir); err != nil {
 		t.Fatalf("fetch of the empty store: %v", err)
 	}
 	if _, ok := branchTip(ctx, dir, "main"); ok {

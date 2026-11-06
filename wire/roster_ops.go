@@ -219,12 +219,12 @@ func (a *App) repoRoster(ctx context.Context) (rosterAt, error) {
 	return r, nil
 }
 
-// rosterCaller is the caller's identity as the roster App x resolves it
-// (x is a store-only App outside a repo: rosterApp). An agent never
+// rosterCaller is the caller's identity as the roster App a resolves it
+// (a is a store-only App outside a repo: rosterApp). An agent never
 // registers (F18: its owner runs `lore agent start`); no identity is
 // refused.
-func (x *App) rosterCaller(ctx context.Context) (whoIs, error) {
-	who, err := x.Who(ctx)
+func (a *App) rosterCaller(ctx context.Context) (whoIs, error) {
+	who, err := a.Who(ctx)
 	if err != nil {
 		return whoIs{}, err
 	}
