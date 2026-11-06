@@ -140,8 +140,7 @@ func TestGitWirePreCommitAgainstOldAndNewLore(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		return // the hook line is POSIX sh; git for Windows runs it in its own sh
 	}
-	sh, err := exec.LookPath("sh")
-	if err != nil {
+	if _, err := exec.LookPath("sh"); err != nil {
 		t.Fatalf("no sh on PATH: %v", err)
 	}
 	line := hookBlocks("")[hookPreCommit].lines[0]
@@ -177,7 +176,8 @@ func TestGitWirePreCommitAgainstOldAndNewLore(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			cmd := exec.CommandContext(context.Background(), sh, "-c", line)
+			cmd := exec.CommandContext(context.Background(), "sh") // the hook line on stdin: sh runs it as a script
+			cmd.Stdin = strings.NewReader(line + "\n")
 			cmd.Dir = work
 			cmd.Env = []string{"PATH=" + bin + string(os.PathListSeparator) + "/usr/bin:/bin"}
 			var stderr strings.Builder
@@ -220,7 +220,7 @@ func TestGitWireEnsureFileBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureFileBlock(p, "lore", []string{"a merge=x"}); err != nil {
+	if err = ensureFileBlock(p, "lore", []string{"a merge=x"}); err != nil {
 		t.Fatal(err)
 	}
 	st2, err := os.Stat(p)
@@ -281,7 +281,8 @@ func TestGitWireDataUnignoreKeepsOSJunkIgnored(t *testing.T) {
 	}
 	ignored := func(p string) bool {
 		t.Helper()
-		cmd := exec.CommandContext(context.Background(), "git", "check-ignore", "-q", "--no-index", "--", p)
+		cmd := exec.CommandContext(context.Background(), "git", "check-ignore", "-q", "--no-index", "--stdin") // the path on stdin: same exit codes
+		cmd.Stdin = strings.NewReader(p + "\n")
 		cmd.Dir = dir
 		err := cmd.Run()
 		var ee *exec.ExitError
