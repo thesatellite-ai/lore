@@ -38,13 +38,13 @@ Older lore could point a repo at a shared database file with a pointer, `.lore/l
 # alice, in docs
 $ cat .lore/lore.yaml
 db_path: ${LORE_HOME}/client-docs.db
-project_id: prj_b4f4…a5b0
+project_id: prj_28f8…03df
 $ lore migrate run --dry-run
 ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
 (exit 27)
 $ LORE_HOME=~/shared-dbs lore migrate run
 Upgraded 1 row
-  mode-b: rules/rul_28f8…03df → store shared (~/shared-dbs/stores/blog)
+  mode-b: rules/rul_4c59…6c38 → store shared (~/shared-dbs/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: this repo has no remote origin; nobody to race, none taken
@@ -52,7 +52,7 @@ backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: lore migrate rollback
 team lock released
 $ lore rule list
-rul_28f8…03df  Posts go out on Tuesdays  [shared]
+rul_4c59…6c38  Posts go out on Tuesdays  [shared]
 
 # alice, in ~
 $ ls ~/shared-dbs ~/shared-dbs/stores
@@ -71,14 +71,14 @@ A `..` in `db_path` is refused until `LORE_ALLOW_DB_PATH_OUTSIDE=1` is set for t
 # alice, in blog
 $ cat .lore/lore.yaml
 db_path: ../client.db
-project_id: prj_b4f4…a5b0
+project_id: prj_28f8…03df
 $ lore migrate run --dry-run
 ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
   hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
 (exit 20)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 Upgraded 1 row
-  mode-b: rules/rul_28f8…03df → store shared (~/work/stores/blog)
+  mode-b: rules/rul_4c59…6c38 → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: this repo has no remote origin; nobody to race, none taken
@@ -86,7 +86,7 @@ backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: lore migrate rollback
 team lock released
 $ lore rule list
-rul_28f8…03df  Posts go out on Tuesdays  [shared]
+rul_4c59…6c38  Posts go out on Tuesdays  [shared]
 ```
 <!-- /example -->
 
@@ -162,8 +162,9 @@ $ lore task add 'Check the contact form on a phone'
 ✓ tsk_2ad3…f891 — Check the contact form on a phone [medium]
 lore live: (live, pushed)
 $ lore live show
+task_lists tlt_162d…9666     live      since 2026-11-02 10:00
 tasks      tsk_2ad3…f891     live      since 2026-11-02 10:00
-1 live rows in _root (epoch 1)
+2 live rows in _root (epoch 1)
 ```
 <!-- /example -->
 
@@ -173,16 +174,16 @@ tasks      tsk_2ad3…f891     live      since 2026-11-02 10:00
 ```console
 # alice, in website
 $ LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'
-✓ tsk_162d…9666 — Renew the SSL certificate [medium]
+✓ tsk_54fe…28f2 — Renew the SSL certificate [medium]
 lore live: (live, not pushed yet: 1 waiting; autopush is off, `lore sync` pushes)
 $ lore live diff
 local     601d2850ffd0
 tracking  86dbae476bd6
 seen      86dbae476bd6
 pending   1 write(s) not confirmed by the remote
-  _root/tasks/tsk_162d…9666.json
+  _root/tasks/tsk_54fe…28f2.json
 lore live: pushed waiting live writes
-$ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_162d…9666
+$ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_54fe…28f2
 ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
   hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
 (exit 15)
@@ -204,7 +205,7 @@ $ lore task list
 (no tasks)
 $ LORE_LIVE_REMOTE=upstream lore task list
 ○ tsk_2ad3…f891 Check the contact form on a phone [medium]
-○ tsk_162d…9666 Renew the SSL certificate [medium]
+○ tsk_54fe…28f2 Renew the SSL certificate [medium]
 ```
 <!-- /example -->
 

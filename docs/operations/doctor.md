@@ -32,6 +32,14 @@ Binary: dev
 [db]
   ok:       true
   wal_size: 0 bytes
+[sync]
+  in git repo:      true
+  tracked files:    7
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  data gitignored:  false
+  uncommitted:      0
 [identity]
   resolved: human:alice@agency.example
   source:   git config user.email
@@ -123,7 +131,7 @@ When you report a problem, attach a support bundle: one JSON file with the docto
 ```console
 # alice, in website
 $ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (1376 bytes)
+✓ wrote support bundle to bundle.json (1639 bytes)
 $ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
   "binary_version": "dev",
     "binary_version": "dev",

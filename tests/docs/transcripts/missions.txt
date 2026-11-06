@@ -57,7 +57,7 @@ alice (work/website)$ lore task list --mission msn_7a670ae8548ed05bf57ad29ad0759
 alice (work/website)$ lore mission edit msn_7a670ae8548ed05bf57ad29ad0759504 --target 2026-12-07 --title 'Open the online shop before Christmas'
 ✓ msn_7a670ae8548ed05bf57ad29ad0759504 updated
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
+lore live: 2 row(s) left live (main holds them)
 alice (work/website)$ lore mission search christmas
 msn_7a670ae8548ed05bf57ad29ad0759504 [active] Open the online shop before Christmas
 

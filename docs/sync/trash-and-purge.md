@@ -77,6 +77,7 @@ $ lore trash purge --archived-before 0d --confirm
 purged 1 rows
   mem_05e9…4603 (memories, repo)
 tombstones are kept forever; the old content is still in git history (rotate any leaked secret)
+lore live: (live, pushed)
 $ cat .lore/data/_purged.json
 {
   "_v": 1,

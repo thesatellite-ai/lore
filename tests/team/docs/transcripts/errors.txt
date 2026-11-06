@@ -33,12 +33,14 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 alice (work/blog)$ lore memory add --body 'the site deploys from the release branch'
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/blog/.git/hooks)
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 
 ### link unknown
 bob (work/website)$ lore memory add --body 'the client wants weekly demos'
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: cannot read agency: github.com/agency/notes (never fetched)
   hint: retry when the store is reachable, or pass --to repo|<org>|me to choose the target yourself
 (exit 18)
@@ -67,20 +69,24 @@ ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/
 ### refs refused by the host
 bob (work/portal)$ lore task add 'set up the portal CI'
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — set up the portal CI [medium]
-lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, not pushed yet: 4 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 bob (work/portal)$ lore live diff
 local     601d2850ffd047c2890d2472633cc4dbdabe12fd
 tracking  (none)
 seen      (none)
-pending   1 write(s) not confirmed by the remote
+pending   4 write(s) not confirmed by the remote
+  _root/actors/act_05e99e22e9e86e96fe4daa7777994603.json
+  _root/projects/prj_c0f3c11a5724b0cfd74b256190d9b5b8.json
+  _root/task_lists/tlt_76bd560aff0771fab8457dbfa9823f10.json
   _root/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
-lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, not pushed yet: 4 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 bob (work/portal)$ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 15s ago
-  - live: 1 live write(s) not pushed yet
-  - live: 1 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
+  - live: 4 live write(s) not pushed yet
+  - live: 4 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
+  - live: 3 row(s) waiting to land; the next live write or `lore sync` lands them
   - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
   - live: post-commit and pre-push hook blocks installed
   - live: the remote refused a push to refs/lore/live, so live rows stay on this machine (the host may allow only branches and tags): [remote rejected] (pre-receive hook declined)
-lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, not pushed yet: 4 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))

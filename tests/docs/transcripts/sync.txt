@@ -1,6 +1,7 @@
 
 ### init
 alice (work/website)$ lore init --non-interactive --name=website
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 lore initialized
     project_id: prj_7a670ae8548ed05bf57ad29ad0759504
     name:       website
@@ -49,7 +50,7 @@ alice (work/website)$ cat .lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "796667b5e5814e64d25afa278afffc07afed3662",
+      "commit": "1e65cc227e91be0471bc78bcb4a553eca62b13d9",
       "state": "branch"
     },
     "project": "prj_7a670ae8548ed05bf57ad29ad0759504",
@@ -83,6 +84,7 @@ alice (work/website)$ git add -A && git commit -qm 'lore: test rule' && git push
 ### teammate clone
 bob (work)$ git clone -q https://github.com/client/website
 bob (work/website)$ lore rule list
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 
 ### sync by hand
@@ -268,6 +270,7 @@ alice (work/website)$ lore trash purge --archived-before 0d --confirm
 purged 1 rows
   mem_05e99e22e9e86e96fe4daa7777994603 (memories, repo)
 tombstones are kept forever; the old content is still in git history (rotate any leaked secret)
+lore live: (live, pushed)
 alice (work/website)$ cat .lore/data/_purged.json
 {
   "_v": 1,
@@ -373,7 +376,9 @@ bob (work/website)$ lore sync ci-merge --base origin/main
 
 ### fix projects
 alice (work/app)$ git checkout -q -b alice-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (alice)'
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
 bob (work)$ git clone -q https://github.com/client2/app && cd app && git checkout -q -b bob-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (bob)' && git push -q -u origin bob-setup
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
 alice (work/app)$ git checkout -q main && git merge -q alice-setup
 alice (work/app)$ git fetch -q origin && git merge --no-edit origin/bob-setup
 Auto-merging .lore/data/_meta.json

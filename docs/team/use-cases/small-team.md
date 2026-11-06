@@ -66,13 +66,14 @@ $ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the chec
 lore live: (live, pushed)
 lore live: landed on main (05513aa); leaves live once main is fetched
 $ git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3
-05513aa lore: land 1 row (_root)
+05513aa lore: land 2 rows (_root)
 86dbae4 lore: land 1 row (_root)
 601d285 lore: land 1 row (_root)
 dfd8dc8 lore: init
 cf563f3 init
+ .../tlt_54fe…28f2.json      | 27 +++++++
  .../tsk_162d…9666.json      | 87 ++++++++++++++++++++++
- 1 file changed, 87 insertions(+)
+ 2 files changed, 114 insertions(+)
 $ git log --oneline -1 && git status --short
 9b40ce7 fix the checkout page on phones
 ```
@@ -97,18 +98,18 @@ Most teams protect `main` (only pull requests may change it). Then the landing w
 ```console
 # bob, in billing
 $ lore task add 'ask the client for the new logo' --assign @alice
-✓ tsk_05e9…4603 — ask the client for the new logo [medium]
+✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
+lore live: 2 row(s) left live (main holds them)
 
 # alice, in billing
-$ lore sync >/dev/null && lore task done tsk_05e9…4603
-✓ tsk_05e9…4603 done
+$ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
+✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
-$ lore explain tsk_05e9…4603
-tsk_05e9…4603 in ~/work/billing (folder _root)
+$ lore explain tsk_c0f3…b5b8
+tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
   live (local 34ee210): row, live since 2026-11-02T10:01:20Z, hlc 2026-11-02T10:01:25.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
@@ -116,7 +117,7 @@ tsk_05e9…4603 in ~/work/billing (folder _root)
   wins: the live copy (rule 4: if a row id is in live, live wins)
   land: waits: main is protected; rides on your next push
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-lore: added "lore: land 1 row (_root)" to feat/login (tsk_05e9…4603)
+lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
 [feat/login 7898daa] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt

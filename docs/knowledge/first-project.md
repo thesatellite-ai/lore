@@ -116,6 +116,14 @@ Binary: dev
 [db]
   ok:       true
   wal_size: 0 bytes
+[sync]
+  in git repo:      true
+  tracked files:    6
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  data gitignored:  false
+  uncommitted:      0
 [identity]
   resolved: human:alice@agency.example
   source:   git config user.email

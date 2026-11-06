@@ -111,6 +111,7 @@ alice (work/infra)$ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
 project_id: prj_f147dd95f1aaf742dd4f5214843a5139
 alice (work/infra)$ lore rule list
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/infra/.git/hooks)
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`
   hint: `lore migrate run --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)

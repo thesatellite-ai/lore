@@ -124,14 +124,17 @@ Your branch, your staged files and your working folder are never touched. Lore b
 # bob, in portal
 $ lore task add 'set up the portal CI'
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
-lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, not pushed yet: 4 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
 local     601d2850ffd0
 tracking  (none)
 seen      (none)
-pending   1 write(s) not confirmed by the remote
+pending   4 write(s) not confirmed by the remote
+  _root/actors/act_05e9…4603.json
+  _root/projects/prj_c0f3…b5b8.json
+  _root/task_lists/tlt_76bd…3f10.json
   _root/tasks/tsk_54fe…28f2.json
-lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, not pushed yet: 4 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 ```
 <!-- /example -->
 
@@ -176,13 +179,13 @@ A **protected branch** is one GitHub only lets you change through a pull request
 <!-- example: small-team#protected-main only=2,4,5 -->
 ```console
 # alice, in billing
-$ lore sync >/dev/null && lore task done tsk_05e9…4603
-✓ tsk_05e9…4603 done
+$ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
+✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-lore: added "lore: land 1 row (_root)" to feat/login (tsk_05e9…4603)
+lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
 [feat/login 7898daa] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
@@ -217,7 +220,7 @@ Every live write is a commit, so the live list's history keeps growing. **Compac
 ```console
 # alice, in website
 $ lore live compact --dry-run
-refs/lore/live has 2 commits (threshold 1000); compacting would keep 4 files, epoch 1 → 2
+refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2
 $ lore live compact
 ✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
@@ -400,7 +403,7 @@ $ git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client/.lor
   ],
   "links": [
     {
-      "project_id": "prj_54fe…28f2",
+      "project_id": "prj_05e9…4603",
       "remote": "github.com/client/website"
     }
   ],

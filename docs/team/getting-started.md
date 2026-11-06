@@ -74,14 +74,14 @@ lore live: (live, pushed)
 $ lore task list
 ○ tsk_54fe…28f2 fix login timeout [medium]
 $ git status --short
-?? .lore/data/task_lists/
 $ git ls-remote origin
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main
 86dbae476bd6	refs/lore/live
 $ lore live show
+task_lists tlt_05e9…4603     live      since 2026-11-02 10:00
 tasks      tsk_54fe…28f2     live      since 2026-11-02 10:00
-1 live rows in _root (epoch 1)
+2 live rows in _root (epoch 1)
 ```
 <!-- /example -->
 
@@ -100,14 +100,15 @@ $ lore task done tsk_54fe…28f2
 lore live: (live, pushed)
 lore live: landed on main (9b40ce7); leaves live once main is fetched
 $ git fetch -q origin && git log --oneline origin/main
-9b40ce7 lore: land 1 row (_root)
+9b40ce7 lore: land 2 rows (_root)
 601d285 lore: init
 05513aa init
 $ lore live show
+task_lists tlt_05e9…4603     live      since 2026-11-02 10:00
 tasks      tsk_54fe…28f2     live      since 2026-11-02 10:00
-1 live rows in _root (epoch 1)
+2 live rows in _root (epoch 1)
 $ lore sync
-lore live: 1 row(s) left live (main holds them)
+lore live: 2 row(s) left live (main holds them)
 lore live: pushed waiting live writes
 $ lore live show
 0 live rows in _root (epoch 1)
@@ -197,20 +198,20 @@ $ lore config check
 
 # alice, in tools
 $ lore store init agency git@github.com:agency/notes --yes
-✓ created store agency (sto_76bd…3f10) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_d431…313a) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 $ lore whoami
 org        agency  (matched by: own pattern github.com/agency/* of agency)
-identity   Alice Doe <human:alice@agency.example>   act_d431…313a  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@agency.example>   act_b4f4…a5b0  @alice  (from: org entry (config.yaml))
 repo       own repo  (no client guards)
 machine    mch_fac0df3a
 agent      none  (no coding agent detected)
-project    prj_05e9…4603
+project    prj_c0f3…b5b8
 remotes    github.com/agency/tools
 stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore actor register
-✓ act_d431…313a Alice Doe (@alice) registered in <redacted>
+✓ act_b4f4…a5b0 Alice Doe (@alice) registered in <redacted>
 ```
 <!-- /example -->
 

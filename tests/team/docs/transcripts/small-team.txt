@@ -5,6 +5,7 @@ alice (work/billing)$ lore actor register
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
 bob (work/billing)$ lore actor register
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/billing/.git/hooks)
 ✓ act_2ad3618e878ebbf527d34d446ef4f891 bob (@bob) registered in this repo
 lore live: (live, pushed)
 lore live: landed on main (86dbae4); leaves live once main is fetched
@@ -33,27 +34,27 @@ alice (work/billing)$ echo ok > checkout.txt && git add checkout.txt && git comm
 lore live: (live, pushed)
 lore live: landed on main (05513aa); leaves live once main is fetched
 alice (work/billing)$ git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3
-05513aa lore: land 1 row (_root)
+05513aa lore: land 2 rows (_root)
 86dbae4 lore: land 1 row (_root)
 601d285 lore: land 1 row (_root)
 dfd8dc8 lore: init
 cf563f3 init
-
+ .../tlt_54fe984c9b495744c0217776765a28f2.json      | 27 +++++++
  .../tsk_162df51b7f78b785c97c26b41ea89666.json      | 87 ++++++++++++++++++++++
- 1 file changed, 87 insertions(+)
+ 2 files changed, 114 insertions(+)
 alice (work/billing)$ git log --oneline -1 && git status --short
 9b40ce7 fix the checkout page on phones
 
 ### urgent rule
 bob (work/billing)$ lore rule add --body 'Never deploy on a Friday'
-✓ rul_54fe984c9b495744c0217776765a28f2
+✓ rul_05e99e22e9e86e96fe4daa7777994603
   scope: [master] severity: must
-bob (work/billing)$ lore sync promote rul_54fe984c9b495744c0217776765a28f2 --to main --dry-run
-would commit .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json onto main
-bob (work/billing)$ git fetch -q origin main:main && lore sync promote rul_54fe984c9b495744c0217776765a28f2 --to main
+bob (work/billing)$ lore sync promote rul_05e99e22e9e86e96fe4daa7777994603 --to main --dry-run
+would commit .lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json onto main
+bob (work/billing)$ git fetch -q origin main:main && lore sync promote rul_05e99e22e9e86e96fe4daa7777994603 --to main
 ✓ committed 1 file(s) onto main (df3a55c39644) — not pushed
 bob (work/billing)$ git push -q origin main && git fetch -q origin && git log --oneline -1 origin/main
-df3a55c lore: promote rul_54fe984c9b495744c0217776765a28f2
+df3a55c lore: promote rul_05e99e22e9e86e96fe4daa7777994603
 
 ### explain
 alice (work/billing)$ lore explain tsk_162df51b7f78b785c97c26b41ea89666
@@ -67,16 +68,16 @@ tsk_162df51b7f78b785c97c26b41ea89666 in ~/work/billing (folder _root)
 
 ### protected main
 bob (work/billing)$ lore task add 'ask the client for the new logo' --assign @alice
-✓ tsk_05e99e22e9e86e96fe4daa7777994603 — ask the client for the new logo [medium]
+✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — ask the client for the new logo [medium]
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
-alice (work/billing)$ lore sync >/dev/null && lore task done tsk_05e99e22e9e86e96fe4daa7777994603
-✓ tsk_05e99e22e9e86e96fe4daa7777994603 done
+lore live: 2 row(s) left live (main holds them)
+alice (work/billing)$ lore sync >/dev/null && lore task done tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
-alice (work/billing)$ lore explain tsk_05e99e22e9e86e96fe4daa7777994603
-tsk_05e99e22e9e86e96fe4daa7777994603 in ~/work/billing (folder _root)
+alice (work/billing)$ lore explain tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+tsk_c0f3c11a5724b0cfd74b256190d9b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
   live (local 34ee210): row, live since 2026-11-02T10:01:20Z, hlc 2026-11-02T10:01:25.000Z/0000/act_7a670ae8548ed05bf57ad29ad0759504
   this branch (HEAD): not present
@@ -84,7 +85,7 @@ tsk_05e99e22e9e86e96fe4daa7777994603 in ~/work/billing (folder _root)
   wins: the live copy (rule 4: if a row id is in live, live wins)
   land: waits: main is protected; rides on your next push
 alice (work/billing)$ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-lore: added "lore: land 1 row (_root)" to feat/login (tsk_05e99e22e9e86e96fe4daa7777994603)
+lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3c11a5724b0cfd74b256190d9b5b8)
 [feat/login 7898daa] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt

@@ -92,7 +92,6 @@ run_162d…9666 cancelled
 ```console
 # alice, in website
 $ git status --short
-?? .lore/data/task_lists/
 ```
 <!-- /example -->
 

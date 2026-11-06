@@ -28,7 +28,10 @@ $ lore task done tsk_2ad3…f891
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, local: no remote)
 $ lore land --all --dry-run
-would land 1 row(s) to main (_root/):
+would land 4 row(s) to main (_root/):
+  act_162d…9666     land  named by lore land
+  prj_54fe…28f2     land  named by lore land
+  tlt_05e9…4603     land  named by lore land
   tsk_2ad3…f891     land  named by lore land
 $ git status --short
 ?? .gitattributes
@@ -52,7 +55,7 @@ live:
 ```console
 # alice, in scratch
 $ lore task add 'tidy the scripts folder'
-✓ tsk_162d…9666 — tidy the scripts folder [medium]
+✓ tsk_c0f3…b5b8 — tidy the scripts folder [medium]
 $ git status --short
 ?? .gitattributes
 ?? .gitignore

@@ -19,6 +19,7 @@ and the leak guards turn on for everyone in agency.
 ✓ github.com/client2/infra (prj_162df51b7f78b785c97c26b41ea89666, github.com/client2/infra) linked to github.com/agency/notes client2/ (pushed)
   nothing was written to this repo
 alice (work/api)$ lore actor register
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/api/.git/hooks)
 ✓ act_54fe984c9b495744c0217776765a28f2 Alice Doe (@alice) registered in <redacted>
 
 ### mission across repos
@@ -31,12 +32,14 @@ alice (work/api)$ lore task add 'build the invite page' --to agency/client2 --mi
 alice (work/api)$ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e99e22e9e86e96fe4daa7777994603 --repo api --key invite/backend
 ✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — send the invite email from the API (already added with --key invite/backend)
 alice (work/app)$ lore task list
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
 ○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 send the invite email from the API [medium]  [agency/client2]
 ○ tsk_76bd560aff0771fab8457dbfa9823f10 build the invite page [medium]  [agency/client2]
 alice (work/app)$ lore task list --all-repos
 ○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 send the invite email from the API [medium]  [agency/client2]
 ○ tsk_76bd560aff0771fab8457dbfa9823f10 build the invite page [medium]  [agency/client2]
 alice (work/infra)$ lore mission status msn_05e99e22e9e86e96fe4daa7777994603
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/infra/.git/hooks)
 msn_05e99e22e9e86e96fe4daa7777994603 Invite landing page   2 tasks · 0 done · 0 claimed · 1 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_c0f3c11a5724b0cfd74b256190d9b5b8  send the invite email from the API              
   waiting   tsk_76bd560aff0771fab8457dbfa9823f10  build the invite page                     waits for tsk_c0f3c11a5724b0cfd74b256190d9b5b8 to be merged (todo)

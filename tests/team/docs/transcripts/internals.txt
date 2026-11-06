@@ -13,9 +13,10 @@ lore live: (live, pushed)
 carol (work/app)$ git ls-tree -r --name-only refs/lore/live
 _live/epoch
 _live/meta.json
+_root/task_lists/tlt_162df51b7f78b785c97c26b41ea89666.json
 _root/tasks/tsk_7a670ae8548ed05bf57ad29ad0759504.json
 carol (work/app)$ git log --oneline refs/lore/live
-601d285 lore: live 1 row (_root)
+601d285 lore: live 2 rows (_root)
 carol (work/app)$ git cat-file -p refs/lore/live:_live/meta.json; echo; git cat-file -p refs/lore/live:_live/epoch
 {
   "features": [
@@ -27,20 +28,20 @@ carol (work/app)$ git cat-file -p refs/lore/live:_live/meta.json; echo; git cat-
 1
 carol (work/app)$ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only refs/lore/live | grep '_root/tasks/')
 {
-  "_hlc": "2026-11-02T10:00:10.000Z/0001/act_162df51b7f78b785c97c26b41ea89666",
+  "_hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe984c9b495744c0217776765a28f2",
   "_live": {
-    "hlc": "2026-11-02T10:00:10.000Z/0001/act_162df51b7f78b785c97c26b41ea89666",
+    "hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe984c9b495744c0217776765a28f2",
     "live_since": "2026-11-02T10:00:10Z"
   },
   "_o": {
     "cmd": "task add",
     "git": {
       "branch": "main",
-      "commit": "fd29d13f95ca3d991c66ac94ad386a3447cfbc77",
+      "commit": "113da9aef0421005961031841c89cdb245cc5201",
       "state": "branch"
     },
-    "project": "prj_54fe984c9b495744c0217776765a28f2",
-    "repo": "rep_05e99e22e9e86e96fe4daa7777994603",
+    "project": "prj_05e99e22e9e86e96fe4daa7777994603",
+    "repo": "rep_c0f3c11a5724b0cfd74b256190d9b5b8",
     "store": "repo"
   },
   "_table": "tasks",
@@ -50,18 +51,18 @@ carol (work/app)$ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only re
   },
   "commitment": "accepted",
   "created_at": "2026-11-02T10:00:00.000000001Z",
-  "created_by": "act_162df51b7f78b785c97c26b41ea89666",
-  "created_by_actor_id": "act_162df51b7f78b785c97c26b41ea89666",
+  "created_by": "act_54fe984c9b495744c0217776765a28f2",
+  "created_by_actor_id": "act_54fe984c9b495744c0217776765a28f2",
   "id": "tsk_7a670ae8548ed05bf57ad29ad0759504",
   "priority": "medium",
-  "project_id": "prj_54fe984c9b495744c0217776765a28f2",
+  "project_id": "prj_05e99e22e9e86e96fe4daa7777994603",
   "status": "todo",
-  "tasklist_id": "tlt_c0f3c11a5724b0cfd74b256190d9b5b8",
+  "tasklist_id": "tlt_162df51b7f78b785c97c26b41ea89666",
   "title": "fix header",
   "updated_at": "2026-11-02T10:00:00.000000001Z",
-  "updated_by": "act_162df51b7f78b785c97c26b41ea89666",
+  "updated_by": "act_54fe984c9b495744c0217776765a28f2",
   "watchers": [
-    "act_162df51b7f78b785c97c26b41ea89666"
+    "act_54fe984c9b495744c0217776765a28f2"
   ]
 }
 carol (work/app)$ git branch -a
@@ -95,7 +96,7 @@ alice$ git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client
   ],
   "links": [
     {
-      "project_id": "prj_54fe984c9b495744c0217776765a28f2",
+      "project_id": "prj_05e99e22e9e86e96fe4daa7777994603",
       "remote": "github.com/client/website"
     }
   ],

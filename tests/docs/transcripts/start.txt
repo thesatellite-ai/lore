@@ -5,6 +5,7 @@ lore version dev
 
 ### init
 alice (work/website)$ lore init --non-interactive --name=website
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 lore initialized
     project_id: prj_7a670ae8548ed05bf57ad29ad0759504
     name:       website
@@ -50,6 +51,15 @@ Binary: dev
 [db]
   ok:       true
   wal_size: 0 bytes
+
+[sync]
+  in git repo:      true
+  tracked files:    6
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  data gitignored:  false
+  uncommitted:      0
 
 [identity]
   resolved: human:alice@agency.example

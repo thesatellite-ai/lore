@@ -111,7 +111,7 @@ $ lore task list --mission msn_7a67…9504
 $ lore mission edit msn_7a67…9504 --target 2026-12-07 --title 'Open the online shop before Christmas'
 ✓ msn_7a67…9504 updated
 lore live: (live, pushed)
-lore live: 1 row(s) left live (main holds them)
+lore live: 2 row(s) left live (main holds them)
 $ lore mission search christmas
 msn_7a67…9504 [active] Open the online shop before Christmas
 ```

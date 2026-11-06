@@ -213,23 +213,27 @@ Lore shares live rows through a hidden list on the remote that is not a branch (
 # bob, in portal
 $ lore task add 'set up the portal CI'
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
-lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, not pushed yet: 4 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
 local     601d2850ffd0
 tracking  (none)
 seen      (none)
-pending   1 write(s) not confirmed by the remote
+pending   4 write(s) not confirmed by the remote
+  _root/actors/act_05e9…4603.json
+  _root/projects/prj_c0f3…b5b8.json
+  _root/task_lists/tlt_76bd…3f10.json
   _root/tasks/tsk_54fe…28f2.json
-lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, not pushed yet: 4 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 15s ago
-  - live: 1 live write(s) not pushed yet
-  - live: 1 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
+  - live: 4 live write(s) not pushed yet
+  - live: 4 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
+  - live: 3 row(s) waiting to land; the next live write or `lore sync` lands them
   - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
   - live: post-commit and pre-push hook blocks installed
   - live: the remote refused a push to refs/lore/live, so live rows stay on this machine (the host may allow only branches and tags): [remote rejected] (pre-receive hook declined)
-lore live: (live, not pushed yet: 1 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, not pushed yet: 4 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 ```
 <!-- /example -->
 

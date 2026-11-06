@@ -84,7 +84,7 @@ $ cat .lore/data/rules/rul_162d…9666.json
     "cmd": "rule add",
     "git": {
       "branch": "main",
-      "commit": "796667b5e581",
+      "commit": "1e65cc227e91",
       "state": "branch"
     },
     "project": "prj_7a67…9504",
@@ -190,10 +190,10 @@ $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin mai
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
-✓ rul_54fe…28f2
+✓ rul_05e9…4603
   scope: [master] severity: must
 $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
-✓ mem_05e9…4603
+✓ mem_c0f3…b5b8
   scope: [master]
 ```
 <!-- /example -->
@@ -205,9 +205,9 @@ $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsAp
 # alice, in shop
 $ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
 lore initialized
-    project_id: prj_c0f3…b5b8
+    project_id: prj_76bd…3f10
     name:       shop
-    repo_id:    rep_76bd…3f10
+    repo_id:    rep_d431…313a
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/shop/AGENTS.md (pointer → .lore/LORE.md)
 · saved as context.targets; change with: lore policy set context.targets <profiles> --yes
@@ -238,9 +238,9 @@ Text that looks like a password stops `lore memory add` with a question; a bare 
 ```console
 # alice, in website
 $ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
-✓ mem_d431…313a
+✓ mem_b4f4…a5b0
   scope: [master]
-$ ls .lore/data/memories | grep -c mem_d431…313a || true
+$ ls .lore/data/memories | grep -c mem_b4f4…a5b0 || true
 1
 ```
 <!-- /example -->

@@ -30,7 +30,6 @@ run_162df51b7f78b785c97c26b41ea89666 cancelled
 
 ### run stays local
 alice (work/website)$ git status --short
-?? .lore/data/task_lists/
 
 ### session list
 alice (work/website)$ lore session list

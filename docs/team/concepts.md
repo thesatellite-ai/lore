@@ -37,14 +37,14 @@ A real task file, as lore wrote it (shortened):
 # carol, in app
 $ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only refs/lore/live | grep '_root/tasks/')
 {
-  "_hlc": "2026-11-02T10:00:10.000Z/0001/act_162d…9666",
+  "_hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe…28f2",
   "_live": {
-    "hlc": "2026-11-02T10:00:10.000Z/0001/act_162d…9666",
+    "hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe…28f2",
     "live_since": "2026-11-02T10:00:10Z"
   …
   "id": "tsk_7a67…9504",
   …
-  "project_id": "prj_54fe…28f2",
+  "project_id": "prj_05e9…4603",
   "status": "todo",
   …
   "title": "fix header",
@@ -86,9 +86,10 @@ A monorepo (one repo that holds several projects) has one live ref. Each lore pr
 $ git ls-tree -r --name-only refs/lore/live
 _live/epoch
 _live/meta.json
+_root/task_lists/tlt_162d…9666.json
 _root/tasks/tsk_7a67…9504.json
 $ git log --oneline refs/lore/live
-601d285 lore: live 1 row (_root)
+601d285 lore: live 2 rows (_root)
 ```
 <!-- /example -->
 

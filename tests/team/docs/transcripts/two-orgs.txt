@@ -54,9 +54,11 @@ org resolution (first rule that answers wins):
 
 ### personal notes split
 alice (work/website)$ lore memory add --body 'ask the client PM before touching the payment flow' --to me
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 ✓ mem_76bd560aff0771fab8457dbfa9823f10 [me/agency]
   scope: [master]
 alice (work/client3-api)$ lore memory add --body 'client3 deploys only on Tuesdays' --to me
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/client3-api/.git/hooks)
 ✓ mem_d4314eba822f1bf5908b2b8ded5f313a [me/client3]
   scope: [master]
 alice (work/website)$ lore memory list
@@ -64,4 +66,5 @@ mem_76bd560aff0771fab8457dbfa9823f10  ask the client PM before touching the paym
 alice (work/client3-api)$ lore memory list
 mem_d4314eba822f1bf5908b2b8ded5f313a  client3 deploys only on Tuesdays  [me/client3]
 alice (work/forked-tool)$ lore memory list
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/forked-tool/.git/hooks)
 (no memories)

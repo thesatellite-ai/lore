@@ -1,6 +1,7 @@
 
 ### local personal store
 alice (work/website)$ lore memory add --body 'I always forget the staging VPN profile' --to me
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 ✓ mem_7a670ae8548ed05bf57ad29ad0759504 [me/agency]
   scope: [master]
 alice (work/scratch)$ lore memory add --body 'I prefer tabs over spaces' --to me
@@ -22,4 +23,5 @@ alice (work/website)$ lore memory add --body 'my invoice template lives in the s
 ✓ mem_54fe984c9b495744c0217776765a28f2 [me]
   scope: [master]
 alice-devbox (work/website)$ lore memory list
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
 mem_54fe984c9b495744c0217776765a28f2  my invoice template lives in the shared drive  [me]

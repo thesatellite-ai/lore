@@ -423,7 +423,7 @@ $ lore doctor | grep 'remote live ref'
 ```console
 # alice, in billing
 $ lore live restore
-✓ restored refs/lore/live: 2 rows (left out 0 already landed or purged)
+✓ restored refs/lore/live: 3 rows (left out 0 already landed or purged)
 $ git ls-remote origin refs/lore/live
 86dbae476bd6	refs/lore/live
 $ lore task add 'close the books for Q1'

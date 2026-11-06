@@ -8,6 +8,15 @@ Binary: dev
   ok:       true
   wal_size: 0 bytes
 
+[sync]
+  in git repo:      true
+  tracked files:    7
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  data gitignored:  false
+  uncommitted:      0
+
 [identity]
   resolved: human:alice@agency.example
   source:   git config user.email
@@ -93,7 +102,7 @@ alice (work/website)$ lore sync conflicts | head -3
 
 ### support bundle
 alice (work/website)$ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (1376 bytes)
+✓ wrote support bundle to bundle.json (1639 bytes)
 alice (work/website)$ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
   "binary_version": "dev",
     "binary_version": "dev",
@@ -151,6 +160,7 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 
 ### ci
 alice (work/ci-clone)$ lore rule list
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/ci-clone/.git/hooks)
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/ci-clone)$ lore doctor; echo "doctor exit $?"
@@ -160,6 +170,15 @@ Binary: dev
 [db]
   ok:       true
   wal_size: 0 bytes
+
+[sync]
+  in git repo:      true
+  tracked files:    10
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  data gitignored:  false
+  uncommitted:      0
 
 [identity]
   resolved: human:alice@agency.example
@@ -207,6 +226,15 @@ Binary: dev
 [db]
   ok:       true
   wal_size: 0 bytes
+
+[sync]
+  in git repo:      true
+  tracked files:    10
+  open conflicts:   0
+  file errors:      0
+  merge driver:     true
+  data gitignored:  false
+  uncommitted:      3
 
 [identity]
   resolved: human:alice@agency.example

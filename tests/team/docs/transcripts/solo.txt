@@ -11,7 +11,10 @@ alice (work/scratch)$ lore task done tsk_2ad3618e878ebbf527d34d446ef4f891
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, local: no remote)
 alice (work/scratch)$ lore land --all --dry-run
-would land 1 row(s) to main (_root/):
+would land 4 row(s) to main (_root/):
+  act_162df51b7f78b785c97c26b41ea89666     land  named by lore land
+  prj_54fe984c9b495744c0217776765a28f2     land  named by lore land
+  tlt_05e99e22e9e86e96fe4daa7777994603     land  named by lore land
   tsk_2ad3618e878ebbf527d34d446ef4f891     land  named by lore land
 alice (work/scratch)$ git status --short
 ?? .gitattributes
@@ -21,7 +24,7 @@ alice (work/scratch)$ git status --short
 
 ### tasks with the code
 alice (work/scratch)$ lore task add 'tidy the scripts folder'
-✓ tsk_162df51b7f78b785c97c26b41ea89666 — tidy the scripts folder [medium]
+✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — tidy the scripts folder [medium]
 alice (work/scratch)$ git status --short
 ?? .gitattributes
 ?? .gitignore
