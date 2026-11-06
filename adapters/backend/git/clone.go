@@ -166,9 +166,42 @@ func (b *Backend) setup(ctx context.Context, remote, bare string) error {
 			return errs.Wrap(errs.Internal, "git: the clone worktree is not on a branch", err)
 		}
 		b.branch = trimmed(out)
-		return nil
+		return b.adoptPinnedBranch(ctx, bare)
 	}
 	return b.addWorktree(ctx, bare)
+}
+
+// adoptPinnedBranch moves a pinned-branch worktree that has no commit yet
+// (an earlier open made the branch new because the store lacked it, D3)
+// onto the remote branch once the store has it, so the clone does not
+// stay a second, empty store under that name (G-CORE-5). Only an unborn,
+// clean worktree is touched; an offline fetch leaves it as it is.
+func (b *Backend) adoptPinnedBranch(ctx context.Context, bare string) error {
+	if b.cfg.branch == "" {
+		return nil
+	}
+	h, err := b.head(ctx)
+	if err != nil || h != "" {
+		return err
+	}
+	st, err := b.git.run(ctx, call{dir: b.work, args: []string{"status", "--porcelain"}})
+	if err != nil || trimmed(st) != "" {
+		return err
+	}
+	if ferr := b.fetch(ctx, bare); ferr != nil {
+		if isOffline(ferr) {
+			return nil
+		}
+		return ferr
+	}
+	tracking, err := b.resolve(ctx, bare, trackingRefNS+b.branch)
+	if err != nil || tracking == "" {
+		return err
+	}
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"checkout", "--quiet", "-B", b.branch, trackingRefNS + b.branch}}); err != nil {
+		return errs.Wrap(errs.Internal, "git: check out the store branch "+b.branch, err)
+	}
+	return nil
 }
 
 // initBare makes an empty bare clone with origin and the row attributes.
