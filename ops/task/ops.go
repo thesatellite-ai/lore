@@ -226,6 +226,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if len(in.Args) > 0 || in.DryRun {
 		return AddOut{}, errs.New(errs.InvalidInput, "task add: --arg and --dry-run go with --template")
 	}
+	// staged is the batch the default list and the task land in, when the
+	// add has to create the list (nil otherwise).
+	var staged context.Context
 	// --assign resolves before anything is written (v0.1.17: the default
 	// task list is not created for a handle on no roster).
 	assign, err := o.resolveAssigns(ctx, in.Assign)
@@ -329,6 +332,14 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		}
 	}
 	if in.Tasklist == "" {
+		// G-ENGINE-2 / FINDING -> g-task: the default list created on demand
+		// lands in ONE engine batch with the task (and the caller's actor
+		// row), so an add refused later (a bad --mission, a ref the engine
+		// refuses, a secret) leaves no default list behind; the staged list
+		// resolves as the task's tasklist_id (engine stagedLive).
+		sctx := engine.Staging(ctx)
+		defer engine.Discard(sctx) // no-op once committed
+		ctx, staged = sctx, sctx
 		if in.Tasklist, err = o.defaultTasklist(ctx, in.To, project); err != nil {
 			return AddOut{}, err
 		}
@@ -415,6 +426,13 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	if err := o.saveRefs(ctx, src, project.String(), w.Row.ID, rel, refs); err != nil {
 		return AddOut{}, err
+	}
+	if staged != nil {
+		warns, cerr := engine.Commit(staged)
+		if cerr != nil {
+			return AddOut{}, cerr
+		}
+		w.Warnings = append(w.Warnings, warns...)
 	}
 	out := AddOut{SchemaVersion: work.SchemaVersion, Kind: KindShow, Data: fullOf(work.LabelerOf(o.env), src, w.Row), Store: string(src)}
 	var metaNotes strings.Builder // OV10/OV56: --meta notes as meta set prints them
