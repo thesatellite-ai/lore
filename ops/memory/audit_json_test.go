@@ -86,3 +86,29 @@ func TestAuditDeferredJSON(t *testing.T) {
 		check(t, h, `{"body":"to kb","to":"kb"}`, "kb", "audit folder")
 	})
 }
+
+// TestAuditDeferredHumanLine (T-TESTS-2): without --json, memory add with
+// a down audit sink prints its success line and then exactly one
+// "warning: … (W_AUDIT_DEFERRED)" line naming the row; a healthy write
+// prints the success line and nothing more.
+func TestAuditDeferredHumanLine(t *testing.T) {
+	healthy := opstest.New(t)
+	got := opstest.Text(healthy.Must(memory.OpAdd, `{"body":"fine"}`))
+	if strings.Contains(got, "warning:") || strings.Contains(got, "W_") {
+		t.Fatalf("a healthy add prints a warning: %q", got)
+	}
+	plain := strings.Count(got, "\n")
+
+	h := opstest.New(t, func(o *wire.Options) { o.Audit = downSink{} })
+	res := h.Must(memory.OpAdd, `{"body":"audited"}`)
+	id := h.ID(res)
+	txt := opstest.Text(res)
+	lines := strings.Split(strings.TrimSuffix(txt, "\n"), "\n")
+	if len(lines) != plain+1 || !strings.HasPrefix(lines[0], "✓ "+id) {
+		t.Fatalf("human output %q, want the %d healthy lines + one warning", txt, plain)
+	}
+	last := lines[len(lines)-1]
+	if !strings.HasPrefix(last, "warning: the audit record of "+id) || !strings.HasSuffix(last, "audit disk full (W_AUDIT_DEFERRED)") {
+		t.Fatalf("warning line %q", last)
+	}
+}
