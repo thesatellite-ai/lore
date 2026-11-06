@@ -182,6 +182,12 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 	if b, rerr := os.ReadFile(filepath.Clean(stamp)); rerr == nil && strings.TrimSpace(string(b)) == fp {
 		return
 	}
+	// The config, attributes and hook files (not .gitignore, which has its
+	// own notice): any byte changed means this command wired the clone.
+	wired := make([]string, 0, len(paths)-1)
+	wired = append(wired, paths[:2]...)
+	wired = append(wired, paths[3:]...)
+	before := wiredContent(wired)
 	for _, kv := range mergeDriverConfig(bin) {
 		cur, gerr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--local", "--get", kv[0]}})
 		if gerr == nil && strings.TrimSpace(string(cur)) == kv[1] {
@@ -203,6 +209,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 			return
 		}
 	}
+	if wiredContent(wired) != before { // v0.1.17 reportGitWiring, same text and condition
+		s.syncNotice("configured git for lore data (merge driver, .gitattributes, hooks in " + dir + ")")
+	}
 	// Row files git would not commit (OWNERQ-9): re-include them, once
 	// per state of .gitignore; `lore sync` refuses while some stay hidden.
 	switch changed, still, err := EnsureDataNotIgnored(ctx, root); {
@@ -210,7 +219,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string) {
 		s.warn("git wiring: " + err.Error())
 		return
 	case changed:
-		s.warn("a .gitignore rule hid lore files; re-included " + dataRel + " in .gitignore — commit it")
+		s.syncNotice("a .gitignore rule hid lore files; re-included " + dataRel + " in .gitignore — commit it")
 	case len(still) > 0:
 		s.warn("git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed):\n  " + strings.Join(still, "\n  "))
 	}

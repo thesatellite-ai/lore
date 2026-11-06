@@ -14,12 +14,14 @@ package host
 import (
 	"context"
 	crand "crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,8 +45,18 @@ const (
 	EnvLiveAutopush = "LORE_LIVE_AUTOPUSH"
 	// EnvLiveRemote points refs/lore/* at another remote.
 	EnvLiveRemote = "LORE_LIVE_REMOTE"
-	envOff        = "0"
+	// EnvSyncQuiet = "1" hides the one-time `lore sync:` notices of the git
+	// wiring (configured git, re-included .gitignore rule), as in v0.1.17
+	// (sync_wire.go reportGitWiring). README, docs/reference/environment.md
+	// and docs/sync/how-notes-travel-with-git.md promise it; warnings and
+	// errors (git still ignores row files, a wiring failure) always print.
+	EnvSyncQuiet = "LORE_SYNC_QUIET"
+	envOff       = "0"
 )
+
+// syncLogPrefix starts the git wiring notices, v0.1.17's text byte for
+// byte (docs paste.py filters "lore sync: configured git for lore data").
+const syncLogPrefix = "lore sync: "
 
 // Live state and log constants (v0.1.17 live_wire.go).
 const (
@@ -173,6 +185,37 @@ func liveBackoff(n int) time.Duration {
 
 // warn prints one live line on the host's stderr.
 func (s *liveSession) warn(line string) { s.h.line(liveLogPrefix + line) }
+
+// syncQuiet reports LORE_SYNC_QUIET=1 (exact value, like every switch).
+func syncQuiet() bool { return os.Getenv(EnvSyncQuiet) == envOn }
+
+// syncNotice prints one `lore sync:` notice on the host's stderr unless
+// LORE_SYNC_QUIET=1. Only for news (what lore changed), never a warning.
+func (s *liveSession) syncNotice(line string) {
+	if syncQuiet() {
+		return
+	}
+	s.h.line(syncLogPrefix + line)
+}
+
+// wiredContent hashes the bytes of every path (missing reads as empty), so
+// the git wiring can tell whether it changed the clone's config or hooks:
+// a set that writes nothing new leaves the hash equal, so the notice is
+// printed once, by the command that wired the clone.
+func wiredContent(paths []string) [sha256.Size]byte {
+	h := sha256.New()
+	for _, p := range paths {
+		b, err := os.ReadFile(filepath.Clean(p))
+		if err != nil {
+			b = nil // missing or unreadable: the same as empty for "did it change"
+		}
+		_, _ = h.Write([]byte(p + "\x00" + strconv.Itoa(len(b)) + "\x00")) // a hash.Hash write never fails
+		_, _ = h.Write(b)
+	}
+	var out [sha256.Size]byte
+	copy(out[:], h.Sum(nil))
+	return out
+}
 
 // prepare runs F3 once per run: the live lock, the tracking refspec, a
 // fetch when due and the integration of the tracking ref.
