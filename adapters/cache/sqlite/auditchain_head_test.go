@@ -23,6 +23,9 @@ func TestAuditChainHeadAnchor(t *testing.T) {
 		tamper     []string // SQL run on the file after three entries (two imported, one appended)
 		appendMore bool     // one more Append after the tamper
 		wantBroken string   // "" intact, "newest" = the newest id, "anchored" = the anchored (deleted) id
+		// wantAnchored: after the run the chain has an anchor again
+		// (adoption); then deleting the newest entry must be caught.
+		wantAnchored bool
 	}{
 		{name: "untouched"},
 		{name: "untouched, then appended", appendMore: true},
@@ -35,6 +38,12 @@ func TestAuditChainHeadAnchor(t *testing.T) {
 		{name: "newest edited, then appended", tamper: []string{`UPDATE audit_chain SET reason = 'hidden' WHERE pos = 3`}, appendMore: true, wantBroken: "any"},
 		{name: "newest deleted, then appended", tamper: []string{`DELETE FROM audit_chain WHERE pos = 3`}, appendMore: true, wantBroken: "any"},
 		{name: "anchor deleted, then appended", tamper: []string{`DELETE FROM audit_chain_head`}, appendMore: true, wantBroken: "any"},
+		// G-HOST-2: a chain written before the anchor existed (no anchor, no
+		// anchored marker) verifies by its links and is adopted by its first
+		// write; a broken link is never adopted.
+		{name: "never anchored (old build)", tamper: []string{`DELETE FROM audit_chain_head`, `DELETE FROM audit_chain_anchored`}},
+		{name: "never anchored, then appended: adopted", tamper: []string{`DELETE FROM audit_chain_head`, `DELETE FROM audit_chain_anchored`}, appendMore: true, wantAnchored: true},
+		{name: "never anchored, older entry edited, then appended", tamper: []string{`DELETE FROM audit_chain_head`, `DELETE FROM audit_chain_anchored`, `UPDATE audit_chain SET action = 'x' WHERE pos = 1`}, appendMore: true, wantBroken: "any"},
 	}
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	for _, c := range cases {
@@ -90,6 +99,25 @@ func TestAuditChainHeadAnchor(t *testing.T) {
 			default:
 				if broken == "" {
 					t.Fatal("a tamper was laundered by a later append: the chain reports intact")
+				}
+			}
+			if c.wantAnchored {
+				dsn, derr := fileDSN(path)
+				if derr != nil {
+					t.Fatal(derr)
+				}
+				db, oerr := sql.Open(driverName, dsn)
+				if oerr != nil {
+					t.Fatal(oerr)
+				}
+				if _, xerr := db.ExecContext(ctx, `DELETE FROM audit_chain WHERE pos = (SELECT MAX(pos) FROM audit_chain)`); xerr != nil {
+					t.Fatal(xerr)
+				}
+				if cerr := db.Close(); cerr != nil {
+					t.Fatal(cerr)
+				}
+				if b2, _, verr := ch.Verify(ctx, chain); verr != nil || b2 == "" {
+					t.Fatalf("an adopted chain must catch a deleted newest entry: %q %v", b2, verr)
 				}
 			}
 		})

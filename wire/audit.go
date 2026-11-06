@@ -210,7 +210,9 @@ func (r *routedAudit) Record(ctx context.Context, ev engine.Event) error {
 	// P3-LOCAL-5: a session row's own event is never linked: the session
 	// source writes that row from inside this call (the first write of a
 	// process), and asking it again would re-enter it.
-	if src, ok := r.repo.(SessionSource); ok && ev.Session == "" && ev.Table != schema.TableSessions {
+	// OV3: a `lore api` request (RemoteRequest) is not this process's
+	// session; its writes carry no session link.
+	if src, ok := r.repo.(SessionSource); ok && ev.Session == "" && ev.Table != schema.TableSessions && !IsRemoteRequest(ctx) {
 		ses, err := src.Session(ctx)
 		if err != nil {
 			return err
