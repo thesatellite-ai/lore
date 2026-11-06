@@ -606,23 +606,25 @@ func originsOf(raws ...string) map[string]string {
 // written: each git clone's origin spelling. who is the lore identity a
 // git clone signs commits with when git has none (FLAG4, storeOpeners).
 // owner, when not nil, names the org identity that signs every commit of
-// a store url it answers for, whatever git knows (Q-R2-1).
-func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option, owner func(context.Context, string) (git.Signature, bool)) (*store.Openers, error) {
+// a store url it answers for, whatever git knows (Q-R2-1). notice, when not
+// nil, hears the merge report of a store sync (storeMergeReport).
+func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option, owner func(context.Context, string) (git.Signature, bool), notice func(string)) (*store.Openers, error) {
 	o := store.NewOpeners()
 	if err := o.Register(folder.Scheme, folder.NewOpener()); err != nil {
 		return nil, err
 	}
-	base := []git.Option{git.WithMerger(merge.Driver{Registry: reg}), git.WithOrigins(origins), who}
-	plain := git.NewOpener(base...)
+	base := []git.Option{git.WithOrigins(origins), who}
 	gitOpen := func(ctx context.Context, u *url.URL, oo store.OpenOptions) (store.Backend, error) {
+		// One merger per opened store, so its report names the store.
+		opts := append(slices.Clone(base), git.WithMerger(merge.Driver{Registry: reg, Report: storeMergeReport(u, notice)}))
 		// Q-R2-1: a store of an org with an identity is always signed by
 		// that identity, never by the person's own git email (spec 6.5).
 		if owner != nil {
 			if sig, ok := owner(ctx, u.String()); ok {
-				return git.NewOpener(append(slices.Clone(base), git.WithSigner(sig))...)(ctx, u, oo)
+				opts = append(opts, git.WithSigner(sig))
 			}
 		}
-		return plain(ctx, u, oo)
+		return git.NewOpener(opts...)(ctx, u, oo)
 	}
 	for _, s := range git.Schemes {
 		if err := o.Register(s, gitOpen); err != nil {
@@ -630,6 +632,32 @@ func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option,
 		}
 	}
 	return o, nil
+}
+
+// storeMergeReportPrefix starts every line of a store sync's merge report.
+const storeMergeReportPrefix = "lore sync: store "
+
+// storeMergeReport is the merge report of one git store's sync (DELETION
+// 3.7, TE-F-1): a soft delete that lost to an edit, or two deletes that
+// met, is a decision a person should hear about, as `lore merge-driver`
+// says it for a repo row and a live merge note for the live ref. It names
+// the store (its url without credentials or query), the row and the
+// outcome; `lore trash list --overruled` lists the rows kept alive. A row
+// whose merge left conflict markers is refused by the sync, so nothing is
+// said for it. nil notice drops the report.
+func storeMergeReport(u *url.URL, notice func(string)) func(merge.Result) {
+	if notice == nil {
+		return nil
+	}
+	shown := *u
+	shown.User, shown.RawQuery, shown.Fragment = nil, "", ""
+	where := shown.String()
+	return func(res merge.Result) {
+		if res.Trash == "" || !res.Clean() {
+			return
+		}
+		notice(storeMergeReportPrefix + where + ": " + string(res.Row.Table) + "/" + res.Row.ID.String() + ": " + string(res.Trash))
+	}
 }
 
 // markerOf is implemented by both 0.1.18 backends: the store's

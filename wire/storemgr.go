@@ -300,7 +300,7 @@ func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options)
 	// repo store is the folder backend (no commits), and a person's commits
 	// are never touched. An empty Version adds no trailer.
 	trailers := git.WithTrailers(gitcommit.OwnCommitTrailers(opts.Version, os.Getenv)...)
-	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), trailers), who.owner)
+	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), trailers), who.owner, opts.Notice)
 }
 
 // openStore opens the store at a canonical url with this App's backends.
