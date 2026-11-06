@@ -1,6 +1,9 @@
 // Package estimate is the task estimate rule (TASK_SYSTEM_DESIGN 9, TSQ4):
 // one decimal >= 0 with at most two decimals, in the project's unit
-// (tasks.estimate_unit: points, hours or days).
+// (tasks.estimate_unit: points or hours). There is no day unit (OWNERQ-21,
+// TIME D13 "no d unit", OQ18): lore never assumes a working day's hours,
+// so a day amount is refused on every write and the legacy unit "days" is
+// read-only (existing literals still roll up and print in days).
 //
 // Layer L1: pure; imports model only.
 //
@@ -21,14 +24,18 @@ import (
 // Unit is the closed set of tasks.estimate_unit values.
 type Unit string
 
-// Units (TSQ4); points is the default.
+// Units (TSQ4); points is the default. Days is the legacy v0.1.18 build
+// unit (OWNERQ-21): a project whose policy still names it reads its
+// stored estimates, but every new estimate is refused until the policy
+// names points or hours.
 const (
 	Points Unit = "points"
 	Hours  Unit = "hours"
 	Days   Unit = "days"
 )
 
-// Units lists every unit, in the policy's declared order.
+// Units lists every unit UnitOf recognises, in the policy's declared order
+// (Days included so a legacy policy value is never read as points).
 func Units() []Unit { return []Unit{Points, Hours, Days} }
 
 // UnitOf maps a policy value to a Unit; unknown or empty is Points.
@@ -47,21 +54,32 @@ const maxDecimals = 2
 // hundred is hundredths per unit.
 const hundred = 100
 
-// daySuffix is the day form accepted with unit days ("2d").
+// daySuffix marks a day amount ("2d"), refused in every unit (OWNERQ-21).
 const daySuffix = "d"
 
+// noDayUnit is the refusal reason of a day amount or the days unit.
+const noDayUnit = "estimates have no day unit (lore does not assume a working day's hours)"
+
 // Parse checks raw against unit and returns the literal to store (9.1):
-// a plain decimal ("3", "0.5", "3.00" kept as typed) in every unit; with
-// hours also a duration ("90m" → "1.5"); with days also "2d" → "2". A
-// comma, a sign, an exponent, an hour duration with days and a duration
-// with points are refused (E_INVALID_INPUT).
+// a plain decimal ("3", "0.5", "3.00" kept as typed) in points or hours;
+// with hours also a duration ("90m" → "1.5"). A comma, a sign, an
+// exponent, a duration with points, a day amount ("2d") in any unit and
+// every value under the legacy unit days are refused (E_INVALID_INPUT,
+// OWNERQ-21).
 func Parse(raw string, unit Unit) (string, error) {
 	s := strings.TrimSpace(raw)
+	if unit == Days {
+		return "", errs.New(errs.InvalidInput, "--estimate "+strconv.Quote(raw)+": "+noDayUnit+"; tasks.estimate_unit is days").
+			WithHint("set the unit to hours or points: lore policy set tasks.estimate_unit hours --yes (then give hours, e.g. 16 or 90m)")
+	}
 	if s == "" {
 		return "", bad(raw, unit, "empty")
 	}
 	if plainDecimal(s) {
 		return s, nil
+	}
+	if n, ok := strings.CutSuffix(s, daySuffix); ok && plainDecimal(n) {
+		return "", bad(raw, unit, noDayUnit)
 	}
 	switch unit {
 	case Hours:
@@ -73,12 +91,7 @@ func Parse(raw string, unit Unit) (string, error) {
 			return "", bad(raw, unit, "more precise than 0.01 hours")
 		}
 		return Format(int64(d / (36 * time.Second))), nil
-	case Days:
-		if n, ok := strings.CutSuffix(s, daySuffix); ok && plainDecimal(n) {
-			return n, nil
-		}
-		return "", bad(raw, unit, "days take a number or Nd (lore does not assume a working day's hours)")
-	case Points:
+	case Points, Days:
 	}
 	return "", bad(raw, unit, "not a number")
 }
@@ -94,9 +107,7 @@ func unitHint(u Unit) string {
 	switch u {
 	case Hours:
 		return ", or a duration like 90m"
-	case Days:
-		return ", or 2d"
-	case Points:
+	case Points, Days:
 	}
 	return ""
 }

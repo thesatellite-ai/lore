@@ -62,7 +62,7 @@ type AddIn struct {
 	// Lead names the one owner of the outcome (TSQ5); joins the assignees.
 	Lead string `json:"lead,omitempty" flag:"lead" desc:"the lead (@handle or actor); added to the assignees if missing"`
 	// Estimate is in the tasks.estimate_unit unit (TSQ4, 9.1).
-	Estimate string   `json:"estimate,omitempty" flag:"estimate" desc:"estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit); hours also take 90m, days 2d"`
+	Estimate string   `json:"estimate,omitempty" flag:"estimate" desc:"estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit: points or hours); hours also take 90m; no day unit (OWNERQ-21)"`
 	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
 	To       string   `json:"to,omitempty" flag:"to" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`

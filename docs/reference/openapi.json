@@ -70648,7 +70648,7 @@
                   },
                   "estimate": {
                     "type": "string",
-                    "description": "estimate: a number \u003e= 0 (2 decimals) in the project's unit (tasks.estimate_unit); hours also take 90m, days 2d"
+                    "description": "estimate: a number \u003e= 0 (2 decimals) in the project's unit (tasks.estimate_unit: points or hours); hours also take 90m; no day unit (OWNERQ-21)"
                   },
                   "key": {
                     "type": "string",
