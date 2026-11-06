@@ -16,7 +16,10 @@ package wire
 //	                  imports (PROV9), the sub-task tree (TASK 6.13),
 //	                  quarantined metadata (METADATA 3.13), secret rules
 //	                  switched off (D2/D9), CI workflows pinning lore below
-//	                  min_lore_version (FORMAT_EVOLUTION 4)
+//	                  min_lore_version (FORMAT_EVOLUTION 4), the
+//	                  CLAUDE.local.md checks (§6.6), the project pin below
+//	                  the floor (an error, FORMAT_EVOLUTION 8.8) or not this
+//	                  binary (a note)
 //
 // There is no lore.db to check, so DBOK stays true and the WAL size 0.
 
@@ -32,6 +35,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/selfupdate"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -86,6 +90,13 @@ func (a *App) CoreDoctorBase(ctx context.Context) opsdoctor.Base {
 	a.doctorMetaQuarantine(ctx, warn)
 	a.doctorSecretRulesOff(ctx, note)
 	a.doctorCIPins(ctx, warn)
+	a.doctorClaudeLocal(ctx, warn)
+	if pin, floorErr := a.doctorVersionPin(ctx); floorErr != "" {
+		b.Errors = append(b.Errors, floorErr)
+		b.Status = opsdoctor.StatusBroken
+	} else if pin != "" {
+		note(pin)
+	}
 	return b
 }
 
@@ -260,4 +271,71 @@ func lorePathBinaries(path string) []string {
 		out = append(out, p)
 	}
 	return out
+}
+
+// claudeLocalFile is the per-checkout import file of Claude Code (render
+// writes one import line into it; internal context lives in ~/.lore/render).
+const claudeLocalFile = "CLAUDE.local.md"
+
+// doctorClaudeLocal warns when the checkout's CLAUDE.local.md is a symlink
+// (lore never writes through one), tracked by git (its content would be
+// committed) or holds more than the one import line.
+func (a *App) doctorClaudeLocal(ctx context.Context, warn func(string)) {
+	top, err := a.repoTop(ctx)
+	if err != nil || top == "" {
+		return
+	}
+	local := filepath.Join(top, claudeLocalFile)
+	fi, err := os.Lstat(local)
+	if err != nil {
+		return
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		warn(claudeLocalFile + " is a symlink; lore will not write through it (delete it and run `lore render`)")
+		return
+	}
+	if out, gerr := (gitRun{dir: top, args: []string{"ls-files", "--", claudeLocalFile}}).output(ctx); gerr == nil && strings.TrimSpace(string(out)) != "" {
+		warn(claudeLocalFile + " is tracked by git: its content would be committed (`git rm --cached " + claudeLocalFile + "`)")
+	}
+	if text, rerr := os.ReadFile(filepath.Clean(local)); rerr == nil && strings.Count(strings.TrimSpace(string(text)), "\n") > 0 {
+		warn(claudeLocalFile + " holds more than the one import line; internal context belongs in ~/.lore/render")
+	}
+}
+
+// envVersionPin is the CI pin; it overrides the team pin (FORMAT_EVOLUTION 8.4).
+const envVersionPin = "LORE_VERSION_PIN"
+
+// pinMeta is the one _meta.json key the pin check reads.
+type pinMeta struct {
+	Pin string `json:"lore_version_pin"`
+}
+
+// doctorVersionPin checks the project pin (LORE_VERSION_PIN, else
+// lore_version_pin in .lore/data/_meta.json) against min_lore_version and
+// this binary: floorErr when the pin is below the floor (everyone on it is
+// read-only), else note when this binary is not the pinned one.
+func (a *App) doctorVersionPin(ctx context.Context) (note, floorErr string) {
+	top, err := a.repoTop(ctx)
+	if err != nil || top == "" {
+		return "", ""
+	}
+	metaRel := rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.MetaFileName
+	pin, source := strings.TrimSpace(os.Getenv(envVersionPin)), envVersionPin
+	if pin == "" {
+		raw, rerr := os.ReadFile(filepath.Join(top, filepath.FromSlash(metaRel)))
+		var m pinMeta
+		if rerr != nil || json.Unmarshal(raw, &m) != nil || strings.TrimSpace(m.Pin) == "" {
+			return "", ""
+		}
+		pin, source = strings.TrimSpace(m.Pin), "lore_version_pin in "+metaRel
+	}
+	norm := func(v string) string { return strings.TrimPrefix(strings.TrimSpace(v), "v") }
+	if d, ok, ferr := rowfs.ReadRepoFormat(top); ferr == nil && ok && d.MinLoreVersion != "" && formatgate.VersionBelow(pin, d.MinLoreVersion) {
+		return "", fmt.Sprintf("the pinned lore %s (%s) is below this project's min_lore_version %s: everyone on the pin is read-only; raise the pin",
+			norm(pin), source, norm(d.MinLoreVersion))
+	}
+	if v := a.opts.Version; norm(pin) != norm(v) && !selfupdate.IsDevBuild(v) {
+		return fmt.Sprintf("this lore is %s; the project pins %s (%s): run `%s upgrade`", norm(v), norm(pin), source, doctorBinaryName), ""
+	}
+	return "", ""
 }
