@@ -231,8 +231,10 @@ func (s *liveSession) fetch(ctx context.Context, now time.Time) {
 // (the last fetch was younger than live.fetch_ttl, or autopush is off),
 // and reports whether it did. A coordination op whose claim was fenced
 // explains the fence from the task row (coord classify: E_CANCELLED for a
-// task a person cancelled meanwhile, E_REASSIGNED), so that row must be the
-// remote's, not the one of the last command that fetched (TEAM F7, §7.4).
+// task a person cancelled meanwhile, E_REASSIGNED), and one that did not
+// find its task may name a task a teammate added since, so that row must be
+// the remote's, not the one of the last command that fetched (TEAM F7,
+// §7.4; staleRowsAnswer in live_hook.go, B-ERRS2-1).
 // It fetches like a rejected push does (FetchAlways): the coordination op
 // already reached the remote for the signals ref.
 func (s *liveSession) refetch(ctx context.Context) bool {

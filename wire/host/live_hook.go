@@ -467,15 +467,40 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		}
 	}
 	res, err := next(ctx)
-	if errs.Has(err, errs.LostClaim) && r.refetch(ctx) {
-		// The fence was explained from rows older than the remote's: run the
-		// operation once more on fresh rows. A fenced coordination op wrote
-		// nothing (the signals decision refused before any write), so the
-		// second run answers the same fence with the code the fresh task row
-		// gives (E_CANCELLED, E_REASSIGNED, or E_LOST_CLAIM again).
+	if staleRowsAnswer(spec.Name, err) && r.refetch(ctx) {
+		// The answer came from rows older than the remote's: run the
+		// operation once more on fresh rows. Nothing was written (see
+		// staleRowsAnswer), so the second run answers with what the fresh
+		// rows give.
 		res, err = next(ctx)
 	}
 	return res, err
+}
+
+// refetchOnNotFound are the coordination operations on one task id whose
+// E_NOT_FOUND is answered before any write: the id lookup comes first
+// (B-ERRS2-1).
+var refetchOnNotFound = map[string]bool{
+	opscoord.OpTaskClaim: true, opscoord.OpTaskHeartbeat: true, opscoord.OpTaskMerged: true,
+	opscoord.OpTaskNote: true, opscoord.OpTaskRelease: true, opscoord.OpTaskRevoke: true,
+	opscoord.OpTaskReassign: true, opscoord.OpGateRequest: true, opscoord.OpGateApprove: true,
+}
+
+// staleRowsAnswer reports whether err may only reflect live rows older
+// than the remote's, so a run that did not fetch should refetch and run
+// the operation again (B-ERRS2-1):
+//   - E_LOST_CLAIM: a claim fence is explained from the task row
+//     (E_CANCELLED for a task a person cancelled meanwhile, E_REASSIGNED,
+//     TEAM F7 §7.4); a fenced op wrote nothing (the signals decision
+//     refused before any write), so the rerun gives the fresh row's code
+//     (or E_LOST_CLAIM again after a revoke);
+//   - E_NOT_FOUND of a refetchOnNotFound op: a task a teammate added after
+//     this clone's last fetch is not in the local rows yet.
+func staleRowsAnswer(name string, err error) bool {
+	if errs.Has(err, errs.LostClaim) {
+		return true
+	}
+	return refetchOnNotFound[name] && errs.Has(err, errs.NotFound)
 }
 
 // refuse is the pre-run part of v0.1.17 livePreRun: the offline note, and

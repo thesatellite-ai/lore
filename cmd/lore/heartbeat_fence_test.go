@@ -38,7 +38,8 @@ func fenceLore(t *testing.T, dir string, args ...string) (int, string) {
 // live.fetch_ttl (the default, not the team suite's 0s). The fence must be
 // explained from the remote's task row: E_CANCELLED, exit 13, never
 // E_LOST_CLAIM from the stale local row. A revoke still answers
-// E_LOST_CLAIM (the fresh row is not cancelled).
+// E_LOST_CLAIM (the fresh row is not cancelled). A claim of a task added
+// after the last fetch refetches too (B-ERRS2-1).
 func TestHeartbeatAfterCancelWithinFetchTTL(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
@@ -92,5 +93,21 @@ func TestHeartbeatAfterCancelWithinFetchTTL(t *testing.T) {
 		if code != tc.code || !strings.Contains(out, tc.want) {
 			t.Fatalf("heartbeat after %v: exit %d %s, want %d %s", tc.human[:2], code, out, tc.code, tc.want)
 		}
+	}
+
+	// A task a teammate adds after the holder's last fetch (within
+	// fetch_ttl) is claimed, not E_NOT_FOUND (B-ERRS2-1). A well-formed id
+	// nobody added stays E_NOT_FOUND after the one refetch.
+	holder := filepath.Join(root, "holder-E_CANCELLED")
+	code, out := fenceLore(t, person, "task", "add", "added after the holder fetched")
+	id := fenceTaskID.FindString(out)
+	if code != 0 || id == "" {
+		t.Fatalf("task add: %d %s", code, out)
+	}
+	if code, out = fenceLore(t, holder, "task", "claim", id); code != 0 || !strings.Contains(out, "claimed") {
+		t.Fatalf("claim of a task added after the last fetch: exit %d %s", code, out)
+	}
+	if code, out = fenceLore(t, holder, "task", "claim", "tsk_01a1a681c07e7dfe8ec01fc44d487e86"); code != 27 || !strings.Contains(out, "E_NOT_FOUND") {
+		t.Fatalf("claim of an unknown id: exit %d %s, want 27 E_NOT_FOUND", code, out)
 	}
 }
