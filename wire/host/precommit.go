@@ -90,7 +90,7 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 			specs = changed // stage the rest one by one, leaving the shadowed files out
 		}
 		args := append([]string{"add", "-A", "--"}, specs...)
-		if _, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: args}); err != nil {
+		if _, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: args, Env: hookIndexEnv()}); err != nil {
 			return errs.Wrap(errs.Internal, "pre-commit: stage "+loreDataPathspec, err)
 		}
 	}
@@ -227,4 +227,22 @@ func looseningError(found []error) error {
 		lines = append(lines, f.Error())
 	}
 	return errs.New(errs.LeakBlocked, strings.Join(lines, "; ")).WithHint(strings.Join(hints, "; "))
+}
+
+// hookIndexEnv passes on the index git gave this hook. `git commit -a` and
+// `git commit -- <paths>` run pre-commit with GIT_INDEX_FILE set to a
+// temporary index (the real one is locked), and gitref drops inherited
+// repo-locating variables, so without this the stage step hits the locked
+// main index and fails (exit 128). A relative value is resolved from the
+// hook's working directory (git runs hooks at the repo top, which is not
+// the project root of a project in a sub-folder).
+func hookIndexEnv() []string {
+	idx := os.Getenv("GIT_INDEX_FILE")
+	if idx == "" {
+		return nil
+	}
+	if abs, err := filepath.Abs(idx); err == nil {
+		idx = abs
+	}
+	return []string{"GIT_INDEX_FILE=" + idx}
 }
