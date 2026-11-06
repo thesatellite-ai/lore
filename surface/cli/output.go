@@ -235,7 +235,10 @@ func printError(stdout, stderr io.Writer, err error, asJSON bool, pal Palette) i
 	if asJSON {
 		// Envelope is a fixed struct of strings and ints: Marshal cannot
 		// fail on it, and a failing writer has nowhere left to report to.
-		b, mErr := json.Marshal(env)
+		// Indented like v0.1.17's printJSON, so every --json error has one
+		// shape whichever noun or host command printed it (E-GAPS-1 S3;
+		// the compat nouns re-indent their output, which leaves it as is).
+		b, mErr := json.MarshalIndent(env, "", indentStep)
 		if mErr == nil {
 			_, _ = io.WriteString(stdout, masked(string(b))+"\n")
 		}

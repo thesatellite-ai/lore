@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -66,7 +67,8 @@ func TestConfirmAsksTheQuestion(t *testing.T) {
 	// no terminal: the error goes back unchanged, question included
 	f := newFake(t)
 	r := execute(Build(f.reg, questionRunner{fake: f, message: "engine: move it?", question: "move it?"}), "", "trash", "purge", "x", "--json")
-	if r.exit != errs.ExitNeedsConfirmation || !strings.Contains(r.stdout+r.stderr, `"question":"move it?"`) {
-		t.Fatalf("no tty: exit %d out %q err %q", r.exit, r.stdout, r.stderr)
+	var env errs.Envelope
+	if jerr := json.Unmarshal([]byte(r.stdout), &env); jerr != nil || r.exit != errs.ExitNeedsConfirmation || env.Error.Question != "move it?" {
+		t.Fatalf("no tty: exit %d out %q err %q (%v)", r.exit, r.stdout, r.stderr, jerr)
 	}
 }
