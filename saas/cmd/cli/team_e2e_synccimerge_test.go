@@ -28,6 +28,10 @@ var bugRepoSyncHost = th.Bug{ID: "BUG-REPOSYNC-HOST", Owner: "p3-modeb (wire/hos
 // ciMergeBaseRef is the --base every test merges from.
 const ciMergeBaseRef = "origin/main"
 
+// stubScriptMode lets the owner run the stub tools the CI clone finds on
+// its PATH (they stand in for real binaries, so they must be executable).
+const stubScriptMode = 0o700
+
 // ciOutcome is `lore sync ci-merge --json`'s data.
 type ciOutcome struct {
 	Outcome  string   `json:"outcome"`
@@ -234,7 +238,7 @@ func TestB11Sync_InstalledWorkflowScriptMergesPullRequest(t *testing.T) {
 	ci := cw.w.Human("ci", "ci@acme.example").Clone(cw.app, "ci")
 	stub := t.TempDir()
 	writeStub := func(name, body string) {
-		if err := os.WriteFile(filepath.Join(stub, name), []byte(body), 0o700); err != nil {
+		if err := os.WriteFile(filepath.Join(stub, name), []byte(body), stubScriptMode); err != nil {
 			t.Fatal(err)
 		}
 	}

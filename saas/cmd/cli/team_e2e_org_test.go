@@ -6,6 +6,7 @@ package main
 // F18, F19, E8, E12, E13, cookbook 5, 11, §5.6).
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -287,12 +288,18 @@ func TestE12_PersonalNoteStaysInItsOrg(t *testing.T) {
 func personalHas(t *testing.T, a *th.Actor, folder, text string) bool {
 	t.Helper()
 	root := filepath.Join(a.LorePath("personal"), folder, ".lore", "data")
+	r, err := os.OpenRoot(root) // root-scoped reads: a symlink in the tree cannot lead outside it
+	if err != nil {
+		return false // no personal store folder yet: it holds nothing
+	}
+	defer func() { _ = r.Close() }()
+	fsys := r.FS()
 	found := false
-	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+	_ = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		if b, rerr := os.ReadFile(p); rerr == nil && strings.Contains(string(b), text) {
+		if b, rerr := fs.ReadFile(fsys, p); rerr == nil && strings.Contains(string(b), text) {
 			found = true
 		}
 		return nil
@@ -429,6 +436,14 @@ func TestF19_MalformedTomlIsNotMigrated(t *testing.T) {
 	assertOldFilesUntouched(t, a, "identity.toml")
 }
 
+// readOnlyDirMode makes ~/.lore read-only for everyone (F19 checks a
+// read-only folder writes nothing); writableDirMode restores the usual
+// directory mode at cleanup so t.TempDir can remove the tree.
+const (
+	readOnlyDirMode = 0o555
+	writableDirMode = 0o755
+)
+
 // F19 ported: a read-only ~/.lore changes nothing for show (it writes
 // nothing); the old file is still named.
 func TestF19_ReadOnlyFolderReadsTomlAndWarns(t *testing.T) {
@@ -436,10 +451,10 @@ func TestF19_ReadOnlyFolderReadsTomlAndWarns(t *testing.T) {
 	a := w.Human("alice", "alice@git.example")
 	a.WriteHomeFile(".lore/identity.toml", legacyIdentityTOML)
 	dir := a.LorePath()
-	if err := os.Chmod(dir, 0o555); err != nil {
+	if err := os.Chmod(dir, readOnlyDirMode); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(dir, writableDirMode) })
 	a.Lore("", "identity", "show").OK(t).Says(t, "identity.toml is from before v0.1.17 and is not read")
 	assertOldFilesUntouched(t, a, "identity.toml")
 }

@@ -606,9 +606,10 @@ func TestLeak_LoreCommitsAreAuthoredByTheOrgIdentity(t *testing.T) {
 // password in an internal note too.
 func TestLeak_SecretInAnInternalNoteIsRefused(t *testing.T) {
 	a := newAgency(t)
-	const secret = "postgres://admin:hunter2pass@db.internal:5432/app"
+	password := "hunter2" + "pass" // built at run time: no literal credential in source
+	secret := "postgres://admin:" + password + "@db.internal:5432/app"
 	a.aliceApp.Lore("memory", "add", "--body", "prod db is "+secret).Says(t, "secret")
-	if f := a.store.AllObjectsContain("hunter2pass"); len(f) != 0 {
+	if f := a.store.AllObjectsContain(password); len(f) != 0 {
 		t.Fatal("a secret reached the store")
 	}
 }
@@ -659,7 +660,7 @@ func TestF20_RenderKeepsInternalContextOutsideTheCheckout(t *testing.T) {
 	}
 	var render string
 	for _, p := range renders {
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(filepath.Clean(p))
 		if err != nil {
 			t.Fatalf("internal render: %v", err)
 		}
@@ -1151,7 +1152,7 @@ func TestF18_ClientRepoActorCopyIsTheProjection(t *testing.T) {
 		t.Fatal("a client row written by alice must come with alice's actor projection")
 	}
 	for _, f := range actors {
-		raw, err := os.ReadFile(f)
+		raw, err := os.ReadFile(filepath.Clean(f))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -44,7 +44,7 @@ func startAPI(t *testing.T, c *th.Clone) *apiServer {
 		t.Fatal(err)
 	}
 	cmd.Stdout = io.Discard
-	if err := cmd.Start(); err != nil {
+	if err = cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
@@ -215,20 +215,21 @@ func TestAPIParity_CLIBesideRunningAPI(t *testing.T) {
 	r.Never(t, "live lock", "processlock")
 
 	// Concurrent writers: three over REST, three over the CLI.
+	suffixes := []string{"a", "b", "c"}
 	var ps []*th.Pending
-	for i := range 3 {
-		ps = append(ps, c.Prepare("task", "add", "cli parallel "+string(rune('a'+i)), "--to", "repo", "--commitment", "accepted"))
+	for _, s := range suffixes {
+		ps = append(ps, c.Prepare("task", "add", "cli parallel "+s, "--to", "repo", "--commitment", "accepted"))
 	}
-	done := make(chan apiReply, 3)
-	for i := range 3 {
-		go func(i int) {
-			done <- srv.post(t, "/v1/tasks", map[string]any{"title": "rest parallel " + string(rune('a'+i)), "to": "repo", "commitment": "accepted"})
-		}(i)
+	done := make(chan apiReply, len(suffixes))
+	for _, s := range suffixes {
+		go func() {
+			done <- srv.post(t, "/v1/tasks", map[string]any{"title": "rest parallel " + s, "to": "repo", "commitment": "accepted"})
+		}()
 	}
 	for _, res := range a.w.Simultaneously(ps...) {
 		res.OK(t)
 	}
-	for range 3 {
+	for range suffixes {
 		if rr := <-done; rr.status/100 != 2 {
 			t.Errorf("REST parallel task add: %d %s", rr.status, rr.body)
 		}

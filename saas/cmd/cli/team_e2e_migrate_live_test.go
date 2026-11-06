@@ -9,7 +9,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"strings"
 	"sync"
 	"testing"
@@ -40,18 +39,25 @@ type liveLooper struct {
 	pool  []string        // the task only this agent claims (max_claims_per_agent 1; final claim state is its own)
 	held  map[string]bool // claim state after its last successful claim/release
 	wrote []liveWrite
-	rnd   *rand.Rand
+	// offset shifts this agent's place in the fixed op rotation so the
+	// three agents run different ops in the same round; the schedule is a
+	// pure function of (round, offset), so a failure replays exactly.
+	offset int
 }
 
-// round runs one random write on the looper's pool or the shared task and
+// liveOps is how many ops the rotation in round cycles through.
+const liveOps = 4
+
+// round runs round i's write from the looper's fixed rotation (claim or
+// release, heartbeat, note, start) on its pool or the shared task and
 // records it when it reported success. Contended, lost or fenced writes
 // are fine (another agent's race), anything else fails the test.
 func (l *liveLooper) round(t *testing.T, shared string, i int) {
 	t.Helper()
-	task := l.pool[l.rnd.IntN(len(l.pool))]
+	task := l.pool[i%len(l.pool)]
 	var w liveWrite
 	var r th.Result
-	switch l.rnd.IntN(4) {
+	switch (i + l.offset) % liveOps {
 	case 0: // claim or release, whichever flips the state
 		if l.held[task] {
 			w = liveWrite{agent: l.name, op: "release", task: task}
@@ -77,8 +83,8 @@ func (l *liveLooper) round(t *testing.T, shared string, i int) {
 		w = liveWrite{agent: l.name, op: "start", task: task}
 		r = l.c.Lore("task", "start", task)
 	}
-	switch {
-	case r.Code == 0:
+	switch r.Code {
+	case 0:
 		l.wrote = append(l.wrote, w)
 		switch w.op {
 		case "claim":
@@ -86,7 +92,7 @@ func (l *liveLooper) round(t *testing.T, shared string, i int) {
 		case "release":
 			l.held[task] = false
 		}
-	case r.Code == th.ExitContended || r.Code == th.ExitLostClaim:
+	case th.ExitContended, th.ExitLostClaim:
 		// a teammate's write won this round; nothing reported success
 	default:
 		t.Errorf("%s: %s %s during the migration failed:\n%s", l.name, w.op, w.task, r)
@@ -121,7 +127,7 @@ func TestMigrateRaceLiveWritesAndClaims(t *testing.T) {
 	for n := range 3 {
 		name := fmt.Sprintf("w-%d", n+1)
 		_, c := cr.agent(t, name)
-		l := &liveLooper{name: name, c: c, held: map[string]bool{}, rnd: rand.New(rand.NewPCG(uint64(n+1), 7))} // fixed seeds: a failure replays
+		l := &liveLooper{name: name, c: c, held: map[string]bool{}, offset: n} // fixed schedule: a failure replays
 		l.pool = []string{cr.task(t, name+" pool")}
 		loopers = append(loopers, l)
 	}
