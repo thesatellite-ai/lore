@@ -76,7 +76,11 @@ func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	claimErrs := []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.Offline, errs.Contended,
 		errs.LostClaim, errs.Cancelled, errs.Reassigned, errs.AmbiguousID, errs.StoreUnreachable, errs.Internal}
-	write := op.Spec{Permission: op.PermWrite, Access: op.AccessWrite, Errors: claimErrs}
+	// A write can also be refused by a fixed rule or the data's state
+	// (E_REFUSED, B-ERRS-4): an agent doing a human override, the WIP
+	// limit, a poisoned task, a task that is not open, a second hold by
+	// the same actor.
+	write := op.Spec{Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(append([]errs.Code(nil), claimErrs...), errs.Refused)}
 	read := op.Spec{Permission: op.PermRead, Access: op.AccessRead, Errors: claimErrs}
 	return []op.Entry{
 		op.Define(with(write, OpTaskClaim, "Claim a task (or coordinate a mission) on the signals ref, with a lease",

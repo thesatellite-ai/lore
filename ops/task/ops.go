@@ -147,13 +147,13 @@ func Ops(env work.Env) []op.Entry {
 		}, o.start),
 		op.Define(op.Spec{
 			Name: OpDone, Summary: "Mark a task done (with the code that finished it)",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren, errs.OpenItems),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren, errs.OpenItems, errs.Refused), // E_REFUSED: an agent finishing a task someone else claimed (B-ERRS-4)
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "done with a lesson", CLI: `lore task done tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"`, Want: "done"}},
 		}, o.done),
 		op.Define(op.Spec{
 			Name: OpCancel, Summary: "Cancel a task",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren, errs.Refused), // E_REFUSED: an agent cancelling a claimed task (B-ERRS-4)
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.cancel),
 		op.Define(op.Spec{
