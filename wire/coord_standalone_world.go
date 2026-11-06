@@ -559,13 +559,17 @@ func (w *coordWorld) defaultBranch(ctx context.Context) string {
 	return fallbackDefaultBranch
 }
 
-// requireHuman refuses agents for human overrides (§7.4).
+// requireHuman refuses agents for human overrides (§7.4): a fixed lore
+// rule, so E_REFUSED (exit 23, B-ERRS-4; v0.1.17 said E_INVALID_INPUT),
+// with needs_person set: the agent must hand it to its person.
 func (w *coordWorld) requireHuman(what string) error {
 	if w.who.Kind == identity.KindHuman {
 		return nil
 	}
-	return errs.New(errs.InvalidInput, what+" is a human override; an agent actor may not do it").
+	e := errs.New(errs.Refused, what+" is a human override; an agent actor may not do it").
 		WithHint("run it as yourself (the identity in ~/.lore/config.yaml), not from an agent session")
+	e.NeedsPerson = true
+	return e
 }
 
 // ---- the row store: the engine ----
@@ -927,13 +931,16 @@ func coordErr(err error) error {
 		}
 		return errs.New(errs.Contended, msg).WithHint("retry after the hold ends, or pick other work with `lore task next`")
 	case errors.As(err, &we):
-		return errs.New(errs.InvalidInput, we.Error())
+		// B-ERRS-4: the WIP limit, a poisoned task and a task that is not
+		// open are refusals by rule or by the data's state (E_REFUSED,
+		// exit 23), not bad input; waiting or retrying will not help.
+		return errs.New(errs.Refused, we.Error())
 	case errors.As(err, &nw):
 		return errs.New(errs.NoWork, nw.Error())
 	case errors.Is(err, coord.ErrContended):
 		return errs.New(errs.Contended, "ready work exists but every claim attempt lost a race").WithHint("retry after a short wait")
 	case errors.As(err, &pe):
-		return errs.New(errs.InvalidInput, pe.Error())
+		return errs.New(errs.Refused, pe.Error())
 	case errors.Is(err, coord.ErrUnknownTask):
 		// No hint here: the host's F1 answer (wire/host explainNotFound,
 		// v0.1.17 explainLiveNotFound) fills it for the id argument: a
@@ -941,7 +948,7 @@ func coordErr(err error) error {
 		// tasks`. It only adds a hint to an error that has none (later 218).
 		return errs.New(errs.NotFound, err.Error())
 	case errors.Is(err, coord.ErrNotOpen):
-		return errs.New(errs.InvalidInput, err.Error())
+		return errs.New(errs.Refused, err.Error())
 	case errors.Is(err, signals.ErrNotHeld):
 		return errs.New(errs.LostClaim, err.Error())
 	case errors.Is(err, signals.ErrBadName):
