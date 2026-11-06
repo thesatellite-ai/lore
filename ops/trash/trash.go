@@ -35,6 +35,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -381,6 +382,16 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 				continue
 			}
 			out.Fields[k] = v.String()
+		}
+		if _, has := out.Fields[resmask.FieldsField]; has && t.Row.Table == schema.TableResources && !in.ShowSensitive {
+			// a resource kind's own sensitive fields (3.11, RQ1); every value
+			// stays hidden unless the kind fields can be read (fail closed)
+			out.Fields[resmask.FieldsField] = "(sensitive, hidden)"
+			if getter, canGet := o.env.(resmask.Getter); canGet {
+				if m, _, ok := resmask.Fields(ctx, getter, t.Row, "(sensitive, hidden)"); ok {
+					out.Fields[resmask.FieldsField] = m
+				}
+			}
 		}
 		return out, nil
 	}
