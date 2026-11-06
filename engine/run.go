@@ -135,21 +135,21 @@ func needsConfirm(spec op.Spec, in op.Input) bool {
 // (op.Questioner: a preview of what it will do) when it has one, else the
 // operation's words and the row ids and --to target the input names
 // ("memory delete mem_…?", never free text: the question travels in
-// E_NEEDS_CONFIRM's message). A generic question is asked only about rows
-// that exist: an id that names no row answers E_NOT_FOUND and a trashed
+// E_NEEDS_CONFIRM's message). Any question is asked only about rows that
+// exist: an id that names no row answers E_NOT_FOUND and a trashed
 // one E_IN_TRASH first, as every lookup does (the lookup matrices), so
 // nobody confirms a write that cannot happen (G-ENGINE-4).
 func (e *Engine) question(ctx context.Context, entry op.Entry, in op.Input) (string, error) {
+	args := in.IDArgs()
+	for _, a := range args { // an operation's own question too is asked only about rows that exist
+		if err := e.mustExist(ctx, a); err != nil {
+			return "", err
+		}
+	}
 	if q, ok := entry.(op.Questioner); ok {
 		s, err := q.Question(ctx, in)
 		if err != nil || s != "" {
 			return s, err
-		}
-	}
-	args := in.IDArgs()
-	for _, a := range args {
-		if err := e.mustExist(ctx, a); err != nil {
-			return "", err
 		}
 	}
 	words := append([]string{strings.ReplaceAll(entry.Spec().Name, ".", " ")}, args...)
