@@ -135,17 +135,139 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 | `E_INTERNAL` | 1 | something failed inside lore | run `lore support-bundle` and file a bug report with it |
 | `E_NOT_IMPLEMENTED` | 23 | this option exists but this build cannot do it yet | read the message; it says what to use instead |
 | `E_UNSUPPORTED` | 23 | the command does not work here, for example outside a git repo | run it inside a git repo |
+| `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule. On coordination commands: an agent doing what only a person may do (the `--json` error has `"needs_person": true`), the WIP limit, a poisoned task, or a task that is no longer open | do what the message says instead; do not retry the same command |
+| `E_NEEDS_CONFIRM` | 26 | the command asks first, and ran with no terminal and no `--yes`; the error carries the question | read the question, then run the command again with `--yes` |
+| `E_POLICY_DENIED` | 23 | a team policy refuses this | read the message for the policy key; `lore policy show` lists them |
+| `E_STALE` | 23 | the row changed between lore's read and its write, and the two changes could not be merged | look at the row again and repeat your change |
+| `E_UNAUTHORIZED` | 28 | a `lore api` request has no valid token | send the token `lore api` printed when it started |
+| `E_SQL_REFUSED` | 20 | `lore sql` takes one read-only `SELECT`, `WITH` or `VALUES` statement, and this was not one, or it named a table that is off limits | rewrite it as one read-only query |
+| `E_SQL_TIMEOUT` | 23 | `lore sql` ran past `--timeout` | narrow the query, or raise `--timeout` |
+| `E_NAME_TAKEN` | 23 | that name is already used by a live row in this place | pick another name, or edit the existing row |
+| `E_REPO_URL` | 20 | lore cannot read that repo address | give a full address such as `github.com/agency/website` or a git url |
+| `E_URL_CREDENTIALS` | 20 | a url holds a password or token in its login part | remove the login part; git reads it from your credential helper |
+
+### Tasks
+
+| Code | Exit | What it means | What to do |
+|---|---|---|---|
+| `E_OPEN_CHILDREN` | 23 | done or cancel of a parent task that still has open sub-tasks | finish them first, or pass `--children` |
+| `E_HAS_OPEN_CHILDREN` | 23 | a claim of a parent task that still has open sub-tasks | claim a sub-task, or pass `--coordinate` |
+| `E_OPEN_ITEMS` | 23 | done of a task with unticked checklist items | tick them, or pass `--tick-all` (or `--force`) |
+| `E_PARENT_CLOSED` | 23 | a sub-task added or reopened under a closed parent | pass `--reopen-parent`, or pick another parent |
+| `E_PARENT_MISSION` | 23 | a sub-task's mission differs from its parent's | give it the parent's mission, or no parent |
+| `E_PARENT_PROJECT` | 23 | the parent task is in another project | pick a parent in the same project |
+| `E_TREE_DEPTH` | 23 | the sub-task tree would be deeper than `tasks.max_depth` | attach the task higher up |
+| `E_TREE_WIDTH` | 23 | a parent would have more direct sub-tasks than `tasks.max_children` | group them under a new sub-task |
+| `E_TEMPLATE` | 23 | a task template is invalid, or its arguments are missing or unknown | read the message; it names the bad or missing argument |
+| `E_DATE` | 20 | a date lore does not understand, or one that could mean two days | give for example `2026-11-13`, `tomorrow`, `next mon` or `in 3 days` |
+| `E_RECUR` | 20 | a repeat rule lore does not understand | give for example `every week`, `every month on last` or `every 3 days until 2027-03-31` |
+| `E_DURATION_BAD` | 20 | a duration lore does not take (0, negative, or in days) | give for example `45m`, `1h30m` or `1.5h` |
+| `E_TIME_TOO_LONG` | 20 | a manual time entry over `time.max_entry` (24h by default) | split it into one entry per day |
+
+### Trash and delete
+
+| Code | Exit | What it means | What to do |
+|---|---|---|---|
+| `E_IN_TRASH` | 23 | an edit or delete of a row that is already in the trash | `lore trash restore <id>` first |
+| `E_PURGED` | 23 | the row was removed for good; only a deletion marker is left | nothing to restore; write it again if you need it |
+| `E_PARENT_DELETED` | 23 | a restore of a child whose parent is in the trash | restore the parent first |
+| `E_PARENT_PURGED` | 23 | a restore of a child whose parent was removed for good | restore it under another parent, or not at all |
+| `E_HAS_DEPENDENTS` | 23 | a delete refused because other live rows still point at this one | delete or repoint those rows first; the message lists them |
+| `E_REASON_REQUIRED` | 20 | a delete without `--reason` while the policy `delete.require_reason` is on | add `--reason '<why>'` |
+
+### Stores
+
+| Code | Exit | What it means | What to do |
+|---|---|---|---|
+| `E_STORE_SCHEME` | 20 | a store url uses a scheme lore 0.1.18 has no backend for (`s3://`, `postgres://`, `lore://`); nothing was written | use a git url or `file:///<absolute path>` |
+| `E_STORE_UNREACHABLE` | 15 | a store with no copy on this machine could not be reached | go online once; after that lore keeps a copy |
+| `E_STORE_READ_ONLY` | 23 | a write to a store this repo attaches read-only | write to another place with `--to`, or attach the store without read-only |
+| `E_STORE_LOCKED` | 23 | another lore process kept the store lock past `store.lock_timeout` | wait and run the command again |
+| `E_STORE_BACKEND` | 23 | a store's settings and its backend do not fit. Not raised by the 0.1.18 core | check the store entry in `.lore/stores.yaml` |
+
+### Metadata
+
+| Code | Exit | What it means | What to do |
+|---|---|---|---|
+| `E_META_KEY` | 20 | a key or allowed-value name is not snake_case ASCII, or is too long or too deep | rename it, for example `client_tier` |
+| `E_META_RESERVED` | 20 | a key name lore keeps for itself (a column, a type or level word, `id`, `meta`, or one starting with `_`, `mky` or `val`) | pick another name |
+| `E_META_TYPE` | 20 | a value does not read as the key's type | give a value of that type; `lore meta show <key>` says which |
+| `E_META_VALUE` | 20 | an empty value, or a value outside the key's allowed values | give one of the allowed values |
+| `E_META_SHAPE` | 20 | a list of objects, a list of lists, or a mixed list on a structured key | flatten the value |
+| `E_META_SIZE` | 20 | the row's metadata would pass `meta.max_bytes` | keep less metadata on the row |
+| `E_META_DEPTH` | 20 | a key has more dot-separated parts than `meta.max_depth` | use a flatter name |
+| `E_META_OP` | 20 | a mistake in a metadata flag or filter | read the message; it points at the part it could not read |
+| `E_META_TABLE` | 20 | this kind of row takes no metadata from the command line | set it on a row kind that takes metadata |
+| `E_META_REQUIRED` | 20 | a required metadata key is missing on add | add it with `--meta key=value` |
+| `E_META_UNKNOWN` | 20 | an unset of a key the row does not have, or an unknown key id | check the key with `lore meta get <id>` |
+| `E_META_AMBIGUOUS` | 21 | a bare key name matches definitions at two or more levels | name the level, as the message shows |
+| `E_META_UNREGISTERED` | 22 | a write to a key whose definition is not visible here | register the key here with `lore meta add`, or write where it is defined |
+| `E_META_STALE` | 22 | a new key would be registered while the store's key lists are missing or out of date | run `lore sync`, then write again |
+| `E_META_TAKEN` | 23 | that key or value name is already taken in this place | pick another name, or use the existing key |
+| `E_META_IN_USE` | 23 | a key or allowed value that some row still uses | move those rows off it first (`--merge-into`) |
+| `E_META_CONFLICT` | 23 | a write by a bare name while that name has an unsettled duplicate | settle the duplicate first, as the message says |
+| `E_META_RETIRED` | 23 | `--merge-into` onto a retired key | merge into a live key |
+| `E_META_QUARANTINED` | 23 | the row's metadata has an entry lore could not read cleanly, so the row is not moved; the row file is kept as it is | `lore meta show <id>` names the entry; fix it, then move again |
+| `E_META_INTERNAL` | 19 | an internal key name or value would reach a client repo | keep the row internal, or drop that metadata |
+| `E_META_FOREIGN_KEY` | 19 | a client-repo row would carry a key id or label from outside the client repo's own keys | place the key with `lore meta rehome`, `adopt` or `move` first |
+| `E_META_STORE_UNREADABLE` | 19 | in a client repo, a write with metadata while an org store has no local copy and cannot be reached, so lore cannot check the keys; nothing written | go online once (or `lore sync`) so the store is kept locally, then write again |
+
+### Resources and kinds
+
+| Code | Exit | What it means | What to do |
+|---|---|---|---|
+| `E_RESOURCE_NAME` | 20 | a kind, field or resource name breaks its format, is reserved, or looks like a credential | pick another name |
+| `E_RESOURCE_INVALID` | 20 | a value or field does not fit the kind | read the message; it names the field that does not fit |
+| `E_RESOURCE_TYPE` | 20 | changing a field's type found values that do not fit the new type | fix those values first; the message lists them |
+| `E_RESOURCE_KIND_MISMATCH` | 20 | a merge of two resources of different kinds | merge resources of one kind only |
+| `E_KIND_LIMIT` | 20 | over a cap on kinds per place, fields per kind or values per field | remove unused ones first |
+| `E_RESOURCE_AMBIGUOUS` | 21 | a bare resource name matches rows at two levels or in two kinds | name the kind or level |
+| `E_KIND_CONFLICT` | 22 | a kind definition clashes with another level's, or holds conflict markers (adopt, rehome and graph skip such a kind) | settle the definitions (`lore sync conflicts`) |
+| `E_KIND_UNKNOWN` | 22 | a kind that is not defined in this place | define it, or write where it is defined |
+| `E_RESOURCE_STALE` | 22 | the store's kind rows this write needs are not available | run `lore sync`, or write with `--to repo` |
+| `E_RESOURCE_INTERNAL` | 19 | an internal resource field would be written in a client repo | write it in the store or an own repo, or move with `--drop-internal` |
+| `E_RESOURCE_IN_USE` | 23 | a kind field or value that resources still use | move those resources off it first |
+| `E_RESOURCE_TAKEN` | 23 | that resource name is already used at this level (archived and trashed rows count) | pick another name, or restore the old one |
+| `E_RESOURCE_ARCHIVED` | 23 | a new reference to an archived resource | refer to its replacement, or unarchive it |
+| `E_RESOURCE_PLACE` | 23 | resources are not allowed in this place (`resources.allowed_in`, or `--to me`) | write them in an allowed place |
+| `E_RESOURCE_QUARANTINED` | 23 | the resource has values lore could not read cleanly | fix them before moving it |
+| `E_RESOURCE_BATCH` | 23 | an import failed its checks as a whole; nothing was written | fix the rows the message lists and import again |
+| `E_RESOURCE_CONFLICT` | 23 | a push to the store hit a strict or kind/field conflict | settle it first, as the message says |
+
+### References and secrets
+
+| Code | Exit | What it means | What to do |
+|---|---|---|---|
+| `E_REF_SYNTAX` | 20 | a `${…}` reference is malformed (an unknown option, a reference inside a path, more than 3 secret alternates) | fix the reference |
+| `E_REF_SCHEME` | 20 | a secret reference names a password manager lore does not know | use one of the managers lore lists in the message |
+| `E_REF_CYCLE` | 20 | references refer to each other in a loop; the message prints the chain | break the loop |
+| `E_REF_DEPTH` | 20 | references nest deeper than 8 | flatten them |
+| `E_REF_LIMIT` | 20 | expanding a text took more than 256 references or 64 KB | split the text |
+| `E_REF_DANGLING` | 20 | the text refers to something not defined here | define it first, or pass `--allow-dangling` |
+| `E_REF_REQUIRED` | 20 | a `${scheme:name:?message}` reference did not resolve | define what it names; the message says what |
+| `E_SECRET_UNAVAILABLE` | 15 | a password manager could not give the entry: not installed, locked, not logged in, timed out, or no such entry on this machine | unlock or log in to the manager and run the command again |
+
+### Upgrade and migration
+
+| Code | Exit | What it means | What to do |
+|---|---|---|---|
+| `E_SCHEMA_OLD` | 25 | the local database is older than this lore | run any lore command again; it updates the local layout on open |
+| `E_UPGRADE_PERMISSION` | 25 | the folder of the lore program cannot be written | run `sudo lore upgrade`, or upgrade through your package manager |
+| `E_UPGRADE_CHECKSUM` | 25 | the downloaded release is cut short or its checksum does not match | run `lore upgrade` again |
+| `E_UPGRADE_PINNED` | 25 | an upgrade in CI without a pinned version, or `--version` against the team's pin | set `LORE_VERSION_PIN` or `lore_version_pin`, or pass `--ignore-pin` |
+| `E_MIGRATE_LOCKED` | 24 | another teammate's `lore migrate run` holds the team migration lock | wait for it to finish |
+| `E_MIGRATE_ROLLBACK_LOSES` | 24 | rolling back the migration would lose changes made after it; nothing was changed | keep the migration, or copy those changes out first |
 
 ### Teams and agents
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
 | `E_NO_WORK` | 10 | `lore task next` found no ready task; the message says why each one is blocked | wait, or unblock a task |
-| `E_CONTENDED` | 11 | ready work exists, but every claim lost the race to another agent | wait a moment and try again |
+| `E_CONTENDED` | 11 | ready work exists but every claim lost the race to another agent, or another writer won every attempt to push a coordination write | wait a moment and try again |
 | `E_LOST_CLAIM` | 12 | your claim is no longer on the server (it ran out or was taken back) | stop working on this task |
 | `E_CANCELLED` | 13 | a person cancelled the task while you held it | stop working on this task |
 | `E_REASSIGNED` | 14 | a person reassigned the task while you held it | stop working on this task |
-| `E_OFFLINE` | 15 | a coordination write could not be confirmed by the server; nothing was queued | check the network and try again |
+| `E_OFFLINE` | 15 | the server could not be reached to confirm a coordination write; nothing was queued | check the network and try again |
 | `E_AMBIGUOUS_ID` | 16 | the id exists in two loaded places | name one with `--from` |
 | `E_ORG_AMBIGUOUS` | 17 | two org entries match this repo equally well | choose one with `lore org use <entry>` |
 | `E_ORG_DISAGREES` | 17 | `LORE_ORG` or `lore org use` names another org than the store's link for this repo | fix the choice, or pass `--force-org` |
