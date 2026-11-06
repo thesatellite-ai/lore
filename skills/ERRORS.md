@@ -201,7 +201,7 @@ E_ROOT_REFUSED
     → run as your normal user; LORE_ALLOW_ROOT=1 only if the person means it
 
 E_SYMLINK_DB
-    → delete the link; lore recreates the file on the next command
+    → delete the link; the next command recreates the file
 
 E_NETWORK_FS
     → move the project to a local disk; git (via .lore/data) shares the notes,

@@ -528,7 +528,7 @@ LORE_ALLOW_ROOT=1 lore init
 ```bash
 # Refused with E_SYMLINK_DB: lore never writes a database, the store lock
 # (.lore/lock) or an audit file through a symbolic link. The message names
-# the file. Inspect the target, then delete the link; lore recreates the file.
+# the file. Inspect the target, then delete the link; the next command recreates it.
 ls -la .lore/lore-cache.db
 rm .lore/lore-cache.db
 lore doctor
