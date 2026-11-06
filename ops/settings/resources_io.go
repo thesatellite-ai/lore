@@ -537,6 +537,10 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 		return ResImportOut{}, err
 	}
 	sctx := withPending(engine.Staging(bctx), pend)
+	// a refused import (any return before Commit) closes its stage, so the
+	// open-stage tracking does not keep its rows for the process
+	// (G-ENGINE-6); after a Commit the stage is closed and this is a no-op
+	defer engine.Discard(sctx)
 	stopped := func(werr error, at string) error {
 		return errors.Join(werr, errs.New(errs.ResourceInvalid, "resource import: "+at+" failed; nothing written (all or nothing)"))
 	}
