@@ -82,6 +82,7 @@ func driftRoot(t *testing.T) *cobra.Command {
 	root.InitDefaultHelpCmd()
 	root.InitDefaultCompletionCmd()
 	classifyUsageErrors(root) // as run does, after the last command is added
+	refuseEnvDB(root)
 	docsRootCmd = root
 	return root
 }

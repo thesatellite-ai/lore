@@ -170,6 +170,7 @@ func run(ctx context.Context, args []string) int {
 	root.InitDefaultHelpCmd()
 	root.InitDefaultCompletionCmd()
 	classifyUsageErrors(root) // usageerr.go: wrong arg count -> E_INVALID_INPUT (FLAG2)
+	refuseEnvDB(root)         // envdb.go: LORE_DB set -> E_UNSUPPORTED on a --db command
 	root.SetArgs(args)
 	if err := root.ExecuteContext(ctx); err != nil {
 		defer liveRows.FlushHeld() // after the error line, as after a result
