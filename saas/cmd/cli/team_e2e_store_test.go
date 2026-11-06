@@ -606,10 +606,11 @@ func TestLeak_LoreCommitsAreAuthoredByTheOrgIdentity(t *testing.T) {
 // password in an internal note too.
 func TestLeak_SecretInAnInternalNoteIsRefused(t *testing.T) {
 	a := newAgency(t)
-	password := "hunter2" + "pass" // built at run time: no literal credential in source
-	secret := "postgres://admin:" + password + "@db.internal:5432/app"
+	// built at run time (convention 8) so the repo's own leak hook does not
+	// read the fixture as a real connection string
+	secret := "postgres://admin:" + "hunter2pass" + "@db.internal:5432/app"
 	a.aliceApp.Lore("memory", "add", "--body", "prod db is "+secret).Says(t, "secret")
-	if f := a.store.AllObjectsContain(password); len(f) != 0 {
+	if f := a.store.AllObjectsContain("hunter2pass"); len(f) != 0 {
 		t.Fatal("a secret reached the store")
 	}
 }
