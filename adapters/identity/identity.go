@@ -45,9 +45,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
+	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -387,8 +386,8 @@ func ReadLegacy(home string) (Entry, bool, error) {
 		return Entry{}, false, errs.Wrap(errs.Internal, "identity: read "+LegacyFile, err)
 	}
 	var w legacyWire
-	if err := yaml.Unmarshal(b, &w); err != nil {
-		return Entry{}, false, errs.Wrap(errs.ConfigInvalid, "identity: "+LegacyFile+" is not valid YAML", err)
+	if err := yamlerr.Decode(b, &w, yamlerr.Lenient); err != nil { // line + key, never a Go type
+		return Entry{}, false, errs.Wrap(errs.ConfigInvalid, "identity: "+LegacyFile+" is not valid: "+err.Error(), err)
 	}
 	key, name := strings.TrimSpace(w.StableKey), strings.TrimSpace(w.DisplayName)
 	if key == "" && name != "" {
