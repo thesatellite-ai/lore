@@ -37,7 +37,12 @@ func (a *App) doctorSignals(ctx context.Context, warn, report func(string)) {
 	if err != nil || w.sit.Role == orgresolve.RoleClient {
 		return
 	}
-	st := w.signalsStore()
+	signalsRows(ctx, w.signalsStore(), warn, report)
+}
+
+// signalsRows are the rows of one signals store (its last fetched copy, and
+// the atomic probe when it pushes on its own).
+func signalsRows(ctx context.Context, st *signals.Store, warn, report func(string)) {
 	v, err := st.Local(ctx)
 	if err != nil {
 		return
