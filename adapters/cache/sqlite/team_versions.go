@@ -41,6 +41,15 @@ WITH stamped AS (
 )
 SELECT actor, machine, version, seen FROM ranked WHERE rn = 1 ORDER BY actor, machine`
 
+// ViewTeamVersions is the same read as a view every cache file holds, so
+// `lore sql` can query it (CLI_REFERENCE 3.6, TEAMV-VIEW): columns actor,
+// machine, version, last_seen.
+const ViewTeamVersions = "team_versions"
+
+func init() {
+	internalDDL = append(internalDDL, `CREATE VIEW IF NOT EXISTS "`+ViewTeamVersions+`" (actor, machine, version, last_seen) AS `+teamVersionsSQL)
+}
+
 // TeamVersions lists every writer and machine with the lore version of its
 // newest save, for `lore doctor`'s "Team versions" section.
 func (c *Cache) TeamVersions(ctx context.Context) ([]TeamVersion, error) {

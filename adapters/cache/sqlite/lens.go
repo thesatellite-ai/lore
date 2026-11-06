@@ -421,7 +421,7 @@ func (l *Lens) publicTables(ctx context.Context, i int) ([]string, error) {
 		return nil, errs.Wrap(errs.NotAStore, "not a lore cache file", err)
 	}
 	defer func() { _ = rs.Close() }()
-	out := append([]string{tblRefs, tblExpanded, ViewRowMeta, tblTaskTree}, ProvenanceViews()...) // PROVENANCE 9.2: the provenance views are readable in lore sql; METADATA 3.16: row_meta
+	out := append([]string{tblRefs, tblExpanded, ViewRowMeta, tblTaskTree, ViewTeamVersions}, ProvenanceViews()...) // PROVENANCE 9.2: the provenance views are readable in lore sql; METADATA 3.16: row_meta; TEAMV-VIEW: team_versions
 	for rs.Next() {
 		var objs string
 		if err := rs.Scan(&objs); err != nil {
