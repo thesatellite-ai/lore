@@ -221,7 +221,7 @@ func (w *coordWorld) remoteRepoName(ctx context.Context) string {
 // requireRosterAgent refuses an agent the org roster does not list (F18,
 // §7.4: v0.1.17's identity chain failed with ErrAgentNotOnRoster); a
 // roster that cannot be read refuses too (fail closed). A miss on an org
-// roster re-reads it once after syncing its store, as rosterByHandle does
+// roster re-reads it once after syncing its store (rosterFind)
 // (BUG-T6, v0.1.17 stores.RosterCheck): an agent its owner started a
 // moment ago on another machine is on the remote roster but not yet in a
 // copy fetched within live.fetch_ttl. A hit costs no extra fetch; a sync
@@ -231,24 +231,9 @@ func (a *App) requireRosterAgent(ctx context.Context, stableKey, org string) err
 	if err != nil {
 		return err
 	}
-	for attempt := 0; attempt < rosterLookups; attempt++ {
-		if attempt > 0 {
-			if r.src == store.SourceRepo {
-				break
-			}
-			if _, serr := a.Sync(ctx, r.src); serr != nil {
-				break
-			}
-		}
-		actors, err := a.RosterActors(ctx, r.src)
-		if err != nil {
-			return err
-		}
-		for _, x := range actors {
-			if x.Active && x.StableKey == stableKey {
-				return nil
-			}
-		}
+	_, ok, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.StableKey == stableKey })
+	if err != nil || ok {
+		return err
 	}
 	return errs.New(errs.IdentityFailed, identity.EnvActor+"="+stableKey+" is not on "+org+"'s roster (register it with `lore agent start --label …`)").
 		WithHint("its owner runs `lore agent start --label <l>` first")

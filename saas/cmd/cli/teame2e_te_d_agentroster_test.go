@@ -60,3 +60,30 @@ func TestTeD_AgentRosterMissOnCachedFetchSyncsOnce(t *testing.T) {
 		t.Fatalf("an unregistered agent's miss costs exactly one fetch: %d", d)
 	}
 }
+
+// The same class for an agent's owner (rosterOwner, b-errs2 sweep): dev2
+// registers on the laptop after the second machine's roster copy was
+// fetched (within fetch_ttl there); `lore agent start` on that machine,
+// owned by the caller, finds dev2 after one sync instead of "you are not
+// on the roster yet".
+func TestTeD_AgentOwnerMissOnCachedFetchSyncsOnce(t *testing.T) {
+	a := newAgency(t, th.Cmd("agent", "start"), th.Flag("assign", "task", "add"), th.Flag("to", "task", "add"))
+	const dev2Key = "human:dev2@northwind.example"
+	boxCfg := th.Config{
+		Personal: &th.Personal{Store: th.PersonalLocal},
+		Orgs:     []th.Org{northwindOrg(dev2Key, "Dev Two", "dev2")},
+		Live:     &th.Live{FetchTTL: "1h"},
+	}
+	box := a.w.Human("dev2box", "dev2@northwind.example")
+	box.WriteConfig(boxCfg)
+	boxApp := box.Clone(a.app, "app")
+	// The box reads the org roster once (an assignment resolves @dev1).
+	boxApp.MustLore("task", "add", "warm the roster copy", "--to", "repo", "--tasklist", a.tl, "--assign", "@dev1")
+
+	laptop := a.w.Human("dev2", "dev2@northwind.example")
+	laptop.WriteConfig(th.Config{Personal: boxCfg.Personal, Orgs: boxCfg.Orgs, Live: th.FreshFetch()})
+	laptopApp := laptop.Clone(a.app, "app")
+	laptopApp.MustLore("actor", "register")
+
+	boxApp.MustLore("agent", "start", "--label", "box-agent")
+}

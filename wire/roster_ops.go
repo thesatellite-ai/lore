@@ -314,8 +314,22 @@ func (a *App) rosterHandleFree(ctx context.Context, r rosterAt, handle, stableKe
 // rosterByHandle finds the active actor @handle on the repo's roster.
 func (a *App) rosterByHandle(ctx context.Context, r rosterAt, handle string) (RosterActor, error) {
 	h := strings.TrimPrefix(handle, rosterHandleMark)
-	// A miss on an org roster re-reads it once after syncing its store
-	// (v0.1.17 refreshOnMiss: a teammate may have just registered).
+	x, ok, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.Handle == h })
+	if err != nil || ok {
+		return x, err
+	}
+	return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on "+r.where+"'s roster").
+		WithHint(r.missHint())
+}
+
+// rosterFind is the active roster actor match picks. A miss on an org
+// roster re-reads it once after syncing its store (v0.1.17 refreshOnMiss
+// and stores.RosterCheck: a teammate, or the caller on another machine,
+// may have just registered, BUG-T6): a hit costs no fetch, a repo roster
+// is never synced, and a sync that fails leaves the local copy's miss
+// standing. Every roster lookup that refuses on a miss goes through it
+// (rosterByHandle, rosterOwner, requireRosterAgent).
+func (a *App) rosterFind(ctx context.Context, r rosterAt, match func(RosterActor) bool) (RosterActor, bool, error) {
 	for attempt := 0; attempt < rosterLookups; attempt++ {
 		if attempt > 0 {
 			if r.src == store.SourceRepo {
@@ -327,16 +341,15 @@ func (a *App) rosterByHandle(ctx context.Context, r rosterAt, handle string) (Ro
 		}
 		actors, err := a.RosterActors(ctx, r.src)
 		if err != nil {
-			return RosterActor{}, err
+			return RosterActor{}, false, err
 		}
 		for _, x := range actors {
-			if x.Active && x.Handle == h {
-				return x, nil
+			if x.Active && match(x) {
+				return x, true, nil
 			}
 		}
 	}
-	return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on "+r.where+"'s roster").
-		WithHint(r.missHint())
+	return RosterActor{}, false, nil
 }
 
 // rosterOwner is an agent's owner: @handle, or the caller's own actor.
@@ -349,16 +362,11 @@ func (a *App) rosterOwner(ctx context.Context, r rosterAt, handle, callerKey str
 		}
 		owner = o
 	} else {
-		actors, err := a.RosterActors(ctx, r.src)
+		o, found, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.StableKey == callerKey })
 		if err != nil {
 			return RosterActor{}, err
 		}
-		found := false
-		for _, x := range actors {
-			if x.Active && x.StableKey == callerKey {
-				owner, found = x, true
-			}
-		}
+		owner = o
 		if !found {
 			return RosterActor{}, errs.New(errs.InvalidInput, "you are not on "+r.where+"'s roster yet").WithHint("run `lore actor register` first")
 		}
