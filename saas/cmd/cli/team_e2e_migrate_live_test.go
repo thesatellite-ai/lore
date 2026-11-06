@@ -9,6 +9,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"testing"
@@ -39,25 +40,18 @@ type liveLooper struct {
 	pool  []string        // the task only this agent claims (max_claims_per_agent 1; final claim state is its own)
 	held  map[string]bool // claim state after its last successful claim/release
 	wrote []liveWrite
-	// offset shifts this agent's place in the fixed op rotation so the
-	// three agents run different ops in the same round; the schedule is a
-	// pure function of (round, offset), so a failure replays exactly.
-	offset int
+	rnd   *rand.ChaCha8 // fixed seed per looper: a failure replays
 }
 
-// liveOps is how many ops the rotation in round cycles through.
-const liveOps = 4
-
-// round runs round i's write from the looper's fixed rotation (claim or
-// release, heartbeat, note, start) on its pool or the shared task and
+// round runs one random write on the looper's pool or the shared task and
 // records it when it reported success. Contended, lost or fenced writes
 // are fine (another agent's race), anything else fails the test.
 func (l *liveLooper) round(t *testing.T, shared string, i int) {
 	t.Helper()
-	task := l.pool[i%len(l.pool)]
+	task := l.pool[0] // one task per agent (max_claims_per_agent 1)
 	var w liveWrite
 	var r th.Result
-	switch (i + l.offset) % liveOps {
+	switch l.rnd.Uint64() >> 62 { // the top two bits pick one of four writes
 	case 0: // claim or release, whichever flips the state
 		if l.held[task] {
 			w = liveWrite{agent: l.name, op: "release", task: task}
@@ -124,10 +118,11 @@ func TestMigrateRaceLiveWritesAndClaims(t *testing.T) {
 	shared := cr.task(t, "shared notes task")
 	long := cr.task(t, "long claim across the migration")
 	var loopers []*liveLooper
-	for n := range 3 {
+	seeds := [...][32]byte{{1, 7}, {2, 7}, {3, 7}} // fixed seeds: a failure replays
+	for n, seed := range seeds {
 		name := fmt.Sprintf("w-%d", n+1)
 		_, c := cr.agent(t, name)
-		l := &liveLooper{name: name, c: c, held: map[string]bool{}, offset: n} // fixed schedule: a failure replays
+		l := &liveLooper{name: name, c: c, held: map[string]bool{}, rnd: rand.NewChaCha8(seed)}
 		l.pool = []string{cr.task(t, name+" pool")}
 		loopers = append(loopers, l)
 	}

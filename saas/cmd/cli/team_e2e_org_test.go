@@ -287,19 +287,18 @@ func TestE12_PersonalNoteStaysInItsOrg(t *testing.T) {
 // containing text (~/.lore/personal/<folder>/.lore/data/**).
 func personalHas(t *testing.T, a *th.Actor, folder, text string) bool {
 	t.Helper()
-	root := filepath.Join(a.LorePath("personal"), folder, ".lore", "data")
-	r, err := os.OpenRoot(root) // root-scoped reads: a symlink in the tree cannot lead outside it
+	root, err := os.OpenRoot(filepath.Join(a.LorePath("personal"), folder, ".lore", "data"))
 	if err != nil {
-		return false // no personal store folder yet: it holds nothing
+		return false // no data folder yet: nothing written
 	}
-	defer func() { _ = r.Close() }()
-	fsys := r.FS()
+	defer func() { _ = root.Close() }() // read-only handle
 	found := false
-	_ = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+	data := root.FS()
+	_ = fs.WalkDir(data, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		if b, rerr := fs.ReadFile(fsys, p); rerr == nil && strings.Contains(string(b), text) {
+		if b, rerr := fs.ReadFile(data, p); rerr == nil && strings.Contains(string(b), text) {
 			found = true
 		}
 		return nil
@@ -436,9 +435,9 @@ func TestF19_MalformedTomlIsNotMigrated(t *testing.T) {
 	assertOldFilesUntouched(t, a, "identity.toml")
 }
 
-// readOnlyDirMode makes ~/.lore read-only for everyone (F19 checks a
-// read-only folder writes nothing); writableDirMode restores the usual
-// directory mode at cleanup so t.TempDir can remove the tree.
+// readOnlyDirMode makes ~/.lore unwritable for F19 (r-x so it can still be
+// listed and read); writableDirMode puts it back so the test's temp dir can
+// be removed.
 const (
 	readOnlyDirMode = 0o555
 	writableDirMode = 0o755

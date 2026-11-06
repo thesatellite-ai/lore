@@ -44,8 +44,8 @@ func startAPI(t *testing.T, c *th.Clone) *apiServer {
 		t.Fatal(err)
 	}
 	cmd.Stdout = io.Discard
-	if err = cmd.Start(); err != nil {
-		t.Fatal(err)
+	if serr := cmd.Start(); serr != nil {
+		t.Fatal(serr)
 	}
 	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	found := make(chan string, 1)
@@ -222,14 +222,14 @@ func TestAPIParity_CLIBesideRunningAPI(t *testing.T) {
 	}
 	done := make(chan apiReply, len(suffixes))
 	for _, s := range suffixes {
-		go func() {
+		go func(s string) {
 			done <- srv.post(t, "/v1/tasks", map[string]any{"title": "rest parallel " + s, "to": "repo", "commitment": "accepted"})
-		}()
+		}(s)
 	}
 	for _, res := range a.w.Simultaneously(ps...) {
 		res.OK(t)
 	}
-	for range suffixes {
+	for range 3 {
 		if rr := <-done; rr.status/100 != 2 {
 			t.Errorf("REST parallel task add: %d %s", rr.status, rr.body)
 		}

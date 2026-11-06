@@ -20,6 +20,10 @@ import (
 	th "saas/cmd/cli/internal/teamharness"
 )
 
+// stubScriptMode is the mode of the CI stub scripts: the owner must be able
+// to execute them.
+const stubScriptMode = 0o700
+
 // bugRepoSyncHost: cmd/lore's sync host answered E_UNSUPPORTED for
 // install-action, ci-merge and peek until wire/host/live_sync.go delegated
 // them to wire.RepoSync (2fe8c14). Closed: the symptom now fails the test.
@@ -27,10 +31,6 @@ var bugRepoSyncHost = th.Bug{ID: "BUG-REPOSYNC-HOST", Owner: "p3-modeb (wire/hos
 
 // ciMergeBaseRef is the --base every test merges from.
 const ciMergeBaseRef = "origin/main"
-
-// stubScriptMode lets the owner run the stub tools the CI clone finds on
-// its PATH (they stand in for real binaries, so they must be executable).
-const stubScriptMode = 0o700
 
 // ciOutcome is `lore sync ci-merge --json`'s data.
 type ciOutcome struct {
