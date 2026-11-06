@@ -62,7 +62,7 @@ After the binary is present, continue to §1.
 | Result | What to do |
 |---|---|
 | **yes** | This project uses lore. Every learned fact, rule, decision should be captured before the session ends. |
-| **no, but the user wants to start** | `lore init --non-interactive && lore setup` (see [P1 — Bootstrap](#workflow-p1)). `setup` builds the search index — required once. |
+| **no, but the user wants to start** | `lore init --non-interactive` (see [P1 — Bootstrap](#workflow-p1)); nothing else to set up (the search index builds itself). |
 | **no, user has not mentioned it** | Do nothing. Don't push lore unless the user asks. |
 
 After capture, **always** run `lore render`. Without render, the captured knowledge is invisible to your next session.

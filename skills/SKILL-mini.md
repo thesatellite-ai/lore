@@ -45,7 +45,7 @@ If `lore` is not on PATH, install it (don't ask, don't hand-edit CLAUDE.md):
 command -v lore >/dev/null 2>&1 || { command -v brew >/dev/null 2>&1 && brew install thesatellite-ai/tap/lore || curl -fsSL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh; }
 ```
 
-New project (no `.lore/`) + user wants lore: `lore init --non-interactive && lore setup`. Install fails → tell user one line, stop; never degrade to prose in CLAUDE.md.
+New project (no `.lore/`) + user wants lore: `lore init --non-interactive`. Install fails → tell user one line, stop; never degrade to prose in CLAUDE.md.
 
 ## ❌ FORBIDDEN PATTERN — read this first
 

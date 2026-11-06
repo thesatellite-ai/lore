@@ -11,7 +11,7 @@ Behind the box is an *index*: a list of every word and the rows it appears in, l
 ## Before you start
 
 - A repo with lore set up and a few rows: see [Your first project](first-project.md).
-- `lore setup` run once after you installed or upgraded lore (it builds the index).
+- Nothing to run first: lore builds the search index from `.lore/data` by itself, also after an upgrade (`lore search rebuild` forces a rebuild).
 
 ## Step 1 — Search everything
 

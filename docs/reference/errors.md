@@ -69,7 +69,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | `E_DB_CORRUPT` | 23 | the local cache holds a record lore cannot read (a cache file that cannot be opened at all is moved aside and rebuilt by itself) | delete `.lore/lore-cache.db`: the next command rebuilds it from `.lore/data` ([how](../operations/backup-restore-repair.md)) |
 | `E_DB_NOT_FOUND` | 23 | no database at the configured path. Not raised yet | check `--db` / `LORE_DB`, or run `lore init` |
 | `E_SCHEMA_VERSION_MISMATCH` | 23 | a newer lore changed this database's layout. Not raised yet | upgrade lore |
-| `E_MIGRATION_INCOMPLETE` | 23 | an upgrade of the database layout did not finish; `lore doctor` reports it | run `lore setup`; if that fails, move `.lore/lore.db` away and run `lore sync` |
+| `E_MIGRATION_INCOMPLETE` | 23 | an upgrade of the database layout did not finish; `lore doctor` reports it | run `lore setup` (safe to repeat); for the repo cache, delete `.lore/lore-cache.db` and the next command rebuilds it |
 | `E_NETWORK_FS` | 23 | the database sits on a network or cloud-synced drive, where it can break silently | move the project to a local folder (git still shares the notes), or set `LORE_ALLOW_NETWORK_FS=1` |
 | `E_INODE_MISMATCH` | 23 | the database file was replaced while lore had it open. Not raised yet | check what else touches the file |
 | `E_DISK_FULL` | 23 | the disk is full; nothing was changed | free some space and run the command again |

@@ -25,7 +25,7 @@ lore version 0.1.0-dev
 
 ## Step 1 — Set up lore in the repo
 
-Run `lore init` once in the top folder of the repo. It creates the local database and a `.lore/data` folder that git tracks. `--name` is the project's name (without it, lore takes the name from the git remote or the folder), and `--non-interactive` skips the questions lore would otherwise ask.
+Run `lore init` once in the top folder of the repo. It creates a `.lore/data` folder that git tracks and a local cache built from it. `--name` is the project's name (without it, lore takes the name from the git remote or the folder), and `--non-interactive` skips the questions lore would otherwise ask.
 
 <!-- example: start#init -->
 ```console
@@ -51,22 +51,11 @@ $ git status --short
 ```
 <!-- /example -->
 
-The new files are plain text. `.lore/lore.db` (the database) stays on your machine and is ignored by git. `.lore/data` holds one small file per row, and that is what you commit.
+The new files are plain text. The local cache (`.lore/lore-cache.db`) stays on your machine and is ignored by git. `.lore/data` holds one small file per row, and that is what you commit.
 
-## Step 2 — Run setup once
+## Step 2 — Nothing else to set up
 
-`lore setup` builds the search index. Run it after you install or upgrade lore. It is safe to run again.
-
-<!-- example: start#setup -->
-```console
-# alice, in website
-$ lore setup
-lore sync: imported 3
-→ running ent schema migration...
-→ building FTS5 search index...
-✓ setup complete (registry fingerprint: 601d2850ffd047c2)
-```
-<!-- /example -->
+There is no setup step. lore builds its local cache (`.lore/lore-cache.db`, the search index included) from the files in `.lore/data` whenever it needs to, and keeps it in step after you upgrade lore, so a new version needs no command either. Two optional extras: `lore setup --agent-hooks` installs session and context hooks for the coding tools set up here, and `lore migrate run` is the one step for notes written by lore v0.1.17.
 
 ## Step 3 — Write your first rule
 

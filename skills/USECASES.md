@@ -131,8 +131,8 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Intent | Command |
 |---|---|
 | First-time setup on a fresh project | `lore init` (runs setup internally) |
-| After upgrading the binary (new columns or new search registry) | `lore setup` — runs ent migration + rebuilds FTS index + stamps fingerprint |
-| Check whether setup is needed | Any command will print `hint: run lore setup` on stderr if fingerprint is stale; otherwise silent |
+| After upgrading the binary | nothing: the cache and search index rebuild themselves; `lore migrate run` only for v0.1.17 data |
+| Install the coding tools' hooks | `lore setup --agent-hooks` (optional; `--dry-run` shows the changes) |
 | Limit | `... --limit=<n>` |
 | Show details for any entity | `lore <kind> show <id>` |
 | List by status | `lore <kind> list --status=<s>` (where applicable) |

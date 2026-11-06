@@ -360,22 +360,9 @@ Render writes the compiled body to `.lore/LORE.md` and stitches an idempotent `@
 
 Symmetric principle: pin only the **non-skippable subset** (constraints + warnings agents can't afford to miss). Everything else fetched via `lore search` per the directive's pre-response checklist. Keeps CLAUDE.md small even as the project's knowledge grows (rules + hotfixes can accumulate into hundreds without bloating the rendered file).
 
-## Setup / migration (run after upgrade)
+## Setup / migration (after upgrade)
 
-After `git pull && task lore:install:all`, run **`lore setup`** once in each project:
-
-```bash
-lore setup
-```
-
-It runs:
-1. `dbent_migrate.Migrate` — ent schema auto-migration (new columns, new entities, new indexes)
-2. `fts5.EnsureRegistrySchema` — creates/rebuilds 23 per-entity FTS tables + triggers + backfills
-3. Stamps a registry fingerprint so per-command warnings stop
-
-Fresh installs (`lore init`) run setup automatically — no manual step needed.
-
-If you skip setup on an upgraded repo, every command prints `hint: run lore setup` on stderr until you do. Per-command overhead is one SELECT (~1ms); the heavy work only runs inside `setup`.
+Nothing to run after `git pull && task lore:install:all` or any upgrade: the local cache and search index rebuild themselves from `.lore/data`, and the machine store schema updates when it is opened. `lore setup` is optional (a safe, idempotent schema update); `lore setup --agent-hooks` installs the coding tools' session and context hooks. The one real step is for data written by v0.1.17: `lore migrate run` (`--dry-run` first).
 
 ## Git commit linking (polymorphic)
 
@@ -872,5 +859,5 @@ lore audit log [--limit 50] [--json]  # newest first; --limit 0 = all
 | `E_ROOT_REFUSED` | running as root (files would end up root-owned) | `LORE_ALLOW_ROOT=1` (legacy `MINI_ALLOW_ROOT=1`) |
 | `E_NETWORK_FS` | project or DB inside iCloud/Dropbox/OneDrive/Google Drive, or on NFS/SMB | `LORE_ALLOW_NETWORK_FS=1` |
 | `E_DISK_FULL` | the disk is full; nothing was written | free space, re-run |
-| `E_MIGRATION_INCOMPLETE` (doctor) | a schema migration was interrupted | `lore setup` |
+| `E_MIGRATION_INCOMPLETE` (doctor) | a schema update was interrupted | `lore setup` (safe to repeat) |
 

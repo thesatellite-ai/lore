@@ -138,7 +138,6 @@ Then **restart your coding agent** so it loads.
 cd your-project
 
 lore init                # create the local lore project
-lore setup               # build the search index
 lore directive install   # add the agent-directive block to CLAUDE.md / AGENTS.md
 
 # capture knowledge
@@ -189,7 +188,7 @@ Bodies can be passed with `--body="…"` or piped: `echo "text" | lore memory ad
 | Command | Use case |
 |---|---|
 | `lore init [path]` | Create a new project (`.lore/lore.db`, schema, gitignore, Project row). `--name`, `--non-interactive` |
-| `lore setup` | One-time post-install/upgrade migrations (builds the search index). Run once per project after install/upgrade |
+| `lore setup` | Optional: `--agent-hooks` installs the coding tools' session and context hooks. Nothing needs to run after an install or upgrade (the cache and search index rebuild themselves); `lore migrate run` is the one step for v0.1.17 data |
 | `lore directive install` | Inject the lore agent-directive block into `CLAUDE.md` / `AGENTS.md` so agents know to use lore (`show` to print it; delete the block to remove it) |
 | `lore identity` | Manage your identity: `identity:` in `~/.lore/config.yaml`, and one per org with `lore identity set --org <org>` |
 | `lore whoami` | The org this repo resolves to and why, your identity, and what loads here |

@@ -12,9 +12,6 @@ note "init"
 on alice work/website "lore init --non-interactive --name=website"
 on alice work/website "git status --short"
 
-note "setup"
-on alice work/website "lore setup"
-
 note "first rule"
 on alice work/website "lore rule add --body 'Run the tests before you push'"
 on alice work/website "lore rule list"

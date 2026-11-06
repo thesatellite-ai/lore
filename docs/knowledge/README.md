@@ -4,7 +4,7 @@
 
 ## Start here
 
-- [Your first project](first-project.md): `lore init`, one rule, `lore render`, and a look at `CLAUDE.md`. Also `lore setup`, `lore doctor`, `lore sql` and shell completion.
+- [Your first project](first-project.md): `lore init`, one rule, `lore render`, and a look at `CLAUDE.md`. Also `lore doctor`, `lore sql` and shell completion.
 
 ## Write things down
 
