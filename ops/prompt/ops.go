@@ -242,7 +242,7 @@ func checkArgsSchema(verb, raw string) error {
 		return nil
 	}
 	var obj map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(s), &obj); err != nil {
+	if err := json.Unmarshal([]byte(s), &obj); err != nil || obj == nil { // JSON null decodes into a nil map
 		return errs.New(errs.InvalidInput, "prompt "+verb+": --args-schema is not a JSON object").
 			WithHint(`give a JSON schema object, e.g. --args-schema '{"type":"object","properties":{"name":{"type":"string"}}}'`)
 	}
