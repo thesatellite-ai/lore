@@ -1,18 +1,6 @@
 ---
 name: lore
-description: |
-  Local-first memory + context-management CLI for coding agents. The canonical place to persist what you learn about a project — rules you must follow, decisions and their rationale, recurring warnings, free-form memories, patterns, playbooks, prompts, tasks, missions, plans, reminders, and tags. Compiles structured knowledge into CLAUDE.md (or AGENTS.md, .cursorrules, etc.) that every future agent session reads.
-
-  ALWAYS load this skill when the user:
-  • says "remember", "don't forget", "we decided", "we keep hitting", "we always X", "we never X"
-  • corrects an approach you took ("no, we don't do it that way here")
-  • confirms a non-obvious decision you made ("yes, that's the right call")
-  • mentions lore, .lore/, CLAUDE.md, render, memory add, rule add
-  • asks "what do we know about X?", "why did you do X?", "what was decided about X?"
-  • wants to bootstrap a project from existing markdown
-  • reports a DB / corruption / lock / migration issue
-
-  Also load proactively at session start in any repo containing .lore/ — the user is using lore and expects you to write back to it.
+description: "Use in any repo with .lore/ (load first), and when the user says \"remember\", \"we decided\", \"we always/never\", \"add a task\", \"what's pending\", \"status\", \"lore\", \"render\", or corrects your approach. Not for prompt history (use ailog) or a one-off handoff doc (use satl-context-handoff)."
 license: same as lore
 ---
 
