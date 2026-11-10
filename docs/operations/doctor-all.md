@@ -66,7 +66,7 @@ setup personal (solo) ─ ~/work/personal/**
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
-2 setups · 20 ok · 4 warnings · 0 errors · 1 could not run → degraded (exit 1)
+2 setups · 20 ok · 5 warnings · 0 errors · 1 could not run → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
@@ -104,7 +104,7 @@ setup personal (solo) ─ ~/work/personal/**
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
-1 setup · 7 ok · 2 warnings · 0 errors → degraded (exit 1)
+1 setup · 7 ok · 3 warnings · 0 errors → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
@@ -139,7 +139,7 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
       repair: lore setup repair agency
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
-1 setup · 12 ok · 2 warnings · 2 errors · 1 could not run → broken (exit 2)
+1 setup · 12 ok · 3 warnings · 2 errors · 1 could not run → broken (exit 2)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
@@ -164,7 +164,7 @@ A check that could not run makes the result degraded, never broken, because the 
 ```console
 # tomas, in agency/site
 $ lore doctor --all --setup agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["status"], r["exit_status"], r["counts"]); [print(c["check"], c["status"], c["level"], c.get("target","-"), "|", c.get("detail","")) for s in r["setups"] for c in s["checks"] if c["status"] not in ("ok", "skip")]'
-broken 2 {'ok': 12, 'warn': 2, 'fail': 2, 'skip': 14, 'error': 1}
+broken 2 {'ok': 12, 'warn': 3, 'fail': 2, 'skip': 14, 'error': 1}
 identity.actor_copies warn warn - | Tomas Weber (act_7a67…9504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
 github.ssh_user fail error - | github.com logs in as mira-dev
 github.key_matches fail error - | github.com logs in as mira-dev, but this setup's account is tomas-dev
@@ -178,7 +178,10 @@ store.private error error store agency | could not tell whether agency/notes is 
 | `setups[]` | one entry per setup: `name`, `kind`, `org`, `default`, `folders`, its own `status` (`healthy`, `degraded` or `broken`) and its `checks` |
 | `setups[].checks[]` | `check` (an id from [Every check](#every-check)), `status` (`ok`, `warn`, `fail`, `skip`, or `error` when the check could not run), `level` (`error` or `warn`), `target` (the store, tool or repo, for checks run per item), `detail`, `fix` (`text`, `command`, `runnable`, `outward`), `checked_at`, `took_ms` |
 | `machine.checks[]` | checks across setups, such as `folders.overlap` |
-| `counts` | results by status, every setup's checks and the machine checks (plain `lore doctor` counts the active setup's checks); `skip` counts the checks that do not apply to this setup (no store url yet, no key file recorded, …) |
+| `counts` | results by status: every setup's checks, the machine checks (plain `lore doctor` counts the active setup's checks) and `findings`; `skip` counts the checks that do not apply to this setup (no store url yet, no key file recorded, …) |
+| `findings` | every warning and error of the report as a result (`check`, `status`, `level`, `detail`, `fix`, `target` `repo <key>`): a stale `.lore/LORE.md`, a gitignored `.lore/data`, unpushed store work. `status` is the worst of `setups[].checks`, `machine.checks` and `findings`, so it is never worse than what the report lists. A finding whose fix is one plain lore command runs with `lore doctor fix <key>` (it asks first; `--yes` skips the question) |
+
+`lore doctor last` prints each setup's last recorded results and when they were taken without running a check (the setup page's Doctor opens on it).
 
 ## Step 5 — List the steps to redo with `lore setup repair`
 

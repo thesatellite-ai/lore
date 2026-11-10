@@ -82,7 +82,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		}
 		run := opsdoctor.CheckRun{Check: string(c.name), Err: err}
 		for _, f := range found {
-			run.Findings = append(run.Findings, opsdoctor.Finding{Check: string(f.Check), Level: doctorLevel(f.Level), Fixed: f.Fixed, Line: f.Line()})
+			run.Findings = append(run.Findings, opsdoctor.Finding{Check: string(f.Check), Level: doctorLevel(f.Level), Fixed: f.Fixed, Line: f.Line(), Fix: f.Fix})
 		}
 		out = append(out, run)
 	}

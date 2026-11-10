@@ -38,7 +38,7 @@ func TestChangedUnderUntrackedUnstagedRenameSubdir(t *testing.T) {
 	}
 	list := func() []string {
 		t.Helper()
-		got, lerr := changedUnder(ctx, repo, project, ".lore/data")
+		got, _, lerr := changedUnder(ctx, repo, project, ".lore/data")
 		if lerr != nil {
 			t.Fatal(lerr)
 		}
@@ -78,5 +78,15 @@ func TestChangedUnderUntrackedUnstagedRenameSubdir(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(project, filepath.FromSlash(p))); err != nil {
 			t.Fatalf("path %q does not resolve from the project dir: %v", p, err)
 		}
+	}
+	// OS clutter (untracked, no global excludes file) is left out and
+	// reported, so the hook stages files by name.
+	for _, n := range []string{".DS_Store", "._a.json"} {
+		if err := os.WriteFile(filepath.Join(data, n), []byte("\x00\x00\x00\x01Bud1"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got2, junk, lerr := changedUnder(ctx, repo, project, ".lore/data"); lerr != nil || !junk || len(got2) != 2 {
+		t.Fatalf("with clutter: %v junk %v err %v, want the two row files and junk", got2, junk, lerr)
 	}
 }

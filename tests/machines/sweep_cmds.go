@@ -132,6 +132,10 @@ const sweepSetup = "sweep-tmp"
 var reads = []sweepStep{
 	{Cmd: "doctor run", Args: []string{"--all"}, In: inBoth, Exits: doctorExits},
 	{Cmd: "doctor run", In: inBoth, Exits: doctorExits},
+	// doctor last reads the recorded results only; doctor fix with a key no
+	// finding has is refused the documented way (E_NOT_FOUND) and runs nothing.
+	{Cmd: "doctor last", In: inBoth},
+	{Cmd: "doctor fix", Args: []string{"0000000000000000"}, In: inBoth},
 	{Cmd: "version", In: inHome},
 	{Cmd: "whoami show", In: inBoth},
 	{Cmd: "identity show", In: inBoth},

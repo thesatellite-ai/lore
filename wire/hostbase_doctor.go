@@ -97,7 +97,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	a.doctorSecretRulesOff(ctx, note)
 	a.doctorCIPins(ctx, warn)
 	a.doctorClaudeLocal(ctx, warn)
-	a.doctorSignals(ctx, warn, func(msg string) { b.Warnings = append(b.Warnings, msg) }) // hostbase_doctor_signals.go
+	a.doctorSignals(ctx, warn, note) // hostbase_doctor_signals.go: expired files only report (a note: they do not change the status)
 	if pin, floorErr := a.doctorVersionPin(ctx); floorErr != "" {
 		b.Errors = append(b.Errors, floorErr)
 		b.Status = opsdoctor.StatusBroken

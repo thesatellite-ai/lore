@@ -173,7 +173,7 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 	for _, t := range tables {
 		name := t.Name()
 		switch {
-		case isOSJunk(name), name == MetaFileName, name == PurgedFileName:
+		case IsOSJunk(name), name == MetaFileName, name == PurgedFileName:
 			continue
 		case strings.HasPrefix(name, tmpPrefix):
 			removeStaleTmp(filepath.Join(f.dataDir, name), now)
@@ -210,7 +210,7 @@ func (f *Folder) scanTable(table string, files map[string]entry, now time.Time) 
 		name := e.Name()
 		rel := table + "/" + name
 		switch {
-		case isOSJunk(name):
+		case IsOSJunk(name):
 			continue
 		case strings.HasPrefix(name, tmpPrefix):
 			removeStaleTmp(filepath.Join(dir, name), now)

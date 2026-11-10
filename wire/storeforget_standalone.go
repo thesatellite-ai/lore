@@ -260,12 +260,32 @@ func unpushedIn(ctx context.Context, cl cloneDirs) []string {
 	}
 	if cl.work != "" && exists(cl.work) {
 		st, err := gitRun{dir: cl.work, args: []string{"status", "--porcelain"}}.output(ctx)
-		switch s := strings.TrimSpace(string(st)); {
-		case err != nil:
+		if err != nil {
 			out = append(out, cl.work+" (unreadable)")
-		case s != "":
-			out = append(out, strconv.Itoa(len(strings.Split(s, "\n")))+" uncommitted change(s) in "+cl.work)
+		} else if n := realChanges(string(st)); n > 0 {
+			out = append(out, strconv.Itoa(n)+" uncommitted change(s) in "+cl.work)
 		}
 	}
 	return out
+}
+
+// realChanges counts the lines of `git status --porcelain` that are not
+// operating-system clutter: an untracked .DS_Store Finder dropped into a
+// store clone is not work the forget would lose.
+func realChanges(porcelain string) int {
+	n := 0
+	for _, l := range strings.Split(porcelain, "\n") {
+		if len(l) < 4 {
+			continue
+		}
+		p := strings.Trim(l[3:], `"`)
+		if i := strings.LastIndex(p, " -> "); i >= 0 {
+			p = p[i+4:]
+		}
+		if rowfs.IsOSJunk(p) {
+			continue
+		}
+		n++
+	}
+	return n
 }

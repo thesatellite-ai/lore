@@ -6,7 +6,8 @@ package host
 //	git commit ─▶ pre-commit block ─▶ project root (none: not a lore
 //	project, git is never blocked) ─▶ changed files under .lore/data ─▶
 //	any of them broken (invalid JSON, conflict markers at any depth)?
-//	refuse, naming each ─▶ else stage .lore/data (knowledge is never left
+//	refuse, naming each (OS clutter such as .DS_Store is skipped, never
+//	checked or staged) ─▶ else stage .lore/data (knowledge is never left
 //	behind by a partial `git add`) ─▶ RX7: a staged meta_keys row that
 //	drops internal, sensitive or strict without a new changed_by record
 //	refuses with E_LEAK_BLOCKED (wire.KeyLoosenings)
@@ -25,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/dataignore"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/merge"
@@ -57,7 +59,7 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	if err != nil {
 		return nil // not a git checkout (a hook copied around)
 	}
-	changed, err := changedUnder(ctx, repo, root, loreDataPathspec)
+	changed, junk, err := changedUnder(ctx, repo, root, loreDataPathspec)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "pre-commit: list the changed lore files", err)
 	}
@@ -86,8 +88,8 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	}
 	if len(changed) > 0 {
 		specs := []string{loreDataPathspec}
-		if shadowed {
-			specs = changed // stage the rest one by one, leaving the shadowed files out
+		if shadowed || junk {
+			specs = changed // stage the rest one by one, leaving the shadowed files and OS clutter out
 		}
 		args := append([]string{"add", "-A", "--"}, specs...)
 		if _, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: args, Env: hookIndexEnv(ctx, repo, root)}); err != nil {
@@ -106,17 +108,18 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 // changedUnder lists the files under pathspec that differ from HEAD or are
 // untracked, as paths relative to root (git status, porcelain v1 with -z:
 // "XY <path>", a rename or copy followed by its old path).
-func changedUnder(ctx context.Context, repo *gitref.Repo, root, pathspec string) ([]string, error) {
+// junk reports that OS clutter (adapters/dataignore.IsOSJunk) was listed
+// and left out: staging then names the files instead of the folder.
+func changedUnder(ctx context.Context, repo *gitref.Repo, root, pathspec string) (paths []string, junk bool, err error) {
 	out, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--", pathspec}})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	top, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"rev-parse", "--show-prefix"}})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	prefix := strings.TrimSpace(string(top)) // root relative to the top, "" or "sub/"
-	var paths []string
 	fields := strings.Split(string(out), "\x00")
 	for i := 0; i < len(fields); i++ {
 		f := fields[i]
@@ -127,9 +130,13 @@ func changedUnder(ctx context.Context, repo *gitref.Repo, root, pathspec string)
 		if strings.ContainsAny(status, "RC") {
 			i++ // the old path of a rename or copy
 		}
+		if dataignore.IsOSJunk(p) {
+			junk = true // Finder's .DS_Store, ._name: not lore's, never checked or staged
+			continue
+		}
 		paths = append(paths, strings.TrimPrefix(p, prefix))
 	}
-	return paths, nil
+	return paths, junk, nil
 }
 
 // withoutLiveRows drops from changed (paths relative to root) the row

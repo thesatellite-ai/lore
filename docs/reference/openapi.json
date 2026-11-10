@@ -13922,6 +13922,446 @@
         }
       }
     },
+    "/v1/doctor/fix": {
+      "post": {
+        "operationId": "doctor.fix",
+        "summary": "Run the fix of one doctor finding of this repo (a plain lore command such as lore render), after a confirmation",
+        "tags": [
+          "doctor"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "finding": {
+                    "type": "string",
+                    "description": "the finding's key: its target in lore doctor --json findings[], without the leading \"repo \""
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "finding"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "exit": {
+                      "type": "integer"
+                    },
+                    "findings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "check": {
+                            "type": "string"
+                          },
+                          "checked_at": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "fix": {
+                            "type": "object",
+                            "properties": {
+                              "choices": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "command": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "command"
+                                  ]
+                                }
+                              },
+                              "command": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "outward": {
+                                "type": "boolean"
+                              },
+                              "runnable": {
+                                "type": "boolean"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "why": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "text",
+                              "command"
+                            ]
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "error",
+                              "warn",
+                              "info"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ok",
+                              "warn",
+                              "fail",
+                              "skip",
+                              "error"
+                            ]
+                          },
+                          "target": {
+                            "type": "string"
+                          },
+                          "took_ms": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "check",
+                          "status",
+                          "level"
+                        ]
+                      }
+                    },
+                    "fixed": {
+                      "type": "boolean"
+                    },
+                    "output_tail": {
+                      "type": "string"
+                    },
+                    "ran": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "still_failing": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ran",
+                    "exit",
+                    "output_tail",
+                    "findings"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_FIX_REFUSED, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/doctor/last": {
+      "post": {
+        "operationId": "doctor.last",
+        "summary": "Show each setup's last doctor results and when they were taken, without running any check",
+        "tags": [
+          "doctor"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "setups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "checked_at": {
+                            "type": "string"
+                          },
+                          "checks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "check": {
+                                  "type": "string"
+                                },
+                                "checked_at": {
+                                  "type": "string"
+                                },
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "fix": {
+                                  "type": "object",
+                                  "properties": {
+                                    "choices": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "command": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "label",
+                                          "command"
+                                        ]
+                                      }
+                                    },
+                                    "command": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "outward": {
+                                      "type": "boolean"
+                                    },
+                                    "runnable": {
+                                      "type": "boolean"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "why": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "text",
+                                    "command"
+                                  ]
+                                },
+                                "level": {
+                                  "type": "string",
+                                  "enum": [
+                                    "error",
+                                    "warn",
+                                    "info"
+                                  ]
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ok",
+                                    "warn",
+                                    "fail",
+                                    "skip",
+                                    "error"
+                                  ]
+                                },
+                                "target": {
+                                  "type": "string"
+                                },
+                                "took_ms": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "check",
+                                "status",
+                                "level"
+                              ]
+                            }
+                          },
+                          "disabled": {
+                            "type": "boolean"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "org": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "healthy",
+                              "degraded",
+                              "broken"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "kind",
+                          "checks"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "setups"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/doctor/run": {
       "post": {
         "operationId": "doctor.run",
@@ -14011,6 +14451,104 @@
                     },
                     "exit_status": {
                       "type": "integer"
+                    },
+                    "findings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "check": {
+                            "type": "string"
+                          },
+                          "checked_at": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "fix": {
+                            "type": "object",
+                            "properties": {
+                              "choices": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "command": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "command"
+                                  ]
+                                }
+                              },
+                              "command": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "outward": {
+                                "type": "boolean"
+                              },
+                              "runnable": {
+                                "type": "boolean"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "why": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "text",
+                              "command"
+                            ]
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "error",
+                              "warn",
+                              "info"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ok",
+                              "warn",
+                              "fail",
+                              "skip",
+                              "error"
+                            ]
+                          },
+                          "target": {
+                            "type": "string"
+                          },
+                          "took_ms": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "check",
+                          "status",
+                          "level"
+                        ]
+                      }
                     },
                     "identity": {
                       "type": "object",

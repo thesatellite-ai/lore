@@ -8,6 +8,8 @@ lore 0.1.18: a new core under every command, and the first release of the open-s
 
 ### Added
 
+- New op `doctor.last` (`lore doctor last`, `POST /v1/doctor/last`) reads each setup's last recorded doctor results and when they were taken, without running a check.
+- Every warning and error of a doctor report is listed and counted: `findings[]` in `lore doctor --json` (check, status, level, detail, fix), counted in `counts` and in the text summary line, and the status is the worst of what the report lists, so it never reads "degraded" beside "0 warnings". A finding whose fix is one plain lore command (`lore render`, `lore sync`) can be run with `lore doctor fix <key>` (new op `doctor.fix`), which re-makes the report and runs only what it offers.
 - Changing a solo setup's email keeps you one actor: the old key is kept under `aliases:` in config and in `key_aliases` on your actor rows, `actor show human:<old email>` still finds you, `actor list` shows one row with the current email, and a new machine with only the new email finds the same actor. Repo copies never carry an email.
 - New ops `machine.reveal <lore_home|config_file|repo_lore>` and `machine.path.list`: show lore's folder, `config.yaml` or the repo's `.lore` in the file manager (Finder on macOS, Explorer on Windows, xdg-open on Linux). The target is a closed set, never a path, a missing file is `E_NOT_FOUND`, and over REST the reveal runs only for the local setup server, never for `lore api`.
 - `lore config fmt [--dry-run]` rewrites `~/.lore/config.yaml` in block style when a list or mapping sits on one line (`setups: [{…}]` from a file saved before the block-style writer, which only a later write repaired), keeping comments and key order; `lore doctor` warns about such a file (`config_style`, naming the command and leaving the file as it is) and `lore doctor --fix` runs the rewrite.
@@ -100,6 +102,8 @@ lore 0.1.18: a new core under every command, and the first release of the open-s
 - New doctor check `duplicate_actors`: one person with two actors from an email change before 0.1.18; with an org it names `lore actor contact add <keep> email <old> --identity --merge`, without one it is a note.
 
 ### Changed
+
+- `lore doctor` lists expired signal files as a note (they never changed the status; the next signals write drops them), not under warnings.
 
 - With no setup and no `identity:`, lore shows git's `user.name` as your display name (the email's local part only when git has no name). Your actor id is unchanged, and actor copies are refreshed on the next write or `lore actor refresh`.
 - `lore doctor`: the top-level `counts` (and status/ok) include the active setup's own checks, so the report never reads all ok while a setup check warns.

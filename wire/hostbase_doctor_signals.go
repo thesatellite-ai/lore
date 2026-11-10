@@ -7,7 +7,7 @@ package wire
 //	  ─▶ a client repo keeps no signals of its own (D8): no rows
 //	  ─▶ the last fetched copy of this repo's signals ref (no network)
 //	       more than signalsRefLargeFiles files ─▶ warning, degraded
-//	       expired signal files still on it    ─▶ warning (the next write drops them)
+//	       expired signal files still on it    ─▶ note (the next write drops them; it does not change the status)
 //	  ─▶ remote with autopush: a no-op atomic push of the ref onto itself;
 //	     the remote refusing --atomic ─▶ warning, degraded
 //

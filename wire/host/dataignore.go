@@ -15,6 +15,9 @@ package host
 //	  ─▶ some: re-include block in .gitignore ─▶ check again ─▶ nothing
 //	     re-included: restore .gitignore ─▶ what is still ignored, with
 //	     the rule responsible
+//
+// The probes, the check-ignore call and the OS clutter list live in
+// adapters/dataignore, shared with `lore doctor`'s [sync] section.
 
 import (
 	"bytes"
@@ -22,39 +25,28 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
-	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/dataignore"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/schema"
 )
 
-// checkIgnoreNone is `git check-ignore`'s exit status when no path given
-// is ignored (0 = some are, 128 = a fatal error).
-const checkIgnoreNone = 1
-
 // dataRel is the committed data folder, relative to the project root.
-var dataRel = rowfs.LoreDir + "/" + rowfs.DataDir
+const dataRel = dataignore.DataRel
 
 // dataIgnoreMarker names lore's re-include block in .gitignore (the
 // v0.1.17 block marker, so both binaries keep one block).
 const dataIgnoreMarker = gitBlockMarker
-
-// dataJunkPatterns are operating-system clutter names ignored again right
-// after the re-include (in a .gitignore the later rule wins).
-var dataJunkPatterns = []string{".DS_Store", "Desktop.ini", "Thumbs.db", "desktop.ini", "._*"}
 
 // dataUnignoreLines re-include lore's data folder. A negation cannot
 // re-include a file whose parent folder is excluded (`.lore/`): that case
 // is reported instead.
 func dataUnignoreLines() []string {
 	out := []string{"!" + dataRel + "/", "!" + dataRel + "/**"}
-	for _, p := range dataJunkPatterns {
+	for _, p := range dataignore.OSJunkPatterns { // OS clutter stays ignored (the later rule wins)
 		out = append(out, dataRel+"/**/"+p)
 	}
 	return out
@@ -64,46 +56,10 @@ func dataUnignoreLines() []string {
 // folder hides every table; the first few name the rule).
 const maxIgnoredShown = 5
 
-// dataProbePath is the file name stem used inside table folders: not a
-// valid row id, so a stray file by that name is skipped, never read.
-const dataProbePath = "sample"
-
-// dataProbes are the paths, relative to the project root, of one file of
-// every kind lore commits under .lore/data.
-func dataProbes() []string {
-	out := []string{path.Join(dataRel, rowfs.MetaFileName), path.Join(dataRel, rowfs.PurgedFileName)}
-	for _, t := range schema.Builtin() {
-		if !t.Synced || t.MachineLocal {
-			continue
-		}
-		out = append(out, path.Join(dataRel, t.Name.String(), dataProbePath+rowfs.RowFileExt))
-	}
-	return out
-}
-
-// ignoredData maps each probe git ignores in root to the rule responsible
-// ("<source>:<line>:<pattern>"). A git that cannot run reports nothing.
+// ignoredData maps each lore file kind git ignores in root (its probe
+// path) to the rule responsible ("<source>:<line>:<pattern>").
 func ignoredData(ctx context.Context, root string) (map[string]string, error) {
-	out, err := (gitref.Exec{}).Run(ctx, gitref.Invocation{Dir: root,
-		Args:  []string{"check-ignore", "-v", "--no-index", "--stdin", "-z"},
-		Stdin: []byte(strings.Join(dataProbes(), "\x00") + "\x00")})
-	if code, ok := gitref.ExitCode(err); ok && code == checkIgnoreNone {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "git check-ignore", err)
-	}
-	// -z -v: <source> NUL <linenum> NUL <pattern> NUL <pathname> NUL ...
-	f := bytes.Split(out, []byte{0})
-	res := map[string]string{}
-	for i := 0; i+3 < len(f); i += 4 {
-		pattern := string(f[i+2])
-		if strings.HasPrefix(pattern, "!") {
-			continue // matched by a negation: not ignored
-		}
-		res[string(f[i+3])] = string(f[i]) + ":" + string(f[i+1]) + ":" + pattern
-	}
-	return res, nil
+	return dataignore.Ignored(ctx, root, nil)
 }
 
 // restoreGitignore puts root's .gitignore back as it was before the block

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -86,6 +87,9 @@ type Finding struct {
 	Fixed bool
 	// Line is the finding's one printed line.
 	Line string
+	// Fix is the command or step that repairs it ("" when none): the
+	// finding's Fix in findings[] (a plain `lore …` command is runnable).
+	Fix string
 }
 
 // CheckRun is one core check's findings, or why it could not run.
@@ -249,10 +253,17 @@ type Report struct {
 	Setups []SetupReport `json:"setups,omitempty"`
 	// Machine holds the machine-wide checks (--all only).
 	Machine MachineReport `json:"machine,omitzero"`
-	// Counts are the setup and machine results by status: every setup's
-	// checks and the machine checks with --all, the active setup's checks
-	// in plain doctor (absent when no setup is active).
+	// Findings are the report's warnings and errors as results (check,
+	// status, level, detail, fix), so every finding that changes Status is
+	// listed and counted (findings.go).
+	Findings []onboard.CheckResult `json:"findings,omitempty"`
+	// Counts are the results by status: every setup's checks and the
+	// machine checks with --all, the active setup's checks in plain doctor,
+	// and Findings in both.
 	Counts Counts `json:"counts,omitzero"`
+	// meta is what each warning or error line's source knew beyond its
+	// text (check, fix, error level), for finalize.
+	meta map[string]findingMeta
 	// all selects the 6.2 text layout.
 	all bool
 	// disabled are --all's one-line notes about skipped disabled setups (alltext prints them).
@@ -286,11 +297,31 @@ func Ops(env Env) []op.Entry {
 		}, func(ctx context.Context, in RunIn) (Report, error) {
 			return Run(ctx, env, in)
 		}),
+		lastOp(env),
+		fixOp(env),
 	}
 }
 
 // Run is doctor.run over env.
 func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
+	r, err := runRepo(ctx, env, in.Fix)
+	if err != nil {
+		return Report{}, err
+	}
+	if err := addSetups(ctx, env, in, &r); err != nil {
+		return Report{}, err
+	}
+	r.finalize()
+	r.OK = r.Status == StatusHealthy
+	r.Exit = exitOf(r.Status)
+	return r, nil
+}
+
+// runRepo is the report's repo part: this binary's base checks and the
+// core checks (doctor.fix re-reads only this part: no setup is probed).
+// The caller finalizes it.
+func runRepo(ctx context.Context, env Env, fix bool) (Report, error) {
+	in := RunIn{Fix: fix}
 	base := Base{Status: StatusHealthy, DBOK: true, Notes: []string{noLoreDBNote}}
 	h, local := env.DoctorHost(ctx)
 	if local {
@@ -309,13 +340,32 @@ func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
 		}
 		r.Sync = b
 	}
-	addChecks(&r, env.DoctorChecks(ctx, in.Fix), outsideRepo(ctx, env))
-	if err := addSetups(ctx, env, in, &r); err != nil {
-		return Report{}, err
+	unnamedBase(&r, base)
+	for _, e := range r.Errors {
+		// A base error breaks the report only when the base said so (a
+		// version below the repo's floor); the rest degrade.
+		r.note(e, findingMeta{check: CheckError, broken: base.Status == StatusBroken})
 	}
-	r.OK = r.Status == StatusHealthy
-	r.Exit = exitOf(r.Status)
+	addChecks(&r, env.DoctorChecks(ctx, in.Fix), outsideRepo(ctx, env))
 	return r, nil
+}
+
+// Lines of a host status that names no finding (a host bug): the status
+// is listed instead of standing unexplained (findings.go).
+const (
+	lineUnnamedDegraded = "doctor: this lore's own checks reported degraded without naming a finding; run lore doctor --json and report it"
+	lineUnnamedBroken   = "doctor: this lore's own checks reported broken without naming an error; run lore doctor --json and report it"
+)
+
+// unnamedBase lists a base status that no warning or error explains, so
+// the report's status never rests on something it does not show.
+func unnamedBase(r *Report, base Base) {
+	switch {
+	case base.Status == StatusBroken && len(base.Errors) == 0:
+		r.Errors = append(r.Errors, lineUnnamedBroken)
+	case base.Status == StatusDegraded && len(base.Errors) == 0 && len(base.Warnings) == 0:
+		r.Warnings = append(r.Warnings, lineUnnamedDegraded)
+	}
 }
 
 // noteRepoSkipped is the one note for the core checks that need a repo,
@@ -351,12 +401,15 @@ func addChecks(r *Report, runs []CheckRun, outside bool) {
 			continue
 		}
 		if c.Err != nil {
-			r.Warnings = append(r.Warnings, c.Check+": the check could not run: "+c.Err.Error())
+			line := c.Check + ": the check could not run: " + c.Err.Error()
+			r.note(line, findingMeta{check: onboard.CheckID(c.Check)})
+			r.Warnings = append(r.Warnings, line)
 			degrade(r)
 			continue
 		}
 		for _, f := range c.Findings {
 			if f.Level == LevelError && !f.Fixed {
+				r.note(f.Line, findingMeta{check: onboard.CheckID(f.Check), fix: f.Fix, broken: true})
 				r.Errors = append(r.Errors, f.Line)
 				r.Status = StatusBroken
 				continue
@@ -365,6 +418,7 @@ func addChecks(r *Report, runs []CheckRun, outside bool) {
 				r.Notes = append(r.Notes, f.Line)
 				continue
 			}
+			r.note(f.Line, findingMeta{check: onboard.CheckID(f.Check), fix: f.Fix})
 			r.Warnings = append(r.Warnings, f.Line)
 			degrade(r)
 		}
