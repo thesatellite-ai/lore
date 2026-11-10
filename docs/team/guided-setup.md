@@ -2,7 +2,7 @@
 
 **In short:** a *setup* is one way you work on this machine: who you are, which GitHub account you use, where your own notes go, which team you belong to, and which folders it is for. You can have several (say, one for your own projects and one for a team), and lore picks the right one from the folder you are in. `lore setup` walks you through making one, step by step, with checks; every step is also a command, so a script or an agent can do the same.
 
-> **New in lore 0.1.18.** The guided page in the browser ships with lore EE. Everything on this page works in the open-source build too, through the `lore setup` commands. The output below is a real run (`tests/team/docs/run-examples.sh guided_setup`) in a throwaway home folder with a fake GitHub: a fake `ssh` answers as GitHub would, and `gh` has no login, so nothing reaches the network.
+> **New in lore 0.1.18.** The guided page in the browser ships in the prebuilt lore binaries (GitHub Releases, Homebrew, the install scripts). Everything on this page works in a build from source too, through the `lore setup` commands. The output below is a real run (`tests/team/docs/run-examples.sh guided_setup`) in a throwaway home folder with a fake GitHub: a fake `ssh` answers as GitHub would, and `gh` has no login, so nothing reaches the network.
 
 ## What it is and when you want it
 
@@ -90,7 +90,7 @@ Steps that do not apply to a kind are skipped. A re-check reuses the results of 
 
 ## Step 2 — Open the guided setup
 
-On a terminal, bare `lore setup` (or `lore onboard`, or `lore setup web`) starts a small local server and opens its page in your browser. In lore EE that is the guided page; in the open-source build it is a plain page that lists the commands that do the same work ([A build without the setup page](#a-build-without-the-setup-page)).
+On a terminal, bare `lore setup` (or `lore onboard`, or `lore setup web`) starts a small local server and opens its page in your browser. In the prebuilt binaries that is the guided page; in a build from source it is a plain page that lists the commands that do the same work ([A build without the setup page](#a-build-without-the-setup-page)).
 
 | Flag | Effect |
 |---|---|
@@ -359,7 +359,7 @@ The page listens on `127.0.0.1` only, on a random port, and the address carries 
 
 ## A build without the setup page
 
-The guided page is part of lore EE; the open-source core (Apache-2.0) builds without it. In such a build `lore setup` still opens a local page with the same safety rules, but it is a plain page that says the guided page is not in this build and lists the commands that do the same work: `lore setup plan`, `lore setup check`, `lore setup apply` and `lore doctor --all`. Every step on this page can be done with those commands ([Manage setups from the command line](#manage-setups-from-the-command-line)).
+The guided page is one of the proprietary components of the prebuilt lore binaries (GitHub Releases, Homebrew, the install scripts); the Apache-2.0 source in this repository builds without it. In such a build `lore setup` still opens a local page with the same safety rules, but it is a plain page that says the guided page is not in this build and lists the commands that do the same work: `lore setup plan`, `lore setup check`, `lore setup apply` and `lore doctor --all`. Every step on this page can be done with those commands ([Manage setups from the command line](#manage-setups-from-the-command-line)).
 
 ## Try it
 

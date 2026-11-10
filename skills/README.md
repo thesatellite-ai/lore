@@ -91,4 +91,4 @@ lore --help | grep -E "^\s+\w+"
 
 ## License
 
-Same license as lore itself.
+Apache License 2.0, the same as the lore source (see the repository's `LICENSE`).

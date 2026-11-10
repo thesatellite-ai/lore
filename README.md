@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/thesatellite-ai/lore/releases"><img src="https://img.shields.io/github/v/release/thesatellite-ai/lore?color=10B981&label=release" alt="Latest release"></a>
-  <a href="https://github.com/thesatellite-ai/lore/blob/main/LICENSE"><img src="https://img.shields.io/github/license/thesatellite-ai/lore?color=10B981" alt="License"></a>
+  <a href="https://github.com/thesatellite-ai/lore/blob/main/LICENSE"><img src="https://img.shields.io/github/license/thesatellite-ai/lore?color=10B981&label=source%20license" alt="Source license: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-10B981" alt="Platforms: macOS, Linux, Windows">
   <img src="https://img.shields.io/badge/built%20with-Go-00ADD8" alt="Built with Go">
   <img src="https://img.shields.io/badge/data-100%25%20local-10B981" alt="100% local data">
@@ -113,7 +113,7 @@ curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh 
 irm https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.ps1 | iex
 ```
 
-Or grab a tarball from [Releases](https://github.com/thesatellite-ai/lore/releases) and put `lore` on your `PATH` (the `skills/` folder in the archive is the skill bundle).
+Or grab a tarball from [Releases](https://github.com/thesatellite-ai/lore/releases) and put `lore` on your `PATH` (the `skills/` folder in the archive is the skill bundle; `BINARY-LICENSE.txt` beside it is the binary's licence, see [License](#license)).
 
 ### Install the skill (do this now — required)
 
@@ -434,7 +434,7 @@ Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses 
 
 **Is capture and recall really automatic?** With the bundled lore skill, the agent captures decisions, rules, and corrections and recalls relevant knowledge on its own. You can also drive everything by hand with the CLI.
 
-**Is lore free and open source?** Yes — free and open source under the Apache License 2.0 from 0.1.18, with no seats or usage tiers. See [License](#license).
+**Is lore free and open source?** The source in this repository is open source under the Apache License 2.0 from 0.1.18. The prebuilt binaries (Releases, Homebrew, the install scripts) are free to use, commercial use included, with no seats or usage tiers; they also contain proprietary components and come under the binary licence shipped in every archive. See [License](#license).
 
 ## Building from source / contributing
 
@@ -442,6 +442,8 @@ See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (build, release, Homebrew tap
 
 ## License
 
-lore is licensed under the [Apache License 2.0](LICENSE) from release 0.1.18 (see [NOTICE](NOTICE)). Releases v0.1.17 and earlier remain under the PolyForm Perimeter License 1.0.0, the license they were published under.
+The source code in this repository is licensed under the [Apache License 2.0](LICENSE) from release 0.1.18 (see [NOTICE](NOTICE)). Releases v0.1.17 and earlier remain under the PolyForm Perimeter License 1.0.0, the license they were published under.
+
+The prebuilt binaries (the archives on [Releases](https://github.com/thesatellite-ai/lore/releases), the Homebrew formula and the `install.sh` / `install.ps1` installers, which download those archives) contain this Apache-2.0 source and also proprietary components, such as the guided setup page. They are free to use, including for commercial work, under `BINARY-LICENSE.txt`, which ships in every archive beside `LICENSE-core-Apache-2.0` and `NOTICE-core` (this repository's licence and notice). The binary licence does not allow reselling the binary, offering it as a hosted service, modifying it, or reverse-engineering its proprietary parts, and it does not limit your Apache-2.0 rights in this source. Building from this source (`go install github.com/thesatellite-ai/lore/cmd/lore@latest` or `task lore:build`) gives a binary under the Apache License 2.0 alone, which serves the plain built-in setup page.
 
 <sub><strong>lore</strong> — open-source, local-first memory &amp; context management for coding agents. Persistent <code>CLAUDE.md</code> / <code>AGENTS.md</code> memory for Cursor, Windsurf, Cline, GitHub Copilot, Codex and other coding agents. No cloud, no API keys, no embeddings.</sub>

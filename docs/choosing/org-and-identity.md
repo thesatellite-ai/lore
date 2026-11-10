@@ -45,7 +45,7 @@ Two entries that answer at the same rule stop with `E_ORG_AMBIGUOUS`; lore never
 - **If a teammate's repo should name its org for everyone,** run `lore org set` in it. It is refused in a client repo, because it would tell the client the agency's org name.
 - **If one repo matches two entries,** pick one with `lore org use <entry>` for this machine, or tighten the patterns.
 - **If you work for two companies,** give each entry its own `identity` with that company's email. Lore never borrows one org's identity in another org's repo, and a repo that matches no org never uses an org's identity.
-- **If you keep several setups on one machine** (your own projects and a team's), make one setup each with `lore setup plan`, `check` and `apply`; a setup that names an org decides it in its folders when nothing above it does. lore EE adds a browser page for the same steps.
+- **If you keep several setups on one machine** (your own projects and a team's), make one setup each with `lore setup plan`, `check` and `apply`; a setup that names an org decides it in its folders when nothing above it does. The prebuilt binaries add a browser page for the same steps.
 - **If you hire a contractor for one client,** see [How to lay out your stores](store-layout.md): the org setup is the same, the store layout is what limits access.
 
 ## Pitfalls

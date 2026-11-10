@@ -212,7 +212,7 @@ agency github ['github.ssh_user', 'github.key_matches']
 
 It exits 1 while any step still has a failing check, and 0 when everything passes. Only failed checks count: warnings and checks that could not run are not repaired, so a setup that doctor calls degraded can still answer "nothing to repair".
 
-To run one fix yourself, `lore setup fix <setup> --check <id> --yes` runs that check's fix command when it is marked runnable; a fix that offers a choice (a linked skill folder: `replace` or `update`) runs only the one named with `--choice <id>`; a fix lore cannot run is refused with its text, so you can do it by hand ([Fixes that lore can run](../team/guided-setup.md#step-7--run-a-fix-from-the-command-line)). In lore EE, **Repair** on the setup page does the same from Home or Doctor.
+To run one fix yourself, `lore setup fix <setup> --check <id> --yes` runs that check's fix command when it is marked runnable; a fix that offers a choice (a linked skill folder: `replace` or `update`) runs only the one named with `--choice <id>`; a fix lore cannot run is refused with its text, so you can do it by hand ([Fixes that lore can run](../team/guided-setup.md#step-7--run-a-fix-from-the-command-line)). In the prebuilt binaries, **Repair** on the guided setup page does the same from Home or Doctor.
 
 ## Which repos it checks
 

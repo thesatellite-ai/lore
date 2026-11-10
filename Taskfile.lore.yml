@@ -753,7 +753,7 @@ tasks:
       - find . -name "*.db" -path "*/.lore/*" -delete 2>/dev/null || true
 
   release:
-    desc: "Build release artifacts (TODO: integrate with goreleaser per ship-gate)"
+    desc: "This repo builds no release binaries: a release is a version tag made by .github/workflows/release.yml (docs/DEVELOPMENT.md \"Releases\")"
     cmds:
-      - 'echo "TODO: integrate with goreleaser per ship-gate"'
+      - 'echo "This repo builds no release binaries: a release is the tag vX.Y.Z from .github/workflows/release.yml; the binaries are built and published separately (docs/DEVELOPMENT.md Releases)"'
       - 'exit 1'
