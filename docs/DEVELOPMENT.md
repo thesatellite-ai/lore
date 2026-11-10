@@ -167,11 +167,13 @@ This repository publishes no binaries. A release of the core is a version tag, m
 1. **push to `main`** → the next patch tag (`vX.Y.Z`) is created and pushed. Add `[skip release]` to the commit **subject** to opt out.
 2. **workflow_dispatch with `tag=`** → that tag on the current ref (use for minor/major bumps).
 
-The tag is also the Go module version an importing build requires. The released `lore` binary (core plus the setup page) is built by that importing build at the same version, with GoReleaser: it cross-compiles linux/darwin/windows × amd64/arm64, bundles the binary + `README.md` + `skills/` into per-platform archives named `lore_<os>_<arch>` with `checksums.txt`, and uploads them to this repository's GitHub Release for the tag, so `lore upgrade` (`adapters/selfupdate`) and `install.sh` keep reading releases from here.
+No binary is built here and the workflow creates no GitHub Release. The tag is also the Go module version an importing build requires, so a tag is permanent: never move or reuse one, fix forward with the next version.
+
+The released `lore` binary (this core plus proprietary components such as the guided setup page) is built and published separately, at the same version, after the tag exists: it cross-compiles linux/darwin/windows × amd64/arm64 and uploads per-platform archives named `lore_<os>_<arch>` (`.tar.gz`, `.zip` on Windows) with `checksums.txt` to this repository's GitHub Release for the tag, so `lore upgrade` (`adapters/selfupdate`), `install.sh` and `install.ps1` keep reading releases from here. Every archive holds `lore` (`lore.exe`), this repository's `README.md` and `skills/`, `BINARY-LICENSE.txt` (the binary's terms: free to use, commercial use included), `LICENSE-core-Apache-2.0` and `NOTICE-core` (this repository's `LICENSE` and `NOTICE`). The source here stays Apache-2.0; a binary built from it (`task lore:build`) is Apache-2.0 alone and serves the plain setup page.
 
 ## Homebrew tap
 
-Formulae for all `thesatellite-ai` tools live in one shared tap repo: **`thesatellite-ai/homebrew-tap`**. The binary release writes `Formula/lore.rb` there; users run `brew install thesatellite-ai/tap/lore`.
+Formulae for all `thesatellite-ai` tools live in one shared tap repo: **`thesatellite-ai/homebrew-tap`**. The binary release writes `Formula/lore.rb` there, pointing at the archives on this repository's Releases, with `license :cannot_represent` (the binary is under `BINARY-LICENSE.txt`, which no SPDX id names); users run `brew install thesatellite-ai/tap/lore`. Nothing in this repository writes to the tap.
 
 ## Rebranding note
 

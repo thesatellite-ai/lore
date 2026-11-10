@@ -30,9 +30,9 @@
 | `lore resource` (every subcommand: add, list, show, edit, graph, impact, check, stale, clone, rename, import, export, repoint, merge, archive, delete, lint, report, history, adopt, rehome, kinds, kind …, field …) | [resources](resources.md) |
 | `lore upgrade` (`--check`, `--version`, `--ignore-pin`), `lore_version_pin`, `LORE_VERSION_PIN`, `LORE_NO_UPGRADE_NOTICE`, `upgrade_notice` / `auto_upgrade` | [upgrade](upgrade.md) |
 
-## lore EE
+## The guided setup page
 
-The guided setup page and its Doctor page, with Repair and the Debug log, ship with lore EE (the enterprise build). Every check on them is also on the command line: [`lore doctor --all`](doctor-all.md).
+The guided setup page and its Doctor page, with Repair and the Debug log, ship in the prebuilt lore binaries (GitHub Releases, Homebrew, the install scripts); a build from source serves a plain page instead. Every check on them is also on the command line: [`lore doctor --all`](doctor-all.md).
 
 ## Related
 

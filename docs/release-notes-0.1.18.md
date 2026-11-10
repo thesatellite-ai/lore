@@ -1,6 +1,6 @@
 # lore 0.1.18
 
-lore 0.1.18 puts a new core under every command and is the first release of lore under the Apache License 2.0. Your notes now live as plain files in your repository, every command works the same from the terminal and from a local API, and a new guided setup gets a machine ready for one or several GitHub accounts and teams.
+lore 0.1.18 puts a new core under every command and is the first release whose source is under the Apache License 2.0. Your notes now live as plain files in your repository, every command works the same from the terminal and from a local API, and a new guided setup gets a machine ready for one or several GitHub accounts and teams.
 
 The full list of changes is in [CHANGELOG.md](../CHANGELOG.md).
 
@@ -15,7 +15,7 @@ The full list of changes is in [CHANGELOG.md](../CHANGELOG.md).
 - **Trash and undo.** `delete` moves a note to the trash; `lore trash list|restore|purge` and `lore batch undo` bring it back or remove it for good.
 - **A local API.** `lore api` serves every command over HTTP on 127.0.0.1 with a token and an OpenAPI description, built from the same list of operations as the CLI, so the inputs, checks and errors are the same.
 - **More to keep track of.** Metadata, resources, variables and references to secrets kept in your vault (never the secret itself), task trees and templates, and where each note came from.
-- **A local setup page.** `lore setup` on a terminal opens a small local page with strict safety rules. In this open-source build it lists the commands that do the same work.
+- **A local setup page.** `lore setup` on a terminal opens a small local page with strict safety rules. The prebuilt binaries serve the guided setup page; a build from source serves a plain page that lists the commands doing the same work.
 
 ## Upgrading from 0.1.17
 
@@ -26,9 +26,13 @@ The full list of changes is in [CHANGELOG.md](../CHANGELOG.md).
 
 ## License
 
-From 0.1.18, lore is licensed under the Apache License 2.0 (see `LICENSE` and `NOTICE`). Releases v0.1.17 and earlier remain under the PolyForm Perimeter License 1.0.0, the license they were published under.
+From 0.1.18, the lore source code is licensed under the Apache License 2.0 (see `LICENSE` and `NOTICE`). Releases v0.1.17 and earlier remain under the PolyForm Perimeter License 1.0.0, the license they were published under.
+
+The prebuilt binaries (the archives on GitHub Releases, the Homebrew formula and the install scripts) contain this source and also proprietary components, such as the guided setup page; they are free to use, including for commercial work, under `BINARY-LICENSE.txt`, which ships in every archive beside `LICENSE-core-Apache-2.0` and `NOTICE-core`. A build from source is Apache-2.0 alone.
 
 ## Install
+
+Each of these installs the prebuilt binary for your platform from this release's archives (see License above), with the agent skill.
 
 ```sh
 brew install thesatellite-ai/tap/lore
@@ -45,3 +49,5 @@ On Windows:
 ```powershell
 irm https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.ps1 | iex
 ```
+
+Or download an archive from [GitHub Releases](https://github.com/thesatellite-ai/lore/releases) and check it against `checksums.txt`. To build from source instead: `go install github.com/thesatellite-ai/lore/cmd/lore@v0.1.18`.

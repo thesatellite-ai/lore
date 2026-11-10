@@ -4,8 +4,9 @@
 // with more app Options (an enterprise build can add a setup page through
 // WithSetupUI).
 //
-// goreleaser and `task build` build ./cmd/lore and stamp `version` through
-// the ldflag -X main.version=….
+// `task lore:build` builds ./cmd/lore and stamps `version` through the
+// ldflag -X main.version=…; the released binaries are built separately
+// (docs/DEVELOPMENT.md "Releases") and stamp it the same way.
 package main
 
 import "github.com/thesatellite-ai/lore/app"

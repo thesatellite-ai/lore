@@ -25,7 +25,7 @@ Before a release, or after changing sync, leak checks, claims or landing, also r
 - Branch from `main`; keep PRs focused.
 - `task check` passes (build, lint, cross-builds, tidy, docs, unit and race tests, then every end-to-end suite: userscen, team, setup page, scenarios, chaos, docs examples). The pre-push hook enforces it once `task lore:hooks:install` has run.
 - Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`). No attribution trailers for coding agents or tools, and no co-author trailers, in commit messages.
-- A push to `main` auto-publishes a release — maintainers handle merges with that in mind. Use `[skip release]` in the commit subject for docs-only changes.
+- A push to `main` without `[skip release]` in the commit subject tags a version (`vX.Y.Z`, the next patch); binaries are built and published separately. Maintainers handle merges with that in mind. Use `[skip release]` in the commit subject for docs-only changes.
 
 ## Contributor license terms
 
