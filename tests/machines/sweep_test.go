@@ -327,12 +327,16 @@ type doctorAll struct {
 	Machine struct {
 		Checks []onboard.CheckResult `json:"checks"`
 	} `json:"machine"`
-	Counts map[onboard.Status]int `json:"counts"`
+	// Findings are the report's warnings and errors as results (ops/doctor/findings.go).
+	Findings []onboard.CheckResult  `json:"findings"`
+	Counts   map[onboard.Status]int `json:"counts"`
 }
 
 // CheckDoctorNames runs doctor --all --json: every check that is not ok
-// or skipped names its check id and a fix, and the counts equal the
-// checks it lists, status by status.
+// or skipped names its check id and a fix, every finding names its check
+// id, the counts equal the results it lists (setups, machine, findings)
+// status by status, and the status is the worst of them: never worse
+// than what the report lists, never better (owner bug 2026-11-10).
 func (m *Machine) CheckDoctorNames(t testing.TB, step string, refusing bool) {
 	t.Helper()
 	r := m.Lore(t, "", "doctor", "--all", "--json")
@@ -366,6 +370,15 @@ func (m *Machine) CheckDoctorNames(t testing.TB, step string, refusing bool) {
 			t.Errorf("[%s] doctor issue without a check id or a fix: %+v", step, c)
 		}
 	}
+	for _, f := range d.Findings {
+		seen[f.Status]++
+		if f.Check == "" || strings.TrimSpace(f.Detail) == "" {
+			t.Errorf("[%s] doctor finding without a check id or a line: %+v", step, f)
+		}
+	}
+	if want := worstOf(append(all, d.Findings...)); d.Status != want {
+		t.Errorf("[%s] doctor status %s, but the results it lists say %s: %s", step, d.Status, want, r.Stdout)
+	}
 	for _, st := range []onboard.Status{onboard.StatusOK, onboard.StatusWarn, onboard.StatusFail, onboard.StatusSkip, onboard.StatusError} {
 		if d.Counts[st] != seen[st] {
 			t.Errorf("[%s] doctor counts %d %s, lists %d such checks: %s", step, d.Counts[st], st, seen[st], r.Stdout)
@@ -374,6 +387,23 @@ func (m *Machine) CheckDoctorNames(t testing.TB, step string, refusing bool) {
 	for _, e := range d.Errors {
 		t.Errorf("[%s] doctor error without a check id: %s", step, e)
 	}
+}
+
+// worstOf is the verdict a reader reaches from listed results: an info
+// result is a note; a failing error-level result breaks; any other warn,
+// fail or error result degrades.
+func worstOf(rs []onboard.CheckResult) string {
+	st := "healthy"
+	for _, c := range rs {
+		switch {
+		case c.Level == onboard.LevelInfo:
+		case c.Status == onboard.StatusFail && c.Level == onboard.LevelError:
+			return "broken"
+		case c.Status == onboard.StatusFail || c.Status == onboard.StatusWarn || c.Status == onboard.StatusError:
+			st = "degraded"
+		}
+	}
+	return st
 }
 
 // recorder is a testing.TB that keeps what Errorf reported.

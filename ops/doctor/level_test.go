@@ -18,7 +18,12 @@ func TestErrorFindingBreaks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if r.Status != StatusBroken || r.Exit != exitBroken || len(r.Errors) != 1 || r.Errors[0] != bad.Line || r.OK {
+		// A broken base with no error of its own adds its unnamed line (unnamedBase) before the finding.
+		want := 1
+		if base == StatusBroken {
+			want = 2
+		}
+		if r.Status != StatusBroken || r.Exit != exitBroken || len(r.Errors) != want || r.Errors[want-1] != bad.Line || r.OK {
 			t.Fatalf("base %s: %+v", base, r)
 		}
 	}

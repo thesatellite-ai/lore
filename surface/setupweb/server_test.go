@@ -582,12 +582,12 @@ func (f writerFunc) Write(b []byte) (int, error) { return f(b) }
 func itoa(n int) string { return strconv.Itoa(n) }
 
 // TestAllowlistMatchesSetupPageOps: the page's list is exactly
-// ops/setup.PageOps (the onboarding ops, ONB 7.1) plus doctor.run,
+// ops/setup.PageOps (the onboarding ops, ONB 7.1) plus doctor.run, doctor.last, doctor.fix,
 // whoami.show, identity.show, the two machine file ops (reveal, path
 // list) and config.fmt (config_style's Run it). A new op on either side fails here, so
 // the page never gains an operation without a reviewed edit of allow.go.
 func TestAllowlistMatchesSetupPageOps(t *testing.T) {
-	want := append(opssetup.PageOps(), OpDoctorRun, OpWhoamiShow, OpIdentityShow, OpMachineReveal, OpMachinePathList, OpConfigFmt)
+	want := append(opssetup.PageOps(), OpDoctorRun, OpDoctorLast, OpDoctorFix, OpWhoamiShow, OpIdentityShow, OpMachineReveal, OpMachinePathList, OpConfigFmt)
 	got := AllowedOps()
 	slices.Sort(want)
 	slices.Sort(got)

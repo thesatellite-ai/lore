@@ -16,8 +16,14 @@ package wire
 //	                         warns on more than one)
 //	in_git_repo              git rev-parse --is-inside-work-tree
 //	merge_driver_configured  git config merge.lore.driver
-//	data_dir_gitignored      git status --ignored lists a file under .lore/data
+//	data_dir_gitignored      git ignores a lore file under .lore/data: a probe
+//	                         per file kind (adapters/dataignore, the same check
+//	                         `lore sync` refuses on) or a real row file that
+//	                         git status --ignored lists; never OS clutter
+//	                         (.DS_Store, ._name: a global core.excludesFile
+//	                         ignoring those says nothing about lore data)
 //	uncommitted_files        git status lists a changed file under .lore/data
+//	                         (OS clutter not counted)
 //
 // The lore.db counters (baselined, pending_exports, trash_rows, errors,
 // dangling_references, duplicate_groups) have no source here and stay
@@ -32,6 +38,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/dataignore"
 	"github.com/thesatellite-ai/lore/adapters/reposync"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	"github.com/thesatellite-ai/lore/schema"
@@ -135,15 +142,28 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 		entries := nulFields(out)
 		for i := 0; i < len(entries); i++ {
 			e := entries[i]
-			if strings.HasPrefix(e, gitStatusIgnored) {
-				s.DataIgnored = true
-				continue
+			skipSource := e[0] == gitStatusRenamed || e[0] == gitStatusCopied
+			p := e[min(len(e), len(gitStatusIgnored)):] // "XY path"
+			switch {
+			case dataignore.IsOSJunk(p): // OS clutter: not lore's, ignored or not
+			case strings.HasPrefix(e, gitStatusIgnored):
+				if dataignore.IsRowFile(p) {
+					s.DataIgnored = true // a real row file git will not take
+				}
+			default:
+				s.Uncommitted++
 			}
-			s.Uncommitted++
-			if e[0] == gitStatusRenamed || e[0] == gitStatusCopied {
+			if skipSource {
 				i++ // the source path follows as its own entry
 			}
 		}
+	}
+	probes := dataignore.Probes() // under dataignore.DataRel; this store's data path may differ
+	for i, p := range probes {
+		probes[i] = dataRel + strings.TrimPrefix(p, dataignore.DataRel)
+	}
+	if hit, perr := dataignore.Ignored(ctx, dir, probes); perr == nil && len(hit) > 0 {
+		s.DataIgnored = true // a whole kind of lore file is ignored
 	}
 	if s.DataIgnored {
 		warn(doctorDataIgnoredWarning)

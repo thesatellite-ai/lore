@@ -25,7 +25,7 @@ setup personal (solo) ─ ~/work/personal/**
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
 
-2 setups · 20 ok · 4 warnings · 0 errors · 1 could not run → degraded (exit 1)
+2 setups · 20 ok · 5 warnings · 0 errors · 1 could not run → degraded (exit 1)
 
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
@@ -45,7 +45,7 @@ setup personal (solo) ─ ~/work/personal/**
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
 
-1 setup · 7 ok · 2 warnings · 0 errors → degraded (exit 1)
+1 setup · 7 ok · 3 warnings · 0 errors → degraded (exit 1)
 
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
@@ -73,7 +73,7 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
 
-1 setup · 12 ok · 2 warnings · 2 errors · 1 could not run → broken (exit 2)
+1 setup · 12 ok · 3 warnings · 2 errors · 1 could not run → broken (exit 2)
 
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
@@ -81,7 +81,7 @@ Context:
 
 ### json
 tomas (work/agency/site)$ lore doctor --all --setup agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["status"], r["exit_status"], r["counts"]); [print(c["check"], c["status"], c["level"], c.get("target","-"), "|", c.get("detail","")) for s in r["setups"] for c in s["checks"] if c["status"] not in ("ok", "skip")]'
-broken 2 {'ok': 12, 'warn': 2, 'fail': 2, 'skip': 14, 'error': 1}
+broken 2 {'ok': 12, 'warn': 3, 'fail': 2, 'skip': 14, 'error': 1}
 identity.actor_copies warn warn - | Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
 github.ssh_user fail error - | github.com logs in as mira-dev
 github.key_matches fail error - | github.com logs in as mira-dev, but this setup's account is tomas-dev

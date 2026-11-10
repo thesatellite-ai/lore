@@ -48,8 +48,15 @@ const (
 	OpSetupTrashPurge    = "setup.trash.purge"
 	OpSetupImportDismiss = "setup.import_dismiss"
 	OpDoctorRun          = "doctor.run"
-	OpWhoamiShow         = "whoami.show"
-	OpIdentityShow       = "identity.show"
+	// OpDoctorLast is what Doctor shows on open: each setup's last
+	// results and when they were taken, read from disk, no check run.
+	OpDoctorLast = "doctor.last"
+	// OpDoctorFix runs one repo finding's fix (Doctor's Run it): the
+	// caller names a finding key, the command comes from the report the
+	// server makes again, and only a plain lore command runs.
+	OpDoctorFix    = "doctor.fix"
+	OpWhoamiShow   = "whoami.show"
+	OpIdentityShow = "identity.show"
 	// OpSetupLeftoversClear clears a config.yaml identity or personal.store
 	// no setup uses (Home's leftovers box); only those two keys.
 	OpSetupLeftoversClear = "setup.leftovers.clear"
@@ -71,7 +78,7 @@ var allowlist = [...]string{
 	OpTeamInvite, OpTeamInviteList, OpTeamInviteRevoke, OpTeamInviteResend,
 	OpSkillInstall, OpSkillStatus, OpRepoInit, OpSetupAliases, OpSetupDiscover, OpSetupSuggestAgain, OpSetupImportScan, OpSetupImport, OpSetupFolders, OpSetupBrowse,
 	OpSetupDisable, OpSetupEnable, OpSetupTrashList, OpSetupTrashRestore, OpSetupTrashPurge, OpSetupImportDismiss,
-	OpDoctorRun, OpWhoamiShow, OpIdentityShow, OpSetupLeftoversClear,
+	OpDoctorRun, OpDoctorLast, OpDoctorFix, OpWhoamiShow, OpIdentityShow, OpSetupLeftoversClear,
 	OpMachineReveal, OpMachinePathList, OpConfigFmt,
 }
 

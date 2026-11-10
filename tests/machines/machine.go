@@ -109,6 +109,9 @@ type Machine struct {
 	// after the base environment (later entries win).
 	PathPrefix []string
 	ExtraEnv   []string
+	// MacCaseFold is set by env_macos when the machine dir's file system
+	// is case-insensitive (its other-case repo path is then no symlink).
+	MacCaseFold bool
 }
 
 // Result is one lore run.

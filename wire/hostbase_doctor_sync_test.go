@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -104,4 +105,64 @@ func TestDoctorSyncSection(t *testing.T) {
 		t.Errorf("ignored data: sync %+v status %s warnings %v", b.Sync, b.Status, b.Warnings)
 	}
 
+}
+
+// TestDoctorSyncOSJunkNotDataIgnored (owner, macOS): a global
+// core.excludesFile listing .DS_Store and ._* made git status --ignored list
+// Finder's clutter under .lore/data, and doctor then said ".lore/data is
+// gitignored". data_dir_gitignored comes from lore's own files only: the
+// clutter (ignored or not) is neither ignored data nor an uncommitted file;
+// a rule that really hides a row file kind still is (the control), and so
+// is a real row file hidden by a narrower rule than any probe sees.
+// Break-verified: with the old "any !! entry" rule the junk case fails
+// (data_dir_gitignored true + the warning).
+func TestDoctorSyncOSJunkNotDataIgnored(t *testing.T) {
+	if isolate.Run(t) {
+		return
+	}
+	gc := filepath.Join(t.TempDir(), "gitconfig")
+	excludes := filepath.Join(t.TempDir(), "gitignore_global")
+	if err := os.WriteFile(excludes, []byte(".DS_Store\n._*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(gc, []byte("[core]\n\texcludesFile = "+excludes+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", gc)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	repo := gitRepo(t)
+	a := openWith(t, repo, Options{})
+	withProject(t, a)
+	gitIn(t, repo, nil, "add", "-A")
+	gitIn(t, repo, []string{"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com"},
+		"commit", "-q", "-m", "init")
+	for _, junk := range []string{".DS_Store", "._projects", "memories/.DS_Store", "memories/._mem_01a1a59b891c70b789144cd3e711fd01.json"} {
+		writeDataFile(t, repo, junk, "junk")
+	}
+	if st := gitIn(t, repo, nil, "status", "--porcelain", "--ignored", "--", ".lore/data"); !strings.Contains(st, "!! .lore/data/.DS_Store") {
+		t.Fatalf("setup: the global excludesFile does not ignore .DS_Store: %q", st)
+	}
+	b := doctorBase(t, a)
+	if b.Sync == nil || b.Sync.DataIgnored || b.Sync.Uncommitted != 0 || hasLine(b.Warnings, ".lore/data is gitignored") {
+		t.Errorf("OS clutter under .lore/data: sync %+v warnings %v", b.Sync, b.Warnings)
+	}
+
+	// Control: a rule hiding a whole kind of row file.
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".lore/data/memories/\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b = doctorBase(t, a)
+	if b.Sync == nil || !b.Sync.DataIgnored || !hasLine(b.Warnings, ".lore/data is gitignored") {
+		t.Errorf("memories/ ignored: sync %+v warnings %v", b.Sync, b.Warnings)
+	}
+
+	// A narrow rule no probe matches still hides a real row file.
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte("mem_01a1a59b891c70b789144cd3e711fd0*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeDataFile(t, repo, syncBrokenRow, "{}")
+	b = doctorBase(t, a)
+	if b.Sync == nil || !b.Sync.DataIgnored {
+		t.Errorf("one real row file ignored: sync %+v warnings %v", b.Sync, b.Warnings)
+	}
 }

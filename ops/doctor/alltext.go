@@ -450,6 +450,9 @@ func (r Report) allText() string {
 	}
 	list(&b, "This repo, errors:", r.Errors)
 	list(&b, "This repo, warnings:", r.Warnings)
+	// The repo's warnings and errors count like every other result
+	// (findings.go): the line never reads "0 warnings" above a degraded verdict.
+	tally(r.Findings)
 	line := fmt.Sprintf("%s · %d ok · %s · %s", plural(len(r.Setups), "setup"), ok, plural(warns, "warning"), plural(errors, "error"))
 	if couldNot > 0 {
 		line += fmt.Sprintf(" · %d could not run", couldNot)

@@ -64,7 +64,8 @@ func TestStatusMatrix(t *testing.T) {
 		{"fixed warning", StatusHealthy, []CheckRun{{Check: "task_lead", Findings: []Finding{fixed}}}, StatusHealthy, 0, 0, 1},
 		{"warning", StatusHealthy, []CheckRun{{Check: "task_lead", Findings: []Finding{warn}}}, StatusDegraded, 1, 1, 0},
 		{"check failed", StatusHealthy, []CheckRun{{Check: "store_lock", Err: errors.New("boom")}, {Check: "internal_off", Findings: []Finding{note}}}, StatusDegraded, 1, 1, 1},
-		{"degraded base", StatusDegraded, nil, StatusDegraded, 1, 0, 0},
+		// A base status with no line of its own is listed (unnamedBase), never left unexplained.
+		{"degraded base", StatusDegraded, nil, StatusDegraded, 1, 1, 0},
 		{"broken stays broken", StatusBroken, []CheckRun{{Check: "task_lead", Findings: []Finding{warn}}}, StatusBroken, 2, 1, 0},
 	}
 	for _, c := range cases {

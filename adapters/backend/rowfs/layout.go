@@ -86,15 +86,25 @@ var (
 // tool folders out of reach).
 var folderSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
-// osJunkFiles are files operating systems drop into browsed folders
-// (lsync/files.go IsOSJunk); never lore data, skipped silently.
-var osJunkFiles = map[string]bool{".DS_Store": true, "Thumbs.db": true, "desktop.ini": true, "Desktop.ini": true}
+// OSJunkPatterns are the files operating systems drop into browsed
+// folders, as gitignore / path.Match globs on a base name: Finder's
+// .DS_Store and AppleDouble ._name files, Windows Explorer's Thumbs.db and
+// desktop.ini. Never lore data: the folder reader skips them, doctor and
+// the pre-commit hook ignore them (adapters/dataignore), and the git
+// wiring writes them, in this order, as ignore lines. The one list.
+var OSJunkPatterns = []string{".DS_Store", "Desktop.ini", "Thumbs.db", "desktop.ini", "._*"}
 
-// osJunkPrefix marks macOS AppleDouble files ("._name").
-const osJunkPrefix = "._"
-
-// isOSJunk reports operating-system clutter.
-func isOSJunk(name string) bool { return osJunkFiles[name] || strings.HasPrefix(name, osJunkPrefix) }
+// IsOSJunk reports whether a file's base name (a slash path is reduced to
+// its last element) is operating-system clutter.
+func IsOSJunk(name string) bool {
+	base := path.Base(strings.TrimSuffix(name, "/"))
+	for _, p := range OSJunkPatterns {
+		if ok, _ := path.Match(p, base); ok {
+			return true
+		}
+	}
+	return false
+}
 
 // CleanFolder validates a folder name and returns its canonical form:
 // FolderRoot for the root, else slash-separated segments ("acme-hub",
