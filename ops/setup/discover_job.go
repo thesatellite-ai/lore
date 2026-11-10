@@ -3,7 +3,7 @@ package setup
 // discover_job.go — setup.discover without the wait (owner report
 // 2026-11-08: Home sat 5–6 s with nothing visible while discovery ran, "it
 // seems broken"). The page server runs one operation at a time
-// (cmd/lore/apirunner.go), so a 2–8 s discover call also held up
+// (app/apirunner.go), so a 2–8 s discover call also held up
 // import_scan and every other request behind it. With async set, the call
 // answers at once and the probes run in a background job outside the
 // runner:

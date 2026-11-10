@@ -353,6 +353,12 @@ func (a *fakeAPI) serve(rw http.ResponseWriter, r *http.Request) {
 	}
 	switch path {
 	case "/user":
+		if acct.Login == a.w.hangProfile {
+			// A profile read that never answers: lore's discovery gives up
+			// at its own deadline and the request's context ends.
+			<-r.Context().Done()
+			return
+		}
 		// GitHub's header is "a, b, c"; gh auth status quotes each scope.
 		rw.Header().Set("X-OAuth-Scopes", strings.ReplaceAll(acct.scopes, "'", ""))
 		writeJSON(rw, http.StatusOK, apiUser{ID: acct.id, Login: acct.Login, Name: acct.displayName, AvatarURL: a.URL() + "/avatars/" + acct.Login})

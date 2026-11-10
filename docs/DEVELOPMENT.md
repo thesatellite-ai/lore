@@ -16,11 +16,12 @@ Internal build / release notes. End-user docs live in the top-level [README](../
 
 ## Layout
 
-One Go module, `github.com/thesatellite-ai/lore`, at the repo root (no `go.work`; a clean clone builds from the module proxy). The packages are layered (`model`, `schema`, `logic`, `store`, `adapters`, `op`, `engine`, `ops`, `surface`, `wire`, `cmd`); `internal/layers` fails the build when a lower layer imports a higher one.
+One Go module, `github.com/thesatellite-ai/lore`, at the repo root (no `go.work`; a clean clone builds from the module proxy). The packages are layered (`model`, `schema`, `logic`, `store`, `adapters`, `op`, `engine`, `ops`, `surface`, `wire`, `app`, `cmd`); `internal/layers` fails the build when a lower layer imports a higher one.
 
 | Path | Role |
 |------|------|
-| `cmd/lore` | the `lore` binary and the only release binary (package `main`, built by `task lore:build` and `.goreleaser.yml`) |
+| `app/` | the `lore` command itself: `app.Main` / `app.Run(ctx, args, ...Option)`, every host command and its tests. Importable, so another build composes the same command with options (`WithVersion`, `WithSetupUI`) instead of swapping files; only `cmd` may import it (`internal/layers`) |
+| `cmd/lore` | the `lore` binary's `main`: stamps the version and calls `app.Main` with no setup UI, so `lore setup web` serves the plain page (`setupweb.DefaultUI`) |
 | `wire/` | the composition root: picks the concrete backends, cache, scanner and identity |
 | `surface/cli`, `surface/rest`, `surface/tui`, `surface/docs` | CLI, local REST + OpenAPI (`lore api`), the TUI, and the generated reference |
 | `ops/<noun>` | one package per noun, each defining its operations |
@@ -63,7 +64,7 @@ task lore:check:gocache  # empty Go's build cache when it is over LORE_GOCACHE_M
 
 ### Test builds are not version-stamped, and the Go cache is bounded
 
-Every task in `Taskfile.lore.yml` runs Go with `GOFLAGS=-trimpath -buildvcs=false` (its top-level `env:`; a `GOFLAGS` you export yourself wins), and the test helpers that `go build` the binary (`tests/machines`, `tests/journeys`, `tests/setupe2e`, `tests/teame2e`, `tests/userscen`) pass the same two flags. Why: a package compiled without `-trimpath` records the folder it was built in, and `-buildvcs` stamps the commit and dirty state into `cmd/lore`, so each of the ~30 worktrees on one build server compiled every package again and every commit added new cache entries; the shared Go build cache (`go env GOCACHE`, one per user) reached 1.2 TB and filled the disk. With the flags, the same code in two worktrees is one cache entry: building `cmd/lore` in a second copy of the tree added 208 MB to the cache without them and 3 MB with them (measured 2026-11-10). Test binaries carry the version `dev` (cmd/lore's default; `formatgate.DevBuild` treats it as a source build). The gate's build stage builds `tmp/bin/lore` with `lore:build:test` (version `dev`, no VCS stamp). Only `task lore:build` (and so `lore:install`) stamps the real version from `git describe` and keeps the VCS stamp, and releases (`.goreleaser.yml`) stamp `{{ .Version }}` as before.
+Every task in `Taskfile.lore.yml` runs Go with `GOFLAGS=-trimpath -buildvcs=false` (its top-level `env:`; a `GOFLAGS` you export yourself wins), and the test helpers that `go build` the binary (`tests/machines`, `tests/journeys`, `tests/setupe2e`, `tests/teame2e`, `tests/userscen`) pass the same two flags. Why: a package compiled without `-trimpath` records the folder it was built in, and `-buildvcs` stamps the commit and dirty state into `cmd/lore`, so each of the ~30 worktrees on one build server compiled every package again and every commit added new cache entries; the shared Go build cache (`go env GOCACHE`, one per user) reached 1.2 TB and filled the disk. With the flags, the same code in two worktrees is one cache entry: building `cmd/lore` in a second copy of the tree added 208 MB to the cache without them and 3 MB with them (measured 2026-11-10). Test binaries carry the version `dev` (cmd/lore's default; `formatgate.DevBuild` treats it as a source build). The gate's build stage builds `tmp/bin/lore` with `lore:build:test` (version `dev`, no VCS stamp). Only `task lore:build` (and so `lore:install`) stamps the real version from `git describe` and keeps the VCS stamp, and the binary release stamps the release version through the same ldflag.
 
 Nothing else bounds the cache (Go drops entries unused for 5 days, which does not help when every worktree builds every day), so `task check` starts with `lore:check:gocache` (`tests/lib/gocache-trim.sh`): it measures `go env GOCACHE` with `du` (about 4 s on a 570 GB cache) and runs `go clean -cache` only when the cache is over `LORE_GOCACHE_MAX_GB` (default 50). `LORE_GOCACHE_TRIM=dry` only says what it would do, `LORE_GOCACHE_TRIM=off` skips the step. It touches nothing but the cache folder, never a tracked file, and runs alone before the build stage because emptying the cache under a running build fails that build (a quick-tier `go test` of another session at the same moment may fail once with a missing cache file and passes on its next run). `go clean -cache` is all or nothing, so the first build after a trim compiles from scratch.
 
@@ -79,7 +80,7 @@ Nothing else bounds the cache (Go drops entries unused for 5 days, which does no
 | quick | `task lore:test:quick` | all the time while building: after every edit, before asking for review | `go test ./...`: every unit test of the root module with Go's test cache, no `-race`, no end-to-end suite except the fast machine shapes (`tests/machines` `TestForeign|Env|Links|Shapes`, about 45 s, skipped when arguments narrow the run). Narrow it with `task lore:test:quick -- ./ops/task/...`. Not behind `testlock`, so it never queues behind someone's full gate |
 | full | `task check` (= `task lore:check`) | once, before a commit is pushed (the pre-push hook enforces it) | everything below, with independent steps in parallel |
 
-Measured on a 48-core Linux machine on 2026-11-07: the quick tier takes about 48 s with an empty test cache (slowest packages wire 38 s, ops/settings 29 s, cmd/lore 26 s, ops/task 21 s) and less when most packages are cached. The full gate takes about 13 minutes (build 4 s, unit stage 176 s bound by the race step, e2e stage 584 s bound by the docs example runners, then setupe2e 475 s, userscen 391 s, teame2e 387 s; the machines suite added later takes about 90 s beside them); the same gate run step after step took 80-85 minutes before.
+Measured on a 48-core Linux machine on 2026-11-07: the quick tier takes about 48 s with an empty test cache (slowest packages wire 38 s, ops/settings 29 s, app 26 s, ops/task 21 s) and less when most packages are cached. The full gate takes about 13 minutes (build 4 s, unit stage 176 s bound by the race step, e2e stage 584 s bound by the docs example runners, then setupe2e 475 s, userscen 391 s, teame2e 387 s; the machines suite added later takes about 90 s beside them); the same gate run step after step took 80-85 minutes before.
 
 The quick tier stays fast only while no unit package is slow: a package that takes minutes is a test-design bug, not a reason to drop it from the tier: time it with `go test -json`, then make it fast without weakening it (independent tests `t.Parallel()` with their own temp dirs, fixtures and binaries built once per package, events or short deadline polls instead of sleeps). The end-to-end suites are behind build tags (`userscen`, `teame2e`, `setupe2e`, `machines`, `journeys`) or are shell/node runners, so `go test ./...` never starts them.
 
@@ -99,8 +100,8 @@ A feature that changes what a person does over time (a new command, a new kind o
 | unit | `lore:build:cross` | a build for all six release targets (linux, darwin, windows × amd64, arm64), in parallel |
 | unit | `lore:check:tidy` | `go mod tidy -diff` is empty (it never rewrites the files, so it can run beside the builds) |
 | unit | `lore:check:docs` | every docsync citation in the docs still matches the code (`ds check`) |
-| unit | `lore:test:all` | every Go test of the root module without `-race`, including `cmd/lore`'s docs drift test `TestDocsMatchCLI` (every `lore …` command in the README and `skills/*.md` exists with the flags shown) |
-| unit | `lore:test:race` | the race detector on the packages with real concurrency (goroutines, locks, HTTP servers): `RACE_PKGS` in `Taskfile.lore.yml` lists them and why each is there. `cmd/lore` is not in it: its own code starts no goroutine and its tests drive `lore api` one request at a time (the comment above `RACE_PKGS` says what would bring it back). Every other package runs plain in `lore:test:all`; a package that gains a goroutine, a channel or a lock joins `RACE_PKGS` in the same commit |
+| unit | `lore:test:all` | every Go test of the root module without `-race`, including `app`'s docs drift test `TestDocsMatchCLI` (every `lore …` command in the README and `skills/*.md` exists with the flags shown) |
+| unit | `lore:test:race` | the race detector on the packages with real concurrency (goroutines, locks, HTTP servers): `RACE_PKGS` in `Taskfile.lore.yml` lists them and why each is there. `app` is not in it: its own code starts no goroutine and its tests drive `lore api` one request at a time (the comment above `RACE_PKGS` says what would bring it back). Every other package runs plain in `lore:test:all`; a package that gains a goroutine, a channel or a lock joins `RACE_PKGS` in the same commit |
 | e2e | `lore:test:scen` | the user-scenario suite (`tests/userscen`): every user-facing feature through the real binary |
 | e2e | `lore:test:team:run` | the team end-to-end suite (`tests/teame2e`): real binary, real git, many actors |
 | e2e | `lore:test:setupe2e:run` | the setup page end to end through its HTTP API (below) |
@@ -136,44 +137,41 @@ Plain `go build`:
 CGO_ENABLED=0 go build -o tmp/bin/lore ./cmd/lore
 ```
 
-## Releases
+## Composing the binary (package app)
 
-Driven by GoReleaser (`.goreleaser.yml`) via `.github/workflows/release.yml`. Four trigger paths:
+All of the `lore` command lives in package `app`; `cmd/lore/main.go` is three lines that stamp the version and call `app.Main`. Another build composes the same command by importing this module and passing options, never by copying or swapping files:
 
-1. **push to `main`** → auto-bump patch, tag, release. Add `[skip release]` to the commit **subject** to opt out.
-2. **push tag `vX.Y.Z`** → release that tag (use for minor/major bumps).
-3. **workflow_dispatch with `tag=`** → create+push that tag, then release.
-4. **workflow_dispatch, empty tag** → snapshot build, artifacts on the run page.
+```go
+import "github.com/thesatellite-ai/lore/app"
 
-Each release cross-compiles linux/darwin/windows × amd64/arm64, bundles the binary + `README.md` + `skills/` into per-platform archives, and publishes a GitHub Release with checksums.
-
-Validate locally before pushing:
-
-```sh
-goreleaser check
-goreleaser release --snapshot --clean --skip=publish
+func main() { app.Main(app.WithVersion(version), app.WithSetupUI(myUI)) }
 ```
 
-GoReleaser is pinned to v2.9.0 (`.github/workflows/release.yml`, and the gate uses the same version): v2.10.0 and later deprecate `brews`, and `goreleaser check` then fails on this config. `brews` is kept on purpose (decision GR-1): a formula also serves Linux Homebrew, and the shared tap `thesatellite-ai/homebrew-tap` holds every org tool's formula. Revisit the pin when the shared tap moves to casks or another layout: migrate `.goreleaser.yml` then, and unpin.
+| API | What it does |
+|-----|--------------|
+| `app.Main(opts ...Option)` | the whole process: the session-end hook fast path, an interrupt-cancelled context, `Run` over `os.Args`, `os.Exit` |
+| `app.Run(ctx, args, opts ...Option) int` | builds the app and the command tree, runs `args`, returns the exit status |
+| `app.WithVersion(v)` | the version the binary reports (empty keeps `dev`) |
+| `app.WithSetupUI(ui)` | the static files `lore setup web` serves (`setupweb.UI`: files only; routes, headers and operations stay the core's). Without it the page is `setupweb.DefaultUI`, the plain page naming the CLI commands |
+
+An enterprise build can add a setup page through `WithSetupUI`. Only `cmd` may import `app` (`internal/layers`), so no core package depends on how the binary is composed. `TestRunAppliesOptions` (app) checks the options and `TestBinaryServesDefaultUI` (tests/setupe2e, in `task lore:test:setupe2e`) checks that this module's binary serves the fallback page.
+
+The test harnesses under `tests/` are ordinary packages, so a build that imports this module can reuse them: `tests/setupe2e` (build tag `setupe2e`; `Build`, `World.Start`, `World.HangProfile`, `PairwiseShapes`) and its world tool `go build -tags setupe2e github.com/thesatellite-ai/lore/tests/setupe2e/cmd/setupworld`.
+
+Changing this module and an importing build together: keep both clones side by side and put a `go.work` in a separate folder above them (`go work init ./lore ./<other>`), or add a local `replace github.com/thesatellite-ai/lore => ../lore` that is never committed. This repo has no `go.work`: a clean clone builds from the module proxy. Land the change here first, then move the importing build's `require` to the new version.
+
+## Releases
+
+This repository publishes no binaries. A release of the core is a version tag, made by `.github/workflows/release.yml`:
+
+1. **push to `main`** → the next patch tag (`vX.Y.Z`) is created and pushed. Add `[skip release]` to the commit **subject** to opt out.
+2. **workflow_dispatch with `tag=`** → that tag on the current ref (use for minor/major bumps).
+
+The tag is also the Go module version an importing build requires. The released `lore` binary (core plus the setup page) is built by that importing build at the same version, with GoReleaser: it cross-compiles linux/darwin/windows × amd64/arm64, bundles the binary + `README.md` + `skills/` into per-platform archives named `lore_<os>_<arch>` with `checksums.txt`, and uploads them to this repository's GitHub Release for the tag, so `lore upgrade` (`adapters/selfupdate`) and `install.sh` keep reading releases from here.
 
 ## Homebrew tap
 
-Formulae for all `thesatellite-ai` tools live in one shared tap repo: **`thesatellite-ai/homebrew-tap`**. GoReleaser writes `Formula/lore.rb` there on every release; users run `brew install thesatellite-ai/tap/lore`.
-
-One-time setup (already done for the tap repo itself):
-
-1. The tap repo `thesatellite-ai/homebrew-tap` exists and is public.
-2. A Personal Access Token with `repo` scope (or a fine-grained token with contents:write on the tap repo) is stored as the **`HOMEBREW_TAP_GITHUB_TOKEN`** repository secret on `thesatellite-ai/lore`. The default `GITHUB_TOKEN` cannot push to a *different* repo, so this separate token is required.
-
-To create the secret:
-
-```sh
-gh secret set HOMEBREW_TAP_GITHUB_TOKEN \
-  --repo thesatellite-ai/lore \
-  --body "<PAT with repo scope>"
-```
-
-Future projects reuse the same tap — just add a `brews:` block pointing at `thesatellite-ai/homebrew-tap` in their own `.goreleaser.yml`.
+Formulae for all `thesatellite-ai` tools live in one shared tap repo: **`thesatellite-ai/homebrew-tap`**. The binary release writes `Formula/lore.rb` there; users run `brew install thesatellite-ai/tap/lore`.
 
 ## Rebranding note
 
