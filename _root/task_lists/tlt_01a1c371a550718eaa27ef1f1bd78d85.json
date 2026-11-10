@@ -1,0 +1,16 @@
+{
+  "_live": {
+    "companion": true,
+    "hlc": "2026-11-10T16:25:12.611Z/0000/act_afbe7ed1d969752697eebecaac20e9dc",
+    "live_since": "2026-11-10T16:25:12Z"
+  },
+  "_table": "task_lists",
+  "_v": 1,
+  "body": null,
+  "created_at": "2026-11-10T03:12:47.440087000Z",
+  "id": "tlt_01a1c371a550718eaa27ef1f1bd78d85",
+  "project_id": "prj_01a10302301574b7b6c83465b541b445",
+  "status_str": "active",
+  "title": "default",
+  "updated_at": "2026-11-10T03:12:47.440088000Z"
+}
