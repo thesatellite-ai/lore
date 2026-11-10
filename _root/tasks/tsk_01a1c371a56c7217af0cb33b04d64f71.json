@@ -1,6 +1,6 @@
 {
   "_live": {
-    "hlc": "2026-11-10T16:25:12.611Z/0000/act_afbe7ed1d969752697eebecaac20e9dc",
+    "hlc": "2026-11-10T16:25:17.310Z/0000/act_afbe7ed1d969752697eebecaac20e9dc",
     "live_since": "2026-11-10T16:25:12Z"
   },
   "_table": "tasks",
@@ -16,11 +16,11 @@
   "claim_epoch": 0,
   "claim_log": null,
   "commitment": "accepted",
-  "completed_at": null,
+  "completed_at": "2026-11-10T16:25:17.159855000Z",
   "created_at": "2026-11-10T03:12:47.468129000Z",
   "created_by_actor_id": "act_afbe7ed1d969752697eebecaac20e9dc",
   "deferred_until": null,
-  "done_by": null,
+  "done_by": "act_afbe7ed1d969752697eebecaac20e9dc",
   "done_commit": null,
   "done_pr": null,
   "due_at": null,
@@ -35,10 +35,10 @@
   "repo_id": null,
   "role": null,
   "started_at": null,
-  "status": "todo",
+  "status": "done",
   "tasklist_id": "tlt_01a1c371a550718eaa27ef1f1bd78d85",
   "timebox_seconds": null,
   "title": "Same row edited at once: report a conflict once under its own folder; other folders say held by it (design decision first, see /space/tmp/lore-land5/status.md NEXT 2)",
-  "updated_at": "2026-11-10T03:12:47.468129000Z",
+  "updated_at": "2026-11-10T16:25:17.159858000Z",
   "work_branch": null
 }
