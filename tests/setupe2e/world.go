@@ -88,7 +88,17 @@ type World struct {
 	output *syncBuffer
 	// lore is the binary Start ran (RunLore uses it).
 	lore string
+	// hangProfile is a login whose GitHub /user read never answers (set
+	// through HangProfile before Start): discovery cannot read that
+	// account's profile in time.
+	hangProfile string
 }
+
+// HangProfile makes the fake GitHub API never answer login's profile read
+// (/user), so lore's discovery gives up at its own deadline. Call it before
+// Start; a page suite uses it to check what the page says about an account
+// whose profile could not be read.
+func (w *World) HangProfile(login string) { w.hangProfile = login }
 
 // Info is the JSON line setupworld prints (contract "World contract").
 type Info struct {

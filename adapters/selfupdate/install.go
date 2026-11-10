@@ -41,7 +41,7 @@ func (m installMethod) String() string {
 	return string(m)
 }
 
-// brewFormula is the formula .goreleaser.yml publishes under brews.
+// brewFormula is the formula the binary release publishes to the shared tap.
 const brewFormula = "thesatellite-ai/tap/" + BinaryName
 
 // detectInstall is machine.DetectInstall. A non-writable script install

@@ -21,7 +21,7 @@ version: "3"
 # shared Go build cache reached 1.2 TB and filled the disk. With these flags two worktrees at the
 # same code share one cache entry. Test binaries carry the unstamped version "dev" (cmd/lore's
 # default). Only `build` (and so install) stamps the real version and keeps the VCS stamp, as
-# .goreleaser.yml does for releases. check:gocache bounds what is left (docs/DEVELOPMENT.md).
+# the release build does. check:gocache bounds what is left (docs/DEVELOPMENT.md).
 env:
   GOFLAGS: "-trimpath -buildvcs=false"
 
@@ -47,7 +47,7 @@ vars:
   # The packages that run under -race (lore:test:race). -race only finds a data race on a path
   # where two goroutines really touch the same memory, so it runs where lore has real concurrency,
   # not on every package: in the old 15-minute race step, packages that start no goroutine of
-  # their own (ops/settings 318 s, ops/task 204 s, ops/internal/lookup 182 s, cmd/lore 509 s)
+  # their own (ops/settings 318 s, ops/task 204 s, ops/internal/lookup 182 s, app 509 s)
   # cost more than the concurrent ones. Every package still runs WITHOUT -race in lore:test:all.
   # Why each entry is here:
   #   engine/...          the keyed-create and write-path locks (sync.Mutex); tests write concurrently
@@ -72,11 +72,11 @@ vars:
     ./engine/... ./adapters/... ./logic/... ./model/... ./store/...
     ./surface/rest/... ./surface/setupweb/... ./ops/setup/... ./ops/memory/... ./ops/doctor/...
     ./wire ./wire/host ./tests/teame2e/teamharness/...
-  # cmd/lore is NOT in the race set. Its own code starts no goroutine; its one lock (apiRunner,
+  # app (the command, tested in package app) is NOT in the race set. Its own code starts no goroutine; its one lock (apiRunner,
   # serialising `lore api` requests) only meets a second goroutine under a real HTTP server, and
-  # its tests call the handler's ServeHTTP one request at a time, so a race build of cmd/lore
+  # its tests call the handler's ServeHTTP one request at a time, so a race build of app
   # (509 s in the old gate) could not find a race there. The REST server's own concurrency is
-  # raced in surface/rest/...; cmd/lore's multi-clone tests run the binary as separate processes,
+  # raced in surface/rest/...; app's multi-clone tests run the binary as separate processes,
   # which the race detector does not see across. Add it back with a test that drives concurrent
   # requests through apiRunner.
   # Folder of the per-step logs and timing tables of lore:check (gitignored tmp/).
@@ -88,7 +88,7 @@ vars:
 
 tasks:
   build:
-    desc: "Build the lore release binary from ./cmd/lore (pure-Go sqlite, CGO off, version stamped; same ldflags as .goreleaser.yml)"
+    desc: "Build the lore release binary from ./cmd/lore (pure-Go sqlite, CGO off, version stamped; same ldflags as the release build)"
     vars:
       VERSION:
         sh: git describe --tags --match 'v*' --always --dirty 2>/dev/null || echo dev
@@ -355,7 +355,7 @@ tasks:
       # -parallel 32, not the default 48 (GOMAXPROCS on a 48-core machine): measured 2026-11-07 back to back,
       # 189 s at 32 vs 194 s at 48; each shape spawns lore processes, so more Go-level
       # parallelism only adds load.
-      - SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel 32 -timeout 60m -run '^(TestAPIMatrix|TestPairwiseCoversEveryPair|TestShapeValidate)$' ./tests/setupe2e/
+      - SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel 32 -timeout 60m -run '^(TestAPIMatrix|TestBinaryServesDefaultUI|TestPairwiseCoversEveryPair|TestShapeValidate)$' ./tests/setupe2e/
 
   test:machines:
     desc: "Real-machine suite (tests/machines, tag machines): homes shaped like real users' (fresh, v0.1.17, migrated with *.migrated backups, several gh accounts and ssh aliases with a key without .pub, org member, setups disabled/trashed/purged) and every valid 4-step setup lifecycle sequence on them, checking after each step that nothing purged or trashed is offered, disabled never applies, config check knows every key, doctor --all reports, and repo files are 0644 / ~/.lore owner-only. MACHINES_FULL=1 runs every sequence on every shape"

@@ -6,7 +6,7 @@ package setupe2e
 //
 // setup.run's schema update fetches the attached stores over ssh (the
 // v0.1.17 store of a v0117 home, startfetch.go). The page's listener is
-// bound before that update (cmd/lore/setupweb.go preListen), so a port
+// bound before that update (app/setupweb.go preListen), so a port
 // another program holds fails first: a typed E_* line naming the port and
 // the way out, and not one ssh call. The control run on a free port shows
 // the same world does fetch, so "no ssh call" is not vacuous.

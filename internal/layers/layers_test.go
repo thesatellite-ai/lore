@@ -37,6 +37,10 @@ var ranks = map[string]int{
 	// never depends on it.
 	"ee":  65,
 	"cmd": 70,
+	// app is the lore command itself (Run, Main, Options): the binary's
+	// body, importable so another build composes it with Options. L7 beside
+	// cmd and wire; only cmd may import it (appImporters).
+	"app": 70,
 	// wire is the composition root (L7 beside cmd): the only package that
 	// picks concrete adapters; nothing may import it but cmd and the old
 	// binary.
@@ -51,6 +55,13 @@ var ranks = map[string]int{
 const eeDir = "ee"
 
 var eeImporters = map[string]bool{"wire": true, "cmd": true, eeDir: true}
+
+// appDir is the command package, and appImporters the only folders that
+// may import it: a binary's main (and app itself). No core package may
+// depend on how the binary is composed.
+const appDir = "app"
+
+var appImporters = map[string]bool{"cmd": true, appDir: true}
 
 // internalDir holds test-only helpers (this package); nothing imports it.
 const internalDir = "internal"
@@ -145,6 +156,10 @@ func violations(p pkg) []string {
 			out = append(out, p.ImportPath+" imports enterprise "+imp+": only wire and cmd may import ee/")
 			continue
 		}
+		if itop == appDir && !appImporters[top] {
+			out = append(out, p.ImportPath+" imports the command "+imp+": only cmd may import app/")
+			continue
+		}
 		if itop == internalDir {
 			out = append(out, p.ImportPath+" imports test-only "+imp)
 			continue
@@ -184,17 +199,19 @@ func TestImportLayers(t *testing.T) {
 // so the guard can never pass vacuously.
 func TestGuardCatchesViolations(t *testing.T) {
 	cases := map[string]pkg{
-		"upward":        {ImportPath: modulePath + "/model/row", Imports: []string{modulePath + "/schema"}},
-		"op to engine":  {ImportPath: modulePath + "/op", Imports: []string{modulePath + "/engine"}},
-		"store to op":   {ImportPath: modulePath + "/store", Imports: []string{modulePath + "/op"}},
-		"old module":    {ImportPath: modulePath + "/engine", Imports: []string{"saas/pkg/aicoder/ids"}},
-		"ent transit":   {ImportPath: modulePath + "/engine", Deps: []string{"entgo.io/ent"}},
-		"model 3rd pty": {ImportPath: modulePath + "/model/ids", Imports: []string{"golang.org/x/text"}},
-		"no layer":      {ImportPath: modulePath + "/misc"},
-		"internal use":  {ImportPath: modulePath + "/engine", Imports: []string{modulePath + "/internal/layers"}},
-		"ee from open":  {ImportPath: modulePath + "/surface/setupweb", Imports: []string{modulePath + "/ee/webui"}},
-		"ee from tests": {ImportPath: modulePath + "/tests/teame2e", Imports: []string{modulePath + "/ee/webui"}},
-		"ee from ops":   {ImportPath: modulePath + "/ops/setup", Imports: []string{modulePath + "/ee/webui"}},
+		"upward":         {ImportPath: modulePath + "/model/row", Imports: []string{modulePath + "/schema"}},
+		"op to engine":   {ImportPath: modulePath + "/op", Imports: []string{modulePath + "/engine"}},
+		"store to op":    {ImportPath: modulePath + "/store", Imports: []string{modulePath + "/op"}},
+		"old module":     {ImportPath: modulePath + "/engine", Imports: []string{"saas/pkg/aicoder/ids"}},
+		"ent transit":    {ImportPath: modulePath + "/engine", Deps: []string{"entgo.io/ent"}},
+		"model 3rd pty":  {ImportPath: modulePath + "/model/ids", Imports: []string{"golang.org/x/text"}},
+		"no layer":       {ImportPath: modulePath + "/misc"},
+		"internal use":   {ImportPath: modulePath + "/engine", Imports: []string{modulePath + "/internal/layers"}},
+		"ee from open":   {ImportPath: modulePath + "/surface/setupweb", Imports: []string{modulePath + "/ee/webui"}},
+		"ee from tests":  {ImportPath: modulePath + "/tests/teame2e", Imports: []string{modulePath + "/ee/webui"}},
+		"ee from ops":    {ImportPath: modulePath + "/ops/setup", Imports: []string{modulePath + "/ee/webui"}},
+		"app from wire":  {ImportPath: modulePath + "/wire", Imports: []string{modulePath + "/app"}},
+		"app from tests": {ImportPath: modulePath + "/tests/teame2e", Imports: []string{modulePath + "/app"}},
 	}
 	for name, p := range cases {
 		if len(violations(p)) == 0 {
@@ -205,6 +222,8 @@ func TestGuardCatchesViolations(t *testing.T) {
 		{ImportPath: modulePath + "/engine", Imports: []string{modulePath + "/op", modulePath + "/store", "context"}},
 		{ImportPath: modulePath + "/wire", Imports: []string{modulePath + "/ee/webui"}},
 		{ImportPath: modulePath + "/cmd/lore", Imports: []string{modulePath + "/ee/webui"}},
+		{ImportPath: modulePath + "/cmd/lore", Imports: []string{modulePath + "/app"}},
+		{ImportPath: modulePath + "/app", Imports: []string{modulePath + "/wire", modulePath + "/surface/setupweb"}},
 		{ImportPath: modulePath + "/ee/webui", Imports: []string{modulePath + "/surface/setupweb"}},
 	} {
 		if v := violations(ok); len(v) != 0 {

@@ -2,7 +2,7 @@ package teamharness
 
 // Clock guard: every clock-driven team scenario (max-age copies, lease
 // expiry, the fetch cache) moves an actor's clock with LORE_NOW, which only a
-// `-tags loretest` build honours (cmd/lore/liveclock_loretest.go). A
+// `-tags loretest` build honours (app/liveclock_loretest.go). A
 // binary built without the tag silently runs on the wall clock, so those
 // tests fail at an unrelated-looking assertion (TestSideEffect14's max-age
 // land check raised two false alarms that way, 2026-11-05). New refuses such

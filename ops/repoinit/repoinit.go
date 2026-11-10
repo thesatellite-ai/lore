@@ -2,10 +2,10 @@
 // init` as a registry operation, so the setup page's "this folder" step can
 // run it over /v1 like every other step (ONBOARDING_DESIGN 4.10, conflict
 // 10.2). Before this package `lore init` was only a cobra command in
-// cmd/lore/init.go; that command is now a thin caller of Run, so `lore init`
+// app/init.go; that command is now a thin caller of Run, so `lore init`
 // and `lore repo init` take the same path and print the same text.
 //
-// Flow (unchanged from cmd/lore/init.go, FA-OLDCODE-2):
+// Flow (unchanged from app/init.go, FA-OLDCODE-2):
 //
 //	SharedRepoMeta (G-MONO-1: two ids refuse, unless wd already has a project)
 //	  ─▶ RootAt (OWNERQ-1: the project is rooted at wd; undone on failure)
@@ -34,7 +34,7 @@ import (
 )
 
 // Operation names. The CLI word `lore init` is a host shortcut that runs
-// the same Run (cmd/lore/init.go); the registry also mounts `lore repo init`.
+// the same Run (app/init.go); the registry also mounts `lore repo init`.
 const (
 	Noun       = "repo"
 	OpRepoInit = "repo.init"
