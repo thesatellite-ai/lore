@@ -1,0 +1,40 @@
+func hookBlocks(rel string) map[string]struct {
+	marker string
+	lines  []string
+} {
+	cd := ""
+	marker := gitBlockMarker
+	if rel != "" && rel != "." {
+		cd = `cd "` + filepath.ToSlash(rel) + `" && `
+		marker = gitBlockMarker + ":" + filepath.ToSlash(rel)
+	}
+	bn := binaryName
+	guard := `command -v ` + bn + ` >/dev/null 2>&1 && `
+	refresh := []string{"( " + cd + guard + bn + " sync hook refresh >/dev/null 2>&1 ) || true"}
+	probe := bn + " sync hook --help >/dev/null 2>&1"
+	tooOld := `echo "` + bn + `: installed ` + bn + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`
+	coreProbe := bn + " migrate --help >/dev/null 2>&1"
+	hasV2 := `grep -rqsE '"_v": *2' .lore/data`
+	needsCore := `echo "` + bn + `: .lore/data holds lore 0.1.18 rows but the ` + bn + ` on PATH is older; install lore 0.1.18 or newer to commit" >&2; exit 1`
+	absMsg := `m="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; `
+	// No lore that can check, in a clone the last check found to be a
+	// client repo (wire/clientmark.go): refuse rather than let the commit
+	// through unchecked.
+	noChecker := `elif [ "$(git config --get ` + wire.ClientRepoGitKey + `)" = true ]; then echo "` + bn + `: this is a client repo and no ` + bn + ` on PATH can check this commit for internal notes; install ` + bn + `, or if the repo is no longer a client repo: git config --unset ` + wire.ClientRepoGitKey + `" >&2; exit 1; `
+	type block = struct {
+		marker string
+		lines  []string
+	}
+	return map[string]block{
+		hookPreCommit:    {marker, []string{"( " + cd + "if command -v " + bn + " >/dev/null 2>&1; then if ! " + coreProbe + " && " + hasV2 + "; then " + needsCore + "; elif " + probe + "; then " + bn + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"}},
+		hookPostCheckout: {marker, refresh},
+		hookPostMerge:    {marker, refresh},
+		hookPostRewrite:  {marker, refresh},
+		hookCommitMsg: {marker, []string{
+			"( " + absMsg + cd + guard + bn + ` task hook commit-msg "$m" >/dev/null 2>&1 ) || true`,
+			"( " + absMsg + cd + "if command -v " + bn + " >/dev/null 2>&1 && " + bn + " check leaks --help >/dev/null 2>&1; then " + bn + ` check leaks --staged --commit-msg "$m"; ` + noChecker + `fi ) || exit $?`,
+		}},
+		hookPostCommit: {rideHookMarker, rideHookLines[hookPostCommit]},
+		hookPrePush:    {rideHookMarker, rideHookLines[hookPrePush]},
+	}
+}

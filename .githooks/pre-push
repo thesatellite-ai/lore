@@ -40,6 +40,17 @@ if ! command -v task >/dev/null 2>&1; then
 	exit 1
 fi
 
+# git exports GIT_DIR (and, in some setups, GIT_WORK_TREE, GIT_INDEX_FILE,
+# ...) to every hook. Left set, every `git -C <tempdir> ...` a test runs
+# acts on THIS repository instead: issue #6 saw .git/config turned bare,
+# origin pointed at a temp folder, junk remotes, a shallow file and a
+# broken worktree link. lore strips these itself (logic/gitenv), but tests
+# start git directly too, so the gate runs without them. The list matches
+# gitenv.RepoLocating; the stamp lookups above ran before this on purpose.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_NAMESPACE GIT_PREFIX \
+	GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES \
+	GIT_QUARANTINE_PATH GIT_SHALLOW_FILE GIT_GRAFT_FILE GIT_CONFIG
+
 echo "pre-push: running task check (the full gate) before pushing…"
 if ! task check </dev/null; then
 	echo "pre-push: task check failed — push blocked" >&2

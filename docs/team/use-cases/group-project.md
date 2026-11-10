@@ -49,13 +49,10 @@ The first link created `client2/` in the store. The others joined it. Now add a 
 # alice, in api
 $ lore mission add 'Invite landing page' --to agency/client2 --key invite
 ✓ msn_05e9…4603 — Invite landing page → [agency/client2]
-lore live: (live, pushed)
 $ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e9…4603 --repo api --key invite/backend
 ✓ tsk_c0f3…b5b8 — send the invite email from the API [medium] → [agency/client2]
-lore live: (live, pushed)
 $ lore task add 'build the invite page' --to agency/client2 --mission msn_05e9…4603 --repo app --after tsk_c0f3…b5b8 --key invite/frontend
 ✓ tsk_76bd…3f10 — build the invite page [medium] → [agency/client2]
-lore live: (live, pushed)
 $ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e9…4603 --repo api --key invite/backend
 ✓ tsk_c0f3…b5b8 — send the invite email from the API (already added with --key invite/backend)
 ```
@@ -94,5 +91,11 @@ The frontend task ("build the invite page") waits for the backend task to be **m
 
 - **`--repo` takes the repo's lore name**: the name given to `lore init --name`, usually the repo name. A task with no repo is offered only to callers that pass no `--repo`, or a matching `--role`.
 - **Every repo lists every group task.** `lore task list` in `app` shows the backend task too. To see only what is ready for one repo, use the mission status, or `lore task next --repo app`.
-- **Same key, same row.** Running the `task add … --key invite/backend` command again prints "already added with --key invite/backend" and changes nothing. You can apply a whole plan from a file with `lore plan apply`. See [Agents on one mission](agents-mission.md).
+- **Same key, same row.** Running the `task add … --key invite/backend` command again prints "already added with --key invite/backend" and changes nothing. You can apply a whole plan from a file with `lore mission apply`. See [Agents on one mission](agents-mission.md).
 - Client 2 can see nothing about the plan. It is all in the agency's store.
+
+## Related
+
+- [Agents on one mission](agents-mission.md): the same kind of mission run by agents.
+- [Agency with a client repo](agency-client-repo.md).
+- [Concepts](../concepts.md): projects, links and stores.

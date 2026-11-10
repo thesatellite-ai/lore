@@ -1,0 +1,20 @@
+{
+  "_hlc": "2026-03-02T11:22:33.000Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "memories",
+  "_v": 2,
+  "_zz_future": [
+    1,
+    {
+      "a": null
+    }
+  ],
+  "body": "keys this lore does not model",
+  "id": "mem_01a1a59b891c70b78914e00000000004",
+  "updated_at": "2026-03-02T11:22:33.000000000Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9",
+  "zz_future": {
+    "d": 0.1,
+    "n": 9007199254740993,
+    "u": "ünï ☃"
+  }
+}

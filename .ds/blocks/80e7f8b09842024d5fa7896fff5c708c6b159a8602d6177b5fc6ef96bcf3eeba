@@ -1,0 +1,17 @@
+const (
+	ExitGeneric           = 1
+	ExitCoordinationMin   = 10
+	ExitCoordinationMax   = 18
+	ExitGuard             = 19
+	ExitBadInput          = 20
+	ExitAmbiguous         = 21
+	ExitDefinition        = 22
+	ExitRefused           = 23
+	ExitMigrate           = 24
+	ExitUpgrade           = 25
+	ExitNeedsConfirmation = 26
+	ExitNotFound          = 27
+	// ExitUnauthorized is the next free number after every class of
+	// CLI_REFERENCE 1.5 (no clash with 1, 10-27).
+	ExitUnauthorized = 28
+)

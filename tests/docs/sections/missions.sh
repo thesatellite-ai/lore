@@ -48,7 +48,7 @@ note "mission delete"
 on alice $W "lore mission add 'Test mission, please ignore'"
 local m2; m2=$(id msn)
 on! alice $W "lore mission delete $m2"
-on alice $W "lore mission delete $m2 --confirm"
+on alice $W "lore mission delete $m2 --yes"
 
 # --- plans (written notes) ------------------------------------------------------
 note "plan add"
@@ -58,7 +58,7 @@ on alice $W "lore plan list"
 on alice $W "lore plan search newsletter"
 on alice $W "lore plan edit $p --status approved"
 
-# --- plan apply: a file that becomes a mission and its tasks ---------------------------
+# --- mission apply: a file that becomes a mission and its tasks ---------------------------
 note "plan file"
 quiet alice $W "cat > newsletter.yaml <<'Y'
 mission: {key: newsletter, title: \"Start the monthly newsletter\"}
@@ -69,18 +69,18 @@ tasks:
 Y"
 on alice $W "cat newsletter.yaml"
 
-note "plan apply"
-on alice $W "lore plan apply newsletter.yaml"
+note "mission apply"
+on alice $W "lore mission apply newsletter.yaml"
 local nm; nm=$(id msn)
 on alice $W "lore mission status $nm"
 
-note "plan apply again"
-on alice $W "lore plan apply newsletter.yaml"
+note "mission apply again"
+on alice $W "lore mission apply newsletter.yaml"
 
 note "plan errors"
 quiet alice $W "printf 'mission: {title: \"Bad plan\"}\ntasks:\n  - {key: b, title: \"Second\", after: [a]}\n  - {key: a, title: \"First\"}\n' > bad.yaml"
 on alice $W "cat bad.yaml"
-on! alice $W "lore plan apply bad.yaml"
+on! alice $W "lore mission apply bad.yaml"
 
 # --- handoffs and the inbox -------------------------------------------------------
 note "register"

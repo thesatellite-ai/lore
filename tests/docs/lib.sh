@@ -51,10 +51,14 @@ CFG
 }
 
 # envfor NAME: the environment one person's commands run with (no LORE_*/GIT_* leaks from the caller).
+# LORE_HUMAN=1: the person is a human at a terminal, so a run started from a coding-agent session
+# does not attribute every write to "<person> via <tool>" (agent detection walks the parent processes);
+# an agent example sets LORE_ACTOR, which wins over it.
+# LORE_NO_DETECT=1 (loretest builds only): agent detection sees nothing, so whoami lines do not depend on where the run starts.
 envfor() {
   local home="$HOMES/$1"
   echo env -i "HOME=$home" "PATH=$SHIM:/usr/local/bin:/usr/bin:/bin" "USER=$1" "TERM=dumb" "NO_COLOR=1" \
-    "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8"
+    "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8" "LORE_HUMAN=1" "LORE_NO_DETECT=1"
 }
 
 # TRANSCRIPT is the file `on` appends to; run-examples.sh sets it per section.
@@ -95,7 +99,9 @@ _on() {
     code=$?
   else
     # shellcheck disable=SC2046
-    out=$(cd "$home/$dir" && $(envfor "$name") ${EXTRA_ENV:-} bash -c "$cmd" 2>&1)
+    # stdin is /dev/null: examples are non-interactive by design, so a prompt (the
+    # secret menu, a confirm) fails at once instead of waiting on the terminal.
+    out=$(cd "$home/$dir" && $(envfor "$name") ${EXTRA_ENV:-} bash -c "$cmd" 2>&1 </dev/null)
     code=$?
   fi
   set -e
@@ -144,7 +150,7 @@ quiet() {
   local extra="${EXTRA_ENV:-}"
   [ -n "${CLOCK:-}" ] && extra="$extra LORE_NOW=$CLOCK GIT_AUTHOR_DATE=$CLOCK GIT_COMMITTER_DATE=$CLOCK"
   # shellcheck disable=SC2046
-  if ! (cd "$home/$dir" && $(envfor "$name") $extra bash -c "$cmd") > "$WORLD/quiet.log" 2>&1; then
+  if ! (cd "$home/$dir" && $(envfor "$name") $extra bash -c "$cmd") > "$WORLD/quiet.log" 2>&1 </dev/null; then
     FAILURES=$((FAILURES + 1))
     echo "SETUP FAILED: $name ($dir) \$ $cmd" >&2
     cat "$WORLD/quiet.log" >&2

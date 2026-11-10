@@ -1,6 +1,6 @@
 # Projects and repos
 
-**In short:** a *project* is the box all of one product's notes live in; `lore init` makes one per repo. Inside a project you can name *repos* (parts of the code, such as the shop and the help pages) and attach a note to one part only, so "Buttons are blue" applies to the shop and not to everything. This page shows how to list, add, archive and delete both.
+**In short:** a *project* is the box all of one product's notes live in; `lore init` makes one per repo. Inside a project you can name *repos* (parts of the code, such as the shop and the help pages) and attach a note to one part only, so "Buttons are blue" applies to the shop and not to everything. This page shows how to list, add, archive and delete both, how to record a repo that moved or was forked, and how to pick the repo from the environment.
 
 ## What it is and when you want it
 
@@ -9,7 +9,7 @@
 
 You want repos when one repository holds several parts that need different notes (a monorepo), or when you want to say which remote (the online address of a repo, like `github.com/client/website`) a part comes from. You want the project commands to see what a database holds and to tidy up old projects.
 
-If the client's product is several separate git repositories that should share one notes database on your machine, read [One database for several repos](shared-database-mode-b.md) instead.
+If the client's product is several separate git repositories that should share one notes database on your machine, read [One store for several repos](shared-database-mode-b.md) instead.
 
 ## Before you start
 
@@ -29,7 +29,9 @@ Project: prj_7a67…9504
   name:    website
   origin:  https://github.com/client/website
   created: 2026-11-02 10:00:00Z
-  active:  2026-11-02 10:00:00Z
+Repos:
+  rep_2ad3…f891  website
+created 2026-11-02T10:00:00Z by act_162d…9666 · updated 2026-11-02T10:00:00Z by act_162d…9666
 ```
 <!-- /example -->
 
@@ -41,18 +43,15 @@ Give each part a short mount name. `--origin` records where its code lives and `
 ```console
 # alice, in website
 $ lore repo list
-(no repos)
+rep_2ad3…f891  website  https://github.com/client/website
 $ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
-✓ repo shop registered (rep_2ad3…f891)
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+✓ repo shop registered (rep_54fe…28f2)
 $ lore repo add help --display-name 'Help pages'
-✓ repo help registered (rep_162d…9666)
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+✓ repo help registered (rep_05e9…4603)
 $ lore repo list
-rep_162d…9666  help
-rep_2ad3…f891  shop  https://github.com/client/website
+rep_2ad3…f891  website  https://github.com/client/website
+rep_54fe…28f2  shop  https://github.com/client/website
+rep_05e9…4603  help
 ```
 <!-- /example -->
 
@@ -60,32 +59,26 @@ Repos are rows like any other: lore writes them to `.lore/data/repos`, and you c
 
 ## Step 3 — Attach notes to one repo
 
-Without `--repo`, a rule applies to the whole project. With `--repo shop` it applies to the shop only. `lore rule list` alone shows the project-wide rules; with `--repo shop` (or `LORE_REPO=shop` in the environment) it shows the project-wide rules plus the shop's own:
+Without `--repo`, a rule applies to the whole project. With `--repo shop` it applies to the shop only. `lore rule list` alone shows the project-wide rules; with `--repo shop` it shows the project-wide rules plus the shop's own:
 
 <!-- example: projects#notes-per-repo -->
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
-✓ rul_54fe…28f2 
+✓ rul_c0f3…b5b8
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ lore rule add --repo shop --body 'Buttons are blue.'
-✓ rul_05e9…4603 
+✓ rul_76bd…3f10
   scope: [repo:shop] severity: must
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push.
+rul_c0f3…b5b8 [must/always] Run the tests before you push.
 $ lore rule list --repo shop
-rul_54fe…28f2 [must/always] Run the tests before you push.
-rul_05e9…4603 [must/always] Buttons are blue.
-$ LORE_REPO=shop lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push.
-rul_05e9…4603 [must/always] Buttons are blue.
+rul_c0f3…b5b8 [must/always] Run the tests before you push.
+rul_76bd…3f10 [must/always] Buttons are blue.
 $ lore rule list --repo blog
-ERROR: [E_REPO_NOT_FOUND] no repo with mount_name "blog" in current project
-(exit 1)
+ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
+  hint: run `lore repo list` to see the mount names
+(exit 27)
 ```
 <!-- /example -->
 
@@ -99,37 +92,97 @@ Archiving hides a repo or project without losing anything; unarchive brings it b
 ```console
 # alice, in website
 $ lore repo archive help
-ERROR: [E_NOT_FOUND] repo "help" not found
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main repos`
-(exit 1)
-$ lore repo archive rep_162d…9666
+ERROR: [E_INVALID_ID] repo: "help" is not a repo id (rep_…)
+  hint: copy the whole id (its prefix, an underscore and 32 hex characters) from the list or show output of that kind
+(exit 20)
+$ lore repo archive rep_05e9…4603
 ✓ help archived
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore repo list
-rep_162d…9666  help [archived]
-rep_2ad3…f891  shop  https://github.com/client/website
-$ lore repo unarchive rep_162d…9666
+rep_2ad3…f891  website  https://github.com/client/website
+rep_54fe…28f2  shop  https://github.com/client/website
+rep_05e9…4603  help [archived]
+$ lore repo unarchive rep_05e9…4603
 ✓ help unarchived
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
-$ lore mount-alias list
-(no mount aliases)
 $ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 ```
 <!-- /example -->
 
-`lore repo delete <id> --confirm` and `lore project delete <id> --confirm` remove a row for good; without `--confirm` they refuse and suggest archiving. An example with projects is on [One database for several repos](shared-database-mode-b.md#step-4--archive-or-delete-a-project).
+`lore repo delete <id>` and `lore project delete <id>` remove a row for good; lore asks first, and without a terminal they stop with `E_NEEDS_CONFIRM` until you add `--yes`. An example with projects is on [One store for several repos](shared-database-mode-b.md#step-3--archive-or-delete-a-project).
 
-## Try it — renamed repos
+## Step 5 — The repo moved: record its new address
 
-When a repo's mount name changes, lore keeps the old name working for a while as a redirect, so scripts that still say `--repo old-name` keep working. `lore mount-alias list` shows those redirects (`--expiring` shows only the ones that end within 7 days); a fresh project has none:
+Every repo row keeps the address it was confirmed at, and lore uses it to recognise the repo in any clone. When the client renames the repo (or moves it to another host), update your remote as usual and then tell lore with `lore repo set-url <url>`: the new address becomes the primary, the old one is kept as history ("until today"), and the repo keeps its id, so every note stays attached. `--mirror` adds a second address (a copy on another host) without changing the primary; `--remove` drops a mirror again; `--repo <mount>` updates another repo of the project instead of this checkout's. The change is written to `.lore/data/_meta.json`; commit it:
 
-<!-- example: projects#archive-a-repo only=5 -->
+<!-- example: projects#repo-moved -->
 ```console
 # alice, in website
-$ lore mount-alias list
-(no mount aliases)
+$ git remote set-url origin https://github.com/client/website-v2 && git push -q origin main
+$ lore repo set-url git@github.com:client/website-v2.git
+✓ rep_2ad3…f891 primary address is now github.com/client/website-v2 (was github.com/client/website until today)
+  .lore/data/_meta.json updated; commit it with your next push
+$ lore repo set-url https://gitlab.com/client/website-v2 --mirror
+✓ rep_2ad3…f891 mirror address added: gitlab.com/client/website-v2
+  .lore/data/_meta.json updated; commit it with your next push
+$ lore repo list
+rep_2ad3…f891  website  git@github.com:client/website-v2.git
+rep_54fe…28f2  shop  https://github.com/client/website
+rep_05e9…4603  help
+$ lore repo merge-ids --dry-run
+✓ rep_2ad3…f891 has no alias ids; nothing to merge
+$ git add -A && git commit -qm 'lore: repo address' && git push -q origin main
+```
+<!-- /example -->
+
+`lore repo merge-ids` is the clean-up for a repo that has alias ids (other `rep_` ids recorded as the same repo): it rewrites the notes stamped with an alias id to the winning id, then clears the aliases. `--dry-run` lists what it would rewrite; here there is nothing to merge.
+
+## Step 6 — A fork gets its own repo id
+
+A fork starts as a copy of the original, `.lore/data` included, so at first it carries the original's repo id. `lore repo fork` gives the fork its own permanent id and records where it came from (`forked_from`; with `--split`, `split_from` for a repo split out of another one). It refuses while the clone's remote is still an address of the original, because then this clone *is* the original. Point `origin` at the fork first. `--new-project` also gives the fork its own project:
+
+<!-- example: projects#fork -->
+```console
+# alice, in ~
+$ git clone -q https://github.com/alice/website website-fork
+
+# alice, in website-fork
+$ git remote add upstream https://github.com/client/website-v2 && git remote set-url origin https://github.com/client/website-v2 && lore repo fork
+ERROR: [E_INVALID_INPUT] this clone's remote github.com/client/website-v2 is a confirmed address of rep_2ad3…f891, so it is that repo, not a fork
+  hint: change the remote to the fork's address first (git remote set-url origin <fork url>)
+(exit 20)
+$ git remote set-url origin https://github.com/alice/website
+$ lore repo fork
+✓ new repo rep_b4f4…a5b0 (website-fork), forked_from rep_2ad3…f891
+✓ .lore/data/_meta.json updated; commit it with your next push
+$ lore repo list
+rep_2ad3…f891  website  git@github.com:client/website-v2.git
+rep_54fe…28f2  shop  https://github.com/client/website
+rep_05e9…4603  help
+rep_b4f4…a5b0  website-fork  https://github.com/alice/website
+$ git status --short
+ M .lore/data/_meta.json
+?? .lore/data/repos/rep_b4f4…a5b0.json
+```
+<!-- /example -->
+
+## Try it — pick the repo from the environment
+
+`LORE_REPO` does what `--repo` does for every command in a shell, which is handy when a coding agent works inside one part of a monorepo. A `--repo` flag on the command line still wins. `LORE_PROJECT_ID` picks the project by its `prj_` id the same way; an id that names no project stops the command with `E_NOT_FOUND` instead of falling back to the folder's project:
+
+<!-- example: projects#repo-from-the-environment -->
+```console
+# alice, in website
+$ LORE_REPO=shop lore rule list
+rul_c0f3…b5b8 [must/always] Run the tests before you push.
+rul_76bd…3f10 [must/always] Buttons are blue.
+$ LORE_REPO=shop lore rule list --repo website
+rul_c0f3…b5b8 [must/always] Run the tests before you push.
+$ LORE_PROJECT_ID=prj_7a67…9504 LORE_REPO=shop lore rule list
+rul_c0f3…b5b8 [must/always] Run the tests before you push.
+rul_76bd…3f10 [must/always] Buttons are blue.
+$ LORE_PROJECT_ID=prj_d431…313a lore rule list
+ERROR: [E_NOT_FOUND] rule: no project "prj_d431…313a"
+  hint: run `lore project list` to see the projects
+(exit 27)
 ```
 <!-- /example -->
 
@@ -139,11 +192,12 @@ $ lore mount-alias list
 - **An unknown `--repo` is an error, not an empty list.** A typo in the mount name stops the command, so you never act on the wrong set of notes by mistake.
 - **A note's repo is fixed when you add it.** To move a rule, use `lore rule edit <id> --rebind-repo <mount>` or `--rebind-master` (back to the whole project).
 - **Two `lore init`s on two branches make two projects.** When those branches merge, run `lore sync fix-projects`; see [Conflicts and duplicates](conflicts-and-duplicates.md#step-5--two-people-set-up-lore-on-separate-branches).
+- **`lore repo set-url` does not change your git remote.** Run `git remote set-url origin <url>` yourself; lore only records the address for its own matching.
 - **Delete is for mistakes.** Archive is reversible and keeps history; delete is not.
 
 ## Related
 
-- [One database for several repos](shared-database-mode-b.md)
+- [One store for several repos](shared-database-mode-b.md)
 - [How notes travel with git](how-notes-travel-with-git.md)
 - [Lore for teams › Stores and links](../team/concepts.md#stores-and-links): an agency project linked to a client repo.
 - [Feature index › Projects and repos](../reference/features.md#projects-and-repos)

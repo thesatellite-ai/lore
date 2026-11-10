@@ -1,0 +1,912 @@
+package settings
+
+import (
+	"context"
+	"fmt"
+	"slices"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	"github.com/thesatellite-ai/lore/ops/internal/trashline"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/meta"
+	"github.com/thesatellite-ai/lore/logic/metafilter"
+	"github.com/thesatellite-ai/lore/model/canon"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// Metadata key and value operations (CLI_REFERENCE 3.1, the registry
+// half): one `meta_keys` row (mky_) per key, one `meta_values` row (val_)
+// per allowed value. Writing metadata ON rows (meta set/unset, --meta) is
+// the metadata logic's, not these ops'.
+const (
+	OpMetaAdd         = "meta.add"
+	OpMetaEdit        = "meta.edit"
+	OpMetaDescribe    = "meta.describe"
+	OpMetaRename      = "meta.rename"
+	OpMetaKeys        = "meta.keys"
+	OpMetaDelete      = "meta.delete"
+	OpMetaValueAdd    = "meta.value.add"
+	OpMetaValueRename = "meta.value.rename"
+	OpMetaSet         = "meta.set"
+	OpMetaUnset       = "meta.unset"
+	OpMetaGet         = "meta.get"
+	// metaREST keeps the REST collection /v1/meta.
+	metaREST = "meta"
+)
+
+// meta_keys / meta_values field names (schema.Builtin).
+const (
+	mName        = "name"
+	mScope       = "scope"
+	mType        = "type"
+	mStrict      = "strict"
+	mInternal    = "internal"
+	mSensitive   = "sensitive"
+	mDescription = "description"
+	mvKeyID      = "key_id"
+	mAddedBy     = "added_by"
+	mReviewed    = "reviewed"
+	mvLabel      = "label"
+)
+
+// Metadata limits (CLI_REFERENCE 3.1).
+const (
+	maxMetaDescription = 300 // characters (runes), not bytes: the spec counts characters
+	maxMetaValues      = 100
+)
+
+// MetaAddIn is the input of meta.add.
+type MetaAddIn struct {
+	Name        string `json:"name" arg:"0" desc:"the key (snake_case)"`
+	Type        string `json:"type" flag:"type" desc:"text | number | bool | date | datetime | list | json | …"`
+	To          string `json:"to,omitempty" flag:"to" desc:"where the key row is written (repo, <store>, <store>/<folder>; default repo)"`
+	Description string `json:"description,omitempty" flag:"description" desc:"what the key means (at most 300 characters)"`
+	Strict      bool   `json:"strict,omitempty" flag:"strict" desc:"refuse type mismatches"`
+	Values      string `json:"values,omitempty" flag:"values" desc:"allowed values, comma separated (a closed set, at most 100)"`
+	Internal    bool   `json:"internal,omitempty" flag:"internal" desc:"never reaches a client repo"`
+	NoInternal  bool   `json:"no_internal,omitempty" flag:"no-internal" desc:"may reach client repos"`
+	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"hide the values from agents, render and lists (OQ2)"`
+}
+
+// MetaEditIn is the input of meta.edit.
+type MetaEditIn struct {
+	Key         string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
+	Strict      bool   `json:"strict,omitempty" flag:"strict" desc:"turn mismatches into refusals"`
+	NoStrict    bool   `json:"no_strict,omitempty" flag:"no-strict" desc:"turn mismatches back into warnings"`
+	Internal    bool   `json:"internal,omitempty" flag:"internal" desc:"mark it internal"`
+	NoInternal  bool   `json:"no_internal,omitempty" flag:"no-internal" desc:"mark it not internal"`
+	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"mark it sensitive (values hidden, OQ2)"`
+	NoSensitive bool   `json:"no_sensitive,omitempty" flag:"no-sensitive" desc:"mark it not sensitive"`
+	Values      string `json:"values,omitempty" flag:"values" desc:"the new allowed values, comma separated"`
+	// Value maintenance (3.8, OQ-AV): ids stay, only meta_values rows change.
+	ValueLabel  []string `json:"value_label,omitempty" flag:"value-label" desc:"label an allowed value: name=label (repeatable)"`
+	RenameValue string   `json:"rename_value,omitempty" flag:"rename-value" desc:"rename an allowed value: old=new (its val_ id stays)"`
+	RemoveValue string   `json:"remove_value,omitempty" flag:"remove-value" desc:"remove an allowed value no row uses"`
+	// Reason is the deleted_reason of a removed allowed value (--values
+	// dropping one, --remove-value): required while delete.require_reason
+	// is true (E_REASON_REQUIRED); without it no value could be removed.
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why an allowed value is removed (needed while delete.require_reason is true)"`
+	// MergeInto folds this key into another of the same type (3.8 Fold, OQ3).
+	MergeInto string `json:"merge_into,omitempty" flag:"merge-into" desc:"fold this key into another key of the same type (rows rewritten, one batch)"`
+	// Everyday features (3.19); "none" clears a field.
+	Label        string `json:"label,omitempty" flag:"label" desc:"display label (column header); none clears it"`
+	RequiredOn   string `json:"required_on,omitempty" flag:"required-on" desc:"tables a new row must carry this key on, comma separated; none clears"`
+	Pattern      string `json:"pattern,omitempty" flag:"pattern" desc:"RE2 pattern text values must match; none clears"`
+	Min          string `json:"min,omitempty" flag:"min" desc:"lowest number, date or datetime; none clears"`
+	Max          string `json:"max,omitempty" flag:"max" desc:"highest number, date or datetime; none clears"`
+	Default      string `json:"default,omitempty" flag:"default" desc:"value given on add (with --default-on); none clears"`
+	DefaultOn    string `json:"default_on,omitempty" flag:"default-on" desc:"tables the default applies to, comma separated; none clears"`
+	Deprecated   bool   `json:"deprecated,omitempty" flag:"deprecated" desc:"new writes warn (refused on a strict key)"`
+	NoDeprecated bool   `json:"no_deprecated,omitempty" flag:"no-deprecated" desc:"not deprecated any more"`
+	ReplacedBy   string `json:"replaced_by,omitempty" flag:"replaced-by" desc:"the key to use instead of a deprecated one; none clears"`
+	// Context: CONTEXT_BUDGET 6.13 (A-CTX-12), "index" puts the key's row
+	// count in the rendered "available knowledge" index.
+	Context string `json:"context,omitempty" flag:"context" desc:"index: count this key's rows in the rendered available-knowledge index; none clears"`
+	// Type converts every stored value of the key (METADATA 3.3, R12,
+	// G-META-7); it runs on its own, asks first, one meta batch.
+	Type       string `json:"type,omitempty" flag:"type" desc:"change the key's type and convert every stored value (asks; nothing written while a value does not fit)"`
+	DryRun     bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"with --type: report what converts and what does not fit, write nothing"`
+	KeepAsText bool   `json:"keep_as_text,omitempty" flag:"keep-as-text" desc:"with --type: keep values that do not fit as text values instead of refusing"`
+	All        bool   `json:"all,omitempty" flag:"all" desc:"with --type: list every converted value"`
+}
+
+// MetaDescribeIn is the input of meta.describe.
+type MetaDescribeIn struct {
+	Key  string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
+	Text string `json:"text" arg:"1" desc:"the description (at most 300 characters)"`
+}
+
+// MetaKeyRef names one key.
+type MetaKeyRef struct {
+	Key string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
+}
+
+// MetaKeysIn is the input of meta.keys.
+type MetaKeysIn struct {
+	Keys []string `json:"keys,omitempty" flag:"key" desc:"only these keys (repeatable)"`
+	IDs  bool     `json:"ids,omitempty" flag:"ids" desc:"show key ids"`
+	// Unreviewed lists only keys an agent registered that nobody has
+	// reviewed yet (MQ7, P3-AGENT-3).
+	Unreviewed bool `json:"unreviewed,omitempty" flag:"unreviewed" desc:"only keys an agent added that nobody reviewed yet (lore meta describe reviews one)"`
+	// Unused lists keys no row uses (archived rows count as use, 3.8).
+	Unused bool `json:"unused,omitempty" flag:"unused" desc:"only keys used on no row (remove with lore meta forget)"`
+	// Place and Table narrow the list (CLI_REFERENCE 3.1 meta keys, XQ6).
+	Place string `json:"place,omitempty" flag:"place" desc:"one place only: repo, project, org or a scope label (project:acme-hub)"`
+	Table string `json:"table,omitempty" flag:"table" desc:"only keys used on rows of this table"`
+}
+
+// MetaValueAddIn is the input of meta.value.add.
+type MetaValueAddIn struct {
+	Key   string `json:"key" arg:"0" desc:"the key (name or mky_ id)"`
+	Value string `json:"value" arg:"1" desc:"the new value (snake_case)"`
+	Label string `json:"label,omitempty" flag:"label" desc:"display label"`
+}
+
+// MetaValueRenameIn is the input of meta.value.rename.
+type MetaValueRenameIn struct {
+	Key string `json:"key" arg:"0" desc:"the key (name or mky_ id)"`
+	Old string `json:"value" arg:"1" desc:"the current value"`
+	New string `json:"new_value" arg:"2" desc:"the new value (snake_case)"`
+}
+
+// MetaKey is one key as shown.
+type MetaKey struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Scope       string   `json:"scope"`
+	Store       string   `json:"store"`
+	Type        string   `json:"type"`
+	Strict      bool     `json:"strict,omitempty"`
+	Internal    bool     `json:"internal,omitempty"`
+	Sensitive   bool     `json:"sensitive,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Values      []string `json:"values,omitempty"`
+	AddedBy     string   `json:"added_by,omitempty"`
+	Unreviewed  bool     `json:"unreviewed,omitempty"`
+	Rows        int      `json:"rows"`
+	Label       string   `json:"label,omitempty"`
+	Retired     string   `json:"merged_into,omitempty"`
+}
+
+// MetaKeysOut is the output of meta.keys.
+type MetaKeysOut struct {
+	Count int       `json:"count"`
+	Data  []MetaKey `json:"data"`
+	ids   bool
+}
+
+// Text implements op.Texter (CLI_REFERENCE 3.1 sample).
+func (o MetaKeysOut) Text() string {
+	if len(o.Data) == 0 {
+		return "(no metadata keys)\n"
+	}
+	var b strings.Builder
+	head := "KEY\tSCOPE\tTYPE\tROWS\tVALUES\n"
+	if o.ids {
+		head = "ID\t" + head
+	}
+	b.WriteString(head)
+	for _, k := range o.Data {
+		if o.ids {
+			b.WriteString(short(mustAny(k.ID)) + "\t")
+		}
+		vals := strings.Join(k.Values, ", ")
+		if k.Retired != "" {
+			vals = "(merged into " + k.Retired + ")"
+		}
+		fmt.Fprintf(&b, "%s\t%s\t%s\t%d\t%s\n", k.Name, k.Scope, k.Type, k.Rows, vals)
+	}
+	return b.String()
+}
+
+// mustAny parses a stored id for printing (the zero id on a bad one).
+func mustAny(s string) ids.AnyID {
+	id, err := ids.ParseAny(s)
+	if err != nil {
+		return ids.AnyID{}
+	}
+	return id
+}
+
+func (o ops) metaOps() []op.Entry {
+	return append(append([]op.Entry{
+		op.Define(op.Spec{Name: OpMetaAdd, Summary: "Add a metadata key to a place's registry", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
+			Examples: []op.Example{{Title: "a closed set", CLI: "lore meta add release_window --type text --strict --values spring,summer", Want: "mky_"}}}, o.metaAdd),
+		op.Define(op.Spec{Name: OpMetaEdit, Summary: "Edit a metadata key (strict, internal, allowed values, type)", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.MetaKey, errs.MetaType, errs.MetaInUse, errs.MetaRetired, errs.MetaConflict, errs.MetaValue, errs.ReasonRequired), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "make a key strict", CLI: "lore meta edit team_owner --strict"}}}, o.metaEdit),
+		op.Define(op.Spec{Name: OpMetaDescribe, Summary: "Set a metadata key's description", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "say what a key is for", CLI: `lore meta describe team_owner "The team that owns this row"`}}}, o.metaDescribe),
+		op.Define(op.Spec{Name: OpMetaRename, Summary: "Rename a metadata key (a label change; the id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: writeErrors, RESTNoun: metaREST, Examples: []op.Example{{Title: "rename a key (the id stays)", CLI: "lore meta rename team_owner owning_team"}}}, o.metaRename),
+		op.Define(op.Spec{Name: OpMetaKeys, Summary: "List the metadata keys every visible place defines", Permission: op.PermRead, Access: op.AccessRead,
+			Errors: readErrors, RESTNoun: metaREST, Examples: []op.Example{{Title: "every key this repo sees", CLI: "lore meta keys"}}}, o.metaKeys),
+		op.Define(op.Spec{Name: OpMetaDelete, Summary: "Delete a metadata key and its allowed values", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: writeErrors, Confirm: op.ConfirmRule{Always: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "delete a metadata key", CLI: "lore meta delete team_owner"}}}, o.metaDelete),
+		op.Define(op.Spec{Name: OpMetaValueAdd, Summary: "Add an allowed value to a metadata key", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: writeErrors, Examples: []op.Example{{Title: "allow one more value", CLI: "lore meta value add priority_band urgent --label Urgent"}}}, o.metaValueAdd),
+		op.Define(op.Spec{Name: OpMetaSet, Summary: "Set metadata on a row by id", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "one value", CLI: "lore meta set tsk_… client=acme", Want: "set client"}}}, o.metaSet),
+		op.Define(op.Spec{Name: OpMetaUnset, Summary: "Remove a metadata key from a row (a parent removes its fields)", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "remove a key from a row", CLI: "lore meta unset tsk_31 team_owner"}}}, o.metaUnset),
+		op.Define(op.Spec{Name: OpMetaGet, Summary: "Show a row's metadata (sensitive values masked unless --show-sensitive)", Permission: op.PermRead, Access: op.AccessRead,
+			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}, Examples: []op.Example{{Title: "a row's metadata", CLI: "lore meta get tsk_31"}, {Title: "one key of a row", CLI: "lore meta get tsk_31 team_owner"}}}, o.metaGet),
+		op.Define(op.Spec{Name: OpMetaValueRename, Summary: "Rename an allowed value (a label change; the val_ id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
+			Errors: writeErrors, Examples: []op.Example{{Title: "rename an allowed value (the id stays)", CLI: "lore meta value rename priority_band urgent critical"}}}, o.metaValueRename),
+	}, o.metaMaintOps()...), slices.Concat(o.metaIOOps(), o.metaMoveOps(), o.metaHistoryOps(), o.metaRebuildOps())...)
+}
+
+func (o ops) metaKey(ctx context.Context, key string) (located, error) {
+	k, err := byNameOrID(ctx, o.env, engine.ReadStoresOf(o.env), schema.TableMetaKeys, mName, key, nil)
+	if errs.Has(err, errs.NotFound) {
+		return located{}, errs.New(errs.NotFound, "no metadata key "+quote(key)).WithHint("lore meta keys lists the keys")
+	}
+	return k, err
+}
+
+// metaValues are the live allowed-value rows of key k (beside k).
+func (o ops) metaValues(ctx context.Context, k located) ([]located, error) {
+	rows, err := liveRows(ctx, o.env, []store.Source{k.Src}, schema.TableMetaValues)
+	if err != nil {
+		return nil, err
+	}
+	vs := where(rows, map[string]string{mvKeyID: k.Row.ID.String()})
+	slices.SortFunc(vs, func(a, b located) int { return strings.Compare(text(a.Row, mName), text(b.Row, mName)) })
+	return vs, nil
+}
+
+func valueNames(vs []located) []string {
+	out := make([]string, 0, len(vs))
+	for _, v := range vs {
+		out = append(out, text(v.Row, mName))
+	}
+	return out
+}
+
+func checkMetaValues(vals []string) error {
+	if len(vals) > maxMetaValues {
+		return errs.New(errs.InvalidInput, fmt.Sprintf("a key has at most %d allowed values", maxMetaValues))
+	}
+	for _, v := range vals {
+		if !snakeName.MatchString(v) {
+			return errs.New(errs.InvalidInput, "allowed value "+quote(v)+" is not snake_case")
+		}
+	}
+	return nil
+}
+
+func (o ops) addValue(ctx context.Context, k located, name, label string) (engine.Written, error) {
+	fields := map[string]value.Value{}
+	if err := optTexts(fields, map[string]string{mName: name, mvLabel: label}); err != nil {
+		return engine.Written{}, err
+	}
+	kid, err := ref(k.Row.ID)
+	if err != nil {
+		return engine.Written{}, err
+	}
+	fields[mvKeyID] = kid
+	return create(ctx, o.env, k.Src, schema.TableMetaValues, map[string]string{mvKeyID: k.Row.ID.String(), mName: name}, fields)
+}
+
+func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
+	if err := checkKeyName(in.Name); err != nil {
+		return RowOut{}, err
+	}
+	if utf8.RuneCountInString(in.Description) > maxMetaDescription {
+		return RowOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("--description has at most %d characters", maxMetaDescription))
+	}
+	// the engine's type words (meta.ParseType): ref and secret_ref are
+	// resource field types, not metadata types (METADATA RX8: a
+	// ${secret:…} reference in a text value serves it); a key the engine
+	// cannot read would be skipped and a same-name text key registered
+	// beside it on the first write (G-META-11)
+	if _, err := value.ParseKind(in.Type); err != nil || in.Type == string(value.KindNull) {
+		return RowOut{}, errs.New(errs.MetaType, "--type "+quote(in.Type)+" is not a metadata type")
+	}
+	if _, err := meta.ParseType(in.Type); err != nil {
+		return RowOut{}, errs.New(errs.MetaType, "--type "+quote(in.Type)+" is not a metadata type").
+			WithHint("a secret goes in a text value as ${secret:manager://entry}; ref and secret_ref are resource field types")
+	}
+	vals := splitList(in.Values)
+	if err := checkMetaValues(vals); err != nil {
+		return RowOut{}, err
+	}
+	target := targetOf(in.To)
+	if err := o.checkRegistryCaps(ctx, target, in.Name); err != nil {
+		return RowOut{}, err
+	}
+	// Default visibility: internal in a store registry, not in a repo.
+	internal := target != store.SourceRepo
+	if err := triStateBool(&internal, in.Internal, in.NoInternal, mInternal); err != nil {
+		return RowOut{}, err
+	}
+	byWhom := addedBy(ctx)
+	fields := map[string]value.Value{mStrict: value.BoolOf(in.Strict), mInternal: value.BoolOf(internal),
+		mSensitive: value.BoolOf(in.Sensitive), mReviewed: value.BoolOf(byWhom == schema.MetaAddedByPerson)}
+	scope := scopeOf(target)
+	if err := optTexts(fields, map[string]string{mName: in.Name, mScope: scope, mType: in.Type, mDescription: in.Description, mAddedBy: byWhom}); err != nil {
+		return RowOut{}, err
+	}
+	w, err := create(ctx, o.env, target, schema.TableMetaKeys, map[string]string{mName: in.Name, mScope: scope}, fields)
+	if err != nil {
+		return RowOut{}, err
+	}
+	k := located{Src: target, Row: w.Row}
+	for _, v := range vals {
+		if _, err := o.addValue(ctx, k, v, ""); err != nil {
+			return RowOut{}, err
+		}
+	}
+	extra := []string{in.Type}
+	if in.Strict {
+		extra = append(extra, "strict")
+	}
+	if len(vals) > 0 {
+		extra = append(extra, "values "+strings.Join(vals, ", "))
+	}
+	if in.Sensitive {
+		extra = append(extra, "sensitive")
+	}
+	vis := "not internal"
+	if internal {
+		vis = "internal"
+	}
+	human := fmt.Sprintf("added %s %s (%s) to %s (%s)\n", short(w.Row.ID), in.Name, strings.Join(extra, ", "), place(target), vis)
+	if meta.TagLike(in.Name) {
+		human += tagLikeNote(in.Name)
+	}
+	return RowOut{ID: w.Row.ID.String(), Store: string(target), Human: human}, nil
+}
+
+// triStateBool applies a --x / --no-x pair to b.
+func triStateBool(b *bool, on, off bool, name string) error {
+	switch {
+	case on && off:
+		return errs.New(errs.InvalidInput, "give --"+name+" or --no-"+name+", not both")
+	case on:
+		*b = true
+	case off:
+		*b = false
+	}
+	return nil
+}
+
+func (o ops) metaDescribe(ctx context.Context, in MetaDescribeIn) (RowOut, error) {
+	if utf8.RuneCountInString(in.Text) > maxMetaDescription {
+		return RowOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("a description has at most %d characters", maxMetaDescription))
+	}
+	k, err := o.metaKey(ctx, in.Key)
+	if err != nil {
+		return RowOut{}, err
+	}
+	v, err := txt(in.Text)
+	if err != nil {
+		return RowOut{}, err
+	}
+	// describe marks the key reviewed whoever runs it: anyone, a person or
+	// an agent, reviews an agent's key, and the audit fields name the
+	// reviewer (AGENT_IDENTITY 8.3, METADATA 3.14, MQ7, P3-AGENT-3).
+	patch := map[string]value.Value{mDescription: v, mReviewed: value.BoolOf(true)}
+	return o.patchRow(ctx, k, patch, text(k.Row, mName)+": description set")
+}
+
+func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
+	rows, err := liveRows(ctx, o.env, engine.ReadStoresOf(o.env), schema.TableMetaKeys)
+	if err != nil {
+		return MetaKeysOut{}, err
+	}
+	out := MetaKeysOut{Data: []MetaKey{}, ids: in.IDs}
+	data, err := o.metaRows(ctx)
+	if err != nil {
+		return MetaKeysOut{}, err
+	}
+	use := usage(data)
+	var used map[string]*keyUse // OV58: --unused also sees trashed rows
+	if in.Unused {
+		all, uerr := o.usedRows(ctx)
+		if uerr != nil {
+			return MetaKeysOut{}, uerr
+		}
+		used = usage(all)
+	}
+	for _, k := range rows {
+		n := 0
+		if u := use[k.Row.ID.String()]; u != nil {
+			n = u.rows
+		}
+		if in.Unused && used[k.Row.ID.String()] != nil {
+			continue
+		}
+		name := text(k.Row, mName)
+		if len(in.Keys) > 0 && !slices.Contains(in.Keys, name) {
+			continue
+		}
+		if !placeMatches(text(k.Row, mScope), in.Place) {
+			continue
+		}
+		if u := use[k.Row.ID.String()]; in.Table != "" && (u == nil || u.byTable[row.Table(in.Table)] == 0) {
+			continue
+		}
+		unreviewed := isUnreviewed(k.Row)
+		if in.Unreviewed && !unreviewed {
+			continue
+		}
+		vs, verr := o.metaValues(ctx, k)
+		if verr != nil {
+			return MetaKeysOut{}, verr
+		}
+		out.Data = append(out.Data, MetaKey{ID: k.Row.ID.String(), Name: name, Scope: text(k.Row, mScope), Store: string(k.Src),
+			Type: text(k.Row, mType), Strict: flag(k.Row, mStrict), Internal: flag(k.Row, mInternal), Sensitive: flag(k.Row, mSensitive),
+			Description: text(k.Row, mDescription), Values: valueNames(vs), AddedBy: text(k.Row, mAddedBy), Unreviewed: unreviewed,
+			Rows: n, Label: text(k.Row, mLabel), Retired: text(k.Row, mMergedInto)})
+	}
+	out.Count = len(out.Data)
+	return out, nil
+}
+
+// MetaDeleteIn is the input of meta.delete.
+type MetaDeleteIn struct {
+	Key    string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
+	Reason string `json:"reason,omitempty" flag:"reason" desc:"why (deleted_reason on the key row, shown by lore trash)"`
+	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
+	op.PurgeFlags
+}
+
+func (o ops) metaDelete(ctx context.Context, in MetaDeleteIn) (RowOut, error) {
+	if in.Reason != "" {
+		ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason
+	}
+	k, err := o.metaKey(ctx, in.Key)
+	if err != nil {
+		return RowOut{}, err
+	}
+	// meta_values cascade with their key (schema relation).
+	if _, err := o.env.Delete(ctx, engine.Ref{Store: k.Src, Table: schema.TableMetaKeys, ID: k.Row.ID}); err != nil {
+		return RowOut{}, err
+	}
+	return RowOut{ID: k.Row.ID.String(), Store: string(k.Src),
+		Human: trashline.Moved("metadata key "+text(k.Row, mName)+" ("+short(k.Row.ID)+")", k.Row.ID.String())}, nil
+}
+
+func (o ops) metaValueAdd(ctx context.Context, in MetaValueAddIn) (RowOut, error) {
+	if err := checkMetaValues([]string{in.Value}); err != nil {
+		return RowOut{}, err
+	}
+	k, err := o.metaKey(ctx, in.Key)
+	if err != nil {
+		return RowOut{}, err
+	}
+	have, err := o.metaValues(ctx, k)
+	if err != nil {
+		return RowOut{}, err
+	}
+	if len(have)+1 > maxMetaValues {
+		return RowOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("a key has at most %d allowed values", maxMetaValues))
+	}
+	w, err := o.addValue(ctx, k, in.Value, in.Label)
+	if err != nil {
+		return RowOut{}, err
+	}
+	all := append(valueNames(have), in.Value)
+	return RowOut{ID: w.Row.ID.String(), Store: string(k.Src),
+		Human: fmt.Sprintf("%s: added value %s (%s); allowed values %s\n", text(k.Row, mName), in.Value, short(w.Row.ID), strings.Join(all, ", "))}, nil
+}
+
+func (o ops) metaValueRename(ctx context.Context, in MetaValueRenameIn) (RowOut, error) {
+	if err := checkMetaValues([]string{in.New}); err != nil {
+		return RowOut{}, err
+	}
+	k, err := o.metaKey(ctx, in.Key)
+	if err != nil {
+		return RowOut{}, err
+	}
+	have, err := o.metaValues(ctx, k)
+	if err != nil {
+		return RowOut{}, err
+	}
+	if slices.Contains(valueNames(have), in.New) {
+		return RowOut{}, errs.New(errs.InvalidInput, text(k.Row, mName)+" already has the value "+quote(in.New))
+	}
+	for _, v := range have {
+		if text(v.Row, mName) != in.Old {
+			continue
+		}
+		nv, terr := txt(in.New)
+		if terr != nil {
+			return RowOut{}, terr
+		}
+		if _, err := o.env.Update(ctx, engine.Ref{Store: v.Src, Table: schema.TableMetaValues, ID: v.Row.ID}, map[string]value.Value{mName: nv}); err != nil {
+			return RowOut{}, err
+		}
+		return RowOut{ID: v.Row.ID.String(), Store: string(v.Src),
+			Human: fmt.Sprintf("%s: renamed value %s %s → %s; row labels refresh on each row's next write; no values changed\n",
+				text(k.Row, mName), short(v.Row.ID), in.Old, in.New)}, nil
+	}
+	return RowOut{}, errs.New(errs.NotFound, text(k.Row, mName)+" has no value "+quote(in.Old))
+}
+
+// metaWriteErrors are the codes of meta set / unset (METADATA 6).
+var metaWriteErrors = append(slices.Clone(writeErrors), errs.MetaKey, errs.MetaReserved, errs.MetaType, errs.MetaValue,
+	errs.MetaShape, errs.MetaSize, errs.MetaDepth, errs.MetaOp, errs.MetaTable, errs.MetaUnknown, errs.MetaAmbiguous,
+	errs.MetaUnregistered, errs.MetaRequired, errs.MetaInUse, errs.MetaRetired, errs.MetaForeignKey, errs.MetaStoreUnreadable)
+
+// checkKeyName is the name rule of a registry key (3.5): dotted snake_case
+// ASCII (E_META_KEY, E_META_DEPTH) and not one of lore's words
+// (E_META_RESERVED, columns of the built-in tables).
+func checkKeyName(name string) error {
+	if err := meta.CheckName(name, meta.MaxDepth); err != nil {
+		return err
+	}
+	return meta.Reserved(name, builtinColumns())
+}
+
+// builtinColumns are the field names of every built-in table.
+func builtinColumns() map[string]bool {
+	out := map[string]bool{}
+	for _, t := range schema.Builtin() {
+		for _, f := range t.Fields {
+			out[f.Name] = true
+		}
+	}
+	return out
+}
+
+// tagLikeNote is the MQ5 warning line for a key named like a tag.
+func tagLikeNote(name string) string {
+	return "warning: key " + quote(name) + " looks like a tag; lore keeps labels in tags (lore tag), not in metadata\n"
+}
+
+// addedBy is who registers a key now (MQ7).
+func addedBy(ctx context.Context) string {
+	if engine.AgentOf(ctx) != "" {
+		return schema.MetaAddedByAgent
+	}
+	return schema.MetaAddedByPerson
+}
+
+// isUnreviewed: a key row an agent added that no person approved; a row
+// without the field (older lore, a person's key) counts as reviewed.
+func isUnreviewed(r row.Row) bool {
+	b, ok := r.Fields[mReviewed].(value.Bool)
+	return ok && !b.Bool()
+}
+
+// MetaSetIn is the input of meta.set. Its own field names keep it out of
+// Run's generic --meta binding: the op binds the change to the row it names.
+type MetaSetIn struct {
+	ID   string `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, a key=value pair"`
+	Pair string `json:"pair,omitempty" arg:"1" desc:"key=value, key:type=value, project:key=value"`
+	// Where and DryRun are the bulk form (3.19): every row the filter
+	// names, one batch.
+	Where  []string `json:"where,omitempty" flag:"where" desc:"set on every row matching this filter (repeatable, ANDed; one batch)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be removed (with --where: the rows); write nothing"`
+	All    bool     `json:"all,omitempty" flag:"all" desc:"with --dry-run: list every row, not a sample"`
+	More   []string `json:"set,omitempty" flag:"set" desc:"more key=value pairs (repeatable)"`
+	JSON   []string `json:"json,omitempty" flag:"meta-json" desc:"a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)"`
+	Stdin  string   `json:"stdin_key,omitempty" flag:"meta-stdin" desc:"read the value of this key from stdin"`
+}
+
+// MetaUnsetIn is the input of meta.unset.
+type MetaUnsetIn struct {
+	ID   string   `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, the key to remove"`
+	Key  string   `json:"key,omitempty" arg:"1" desc:"the key to remove (deploy removes deploy.env too)"`
+	More []string `json:"keys,omitempty" flag:"key" desc:"more keys to remove (repeatable)"`
+	// Where and DryRun are the bulk form (3.19).
+	Where  []string `json:"where,omitempty" flag:"where" desc:"remove from every row matching this filter (repeatable, ANDed; one batch)"`
+	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be removed (with --where: the rows); write nothing"`
+	All    bool     `json:"all,omitempty" flag:"all" desc:"with --dry-run: list every row, not a sample"`
+}
+
+// MetaGetIn is the input of meta.get.
+type MetaGetIn struct {
+	ID  string `json:"id" arg:"0" desc:"the row (any id)"`
+	Key string `json:"key,omitempty" arg:"1" desc:"only this key"`
+	IDs bool   `json:"ids,omitempty" flag:"ids" desc:"show key ids"`
+	// ShowSensitive: META 3.20 (asks first; --yes without a terminal, XQ3).
+	ShowSensitive bool `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
+}
+
+// metaShowSensitiveField is the json name of the show_sensitive inputs of
+// meta.get and meta.export (op.ConfirmRule.When: they ask first, XQ3).
+const metaShowSensitiveField = "show_sensitive"
+
+// MetaValue is one value as shown; a sensitive value is masked and has no
+// JSON (OQ2).
+type MetaValue struct {
+	Key       string `json:"key"`
+	KeyID     string `json:"key_id"`
+	Scope     string `json:"scope"`
+	Value     string `json:"value"`
+	JSON      string `json:"json,omitempty"`
+	Sensitive bool   `json:"sensitive,omitempty"`
+	// Label is an allowed value's display label (METADATA 3.17, G-META-10):
+	// text prints it instead of the name; "" when the value has none or is
+	// masked.
+	Label string `json:"label,omitempty"`
+}
+
+// MetaGetOut is the output of meta.get.
+type MetaGetOut struct {
+	ID    string      `json:"id"`
+	Count int         `json:"count"`
+	Data  []MetaValue `json:"data"`
+	// Masked names the keys printed as ••• (META 3.14/3.20 meta_masked).
+	Masked []string `json:"meta_masked,omitempty"`
+	// Quarantined lists each problem of quarantined metadata with its fix
+	// (METADATA 3.13, CLI_REFERENCE meta show: a line, not an exit).
+	Quarantined []string `json:"quarantined,omitempty"`
+	ids         bool
+}
+
+// Text implements op.Texter (the `meta show` sample of 3.2).
+func (o MetaGetOut) Text() string {
+	var b strings.Builder
+	for _, q := range o.Quarantined {
+		b.WriteString(string(errs.MetaQuarantined) + "  " + q + "\n")
+	}
+	if len(o.Data) == 0 {
+		if b.Len() > 0 {
+			return b.String()
+		}
+		return "(no metadata)\n"
+	}
+	for _, v := range o.Data {
+		if v.Label != "" {
+			v.Value = v.Label // an allowed value by its label in text (3.17)
+		}
+		if o.ids {
+			fmt.Fprintf(&b, "%s\t%s\t%s\n", v.KeyID, v.Key, v.Value)
+			continue
+		}
+		fmt.Fprintf(&b, "%s\t%s\n", v.Key, v.Value)
+	}
+	return b.String()
+}
+
+// rowID parses the id of meta set/unset/get.
+func rowID(s string) (ids.AnyID, error) {
+	id, err := ids.ParseAny(strings.TrimSpace(s))
+	if err != nil {
+		// The one lookup rule (ops/internal/lookup): a value that cannot be
+		// the id of an existing row is E_NOT_FOUND, never E_INVALID_ID.
+		if key, _, pair := strings.Cut(s, "="); pair {
+			// A key=value pair in the id slot (the id was left out): name
+			// the key only, since the value may be a secret the write scan
+			// never saw, and an error is printed and logged in clear.
+			return ids.AnyID{}, lookup.BadID("meta: "+quote(key+"=…")+" is not a row id", err).
+				WithHint("give the row id first: lore meta set <id> " + key + "=<value>")
+		}
+		return ids.AnyID{}, lookup.BadID("meta: "+quote(s)+" is not a row id", err)
+	}
+	return id, nil
+}
+
+// metaRowWrite runs one metadata change on the row id names (flow: bind
+// the MetaWrite to the id → Env.Update with no field change → the engine
+// resolves, checks and writes, R13) and reports it.
+func (o ops) metaRowWrite(ctx context.Context, id ids.AnyID, mw engine.MetaWrite, done func(row.Row) string) (RowOut, error) {
+	// The row's store is read first so the answer names it, as every other
+	// row write does (meta set and unset answered "store": "").
+	src, _, err := o.env.Get(ctx, engine.Ref{ID: id})
+	if err != nil {
+		return RowOut{}, err
+	}
+	w, err := o.env.Update(engine.WithMeta(ctx, mw), engine.Ref{Store: src, ID: id}, map[string]value.Value{})
+	if err != nil {
+		return RowOut{}, err
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s: %s\n", w.Row.Table, short(w.Row.ID), done(w.Row))
+	for _, x := range w.Warnings {
+		b.WriteString(x.Message + "\n")
+	}
+	return RowOut{ID: w.Row.ID.String(), Store: string(src), Human: b.String()}, nil
+}
+
+// setEcho is "name = value, …" of the keys a meta set wrote, read back
+// from the stored row so a sensitive key echoes "= •••" (METADATA 3.2,
+// 3.20; OV10) and a typed value shows as stored. A dotted (object field)
+// name echoes that field's value (later 516); a name the row does not
+// hold, or a field the stored object lacks, shows alone.
+func setEcho(r row.Row, names []string, sens map[string]bool) string {
+	byName := map[string]meta.Entry{}
+	for _, en := range decodeEntries(r, sens) {
+		byName[en.Name] = en
+	}
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		en, ok := byName[meta.TopSegment(n)]
+		segs := meta.Segments(n)
+		switch {
+		case ok && en.Sensitive:
+			parts = append(parts, n+" = "+meta.Show(en))
+		case ok && len(segs) == 1:
+			parts = append(parts, n+" = "+meta.Show(en))
+		case ok:
+			if sub, found := fieldOf(en.V, segs[1:]); found {
+				parts = append(parts, n+" = "+meta.Show(meta.Entry{V: sub}))
+				continue
+			}
+			parts = append(parts, n)
+		default:
+			parts = append(parts, n)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// fieldOf is the canonical JSON of the object field at path inside raw;
+// false when a step is not an object member.
+func fieldOf(raw []byte, path []string) ([]byte, bool) {
+	for _, step := range path {
+		ms, err := canon.Members(raw)
+		if err != nil {
+			return nil, false
+		}
+		at := slices.IndexFunc(ms, func(m canon.Member) bool { return m.Key == step })
+		if at < 0 {
+			return nil, false
+		}
+		raw = ms[at].Raw
+	}
+	return raw, true
+}
+
+// metaSet is `lore meta set <id> k=v` (3.2; MQ9, MQ12, R13).
+func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
+	if len(in.Where) > 0 {
+		return o.metaSetWhere(ctx, in)
+	}
+	id, err := rowID(in.ID)
+	if err != nil {
+		return RowOut{}, err
+	}
+	f := engine.MetaFlags{MetaJSON: in.JSON, MetaStdin: in.Stdin}
+	if in.Pair != "" {
+		f.Meta = append(f.Meta, in.Pair)
+	}
+	f.Meta = append(f.Meta, in.More...)
+	if f.Empty() {
+		return RowOut{}, errs.New(errs.InvalidInput, "meta set: nothing to set").WithHint("lore meta set <id> key=value")
+	}
+	aliases, err := metalist.ScopeAliases(ctx, o.env) // 3.6 meta.scope_aliases (FA-META-12)
+	if err != nil {
+		return RowOut{}, err
+	}
+	f.Meta = meta.ExpandAliases(f.Meta, aliases)
+	mw, err := f.Write("", id, nil)
+	if err != nil {
+		return RowOut{}, err
+	}
+	var names []string
+	for _, t := range append(slices.Clone(mw.Set), mw.JSON...) {
+		names = append(names, t.Name())
+	}
+	sens, err := o.sensitiveKeyIDs(ctx)
+	if err != nil {
+		return RowOut{}, err
+	}
+	return o.metaRowWrite(ctx, id, mw, func(r row.Row) string { return "set " + setEcho(r, names, sens) })
+}
+
+// metaUnset is `lore meta unset <id> <key>` (3.2): E_META_UNKNOWN when the
+// row lacks the key.
+func (o ops) metaUnset(ctx context.Context, in MetaUnsetIn) (RowOut, error) {
+	if len(in.Where) > 0 {
+		return o.metaUnsetWhere(ctx, in)
+	}
+	id, err := rowID(in.ID)
+	if err != nil {
+		return RowOut{}, err
+	}
+	if in.Key == "" {
+		return RowOut{}, errs.New(errs.InvalidInput, "meta unset: name the key").WithHint("lore meta unset <id> <key>")
+	}
+	keys := append([]string{in.Key}, in.More...)
+	if in.DryRun {
+		return o.metaUnsetDry(ctx, in.ID, keys)
+	}
+	done := "removed " + strings.Join(keys, ", ")
+	return o.metaRowWrite(ctx, id, engine.MetaWrite{ID: id, Unset: keys}, func(row.Row) string { return done })
+}
+
+// metaUnsetDry is `meta unset <id> <key> --dry-run`: it names what the
+// real run would remove and writes nothing. --dry-run was read only by
+// the --where form, so the one-row form removed the keys it was told to
+// leave alone. A key the row does not hold is refused as the real run
+// refuses it (E_META_UNKNOWN), so the dry run predicts the real one.
+func (o ops) metaUnsetDry(ctx context.Context, rawID string, keys []string) (RowOut, error) {
+	got, err := o.metaGet(ctx, MetaGetIn{ID: rawID})
+	if err != nil {
+		return RowOut{}, err
+	}
+	have := map[string]bool{}
+	for _, v := range got.Data {
+		have[meta.TopSegment(v.Key)] = true
+	}
+	for _, k := range keys {
+		if !have[meta.TopSegment(k)] {
+			return RowOut{}, errs.New(errs.MetaUnknown, fmt.Sprintf("%s has no metadata key %q", got.ID, k)).
+				WithHint("lore meta show " + got.ID + " lists its keys")
+		}
+	}
+	return RowOut{ID: got.ID, DryRun: true, IDs: []string{got.ID},
+		Human: "would remove " + strings.Join(keys, ", ") + " from " + got.ID + "; nothing written (dry run)\n"}, nil
+}
+
+// metaGet shows one row's metadata, sensitive values masked (OQ2).
+func (o ops) metaGet(ctx context.Context, in MetaGetIn) (MetaGetOut, error) {
+	id, err := rowID(in.ID)
+	if err != nil {
+		return MetaGetOut{}, err
+	}
+	src, r, err := o.env.Get(ctx, engine.Ref{ID: id})
+	if err != nil {
+		return MetaGetOut{}, err
+	}
+	if r.Deleted { // DELETION 3.2: a trashed row answers E_IN_TRASH
+		return MetaGetOut{}, lookup.Gone(ctx, o.env, engine.Ref{Store: src, ID: id}, errs.New(errs.NotFound, "meta show: "+id.String()+" is deleted"))
+	}
+	sens, err := o.sensitiveKeyIDs(ctx)
+	if err != nil {
+		return MetaGetOut{}, err
+	}
+	out := MetaGetOut{ID: r.ID.String(), Data: []MetaValue{}, ids: in.IDs}
+	for _, p := range metafilter.Quarantine(r.Meta) {
+		fix := "fix the row file, or lore meta unset " + r.ID.String() + " " + p.Key
+		if p.Key == "" {
+			fix = "move content out of the row's metadata (lore meta unset " + r.ID.String() + " <key>)"
+		}
+		out.Quarantined = append(out.Quarantined, p.Text+"; "+fix)
+	}
+	slices.Sort(out.Quarantined)
+	for kid, j := range r.Meta {
+		en, derr := meta.DecodeEntry(j)
+		if derr != nil {
+			continue // listed in Quarantined above
+		}
+		en.Sensitive = en.Sensitive || sens[kid.String()] // 3.20: entry OR registry
+		if in.Key != "" && en.Name != in.Key && kid.String() != in.Key {
+			continue
+		}
+		v := MetaValue{Key: en.Name, KeyID: kid.String(), Scope: en.Scope, Value: meta.Show(en), Sensitive: en.Sensitive}
+		switch {
+		case !en.Sensitive:
+			v.JSON = string(en.V)
+		case in.ShowSensitive: // 3.20: the person asked (the op confirmed first)
+			shown := en
+			shown.Sensitive = false
+			v.Value, v.JSON = meta.Show(shown), string(en.V)
+		default:
+			out.Masked = append(out.Masked, en.Name)
+		}
+		if !v.Sensitive || in.ShowSensitive {
+			shown := en
+			shown.Sensitive = false
+			v.Label = metashow.Label(ctx, o.env, shown)
+		}
+		out.Data = append(out.Data, v)
+	}
+	slices.Sort(out.Masked)
+	slices.SortFunc(out.Data, func(a, b MetaValue) int { return strings.Compare(a.Key+a.KeyID, b.Key+b.KeyID) })
+	out.Count = len(out.Data)
+	return out, nil
+}
+
+// placeMatches reports a key scope inside --place: a level word (repo,
+// project, org) matches every scope of that level, a scope label only
+// itself; "" matches all.
+func placeMatches(scope, place string) bool {
+	return place == "" || scope == place || strings.HasPrefix(scope, place+":")
+}

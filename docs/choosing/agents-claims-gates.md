@@ -12,8 +12,8 @@
 | **Lease and heartbeat** | the claim runs out after 20 minutes unless the agent says "still here" | always, with claims; it is how a crashed agent's task comes free | `lore task heartbeat --daemon <id>` |
 | **Dependencies** | "do this one after that one" | one task needs another's code first, maybe in another repo | `lore task add --after <id>` (`<id>:merged` waits for the merge) |
 | **Gate** | a "stop, ask a person" sign on a task | a step is risky: a payment change, a change to the live database, a release | `lore gate request <id>`, then a person runs `lore gate approve <id>` |
-| **Resource hold** | a key to a room only one person may use at a time | only one worker may run something heavy at once, like the full test suite | `lore resource claim full-suite --ttl 30m`, `lore resource release full-suite` |
-| **Handoff and finding** | a note left for the next worker; a fact every agent should know | an agent stops mid-way, or learns something the others need | `lore handoff add --for @agent-frontend --task <id>`, `lore finding add --mission <id>` |
+| **Resource hold** | a key to a room only one person may use at a time | only one worker may run something heavy at once, like the full test suite | `lore hold claim full-suite --ttl 30m`, `lore hold release full-suite` |
+| **Handoff and memory** | a note left for the next worker; a fact every agent should know | an agent stops mid-way, or learns something the others need | `lore handoff add --for @agent-frontend --task <id>`, `lore memory add "<fact>"` |
 
 ## If this, then that
 
@@ -35,7 +35,8 @@
 - **One claim per agent by default** (`agents.max_claims_per_agent: 1`), and after 3 agents have tried a task (`agents.max_attempts`) it is marked `blocked` and needs a person.
 - **A released task stays `in_progress`.** `lore task release` drops only the claim; cancel the task or move it back if nobody should work on it.
 - **Teams stay internal.** In a linked client repo, assigning a whole team is refused; assign a person.
-- **Resources are not available in a linked client repo yet** (`E_NOT_IMPLEMENTED`); run shared-resource scripts from the agency's own repos.
+- **Holds in a client repo need a store link.** In a client repo linked to the agency's store, a hold is kept on the store's signals ref, never in the client's repo. A client repo matched only by a `repos:` pattern has no store to keep it on, so `lore hold claim` is refused with `E_UNSUPPORTED`; link it with `lore org link`. `--on machine` answers `E_NOT_IMPLEMENTED`: use your machine's own lock tool, such as `flock`.
+- **A hold is not a `lore resource`.** `lore hold` takes turns on a named thing; `lore resource` keeps typed facts about servers and services ([Resources](../operations/resources.md)). They share only the word.
 
 ## Guides and examples for each tool
 
@@ -46,7 +47,8 @@
 | What a claim writes in git | [How it works: signals](../team/how-it-works.md#signals-claim-renew-expire-reclaim) | [`internals`](../../tests/team/docs/transcripts/internals.txt) |
 | Release, revoke, reassign, resources, teams | [Agents: taking work back](../team/agents.md#taking-work-back-from-an-agent-people-only) | [`team-ops`](../../tests/team/docs/transcripts/team-ops.txt) |
 | Missions, plans, handoffs | [Missions and plans](../tasks/missions-and-plans.md) | [`missions`](../../tests/docs/sections/missions.sh) ([output](../../tests/docs/transcripts/missions.txt)) |
-| A diary of one agent's run | [Run log](../tasks/run-log.md) | [`runs`](../../tests/docs/sections/runs.sh) ([output](../../tests/docs/transcripts/runs.txt)) |
+| Facts about servers and services (`lore resource`) | [Resources](../operations/resources.md) | [`resources`](../../tests/docs/sections/resources.sh) ([output](../../tests/docs/transcripts/resources.txt)) |
+| How long one agent's run took | [Run log](../tasks/run-log.md) | [`runs`](../../tests/docs/sections/runs.sh) ([output](../../tests/docs/transcripts/runs.txt)) |
 | Offline claim and other errors | [Troubleshooting](../team/troubleshooting.md) | [`errors`](../../tests/team/docs/transcripts/errors.txt) |
 
 ## Related

@@ -1,0 +1,6 @@
+func defaultLiveKinds() map[string]bool {
+	return map[string]bool{
+		"tasks": true, "missions": true, "handoffs": true, "comments": true,
+		"rules": false, "decisions": false, "memories": false,
+	}
+}

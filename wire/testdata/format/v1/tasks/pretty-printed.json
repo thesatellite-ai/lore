@@ -1,0 +1,9 @@
+{
+  "_v": 1,
+  "_table": "tasks",
+  "id": "tsk_01a1a59b891c70b78914e00000000005",
+  "updated_at": "2026-03-02T11:22:33.1Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9",
+  "title": "a hand-edited v1 file with spaces and newlines",
+  "status": "todo"
+}

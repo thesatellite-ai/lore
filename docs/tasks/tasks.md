@@ -34,7 +34,7 @@ lore live: (live, pushed)
 ```
 <!-- /example -->
 
-<!-- ds:block id=team-live-kinds-62s7pcxa -->
+<!-- ds:block id=team-live-kinds-88j26q7s -->
 The line `lore live: (live, pushed)` means lore shared the task at once: it put the task on a hidden list on GitHub that is not a branch, so your teammates see it without waiting for your next commit. You do not need to do anything for this. [Concepts › Branch data, live rows and signals](../team/concepts.md#branch-data-live-rows-and-signals) explains it in full.
 
 ## Step 2 — See your list
@@ -80,6 +80,7 @@ tsk_2ad3…f891
   priority: medium
   commit:   accepted
 The Pro plan says 9 a month; it should say 19.
+created 2026-11-02T10:00:10Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
 ```
 <!-- /example -->
 
@@ -100,6 +101,7 @@ tsk_162d…9666
   priority: low
   commit:   accepted
   due:      2026-11-20
+created 2026-11-02T10:00:15Z by act_54fe…28f2 · updated 2026-11-02T10:00:40Z by act_54fe…28f2
 ```
 <!-- /example -->
 
@@ -112,11 +114,9 @@ tsk_162d…9666
 # alice, in website
 $ lore task done tsk_7a67…9504 --lesson 'The client pays faster when the reminder goes out two days before the demo'
 ✓ tsk_7a67…9504 done
-  lesson → mem_54fe…28f2
-lore sync: exported 1
+  lesson → mem_05e9…4603
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ lore task list
 ▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
 ○ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
@@ -164,23 +164,22 @@ $ lore task list --status cancelled
 ```
 <!-- /example -->
 
-Delete only removes a task for good, with no undo. lore asks for `--confirm` first, so a typo cannot delete the wrong task.
+Delete only removes a task for good, with no undo. lore asks first (without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`), so a typo cannot delete the wrong task.
 
 <!-- example: tasks#delete -->
 ```console
 # alice, in website
 $ lore task add 'Test task, please ignore'
-✓ tsk_05e9…4603 — Test task, please ignore [medium]
+✓ tsk_c0f3…b5b8 — Test task, please ignore [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
-$ lore task delete tsk_05e9…4603
-ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
-  hint: a hard delete cannot be undone; pass --confirm if you really mean it
-(exit 1)
-$ lore task delete tsk_05e9…4603 --confirm
-✓ tsk_05e9…4603 deleted (hard)
+$ lore task delete tsk_c0f3…b5b8
+ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3…b5b8 Test task, please ignore?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+$ lore task delete tsk_c0f3…b5b8 --yes
+✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore tsk_c0f3…b5b8)
 lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -194,17 +193,18 @@ Some work has an order: you cannot send the welcome email before you write it. `
 ```console
 # alice, in website
 $ lore task add 'Write the welcome email'
-✓ tsk_c0f3…b5b8 — Write the welcome email [medium]
+✓ tsk_76bd…3f10 — Write the welcome email [medium]
 lore live: (live, pushed)
-$ lore task add 'Send the welcome email' --after tsk_c0f3…b5b8
-✓ tsk_76bd…3f10 — Send the welcome email [medium]
+$ lore task add 'Send the welcome email' --after tsk_76bd…3f10
+✓ tsk_d431…313a — Send the welcome email [medium]
 lore live: (live, pushed)
-$ lore task show tsk_76bd…3f10
-tsk_76bd…3f10
+$ lore task show tsk_d431…313a
+tsk_d431…313a
   title:    Send the welcome email
   status:   todo
   priority: medium
   commit:   accepted
+created 2026-11-02T10:01:50Z by act_54fe…28f2 · updated 2026-11-02T10:01:50Z by act_54fe…28f2
 ```
 <!-- /example -->
 
@@ -213,8 +213,8 @@ A task can never wait on itself, not even through other tasks. lore refuses such
 <!-- example: tasks#cycle -->
 ```console
 # alice, in website
-$ lore task edit tsk_c0f3…b5b8 --after tsk_76bd…3f10
-ERROR: [E_CYCLE] dependency cycle: tsk_c0f3…b5b8 → tsk_76bd…3f10 → tsk_c0f3…b5b8
+$ lore task edit tsk_76bd…3f10 --after tsk_d431…313a
+ERROR: [E_CYCLE] dependency cycle: tsk_76bd…3f10 → tsk_d431…313a → tsk_76bd…3f10
   hint: drop one --after edge; a task may not wait on itself, even through others
 (exit 19)
 ```
@@ -230,24 +230,22 @@ A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from
 ```console
 # alice, in website
 $ lore tasklist add --title 'Launch week' --body 'Everything that must happen before the shop opens'
-✓ tlt_d431…313a
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
-$ lore task add 'Check every link on the home page' --tasklist tlt_d431…313a
-✓ tsk_b4f4…a5b0 — Check every link on the home page [medium]
+✓ tlt_b4f4…a5b0
+$ lore task add 'Check every link on the home page' --tasklist tlt_b4f4…a5b0
+✓ tsk_28f8…03df — Check every link on the home page [medium]
 lore live: (live, pushed)
-$ lore task edit tsk_c0f3…b5b8 --tasklist tlt_d431…313a
-✓ tsk_c0f3…b5b8 updated
+$ lore task edit tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
+✓ tsk_76bd…3f10 updated
 lore live: (live, pushed)
 $ lore tasklist list
-TA  tlt_28f8…03df
-TA  tlt_d431…313a
+TA  tlt_4c59…6c38
+TA  tlt_b4f4…a5b0
 $ lore tasklist search launch
-tlt_d431…313a Launch week
-$ lore tasklist edit tlt_d431…313a --status closed
-✓ tasklist tlt_d431…313a updated
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+tlt_b4f4…a5b0 Launch week
+$ lore tasklist edit tlt_b4f4…a5b0 --status closed
+✓ tasklist tlt_b4f4…a5b0 updated
+lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -255,16 +253,82 @@ lore sync: 2 file(s) in .lore/data not committed — commit them with your chang
 
 ## Step 11 — Save a filter under a name
 
-<!-- ds:block id=sync-localtables-dcpb69pj -->
-`lore task-view add` stores a task filter under a name, such as "urgent", so you or a tool can look it up later. The filter is a small JSON text, for example `{"priority":"urgent"}`. Saved views stay on your machine; they are not shared with git.
+<!-- ds:block id=sync-syncedtables-fa4jung7 -->
+`lore task view add` stores a task filter under a name, such as `open_todo`, so you or a tool can reuse it. The filter uses the same `--where` grammar as `lore task list` (and `--sort`, `--group-by` if you like). `lore task list --view <name>` applies it. A saved view is a row in `.lore/data`, so it travels with git like your tasks.
 
 <!-- example: tasks#task-view -->
 ```console
 # alice, in website
-$ lore task-view add --name urgent --filter '{"priority":"urgent"}'
-✓ task-view urgent saved
-$ lore task-view list
-tvw_4c59…6c38 urgent
+$ lore task view add open_todo --where 'status:todo'
+tvw_3b62…e913  open_todo  where "status:todo"
+$ lore task view list
+tvw_3b62…e913  open_todo  where "status:todo"
+$ lore task list --view open_todo
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
+```
+<!-- /example -->
+
+## Step 12 — Move tasks in and out with files
+
+`lore task export` prints your tasks as a file; `--where` picks which (the `lore task list` grammar), `--with-children` adds their sub-tasks and `--with-checklist` their checklists:
+
+- `--format json` (the default) is the shape `lore task import` reads back, status, estimate and parent included, so export then import round-trips them.
+- `--format csv` has the same columns plus a few for reading (`lead`, `created_at`, `completed_at`); import reads past those with one warning each.
+- `--format markdown` prints `- [ ] title (id)` lines, nested by parent with `--tree`.
+- `--format github` prints a JSON list of issues for your own `gh` scripts: title, body (with `--with-checklist`, the checklist as a GitHub task list), `state` open or closed (`state_reason` completed for done, not_planned for cancelled), labels `priority:<p>` and `status:<s>` (and `proposed`), the mission's title as milestone, the due date, and the lore id and parent id so a script can link sub-issues. It names no assignees (lore people are not GitHub logins) and no internal or sensitive field. It only writes the file: nothing is sent to GitHub.
+
+Here alice prints her open tasks as Markdown and as CSV:
+
+<!-- example: tasks#export -->
+```console
+# alice, in website
+$ lore task export --where 'status:todo' --format markdown
+- [ ] Write the welcome email (tsk_76bd…3f10)
+- [ ] Send the welcome email (tsk_d431…313a)
+- [ ] Check every link on the home page (tsk_28f8…03df)
+- [ ] Try a dark mode for the shop (tsk_f147…5139)
+- [ ] Add a FAQ page (tsk_2537…6bbb)
+- [ ] Renew the SSL certificate (tsk_b69e…5ed7)
+- [ ] Add a size guide (tsk_d191…45c2)
+$ lore task export --where 'status:todo' --format csv
+id,title,body,priority,commitment,due,defer_until,tasklist,mission,plan,role,tasklist_name,mission_name,plan_name,status,estimate,parent,lead,created_at,completed_at
+tsk_76bd…3f10,Write the welcome email,,medium,accepted,,,tlt_b4f4…a5b0,,,,Launch week,,,todo,,,,2026-11-02T10:01:45Z,
+tsk_d431…313a,Send the welcome email,,medium,accepted,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:01:50Z,
+tsk_28f8…03df,Check every link on the home page,,medium,accepted,,,tlt_b4f4…a5b0,,,,Launch week,,,todo,,,,2026-11-02T10:02:10Z,
+tsk_f147…5139,Try a dark mode for the shop,,medium,someday,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:02:50Z,
+tsk_2537…6bbb,Add a FAQ page,,medium,accepted,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:02:55Z,
+tsk_b69e…5ed7,Renew the SSL certificate,,medium,accepted,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:03:25Z,
+tsk_d191…45c2,Add a size guide,,high,accepted,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:06:00Z,
+```
+<!-- /example -->
+
+`lore task import <file>` (`--from csv|json`, otherwise read from the extension) adds the file's tasks; `--dry-run` lists what it would create, and it asks before writing (`--yes` in scripts). It reads the columns `status`, `estimate` (in the unit of the store it writes to) and `parent` (another record of the file, before or after it, or a task id the store already has; anything else is dropped with a warning), and `--map-status 'In Review=in_progress,Shipped=done'` renames another tool's status values. A file where a done or cancelled task still has an open sub-task, or where parents form a loop, is refused before anything is written.
+
+Importing the same file twice does not duplicate anything. Each record is matched by its source and external id; a record already imported adds nothing and is listed as "already imported as <id>", and fields whose value changed in the file since are listed as "differs, not written". Import never overwrites a task: change it with `lore task edit`.
+
+Here alice brings in two tasks from another tool's CSV export, whose `status` column says `To Do` and `In Review`. The `id` column becomes the external id, which is how the second import knows both are already there:
+
+<!-- example: tasks#import -->
+```console
+# alice, in website
+$ cat ~/backlog.csv
+id,title,priority,status
+T-1,Add a cookie banner,high,To Do
+T-2,Compress the product photos,medium,In Review
+$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --dry-run
+would import 2 tasks from csv (dry run, nothing written)
+  T-1  Add a cookie banner
+  T-2  Compress the product photos
+$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
+✓ 2 tasks imported from csv (batch bat_9a34…b418)
+lore live: (live, pushed)
+lore live: 2 row(s) left live (main holds them)
+$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
+  2 already imported, nothing added for them:
+    T-1  Add a cookie banner  (already imported as tsk_bfed…eeea)
+    T-2  Compress the product photos  (already imported as tsk_376c…8e1a)
 ```
 <!-- /example -->
 
@@ -277,9 +341,9 @@ After the steps above, the open list holds the task in progress and the tasks st
 # alice, in website
 $ lore task list
 ▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
-○ tsk_c0f3…b5b8 Write the welcome email [medium]
-○ tsk_76bd…3f10 Send the welcome email [medium]
-○ tsk_b4f4…a5b0 Check every link on the home page [medium]
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
 ```
 <!-- /example -->
 
@@ -315,15 +379,16 @@ $ git pull -q --rebase origin main && git push -q origin main
 Other traps:
 
 - **Search misses a done task.** `lore task search` looks at open tasks only. Add `--all`.
-- **`--confirm` is required to delete.** Without it, `task delete` stops with `E_INVALID_INPUT`. Its hint suggests `task archive`, which does not exist as a command yet; use `lore task cancel` instead.
-- **`lore tasklist list` and `lore tasklist show` print only `TA` and the id**, not the title. Use `lore tasklist search <word>` to see titles.
+- **Deleting needs a yes.** Without a terminal, `task delete` stops with `E_NEEDS_CONFIRM` until you add `--yes` (the old spelling `--confirm` works the same on a delete; the task goes to the trash, `lore trash restore` brings it back). To keep the task but stop it, use `lore task cancel` instead.
+- **`lore tasklist list` prints only `TA` and the id**, not the title. `lore tasklist show <id>` prints the title, status, task count and body; `lore tasklist search <word>` shows titles.
 - **`lore task show` does not list the tasks a task in this repo waits for.** Use `lore mission status` for that: it prints "waits for <id> to be done" next to the task. (For a task kept in an org's notes store, `task show` does print an `after:` line.)
-- **A saved view is only stored.** No command applies a saved `task-view` to `task list` yet, and lore does not check the filter text when you save it.
 - **Ids are long on purpose.** Copy them from `lore task list` or `--json` output rather than typing them.
 
 ## Related
 
 - [Commitment and snooze](commitment-and-snooze.md): ideas, proposals and tasks for later.
+- [Task tools](task-tools.md): board, checklists, split, relations, watch, history, templates, repeating tasks and the stale sweep.
+- [Run log](run-log.md): time spent on a task, by runs and by hand.
 - [Missions and plans](missions-and-plans.md): group tasks under a bigger goal.
 - [Link commits](link-commits.md): record which commit finished a task.
 - [Reminders](reminders.md): dates that come back.

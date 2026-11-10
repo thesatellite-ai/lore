@@ -38,16 +38,14 @@ lore.
 - `lore init --non-interactive` (refuses if `.lore/` exists — say so).
 - Verify: `lore doctor`.
 
-### 3. Stage candidates from existing `.ai/` docs
-- `lore learn-from docs --paths=<comma-separated paths to canonical files>`
-- Show me how many candidates were staged + which source files.
-- DO NOT auto-promote yet.
+### 3. List candidates from existing `.ai/` docs
+- Read the canonical files section by section and list each section as a proposed rule, decision, memory or hotfix (lore 0.1.18 has no automatic importer).
+- Show me the list with its source file and heading.
+- DO NOT add anything yet.
 
-### 4. Review & promote candidates
-- `lore learn list` to see them.
-- Reject obvious low-value items (intro paragraphs, `#_intro` sections).
-- Promote the rest. Note: v0.1 only supports `--target=memories` (other
-  targets return `E_NOT_IMPLEMENTED`); everything lands as memories first.
+### 4. Review & add
+- Drop obvious low-value items (intro paragraphs, outdated notes).
+- Add the rest with the matching command (`lore rule add`, `lore decision add`, `lore memory add`, `lore hotfix add`).
   You can promote-to-rule later.
 - Verify: `sqlite3 .lore/lore.db "SELECT COUNT(*) FROM memories;"`
 
@@ -99,8 +97,6 @@ lore.
   upgrading the binary.
 - `--scope=foobar` and other invalid enum values: the skill bundle says to
   surface the error rather than forward.
-- `bench eval --link` only supports `rule | hotfix | decision | memory`
-  (not `task`, `pattern`, etc.).
 
 ## When you're done
 

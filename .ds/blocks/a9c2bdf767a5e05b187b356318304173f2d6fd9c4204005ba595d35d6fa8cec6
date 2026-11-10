@@ -1,0 +1,8 @@
+const (
+	defaultLiveFetchTTL     = 60 * time.Second
+	defaultLiveMaxAge       = 7 * 24 * time.Hour // TEAM-026: an open row is copied to main after a week
+	defaultLiveAutopush     = true
+	defaultLiveCompactAfter = 1000
+	defaultLiveRemote       = "origin"
+	defaultPushRetries      = 5
+)

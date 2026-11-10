@@ -17,6 +17,7 @@ on alice $W "lore rule show $r1"
 note "memory"
 on alice $W "lore memory add --body 'The client replies faster on WhatsApp than email'"
 local m1; m1=$(id mem)
+on alice $W "lore tag add --name staging"
 on alice $W "lore memory add --body 'The staging site is reset every Monday morning' --tag staging"
 on alice $W "lore memory list"
 
@@ -56,15 +57,15 @@ on alice $W "lore memory search WhatsApp"
 note "delete"
 on alice $W "lore memory add --body 'Lunch is at noon'"
 local m3; m3=$(id mem)
-on alice $W "lore memory delete $m3 --confirm"
+on alice $W "lore memory delete $m3 --yes"
 on alice $W "lore memory show $m3 || true"
 
 note "secrets"
-on! alice $W "lore memory add --body 'The staging password is password=example-only'"
-on alice $W "lore memory add --body 'The staging password is password=example-only' --allow-secrets"
+on! alice $W "lore memory add --body 'The staging password is pass''word=example-only'"
+on alice $W "lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes"
 local ms; ms=$(id mem)
 on alice $W "ls .lore/data/memories | grep -c $ms || true"
-on alice $W "lore memory delete $ms --confirm"
+on alice $W "lore memory delete $ms --yes"
 
 # --- the other kinds ----------------------------------------------------------
 note "hotfix"
@@ -73,6 +74,7 @@ on alice $W "lore hotfix list"
 
 note "pattern"
 on alice $W "lore pattern add --title 'Load data in one place' --body 'Each page loads its data in its loader, never inside a button handler.'"
+local pt; pt=$(id pat)
 
 note "playbook"
 on alice $W "lore playbook add --title 'How to release' --body '1. Run the tests. 2. Tag the release. 3. Post in the team chat.'"
@@ -82,10 +84,12 @@ on alice $W "lore prompt add --title 'Review a pull request' --description 'Bugs
 
 note "snapshot"
 on alice $W "lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'"
+local sn; sn=$(id snp)
 on alice $W "lore snapshot list"
 
 note "incident"
 on alice $W "lore incident add --title 'Site down for 20 minutes' --body 'The disk filled up with logs. We now rotate logs daily.'"
+local inc; inc=$(id inc)
 
 note "behaviour"
 on alice $W "lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete any file you did not create.'"
@@ -114,10 +118,34 @@ on alice $W "lore workspace add --title 'Website redesign' --body 'Everything fo
 note "other kinds listed"
 on alice $W "lore incident list; lore tastepref list; lore techdoc list"
 
+note "other kinds show edit"
+on alice $W "lore pattern show $pt"
+on alice $W "lore pattern edit $pt --body 'Each page loads its data in its loader, never inside a button handler or an effect.'"
+on alice $W "lore pattern search loader"
+
+note "incident edit"
+on alice $W "lore incident edit $inc --severity high --ref $pt --relation fixed_by"
+on alice $W "lore incident show $inc"
+
+note "other kinds archive"
+on alice $W "lore snapshot archive $sn"
+on alice $W "lore snapshot list"
+on alice $W "lore snapshot unarchive $sn"
+
+note "show any row"
+on alice $W "lore show $inc"
+on alice $W "lore row show $d1 --origin"
+
+note "tui"
+on alice $W "printf '1\\nq\\n' | lore tui --kind decision"
+
 # --- comments and tags --------------------------------------------------------
 note "comment"
 on alice $W "lore comment add --on-table decisions --on-id $d1 --body 'The client confirmed this on the call.'"
 on alice $W "lore comment list --on-table decisions --on-id $d1"
+local c1; c1=$(id cmt)
+on alice $W "lore comment search confirmed"
+on alice $W "lore comment delete $c1 --yes"
 
 note "tag"
 on alice $W "lore tag add --name payments"
@@ -125,27 +153,29 @@ on alice $W "lore tag attach --tag payments --on-table decisions --on-id $d1"
 on alice $W "lore tag list"
 on alice $W "lore tag detach --tag payments --on-table decisions --on-id $d1"
 
+note "tag edit"
+on alice $W "lore tag edit payments --name billing --color '#1f6feb' --globs 'src/checkout/**'"
+on alice $W "lore tag list"
+
 note "commit"
 on alice $W "git status --short | head -5"
 on alice $W "git add -A && git commit -qm 'lore: notes' && git log --oneline | head -1"
 
 # --- import existing notes ----------------------------------------------------
 note "import"
-quiet alice $W "mkdir -p .ai && printf '# Team notes\n\n## Testing\n\nRun the tests before you push.\n\n## Payments\n\nWe use Stripe for payments.\n' > .ai/notes.md"
+quiet alice $W "mkdir -p .ai && printf '# Team notes\n\n## Prices\n\nAsk the client before changing any price.\n\n## Invoices\n\nThe client pays invoices on the first Monday of the month.\n' > .ai/notes.md"
 on alice $W "cat .ai/notes.md"
-on alice $W "lore learn-from docs --paths .ai/notes.md"
-on alice $W "lore learn list"
 
 note "promote"
-local c1 c2 c3
-c1=$(grep -o 'lcd_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 1p)
-c2=$(grep -o 'lcd_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 2p)
-c3=$(grep -o 'lcd_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 3p)
-on! alice $W "lore learn promote $c2 --target rules"
-on alice $W "lore learn promote $c3"
-on alice $W "lore learn reject $c1"
-on alice $W "lore learn list --status ''"
-on alice $W "lore memory list"
+# lore learn-from is not in 0.1.18 (dropped): each section becomes a row of the right
+# kind by hand, and the file is deleted once everything is in lore.
+on alice $W "lore rule add --body 'Ask the client before changing any price.'"
+on alice $W "lore memory add --body 'The client pays invoices on the first Monday of the month.'"
+on alice $W "rm .ai/notes.md && git status --short"
+
+note "imported"
+on alice $W "lore search invoices"
+on alice $W "lore render >/dev/null && grep -c 'Ask the client before changing any price' .lore/LORE.md"
 
 note "external source"
 on alice $W "lore external-source add --kind wiki --name 'Team wiki'"
@@ -153,3 +183,9 @@ on alice $W "lore external-source list"
 local e1; e1=$(id ext)
 on alice $W "lore external-source enable $e1 && lore external-source list"
 on alice $W "lore external-source disable $e1"
+
+# --- move a memory to another store ---------------------------------------------
+note "memory move"
+on alice $W "lore store init agency file://\$HOME/stores/agency"
+on alice $W "lore memory move $m1 --to agency --yes"
+on alice $W "lore memory show $m1"

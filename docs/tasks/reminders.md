@@ -22,18 +22,14 @@ Alice (an agency developer) keeps the dates for the client's website, `github.co
 ```console
 # alice, in website
 $ lore reminder add 'Renew the domain name' --due 2027-06-01 --recurrence 1y
-✓ reminder rmd_b69e…5ed7 due 2027-06-01
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+✓ reminder rmd_0aae…a61f due 2027-06-01
 $ lore reminder add 'Call the client about the new logo' --due 2026-11-01
-✓ reminder rmd_0aae…a61f due 2026-11-01
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
+✓ reminder rmd_6a86…ed8c due 2026-11-01
 $ lore reminder list
 ! 2026-11-01  Call the client about the new logo
-    rmd_0aae…a61f
+    rmd_6a86…ed8c
   2027-06-01  Renew the domain name (1y)
-    rmd_b69e…5ed7
+    rmd_0aae…a61f
 ```
 <!-- /example -->
 
@@ -46,44 +42,38 @@ Reminders are listed by date, soonest first. A `!` at the start of the line mean
 <!-- example: tasks#reminder-done -->
 ```console
 # alice, in website
-$ lore reminder done rmd_b69e…5ed7
-✓ rescheduled to 2028-06-01
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore reminder done rmd_0aae…a61f
-✓ reminder rmd_0aae…a61f completed
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
+✓ rescheduled to 2028-06-01
+$ lore reminder done rmd_6a86…ed8c
+✓ reminder rmd_6a86…ed8c completed
 $ lore reminder list
   2028-06-01  Renew the domain name (1y)
-    rmd_b69e…5ed7
+    rmd_0aae…a61f
 $ lore reminder list --done
   2026-11-01  Call the client about the new logo
-    rmd_0aae…a61f
+    rmd_6a86…ed8c
 ```
 <!-- /example -->
 
 ## Step 3 — Delete a reminder
 
-Delete only for mistakes. It needs `--confirm`:
+Delete only for mistakes. lore asks first; without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`:
 
 <!-- example: tasks#reminder-delete -->
 ```console
 # alice, in website
-$ lore reminder delete rmd_0aae…a61f
-ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
-  hint: a hard delete cannot be undone; pass --confirm if you really mean it
-(exit 1)
-$ lore reminder delete rmd_0aae…a61f --confirm
-✓ rmd_0aae…a61f deleted (hard)
-lore sync: removed files 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+$ lore reminder delete rmd_6a86…ed8c
+ERROR: [E_NEEDS_CONFIRM] reminder delete rmd_6a86…ed8c?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+$ lore reminder delete rmd_6a86…ed8c --yes
+✓ rmd_6a86…ed8c moved to the trash (restore: lore trash restore rmd_6a86…ed8c)
 ```
 <!-- /example -->
 
 ## Try it
 
-<!-- ds:block id=reminder-recurrence-gs41nylk -->
+<!-- ds:block id=reminder-recurrence-my5a3sp3 -->
 | `--recurrence` | Next date after `done` |
 |---|---|
 | `7d` | 7 days later |
@@ -93,6 +83,8 @@ lore sync: 3 file(s) in .lore/data not committed — commit them with your chang
 | `6m` | the same day 6 months later |
 | `1y` | the same day next year |
 
+Done late, a recurring reminder moves to the first of its dates after now, never to a date that is already past: a `7d` reminder due 2026-10-01 and done on 2026-11-02 moves to 2026-11-05 and prints `skipped 4 past dates`, as a recurring task does. A month-end date keeps its day where the month has it (`1m` from Jan 31 gives Feb 28, then Mar 31).
+
 After `done`, the yearly reminder from Step 1 sits one year later, and the one-time reminder is on the done list:
 
 <!-- example: tasks#reminder-done only=3,4 -->
@@ -100,10 +92,10 @@ After `done`, the yearly reminder from Step 1 sits one year later, and the one-t
 # alice, in website
 $ lore reminder list
   2028-06-01  Renew the domain name (1y)
-    rmd_b69e…5ed7
+    rmd_0aae…a61f
 $ lore reminder list --done
   2026-11-01  Call the client about the new logo
-    rmd_0aae…a61f
+    rmd_6a86…ed8c
 ```
 <!-- /example -->
 

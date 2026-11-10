@@ -1,0 +1,3 @@
+func MachineLocal() Item {
+	return itemFunc(func(t *TableDef) { t.MachineLocal, t.Synced = true, true })
+}

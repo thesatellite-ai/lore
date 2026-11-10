@@ -1,0 +1,16 @@
+func PolicyFor(def schema.TableDef) Policy {
+	text := map[string]bool{}
+	strategies := map[string]schema.MergeStrategy{}
+	for _, f := range def.Fields {
+		if f.Kind == value.KindText && len(f.Values) == 0 {
+			text[f.Name] = true
+		}
+		if f.Merge != schema.MergeDefault {
+			strategies[f.Name] = f.Merge
+		}
+	}
+	return Policy{
+		IsText:   func(field string) bool { return text[field] },
+		Strategy: func(field string) schema.MergeStrategy { return strategies[field] },
+	}
+}

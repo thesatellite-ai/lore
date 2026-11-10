@@ -1,0 +1,22 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "invites",
+  "_v": 2,
+  "accepted_by": "act_01a1a59b891c70b78914000000000003",
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "email": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "expires_on": "2026-11-04",
+  "github": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "id": "inv_01a1a59b891c70b7891400000000000f",
+  "note": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "period_type": "employee",
+  "projects": [
+    "fixture café — 日本 <b>&</b> \"q\"\ttab"
+  ],
+  "roles": [
+    "fixture café — 日本 <b>&</b> \"q\"\ttab"
+  ],
+  "status": "pending",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

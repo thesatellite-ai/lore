@@ -1,122 +1,50 @@
 # Coding Agent Guidelines
 
-Go workspace with heavy **code generation**. Never modify `gen/`, `generated/`, or `ent/` directories.
+lore is one Go module, `github.com/thesatellite-ai/lore`, at the repo root: no `go.work`, no code generation, pure-Go SQLite (`modernc.org/sqlite`, `CGO_ENABLED=0`). The v0.1.17 modules `saas/`, `dbent/`, `lace/` and `go.work` were deleted in phase E (42dbef7a). Build and release details: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-## Stack
+## Layout
 
-Go 1.22 | Gin | Ent ORM | gqlgen | PostgreSQL | Redis | NATS | PKL Config | OpenTelemetry
+The packages are layered; each imports only the layers below it, and `internal/layers` fails the build when a lower layer imports a higher one.
 
-## Workspace Modules
+| Layer | Package | Holds |
+|-------|---------|-------|
+| L0 | `model/` | typed ids, HLC, the row envelope, the closed `Value` type, typed error codes |
+| L0/L1 | `schema/` | table definitions (`schema.Table(...)`): fields, relations, on-delete rules |
+| L1 | `logic/` | pure rules: merge, validate, references, policy |
+| L2 | `store/` | the `Backend` port and the contract suite every backend passes |
+| L3 | `adapters/` | store backends (`backend/git`, `backend/folder`, `backend/rowfs`), the run-time SQLite cache (`cache/sqlite`), scanner, identity |
+| L3/L4 | `op/` | the operation registry types (`op.Define[In, Out]`) |
+| L4 | `engine/` | the one read/write path |
+| L5 | `ops/<noun>/` | one package per noun, defining its operations |
+| L6 | `surface/` | `cli`, `rest` (local `lore api`), `tui`, `docs` |
+| L7 | `wire/`, `cmd/lore` | the composition root and the `lore` binary (the only release binary) |
 
-| Module | Purpose |
-|--------|---------|
-| `saas/` | Core app: CLI, API bootstrap, business logic |
-| `apidash/` | GraphQL API (`/api/sa`) |
-| `dbent/` | Ent ORM schemas & migrations |
-| `lace/` | Shared utility library (30+ packages) |
-| `config/` | PKL configuration |
+Tests live beside each package; the team end-to-end suite is in `tests/teame2e` (build tag `teame2e`).
 
 ## Where to Make Changes
 
-| Task | Edit | Run | Avoid |
-|------|------|-----|-------|
-| Database schema | `dbent/schema/*.go` | `task dbent:entg && task dbent:migrate` | `dbent/gen/ent/*` |
-| GraphQL API | `apidash/internal/graph/*.graphqls` | `task apidash:gql` | `apidash/internal/graph/generated/*` |
-| Configuration | `config/*.pkl` | `task config:gen` | `config/gen/*` |
-| Shared utility | `lace/` | - | - |
-| Business logic | `saas/pkg/` | - | - |
-| CLI commands | `saas/cmd/cli/` | - | - |
+| Task | Edit |
+|------|------|
+| A new table or field | `schema/` (`schema.Table(...)`); the cache, CLI flags, REST routes and docs follow from it |
+| A command or operation | `ops/<noun>/` (`op.Define`); CLI and REST are built from the registry at startup |
+| Choosing an adapter | `wire/` only |
+| Binary-only flags and startup | `cmd/lore/` |
 
 ## Task Commands
 
 | Command | Purpose |
 |---------|---------|
-| `task docker:up` | Start Docker infrastructure |
-| `task docker:down` | Stop Docker containers |
-| `task dbent:entg` | Generate Ent ORM code |
-| `task dbent:migrate` | Run database migrations |
-| `task apidash:gql` | Generate GraphQL resolvers |
-| `task config:gen` | Generate PKL config bindings |
-| `task workvendor` | Sync workspace dependencies |
-| `task lint` | Format and vet code |
-| `task gitgen` | Stage generated files (commit as `gen`) |
-| `task scripts:gh:secrets:update` | Sync .env.prod to GitHub |
-| `task scripts:gh:secrets:push` | Push all secrets to GitHub |
-
-## Context-Specific Rules
-
-Read before performing these actions:
-
-| Action | Read First |
-|--------|------------|
-| Git commit | `.claude/rules/git-commit.md` |
-| New GraphQL endpoint | `.claude/rules/new-endpoint.md` |
-| New Ent schema/field | `.claude/rules/new-schema.md` |
-| New service | `.claude/rules/new-service.md` |
-| New CLI command | `.claude/rules/new-cli-command.md` |
-| New cron job | `.claude/rules/new-cron-job.md` |
-| New lace package | `.claude/rules/new-lace-package.md` |
-| Configuration | `.claude/rules/configuration.md` |
-| NATS handler | `.claude/rules/nats-handler.md` |
-| Migrations | `.claude/rules/migrations.md` |
-| Writing tests | `.claude/rules/testing.md` |
-| Error handling | `.claude/rules/error-handling.md` |
-| Logging | `.claude/rules/logging.md` |
-| Tracing | `.claude/rules/tracing.md` |
-| Validation | `.claude/rules/validation.md` |
-| Adding dependencies | `.claude/rules/libraries.md` |
-| Authentication | `.claude/rules/authentication.md` |
-| Secrets | `.claude/rules/secrets.md` |
-| Debugging | `.claude/rules/debugging.md` |
-| Docker/local dev | `.claude/rules/docker-dev.md` |
-| Deployment | `.claude/rules/deployment.md` |
-| GitHub secrets | `.claude/rules/github-secrets.md` |
-
-## Code Conventions
-
-```go
-// Context first, error last
-func DoThing(ctx context.Context, id string) (*Result, error)
-
-// Wrap errors with context
-return fmt.Errorf("doThing: %w", err)
-
-// Import order: stdlib, third-party, local
-import (
-    "context"
-
-    "github.com/gin-gonic/gin"
-
-    "saas/pkg/app"
-)
-```
-
-## Tags
-
-We use some tag system in comments like `@tag('dnd', 'skip')` so each tag has special meaning
-
-* `dnd` - means never remove the commented out code block
+| `task lore:build` | build `tmp/bin/lore` |
+| `task lore:test:quick` | QUICK tier: every unit test, Go test cache on, no race, no e2e — run it all the time while building |
+| `task lore:test` | every package plain + the concurrent packages (`RACE_PKGS`) under the race detector |
+| `task lore:test:team` | team end-to-end suite (real binary, real git) |
+| `task lore:lint` | vet, gofmt, staticcheck, cross-build of the six release targets |
+| `task check` | FULL tier, the gate before every push: lint, cross-builds, unit + race, then every e2e suite, steps in parallel with per-step times (`docs/DEVELOPMENT.md`) |
 
 ## Critical Rules
 
-* **Never** modify generated files directly
-* **Never** create helpers in `resolver/` directories (gqlgen will overwrite)
-* **Never** use `graphql.Upload` for file uploads (use base64 instead)
-* **Always** run migrations after schema changes
-* **Always** pass `context.Context` as first param to I/O functions
-* **Never** modify any file or create any file in these go modules directories `core`, `lace`, `scripts`
-
-## Detailed Documentation
-
-| Topic | Location |
-|-------|----------|
-| Architecture | `.ai/ARCHITECTURE.md` |
-| Backend packages | `.claude/docs/backend/` |
-| CLI reference | `.claude/docs/cli/` |
-| Templates | `.claude/templates/` |
-
-## Ignore Files and Folders
-
-Never include these files and folders in your agentic flow or decisions or grep anything at all.
-
-* docs/framework
+* **Never** add `any` / `interface{}` in hand-written code except where a stdlib signature forces it (`internal/layers/noany_test.go` enforces it)
+* **Never** add code generation or a `go.work`
+* **Never** commit secrets; test fixtures that look like keys are built at run time
+* **Always** pass `context.Context` as the first parameter to I/O functions
+* **Always** wrap errors with context, or return a typed error from `model/errs`

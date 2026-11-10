@@ -73,13 +73,6 @@ jobs:
           go-version: "1.26.x"
           cache: false
 
-      # go.work stitches the local modules (dbent/lace/saas); enttui
-      # resolves from the proxy. Keep the graph consistent before the
-      # GoReleaser cross-compile.
-      - name: go work sync
-        if: steps.skip.outputs.skip != 'true'
-        run: go work sync
-
       # Resolve the release tag for this run.
       #   tag:      version string (empty on snapshot)
       #   create:   "true" => git tag && git push
@@ -164,7 +157,11 @@ jobs:
         if: steps.skip.outputs.skip != 'true'
         uses: goreleaser/goreleaser-action@v7
         with:
-          version: latest
+          # Pinned (GR-1): v2.9.0 is the newest goreleaser whose `goreleaser check`
+          # passes .goreleaser.yml unchanged; v2.10.0 deprecates `brews`, which we
+          # keep (a formula also serves Linux Homebrew, and the shared tap holds
+          # every org tool's formula). The gate pins the same version.
+          version: v2.9.0
           args: >-
             release --clean
             ${{ steps.brew.outputs.skip }}

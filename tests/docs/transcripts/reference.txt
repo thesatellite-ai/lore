@@ -1,45 +1,38 @@
 
-### errors list
-alice (work/website)$ lore errors list | head -4
-E_DB_LOCKED                      another lore process is holding the DB write lock
-E_DB_CORRUPT                     DB file failed quick_check; run `lore repair`
-E_DB_NOT_FOUND                   DB file does not exist at the configured path
-E_SCHEMA_VERSION_MISMATCH        DB was migrated by a newer lore; upgrade or use a different DB
-alice (work/website)$ lore errors list --json | head -9
-{
-  "schema_version": 1,
-  "count": 53,
-  "errors": [
-    {
-      "code": "E_DB_LOCKED",
-      "description": "another lore process is holding the DB write lock"
-    },
-    {
-
 ### an error
 alice (work)$ lore rule list
-ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
-  hint: run `lore init` here, or cd into a project root
-(exit 1)
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
+  hint: cd into a git checkout, or run git init here first
+(exit 19)
 
 ### errors with json
 alice (work)$ lore rule list --json
-ERROR: [E_NOT_PROJECT_ROOT] current directory is not a lore project (no .lore/lore.db or lore.yaml)
-  hint: run `lore init` here, or cd into a project root
-(exit 1)
+{
+  "error": {
+    "code": "E_NOT_A_STORE",
+    "message": "git: the folder is not inside a git work tree",
+    "hint": "cd into a git checkout, or run git init here first",
+    "exit": 19,
+    "class": "guard",
+    "retryable": false,
+    "needs_person": false
+  }
+}
+(exit 19)
 alice (work/website)$ lore rule list --colour never
-ERROR: unknown flag: --colour
-(exit 1)
+ERROR: [E_INVALID_INPUT] unknown flag: --colour
+  hint: lore rule list --help lists its flags
+(exit 20)
 
 ### read only
 alice (work/website)$ lore rule add --body 'Never put passwords in the code'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
-(exit 1)
+(exit 23)
 alice (work/website)$ lore rule add --read-only --body 'Never put passwords in the code'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
-(exit 1)
+(exit 23)
 
 ### exit status
 alice (work/website)$ lore task add 'Write the release notes'
@@ -60,7 +53,7 @@ identity:
   key: human:alice@agency.example
   name: Alice
 personal:
-  store: local
+  store: git@github.com:alice/lore-me
 orgs:
   - name: agency
     identity:
@@ -68,7 +61,7 @@ orgs:
       name: Alice
       handle: alice
     stores:
-      - url: github.com/agency/notes
+      - url: git@github.com:agency/notes
         org_folder: "."
     own:
       - github.com/agency/*
@@ -104,6 +97,14 @@ link_index:
   max_age: 1h
 untrusted_hosts:
   - build-*.client.example
+upgrade_notice: true
+auto_upgrade: false
+context:
+  profiles:
+    - name: mytool
+      pointer_file: MYTOOL.md
+      import: at
+      budget: 20000
 alice (work/website)$ lore config check
 ✓ ~/.lore/config.yaml is valid: 1 org entry (agency)
 
@@ -114,7 +115,7 @@ orgs:
     identity:
       key: alice@agency.example
     stores:
-      - url: github.com/agency/notes
+      - url: git@github.com:agency/notes
         branch: team/staging
 lease:
   ttl: 5m
@@ -122,79 +123,67 @@ lease:
 merge_check:
   adapter: gitlab
 alice (work/website)$ lore config check
-✗ ~/.lore/config.yaml
-  - lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed
-  - merge_check: adapter "gitlab": must be "none" or "github"
-  - orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit
-  - orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029)
-  - orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: fix the problems listed above; nothing else in lore reads an invalid config
-(exit 1)
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed; merge_check: adapter "gitlab": must be "none" or "github"; orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit; orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029); orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+  hint: fix the problems listed; nothing else in lore reads an invalid config
+(exit 20)
 
 ### config check typo
 alice (work/website)$ lore config check
-✗ ~/.lore/config.yaml
-  - lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid
-  hint: fix the problems listed above; nothing else in lore reads an invalid config
-(exit 1)
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: orgconf: config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
+  hint: fix the problems listed; nothing else in lore reads an invalid config
+(exit 20)
 
 ### invalid config stops writes
 alice (work/website)$ lore rule list
-(no rules)
-alice (work/website)$ lore rule add --body 'Run the tests before you push'
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lorecfg: load ~/.lore/config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: orgconf: config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
   hint: run `lore config check` for every problem with its location
-(exit 1)
+(exit 20)
+alice (work/website)$ lore rule add --body 'Run the tests before you push'
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: orgconf: config.yaml: line 2: invalid duration "1d12h": time: unknown unit "d" in duration "1d12h"
+  hint: run `lore config check` for every problem with its location
+(exit 20)
 
 ### db flag
 alice$ lore rule list --db work/website/.lore/lore.db
-rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
+ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row files read from the repository, not lore.db
+  hint: run the command inside the repository (or name a store with --store / --to)
+(exit 23)
 alice$ lore rule list
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
+  hint: cd into a git checkout, or run git init here first
+(exit 19)
+alice$ cd work/website && lore rule list
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
 
 ### db config
 alice (work/website)$ lore config list
-db_created_at=2026-11-02T10:00:00.000000001Z
-db_uuid=cfg_54fe984c9b495744c0217776765a28f2
-fts_registry_fingerprint=a98a26bd082406f5
-last_checkpoint_at=
-last_vacuum_at=
-schema_version=1
-alice (work/website)$ lore config get schema_version
-1
+(no config keys)
+alice (work/website)$ lore config get default_branch || echo 'not set'
+ERROR: [E_NOT_FOUND] config key "default_branch" not found
+  hint: `lore config list` shows the keys set in ~/.lore/config.yaml
+not set
 
 ### default branch
 alice$ cat .lore/config.yaml
 default_branch: develop
 alice (work/website)$ lore task add 'Fix the footer links'
-✓ tsk_05e99e22e9e86e96fe4daa7777994603 — Fix the footer links [medium]
+✓ tsk_54fe984c9b495744c0217776765a28f2 — Fix the footer links [medium]
 lore live: (live, pushed)
-alice (work/website)$ lore task done tsk_05e99e22e9e86e96fe4daa7777994603
-✓ tsk_05e99e22e9e86e96fe4daa7777994603 done
+alice (work/website)$ lore task done tsk_54fe984c9b495744c0217776765a28f2
+✓ tsk_54fe984c9b495744c0217776765a28f2 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: landed on develop (601d285); leaves live once develop is fetched
+lore live: landed on develop; this checkout is on main, so those rows show here after you merge develop
 alice (work/website)$ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
 601d285 lore: land 2 rows (_root)
 86dbae4 lore: init
 86dbae4 lore: init
 
-### sync data ignored
-alice (work/website)$ mkdir -p .lore/data/tasks && echo '*.json' > .lore/data/tasks/.gitignore
-alice (work/website)$ lore sync install-git
-lore sync: git ignores lore data, so teammates will not receive it:
-  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
-change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
-ERROR: [E_SYNC_DATA_IGNORED] lore sync: git ignores lore data, so teammates will not receive it:
-  .lore/data/tasks/sample.json (ignored by .lore/data/tasks/.gitignore:1: *.json)
-change that rule so .lore/data/ is not excluded (a negation cannot re-include files inside an ignored folder)
-(exit 1)
-
 ### no work
 alice (work/landing)$ lore task next
 ERROR: [E_NO_WORK] nothing ready: no open task matches
+  hint: lore task add makes a task; lore task list shows the open ones
 (exit 10)
 
 ### store marker
@@ -210,46 +199,166 @@ orgs:
     stores:
       - {url: "git@github.com:other/notes", org_folder: org}
     repos: [github.com/client/*]
-alice$ lore store init git@github.com:agency/notes
-✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
-alice$ lore store init git@github.com:other/notes
-✓ wrote lore-store.yaml to github.com/other/notes (new branch main, first commit) and pushed
-alice$ git clone -q https://github.com/agency/notes notes-checkout && cat notes-checkout/lore-store.yaml
-lore_store: 1
-created: "2026-11-02"
-org_folder: org
+alice (work/website)$ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
+✓ created store agency (sto_05e99e22e9e86e96fe4daa7777994603) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+alice (work/website)$ LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes
+✓ created store freelance (sto_c0f3c11a5724b0cfd74b256190d9b5b8) at git@github.com:other/notes; recorded in .lore/stores.yaml; commit it to share
+alice (work/website)$ cat .lore/stores.yaml
+stores:
+    - name: agency
+      url: git@github.com:agency/notes
+    - name: freelance
+      url: git@github.com:other/notes
 
 ### org use
 alice (work/website)$ lore whoami
 org        refused  (the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance))
 identity   (not resolved: the org is refused above)
-project    prj_c0f3c11a5724b0cfd74b256190d9b5b8
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
+project    prj_76bd560aff0771fab8457dbfa9823f10
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: everywhere/
+personal   not set
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance)
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 alice (work/website)$ lore org use agency
-✓ prj_c0f3c11a5724b0cfd74b256190d9b5b8 uses org agency on this machine
+✓ prj_76bd560aff0771fab8457dbfa9823f10 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
-alice$ grep -A3 repo_orgs ~/.lore/config.yaml
+alice$ grep -A4 repo_orgs ~/.lore/config.yaml
 repo_orgs:
-  prj_c0f3c11a5724b0cfd74b256190d9b5b8: {org: agency, remotes: [github.com/client/website]}
+  prj_76bd560aff0771fab8457dbfa9823f10:
+    org: agency
+    remotes:
+      - github.com/client/website
 alice (work/website)$ lore org link agency --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_c0f3c11a5724b0cfd74b256190d9b5b8 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_c0f3c11a5724b0cfd74b256190d9b5b8, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  link: project prj_76bd560aff0771fab8457dbfa9823f10 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_76bd560aff0771fab8457dbfa9823f10, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 
 ### force org
 alice (work/website)$ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
 ERROR: [E_ORG_DISAGREES] LORE_ORG chose freelance, but this repo is linked in agency
-  hint: pass --force-org to write anyway, or fix the choice with `lore org use`
+  hint: name the org the write goes to with --to <org>, or fix the choice with `lore org use` (or unset LORE_ORG)
 (exit 17)
-alice (work/website)$ LORE_ORG=freelance lore memory add --force-org --to freelance/client --create --body 'The client pays invoices in 30 days'
-✓ mem_76bd560aff0771fab8457dbfa9823f10 [freelance/client]
-  filed: --to freelance/client
+alice (work/website)$ lore memory add --force-org --body 'The client pays invoices in 30 days'
+ERROR: [E_INVALID_INPUT] unknown flag: --force-org
+  hint: lore memory add --help lists its flags
+(exit 20)
+alice (work/website)$ lore memory add --to freelance --body 'The client pays invoices in 30 days'
+✓ mem_d4314eba822f1bf5908b2b8ded5f313a [freelance]
   scope: [master]
-lore: [freelance/client] 4 file(s) pushed
+
+### project id
+alice (work/website)$ LORE_DB=.lore/lore.db lore rule list
+ERROR: [E_UNSUPPORTED] LORE_DB is not supported by this command: its rows are row files read from the repository, not lore.db
+  hint: unset LORE_DB and run the command inside the repository (or name a store with --store / --to)
+(exit 23)
+alice (work/website)$ lore project list
+prj_76bd560aff0771fab8457dbfa9823f10  website  https://github.com/client/website
+alice (work/website)$ LORE_PROJECT_ID=$(lore project list | cut -d' ' -f1) lore rule list
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
+alice (work/website)$ LORE_PROJECT_ID=prj_website lore rule list
+ERROR: [E_NOT_FOUND] rule: no project "prj_website"
+  hint: run `lore project list` to see the projects
+(exit 27)
+
+### config check setups
+alice$ cat .lore/config.yaml
+identity:
+  key: human:alice@agency.example
+  name: Alice
+setups:
+  - name: work
+    kind: solo
+    default: true
+    folders:
+      - ~/work
+    identity:
+      key: human:alice@agency.example
+      name: Alice
+    tools: [claude_code, codex]
+setup:
+  idle_minutes: 60
+  open_browser: false
+doctor:
+  scan_depth: 4
+  probe_timeout_s: 30
+policies:
+  meta.max_bytes: 4096
+  meta.max_bytez: 100
+alice (work/website)$ lore config check
+✓ ~/.lore/config.yaml is valid: 0 org entries
+  warning: ~/.lore/config.yaml: policies.meta.max_bytez is not a policy key lore knows; ignored
+alice (work/website)$ lore policy show 2>/dev/null | grep meta.max_bytes
+meta.max_bytes	4096	machine (~/.lore/config.yaml policies)
+
+### config check setups bad
+alice$ cat .lore/config.yaml
+setups:
+  - name: Work
+    kind: boss
+    folders: [work]
+  - name: home
+    kind: solo
+    default: true
+  - name: laptop
+    kind: solo
+    default: true
+setup:
+  idle_minutes: 0
+doctor:
+  scan_depth: 20
+  probe_timeout_s: 600
+policies:
+  meta.max_bytes: lots
+alice (work/website)$ lore config check
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: setups[Work]: name "Work" must be snake_case or kebab-case (a-z, 0-9, _ or -, starting with a letter), at most 64 characters; setups[Work]: kind "boss" must be solo, member or admin; setups[Work]: folder "work" must be absolute (start with / or ~/); setups: default: true is set on home and laptop; at most one setup may be the default; setup.idle_minutes 0 must be between 1 and 1440; doctor.scan_depth 20 must be between 1 and 10; doctor.probe_timeout_s 600 must be between 1 and 300; ~/.lore/config.yaml: policies.meta.max_bytes: value must be a whole number from 0
+  hint: fix the problems listed; nothing else in lore reads an invalid config
+(exit 20)
+
+### sql refused
+alice (work/website)$ lore sql 'DELETE FROM rules'
+ERROR: [E_SQL_REFUSED] only one SELECT, WITH or VALUES statement (optionally after EXPLAIN [QUERY PLAN]) is allowed
+  hint: lore sql is read-only; change data with lore commands so it reaches git
+(exit 20)
+
+### has dependents
+alice (work/website)$ lore project list
+prj_76bd560aff0771fab8457dbfa9823f10  website  https://github.com/client/website
+alice (work/website)$ lore project delete $(lore project list | cut -d' ' -f1) --yes
+ERROR: [E_HAS_DEPENDENTS] project delete: mem_d4314eba822f1bf5908b2b8ded5f313a (memories.project_id), rul_162df51b7f78b785c97c26b41ea89666 (rules.project_id), tsk_7a670ae8548ed05bf57ad29ad0759504 (tasks.project_id), tsk_2ad3618e878ebbf527d34d446ef4f891 (tasks.project_id), tsk_54fe984c9b495744c0217776765a28f2 (tasks.project_id), tlt_b4f4765e593d51fd1352985e8af3a5b0 (task_lists.project_id) still point at prj_76bd560aff0771fab8457dbfa9823f10
+  hint: delete or move the pointing rows first
+(exit 23)
+
+### ref syntax
+alice (work/website)$ lore vars set host staging.client.example
+Added var_…c1c9 host = staging.client.example (text) in repo (not shareable: clients see ${var:<name>}).
+alice (work/website)$ lore vars set base_url 'https://${var:host?port=8080}/'
+ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for ${var:…}
+(exit 20)
+
+### meta unknown
+alice (work/website)$ lore rule add --body 'Keep the footer links in one list'
+✓ rul_28f8d32584b2db54ffb146bede5b03df
+  scope: [master] severity: must
+alice (work/website)$ lore meta unset rul_28f8d32584b2db54ffb146bede5b03df client_tier
+ERROR: [E_META_UNKNOWN] rul_28f8d32584b2db54ffb146bede5b03df has no metadata key "client_tier"; it has no metadata
+  hint: lore meta show rul_28f8d32584b2db54ffb146bede5b03df lists its keys
+(exit 20)
+
+### personal everywhere
+alice (work/website)$ lore store init me
+✓ created store me (sto_4c590afb2a0cc7ae1b97b7e4e62d6c38) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+alice (work/website)$ lore memory add --to me --everywhere --body 'I write short commit messages'
+ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
+  hint: lore memory add --help lists its flags
+(exit 20)
+alice (work/website)$ lore memory add --to me --body 'I write short commit messages'
+✓ mem_3b6283bc4392c556bbae5f094246e913 [me]
+  scope: [master]
+alice (work/landing)$ lore memory list
+mem_3b6283bc4392c556bbae5f094246e913  I write short commit messages  [me]

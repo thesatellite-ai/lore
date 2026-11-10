@@ -36,7 +36,7 @@ skill/
     ├── 01-bootstrap.md           ← first-time setup
     ├── 02-capture-correction.md  ← user corrects → rule add
     ├── 03-multi-repo.md          ← scoping per repo
-    ├── 04-disaster-recovery.md   ← repair tier 1/2/3
+    ├── 04-disaster-recovery.md   ← rebuild the DB from .lore/data
     ├── 05-decision-record.md     ← save a decision and its reasons
     ├── 06-task-tracking.md       ← mission + tasks + sprint
     ├── 07-search-patterns.md     ← find a note fast (search syntax)
@@ -82,11 +82,8 @@ The folder is plain markdown, so any agent that can read files can use it. Tell 
 This skill describes the **public CLI surface** of lore. When the CLI changes:
 
 ```bash
-# Regenerate the error table from the binary
-lore errors list --json | jq -r '
-    "| `\(.errors[].code)` | \(.errors[].description) |"
-' > /tmp/errors.md
-# Then paste into ERRORS.md
+# The error table comes from the errors block of docs/reference/cli-commands.md
+# (regenerated with `lore spec docs`); copy the changed rows into ERRORS.md
 
 # Verify commands documented in SKILL.md/COMMANDS.md still exist
 lore --help | grep -E "^\s+\w+"

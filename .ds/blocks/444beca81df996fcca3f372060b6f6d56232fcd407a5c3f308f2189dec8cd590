@@ -1,0 +1,23 @@
+const (
+	// EnvLive = "0" turns live rows off: every row stays in .lore/data.
+	EnvLive = "LORE_LIVE"
+	// EnvSync = "0" turns live rows off (as EnvLive does) and keeps the
+	// workflow pin where it is (NeedsPinRefresh). It no longer means
+	// "cache only" as in v0.1.17: the row files are the store since 0.1.18,
+	// so every write still lands in .lore/data (BUGFIX-05). Git wiring is
+	// EnvSyncGit's switch, not this one.
+	EnvSync = "LORE_SYNC"
+	// EnvSyncGit = "0" keeps lore from touching git config (refspec).
+	EnvSyncGit = "LORE_SYNC_GIT"
+	// EnvLiveAutopush = "0" keeps lore off the network on its own.
+	EnvLiveAutopush = "LORE_LIVE_AUTOPUSH"
+	// EnvLiveRemote points refs/lore/* at another remote.
+	EnvLiveRemote = "LORE_LIVE_REMOTE"
+	// EnvSyncQuiet = "1" hides the one-time `lore sync:` notices of the git
+	// wiring (configured git, re-included .gitignore rule), as in v0.1.17
+	// (sync_wire.go reportGitWiring). README, docs/reference/environment.md
+	// and docs/sync/how-notes-travel-with-git.md promise it; warnings and
+	// errors (git still ignores row files, a wiring failure) always print.
+	EnvSyncQuiet = "LORE_SYNC_QUIET"
+	envOff       = "0"
+)

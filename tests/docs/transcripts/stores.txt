@@ -1,0 +1,119 @@
+
+### store init
+alice (work/website)$ lore store init notes file://$HOME/stores/notes
+✓ created store notes (sto_7a670ae8548ed05bf57ad29ad0759504) at file://~/stores/notes; recorded in .lore/stores.yaml; commit it to share
+alice (work/website)$ cat .lore/stores.yaml
+stores:
+    - name: notes
+      url: file://~/stores/notes
+alice (work/website)$ ls ~/stores/notes; cat ~/stores/notes/lore-store.yaml
+lore-store.yaml
+lore_store: 2
+id: sto_7a670ae8548ed05bf57ad29ad0759504
+visibility: internal
+created: "2026-11-02"
+org_folder: org
+alice (work/website)$ lore store list
+stores:
+  NAME   URL                                                                     FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS
+  notes  file://~/stores/notes          false              false     stores.yaml  internal    ok     
+count: 1
+
+### visibility
+alice (work/website)$ lore store visibility notes shareable
+ERROR: [E_NEEDS_CONFIRM] store visibility notes: rows of this store will render into committed files and show in client repos; make it shareable?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/website)$ lore store visibility notes shareable --yes
+✓ notes is shareable (was internal; lore-store.yaml written)
+alice (work/website)$ grep visibility ~/stores/notes/lore-store.yaml
+visibility: shareable
+alice (work/website)$ lore store visibility notes internal --yes
+✓ notes is internal (was shareable; lore-store.yaml written)
+  re-render these repos (`lore render`): their committed files may hold its rows
+    ~/work/website
+
+### store moved
+alice (work/website)$ mv ~/stores/notes ~/stores/agency-notes
+alice (work/website)$ lore store list
+stores:
+  NAME   URL                                                                     FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH    ADDRESS
+  notes  file://~/stores/notes          false              false     stores.yaml              missing  
+count: 1
+alice (work/website)$ lore store set-url notes file://$HOME/stores/agency-notes
+✓ store notes (sto_7a670ae8548ed05bf57ad29ad0759504) is now at file://~/stores/agency-notes (was file://~/stores/notes); its rows stay
+  now naming it: .lore/stores.yaml notes
+  note: the old address could not be read (E_NOT_A_STORE), so its store id was not compared
+alice (work/website)$ lore store list
+stores:
+  NAME   URL                                                                            FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS
+  notes  file://~/stores/agency-notes          false              false     stores.yaml  internal    ok     
+count: 1
+
+### store folders
+alice (work/website)$ lore store folder add notes golang
+✓ created folder golang in notes (prj_2ad3618e878ebbf527d34d446ef4f891; shown only in repos that attach it)
+alice (work/website)$ lore memory add --to notes/golang --body 'Close every channel from the sender side.'
+✓ mem_162df51b7f78b785c97c26b41ea89666 [notes/golang]
+  scope: [master]
+alice (work/website)$ cat .lore/stores.yaml
+stores:
+    - name: notes
+      url: file://~/stores/agency-notes
+    - name: notes/golang
+      url: file://~/stores/agency-notes
+      folder: golang
+alice (work/website)$ lore memory list
+mem_162df51b7f78b785c97c26b41ea89666  Close every channel from the sender side.  [notes/golang]
+
+### move a row
+alice (work/website)$ lore rule add --body 'Keep the agency hourly rate out of the client repo.'
+✓ rul_54fe984c9b495744c0217776765a28f2
+  scope: [master] severity: must
+alice (work/website)$ lore row move rul_54fe984c9b495744c0217776765a28f2 --to notes
+ERROR: [E_NEEDS_CONFIRM] This becomes visible to everyone with access to notes (internal):
+  "Keep the agency hourly rate out of the c…" (rul_54fe984c9b495744c0217776765a28f2, id kept), now in repo
+Move it?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/website)$ lore row move rul_54fe984c9b495744c0217776765a28f2 --to notes --yes
+✓ rul_54fe984c9b495744c0217776765a28f2 moved to store notes (same id; the old copy is tombstoned)
+alice (work/website)$ lore rule list
+rul_54fe984c9b495744c0217776765a28f2  Keep the agency hourly rate out of the client repo.  [notes]
+alice (work/website)$ cat .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
+{
+  "_deleted": true,
+  "_hlc": "2026-11-02T10:01:35.000Z/0001/act_05e99e22e9e86e96fe4daa7777994603",
+  "_table": "rules",
+  "_v": 2,
+  "id": "rul_54fe984c9b495744c0217776765a28f2",
+  "updated_at": "2026-11-02T10:00:00.000000001Z",
+  "updated_by": "act_05e99e22e9e86e96fe4daa7777994603"
+}
+
+### no way back
+alice (work/website)$ lore row move rul_54fe984c9b495744c0217776765a28f2 --to repo --yes
+ERROR: [E_UNSUPPORTED] rul_54fe984c9b495744c0217776765a28f2 was in store repo before and left it; a row never returns to a place it left
+  hint: keep it in notes
+(exit 23)
+alice (work/website)$ lore rule list
+rul_54fe984c9b495744c0217776765a28f2  Keep the agency hourly rate out of the client repo.  [notes]
+
+### detach a store
+alice (work/website)$ lore store remove notes/golang --yes
+✓ detached folder entry notes/golang from .lore/stores.yaml; its rows stay in the store (`lore store forget` drops this machine's copy); commit the file to share
+alice (work/website)$ lore store remove notes
+ERROR: [E_NEEDS_CONFIRM] store remove notes: detach store notes (file://~/stores/agency-notes) from this repo? its rows stay in the store
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/website)$ lore store remove notes --yes
+✓ detached store notes from .lore/stores.yaml; its rows stay in the store (`lore store forget` drops this machine's copy); commit the file to share
+alice (work/website)$ lore store list
+stores:
+  NAME  URL  FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH  ADDRESS
+count: 0
+alice (work/website)$ lore rule list
+(no rules)
+alice (work/website)$ ls ~/stores/agency-notes
+golang
+lore-store.yaml

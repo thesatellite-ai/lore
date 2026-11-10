@@ -1,0 +1,82 @@
+
+### invite
+tomas (work/acme-hub)$ lore team invite mira@agency.example --role dev,reviewer --project acme-hub
+✓ invite inv_7a670ae8548ed05bf57ad29ad0759504 written to store agency (expires 2026-11-16)
+Send this to mira@agency.example (it holds no secret):
+  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+tomas (work/acme-hub)$ lore team invite ana@agency.example --type contractor --expires 30d
+✓ invite inv_2ad3618e878ebbf527d34d446ef4f891 written to store agency (expires 2026-12-02)
+Send this to ana@agency.example (it holds no secret):
+  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+
+### invite refusals
+tomas (work/acme-hub)$ lore team invite mira@agency.example
+ERROR: [E_INVALID_INPUT] invite inv_7a670ae8548ed05bf57ad29ad0759504 for mira@agency.example is still pending (until 2026-11-16); one invite per person
+  hint: lore team invite resend mira@agency.example prints it again; lore team invite revoke mira@agency.example ends it
+(exit 20)
+tomas (work/acme-hub)$ lore team invite bo@agency.example --role dev
+ERROR: [E_INVALID_INPUT] --role is applied on each --project, and no --project is given
+  hint: --project <project>
+(exit 20)
+tomas (work/acme-hub)$ lore --setup personal team invite bo@agency.example
+ERROR: [E_REFUSED] setup personal is a solo setup; team invites are written from an admin setup of the org
+  hint: run with --setup <an admin setup>, or ask the org admin to invite
+(exit 23)
+
+### list
+tomas (work/acme-hub)$ lore team invite list
+invites:
+  ID                                    EMAIL                GITHUB  ROLES          PROJECTS                              PERIOD_TYPE  STATUS   EXPIRES_ON  ACCEPTED_BY  CREATED_BY                            UPDATED_BY
+  inv_7a670ae8548ed05bf57ad29ad0759504  mira@agency.example          dev, reviewer  prj_162df51b7f78b785c97c26b41ea89666  employee     pending  2026-11-16               act_54fe984c9b495744c0217776765a28f2  act_54fe984c9b495744c0217776765a28f2
+  inv_2ad3618e878ebbf527d34d446ef4f891  ana@agency.example                                                                contractor   pending  2026-12-02               act_54fe984c9b495744c0217776765a28f2  act_54fe984c9b495744c0217776765a28f2
+tomas (work/acme-hub)$ lore team invite list --status pending --json
+{
+  "invites": [
+    {
+      "id": "inv_7a670ae8548ed05bf57ad29ad0759504",
+      "email": "mira@agency.example",
+      "roles": [
+        "dev",
+        "reviewer"
+      ],
+      "projects": [
+        "prj_162df51b7f78b785c97c26b41ea89666"
+      ],
+      "period_type": "employee",
+      "status": "pending",
+      "expires_on": "2026-11-16",
+      "created_by": "act_54fe984c9b495744c0217776765a28f2",
+      "updated_by": "act_54fe984c9b495744c0217776765a28f2"
+    },
+    {
+      "id": "inv_2ad3618e878ebbf527d34d446ef4f891",
+      "email": "ana@agency.example",
+      "period_type": "contractor",
+      "status": "pending",
+      "expires_on": "2026-12-02",
+      "created_by": "act_54fe984c9b495744c0217776765a28f2",
+      "updated_by": "act_54fe984c9b495744c0217776765a28f2"
+    }
+  ]
+}
+
+### resend and revoke
+tomas (work/acme-hub)$ lore team invite resend mira@agency.example
+id: inv_7a670ae8548ed05bf57ad29ad0759504
+text: lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+tomas (work/acme-hub)$ lore team invite revoke ana@agency.example
+ERROR: [E_NEEDS_CONFIRM] Revoke invite inv_2ad3618e878ebbf527d34d446ef4f891 for ana@agency.example?
+  hint: nothing written; confirm with --yes (or "yes": true over lore api)
+(exit 26)
+tomas (work/acme-hub)$ lore team invite revoke ana@agency.example --yes
+id: inv_2ad3618e878ebbf527d34d446ef4f891
+status: revoked
+tomas (work/acme-hub)$ lore team invite resend ana@agency.example
+ERROR: [E_INVITE_REVOKED] invite inv_2ad3618e878ebbf527d34d446ef4f891 was revoked
+  hint: lore team invite ana@agency.example
+(exit 23)
+tomas (work/acme-hub)$ lore team invite list
+invites:
+  ID                                    EMAIL                GITHUB  ROLES          PROJECTS                              PERIOD_TYPE  STATUS   EXPIRES_ON  ACCEPTED_BY  CREATED_BY                            UPDATED_BY
+  inv_7a670ae8548ed05bf57ad29ad0759504  mira@agency.example          dev, reviewer  prj_162df51b7f78b785c97c26b41ea89666  employee     pending  2026-11-16               act_54fe984c9b495744c0217776765a28f2  act_54fe984c9b495744c0217776765a28f2
+  inv_2ad3618e878ebbf527d34d446ef4f891  ana@agency.example                                                                contractor   revoked  2026-12-02               act_54fe984c9b495744c0217776765a28f2  act_54fe984c9b495744c0217776765a28f2

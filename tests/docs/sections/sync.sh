@@ -61,6 +61,11 @@ on alice work/website "git log --oneline -2 main"
 on alice work/website "git push -q origin main"
 on bob work/website "git pull -q && lore rule list"
 
+note "peek and promote refusals"
+on! bob work/website "lore sync peek feature/payments"
+on alice work/website "git branch --show-current"
+on! alice work/website "lore sync promote $r_pw --to feature/payments"
+
 # --- docs/sync/conflicts-and-duplicates.md ----------------------------------------------
 note "merge by field"
 on alice work/website "git checkout -q main && git pull -q --no-rebase origin main"
@@ -90,52 +95,83 @@ on bob work/website "git pull -q --no-rebase origin main"
 on alice work/website "lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main"
 on bob work/website "lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'"
 on bob work/website "git pull -q --no-rebase origin main"
-on bob work/website "lore sync dupes"
+on bob work/website "lore memory list | grep -i invoice"
 local m_a m_b
 m_a=$(grep -o 'mem_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 1p)
 m_b=$(grep -o 'mem_[0-9a-f]\{32\}' <<<"$LAST_OUT" | sed -n 2p)
+# merge-rows folds the duplicate on the 0.1.18 core: references move to the kept row,
+# the dropped row goes to the trash in one batch.
 on bob work/website "lore sync merge-rows memories --keep $m_a --drop $m_b"
 on bob work/website "lore memory list"
+on bob work/website "lore trash list"
 on bob work/website "git add -A && git commit -qm 'lore: fold duplicate memory' && git push -q origin main"
 
 note "file and database conflict"
 on alice work/website "git pull -q --no-rebase origin main"
-on alice work/website "LORE_SYNC=0 lore memory edit $m_whatsapp --body 'The client replies faster on WhatsApp than by email.'"
+# A memory's file is the truth (core-owned row): a hand edit of the file wins, and
+# there is no database copy to conflict with it.
 on alice work/website "sed -i 's/than email/than email or phone/' .lore/data/memories/$m_whatsapp.json"
+on alice work/website "lore memory list"
 on alice work/website "lore sync"
 on alice work/website "lore sync conflicts"
-on alice work/website "lore sync resolve 1 --take other"
-on alice work/website "lore memory list"
 on alice work/website "git add -A && git commit -qm 'lore: whatsapp wording' && git push -q origin main"
 
 # --- docs/sync/trash-and-purge.md -------------------------------------------------------
 note "trash"
 on alice work/website "git rm -q .lore/data/memories/$m_whatsapp.json"
 on alice work/website "lore memory list"
-on alice work/website "lore sync trash"
-local t_no; t_no=$(grep -o '^#[0-9]*' <<<"$LAST_OUT" | head -1 | tr -d '#')
-on alice work/website "lore sync trash restore $t_no"
+# A row file removed with git is not in lore's trash: the file is the truth, so the
+# row comes back from git (lore trash holds rows deleted with a lore command).
+on alice work/website "git checkout HEAD -- .lore/data/memories/$m_whatsapp.json"
 on alice work/website "lore memory list"
 on alice work/website "git add -A && git status --short"
 
 note "export"
 on alice work/website "rm -rf .lore/data && lore sync status"
-on alice work/website "lore sync export --all"
-on alice work/website "git status --short"
+# The row files are the truth (STORE_SERVER_SPEC 3): a deleted .lore/data comes back
+# from git, and nothing is lost.
+on alice work/website "git checkout -q HEAD -- .lore/data && git status --short"
 
 note "purge"
 on alice work/website "lore memory archive $m_whatsapp && git commit -qam 'lore: archive whatsapp memory'"
-on alice work/website "lore sync purge --archived-before 0d --dry-run"
-on! alice work/website "lore sync purge --archived-before 0d"
-on alice work/website "lore sync purge --archived-before 0d --confirm"
+on alice work/website "lore trash purge --archived-before 0d --dry-run"
+on! alice work/website "lore trash purge --archived-before 0d"
+on alice work/website "lore trash purge --archived-before 0d --confirm"
 on alice work/website "cat .lore/data/_purged.json"
 on alice work/website "git add -A && git status --short && git commit -qm 'lore: purge archived rows' && git push -q origin main"
 
+note "delete and restore"
+on alice work/website "lore memory add --body 'The demo is on Friday at 10.'"
+local m_demo; m_demo=$(id mem)
+on alice work/website "lore memory delete $m_demo --reason 'the demo moved' --yes"
+on alice work/website "lore trash list"
+on alice work/website "lore trash show $m_demo"
+on alice work/website "lore trash restore $m_demo"
+on alice work/website "lore memory list | grep demo"
+
+note "bulk delete and undo"
+on alice work/website "lore memory add --body 'Staging deploys at 9.' >/dev/null && lore memory add --body 'Production deploys on Tuesday.' >/dev/null"
+on alice work/website "lore memory delete --where 'body~=deploys' --dry-run"
+on alice work/website "lore memory delete --where 'body~=deploys' --yes"
+local b_del; b_del=$(id bat)
+on alice work/website "lore trash stats"
+on alice work/website "lore batch list"
+on alice work/website "lore batch show $b_del"
+on alice work/website "lore batch undo $b_del --yes"
+on alice work/website "lore memory list | grep deploys"
+
+note "local copies"
+on alice work/website "lore trash list --local"
+on alice work/website "git add -A && git commit -qm 'lore: demo and deploy notes' && git push -q origin main"
+
 # --- docs/sync/hooks-and-merge-driver.md ------------------------------------------------
 note "hooks"
-on alice work/website "lore sync install-git"
+# lore wires the hooks, the merge driver and .gitattributes after every command; there
+# is no command to run for it.
+on alice work/website "lore sync status >/dev/null"
 on alice work/website "ls .git/hooks | grep -v sample"
-on alice work/website "git config --get-regexp '^merge\\.lore'"
+# The driver line names the lore binary by its full path; shortened here.
+on alice work/website "git config --get-regexp '^merge\\.lore' | sed \"s|'/[^']*'|/path/to/lore|\""
 on alice work/website "cat .git/hooks/pre-commit"
 
 note "commit refused"
@@ -154,7 +190,13 @@ on alice work/website "grep -A 6 '^on:' .github/workflows/lore-sync-merge.yml"
 note "workflow automatic"
 on alice work/website "lore sync install-action --auto"
 on alice work/website "grep -A 7 '^on:' .github/workflows/lore-sync-merge.yml"
-on alice work/website "lore sync uninstall-action"
+on alice work/website "rm .github/workflows/lore-sync-merge.yml"
+
+note "workflow not ours"
+on alice work/website "mkdir -p .github/workflows && printf 'name: our own merge job\n' > .github/workflows/lore-sync-merge.yml"
+on! alice work/website "lore sync install-action"
+on alice work/website "lore sync install-action --force --lore-version v0.1.18 | head -1 && grep -m1 -n 'v0.1.18' .github/workflows/lore-sync-merge.yml"
+on alice work/website "rm .github/workflows/lore-sync-merge.yml"
 
 note "ci merge"
 on bob work/website "git pull -q --no-rebase origin main"
@@ -177,3 +219,14 @@ on alice work/app "lore sync fix-projects --dry-run"
 on alice work/app "lore sync fix-projects"
 on alice work/app "lore project list"
 on alice work/app "git add -A && git commit -qm 'lore: one project' && git push -q origin main"
+
+# --- docs/sync/conflicts-and-duplicates.md: lint after merges ---------------------------
+note "lint"
+on alice work/website "git pull -q --no-rebase origin main"
+on alice work/website "lore memory add --body 'The client signs off every release on Fridays.'"
+local m_sign; m_sign=$(id mem)
+on alice work/website "lore rule add --body 'Ship only after the client sign-off, see \${row:$m_sign}.'"
+on alice work/website "lore memory delete $m_sign --yes"
+on alice work/website "lore lint"
+on alice work/website "lore trash restore $m_sign >/dev/null && lore lint --code dangling_ref"
+on alice work/website "git add -A && git commit -qm 'lore: sign-off rule' && git push -q origin main"

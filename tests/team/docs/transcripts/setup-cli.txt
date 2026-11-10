@@ -1,0 +1,177 @@
+
+### list
+tomas (work/agency/site)$ lore setup list
+setups:
+  NAME      KIND   ORG     DEFAULT  FOLDERS             HEALTH
+  agency    admin  agency  true     ~/work/agency/**    not checked yet (lore doctor --all)
+  personal  solo           false    ~/work/personal/**  not checked yet (lore doctor --all)
+active: agency (folder: ~/work/agency/**)
+This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
+tomas (work/personal/dotfiles)$ lore setup list
+setups:
+  NAME      KIND   ORG     DEFAULT  FOLDERS             HEALTH
+  agency    admin  agency  true     ~/work/agency/**    not checked yet (lore doctor --all)
+  personal  solo           false    ~/work/personal/**  not checked yet (lore doctor --all)
+active: personal (folder: ~/work/personal/**)
+This folder: no org, no attached store, written as Tomas Weber <tomas@home.example> — matches setup personal (folder ~/work/personal/**)
+tomas (work/personal/dotfiles)$ lore whoami --explain | sed -n '/setup resolution/,$p'
+setup resolution (first step that answers wins):
+  ✗ 1. flag     --setup not given
+  ✗ 2. env      LORE_SETUP is not set
+  ✗ 3. repo     no repo_setups pin for rep_7a670ae8548ed05bf57ad29ad0759504
+  ✓ 4. folder   ~/work/personal/**
+  · 5. org      
+  · 6. default  
+  · 7. none     
+
+### show
+tomas$ lore setup show personal
+setup:
+  name: personal
+  kind: solo
+  folders: ~/work/personal/**
+  identity:
+    key: human:tomas@home.example
+    name: Tomas Weber
+  personal_store: none
+
+### choose
+tomas (work/agency/site)$ lore --setup personal whoami | head -2
+org        agency  (matched by: own pattern github.com/agency/* of agency)
+setup      personal  (flag: --setup personal)
+tomas (work/agency/site)$ lore setup use personal
+export LORE_SETUP=personal
+tomas (work/agency/site)$ lore setup use personal --here
+pinned this repo to setup personal (this machine only; lore setup use --here --clear removes the pin)
+tomas (work/agency/site)$ lore setup list | tail -2
+active: personal (repo: rep_2ad3618e878ebbf527d34d446ef4f891)
+This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup personal (repo rep_2ad3618e878ebbf527d34d446ef4f891)
+tomas (work/agency/site)$ lore setup use --here --clear
+cleared this repo's setup pin; lore setup list shows the setup lore picks here now
+tomas (work/agency/site)$ lore --setup nope task add 'check the sitemap'
+ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: agency, personal
+  hint: lore setup list
+(exit 27)
+
+### edit
+tomas$ lore setup edit personal --folder '~/work/personal/**' --folder '~/src/**' --note 'side projects and dotfiles'
+name: personal
+changed: true
+tomas$ lore setup show personal
+setup:
+  name: personal
+  kind: solo
+  folders: ~/work/personal/**, ~/src/**
+  identity:
+    key: human:tomas@home.example
+    name: Tomas Weber
+  personal_store: none
+  note: side projects and dotfiles
+
+### disable and enable
+tomas$ lore setup disable personal
+disabled setup personal: it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable personal turns it back on
+tomas (work/personal/dotfiles)$ lore --setup personal task add 'rotate the backup key'
+ERROR: [E_SETUP_NOT_FOUND] setup "personal" is disabled; it matches nothing until it is enabled
+  hint: lore setup enable personal
+(exit 27)
+tomas$ lore setup enable personal
+enabled setup personal
+
+### remove and restore
+tomas (work/personal/dotfiles)$ lore setup use personal --here
+pinned this repo to setup personal (this machine only; lore setup use --here --clear removes the pin)
+tomas$ lore setup remove personal
+moved setup personal to the trash; lore setup trash restore personal brings it back
+tomas$ lore setup trash list
+setups in the trash (lore setup trash restore <name> brings one back):
+  personal  solo  removed 2026-11-02T10:01:25Z  — side projects and dotfiles
+tomas$ lore setup trash restore personal
+restored setup personal from the trash
+tomas$ lore setup remove personal
+moved setup personal to the trash; lore setup trash restore personal brings it back
+tomas$ lore setup trash purge personal --dry-run
+would delete for good:
+  - the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
+stays:
+  - the personal store local in ~/.lore/config.yaml
+  - every GitHub repo: lore never deletes a repository
+tomas$ lore setup trash purge personal
+ERROR: [E_NEEDS_CONFIRM] deletes: the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
+stays: the personal store local in ~/.lore/config.yaml; every GitHub repo: lore never deletes a repository
+Delete setup personal for good?
+  hint: rerun with --confirm to delete it for good (--yes never purges); --dry-run shows what stays
+(exit 26)
+tomas$ lore setup trash purge personal --confirm
+deleted for good:
+  - the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
+stays:
+  - the personal store local in ~/.lore/config.yaml
+  - every GitHub repo: lore never deletes a repository
+tomas$ lore setup trash list
+the setup trash is empty
+
+### steps
+tomas$ lore setup plan --kind solo | cut -c1-52
+steps:
+  ID              TITLE                             
+  kind            What kind of setup is this?       
+  identity        Who are you?                      
+  github          Which GitHub account?             
+  personal_store  Where do your own notes go?       
+  tools           Which coding tools do you use?    
+  secrets         Where do you keep secrets?        
+  folders         Which folders is this setup for?  
+  this_folder     This folder                       
+  summary         Summary                           
+progress:
+  SETUP  STEP  ANSWERS  CHECKS  STATUS  UPDATED_AT
+tomas$ lore setup apply side --step kind --answers '{"kind":"solo","name":"side"}' | head -4
+step: kind
+status: done
+changed: true
+wrote: ~/.lore/config.yaml
+tomas$ lore setup check side --step identity --answers '{"name":"Tomas Weber","email":"tomas@home.example"}' | head -2
+step: identity
+status: ready
+tomas$ lore setup apply side --step github --answers '{"user":"tomas-dev"}'
+ERROR: [E_SETUP_STEP_ORDER] step github needs identity first
+  hint: run lore setup apply side --step identity
+(exit 23)
+
+### import
+tomas$ lore setup import-scan --folder ~/work
+proposals:
+  SETUP  FIELDS  REPOS
+sources:
+  KIND             PATH                                                                                                STATE    DETAIL
+  config           ~/.lore/config.yaml                         found    1 org, 2 setups, 1 deleted setup
+  identity_legacy  ~/.lore/identity.yaml                       missing  
+  identity_backup  ~/.lore/identity.yaml.migrated              missing  
+  identity_legacy  ~/.lore/identity.toml                       missing  
+  identity_backup  ~/.lore/identity.toml.migrated              missing  
+  machine_db       ~/.lore/state/machine.db                    found    2 known repos
+  scan_folder      ~/work                                      found    3 lore repos (2 already known)
+  repo_stores      ~/work/agency/site/.lore/stores.yaml        missing  
+  repo_stores      ~/work/personal/dotfiles/.lore/stores.yaml  missing  
+  repo_stores      ~/work/stores/.lore/stores.yaml             found    1 store
+repos:
+  ROOT                                                                              FROM        ORG  STORES
+  ~/work/agency/site        machine.db       
+  ~/work/personal/dotfiles  machine.db       
+  ~/work/stores             scan             git@github.com:agency/notes
+covered: agency already uses org agency, side already uses the same personal store
+found:
+  config: ~/.lore/config.yaml
+banner: 
+banner_key: 
+tomas$ lore setup import --setups '[{"name":"personal","kind":"solo"}]'
+imported: personal
+skipped:
+  NAME  REASON
+
+### join
+tomas$ lore setup join lore-invite:v1:garbage
+ERROR: [E_INVITE_INVALID] this is not a lore invite; copy the whole line starting with lore-invite:v1: (the text after the prefix is cut or changed)
+  hint: ask the person who invited you to run lore team invite resend <your email>
+(exit 20)

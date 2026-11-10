@@ -1,0 +1,395 @@
+
+### kinds
+alice (work/infra)$ lore resource kind add host --description 'a server we run'
+added kind knd_…9504 host in this repo
+alice (work/infra)$ lore resource field add host provider --type text --required --values hetzner,aws
+added field fld_…7ab0 host.provider (text)
+alice (work/infra)$ lore resource field add host ip --type ip
+added field fld_…c1c9 host.ip (ip)
+alice (work/infra)$ lore resource field add host os --type text --default ubuntu-24.04
+added field fld_…a6bb host.os (text)
+alice (work/infra)$ lore resource kind add service --description 'an app we deploy'
+added kind knd_…f891 service in this repo
+alice (work/infra)$ lore resource field add service runs_on --type ref --ref-kind host --required
+added field fld_…8272 service.runs_on (ref)
+alice (work/infra)$ lore resource field add service url --type url
+added field fld_…dbee service.url (url)
+alice (work/infra)$ lore resource field add service db_password --type secret_ref
+added field fld_…7441 service.db_password (secret_ref), internal by default: an entry NAME in a secret manager, never the key
+
+### kind show
+alice (work/infra)$ lore resource kind show host
+knd_7a670ae8548ed05bf57ad29ad0759504  host  (repo)
+  a server we run
+  ip  ip
+  os  text  default ubuntu-24.04
+  provider  text  required  values hetzner, aws
+alice (work/infra)$ lore resource kinds
+ID	KIND	STORE	ROWS	FIELDS
+knd_7a670ae8548ed05bf57ad29ad0759504	host	repo	0	ip, os, provider
+knd_2ad3618e878ebbf527d34d446ef4f891	service	repo	0	db_password, runs_on, url
+
+### add
+alice (work/infra)$ lore resource add host hub_prod --set provider=hetzner --set ip=203.0.113.10
+created res_…d716  host  repo:host/hub_prod
+  ip = 203.0.113.10; os = ubuntu-24.04; provider = hetzner
+  default: os
+alice (work/infra)$ lore resource add host hub_stage --set provider=aws --set ip=203.0.113.11
+created res_…342c  host  repo:host/hub_stage
+  ip = 203.0.113.11; os = ubuntu-24.04; provider = aws
+  default: os
+
+### add refused
+alice (work/infra)$ lore resource add host hub_test --set provider=linode
+ERROR: [E_RESOURCE_INVALID] host hub_test: provider "linode" is not one of hetzner, aws
+  hint: lore resource kind show host
+(exit 20)
+alice (work/infra)$ lore resource add host Hub-Test --set provider=aws
+ERROR: [E_RESOURCE_NAME] host Hub-Test: the name does not fit the kind's name format
+  hint: lore resource kind show host
+(exit 20)
+alice (work/infra)$ lore resource add service hub_cron
+ERROR: [E_RESOURCE_INVALID] service hub_cron: required field runs_on is missing
+  hint: lore resource kind show service
+(exit 20)
+
+### refs
+alice (work/infra)$ lore resource add service hub_api --set runs_on=hub_prod --set url=https://api.example.com --set db_password=gopass://acme/hub/db
+created res_…9666  service  repo:service/hub_api
+  db_password = gopass://acme/hub/db; runs_on = hub_prod; url = https://api.example.com
+alice (work/infra)$ lore resource add service hub_web --set runs_on=hub_prod --set url=https://www.example.com
+created res_…38ea  service  repo:service/hub_web
+  runs_on = hub_prod; url = https://www.example.com
+
+### list and show
+alice (work/infra)$ lore resource list host
+KIND	NAME	IP	OS	PROVIDER	CHECKED
+host	hub_prod	203.0.113.10	ubuntu-24.04	hetzner	
+host	hub_stage	203.0.113.11	ubuntu-24.04	aws	
+alice (work/infra)$ lore resource list service --where runs_on=hub_prod --sort name:desc
+KIND	NAME	DB_PASSWORD	RUNS_ON	URL	CHECKED
+service	hub_web		hub_prod	https://www.example.com	
+service	hub_api	gopass://acme/hub/db	hub_prod	https://api.example.com	
+alice (work/infra)$ lore resource show hub_api
+res_162df51b7f78b785c97c26b41ea89666  service  repo:service/hub_api
+  db_password = gopass://acme/hub/db
+  runs_on = hub_prod
+  url = https://api.example.com
+created 2026-11-02T10:01:20Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:01:20Z by act_54fe984c9b495744c0217776765a28f2
+
+### graph
+alice (work/infra)$ lore resource graph hub_api --down
+service hub_api
+└── runs_on  host hub_prod
+alice (work/infra)$ lore resource graph hub_prod --up
+host hub_prod
+├── runs_on ← service hub_api
+└── runs_on ← service hub_web
+
+### impact
+alice (work/infra)$ lore resource list service --json | grep -o 'res_[0-9a-f]*' | head -1
+res_162df51b7f78b785c97c26b41ea89666
+alice (work/infra)$ lore task add 'Rotate the hub_api database password' --ref res_162df51b7f78b785c97c26b41ea89666
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 — Rotate the hub_api database password [medium]
+lore live: (live, pushed)
+alice (work/infra)$ lore resource impact hub_prod
+what breaks if host hub_prod goes down
+  1  service    hub_api              runs_on → hub_prod
+  1  service    hub_web              runs_on → hub_prod
+  open  task tsk_05e99e22e9e86e96fe4daa7777994603 (mentions hub_api)
+
+### check and stale
+alice (work/infra)$ lore resource stale
+KIND	NAME	LAST_CHECKED	AGE
+host	hub_prod		never
+host	hub_stage		never
+service	hub_api		never
+service	hub_web		never
+alice (work/infra)$ lore resource check hub_prod --note 'looked in the provider console'
+✓ checked hub_prod now (res_…d716)
+alice (work/infra)$ lore resource stale
+KIND	NAME	LAST_CHECKED	AGE
+host	hub_stage		never
+service	hub_api		never
+service	hub_web		never
+
+### edit and history
+alice (work/infra)$ lore resource edit hub_prod --set os=debian-12
+✓ edited host hub_prod (res_…d716)
+alice (work/infra)$ lore resource edit hub_stage --unset ip
+✓ edited host hub_stage (res_…342c)
+alice (work/infra)$ lore resource history hub_prod
+2026-11-02  os  ubuntu-24.04 → debian-12  act_54fe984c9b495744c0217776765a28f2
+2026-11-02  ip  set 203.0.113.10  act_54fe984c9b495744c0217776765a28f2
+2026-11-02  provider  set hetzner  act_54fe984c9b495744c0217776765a28f2
+2026-11-02  os  set ubuntu-24.04  act_54fe984c9b495744c0217776765a28f2
+alice (work/infra)$ lore resource history hub_prod --field os
+2026-11-02  os  ubuntu-24.04 → debian-12  act_54fe984c9b495744c0217776765a28f2
+2026-11-02  os  set ubuntu-24.04  act_54fe984c9b495744c0217776765a28f2
+
+### clone and rename
+alice (work/infra)$ lore resource clone hub_prod hub_prod_2 --set ip=203.0.113.12
+created res_…5139  host  repo:host/hub_prod_2
+  ip = 203.0.113.12; os = debian-12; provider = hetzner
+alice (work/infra)$ lore resource rename hub_prod_2 hub_prod_new
+✓ renamed host hub_prod_2 → hub_prod_new; ids and refs unchanged (res_…5139)
+
+### bulk edit
+alice (work/infra)$ lore resource edit --kind host --where provider=hetzner --set os=debian-13 --dry-run
+would edit 2 host resources (dry run, nothing written):
+  repo:host/hub_prod  os debian-12 → debian-13
+  repo:host/hub_prod_new  os debian-12 → debian-13
+alice (work/infra)$ lore resource edit --kind host --where provider=hetzner --set os=debian-13 --yes
+edit 2 host resources; batch bat_c0f3c11a5724b0cfd74b256190d9b5b8 (undo: lore batch undo bat_c0f3c11a5724b0cfd74b256190d9b5b8)
+alice (work/infra)$ lore resource check --kind host --where provider=hetzner --yes
+check 2 host resources; batch bat_76bd560aff0771fab8457dbfa9823f10 (undo: lore batch undo bat_76bd560aff0771fab8457dbfa9823f10)
+
+### import
+alice (work/infra)$ cat ~/hosts.csv
+name,provider,ip
+hub_db,aws,203.0.113.20
+hub_cache,aws,203.0.113.21
+alice (work/infra)$ lore resource import ~/hosts.csv --kind host --dry-run
+  create  host hub_db
+  create  host hub_cache
+nothing written (dry run)
+alice (work/infra)$ lore resource import ~/hosts.csv --kind host --yes
+  create  host hub_db
+  create  host hub_cache
+imported 2 rows (2 created, 0 updated) from csv; batch bat_d4314eba822f1bf5908b2b8ded5f313a
+
+### import refused
+alice (work/infra)$ lore resource import ~/hosts2.csv --kind host --upsert-by name --yes
+ERROR: [E_RESOURCE_BATCH] resource import: host hub_mail: provider "linode" is not one of hetzner, aws; nothing written (all or nothing; --skip-errors writes the valid rows)
+  hint: lore resource kind show host
+(exit 23)
+alice (work/infra)$ lore resource import ~/hosts2.csv --kind host --upsert-by name --dry-run
+  update  host hub_db
+  error  host hub_mail  [E_RESOURCE_INVALID] host hub_mail: provider "linode" is not one of hetzner, aws
+nothing written (dry run)
+1 error (skipped)
+alice (work/infra)$ lore resource import ~/hosts2.csv --kind host --upsert-by name --skip-errors --yes
+  update  host hub_db
+  error  host hub_mail  [E_RESOURCE_INVALID] host hub_mail: provider "linode" is not one of hetzner, aws
+imported 1 row (0 created, 1 updated) from csv; batch bat_b4f4765e593d51fd1352985e8af3a5b0
+1 error (skipped)
+
+### export
+alice (work/infra)$ lore resource export --kind host --format csv
+name,ip,os,provider
+hub_cache,203.0.113.21,ubuntu-24.04,aws
+hub_db,203.0.113.30,ubuntu-24.04,aws
+hub_prod,203.0.113.10,debian-13,hetzner
+hub_prod_new,203.0.113.12,debian-13,hetzner
+hub_stage,,ubuntu-24.04,aws
+alice (work/infra)$ lore resource export --kind service --format yaml --where runs_on=hub_prod
+resources:
+    - kind: service
+      name: hub_api
+      fields:
+        db_password: gopass://acme/hub/db
+        runs_on: hub_prod
+        url: https://api.example.com
+    - kind: service
+      name: hub_web
+      fields:
+        runs_on: hub_prod
+        url: https://www.example.com
+
+### repoint
+alice (work/infra)$ lore resource repoint hub_prod hub_prod_new --dry-run
+would repoint 2 rows from hub_prod to hub_prod_new:
+  service/hub_api runs_on
+  service/hub_web runs_on
+then archive hub_prod; nothing written (dry run)
+alice (work/infra)$ lore resource repoint hub_prod hub_prod_new --yes
+repointed 2 rows from hub_prod to hub_prod_new:
+  service/hub_api runs_on
+  service/hub_web runs_on
+archived hub_prod (replaced_by hub_prod_new); batch bat_28f8d32584b2db54ffb146bede5b03df
+alice (work/infra)$ lore resource add service hub_admin --set runs_on=hub_prod
+ERROR: [E_RESOURCE_ARCHIVED] service hub_admin: runs_on: hub_prod is archived
+  hint: ref its replacement host hub_prod_new
+(exit 23)
+alice (work/infra)$ lore resource list host --archived
+KIND	NAME	IP	OS	PROVIDER	CHECKED
+host	hub_cache	203.0.113.21	ubuntu-24.04	aws	
+host	hub_db	203.0.113.30	ubuntu-24.04	aws	2026-11-02
+host	hub_prod	203.0.113.10	debian-13	hetzner	2026-11-02
+host	hub_prod_new	203.0.113.12	debian-13	hetzner	2026-11-02
+host	hub_stage		ubuntu-24.04	aws	2026-11-02
+
+### merge
+alice (work/infra)$ lore resource edit hub_db --unset ip
+✓ edited host hub_db (res_…e913)
+alice (work/infra)$ lore resource merge hub_cache --into hub_db --dry-run
+would merge hub_cache into hub_db
+would repoint 0 rows from hub_cache to hub_db:
+then archive hub_cache; nothing written (dry run)
+values filled from hub_cache: ip
+alice (work/infra)$ lore resource merge hub_cache --into hub_db --yes
+merged host hub_cache into hub_db
+values filled from hub_cache: ip
+repointed 0 rows from hub_cache to hub_db:
+archived hub_cache (replaced_by hub_db); batch bat_4c590afb2a0cc7ae1b97b7e4e62d6c38
+
+### archive and delete
+alice (work/infra)$ lore resource archive hub_stage
+✓ archived hub_stage (res_…342c)
+alice (work/infra)$ lore resource delete hub_db
+ERROR: [E_NEEDS_CONFIRM] run resource delete?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/infra)$ lore resource delete hub_prod_new --with-dependents --dry-run
+would delete 3 resources: host hub_prod_new, service hub_api, service hub_web (dry run, nothing written)
+alice (work/infra)$ lore resource delete hub_db --yes
+✓ res_…e913 (hub_db) moved to the trash (restore: lore trash restore res_3b6283bc4392c556bbae5f094246e913)
+
+### fields
+alice (work/infra)$ lore resource field edit host provider --add-value linode
+✓ edited field host.provider (fld_…7ab0)
+alice (work/infra)$ lore resource field add host region --type text
+added field fld_…d91b host.region (text)
+alice (work/infra)$ lore resource edit hub_prod_new --set region=eu-1
+✓ edited host hub_prod_new (res_…5139)
+alice (work/infra)$ lore resource field retype host region number --dry-run
+ERROR: [E_RESOURCE_TYPE] 1 value does not fit number: res_f147dd95f1aaf742dd4f5214843a5139 hub_prod_new
+  hint: fix them, or pass --keep-as-text to keep values that do not fit as text and quarantine them; nothing written
+(exit 20)
+alice (work/infra)$ lore resource field rename host os os_image
+✓ renamed field host.os → os_image; no values changed (fld_…a6bb)
+alice (work/infra)$ lore resource field remove host region
+ERROR: [E_RESOURCE_IN_USE] host.region has values on 1 row
+  hint: pass --drop to remove the values in the same commit
+(exit 23)
+alice (work/infra)$ lore resource field remove host region --drop --yes
+✓ removed field host.region (fld_…d91b); values dropped from 1 row
+alice (work/infra)$ lore resource field add host renews --type date --remind-before 30d
+added field fld_…294c host.renews (date)
+
+### kind edit and rename
+alice (work/infra)$ lore resource kind edit host --description 'a server or VM we run'
+✓ edited kind host (knd_…9504)
+alice (work/infra)$ lore resource kind rename host server
+✓ renamed kind host → server; ids unchanged (knd_…9504)
+alice (work/infra)$ lore resource kinds
+ID	KIND	STORE	ROWS	FIELDS
+knd_7a670ae8548ed05bf57ad29ad0759504	server	repo	4	ip, os_image, provider, renews
+knd_2ad3618e878ebbf527d34d446ef4f891	service	repo	2	db_password, runs_on, url
+
+### secret value
+alice (work/infra)$ lore resource field add server access_key --type text
+added field fld_…1968 server.access_key (text)
+alice (work/infra)$ lore resource edit hub_prod_new --set access_key=AKIA''IOSFODNN7EXAMPLE
+ERROR: [E_NEEDS_CONFIRM] fields looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+  hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
+(exit 26)
+alice (work/infra)$ lore resource edit hub_prod_new --set access_key=AKIA''IOSFODNN7EXAMPLE --secret-ref gopass://acme/hub/aws-key --yes
+✓ edited server hub_prod_new (res_…5139)
+alice (work/infra)$ lore resource show hub_prod_new
+res_f147dd95f1aaf742dd4f5214843a5139  server  repo:server/hub_prod_new
+  access_key = ${secret:gopass://acme/hub/aws-key}
+  ip = 203.0.113.12
+  os_image = debian-13
+  provider = hetzner
+  checked 2026-11-02T10:00:00.000000001Z (by edit)
+created 2026-11-02T10:02:45Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:05:50Z by act_54fe984c9b495744c0217776765a28f2
+
+### secret ref field
+alice (work/infra)$ lore resource add service hub_jobs --set runs_on=hub_prod_new --set db_password=acme/hub/jobs-db
+created res_…1163  service  repo:service/hub_jobs
+  db_password = gopass://acme/hub/jobs-db; runs_on = hub_prod_new
+
+### sensitive
+alice (work/infra)$ lore resource field add server root_user --type text --sensitive
+added field fld_…8173 server.root_user (text)
+alice (work/infra)$ lore resource edit hub_prod_new --set root_user=deploy
+✓ edited server hub_prod_new (res_…5139)
+alice (work/infra)$ lore resource list server
+KIND	NAME	ACCESS_KEY	IP	OS_IMAGE	PROVIDER	RENEWS	ROOT_USER	CHECKED
+server	hub_prod_new	${secret:gopass://acme/hub/aws-key}	203.0.113.12	debian-13	hetzner		•••	2026-11-02
+alice (work/infra)$ lore resource show hub_prod_new --show-sensitive
+ERROR: [E_NEEDS_CONFIRM] resource show?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/infra)$ lore resource show hub_prod_new --show-sensitive --yes
+res_f147dd95f1aaf742dd4f5214843a5139  server  repo:server/hub_prod_new
+  access_key = ${secret:gopass://acme/hub/aws-key}
+  ip = 203.0.113.12
+  os_image = debian-13
+  provider = hetzner
+  root_user = deploy
+  checked 2026-11-02T10:00:00.000000002Z (by edit)
+created 2026-11-02T10:02:45Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:06:10Z by act_54fe984c9b495744c0217776765a28f2
+
+### ambiguous
+alice (work/infra)$ lore resource add service hub_prod_new --set runs_on=hub_prod_new
+created res_…6bbb  service  repo:service/hub_prod_new
+  runs_on = hub_prod_new
+alice (work/infra)$ lore resource show hub_prod_new
+ERROR: [E_RESOURCE_AMBIGUOUS] "hub_prod_new" matches 2 resources: repo:server/hub_prod_new, repo:service/hub_prod_new
+  hint: name it by its qualified name (repo:server/hub_prod_new or repo:service/hub_prod_new) or its res_ id
+(exit 21)
+alice (work/infra)$ lore resource show server/hub_prod_new | head -1
+res_f147dd95f1aaf742dd4f5214843a5139  server  repo:server/hub_prod_new
+alice (work/infra)$ lore resource show repo:service/hub_prod_new | head -1
+res_2537f9b2f7de77bfe5ca958860216bbb  service  repo:service/hub_prod_new
+
+### lint and report
+alice (work/infra)$ lore resource edit --kind server --where provider=hetzner --set renews=2026-11-20 --yes
+edit 1 server resources; batch bat_b69e8368dd4986838455061d5d9e5ed7 (undo: lore batch undo bat_b69e8368dd4986838455061d5d9e5ed7)
+alice (work/infra)$ lore resource lint
+remind           server hub_prod_new.renews     2026-11-20 is within 30d
+1 findings
+alice (work/infra)$ lore resource report
+resources   5 (service 4, server 1)
+stale       0
+unchecked   4: service hub_api, service hub_jobs, service hub_prod_new, service hub_web
+dangling    0
+quarantined 0
+  details: lore resource lint
+open links  1: task tsk_05e99e22e9e86e96fe4daa7777994603
+rotate      2: gopass://acme/hub/db, gopass://acme/hub/jobs-db
+
+### files
+alice (work/infra)$ git status --short .lore/data
+ M .lore/data/_meta.json
+?? .lore/data/kind_fields/
+?? .lore/data/kinds/
+?? .lore/data/knowledge_refs/
+?? .lore/data/resources/
+
+### adopt
+alice (work/infra)$ lore store init infra file://$HOME/stores/infra
+✓ created store infra (sto_0aaebe6aca5bb46cc521869f5ba2a61f) at file://~/stores/infra; recorded in .lore/stores.yaml; commit it to share
+alice (work/infra)$ lore resource adopt --from repo --to infra
+ERROR: [E_NEEDS_CONFIRM] move 2 kinds (server, service) and 9 field rows from repo into infra?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/infra)$ lore resource adopt --from repo --to infra --yes
+✓ adopted 2 kinds (server, service) and 9 field rows from repo into infra; ids unchanged
+alice (work/infra)$ lore resource kinds
+ID	KIND	STORE	ROWS	FIELDS
+knd_7a670ae8548ed05bf57ad29ad0759504	server	infra	4	access_key, ip, os_image, provider, renews, root_user
+knd_2ad3618e878ebbf527d34d446ef4f891	service	infra	4	db_password, runs_on, url
+alice (work/infra)$ lore resource rehome
+✓ every kind and ref of this repo is visible from here
+
+### try it
+alice (work/shop)$ lore resource kind add host --description 'a server we run'
+added kind knd_…9504 host in this repo
+alice (work/shop)$ lore resource field add host provider --type text --required --values hetzner,aws
+added field fld_…7ab0 host.provider (text)
+alice (work/shop)$ lore resource kind add service --description 'an app we deploy'
+added kind knd_…f891 service in this repo
+alice (work/shop)$ lore resource field add service runs_on --type ref --ref-kind host --required
+added field fld_…8272 service.runs_on (ref)
+alice (work/shop)$ lore resource add host shop_prod --set provider=hetzner
+created res_…7068  host  repo:host/shop_prod
+  provider = hetzner
+alice (work/shop)$ lore resource add service shop_api --set runs_on=shop_prod
+created res_…1991  service  repo:service/shop_api
+  runs_on = shop_prod
+alice (work/shop)$ lore resource impact shop_prod
+what breaks if host shop_prod goes down
+  1  service    shop_api             runs_on → shop_prod

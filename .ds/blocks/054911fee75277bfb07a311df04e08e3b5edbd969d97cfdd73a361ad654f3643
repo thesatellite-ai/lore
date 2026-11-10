@@ -1,0 +1,10 @@
+const (
+	DefaultLimit    = 20
+	DefaultPerTable = 10
+	// RRFK is the standard Reciprocal Rank Fusion constant.
+	RRFK = 60.0
+	// BodyMax is the label length of a body-labelled hit (truncBody).
+	BodyMax = 80
+	// lineMax caps one printed hit text (v0.1.17: 100, cut to 97 + "...").
+	lineMax = 100
+)

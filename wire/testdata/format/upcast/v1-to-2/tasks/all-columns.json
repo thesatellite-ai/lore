@@ -1,0 +1,109 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "tasks",
+  "_v": 2,
+  "approved_at": "2026-11-04T08:09:56.252002659Z",
+  "approved_by": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "approved_hash": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "assigned_team": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "assigned_to_actor_id": "act_01a1a59b891c70b78914000000000003",
+  "assignees": [
+    "fixture café — 日本 <b>&</b> \"q\"\ttab"
+  ],
+  "attempts": 3,
+  "blocked_by": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "body": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "checklist": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "claim_epoch": 3,
+  "claim_log": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "close_reason": "completed",
+  "commitment": "accepted",
+  "completed_at": "2026-11-04T08:09:56.252002659Z",
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "created_by_actor_id": "act_01a1a59b891c70b78914000000000003",
+  "deferred_until": "2026-11-04T08:09:56.252002659Z",
+  "done_by": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "done_commit": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "done_pr": 3,
+  "due_at": "2026-11-04T08:09:56.252002659Z",
+  "estimate": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "gate": "required",
+  "history": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "id": "tsk_01a1a59b891c70b7891400000000002e",
+  "idempotency_key": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "merged_at": "2026-11-04T08:09:56.252002659Z",
+  "mission_id": "msn_01a1a59b891c70b78914000000000017",
+  "parent_id": "tsk_01a1a59b891c70b7891400000000002e",
+  "plan_id": "pln_01a1a59b891c70b78914000000000019",
+  "priority": "low",
+  "project_id": "prj_01a1a59b891c70b7891400000000001d",
+  "rank": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "recur": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "repo_id": "rep_01a1a59b891c70b78914000000000020",
+  "role": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "started_at": "2026-11-04T08:09:56.252002659Z",
+  "status": "todo",
+  "tag_ids": [
+    "tag_01a1a59b891c70b7891400000000002a"
+  ],
+  "tasklist_id": "tlt_01a1a59b891c70b7891400000000002b",
+  "time_entries": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "time_open": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "time_totals": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "timebox_seconds": 3,
+  "title": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9",
+  "watchers": [
+    "fixture café — 日本 <b>&</b> \"q\"\ttab"
+  ],
+  "work_branch": "fixture café — 日本 <b>&</b> \"q\"\ttab"
+}

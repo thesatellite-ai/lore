@@ -15,7 +15,10 @@ You do not need to read the design spec to use any of this. Every command exampl
 | someone working for two companies on one laptop | [One person in two companies](use-cases/two-companies.md) | [Personal notes](use-cases/personal-notes.md) |
 | running agents on a shared plan | [Agents](agents.md) | [Agents on one mission](use-cases/agents-mission.md) |
 | curious how it works inside | [How it works](how-it-works.md) | [Concepts](concepts.md) |
-| setting your identity, joining an org, tidying stores | [Identity and stores](identity-and-stores.md) | [Getting started](getting-started.md#7-a-first-config-with-an-org) |
+| setting your identity, joining an org, tidying stores | [Identity and stores](identity-and-stores.md) | [Getting started](getting-started.md#step-7--a-first-config-with-an-org) |
+| keeping people's profiles, contacts and project roles, or someone joining or leaving | [Team profiles](profiles.md) | [Concepts](concepts.md#people-profiles-and-stints) |
+| setting up lore on a machine, several setups, or joining from an invite | [Guided setup](guided-setup.md) | [Team invites](invites.md), [Setup and invite errors](setup-errors.md) |
+| scripting setups, or managing them without a browser | [Setups from the command line](setup-cli.md) | [Guided setup](guided-setup.md#step-4--know-which-setup-a-folder-uses) |
 | stuck on an error | [Troubleshooting](troubleshooting.md) | [Commands reference](commands.md) |
 
 ## Reading order
@@ -25,7 +28,7 @@ You do not need to read the design spec to use any of this. Every command exampl
 3. [Getting started](getting-started.md): install, first config, first live task, first landing.
 4. One or two [use cases](#use-cases) close to your situation.
 5. [How it works](how-it-works.md) when you want to know what lore does in git for each command.
-6. [Commands reference](commands.md), [Agents](agents.md), [Identity and stores](identity-and-stores.md) and [Troubleshooting](troubleshooting.md) as you need them.
+6. [Commands reference](commands.md), [Agents](agents.md), [Identity and stores](identity-and-stores.md), [Team profiles](profiles.md) and [Troubleshooting](troubleshooting.md) as you need them, [Guided setup](guided-setup.md), [Setups from the command line](setup-cli.md), [Team invites](invites.md).
 
 ## Use cases
 
@@ -52,10 +55,11 @@ Two developers, one repo, two branches. Bob (an agency developer) gives Alice (a
 <!-- example: small-team#assign-across-branches only=1,3 -->
 ```console
 # bob, in billing
-$ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
+$ git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
 ✓ tsk_162d…9666 — check the checkout page on a phone [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
+lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
 $ lore sync && lore task list --mine
@@ -80,3 +84,11 @@ The same kind of story also runs against two real repos on a real git host, by h
 Two things are shortened for reading: row ids (`tsk_01a19d82ec2f7ba5968210b0efbee6fe` is shown as `tsk_01a1…e6fe`) and the few lines every fresh clone prints once while it builds its local cache. Paths look like `~/work/website`: each person in the examples has their own home folder, and `~` stands for it.
 
 All names are role words, not real companies: **the agency** (org `agency`, private store `github.com/agency/notes`), **the client** (`github.com/client/website`), **client 2** (three repos, `github.com/client2/app`, `client2/api` and `client2/infra`, that make one product) and **client 3**. The people are Alice and Bob (agency developers) and Carol (the client's developer); the agents are `agent-backend`, `agent-frontend` and friends.
+
+## Related
+
+- [Overview](overview.md) and [Concepts](concepts.md): the picture and the words before the commands.
+- [Getting started](getting-started.md): the first live task and the first landing.
+- [Commands reference](commands.md) and [Troubleshooting](troubleshooting.md).
+- [Guided setup](guided-setup.md), [Setups from the command line](setup-cli.md), [Team invites](invites.md) and [Team profiles](profiles.md).
+- [Docs home](../README.md): lore for one person, knowledge, tasks, sync and operations.

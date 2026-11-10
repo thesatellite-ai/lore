@@ -41,8 +41,5 @@ on alice $W "lore search invoices"
 on alice $W "lore search 'invoi*'"
 on alice $W "lore search 'client Fridays'"
 
-note "querylog"
-on alice $W "lore querylog list"
-
 note "no results"
 on alice $W "lore search pineapple"

@@ -18,10 +18,8 @@ In a repo without a remote, nothing is ever pushed. Tasks are still live by defa
 ```console
 # alice, in scratch
 $ lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
-✓ rul_7a67…9504 
+✓ rul_7a67…9504
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 $ lore task add 'write the README'
 ✓ tsk_2ad3…f891 — write the README [medium]
 lore live: (live, local: no remote)
@@ -37,10 +35,11 @@ $ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 ```
 <!-- /example -->
 
-Once the repo has a remote, the same task is pushed to `refs/lore/live` on the remote. It lands on `main` when it is done. See [Getting started](../getting-started.md#4-your-first-live-task).
+Once the repo has a remote, the same task is pushed to `refs/lore/live` on the remote. It lands on `main` when it is done. See [Getting started](../getting-started.md#step-4--your-first-live-task).
 
 Do you want tasks to travel with your branch like every other row? Then turn live off for tasks:
 
@@ -55,12 +54,11 @@ live:
 # alice, in scratch
 $ lore task add 'tidy the scripts folder'
 ✓ tsk_54fe…28f2 — tidy the scripts folder [medium]
-lore sync: exported 1
-lore sync: 5 file(s) in .lore/data not committed — commit them with your change
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 ```
 <!-- /example -->
 
@@ -80,3 +78,9 @@ The task is now a file in `.lore/data` on your branch ("not committed — commit
 - With no remote, live rows say `(live, local: no remote)` and stay on this machine. `lore land --all --dry-run` shows what would land once there is a remote `main` to land on.
 - Rules, decisions and memories were never live by default. They still travel with your branch unless you pass `--live`.
 - `lore whoami` shows `org none` and `config … does not exist (no orgs configured)`. That is the expected state, not an error.
+
+## Related
+
+- [Personal notes](personal-notes.md).
+- [Small team in one repo](small-team.md): when a second person joins.
+- [Getting started](../getting-started.md).

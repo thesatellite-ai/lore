@@ -1,0 +1,532 @@
+package host
+
+// live_session.go — one repository's live ref for one operation
+// (LORE_TEAM_SPEC F2, F3, F8; ported from saas/cmd/cli live_wire.go).
+//
+// Flow of one run (LiveHook.Around):
+//
+//	prepare ── live lock (L) ── tracking refspec ── fetch when due (F3)
+//	        └─ integrate the tracking ref into refs/lore/live
+//	operation ── liveBackend writes live rows to the local ref (F2 1-5)
+//	finish ── flush held companions ── push (F2 step 6) ── "(live, …)" line
+//	       └─ automatic compaction (F8) ── release the lock
+
+import (
+	"context"
+	crand "crypto/rand"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"math/big"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
+	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/logic/clock"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// Environment switches of live rows (§1 "Environment variables").
+// ds:def id=sync-env-pe9vvf3f owner=@khanakia stability=stable desc="LORE_LIVE, LORE_SYNC, LORE_SYNC_GIT, LORE_LIVE_AUTOPUSH, LORE_LIVE_REMOTE, LORE_SYNC_QUIET"
+const (
+	// EnvLive = "0" turns live rows off: every row stays in .lore/data.
+	EnvLive = "LORE_LIVE"
+	// EnvSync = "0" turns live rows off (as EnvLive does) and keeps the
+	// workflow pin where it is (NeedsPinRefresh). It no longer means
+	// "cache only" as in v0.1.17: the row files are the store since 0.1.18,
+	// so every write still lands in .lore/data (BUGFIX-05). Git wiring is
+	// EnvSyncGit's switch, not this one.
+	EnvSync = "LORE_SYNC"
+	// EnvSyncGit = "0" keeps lore from touching git config (refspec).
+	EnvSyncGit = "LORE_SYNC_GIT"
+	// EnvLiveAutopush = "0" keeps lore off the network on its own.
+	EnvLiveAutopush = "LORE_LIVE_AUTOPUSH"
+	// EnvLiveRemote points refs/lore/* at another remote.
+	EnvLiveRemote = "LORE_LIVE_REMOTE"
+	// EnvSyncQuiet = "1" hides the one-time `lore sync:` notices of the git
+	// wiring (configured git, re-included .gitignore rule), as in v0.1.17
+	// (sync_wire.go reportGitWiring). README, docs/reference/environment.md
+	// and docs/sync/how-notes-travel-with-git.md promise it; warnings and
+	// errors (git still ignores row files, a wiring failure) always print.
+	EnvSyncQuiet = "LORE_SYNC_QUIET"
+	envOff       = "0"
+)
+
+// syncLogPrefix starts the git wiring notices, v0.1.17's text byte for
+// byte (docs paste.py filters "lore sync: configured git for lore data").
+const syncLogPrefix = "lore sync: "
+
+// Live state and log constants (v0.1.17 live_wire.go).
+const (
+	liveStateDirName      = "lore"
+	liveLogPrefix         = "lore live: "
+	liveNoteRefused       = "live-refused"
+	liveNoteMode          = 0o600
+	updatedAtKey          = "updated_at"
+	defaultBranchFallback = "main"
+	liveBackoffBase       = 40 * time.Millisecond
+	liveBackoffJitter     = 80 * time.Millisecond
+)
+
+// liveSignatureFallback signs live commits when git has no identity.
+var liveSignatureFallback = gitref.Signature{Name: "lore", Email: "lore@localhost"}
+
+// liveDisabled reports LORE_LIVE=0 or LORE_SYNC=0 (rows then stay in
+// .lore/data; nothing is read from or written to the live ref).
+func liveDisabled() bool {
+	return os.Getenv(EnvLive) == envOff || os.Getenv(EnvSync) == envOff
+}
+
+// liveSession is one repository's live state for one run.
+type liveSession struct {
+	// quietPush: the push after autoLand reports only a push that did not
+	// go through (v0.1.17 push(ctx, false))
+	quietPush bool
+	h         *liveHost
+	top       string
+	repo      *gitref.Repo
+	ref       *live.Ref
+	cfg       liveSettings
+	clk       clock.Clock
+	stateDir  string
+	autopush  bool
+	kind      live.FetchKind
+	// agent: an agent runs the operation (D8: never named in a live hlc).
+	agent bool
+	// fetchErr is the last fetch failure (offline).
+	fetchErr error
+	// fetched: this run fetched the remote successfully (refetch).
+	fetched bool
+	// blocked is set when the remote live ref was rewritten: no writes.
+	blocked  error
+	prepared bool
+	finished bool
+	// wrote counts rows this run committed to the local live ref;
+	// folders are the live folders they went to (the landing pass).
+	wrote   int
+	folders map[string]bool
+	notes   []live.MergeNote
+	lock    *liveLock
+	// cache is the read cache repo runs git through (nil when the session
+	// was built without one); prepare invalidates it once the lock is held.
+	cache *gitref.ReadCache
+	// companions are new supporting rows held until a content row of the
+	// run carries them (FLAG6); companionInner writes any left over.
+	companions     map[live.RowKey]store.Change
+	companionInner store.Backend
+	// targets caches refTargets (F-MOVE-2b): the tables a carried
+	// companion may belong to.
+	targets map[row.Table]bool
+	// atomicMark is the local live ref before a coordination write put its
+	// rows there for the atomic signals push (live_stage.go); atomicOpen
+	// while that push is not confirmed.
+	atomicMark string
+	atomicOpen bool
+}
+
+// openLiveSession opens the live session of the repository at top.
+func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top string, kind live.FetchKind) (*liveSession, error) {
+	out, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-common-dir"}})
+	if err != nil {
+		return nil, fmt.Errorf("locate .git: %w", err)
+	}
+	cfg := loadLiveSettings(h.cfg.Home)
+	if h.cfg.OrgLive != nil {
+		cfg.override(h.cfg.OrgLive(ctx)) // P3-MODEB-2: the repo's org entry wins per key
+	}
+	s := &liveSession{
+		h: h, top: top, repo: repo, cfg: cfg, clk: h.clock(), kind: kind,
+		stateDir: filepath.Join(strings.TrimSpace(string(out)), liveStateDirName),
+		autopush: cfg.Autopush && os.Getenv(EnvLiveAutopush) != envOff,
+	}
+	remoteName := cfg.Remote
+	if v := os.Getenv(EnvLiveRemote); v != "" {
+		remoteName = v
+	}
+	var remote gitremote.Remote
+	if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + remoteName + ".url"}}); err == nil {
+		remote = &gitremote.Git{Repo: repo, Name: remoteName}
+	}
+	sig, ok := repo.GitIdentity(ctx)
+	if !ok {
+		sig = h.loreSignature(ctx)
+	}
+	s.ref = &live.Ref{
+		Repo: repo, Name: live.RefLive, Remote: remote, RemoteName: remoteName,
+		StateDir: s.stateDir, Clock: s.clk, Signature: sig,
+		IgnoreKeys: []string{updatedAtKey}, PushRetries: cfg.PushRetries, Backoff: liveBackoff,
+	}
+	return s, nil
+}
+
+// loreSignature signs live commits when git has no identity (FLAG4): the
+// lore identity from LiveConfig.Signer, else liveSignatureFallback (no
+// Signer, an unresolved identity, or a name/e-mail git would refuse or
+// mis-parse in an author line).
+func (h *liveHost) loreSignature(ctx context.Context) gitref.Signature {
+	if h.cfg.Signer == nil {
+		return liveSignatureFallback
+	}
+	name, email, ok := h.cfg.Signer(ctx)
+	name, email = strings.TrimSpace(name), strings.TrimSpace(email)
+	if !ok || name == "" || email == "" || strings.ContainsAny(name+email, "\n\r<>") {
+		return liveSignatureFallback
+	}
+	return gitref.Signature{Name: name, Email: email}
+}
+
+// liveBackoff is the pause before push retry n: base × n plus jitter, so
+// two writers that lost to each other do not collide again in lock-step.
+func liveBackoff(n int) time.Duration {
+	j, err := crand.Int(crand.Reader, big.NewInt(int64(liveBackoffJitter)))
+	if err != nil {
+		return time.Duration(n) * liveBackoffBase
+	}
+	return time.Duration(n)*liveBackoffBase + time.Duration(j.Int64())
+}
+
+// warn prints one live line on the host's stderr.
+func (s *liveSession) warn(line string) { s.h.line(liveLogPrefix + line) }
+
+// syncQuiet reports LORE_SYNC_QUIET=1 (exact value, like every switch).
+func syncQuiet() bool { return os.Getenv(EnvSyncQuiet) == envOn }
+
+// syncNotice prints one `lore sync:` notice on the host's stderr unless
+// LORE_SYNC_QUIET=1. Only for news (what lore changed), never a warning.
+func (s *liveSession) syncNotice(line string) {
+	if syncQuiet() {
+		return
+	}
+	s.h.line(syncLogPrefix + line)
+}
+
+// wiredContent hashes the bytes of every path (missing reads as empty), so
+// the git wiring can tell whether it changed the clone's config or hooks:
+// a set that writes nothing new leaves the hash equal, so the notice is
+// printed once, by the command that wired the clone.
+func wiredContent(paths []string) [sha256.Size]byte {
+	h := sha256.New()
+	for _, p := range paths {
+		b, err := os.ReadFile(filepath.Clean(p))
+		if err != nil {
+			b = nil // missing or unreadable: the same as empty for "did it change"
+		}
+		_, _ = h.Write([]byte(p + "\x00" + strconv.Itoa(len(b)) + "\x00")) // a hash.Hash write never fails
+		_, _ = h.Write(b)
+	}
+	var out [sha256.Size]byte
+	copy(out[:], h.Sum(nil))
+	return out
+}
+
+// prepare runs F3 once per run: the live lock, the tracking refspec, a
+// fetch when due and the integration of the tracking ref.
+func (s *liveSession) prepare(ctx context.Context) {
+	if s.prepared {
+		return
+	}
+	s.prepared = true
+	l, err := acquireLiveLock(ctx, s.stateDir)
+	if err != nil {
+		s.warn(err.Error())
+		return
+	}
+	s.lock = l
+	if s.cache != nil {
+		// Another process may have moved refs while we waited for the
+		// lock; nothing read before it may be answered from the cache.
+		s.cache.Invalidate()
+	}
+	if s.ref.Remote != nil && os.Getenv(EnvSyncGit) != envOff {
+		if _, err = gitremote.EnsureTrackingRefspec(ctx, s.repo, s.ref.RemoteName); err != nil {
+			s.warn("tracking refspec: " + err.Error())
+		}
+	}
+	now := s.clk.Now()
+	if live.ShouldFetch(live.FetchInputs{
+		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: s.cfg.FetchTTL,
+		Kind: s.kind, Autopush: s.autopush, HasRemote: s.ref.Remote != nil,
+	}) {
+		s.fetch(ctx, now)
+	}
+	s.integrate(ctx)
+}
+
+// integrate is F3 step 3: the tracking ref into the local live ref.
+func (s *liveSession) integrate(ctx context.Context) {
+	res, err := s.ref.Integrate(ctx)
+	switch {
+	case errors.Is(err, live.ErrRemoteRewritten):
+		s.blocked = err
+	case err != nil:
+		s.warn("integrate: " + err.Error())
+	default:
+		s.notes = append(s.notes, res.Notes...)
+	}
+}
+
+// fetch is F3 step 2: refs/lore/* and the default branch, then the stamp.
+func (s *liveSession) fetch(ctx context.Context, now time.Time) {
+	err := s.ref.Fetch(ctx, s.defaultBranch(ctx))
+	if errors.Is(err, gitremote.ErrRemoteRefMissing) {
+		err = s.ref.Fetch(ctx) // a remote without the default branch yet
+	}
+	if err != nil {
+		s.fetchErr = err
+		return
+	}
+	s.fetched = true
+	if err := live.WriteFetchStamp(s.stateDir, now); err != nil {
+		s.warn(err.Error())
+	}
+}
+
+// refetch fetches and integrates once more for a run that did not fetch
+// (the last fetch was younger than live.fetch_ttl, or autopush is off),
+// and reports whether it did. A coordination op whose claim was fenced
+// explains the fence from the task row (coord classify: E_CANCELLED for a
+// task a person cancelled meanwhile, E_REASSIGNED), and one that did not
+// find its task may name a task a teammate added since, so that row must be
+// the remote's, not the one of the last command that fetched (TEAM F7,
+// §7.4; staleRowsAnswer in live_hook.go, B-ERRS2-1).
+// It fetches like a rejected push does (FetchAlways): the coordination op
+// already reached the remote for the signals ref.
+func (s *liveSession) refetch(ctx context.Context) bool {
+	if s.lock == nil || s.fetched || s.blocked != nil || s.ref.Remote == nil {
+		return false
+	}
+	s.fetch(ctx, s.clk.Now())
+	if !s.fetched {
+		return false
+	}
+	s.integrate(ctx)
+	return true
+}
+
+// fetchAge is how old the last successful fetch is ("" when never).
+func (s *liveSession) fetchAge() string {
+	at := live.FetchStamp(s.stateDir)
+	if at.IsZero() {
+		return ""
+	}
+	return s.clk.Now().Sub(at).Round(time.Second).String()
+}
+
+// defaultBranch is config's default_branch, else <remote>/HEAD, else main.
+func (s *liveSession) defaultBranch(ctx context.Context) string {
+	if s.cfg.DefaultBranch != "" {
+		return s.cfg.DefaultBranch
+	}
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "refs/remotes/" + s.ref.RemoteName + "/HEAD"}})
+	if err == nil {
+		if b := strings.TrimPrefix(strings.TrimSpace(string(out)), s.ref.RemoteName+"/"); b != "" {
+			return b
+		}
+	}
+	return defaultBranchFallback
+}
+
+// finish ends the run's live work: held companions, the push and its
+// status line, then automatic compaction; the lock is released last.
+// Landing finished rows is `lore land` / `lore sync` (ops/sync), not here.
+func (s *liveSession) finish(ctx context.Context) {
+	defer s.release()
+	if !s.prepared || s.finished {
+		return
+	}
+	s.finished = true
+	// A coordination write whose atomic push never succeeded leaves its
+	// rows on the local ref: they were never fenced, so they never go out.
+	if err := s.atomicReset(ctx); err != nil {
+		s.warn("undo an unconfirmed coordination write: " + err.Error())
+	}
+	if err := s.flushCompanions(ctx); err != nil {
+		s.warn("supporting rows (actors, metadata keys) were not written: " + err.Error())
+	}
+	if !s.push(ctx) {
+		return
+	}
+	s.autoLand(ctx)
+	// the landing's own push repeats no "(live, pushed)": v0.1.17 reported
+	// it only when it did not go through (push(ctx, false) in live_wire.go)
+	s.quietPush = true
+	if s.push(ctx) {
+		s.autoCompact(ctx)
+	}
+}
+
+// autoLand is the landing pass at the end of a run that wrote live rows
+// (v0.1.17 finish → autoLand): every folder written this run, then its
+// status lines. Best effort: a failure is a stderr line, the rows stay live.
+func (s *liveSession) autoLand(ctx context.Context) {
+	if s.blocked != nil || s.ref.Remote == nil || s.wrote == 0 || (!s.autopush && s.kind != live.FetchAlways) {
+		return
+	}
+	folders := make([]string, 0, len(s.folders))
+	for f := range s.folders {
+		folders = append(folders, f)
+	}
+	sort.Strings(folders)
+	for _, f := range folders {
+		out, err := s.landPass(ctx, f, nil, true)
+		if err != nil {
+			s.warn("land: " + err.Error())
+			continue
+		}
+		for _, l := range landLines(out) {
+			s.h.line(l)
+		}
+	}
+}
+
+// release drops the live lock.
+func (s *liveSession) release() {
+	if s.lock != nil {
+		_ = s.lock.release() // the run is over; a failed unlock ends with the process
+		s.lock = nil
+	}
+}
+
+// push sends the local live ref when it is ahead (F2 step 6) and prints
+// the run's status line. False: blocked, offline, autopush off, refused.
+func (s *liveSession) push(ctx context.Context) bool {
+	if s.blocked != nil {
+		s.printNotes()
+		return false
+	}
+	snap, err := s.ref.Snapshot(ctx)
+	if err != nil {
+		return false
+	}
+	if !snap.Ahead() {
+		s.printNotes()
+		return true
+	}
+	if !s.autopush && s.kind != live.FetchAlways {
+		if s.wrote > 0 {
+			s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; autopush is off, `lore sync` pushes)", s.waiting()))
+		}
+		return false
+	}
+	out, err := s.ref.Push(ctx)
+	s.notes = append(s.notes, out.Notes...)
+	s.printNotes()
+	if err != nil {
+		if errors.Is(err, live.ErrRemoteRewritten) {
+			s.blocked = err
+		}
+		s.warn("push: " + err.Error())
+		return false
+	}
+	if !s.quietPush || out.Status != live.PushDone {
+		s.reportPush(out)
+	}
+	return out.Pushed()
+}
+
+// reportPush is the run's "(live, …)" line (v0.1.17 text).
+func (s *liveSession) reportPush(out live.PushOutcome) {
+	switch out.Status {
+	case live.PushNothing:
+	case live.PushDone:
+		if s.wrote > 0 {
+			s.warn("(live, pushed)")
+		} else {
+			s.warn("pushed waiting live writes")
+		}
+		_ = s.writeNote(liveNoteRefused, "") // best effort: clears a stale doctor note
+	case live.PushNoRemote:
+		if s.wrote > 0 {
+			s.warn("(live, local: no remote)")
+		}
+	case live.PushOffline:
+		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; offline)", s.waiting()))
+	case live.PushRefused:
+		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; the remote refused refs/lore/live: %s)", s.waiting(), out.Detail))
+		_ = s.writeNote(liveNoteRefused, out.Detail) // best effort: feeds `lore live doctor` only
+	case live.PushRetriesOut:
+		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; lost %d races, the next command retries)", s.waiting(), out.Attempts))
+	}
+}
+
+// printNotes prints the merge decisions once.
+func (s *liveSession) printNotes() {
+	for _, n := range s.notes {
+		s.warn(n.Describe())
+	}
+	s.notes = nil
+}
+
+// waiting counts pending live writes (display only).
+func (s *liveSession) waiting() int {
+	p, _ := s.ref.Pending() // an unreadable list still shows one waiting
+	if len(p) == 0 {
+		return 1
+	}
+	return len(p)
+}
+
+// writeNote writes (or clears, text "") a one-line machine note in
+// .git/lore for `lore live doctor`.
+func (s *liveSession) writeNote(name, text string) error {
+	p := filepath.Join(s.stateDir, name)
+	if text == "" {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	if err := os.MkdirAll(s.stateDir, liveStateMode); err != nil {
+		return err
+	}
+	return os.WriteFile(p, []byte(text+"\n"), liveNoteMode)
+}
+
+// autoCompact is F8's automatic compaction after a run that wrote live
+// rows, past live.compact_after commits and not within a day.
+func (s *liveSession) autoCompact(ctx context.Context) {
+	if s.wrote == 0 || s.ref.Remote == nil {
+		return
+	}
+	n, err := s.ref.CommitCount(ctx)
+	if err != nil {
+		return
+	}
+	_, tree, err := s.ref.LocalTree(ctx)
+	if err != nil {
+		return
+	}
+	if !live.ShouldCompact(live.CompactInputs{Commits: n, Threshold: s.cfg.CompactAfter, LastCompact: tree.CompactedAt(), Now: s.clk.Now()}) {
+		return
+	}
+	res, err := s.ref.Compact(ctx, false)
+	if err != nil || res.Status != live.PushDone {
+		return // a later write tries again; nothing is lost
+	}
+	s.warn(fmt.Sprintf("compacted %s (%d commits → 1, epoch %d)", s.ref.Name, res.Plan.Commits, res.Plan.ToEpoch))
+}
+
+// mainDataPath is a row file's path in .lore/data on a branch for a live
+// folder (the root folder is the repo top level).
+func mainDataPath(folder, rel string) string {
+	p := ".lore/data/" + rel
+	if folder == live.RootFolder {
+		return p
+	}
+	return folder + "/" + p
+}
+
+// markFolder records a live folder this run wrote to.
+func (s *liveSession) markFolder(folder string) {
+	if s.folders == nil {
+		s.folders = map[string]bool{}
+	}
+	s.folders[folder] = true
+}

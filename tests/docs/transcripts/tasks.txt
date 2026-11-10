@@ -32,6 +32,7 @@ tsk_2ad3618e878ebbf527d34d446ef4f891
   commit:   accepted
 
 The Pro plan says 9 a month; it should say 19.
+created 2026-11-02T10:00:10Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2
 
 ### edit
 alice (work/website)$ lore task edit tsk_162df51b7f78b785c97c26b41ea89666 --priority low --due 2026-11-20 --title 'Update the footer year to 2027'
@@ -44,15 +45,14 @@ tsk_162df51b7f78b785c97c26b41ea89666
   priority: low
   commit:   accepted
   due:      2026-11-20
+created 2026-11-02T10:00:15Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:00:40Z by act_54fe984c9b495744c0217776765a28f2
 
 ### done
 alice (work/website)$ lore task done tsk_7a670ae8548ed05bf57ad29ad0759504 --lesson 'The client pays faster when the reminder goes out two days before the demo'
 ✓ tsk_7a670ae8548ed05bf57ad29ad0759504 done
-  lesson → mem_54fe984c9b495744c0217776765a28f2
-lore sync: exported 1
+  lesson → mem_05e99e22e9e86e96fe4daa7777994603
 lore live: (live, pushed)
 lore live: landed on main (601d285); leaves live once main is fetched
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore task list
 ▶ tsk_2ad3618e878ebbf527d34d446ef4f891 Fix the typo on the pricing page [medium]
 ○ tsk_162df51b7f78b785c97c26b41ea89666 Update the footer year to 2027 [low] due:2026-11-20
@@ -80,152 +80,145 @@ alice (work/website)$ lore task list --status cancelled
 
 ### delete
 alice (work/website)$ lore task add 'Test task, please ignore'
-✓ tsk_05e99e22e9e86e96fe4daa7777994603 — Test task, please ignore [medium]
+✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — Test task, please ignore [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
-alice (work/website)$ lore task delete tsk_05e99e22e9e86e96fe4daa7777994603
-ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
-  hint: a hard delete cannot be undone; pass --confirm if you really mean it
-(exit 1)
-alice (work/website)$ lore task delete tsk_05e99e22e9e86e96fe4daa7777994603 --confirm
-✓ tsk_05e99e22e9e86e96fe4daa7777994603 deleted (hard)
+alice (work/website)$ lore task delete tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3c11a5724b0cfd74b256190d9b5b8 Test task, please ignore?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/website)$ lore task delete tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --yes
+✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 moved to the trash (restore: lore trash restore tsk_c0f3c11a5724b0cfd74b256190d9b5b8)
 lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
 
 ### after
 alice (work/website)$ lore task add 'Write the welcome email'
-✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — Write the welcome email [medium]
+✓ tsk_76bd560aff0771fab8457dbfa9823f10 — Write the welcome email [medium]
 lore live: (live, pushed)
-alice (work/website)$ lore task add 'Send the welcome email' --after tsk_c0f3c11a5724b0cfd74b256190d9b5b8
-✓ tsk_76bd560aff0771fab8457dbfa9823f10 — Send the welcome email [medium]
+alice (work/website)$ lore task add 'Send the welcome email' --after tsk_76bd560aff0771fab8457dbfa9823f10
+✓ tsk_d4314eba822f1bf5908b2b8ded5f313a — Send the welcome email [medium]
 lore live: (live, pushed)
-alice (work/website)$ lore task show tsk_76bd560aff0771fab8457dbfa9823f10
-tsk_76bd560aff0771fab8457dbfa9823f10
+alice (work/website)$ lore task show tsk_d4314eba822f1bf5908b2b8ded5f313a
+tsk_d4314eba822f1bf5908b2b8ded5f313a
   title:    Send the welcome email
   status:   todo
   priority: medium
   commit:   accepted
+created 2026-11-02T10:01:50Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:01:50Z by act_54fe984c9b495744c0217776765a28f2
 
 ### cycle
-alice (work/website)$ lore task edit tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --after tsk_76bd560aff0771fab8457dbfa9823f10
-ERROR: [E_CYCLE] dependency cycle: tsk_c0f3c11a5724b0cfd74b256190d9b5b8 → tsk_76bd560aff0771fab8457dbfa9823f10 → tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+alice (work/website)$ lore task edit tsk_76bd560aff0771fab8457dbfa9823f10 --after tsk_d4314eba822f1bf5908b2b8ded5f313a
+ERROR: [E_CYCLE] dependency cycle: tsk_76bd560aff0771fab8457dbfa9823f10 → tsk_d4314eba822f1bf5908b2b8ded5f313a → tsk_76bd560aff0771fab8457dbfa9823f10
   hint: drop one --after edge; a task may not wait on itself, even through others
 (exit 19)
 
 ### tasklist
 alice (work/website)$ lore tasklist add --title 'Launch week' --body 'Everything that must happen before the shop opens'
-✓ tlt_d4314eba822f1bf5908b2b8ded5f313a
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
-alice (work/website)$ lore task add 'Check every link on the home page' --tasklist tlt_d4314eba822f1bf5908b2b8ded5f313a
-✓ tsk_b4f4765e593d51fd1352985e8af3a5b0 — Check every link on the home page [medium]
+✓ tlt_b4f4765e593d51fd1352985e8af3a5b0
+alice (work/website)$ lore task add 'Check every link on the home page' --tasklist tlt_b4f4765e593d51fd1352985e8af3a5b0
+✓ tsk_28f8d32584b2db54ffb146bede5b03df — Check every link on the home page [medium]
 lore live: (live, pushed)
-alice (work/website)$ lore task edit tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --tasklist tlt_d4314eba822f1bf5908b2b8ded5f313a
-✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 updated
+alice (work/website)$ lore task edit tsk_76bd560aff0771fab8457dbfa9823f10 --tasklist tlt_b4f4765e593d51fd1352985e8af3a5b0
+✓ tsk_76bd560aff0771fab8457dbfa9823f10 updated
 lore live: (live, pushed)
 alice (work/website)$ lore tasklist list
-TA  tlt_28f8d32584b2db54ffb146bede5b03df
-TA  tlt_d4314eba822f1bf5908b2b8ded5f313a
+TA  tlt_4c590afb2a0cc7ae1b97b7e4e62d6c38
+TA  tlt_b4f4765e593d51fd1352985e8af3a5b0
 alice (work/website)$ lore tasklist search launch
-tlt_d4314eba822f1bf5908b2b8ded5f313a Launch week
-alice (work/website)$ lore tasklist edit tlt_d4314eba822f1bf5908b2b8ded5f313a --status closed
-✓ tasklist tlt_d4314eba822f1bf5908b2b8ded5f313a updated
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
+tlt_b4f4765e593d51fd1352985e8af3a5b0 Launch week
+alice (work/website)$ lore tasklist edit tlt_b4f4765e593d51fd1352985e8af3a5b0 --status closed
+✓ tasklist tlt_b4f4765e593d51fd1352985e8af3a5b0 updated
+lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 
 ### task view
-alice (work/website)$ lore task-view add --name urgent --filter '{"priority":"urgent"}'
-✓ task-view urgent saved
-alice (work/website)$ lore task-view list
-tvw_4c590afb2a0cc7ae1b97b7e4e62d6c38 urgent
+alice (work/website)$ lore task view add open_todo --where 'status:todo'
+tvw_3b6283bc4392c556bbae5f094246e913  open_todo  where "status:todo"
+alice (work/website)$ lore task view list
+tvw_3b6283bc4392c556bbae5f094246e913  open_todo  where "status:todo"
+alice (work/website)$ lore task list --view open_todo
+○ tsk_76bd560aff0771fab8457dbfa9823f10 Write the welcome email [medium]
+○ tsk_d4314eba822f1bf5908b2b8ded5f313a Send the welcome email [medium]
+○ tsk_28f8d32584b2db54ffb146bede5b03df Check every link on the home page [medium]
 
 ### commitment
 alice (work/website)$ lore task add 'Try a dark mode for the shop' --commitment someday
-✓ tsk_3b6283bc4392c556bbae5f094246e913 — Try a dark mode for the shop [medium]
+✓ tsk_f147dd95f1aaf742dd4f5214843a5139 — Try a dark mode for the shop [medium]
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore task add 'Add a FAQ page' --commitment proposed
-✓ tsk_f147dd95f1aaf742dd4f5214843a5139 — Add a FAQ page [medium]
+✓ tsk_2537f9b2f7de77bfe5ca958860216bbb — Add a FAQ page [medium]
 lore live: (live, pushed)
 alice (work/website)$ lore task list
 ▶ tsk_2ad3618e878ebbf527d34d446ef4f891 Fix the typo on the pricing page [medium]
-○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 Write the welcome email [medium]
-○ tsk_76bd560aff0771fab8457dbfa9823f10 Send the welcome email [medium]
-○ tsk_b4f4765e593d51fd1352985e8af3a5b0 Check every link on the home page [medium]
+○ tsk_76bd560aff0771fab8457dbfa9823f10 Write the welcome email [medium]
+○ tsk_d4314eba822f1bf5908b2b8ded5f313a Send the welcome email [medium]
+○ tsk_28f8d32584b2db54ffb146bede5b03df Check every link on the home page [medium]
 
 ### triage
 alice (work/website)$ lore task triage
-○ tsk_f147dd95f1aaf742dd4f5214843a5139 Add a FAQ page [medium] (proposed)
+○ tsk_2537f9b2f7de77bfe5ca958860216bbb Add a FAQ page [medium] (proposed)
 alice (work/website)$ lore task someday
-○ tsk_3b6283bc4392c556bbae5f094246e913 Try a dark mode for the shop [medium] (someday)
+○ tsk_f147dd95f1aaf742dd4f5214843a5139 Try a dark mode for the shop [medium] (someday)
 
 ### accept
-alice (work/website)$ lore task edit tsk_f147dd95f1aaf742dd4f5214843a5139 --commitment accepted
-✓ tsk_f147dd95f1aaf742dd4f5214843a5139 updated
+alice (work/website)$ lore task edit tsk_2537f9b2f7de77bfe5ca958860216bbb --commitment accepted
+✓ tsk_2537f9b2f7de77bfe5ca958860216bbb updated
 lore live: (live, pushed)
 alice (work/website)$ lore task triage
 (no tasks)
 
 ### defer
 alice (work/website)$ lore task add 'Renew the SSL certificate' --defer-until 2026-12-01
-✓ tsk_2537f9b2f7de77bfe5ca958860216bbb — Renew the SSL certificate [medium]
+✓ tsk_b69e8368dd4986838455061d5d9e5ed7 — Renew the SSL certificate [medium]
 lore live: (live, pushed)
 alice (work/website)$ lore task deferred
-○ tsk_2537f9b2f7de77bfe5ca958860216bbb Renew the SSL certificate [medium] ⏾2026-12-01
+○ tsk_b69e8368dd4986838455061d5d9e5ed7 Renew the SSL certificate [medium] ⏾2026-12-01
 alice (work/website)$ lore task list --include-deferred
 ▶ tsk_2ad3618e878ebbf527d34d446ef4f891 Fix the typo on the pricing page [medium]
-○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 Write the welcome email [medium]
-○ tsk_76bd560aff0771fab8457dbfa9823f10 Send the welcome email [medium]
-○ tsk_b4f4765e593d51fd1352985e8af3a5b0 Check every link on the home page [medium]
-○ tsk_f147dd95f1aaf742dd4f5214843a5139 Add a FAQ page [medium]
-○ tsk_2537f9b2f7de77bfe5ca958860216bbb Renew the SSL certificate [medium] ⏾2026-12-01
+○ tsk_76bd560aff0771fab8457dbfa9823f10 Write the welcome email [medium]
+○ tsk_d4314eba822f1bf5908b2b8ded5f313a Send the welcome email [medium]
+○ tsk_28f8d32584b2db54ffb146bede5b03df Check every link on the home page [medium]
+○ tsk_2537f9b2f7de77bfe5ca958860216bbb Add a FAQ page [medium]
+○ tsk_b69e8368dd4986838455061d5d9e5ed7 Renew the SSL certificate [medium] ⏾2026-12-01
 
 ### undefer
-alice (work/website)$ lore task edit tsk_2537f9b2f7de77bfe5ca958860216bbb --clear-defer
-✓ tsk_2537f9b2f7de77bfe5ca958860216bbb updated
+alice (work/website)$ lore task edit tsk_b69e8368dd4986838455061d5d9e5ed7 --clear-defer
+✓ tsk_b69e8368dd4986838455061d5d9e5ed7 updated
 lore live: (live, pushed)
 alice (work/website)$ lore task deferred
 (no tasks)
 
 ### reminder
 alice (work/website)$ lore reminder add 'Renew the domain name' --due 2027-06-01 --recurrence 1y
-✓ reminder rmd_b69e8368dd4986838455061d5d9e5ed7 due 2027-06-01
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+✓ reminder rmd_0aaebe6aca5bb46cc521869f5ba2a61f due 2027-06-01
 alice (work/website)$ lore reminder add 'Call the client about the new logo' --due 2026-11-01
-✓ reminder rmd_0aaebe6aca5bb46cc521869f5ba2a61f due 2026-11-01
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
+✓ reminder rmd_6a866bb99ce08addfe04ea845052ed8c due 2026-11-01
 alice (work/website)$ lore reminder list
 ! 2026-11-01  Call the client about the new logo
-    rmd_0aaebe6aca5bb46cc521869f5ba2a61f
+    rmd_6a866bb99ce08addfe04ea845052ed8c
   2027-06-01  Renew the domain name (1y)
-    rmd_b69e8368dd4986838455061d5d9e5ed7
+    rmd_0aaebe6aca5bb46cc521869f5ba2a61f
 
 ### reminder done
-alice (work/website)$ lore reminder done rmd_b69e8368dd4986838455061d5d9e5ed7
-✓ rescheduled to 2028-06-01
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore reminder done rmd_0aaebe6aca5bb46cc521869f5ba2a61f
-✓ reminder rmd_0aaebe6aca5bb46cc521869f5ba2a61f completed
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
+✓ rescheduled to 2028-06-01
+alice (work/website)$ lore reminder done rmd_6a866bb99ce08addfe04ea845052ed8c
+✓ reminder rmd_6a866bb99ce08addfe04ea845052ed8c completed
 alice (work/website)$ lore reminder list
   2028-06-01  Renew the domain name (1y)
-    rmd_b69e8368dd4986838455061d5d9e5ed7
+    rmd_0aaebe6aca5bb46cc521869f5ba2a61f
 alice (work/website)$ lore reminder list --done
   2026-11-01  Call the client about the new logo
-    rmd_0aaebe6aca5bb46cc521869f5ba2a61f
+    rmd_6a866bb99ce08addfe04ea845052ed8c
 
 ### reminder delete
-alice (work/website)$ lore reminder delete rmd_0aaebe6aca5bb46cc521869f5ba2a61f
-ERROR: [E_INVALID_INPUT] --confirm required to hard-delete
-  hint: a hard delete cannot be undone; pass --confirm if you really mean it
-(exit 1)
-alice (work/website)$ lore reminder delete rmd_0aaebe6aca5bb46cc521869f5ba2a61f --confirm
-✓ rmd_0aaebe6aca5bb46cc521869f5ba2a61f deleted (hard)
-lore sync: removed files 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
+alice (work/website)$ lore reminder delete rmd_6a866bb99ce08addfe04ea845052ed8c
+ERROR: [E_NEEDS_CONFIRM] reminder delete rmd_6a866bb99ce08addfe04ea845052ed8c?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/website)$ lore reminder delete rmd_6a866bb99ce08addfe04ea845052ed8c --yes
+✓ rmd_6a866bb99ce08addfe04ea845052ed8c moved to the trash (restore: lore trash restore rmd_6a866bb99ce08addfe04ea845052ed8c)
 
 ### push after done
 alice (work/website)$ git commit -qm 'Fix the Pro plan price on the pricing page'
@@ -242,19 +235,21 @@ alice (work/website)$ git pull -q --rebase origin main && git push -q origin mai
 
 ### link
 alice (work/website)$ lore link add --entity tsk_2ad3618e878ebbf527d34d446ef4f891 --commit HEAD
-✓ linked 05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891  (cml_6a866bb99ce08addfe04ea845052ed8c)
+✓ linked 05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891  (cml_4f89f5fcb1d81152bdf3f52979ebb64b)
   message: Fix the Pro plan price on the pricing page
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 alice (work/website)$ lore link list --entity tsk_2ad3618e878ebbf527d34d446ef4f891
-cml_6a866bb99ce08addfe04ea845052ed8c  05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
+cml_4f89f5fcb1d81152bdf3f52979ebb64b  05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
 
 ### commit show
 alice (work/website)$ lore commit-show $(git rev-parse HEAD)
 Commit 05513aa29b7881f12bc94eb06be8acf0d03eaed2 — 1 linked entities:
   tasks/tsk_2ad3618e878ebbf527d34d446ef4f891
 alice (work/website)$ lore commit-show HEAD
-(no entities linked to this commit)
+Commit 05513aa29b7881f12bc94eb06be8acf0d03eaed2 — 1 linked entities:
+  tasks/tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore commit show $(git rev-parse HEAD)
+Commit 05513aa29b7881f12bc94eb06be8acf0d03eaed2 — 1 linked entities:
+  tasks/tsk_2ad3618e878ebbf527d34d446ef4f891
 
 ### done with commit
 alice (work/website)$ lore task done tsk_2ad3618e878ebbf527d34d446ef4f891 --commit $(git rev-parse HEAD) --no-lesson
@@ -262,8 +257,8 @@ alice (work/website)$ lore task done tsk_2ad3618e878ebbf527d34d446ef4f891 --comm
 lore live: (live, pushed)
 lore live: landed on main (dfd8dc8); leaves live once main is fetched
 alice (work/website)$ lore sync
-· already in sync
 lore live: 1 row(s) left live (main holds them)
+lore live: pushed waiting live writes
 alice (work/website)$ lore task list --status done
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 merged 10:04 (found by: ancestry, 05513aa)
 ✓ tsk_7a670ae8548ed05bf57ad29ad0759504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
@@ -272,24 +267,98 @@ lore live: landed on main (cf563f3); leaves live once main is fetched
 
 ### merged
 alice (work/website)$ lore task add 'Shrink the hero image'
-✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b — Shrink the hero image [medium]
+✓ tsk_77cb2df809cef85479f6587c4a7d76c4 — Shrink the hero image [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
-alice (work/website)$ lore task done tsk_4f89f5fcb1d81152bdf3f52979ebb64b --no-lesson
-✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b done
+alice (work/website)$ lore task done tsk_77cb2df809cef85479f6587c4a7d76c4 --no-lesson
+✓ tsk_77cb2df809cef85479f6587c4a7d76c4 done
 lore live: (live, pushed)
 lore live: landed on main (df3a55c); leaves live once main is fetched
-alice (work/website)$ lore task merged tsk_4f89f5fcb1d81152bdf3f52979ebb64b
-✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b merged (marked by hand, 10:05)
+alice (work/website)$ lore task merged tsk_77cb2df809cef85479f6587c4a7d76c4
+✓ tsk_77cb2df809cef85479f6587c4a7d76c4 merged (marked by hand, 10:05)
 lore live: landed on main (6d00426); leaves live once main is fetched
 
 ### link remove
 alice (work/website)$ lore link list
-cml_6a866bb99ce08addfe04ea845052ed8c  05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
-alice (work/website)$ lore link remove cml_6a866bb99ce08addfe04ea845052ed8c
-ERROR: [E_INVALID_INPUT] --confirm required
-  hint: link remove deletes the row; pass --confirm to proceed
-(exit 1)
-alice (work/website)$ lore link remove cml_6a866bb99ce08addfe04ea845052ed8c --confirm
-✓ link cml_6a866bb99ce08addfe04ea845052ed8c removed
-lore sync: removed files 1
+cml_4f89f5fcb1d81152bdf3f52979ebb64b  05513aa2 → tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the Pro plan price on the pricing page
+alice (work/website)$ lore link remove cml_4f89f5fcb1d81152bdf3f52979ebb64b
+ERROR: [E_NEEDS_CONFIRM] link remove cml_4f89f5fcb1d81152bdf3f52979ebb64b?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+alice (work/website)$ lore link remove cml_4f89f5fcb1d81152bdf3f52979ebb64b --yes
+✓ link cml_4f89f5fcb1d81152bdf3f52979ebb64b removed
+
+### accept and decline
+alice (work/website)$ lore task add 'Add a size guide' --commitment proposed
+✓ tsk_d191616cfa49f94ede5d5148b8b045c2 — Add a size guide [medium]
+lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
+alice (work/website)$ lore task add 'Rename the shop to Website Pro' --commitment proposed
+✓ tsk_b4d3d8fc9a019dca1371ad55c6a611aa — Rename the shop to Website Pro [medium]
+lore live: (live, pushed)
+alice (work/website)$ lore task triage
+○ tsk_d191616cfa49f94ede5d5148b8b045c2 Add a size guide [medium] (proposed)
+○ tsk_b4d3d8fc9a019dca1371ad55c6a611aa Rename the shop to Website Pro [medium] (proposed)
+alice (work/website)$ lore task accept tsk_d191616cfa49f94ede5d5148b8b045c2 --priority high
+✓ tsk_d191616cfa49f94ede5d5148b8b045c2 updated
+lore live: (live, pushed)
+alice (work/website)$ lore task decline tsk_b4d3d8fc9a019dca1371ad55c6a611aa --reason wont_do --note 'The client keeps the name'
+✓ tsk_b4d3d8fc9a019dca1371ad55c6a611aa cancelled
+  note kept as a comment
+lore live: (live, pushed)
+lore live: landed on main (34ee210); leaves live once main is fetched
+alice (work/website)$ lore task triage
+(no tasks)
+alice (work/website)$ lore task list --status cancelled
+✗ tsk_162df51b7f78b785c97c26b41ea89666 Update the footer year to 2027 [low] due:2026-11-20
+alice (work/website)$ lore task list --status cancelled --all
+✗ tsk_162df51b7f78b785c97c26b41ea89666 Update the footer year to 2027 [low] due:2026-11-20
+✗ tsk_b4d3d8fc9a019dca1371ad55c6a611aa Rename the shop to Website Pro [medium] (proposed)
+alice (work/website)$ lore task show tsk_b4d3d8fc9a019dca1371ad55c6a611aa
+tsk_b4d3d8fc9a019dca1371ad55c6a611aa
+  title:    Rename the shop to Website Pro
+  status:   cancelled
+  priority: medium
+  commit:   proposed
+  closed:   wont_do
+
+  notes:
+    2026-11-02 10:06  The client keeps the name
+created 2026-11-02T10:06:05Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:06:20Z by act_54fe984c9b495744c0217776765a28f2
+
+### export
+alice (work/website)$ lore task export --where 'status:todo' --format markdown
+- [ ] Write the welcome email (tsk_76bd560aff0771fab8457dbfa9823f10)
+- [ ] Send the welcome email (tsk_d4314eba822f1bf5908b2b8ded5f313a)
+- [ ] Check every link on the home page (tsk_28f8d32584b2db54ffb146bede5b03df)
+- [ ] Try a dark mode for the shop (tsk_f147dd95f1aaf742dd4f5214843a5139)
+- [ ] Add a FAQ page (tsk_2537f9b2f7de77bfe5ca958860216bbb)
+- [ ] Renew the SSL certificate (tsk_b69e8368dd4986838455061d5d9e5ed7)
+- [ ] Add a size guide (tsk_d191616cfa49f94ede5d5148b8b045c2)
+alice (work/website)$ lore task export --where 'status:todo' --format csv
+id,title,body,priority,commitment,due,defer_until,tasklist,mission,plan,role,tasklist_name,mission_name,plan_name,status,estimate,parent,lead,created_at,completed_at
+tsk_76bd560aff0771fab8457dbfa9823f10,Write the welcome email,,medium,accepted,,,tlt_b4f4765e593d51fd1352985e8af3a5b0,,,,Launch week,,,todo,,,,2026-11-02T10:01:45Z,
+tsk_d4314eba822f1bf5908b2b8ded5f313a,Send the welcome email,,medium,accepted,,,tlt_4c590afb2a0cc7ae1b97b7e4e62d6c38,,,,default,,,todo,,,,2026-11-02T10:01:50Z,
+tsk_28f8d32584b2db54ffb146bede5b03df,Check every link on the home page,,medium,accepted,,,tlt_b4f4765e593d51fd1352985e8af3a5b0,,,,Launch week,,,todo,,,,2026-11-02T10:02:10Z,
+tsk_f147dd95f1aaf742dd4f5214843a5139,Try a dark mode for the shop,,medium,someday,,,tlt_4c590afb2a0cc7ae1b97b7e4e62d6c38,,,,default,,,todo,,,,2026-11-02T10:02:50Z,
+tsk_2537f9b2f7de77bfe5ca958860216bbb,Add a FAQ page,,medium,accepted,,,tlt_4c590afb2a0cc7ae1b97b7e4e62d6c38,,,,default,,,todo,,,,2026-11-02T10:02:55Z,
+tsk_b69e8368dd4986838455061d5d9e5ed7,Renew the SSL certificate,,medium,accepted,,,tlt_4c590afb2a0cc7ae1b97b7e4e62d6c38,,,,default,,,todo,,,,2026-11-02T10:03:25Z,
+tsk_d191616cfa49f94ede5d5148b8b045c2,Add a size guide,,high,accepted,,,tlt_4c590afb2a0cc7ae1b97b7e4e62d6c38,,,,default,,,todo,,,,2026-11-02T10:06:00Z,
+
+### import
+alice (work/website)$ cat ~/backlog.csv
+id,title,priority,status
+T-1,Add a cookie banner,high,To Do
+T-2,Compress the product photos,medium,In Review
+alice (work/website)$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --dry-run
+would import 2 tasks from csv (dry run, nothing written)
+  T-1  Add a cookie banner
+  T-2  Compress the product photos
+alice (work/website)$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
+✓ 2 tasks imported from csv (batch bat_9a34c925c88945140e68f54b1ba3b418)
+lore live: (live, pushed)
+lore live: 2 row(s) left live (main holds them)
+alice (work/website)$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
+  2 already imported, nothing added for them:
+    T-1  Add a cookie banner  (already imported as tsk_bfed655e145f36ce2ef425180e72eeea)
+    T-2  Compress the product photos  (already imported as tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a)

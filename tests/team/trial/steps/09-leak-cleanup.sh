@@ -8,7 +8,7 @@ ok dev1 dev1/app "lore task add 'INTERNAL-MARKER-13 chase the client about the u
 X=$(grep -o -E 'tsk_[0-9a-f]+' <<< "$LAST_OUT" | head -n 1)
 ok client client/observer "lore sync >/dev/null 2>&1; lore task list"
 has "INTERNAL-MARKER-13"
-ok dev1 dev1/app "lore live purge $X"
+ok dev1 dev1/app "lore live purge $X --confirm"
 has "purged $X"
 ok dev1 dev1/app "lore live compact"
 has "compacted refs/lore/live"

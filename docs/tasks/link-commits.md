@@ -48,18 +48,16 @@ $ git pull -q --rebase origin main && git push -q origin main
 ```console
 # alice, in website
 $ lore link add --entity tsk_2ad3…f891 --commit HEAD
-✓ linked 05513aa2 → tasks/tsk_2ad3…f891  (cml_6a86…ed8c)
+✓ linked 05513aa2 → tasks/tsk_2ad3…f891  (cml_4f89…b64b)
   message: Fix the Pro plan price on the pricing page
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ lore link list --entity tsk_2ad3…f891
-cml_6a86…ed8c  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
+cml_4f89…b64b  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
 ```
 <!-- /example -->
 
 ## Step 3 — Find the rows behind a commit
 
-`lore commit-show` lists every row linked to one commit. Give it the **full** sha, which `git rev-parse HEAD` prints:
+`lore commit-show` lists every row linked to one commit. Give it the full sha, a unique short sha of 7 or more characters (any case, as `git log --oneline` prints it), or any revision git understands, such as `HEAD` or `HEAD~1`:
 
 <!-- example: tasks#commit-show -->
 ```console
@@ -68,11 +66,15 @@ $ lore commit-show $(git rev-parse HEAD)
 Commit 05513aa29b78 — 1 linked entities:
   tasks/tsk_2ad3…f891
 $ lore commit-show HEAD
-(no entities linked to this commit)
+Commit 05513aa29b78 — 1 linked entities:
+  tasks/tsk_2ad3…f891
+$ lore commit show $(git rev-parse HEAD)
+Commit 05513aa29b78 — 1 linked entities:
+  tasks/tsk_2ad3…f891
 ```
 <!-- /example -->
 
-The second command shows the trap: `commit-show` does not understand `HEAD` or a short sha, and says nothing is linked.
+`lore commit show` (with a space) is the same command under the `commit` group and prints the same list. A short sha that two linked commits share is refused with `E_AMBIGUOUS_ID`, which lists both shas; add characters until one is left. A word that is neither a sha nor a git revision is refused with `E_INVALID_INPUT`.
 
 ## Step 4 — Finish the task with its commit
 
@@ -86,8 +88,8 @@ $ lore task done tsk_2ad3…f891 --commit $(git rev-parse HEAD) --no-lesson
 lore live: (live, pushed)
 lore live: landed on main (dfd8dc8); leaves live once main is fetched
 $ lore sync
-· already in sync
 lore live: 1 row(s) left live (main holds them)
+lore live: pushed waiting live writes
 $ lore task list --status done
 ✓ tsk_2ad3…f891 merged 10:04 (found by: ancestry, 05513aa)
 ✓ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
@@ -104,15 +106,15 @@ Sometimes lore cannot see the merge: the task has no commit, or the change reach
 ```console
 # alice, in website
 $ lore task add 'Shrink the hero image'
-✓ tsk_4f89…b64b — Shrink the hero image [medium]
+✓ tsk_77cb…76c4 — Shrink the hero image [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
-$ lore task done tsk_4f89…b64b --no-lesson
-✓ tsk_4f89…b64b done
+$ lore task done tsk_77cb…76c4 --no-lesson
+✓ tsk_77cb…76c4 done
 lore live: (live, pushed)
 lore live: landed on main (df3a55c); leaves live once main is fetched
-$ lore task merged tsk_4f89…b64b
-✓ tsk_4f89…b64b merged (marked by hand, 10:05)
+$ lore task merged tsk_77cb…76c4
+✓ tsk_77cb…76c4 merged (marked by hand, 10:05)
 lore live: landed on main (6d00426); leaves live once main is fetched
 ```
 <!-- /example -->
@@ -121,20 +123,19 @@ Merged matters when another task waits for this one with `--after <id>:merged` (
 
 ## Step 6 — Remove a link
 
-`lore link list` shows every link with its id (`cml_…`). `lore link remove` deletes one; it needs `--confirm`:
+`lore link list` shows every link with its id (`cml_…`). `lore link remove` deletes one; lore asks first, and without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`:
 
 <!-- example: tasks#link-remove -->
 ```console
 # alice, in website
 $ lore link list
-cml_6a86…ed8c  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
-$ lore link remove cml_6a86…ed8c
-ERROR: [E_INVALID_INPUT] --confirm required
-  hint: link remove deletes the row; pass --confirm to proceed
-(exit 1)
-$ lore link remove cml_6a86…ed8c --confirm
-✓ link cml_6a86…ed8c removed
-lore sync: removed files 1
+cml_4f89…b64b  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
+$ lore link remove cml_4f89…b64b
+ERROR: [E_NEEDS_CONFIRM] link remove cml_4f89…b64b?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+$ lore link remove cml_4f89…b64b --yes
+✓ link cml_4f89…b64b removed
 ```
 <!-- /example -->
 
@@ -146,22 +147,21 @@ The shortest path from a commit to its task, using the commands above:
 ```console
 # alice, in website
 $ lore link add --entity tsk_2ad3…f891 --commit HEAD
-✓ linked 05513aa2 → tasks/tsk_2ad3…f891  (cml_6a86…ed8c)
+✓ linked 05513aa2 → tasks/tsk_2ad3…f891  (cml_4f89…b64b)
   message: Fix the Pro plan price on the pricing page
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
 ## Pitfalls
 
-- **`lore commit-show HEAD` finds nothing.** It only matches the full 40-character sha. Use `lore commit-show $(git rev-parse HEAD)`, or `lore link list --commit <full sha>`.
+- **`HEAD` means the commit you are on now.** `lore commit show HEAD` resolves `HEAD` in the folder you run it from; after another commit, the linked one is `HEAD~1`. `lore link list --commit` still matches only the full sha.
 - **A rebase changes the sha.** `git pull --rebase` gives your commit a new id. Link the commit after you push, as in Step 1 to 2, so the link points at the commit that is really on `main`.
 - **`lore task show` does not print the commit.** Its `commit:` line is the task's commitment (how sure it is), not a git commit. Use `lore link list --entity <id>` or `lore task list --status done`.
+- **A squash merge keeps the link through the `Lore-Task` trailer.** While you hold a claim on a task, lore's `commit-msg` hook adds a `Lore-Task: <id>` line to the end of your commit messages (only when the task row lives in the repo you commit to). A squash or rebase merge that keeps that line lets lore find the merge on `main` even though the commit sha changed; without it, use Step 5. See [How it works](../team/how-it-works.md).
 - **Links are saved like other rows.** `link add` writes a file to `.lore/data` ("not committed — commit them with your change"); commit it, or your teammates will not see the link.
 
 ## Related
 
 - [Tasks](tasks.md): add, finish and order tasks.
 - [Team commands › lore task done](../team/commands.md#lore-task-done) and [lore task merged](../team/commands.md#lore-task-merged): `--pr` and how merges are found in a team.
-- [Run log](run-log.md): a step-by-step record of how the work was done.
+- [Run log](run-log.md): how long each try at the work took.

@@ -5,16 +5,6 @@ version: "3"
 dotenv: [".env"]
 
 includes:
-  lace:
-    taskfile: ./lace/Taskfile.yml
-    dir: ./lace
-  dbent:
-    taskfile: ./dbent/Taskfile.yml
-    dir: ./dbent
-  saas:
-    taskfile: ./saas/Taskfile.yml
-    dir: ./saas
-
   # CUSTOM
   lore:
     taskfile: ./Taskfile.lore.yml
@@ -32,31 +22,14 @@ tasks:
     cmds:
       - task: lore:check
 
-  workvendor:
-    desc: fix work vendor mismatch on server
-    cmds:
-      - |
-        set -ex
-        for d in $(sed -n '/^use *(/,/^)/p' go.work | tail -n +2 | sed '$d' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'); do
-          echo ">> Removing go.sum for '$d'"
-          (cd "$d" && rm -f go.sum)
-        done
-      - go work vendor
-
   upgrade:
-    desc: update all go modules in go.work
+    desc: update every Go dependency of the root module
     cmds:
-      - |
-        set -ex
-        for d in $(sed -n '/^use *(/,/^)/p' go.work | tail -n +2 | sed '$d' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'); do
-          echo ">> Updating '$d'"
-          ls -ld "$d"
-          (cd "$d" && go get -u ./... && go mod tidy)
-        done
-      - task workvendor
+      - go get -u ./...
+      - go mod tidy
 
   lint:
-    desc: gofmt + go vet on all modules
+    desc: gofmt + go vet on the root module
     cmds:
       - gofmt -w $(find . -name '*.go' -not -path './vendor/*' -not -path '*/gen/*' -not -path './.git/*')
       - go vet ./...

@@ -41,7 +41,7 @@ Agent:  Captured as a must-severity rule scoped to non-test .go files.
 ## Check that the agent will see it
 
 ```bash
-lore why-context --last-render --rendered | grep -A2 "rul_<id>"
+lore why-context --rendered | grep -A2 "rul_<id>"
 # <rule id="rul_<id>" severity="must" activation="glob">
 # Never put passwords in the code; read them from environment variables.
 # </rule>

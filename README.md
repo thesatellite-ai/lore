@@ -36,18 +36,20 @@ One command to install, nothing to run, everything stays on your machine. It shi
   - [Retrieve & render](#retrieve--render)
   - [Project management](#project-management)
   - [Agent loop & automation](#agent-loop--automation)
-  - [Backup, health & recovery](#backup-health--recovery)
+  - [Health & recovery](#health--recovery)
   - [Sharing through git](#sharing-through-git)
+  - [Teams, stores and agents](#teams-stores-and-agents)
 - [Team sync through git](#team-sync-through-git)
   - [Merges and pull requests](#merges-and-pull-requests)
 - [Common flags](#common-flags)
 - [Interactive TUI](#interactive-tui)
 - [FAQ](#faq)
 - [Building from source / contributing](#building-from-source--contributing)
+- [License](#license)
 
 ## Documentation
 
-![How lore works: a note goes down from people and agents through lore into git, and teammates' notes come back up as the context file agents read](docs/assets/architecture.svg)
+![How lore is built: callers at the top, then surface, wire, ops, engine, store and adapters, and the .lore/data row files in git at the bottom; a command goes down and is committed and pushed, and teammates' rows come back up as the context file coding agents read](docs/assets/architecture.svg)
 
 - **[Learning path](docs/README.md#learning-path):** thirteen steps from your first rule to a team with a client, private notes and several agents, each with a guide and a real example.
 - **[Start from your goal](docs/README.md#start-from-your-goal):** "I want to…" and the page that does it.
@@ -59,7 +61,7 @@ One command to install, nothing to run, everything stays on your machine. It shi
 
 Most agent memory tools bolt a vector database (a search engine that matches by rough meaning, not by exact words) onto your agent and hope it finds the right thing when it is needed. lore takes the opposite bet: **your agent already reads `CLAUDE.md` / `AGENTS.md` at the start of every session** — so lore makes *that file* the memory. `lore render` writes your knowledge to `.lore/LORE.md` and adds an `@import` pointer (one line that says "read that file too") to `CLAUDE.md`, so your hand-written content is kept and recall is just your agent reading the file it already reads. No embeddings, no API keys, no runtime retrieval lottery, and nothing leaves your machine.
 
-- **Local-first & private** — a SQLite cache under `.lore/` plus plain JSON files you commit yourself. No cloud, no account, no telemetry. Nothing leaves your laptop unless you `git push` it.
+- **Local-first & private** — a local cache under `.lore/` plus plain JSON files you commit yourself. No cloud, no account, no telemetry. Nothing leaves your laptop unless you `git push` it.
 - **Shared through git, per branch** — every shared row (one note) is one small JSON file under `.lore/data/`. Knowledge learned on a feature branch stays on that branch and reaches `main` when the PR merges, exactly like code. No server, no S3, no sync service.
 - **Deterministic recall** — must-follow rules and critical warnings are *pinned* into the rendered file; everything else is one `lore search` away. No embedding drift, no "why didn't it remember that?"
 - **Structured, not a blob** — `rule` (with severity), `decision` (with rationale), `hotfix`, `pattern`, `playbook`, `task`, `run` — each entity is rendered the way it's meant to be read, not dumped as one undifferentiated wall of text.
@@ -138,7 +140,6 @@ Then **restart your coding agent** so it loads.
 cd your-project
 
 lore init                # create the local lore project
-lore setup               # build the search index
 lore directive install   # add the agent-directive block to CLAUDE.md / AGENTS.md
 
 # capture knowledge
@@ -150,7 +151,7 @@ lore decision add --title="Payments" --body="We use Stripe for payments"
 lore search "whatsapp"           # search across all knowledge
 lore render                      # compile knowledge → .lore/LORE.md + @import pointer in CLAUDE.md
 
-lore tui                         # browse everything interactively
+lore tui                         # browse everything (read-only)
 
 # share it with your team: the knowledge is plain files under .lore/data/
 git add .lore/data .gitattributes && git commit -m "lore knowledge"
@@ -158,10 +159,11 @@ git add .lore/data .gitattributes && git commit -m "lore knowledge"
 
 ## Concepts
 
-- **Project** — a local database under `.lore/` per repo (created by `lore init`), mirrored to committed JSON files under `.lore/data/` so it travels with the code (see [Team sync through git](#team-sync-through-git)).
+- **Project** — one per repo (created by `lore init`): every note is a small JSON file under `.lore/data/` that you commit with the code, so it travels with it; a local cache under `.lore/` is rebuilt from those files whenever it is missing (see [Team sync through git](#team-sync-through-git)).
 - **Entities** — typed knowledge records: `memory`, `rule`, `decision`, `pattern`, `hotfix`, `snapshot`, `playbook`, `prompt`, `task`, `mission`, `plan`, `reminder`, `handoff`, `incident`, `techdoc`, and more.
 - **Scope** — knowledge is scoped to the whole project (`master`) or a specific `--repo`. `add` persists `repo_id`; `list` and `search` filter by it with identical semantics (`--repo`, `--all-repos`, `--master-only`, `--no-inherit`). Real per-repo scoping — no body prefix-tag convention needed. Re-scope an existing row with `edit --rebind-repo=<mount>` / `edit --rebind-master`. Bare `--repo` on `edit` is context-only (never mutates scope; warns loudly). For audited body+scope change use `add --supersedes=<old_id> --repo=<mount>`.
-- **Render** — `lore render` compiles the relevant scoped knowledge into a generated file (default `.lore/LORE.md`) and stitches an idempotent `@import` pointer into your agent file (`CLAUDE.md` by default, or `AGENTS.md` / `.cursorrules` via `--target`) — so your hand-written `CLAUDE.md` content is never clobbered. Use `--no-pointer` to write only the generated file, or `--out` to change its path.
+- **Render** — `lore render` compiles a small **core** of the project's knowledge into a generated file (default `.lore/LORE.md`), kept inside a byte budget: must rules, critical and high hotfixes, the agent's operating rules and an index of topics. It stitches an idempotent `@import` pointer into the file your coding tool reads (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/lore.mdc`, `GEMINI.md`, … chosen with `--target`; otherwise `lore init` picks the tools of the setup that applies to the folder, else the tool files the repo already has, else `AGENTS.md`), so your hand-written content is never clobbered. Use `--no-pointer` to write only the generated file, or `--out` to change its path.
+- **Agent workflow** — the agent reads the core (it is already loaded through the pointer file), runs `lore context --for-file <path>` before it touches a path (the rules, hotfixes and notes for that file and its folders), and `lore search "<keywords>"` for everything else. `lore setup --agent-hooks` makes Claude Code, Codex and Gemini CLI fetch the per-file context by themselves.
 
 ### The common verb pattern
 
@@ -187,13 +189,16 @@ Bodies can be passed with `--body="…"` or piped: `echo "text" | lore memory ad
 
 | Command | Use case |
 |---|---|
-| `lore init [path]` | Create a new project (`.lore/lore.db`, schema, gitignore, Project row). `--name`, `--non-interactive` |
-| `lore setup` | One-time post-install/upgrade migrations (builds the search index). Run once per project after install/upgrade |
-| `lore directive install` | Inject the lore agent-directive block into `CLAUDE.md` / `AGENTS.md` so agents know to use lore (`remove` to undo, `show` to print it) |
-| `lore identity` | Manage your identity: the fallback one in `~/.lore/identity.yaml` (migrated from `identity.toml`), and one per org with `lore identity set --org <org>` |
+| `lore init [path]` | Create a new project (its rows in `.lore/data`, `.lore/LORE.md`, the tool pointer file, `.gitignore` lines). `--name`, `--non-interactive` |
+| `lore setup` | Optional: set up this machine step by step (`lore setup plan`, `check`, `apply`), check every setup with `lore doctor --all`, and `--agent-hooks` installs the coding tools' session and context hooks. Nothing needs to run after an install or upgrade (the cache and search index rebuild themselves); `lore migrate run` is the one step for v0.1.17 data |
+| `lore directive install` | Inject the lore agent-directive block into `CLAUDE.md` / `AGENTS.md` so agents know to use lore (`show` to print it; delete the block to remove it) |
+| `lore identity` | Manage your identity: `identity:` in `~/.lore/config.yaml`, and one per org with `lore identity set --org <org>` |
 | `lore whoami` | The org this repo resolves to and why, your identity, and what loads here |
 | `lore config check` | Validate `~/.lore/config.yaml` (orgs, stores, patterns, durations) and say where each problem is |
-| `lore config` | Get/set DB-level config keys (`dbconfig` table) |
+| `lore config get` / `set` / `list` | Read and change keys of `~/.lore/config.yaml` (a dotted path such as `live.autopush`; keeps comments and order) |
+| `lore org use` / `link` / `create` / `import` / `rename` / `set` | Choose and set up which org a repo belongs to |
+| `lore cache prune` | Remove cache files of stores no repo on this machine attaches any more (lists them and asks first; `--dry-run`) |
+| `lore upgrade` | Install the newest release, or the project's pinned version (`--check` only reports) |
 | `lore version` | Version, schema version, build info (`--json`) |
 | `lore doctor` | Health checks; exit 0 healthy / 1 degraded / 2 broken |
 
@@ -225,9 +230,10 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 | `lore <entity> search "<q>"` | Scope search to a single entity type |
 | `lore search status` | Per-entity search-index counts + health |
 | `lore search rebuild` | Rebuild the search index from source rows |
-| `lore render` | Compile scoped knowledge → `.lore/LORE.md` and stitch an `@import` pointer into the agent file. `--out`, `--target AGENTS.md`, `--no-pointer`, `--dry-run`, `--repo`, `--project` |
+| `lore context --for-file <path>` | What applies to one file before the agent touches it; also `--for-task <id>`, `--topic <t>`, `--topics`, `--for-prompt "<text>"` |
+| `lore render` | Compile the core → `.lore/LORE.md` and stitch an `@import` pointer into the agent file. `--out`, `--target <profile>`, `--no-pointer`, `--dry-run`, `--check`, `--report` |
 | `lore why-context` | Show the last rendered context (exactly what the agent saw) |
-| `lore commit-show <sha>` | Show every entity linked to a git commit |
+| `lore commit show <sha>` | Show every entity linked to a git commit |
 
 ### Project management
 
@@ -236,7 +242,7 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 | `lore project` | Manage projects (the top-level container) |
 | `lore repo` | Manage repos within a project (per-repo scoping) |
 | `lore task` | Discrete work items: `add / list / triage / someday / deferred / show / edit / start / done / cancel / search`. Two axes beyond `status`: `commitment` (`accepted`/`proposed`/`someday` — agents must set it on `add`, no default) and `deferred_until` (snooze; auto-resurfaces). Default views show only committed, active, non-deferred tasks. |
-| `lore tasklist` / `lore task-view` | Group tasks; saved task-list filter views |
+| `lore tasklist` / `lore task view` | Group tasks; saved task-list filter views |
 | `lore mission` | Containers that group related tasks |
 | `lore plan` | Plans |
 | `lore reminder` | Time-based reminders |
@@ -246,52 +252,42 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 
 | Command | Use case |
 |---|---|
-| `lore run` | Log + inspect agent runs: `start / step / end / cancel / replay / show / list` |
+| `lore run` | Time one try at a task: `start / end / cancel`; the span lands on the task's time |
 | `lore link add --commit=<sha> --entity=<id>` | Link a git commit to any entity (task/run/mission/decision/…). Also `list` / `remove` |
-| `lore learn-from <source>` | Bootstrap knowledge from existing markdown/docs |
-| `lore learn` | Manage background-learning staging: `from / list / promote / reject` |
-| `lore external-source` | Register sources for `learn-from`: `add / enable / disable / list` (disabled by default) |
-| `lore bench` | Benchmark engine — define, run, and report on eval tasks: `eval / run / report / result / grader` |
-| `lore directive` | Install/remove/show the agent-directive block |
+| `lore external-source` | Register outside sources: `add / enable / disable / list` (disabled by default) |
+| `lore directive` | Install or show the agent-directive block |
 | `lore skill` | Meta-tools for the lore skill bundle (`compile` — shorten the main bundle with a model) |
-| `lore session` / `lore querylog` | Inspect sessions and the query log |
+| `lore session` | Inspect agent sessions on this machine |
 | `lore actor` | Inspect actors (humans, agents, hooks, plugins) |
 | `lore behaviour` / `lore suggestion` | Behaviours and suggestions |
-| `lore pii-pattern` | Custom PII/secret detection patterns (capture refuses secrets by default) |
-| `lore plugin` | Manage the trusted-plugin allowlist |
+| `lore secrets rule` | Your own secret patterns (capture refuses secrets by default) |
 
-### Backup, health & recovery
+### Health & recovery
 
 | Command | Use case |
 |---|---|
-| `lore backup` | Online backup of the project DB |
-| `lore restore <file>` | Restore the DB from a backup |
-| `lore repair` | Recover from a corrupted DB |
-| `lore doctor` | Health checks (DB integrity, interrupted or mismatched schema migrations, sync state) |
-| `lore audit verify` / `lore audit log` | Hash-chained log of every change to shared knowledge; `verify` flags edited entries and rows changed outside lore |
-| `lore tables` | Every data table + total record count. Sortable (`--sort=name\|count[:asc\|desc]`), filterable (`--filter=`), `--json`. Also a TUI screen: `lore tui --kind=tables` |
+| `lore doctor` | Health checks (the local cache, attached stores, sync state, team versions); `--fix` repairs what it safely can |
+| `lore audit verify` / `lore audit log` | Hash-chained log of every change lore makes on this machine; `verify` flags edited or deleted entries |
+| `lore search rebuild` | Rebuild the search index from `.lore/data`; a damaged cache (`.lore/lore-cache.db`) is rebuilt by the next command after you delete it |
 | `lore support-bundle` | Produce a sanitized incident-report bundle |
 | `lore snapshot` | Point-in-time knowledge captures (logical, not file backup) |
-| `lore restore <file> --prefer db\|files\|newest` | After restoring, decide which side wins where the restored DB and `.lore/data` disagree. `db` (default) is a rollback: files of rows not in the backup are removed; `files` moves DB-only rows to the trash; `newest` keeps the later edit |
 
 ### Sharing through git
 
-A sync pass runs automatically before and after every command; these subcommands expose it. `lore sync`, `status`, `conflicts`, `trash`, `peek`, `dupes`, `export` and `install-git` accept `--json`.
+A sync pass runs automatically before and after every command; these subcommands expose it. `lore sync`, `status`, `conflicts`, `peek` and `install-action` accept `--json`.
 
 | Command | Use case |
 |---|---|
 | `lore sync` | Run a pass now: import what git changed, export what the DB changed |
 | `lore sync status` | Baseline, pending exports, open conflicts, broken files, uncommitted files |
-| `lore sync conflicts` / `lore sync resolve <id> --take kept\|other` | Versions kept aside when both sides edited the same row, and how to settle them |
-| `lore sync trash` / `lore sync trash restore <id>` | Rows removed because their file disappeared (revert, `git clean`, stash) — undoable |
+| `lore sync conflicts` / `lore sync resolve <n> --take kept\|other` | Versions kept aside when both sides edited the same row, and how to settle them |
+| `lore trash list --local` | Rows removed because their file disappeared (revert, `git clean`, stash); the file comes back with `git checkout` |
 | `lore sync peek <ref> [table]` | Read another branch's rows without checking it out (`origin/feature/x`) |
 | `lore sync promote <id> --to <branch>` | Commit a row onto another local branch (an urgent rule onto `main`) — never pushes |
-| `lore sync dupes` / `lore sync merge-rows <table> --keep <id> --drop <id>` | Find and fold rows two clones recorded independently |
-| `lore sync export --all` | Rewrite every file from the DB (recreate a deleted `.lore/data`) |
-| `lore sync purge --archived-before 90d --confirm` | Durably remove archived rows; records them in `_purged.json` so old clones never resurrect them |
+| `lore sync merge-rows <table> --keep <id> --drop <id>` | Fold a duplicate row into another: references move to the kept row, the dropped one goes to the trash |
+| `lore trash purge --archived-before 90d --confirm` | Durably remove archived rows; records them in `_purged.json` so old clones never resurrect them |
 | `lore sync fix-projects` | Collapse duplicate project ids after two people bootstrapped in parallel |
-| `lore sync install-git` | Install the merge driver, `.gitattributes` rules and hook blocks now (otherwise automatic); fails with `E_SYNC_DATA_IGNORED` when git ignores `.lore/data` |
-| `lore sync install-action` / `uninstall-action` | Opt in to (or remove) a GitHub workflow that settles lore-data conflicts in pull requests; runs only by hand unless `--auto`; `--branch`, `--dry-run` |
+| `lore sync install-action` | Opt in to a GitHub workflow that settles lore-data conflicts in pull requests; runs only by hand unless `--auto`; `--branch`, `--dry-run`; delete the file to remove it |
 | `lore sync ci-merge --base origin/main` | Merge a base branch in when only lore data conflicts and lore settles it all (what that workflow runs; never pushes) |
 
 ### Teams, stores and agents
@@ -308,18 +304,19 @@ lore task add "Send the invoice reminder before Friday's demo" --assign @bob  # 
 lore org link agency --project client                     # once: tie a client repo to an internal project
 lore memory add --body "The client replies faster on WhatsApp than email"  # in a client repo: goes to the store, not the repo
 lore task next --mission msn_01a1…                        # an agent takes the next ready task
+lore hold claim full-suite --ttl 30m                      # one heavy test run at a time (lore hold release full-suite)
 ```
 
 Read on in [docs/team](docs/team/README.md): [overview](docs/team/overview.md), [concepts](docs/team/concepts.md), [getting started](docs/team/getting-started.md), [use cases](docs/team/README.md#use-cases) (small team, agency and client repo, group of repos, contractor, two companies, personal notes, agents on one mission), [how it works](docs/team/how-it-works.md), [agents](docs/team/agents.md), [commands reference](docs/team/commands.md) and [troubleshooting](docs/team/troubleshooting.md). The design and every rule: [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md).
 
 ## Team sync through git
 
-<!-- ds:block id=sync-datanames-nhh4krj2 -->
-lore keeps a fast SQLite cache in `.lore/lore.db` (gitignored) and writes every shared row as one canonical JSON file under `.lore/data/<table>/<id>.json`, which you commit. Git then does everything else: branches, merges, history, review, access control.
+<!-- ds:block id=sync-datanames-dgnn2vn8 -->
+lore keeps a fast local cache in `.lore/lore-cache.db` (gitignored) and writes every shared row as one canonical JSON file under `.lore/data/<table>/<id>.json`, which you commit. Git then does everything else: branches, merges, history, review, access control.
 
 ```
 .lore/
-  lore.db                          gitignored — local cache, rebuilt from data/ any time
+  lore-cache.db                    gitignored — local cache, rebuilt from data/ any time
   data/                            COMMITTED — the shared knowledge
     _meta.json                     pins the project id for every clone
     rules/rul_0192….json
@@ -330,28 +327,28 @@ lore keeps a fast SQLite cache in `.lore/lore.db` (gitignored) and writes every 
 
 **How it flows.** `lore rule add …` writes the row and its file in the same command. You commit the file with your code; when the PR merges, the rule is on `main`. A teammate's `git pull` brings the file; their next lore command (or the post-merge hook) imports it into their cache. Switching branches switches the knowledge: rows that exist only on another branch disappear from the cache and come back when you switch back.
 
-<!-- ds:block id=sync-syncedtables-rgmtjeph -->
-<!-- ds:block id=sync-localtables-dcpb69pj -->
-<!-- ds:block id=sync-volatile-4t6jsc7v -->
-**What syncs.** Knowledge and work tracking (rules, decisions, memories, patterns, hotfixes, playbooks, prompts, tasks, missions, plans, tags, comments, …). Telemetry stays local: search logs, render history, run logs, audit chains, benchmark results, the search index, embeddings and access counters.
+<!-- ds:block id=sync-syncedtables-fa4jung7 -->
+<!-- ds:block id=sync-localtables-ukz59e32 -->
+<!-- ds:block id=sync-volatile-f7q2cp2w -->
+**What syncs.** Knowledge and work tracking (rules, decisions, memories, patterns, hotfixes, playbooks, prompts, tasks, missions, plans, tags, comments, …). Machine-local data stays local: runs, the audit trail, the search index and usage counters.
 
-<!-- ds:block id=sync-mergedriver-config-bur8yta8 -->
-<!-- ds:block id=sync-strategyfor-ycedma28 -->
+<!-- ds:block id=sync-mergedriver-config-cthptudb -->
+<!-- ds:block id=sync-strategyfor-db9rgsqn -->
 **Merges.** One file per row means two people adding knowledge never conflict. Editing *different fields* of the same row merges cleanly through lore's git merge driver; editing the *same text* on two branches is a real conflict that a person settles. List fields that are sets (labels, approvers, team members, project links) merge both sides' additions and never conflict, and an edit beats a delete. Details, and what happens in pull requests, in [Merges and pull requests](#merges-and-pull-requests).
 
-**Every write is captured.** Database triggers record every change to a shared table, so `lore tui`, raw SQL and `sqlite3` edits are exported too. A row whose file disappears goes to `lore sync trash` first, so a `git clean` or a stash is always recoverable.
+**The files are the truth.** Every lore command writes the row file and updates the cache in the same step; `.lore/lore-cache.db` is only a cache, rebuilt from `.lore/data` at any time, so never edit it by hand. A row whose file disappears goes to `lore trash list --local` first, and its file is still in git, so a `git clean` or a stash is always recoverable.
 
-**Existing projects.** The first command of the new version backs up `lore.db` and exports everything to `.lore/data` ("bootstrap"). A teammate who pulls that adopts it: their project id is switched to the shared one, their private rows are exported onto their branch, and any row both sides changed keeps the newer version with the other saved under `lore sync conflicts`. Roll out by having one person bootstrap on `main` first; everyone else pulls and runs any lore command.
+**Existing projects.** A repo with v0.1.17 data is converted once with `lore migrate run`: it keeps a local backup ref, and `lore migrate rollback` undoes it. `--dry-run` lists what it would change first.
 
-**Fresh clones.** `git clone` brings `.lore/data` but no database; the first lore command (or `lore init`) builds `lore.db` from the files.
+**Fresh clones.** `git clone` brings `.lore/data` but no database; the first lore command (or `lore init`) builds the local cache from the files.
 
-**Secrets.** A row matching a credential pattern is never written to `.lore/data` (it stays local and is reported); the pre-commit hook re-scans hand-edited files.
+**Secrets.** A row matching a credential pattern is never written to `.lore/data` (it stays local and is reported); the `commit-msg` hook block re-scans the staged files.
 
-<!-- ds:block id=sync-env-qmha7pjc -->
-**Switches.** `LORE_SYNC=0` turns sync off (cache-only, as before). `LORE_SYNC_GIT=0` keeps the files but never touches git config, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` silences progress lines. `LORE_SYNC_ALLOW_SECRETS=1` exports flagged rows for one run.
+<!-- ds:block id=sync-env-pe9vvf3f -->
+**Switches.** `LORE_SYNC=0` turns live rows off (like `LORE_LIVE=0`) and stops lore updating the version pin in `.github/workflows/lore-sync-merge.yml`; rows are still written to `.lore/data`, because since 0.1.18 the files are where lore keeps them. `LORE_SYNC_GIT=0` keeps the files but never touches git config, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` silences progress lines. `LORE_SYNC_ALLOW_SECRETS=1` is ignored since 0.1.18 (a warning says so).
 
-<!-- ds:block id=sync-hooklines-3282rwuw -->
-**Hooks.** lore chains a small marked block into the hooks directory git already uses (`.git/hooks`, or the one a hook manager such as husky owns via `core.hooksPath`); it never repoints `core.hooksPath` and never replaces your scripts. Every block is a no-op when lore is not installed, and the pre-commit block skips with an "upgrade it" note on a lore too old to have `sync hook`, so committed hooks never block a teammate who has not upgraded. The blocks are POSIX `sh`; on Windows, Git for Windows runs hooks and merge drivers through its bundled shell, so `lore.exe` only needs to be on `PATH`. Several lore projects in one repo (a monorepo) each get their own block. The `commit-msg` block adds a `Lore-Task:` trailer for the task you hold (so a squash merge is still recognised as finishing it) and runs the leak check (internal text pasted into a client repo is refused, see `lore check leaks`). In a client repo the `pre-push` block runs the same leak check on every commit the push sends, so a `git commit --no-verify` is still caught (`git push --no-verify` skips every local check). The `post-commit` and `pre-push` blocks carry finished live rows onto a protected `main` (a `lore: land N rows` commit that rides along with your push); they are one block per repo and skip quietly on a lore too old to have `lore land`.
+<!-- ds:block id=sync-hooklines-g87bgvsj -->
+**Hooks.** lore chains a small marked block into the hooks directory git already uses (`.git/hooks`, or the one a hook manager such as husky owns via `core.hooksPath`); it never repoints `core.hooksPath` and never replaces your scripts. Every block is a no-op when lore is not installed, and the pre-commit block skips with an "upgrade it" note on a lore too old to have `sync hook`, so committed hooks do not block a teammate who has not upgraded; the one exception is a lore older than 0.1.18 when `.lore/data` already holds 0.1.18 rows, which the pre-commit block refuses with an "install lore 0.1.18 or newer" note, because that lore cannot read them; and in a client repo (one a lore check has marked with `git config lore.clientrepo true`) the `commit-msg` block refuses the commit when no lore on `PATH` can check it for internal notes, instead of letting it through unchecked. The blocks are POSIX `sh`; on Windows, Git for Windows runs hooks and merge drivers through its bundled shell, so `lore.exe` only needs to be on `PATH`. Several lore projects in one repo (a monorepo) each get their own block. The `commit-msg` block adds a `Lore-Task:` trailer for the task you hold (so a squash merge is still recognised as finishing it) and runs the leak check (internal text pasted into a client repo is refused, see `lore check leaks`). In a client repo the `pre-push` block runs the same leak check on every commit the push sends, so a `git commit --no-verify` is still caught (`git push --no-verify` skips every local check). The `post-commit` and `pre-push` blocks carry finished live rows onto a protected `main` (a `lore: land N rows` commit that rides along with your push); they are one block per repo and skip quietly on a lore too old to have `lore land`.
 
 ### Merges and pull requests
 
@@ -378,7 +375,7 @@ A second driver, `lore-keep-ours`, handles `.lore/LORE.md`: it keeps your copy, 
 lore sync install-action            # writes .github/workflows/lore-sync-merge.yml (runs only when started from the Actions tab) — commit it
 lore sync install-action --auto     # same, but it also runs by itself when lore data changes (spends Actions time)
 lore sync install-action --dry-run  # print it, write nothing
-lore sync uninstall-action          # remove it (commit the deletion)
+rm .github/workflows/lore-sync-merge.yml   # remove it (commit the deletion)
 ```
 
 Installed with `--auto`, the workflow runs when lore data changes on a pull request or on the default branch (`--branch` to choose others); without it, it runs only when started by hand. Re-running `install-action` without `--auto` or `--manual` keeps the triggers the file already has, and the automatic version updates below never change them. For each open pull request it runs `lore sync ci-merge --base origin/<base>`, which merges the base branch in with lore's driver and commits, but only when GitHub would report a conflict, every conflict is in `.lore/data` or `.lore/LORE.md`, and the driver settles all of them; then it pushes that merge to the pull request branch. A code conflict, or the same text edited on both sides, is left alone and listed in the run summary for a person. Things to know:
@@ -403,50 +400,48 @@ These work across most commands:
 | `--json` | Machine-readable JSON envelope (use this from scripts/agents) |
 | `--repo <mount\|rep_id>` | Scope to one repo instead of project-master |
 | `--project <id\|name>` | Operate on a specific project |
-| `--db <path>` | Override the DB path (default: cwd's `.lore/lore.db`; also `LORE_DB`) |
+| `--db <path>` | Refused on row commands (`E_UNSUPPORTED`): their rows are files in the repository, so run the command inside it (`LORE_DB` is refused the same way) |
 | `--read-only` | Skip lock acquisition; refuse writes (safe for inspection) |
-| `--include-archived` / `--archived` | Include soft-deleted rows |
-| `--color auto\|always\|never` | Color output control |
+| `--archived` (lists) / `--include-archived` (search) | Include archived rows |
+| `--color auto\|always\|never` | Colour on every command; `auto` (default) colours only a terminal and follows `NO_COLOR` / `FORCE_COLOR` |
+| `--trace` | Print every git command lore runs for live rows and every fetch, push and ls-remote to a store, with timing and the host reached (`LORE_TRACE=1`) |
 
-Env: `LORE_DB`, `LORE_PROJECT_ID`, `LORE_REPO`, `LORE_HOME` mirror the flags.
+Env: `LORE_PROJECT_ID`, `LORE_REPO`, `LORE_READ_ONLY=1`, `LORE_TRACE=1` mirror the flags.
 
-Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses a project or DB inside iCloud/Dropbox/OneDrive/Google Drive or on NFS/SMB, where SQLite corrupts silently (`LORE_ALLOW_NETWORK_FS=1` overrides — share knowledge through git instead).
+Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses a project or DB inside iCloud/Dropbox/OneDrive/Google Drive or on NFS/SMB, where the local cache can break silently (`LORE_ALLOW_NETWORK_FS=1` overrides — share knowledge through git instead).
 
 ## Interactive TUI
 
-`lore tui` opens a full terminal UI to browse, filter, view, and edit every entity in the DB — vim-style keys, fuzzy search, live theme toggle.
-
-![lore TUI — main list view](docs/screenshots/main.jpg)
-
-| | |
-|---|---|
-| ![lore TUI — entity detail view](docs/screenshots/view.jpg) | ![lore TUI — edit form](docs/screenshots/edit.jpg) |
-| ![lore TUI — actions menu](docs/screenshots/actions.jpg) | ![lore TUI — quick help](docs/screenshots/quick-help.jpg) |
+`lore tui` is a read-only browser in the terminal: a screen of every table with its row count, then one page of rows per table (type `/text` to filter, `n`/`p` to page), then every field of one row (sensitive values masked). `lore tui --kind decision` opens on one table first. It reads every attached store and changes nothing; add and edit rows with the `lore <kind> add|edit` commands. The full-screen editing TUI of v0.1.17 is gone in 0.1.18.
 
 ## FAQ
 
 **Which coding agents does lore support?** Any agent that reads a project-instructions file. lore renders `CLAUDE.md`, `AGENTS.md` (Cursor, Codex, and others), or `.cursorrules` via `lore render --target`. Works alongside Cursor, Windsurf, Cline, GitHub Copilot, Codex and other coding agents.
 
-**Does lore send my code or knowledge to the cloud?** No. Everything lives under `.lore/` in your repo: a local SQLite cache plus JSON files. No account, no network calls, no telemetry — knowledge only leaves your machine when you `git push` it yourself.
+**Does lore send my code or knowledge to the cloud?** No. Everything lives under `.lore/` in your repo: a local cache plus JSON files. No account, no network calls, no telemetry — knowledge only leaves your machine when you `git push` it yourself.
 
-**Does it use a model, embeddings, or an API key?** No. Search is SQLite FTS5 full-text search (it matches the words you type) — fast, always the same answer, and free. There's no vector database and no embedding bill.
+**Does it use a model, embeddings, or an API key?** No. Search is local full-text search (it matches the words you type) — fast, always the same answer, and free. There's no vector database and no embedding bill.
 
 **How is this different from just writing `CLAUDE.md` by hand?** lore keeps knowledge structured (rules vs decisions vs hotfixes, with severity), deduplicated, scoped per-repo, searchable, and versioned — then regenerates `.lore/LORE.md` deterministically and `@import`s it from `CLAUDE.md`, leaving your hand-written content untouched. Hand-written instruction files rot, contradict each other, and quietly blow your token budget.
 
 **Won't a large memory bloat my context window?** No. The hybrid render pins only `must`-severity rules and critical hotfixes into the file; everything else surfaces on demand via `lore search`. Context stays small even as the knowledge base grows.
 
-**Can my team share project memory?** Yes — through git. Every shared row lives as a JSON file under `.lore/data/`; commit it with your code and it follows branches, merges with PRs, and reaches teammates on `git pull`. Each developer's `.lore/lore.db` is just a local cache rebuilt from those files. See [Team sync through git](#team-sync-through-git).
+**Can my team share project memory?** Yes — through git. Every shared row lives as a JSON file under `.lore/data/`; commit it with your code and it follows branches, merges with PRs, and reaches teammates on `git pull`. Each developer's local cache (`.lore/lore-cache.db`) is rebuilt from those files. See [Team sync through git](#team-sync-through-git).
 
 **What happens when two people edit the same rule on different branches?** Different fields merge automatically through lore's merge driver. The same text edited twice is a real conflict: git stops, the conflict markers sit inside the JSON value, and lore shows both versions but will not let you commit the file until you pick one with `lore <entity> edit`.
 
-**I accidentally ran `git clean` / reverted a commit — is the knowledge gone?** No. Rows whose file disappears are copied to `lore sync trash` before they leave the cache; `lore sync trash restore <id>` brings one back.
+**I accidentally ran `git clean` / reverted a commit — is the knowledge gone?** No. Rows whose file disappears are copied to `lore trash list --local` before they leave the cache, and the file itself is still in git history: `git checkout HEAD -- <file>` (or the commit before the one that deleted it) brings it back.
 
 **Is capture and recall really automatic?** With the bundled lore skill, the agent captures decisions, rules, and corrections and recalls relevant knowledge on its own. You can also drive everything by hand with the CLI.
 
-**Is lore free and open source?** Yes — free, open source, no seats or usage tiers.
+**Is lore free and open source?** Yes — free and open source under the Apache License 2.0 from 0.1.18, with no seats or usage tiers. See [License](#license).
 
 ## Building from source / contributing
 
 See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (build, release, Homebrew tap) and **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+## License
+
+lore is licensed under the [Apache License 2.0](LICENSE) from release 0.1.18 (see [NOTICE](NOTICE)). Releases v0.1.17 and earlier remain under the PolyForm Perimeter License 1.0.0, the license they were published under.
 
 <sub><strong>lore</strong> — open-source, local-first memory &amp; context management for coding agents. Persistent <code>CLAUDE.md</code> / <code>AGENTS.md</code> memory for Cursor, Windsurf, Cline, GitHub Copilot, Codex and other coding agents. No cloud, no API keys, no embeddings.</sub>

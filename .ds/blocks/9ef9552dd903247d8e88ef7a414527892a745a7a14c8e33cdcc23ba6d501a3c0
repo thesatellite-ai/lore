@@ -1,0 +1,8 @@
+const (
+	// EnvActor names the acting agent for this session (agent:<label>).
+	EnvActor = "LORE_ACTOR"
+	// EnvSession is the agent session id (`lore agent start`).
+	EnvSession = "LORE_SESSION"
+	// EnvHuman=1 marks a person's terminal (R11; only "1" counts).
+	EnvHuman = "LORE_HUMAN"
+)

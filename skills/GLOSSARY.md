@@ -14,31 +14,19 @@ The identity behind any write. Resolved via 8-step fallback chain (flag → env 
 A file name several coding tools read for agent context. `lore render --target=AGENTS.md` stitches the `@import` pointer into `AGENTS.md` instead of `CLAUDE.md`; the generated knowledge still lives in `.lore/LORE.md`.
 
 ## Audit log
-Append-only, hash-chained ledger of every change to a shared row (lore writes, imports from .lore/data, merges, and external writes found in the DB). `lore audit verify` checks the chain and flags rows changed outside lore; `lore audit log` lists entries.
-
-## Bench
-The DB-backed evaluation engine. Three nouns: **eval** (task template), **run** (one execution), **result** (task × arm × attempt outcome). Replaces the Phase-1 YAML + bash runner. See `BENCH_DESIGN.md`.
-
-## Bench eval
-A benchmark task template — independent of any run. Has `code` (e.g. `E1-001`), category enum, prompt, polymorphic link to a captured rule/hotfix/decision/memory, and a grader spec. Authored via `lore bench eval add`.
-
-## Bench run
-One benchmark execution. Captures `model + temperature + runs_per_arm + claude_md_sha256` (for reproducibility). Status flow: `running → complete | aborted | failed`. The 1:N parent of bench_results.
-
-## Bench result
-One row per (run × eval × arm × attempt). Stores `prompt_sent + output_received` verbatim so the grader can be re-run after a bug fix without paying for model calls again. `grade` enum: `pass | fail | error | skipped`. The unit of statistical analysis.
+Append-only, hash-chained log of every change lore makes on this machine (create, update, delete, purge, secret reveals), kept in `~/.lore/state/machine.db`. `lore audit verify` checks the chain (`E_AUDIT_CHAIN_BROKEN` on an edited or deleted entry); `lore audit log` lists entries. Teammates' changes are in `git log -- .lore/data`.
 
 ## BM25
 Ranking function used by SQLite FTS5. Orders search hits by term frequency × inverse document frequency. Better hits = lower bm25() values; lore flips sign so "higher score = better" for callers.
 
 ## Bootstrap
-The first-time setup: `lore init` + `lore learn-from docs`. See [examples/01-bootstrap.md](./examples/01-bootstrap.md).
+The first-time setup: `lore init`, then turning existing notes into rows by hand. See [examples/01-bootstrap.md](./examples/01-bootstrap.md).
 
 ## Bundle (support bundle)
 Sanitized tarball produced by `lore support-bundle` for bug reports. Contains DB schema, doctor output, scrubbed audit log. No bodies / no credentials.
 
 ## Canary
-A content-derived sha256 prefix at the top of the generated knowledge file `.lore/LORE.md` (`<!-- AICODER:CANARY=rnd_<hex> -->`). Lets `why-context --last-render` look up exactly which render the agent read. Content-derived so renders are deterministic.
+A content-derived sha256 prefix at the top of the generated knowledge file `.lore/LORE.md` (`<!-- AICODER:CANARY=rnd_<hex> -->`). Lets `why-context` look up exactly which render the agent read. Content-derived so renders are deterministic.
 
 ## CLAUDE.md
 The context file that some coding tools read at the start of every session. lore's default **pointer target**: `lore render` writes the compiled knowledge to `.lore/LORE.md` and stitches an idempotent `@import` pointer into CLAUDE.md, leaving any hand-written content intact. The agent reads CLAUDE.md, which imports `.lore/LORE.md`; the user writes to lore; `lore render` bridges the two.
@@ -55,8 +43,8 @@ A monotonically-increasing per-project integer per entity kind. Lets users say `
 ## doctor
 Health-check command. Exits 0 (healthy), 1 (degraded), 2 (broken). Returns structured JSON with `--json`. Probes: DB integrity, schema presence, identity resolution, WAL size.
 
-## ent
-The ORM used by lore. Schema-first (Go), code-gen'd. Schemas at `dbent/schema/`. Generated code at `dbent/gen/ent/` — never edit by hand.
+## TableDef
+The one Go definition of a table (fields, relations, on-delete rules), declared with `schema.Table(...)` in the `schema/` package. It drives the cache tables, foreign keys, indexes, CLI flags, REST routes and the docs. No code generation: the SQLite cache is built from the TableDefs at run time (`adapters/cache/sqlite`). lore v0.1.17 used the ent ORM; 0.1.18 removed it.
 
 ## entity_table / entity_id
 The polymorphic FK pattern for `comments` and `entity_tags` tables. `entity_table` is the literal table name (e.g., `"memories"`), `entity_id` is the opaque ID.
@@ -73,9 +61,6 @@ A loud recurring warning the team keeps hitting. Pinned in render output, never 
 ## Identity
 See **Actor**.
 
-## learn-from
-Bootstrap command that ingests existing markdown (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, README) into `learn_candidates` for review. Use `lore learn promote <id>` to accept.
-
 ## Master scope
 A row with no `repo_id` — applies to the entire project, not just one repo. The default when no `--repo` is passed.
 
@@ -86,16 +71,16 @@ Free-form learned fact. The lightest-weight capture shape. No rationale, no seve
 A container for tasks. Used to group related work items under one initiative with a target date.
 
 ## Mode A
-Local DB mode. One `.lore/lore.db` per project root. The default. Mode A projects sync through git via `.lore/data/` (see Row file).
+The v0.1.17 name for the default: one project per repo, its rows under `.lore/data/` (see Row file), shared through git. In 0.1.18 every repo works this way; the local cache is `.lore/lore-cache.db`.
 
 ## Row file
-`.lore/data/<table>/<id>.json` — one canonical JSON file per shared row (sorted keys, UTC timestamps, `_v` format version, `_table`). The committed source of truth; `lore.db` is a cache of these files plus machine-local tables.
+`.lore/data/<table>/<id>.json` — one canonical JSON file per shared row (sorted keys, UTC timestamps, `_v` format version, `_table`). The committed source of truth; `.lore/lore-cache.db` is a cache of these files (machine-local state lives in `~/.lore/state/machine.db`).
 
 ## Bootstrap / Adopt
-The first sync pass. **Bootstrap** (no `.lore/data` yet): back up `lore.db`, export every shared row, write `_meta.json`. **Adopt** (`.lore/data` exists but this DB never synced — a teammate's pull, a fresh clone, a restore): switch to the shared project id, import files, export private rows, keep losing versions of clashing rows as conflicts.
+The v0.1.17 first sync pass (0.1.18 writes the row files directly; v0.1.17 data converts with `lore migrate run`). **Bootstrap** (no `.lore/data` yet): back up `lore.db`, export every shared row, write `_meta.json`. **Adopt** (`.lore/data` exists but this DB never synced — a teammate's pull, a fresh clone, a restore): switch to the shared project id, import files, export private rows, keep losing versions of clashing rows as conflicts.
 
 ## Sync trash
-Rows deleted because their file disappeared (revert, `git clean`, stash) are copied to the trash first; `lore sync trash restore <n>` undoes it.
+Rows deleted because their file disappeared (revert, `git clean`, stash) are copied to the trash first; `lore trash list --local` lists them; core rows come back from git (`git checkout HEAD -- <file>`).
 
 ## Merge driver
 A program git runs instead of its line-by-line merge for files `.gitattributes` assigns to it. lore's (`lore merge-driver`) merges row files field by field: a field changed on one side takes that side, `updated_at` takes the later time, a status / priority / date / reference changed both ways takes the newer edit (and says so), and text changed both ways becomes a real conflict with markers inside that one value. Configured in each clone automatically; host merge buttons (GitHub, GitLab) never run it.
@@ -107,7 +92,7 @@ A program git runs instead of its line-by-line merge for files `.gitattributes` 
 `.github/workflows/lore-sync-merge.yml`, written by `lore sync install-action` (opt-in; runs only when started by hand unless installed with `--auto`; a re-run or a version update keeps the triggers the file already has). Runs `ci-merge` for open pull requests (with `--auto`, whenever lore data changes) and pushes the merges it is allowed to make. Uses a `LORE_SYNC_TOKEN` secret when present so required checks re-run on its merge commits. Its lore version is pinned `auto` (follows the newest lore release a developer runs in the repo; never downgraded) or `fixed` (`--lore-version`); a checksum line marks hand edits, which stop the automatic updates.
 
 ## Mode B
-Shared DB mode. Multiple project roots pointing at a single shared SQLite file via `.lore/lore.toml`. Used when many sibling projects want one knowledge base.
+The v0.1.17 shared-database mode: several repos pointing at one shared database file via `.lore/lore.yaml` (older: `.lore/lore.toml`). Retired in 0.1.18: share notes through a store (`lore store init` / `lore store add`); `lore migrate run` converts such a repo.
 
 ## NFC
 Unicode Normalization Form C. lore normalizes all text input to NFC on write so equivalent characters compare equal. Defeats homoglyph attacks and accidental encoding drift.
@@ -119,7 +104,7 @@ Reusable code shape captured for future reference.
 Reusable multi-step procedure (different from this docs' playbooks file — same idea, different scope).
 
 ## Prefix
-The 3-character identifier prefix on every opaque ID. `mem_` = memory, `rul_` = rule, `dec_` = decision, etc. 32 registered prefixes; see `saas/pkg/lore/ids/registry.go`.
+The 3-character identifier prefix on every opaque ID. `mem_` = memory, `rul_` = rule, `dec_` = decision, etc. 86 registered prefixes; see `model/ids/prefixes.go`.
 
 ## Project
 The top-level scope in lore. One project per `lore init`. Has many repos.
@@ -146,10 +131,10 @@ The DB schema generation. v0.1 = `schema_version: 1`. Bumped only on breaking ch
 The triple `(project_id, repo_id, master?)` that determines who sees a row. Flags `--repo`, `--all-repos`, `--master-only`, `--no-inherit` control scope at query time.
 
 ## Secret scrubber
-Pre-write check that refuses bodies containing credential patterns (AWS keys, GitHub PATs, JWTs, OpenAI keys, Stripe keys, etc.). Override via `--allow-secrets`, which is logged loudly.
+Pre-write check that refuses bodies containing credential patterns (AWS keys, GitHub PATs, JWTs, OpenAI keys, Stripe keys, etc.). The write stops with `E_NEEDS_CONFIRM` (the JSON error carries `findings[]` and `next.add_args_one_of`); a bare `--yes` does not store it. The choices are `--secret-ref "<manager>://<entry>"`, `--secret-unstored`, or `--not-a-secret --reason "<why>" --yes` (after the person confirms); at a terminal a menu offers redact / unstored / not a secret (reason required) / cancel. The commit hook still refuses a credential.
 
 ## Symlink protection
-lore refuses to open `.lore/lore.db` if it's a symlink (O_NOFOLLOW semantics). Prevents an attacker with write access to `.lore/` from redirecting writes to `/etc/passwd` etc.
+lore refuses to write a database file (the cache and its sidecars, the machine store), the store lock `.lore/lock` or an audit file through a symbolic link (`E_SYMLINK_DB`); `.lore/LORE.md` may be a link only when it stays inside the repository. Prevents an attacker with write access to `.lore/` from redirecting writes to `/etc/passwd` etc.
 
 ## Tag
 Polymorphic label. Created once (`tag add --name=…`), then attached to many entities via `tag attach --on-table=… --on-id=…`.
@@ -161,7 +146,7 @@ Discrete work item with status + priority + optional mission. Lifecycle: todo �
 Alternative grouping for tasks. Lighter than Mission; no target date.
 
 ## TOML pointer
-The 2-line file at `.lore/lore.toml` in Mode B. Lists `db_path` (where the shared DB lives) and `project_id` (which project this directory belongs to).
+The 2-line file at `.lore/lore.yaml` (older: `.lore/lore.toml`) in a v0.1.17 Mode B repo; `lore migrate run` converts it and keeps it as `<file>.migrated`. Lists `db_path` (where the shared DB lives) and `project_id` (which project this directory belongs to).
 
 ## Trojan source defense
 lore strips bidi-override + zero-width characters from input text. Prevents copy-paste attacks that visually swap characters mid-string.
@@ -173,4 +158,4 @@ Timestamp-prefixed UUID variant. lore uses UUIDv7 for all IDs so insert order �
 Introspection command. Shows what the most recent render included/excluded and why. Use when "the agent seems to be missing X."
 
 ## WAL
-SQLite's Write-Ahead Log mode. lore uses it via PRAGMA for crash safety + concurrent readers. Sidecar files: `lore.db-wal`, `lore.db-shm`.
+SQLite's Write-Ahead Log mode. lore uses it via PRAGMA for crash safety + concurrent readers. Sidecar files: `lore-cache.db-wal`, `lore-cache.db-shm`.

@@ -1,14 +1,10 @@
 # reference: the outputs the reference pages quote (docs/reference/*.md).
-# Alice (an agency developer) works in the client's website repo. She lists the
-# error codes, sees how one error looks and which exit status it gives, checks
+# Alice (an agency developer) works in the client's website repo. She sees how one error looks and which exit status it gives, checks
 # her ~/.lore/config.yaml with `lore config check` (first a good file, then one
-# with mistakes), and points one command at another database with --db / LORE_DB.
+# with mistakes), and sees that --db is refused (rows are read from the repo's files)
+# while LORE_REPO / LORE_PROJECT_ID still pick the repo and project.
 
 lore_repo alice client/website
-
-note "errors list"
-on alice work/website "lore errors list | head -4"
-on alice work/website "lore errors list --json | head -9"
 
 note "an error"
 on! alice work "lore rule list"
@@ -35,7 +31,7 @@ identity:
   key: human:alice@agency.example
   name: Alice
 personal:
-  store: local
+  store: git@github.com:alice/lore-me
 orgs:
   - name: agency
     identity:
@@ -43,7 +39,7 @@ orgs:
       name: Alice
       handle: alice
     stores:
-      - url: github.com/agency/notes
+      - url: git@github.com:agency/notes
         org_folder: "."
     own:
       - github.com/agency/*
@@ -79,6 +75,14 @@ link_index:
   max_age: 1h
 untrusted_hosts:
   - build-*.client.example
+upgrade_notice: true
+auto_upgrade: false
+context:
+  profiles:
+    - name: mytool
+      pointer_file: MYTOOL.md
+      import: at
+      budget: 20000
 Y
 on alice . "cat .lore/config.yaml"
 on alice work/website "lore config check"
@@ -90,7 +94,7 @@ orgs:
     identity:
       key: alice@agency.example
     stores:
-      - url: github.com/agency/notes
+      - url: git@github.com:agency/notes
         branch: team/staging
 lease:
   ttl: 5m
@@ -108,19 +112,22 @@ live:
 Y
 on! alice work/website "lore config check"
 
+# A config lore cannot read blocks reads too (fail closed, CFG): lore cannot tell which
+# stores a row may come from.
 note "invalid config stops writes"
-on alice work/website "lore rule list"
+on! alice work/website "lore rule list"
 on! alice work/website "lore rule add --body 'Run the tests before you push'"
 quiet alice . "rm .lore/config.yaml"
 
 note "db flag"
 quiet alice work/website "lore rule add --body 'Run the tests before you push'"
-on alice . "lore rule list --db work/website/.lore/lore.db"
-EXTRA_ENV="LORE_DB=work/website/.lore/lore.db" on alice . "lore rule list"
+on! alice . "lore rule list --db work/website/.lore/lore.db"
+on! alice . "lore rule list"
+on alice . "cd work/website && lore rule list"
 
 note "db config"
 on alice work/website "lore config list"
-on alice work/website "lore config get schema_version"
+on alice work/website "lore config get default_branch || echo 'not set'"
 
 # --- default_branch (docs/reference/config.md) -------------------------------------------
 note "default branch"
@@ -136,11 +143,6 @@ on alice work/website "git fetch -q origin && git log --oneline origin/develop -
 quiet alice . "rm .lore/config.yaml"
 
 # --- one error from each group (docs/reference/errors.md) --------------------------------
-note "sync data ignored"
-on alice work/website "mkdir -p .lore/data/tasks && echo '*.json' > .lore/data/tasks/.gitignore"
-on! alice work/website "lore sync install-git"
-quiet alice work/website "rm .lore/data/tasks/.gitignore"
-
 note "no work"
 lore_repo alice client/landing
 on! alice work/landing "lore task next"
@@ -163,16 +165,105 @@ orgs:
     repos: [github.com/client/*]
 Y
 on alice . "cat .lore/config.yaml"
-on alice . "lore store init git@github.com:agency/notes"
-on alice . "lore store init git@github.com:other/notes"
-on alice . "git clone -q https://github.com/agency/notes notes-checkout && cat notes-checkout/lore-store.yaml"
+# 0.1.18: a store is attached to the repo by name (`lore store init <name> <url>`).
+on alice work/website "LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes"
+on alice work/website "LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes"
+on alice work/website "cat .lore/stores.yaml"
 
 note "org use"
 on! alice work/website "lore whoami"
 on alice work/website "lore org use agency"
-on alice . "grep -A3 repo_orgs ~/.lore/config.yaml"
+on alice . "grep -A4 repo_orgs ~/.lore/config.yaml"
 on alice work/website "lore org link agency --project client --yes"
 
 note "force org"
 on! alice work/website "LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'"
-on alice work/website "LORE_ORG=freelance lore memory add --force-org --to freelance/client --create --body 'The client pays invoices in 30 days'"
+# --force-org is gone: name the store the note goes to with --to.
+on! alice work/website "lore memory add --force-org --body 'The client pays invoices in 30 days'"
+on alice work/website "lore memory add --to freelance --body 'The client pays invoices in 30 days'"
+
+# --- LORE_DB and LORE_PROJECT_ID (docs/reference/environment.md) -------------------------
+note "project id"
+quiet alice . "rm .lore/config.yaml"
+on! alice work/website "LORE_DB=.lore/lore.db lore rule list"
+on alice work/website "lore project list"
+on alice work/website "LORE_PROJECT_ID=\$(lore project list | cut -d' ' -f1) lore rule list"
+on! alice work/website "LORE_PROJECT_ID=prj_website lore rule list"
+
+# --- setups, setup.*, doctor.* and policies: (docs/reference/config.md) ------------------
+note "config check setups"
+config alice <<'Y'
+identity:
+  key: human:alice@agency.example
+  name: Alice
+setups:
+  - name: work
+    kind: solo
+    default: true
+    folders:
+      - ~/work
+    identity:
+      key: human:alice@agency.example
+      name: Alice
+    tools: [claude_code, codex]
+setup:
+  idle_minutes: 60
+  open_browser: false
+doctor:
+  scan_depth: 4
+  probe_timeout_s: 30
+policies:
+  meta.max_bytes: 4096
+  meta.max_bytez: 100
+Y
+on alice . "cat .lore/config.yaml"
+on alice work/website "lore config check"
+on alice work/website "lore policy show 2>/dev/null | grep meta.max_bytes"
+
+note "config check setups bad"
+config alice <<'Y'
+setups:
+  - name: Work
+    kind: boss
+    folders: [work]
+  - name: home
+    kind: solo
+    default: true
+  - name: laptop
+    kind: solo
+    default: true
+setup:
+  idle_minutes: 0
+doctor:
+  scan_depth: 20
+  probe_timeout_s: 600
+policies:
+  meta.max_bytes: lots
+Y
+on alice . "cat .lore/config.yaml"
+on! alice work/website "lore config check"
+quiet alice . "rm .lore/config.yaml"
+
+# --- one refused command per error group (docs/reference/errors.md) ----------------------
+note "sql refused"
+on! alice work/website "lore sql 'DELETE FROM rules'"
+
+note "has dependents"
+on alice work/website "lore project list"
+on! alice work/website "lore project delete \$(lore project list | cut -d' ' -f1) --yes"
+
+note "ref syntax"
+on alice work/website "lore vars set host staging.client.example"
+on! alice work/website "lore vars set base_url 'https://\${var:host?port=8080}/'"
+
+note "meta unknown"
+on alice work/website "lore rule add --body 'Keep the footer links in one list'"
+local r_footer; r_footer=$(id rul)
+on! alice work/website "lore meta unset $r_footer client_tier"
+
+# --- --everywhere is gone: a --to me row shows in every repo (docs/reference/flags.md) ---
+note "personal everywhere"
+on alice work/website "lore store init me"
+on! alice work/website "lore memory add --to me --everywhere --body 'I write short commit messages'"
+on alice work/website "lore memory add --to me --body 'I write short commit messages'"
+on alice work/landing "lore memory list"

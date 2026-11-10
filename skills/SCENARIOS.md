@@ -13,7 +13,7 @@ Each entry: situation → exact commands. Stop reading at the first match.
 [ -d .lore ] && echo init-skip || echo "ask user: bootstrap?"
 # If yes:
 lore init --non-interactive
-lore learn-from docs        # if any *.md exists
+# existing *.md notes: add each true item with rule add / decision add / memory add
 lore render
 ```
 
@@ -31,10 +31,11 @@ lore render     # writes .lore/LORE.md from existing DB + creates CLAUDE.md with
 ### A.4 User says "set this up like my other project"
 ```bash
 lore init --non-interactive
-# Copy memories/rules from the other project:
-sqlite3 ../other-project/.lore/lore.db ".dump memories rules decisions" \
-    | sqlite3 .lore/lore.db
-# (NOTE: project_id differs; you may need to UPDATE project_id after dump.)
+# Rules both projects follow belong in a store both repos attach
+# (PLAYBOOKS.md P6), not in a copy: in the other repo, once,
+#   lore store init shared file:///<absolute path>   (or a git url)
+# then here:
+lore store add shared <url>
 lore render
 ```
 
@@ -77,7 +78,7 @@ lore render
 ### B.5 User: "I keep forgetting that ent regen wipes resolver/ helpers"
 ```bash
 lore hotfix add --severity=high --title="ent regen wipes resolver/ helpers" \
-    --body="ent regen wipes hand-written code in resolver/. Keep helpers in internal/, lace/, or saas/pkg/."
+    --body="ent regen wipes hand-written code in resolver/. Keep helpers in internal/ or pkg/."
 lore render
 ```
 
@@ -131,7 +132,7 @@ lore render
 ```bash
 lore suggestion add \
     --title="Rate-limit /api/* endpoints" \
-    --body="Public endpoints currently uncapped. Suggest: 100req/min per IP, 1000req/min per API key. Use lace/ratelimit pkg."
+    --body="Public endpoints currently uncapped. Suggest: 100req/min per IP, 1000req/min per API key. Use the shared ratelimit pkg."
 lore render
 ```
 
@@ -233,12 +234,12 @@ lore rule list --json | jq '.data[] | select(.activation == "glob" and (.globs /
 
 ### D.6 "Why is X showing in CLAUDE.md?"
 ```bash
-lore why-context --last-render --rendered | grep -B2 -A2 "X"
+lore why-context --rendered | grep -B2 -A2 "X"
 ```
 
 ### D.7 "What did the agent receive in its last render?"
 ```bash
-lore why-context --last-render --json | jq '.scope_summary'
+lore why-context --json | jq '.scope_summary'
 ```
 
 ---
@@ -257,7 +258,7 @@ lore render --dry-run | less
 
 ### E.3 "Render for a specific repo"
 ```bash
-lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
+(cd web && lore render)   # render runs in the repo it renders
 ```
 
 ### E.4 "Also stitch the pointer into AGENTS.md for Codex"
@@ -289,39 +290,29 @@ lore doctor --json | jq '.warnings, .errors'
 
 ### F.3 "DB is corrupt"
 ```bash
-lore repair --tier=2 --confirm
+# the cache is built from .lore/data: delete it, the next command rebuilds it
+rm -f .lore/lore-cache.db*
+lore doctor
 ```
 
-### F.4 "I have no backup"
+### F.4 "I deleted .lore/data"
 ```bash
-# Tier 3 — bootstrap empty + re-learn from committed CLAUDE.md
-lore repair --tier=3 --confirm
-lore learn-from docs
-for id in $(lore learn list --json | jq -r '.data[].id'); do
-    lore learn promote "$id" --target=memories
-done
-lore render
+git checkout HEAD -- .lore/data     # the files are the truth; git has them
 ```
 
-### F.5 "Create a backup right now"
+### F.5 "Make a safe copy of my notes"
 ```bash
-lore backup
-ls -la .lore/backups/ | tail
+git add .lore/data && git status --short .lore/data   # commit them; no separate backup
 ```
 
-### F.6 "Restore from a specific backup"
+### F.6 "DB is locked, another process is running"
 ```bash
-lore restore .lore/backups/20260510-180412.sqlite --confirm
+# E_STORE_LOCKED: another lore command held the store lock past
+# store.lock_timeout. Wait a few seconds and run the command again.
+# A lock left by a dead process is taken over on the next attempt.
 ```
 
-### F.7 "DB is locked, another process is running"
-```bash
-# Either wait, or find + kill the other process:
-lsof .lore/lore.db   # see PID
-# If stale (process is dead), lore auto-reclaims on next attempt.
-```
-
-### F.8 "Open a bug — capture state"
+### F.7 "Open a bug — capture state"
 ```bash
 lore support-bundle --out=/tmp/lore-bug.tar.gz
 # Attach to issue. No secrets — bodies are scrubbed.
@@ -363,29 +354,25 @@ lore repo list --json
 
 ---
 
-## H · Mode B (shared DB)
+## H · Notes shared by several repos (a store)
 
-### H.1 "Use my home shared DB for this repo"
+### H.1 "Share notes between these repos"
 ```bash
-lore project shared-init --db=${HOME}/.lore/shared.db --name=myproject
+lore store init shared "file://$HOME/stores/shared"   # first repo: make the folder store, attach it
+lore store add shared "file://$HOME/stores/shared"    # each other repo
+lore memory add --to shared --body "<...>"
 ```
 
-### H.2 "Show all projects in the shared DB"
+### H.2 "Which stores does this repo see?"
 ```bash
-lore project shared-list --db=${HOME}/.lore/shared.db --json
+lore store list --json
 ```
 
-### H.3 "Switch this repo from Mode A to Mode B"
+### H.3 "This repo still uses the old shared database (Mode B)"
+Every command stops with `E_UNSUPPORTED` and names `lore migrate run` (0.1.18 retired Mode B).
 ```bash
-# Export Mode A rows:
-sqlite3 .lore/lore.db ".dump memories rules decisions hotfixes" > /tmp/dump.sql
-# Move aside Mode A db:
-mv .lore/lore.db .lore/lore.db.modeA-backup
-# Init Mode B:
-lore project shared-init --db=${HOME}/.lore/shared.db --name=$(basename $PWD)
-# Apply dump (manual project_id remap may be needed):
-sqlite3 ${HOME}/.lore/shared.db < /tmp/dump.sql
-lore render
+lore migrate run --dry-run    # lists the rows that move into a folder store beside the shared DB
+lore migrate run              # converts; the pointer is kept as .lore/lore.yaml.migrated
 ```
 
 ---
@@ -462,9 +449,9 @@ N=$(lore rule list --json | jq '.data | length')
 
 ### L.1 "Import from .cursorrules"
 ```bash
-lore learn-from docs --paths=.cursorrules
-lore learn list --json
-# Then promote selectively or in bulk.
+cat .cursorrules
+# no importer in 0.1.18: add each item that is still true with its own command
+lore rule add --severity=must --body="<rule from the file>"
 ```
 
 ### L.2 "Import from a Notion export"
@@ -487,8 +474,9 @@ lore render
 ## M · Inspection / debugging
 
 ### M.1 "What error codes can occur?"
+Read the error table in `docs/reference/errors.md` (generated by `lore spec docs` from the code). A failing command with `--json` prints its own code:
 ```bash
-lore errors list --json
+lore task show tsk_missing --json
 ```
 
 ### M.2 "What version + schema?"
@@ -496,14 +484,15 @@ lore errors list --json
 lore version --json
 ```
 
-### M.3 "Show me the last 10 query logs"
+### M.3 "What did the last render pin, and why?"
 ```bash
-lore querylog list --json | jq '.data[0:10]'
+lore why-context
+lore why-context --cut
 ```
 
-### M.4 "Show render history"
+### M.4 "How has LORE.md grown?"
 ```bash
-lore renderhistory list --json
+lore render --trend --json
 ```
 
 ### M.5 "Show recent sessions"
@@ -511,9 +500,9 @@ lore renderhistory list --json
 lore session list --json
 ```
 
-### M.6 "Show background runs (learn, assemble, bench)"
+### M.6 "How long did the agent's runs on a task take?"
 ```bash
-lore run list --json
+lore task time show tsk_<id>
 ```
 
 ---
@@ -522,9 +511,11 @@ lore run list --json
 
 ### N.1 User pastes content with an embedded API key
 ```bash
-# lore refuses by default with E_SECRET_DETECTED.
-# Only override if user explicitly says "yes, I know, override":
-lore memory add --body "<...>" --allow-secrets    # logged loudly; never written to .lore/data
+# lore stops with E_NEEDS_CONFIRM (findings[] + next.add_args_one_of); a bare --yes does not store it.
+lore memory add --body "<...>" --secret-ref "vault://team/deploy-key"   # keep a reference instead of the value
+lore memory add --body "<...>" --secret-unstored                        # keep the note, leave the value out
+# Only if the person explicitly confirms it is not a secret:
+lore memory add --body "<...>" --not-a-secret --reason "<why>" --yes    # the commit hook still refuses a credential
 ```
 
 ### N.2 User runs as root
@@ -533,64 +524,57 @@ lore memory add --body "<...>" --allow-secrets    # logged loudly; never written
 LORE_ALLOW_ROOT=1 lore init
 ```
 
-### N.3 .lore/lore.db is a symlink
+### N.3 A lore file is a symlink
 ```bash
-# Refused with E_SYMLINK_DB. Inspect target — if intentional, delete + restore.
-ls -la .lore/lore.db
-rm .lore/lore.db
-lore repair --tier=2 --confirm   # if backup exists
+# Refused with E_SYMLINK_DB: lore never writes a database, the store lock
+# (.lore/lock) or an audit file through a symbolic link. The message names
+# the file. Inspect the target, then delete the link; the next command recreates it.
+ls -la .lore/lore-cache.db
+rm .lore/lore-cache.db
+lore doctor
 ```
 
 ### N.4 Two lore processes running concurrently
 ```bash
-# Each holds a process flock during write. Second writer waits or returns
-# E_LOCK_HELD if --read-only is off and the lock is held.
-# Default: wait + retry up to 5s.
+# Writers take the store lock in turn; a second writer waits up to
+# store.lock_timeout, then answers E_STORE_LOCKED (retry). Readers never wait.
 ```
 
 ### N.5 DB on iCloud / Dropbox / OneDrive
 ```bash
 # lore detects cloud-sync folders by path and network filesystems by fs type,
-# and returns E_NETWORK_FS. Best fix: move the whole project to a local disk
-# and share knowledge through git (.lore/data). Or keep the project and move
-# only the DB to a local path (git sync is then off for this project):
-mv .lore/lore.db $HOME/local-lore/$(basename $PWD).db
-mkdir -p .lore
-ln -s $HOME/local-lore/$(basename $PWD).db .lore/lore.db
-# (NOTE: symlink will be refused — instead use --db flag or LORE_DB env.)
-echo "LORE_DB=$HOME/local-lore/$(basename $PWD).db" >> .envrc
+# and returns E_NETWORK_FS. Fix: move the whole project to a local disk
+# and share knowledge through git (.lore/data). --db / LORE_DB are refused
+# on row commands, and a symlinked cache is refused (E_SYMLINK_DB).
+# LORE_ALLOW_NETWORK_FS=1 overrides at the user's own risk.
 ```
 
 ### N.6 User: "I want to delete a memory"
 ```bash
-# v0.1: no `memory delete` command. Direct SQL (advanced):
-sqlite3 .lore/lore.db "DELETE FROM memories WHERE id=7"
-# OR set archived_at to soft-delete:
-sqlite3 .lore/lore.db "UPDATE memories SET archived_at=datetime('now') WHERE id=7"
-lore render    # rerender without archived rows
+lore memory delete mem_<id> --reason "<why>"   # to the trash; asks first
+lore trash restore mem_<id>                    # undo
+# or keep it out of the context without deleting:
+lore memory archive mem_<id>
 ```
 
 ### N.7 User: "edit memory mem_<id>"
 ```bash
-# v0.1: no `memory edit`. Add a new one + archive the old:
-sqlite3 .lore/lore.db "UPDATE memories SET archived_at=datetime('now') WHERE id=3"
-lore memory add --body="<corrected text>"
-lore render
+lore memory edit mem_<id> --body "<corrected text>"
+# or record that the old one is wrong and add the replacement:
+lore memory add --body "<corrected text>" --supersedes mem_<id>
 ```
 
 ### N.8 User: "rename the project"
 ```bash
-sqlite3 .lore/lore.db "UPDATE projects SET name='newname' WHERE id=(SELECT id FROM projects)"
+# 0.1.18 has no project rename command; tell the user. Never edit the
+# cache (.lore/lore-cache.db): it is rebuilt from .lore/data.
 ```
 
 ### N.9 User: "I deleted .lore/ by accident"
 ```bash
-# If you have a backup outside .lore/:
-mkdir .lore
-lore restore /path/to/backup.sqlite --confirm
-# If you committed CLAUDE.md to git, you can rebuild from that:
-lore init --non-interactive
-lore learn-from docs
+# If .lore/data was committed, git brings everything shared back:
+git checkout HEAD -- .lore
+lore doctor                # the next command rebuilds the cache from .lore/data
 ```
 
 ### N.10 User: "audit log is corrupted"
@@ -601,89 +585,19 @@ lore audit log --limit 50  # who changed what, newest first
 
 ---
 
-## P · Benchmark engine
-
-### P.1 "Set up a benchmark task for rule rul_<id>"
-```bash
-lore bench eval add --category=rule-trigger \
-    --link=rule:rul_<id> \
-    --prompt-file=/tmp/prompt.md \
-    --grader-kind=programmatic \
-    --grader-cmd='! grep -qE "fmt\.Errorf" "$OUTPUT_FILE"'
-```
-
-### P.2 "List benchmark tasks"
-```bash
-lore bench eval list                          # human
-lore bench eval list --json | jq '.count'     # script
-lore bench eval list --category=rule-trigger  # filter
-lore bench eval list --include-archived       # see archived too
-```
-
-### P.3 "Show E1-001"
-```bash
-lore bench eval show E1-001
-lore bench eval show E1-001 --json | jq '.data.grader_spec'
-```
-
-### P.4 "Edit the grader for E1-001"
-```bash
-lore bench eval edit E1-001 \
-    --grader-cmd='grep -qE "return.*err" "$OUTPUT_FILE"'
-```
-
-### P.5 "Clone E1-001 to experiment"
-```bash
-lore bench eval duplicate E1-001 --as=E1-001-experimental
-lore bench eval edit E1-001-experimental --grader-cmd='...'
-```
-
-### P.6 "Archive a task"
-```bash
-lore bench eval archive E1-001        # soft-delete (preserves history)
-lore bench eval unarchive E1-001      # restore
-lore bench eval delete E1-001 --confirm  # hard-delete (refuses if any
-                                            # bench_result rows reference it)
-```
-
-### P.7 "Import the YAML test set"
-```bash
-lore bench eval import --from=bench/tasks/
-# 30 tasks imported, classified by category
-lore bench eval list --json | jq '.count'   # 30
-```
-
-### P.8 "Export task set for git diff"
-```bash
-lore bench eval export --to=bench/tasks/
-git diff bench/tasks/
-```
-
-### P.9 (v0.2.3+) "Run the benchmark"
-```bash
-lore bench run start --model=claude-sonnet-4-6 --runs-per-arm=3
-```
-
-### P.10 (v0.2.3+) "Report on the latest run"
-```bash
-lore bench report summary --latest
-```
-
----
-
 ## O · What you should refuse
 
 ### O.1 User: "store this AWS key as a memory"
-**Refuse.** Even if they say "trust me" — the secret-scrubber pattern is broad and the false-positive rate is low. Suggest: store in `.env` (gitignored) or a secrets manager. If they really insist, require explicit `--allow-secrets` AND log a warning.
+**Refuse.** Even if they say "trust me" — the secret-scrubber pattern is broad and the false-positive rate is low. Suggest: store in `.env` (gitignored) or a secrets manager. Offer `--secret-ref "<manager>://<entry>"` (a reference to where the key lives) or `--secret-unstored`. A bare `--yes` does not store a detected secret; `--not-a-secret --reason "<why>" --yes` is only for text the person explicitly confirms is not a secret.
 
 ### O.2 User: "run lore as root"
 **Refuse by default.** Suggest: chown the directory to the user.
 
 ### O.3 User: "delete the audit log"
-**Refuse.** Audit log is forensic. Suggest: archive the DB and start fresh if needed.
+**Refuse.** Audit log is forensic (it lives in `~/.lore/state/machine.db` and is hash-chained). Suggest `lore audit log` to read it.
 
-### O.4 User: "edit .lore/lore.db directly with sqlite3"
-**Discourage** for normal operations. Suggest the CLI. **Allow** for documented surgery (rename, delete, archive) with clear caveats — see N.6 / N.7 / N.8 above.
+### O.4 User: "edit the lore database directly with sqlite3"
+**Refuse.** The cache `.lore/lore-cache.db` is rebuilt from `.lore/data`, so a direct edit is lost and skips validation and the secret checks. Use the CLI (N.6 / N.7); for read-only questions `lore sql "<SELECT …>"`.
 
 ### O.5 User: "skip the migration check"
-**Refuse.** Schema mismatch + skip = data corruption. Suggest: upgrade lore OR pin DB to old version.
+**Refuse.** There is no migration check to skip in 0.1.18: the cache rebuilds itself. v0.1.17 data is converted once with `lore migrate run`; `E_OLD_LORE` means `lore upgrade`.

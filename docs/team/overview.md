@@ -43,7 +43,7 @@ That works well for one person. For a team it leaves gaps. Lore for teams fills 
  ┌──────────────────────────────────────────────────────────────────────┐
  │ ~/.lore/config.yaml    your orgs, your identity in each, your stores │
  │ ~/.lore/personal/      your personal notes: everywhere/, agency/     │
- │ ~/.lore/clones/        one bare clone per store                      │
+ │ ~/.lore/clones/        one clone per store (<repo>.git/ + <repo>/)   │
  │ ~/.lore/render/…md     internal context for agents, OUTSIDE the repo │
  └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -81,3 +81,10 @@ If you work alone in one repo, nothing changes unless you want it to. No config 
 - **Hidden is not private.** Anyone who can clone a repo can download everything in it, on any branch or hidden list. Private notes must live in a repo the other side cannot open.
 - **Live is temporary.** Live rows are copied to `main` when they are finished, or after 7 days (`live.max_age`) if they are still open. A ZIP download, a fork or a shallow clone carries only what is on `main`.
 - **Your identity key is your email.** Keep it the same on every machine.
+
+## Related
+
+- [Concepts](concepts.md): each idea explained on its own.
+- [Getting started](getting-started.md): your first live task.
+- [Use cases](README.md#use-cases): pick the one closest to your team.
+- [Guided setup](guided-setup.md): setting up a machine for one or more teams.

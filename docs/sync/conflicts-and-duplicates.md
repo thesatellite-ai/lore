@@ -8,12 +8,12 @@ Each note is one small file with one field per line ([How notes travel with git]
 
 lore installs a **merge driver**: a small helper git calls to combine two edits of the same note (see [Hooks and the merge driver](hooks-and-merge-driver.md)). It merges a note field by field:
 
-<!-- ds:block id=sync-strategyfor-ycedma28 -->
+<!-- ds:block id=sync-strategyfor-db9rgsqn -->
 | Both sides changed... | Result |
 |---|---|
 | different fields (one the strength, one the text) | both changes kept, no conflict |
 | the same field to the same value | that value |
-| the same choice-type field (status, priority, an archive date, a link to another row) | the side with the newer `updated_at` wins |
+| the same choice-type field (status, priority, an archive date, a link to another row) | the side changed last wins |
 | the same free-text field (title, body) | a real conflict: both versions are written into the value, and you choose |
 | a list that works like a set (labels, approvers) | additions from both sides kept, removals honoured |
 
@@ -24,7 +24,7 @@ You want this page after a `git pull` or merge that touched `.lore/data`, when `
 ## Before you start
 
 - A repo set up with lore, cloned by two people (here Alice and Bob, agency developers, in `github.com/client/website`).
-- The merge driver is set up in each clone. lore does this on its first command in a clone; `lore sync install-git` does it at once.
+- The merge driver is set up in each clone. lore does this on its first command in a clone.
 
 ## Step 1 — Two edits of different fields merge by themselves
 
@@ -33,27 +33,21 @@ Alice makes "Buttons are blue" a must-have rule (the `severity` field). At the s
 <!-- example: sync#merge-by-field only=5,6,7,8 -->
 ```console
 # alice, in website
-$ lore rule edit rul_76bd…3f10 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
-✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+$ lore rule edit rul_b4f4…a5b0 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
+✓ rul_b4f4…a5b0 updated
 
 # bob, in website
-$ lore rule edit rul_76bd…3f10 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
-✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
+✓ rul_b4f4…a5b0 updated
 $ git pull --no-rebase origin main
 From /srv/git/github.com/client/website
  * branch            main       -> FETCH_HEAD
-Auto-merging .lore/data/rules/rul_76bd…3f10.json
+Auto-merging .lore/data/rules/rul_b4f4…a5b0.json
 Merge made by the 'ort' strategy.
- .lore/data/rules/rul_76bd…3f10.json | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
 $ lore rule list
-rul_2ad3…f891 [must/always] Run the tests before you push.
-rul_c0f3…b5b8 [must/always] Never put passwords in the code.
-rul_76bd…3f10 [must/always] Buttons are blue, links are green.
+rul_162d…9666 [must/always] Run the tests before you push.
+rul_76bd…3f10 [must/always] Never put passwords in the code.
+rul_b4f4…a5b0 [must/always] Buttons are blue, links are green.
 ```
 <!-- /example -->
 
@@ -64,26 +58,22 @@ Now Alice writes "dark blue" and Bob writes "light blue". Alice pulls and gets a
 <!-- example: sync#same-text-conflict only=2,3,4,5 -->
 ```console
 # alice, in website
-$ lore rule edit rul_76bd…3f10 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
-✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
+✓ rul_b4f4…a5b0 updated
 
 # bob, in website
-$ lore rule edit rul_76bd…3f10 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
-✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
+✓ rul_b4f4…a5b0 updated
 
 # alice, in website
 $ git pull -q --no-rebase origin main
-lore merge-driver: .lore/data/rules/rul_76bd…3f10.json needs a manual merge (markers are inside the JSON values)
-Auto-merging .lore/data/rules/rul_76bd…3f10.json
-CONFLICT (content): Merge conflict in .lore/data/rules/rul_76bd…3f10.json
+lore merge-driver: .lore/data/rules/rul_b4f4…a5b0.json needs a manual merge (markers are inside the JSON values)
+Auto-merging .lore/data/rules/rul_b4f4…a5b0.json
+CONFLICT (content): Merge conflict in .lore/data/rules/rul_b4f4…a5b0.json
 Automatic merge failed; fix conflicts and then commit the result.
 (exit 1)
-$ grep body .lore/data/rules/rul_76bd…3f10.json
-  "body": "<<<<<<< ours\nButtons are dark blue.\n=======\nButtons are light blue.\n>>>>>>> theirs",
+$ grep body .lore/data/rules/rul_b4f4…a5b0.json
+  "body": "<<<<<<< 2026-11-02T10:04:00.000Z/0000/act_28f8…03df\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:55.000Z/0000/act_54fe…28f2",
 ```
 <!-- /example -->
 
@@ -93,99 +83,71 @@ The commit is refused while the markers are there. The pre-commit hook (a small 
 ```console
 # alice, in website
 $ git commit -qam 'merge'
-lore sync: imported 1
-lore sync: conflict-markers rules/rul_76bd…3f10.json: unresolved conflict markers in "body" — settle it with a lore edit of that row, or by editing the file
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: rules/rul_76bd…3f10.json (conflict-markers), .lore/data/rules/rul_76bd…3f10.json (conflict markers in body)
-  hint: resolve the conflict markers (or `lore sync resolve`); remove the credential from the files that hold one, then commit again
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4…a5b0.json (conflict markers in a value)
+  hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
 (exit 1)
-$ lore rule edit rul_76bd…3f10 --body 'Buttons are blue.'
-✓ rul_76bd…3f10 updated
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
+$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue.'
+lore: invalid-file store repo: .lore/data/rules/rul_b4f4…a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4…a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
+✓ rul_b4f4…a5b0 updated
 $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main
 ```
 <!-- /example -->
 
 You can also edit the value in the file by hand; the next lore command reads it in.
 
+Or let lore pick one side for you. `lore sync conflicts` lists every row that still holds conflict markers, numbered: first the live rows (tasks shared before they land), then the row files of this repo that a git merge left with markers (with the file path; for those `kept` reads "both" until you choose). `lore sync status` counts the conflicted files too. `lore sync resolve <number> --take kept` keeps the first side of every marker block in that row (your edit; for a git merge, the branch you are on), `--take other` keeps the second (the edit that met it; for a git merge, the branch you merged in). It only ever chooses between texts already there, never writes new text:
+
+- A row file is written back in place and the local cache refreshed; you still `git add` and commit the merge yourself, lore never commits it for you.
+- A live row gets a new live version, pushed like any other live edit.
+- If the result would still hold markers (nested or hand-made blocks), or a file would not be a valid row afterwards, resolve refuses with `E_INVALID_INPUT` and writes nothing: edit that row by hand. An unknown number is `E_NOT_FOUND`.
+
 ## Step 3 — The file and your database both changed
 
-A different kind of conflict happens on one machine: a row changed in `lore.db` (for example with sync turned off, or by another tool) while its file also changed (by hand, or by git). The pass keeps one version, saves the other, and says so. `lore sync conflicts` shows the saved version; `lore sync resolve <number> --take kept` accepts what the pass kept, `--take other` puts the saved one back:
+For shared notes (rules, memories, tasks and the other core notes) the file is the only truth: lore reads them straight from `.lore/data`, and `lore-cache.db` is just a local copy. So an edit of the file, by hand or by git, simply wins, and there is no second version to conflict with it:
 
-<!-- example: sync#file-and-database-conflict only=2,3,4,5,6,7 -->
+<!-- example: sync#file-and-database-conflict only=2,3,4,5 -->
 ```console
 # alice, in website
-$ LORE_SYNC=0 lore memory edit mem_54fe…28f2 --body 'The client replies faster on WhatsApp than by email.'
-✓ mem_54fe…28f2 updated
-$ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_54fe…28f2.json
-$ lore sync
-lore sync: imported 1
-lore sync: conflict memories/mem_54fe…28f2.json: kept file — both sides edited body; local version saved, see `lore sync conflicts`
-$ lore sync conflicts
-#1 memories/mem_54fe…28f2 kept=file open at 2026-11-02T10:05:15Z
-    {
-      "_table": "memories",
-      "_v": 1,
-      "archived_at": null,
-      "body": "The client replies faster on WhatsApp than by email.",
-      "confidence": null,
-      "created_at": "2026-11-02T10:00:00.000000003Z",
-      "created_by_actor_id": "act_162d…9666",
-      "id": "mem_54fe…28f2",
-      "kind": "retrieved",
-      "last_validated_at": null,
-      "project_id": "prj_7a67…9504",
-      "repo_id": null,
-      "source_kind": "manual",
-      "source_ref": null,
-      "superseded_by_id": null,
-      "trust_score": 0.5,
-      "tx_at": "2026-11-02T10:00:00.000000004Z",
-      "updated_at": "2026-11-02T10:00:00.000000005Z",
-      "valid_at": null,
-      "valid_until": null,
-      "validated_by_actor_id": null
-    }
-$ lore sync resolve 1 --take other
-lore sync: exported 1
-✓ conflict #1 resolved (other)
+$ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_05e9…4603.json
 $ lore memory list
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than by email.
-mem_d431…313a [retrieved] Send the invoice reminder before the demo on Friday.
+mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email or phone.
+mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
+$ lore sync
+· already in sync
+$ lore sync conflicts
+· no conflicts
 ```
 <!-- /example -->
 
-`lore sync conflicts --all` also lists conflicts you already resolved.
+Lore 0.1.18 keeps no second copy in `lore-cache.db` that could disagree with the file, so this kind of conflict cannot happen any more. The only conflicts left are conflict markers inside a row, from Step 2 or from a live row two people edited at once; `lore sync conflicts` and `lore sync resolve` settle those.
 
 ## Step 4 — The same fact written twice
 
-Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, `lore sync dupes` finds rows whose text is the same (ignoring case and spaces), and `lore sync merge-rows` folds one into the other. Links to the dropped row (tags, comments) move to the kept one, and the dropped row goes to the trash:
+Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, both rows are there; `lore memory list` (or `lore search`) shows them side by side. `lore sync merge-rows <table> --keep <id> --drop <id>` folds them: every reference to the dropped row (links, comments, tags, `${…}` references in other rows) moves to the row you keep, and the dropped row goes to the trash in one batch, so `lore trash restore` can bring it back (`lore trash list` shows it with the reason `merged into <kept id>`). Edit the kept row first if it should carry some of the other's text. Deleting the duplicate with its own command also works, but leaves references to it dangling (`lore lint` reports them).
 
-<!-- example: sync#duplicates only=2,3,4,5,6,7 -->
+<!-- example: sync#duplicates only=2,3,4,5,6,7,8 -->
 ```console
 # alice, in website
 $ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
-✓ mem_d431…313a 
+✓ mem_4c59…6c38
   scope: [master]
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 
 # bob, in website
 $ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
-✓ mem_b4f4…a5b0 
+✓ mem_3b62…e913
   scope: [master]
-lore sync: exported 2
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ git pull -q --no-rebase origin main
-$ lore sync dupes
-memories: mem_d431…313a, mem_b4f4…a5b0
-    Send the invoice reminder before the demo on Friday.
-$ lore sync merge-rows memories --keep mem_d431…313a --drop mem_b4f4…a5b0
-lore sync: removed files 1
-✓ merged mem_b4f4…a5b0 into mem_d431…313a
+$ lore memory list | grep -i invoice
+mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
+mem_3b62…e913 [retrieved] send the invoice reminder before the demo on friday.
+$ lore sync merge-rows memories --keep mem_4c59…6c38 --drop mem_3b62…e913
+✓ merged mem_3b62…e913 into mem_4c59…6c38 (0 row(s) re-pointed; mem_3b62…e913 is in the trash, batch bat_f147…5139)
 $ lore memory list
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email.
-mem_d431…313a [retrieved] Send the invoice reminder before the demo on Friday.
+mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
+mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
+$ lore trash list
+mem_3b62…e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by act_28f8…03df  reason "merged into mem_4c59…6c38"  bat_f147…5139
+1 row in the trash
 ```
 <!-- /example -->
 
@@ -197,40 +159,65 @@ If two people ran `lore init` on separate branches before either was merged, eac
 ```console
 # alice, in app
 $ git fetch -q origin && git merge --no-edit origin/bob-setup
-lore merge-driver: .lore/data/_meta.json needs a manual merge (markers are inside the JSON values)
 Auto-merging .lore/data/_meta.json
-CONFLICT (add/add): Merge conflict in .lore/data/_meta.json
-Automatic merge failed; fix conflicts and then commit the result.
+Auto-merging .lore/data/policies/pol_d431…313a.json
+ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
+  commit .lore/data/repos/rep_77cb…76c4.json row of another project
+  hint: this repository holds rows of a second project (two `lore init`s merged?): run `lore sync fix-projects` to keep one project and re-point its rows, then commit again
+Not committing merge; use 'git commit' to complete the merge.
 (exit 1)
 $ lore project list
-lore sync: imported 2
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-prj_28f8…03df  app  https://github.com/client2/app
-prj_4c59…6c38  app  https://github.com/client2/app
+prj_d191…45c2  app  https://github.com/client2/app
+prj_b4d3…11aa  app  https://github.com/client2/app
 $ lore sync fix-projects --dry-run
-2 project row(s); 1 would be merged
+2 project row(s): would keep prj_d191…45c2 and merge prj_b4d3…11aa (1 row(s) to re-point)
 $ lore sync fix-projects
-lore sync: 2 project files in .lore/data/projects (parallel bootstraps met in a merge); run `lore sync fix-projects`
-lore sync: removed files 1
-✓ kept prj_28f8…03df, merged prj_4c59…6c38
+✓ kept prj_d191…45c2, merged prj_b4d3…11aa (1 row(s) re-pointed)
 $ lore project list
-prj_28f8…03df  app  https://github.com/client2/app
+prj_d191…45c2  app  https://github.com/client2/app
 $ git add -A && git commit -qm 'lore: one project' && git push -q origin main
 ```
 <!-- /example -->
 
+## Try it — check the notes after a merge with `lore lint`
+
+Merges, folds and deletes can leave a note pointing at a row that is gone. `lore lint` reads every attached store once and reports such problems, each with the row and the command that fixes it; it never changes anything. Here a rule points at a memory with `${row:<id>}`, the memory is deleted, and lint reports `dangling_ref`; restoring the memory clears it:
+
+<!-- example: sync#lint only=2,3,4,5,6 -->
+```console
+# alice, in website
+$ lore memory add --body 'The client signs off every release on Fridays.'
+✓ mem_9a34…b418
+  scope: [master]
+$ lore rule add --body 'Ship only after the client sign-off, see ${row:mem_9a34…b418}.'
+✓ rul_bfed…eeea
+  scope: [master] severity: must
+$ lore memory delete mem_9a34…b418 --yes
+✓ mem_9a34…b418 moved to the trash (restore: lore trash restore mem_9a34…b418)
+$ lore lint
+dangling_ref rul_bfed…eeea (repo): body: ${row:mem_9a34…b418} points at no live row
+  fix: lore edit the row, or restore mem_9a34…b418 (lore trash restore mem_9a34…b418)
+1 finding(s)
+$ lore trash restore mem_9a34…b418 >/dev/null && lore lint --code dangling_ref
+lint: no findings
+```
+<!-- /example -->
+
+The other findings lint reports are unknown `${…}` schemes (`unknown_scheme`), variables known by an old name or shadowed by another store (`var_old_name`, `var_shadowed`, `var_shareable_differs`), task parent cycles (`parent_cycle`), tasks with very long time spans or many time entries (`long_span`, `time_entries_many`), rows imported twice from one source (`duplicate_import`), metadata keys no registry defines (`meta_unknown_key`) and stored secrets (`secret_found`). `--code <code>` keeps only some codes (an unknown code is refused with the list of known ones), `--json` prints the findings for a script, and `lore lint --context` runs the separate checks for what renders into agent files (no summary, too long, untagged, near duplicates among pinned entries, …). lint exits 0 even when it finds something, so in CI test the count from `--json`.
+
 ## Pitfalls
 
 - **GitHub's merge button does not run lore's driver.** On a pull request, two edits of the same note show as a conflict even when lore could merge them. Merge main into your branch locally (`git pull origin main`), or install [the GitHub workflow](github-workflow.md).
-- **A clone that never ran lore has no driver.** If someone merges in a fresh clone before running any lore command, git falls back to line merging. Run any lore command (or `lore sync install-git`) once after cloning.
+- **A clone that never ran lore has no driver.** If someone merges in a fresh clone before running any lore command, git falls back to line merging. Run `lore sync` once after cloning.
 - **Conflict markers in a value are imported, not hidden.** Until you settle them, `lore rule list` shows the markers in the text, and every command repeats the warning. That is deliberate, so the conflict is not forgotten.
-- **`dupes` finds exact text only.** "We use Stripe" and "Payments go through Stripe" are not duplicates to lore. Fold those by hand with `merge-rows` when you see them.
-- **Resolve numbers are per machine.** `#1` in `lore sync conflicts` is a local number, not a row id; it means nothing on a teammate's machine.
+- **lore does not look for duplicates in memories for you.** (`lore lint --context` flags near duplicates among pinned entries only.) Find them with `lore search` or `lore memory list`; "We use Stripe" and "Payments go through Stripe" are the same fact to you, not to lore. Then fold them with `lore sync merge-rows`.
+- **Resolve numbers are per machine.** `#1` in `lore sync conflicts` is a local number, not a row id; it means nothing on a teammate's machine. Run `lore sync conflicts` again before each `resolve`: the numbers shift once a conflict is settled.
+- **Resolve works on this repo only.** Files of an attached store's clone are settled by `lore sync`'s own merge, not by `lore sync resolve`.
 
 ## Related
 
 - [Hooks and the merge driver](hooks-and-merge-driver.md): what the driver is and how it is installed.
 - [The GitHub workflow](github-workflow.md): merge lore data on pull requests.
-- [Trash, export and purge](trash-and-purge.md): where dropped rows go.
+- [Trash, restore from git and purge](trash-and-purge.md): where dropped rows go.
 - [How it works › Merging two versions of a row](../team/how-it-works.md#merging-two-versions-of-a-row): the same rules for live rows.
 - [Feature index › Git sync](../reference/features.md#git-sync-notes-travel-with-your-commits)

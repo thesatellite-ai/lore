@@ -1,0 +1,39 @@
+# Live capture (AGENT_IDENTITY 4 and 12 step 2): Claude Code 2.1.318, a
+# command run by its Bash tool, on Linux inside tmux reached over ssh,
+# 2026-11-05. Taken with `env | cut -d= -f1 | sort` and a /proc walk.
+# Names only: a bare NAME means "was set" (the test gives it a dummy
+# value). NAME=value keeps the value only where the detector reads it and
+# it is not personal (markers, AI_AGENT, TERM_PROGRAM). Unrelated names
+# (PATH, LANG, the shell's own) are left out; credential-looking names were
+# never copied.
+tty no
+proc bash
+proc claude
+proc bash -bash
+proc tmux new-session
+proc systemd
+env AI_AGENT=claude-code_2-1-318_agent
+env CLAUDECODE=1
+env CLAUDE_CODE_CHILD_SESSION=1
+env CLAUDE_CODE_ENTRYPOINT=cli
+env CLAUDE_CODE_EXECPATH
+env CLAUDE_CODE_MESSAGING_SOCKET
+env CLAUDE_CODE_SESSION_ATTENDED
+env CLAUDE_CODE_SESSION_ID
+env CLAUDE_EFFORT
+env CLAUDE_PID
+env COLORTERM
+env SSH_CLIENT
+env SSH_CONNECTION
+env TERM_PROGRAM=tmux
+env TERM_PROGRAM_VERSION=3.6
+env TMUX
+env TMUX_PANE
+want tool claude_code
+want signal CLAUDE_CODE_CHILD_SESSION
+want session set
+want terminal tmux 3.6
+want noflag weak_only
+want noflag stale_marker
+want noflag ssh
+want noflag tty

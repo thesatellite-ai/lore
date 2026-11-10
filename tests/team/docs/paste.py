@@ -16,8 +16,9 @@ between two markers, and this script rewrites what is between them:
   <!-- /help -->
 
   <!-- errors -->                         every lore-for-teams error code with its exit
-  <!-- /errors -->                        status and description (lore errors list +
-                                          the exit table in errcodes/registry.go)
+  <!-- /errors -->                        status and meaning, copied from the generated
+                                          errors block of docs/reference/cli-commands.md
+                                          (lore spec docs writes it from model/errs)
 
 Usage (from the repo root, after tests/team/docs/run-examples.sh):
 
@@ -39,7 +40,9 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 DOCS = REPO / "docs" / "team"
 TRANSCRIPTS = HERE / "transcripts"
-REGISTRY = REPO / "saas" / "pkg" / "aicoder" / "errcodes" / "registry.go"
+# The generated error table (`lore spec docs` from model/errs): the one source of
+# every code's exit status and meaning (CLI_REFERENCE 5).
+CLI_COMMANDS = REPO / "docs" / "reference" / "cli-commands.md"
 
 # Lines every first command in a fresh clone prints; they say nothing about the example.
 NOISE = re.compile(
@@ -53,7 +56,6 @@ LONG_SHA = re.compile(r"\b([0-9a-f]{12})[0-9a-f]{28}\b")
 PROMPT = re.compile(r"^([a-z0-9-]+)(?: \(([^)]*)\))?\$ (.*)$")
 BLOCK = re.compile(r"(<!-- (example|help): ([^>]*?) -->\n)(.*?)(<!-- /\2 -->)", re.S)
 ERRORS = re.compile(r"(<!-- errors -->\n)(.*?)(<!-- /errors -->)", re.S)
-TEAM_CODES_START = "Lore for teams"
 ELLIPSIS = "…"
 
 
@@ -158,24 +160,34 @@ def render_help(spec: str) -> str:
     return f"{lead}```text\n{body}\n```\n"
 
 
-def exit_codes() -> dict:
-    src = REGISTRY.read_text()
-    names = dict(re.findall(r"^\s+(\w+)\s+Code = \"(E_[A-Z_]+)\"", src, re.M))
-    table = re.search(r"var exitCodes = map\[Code\]int\{(.*?)\n\}", src, re.S).group(1)
-    return {names[k]: int(v) for k, v in re.findall(r"(\w+):\s+(\d+),", table)}
+# TEAM_CODES are the lore-for-teams codes, in the order the page lists them
+# (coordination first, then the guards); their exit and meaning come from
+# CLI_COMMANDS, never from this file.
+TEAM_CODES = [
+    "E_NO_WORK", "E_CONTENDED", "E_LOST_CLAIM", "E_CANCELLED", "E_REASSIGNED",
+    "E_OFFLINE", "E_AMBIGUOUS_ID", "E_ORG_AMBIGUOUS", "E_ORG_DISAGREES",
+    "E_LINK_UNKNOWN", "E_NOT_A_STORE", "E_LEAK_BLOCKED", "E_CYCLE", "E_OLD_LORE",
+    "E_CONFIG_INVALID", "E_REFUSED",
+]
+
+
+def generated_errors() -> dict:
+    """code -> (exit, meaning) from the errors block of cli-commands.md."""
+    text = CLI_COMMANDS.read_text()
+    block = text[text.index("<!-- lore:spec:begin errors -->"):text.index("<!-- lore:spec:end errors -->")]
+    rows = re.findall(r"^\| `(E_[A-Z_]+)` \| (\d+) \| [^|]* \| [^|]* \| (.*) \|$", block, re.M)
+    return {code: (int(exit_), meaning.strip()) for code, exit_, meaning in rows}
 
 
 def render_errors() -> str:
-    codes = exit_codes()
-    listing = lore("errors", "list")
-    src = REGISTRY.read_text()
-    team_block = src[src.index(TEAM_CODES_START):]
-    team = re.findall(r"Code = \"(E_[A-Z_]+)\"", team_block.split("\n)", 1)[0])
+    known = generated_errors()
+    missing = [c for c in TEAM_CODES if c not in known]
+    if missing:
+        sys.exit(f"paste: team codes missing from {CLI_COMMANDS.relative_to(REPO)}: {', '.join(missing)}")
     rows = ["| Code | Exit status | Meaning |", "|---|---|---|"]
-    for line in listing.splitlines():
-        code, _, desc = line.partition(" ")
-        if code in team:
-            rows.append(f"| `{code}` | {codes.get(code, 1)} | {desc.strip()} |")
+    for code in TEAM_CODES:
+        exit_, meaning = known[code]
+        rows.append(f"| `{code}` | {exit_} | {meaning} |")
     return "\n".join(rows) + "\n"
 
 

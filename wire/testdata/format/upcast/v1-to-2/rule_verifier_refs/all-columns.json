@@ -1,0 +1,13 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "rule_verifier_refs",
+  "_v": 2,
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "id": "rvr_01a1a59b891c70b78914000000000023",
+  "notes": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "rule_id": "rul_01a1a59b891c70b78914000000000024",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9",
+  "verifier_kind": "regex",
+  "verifier_ref": "fixture café — 日本 <b>&</b> \"q\"\ttab"
+}

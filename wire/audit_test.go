@@ -1,0 +1,245 @@
+package wire
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+// sinkLog is an injected engine.AuditSink (what the old binary passes to
+// append the v0.1.17 audit_logs chain).
+type sinkLog struct {
+	mu  sync.Mutex
+	evs []engine.Event
+}
+
+func (s *sinkLog) Record(_ context.Context, ev engine.Event) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.evs = append(s.evs, ev)
+	return nil
+}
+
+// TestAuditSinkInjected: with Options.Audit set every core write (create,
+// update, delete — a soft delete, recorded as trash per OV9/DQ8) reaches
+// the sink in order, with store, table, id and
+// actor, and AuditFile is never written.
+func TestAuditSinkInjected(t *testing.T) {
+	t.Parallel()
+	repo := gitRepo(t)
+	sink := &sinkLog{}
+	a := openWith(t, repo, Options{Audit: sink, RepoIsClient: func(context.Context) (bool, error) { return false, nil }})
+	id := auditWrites(t, a)
+	sink.mu.Lock()
+	evs := append([]engine.Event(nil), sink.evs...)
+	sink.mu.Unlock()
+	var mine []engine.Action
+	for _, ev := range evs {
+		if ev.ID == id {
+			mine = append(mine, ev.Action)
+			if ev.Store != store.SourceRepo || ev.Table != schema.TableProjects || ev.Actor.IsZero() {
+				t.Fatalf("event %+v lacks store/table/actor", ev)
+			}
+		}
+	}
+	// OV9 (DQ8 delete = soft delete): the delete sets the trash fields, so
+	// its event is ActionTrash, not ActionDelete (a tombstone is purge's).
+	if strings.Join(actions(mine), ",") != "create,update,trash" {
+		t.Fatalf("sink got %v for %s, want create,update,trash", mine, id)
+	}
+	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(AuditFile))); !os.IsNotExist(err) {
+		t.Fatalf("AuditFile written although a sink is set: %v", err)
+	}
+}
+
+// TestAuditFileFallback: without a sink the events go to AuditFile, one
+// JSON line each, owner-only, and no line carries a field value (the
+// project's name never appears, only names, ids and counts).
+func TestAuditFileFallback(t *testing.T) {
+	t.Parallel()
+	repo := gitRepo(t)
+	a := openWith(t, repo, Options{RepoIsClient: func(context.Context) (bool, error) { return false, nil }})
+	id := auditWrites(t, a)
+	path := filepath.Join(repo, filepath.FromSlash(AuditFile))
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != auditFileMode {
+		t.Fatalf("audit file mode %v, want %v", fi.Mode().Perm(), os.FileMode(auditFileMode))
+	}
+	raw := string(mustRead(t, path))
+	if strings.Contains(raw, auditProjectName) || strings.Contains(raw, auditRenamed) {
+		t.Fatal("the audit file carries a field value")
+	}
+	var got []string
+	for _, ln := range strings.Split(strings.TrimSpace(raw), "\n") {
+		var l auditLine
+		if jerr := json.Unmarshal([]byte(ln), &l); jerr != nil {
+			t.Fatalf("line %q: %v", ln, jerr)
+		}
+		if l.ID == id.String() {
+			got = append(got, l.Action)
+		}
+	}
+	// OV9 (DQ8 delete = soft delete): the delete line says trash.
+	if strings.Join(got, ",") != "create,update,trash" {
+		t.Fatalf("file lines for %s = %v", id, got)
+	}
+}
+
+// auditProjectName and auditRenamed are field values that must never reach
+// an audit record.
+const (
+	auditProjectName = "audit-name-ü-7731"
+	auditRenamed     = "audit-renamed-9112"
+)
+
+// auditWrites creates, updates and deletes one repo project through the
+// App and returns its id.
+func auditWrites(t *testing.T, a *App) ids.AnyID {
+	t.Helper()
+	ctx := background()
+	n, err := value.TextOf(auditProjectName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := a.Create(ctx, store.SourceRepo, schema.TableProjects, map[string]value.Value{"name": n})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := value.TextOf(auditRenamed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := engine.Ref{Store: store.SourceRepo, Table: schema.TableProjects, ID: w.Row.ID}
+	if _, err = a.Update(ctx, ref, map[string]value.Value{"name": r}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.Delete(ctx, ref); err != nil {
+		t.Fatal(err)
+	}
+	return w.Row.ID
+}
+
+func actions(as []engine.Action) []string {
+	out := make([]string, len(as))
+	for i, x := range as {
+		out[i] = string(x)
+	}
+	return out
+}
+
+// TestAttachedStoreAuditMachineLocal: a write to an attached folder store
+// leaves one line per event in <home>/StoreAuditDir/<sto id>.jsonl (file
+// 0600, folder 0700, no field value) and nothing in the checkout: no line
+// in AuditFile, no store id anywhere under .lore/state. The repo sink
+// (injected or fallback) never sees the attached event chained; a repo
+// write still reaches it as before.
+func TestAttachedStoreAuditMachineLocal(t *testing.T) {
+	t.Parallel()
+	for _, injected := range []bool{false, true} {
+		repo := gitRepo(t)
+		home := t.TempDir()
+		writeStoresYAML(t, repo, "stores:\n  - name: agency\n    url: "+folderStoreAt(t, folderStore, rowfs.VisibilityInternal)+"\n")
+		opts := Options{Home: home, RepoIsClient: func(context.Context) (bool, error) { return false, nil }}
+		sink := &sinkLog{}
+		if injected {
+			opts.Audit = sink
+		}
+		a := openWith(t, repo, opts)
+		ctx := background()
+		n, err := value.TextOf(auditProjectName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w, err := a.Create(ctx, "agency", schema.TableProjects, map[string]value.Value{"name": n})
+		if err != nil {
+			t.Fatal(err)
+		}
+		storeID := w.Row.ID.String()
+
+		dir := filepath.Join(home, filepath.FromSlash(StoreAuditDir))
+		path := filepath.Join(dir, folderStore+storeAuditExt)
+		fi, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("injected=%v: no machine-local store audit file: %v", injected, err)
+		}
+		if fi.Mode().Perm() != auditFileMode {
+			t.Fatalf("store audit file mode %v", fi.Mode().Perm())
+		}
+		if di, derr := os.Stat(dir); derr != nil || di.Mode().Perm() != storeAuditDirMode {
+			t.Fatalf("store audit dir: %v %v", di, derr)
+		}
+		raw := string(mustRead(t, path))
+		if strings.Contains(raw, auditProjectName) {
+			t.Fatal("the store audit file carries a field value")
+		}
+		var l auditLine
+		for _, ln := range strings.Split(strings.TrimSpace(raw), "\n") {
+			var cand auditLine
+			if jerr := json.Unmarshal([]byte(ln), &cand); jerr != nil {
+				t.Fatalf("line %q: %v", ln, jerr)
+			}
+			if cand.ID == storeID {
+				l = cand
+			}
+		}
+		if l.ID != storeID || l.Store != "agency" || l.Action != string(engine.ActionCreate) || l.Actor == "" {
+			t.Fatalf("store audit line = %+v, want id %s", l, storeID)
+		}
+
+		// nothing of the store write inside the checkout
+		_ = filepath.Walk(filepath.Join(repo, ".lore", "state"), func(p string, info os.FileInfo, werr error) error {
+			if werr != nil || info.IsDir() {
+				return nil
+			}
+			if strings.Contains(string(mustRead(t, p)), storeID) {
+				t.Fatalf("injected=%v: store row id in checkout file %s", injected, p)
+			}
+			return nil
+		})
+
+		// a repo write still reaches the repo sink
+		rid := auditWrites(t, a)
+		if injected {
+			sink.mu.Lock()
+			var got bool
+			for _, ev := range sink.evs {
+				got = got || ev.ID == rid
+			}
+			sink.mu.Unlock()
+			if !got {
+				t.Fatal("repo write did not reach the injected sink")
+			}
+		} else if !strings.Contains(string(mustRead(t, filepath.Join(repo, filepath.FromSlash(AuditFile)))), rid.String()) {
+			t.Fatal("repo write missing from AuditFile")
+		}
+		if strings.Contains(string(mustRead(t, path)), rid.String()) {
+			t.Fatal("repo write landed in the store audit file")
+		}
+	}
+}
+
+// TestStoreAuditStem: a store without a sto_ id gets name-<sanitised name>
+// (render_private's stem), always one path element.
+func TestStoreAuditStem(t *testing.T) {
+	t.Parallel()
+	r := newRoutedAudit(&sinkLog{}, t.TempDir(), nil)
+	for in, want := range map[store.Source]string{"me": "name-me", "org/a b": "name-org_a_b", "../x": "name-.._x"} {
+		if got := r.stem(in); got != want {
+			t.Fatalf("stem(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

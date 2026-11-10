@@ -39,35 +39,41 @@ orgs:
 # alice, in website
 $ lore whoami
 org        agency  (matched by: link in <redacted>, project id + remote)
-identity   Alice Doe <human:alice@agency.example>   act_7a67…9504  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@agency.example>   act_7a67…9504  @alice  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
 stores     <redacted> on branch main  (org folder <redacted>)
 internal   <redacted> <redacted>/
 links      known  1 link(s) for this repo (stores of 2 entries scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 
 # alice, in client3-api
 $ lore whoami
 org        client3  (matched by: own pattern github.com/client3/* of client3)
-identity   Alice Doe <human:alice@client3.example>   act_162d…9666  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@client3.example>   act_162d…9666  @alice  (from: org entry (config.yaml orgs[client3].identity))
 repo       own repo  (no client guards)
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
 project    prj_54fe…28f2
 remotes    github.com/client3/api
 stores     <redacted> on branch main  (org folder <redacted>)
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: client3/, everywhere/
+personal   me -> ~/.lore/personal
 
 # alice, in forked-tool
 $ lore whoami
 org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
-repo       no org  (fallback identity, personal everywhere/ notes only)
+repo       no org  (fallback identity)
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
 project    prj_c0f3…b5b8
 remotes    github.com/someone/tool
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: everywhere/
+personal   me -> ~/.lore/personal
 ```
 <!-- /example -->
 
@@ -81,23 +87,21 @@ Personal notes follow the same split. A note written in an agency repo is filed 
 ```console
 # alice, in website
 $ lore memory add --body 'ask the client PM before touching the payment flow' --to me
-✓ mem_76bd…3f10 [me]
-  filed: --to me → personal agency/
+✓ mem_76bd…3f10 [me/agency]
   scope: [master]
 
 # alice, in client3-api
 $ lore memory add --body 'client3 deploys only on Tuesdays' --to me
-✓ mem_d431…313a [me]
-  filed: --to me → personal client3/
+✓ mem_d431…313a [me/client3]
   scope: [master]
 
 # alice, in website
 $ lore memory list
-mem_76bd…3f10  ask the client PM before touching the payment flow  [me]
+mem_76bd…3f10  ask the client PM before touching the payment flow  [me/agency]
 
 # alice, in client3-api
 $ lore memory list
-mem_d431…313a  client3 deploys only on Tuesdays  [me]
+mem_d431…313a  client3 deploys only on Tuesdays  [me/client3]
 
 # alice, in forked-tool
 $ lore memory list
@@ -108,9 +112,9 @@ $ lore memory list
 ## What happened
 
 ```text
- ~/work/website      → agency   alice@agency.example   agency/notes   personal: agency/, everywhere/
- ~/work/client3-api  → client3  alice@client3.example  client3/notes  personal: client3/, everywhere/
- ~/work/forked-tool  → none     alice@example.com      (no store)     personal: everywhere/
+ ~/work/website      → agency   alice@agency.example   agency/notes   personal: me (notes filed under me/agency)
+ ~/work/client3-api  → client3  alice@client3.example  client3/notes  personal: me (notes filed under me/client3)
+ ~/work/forked-tool  → none     alice@example.com      (no store)     personal: me
 ```
 
 ## Pitfalls
@@ -119,3 +123,10 @@ $ lore memory list
 - **Set a top-level `identity`** once you have orgs. Without it, lore falls back to the git email chain, but skips any value equal to an org identity. So a personal repo is never stamped with a company identity. Lore prints a hint to set one.
 - **Two identities, two actors.** The same person in two orgs is two roster rows (two entries on two lists of people and agents), never linked automatically.
 - **Agents for two orgs** should run as different OS users or in different containers. Lore keeps orgs apart in what it loads. But an agent with plain file access could read another org's clone in `~/.lore/clones`.
+
+## Related
+
+- [Contractor limited to one client](contractor.md).
+- [Personal notes](personal-notes.md).
+- [Guided setup](../guided-setup.md) and [Setups from the command line](../setup-cli.md): one setup per company, chosen by folder.
+- [Identity and stores](../identity-and-stores.md): `lore identity set --org`.

@@ -1,0 +1,10 @@
+{
+  "_hlc": "2026-03-02T11:22:33.100Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "tasks",
+  "_v": 2,
+  "id": "tsk_01a1a59b891c70b78914e00000000005",
+  "status": "todo",
+  "title": "a hand-edited v1 file with spaces and newlines",
+  "updated_at": "2026-03-02T11:22:33.100000000Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

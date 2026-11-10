@@ -5,75 +5,67 @@ alice (work/website)$ git config --get-all remote.origin.fetch
 +refs/lore/*:refs/lore-remote/origin/*
 
 ### monorepo live tree
-carol (work/app)$ mkdir -p web && cd web && lore init --non-interactive --name=web >/dev/null 2>&1; cd .. && lore task add 'fix header' --to repo && cd web && lore rule add --body 'Buttons are blue' --live --to repo
+carol (work/app)$ mkdir -p web && cd web && lore init --non-interactive --name=web >/dev/null 2>&1; cd .. && lore task add 'fix header' --to repo && cd web && lore rule add --body 'Buttons are blue' --to repo
 ✓ tsk_7a670ae8548ed05bf57ad29ad0759504 — fix header [medium]
 lore live: (live, pushed)
-✓ rul_2ad3618e878ebbf527d34d446ef4f891 
+✓ rul_2ad3618e878ebbf527d34d446ef4f891
   scope: [master] severity: must
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
 carol (work/app)$ git ls-tree -r --name-only refs/lore/live
 _live/epoch
 _live/meta.json
 _root/task_lists/tlt_162df51b7f78b785c97c26b41ea89666.json
 _root/tasks/tsk_7a670ae8548ed05bf57ad29ad0759504.json
-web/rules/rul_2ad3618e878ebbf527d34d446ef4f891.json
 carol (work/app)$ git log --oneline refs/lore/live
-86dbae4 lore: live 1 row (web)
-9b40ce7 lore: live 2 rows (_root)
+601d285 lore: live 2 rows (_root)
 carol (work/app)$ git cat-file -p refs/lore/live:_live/meta.json; echo; git cat-file -p refs/lore/live:_live/epoch
 {
   "features": [
-    "live"
+    "hlc",
+    "live",
+    "task_tree"
   ],
-  "min_lore_version": "0.1.0"
+  "min_lore_version": "0.1.18"
 }
 
 1
 carol (work/app)$ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only refs/lore/live | grep '_root/tasks/')
 {
+  "_hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe984c9b495744c0217776765a28f2",
   "_live": {
-    "hlc": "2026-11-02T10:00:10.000Z/0000/act_54fe984c9b495744c0217776765a28f2",
+    "hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe984c9b495744c0217776765a28f2",
     "live_since": "2026-11-02T10:00:10Z"
   },
+  "_o": {
+    "cmd": "task add",
+    "git": {
+      "branch": "main",
+      "commit": "86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a",
+      "state": "branch"
+    },
+    "project": "prj_05e99e22e9e86e96fe4daa7777994603",
+    "repo": "rep_c0f3c11a5724b0cfd74b256190d9b5b8",
+    "store": "repo"
+  },
   "_table": "tasks",
-  "_v": 1,
-  "approved_at": null,
-  "approved_by": null,
-  "approved_hash": null,
-  "assigned_team": null,
-  "assigned_to_actor_id": null,
-  "attempts": 0,
-  "blocked_by": null,
-  "body": null,
-  "claim_epoch": 0,
-  "claim_log": null,
+  "_v": 2,
+  "_w": {
+    "v": "dev"
+  },
   "commitment": "accepted",
-  "completed_at": null,
   "created_at": "2026-11-02T10:00:00.000000001Z",
+  "created_by": "act_54fe984c9b495744c0217776765a28f2",
   "created_by_actor_id": "act_54fe984c9b495744c0217776765a28f2",
-  "deferred_until": null,
-  "done_by": null,
-  "done_commit": null,
-  "done_pr": null,
-  "due_at": null,
-  "gate": null,
   "id": "tsk_7a670ae8548ed05bf57ad29ad0759504",
-  "idempotency_key": null,
-  "merged_at": null,
-  "mission_id": null,
-  "plan_id": null,
   "priority": "medium",
   "project_id": "prj_05e99e22e9e86e96fe4daa7777994603",
-  "repo_id": null,
-  "role": null,
-  "started_at": null,
   "status": "todo",
   "tasklist_id": "tlt_162df51b7f78b785c97c26b41ea89666",
-  "timebox_seconds": null,
   "title": "fix header",
-  "updated_at": "2026-11-02T10:00:00.000000002Z",
-  "work_branch": null
+  "updated_at": "2026-11-02T10:00:00.000000001Z",
+  "updated_by": "act_54fe984c9b495744c0217776765a28f2",
+  "watchers": [
+    "act_54fe984c9b495744c0217776765a28f2"
+  ]
 }
 carol (work/app)$ git branch -a
 * main
@@ -81,74 +73,68 @@ carol (work/app)$ git branch -a
 
 ### store layout
 alice (work/website)$ lore task add 'renew the client SSL certificate' --to agency
-✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — renew the client SSL certificate [medium] → [agency/client]
-lore live: (live, pushed)
+✓ tsk_76bd560aff0771fab8457dbfa9823f10 — renew the client SSL certificate [medium] → [agency/client]
 alice (work/website)$ lore memory add --body 'the client wants a demo every second Friday'
-✓ mem_76bd560aff0771fab8457dbfa9823f10 [agency/client]
+✓ mem_d4314eba822f1bf5908b2b8ded5f313a [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [master]
-lore: [agency/client] 1 file(s) pushed
 alice$ git -C ~/.lore/clones/github.com/agency/notes.git ls-tree -r --name-only main | grep -v '_meta.json\|.gitattributes' | head -20
-client/.lore/data/memories/mem_76bd560aff0771fab8457dbfa9823f10.json
-client/.lore/data/projects/prj_d4314eba822f1bf5908b2b8ded5f313a.json
+client/.lore/data/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json
+client/.lore/data/memories/mem_d4314eba822f1bf5908b2b8ded5f313a.json
+client/.lore/data/task_lists/tlt_28f8d32584b2db54ffb146bede5b03df.json
+client/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
 lore-store.yaml
 org/.lore/data/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json
-org/.lore/data/projects/prj_28f8d32584b2db54ffb146bede5b03df.json
+org/.lore/data/projects/prj_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
 alice$ git -C ~/.lore/clones/github.com/agency/notes.git for-each-ref --format='%(refname)'
 refs/heads/main
-refs/lore-remote/origin/live/main
-refs/lore/live/main
 refs/remotes/origin/main
-alice$ git -C ~/.lore/clones/github.com/agency/notes.git ls-tree -r --name-only refs/lore-remote/origin/live/main
-_live/epoch
-_live/meta.json
-client/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json
-client/task_lists/tlt_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
-client/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json
 alice$ git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client/.lore/data/_meta.json
 {
   "_v": 1,
+  "features": [
+    "hlc",
+    "task_tree"
+  ],
   "links": [
     {
       "project_id": "prj_05e99e22e9e86e96fe4daa7777994603",
       "remote": "github.com/client/website"
     }
   ],
-  "project_id": "prj_d4314eba822f1bf5908b2b8ded5f313a"
+  "min_lore_version": "0.1.18",
+  "project_id": "prj_3b6283bc4392c556bbae5f094246e913"
 }
 
 ### signals
 alice (work/website)$ lore agent start --label agent-backend --owner @alice
-✓ act_3b6283bc4392c556bbae5f094246e913 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_f147dd95f1aaf742dd4f5214843a5139 agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
-lore: [agency/org] 1 file(s) pushed
-agent-backend (work/website)$ lore task claim tsk_c0f3c11a5724b0cfd74b256190d9b5b8
-lore sync: built .lore/lore.db from .lore/data (2 rows)
-lore sync: adopted .lore/data: imported 2, exported 0, conflicts 0
-lore sync: backup of lore.db before adopt: ~/work/website/.lore/backups/20261102-100000.000000000-pre-sync.sqlite
-✓ claimed tsk_c0f3c11a5724b0cfd74b256190d9b5b8 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
-alice$ cd ~/.lore/clones/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
-client/claims/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json
-05513aa lore: signals
-alice$ cd ~/.lore/clones/github.com/agency/notes.git && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
+agent-backend (work/website)$ lore task claim tsk_76bd560aff0771fab8457dbfa9823f10
+✓ claimed tsk_76bd560aff0771fab8457dbfa9823f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
+client/claims/tsk_76bd560aff0771fab8457dbfa9823f10.json
+9b40ce7 lore: signals
+alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
-  "task": "tsk_c0f3c11a5724b0cfd74b256190d9b5b8",
+  "task": "tsk_76bd560aff0771fab8457dbfa9823f10",
   "project": "client",
-  "holder": "act_3b6283bc4392c556bbae5f094246e913",
+  "holder": "act_f147dd95f1aaf742dd4f5214843a5139",
   "holder_label": "agent:agent-backend",
   "session": "s-10e90368",
   "claim_token": "ct_a5f6f…",
   "claim_epoch": 1,
-  "since": "2026-11-02T10:01:15Z",
-  "expires": "2026-11-02T10:21:15Z",
+  "since": "2026-11-02T10:01:10Z",
+  "expires": "2026-11-02T10:21:10Z",
   "renewed_seq": 0,
+  "renewed_at": "2026-11-02T10:01:10Z",
   "host": "devbox"
 }
-agent-backend (work/website)$ lore task heartbeat tsk_c0f3c11a5724b0cfd74b256190d9b5b8
-✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 renewed until 2026-11-02T10:21:30Z (seq 1)
-alice$ cd ~/.lore/clones/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main
-dfd8dc8 lore: signals
+agent-backend (work/website)$ lore task heartbeat tsk_76bd560aff0771fab8457dbfa9823f10
+✓ tsk_76bd560aff0771fab8457dbfa9823f10 renewed until 2026-11-02T10:21:25Z (seq 1)
+alice$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main
+05513aa lore: signals
 
 ### hooks
 alice (work/website)$ ls .git/hooks | grep -v sample; grep -h 'lore' .git/hooks/pre-commit | head -5
@@ -160,7 +146,7 @@ post-rewrite
 pre-commit
 pre-push
 # >>> lore-sync >>>
-( if command -v lore >/dev/null 2>&1; then if lore sync hook --help >/dev/null 2>&1; then lore sync hook pre-commit; else echo "lore: installed lore cannot check .lore/data (no 'sync hook'); upgrade it" >&2; fi; fi ) || exit $?
+( if command -v lore >/dev/null 2>&1; then if ! lore migrate --help >/dev/null 2>&1 && grep -rqsE '"_v": *2' .lore/data; then echo "lore: .lore/data holds lore 0.1.18 rows but the lore on PATH is older; install lore 0.1.18 or newer to commit" >&2; exit 1; elif lore sync hook --help >/dev/null 2>&1; then lore sync hook pre-commit; else echo "lore: installed lore cannot check .lore/data (no 'sync hook'); upgrade it" >&2; fi; fi ) || exit $?
 # <<< lore-sync <<<
 alice (work/website)$ cat .git/info/exclude | tail -2
 # *.[oa]

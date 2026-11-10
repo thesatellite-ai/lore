@@ -33,7 +33,7 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 | Assign task to an actor | `lore task add "<t>" --tasklist=<tlt_id> --assigned-to=<act_id>` |
 | Supersede a memory/rule/decision/hotfix/pattern | `lore <kind> add ... --supersedes=<old_id>` |
 | Mark a memory as validated by an actor | `lore memory add ... --validated-by=<act_id>` |
-| Authored-by override (any entity) | `--created-by=<act_id>` (defaults to current identity) |
+| Rows a given actor wrote (any entity) | `lore <noun> list --created-by=<act_id>` (the author is recorded from the writing identity, never set by hand) |
 | Move task to another tasklist | `lore task edit <id> --tasklist=<tlt_id>` |
 | Reassign task | `lore task edit <id> --assigned-to=<act_id>` |
 | Detach task from mission | `lore task edit <id> --clear-mission` |
@@ -73,12 +73,12 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Put a row into the client repo on purpose | `--to repo` |
 | A private note only you see | `--to me` (`--everywhere` to load it in every repo) |
 | Choose an org for this repo on this machine | `lore org use <entry>` (one command: `LORE_ORG=<entry> lore …`) |
-| Share an internal note with the client on purpose | `lore share <id> --to repo` (shows the text, asks) |
+| Share an internal note with the client on purpose | `lore move <id> --to repo` (shows the text, asks) |
 | A row was filed in the wrong place | `lore move <id> --to <target>` |
 | Check a PR body for internal content before posting | `lore check pr-body <file>` (or `-` for stdin) |
-| An internal row reached the client's live ref | `lore live purge <id>`, then `lore live compact` |
+| An internal row reached the client's live ref | `lore live purge <id> --confirm`, then `lore live compact` |
 | Start an agent session | `lore agent start --label <name> --owner @<you>` and export what it prints |
-| Create a mission and its tasks from a file (re-run adds nothing) | `lore plan apply <file>` |
+| Create a mission and its tasks from a file (re-run adds nothing) | `lore mission apply <file>` |
 | Take the next ready task as an agent | `lore task next --mission <id> [--repo <name>]` (exit 10: nothing ready) |
 | Keep an agent's claim alive | `lore task heartbeat --daemon <id>`, started from a process that lives as long as the agent (it stops when the process that started it exits), or `lore task heartbeat` from the agent tool's hook |
 | Record progress and push the work branch | `lore task note <id> "<text>"` |
@@ -104,7 +104,6 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Install the agent directive at the top of CLAUDE.md | `lore directive install` |
 | Same, but into AGENTS.md (or both) | `lore directive install --target=AGENTS.md` (or `--target=CLAUDE.md,AGENTS.md`) |
 | Print the directive block (no write) | `lore directive show` |
-| Strip the directive block | `lore directive remove [--target=...]` |
 
 ## Retrieve / search
 
@@ -132,8 +131,8 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Intent | Command |
 |---|---|
 | First-time setup on a fresh project | `lore init` (runs setup internally) |
-| After upgrading the binary (new columns or new search registry) | `lore setup` — runs ent migration + rebuilds FTS index + stamps fingerprint |
-| Check whether setup is needed | Any command will print `hint: run lore setup` on stderr if fingerprint is stale; otherwise silent |
+| After upgrading the binary | nothing: the cache and search index rebuild themselves; `lore migrate run` only for v0.1.17 data |
+| Install the coding tools' hooks | `lore setup --agent-hooks` (optional; `--dry-run` shows the changes) |
 | Limit | `... --limit=<n>` |
 | Show details for any entity | `lore <kind> show <id>` |
 | List by status | `lore <kind> list --status=<s>` (where applicable) |
@@ -147,16 +146,16 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Change the generated knowledge-file path | `lore render --out=docs/LORE.md` |
 | Write the generated file only (no pointer stitch) | `lore render --no-pointer` |
 | See what render would produce (the `.lore/LORE.md` body) | `lore render --dry-run` |
-| What did the agent actually see? | `lore why-context --last-render` |
-| Same as above in JSON | `lore why-context --last-render --json` |
-| Last rendered text | `lore why-context --last-render --rendered` |
+| What did the agent actually see? | `lore why-context` |
+| Same as above in JSON | `lore why-context --json` |
+| Last rendered text | `lore why-context --rendered` |
 
 ## Project + repo management
 
 | Intent | Command |
 |---|---|
 | Bootstrap new project (Mode A) | `lore init --non-interactive` |
-| Bootstrap shared-DB project (Mode B) | `lore project shared-init --db=<path>` |
+| Share notes between repos (replaces Mode B) | `lore store init <name> file://<abs-path>` once, `lore store add <name> <url>` in each other repo; an old Mode B repo: `lore migrate run` |
 | List projects in cwd's DB | `lore project list` |
 | Show project + repos | `lore project show <name> --json` |
 | Add a repo | `lore repo add <mount> --origin=<url>` |
@@ -169,9 +168,9 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Is everything OK? | `lore doctor` (exit 0 healthy, 1 degraded, 2 broken) |
 | JSON health snapshot | `lore doctor --json` |
 | Repair what doctor can fix safely (`--supersedes` links written by older versions) | `lore doctor --fix` (safe to re-run) |
-| Create a backup | `lore backup [--out=<path>]` |
-| Restore from a backup | `lore restore <path> --confirm` |
-| Auto-repair (WAL → backup → bootstrap) | `lore repair --tier=2 --confirm` |
+| Keep a safe copy of the notes | commit `.lore/data` (the files are the truth) |
+| Rebuild a damaged cache | `rm -f .lore/lore-cache.db*`: the next command rebuilds it from `.lore/data` |
+| Rebuild the search index | `lore search rebuild` |
 | Capture bug bundle | `lore support-bundle --out=<path>` |
 
 ## Identity
@@ -186,7 +185,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Intent | Command |
 |---|---|
 | Binary + schema versions | `lore version --json` |
-| Full error code registry | `lore errors list --json` |
+| Full error code registry | `docs/reference/cli-commands.md#errors` (generated by `lore spec docs`) |
 | Help for any command | `lore <cmd> --help` |
 
 ## Read-only / CI
@@ -202,7 +201,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 ```bash
 lore --help
 lore <command> --help
-lore errors list --json   # what can go wrong
+lore doctor               # what is wrong right now
 ```
 
-Every list/show command supports `--json`. Every error has a code starting with `E_`. Every command accepts the universal flags (`--db`, `--project`, `--repo`, `--read-only`, `--color`).
+Every list/show command supports `--json`. Every error has a code starting with `E_`. Every command takes `--color auto|always|never` and `--trace`; commands that open the local database also take `--project`, `--repo` and `--read-only` (`--db` is refused on row commands).

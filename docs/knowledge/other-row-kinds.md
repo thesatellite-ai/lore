@@ -37,11 +37,9 @@ A hotfix has a `--severity`: `low`, `medium`, `high` (the default) or `critical`
 ```console
 # alice, in website
 $ lore hotfix add --title 'Checkout button is broken on Safari' --body 'Use the old button until the fix ships.' --severity critical
-⚠ hfx_4c59…6c38 — Checkout button is broken on Safari [critical]
-lore sync: exported 1
-lore sync: 9 file(s) in .lore/data not committed — commit them with your change
+⚠ hfx_f147…5139 — Checkout button is broken on Safari [critical]
 $ lore hotfix list
-hfx_4c59…6c38 [critical] Use the old button until the fix ships.
+hfx_f147…5139 [critical] Use the old button until the fix ships.
 ```
 <!-- /example -->
 
@@ -55,9 +53,7 @@ Each kind is one `add` command. Here are the ones with a title and a body:
 ```console
 # alice, in website
 $ lore pattern add --title 'Load data in one place' --body 'Each page loads its data in its loader, never inside a button handler.'
-✓ pat_3b62…e913
-lore sync: exported 1
-lore sync: 10 file(s) in .lore/data not committed — commit them with your change
+✓ pat_2537…6bbb
 ```
 <!-- /example -->
 
@@ -65,9 +61,7 @@ lore sync: 10 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore playbook add --title 'How to release' --body '1. Run the tests. 2. Tag the release. 3. Post in the team chat.'
-✓ pbk_f147…5139
-lore sync: exported 1
-lore sync: 11 file(s) in .lore/data not committed — commit them with your change
+✓ pbk_b69e…5ed7
 ```
 <!-- /example -->
 
@@ -77,9 +71,7 @@ A playbook and a prompt also keep a one-line summary. `--description` sets it; w
 ```console
 # alice, in website
 $ lore prompt add --title 'Review a pull request' --description 'Bugs first, then style' --body 'Read the change, list bugs first, then style notes.'
-✓ prm_2537…6bbb
-lore sync: exported 1
-lore sync: 12 file(s) in .lore/data not committed — commit them with your change
+✓ prm_0aae…a61f
 ```
 <!-- /example -->
 
@@ -89,11 +81,9 @@ A snapshot is stamped with today's date, which `lore snapshot list` shows. `--so
 ```console
 # alice, in website
 $ lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'
-✓ snp_b69e…5ed7 — Week 44
-lore sync: exported 1
-lore sync: 13 file(s) in .lore/data not committed — commit them with your change
+✓ snp_6a86…ed8c — Week 44
 $ lore snapshot list
-snp_b69e…5ed7 Week 44   (2026-11-02)
+snp_6a86…ed8c Week 44   (2026-11-02)
 ```
 <!-- /example -->
 
@@ -101,9 +91,7 @@ snp_b69e…5ed7 Week 44   (2026-11-02)
 ```console
 # alice, in website
 $ lore incident add --title 'Site down for 20 minutes' --body 'The disk filled up with logs. We now rotate logs daily.'
-✓ inc_0aae…a61f
-lore sync: exported 1
-lore sync: 14 file(s) in .lore/data not committed — commit them with your change
+✓ inc_4f89…b64b
 ```
 <!-- /example -->
 
@@ -111,9 +99,7 @@ lore sync: 14 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete any file you did not create.'
-✓ bhv_6a86…ed8c
-lore sync: exported 1
-lore sync: 15 file(s) in .lore/data not committed — commit them with your change
+✓ bhv_77cb…76c4
 ```
 <!-- /example -->
 
@@ -121,9 +107,7 @@ lore sync: 15 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore architecturenote add --title 'How the site is built' --body 'The website reads products from the shop API and caches them for 5 minutes.'
-✓ anr_4f89…b64b
-lore sync: exported 1
-lore sync: 16 file(s) in .lore/data not committed — commit them with your change
+✓ anr_d191…45c2
 ```
 <!-- /example -->
 
@@ -131,9 +115,7 @@ lore sync: 16 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore cookbookrecipe add --title 'Add a new page' --body 'Copy pages/about, rename it, add a link in the menu.'
-✓ cbr_77cb…76c4
-lore sync: exported 1
-lore sync: 17 file(s) in .lore/data not committed — commit them with your change
+✓ cbr_b4d3…11aa
 ```
 <!-- /example -->
 
@@ -141,9 +123,7 @@ lore sync: 17 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore suggestion add --title 'Add dark mode' --body 'Several users asked for it.'
-✓ sug_d191…45c2
-lore sync: exported 1
-lore sync: 18 file(s) in .lore/data not committed — commit them with your change
+✓ sug_9a34…b418
 ```
 <!-- /example -->
 
@@ -151,9 +131,7 @@ lore sync: 18 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore workflow add --title 'Code review' --body 'One approval from a second developer before merge.'
-✓ wfl_bfed…eeea
-lore sync: exported 1
-lore sync: 21 file(s) in .lore/data not committed — commit them with your change
+✓ wfl_67e2…291e
 ```
 <!-- /example -->
 
@@ -161,9 +139,7 @@ lore sync: 21 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore workspace add --title 'Website redesign' --body 'Everything for the new look of the site.'
-✓ wsp_376c…8e1a
-lore sync: exported 1
-lore sync: 22 file(s) in .lore/data not committed — commit them with your change
+✓ wsp_8567…366f
 ```
 <!-- /example -->
 
@@ -173,9 +149,7 @@ lore sync: 22 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore tastepref add --body 'Buttons are blue'
-✓ tst_b4d3…11aa
-lore sync: exported 1
-lore sync: 19 file(s) in .lore/data not committed — commit them with your change
+✓ tst_bfed…eeea
 ```
 <!-- /example -->
 
@@ -183,9 +157,74 @@ lore sync: 19 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore techdoc add --name 'Payments docs' --base-url https://docs.example.com/payments --description 'How to take a card payment'
-✓ tdc_9a34…b418 Payments docs
-lore sync: exported 1
-lore sync: 20 file(s) in .lore/data not committed — commit them with your change
+✓ tdc_376c…8e1a Payments docs
+```
+<!-- /example -->
+
+## Step 4 — Read, change and search one kind
+
+Every kind has `show`, `search` and `delete`; most have `edit` too. `lore <kind> show <id>` prints a two-letter tag and the id, the title or name, any references and the body; `lore show <id>` prints every field of any row. `lore <kind> edit <id>` changes only the flags you give, and `lore <kind> search <words>` searches that kind alone.
+
+<!-- example: knowledge#other-kinds-show-edit -->
+```console
+# alice, in website
+$ lore pattern show pat_2537…6bbb
+PA  pat_2537…6bbb
+  title: Load data in one place
+Each page loads its data in its loader, never inside a button handler.
+created 2026-11-02T10:03:10Z by act_54fe…28f2 · updated 2026-11-02T10:03:10Z by act_54fe…28f2
+$ lore pattern edit pat_2537…6bbb --body 'Each page loads its data in its loader, never inside a button handler or an effect.'
+✓ pattern pat_2537…6bbb updated
+$ lore pattern search loader
+pat_2537…6bbb Load data in one place
+```
+<!-- /example -->
+
+`lore incident edit` also takes `--severity` and `--ref <id> --relation <name>`, to link the incident to the row that fixed or caused it. The link shows in `lore incident show`:
+
+<!-- example: knowledge#incident-edit -->
+```console
+# alice, in website
+$ lore incident edit inc_4f89…b64b --severity high --ref pat_2537…6bbb --relation fixed_by
+✓ inc_4f89…b64b updated
+$ lore incident show inc_4f89…b64b
+IN  inc_4f89…b64b
+  title: Site down for 20 minutes
+  fixed_by patterns/pat_2537…6bbb
+The disk filled up with logs. We now rotate logs daily.
+created 2026-11-02T10:03:35Z by act_54fe…28f2 · updated 2026-11-02T10:04:40Z by act_54fe…28f2
+```
+<!-- /example -->
+
+To read the whole incident, use `lore show`, which works for any id:
+
+<!-- example: knowledge#show-any-row only=1 -->
+```console
+# alice, in website
+$ lore show inc_4f89…b64b
+inc_4f89…b64b  incidents  repo  "Site down for 20 minutes"
+  body: The disk filled up with logs. We now rotate logs daily.
+  created_by_actor_id: act_54fe…28f2
+  project_id: prj_71f0…c07d
+  severity_str: high
+  title: Site down for 20 minutes
+created 2026-11-02T10:03:35Z by act_54fe…28f2 · updated 2026-11-02T10:04:40Z by act_54fe…28f2
+```
+<!-- /example -->
+
+## Step 5 — Archive and bring back
+
+Hotfixes, patterns, playbooks, prompts and snapshots can be archived: the row stays, but `list` and render skip it. `unarchive` brings it back.
+
+<!-- example: knowledge#other-kinds-archive -->
+```console
+# alice, in website
+$ lore snapshot archive snp_6a86…ed8c
+✓ snp_6a86…ed8c archived
+$ lore snapshot list
+(no snapshots)
+$ lore snapshot unarchive snp_6a86…ed8c
+✓ snp_6a86…ed8c unarchived
 ```
 <!-- /example -->
 
@@ -195,9 +234,9 @@ lore sync: 20 file(s) in .lore/data not committed — commit them with your chan
 ```console
 # alice, in website
 $ lore incident list; lore tastepref list; lore techdoc list
-IN  inc_0aae…a61f
-TA  tst_b4d3…11aa
-tdc_9a34…b418 Payments docs https://docs.example.com/payments
+IN  inc_4f89…b64b  Site down for 20 minutes
+TA  tst_bfed…eeea  Buttons are blue
+tdc_376c…8e1a Payments docs https://docs.example.com/payments
 ```
 <!-- /example -->
 
@@ -205,7 +244,8 @@ tdc_9a34…b418 Payments docs https://docs.example.com/payments
 
 - **Some lists show only the id.** `lore incident list` and `lore tastepref list` print a two-letter tag and the id, not the text. Use `lore <kind> show <id>` or `lore search` to read them.
 - **`hotfix list` shows the body, not the title.** Keep the first words of the body clear.
-- **Not every kind has `edit` or `archive`.** Snapshots, incidents and tech docs have no `edit`; only rules, memories, decisions, hotfixes, patterns, playbooks, prompts and snapshots have `archive`. Run `lore <kind> --help` to see the verbs.
+- **Not every kind has `edit` or `archive`.** Snapshots and tech docs have no `edit`; only rules, memories, decisions, hotfixes, patterns, playbooks, prompts and snapshots have `archive`. Run `lore <kind> --help` to see the verbs.
+- **`<kind> show` is short on purpose.** For patterns, playbooks, prompts, behaviours, architecture notes, cookbook recipes, suggestions, taste preferences, workflows and workspaces it prints the tag and the id only (the 0.1.17 shape scripts depend on). Use `lore show <id>` or `--json` to read the title and body.
 - **Only rules and hotfixes are pinned.** The other kinds reach the coding tool through `lore search`, not through the rendered file. See [Render](render-and-agent-files.md).
 
 ## Related

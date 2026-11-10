@@ -1,0 +1,1 @@
+func Synced() Item { return itemFunc(func(t *TableDef) { t.Synced = true }) }

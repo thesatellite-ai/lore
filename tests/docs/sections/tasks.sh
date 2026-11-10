@@ -47,7 +47,7 @@ note "delete"
 on alice $W "lore task add 'Test task, please ignore'"
 local t4; t4=$(id tsk)
 on! alice $W "lore task delete $t4"
-on alice $W "lore task delete $t4 --confirm"
+on alice $W "lore task delete $t4 --yes"
 
 # --- order: one task waits for another ---------------------------------------
 note "after"
@@ -71,8 +71,9 @@ on alice $W "lore tasklist search launch"
 on alice $W "lore tasklist edit $tl --status closed"
 
 note "task view"
-on alice $W "lore task-view add --name urgent --filter '{\"priority\":\"urgent\"}'"
-on alice $W "lore task-view list"
+on alice $W "lore task view add open_todo --where 'status:todo'"
+on alice $W "lore task view list"
+on alice $W "lore task list --view open_todo"
 
 # --- commitment and snooze ------------------------------------------------------
 note "commitment"
@@ -115,7 +116,7 @@ on alice $W "lore reminder list --done"
 
 note "reminder delete"
 on! alice $W "lore reminder delete $r2"
-on alice $W "lore reminder delete $r2 --confirm"
+on alice $W "lore reminder delete $r2 --yes"
 
 # --- link commits ------------------------------------------------------------
 note "push after done"
@@ -131,6 +132,7 @@ on alice $W "lore link list --entity $t2"
 note "commit show"
 on alice $W "lore commit-show \$(git rev-parse HEAD)"
 on alice $W "lore commit-show HEAD"
+on alice $W "lore commit show \$(git rev-parse HEAD)"
 
 note "done with commit"
 on alice $W "lore task done $t2 --commit \$(git rev-parse HEAD) --no-lesson"
@@ -147,4 +149,34 @@ note "link remove"
 on alice $W "lore link list"
 local cml; cml=$(id cml)
 on! alice $W "lore link remove $cml"
-on alice $W "lore link remove $cml --confirm"
+on alice $W "lore link remove $cml --yes"
+
+# --- accept and decline proposals ---------------------------------------------------
+note "accept and decline"
+on alice $W "lore task add 'Add a size guide' --commitment proposed"
+local pa; pa=$(id tsk)
+on alice $W "lore task add 'Rename the shop to Website Pro' --commitment proposed"
+local pd; pd=$(id tsk)
+on alice $W "lore task triage"
+on alice $W "lore task accept $pa --priority high"
+on alice $W "lore task decline $pd --reason wont_do --note 'The client keeps the name'"
+on alice $W "lore task triage"
+on alice $W "lore task list --status cancelled"
+on alice $W "lore task list --status cancelled --all"
+on alice $W "lore task show $pd"
+
+# --- export and import ---------------------------------------------------------------
+note "export"
+on alice $W "lore task export --where 'status:todo' --format markdown"
+on alice $W "lore task export --where 'status:todo' --format csv"
+
+note "import"
+cat > "$HOMES/alice/backlog.csv" <<'CSV'
+id,title,priority,status
+T-1,Add a cookie banner,high,To Do
+T-2,Compress the product photos,medium,In Review
+CSV
+on alice $W "cat ~/backlog.csv"
+on alice $W "lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --dry-run"
+on alice $W "lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes"
+on alice $W "lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes"

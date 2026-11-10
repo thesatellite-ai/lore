@@ -27,7 +27,8 @@ All of these are plain config in `~/.lore/config.yaml`; the commands are the sam
 - **If only one client is special,** use the mixed layout: move that client to its own store and keep the rest together.
 - **If one client has several repos that make one product** (client 2's `app`, `api` and `infra`), link all of them to one project folder (`client2/`), so they share one mission and task list.
 - **If you need a place to try things out,** use a staging branch of the same store, chosen with `lore org use` for one repo or `LORE_ORG` for one shell. A staging entry never matches a repo by itself.
-- **If a note is only for you,** write it with `--to me`; add `--everywhere` to load it in every repo instead of only this company's.
+- **If a note is only for you,** write it with `--to me`. With `personal.store` set to a store address, such a note loads in every repo you open. The older value `personal.store: local` (`~/.lore/personal`) files it by company instead: under the company's folder in that company's repos, under `everywhere/` elsewhere ([Personal notes](../team/use-cases/personal-notes.md)).
+- **If a store's notes may appear in committed files** (a render, a client repo), mark it `lore store visibility <name> shareable`; every store starts `internal`.
 
 ## Pitfalls
 
@@ -48,11 +49,12 @@ All of these are plain config in `~/.lore/config.yaml`; the commands are the sam
 | Several repos, one project | [Several repos as one product](../team/use-cases/group-project.md) | [`group`](../../tests/team/docs/transcripts/group.txt) |
 | Staging branch | [Same store, separate staging](../team/use-cases/staging.md) | [`staging`](../../tests/team/docs/transcripts/staging.txt) |
 | Personal store | [Personal notes](../team/use-cases/personal-notes.md) | [`personal`](../../tests/team/docs/transcripts/personal.txt) |
-| Looking after stores | [Your identity, joining an org, and store housekeeping](../team/identity-and-stores.md) | [`people`](../../tests/team/docs/transcripts/people.txt) |
+| Looking after stores | [Your identity, joining an org, and store housekeeping](../team/identity-and-stores.md), [Your stores: list, move, retire](../sync/stores.md) | [`people`](../../tests/team/docs/transcripts/people.txt), [`stores`](../../tests/docs/sections/stores.sh) ([output](../../tests/docs/transcripts/stores.txt)) |
 
 ## Related
 
 - [Concepts: stores and links](../team/concepts.md#stores-and-links)
+- [Which storage backend and cache](backend.md): folder store or git store, and where each keeps its files.
 - [Which org and identity setup](org-and-identity.md)
 - [Keep a note with the code, or share it at once](with-code-or-live.md)
 - [All decision guides](README.md)
