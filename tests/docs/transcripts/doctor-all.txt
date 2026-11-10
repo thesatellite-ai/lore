@@ -1,0 +1,103 @@
+
+### run it
+tomas (work/agency/site)$ lore doctor --all
+setup agency (admin of agency, default) ─ ~/work/agency/**
+  ⚠ identity    tomas@agency.example · roster – · period –
+  ⚠ github      tomas-dev via github.com
+  ✓ store me    read – write – private –
+  ? store agency   read ✓ write ✓ private ?
+  ✓ secrets     none
+  ⚠ identity.actor_copies  Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+      fix: lore actor refresh
+  ⚠ github.gh_account  gh has no login for tomas-dev
+      fix: gh auth login --hostname github.com
+  ? store.private  agency: could not tell whether agency/notes is private: To get started with GitHub CLI, please run:  gh auth login
+
+setup personal (solo) ─ ~/work/personal/**
+  ⚠ identity    tomas@home.example
+  ✓ github       via github.com
+  ✓ secrets     none
+  ⚠ identity.actor_copies  Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+      fix: lore actor refresh
+  ⚠ folders.exist  not a folder: ~/work/personal
+      fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
+
+This repo, warnings:
+  - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
+
+2 setups · 20 ok · 4 warnings · 0 errors · 1 could not run → degraded (exit 1)
+
+Context:
+  - context: .lore/LORE.md not rendered yet (lore render)
+(exit 1)
+
+### one setup
+tomas (work/agency/site)$ lore doctor --all --setup personal
+setup personal (solo) ─ ~/work/personal/**
+  ⚠ identity    tomas@home.example
+  ✓ github       via github.com
+  ✓ secrets     none
+  ⚠ identity.actor_copies  Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+      fix: lore actor refresh
+  ⚠ folders.exist  not a folder: ~/work/personal
+      fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
+
+This repo, warnings:
+  - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
+
+1 setup · 7 ok · 2 warnings · 0 errors → degraded (exit 1)
+
+Context:
+  - context: .lore/LORE.md not rendered yet (lore render)
+(exit 1)
+
+### wrong account
+tomas (work/agency/site)$ lore doctor --all --setup agency --fresh
+setup agency (admin of agency, default) ─ ~/work/agency/**
+  ⚠ identity    tomas@agency.example · roster – · period –
+  ✗ github      tomas-dev via github.com
+  ✓ store me    read – write – private –
+  ? store agency   read ✓ write ✓ private ?
+  ✓ secrets     none
+  ⚠ identity.actor_copies  Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+      fix: lore actor refresh
+  ✗ github.ssh_user  github.com logs in as mira-dev
+      fix: github.com logs in as mira-dev, not tomas-dev. In ~/.ssh/config point Host github.com at tomas-dev's key (IdentityFile <that key>, IdentitiesOnly yes), or pick the mira-dev account
+  ✗ github.key_matches  github.com logs in as mira-dev, but this setup's account is tomas-dev
+      fix: Nothing lore can use logs in as tomas-dev. Run the GitHub step again so lore finds a route (an ssh alias that logs in as tomas-dev, or https with tomas-dev's gh login: gh auth login), or add a Host block for tomas-dev's key to ~/.ssh/config
+  ⚠ github.gh_account  gh has no login for tomas-dev
+      fix: gh auth login --hostname github.com
+  ? store.private  agency: could not tell whether agency/notes is private: To get started with GitHub CLI, please run:  gh auth login
+      repair: lore setup repair agency
+
+This repo, warnings:
+  - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
+
+1 setup · 12 ok · 2 warnings · 2 errors · 1 could not run → broken (exit 2)
+
+Context:
+  - context: .lore/LORE.md not rendered yet (lore render)
+(exit 2)
+
+### json
+tomas (work/agency/site)$ lore doctor --all --setup agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["status"], r["exit_status"], r["counts"]); [print(c["check"], c["status"], c["level"], c.get("target","-"), "|", c.get("detail","")) for s in r["setups"] for c in s["checks"] if c["status"] not in ("ok", "skip")]'
+broken 2 {'ok': 12, 'warn': 2, 'fail': 2, 'skip': 14, 'error': 1}
+identity.actor_copies warn warn - | Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+github.ssh_user fail error - | github.com logs in as mira-dev
+github.key_matches fail error - | github.com logs in as mira-dev, but this setup's account is tomas-dev
+github.gh_account warn warn - | gh has no login for tomas-dev
+store.private error error store agency | could not tell whether agency/notes is private: To get started with GitHub CLI, please run:  gh auth login
+
+### repair
+tomas (work/agency/site)$ lore setup repair agency --dry-run
+agency: 1 step to redo
+  github
+    ✗ github.ssh_user  github.com logs in as mira-dev
+      fix: github.com logs in as mira-dev, not tomas-dev. In ~/.ssh/config point Host github.com at tomas-dev's key (IdentityFile <that key>, IdentitiesOnly yes), or pick the mira-dev account
+    ✗ github.key_matches  github.com logs in as mira-dev, but this setup's account is tomas-dev
+      fix: Nothing lore can use logs in as tomas-dev. Run the GitHub step again so lore finds a route (an ssh alias that logs in as tomas-dev, or https with tomas-dev's gh login: gh auth login), or add a Host block for tomas-dev's key to ~/.ssh/config
+(exit 1)
+tomas (work/agency/site)$ lore setup repair agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); [print(s["name"], st["step"], [c["check"] for c in st["checks"]]) for s in r["setups"] for st in s["steps"]]'
+agency github ['github.ssh_user', 'github.key_matches']
+tomas (work/agency/site)$ lore setup repair agency --dry-run
+agency: nothing to repair

@@ -2,19 +2,14 @@ version: 2
 
 project_name: lore
 
-# This repo is a Go workspace (go.work stitches ./dbent ./lace ./saas;
-# `enttui` resolves from the module proxy). dbent is local-only, so the
-# build MUST run with the workspace active — do not disable it.
+# The release binary is ./cmd/lore in the root module
+# (github.com/thesatellite-ai/lore), the only module in the repo.
 # Pure-Go sqlite (modernc.org/sqlite) => CGO_ENABLED=0 => cross-compile
 # every target from a single Linux runner. FTS5 is built into modernc;
 # no build tag needed.
-before:
-  hooks:
-    - go work sync
-
 builds:
   - id: lore
-    main: ./saas/cmd/cli
+    main: ./cmd/lore
     binary: lore
     env:
       - CGO_ENABLED=0
@@ -75,6 +70,9 @@ release:
 # HOMEBREW_TAP_GITHUB_TOKEN (PAT with contents:write on the tap repo) —
 # the default GITHUB_TOKEN cannot push to a different repository.
 # Users: `brew install thesatellite-ai/tap/lore`.
+# `brews` stays (GR-1): a formula serves macOS and Linux Homebrew from the
+# shared tap. goreleaser v2.10.0+ reports it as deprecated and `goreleaser
+# check` fails there, so release.yml and the gate pin goreleaser v2.9.0.
 brews:
   - name: lore
     repository:
@@ -85,7 +83,7 @@ brews:
     directory: Formula
     homepage: "https://github.com/thesatellite-ai/lore"
     description: "Local-first knowledge & context store for AI coding agents"
-    license: "PolyForm-Perimeter-1.0.0"
+    license: "Apache-2.0"
     skip_upload: auto
     install: |
       bin.install "lore"

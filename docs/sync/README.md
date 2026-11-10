@@ -15,11 +15,12 @@ The examples follow Alice and Bob (two agency developers) in the client's repo `
 | [How notes travel with git](how-notes-travel-with-git.md) | You want the big picture: what `lore init` adds, what to commit, what `lore sync` does, and how a teammate gets your notes. Start here. |
 | [Branches: peek and promote](branches-peek-promote.md) | You want to see a teammate's notes on their branch without switching to it, or move one urgent rule onto main now. |
 | [Conflicts and duplicates](conflicts-and-duplicates.md) | Two people changed the same note, the same fact was written twice, or two people set up lore on separate branches. |
-| [Trash, export and purge](trash-and-purge.md) | A note disappeared, `.lore/data` was deleted, or you want old archived notes gone for good. |
+| [Trash, restore from git and purge](trash-and-purge.md) | A note disappeared, `.lore/data` was deleted, or you want old archived notes gone for good. |
 | [Hooks and the merge driver](hooks-and-merge-driver.md) | You want to know what lore adds to `.git/hooks` and `.gitattributes`, and why a commit was refused. |
 | [The GitHub workflow](github-workflow.md) | Pull requests on GitHub show a conflict in `.lore/data` that lore could have merged. |
 | [Projects and repos](multi-repo-projects.md) | You want notes that apply to one part of the code only, or you want to see and tidy the projects in a database. |
-| [One database for several repos](shared-database-mode-b.md) | A client's product is several repos and you want them to share one notes database on your machine. |
+| [Your stores: list, move, retire](stores.md) | You keep notes in a store next to the client's repo and want to see its stores, move a note into one, follow a store that moved, split it into folders or detach it. |
+| [One store for several repos](shared-database-mode-b.md) | A client's product is several repos and you want them to share notes through one folder store on your machine, or a repo still uses the old shared database. |
 
 ## Two words you will see everywhere
 
@@ -35,7 +36,7 @@ Some notes do not wait for a commit. Tasks, for example, are *live* by default: 
 
 ## Where the examples come from
 
-The examples are run by `tests/docs/run-examples.sh sync` and `tests/docs/run-examples.sh projects`, in throwaway folders with a fake GitHub made of plain git repos on disk. Nothing touches a real account or the network. The script writes what each command printed to `tests/docs/transcripts/`, and the pages paste from there, so the output you see is the output lore really prints.
+The examples are run by `tests/docs/run-examples.sh sync`, `tests/docs/run-examples.sh projects` and `tests/docs/run-examples.sh stores`, in throwaway folders with a fake GitHub made of plain git repos on disk. Nothing touches a real account or the network. The script writes what each command printed to `tests/docs/transcripts/`, and the pages paste from there, so the output you see is the output lore really prints.
 
 ## Related
 

@@ -15,13 +15,13 @@ task lore:test:team                       # whole suite through testlock, prints
 task lore:test:team:race -- -count=10     # only the race tests, repeated, with -race
 
 # by hand, one test
-go build -tags loretest -o /tmp/lore-team ./saas/cmd/cli
-LORE_TEAM_BIN=/tmp/lore-team go test -tags teame2e -run 'TestF07_ClaimRenewReleaseNeverMakeHistory' -v ./saas/cmd/cli/
+go build -tags loretest -o /tmp/lore-team ./cmd/lore
+LORE_TEAM_BIN=/tmp/lore-team go test -tags teame2e -run 'TestF07_ClaimRenewReleaseNeverMakeHistory' -v ./tests/teame2e/
 ```
 
 | Variable | Effect |
 |---|---|
-| `LORE_TEAM_BIN` | lore binary to drive (built with `-tags loretest` so `LORE_NOW` works); default: the plain e2e build |
+| `LORE_TEAM_BIN` | lore binary to drive (built with `-tags loretest` so `LORE_NOW` works); default: `./cmd/lore` built with `-tags loretest` by the suite's TestMain |
 | `LORE_TEAM_STRICT=1` | a pending test fails instead of skipping |
 | `LORE_TEAM_FORCE=1` | skip the capability probe and run everything (a feature whose help text is not final yet; checking fixtures) |
 
@@ -29,15 +29,15 @@ LORE_TEAM_BIN=/tmp/lore-team go test -tags teame2e -run 'TestF07_ClaimRenewRelea
 
 | Path | What |
 |---|---|
-| `saas/cmd/cli/internal/teamharness/` | the harness: World, Remote (bare repos), Actor (HOME, config, clock, offline), Clone, capability probe, same-instant barrier, leak scanner, git shim |
-| `saas/cmd/cli/internal/teamharness/matrix/` | reads `go test -json`, prints the pass / FAIL / pending matrix, exits 1 only on real failures; a suite that does not compile prints `BUILD FAILED` with the compiler output, a package failing outside any test prints `PACKAGE FAILED`, and a run where no test matched prints `NO TESTS RAN` (all exit 1, never a 0/0 matrix) |
-| `saas/cmd/cli/team_e2e_fixtures_test.go` | shared worlds: one-repo team, the agency (its store, the client, client 3), helpers |
-| `saas/cmd/cli/team_e2e_live_test.go` | P2: F1–F6, F8, E1–E4, E6, cookbook 1, 7, 16, side effects 11, 14, 22, 23, 27, 28, 34, crashes |
-| `saas/cmd/cli/team_e2e_org_test.go` | P1: F10, F17–F19, E8, E12, E13, cookbook 5 |
-| `saas/cmd/cli/team_e2e_store_test.go` | P3: F11–F16, F20, E9–E11, §6, cookbook 3, 4, 8, 10, 12, 13, 14, side effects 4, 20, 32 |
-| `saas/cmd/cli/team_e2e_agents_test.go` | P4: F7, F9, §7.3, §7.4, §7.5 worked example, E5, E7, cookbook 2, 9, 15 |
+| `tests/teame2e/teamharness/` | the harness: World, Remote (bare repos), Actor (HOME, config, clock, offline), Clone, capability probe, same-instant barrier, leak scanner, git shim |
+| `tests/teame2e/teamharness/matrix/` | reads `go test -json`, prints the pass / FAIL / pending matrix, exits 1 only on real failures; a suite that does not compile prints `BUILD FAILED` with the compiler output, a package failing outside any test prints `PACKAGE FAILED`, and a run where no test matched prints `NO TESTS RAN` (all exit 1, never a 0/0 matrix) |
+| `tests/teame2e/team_e2e_fixtures_test.go` | shared worlds: one-repo team, the agency (its store, the client, client 3), helpers |
+| `tests/teame2e/team_e2e_live_test.go` | P2: F1–F6, F8, E1–E4, E6, cookbook 1, 7, 16, side effects 11, 14, 22, 23, 27, 28, 34, crashes |
+| `tests/teame2e/team_e2e_org_test.go` | P1: F10, F17–F19, E8, E12, E13, cookbook 5 |
+| `tests/teame2e/team_e2e_store_test.go` | P3: F11–F16, F20, E9–E11, §6, cookbook 3, 4, 8, 10, 12, 13, 14, side effects 4, 20, 32 |
+| `tests/teame2e/team_e2e_agents_test.go` | P4: F7, F9, §7.3, §7.4, §7.5 worked example, E5, E7, cookbook 2, 9, 15 |
 
-All `team_e2e_*_test.go` files carry the build tag `teame2e`, so the normal suite (`task lore:test`, `task lore:check`) never compiles them.
+All `team_e2e_*_test.go` files carry the build tag `teame2e`, so the plain `go test ./...` (`task lore:test:quick`, `task lore:test`) never compiles them; the full gate `task lore:check` runs them in its e2e stage (`lore:test:team:run`).
 
 ## How the harness fakes the world
 

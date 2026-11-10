@@ -43,15 +43,11 @@ lore tag detach --on-table=tasks --on-id=tsk_019e... --tag=blocked
 
 ### Find everything tagged X
 
-There's no first-class "find by tag" command in v0.1, but you can compose:
+The `list` commands of memories, rules, decisions and hotfixes filter by tag:
 
 ```bash
-sqlite3 .lore/lore.db <<'SQL'
-SELECT entity_table, entity_id
-FROM entity_tags et
-JOIN tags t ON t.id = et.tag_id
-WHERE t.name = 'blocked';
-SQL
+lore memory list --tag blocked
+lore rule list --tag blocked --json | jq -r '.data[].id'
 ```
 
 Or via JSON:

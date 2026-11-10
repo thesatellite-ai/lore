@@ -12,7 +12,7 @@ lore memory search "invoice"
 ```
 
 ```bash
-lore memory search "invoice" --json | jq '.count, .results[0:3]'
+lore memory search "invoice" --json | jq '.count, .data[0:3]'
 ```
 
 ## Phrase search
@@ -79,10 +79,10 @@ lore memory search "" --json
 
 ```bash
 # Notes about invoices, only well-trusted ones (trust_score: how much lore trusts a note, 0 to 1)
-lore memory search "invoice" --json | jq '.results[] | select(.trust_score >= 0.7)'
+lore memory search "invoice" --json | jq '.data[] | select(.row.trust_score >= 0.7)'
 
 # IDs only (for piping into another command)
-lore memory search "WhatsApp" --json | jq -r '.results[].id'
+lore memory search "WhatsApp" --json | jq -r '.data[].id'
 
 # Count by kind
 lore memory list --json | jq -r '.data[].kind' | sort | uniq -c
@@ -113,5 +113,5 @@ done
 
 ## Pitfalls
 
-- By default search looks in the current repo plus the shared notes; pass `--all-repos` to look everywhere.
+- By default search looks at the project-wide notes only, even inside one of the project's repos; pass `--repo <name>` for that repo's notes plus the shared ones, or `--all-repos` to look everywhere.
 - Archived notes are left out unless you pass `--include-archived`.

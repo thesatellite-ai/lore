@@ -4,7 +4,7 @@ prefix = "ds"
 [scan]
 code = ["**"]
 docs = ["docs/**", "README.md", "LORE_SYNC_SPEC.md", "skills/**/*.md"]
-exclude = ["**/testdata/**", "**/node_modules/**", "**/vendor/**", "dist/**", "public/**", "tmp/**", "apidash/**", "docs/framework/**", "brand/**", "lace/**", "**/*.db", "coverage.svg"]
+exclude = ["**/testdata/**", "**/node_modules/**", "**/vendor/**", "dist/**", "public/**", "tmp/**", "apidash/**", "docs/framework/**", "brand/**", "**/*.db", "coverage.svg"]
 generated = ["**/*.pb.go", "**/gen/**", "**/*_gen.go", "**/*_gen.ts"]
 
 [include]

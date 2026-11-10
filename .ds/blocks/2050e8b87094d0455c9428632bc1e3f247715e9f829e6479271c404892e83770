@@ -1,0 +1,17 @@
+const (
+	// LoreDir is the lore folder inside the store root and every folder.
+	LoreDir = ".lore"
+	// DataDir is the folder under LoreDir that holds the row files.
+	DataDir = "data"
+	// MetaFileName holds a folder's identity and format version; it lives
+	// in the data folder but is never a row.
+	MetaFileName = "_meta.json"
+	// PurgedFileName lists ids purged on purpose; never a row.
+	PurgedFileName = "_purged.json"
+	// LockFileName is the store lock file inside the root's LoreDir.
+	LockFileName = "lock"
+	// RowFileExt is the extension of every row file.
+	RowFileExt = ".json"
+	// tmpPrefix marks in-flight atomic writes; leftovers are crash debris.
+	tmpPrefix = ".tmp-"
+)

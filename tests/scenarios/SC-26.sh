@@ -1,16 +1,30 @@
 #!/usr/bin/env bash
-# SC-26: Schema migration replay log integrity
-# Catches: R21-49
+# SC-26: a tampered cache is rebuilt from the row files, never trusted
+# Catches: R21-49 (0.1.18: the row files are the truth; .lore/lore-cache.db
+# records each table's schema fingerprint and its layout version, and a
+# table or file that does not match is rebuilt instead of read)
 source "$(dirname "$0")/../lib/common.sh"
 need sqlite3
+need python3
 mk_tmp; init_project mig
+$LORE memory add --body "truth from the file" >/dev/null || fail "memory add"
+CACHE=.lore/lore-cache.db
+[ -f "$CACHE" ] || fail "no cache file at $CACHE"
 
-ROWS=$(sqlite3 .lore/lore.db "SELECT COUNT(*) FROM schema_migrations WHERE status='applied'" 2>/dev/null || echo 0)
-[ "$ROWS" -gt 0 ] || skip "schema_migrations not seeded (R21-49 deferred)"
+body() { $LORE memory list --json | json_get '",".join(r["body"] for r in d["data"])'; }
+[ "$(body)" = "truth from the file" ] || fail "memory not listed before the tamper"
 
-# Tamper with applied sha.
-sqlite3 .lore/lore.db "UPDATE schema_migrations SET migration_sha256='tampered' WHERE rowid=1"
+# 1. A table whose recorded fingerprint is wrong is rebuilt: the tampered
+#    cached body never shows.
+sqlite3 "$CACHE" "UPDATE memories SET body='tampered'" || fail "tamper body"
+sqlite3 "$CACHE" "UPDATE _tables SET fingerprint='tampered' WHERE name='memories'" || fail "tamper fingerprint"
+[ "$(body)" = "truth from the file" ] || fail "a table with a tampered fingerprint was read: $(body)"
 
-$LORE doctor 2>&1 | grep -qE "migration.*hash|tampered|E_SCHEMA_MIGRATION" || \
-    fail "tampered migration sha not detected"
+# 2. A file of another layout version is emptied and rebuilt.
+sqlite3 "$CACHE" "UPDATE memories SET body='tampered again'" || fail "tamper body"
+sqlite3 "$CACHE" "PRAGMA user_version = 99" || fail "tamper layout version"
+[ "$(body)" = "truth from the file" ] || fail "a cache of another layout version was read: $(body)"
+[ "$(sqlite3 "$CACHE" "PRAGMA user_version")" != 99 ] || fail "the cache kept the foreign layout version"
+
+$LORE doctor >/dev/null || fail "doctor not healthy after the rebuilds"
 pass SC-26

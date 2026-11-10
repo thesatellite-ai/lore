@@ -32,7 +32,7 @@ Lore fetches once per command and reuses that fetch for 60 seconds; `lore sync` 
 - **Hidden is not private.** Anyone who can clone the repo can fetch the live list. `--live` decides *when* people see a note; `--to` decides *who* (see [How to lay out your stores](store-layout.md)). In a client's repo, a live note is a note the client can read, unless it goes to your store (a separate private repo that only you can open).
 - **Live is temporary.** ZIP downloads, forks, plain mirrors and shallow clones do not carry the live list. That is why open rows are copied to `main` after `live.max_age` (7 days by default).
 - **If a note is in both places, the live copy wins,** always. Use `lore explain <id>` to see where a row is and why.
-- **No live rows in a shared database (Mode B: one database file on your machine for several repos).** Live hangs off the repo's `.lore/data`, which a Mode B repo does not have ([Where your notes live](database-mode.md)).
+- **No live rows in a folder store.** Live rows hang off the repo's own git remote; notes written `--to` a folder store are never live ([Where your notes live](database-mode.md)).
 - **A branch note stays on its branch.** A rule you add on `feat/x` is invisible on `main` until `feat/x` merges. Read it from elsewhere with `lore sync peek`.
 
 ## Guides and examples for each option
@@ -47,5 +47,7 @@ Lore fetches once per command and reuses that fetch for 60 seconds; `lore sync` 
 ## Related
 
 - [Concepts: branch data, live rows and signals](../team/concepts.md#branch-data-live-rows-and-signals)
+- [Which command for which job](workflow-methods.md#merging-notes-hooks-and-merge-driver-or-the-ci-merge): how git merges notes on your machine and on GitHub.
+- [Which storage backend and cache](backend.md)
 - [Where your notes live](database-mode.md)
 - [All decision guides](README.md)

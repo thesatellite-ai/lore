@@ -21,6 +21,12 @@ All phases P0–P7 are implemented and tested. The design below is kept as writt
 
 </Callout>
 
+<Callout type="warn" title="0.1.18: the engine this spec describes is gone">
+
+This spec and its "As built" notes describe the v0.1.17 sync engine (`saas/pkg/aicoder/lsync` and `saas/cmd/cli/sync_wire.go`), which 0.1.18 deleted with the `saas` module. The row-file layout, the git wiring and the field-level merge carried over into the 0.1.18 store (`adapters/backend/rowfs`, `adapters/backend/git`, `wire/host/gitwire.go`, `logic/merge`), but the SQLite dirty table, the reconcile rounds, the 15-second sync lock (now `store.lock_timeout`, 10 s by default), `LORE_SYNC=0` as a cache-only switch and the table lists of §7 are history, not the current code. The current behaviour is in [docs/sync](docs/sync/README.md) and [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md).
+
+</Callout>
+
 ## 0. Implementation status
 
 ### What shipped and where
@@ -31,7 +37,7 @@ All phases P0–P7 are implemented and tested. The design below is kept as writt
 | Generic helpers (importable by any project) | `saas/pkg/aicoder/canonjson` (byte-stable JSON), `saas/pkg/aicoder/merge3` (field-level three-way merge), `saas/pkg/aicoder/gitsetup` (idempotent git config / attribute blocks / chained hook blocks, `ReadTree`, `CommitFiles`) |
 | Deterministic ids for natural keys | `saas/pkg/aicoder/ids/deterministic.go`, `saas/cmd/cli/natural_ids.go` (ent hook) |
 | CLI wiring (pass before and after every command, fresh-clone build, git wiring, LORE.md re-render) | `saas/cmd/cli/sync_wire.go`, `memory.go` (`resolveContext`), `main.go`, `init.go` (`createProjectDB`, adopt-on-init) |
-| Commands | `saas/cmd/cli/sync_cmd.go`: `lore sync`, `status`, `export --all`, `conflicts`, `resolve`, `trash`, `trash restore`, `purge`, `fix-projects`, `install-git`, `peek`, `promote`, `dupes`, `merge-rows`, hidden `hook`, hidden `merge-driver`; `lore restore --prefer` (`backup.go`); doctor `[sync]` section (`doctor.go`) |
+| Commands | `saas/cmd/cli/sync_cmd.go`: `lore sync`, `status`, `export --all`, `conflicts`, `resolve`, `trash`, `trash restore`, `purge`, `fix-projects`, `install-git`, `peek`, `promote`, `dupes`, `merge-rows`, hidden `hook`, hidden `merge-driver`; the v0.1.17 whole-database restore command with `--prefer` (`backup.go`, not in 0.1.18: single rows come back with `lore trash restore`); doctor `[sync]` section (`doctor.go`) |
 | Docs | `README.md` (Team sync through git, Sharing through git, FAQ), `skills/` (SKILL, SKILL-mini, COMMANDS, PLAYBOOKS P13/P13b, GLOSSARY), `docs/DEVELOPMENT.md`, agent directive (`directive.go`) |
 | Tasks | `task lore:test:sync`, `task lore:bench:sync` |
 
@@ -68,7 +74,7 @@ These were pre-existing and unrelated to the sync design, but sync's extra write
 |---|---|---|
 | Pre-commit guard skipped an UNSTAGED lore file (git's ` M` lost its leading space to output trimming) and then auto-staged it unchecked | `gitsetup.Uncommitted` parses `--porcelain -z` untrimmed (renames handled) | `TestUncommitted_UnstagedAndSubdir`, `TestE2E_PreCommitGuardsUnstagedFileInSubdirProject` (proven by reverting) |
 | Same guard read the wrong files when the lore project lives in a subdirectory of the repo (repo-root-relative paths joined onto the project dir) | `Uncommitted` returns paths relative to the directory asked about | same tests |
-| `lore restore --prefer <typo>` replaced the DB, then failed before resetting sync state | flags validated before any file is touched | `TestE2E_RestoreRejectsBadPreferBeforeTouchingDB` |
+| The v0.1.17 restore command with a mistyped `--prefer` value replaced the DB, then failed before resetting sync state | flags validated before any file is touched | `TestE2E_RestoreRejectsBadPreferBeforeTouchingDB` |
 | `--prefer db` re-imported rows added after the backup (they still had files), silently undoing the restore | after a restore the preference is a rollback: `db` removes file-only rows' files, `files` trashes DB-only rows | `TestAdopt_PreferIsARollback` |
 | Deterministic ids come from editable fields: re-creating a row under a renamed row's old key hit a primary-key collision | on an id (not natural-key) collision the hook falls back to a random id | `TestNaturalIDHook_RenamedRowDoesNotBlockRecreate` (proven by disabling) |
 | `--columns` scoped only the first search term (FTS5 binds a column filter to the next phrase) | `{cols}: (expr)` | `TestSearchEntity_ColumnFilterScopesAllTerms` (proven by removing the parentheses) |
@@ -102,7 +108,7 @@ Found while building it: the first `ProbeMerge` used plain `git merge-tree`, whi
 
 ### Test gate and use-case coverage (after v0.1.13)
 
-- **One gate:** `task check` runs build, lint (vet, gofmt, staticcheck, six-target cross-build), race tests, every module's tests, `go mod tidy` check, scenarios, chaos and `ds check`, then stamps the tested tree. The committed `.githooks/pre-push` (enabled by `task lore:hooks:install`) runs it unless it already passed for exactly the code being pushed, and refuses to push code it did not test. Pinned by `prepush_hook_test.go`.
+- **One gate:** `task check` runs build, then lint (vet, gofmt, staticcheck, six-target cross-build), `go mod tidy -diff`, `ds check`, every package's tests and the race detector on the concurrent packages in parallel, then every end-to-end suite (userscen, team, setup page, scenarios, chaos, docs examples) in parallel, and stamps the tested tree. The committed `.githooks/pre-push` (enabled by `task lore:hooks:install`) runs it unless it already passed for exactly the code being pushed, and refuses to push code it did not test. Pinned by `prepush_hook_test.go`.
 - **True coverage:** `task lore:test:cover` builds the end-to-end binary with `-cover` (`LORE_E2E_COVERDIR`), so subprocess runs count. Measured with the shell scenarios too, CLI functions reached by no test went from 81 of 543 to 0 of 550 (`usecases_{tasks,misc,bench}_test.go`, every function mutation-checked).
 - **Docs drift gate extended:** `TestDocsMatchCLI` now checks positional arguments (cobra `ValidateArgs`) and flag values. It found 55 examples passing body text positionally (`lore memory add "…"`), which every body-primary command refuses; all fixed, and those commands now declare `Args: bodyOnlyArgs` so the rule is visible to cobra and the test.
 
@@ -326,7 +332,6 @@ your-repo/
     backups/            (gitignored)
 ```
 
-<!-- ds:block id=sync-datanames-nhh4krj2 -->
 One directory per synced table (named exactly like the SQL table); one file per row; filename is exactly the row id plus `.json`. Hook blocks live in whatever hook directory git uses for the clone (`.git/hooks`, or a hook manager's `core.hooksPath`), not in a committed directory. No nesting by date or shard in v1 (10k files per directory is fine for git and every OS lore targets; revisit past 50k).
 
 ## 6. File format
@@ -348,8 +353,6 @@ One directory per synced table (named exactly like the SQL table); one file per 
 }
 ```
 
-<!-- ds:block id=sync-formatversion-h8e7vzn7 -->
-<!-- ds:block id=sync-timelayout-ykcphmfb -->
 **Canonical serialization rules** (byte-identical output for identical data, so git never sees noise):
 
 | Rule | Why |
@@ -367,9 +370,6 @@ Write only when the canonical bytes differ from the file on disk. An edit that c
 
 ## 7. Table classification
 
-<!-- ds:block id=sync-syncedtables-rgmtjeph -->
-<!-- ds:block id=sync-localtables-dcpb69pj -->
-<!-- ds:block id=sync-volatile-4t6jsc7v -->
 Every ent schema table is in exactly one class. A unit test walks `dbent/schema` and fails if any table is unclassified, so a new table cannot silently skip the decision.
 
 | Class | Meaning | Tables (proposed — confirm in review) |
@@ -402,8 +402,6 @@ lore rule add --body="Use JWT"
 
 ### 8.2 Reconcile (start of every command)
 
-<!-- ds:block id=sync-racywindow-zrv7fwan -->
-<!-- ds:block id=sync-drainrounds-2adqnp3a -->
 As built — a stat cache instead of git tree hashes (see §0 Deltas):
 
 ```
@@ -465,7 +463,6 @@ lore task list              → reconcile: diff old HEAD tree vs new → rows of
 | Same row, same field | conflict |
 | Row archived on one side, edited on other | conflict on `archived_at` / edited field lines — never a modify/delete conflict, because there are no hard deletes (E9) |
 
-<!-- ds:block id=sync-strategyfor-ycedma28 -->
 **`lore merge-driver %O %A %B %P` (local merges, rebases, pulls):** field-level 3-way merge per file. The file is settled first (`merge3.MergeFile`, LORE_TEAM_SPEC F4 step 1, C12): a row added on both sides is merged field by field from an empty base, an edit beats a delete (a live tombstone, `_live.deleted: true`) and the driver says which side deleted it, and two tombstones stay one tombstone. Only then are fields merged:
 
 | base → ours | base → theirs | result |
@@ -500,8 +497,6 @@ The workflow (`.github/workflows/lore-sync-merge.yml`, generated from `sync_acti
 
 ## 10. Git integration (auto-configured, optional for correctness)
 
-<!-- ds:block id=sync-gitattributes-xzr8sqyk -->
-<!-- ds:block id=sync-mergedriver-config-bur8yta8 -->
 Lore checks and repairs this on every command, idempotently, in the per-clone `.git/config` only:
 
 ```ini
@@ -529,12 +524,11 @@ existing script        → block inserted right after the shebang, so an early `
 
 The check runs at the end of every command but costs only a few `stat` calls: lore records a fingerprint of the git config file, the hook files and `.gitattributes`, and spawns git only when one of them changed.
 
-<!-- ds:block id=sync-hooklines-3282rwuw -->
 Hooks provided (all optional — correctness never depends on them):
 
 - `pre-commit`: run a pass; refuse the commit when any lore file is invalid JSON, carries conflict markers (raw, or inside a JSON string value), or matches a credential pattern; otherwise stage `.lore/data/`. The hook first checks that the installed lore has `sync hook`: hook scripts may be committed (`.githooks`), and a teammate on an older lore must still be able to commit (they get an "upgrade it" note).
 - `post-checkout` / `post-merge` / `post-rewrite`: `lore sync hook refresh` — imports immediately and re-renders `.lore/LORE.md` when rows arrived. Never fails the git operation.
-- `commit-msg`: first `lore task hook commit-msg` adds the `Lore-Task: <id>` trailer for the task you hold (LORE_TEAM_SPEC F9, C8; never fails a commit); then the F16 leak check (LORE_TEAM_SPEC §6.3) on the final message: `lore check leaks --staged --commit-msg "$1"` over every staged file and the message, failing closed when the store cannot be read; probed with `check leaks --help` first so an older lore never refuses a commit.
+- `commit-msg`: first `lore task hook commit-msg` adds the `Lore-Task: <id>` trailer for the task you hold (LORE_TEAM_SPEC F9, C8; never fails a commit); then the F16 leak check (LORE_TEAM_SPEC §6.3) on the final message: `lore check leaks --staged --commit-msg "$1"` over every staged file and the message, failing closed when the store cannot be read; probed with `check leaks --help` first so an older lore never refuses a commit, except in a clone the last check marked as a client repo (`git config lore.clientrepo true`, wire/clientmark.go): there, with no lore on PATH that can check, the hook refuses the commit rather than let it through unchecked.
 - `post-commit` / `pre-push`: the protected-main ride-along (LORE_TEAM_SPEC F6). `post-commit` adds a `lore: land N rows` commit for finished live rows; `pre-push` re-adds it when it was dropped and stops that push once so the ride-along goes with it. They are repo-wide (one block per repo, no `cd`, so one ride-along commit covers every project of a monorepo), probe `lore land --help` first so an older lore never refuses a push, and do nothing while `LORE_RIDE_ACTIVE=1` (set by lore for its own commits and pushes).
 
 ## 11. Edge cases
@@ -584,7 +578,7 @@ Grouped by area. Each row is a case the implementation must handle and a test mu
 | # | Case | Fix |
 |---|---|---|
 | E24 | Mixed lore versions on a team: older binary reads a newer file with extra fields | Unknown fields kept in a raw side map and written back verbatim. Newer `_v` major than supported → read-only for that file + "upgrade lore" hint. Never drop fields. |
-| E25 | Schema migration renames / reshapes a field | Upcasters per `_v` applied on read (`upcast` in `codec.go`; the format is still `_v` 1, so none exist yet); a file newer than the running lore is refused with `newer-format` rather than misread. To rewrite every file in the current format after a format bump, run `lore sync export --all` (designed as `sync migrate`) and commit on main. Branches with old-format files keep importing via the upcasters. |
+| E25 | Schema migration renames / reshapes a field | Upcasters per `_v` applied on read (`upcast` in `codec.go`; the format is still `_v` 1, so none exist yet); a file newer than the running lore is refused with `newer-format` rather than misread. To rewrite every file in the current format after a format bump, run `lore migrate run` and commit on main (0.1.18: `lore sync export` is dropped, the row files are the truth). Branches with old-format files keep importing via the upcasters. |
 | E26 | Windows `core.autocrlf` rewrites line endings → hashes differ, spurious diffs | `.gitattributes` forces `eol=lf` for lore paths; reader normalizes CRLF before parsing. |
 | E27 | Local-only tables (query_log, runs) reference synced rows that vanish on branch switch | No foreign keys from local tables to synced tables (or `ON DELETE SET NULL`); readers tolerate missing targets. |
 | E28 | Two lore processes at once (two agents in one repo) | `.lore/state/sync.lock` (flock) around reconcile and around each write; SQLite WAL already serialises DB writes. |
@@ -593,8 +587,6 @@ Grouped by area. Each row is a case the implementation must handle and a test mu
 | E31 | Case-insensitive filesystems (macOS, Windows) | Ids are lowercase hex, kinds lowercase ASCII → no case collisions. Assert in the serializer. |
 | E32 | Very long bodies / large binary-ish content | Same limits as today's DB fields; serializer rejects bodies over a named max (constant with why-doc) with a clear error rather than committing multi-MB JSON. |
 
-<!-- ds:block id=sync-locktimeout-rh9uf4cq -->
-<!-- ds:block id=sync-maxfilesize-zk9m2syn -->
 As built, the numbers behind E28 and E32 are named constants: a pass waits up to 15 seconds for another process's sync lock before giving up, and a row file larger than 4 MiB is refused on read (it is reported, never imported).
 
 ### 11.5 Security
@@ -622,7 +614,7 @@ As built, the numbers behind E28 and E32 are named constants: a pass waits up to
 
 ## 12. Existing `lore.db` files and direct DB writes
 
-Every repo using lore today has a `lore.db` and no `.lore/data/`. And not every write goes through lore's write path: `lore tui` opens the same `lore.db` through enttui (`saas/cmd/cli/tui.go`), 13 CLI files run raw SQL, people run `sqlite3` by hand, `lore backup restore` replaces the whole file, and teammates on an older lore binary keep writing to their DB with no files at all. So sync must work in **both directions**: files → DB (§8.2) and DB → files (this section).
+Every repo using lore today has a `lore.db` and no `.lore/data/`. And not every write goes through lore's write path: `lore tui` opens the same `lore.db` through enttui (`saas/cmd/cli/tui.go`), 13 CLI files run raw SQL, people run `sqlite3` by hand, the v0.1.17 backup restore command replaces the whole file (0.1.18 has no backup or restore command: the row files are the truth), and teammates on an older lore binary keep writing to their DB with no files at all. So sync must work in **both directions**: files → DB (§8.2) and DB → files (this section).
 
 ### 12.1 Catching every DB write: triggers + outbox
 
@@ -683,7 +675,7 @@ lore <any command>   (new version, LORE_SYNC on)
            • print a summary: imported N, exported M, conflicts K
 ```
 
-Bootstrap never modifies existing DB rows except the project-id rewrite in ADOPT, and it backs up `lore.db` first via the existing `lore backup` path (`.lore/backups/<ts>.sqlite`), so it can always be undone.
+Bootstrap never modifies existing DB rows except the project-id rewrite in ADOPT, and it backs up `lore.db` first with the same `VACUUM INTO` copy the v0.1.17 backup command made (`.lore/backups/<ts>.sqlite`; in 0.1.18 that copy is only taken inside the automatic schema update, not by a command), so it can always be undone.
 
 ### 12.4 Rolling out to a team that already uses lore
 
@@ -702,7 +694,7 @@ If two people bootstrap in parallel before either merges, both `_meta.json` file
 |---|---|---|
 | E41 | `lore tui` edits a row | Trigger → outbox → exported on the next command (or immediately: tui calls the drain on exit). |
 | E42 | Raw SQL inside lore's own code paths, or `sqlite3` by hand | Same triggers; nothing to remember per code path. |
-| E43 | `lore backup restore` replaces `lore.db` | The restored DB has an old or no `sync_state`. Restore asks `--prefer db` (default, since restoring means "I want this DB back") or `--prefer files`. With `db`: export every differing row (the result is a reviewable git diff before commit). With `files`: full import over the restored DB. |
+| E43 | The v0.1.17 backup restore command replaces `lore.db` (not in 0.1.18) | The restored DB has an old or no `sync_state`. Restore asks `--prefer db` (default, since restoring means "I want this DB back") or `--prefer files`. With `db`: export every differing row (the result is a reviewable git diff before commit). With `files`: full import over the restored DB. |
 | E44 | `lore.db` deleted or corrupt | Full import from files rebuilds every synced row; only local-only telemetry is lost. This becomes the cheapest recovery tier, ahead of today's backup tiers. |
 | E45 | A teammate still on an old lore binary keeps writing to their DB with no triggers | Their changes are invisible until they upgrade; on upgrade, ADOPT exports them (rows only in the DB) and conflict-copies any that diverged. `_meta.json` carries `min_lore_version`; future versions refuse to write below it. Rollout note: upgrade everyone in step 2 above. **As built:** no `min_lore_version` field; the per-file `_v` check gives the same protection. |
 | E46 | Existing hook manager owns `core.hooksPath` (husky, lefthook, a repo's `.githooks` like sync_go) | Append lore's marked block to that directory's scripts; never repoint `core.hooksPath` (also referenced in §10). |

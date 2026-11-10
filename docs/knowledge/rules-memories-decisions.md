@@ -24,20 +24,14 @@ All three share the same verbs: `add`, `list`, `show`, `edit`, `search`, `archiv
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
-✓ rul_7a67…9504 
+✓ rul_7a67…9504
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ lore rule add --body 'Never put passwords in the code' --severity must
-✓ rul_2ad3…f891 
+✓ rul_2ad3…f891
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 2 file(s) in .lore/data not committed — commit them with your change
 $ lore rule add --body 'Keep pull requests under 400 lines' --severity should
-✓ rul_162d…9666 
+✓ rul_162d…9666
   scope: [master] severity: should
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ lore rule list
 rul_7a67…9504 [must/always] Run the tests before you push
 rul_2ad3…f891 [must/always] Never put passwords in the code
@@ -47,6 +41,7 @@ rul_7a67…9504
   severity:   must
   activation: always
 Run the tests before you push
+created 2026-11-02T10:00:05Z by act_54fe…28f2 · updated 2026-11-02T10:00:05Z by act_54fe…28f2
 ```
 <!-- /example -->
 
@@ -58,18 +53,16 @@ A memory has a *kind* (`--kind`): `retrieved` (the default; found by search when
 ```console
 # alice, in website
 $ lore memory add --body 'The client replies faster on WhatsApp than email'
-✓ mem_54fe…28f2 
+✓ mem_05e9…4603
   scope: [master]
-lore sync: exported 1
-lore sync: 4 file(s) in .lore/data not committed — commit them with your change
+$ lore tag add --name staging
+✓ tag staging tag_c0f3…b5b8
 $ lore memory add --body 'The staging site is reset every Monday morning' --tag staging
-✓ mem_05e9…4603 
+✓ mem_76bd…3f10
   scope: [master]
-lore sync: exported 1
-lore sync: 5 file(s) in .lore/data not committed — commit them with your change
 $ lore memory list
-mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email
-mem_05e9…4603 [retrieved] The staging site is reset every Monday morning
+mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email
+mem_76bd…3f10 [retrieved] The staging site is reset every Monday morning
 ```
 <!-- /example -->
 
@@ -81,16 +74,15 @@ A decision needs a short `--title` (the choice) and a `--body` (the reason). `--
 ```console
 # alice, in website
 $ lore decision add --title 'We use Stripe for payments' --body 'Stripe already works in the client shop app, so we keep one payment provider.'
-✓ dec_c0f3…b5b8 — We use Stripe for payments 
-lore sync: exported 1
-lore sync: 6 file(s) in .lore/data not committed — commit them with your change
+✓ dec_d431…313a — We use Stripe for payments 
 $ lore decision list
-dec_c0f3…b5b8 [accepted] We use Stripe for payments
-$ lore decision show dec_c0f3…b5b8
-dec_c0f3…b5b8
+dec_d431…313a [accepted] We use Stripe for payments
+$ lore decision show dec_d431…313a
+dec_d431…313a
   title:  We use Stripe for payments
   status: accepted
 Stripe already works in the client shop app, so we keep one payment provider.
+created 2026-11-02T10:00:50Z by act_54fe…28f2 · updated 2026-11-02T10:00:50Z by act_54fe…28f2
 ```
 <!-- /example -->
 
@@ -101,16 +93,15 @@ Stripe already works in the client shop app, so we keep one payment provider.
 <!-- example: knowledge#edit -->
 ```console
 # alice, in website
-$ lore memory edit mem_54fe…28f2 --body 'The client replies faster on WhatsApp than email, even on weekends'
-✓ mem_54fe…28f2 updated
-lore sync: exported 1
-lore sync: 6 file(s) in .lore/data not committed — commit them with your change
-$ lore memory show mem_54fe…28f2
-mem_54fe…28f2
+$ lore memory edit mem_05e9…4603 --body 'The client replies faster on WhatsApp than email, even on weekends'
+✓ mem_05e9…4603 updated
+$ lore memory show mem_05e9…4603
+mem_05e9…4603
   kind:   retrieved
   trust:  0.50
   source: manual
 The client replies faster on WhatsApp than email, even on weekends
+created 2026-11-02T10:00:30Z by act_54fe…28f2 · updated 2026-11-02T10:01:05Z by act_54fe…28f2
 ```
 <!-- /example -->
 
@@ -121,13 +112,11 @@ When the meaning changes, add a new row and name the old one with `--supersedes 
 <!-- example: knowledge#supersedes -->
 ```console
 # alice, in website
-$ lore decision add --title 'We use Stripe and bank transfer for payments' --body 'The client asked for bank transfer too.' --supersedes dec_c0f3…b5b8
-✓ dec_76bd…3f10 — We use Stripe and bank transfer for payments 
-lore sync: exported 2
-lore sync: 7 file(s) in .lore/data not committed — commit them with your change
+$ lore decision add --title 'We use Stripe and bank transfer for payments' --body 'The client asked for bank transfer too.' --supersedes dec_d431…313a
+✓ dec_b4f4…a5b0 — We use Stripe and bank transfer for payments 
 $ lore decision list
-dec_c0f3…b5b8 [superseded] We use Stripe for payments
-dec_76bd…3f10 [accepted] We use Stripe and bank transfer for payments
+dec_d431…313a [superseded] We use Stripe for payments
+dec_b4f4…a5b0 [accepted] We use Stripe and bank transfer for payments
 ```
 <!-- /example -->
 
@@ -142,17 +131,16 @@ Rows linked by older versions point the wrong way; run `lore doctor --fix` once 
 <!-- example: knowledge#invalidate only=2,4 -->
 ```console
 # alice, in website
-$ lore memory invalidate mem_d431…313a
-✓ mem_d431…313a invalidated (valid_until=now)
-lore sync: exported 1
-lore sync: 8 file(s) in .lore/data not committed — commit them with your change
-$ lore memory show mem_d431…313a
-mem_d431…313a
+$ lore memory invalidate mem_28f8…03df
+✓ mem_28f8…03df invalidated (valid_until=now)
+$ lore memory show mem_28f8…03df
+mem_28f8…03df
   kind:   retrieved
   trust:  0.50
   source: manual
   valid-until: 2026-11-02T10:30:00Z
 The office printer is on the second floor
+created 2026-11-02T10:01:25Z by act_54fe…28f2 · updated 2026-11-02T10:01:30Z by act_54fe…28f2
 ```
 <!-- /example -->
 
@@ -165,8 +153,6 @@ The office printer is on the second floor
 # alice, in website
 $ lore rule archive rul_7a67…9504
 ✓ rul_7a67…9504 archived
-lore sync: exported 1
-lore sync: 8 file(s) in .lore/data not committed — commit them with your change
 $ lore rule list
 rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_162d…9666 [should/always] Keep pull requests under 400 lines
@@ -178,8 +164,6 @@ $ lore render >/dev/null && grep -c 'Run the tests before you push' .lore/LORE.m
 0
 $ lore rule unarchive rul_7a67…9504
 ✓ rul_7a67…9504 unarchived
-lore sync: exported 1
-lore sync: 8 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
@@ -187,41 +171,60 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 
 ## Step 8 — Delete a row for good
 
-`delete` removes a row with no undo, so it asks for `--confirm`. Archive is usually what you want.
+`delete` moves a row to the trash, and it asks first; `--yes` answers for you (a script or an agent has no terminal to answer on). `lore trash restore <id>` brings it back; `delete --purge --confirm` (or `lore trash purge <id> --confirm` later) removes it for good, keeping only a small marker so an old copy never comes back. Archive is usually what you want.
 
 <!-- example: knowledge#delete only=2,3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_b4f4…a5b0 --confirm
-✓ mem_b4f4…a5b0 deleted (hard)
-lore sync: removed files 1
-lore sync: 8 file(s) in .lore/data not committed — commit them with your change
-$ lore memory show mem_b4f4…a5b0 || true
-ERROR: [E_NOT_FOUND] memory "mem_b4f4…a5b0" not found
-  hint: it may have landed on main while this branch is older: `lore sync peek origin/main memories`
+$ lore memory delete mem_4c59…6c38 --yes
+✓ mem_4c59…6c38 moved to the trash (restore: lore trash restore mem_4c59…6c38)
+$ lore memory show mem_4c59…6c38 || true
+ERROR: [E_IN_TRASH] mem_4c59…6c38 is in the trash (deleted by act_54fe…28f2 on 2026-11-02 10:02)
+  hint: lore trash show mem_4c59…6c38; bring it back with lore trash restore mem_4c59…6c38
 ```
 <!-- /example -->
 
+## Step 9 — Move a memory to another store
+
+A repo can have more stores attached than its own `.lore/data`: a private store for your agency's notes, say, that the client never sees. `lore memory move <id> --to <store> --yes` moves the memory there with the same id, and leaves a tombstone in the old place so a stale copy never comes back. `--to` takes a name from `.lore/stores.yaml` (or `repo` for the repo's own store). Here alice makes a folder store first with `lore store init`:
+
+<!-- example: knowledge#memory-move -->
+```console
+# alice, in website
+$ lore store init agency file://$HOME/stores/agency
+✓ created store agency (sto_2e0c…0b6d) at file://~/stores/agency; recorded in .lore/stores.yaml; commit it to share
+$ lore memory move mem_05e9…4603 --to agency --yes
+✓ mem_05e9…4603 moved to agency
+$ lore memory show mem_05e9…4603
+mem_05e9…4603
+  kind:   retrieved
+  trust:  0.50
+  source: manual
+The client replies faster on WhatsApp than email, even on weekends
+created 2026-11-02T10:00:30Z by act_54fe…28f2 · updated 2026-11-02T10:07:15Z by act_54fe…28f2
+```
+<!-- /example -->
+
+The memory reads the same; only where its file lives changed. `lore row move <id> --to <store>` does the same for a row of any kind. Stores are explained in [Multi-repo projects](../sync/multi-repo-projects.md).
+
 ## Try it: a password is refused
 
-lore refuses text that looks like a password, a key or a token, because rows end up in git where everyone with the repo can read them. `--allow-secrets` lets the row into your local database anyway, but lore still checks every file before it goes to git: a row that holds a password is kept out of `.lore/data` (the `0` below counts its file), and every later command repeats the warning until you edit or delete the row.
+lore stops on text that looks like a password, a key or a token, because rows end up in git where everyone with the repo can read them. It asks first (`E_NEEDS_CONFIRM` without a terminal); the better fix is to keep the secret in your password manager and leave it out of the note. A bare `--yes` does not answer that question. When the match is not a real secret (an example value, a test string), `--not-a-secret --reason "<why>" --yes` stores the row as not a secret; for a real one, `--secret-ref "<manager>://<entry>"` keeps a reference and `--secret-unstored` keeps the note without the value. At a terminal a menu offers the same choices (redact, unstored, not a secret with a required reason, cancel). Its file is written to `.lore/data` (the `1` below counts it) with a `secret_allows` entry recording your answer; the commit hook lets that row through with its allow entry, so the value does reach git, on purpose. Any other file that still holds a credential pattern is refused at commit, so a real password does not reach git by accident. The `''` inside `pass''word` below only keeps this page from tripping that same hook: the shell joins the two halves into one word before lore sees it.
 
 <!-- example: knowledge#secrets -->
 ```console
 # alice, in website
-$ lore memory add --body 'The staging password is password=example-only'
-ERROR: [E_SECRET_DETECTED] body contains a secret (credential pattern password_pair, preview pass****)
-  hint: use --allow-secrets to override (logged loud); see also ~/.lore/pii-patterns.txt
-(exit 1)
-$ lore memory add --body 'The staging password is password=example-only' --allow-secrets
-✓ mem_28f8…03df 
+$ lore memory add --body 'The staging password is pass''word=example-only'
+ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: passw…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+  hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
+(exit 26)
+$ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes
+✓ mem_3b62…e913
   scope: [master]
-lore sync: secret-detected memories/mem_28f8…03df.json: credential pattern password_pair found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
-$ ls .lore/data/memories | grep -c mem_28f8…03df || true
-0
-$ lore memory delete mem_28f8…03df --confirm
-lore sync: secret-detected memories/mem_28f8…03df.json: credential pattern password_pair found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
-✓ mem_28f8…03df deleted (hard)
+$ ls .lore/data/memories | grep -c mem_3b62…e913 || true
+1
+$ lore memory delete mem_3b62…e913 --yes
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
 ```
 <!-- /example -->
 
@@ -230,10 +233,10 @@ lore sync: secret-detected memories/mem_28f8…03df.json: credential pattern pas
 - **Archived rows are hidden from lists.** `lore rule list` and `lore memory list` skip archived rows; pass `--archived` to see them with an `[archived]` mark.
 - **An invalidated memory is still listed and still found by search.** `invalidate` records the end date (`valid-until` in `lore memory show`); it does not hide the row. Archive it as well if you want it out of the way.
 - **Rows written by older lore versions point the other way.** Before this was fixed, `--supersedes` stored the old id on the new row and left the old row unchanged. `lore doctor` lists such pairs and `lore doctor --fix` turns them around once (a second run changes nothing).
-- **`delete` wants `--confirm`, not `--yes`.** `--yes` is the answer to lore's "are you sure?" questions elsewhere; `delete` stops with `unknown flag: --yes`.
-- **Shell quotes.** Wrap the body in single quotes so the shell does not touch `$` or `!` in your text. You can also pipe the body in: `echo 'Run the tests before you push' | lore rule add`.
-- **`--allow-secrets` does not put the secret in git.** Rules and memories are checked when you add them; every kind of row is checked again before its file is written to `.lore/data`. A decision with a password in its body is added without a question, then kept out of git with a `secret-detected` line on every command. Fix the row (`edit`) or delete it. `LORE_SYNC_ALLOW_SECRETS=1` lets one run write it anyway; do not use it for real passwords.
-- **Not committed yet.** Every change prints `lore sync: N file(s) in .lore/data not committed`. The row is safe on your machine, but nobody else sees it until you commit `.lore/data`.
+- **`delete` takes `--yes`.** Without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`. The old spelling `--confirm` still works on a delete: it moves the row to the trash like `--yes` and prints a hint at `lore trash purge`. `--purge` needs `--confirm`.
+- **Shell quotes.** Wrap the body in single quotes so the shell does not touch `$` or `!` in your text. lore does not read the body from a pipe; for a long body or a file, use `--body "$(cat notes.md)"`.
+- **`--not-a-secret` does not put the secret in git.** It records that you looked and the text is not a secret; the commit hook still refuses a file that holds a credential pattern. Fix the row (`edit`) or delete it before you commit.
+- **Not committed yet.** A new or changed row is a file in `.lore/data`. It is safe on your machine, but nobody else sees it until you commit `.lore/data` (`git status` lists it).
 
 ## Related
 

@@ -15,36 +15,32 @@ personal:
   store: local                                  # or: git@github.com:alice/lore-me
 ```
 
+With a git URL, each note is pushed to your repo at once. To push them in batches instead, or only when you run `lore sync`, see [How writes reach the remote](../identity-and-stores.md#how-writes-reach-the-remote).
+
 ## The commands
 
-`--to me` files a note by where you are when you write it. In a repo of an org (one company's setup), it goes under that org's folder. Anywhere else, it goes under `everywhere/`. If you file a note under `everywhere/` on purpose and it names a company you know, lore asks first:
+`--to me` files a note by where you are when you write it. In a repo of an org (one company's setup), it goes under that org's folder. Anywhere else, it goes under `everywhere/`:
 
 <!-- example: personal#local-personal-store -->
 ```console
 # alice, in website
 $ lore memory add --body 'I always forget the staging VPN profile' --to me
-✓ mem_7a67…9504 [me]
-  filed: --to me → personal agency/
+✓ mem_7a67…9504 [me/agency]
   scope: [master]
 
 # alice, in scratch
 $ lore memory add --body 'I prefer tabs over spaces' --to me
-✓ mem_2ad3…f891 [me]
-  filed: --to me → personal everywhere/
+✓ mem_2ad3…f891 [me/everywhere]
   scope: [master]
 
 # alice, in website
-$ lore memory add --body 'agency invoices go to the finance inbox' --to me --everywhere
-note mentions [agency], a known org or repo. Save it under everywhere/ anyway? [y/N] n
-ERROR: [E_INVALID_INPUT] not saved
-(exit 1)
 $ lore memory list
-mem_7a67…9504  I always forget the staging VPN profile  [me]
-mem_2ad3…f891  I prefer tabs over spaces  [me]
+mem_7a67…9504  I always forget the staging VPN profile  [me/agency]
+mem_2ad3…f891  I prefer tabs over spaces  [me/everywhere]
 
 # alice, in scratch
 $ lore memory list
-mem_2ad3…f891  I prefer tabs over spaces  [me]
+mem_2ad3…f891  I prefer tabs over spaces  [me/everywhere]
 
 # alice, in ~
 $ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
@@ -59,20 +55,18 @@ To sync between machines, make a private repo of your own into a store (a lore-o
 
 <!-- example: personal#git-personal-store -->
 ```console
-# alice, in ~
-$ lore store init git@github.com:alice/lore-me
-✓ wrote lore-store.yaml to github.com/alice/lore-me (new branch main, first commit) and pushed
+# alice, in scratch
+$ lore store init me git@github.com:alice/lore-me --yes
+✓ created store me (sto_162d…9666) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 
 # alice, in website
-$ lore memory add --body 'the client invoice template lives in the shared drive' --to me
-✓ mem_162d…9666 [me]
-  filed: --to me → personal agency/
+$ lore memory add --body 'my invoice template lives in the shared drive' --to me
+✓ mem_54fe…28f2 [me]
   scope: [master]
-lore: [me] 4 file(s) pushed
 
 # alice-devbox, in website
 $ lore memory list
-mem_162d…9666  the client invoice template lives in the shared drive  [me]
+mem_54fe…28f2  my invoice template lives in the shared drive  [me]
 ```
 <!-- /example -->
 
@@ -80,14 +74,22 @@ mem_162d…9666  the client invoice template lives in the shared drive  [me]
 
 ```text
  personal store (~/.lore/personal, or github.com/alice/lore-me)
-   everywhere/.lore/data/memories/…   loads in every repo
-   agency/.lore/data/memories/…       loads only where the org is agency
-   client3/.lore/data/memories/…      loads only where the org is client3
+   everywhere/.lore/data/memories/…      loads in every repo
+   agency/.lore/data/memories/…          loads only where the org is agency
+   client3/.lore/data/memories/…         loads only where the org is client3
 ```
 
 ## Pitfalls
 
-- **Filing is by place, not by text.** Lore never guesses the company from what you wrote. It files the note under the org of the repo you are in. `--everywhere` overrides that. If the text names a known org or repo, you get a warning first (refused without a terminal unless `--yes`).
+- **Filing is by place, not by text.** Lore never guesses the company from what you wrote. It files the note under the org of the repo you are in. To file a note for every repo, write it from a repo that belongs to no org.
 - **Never in the checkout.** Personal notes are rendered into `~/.lore/render/…`, outside the repo, like internal notes. Nothing personal is written to a committed file.
+- **A note that names a company asks first.** When your personal store is a synced repo, every repo you open reads it. So a `--to me` note whose text names a known org or repo owner (for example `client`) stops with `E_NEEDS_CONFIRM` (exit 26): answer `--yes` to keep it personal, or send it `--to` the org's store instead.
 - **A personal store repo is a lore store**: create it with `lore store init` on a new, empty, private repo.
-- Personal notes are for you. To give one to your team, use `lore share <id> --to agency`; see [Sharing an internal note with the client](sharing-a-note.md) for how sharing works.
+- Personal notes are for you. To give one to your team, use `lore move <id> --to agency` (it keeps the id); see [Sharing an internal note with the client](sharing-a-note.md) for how moving works.
+
+## Related
+
+- [Solo developer](solo.md).
+- [One person in two companies](two-companies.md): personal notes beside two orgs.
+- [Setups from the command line](../setup-cli.md): a personal store per setup.
+- [Identity and stores](../identity-and-stores.md); [How writes reach the remote](../identity-and-stores.md#how-writes-reach-the-remote) for batched pushes and folding old history.

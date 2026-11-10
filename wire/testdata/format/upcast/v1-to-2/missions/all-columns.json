@@ -1,0 +1,25 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "missions",
+  "_v": 2,
+  "approvers": [
+    "fixture café — 日本 <b>&</b> \"q\"\ttab"
+  ],
+  "body": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "completed_at": "2026-11-04T08:09:56.252002659Z",
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "created_by_actor_id": "act_01a1a59b891c70b78914000000000003",
+  "id": "msn_01a1a59b891c70b78914000000000017",
+  "idempotency_key": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "plan_id": "pln_01a1a59b891c70b78914000000000019",
+  "project_id": "prj_01a1a59b891c70b7891400000000001d",
+  "starts_at": "2026-11-04T08:09:56.252002659Z",
+  "status": "active",
+  "tag_ids": [
+    "tag_01a1a59b891c70b7891400000000002a"
+  ],
+  "target_date": "2026-11-04T08:09:56.252002659Z",
+  "title": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

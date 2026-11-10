@@ -32,7 +32,7 @@ jobs:
       - name: No secrets in DB
         run: |
           # Optional: scan all memory bodies via the same patterns lore uses on write
-          LORE_READ_ONLY=1 lore memory list --json --include-archived \
+          LORE_READ_ONLY=1 lore memory list --json --archived \
             | jq -r '.data[].body' \
             | grep -E "AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}" \
             && exit 1 || true
@@ -62,7 +62,7 @@ In CI, the runner has no business mutating the project DB. Read-only mode:
 ```bash
 #!/usr/bin/env bash
 # Auto-render before commit if the DB changed.
-# Note: .lore/lore.db is gitignored, so re-render unconditionally and let the
+# Note: the cache .lore/lore-cache.db is gitignored, so re-render unconditionally and let the
 # diff check below decide whether anything actually changed.
 lore render
 git add .lore/LORE.md CLAUDE.md

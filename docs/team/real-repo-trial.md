@@ -17,11 +17,11 @@ Two agency developers (`dev1`, `dev2`), two agents (`agent-a`, `agent-b`) and th
 | 04 landing, merge-only main | a repo task done with `--commit`, an internal task done in the store, both feature branches merged into `main` with `git merge`; every checkout stays clean |
 | 05 protected main (local sim) | ride-along landing when `main` refuses direct pushes (a local repo whose hook answers like GitHub's GH006, since protecting a real branch needs admin API access) |
 | 06 leak attempts | a commit with internal text (with and without the marker), `git commit --no-verify` followed by `git push`, `lore check pr-body`, `lore task add --to repo` and `lore rule add --to repo` with internal text: every one is refused, and the branch never reaches the client's remote |
-| 07 share one note | `lore share --to repo` refuses without a terminal or `--yes`, then shares one note on purpose; the client sees exactly that note |
-| 08a agents: plan, claims, merge | `lore agent start`, `lore plan apply` (twice: created, then found), claims, `E_NO_WORK`, a finding, a note, done → merged after a real merge; `agent-b` is killed while it holds a claim |
+| 07 move one note to the client | `lore move <id> --to repo` refuses without a terminal or `--yes`, then moves one note on purpose (same id); the client sees exactly that note |
+| 08a agents: plan, claims, merge | `lore agent start`, `lore mission apply` (twice: created, then found), claims, `E_NO_WORK`, a finding, a note, done → merged after a real merge; `agent-b` is killed while it holds a claim |
 | 08b agents: reclaim, gate, done | after the lease expires, `agent-a` reclaims the task on `agent-b`'s pushed branch, `agent-b` gets `E_LOST_CLAIM`, an agent cannot approve the gate, `dev1` approves, the mission ends with 3 done |
 | 09 leak cleanup, compaction | an internal task written with `--to repo` by mistake, seen by a second client clone, then `lore live purge` and `lore live compact`; a fresh mirror of the client repo holds no marker in any commit |
-| 10 staging store branch | `lore store init --branch staging`, `lore org use agency-stag`, and rows that never mix between the two branches |
+| 10 staging store branch | `lore store init <name> '<url>?branch=staging'`, `lore org use agency-stag`, and rows that never mix between the two branches |
 
 After every step from 01 on, the client's own clone fetches every ref the client repo serves and is searched for `INTERNAL-MARKER-`: the checkout, the tree of every ref (including `refs/lore/*`), `git log --all -p`, every object in its object store (unreachable ones too) and the client's own `lore task list`, `lore memory list` and `lore rule list`. Step 09's mistake is fetched only by the second clone, as in [Cleaning up after a leak](use-cases/leak-cleanup.md); the main client clone fetches again only after the cleanup.
 
@@ -47,7 +47,7 @@ task lore:trial:github
 | `LORE_BIN` | a lore binary to drive instead of building one from this checkout |
 | `LORE_TRIAL_ADOPT` | one or more remote URLs (space-separated) that may be wiped once although they carry no marker; see below |
 
-The task builds lore from the checkout (`go build ./saas/cmd/cli`), puts it first on `PATH` so the git hooks lore installs call it, and leaves the work directory in place so you can read the logs: `logs/trial.log` (every command and its output, plus each check), `logs/clientcheck.log` (each client scan) and `logs/heartbeat-agent-b.log`. Every git call the trial makes itself uses `GIT_SSH_COMMAND="ssh -o ConnectTimeout=20"` and up to five tries.
+The task builds lore from the checkout (`go build ./cmd/lore`), puts it first on `PATH` so the git hooks lore installs call it, and leaves the work directory in place so you can read the logs: `logs/trial.log` (every command and its output, plus each check), `logs/clientcheck.log` (each client scan) and `logs/heartbeat-agent-b.log`. Every git call the trial makes itself uses `GIT_SSH_COMMAND="ssh -o ConnectTimeout=20"` and up to five tries.
 
 Without both variables it refuses before doing anything:
 
@@ -97,3 +97,9 @@ The task exits 1 when any step failed or any marker reached the client clone, 2 
 ## When to run it
 
 Run it by hand before a release, and after any change to sync and live refs, the leak checks, claims and leases, or landing. It is not part of `task check` or of any workflow, and must never be: it needs push access to two real repos and deletes everything in them.
+
+## Related
+
+- [How these examples were made](README.md#how-these-examples-were-made): the throwaway-world runs every team page is built from.
+- [Small team in one repo](use-cases/small-team.md) and [Agency with a client repo](use-cases/agency-client-repo.md): the stories the trial repeats.
+- [Troubleshooting](troubleshooting.md).

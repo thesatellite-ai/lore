@@ -37,36 +37,32 @@ orgs:
 
 ## The commands
 
-Alice creates the three stores. She links `client/website` to the client's store with `--store`. Then she writes one client note and one company rule (`--to agency/.` is the company store's root project):
+Alice creates the three stores (from a plain folder of hers, `stores`, which attaches them by name; never from the client's repo). She links `client/website` to the client's store with `--store`. Then she writes one client note and one company rule (`--to agency/.` is the company store's root project):
 
 <!-- example: contractor#one-store-per-client -->
 ```console
-# alice, in ~
-$ lore store init git@github.com:agency/notes && lore store init git@github.com:agency/notes-client && lore store init git@github.com:agency/notes-client2
-✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
-✓ wrote lore-store.yaml to github.com/agency/notes-client (new branch main, first commit) and pushed
-✓ wrote lore-store.yaml to github.com/agency/notes-client2 (new branch main, first commit) and pushed
+# alice, in stores
+$ lore store init agency git@github.com:agency/notes --yes && lore store init client git@github.com:agency/notes-client --yes && lore store init client2 git@github.com:agency/notes-client2 --yes
+✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store client (sto_2ad3…f891) at git@github.com:agency/notes-client; recorded in .lore/stores.yaml; commit it to share
+✓ created store client2 (sto_162d…9666) at git@github.com:agency/notes-client2; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
 $ lore org link agency --project client --store git@github.com:agency/notes-client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_7a67…9504 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
-✓ github.com/client/website (prj_7a67…9504, github.com/client/website) linked to github.com/agency/notes-client client/ (created; pushed)
+  link: project prj_54fe…28f2 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
+✓ github.com/client/website (prj_54fe…28f2, github.com/client/website) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
-✓ act_2ad3…f891 Alice Doe (@alice) registered in agency ./
-lore: [agency/.] 3 file(s) pushed
+✓ act_05e9…4603 Alice Doe (@alice) registered in <redacted>
 $ lore memory add --body 'the client staging database is restored every Sunday night'
-✓ mem_162d…9666 [agency/client]
+✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
   scope: [master]
-lore: [agency/client] 2 file(s) pushed
 $ lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'
-✓ rul_54fe…28f2 [agency/.]
-  filed: --to agency/.
+✓ rul_76bd…3f10 [agency/.]
   scope: [master] severity: must
-lore: [agency/.] 1 file(s) pushed
 ```
 <!-- /example -->
 
@@ -77,30 +73,33 @@ Bob, in the same client repo, sees the link, the client's note and the company s
 # bob, in website
 $ lore whoami
 org        agency  (matched by: link in github.com/agency/notes-client client/, project id + remote)
-identity   Bob Roe <human:bob@agency.example>   act_05e9…4603  @bob  (from: org entry (config.yaml))
+identity   Bob Roe <human:bob@agency.example>   act_d431…313a  @bob  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
-project    prj_7a67…9504
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
+project    prj_54fe…28f2
 remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch main  (org folder .)
            git@github.com:agency/notes-client on branch main
 internal   github.com/agency/notes-client client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 $ lore actor register
-✓ act_05e9…4603 Bob Roe (@bob) registered in agency ./
-lore: [agency/.] 1 file(s) pushed
+✓ act_d431…313a Bob Roe (@bob) registered in <redacted>
 $ lore memory list
-mem_162d…9666  the client staging database is restored every Sunday night  [agency/client]
+mem_c0f3…b5b8  the client staging database is restored every Sunday night  [agency/client]
 
 # bob, in ~
 $ lore store show
 <redacted>
   entries   agency   branches main
-  clone     ~/.lore/clones/github.com/agency/notes.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+  clone     ~/.lore/clones-v017/github.com/agency/notes.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
 <redacted>
   entries   agency   branches main
-  clone     ~/.lore/clones/github.com/agency/notes-client.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+  clone     ~/.lore/clones-v017/github.com/agency/notes-client.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
 $ ls ~/.lore/clones/github.com/agency
+notes
+notes-client
 notes-client.git
 notes.git
 ```
@@ -120,3 +119,10 @@ notes.git
 - **Folder names are unique across an org's stores**, and exactly one store sets `org_folder`.
 - **Offboarding** (when Bob leaves) means removing two repo permissions. Then run `lore task revoke` / `lore task reassign` for his open work and `lore actor deactivate @bob`. The roster row stays, marked inactive, because old rows point at it. Copies Bob already fetched stay on Bob's machine, like any git clone.
 - The three layouts (one store for everything, one per client, or a mix) are all plain config. The commands do not change. One store per client is the recommended layout once you have contractors or NDAs (secrecy agreements).
+
+## Related
+
+- [Agency with a client repo](agency-client-repo.md): the same org with one store for everything.
+- [One person in two companies](two-companies.md).
+- [Team profiles](../profiles.md): contractor stints and offboarding.
+- [Identity and stores](../identity-and-stores.md).

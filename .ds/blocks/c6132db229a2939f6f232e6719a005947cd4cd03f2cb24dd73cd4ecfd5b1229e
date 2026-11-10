@@ -1,0 +1,12 @@
+type File struct {
+	Mission struct {
+		Key   string `yaml:"key"`
+		Title string `yaml:"title"`
+		To    string `yaml:"to"`
+		// StartsAt is YYYY-MM-DD only: a file is applied again later, so
+		// a relative phrase ("next mon") would move (TASK 15.2).
+		StartsAt string `yaml:"starts_at"`
+	} `yaml:"mission"`
+	Approvers []string   `yaml:"approvers"`
+	Tasks     []FileTask `yaml:"tasks"`
+}

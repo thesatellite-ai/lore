@@ -1,0 +1,70 @@
+
+### api start
+alice$ cat api.log
+lore api listening on http://127.0.0.1:$PORT (token: ~/.lore/api-token)
+alice$ ls -l .lore/api-token | cut -d" " -f1
+-rw-------
+
+### api no token
+alice$ curl -s -w "\nHTTP %{http_code}\n" http://127.0.0.1:$PORT/v1/rules
+{"error":{"code":"E_UNAUTHORIZED","message":"missing or wrong bearer token","hint":"send Authorization: Bearer \u003cthe token in ~/.lore/api-token\u003e","exit":28,"class":"unauthorized","retryable":false,"needs_person":false}}
+
+HTTP 401
+
+### api calls
+alice$ curl -s -X POST -H "Authorization: Bearer $(cat ~/.lore/api-token)" -d '{"body": "Run the tests before you push"}' -w "\nHTTP %{http_code}\n" http://127.0.0.1:$PORT/v1/rules
+{"id":"rul_7a670ae8548ed05bf57ad29ad0759504","store":"repo","scope":"master","severity":"must"}
+
+HTTP 201
+alice$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" http://127.0.0.1:$PORT/v1/rules
+{"schema_version":1,"kind":"rule.list","count":1,"data":[{"id":"rul_7a670ae8548ed05bf57ad29ad0759504","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z","trust_score":0.5,"source_kind":"manual","project_id":"prj_2ad3618e878ebbf527d34d446ef4f891","body":"Run the tests before you push","activation":"always","severity":"must","created_by_actor_id":"act_162df51b7f78b785c97c26b41ea89666","created_by":"act_162df51b7f78b785c97c26b41ea89666","updated_by":"act_162df51b7f78b785c97c26b41ea89666"}]}
+alice (work/website)$ lore rule list
+rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Run the tests before you push
+
+### api error
+alice$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" "http://127.0.0.1:$PORT/v1/rules?limit=5"
+{"error":{"code":"E_INVALID_INPUT","message":"unknown parameter limit","exit":20,"class":"bad_input","retryable":false,"needs_person":false}}
+
+HTTP 400
+alice$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" http://127.0.0.1:$PORT/v1/notes
+{"error":{"code":"E_NOT_FOUND","message":"no route GET /v1/notes","exit":27,"class":"not_found","retryable":false,"needs_person":false}}
+
+HTTP 404
+
+### api rotate
+alice$ cp .lore/api-token old-token
+alice (work/website)$ lore api token rotate
+new token written to ~/.lore/api-token
+alice$ curl -s -o /dev/null -w "old token: HTTP %{http_code}\n" -H "Authorization: Bearer $(cat ~/old-token)" http://127.0.0.1:$PORT/v1/rules
+old token: HTTP 401
+alice$ curl -s -o /dev/null -w "new token: HTTP %{http_code}\n" -H "Authorization: Bearer $(cat ~/.lore/api-token)" http://127.0.0.1:$PORT/v1/rules
+new token: HTTP 200
+
+### try api
+alice$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" http://127.0.0.1:$PORT/openapi.json | python3 -c 'import json, sys; p = json.load(sys.stdin)["paths"]; [print(" ".join(sorted(m.upper() for m in p[k])), k) for k in sorted(p) if k.startswith("/v1/rules")]'
+DELETE GET POST /v1/rules
+POST /v1/rules/search
+DELETE GET PATCH /v1/rules/{id}
+POST /v1/rules/{id}/archive
+POST /v1/rules/{id}/unarchive
+
+### api stop
+alice$ curl -s http://127.0.0.1:$PORT/v1/rules || echo "no answer (curl exit $?): lore api has stopped"
+no answer (curl exit 7): lore api has stopped
+
+### spec
+alice$ lore spec openapi --out api-docs && ls api-docs
+wrote api-docs/openapi.json
+openapi.json
+alice$ lore spec openapi --out api-docs --check
+current api-docs/openapi.json
+alice$ echo "{}" > api-docs/openapi.json; lore spec openapi --out api-docs --check
+ERROR: [E_CONFIG_INVALID] docs: the committed reference is stale: api-docs/openapi.json is stale at line 1:
+  committed: {}
+  generated: {
+  hint: run: lore spec docs && lore spec openapi, then commit the files
+(exit 20)
+alice$ lore spec docs --out api-docs
+ERROR: [E_NOT_FOUND] docs: api-docs/cli-commands.md does not exist
+  hint: run it in the lore repo with the default --out, or pass --out <folder> holding a page with the <!-- lore:spec:begin commands --> and <!-- lore:spec:begin errors --> blocks
+(exit 27)

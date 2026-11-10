@@ -27,68 +27,74 @@ An entry whose store branch is not the store's default branch is a **staging ent
 
 ## The commands
 
-Alice (an agency developer) creates the staging branch once and switches this repo to staging. She links it there (links exist per store branch), adds a staging task, and switches back:
+Alice (an agency developer) creates the staging branch once (from her `stores` folder, never from the client's repo) and switches this repo to staging. She links it there (links exist per store branch), adds a staging task, and switches back:
 
 <!-- example: staging#staging-branch -->
 ```console
+# alice, in stores
+$ lore store init agency_stag 'git@github.com:agency/notes?branch=staging' --yes
+✓ created store agency_stag (sto_7a67…9504) at git@github.com:agency/notes?branch=staging; recorded in .lore/stores.yaml; commit it to share
+
 # alice, in website
-$ lore store init git@github.com:agency/notes --branch staging
-✓ wrote lore-store.yaml to github.com/agency/notes (new branch staging, first commit) and pushed
 $ lore org use agency-stag
-✓ prj_7a67…9504 uses org agency-stag on this machine
+✓ prj_2ad3…f891 uses org agency-stag on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore whoami
 org        agency-stag  (matched by: lore org use (this machine))
-identity   Alice Doe <human:alice@agency.example>   act_2ad3…f891  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@agency.example>   act_162d…9666  @alice  (from: org entry (config.yaml orgs[agency-stag].identity))
 repo       client repo  (guards on)
-project    prj_7a67…9504
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
+project    prj_2ad3…f891
 remotes    github.com/client/website
 stores     <redacted> on branch staging  (org folder <redacted>)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
-personal   local: agency-stag/, everywhere/
+personal   me -> ~/.lore/personal
 $ lore org link agency-stag --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency-stag.
-  link: project prj_7a67…9504 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
-✓ github.com/client/website (prj_7a67…9504, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+  link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
+✓ github.com/client/website (prj_2ad3…f891, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 $ lore task add 'seed staging with demo data' --to agency-stag
-✓ tsk_162d…9666 — seed staging with demo data [medium] → [agency-stag/client]
-lore live: (live, pushed)
+✓ tsk_54fe…28f2 — seed staging with demo data [medium] → [agency-stag/client]
 $ lore task list
-○ tsk_162d…9666 seed staging with demo data [medium]  [agency-stag/client]
+○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
 $ lore org use agency
-✓ prj_7a67…9504 uses org agency on this machine
+✓ prj_2ad3…f891 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore task list
 (no tasks)
 $ LORE_ORG=agency-stag lore task list
-○ tsk_162d…9666 seed staging with demo data [medium]  [agency-stag/client]
+○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
 $ git ls-remote https://github.com/agency/notes
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main
 86dbae476bd6	refs/heads/staging
-9b40ce71af28	refs/lore/live/staging
 ```
 <!-- /example -->
 
-With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=agency-stag` shows it for one command. On the remote, the store has a `staging` branch and its own live ref `refs/lore/live/staging` (a hidden list that is not a branch), next to `main`.
+With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=agency-stag` shows it for one command. On the remote, the store has a `staging` branch next to `main`; each store branch is its own lore, written by plain commits (a store has no live ref in 0.1.18).
 
 ## What happened
 
 ```text
  github.com/agency/notes
    refs/heads/main          ◀── agency       (normal work; matched by link or pattern)
-   refs/lore/live/main
    refs/heads/staging       ◀── agency-stag  (only by lore org use / LORE_ORG)
-   refs/lore/live/staging
  ~/.lore/clones/github.com/agency/notes.git   one bare clone serves both entries
 ```
 
 ## Pitfalls
 
-- **The branch must exist first.** Linking or writing to a staging entry whose branch does not exist is refused, with a hint to run `lore store init <url> --branch staging`. A typo never creates a new lore silently. See [Troubleshooting](../troubleshooting.md#store-branch-does-not-exist).
+- **The branch must exist first.** Linking or writing to a staging entry whose branch does not exist is refused, with a hint to create it on purpose with `lore store init <name> '<url>?branch=staging'`; `lore store add <name> <url> --branch staging` attaches a branch that already exists. A typo never creates a new lore silently. See [Troubleshooting](../troubleshooting.md#store-branch-does-not-exist).
 - **Links, roster and global project are per branch.** The roster is the list of people and agents in the org. A staging entry needs its own `lore org link`, and `lore actor register` if you want `@handles` there. With a staging entry chosen, `lore whoami` counts only that branch's links: `0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)` until you link it.
-- **A branch name may not contain `/`** (`release/2026` is refused by `lore config check`), so `refs/lore/live/<branch>` names can never clash.
+- **A branch name may not contain `/`** (`release/2026` is refused by `lore config check`), so a store branch name never clashes with lore's own refs.
 - `lore org use` is saved in `repo_orgs:` of your own `~/.lore/config.yaml`. Nothing is committed, and teammates are not affected.
 - To move rows between staging and main, merge the store branches yourself with git. Lore's merge driver (a small helper git calls to combine two edits of the same note) settles the row files.
+
+## Related
+
+- [Agency with a client repo](agency-client-repo.md): the real org this staging copy mirrors.
+- [Setups from the command line](../setup-cli.md): a separate setup per folder.
+- [Troubleshooting](../troubleshooting.md).

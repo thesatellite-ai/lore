@@ -7,7 +7,7 @@
 | Setup | What you write | What lore does | Choose it when |
 |---|---|---|---|
 | **No config** | nothing | uses your git name and email; every repo is "no org" | you work alone, or in a team with no client and no private notes |
-| **A fallback identity** | `lore identity set` (saved in `~/.lore/identity.yaml`) | uses that email everywhere outside an org | your git email is not the one you want on your notes |
+| **A fallback identity** | `lore identity set` (saved in `identity:` of `~/.lore/config.yaml`) | uses that email everywhere outside an org | your git email is not the one you want on your notes |
 | **One org** | one entry under `orgs:` with `identity`, `stores`, `own:` and `repos:` | in matching repos: your company email, its roster (the list of people and agents) and its store (its private notes repo) | you work for one company |
 | **Joining an org someone set up** | `lore org import` | copies the suggested entry from the store, adds your identity, puts you on the roster | your company already uses lore |
 | **Two or more orgs** | one entry per company, each with its own `identity` | picks the org from the repo you are in; orgs never mix | you work for two companies, with a different email at each |
@@ -32,7 +32,8 @@ The first rule that answers wins:
 3. A committed `.lore/org.yaml`, written by `lore org set` (only in the org's own repos).
 4. A link in one org's store (made once with `lore org link`).
 5. An `own:` or `repos:` pattern that matches the repo's address, for example `github.com/client/*`.
-6. Nothing matched: no org.
+6. The active setup (see [Setups from the command line](../team/setup-cli.md)), when it names an org: used only when rules 1 to 5 found none. `lore whoami --explain` shows it as `setup`.
+7. Nothing matched: no org.
 
 Two entries that answer at the same rule stop with `E_ORG_AMBIGUOUS`; lore never guesses. `lore whoami` prints the result and the rule that decided it, and `lore whoami --explain` prints every rule with hit or miss.
 
@@ -44,6 +45,7 @@ Two entries that answer at the same rule stop with `E_ORG_AMBIGUOUS`; lore never
 - **If a teammate's repo should name its org for everyone,** run `lore org set` in it. It is refused in a client repo, because it would tell the client the agency's org name.
 - **If one repo matches two entries,** pick one with `lore org use <entry>` for this machine, or tighten the patterns.
 - **If you work for two companies,** give each entry its own `identity` with that company's email. Lore never borrows one org's identity in another org's repo, and a repo that matches no org never uses an org's identity.
+- **If you keep several setups on one machine** (your own projects and a team's), make one setup each with `lore setup plan`, `check` and `apply`; a setup that names an org decides it in its folders when nothing above it does. lore EE adds a browser page for the same steps.
 - **If you hire a contractor for one client,** see [How to lay out your stores](store-layout.md): the org setup is the same, the store layout is what limits access.
 
 ## Pitfalls
@@ -63,6 +65,7 @@ Two entries that answer at the same rule stop with `E_ORG_AMBIGUOUS`; lore never
 | Joining an org | [Your identity, joining an org, and store housekeeping](../team/identity-and-stores.md) | [`people`](../../tests/team/docs/transcripts/people.txt) |
 | Two orgs | [One person in two companies](../team/use-cases/two-companies.md) | [`two-orgs`](../../tests/team/docs/transcripts/two-orgs.txt) |
 | How the org is picked | [Concepts: orgs, identity and whoami](../team/concepts.md#orgs-identity-and-whoami), [How it works: org resolution](../team/how-it-works.md#org-resolution) | [`two-orgs`](../../tests/team/docs/transcripts/two-orgs.txt) |
+| Setups (several identities on one machine) | [Setups from the command line](../team/setup-cli.md), [Team invites](../team/invites.md) | [`setup-cli`](../../tests/team/docs/transcripts/setup-cli.txt), [`invites`](../../tests/team/docs/transcripts/invites.txt) |
 | Every config key | [Config files](../reference/config.md) | [`reference`](../../tests/docs/sections/reference.sh) ([output](../../tests/docs/transcripts/reference.txt)) |
 
 ## Related

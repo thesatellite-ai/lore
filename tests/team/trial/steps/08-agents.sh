@@ -19,9 +19,9 @@ for a in agent-a agent-b; do
   ok "$a" "$a/app" "retry git pull -q; lore sync >/dev/null 2>&1; lore whoami"
   has "agent:$a"
 done
-ok dev1 dev1/app "lore plan apply ../plan-trial.yaml"
+ok dev1 dev1/app "lore mission apply ../plan-trial.yaml"
 has "\\(created\\)"
-ok dev1 dev1/app "lore plan apply ../plan-trial.yaml"
+ok dev1 dev1/app "lore mission apply ../plan-trial.yaml"
 has "\\(found\\)"
 M=$(grep -o -E 'msn_[0-9a-f]+' <<< "$LAST_OUT" | head -n 1)
 B=$(grep 'MARKER-7' <<< "$LAST_OUT" | grep -o -E 'tsk_[0-9a-f]+' | head -n 1)

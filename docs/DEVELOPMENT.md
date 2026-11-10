@@ -8,25 +8,37 @@ Internal build / release notes. End-user docs live in the top-level [README](../
 
 | Layer | Detail |
 |-------|--------|
-| Storage | SQLite cache `.lore/lore.db` (pure-Go `modernc.org/sqlite`) mirrored to committed JSON row files under `.lore/data/` |
-| Sync | `saas/pkg/aicoder/lsync` reconciles both directions around every command; design in [LORE_SYNC_SPEC.md](../LORE_SYNC_SPEC.md) |
+| Storage | committed `_v: 2` JSON row files under `.lore/data/` are the truth; a SQLite cache (pure-Go `modernc.org/sqlite`, `adapters/cache/sqlite`) is built from them at run time; machine-local tables live in `~/.lore/state/machine.db` |
+| Sync | `adapters/live`, `adapters/reposync` and `ops/sync` carry rows between the working tree, the live ref and the store; row merge in `logic/merge`, `logic/merge3`, `logic/canonjson`; design in [LORE_SYNC_SPEC.md](../LORE_SYNC_SPEC.md) |
 | Search | SQLite FTS5 (built into the binary) + hybrid ranking |
 | Output | Compiles stored knowledge into `CLAUDE.md` / `AGENTS.md` / `.cursorrules` |
 | Agent loop | The lore skill (an instruction file the coding agent loads) captures corrections & decisions back into the db |
 
 ## Layout
 
-This is a Go **workspace** (`go.work`) stitching local modules:
+One Go module, `github.com/thesatellite-ai/lore`, at the repo root (no `go.work`; a clean clone builds from the module proxy). The packages are layered (`model`, `schema`, `logic`, `store`, `adapters`, `op`, `engine`, `ops`, `surface`, `wire`, `cmd`); `internal/layers` fails the build when a lower layer imports a higher one.
 
-| Module | Role |
-|--------|------|
-| `saas/cmd/cli` | the `lore` binary (package `main`) |
-| `saas/pkg/aicoder/*` | core domain logic (capture, search, render, fts5) |
-| `saas/pkg/aicoder/lsync` | git sync engine: table registry, change triggers, reconcile, bootstrap/adopt, merge driver, trash/conflicts |
-| `saas/pkg/aicoder/{canonjson,merge3,gitsetup}` | generic helpers sync is built on: byte-stable JSON, field-level 3-way merge, idempotent git wiring + plumbing |
-| `dbent` | Ent schema + generated client (local-only module) |
-| `lace/db` | pure-Go SQLite open/registration |
-| `github.com/khanakia/entx/enttui` | TUI engine (resolved from the module proxy) |
+| Path | Role |
+|------|------|
+| `cmd/lore` | the `lore` binary and the only release binary (package `main`, built by `task lore:build` and `.goreleaser.yml`) |
+| `wire/` | the composition root: picks the concrete backends, cache, scanner and identity |
+| `surface/cli`, `surface/rest`, `surface/tui`, `surface/docs` | CLI, local REST + OpenAPI (`lore api`), the TUI, and the generated reference |
+| `ops/<noun>` | one package per noun, each defining its operations |
+| `adapters/backend/{git,folder,rowfs}`, `adapters/cache/sqlite` | store backends and the run-time SQLite cache |
+| `tests/teame2e` | the team end-to-end suite (`task lore:test:team`, build tag `teame2e`) |
+| `tests/setupe2e` | the setup page end-to-end suite (`task lore:test:setupe2e`, build tag `setupe2e`): fake machines and the real `lore setup web` |
+| `tests/journeys` | the real-user journeys (`task lore:test:journeys`, build tag `journeys`): personas living with lore over months, shared invariants after every step ([tests/journeys/README.md](../tests/journeys/README.md)) |
+
+The v0.1.17 modules `saas/`, `dbent/`, `lace/` and `go.work` were deleted in phase E (42dbef7a).
+
+## Engine notes (0.1.18 core)
+
+Every row write in the core goes through one path in `engine/`: scan, validate, policy, backend, cache, audit. Two context helpers in `engine/batch.go` change how a group of writes lands; an operation that writes many rows as one action uses them instead of its own loop of commits.
+
+| Helper | What it does | Who uses it |
+|---|---|---|
+| `engine.Staging(ctx)` then `engine.Commit(ctx)` | Every engine write made with the staged `ctx` is held, not written. `Commit` writes all of them as one backend batch (one git commit on a git store), then refreshes the cache and records the audit. All or none: a failed write leaves the store as it was. A stage that touches two stores is refused with `E_INVALID_INPUT` and nothing written. A second write of the same row inside one stage is `E_INVALID_INPUT` (the stage cannot read its own rows back); a repeated create of the same row (an actor row two writes both ensure) is dropped. After `Commit` the stage is closed: a later write with the same `ctx` goes straight to the store. | `lore resource import` (FB-RES-1): the whole file is one batch, one commit |
+| `engine.WithCreateID(ctx, id)` | The next `Create` of a row of `id`'s table made with `ctx` uses `id` instead of a fresh one. It runs through the ordinary `Create` path, so every guard a surface adds around `Create` still runs; creates of other tables (an actor row the write ensures) are not affected; the row must not exist yet (`E_STALE`). | `lore resource import`: each new row's id is pinned first, so references between rows of the same file resolve before any row is written (no second pass) |
 
 `vendor/` is **not** committed; `go.sum` is. A fresh clone builds from the module proxy. The build is pure-Go: `CGO_ENABLED=0`, `modernc.org/sqlite` (FTS5 is built in — no build tag).
 
@@ -39,41 +51,89 @@ task lore:build          # → tmp/bin/lore (version stamped from git describe)
 task lore:build:debug    # with debug symbols
 task lore:install:all    # build + install binary AND the lore skill locally
 task lore:skill:install  # (re)install the skill to ~/.claude/skills/lore
-task lore:test           # unit + integration tests (race detector)
-task lore:test:sync      # sync engine + CLI end-to-end suite (real git, real binary)
+task lore:test:quick     # QUICK tier: every unit test, Go test cache on, no race, no e2e (run it all the time)
+task lore:test           # every package plain + the concurrent packages under the race detector
+task lore:test:race      # only the race set (RACE_PKGS in Taskfile.lore.yml)
+task lore:test:sync      # git-sync tests: row merge, the live ref, branch sync, sync operations
+task lore:test:team      # team end-to-end suite (real binary, real git, many actors)
+task lore:test:setupe2e  # setup page e2e: every machine shape via the page's HTTP API
 task lore:test:cover     # coverage of unit AND end-to-end tests; lists functions no test reaches
-task lore:bench:sync     # sync performance at 1k / 10k rows
+task lore:check:gocache  # empty Go's build cache when it is over LORE_GOCACHE_MAX_GB (default 50)
 ```
+
+### Test builds are not version-stamped, and the Go cache is bounded
+
+Every task in `Taskfile.lore.yml` runs Go with `GOFLAGS=-trimpath -buildvcs=false` (its top-level `env:`; a `GOFLAGS` you export yourself wins), and the test helpers that `go build` the binary (`tests/machines`, `tests/journeys`, `tests/setupe2e`, `tests/teame2e`, `tests/userscen`) pass the same two flags. Why: a package compiled without `-trimpath` records the folder it was built in, and `-buildvcs` stamps the commit and dirty state into `cmd/lore`, so each of the ~30 worktrees on one build server compiled every package again and every commit added new cache entries; the shared Go build cache (`go env GOCACHE`, one per user) reached 1.2 TB and filled the disk. With the flags, the same code in two worktrees is one cache entry: building `cmd/lore` in a second copy of the tree added 208 MB to the cache without them and 3 MB with them (measured 2026-11-10). Test binaries carry the version `dev` (cmd/lore's default; `formatgate.DevBuild` treats it as a source build). The gate's build stage builds `tmp/bin/lore` with `lore:build:test` (version `dev`, no VCS stamp). Only `task lore:build` (and so `lore:install`) stamps the real version from `git describe` and keeps the VCS stamp, and releases (`.goreleaser.yml`) stamp `{{ .Version }}` as before.
+
+Nothing else bounds the cache (Go drops entries unused for 5 days, which does not help when every worktree builds every day), so `task check` starts with `lore:check:gocache` (`tests/lib/gocache-trim.sh`): it measures `go env GOCACHE` with `du` (about 4 s on a 570 GB cache) and runs `go clean -cache` only when the cache is over `LORE_GOCACHE_MAX_GB` (default 50). `LORE_GOCACHE_TRIM=dry` only says what it would do, `LORE_GOCACHE_TRIM=off` skips the step. It touches nothing but the cache folder, never a tracked file, and runs alone before the build stage because emptying the cache under a running build fails that build (a quick-tier `go test` of another session at the same moment may fail once with a missing cache file and passes on its next run). `go clean -cache` is all or nothing, so the first build after a trim compiles from scratch.
+
+## The setup page (`surface/setupweb`)
+
+- **Server.** `surface/setupweb` owns the local page server: one-time token, session cookie, CSRF header, Host and Origin checks, the CSP and the allowlisted `/v1` routes. The page's files come from a `setupweb.UI` (`FS()` with `index.html` and `assets/`, plus a content-hash `Version()`). This build hands in no UI, so the server serves `setupweb.DefaultUI`, a plain page that lists `lore setup plan|check|apply` and `lore doctor --all`. Another UI can be handed in through `setupweb.Options.UI` without changing the server's security rules; open packages never import code outside this module's layers (`internal/layers` enforces it).
+- **Serving.** `GET /setup/assets/{file...}` serves `.js`, `.css`, `.svg`, `.woff2`, `.png` and `.txt` files from the UI's `assets/` (anything else is 404); every other `GET /setup/...` path except `assets`, `session` and `close` answers `index.html`, so a UI can route with history URLs under `/setup/`. The CSP allows `'self'` only, with no `'unsafe-inline'`, so `index.html` must not carry an inline script or style.
+
+## Two test tiers
+
+| Tier | Command | When | What runs |
+|---|---|---|---|
+| quick | `task lore:test:quick` | all the time while building: after every edit, before asking for review | `go test ./...`: every unit test of the root module with Go's test cache, no `-race`, no end-to-end suite except the fast machine shapes (`tests/machines` `TestForeign|Env|Links|Shapes`, about 45 s, skipped when arguments narrow the run). Narrow it with `task lore:test:quick -- ./ops/task/...`. Not behind `testlock`, so it never queues behind someone's full gate |
+| full | `task check` (= `task lore:check`) | once, before a commit is pushed (the pre-push hook enforces it) | everything below, with independent steps in parallel |
+
+Measured on a 48-core Linux machine on 2026-11-07: the quick tier takes about 48 s with an empty test cache (slowest packages wire 38 s, ops/settings 29 s, cmd/lore 26 s, ops/task 21 s) and less when most packages are cached. The full gate takes about 13 minutes (build 4 s, unit stage 176 s bound by the race step, e2e stage 584 s bound by the docs example runners, then setupe2e 475 s, userscen 391 s, teame2e 387 s; the machines suite added later takes about 90 s beside them); the same gate run step after step took 80-85 minutes before.
+
+The quick tier stays fast only while no unit package is slow: a package that takes minutes is a test-design bug, not a reason to drop it from the tier: time it with `go test -json`, then make it fast without weakening it (independent tests `t.Parallel()` with their own temp dirs, fixtures and binaries built once per package, events or short deadline polls instead of sleeps). The end-to-end suites are behind build tags (`userscen`, `teame2e`, `setupe2e`, `machines`, `journeys`) or are shell/node runners, so `go test ./...` never starts them.
+
+## Journeys: every feature adds its steps
+
+A feature that changes what a person does over time (a new command, a new kind of store, a new sync mode, a new refusal, a new setup step) adds, in the same change, the journey steps where a real person would meet it, in the persona who would (`tests/journeys/<persona>_test.go`). A rule that must hold everywhere becomes a shared invariant instead. How: [tests/journeys/README.md](../tests/journeys/README.md).
 
 ## The gate: `task check`, before every push
 
-One command runs everything, in this order, and stops at the first failure:
+`task check` holds the machine-wide `testlock` for its whole run, first bounds the Go build cache (stage cache: `lore:check:gocache`, above), then goes through three stages; the steps inside a stage run at the same time (`tests/lib/gate-parallel.sh`), each writing its own log to `tmp/check/<step>.log`. As each stage ends it prints every step's wall time so far and the stage's wall time; a failed step fails the stage, is named, and the tail of its log is printed. A stage starts only when the one before it passed.
 
-| Step | What it proves |
-|---|---|
-| `lore:build` | the binary builds |
-| `lore:lint` | `go vet`, `gofmt`, `staticcheck`, and a build for all six release targets (linux, darwin, windows × amd64, arm64) |
-| `lore:test` | unit and integration tests with the race detector |
-| `lore:test:all` | every Go test in `dbent`, `lace` and `saas`, including the CLI end-to-end suite (real git, real binary) and `TestDocsMatchCLI` (every `lore …` command in the README and `skills/*.md` exists with the flags shown) |
-| `lore:check:tidy` | `go mod tidy` changes nothing |
-| `lore:scenarios`, `lore:chaos` | the shell acceptance and failure-injection scripts in `tests/` (SC-21 needs root or sudo and skips otherwise) |
-| `lore:check:docs` | every docsync citation in the docs still matches the code (`ds check`) |
+| Stage | Step | What it proves |
+|---|---|---|
+| cache | `lore:check:gocache` | the shared Go build cache is emptied when it is over `LORE_GOCACHE_MAX_GB` (default 50 GB) |
+| build | `lore:build:test` | the binary the shell scenarios and chaos runs use builds (version `dev`, no VCS stamp; `lore:build:cross` still builds every release target) |
+| unit | `lore:lint:vet`, `lore:lint:fmt`, `lore:lint:staticcheck` | `go vet` (root module and every tagged suite), `gofmt`, `staticcheck` |
+| unit | `lore:build:cross` | a build for all six release targets (linux, darwin, windows × amd64, arm64), in parallel |
+| unit | `lore:check:tidy` | `go mod tidy -diff` is empty (it never rewrites the files, so it can run beside the builds) |
+| unit | `lore:check:docs` | every docsync citation in the docs still matches the code (`ds check`) |
+| unit | `lore:test:all` | every Go test of the root module without `-race`, including `cmd/lore`'s docs drift test `TestDocsMatchCLI` (every `lore …` command in the README and `skills/*.md` exists with the flags shown) |
+| unit | `lore:test:race` | the race detector on the packages with real concurrency (goroutines, locks, HTTP servers): `RACE_PKGS` in `Taskfile.lore.yml` lists them and why each is there. `cmd/lore` is not in it: its own code starts no goroutine and its tests drive `lore api` one request at a time (the comment above `RACE_PKGS` says what would bring it back). Every other package runs plain in `lore:test:all`; a package that gains a goroutine, a channel or a lock joins `RACE_PKGS` in the same commit |
+| e2e | `lore:test:scen` | the user-scenario suite (`tests/userscen`): every user-facing feature through the real binary |
+| e2e | `lore:test:team:run` | the team end-to-end suite (`tests/teame2e`): real binary, real git, many actors |
+| e2e | `lore:test:setupe2e:run` | the setup page end to end through its HTTP API (below) |
+| e2e | `lore:test:machines:core` | the real-machine suite (`tests/machines`): homes shaped like real users' machines (a fresh one, a v0.1.17 install, a migrated one with its `*.migrated` backups and a flow-style `config.yaml`, an owner-like one with three gh logins and the wrong one active, an ssh alias per account, a key without `.pub`, an alias whose key is gone, a control socket in `~/.ssh`, an org member, and setups disabled, trashed and purged with and without a tombstone), lore init in every kind of repo folder, and every valid 4-step setup lifecycle sequence (create, edit, disable, enable, pin, trash, restore, purge, restart; 83 sequences, the full set on the migrated, owner-like and graveyard shapes, a spread quarter on the rest, `MACHINES_FULL=1` for all). After every step: nothing purged or trashed is offered by import, a disabled setup never applies to its folder, `config check` knows every key, `doctor --all` reports, committed repo files are 0644 and folders 0755, and nothing in `~/.lore` is readable by another user. Also the shapes real machines grow (symlinked skill dirs and chains, dangling links, other tools' CLAUDE.md/AGENTS.md/.cursor files, a hand-edited `config.yaml` with comments, CRLF, tabs and unknown keys, v0.1.17 leftovers, overlapping folders, repos without a remote, with `GIT_DIR` set, worktrees, bare repos and submodules, read-only files, a missing `~/.lore`, two lore binaries on PATH, a non-ASCII home and spaces in paths); new shapes register in their own `tests/machines/shape_<area>.go` with `RegisterShape`. About 2 min; `task lore:test:machines` runs the whole package alone |
+| e2e | `lore:test:sweep:tasks`, `lore:test:sweep:rest` | the command sweep: every user command of the inventory (and `TestSweepCoversEveryCommand` fails on a command that is neither swept nor listed as not user-run) on every shape, then disk state (block-style `config.yaml`, nothing written through a link into a foreign folder, modes 0644/0755) and `doctor --all`. About 30 s and 105 s alone (measured 2026-11-10), under the 3-minute budget of a gate step, so every gate runs the full sweep; a sweep that outgrows it runs a fixed seeded subset per gate and the full set in a separate task, with `TestSweepCoversEveryCommand` still checking that every command is in the full set |
+| e2e | `lore:test:life:setups`, `lore:test:life:teams`, `lore:test:life:objects`, `lore:test:life:rest` | lifecycles through the built binary over kinds × shapes: every setup kind (solo, join, start team) create, edit every step, rename, change default, purge, re-add, import, edit again, remove; stores, tools, identity, personal store, org membership, profiles, live and trash/restore/purge; the same lifecycle over REST (`TestRestLifecycle`). Disk and doctor after every transition. 20 to 50 s each |
+| e2e | `lore:test:journeys:frame`, `lore:test:journeys:<persona>` | the real-user journeys (`tests/journeys`), one step per persona (solo, agency, teamlead, joiner, agents, upgrader, and `land` for the `TestJourneyLand…` journeys of a landing round) plus the harness self-tests: each persona lives with lore over months through the real binary with the `LORE_NOW` clock, and after every step the shared invariants run on every machine (readable output, doctor in HOME and every clone, `config check`, file modes) plus the journey's own facts. Each under about 3 min; `task lore:test:journeys` runs them all alone |
+| e2e | `lore:scenarios:run`, `lore:chaos:run` | the shell acceptance and failure-injection scripts in `tests/` (SC-21 needs root or sudo and skips otherwise) |
+| e2e | `lore:docs:examples:verify` | every docs example (`tests/docs`, `tests/team/docs`) re-run against the real binary gives the committed transcripts, and every pasted page block and the commands index are current |
+
+The unit and e2e stages run one after the other, not together: each saturates every core, and the e2e suites' timeouts assume they share the machine only with each other. Run one step on its own with its task name (`task lore:test:team`, `task lore:test:setupe2e`, `task lore:scenarios`, …); the public names of the heavy suites take `testlock` themselves.
 
 ```sh
 task check               # alias of task lore:check
 task lore:hooks:install  # once per clone: use the committed .githooks
 ```
 
-`task lore:hooks:install` points git at `.githooks/`, whose `pre-push` hook enforces the gate. A passing `task check` records the tree of the tracked files it tested (`.git/lore-check-passed`). On `git push`, if every pushed commit has exactly that tree, the push goes through at once; otherwise the hook runs `task check` first and blocks the push if it fails, or if the code it tested is not the code being pushed (uncommitted changes while checking). `git push --no-verify` skips it, for emergencies only. The hook itself is tested in `saas/cmd/cli/prepush_hook_test.go`.
+`task lore:hooks:install` points git at `.githooks/`, whose `pre-push` hook enforces the gate. A passing `task check` records the tree of the tracked files it tested (`.git/lore-check-passed`). On `git push`, if every pushed commit has exactly that tree, the push goes through at once; otherwise the hook runs `task check` first and blocks the push if it fails, or if the code it tested is not the code being pushed (uncommitted changes while checking). `git push --no-verify` skips it, for emergencies only. The hook itself is tested in `internal/repoguard/prepush_hook_test.go`.
 
 No gate step may modify tracked files: `task check` records the tracked tree when it starts (`check:begin`) and refuses to stamp if it changed by the end, naming the files. That is why `check:docs` puts `.ds/ledger.tsv` and `refs.tsv` back after `ds scan` (whose header records the commit and time of every scan): run `ds scan` yourself and commit when docs or citations change. Uncommitted changes to tracked files also make the stamp differ from the commit being pushed, so commit or `git stash` them before pushing.
 
-Adding an ent table? `saas/pkg/aicoder/lsync/registry.go` must classify it as synced or local — `TestRegistry_EveryTableClassified` fails until it does. A new unique index on a synced table also needs an entry in `saas/cmd/cli/natural_ids.go` (`TestNaturalIDSpecs_MatchRegistry`).
+### Setup page end to end: `task lore:test:setupe2e`
+
+`tests/setupe2e` (build tag `setupe2e`) builds a fake machine per shape: gh logins (0, 1 or 2, which one active), `~/.ssh` (none, the default key only, several Host aliases, an alias whose key is missing; keys with or without `.pub`), `~/.gitconfig` includeIf identities, the state of `~/.lore` (empty, a v0.1.17 install, saved, removed, disabled or trashed setups, an invalid `config.yaml`) and the start folder (a lore repo, a git repo, a plain folder). Fake `gh`, `ssh` and `git` log every call with the account it acted as, a fake GitHub API answers `LORE_GITHUB_API`, and bare repos stand in for GitHub; logins, emails and keys are placeholders made at run time. `TestAPIMatrix` runs all 1764 valid shapes through the real binary's HTTP API (token, cookie, CSRF), saving every step with the page's own defaults, and fails when a refusal names a value lore filled in, when Save is refused for anything but a value only the person can give, when a gh or ssh call for a GitHub account's repo runs as another account, or when `config.yaml` lacks the setup; an invalid `config.yaml` must come back as typed problems instead. A world or server that cannot start fails the shape; nothing skips.
+
+One world by hand, for a debugger: `go run -tags setupe2e ./tests/setupe2e/cmd/setupworld up --shape '{"gh_accounts":2,"gh_active":"second","ssh":"several","keys":"with_pub","include_if":1,"lore_home":"setups","start":"plain"}' --dir <empty dir> --port <port>` prints one JSON line (the setup link, HOME, config and log paths, accounts) and serves until Ctrl-C. `SETUPE2E_ONLY=<part of a shape name>` narrows the matrix.
+
+Adding a table? Declare it once with `schema.Table(...)` in `schema/` (a synced row table or a machine-local one); that one definition drives the cache tables, foreign keys, indexes, CLI flags, REST routes and the docs. There is no code generation.
 
 Plain `go build`:
 
 ```sh
-CGO_ENABLED=0 go build -o tmp/bin/lore ./saas/cmd/cli
+CGO_ENABLED=0 go build -o tmp/bin/lore ./cmd/lore
 ```
 
 ## Releases
@@ -93,6 +153,8 @@ Validate locally before pushing:
 goreleaser check
 goreleaser release --snapshot --clean --skip=publish
 ```
+
+GoReleaser is pinned to v2.9.0 (`.github/workflows/release.yml`, and the gate uses the same version): v2.10.0 and later deprecate `brews`, and `goreleaser check` then fails on this config. `brews` is kept on purpose (decision GR-1): a formula also serves Linux Homebrew, and the shared tap `thesatellite-ai/homebrew-tap` holds every org tool's formula. Revisit the pin when the shared tap moves to casks or another layout: migrate `.goreleaser.yml` then, and unpin.
 
 ## Homebrew tap
 
@@ -115,4 +177,4 @@ Future projects reuse the same tap — just add a `brews:` block pointing at `th
 
 ## Rebranding note
 
-Internal Go module/package names (`saas`, `dbent`, `lace`, `saas/pkg/aicoder/*`) intentionally keep their original identifiers — they are not user-visible and renaming them is pure churn. User-facing surfaces (binary `lore`, `.lore/` data dir, `lore.db`, `LORE_*` env vars, the skill) are all branded `lore`.
+The v0.1.17 internal module names (`saas`, `dbent`, `lace`) are gone since phase E; the code is the one module `github.com/thesatellite-ai/lore`. User-facing surfaces (binary `lore`, `.lore/` data dir, `lore.db`, `LORE_*` env vars, the skill) are all branded `lore`.

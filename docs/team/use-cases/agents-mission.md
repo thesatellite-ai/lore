@@ -34,28 +34,27 @@ tasks:
 ```
 <!-- /example -->
 
-`lore agent start` registers an agent actor for this session (one actor per label, owned by a person). It prints the environment the session must export. `lore plan apply` creates the mission and every task in one write. Applying it again finds them by their keys and adds nothing. The coordinator then holds a claim on the mission itself. So a second coordinator would be told the mission is taken:
+`lore agent start` registers an agent actor for this session (one actor per label, owned by a person). It prints the environment the session must export. `lore mission apply` creates the mission and every task in one write. Applying it again finds them by their keys and adds nothing. The coordinator then holds a claim on the mission itself. So a second coordinator would be told the mission is taken:
 
 <!-- example: agents#plan only=2,3,4,5 -->
 ```console
 # alice, in api
 $ lore agent start --label agent-coord --owner @alice
-✓ act_7a67…9504 agent agent-coord (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
+✓ act_7a67…9504 agent agent-coord (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
-lore: [agency/org] 1 file(s) pushed
 
 # agent-coord, in api
-$ lore plan apply invite.yaml
+$ lore mission apply invite.yaml
 ✓ msn_2ad3…f891 Invite landing page (created) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
-  tsk_05e9…4603 allow /invite on the proxy  
+  tsk_05e9…4603 allow /invite on the proxy
   tsk_c0f3…b5b8 deploy to staging             after frontend,proxy  gate required
-$ lore plan apply invite.yaml
+$ lore mission apply invite.yaml
 ✓ msn_2ad3…f891 Invite landing page (found) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
-  tsk_05e9…4603 allow /invite on the proxy  
+  tsk_05e9…4603 allow /invite on the proxy
   tsk_c0f3…b5b8 deploy to staging             after frontend,proxy  gate required
 $ lore task claim msn_2ad3…f891
 ✓ claimed msn_2ad3…f891 (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
@@ -70,9 +69,8 @@ Each worker registers, reads its inbox and asks for the next ready task of its r
 ```console
 # alice, in agents/api
 $ lore agent start --label agent-backend --owner @alice
-✓ act_76bd…3f10 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
+✓ act_76bd…3f10 agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
-lore: [agency/org] 1 file(s) pushed
 
 # agent-backend, in agents/api
 $ lore inbox
@@ -83,21 +81,20 @@ $ lore task next --mission msn_2ad3…f891 --repo api
 
 # alice, in agents/app
 $ lore agent start --label agent-frontend --owner @alice
-✓ act_d431…313a agent agent-frontend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
+✓ act_d431…313a agent agent-frontend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
-lore: [agency/org] 1 file(s) pushed
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (claimed by agent:agent-backend)
+  hint: lore task board shows what each task waits on
 (exit 10)
 
 # alice, in agents/infra
 $ lore agent start --label agent-infra --owner @alice
-✓ act_b4f4…a5b0 agent agent-infra (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
+✓ act_b4f4…a5b0 agent agent-infra (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 export LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
-lore: [agency/org] 1 file(s) pushed
 
 # agent-infra, in agents/infra
 $ lore task next --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invite.conf
@@ -106,28 +103,27 @@ $ lore task next --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invit
 ```
 <!-- /example -->
 
-## 3. A finding every agent sees
+## 3. A fact every agent sees
 
-`agent-infra` learns something the others need. A finding is a memory pinned to the mission. It shows up in every inbox on that agent's next fetch. Lore reuses a fetch for 60 seconds (`live.fetch_ttl`), so a finding can take up to a minute to reach another agent's inbox; `lore sync` fetches at once (`lore inbox` has no refresh flag of its own):
+`agent-infra` learns something the others need, and saves it as a live memory: `--live` puts it on the store's live list at once, before any commit, and the org's defaults file it in the client project's store folder. Another agent sees it on its next fetch. Lore reuses a fetch for 60 seconds (`live.fetch_ttl`), so it can take up to a minute; `lore sync` fetches at once, and `lore search` finds it:
 
-<!-- example: agents#finding -->
+<!-- example: agents#shared-fact -->
 ```console
 # agent-infra, in agents/infra
-$ lore finding add --mission msn_2ad3…f891 'invite links must use the public website address, not the server name'
-✓ mem_28f8…03df finding on msn_2ad3…f891 (live)
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+$ lore memory add --live --body 'invite links must use the public website address, not the server name'
+✓ mem_28f8…03df [agency/client2]
+  filed: defaults.client_repos.memory = agency (personal config) → the linked project client2/
+  scope: [master]
 
 # agent-backend, in agents/api
-$ lore inbox
-msn_2ad3…f891  finding  agent-infra  invite links must use the public website address, not the server name
+$ lore sync >/dev/null && lore search 'invite links'
+Found 1 hit for "invite links" across 1 entity type:
+memory  mem_28f8…03df  invite links must use the public website address, not the server name  [agency/client2]  (score=0.017)
 
 # agent-infra, in agents/infra
 $ lore task done tsk_05e9…4603
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: landed on main (86dbae4); leaves live once main is fetched
-lore live: 7 row(s) left live (main holds them)
 ```
 <!-- /example -->
 
@@ -140,35 +136,29 @@ lore live: 7 row(s) left live (main holds them)
 # agent-backend, in agents/api
 $ lore task note tsk_162d…9666 'the API sends the invite email and returns a link; the email text is in invite.html'
 ✓ note cmt_4c59…6c38 on tsk_162d…9666
-lore live: landed on main (9b40ce7); leaves live once main is fetched
-lore live: 1 row(s) left live (main holds them)
 $ git switch -q -c agent-backend/invite && mkdir -p api && echo 'package api' > api/invite.go && git add api && git commit -qm 'send the invite email' && git push -q -u origin agent-backend/invite
 $ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
-✓ tsk_162d…9666 done (commit 05513aa); waiting for merge
+✓ tsk_162d…9666 done (commit 601d285); waiting for merge
   lesson → mem_3b62…e913
-lore live: landed on main (dfd8dc8); leaves live once main is fetched
-lore live: 1 row(s) left live (main holds them)
-lore: [agency/client2] 2 file(s) pushed
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
-  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 05513aa not on the default branch yet)
+  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 601d285 not on the default branch yet)
+  hint: lore task board shows what each task waits on
 (exit 10)
 
 # alice, in api
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 $ lore task list
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, cf563f3)
-lore live: landed on main (df3a55c); leaves live once main is fetched
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 86dbae4)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
-○ tsk_c0f3…b5b8 deploy to staging [medium]  [agency/client2]
+○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
   read its notes: lore task show tsk_54fe…28f2
-lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
 
@@ -183,17 +173,15 @@ $ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'e
 $ lore task note tsk_54fe…28f2 'route + loader done, form next'
 ✓ note cmt_f147…5139 on tsk_54fe…28f2
   work branch agent-frontend/invite-route pushed
-lore live: landed on main (6d00426); leaves live once main is fetched
 
 # agent-coord, in api
 $ lore inbox
 msn_2ad3…f891  EXPIRED  agent-frontend tsk_54fe…28f2 claimed by agent-frontend, lease expired 8 min ago; work branch pushed (agent-frontend/invite-route)
-msn_2ad3…f891  finding  agent-infra  invite links must use the public website address, not the server name
 $ lore mission status msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 2 done · 0 claimed · 0 ready · 1 waiting · 0 gated · 1 expired · 0 blocked
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  not merged yet 4m
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:23 12m (timebox 1h)
-  expired   tsk_54fe…28f2  build the invite page        agent-frontend work branch agent-frontend/invite-route 30m (timebox 1h)
+  expired   tsk_54fe…28f2  build the invite page        agent-frontend work branch agent-frontend/invite-route 0s (timebox 1h)
   waiting   tsk_c0f3…b5b8  deploy to staging                         waits for tsk_54fe…28f2 to be merged (in_progress)
 ```
 <!-- /example -->
@@ -204,18 +192,16 @@ A replacement agent, `agent-frontend-2`, takes the task over (attempt 2), fetche
 ```console
 # alice, in agents/fe2/app
 $ lore agent start --label agent-frontend-2 --owner @alice
-✓ act_2537…6bbb agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
+✓ act_2537…6bbb agent agent-frontend-2 (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
-lore: [agency/org] 1 file(s) pushed
 
 # agent-frontend-2, in agents/fe2/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_d57ca…) on refs/lore/signals/main; reclaim, attempt 2; previous holder agent-frontend timed out
   work branch agent-frontend/invite-route
   read its notes: lore task show tsk_54fe…28f2
-lore live: 1 row(s) left live (main holds them)
 $ git fetch -q origin agent-frontend/invite-route && git log --oneline -1 FETCH_HEAD
-34ee210 invite page
+9b40ce7 invite page
 
 # agent-frontend, in agents/app
 $ lore task done tsk_54fe…28f2
@@ -225,9 +211,8 @@ ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 10
 
 # agent-frontend-2, in agents/fe2/app
 $ git switch -q -c agent-frontend-2/invite-route FETCH_HEAD && echo form >> src/routes/invite.tsx && git commit -qam 'invite form' && git push -q -u origin agent-frontend-2/invite-route && lore task done tsk_54fe…28f2 --commit $(git rev-parse HEAD)
-✓ tsk_54fe…28f2 done (commit 7898daa); waiting for merge
+✓ tsk_54fe…28f2 done (commit 05513aa); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: landed on main (ccfb0bb); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -241,13 +226,12 @@ The deploy task waits for every task it depends on to be merged. `agent-infra` f
 $ lore task next --mission msn_2ad3…f891 --role coordinator
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: waits for tsk_05e9…4603 to be merged (done, merge unknown)
+  hint: lore task board shows what each task waits on
 (exit 10)
 
 # alice, in infra
 $ lore task merged tsk_05e9…4603
 ✓ tsk_05e9…4603 merged (marked by hand, 11:04)
-lore live: landed on main (51886a5); leaves live once main is fetched
-lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
 
@@ -259,16 +243,16 @@ Now the deploy task is ready except for its gate. The coordinator stops there. A
 $ lore task next --mission msn_2ad3…f891 --role coordinator
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: gate needs approval (lore gate approve tsk_c0f3…b5b8)
+  hint: lore task board shows what each task waits on
 (exit 10)
 $ lore gate approve tsk_c0f3…b5b8
 ERROR: [E_INVALID_INPUT] approvals come from your identity file, never from LORE_ACTOR (LORE_ACTOR is set here)
   hint: an agent session cannot approve; run `lore gate approve` in your own shell
-(exit 1)
+(exit 20)
 
 # alice, in api
 $ lore gate approve tsk_c0f3…b5b8
-✓ tsk_c0f3…b5b8 approved by Alice Doe (org entry (config.yaml)), hash 22efc3b3…
-lore live: 1 row(s) left live (main holds them)
+✓ tsk_c0f3…b5b8 approved by Alice Doe (org entry (config.yaml)), hash cf563f34…
 
 # agent-coord, in api
 $ lore task next --mission msn_2ad3…f891 --role coordinator
@@ -288,7 +272,7 @@ $ lore mission status msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
   claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:29) 1m
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:04 4m
-  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:02 24m (timebox 1h; agent-frontend 20m + agent-frontend-2 4m)
+  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:02 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:23 12m (timebox 1h)
 $ lore task show tsk_c0f3…b5b8 --from agency/client2
 tsk_c0f3…b5b8
@@ -305,6 +289,7 @@ tsk_c0f3…b5b8
   claim:    active, held by agent-coord (session s-10e90368, devbox)
   token:    ct_3de87…  epoch 1
   expires:  2026-11-02T11:29:20Z  renewed_seq 0
+created 2026-11-02T10:03:30Z by act_7a67…9504 · updated 2026-11-02T11:09:20Z by act_7a67…9504
 $ lore task show tsk_54fe…28f2
 tsk_54fe…28f2
   title:    build the invite page
@@ -312,18 +297,21 @@ tsk_54fe…28f2
   priority: medium
   commit:   accepted
   mission:  msn_2ad3…f891
+  done by:  agent-frontend-2
+  closed:   completed
+  time:     3m (agent 3m, person 0m)
   repo:     app
   after:    tsk_162d…9666 (until merged)
   timebox:  1h
   attempts: 2
   branch:   agent-frontend/invite-route
-  done by:  agent-frontend-2
-  commit:   8c373dc3944d
+  commit:   df3a55c39644
   merged:   2026-11-02T11:02:20Z
   source:   agency/client2
   notes:
-    2026-11-02 10:28  route + loader done, form next  (agent-frontend)
+    2026-11-02 10:28  route + loader done, form next  [agency/client2]
   claim:    none on refs/lore/signals/main
+created 2026-11-02T10:03:30Z by act_7a67…9504 · updated 2026-11-02T11:02:20Z by act_b69e…5ed7
 ```
 <!-- /example -->
 
@@ -331,8 +319,8 @@ tsk_54fe…28f2
 
 ```text
  agency/notes (store)                                     who wrote it
-   refs/lore/live/main    client2/missions/…, tasks/…     agent-coord (plan apply), workers (notes, done)
-                          client2/memories/… (finding, lessons)
+   refs/lore/live/main    client2/missions/…, tasks/…     agent-coord (mission apply), workers (notes, done)
+                          client2/memories/… (shared facts, lessons)
    refs/heads/main        client2/.lore/data/…            landings: every finished task, with done_by,
                                                           done_commit, merged_at, claim log
    refs/lore/signals/main client2/claims/<task>.json      one commit, replaced on every claim and heartbeat
@@ -350,3 +338,10 @@ tsk_54fe…28f2
 - **Claims fail closed.** Offline, a claim, heartbeat, release, done on a claimed task or an approval fails with `E_OFFLINE` (exit 15). Nothing is queued to happen later.
 - **Speed and scale.** A claim is a git round trip (a second or two). Others see changes on their next fetch. Ten to twenty agents per store branch are fine.
 - **Task ids from the store** are found from any linked repo by every task command (`task show`, `task next`, `task done`, `mission status`); `--from agency/client2` picks the source when an id exists in two places.
+
+## Related
+
+- [Agents](../agents.md): the loop, fail-closed errors and taking work back.
+- [Several repos as one product](group-project.md): one mission across repos.
+- [Missions and plans](../../tasks/missions-and-plans.md): missions for one person.
+- [Commands reference](../commands.md).

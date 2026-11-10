@@ -1,0 +1,186 @@
+package rest
+
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"io/fs"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+
+	"github.com/thesatellite-ai/lore/adapters/osrename"
+	"github.com/thesatellite-ai/lore/model/errs"
+)
+
+// Token file constants (spec 9.7).
+const (
+	// TokenFile is the token's file name inside lore's home (~/.lore).
+	TokenFile = "api-token"
+	// TokenBytes is the token's random length; the file holds it as hex.
+	TokenBytes = 32
+	// tokenMode is the only mode lore writes or accepts for the token file:
+	// a token readable by other users would let them call the API as you.
+	tokenMode fs.FileMode = 0o600
+	// homeMode is the mode of a home directory lore creates.
+	homeMode fs.FileMode = 0o700
+	// groupOtherBits are the permission bits that must be clear.
+	groupOtherBits fs.FileMode = 0o077
+	// goosWindows is runtime.GOOS on Windows, where permission bits do not
+	// exist: os.Stat reports every writable file as 0666 whatever its ACL,
+	// so a mode check there would refuse every token lore itself wrote.
+	goosWindows = "windows"
+	// tempFilePattern names the temporary file a new token is written to
+	// before the atomic rename.
+	tempFilePattern = ".api-token-*"
+)
+
+// TokenPath is the token file of a lore home directory.
+func TokenPath(home string) string { return filepath.Join(home, TokenFile) }
+
+// LoadOrCreateToken returns the API token of home, creating it on first use
+// (32 random bytes, hex, mode 0600, written atomically).
+//
+// Invariant: an existing token file is used only when it is a regular file
+// with no group or other permission bits and holds exactly one hex token;
+// anything else is refused (E_CONFIG_INVALID), never silently fixed, so a
+// file someone else could read or replace is never trusted.
+func LoadOrCreateToken(home string) (string, error) {
+	tok, err := readToken(home)
+	if errs.Has(err, errs.NotFound) {
+		return RotateToken(home)
+	}
+	return tok, err
+}
+
+// RotateToken replaces home's token with a new random one (`lore api token
+// rotate`) and returns it. A running `lore api` reads the file on every
+// request (TokenFileAuth), so every client holding the old token gets 401
+// from the next request on, and the new token works without a restart.
+func RotateToken(home string) (string, error) {
+	tok, err := NewToken()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(home, homeMode); err != nil {
+		return "", errs.Wrap(errs.Internal, "rest: create "+home, err)
+	}
+	f, err := os.CreateTemp(home, tempFilePattern)
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "rest: create token file", err)
+	}
+	tmp := f.Name()
+	ok := false
+	defer func() {
+		if !ok {
+			_ = os.Remove(tmp) // best effort: the temp file holds an unused token
+		}
+	}()
+	if err := f.Chmod(tokenMode); err != nil {
+		_ = f.Close()
+		return "", errs.Wrap(errs.Internal, "rest: chmod token file", err)
+	}
+	if _, err := f.WriteString(tok + "\n"); err != nil {
+		_ = f.Close()
+		return "", errs.Wrap(errs.Internal, "rest: write token file", err)
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return "", errs.Wrap(errs.Internal, "rest: sync token file", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", errs.Wrap(errs.Internal, "rest: close token file", err)
+	}
+	if err := osrename.Rename(tmp, TokenPath(home)); err != nil {
+		return "", errs.Wrap(errs.Internal, "rest: install token file", err)
+	}
+	ok = true
+	return tok, nil
+}
+
+// TokenFileAuth is `lore api`'s authenticator (Options.Authenticate): it
+// re-reads home's token file on every request and accepts only a bearer
+// token equal to it, compared in constant time (bearerMatches).
+//
+// Invariant: the file is the only source of truth. A rotated token is
+// enforced from the next request on (BUG-API-ROTATE: a token read once at
+// startup kept the old one valid until a restart), and a token file that
+// is missing, unreadable or fails readToken's checks refuses every request
+// (401) rather than falling back to an earlier value: closed, never open.
+// The read costs one stat and one small file read per request, which a
+// loopback API serving one person can afford.
+func TokenFileAuth(home string) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tok, err := readToken(home)
+			if err != nil { // the reason (path, mode) stays on the server: the caller is not yet trusted
+				refuseBearer(w, errs.New(errs.Unauthorized, "the server's api token file is missing or unusable").
+					WithHint("on the server machine run: lore api token rotate"))
+				return
+			}
+			if !bearerMatches(r, sha256.Sum256([]byte(tok))) {
+				refuseBearer(w, errs.New(errs.Unauthorized, "missing or wrong bearer token").
+					WithHint("send Authorization: Bearer <the token in ~/.lore/api-token>"))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// NewToken returns TokenBytes random bytes as hex. `lore api` writes it to
+// the token file; the setup page (ONB 5.3) keeps its one-time token and
+// its session values in memory only.
+func NewToken() (string, error) {
+	raw := make([]byte, TokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", errs.Wrap(errs.Internal, "rest: read random bytes", err)
+	}
+	return hex.EncodeToString(raw), nil
+}
+
+// readToken reads and checks an existing token; E_NOT_FOUND when absent.
+func readToken(home string) (string, error) {
+	p := TokenPath(home)
+	st, err := os.Lstat(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", errs.New(errs.NotFound, "rest: no api token yet")
+	}
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "rest: stat "+p, err)
+	}
+	if !st.Mode().IsRegular() {
+		return "", errs.New(errs.ConfigInvalid, p+" is not a regular file").WithHint("remove it; lore creates a new token")
+	}
+	if modeErr := checkTokenMode(runtime.GOOS, p, st.Mode().Perm()); modeErr != nil {
+		return "", modeErr
+	}
+	b, err := os.ReadFile(filepath.Clean(p))
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "rest: read "+p, err)
+	}
+	tok := string(b)
+	if n := len(tok); n > 0 && tok[n-1] == '\n' {
+		tok = tok[:n-1]
+	}
+	if raw, err := hex.DecodeString(tok); err != nil || len(raw) != TokenBytes {
+		return "", errs.New(errs.ConfigInvalid, p+" does not hold a lore api token").WithHint("run: lore api token rotate")
+	}
+	return tok, nil
+}
+
+// checkTokenMode refuses a token file whose group or other permission bits
+// are set. On Windows it accepts any mode: Go reports synthetic bits there
+// (0666, or 0444 when read-only), the file's ACL is what guards it, and the
+// token lives in the user's own profile directory. goos is a parameter so
+// the Windows branch is tested on every platform.
+func checkTokenMode(goos, p string, perm fs.FileMode) error {
+	if goos == goosWindows || perm&groupOtherBits == 0 {
+		return nil
+	}
+	return errs.New(errs.ConfigInvalid, p+" has mode "+strconv.FormatUint(uint64(perm), 8)+"; other users could read it").
+		WithHint("run: chmod 600 " + p + " (or lore api token rotate)")
+}

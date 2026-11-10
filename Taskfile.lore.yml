@@ -14,6 +14,17 @@
 
 version: "3"
 
+# Every go command of every task builds without the work tree's path and without VCS stamps
+# (an OS-level GOFLAGS overrides it). Why: a package compiled without -trimpath records the
+# folder it was built in, and -buildvcs records the commit and dirty state in cmd/lore, so ~30
+# worktrees each compiled every package again and every commit added fresh cache entries; the
+# shared Go build cache reached 1.2 TB and filled the disk. With these flags two worktrees at the
+# same code share one cache entry. Test binaries carry the unstamped version "dev" (cmd/lore's
+# default). Only `build` (and so install) stamps the real version and keeps the VCS stamp, as
+# .goreleaser.yml does for releases. check:gocache bounds what is left (docs/DEVELOPMENT.md).
+env:
+  GOFLAGS: "-trimpath -buildvcs=false"
+
 vars:
   BIN_DIR: "{{.ROOT_DIR}}/tmp/bin"
   LORE_BIN: "{{.BIN_DIR}}/lore"
@@ -27,26 +38,88 @@ vars:
   CHECK_BEGIN: "lore-check-begin"
   # Prints the tree id of the tracked files as they are in the work tree.
   TRACKED_TREE: "{{.TASKFILE_DIR}}/.githooks/lib/tracked-tree.sh"
+  # Extra compiler flags for every -race run. -race also turns on checkptr for every package;
+  # modernc.org's SQLite is C transpiled to Go by ccgo (generated, not hand-written) and does
+  # pointer arithmetic on every statement, so checkptr alone made each cache open about 3x slower
+  # (an ops test harness: 16.5 s -> 5.2 s). It is off for modernc.org/... only: the race detector
+  # still instruments every package and checkptr stays on for lore's own code.
+  RACE_GCFLAGS: "modernc.org/...=-d=checkptr=0"
+  # The packages that run under -race (lore:test:race). -race only finds a data race on a path
+  # where two goroutines really touch the same memory, so it runs where lore has real concurrency,
+  # not on every package: in the old 15-minute race step, packages that start no goroutine of
+  # their own (ops/settings 318 s, ops/task 204 s, ops/internal/lookup 182 s, cmd/lore 509 s)
+  # cost more than the concurrent ones. Every package still runs WITHOUT -race in lore:test:all.
+  # Why each entry is here:
+  #   engine/...          the keyed-create and write-path locks (sync.Mutex); tests write concurrently
+  #   adapters/...        goroutines or locks in backend/git, backend/rowfs, backend/folder, cache/sqlite,
+  #                       gitref, gitcommit, gitremote, live, mergewatch, orgcfg, probe, scanner/gitleaks,
+  #                       secretmgr, selfupdate, signals, llmcall, with their own concurrent tests
+  #                       (orgcfg linkwrite_race, selfupdate lockrace, gitleaks concurrent, signals write)
+  #   logic/...           logic/clock and model/hlc share a clock under a mutex; logic/rowscan starts
+  #   model/...           goroutines; logic/merge* is the sync merge path (cheap: about 10 s together)
+  #   store/...           memstore and the backend contract suite guard state with a mutex
+  #   surface/rest/...    HTTP servers: every request is its own goroutine
+  #   surface/setupweb/...
+  #   ops/setup/...       the setup probes run concurrently (goroutines in ops/setup)
+  #   ops/memory/...      addkey_test writes the same key from many goroutines
+  #   ops/doctor/...      Parallel runs a doctor run's checks on up to min(4, CPUs) goroutines
+  #   wire, wire/host     gitexec pipes, setup discover/probe/aliases goroutines, the host's live
+  #                       session locks, the coordination and heartbeat daemons
+  #   tests/teame2e/teamharness/...   the team harness drives actors from goroutines
+  # wire/renderhost (75 s under -race) has no goroutine or lock and is left plain. Add a package
+  # here in the same commit that gives it a goroutine, a channel or a lock.
+  RACE_PKGS: >-
+    ./engine/... ./adapters/... ./logic/... ./model/... ./store/...
+    ./surface/rest/... ./surface/setupweb/... ./ops/setup/... ./ops/memory/... ./ops/doctor/...
+    ./wire ./wire/host ./tests/teame2e/teamharness/...
+  # cmd/lore is NOT in the race set. Its own code starts no goroutine; its one lock (apiRunner,
+  # serialising `lore api` requests) only meets a second goroutine under a real HTTP server, and
+  # its tests call the handler's ServeHTTP one request at a time, so a race build of cmd/lore
+  # (509 s in the old gate) could not find a race there. The REST server's own concurrency is
+  # raced in surface/rest/...; cmd/lore's multi-clone tests run the binary as separate processes,
+  # which the race detector does not see across. Add it back with a test that drives concurrent
+  # requests through apiRunner.
+  # Folder of the per-step logs and timing tables of lore:check (gitignored tmp/).
+  GATE_LOG_DIR: "{{.ROOT_DIR}}/tmp/check"
+  # Runs one step of lore:check as its own task process (tests/lib/gate-parallel.sh starts each
+  # step in a separate shell). TASKFILE is this file's own path, so it works when this file is
+  # included as `lore:` and when it is run alone with `task -t Taskfile.lore.yml`.
+  SELF: 'task --taskfile "{{.TASKFILE}}"'
 
 tasks:
   build:
-    desc: "Build aicoder binary (pure-Go sqlite, CGO off, version stamped)"
+    desc: "Build the lore release binary from ./cmd/lore (pure-Go sqlite, CGO off, version stamped; same ldflags as .goreleaser.yml)"
     vars:
       VERSION:
-        sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+        sh: git describe --tags --match 'v*' --always --dirty 2>/dev/null || echo dev
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -trimpath -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.LORE_BIN}} ./saas/cmd/cli
+      # -buildvcs=auto on the command line wins over the GOFLAGS above: the binary a person
+      # installs keeps its commit (the setup page's About shows it).
+      - CGO_ENABLED=0 go build -trimpath -buildvcs=auto -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.LORE_BIN}} ./cmd/lore
       - echo "Built {{.LORE_BIN}} ({{.VERSION}})"
 
-  build:debug:
-    desc: "Build aicoder with debug symbols"
+  build:test:
+    desc: "Build tmp/bin/lore for the gate's shell scenarios and chaos runs: the test version \"dev\" and no VCS stamp, so a new commit does not change how the binary is built (lore:build stamps the real version)"
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -o {{.LORE_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -ldflags='-buildid= -s -w' -o {{.LORE_BIN}} ./cmd/lore
+      - echo "Built {{.LORE_BIN}} (dev, test build)"
+
+  spec:
+    desc: "Regenerate docs/reference/cli-commands.md and openapi.json from the 0.1.18 operation registry (the wire drift test fails until this is run). Runs the binary from a temp folder so it never touches this repo's hooks"
+    deps: [build]
+    cmds:
+      - cd "$(mktemp -d)" && {{.LORE_BIN}} spec docs --out {{.ROOT_DIR}}/docs/reference && {{.LORE_BIN}} spec openapi --out {{.ROOT_DIR}}/docs/reference
+
+  build:debug:
+    desc: "Build lore (./cmd/lore) with debug symbols"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -o {{.LORE_BIN}} ./cmd/lore
 
   install:
-    desc: "Install aicoder to $GOPATH/bin"
+    desc: "Install lore (./cmd/lore) to $GOPATH/bin"
     deps: [build]
     cmds:
       - cp {{.LORE_BIN}} $(go env GOPATH)/bin/lore
@@ -68,29 +141,43 @@ tasks:
       - task: install
       - task: skill:install
 
-  test:
-    desc: "Unit + integration tests for mini's code"
+  test:quick:
+    desc: "QUICK tier, run it all the time while building: every unit test of the root module, Go test cache on, no -race, no end-to-end suites (userscen, teame2e, setupe2e and the shell/docs runners are behind build tags or in lore:check). Extra go test flags after --, e.g. task lore:test:quick -- ./ops/task/..."
     cmds:
-      - go test -race ./saas/cmd/cli/... ./saas/pkg/aicoder/...
-      - go test -race ./dbent/schema/...
+      # Not wrapped in testlock on purpose: it is the tier agents run between edits and must not
+      # queue behind a full lore:check of another session. No -count=1 (the cache is the point:
+      # go test reruns a package when its code, the env vars or the files it reads change) and the
+      # same flags as lore:test:all, so the two share one test cache.
+      - go test {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}./...{{end}}
+      # The fast real-machine shapes (foreign files, env, links, shapes; ~45 s on a loaded 48-core server) run here too, so a
+      # change that breaks a real home is seen between edits, not only at the gate. Skipped when
+      # CLI_ARGS narrows the run to some packages.
+      - >-
+        {{if not .CLI_ARGS}}{{.SELF}} test:machines:part PART=quick FILTER="-run '^Test(Foreign|Env|Links|Shapes)'"{{end}}
+
+  test:
+    desc: "Unit + integration tests: every package plain (lore:test:all) and the concurrent packages under the race detector (lore:test:race), in parallel"
+    deps: [test:all, test:race]
+
+  test:race:
+    desc: "Race detector on the packages with real concurrency, RACE_PKGS (engine, adapters, logic, model, store, surface/rest, surface/setupweb, ops/setup, ops/memory, ops/doctor, wire, wire/host, teamharness); Taskfile.lore.yml says why each is there"
+    cmds:
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m {{.RACE_PKGS}}
 
   test:all:
-    desc: "Every Go test in the workspace modules (dbent, lace, saas), incl. the CLI end-to-end suite and the docs drift test"
+    desc: "Every Go test of the root module without -race, incl. cmd/lore's docs drift test (the team suite is lore:test:team)"
     cmds:
-      - go test -count=1 ./dbent/... ./lace/... ./saas/...
+      # No -count=1: go test reruns a package when its code, the env vars or the files it reads change.
+      - go test ./...
 
   check:tidy:
-    desc: "Fail when `go mod tidy` would change saas/go.mod or go.sum (leaves the files as they were)"
-    dir: saas
+    desc: "Fail when `go mod tidy` would change go.mod or go.sum (go mod tidy -diff: never writes them)"
     cmds:
       - |
-        set -e
-        keep=$(mktemp -d)
-        cp go.mod go.sum "$keep"/
-        go mod tidy
-        if ! cmp -s go.mod "$keep/go.mod" || ! cmp -s go.sum "$keep/go.sum"; then
-          cp "$keep/go.mod" "$keep/go.sum" .
-          echo "✘ go mod tidy would change saas/go.mod or go.sum — run it in saas/ and commit the result"
+        # -diff never writes go.mod or go.sum, so this step can run while other gate steps
+        # build and test from the same files.
+        if ! go mod tidy -diff; then
+          echo "✘ go mod tidy would change go.mod or go.sum — run it and commit the result"
           exit 1
         fi
         echo "✓ go mod tidy: no changes"
@@ -115,10 +202,17 @@ tasks:
         rm -rf "$keep"
         exit $status
 
+  check:gocache:
+    desc: "Empty Go's build cache (go clean -cache) when it is over LORE_GOCACHE_MAX_GB (default 50); LORE_GOCACHE_TRIM=dry only reports, =off skips. The first step of lore:check; touches no tracked file (tests/lib/gocache-trim.sh)"
+    cmds:
+      - tests/lib/gocache-trim.sh
+
   check:begin:
     desc: "Record the tracked files' tree before the gate runs (check:stamp compares against it)"
     cmds:
       - '"{{.TRACKED_TREE}}" > "$(git rev-parse --git-path {{.CHECK_BEGIN}})"'
+      # a fresh log folder, so the timing table lists this run only (literal path under tmp/)
+      - rm -rf "{{.ROOT_DIR}}/tmp/check"
 
   check:stamp:
     desc: "Record that the gate passed for the tracked files as they are now (read by the pre-push hook); refused if they changed while it ran"
@@ -137,19 +231,64 @@ tasks:
         echo "✓ gate passed for tree $tree"
 
   check:
-    desc: "THE gate — run before every push (the pre-push hook enforces it): build, lint, race tests, every module's tests, tidy, scenarios, chaos, docs"
+    desc: "FULL tier, THE gate — run before every push (the pre-push hook enforces it): build, then lint, cross-builds, tidy, docsync, every unit test and the race set in parallel, then every end-to-end suite (userscen, teame2e, setupe2e with the page e2e, machines, scenarios, chaos, docs example runners) in parallel; per-step logs and wall times in tmp/check"
+    cmds:
+      - testlock task --taskfile "{{.TASKFILE}}" check:run
+
+  check:run:
+    desc: "Body of lore:check WITHOUT the machine-wide test lock; call lore:check instead"
+    env:
+      GATE_LOG_DIR: "{{.GATE_LOG_DIR}}"
     cmds:
       - task: check:begin
-      - task: build
-      - task: lint
-      - task: test
-      - task: test:all
-      - task: check:tidy
-      - task: scenarios
-      - task: chaos
-      - task: check:docs
+      # Stage cache: bound the shared Go build cache before anything builds (check:gocache), alone,
+      # because emptying it under a running build would fail that build.
+      - tests/lib/gate-parallel.sh cache 'gocache={{.SELF}} check:gocache'
+      # Stage build: the test binary the shell scenarios and chaos runs use (build:test: version
+      # "dev", no VCS stamp). Built alone first because scenarios and chaos only read it; their
+      # public tasks rebuild it (deps: [build]), which two parallel steps must not do to one path.
+      - tests/lib/gate-parallel.sh build 'build={{.SELF}} build:test'
+      # Stage unit: everything that only needs the source. Each step is its own process; Go's
+      # build cache is shared and safe for concurrent builds.
+      - >-
+        tests/lib/gate-parallel.sh unit
+        'vet={{.SELF}} lint:vet'
+        'gofmt={{.SELF}} lint:fmt'
+        'staticcheck={{.SELF}} lint:staticcheck'
+        'cross-builds={{.SELF}} build:cross'
+        'tidy={{.SELF}} check:tidy'
+        'docsync={{.SELF}} check:docs'
+        'test-all={{.SELF}} test:all'
+        'race={{.SELF}} test:race'
+      # Stage e2e: the suites that run the real binary. Run after stage unit, not beside it: both
+      # stages saturate every core, and the e2e suites' timeouts assume a machine they share only
+      # with each other. Each builds its own binary under its own name (lore-team, lore-docs,
+      # lore-setupe2e, userscen's temp dir).
+      - >-
+        tests/lib/gate-parallel.sh e2e
+        'userscen={{.SELF}} test:scen'
+        'teame2e={{.SELF}} test:team:run'
+        'setupe2e={{.SELF}} test:setupe2e:run'
+        'machines={{.SELF}} test:machines:core'
+        'sweep-tasks={{.SELF}} test:machines:sweep:tasks'
+        'sweep-rest={{.SELF}} test:machines:sweep:rest'
+        'life-setups={{.SELF}} test:machines:life:setups'
+        'life-teams={{.SELF}} test:machines:life:teams'
+        'life-objects={{.SELF}} test:machines:life:objects'
+        'life-rest={{.SELF}} test:machines:life:rest'
+        'journey-frame={{.SELF}} test:journeys:frame'
+        'journey-solo={{.SELF}} test:journeys:solo'
+        'journey-agency={{.SELF}} test:journeys:agency'
+        'journey-teamlead={{.SELF}} test:journeys:teamlead'
+        'journey-joiner={{.SELF}} test:journeys:joiner'
+        'journey-agents={{.SELF}} test:journeys:agents'
+        'journey-upgrader={{.SELF}} test:journeys:upgrader'
+        'journey-land={{.SELF}} test:journeys:land'
+        'scenarios={{.SELF}} scenarios:run'
+        'chaos={{.SELF}} chaos:run'
+        'docs-examples={{.SELF}} docs:examples:verify'
       - task: check:stamp
-      - echo "✓ task check — every gate passed"
+      - echo "✓ task check — every gate passed (logs in {{.GATE_LOG_DIR}})"
 
   hooks:install:
     desc: "Use the repo's committed hooks (.githooks): pre-push runs `task check` unless it already passed for the exact code being pushed"
@@ -159,10 +298,20 @@ tasks:
       - echo "✓ hooks installed (core.hooksPath = .githooks)"
 
   test:sync:
-    desc: "Git-sync tests only: lsync engine, merge3, canonjson, gitsetup, ids + the CLI e2e suite (real git, real binary)"
+    desc: "Git-sync tests only: row merge (logic/merge, merge3, canonjson), the live ref, branch sync and the sync operations; the end-to-end sync tests are in lore:test:team"
     cmds:
-      - go test -race ./saas/pkg/aicoder/lsync/... ./saas/pkg/aicoder/merge3/... ./saas/pkg/aicoder/canonjson/... ./saas/pkg/aicoder/gitsetup/... ./saas/pkg/aicoder/ids/...
-      - go test ./saas/cmd/cli/...
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./logic/merge/... ./logic/merge3/... ./logic/canonjson/... ./adapters/live/... ./adapters/reposync/... ./ops/sync/...
+
+  test:scen:
+    desc: "User-scenario suite (tests/userscen): every user-facing feature through the real binary, temp HOME, real git. Extra go test flags after --"
+    cmds:
+      # -timeout 60m: the trash matrix alone takes ~8 min (26 kinds x 3 stores).
+      # -count=1: TestMain builds cmd/lore in a subprocess (go build), and the test cache keys
+      # only on the userscen package's own sources, the env vars it reads and the files the
+      # test process opens, never on the lore sources that subprocess compiles. A cached pass
+      # would replay after any change to lore itself, so this step (and the userscen step of
+      # task check, which calls it) always runs the binary built from the current tree.
+      - CGO_ENABLED=0 go test -tags userscen -count=1 -timeout 60m ./tests/userscen/... {{.CLI_ARGS}}
 
   test:team:
     desc: "Team e2e suite (LORE_TEAM_SPEC.md): real binary, real git, many actors. Not built yet = PENDING (skip); LORE_TEAM_STRICT=1 fails pending tests, LORE_TEAM_FORCE=1 skips the capability probe. Extra go test flags after --"
@@ -176,18 +325,180 @@ tasks:
     cmds:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW (test clock).
-      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./cmd/lore
       # go test -json → pass / FAIL / pending matrix; exits 1 only on real failures
       # (pipefail so a build failure of the test binary is not swallowed by the pipe).
+      # -count=1: the tests run the outside binary LORE_TEAM_BIN, which the test cache does not
+      # track, so a cached pass could hide a rebuilt binary's failure.
+      # -timeout 40m: go test's default 10 min is a wall-clock limit on the whole
+      # package; beside the other e2e steps of lore:check (load above 70) the suite
+      # took 630 s and the default killed a passing test mid-run.
       - |
         set -o pipefail
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked)' ./saas/cmd/cli/ {{.CLI_ARGS}} \
-          | go run ./saas/cmd/cli/internal/teamharness/matrix
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -timeout 40m -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./tests/teame2e/ {{.CLI_ARGS}} \
+          | go run ./tests/teame2e/teamharness/matrix
+
+  test:setupe2e:
+    desc: "Setup page e2e suite (tests/setupe2e, tag setupe2e): every valid machine shape (1764) through the real binary's HTTP API. Fails, never skips, when a world or the server cannot start. Narrow with SETUPE2E_ONLY=<text in the shape name>"
+    cmds:
+      - testlock task lore:test:setupe2e:run
+
+  test:setupe2e:run:
+    desc: "Body of lore:test:setupe2e WITHOUT the machine-wide test lock; call lore:test:setupe2e instead"
+    vars:
+      SETUPE2E_BIN: "{{.BIN_DIR}}/lore-setupe2e"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      # built once; every world runs this binary
+      - CGO_ENABLED=0 go build -o {{.SETUPE2E_BIN}} ./cmd/lore
+      # -count=1: the tests run the outside binary SETUPE2E_LORE, which the test cache does not track.
+      # -parallel 32, not the default 48 (GOMAXPROCS on a 48-core machine): measured 2026-11-07 back to back,
+      # 189 s at 32 vs 194 s at 48; each shape spawns lore processes, so more Go-level
+      # parallelism only adds load.
+      - SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel 32 -timeout 60m -run '^(TestAPIMatrix|TestPairwiseCoversEveryPair|TestShapeValidate)$' ./tests/setupe2e/
+
+  test:machines:
+    desc: "Real-machine suite (tests/machines, tag machines): homes shaped like real users' (fresh, v0.1.17, migrated with *.migrated backups, several gh accounts and ssh aliases with a key without .pub, org member, setups disabled/trashed/purged) and every valid 4-step setup lifecycle sequence on them, checking after each step that nothing purged or trashed is offered, disabled never applies, config check knows every key, doctor --all reports, and repo files are 0644 / ~/.lore owner-only. MACHINES_FULL=1 runs every sequence on every shape"
+    cmds:
+      - testlock task lore:test:machines:run
+
+  test:machines:run:
+    desc: "Body of lore:test:machines WITHOUT the machine-wide test lock; call lore:test:machines instead"
+    vars:
+      MACHINES_BIN: "{{.BIN_DIR}}/lore-machines"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -o {{.MACHINES_BIN}} ./cmd/lore
+      # -count=1: the tests run the outside binary MACHINES_LORE, which the test cache does not track.
+      - MACHINES_LORE={{.MACHINES_BIN}} go test -tags machines -count=1 -parallel 32 -timeout 20m ./tests/machines/ {{.CLI_ARGS}}
+
+  # The gate runs tests/machines as parallel parts (each its own binary name, each under ~3 min on
+  # an idle 48-core server) instead of one package run; test:machines:run stays the whole package for a
+  # manual run. The -run/-skip patterns together cover every test: core skips exactly what the
+  # other parts run.
+  test:machines:part:
+    desc: "One part of the tests/machines suite with its own binary (PART names it, FILTER is the go test -run/-skip); the parts below call it"
+    vars:
+      MACHINES_BIN: "{{.BIN_DIR}}/lore-machines-{{.PART}}"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - CGO_ENABLED=0 go build -o {{.MACHINES_BIN}} ./cmd/lore
+      - MACHINES_LORE={{.MACHINES_BIN}} go test -tags machines -count=1 -parallel 32 -timeout 20m {{.FILTER}} ./tests/machines/
+
+  test:machines:core:
+    desc: "tests/machines minus the sweep, life and REST parts: the shapes (built-in, links_*, env_*, foreign_*, repos_*), the 4-step setup sequences and the setup campaign"
+    cmds:
+      - task: test:machines:part
+        vars: {PART: core, FILTER: "-skip '^Test(Sweep(Tasks|Reads|Knowledge|Rows|CoversEveryCommand|CheckersBite|SkillLinkRule)|Life(Setups|SetupEditAgreement|Teams|Objects)|Rest(Lifecycle|TeamStoreURL))$'"}
+
+  test:machines:sweep:tasks:
+    desc: "Command sweep, task/mission/reminder lifecycles on every shape (answers right, disk right, doctor names what is left)"
+    cmds:
+      - task: test:machines:part
+        vars: {PART: sweep-tasks, FILTER: "-run '^TestSweepTasks$'"}
+
+  test:machines:sweep:rest:
+    desc: "Command sweep, reads + knowledge kinds + rows on every shape, plus the coverage check (every leaf command swept or listed with a reason) and the checkers' own break tests"
+    cmds:
+      - task: test:machines:part
+        vars: {PART: sweep-rest, FILTER: "-run '^TestSweep(Reads|Knowledge|Rows|CoversEveryCommand|CheckersBite|SkillLinkRule)$'"}
+
+  test:machines:life:setups:
+    desc: "Solo setup lifecycle through the binary on every shape (create, edit every step, rename, default, purge, re-add, import, edit, remove) and the check/apply name agreement for an existing setup"
+    cmds:
+      - task: test:machines:part
+        vars: {PART: life-setups, FILTER: "-run '^TestLife(Setups|SetupEditAgreement)$'"}
+
+  test:machines:life:teams:
+    desc: "Member and admin (start a team) setup lifecycles through the binary on every shape, against a local git server fake"
+    cmds:
+      - task: test:machines:part
+        vars: {PART: life-teams, FILTER: "-run '^TestLifeTeams$'"}
+
+  test:machines:life:objects:
+    desc: "Lifecycles of stores, skills, identity, personal store, machine label, live and row trash through the binary on every shape"
+    cmds:
+      - task: test:machines:part
+        vars: {PART: life-objects, FILTER: "-run '^TestLifeObjects$'"}
+
+  test:machines:life:rest:
+    desc: "Setup lifecycle through the setup page's REST API on every shape, checked against the CLI on the same home after each transition"
+    cmds:
+      - task: test:machines:part
+        vars: {PART: life-rest, FILTER: "-run '^TestRest(Lifecycle|TeamStoreURL)$'"}
+
+  test:journeys:
+    desc: "Real-user journey suite (tests/journeys, tag journeys): each persona lives with lore over weeks through the real binary (loretest build, LORE_NOW clock), and after every step the shared invariants run on every machine (readable output, doctor, config, file modes) plus the journey's own facts. How to add a persona, step or invariant: tests/journeys/README.md. JOURNEYS_STRICT=1 fails steps marked Pending on another branch. Extra go test flags after --"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: all, FILTER: "{{.CLI_ARGS}}"}
+
+  test:journeys:part:
+    desc: "One part of tests/journeys with its own binary (PART names it, FILTER is the go test -run); the gate's journey-* steps call it"
+    vars:
+      JOURNEYS_BIN: "{{.BIN_DIR}}/lore-journeys-{{.PART}}"
+    cmds:
+      - CGO_ENABLED=0 go build -tags loretest -o {{.JOURNEYS_BIN}} ./cmd/lore
+      - JOURNEYS_LORE={{.JOURNEYS_BIN}} go test -tags journeys -count=1 -parallel 16 -timeout 15m {{.FILTER}} ./tests/journeys/
+
+  test:journeys:frame:
+    desc: "Journey harness self-tests: a walk through every harness action, every shared invariant bites, Pending records"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: frame, FILTER: "-run '^TestFrame'"}
+
+  test:journeys:land:
+    desc: "Journeys of one landing round (tests/journeys/land*_test.go, tests named TestJourneyLand…): e.g. a person with many repos whose doctor --all stays in budget and light on git, and whose trivial commands start without git"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: land, FILTER: "-run '^TestJourneyLand'"}
+
+  test:journeys:solo:
+    desc: "Journey: Solo dev over six months: install, two repos, offline and interrupted pushes, rename and new email/account/key, moved repo and folder, new laptop and the old one again, upgrade, tool swap, a personal store with thousands of rows"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: solo, FILTER: "-run '^TestJourneySolo'"}
+
+  test:journeys:agency:
+    desc: "Journey: Agency dev: internal store plus client repos, no leak into a client repo, moved client repo, a client project ends, offboard and rejoin"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: agency, FILTER: "-run '^TestJourneyAgency'"}
+
+  test:journeys:teamlead:
+    desc: "Journey: Team lead: start a team, invite three, leave, rename, admin change, a week offline with unpushed work, two edits of one row, compact with unpushed work"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: teamlead, FILTER: "-run '^TestJourneyTeamLead'"}
+
+  test:journeys:joiner:
+    desc: "Journey: New joiner: invite on day 1 beside an existing personal setup (two setups, overlapping folders), later leaves job A"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: joiner, FILTER: "-run '^TestJourneyJoiner'"}
+
+  test:journeys:agents:
+    desc: "Journey: Coding agents: Claude Code and Codex sessions writing beside the human, a session ending mid-write, detection on/off, lore api beside the CLI"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: agents, FILTER: "-run '^TestJourneyAgents'"}
+
+  test:journeys:upgrader:
+    desc: "Journey: Upgrader from v0.1.17: old lore.db, hooks and config, migrate, old and new binaries on two machines for a week"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: upgrader, FILTER: "-run '^TestJourneyUpgrader'"}
+
 
   trial:github:
     desc: "MANUAL ONLY, never in CI or any automatic gate: the real-repo trial (docs/team/real-repo-trial.md). Needs two empty private repos you can push to, named by LORE_TRIAL_CLIENT_REMOTE and LORE_TRIAL_STORE_REMOTE; it deletes every ref of both (only when empty or carrying the trial's marker), builds lore from this checkout and runs every team step against them, then prints a pass/fail table"
     cmds:
       - tests/team/trial/run.sh
+
+  test:team:lockranks:
+    desc: "Team e2e suite with every test under the ranked lock watch (LORE_TEAM_LOCK_RANKS=1, FORMAT_EVOLUTION 7.5/7.8; Linux only): fails when any process takes a lock ranked before one it holds. Extra go test flags after --"
+    cmds:
+      - LORE_TEAM_LOCK_RANKS=1 task lore:test:team -- {{.CLI_ARGS}}
 
   test:team:race:
     desc: "Team e2e race tests repeated (default -count=5; override: task lore:test:team:race -- -count=10)"
@@ -200,8 +511,8 @@ tasks:
       TEAM_BIN: "{{.BIN_DIR}}/lore-team"
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./saas/cmd/cli
-      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -run 'Race' -count=5 ./saas/cmd/cli/ {{.CLI_ARGS}}
+      - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./cmd/lore
+      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -run 'Race' -count=5 ./tests/teame2e/ {{.CLI_ARGS}}
 
   docs:examples:
     desc: "Run every docs/team example against the real binary (tests/team/docs/run-examples.sh), then refresh the pages from the transcripts (paste.py); fails when an example misbehaves or a page is stale. One section: task lore:docs:examples -- agents"
@@ -215,7 +526,7 @@ tasks:
     cmds:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW, so transcripts are stable.
-      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./cmd/lore
       - LORE_BIN={{.DOCS_BIN}} tests/team/docs/run-examples.sh {{.CLI_ARGS}}
       - LORE_BIN={{.DOCS_BIN}} python3 tests/team/docs/paste.py
 
@@ -231,7 +542,7 @@ tasks:
     cmds:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW, so transcripts are stable.
-      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./cmd/lore
       - LORE_BIN={{.DOCS_BIN}} tests/docs/run-examples.sh {{.CLI_ARGS}}
       - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/paste.py
       - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/commands_index.py
@@ -242,92 +553,109 @@ tasks:
       DOCS_BIN: "{{.BIN_DIR}}/lore-docs"
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./saas/cmd/cli
+      - CGO_ENABLED=0 go build -tags loretest -o {{.DOCS_BIN}} ./cmd/lore
       - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/paste.py --check
       - LORE_BIN={{.DOCS_BIN}} python3 tests/docs/commands_index.py --check
 
-  bench:sync:
-    desc: "Sync performance: no-op pass, bootstrap and fresh-clone adopt at 1k/10k rows (numbers recorded in LORE_SYNC_SPEC.md)"
+  docs:examples:verify:
+    desc: "Re-run every docs example (tests/docs and tests/team/docs) against the real binary and fail when a transcript, a pasted page block or the commands index is stale. Changes no tracked file when the docs are current; when they are not, the fresh transcripts are left in place: refresh the pages with lore:docs:examples and lore:docs:examples:core and commit"
+    vars:
+      # its own name: lore:docs:examples(:core) build lore-docs, and lore:check runs this step
+      # beside other steps that must not rebuild a binary it is running
+      VERIFY_BIN: "{{.BIN_DIR}}/lore-docs-verify"
     cmds:
-      - go test ./saas/pkg/aicoder/lsync/ -run xxx -bench . -benchtime 3x
+      - mkdir -p {{.BIN_DIR}}
+      # loretest: the build tag under which the binary honours LORE_NOW, so transcripts are stable.
+      - CGO_ENABLED=0 go build -tags loretest -o {{.VERIFY_BIN}} ./cmd/lore
+      - LORE_BIN={{.VERIFY_BIN}} tests/docs/run-examples.sh
+      - LORE_BIN={{.VERIFY_BIN}} tests/team/docs/run-examples.sh
+      - |
+        if ! git diff --quiet -- tests/docs/transcripts tests/team/docs/transcripts; then
+          echo "✘ docs example transcripts changed when re-run:"
+          git diff --stat -- tests/docs/transcripts tests/team/docs/transcripts
+          exit 1
+        fi
+      - LORE_BIN={{.VERIFY_BIN}} python3 tests/docs/paste.py --check
+      - LORE_BIN={{.VERIFY_BIN}} python3 tests/team/docs/paste.py --check
+      - LORE_BIN={{.VERIFY_BIN}} python3 tests/docs/commands_index.py --check
+
+  bench:meta:
+    desc: "Metadata cache bench (METADATA 4, OQ6): generated store, rows x 20 keys; fails when first build, cache size or a warm two-filter search exceed the gate in metabench_test.go. ROWS=N overrides the row count"
+    vars:
+      ROWS: '{{.ROWS | default ""}}'
+    cmds:
+      - LORE_BENCH_META=1 {{if .ROWS}}LORE_BENCH_META_ROWS={{.ROWS}} {{end}}go test ./adapters/cache/sqlite/ -run '^TestMetaBench$' -v -timeout 60m
 
   test:cover:
-    desc: "Coverage of unit AND end-to-end tests (the e2e binary is built with -cover); lists functions no test reaches"
+    desc: "Coverage of the root module's tests; lists functions no test reaches"
     cmds:
       - |
         set -e
-        dir=$(mktemp -d)
-        unit=$(mktemp -d)
-        LORE_E2E_COVERDIR="$dir" go test -count=1 -cover -coverpkg=./saas/... ./saas/cmd/cli/... ./saas/pkg/aicoder/... -args -test.gocoverdir="$unit" >/dev/null
-        go tool covdata textfmt -i="$dir,$unit" -o coverage.out
+        # -count=1 kept: the run must write a fresh coverage profile; a cache replay writes none.
+        go test -count=1 -coverpkg=./... -coverprofile=coverage.out ./... >/dev/null
         go tool cover -func=coverage.out | tail -1
-        echo "functions no test reaches (lore CLI + sync packages):"
-        go tool cover -func=coverage.out | grep -E "saas/(cmd/cli|pkg/aicoder/(lsync|gitsetup|merge3|canonjson|guard|migrationlog))/" | awk '$NF == "0.0%"' || true
+        echo "functions no test reaches:"
+        go tool cover -func=coverage.out | awk '$NF == "0.0%"' || true
 
   build:cross:
-    desc: "Cross-compile the CLI for every shipped OS/arch (platform code must build everywhere, not just on the host)"
+    desc: "Cross-compile the release binary (./cmd/lore) for every shipped OS/arch (platform code must build everywhere, not just on the host)"
+    # the six targets build in parallel (each writes /dev/null, nothing shared)
+    deps:
+      - {task: build:cross:one, vars: {GOOS: linux, GOARCH: amd64}}
+      - {task: build:cross:one, vars: {GOOS: linux, GOARCH: arm64}}
+      - {task: build:cross:one, vars: {GOOS: darwin, GOARCH: arm64}}
+      - {task: build:cross:one, vars: {GOOS: darwin, GOARCH: amd64}}
+      - {task: build:cross:one, vars: {GOOS: windows, GOARCH: amd64}}
+      - {task: build:cross:one, vars: {GOOS: windows, GOARCH: arm64}}
+
+  build:cross:one:
+    desc: "Cross-compile ./cmd/lore for one GOOS/GOARCH (called by build:cross)"
+    internal: true
     cmds:
-      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
-      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
-      - CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
-      - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
-      - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./saas/cmd/cli
-      - CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o /dev/null ./saas/cmd/cli
+      - CGO_ENABLED=0 GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o /dev/null ./cmd/lore
 
   lint:
-    desc: "Static checks: vet + fmt + staticcheck + cross-OS build"
+    desc: "Static checks: vet + fmt + staticcheck + cross-OS build, in parallel"
+    deps: [build:cross, lint:vet, lint:fmt, lint:staticcheck]
+
+  lint:vet:
+    desc: "go vet on the root module and on the tagged end-to-end suites"
     cmds:
-      - task: build:cross
-      - go vet ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...
-      - 'test -z "$(gofmt -l ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/)" || (echo "gofmt failures:"; gofmt -l ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/; exit 1)'
-      - if which staticcheck > /dev/null; then staticcheck ./saas/cmd/cli/... ./saas/pkg/aicoder/... ./dbent/schema/...; else echo "staticcheck not installed; skipping"; fi
+      - go vet ./...
+      - go vet -tags teame2e ./tests/...
+      - go vet -tags setupe2e ./tests/setupe2e/...
+      - go vet -tags machines ./tests/machines/...
+      - go vet -tags journeys ./tests/journeys/...
+      - go vet -tags userscen ./tests/userscen/...
+
+  lint:fmt:
+    desc: "Fail when a Go file is not gofmt-formatted"
+    cmds:
+      - 'test -z "$(gofmt -l .)" || (echo "gofmt failures:"; gofmt -l .; exit 1)'
+
+  lint:staticcheck:
+    desc: "staticcheck on the root module (skipped with a note when it is not installed)"
+    cmds:
+      - if which staticcheck > /dev/null; then staticcheck ./...; else echo "staticcheck not installed; skipping"; fi
 
   fmt:
     desc: "Format code"
     cmds:
-      - gofmt -w ./saas/cmd/cli/ ./saas/pkg/aicoder/ ./dbent/schema/
-
-  schema:gen:
-    desc: "Regenerate ent code from schema (after editing dbent/schema/*.go)"
-    cmds:
-      # dbent/cmd/entg runs the entgql extension, which reads ../apidash/gqlgen.yml
-      # and writes ../apidash/internal/graph/schemas/ent.graphql. This repo has no
-      # apidash module, so when it is absent a throwaway one is created for the run
-      # and removed afterwards (also on failure). The gql_*.go files in dbent/gen
-      # come from the extension itself, not from that config.
-      - |
-        made=""
-        if [ ! -e apidash ]; then
-          made=1
-          mkdir -p apidash/internal/graph/schemas
-          printf 'schema:\n  - internal/graph/schemas/*.graphqls\n' > apidash/gqlgen.yml
-        fi
-        # task's shell has no reliable EXIT trap: capture the status, clean, re-raise.
-        rc=0
-        (cd dbent && go run ./cmd/entg .) || rc=$?
-        if [ -n "$made" ]; then rm -rf apidash; fi
-        exit $rc
-
-  schema:migrate:
-    desc: "Apply schema to SQLite DB"
-    cmds:
-      - cd dbent && go run ./cmd/migrate .
-
-  tui:gen:
-    desc: "Regenerate the enttui register glue (saas/pkg/aicoder/tuigen) after a dbent schema change"
-    cmds:
-      # Stage on the generated ent client; tuigen imports dbent/gen/ent.
-      - task: schema:gen
-      - go generate ./saas/pkg/aicoder/tuigen
+      - gofmt -w .
 
   tui:run:
-    desc: "Launch the lore TUI on the current .lore DB (flags after --, e.g. task lore:tui:run -- --kind task)"
+    desc: "Launch the lore TUI on the current project's stores (flags after --, e.g. task lore:tui:run -- --kind task)"
     cmds:
-      - CGO_ENABLED=0 go run ./saas/cmd/cli tui {{.CLI_ARGS}}
+      - CGO_ENABLED=0 go run ./cmd/lore tui {{.CLI_ARGS}}
 
   scenarios:
     desc: "Run all acceptance scenarios (tests/scenarios/SC-*.sh)"
     deps: [build]
+    cmds:
+      - task: scenarios:run
+
+  scenarios:run:
+    desc: "Body of lore:scenarios against the already built tmp/bin/lore (no rebuild; lore:check builds it once first)"
     cmds:
       - |
         if [ ! -d {{.TESTS_DIR}}/scenarios ]; then
@@ -356,6 +684,11 @@ tasks:
   chaos:
     desc: "Run FMEA chaos scenarios (tests/chaos/CH-*.sh) — slow"
     deps: [build]
+    cmds:
+      - task: chaos:run
+
+  chaos:run:
+    desc: "Body of lore:chaos against the already built tmp/bin/lore (no rebuild; lore:check builds it once first)"
     cmds:
       - |
         if [ ! -d {{.TESTS_DIR}}/chaos ]; then

@@ -1,0 +1,3 @@
+	if os.Getenv("LORE_READ_ONLY") == "1" {
+		return nil, errReadOnly
+	}

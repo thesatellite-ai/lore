@@ -1,0 +1,21 @@
+{
+  "_v": 2,
+  "big": 12345678901234567890,
+  "emoji": "😀\t\n",
+  "id": "mem_01936f2a7c4b7e1d8a3f5b6c7d8e9f00",
+  "list": [],
+  "n": 1.50,
+  "neg": -0.0e5,
+  "nested": {
+    "a": "\u2028xé",
+    "z": [
+      1,
+      {
+        "a": null,
+        "b": true
+      }
+    ]
+  },
+  "obj": {},
+  "title": "Checkout <needs> retry & 502"
+}

@@ -63,7 +63,7 @@ guard_remote store "$STORE_URL" || exit 2
 if [ -z "${LORE_BIN:-}" ]; then
   LORE_BIN="$T/bin/lore-build"
   echo "building lore from $REPO" >&2
-  (cd "$REPO" && CGO_ENABLED=0 go build -o "$LORE_BIN" ./saas/cmd/cli) || { echo "build failed" >&2; exit 2; }
+  (cd "$REPO" && CGO_ENABLED=0 go build -o "$LORE_BIN" ./cmd/lore) || { echo "build failed" >&2; exit 2; }
 fi
 # Hooks lore installs call plain `lore` from PATH: put the binary under test first.
 ln -sf "$LORE_BIN" "$T/bin/lore"

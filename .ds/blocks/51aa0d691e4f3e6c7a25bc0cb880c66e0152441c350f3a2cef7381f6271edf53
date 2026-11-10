@@ -1,0 +1,9 @@
+const (
+	StatusHealthy  = "healthy"
+	StatusDegraded = "degraded"
+	StatusBroken   = "broken"
+
+	exitHealthy  = 0
+	exitDegraded = 1
+	exitBroken   = 2
+)

@@ -1,0 +1,8 @@
+var recurrenceShift = map[string]struct{ y, m, d int }{
+	schema.Recurrence7d:  {0, 0, 7},
+	schema.Recurrence30d: {0, 0, 30},
+	schema.Recurrence1m:  {0, 1, 0},
+	schema.Recurrence3m:  {0, 3, 0},
+	schema.Recurrence6m:  {0, 6, 0},
+	schema.Recurrence1y:  {1, 0, 0},
+}

@@ -1,0 +1,94 @@
+
+### plan
+tomas$ lore setup plan --kind member | cut -c1-52
+steps:
+  ID              TITLE                             
+  kind            What kind of setup is this?       
+  identity        Who are you?                      
+  github          Which GitHub account?             
+  personal_store  Where do your own notes go?       
+  join            Join your team                    
+  tools           Which coding tools do you use?    
+  secrets         Where do you keep secrets?        
+  folders         Which folders is this setup for?  
+  this_folder     This folder                       
+  summary         Summary                           
+progress:
+  SETUP  STEP  ANSWERS  CHECKS  STATUS  UPDATED_AT
+tomas$ lore setup < /dev/null; echo "exit $?"
+exit 0
+
+### aliases
+tomas$ lore setup aliases
+aliases:
+  ALIAS       IDENTITY_FILE      KEY_MISSING  KEY_NEARBY  PUB_KEY  FINGERPRINT  NO_PUB  IDENTITIES_ONLY  LOGS_IN_AS  STATUS  DETAIL
+  github.com  ~/.ssh/id_ed25519  true                                           false   false            tomas-dev   ok      
+  gh-agency   ~/.ssh/id_agency   true                                           false   true             tomas-dev   ok      
+gh:
+  USER  ACTIVE
+route:
+  line: 
+
+### this folder
+tomas (work/agency/site)$ lore setup list | tail -1
+This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
+tomas (work/lab)$ lore setup list | tail -2
+active: agency (default: true)
+This folder: no org, no attached store, written as Tomas Weber <tomas@agency.example> — no setup matches (the default setup agency is for org agency, this repo is no org); lore setup offers a solo setup lab from this repo
+
+### tie
+tomas$ lore setup edit personal --folder '~/work/**'
+name: personal
+changed: true
+tomas$ lore setup edit agency --folder '~/work/**'
+ERROR: [E_SETUP_AMBIGUOUS] setup edit: --folder ~/work/** ties with personal ~/work/**
+  hint: make one folder glob more specific than the other setup's; nothing was saved, run lore setup edit agency again
+(exit 21)
+tomas (work/lab)$ lore task add 'renew the certificate'
+ERROR: [E_SETUP_AMBIGUOUS] ~/work/lab matches setups agency and personal equally; make one folder glob more specific (lore setup edit) or run with --setup
+  hint: lore setup edit agency --folder <a more specific glob>, or --setup agency
+(exit 21)
+tomas (work/lab)$ lore task list
+(no tasks)
+tomas$ lore setup edit agency --folder '~/work/agency/**'
+name: agency
+changed: true
+
+### unknown name
+tomas (work/agency/site)$ lore --setup nope task add 'check the sitemap'
+ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: agency, personal
+  hint: lore setup list
+(exit 27)
+tomas (work/agency/site)$ lore --setup nope task list
+ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: agency, personal
+  hint: lore setup list
+(exit 27)
+
+### no personal store
+tomas (work/agency/site)$ lore --setup personal memory add --to me --body 'Renew the domain in March.'
+ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit personal --personal-store <url>
+  hint: --to repo, --to <org store>, or lore setup edit personal --personal-store <url>
+(exit 20)
+
+### invite and join
+tomas (work/agency/site)$ lore team invite mira@agency.example
+✓ invite inv_7a670ae8548ed05bf57ad29ad0759504 written to store agency (expires 2026-11-16)
+Send this to mira@agency.example (it holds no secret):
+  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+mira$ lore setup join "$INVITE" --json | python3 -m json.tool | sed -n '/"invite": {/,/}/p'
+    "invite": {
+        "v": 1,
+        "id": "inv_7a670ae8548ed05bf57ad29ad0759504",
+        "org": "agency",
+        "store": "git@github.com:agency/notes",
+        "org_folder": "org",
+        "email": "mira@agency.example",
+        "by": "tomas@agency.example",
+        "expires": "2026-11-16"
+    },
+
+### fix
+tomas (work/agency/site)$ lore setup fix agency --check github.gh_account
+ERROR: [E_FIX_REFUSED] fix for github.gh_account refused: fix is not runnable; do it by hand: gh is optional; it only speeds up checks and lets lore offer 'create repo'. To add: gh auth login --hostname github.com
+  hint: run lore setup check to see the fix text and do it by hand
+(exit 20)

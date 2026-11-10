@@ -2,12 +2,12 @@
 # CH-10: Secret pasted into memory body refused, no row inserted
 # Catches: R16-12
 source "$(dirname "$0")/../lib/common.sh"
-need sqlite3
 mk_tmp; init_project ch10
 
-$LORE memory add --body "AKIAIOSFODNN7EXAMPLE/wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" 2>&1 | \
+$LORE memory add --body "AKIA""IOSFODNN7EXAMPLE/wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" 2>&1 | \
     grep -qE "E_SECRET_DETECTED|secret" || fail "AWS-pair secret not refused"
 
-COUNT=$(sqlite3 .lore/lore.db "SELECT COUNT(*) FROM memories")
-[ "$COUNT" -eq 0 ] || fail "secret leaked into DB ($COUNT rows)"
+COUNT=$(lore_count memories)
+[ "$COUNT" -eq 0 ] || fail "secret leaked into the store ($COUNT rows)"
+[ -z "$(find .lore/data -path '*/memories/*' -name '*.json' 2>/dev/null)" ] || fail "secret leaked into a row file"
 pass CH-10

@@ -37,16 +37,14 @@ A real task file, as lore wrote it (shortened):
 # carol, in app
 $ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only refs/lore/live | grep '_root/tasks/')
 {
+  "_hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe…28f2",
   "_live": {
-    "hlc": "2026-11-02T10:00:10.000Z/0000/act_54fe…28f2",
+    "hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe…28f2",
     "live_since": "2026-11-02T10:00:10Z"
-  …
-  "claim_epoch": 0,
   …
   "id": "tsk_7a67…9504",
   …
   "project_id": "prj_05e9…4603",
-  …
   "status": "todo",
   …
   "title": "fix header",
@@ -90,10 +88,8 @@ _live/epoch
 _live/meta.json
 _root/task_lists/tlt_162d…9666.json
 _root/tasks/tsk_7a67…9504.json
-web/rules/rul_2ad3…f891.json
 $ git log --oneline refs/lore/live
-86dbae4 lore: live 1 row (web)
-9b40ce7 lore: live 2 rows (_root)
+601d285 lore: live 2 rows (_root)
 ```
 <!-- /example -->
 
@@ -131,7 +127,7 @@ A **store** is a separate private repo that only your company can open, like a l
    refs/lore/signals/main             claims and leases
 ```
 
-Each folder in a store is a full lore project. It has branch data (on the store's `main`), live rows and signals, and the same landing rules. Lore keeps one bare clone of each store in `~/.lore/clones/` and never checks it out.
+Each folder in a store is a full lore project. It has branch data (on the store's `main`), live rows and signals, and the same landing rules. Lore keeps one clone of each store in `~/.lore/clones/`, in two sibling folders: `<repo>.git/` holds the git data and `<repo>/` holds the worktree lore reads and writes (`work/`) and its lock. They are one clone, not two copies; see [Troubleshooting](troubleshooting.md#two-clone-folders-for-one-store).
 
 A **link** ties a client repo to its internal project: "project `prj_…` at `github.com/client/website` belongs to `client/`". Someone at the agency makes it once with `lore org link agency --project client`. The link is saved **only in the store** (in `client/.lore/data/_meta.json`). So nothing is written to the client's repo, and everyone at the agency finds the link on their next command. Several repos can link to one project. That is a **group**: three client 2 repos, one `client2/` project.
 
@@ -158,11 +154,13 @@ If two entries match at the same rule, that is an error (`E_ORG_AMBIGUOUS`): lor
 $ lore whoami --explain
 org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
-repo       no org  (fallback identity, personal everywhere/ notes only)
+repo       no org  (fallback identity)
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
 project    prj_c0f3…b5b8
 remotes    github.com/someone/tool
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
-personal   local: everywhere/
+personal   me -> ~/.lore/personal
 org resolution (first rule that answers wins):
   ✗ 1. LORE_ORG         LORE_ORG is not set
   ✗ 2. lore org use     no `lore org use` choice for prj_c0f3…b5b8
@@ -183,6 +181,12 @@ The **repo role** decides which guards apply. A leak guard is a check that stops
 | **own repo** | matched by `own:`, or linked with `--own` | off |
 | **no org** | nothing matched | off; only your `everywhere/` personal notes load |
 
+## People: profiles and stints
+
+Each person on the roster can carry a **profile**: a title, a timezone, contacts (several emails, GitHub accounts, a phone, …), **company periods** (one per stint at the company, with its dates and company role) and **project memberships** (which projects they work on, since when, in which **roles**). A person has a **status**: `active`, `on_leave`, `left` or `archived`; left and archived people drop out of `--assign` and pickers, but their old rows keep their name. `lore actor offboard` and `lore actor rejoin` move someone out and back in, and the actor id never changes.
+
+Contacts marked as **identity contacts** tie every email and GitHub login of one person to one actor, so a second laptop with a personal git email never makes a second person. All of this lives only in the org's roster store; a client repo still sees a person as `{id, display_name, kind}`. Team profiles are in development for lore 0.1.18 and not released yet. See [Team profiles](profiles.md).
+
 ## Who sees what: the layers
 
 ```text
@@ -195,7 +199,7 @@ The **repo role** decides which guards apply. A leak guard is a check that stops
    --to me        --to agency           --to agency/org    --to repo
 ```
 
-`--to` picks **who** sees a row. `--live` picks **when**. The two are independent. In a client repo, a row written without `--to` goes to the org's default for its kind. By default, tasks and memories go to the linked internal project, and rules and decisions need a person at a terminal or an explicit `--to`. So forgetting a flag puts a note in the safe place. Moving a row to a wider audience is always one deliberate step: `lore share` shows the text, asks, and writes a new copy with a new id. A pointer (a row that names another row's id) never goes from a wider layer to a narrower one, because the pointer alone would show that the hidden row exists.
+`--to` picks **who** sees a row. `--live` picks **when**. The two are independent. In a client repo, a row written without `--to` goes to the org's default for its kind. By default, tasks and memories go to the linked internal project, and rules and decisions need a person at a terminal or an explicit `--to`. So forgetting a flag puts a note in the safe place. Moving a row to a wider audience is always one deliberate step: `lore move <id> --to <target>` shows the text, asks, and moves the row with the same id (a row has one home, so there is never a second copy). A pointer (a row that names another row's id) never goes from a wider layer to a narrower one, because the pointer alone would show that the hidden row exists.
 
 ## The fixed rules in plain words
 
@@ -220,3 +224,11 @@ The one rule behind all of them: **hidden is not private**. Anyone who can clone
 - **The fetch cache.** Lore fetches once per command and reuses that fetch for 60 seconds; `lore sync` always fetches.
 - **Gates need a person.** Any person on the roster may approve a gate; a mission's `approvers:` list can narrow that. An agent never can.
 - **Teams stay internal.** In a linked client repo, assigning a whole team is refused; assign a person.
+
+## Related
+
+- [Overview](overview.md): the whole picture in one diagram.
+- [How it works](how-it-works.md): the same ideas, as git operations.
+- [Getting started](getting-started.md): the concepts in a first run.
+- [Commands reference](commands.md).
+- [Team profiles](profiles.md): people, contacts, stints and project roles in detail.

@@ -11,7 +11,7 @@ Behind the box is an *index*: a list of every word and the rows it appears in, l
 ## Before you start
 
 - A repo with lore set up and a few rows: see [Your first project](first-project.md).
-- `lore setup` run once after you installed or upgraded lore (it builds the index).
+- Nothing to run first: lore builds the search index from `.lore/data` by itself, also after an upgrade (`lore search rebuild` forces a rebuild).
 
 ## Step 1 — Search everything
 
@@ -22,8 +22,8 @@ Give one or more words. Each hit shows its kind, its id, the matching text with 
 # alice, in website
 $ lore search payments
 Found 2 hits for "payments" across 2 entity types:
-[decision  ] dec_7a67…9504 We use Stripe for payments  (score=0.017)
-[memory    ] mem_2ad3…f891 Old payments page is gone  (score=0.017)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.017)
+memory    mem_2ad3…f891  Old payments page is gone  (score=0.017)
 ```
 <!-- /example -->
 
@@ -36,7 +36,7 @@ Found 2 hits for "payments" across 2 entity types:
 # alice, in website
 $ lore search payments --tables decision
 Found 1 hit for "payments" across 1 entity type:
-[decision  ] dec_7a67…9504 We use Stripe for payments  (score=0.017)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.017)
 $ lore decision search Stripe
 dec_7a67…9504 [accepted] We use Stripe for payments
 ```
@@ -55,8 +55,8 @@ $ lore search WhatsApp --json
   "kind": "search.global",
   "count": 1,
   "data": {
+    "query": "WhatsApp",
     "count": 1,
-    "external": [],
     "hits": [
       {
         "entity_table": "memories",
@@ -67,7 +67,7 @@ $ lore search WhatsApp --json
         "snippet": "The client replies faster on \u003cb\u003eWhatsApp\u003c/b\u003e than email"
       }
     ],
-    "query": "WhatsApp"
+    "external": []
   }
 }
 ```
@@ -84,7 +84,7 @@ $ lore search payments --tables memory
 (no matches)
 $ lore search payments --tables memory --include-archived
 Found 1 hit for "payments" across 1 entity type:
-[memory    ] mem_2ad3…f891 Old payments page is gone  (score=0.017)
+memory  mem_2ad3…f891  Old payments page is gone  (score=0.017)
 ```
 <!-- /example -->
 
@@ -94,7 +94,8 @@ A project can have several repos (see [Multi-repo projects](../sync/multi-repo-p
 
 | Flag | Shows |
 |---|---|
-| *(none)* or `--repo <name>` | that repo's rows plus the project-wide ones |
+| *(none)* | only project-wide rows, even inside one of the project's repos (a row added with `--repo`, `--scope repo` or `--scope dir:<path>` belongs to its repo and needs `--repo <name>` or `--all-repos`) |
+| `--repo <name>` | that repo's rows plus the project-wide ones |
 | `--repo <name> --no-inherit` | only that repo's rows |
 | `--master-only` | only project-wide rows |
 | `--all-repos` | every row of every repo |
@@ -104,13 +105,9 @@ A project can have several repos (see [Multi-repo projects](../sync/multi-repo-p
 # alice, in website
 $ lore repo add web --origin https://github.com/client/website
 ✓ repo web registered (rep_54fe…28f2)
-lore sync: exported 1
-lore sync: 6 file(s) in .lore/data not committed — commit them with your change
 $ lore memory add --repo web --body 'The web repo deploys on every merge to main'
-✓ mem_05e9…4603 
+✓ mem_05e9…4603
   scope: [repo:web]
-lore sync: exported 1
-lore sync: 7 file(s) in .lore/data not committed — commit them with your change
 $ lore memory list --repo web
 mem_162d…9666 [retrieved] The client replies faster on WhatsApp than email
 mem_05e9…4603 [retrieved] The web repo deploys on every merge to main
@@ -120,7 +117,7 @@ $ lore memory list --repo web --no-inherit
 mem_05e9…4603 [retrieved] The web repo deploys on every merge to main
 $ lore search deploys --all-repos
 Found 1 hit for "deploys" across 1 entity type:
-[memory    ] mem_05e9…4603 The web repo deploys on every merge to main  (score=0.017)
+memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.017)
 ```
 <!-- /example -->
 
@@ -133,21 +130,27 @@ Search matches whole words, upper or lower case alike. It does not match other f
 # alice, in website
 $ lore search invoice
 Found 2 hits for "invoice" across 2 entity types:
-[memory    ] mem_c0f3…b5b8 The client sends invoices on Fridays  (score=0.017)
-[task      ] tsk_76bd…3f10 Send the invoice reminder before Friday  (score=0.017)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
 $ lore search invoices
 Found 2 hits for "invoices" across 2 entity types:
-[memory    ] mem_c0f3…b5b8 The client sends invoices on Fridays  (score=0.017)
-[task      ] tsk_76bd…3f10 Send the invoice reminder before Friday  (score=0.017)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
 $ lore search 'invoi*'
 Found 2 hits for "invoi*" across 2 entity types:
-[memory    ] mem_c0f3…b5b8 The client sends invoices on Fridays  (score=0.017)
-[task      ] tsk_76bd…3f10 Send the invoice reminder before Friday  (score=0.017)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
 $ lore search 'client Fridays'
 Found 1 hit for "client Fridays" across 1 entity type:
-[memory    ] mem_c0f3…b5b8 The client sends invoices on Fridays  (score=0.017)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
 ```
 <!-- /example -->
+
+## Leave words out
+
+Put `-` in front of a word to drop the rows that hold it: `lore search "deploy -friday"` finds the rows about deploy that never mention friday. It works with a prefix (`-fri*`), a phrase (`-"on call"`), several words (`"deploy -friday -monday"`), a metadata condition (`"env:prod -friday"`) and `--include-deleted`. A `-` inside a word is part of the word: `well-known` and `x-ray` search for those words, and `-x-ray` leaves out the rows that hold `x-ray`.
+
+The query needs at least one word to search for: `lore search -- "-friday"` is refused with a hint. When the query's first word starts with `-`, put `--` before it, or the shell line reads it as a flag: `lore search -- "-friday deploy"`.
 
 ## Keep the index healthy
 
@@ -158,11 +161,11 @@ Found 1 hit for "client Fridays" across 1 entity type:
 # alice, in website
 $ lore search status
 ENTITY                 FTS_TABLE                   FTS   SOURCE STATUS
-architecturenote       architecturenote_fts          0        0 ✓ ok
-behaviour              behaviour_fts                 0        0 ✓ ok
-comment                comment_fts                   0        0 ✓ ok
-cookbookrecipe         cookbookrecipe_fts            0        0 ✓ ok
-decision               decision_fts                  1        1 ✓ ok
+architecturenote       _fts_architecture_notes        0        0 ✓ ok
+behaviour              _fts_behaviours               0        0 ✓ ok
+comment                _fts_comments                 0        0 ✓ ok
+cookbookrecipe         _fts_cookbook_recipes         0        0 ✓ ok
+decision               _fts_decisions                1        1 ✓ ok
 …
 ```
 <!-- /example -->
@@ -171,9 +174,10 @@ decision               decision_fts                  1        1 ✓ ok
 ```console
 # alice, in website
 $ lore search rebuild
-✓ rebuilt 23 entity FTS tables
+✓ rebuilt the search index of 2 stores (repo, machine)
 $ lore search rebuild --kind memory
-✓ rebuilt memory_fts
+note: the core rebuilds a store's whole cache; --kind memory included
+✓ rebuilt the search index of 2 stores (repo, machine)
 ```
 <!-- /example -->
 
@@ -181,22 +185,14 @@ $ lore search rebuild --kind memory
 
 - **No word forms.** `invoice` and `invoices` are different words to the index. Use `invoic*` when you are not sure.
 - **Quote what the shell would change.** `lore search 'invoi*'` with quotes; without them the shell may turn `*` into file names first.
-- <!-- ds:block id=search-defaults-87uy20io --> **Limits.** By default each kind gives at most 10 hits (`--per-table`) and the merged list stops at 20 (`--limit`). A common word in a big project can push the row you want off the list: add a second word or narrow with `--tables`.
+- <!-- ds:block id=search-defaults-z8rpj5sv --> **Limits.** By default each kind gives at most 10 hits (`--per-table`) and the merged list stops at 20 (`--limit`). A common word in a big project can push the row you want off the list: add a second word or narrow with `--tables`.
+- **Emoji are not searchable.** The index treats emoji and other symbols as spaces between words, so `lore search 😀` finds nothing; search for the words around it.
 - **"(no matches)" is not an error.** The command exits 0; check the words, or add `--include-archived` or `--all-repos`.
-- **`lore querylog list` stays empty.** The query log is meant to record past searches, but in this build nothing writes to it, so it always prints `(no querylogs)`.
-
-<!-- example: search#querylog -->
-```console
-# alice, in website
-$ lore querylog list
-(no querylogs)
-```
-<!-- /example -->
 
 ## Related
 
 - [Render and agent files](render-and-agent-files.md): what is pinned and what is left for search.
 - [Rules, memories and decisions](rules-memories-decisions.md)
 - [Multi-repo projects](../sync/multi-repo-projects.md): repos in one project.
-- [Backup, restore and repair](../operations/backup-restore-repair.md): rebuild the index after a restore.
+- [A damaged cache](../operations/backup-restore-repair.md): rebuild the cache and the search index.
 - [Knowledge guides index](README.md)

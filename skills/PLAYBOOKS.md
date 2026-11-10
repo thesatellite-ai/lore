@@ -12,14 +12,12 @@ The user said "let's start using lore here" or you detected `.lore/` is missing.
 
 ```bash
 cd ~/projects/my-app
-lore init --non-interactive            # creates .lore/lore.db
-lore learn-from docs                   # ingests existing CLAUDE.md/AGENTS.md/.cursorrules
-lore learn list --json                 # review what was extracted
-
-# Accept the good ones
-for id in $(lore learn list --json | jq -r '.data[].id'); do
-    lore learn promote "$id" --target=memories
-done
+lore init --non-interactive            # creates .lore/
+# Existing CLAUDE.md / AGENTS.md / .cursorrules: no importer in 0.1.18.
+# Read them and add each item that is still true with its own command:
+lore rule add --severity=must --body="<a hard rule>"
+lore decision add --title="<choice>" --body="<the choice and why>"
+lore memory add --body="<a fact>"
 
 lore render                            # writes .lore/LORE.md + @import pointer in CLAUDE.md
 ```
@@ -73,7 +71,7 @@ User: "ugh, ent regen wiped my resolver helpers AGAIN."
 lore hotfix add \
     --severity=high \
     --title="ent regen overwrites resolver/" \
-    --body="ent regen overwrites resolver/ files — keep helpers in internal/, lace/, or saas/pkg/"
+    --body="ent regen overwrites resolver/ files — keep helpers in internal/ or pkg/"
 lore render
 ```
 
@@ -101,9 +99,9 @@ lore memory add --body="Client charges in USD"
 lore memory add --body="All times in UTC"
 
 # Render per repo (each gets only its repo + master)
-cd web   && lore render --repo=web
-cd admin && lore render --repo=admin
-cd api   && lore render --repo=api
+(cd web   && lore render)   # render runs in the repo it renders
+(cd admin && lore render)
+(cd api   && lore render)
 ```
 
 Search defaults to "current repo + master". To search elsewhere:
@@ -116,24 +114,25 @@ lore memory search "" --no-inherit    # strict scope (no master fallback)
 
 ---
 
-## P6 — Shared DB across sibling projects (Mode B)
+## P6 — Notes shared by sibling projects (a store)
 
-Multiple unrelated repos sharing one `.db` file under `~/.lore/`.
+Several repos reading and writing one set of notes. (The v0.1.17 shared-database mode is retired; in a repo that still has its pointer, run `lore migrate run`.)
 
 ```bash
 # In repo A
 cd ~/projects/alpha
-lore project shared-init --db=${HOME}/.lore/shared.db --name=alpha
+lore store init shared "file://$HOME/stores/shared"
 
 # In repo B
 cd ~/projects/beta
-lore project shared-init --db=${HOME}/.lore/shared.db --name=beta
+lore store add shared "file://$HOME/stores/shared"
+lore rule add --to shared --body "Every change comes with a test"
 
 # Inspect
-lore project shared-list --db=${HOME}/.lore/shared.db --json
+lore store list --json
 ```
 
-Each project sees only its own rows (partitioned by `project_id`).
+Notes written `--to shared` show in every repo that attached the store; everything else stays in the repo's own `.lore/data`.
 
 ---
 
@@ -145,15 +144,15 @@ User: "everything's broken."
 # 1. Diagnose
 lore doctor --json | jq '.db_ok, .errors'
 
-# 2. Attempt automatic repair (tries WAL replay first, then latest backup)
-lore repair --tier=2 --confirm
+# 2. The cache is built from .lore/data: delete it, the next command rebuilds it
+rm -f .lore/lore-cache.db*
+lore doctor
 
-# 3. If that fails, last resort: bootstrap empty + re-learn from CLAUDE.md
-lore repair --tier=3 --confirm
-lore learn-from docs
+# 3. If .lore/data itself was deleted, git has it
+git checkout HEAD -- .lore/data
 ```
 
-`tier=2` succeeds whenever a backup exists in `.lore/backups/`. Backups are created on-demand via `lore backup`; you should run that before risky operations.
+Machine-local things (the audit log, sessions) live in `~/.lore/state/machine.db` and are not touched by a rebuild. Keep `.lore/data` committed and nothing shared can be lost.
 
 ---
 
@@ -201,10 +200,10 @@ lore reminder add "Re-evaluate SQLite choice" --due=2026-12-31 \
 
 ```bash
 lore render
-lore why-context --last-render --json | jq
+lore why-context --json | jq
 
 # Or see the rendered text itself
-lore why-context --last-render --rendered
+lore why-context --rendered
 ```
 
 Useful when the agent is "missing" context — verify the rule/memory is actually included.
@@ -215,12 +214,8 @@ Useful when the agent is "missing" context — verify the rule/memory is actuall
 
 ```bash
 lore init --non-interactive
-lore learn-from docs --paths='.cursorrules,AGENTS.md,CLAUDE.md,docs/conventions.md'
-lore learn list                        # review proposals
-# Accept all:
-for id in $(lore learn list --json | jq -r '.data[].id'); do
-    lore learn promote "$id" --target=memories
-done
+# Read .cursorrules, AGENTS.md, CLAUDE.md, docs/conventions.md section by section;
+# add each item that is still true (rule add / decision add / memory add / hotfix add)
 lore render                            # produces .lore/LORE.md + @import pointer in CLAUDE.md
 # Optionally: tell git to ignore the old sources, keep .lore/LORE.md as the canonical surface
 ```
@@ -263,15 +258,16 @@ lore memory list
 # 4. Alice opens her coding tool of choice — CLAUDE.md @imports the same .lore/LORE.md
 ```
 
-Shared knowledge lives in `.lore/data/` — one committed JSON file per row — and travels with the code: it follows branches, merges with PRs, and arrives on `git pull` (the post-merge hook imports it immediately). `.lore/lore.db` is a gitignored per-developer cache rebuilt from those files. Alice's captures are exported to `.lore/data/` as she makes them and reach the team when she commits and pushes them.
+Shared knowledge lives in `.lore/data/` — one committed JSON file per row — and travels with the code: it follows branches, merges with PRs, and arrives on `git pull` (the post-merge hook imports it immediately). `.lore/lore-cache.db` is a gitignored per-developer cache rebuilt from those files. Alice's captures are exported to `.lore/data/` as she makes them and reach the team when she commits and pushes them.
 
 ### P13b — Roll sync out to a team that already uses lore
 
-Each developer has an old, never-shared `lore.db`.
+Each developer has v0.1.17 data (an old `.lore/lore.db`, or `_v: 1` row files).
 
 ```bash
 # 1. One person, on main, after upgrading lore:
-lore memory list                      # first command: backs up lore.db, exports everything to .lore/data
+lore migrate run --dry-run            # what moves; then:
+lore migrate run                      # converts the v0.1.17 data (keeps a local backup ref; lore migrate rollback undoes it)
 git add .lore/data .gitattributes && git commit -m "lore: shared knowledge" && git push
 
 # 2. Everyone else, after upgrading:
@@ -279,7 +275,6 @@ git pull
 lore memory list                      # adopts .lore/data: switches to the shared project id,
                                       # imports teammates' rows, exports their private rows
 lore sync conflicts                   # rows both sides changed: the newer won, the other is here
-lore sync dupes                       # same fact recorded twice → lore sync merge-rows …
 git add .lore/data && git commit -m "lore: my knowledge"   # on their branch, merged via PR
 ```
 
@@ -315,14 +310,14 @@ Started as a soft fact; turns out the team really enforces it.
 
 ```bash
 # Find the memory
-M=$(lore memory search "stdlib errors" --json | jq -r '.results[0].id')
+M=$(lore memory search "stdlib errors" --json | jq -r '.data[0].id')
 
 # Capture the same content as a rule
 BODY=$(lore memory show $M --json | jq -r '.data.body')
 lore rule add --severity=must --body="$BODY"
 
 # Archive the original memory
-sqlite3 .lore/lore.db "UPDATE memories SET archived_at=datetime('now') WHERE id='$M'"
+lore memory archive "$M"
 
 lore render
 ```
@@ -338,7 +333,7 @@ R=$(lore rule list --json | jq -r '.data[] | select(.body | test("stdlib errors"
 BODY=$(lore rule show $R --json | jq -r '.data.body')
 
 lore memory add --body="(formerly rule) $BODY"
-sqlite3 .lore/lore.db "UPDATE rules SET archived_at=datetime('now') WHERE id='$R'"
+lore rule archive "$R"
 lore render
 ```
 
@@ -352,9 +347,8 @@ Run weekly:
 # 1. Health
 lore doctor --json | jq '.status'
 
-# 2. Backup
-lore backup
-ls -la .lore/backups/ | tail -3
+# 2. Shared knowledge committed?
+git status --porcelain -- .lore/data
 
 # 3. Are there active reminders due this week?
 lore reminder list --json | jq --arg until "$(date -v+7d +%Y-%m-%d)" '
@@ -401,7 +395,7 @@ lore audit log --limit 0 --json | jq '.data[] | select(.target_table == "rules" 
 lore audit verify
 ```
 
-Every change to a shared row is an entry: `<table>.write` (a lore command), `<table>.import` (arrived from teammates via .lore/data), `<table>.merge` (both sides edited), `<table>.external-write` (found in lore.db, not made by lore — e.g. sqlite3). Entries are hash-chained: editing or deleting one breaks `audit verify`. Run `audit verify` FIRST when investigating: any other lore command synchronises the DB and records outside changes as external writes.
+Every change lore makes on this machine is an entry (action `create`, `update`, `delete`, `purge`, or a `secret.*` action), with the row, the actor and the hashes before and after; the log lives in `~/.lore/state/machine.db`. Entries are hash-chained: editing or deleting one breaks `audit verify` (`E_AUDIT_CHAIN_BROKEN`). Changes that arrive from teammates through git are in `git log -- .lore/data`, not in this log.
 
 ---
 
@@ -411,7 +405,7 @@ When the rendered knowledge grows large and you want a focused view:
 
 ```bash
 # Per-repo render (that repo's rows + master)
-lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
+(cd web && lore render)   # each repo renders its own rows + master
 
 # Note: a plain `lore render` always includes project-master + project rows;
 # there is no master-only render flag. Use --repo to narrow to a repo slice.
@@ -424,19 +418,21 @@ lore render --repo=web --out=web/.lore/LORE.md --target=web/CLAUDE.md
 ## P20 — Migrate to a new lore version
 
 ```bash
-# 1. Backup current state
-lore backup
+# 1. Commit current state
+git status --porcelain -- .lore/data   # empty = everything is in git
 
-# 2. Check the new binary's schema vs the DB's schema
-lore version --json | jq '.schema_version'
-sqlite3 .lore/lore.db "SELECT MAX(version) FROM schema_migrations"
+# 2. Install the new binary
+lore upgrade                 # or brew / the install script
 
-# 3. If new binary expects a newer schema, run migration (auto on next open)
-lore doctor   # triggers auto-migrate
+# 3. Nothing else to run: the cache and search index rebuild themselves from
+#    .lore/data and the machine store updates when it is opened.
+#    Only a repo with v0.1.17 data needs one step:
+lore migrate status          # the row format of every place
+lore migrate run --dry-run && lore migrate run
 
 # 4. Verify
 lore doctor --json | jq '.status, .db_ok'
 lore render   # confirm output unchanged
 ```
 
-If the new binary expects an OLDER schema (downgrade), lore refuses with `E_SCHEMA_VERSION_MISMATCH`. Use the matching binary version OR restore from a backup taken with the old version.
+A binary below the project's `min_lore_version` (or one that does not know a format feature the project uses) refuses writes with `E_OLD_LORE` (reads still work): run `lore upgrade`. `lore setup` is optional (safe to repeat; `--agent-hooks` installs the coding tools' hooks).

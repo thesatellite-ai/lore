@@ -69,10 +69,14 @@ CFG
 }
 
 # envfor NAME: the environment one person's commands run with (no LORE_*/GIT_* leaks from the caller).
+# LORE_HUMAN=1: the person is a human at a terminal, so a run started from a coding-agent session
+# does not attribute every write to "<person> via <tool>" (agent detection walks the parent processes);
+# an agent example sets LORE_ACTOR, which wins over it.
+# LORE_NO_DETECT=1 (loretest builds only): agent detection sees nothing, so whoami lines do not depend on where the run starts.
 envfor() {
   local home="$HOMES/$1"
   echo env -i "HOME=$home" "PATH=$SHIM:/usr/local/bin:/usr/bin:/bin" "USER=$1" "TERM=dumb" "NO_COLOR=1" \
-    "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8"
+    "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8" "LORE_HUMAN=1" "LORE_NO_DETECT=1"
 }
 
 # TRANSCRIPT is the file `on` appends to; examples set it per page section.
@@ -84,8 +88,10 @@ FAILURES=0
 # The machine's real hostname (lore records it in claims) becomes the fictional "devbox".
 # Claim tokens are cut to the prefix lore itself prints (ct_7e165…): a full token in a
 # committed file looks like a credential to secret scanners, and readers never need it.
+# An invite line (lore-invite:v1:<base64 JSON>) is cut after 24 characters: its JSON holds the
+# random invite id, so the full line would differ on every run.
 clean() {
-  sed -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e "s#$HOMES/[a-z0-9-]*#~#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
+  sed -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e 's#\(lore-invite:v1:[A-Za-z0-9_-]\{24\}\)[A-Za-z0-9_=-]*#\1…#g' -e "s#$HOMES/[a-z0-9-]*#~#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
 }
 
 # _answer feeds a prompt its answer (ANSWER) after a pause, so the terminal shows the
@@ -159,6 +165,20 @@ on_known() {
   fi
 }
 on!() { _on fail "$@"; }
+# on_known_fail BUG NAME DIR CMD: an example that should FAIL (a refusal) but succeeds today
+# because of a reported bug; reported like on_known, and flagged once it refuses again.
+on_known_fail() {
+  local bug="$1"; shift
+  local before=$FAILURES
+  _on fail "$@" 2>/dev/null || true
+  if [ "$FAILURES" -gt "$before" ]; then
+    FAILURES=$before
+    KNOWN+=("$bug: $1 ($2) \$ $3")
+    printf 'KNOWN FAILURE (%s, expected a refusal): %s (%s) $ %s\n%s\n' "$bug" "$1" "$2" "$3" "$LAST_OUT" >&2
+  else
+    printf 'KNOWN FAILURE NOW PASSES (%s): remove on_known_fail from this example: %s\n' "$bug" "$3" >&2
+  fi
+}
 
 # quiet NAME DIR CMD: setup step, not shown in transcripts; fails the run on error.
 quiet() {

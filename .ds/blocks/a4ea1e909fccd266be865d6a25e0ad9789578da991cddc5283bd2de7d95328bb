@@ -1,0 +1,10 @@
+func ollamaHostOrDefault(h string) string {
+	if h != "" {
+		// OLLAMA_HOST may be bare host:port or full URL; normalize.
+		if !strings.HasPrefix(h, "http://") && !strings.HasPrefix(h, "https://") {
+			h = "http://" + h
+		}
+		return strings.TrimRight(h, "/")
+	}
+	return "http://localhost:11434"
+}

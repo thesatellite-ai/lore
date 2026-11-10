@@ -1,0 +1,321 @@
+
+### profile fields
+tomas (work/acme-hub)$ lore actor edit @mira --title 'Backend engineer' --timezone Europe/Istanbul --location 'Ankara, TR'
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (title, timezone, location) in <redacted>
+tomas (work/acme-hub)$ lore actor edit @mira --bio 'Payments and billing.' --photo-url https://example.com/mira.png
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in <redacted>
+tomas (work/acme-hub)$ lore actor edit @mira --clear photo_url,bio
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in <redacted>
+tomas (work/acme-hub)$ lore actor edit @mira --timezone 'Istanbul time'
+ERROR: [E_INVALID_INPUT] actor edit --timezone: "Istanbul time" is not an IANA zone name
+  hint: give an IANA zone name such as Europe/Istanbul or America/New_York
+(exit 20)
+
+### contacts
+tomas (work/acme-hub)$ lore actor contact add @mira email mira@agency.example --label work --primary --identity
+✓ acn_2ad3618e878ebbf527d34d446ef4f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in <redacted>
+tomas (work/acme-hub)$ lore actor contact add @mira email mira.patel@example.com --label personal --identity
+✓ acn_162df51b7f78b785c97c26b41ea89666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in <redacted>
+tomas (work/acme-hub)$ lore actor contact add @mira github mira-agency --label work --primary --identity
+✓ acn_54fe984c9b495744c0217776765a28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in <redacted>
+tomas (work/acme-hub)$ lore actor contact add @mira github mirap --label personal --identity
+✓ acn_05e99e22e9e86e96fe4daa7777994603 github mirap added for Mira Patel (@mira) [identity] in <redacted>
+tomas (work/acme-hub)$ lore actor contact add @mira phone '+90 532 000 0000' --label work --primary
+✓ acn_c0f3c11a5724b0cfd74b256190d9b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in <redacted>
+tomas (work/acme-hub)$ lore actor contact add @mira github mirap --label personal --identity
+· acn_05e99e22e9e86e96fe4daa7777994603 github mirap already there [identity] in <redacted>
+tomas (work/acme-hub)$ lore actor contact list --type phone
+acn_c0f3c11a5724b0cfd74b256190d9b5b8 Mira Patel (@mira)       phone     +90 532 000 0000             work       primary           tel:+905320000000
+tomas (work/acme-hub)$ lore actor contact add @mira phone 12 --label work
+ERROR: [E_CONTACT_TYPE] contact value: a phone number holds at least 7 digits (+90 532 000 0000)
+  hint: lore contact-type list shows each type's kind
+(exit 20)
+tomas (work/acme-hub)$ lore actor contact add @tomas github mirap --identity
+ERROR: [E_CONTACT_TAKEN] identity contact github:mirap already belongs to Mira Patel (@mira) act_7a670ae8548ed05bf57ad29ad0759504 (acn_05e99e22e9e86e96fe4daa7777994603)
+  hint: lore actor show github:mirap to see who has it; if it is on the wrong person, lore actor contact remove <acn_id> there
+(exit 23)
+tomas (work/acme-hub)$ lore actor show github:mirap
+act_7a670ae8548ed05bf57ad29ad0759504
+  kind:        human
+  display:     Mira Patel
+  stable_key:  human:mira@agency.example
+  title:       Backend engineer
+  timezone:    Europe/Istanbul
+  location:    Ankara, TR
+  contacts:    email    mira@agency.example  work  primary identity
+               email    mira.patel@example.com  personal  identity
+               github   mira-agency  work  primary identity
+               github   mirap  personal  identity
+               phone    +90 532 000 0000  work  primary
+  source:      agency/org (Mira Patel)
+  copies:      agency/org   source
+created 2026-11-02T10:00:00Z by act_7a670ae8548ed05bf57ad29ad0759504 · updated 2026-11-02T10:00:00Z by act_76bd560aff0771fab8457dbfa9823f10
+
+### contact edit and remove
+tomas (work/acme-hub)$ lore actor contact add @mira linkedin mira-patel --label work
+✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel added for Mira Patel (@mira) [primary] in <redacted>
+tomas (work/acme-hub)$ lore actor contact edit acn_d4314eba822f1bf5908b2b8ded5f313a --note 'old profile, not updated'
+✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel edited for Mira Patel (@mira) [primary] in <redacted>
+tomas (work/acme-hub)$ lore actor contact remove acn_d4314eba822f1bf5908b2b8ded5f313a --reason 'account closed'
+✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel removed from Mira Patel (@mira) in <redacted> (restorable from the trash)
+tomas (work/acme-hub)$ lore actor contact list @mira --identity
+acn_2ad3618e878ebbf527d34d446ef4f891 Mira Patel (@mira)       email     mira@agency.example          work       primary, identity mailto:mira@agency.example
+acn_162df51b7f78b785c97c26b41ea89666 Mira Patel (@mira)       email     mira.patel@example.com       personal   identity          mailto:mira.patel@example.com
+acn_54fe984c9b495744c0217776765a28f2 Mira Patel (@mira)       github    mira-agency                  work       primary, identity https://github.com/mira-agency
+acn_05e99e22e9e86e96fe4daa7777994603 Mira Patel (@mira)       github    mirap                        personal   identity          https://github.com/mirap
+
+### contact types
+tomas (work/acme-hub)$ lore contact-type add bitbucket --kind handle --identity --url-template 'https://bitbucket.org/{value}'
+✓ contact type bitbucket added in <redacted>
+tomas (work/acme-hub)$ lore contact-type edit github --label GitHub
+✓ contact type github edited in <redacted>
+tomas (work/acme-hub)$ lore contact-type list
+github       handle  identity  changed   GitHub       https://github.com/{value}
+gitlab       handle  identity  built-in  GitLab       https://gitlab.com/{value}
+email        email   identity  built-in  Email        mailto:{value}
+phone        phone   -         built-in  Phone        tel:{value}
+linkedin     handle  -         built-in  LinkedIn     https://www.linkedin.com/in/{value}
+x            handle  -         built-in  X            https://x.com/{value}
+slack        text    -         built-in  Slack
+discord      text    -         built-in  Discord
+website      url     -         built-in  Website      {value}
+bitbucket    handle  identity  added     -            https://bitbucket.org/{value}
+tomas (work/acme-hub)$ lore contact-type add email --kind email
+ERROR: [E_NAME_TAKEN] contact type email is already in the list (built-in)
+  hint: lore contact-type edit email
+(exit 23)
+
+### periods
+tomas (work/acme-hub)$ lore actor period add @mira --type employee --started-on 2026-01-12 --org-role 'Senior engineer'
+✓ period apd_b4f4765e593d51fd1352985e8af3a5b0 of Mira Patel (@mira) added: 2026-01-12 → now  employee  Senior engineer
+  it replaces the stint read from the roster (active/left_at)
+tomas (work/acme-hub)$ lore actor period list @mira
+act_7a670ae8548ed05bf57ad29ad0759504  Mira Patel (@mira)  active
+  apd_b4f4765e593d51fd1352985e8af3a5b0  2026-01-12 → now  employee  Senior engineer
+tomas (work/acme-hub)$ lore actor period add @mira --type contractor --started-on 2026-02-01
+ERROR: [E_PERIOD_OVERLAP] period 2026-01-12 → now is still open while 2026-02-01 → now starts after it
+  hint: lore actor period list <actor> shows the stints; pick a date after the last end
+(exit 23)
+
+### roles
+tomas (work/acme-hub)$ lore role add tech_writer --label 'Technical writer'
+✓ role tech_writer added in <redacted>
+tomas (work/acme-hub)$ lore role list
+lead  Lead — leads the project
+dev  Developer — writes the code
+designer  Designer — designs the product
+qa  QA — tests the product
+pm  Project manager — runs the project
+reviewer  Reviewer — reviews changes
+client  Client — the client's own person on the project
+tech_writer  Technical writer
+tomas (work/acme-hub)$ lore project member add acme-hub @mira --role wizard
+ERROR: [E_ROLE_UNKNOWN] not a live role: wizard (unknown)
+  hint: lore role list; lore role add <name>
+(exit 20)
+tomas (work/acme-hub)$ lore role edit tech_writer --description 'writes the user docs'
+✓ role tech_writer updated in <redacted>
+tomas (work/acme-hub)$ lore role edit qa --retire
+✓ role qa updated in <redacted>
+
+### members
+tomas (work/acme-hub)$ lore project member add acme-hub @mira --role dev,reviewer
+✓ @mira added to acme-hub as dev, reviewer from 2026-01-12 (pmb_28f8d32584b2db54ffb146bede5b03df)
+tomas (work/northwind-app)$ lore project member add northwind-app @mira --role lead
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/northwind-app/.git/hooks)
+✓ @mira added to northwind-app as lead from 2026-03-01 (pmb_4c590afb2a0cc7ae1b97b7e4e62d6c38)
+tomas (work/acme-hub)$ lore project member add acme-hub @tomas --role lead
+✓ @tomas added to acme-hub as lead from 2026-03-01 (pmb_3b6283bc4392c556bbae5f094246e913)
+tomas (work/acme-hub)$ lore project member list acme-hub
+@mira  dev, reviewer  since 2026-01-12
+@tomas  lead  since 2026-03-01
+tomas (work/acme-hub)$ lore actor show @mira
+act_7a670ae8548ed05bf57ad29ad0759504
+  kind:        human
+  display:     Mira Patel
+  stable_key:  human:mira@agency.example
+  title:       Backend engineer
+  timezone:    Europe/Istanbul
+  location:    Ankara, TR
+  contacts:    email    mira@agency.example  work  primary identity
+               email    mira.patel@example.com  personal  identity
+               github   mira-agency  work  primary identity
+               github   mirap  personal  identity
+               phone    +90 532 000 0000  work  primary
+  periods:     2026-01-12 → now  employee  Senior engineer
+  projects:    acme-hub  dev, reviewer  since 2026-01-12
+               prj_f147dd95f1aaf742dd4f5214843a5139  lead  since 2026-03-01
+  source:      agency/org (Mira Patel)
+  copies:      agency/org   source
+created 2026-11-02T10:00:00Z by act_7a670ae8548ed05bf57ad29ad0759504 · updated 2026-11-02T10:00:00Z by act_76bd560aff0771fab8457dbfa9823f10
+
+### member edit and remove
+tomas (work/acme-hub)$ lore project member edit acme-hub @tomas --role lead,pm
+✓ @tomas on acme-hub: roles now lead, pm
+tomas (work/northwind-app)$ lore project member add northwind-app @tomas --role reviewer
+✓ @tomas added to northwind-app as reviewer from 2026-03-01 (pmb_2537f9b2f7de77bfe5ca958860216bbb)
+tomas (work/northwind-app)$ lore project member remove northwind-app @tomas --reason 'Mira reviews her own project now'
+✓ @tomas removed from northwind-app on 2026-03-01 (Mira reviews her own project now; history kept)
+tomas (work/northwind-app)$ lore project member remove northwind-app @tomas
+ERROR: [E_NOT_FOUND] @tomas is not a member of northwind-app
+  hint: lore project member list northwind-app --history
+(exit 27)
+tomas (work/northwind-app)$ lore project member list northwind-app --history
+@mira  lead  since 2026-03-01
+@tomas  reviewer  2026-03-01 → 2026-03-01 (Mira reviews her own project now)
+
+### status
+tomas (work/acme-hub)$ lore actor status @mira on_leave --from 2026-06-01 --until 2026-06-30
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel (@mira): active → on_leave (2026-06-01 → 2026-06-30)
+tomas (work/acme-hub)$ lore actor list
+act_b69e8368dd4986838455061d5d9e5ed7 [human] carol                                    repo
+act_76bd560aff0771fab8457dbfa9823f10 [human] Tomas Weber                              agency/org
+act_7a670ae8548ed05bf57ad29ad0759504 [human] Mira Patel  (on_leave until 2026-06-30)  agency/org
+3 actors across 2 stores
+tomas (work/acme-hub)$ lore actor status @mira active
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel (@mira): on_leave → active
+tomas (work/acme-hub)$ lore actor status @mira left
+ERROR: [E_STATUS_CHANGE] Mira Patel (@mira) is active; leaving ends their stint and project memberships
+  hint: lore actor offboard @mira
+(exit 23)
+
+### offboard
+tomas (work/acme-hub)$ lore task add 'move the invoice export to the new API' --to agency --assign @mira
+✓ tsk_0aaebe6aca5bb46cc521869f5ba2a61f — move the invoice export to the new API [medium] → [agency/acme-hub]
+tomas (work/acme-hub)$ lore actor offboard @mira --reason 'moved abroad'
+ERROR: [E_NEEDS_CONFIRM] offboard Mira Patel (@mira) (act_7a670ae8548ed05bf57ad29ad0759504) on 2026-09-30:
+  period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
+  projects   acme-hub (dev, reviewer) ends 2026-09-30
+             prj_f147dd95f1aaf742dd4f5214843a5139 (lead) ends 2026-09-30
+  open tasks tsk_0aaebe6aca5bb46cc521869f5ba2a61f  "move the invoice export to the new API"  agency  lead  reassign: lore task edit tsk_0aaebe6aca5bb46cc521869f5ba2a61f --assign @<someone>
+  agents     (none)
+  status     active → left
+  hint: ask the person, then rerun with --yes
+(exit 26)
+tomas (work/acme-hub)$ lore actor offboard @mira --reason 'moved abroad' --yes
+offboard Mira Patel (@mira) (act_7a670ae8548ed05bf57ad29ad0759504) on 2026-09-30:
+  period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
+  projects   acme-hub (dev, reviewer) ends 2026-09-30
+             prj_f147dd95f1aaf742dd4f5214843a5139 (lead) ends 2026-09-30
+  open tasks tsk_0aaebe6aca5bb46cc521869f5ba2a61f  "move the invoice export to the new API"  agency  lead  reassign: lore task edit tsk_0aaebe6aca5bb46cc521869f5ba2a61f --assign @<someone>
+  agents     (none)
+  status     active → left
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel (@mira) offboarded on 2026-09-30 (2 memberships ended, 0 agents inactive, 1 open tasks listed above)
+tomas (work/acme-hub)$ lore actor list
+act_b69e8368dd4986838455061d5d9e5ed7 [human] carol               repo
+act_76bd560aff0771fab8457dbfa9823f10 [human] Tomas Weber         me, agency, agency/org
+act_7a670ae8548ed05bf57ad29ad0759504 [human] Mira Patel  (left)  agency/org
+3 actors across 4 stores
+tomas (work/acme-hub)$ lore task add 'review the refund flow' --to agency --assign @mira
+ERROR: [E_NOT_FOUND] no person or team with handle @mira
+  hint: they run `lore actor register` in a repo of the org, then `lore sync` here
+(exit 27)
+tomas (work/acme-hub)$ lore actor status @mira archived
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel (@mira): left → archived
+tomas (work/acme-hub)$ lore actor list --archived
+act_b69e8368dd4986838455061d5d9e5ed7 [human] carol                   repo
+act_76bd560aff0771fab8457dbfa9823f10 [human] Tomas Weber             me, agency, agency/org
+act_7a670ae8548ed05bf57ad29ad0759504 [human] Mira Patel  (archived)  agency/org
+3 actors across 4 stores
+
+### rejoin
+tomas (work/acme-hub)$ lore actor rejoin @mira --type contractor --org-role 'Contract engineer' --yes
+rejoin Mira Patel (@mira) (act_7a670ae8548ed05bf57ad29ad0759504) on 2026-11-02:
+  period     2026-11-02 → now  contractor  Contract engineer
+  projects   acme-hub (dev, reviewer): lore project member add acme-hub act_7a670ae8548ed05bf57ad29ad0759504 --role dev,reviewer
+             prj_f147dd95f1aaf742dd4f5214843a5139 (lead): lore project member add prj_f147dd95f1aaf742dd4f5214843a5139 act_7a670ae8548ed05bf57ad29ad0759504 --role lead
+             memberships are not restored (TP-16)
+  status     archived → active
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel (@mira) rejoined on 2026-11-02 as contractor
+tomas (work/acme-hub)$ lore project member add acme-hub @mira --role reviewer
+✓ @mira added to acme-hub as reviewer from 2026-11-02 (pmb_6a866bb99ce08addfe04ea845052ed8c)
+tomas (work/acme-hub)$ lore project member list acme-hub --history
+@mira  dev, reviewer  2026-01-12 → 2026-09-30 (offboarded)
+@mira  reviewer  since 2026-11-02
+@tomas  lead, pm  since 2026-03-01
+tomas (work/acme-hub)$ lore actor period list @mira
+act_7a670ae8548ed05bf57ad29ad0759504  Mira Patel (@mira)  active
+  apd_b4f4765e593d51fd1352985e8af3a5b0  2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
+  apd_4f89f5fcb1d81152bdf3f52979ebb64b  2026-11-02 → now  contractor  Contract engineer
+
+### whole year
+tomas (work/acme-hub)$ lore actor show @mira
+act_7a670ae8548ed05bf57ad29ad0759504
+  kind:        human
+  display:     Mira Patel
+  stable_key:  human:mira@agency.example
+  title:       Backend engineer
+  timezone:    Europe/Istanbul
+  location:    Ankara, TR
+  contacts:    email    mira@agency.example  work  primary identity
+               email    mira.patel@example.com  personal  identity
+               github   mira-agency  work  primary identity
+               github   mirap  personal  identity
+               phone    +90 532 000 0000  work  primary
+  periods:     2026-01-12 → 2026-09-30  employee  Senior engineer
+               2026-11-02 → now  contractor  Contract engineer
+  projects:    acme-hub  reviewer  since 2026-11-02
+               acme-hub  dev, reviewer  2026-01-12 → 2026-09-30
+               prj_f147dd95f1aaf742dd4f5214843a5139  lead  2026-03-01 → 2026-09-30
+  source:      agency/org (Mira Patel)
+  copies:      agency/org   source
+created 2026-11-02T10:00:00Z by act_7a670ae8548ed05bf57ad29ad0759504 · updated 2026-11-02T10:00:00Z by act_76bd560aff0771fab8457dbfa9823f10
+tomas (work/acme-hub)$ lore project member list --actor @mira --history
+acme-hub  @mira  dev, reviewer  2026-01-12 → 2026-09-30 (offboarded)
+acme-hub  @mira  reviewer  since 2026-11-02
+prj_f147dd95f1aaf742dd4f5214843a5139  @mira  lead  2026-03-01 → 2026-09-30 (offboarded)
+
+### org create and rename
+ana (work/handbook)$ lore store init acme git@github.com:acme/lore-notes --yes
+lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/handbook/.git/hooks)
+✓ created store acme (sto_77cb2df809cef85479f6587c4a7d76c4) at git@github.com:acme/lore-notes; recorded in .lore/stores.yaml; commit it to share
+ana (work/handbook)$ lore org create acme --store acme --own 'github.com/acme/*' --key human:ana@acme.example --name 'Ana Lima' --handle ana --yes
+This writes org/.lore/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:
+
+    name: acme
+    identity:
+        key: human:ana@acme.example
+        name: Ana Lima
+        handle: ana
+    stores:
+        - url: git@github.com:acme/lore-notes
+          org_folder: org
+    own:
+        - github.com/acme/*
+
+✓ wrote org/.lore/lore-org.yaml (pushed)
+✓ added org entry acme
+✓ act_d191616cfa49f94ede5d5148b8b045c2 Ana Lima (@ana) registered in <redacted>
+  teammates join with: lore org import git@github.com:acme/lore-notes --key human:<their email> --name "Their Name"
+  tie a client repo to it (written only into the store): lore org link acme --project <folder>
+ana (work/handbook)$ lore org rename acme acme-studio
+✓ org entry acme is now acme-studio (this machine)
+  id prj_b4d3d8fc9a019dca1371ad55c6a611aa recorded (the org folder's project id; it never changes)
+  rows are unchanged; store rows that name the old label (routing.client_repos) and other machines keep it until edited there
+  written to ~/.lore/config.yaml
+ana (work/handbook)$ lore whoami
+org        acme-studio  (matched by: own pattern github.com/acme/* of acme-studio)
+identity   Ana Lima <human:ana@acme.example>   act_d191616cfa49f94ede5d5148b8b045c2  @ana  (from: org entry (config.yaml orgs[acme-studio].identity))
+repo       own repo  (no client guards)
+machine    mch_017941fe
+agent      none  (no coding agent detected)
+project    (no .lore/data/_meta.json here)
+remotes    github.com/acme/handbook
+stores     <redacted> on branch main  (org folder <redacted>)
+links      known  no project id here yet, so no store link can name this repo
+personal   not set
+
+### machines
+tomas (work/acme-hub)$ lore machine label 'office desktop'
+✓ machine mch_017941fe labelled "office desktop"
+tomas (work/acme-hub)$ lore machine list | cut -c1-38
+ID            LABEL           HOST    
+mch_017941fe  office desktop  devbox  
+tomas (work/acme-hub)$ lore machine show mch_017941fe | grep -e '^mch_' -e 'label:' -e 'host:' -e 'runtime:' -e 'last_write:'
+mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff
+  label:     office desktop
+  host:      devbox
+  runtime:   bare
+  last_write: 2026-11-02T10:00:00.000000001Z
+tomas (work/acme-hub)$ lore machine label ''
+✓ machine mch_017941fe label cleared

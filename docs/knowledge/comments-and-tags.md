@@ -20,10 +20,10 @@ Both point at a row by its *table* (the kind of row, in the plural: `rules`, `me
 <!-- example: knowledge#comment only=1 -->
 ```console
 # alice, in website
-$ lore comment add --on-table decisions --on-id dec_c0f3…b5b8 --body 'The client confirmed this on the call.'
-✓ comment cmt_67e2…291e on decisions/dec_c0f3…b5b8 
+$ lore comment add --on-table decisions --on-id dec_d431…313a --body 'The client confirmed this on the call.'
+✓ comment cmt_78c8…5b6c on decisions/dec_d431…313a 
 lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+lore live: landed on main (86dbae4); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -37,25 +37,49 @@ Create the tag with `lore tag add --name`, then attach it. Tag names are lowerca
 ```console
 # alice, in website
 $ lore tag add --name payments
-✓ tag payments tag_8567…366f
-lore sync: exported 1
-lore sync: 23 file(s) in .lore/data not committed — commit them with your change
-$ lore tag attach --tag payments --on-table decisions --on-id dec_c0f3…b5b8
-✓ tag "payments" attached to decisions/dec_c0f3…b5b8
-lore sync: exported 1
-lore sync: 24 file(s) in .lore/data not committed — commit them with your change
+✓ tag payments tag_d7c7…7fe6
+$ lore tag attach --tag payments --on-table decisions --on-id dec_d431…313a
+✓ tag "payments" attached to decisions/dec_d431…313a
 $ lore tag list
-payments             tag_8567…366f  (1 uses)
-$ lore tag detach --tag payments --on-table decisions --on-id dec_c0f3…b5b8
+payments             tag_d7c7…7fe6  (1 uses)
+staging              tag_c0f3…b5b8  (1 uses)
+$ lore tag detach --tag payments --on-table decisions --on-id dec_d431…313a
 ✓ detached 1 tag binding(s)
-lore sync: removed files 1
-lore sync: 23 file(s) in .lore/data not committed — commit them with your change
 ```
 <!-- /example -->
 
 `(1 uses)` counts the rows that carry the tag. `lore tag detach` takes the label off again; the tag itself stays, ready to be used again.
 
-`lore memory add --tag staging` is something else: it stores the word `staging` on that memory only. It does not create a `lore tag`, and `lore tag list` does not count it.
+## Step 3 — Search and delete comments
+
+`lore comment search <words>` searches the text of every comment. `lore comment delete <id> --yes` moves a comment to the trash; `lore trash restore <id>` brings it back.
+
+<!-- example: knowledge#comment only=3,4 -->
+```console
+# alice, in website
+$ lore comment search confirmed
+cmt_78c8…5b6c [decisions/dec_d431…313a] The client confirmed this on the call.
+$ lore comment delete cmt_78c8…5b6c --yes
+✓ cmt_78c8…5b6c moved to the trash (restore: lore trash restore cmt_78c8…5b6c)
+lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
+```
+<!-- /example -->
+
+## Step 4 — Rename a tag or give it files
+
+`lore tag edit <tag>` changes a tag's `--name`, `--color` (`#RRGGBB`) or `--globs`, the files the topic covers (comma separated; `-` clears it). Tagged rows keep the tag, because they point at its id, not its name. You can name the tag by its name or its `tag_` id.
+
+<!-- example: knowledge#tag-edit -->
+```console
+# alice, in website
+$ lore tag edit payments --name billing --color '#1f6feb' --globs 'src/checkout/**'
+✓ tag billing tag_d7c7…7fe6 (globs src/checkout/**)
+$ lore tag list
+billing              tag_d7c7…7fe6  (0 uses)
+staging              tag_c0f3…b5b8  (1 uses)
+```
+<!-- /example -->
 
 ## Try it: read the comments on a row
 
@@ -64,14 +88,14 @@ lore sync: 23 file(s) in .lore/data not committed — commit them with your chan
 <!-- example: knowledge#comment only=2 -->
 ```console
 # alice, in website
-$ lore comment list --on-table decisions --on-id dec_c0f3…b5b8
-cmt_67e2…291e on decisions/dec_c0f3…b5b8  The client confirmed this on the call.
+$ lore comment list --on-table decisions --on-id dec_d431…313a
+cmt_78c8…5b6c on decisions/dec_d431…313a  The client confirmed this on the call.
 ```
 <!-- /example -->
 
 ## Pitfalls
 
-- **The table name is plural.** `--on-table decisions`, not `decision`. The names are the ones `lore tables` prints.
+- **The table name is plural.** `--on-table decisions`, not `decision`. The names are the folder names under `.lore/data`.
 - **A comment goes to main at once.** Because comments are live and count as finished on write, lore lands them on main without waiting for your next commit (see the `landed on main` line above). Write comments as if the whole team can read them immediately, because it can.
 - **Tags belong to one project.** A tag made in one repo's project does not exist in another; create it there too.
 - **Two kinds of tag.** `memory add --tag` writes a label on the memory itself; `lore tag` makes a shared label any row can carry. Use `lore tag attach` when you want `lore tag list` to see it. In the example on this page, the memory tagged `staging` while it was added does not appear in `lore tag list`.

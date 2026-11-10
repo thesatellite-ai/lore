@@ -26,7 +26,7 @@ bin/
 
 # Other
 /uploads/
-trash
+/trash
 
 # fm
 logs/*
@@ -34,7 +34,6 @@ logs/*
 tmp/
 
 ignore.md
-saas/cmd/test
 
 .github/.secrets
 .github/.secrets.**
@@ -73,3 +72,4 @@ dist/
 /CONTEXT.md
 /docsi
 # END repolink
+/cli

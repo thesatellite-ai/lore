@@ -4,7 +4,7 @@
 
 ## What it is and when you want it
 
-Think of `.lore/data` as a card box that lives inside the repo: one card (file) per note. The database `.lore/lore.db` is a fast index of that box that stays on your machine and is never committed. Because the cards are ordinary files:
+Think of `.lore/data` as a card box that lives inside the repo: one card (file) per note. The cache `.lore/lore-cache.db` is a fast index of that box that stays on your machine and is never committed. Because the cards are ordinary files:
 
 - a note written on a branch stays on that branch until the branch merges, like the code it belongs to;
 - a pull request shows new and changed notes in its diff;
@@ -21,34 +21,37 @@ You want this page when you set up lore in a repo that other people also use, or
 
 ## Step 1 — Set up lore and commit what it wrote
 
-`lore init` creates the database, the `.lore/data` folder with the first rows (the project and you), and a few lines in `.gitignore` and `.gitattributes`. It also sets up git hooks (small scripts git runs on its own, for example just before a commit) and a merge driver (a small helper git calls to combine two edits of the same note). Both are described in [Hooks and the merge driver](hooks-and-merge-driver.md).
+`lore init` creates the `.lore/data` folder with the first rows (the project, this repo and you), a local cache that lore rebuilds from those files whenever it needs to, a pointer file for your coding tool (here `AGENTS.md`, since no setup picked a tool and the repo had no tool file; saved as the `context.targets` setting), and a few lines in `.gitignore` and `.gitattributes`. It also sets up git hooks (small scripts git runs on its own, for example just before a commit) and a merge driver (a small helper git calls to combine two edits of the same note). Both are described in [Hooks and the merge driver](hooks-and-merge-driver.md).
 
 <!-- example: sync#init -->
 ```console
 # alice, in website
 $ lore init --non-interactive --name=website
-✓ lore initialized at ~/work/website
+lore initialized
     project_id: prj_7a67…9504
     name:       website
-    origin:     https://github.com/client/website
-    db:         ~/work/website/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
-  next: lore learn-from docs   to bootstrap from existing markdown
-lore sync: exported 2 rows to .lore/data — review and commit it
+    repo_id:    rep_2ad3…f891
+· context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
+✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
+  next: lore render            to write .lore/LORE.md for those tools
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
 ?? .lore/
+?? AGENTS.md
 $ ls .lore .lore/data
 .lore:
-backups
 data
-lore.db
+lock
+lore-cache.db
 state
 .lore/data:
 _meta.json
 actors
+policies
 projects
+repos
 $ cat .gitattributes
 # >>> lore-sync >>>
 .lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
@@ -59,8 +62,8 @@ $ git add -A && git commit -qm 'lore: init' && git push -q origin main
 ```
 <!-- /example -->
 
-<!-- ds:block id=sync-datanames-nhh4krj2 -->
-`.lore/data` has one folder per kind of row (`rules`, `memories`, `projects`, ...) and one file per row, named after the row's id. `_meta.json` says which project the data belongs to. Commit everything `lore init` wrote; `.lore/lore.db`, `.lore/state` and `.lore/backups` are already in `.gitignore`.
+<!-- ds:block id=sync-datanames-dgnn2vn8 -->
+`.lore/data` has one folder per kind of row (`rules`, `memories`, `projects`, ...) and one file per row, named after the row's id. `_meta.json` says which project the data belongs to. Commit everything `lore init` wrote; the local cache (`.lore/lore-cache.db`), the lock file, `.lore/state`, and a v0.1.17 `.lore/lore.db` are already in `.gitignore`.
 
 ## Step 2 — Write a note and commit it with your change
 
@@ -70,44 +73,47 @@ Add a rule. lore writes the row file at once and reminds you that it is not comm
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
-✓ rul_2ad3…f891 
+✓ rul_162d…9666
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 1 file(s) in .lore/data not committed — commit them with your change
 $ git status --short
 ?? .lore/data/rules/
-$ cat .lore/data/rules/rul_2ad3…f891.json
+$ cat .lore/data/rules/rul_162d…9666.json
 {
+  "_hlc": "2026-11-02T10:00:30.000Z/0000/act_54fe…28f2",
+  "_o": {
+    "cmd": "rule add",
+    "git": {
+      "branch": "main",
+      "commit": "601d2850ffd0",
+      "state": "branch"
+    },
+    "project": "prj_7a67…9504",
+    "repo": "rep_2ad3…f891",
+    "store": "repo"
+  },
   "_table": "rules",
-  "_v": 1,
+  "_v": 2,
+  "_w": {
+    "v": "dev"
+  },
   "activation": "always",
-  "applies_to_description": null,
-  "archived_at": null,
   "body": "Run the tests before you push.",
-  "confidence": null,
   "created_at": "2026-11-02T10:00:00.000000001Z",
-  "created_by_actor_id": "act_162d…9666",
-  "globs": null,
-  "id": "rul_2ad3…f891",
-  "last_validated_at": null,
+  "created_by": "act_54fe…28f2",
+  "created_by_actor_id": "act_54fe…28f2",
+  "id": "rul_162d…9666",
   "project_id": "prj_7a67…9504",
-  "repo_id": null,
   "severity": "must",
   "source_kind": "manual",
-  "source_ref": null,
-  "superseded_by_id": null,
   "trust_score": 0.5,
-  "updated_at": "2026-11-02T10:00:00.000000002Z"
+  "updated_at": "2026-11-02T10:00:00.000000001Z",
+  "updated_by": "act_54fe…28f2"
 }
 $ lore sync status
-baselined:        true
-data dir present: true
-tracked files:    3
-pending exports:  0
-open conflicts:   0
-trash rows:       0
-uncommitted:      1
+meta quarantined: 0
 live rows:        0 (_root)
+conflicted files: 0
+refused pushes:   0
 $ git add -A && git commit -qm 'lore: test rule' && git push -q origin main
 ```
 <!-- /example -->
@@ -116,7 +122,7 @@ The file is plain JSON with sorted keys, one per line, so a diff shows exactly w
 
 ## Step 3 — A teammate clones the repo
 
-Bob (another agency developer) clones the repo. There is no `lore.db` in a fresh clone, so his first lore command builds it from `.lore/data`, and the rule is there:
+Bob (another agency developer) clones the repo. There is no `lore-cache.db` in a fresh clone, so his first lore command builds it from `.lore/data`, and the rule is there:
 
 <!-- example: sync#teammate-clone -->
 ```console
@@ -125,7 +131,7 @@ $ git clone -q https://github.com/client/website
 
 # bob, in website
 $ lore rule list
-rul_2ad3…f891 [must/always] Run the tests before you push.
+rul_162d…9666 [must/always] Run the tests before you push.
 ```
 <!-- /example -->
 
@@ -141,14 +147,10 @@ From now on, `git pull`, `git checkout`, `git merge` and `git rebase` just chang
 $ lore sync
 · already in sync
 $ lore sync status
-baselined:        true
-data dir present: true
-tracked files:    3
-pending exports:  0
-open conflicts:   0
-trash rows:       0
-uncommitted:      0
+meta quarantined: 0
 live rows:        0 (_root)
+conflicted files: 0
+refused pushes:   0
 ```
 <!-- /example -->
 
@@ -156,26 +158,27 @@ live rows:        0 (_root)
 |---|---|
 | `pending exports` | rows changed in the database that are not written to files yet (normally 0: the pass after each command writes them) |
 | `open conflicts` | rows where the file and the database both changed; see [Conflicts and duplicates](conflicts-and-duplicates.md) |
-| `trash rows` | rows removed because their file disappeared; see [Trash, export and purge](trash-and-purge.md) |
+| `trash rows` | rows removed because their file disappeared; see [Trash, restore from git and purge](trash-and-purge.md) |
 | `uncommitted` | files in `.lore/data` that git has not committed yet |
 | `live rows` | rows on the live list (tasks and other live rows, see [Lore for teams](../team/README.md)) |
 
 ## Try it — turn sync off for one command
 
-<!-- ds:block id=sync-env-qmha7pjc -->
-Four environment variables (settings you put in front of a command, like `LORE_SYNC=0 lore ...`) change what a pass does. `LORE_SYNC=0` turns syncing off for that command: the database changes, but no file is written. `LORE_SYNC_GIT=0` keeps syncing files but never touches git settings, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` hides the `lore sync:` progress lines (errors still print). `LORE_SYNC_ALLOW_SECRETS=1` writes a row to a file even when its text looks like a password or key, for that one run; the value will then be committed.
+<!-- ds:block id=sync-env-pe9vvf3f -->
+Three environment variables (settings you put in front of a command, like `LORE_SYNC=0 lore ...`) change what a pass does. `LORE_SYNC=0` turns live rows off for that command (like `LORE_LIVE=0`) and stops lore updating the version pin in `.github/workflows/lore-sync-merge.yml`; the note file is still written, because since 0.1.18 the files are where lore keeps notes. `LORE_SYNC_GIT=0` keeps syncing files but never touches git settings, `.gitattributes` or hooks. `LORE_SYNC_QUIET=1` hides the `lore sync:` progress lines (errors still print). `LORE_SYNC_ALLOW_SECRETS` was removed in 0.1.18: lore ignores it and `lore doctor` warns while it is still set.
 
-Here Alice adds a memory with sync off. A memory is something worth remembering, like "the client replies faster on WhatsApp than email". Nothing shows in git until the next normal command (here `lore sync`) writes the file:
+Here Alice adds a memory with sync off. A memory is something worth remembering, like "the client replies faster on WhatsApp than email". The file is in `.lore/data` at once, so `git status` shows it and the next `lore sync` has nothing left to do:
 
 <!-- example: sync#sync-off -->
 ```console
 # alice, in website
 $ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
-✓ mem_54fe…28f2 
+✓ mem_05e9…4603
   scope: [master]
 $ git status --short
+?? .lore/data/memories/
 $ lore sync
-lore sync: exported 1
+· already in sync
 $ git status --short
 ?? .lore/data/memories/
 $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin main
@@ -188,12 +191,10 @@ $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin mai
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
-✓ rul_54fe…28f2 
+✓ rul_05e9…4603
   scope: [master] severity: must
-lore sync: exported 1
-lore sync: 3 file(s) in .lore/data not committed — commit them with your change
 $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
-✓ mem_05e9…4603 
+✓ mem_c0f3…b5b8
   scope: [master]
 ```
 <!-- /example -->
@@ -204,14 +205,14 @@ $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsAp
 ```console
 # alice, in shop
 $ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
-✓ lore initialized at ~/work/shop
-    project_id: prj_c0f3…b5b8
+lore initialized
+    project_id: prj_76bd…3f10
     name:       shop
-    origin:     https://github.com/client/shop
-    db:         ~/work/shop/.lore/lore.db
-    identity:   human:alice@agency.example (git config)
-  next: lore learn-from docs   to bootstrap from existing markdown
-lore sync: exported 2 rows to .lore/data — review and commit it
+    repo_id:    rep_d431…313a
+· context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
+✓ ~/work/shop/AGENTS.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
+  next: lore render            to write .lore/LORE.md for those tools
 $ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)
 $ lore sync
@@ -232,34 +233,29 @@ pre-push
 ```
 <!-- /example -->
 
-A row that looks like a password is kept out of `.lore/data` even when `--allow-secrets` let it into the database; `LORE_SYNC_ALLOW_SECRETS=1` writes it for one run, and the next commit would share it:
+Text that looks like a password stops `lore memory add` with a question; a bare `--yes` does not answer it. `--not-a-secret --reason "<why>" --yes` stores the row as not a secret (`--secret-ref` and `--secret-unstored` are the other answers), so its file is in `.lore/data` at once. lore's commit hook still checks every file: such a row commits with its `secret_allows` entry (the value reaches git, as you chose), and any other file that holds a credential pattern is refused (the `''` inside `pass''word` below only keeps this page from tripping that hook; the shell joins the two halves into one word before lore sees it):
 
-<!-- example: environment#sync-allow-secrets -->
+<!-- example: environment#not-a-secret -->
 ```console
 # alice, in website
-$ lore memory add --allow-secrets --body 'The staging password is password=example-only'
-✓ mem_76bd…3f10 
+$ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
+✓ mem_b4f4…a5b0
   scope: [master]
-lore sync: secret-detected memories/mem_76bd…3f10.json: credential pattern password_pair found — not written to git; edit the row or set LORE_SYNC_ALLOW_SECRETS=1 for one run
-$ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
-0
-$ LORE_SYNC_ALLOW_SECRETS=1 lore sync
-lore sync: exported 1
-$ ls .lore/data/memories | grep -c mem_76bd…3f10 || true
+$ ls .lore/data/memories | grep -c mem_b4f4…a5b0 || true
 1
 ```
 <!-- /example -->
 
-The database remembers which rows still need a file, so a row written with sync off, or by another tool that changed `lore.db` directly, is never lost: the next pass writes it out.
+The database remembers which rows still need a file, so a row written with sync off, or by another tool that changed `lore-cache.db` directly, is never lost: the next pass writes it out.
 
 ## Pitfalls
 
 - **Forgetting to commit `.lore/data`.** A note that is only on your machine is not shared. Every command that writes a row file prints `N file(s) in .lore/data not committed`; `lore sync status` always shows the count. Commit the files with your change.
-- **Deleting `.lore/data` by mistake.** lore leaves the database alone and tells you; `lore sync export --all` writes every file again. See [Trash, export and purge](trash-and-purge.md#step-2--rebuild-loredata-from-the-database).
+- **Deleting `.lore/data` by mistake.** lore leaves the database alone and tells you; `git checkout HEAD -- .lore/data` brings the files back. See [Trash, restore from git and purge](trash-and-purge.md#step-2--get-back-a-deleted-loredata).
 - **Editing a row file by hand.** It works (the next pass reads it in), but a broken file (bad JSON, conflict markers) is skipped and reported on every command until you fix it, and the pre-commit hook refuses to commit it.
-- <!-- ds:block id=sync-maxfilesize-zk9m2syn --> **Very large rows.** A row file larger than 4 MiB is refused on read and reported, never imported. Keep long logs out of notes.
-- <!-- ds:block id=sync-locktimeout-rh9uf4cq --> **Two lore commands at once** (for example two agents in one repo) take turns. Each one puts a lock on the database, like a "busy" sign on a door. A pass waits up to 15 seconds for the other one's lock, then gives up with an error. Run the command again.
-- **One database per working folder.** Each clone and each git worktree (a second working folder of the same repo) has its own `lore.db`; they share notes only through the committed files.
+- <!-- ds:block id=sync-maxfilesize-8up39v74 --> **Very large rows.** A row file larger than 4 MiB is refused on read and reported, never imported. Keep long logs out of notes.
+- <!-- ds:block id=sync-locktimeout-yztbqwrs --> **Two lore commands at once** (for example two agents in one repo) take turns. A write takes the store lock (`.lore/lock`), like a "busy" sign on a door. It waits up to 10 seconds for the other one's lock (`store.lock_timeout` in `~/.lore/config.yaml`), then gives up with `E_STORE_LOCKED`. Run the command again.
+- **One database per working folder.** Each clone and each git worktree (a second working folder of the same repo) has its own `lore-cache.db`; they share notes only through the committed files.
 
 ## Related
 

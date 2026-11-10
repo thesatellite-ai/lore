@@ -12,7 +12,10 @@ Times are already stable: run-examples.sh runs every section on the test clock.
 Hex ids that are the same object printed at different lengths (a commit as 7, 8 and 40
 characters; a 64-character fingerprint and its 12-character prefix) get one stand-in,
 cut to each length, so they still read as one object. A run of digits followed by
-" bytes" is a size, not an id, and is left alone.
+" bytes" is a size, not an id, and is left alone. Row ids printed short (an 8-hex prefix
+`act_055c2238`, or `sal_…4e57` with the last four) get their full id's stand-in cut the
+same way. Machine ids (mch_ + 64 hex) depend on the host that runs the examples, so they
+get stand-ins too, and so does the wall-clock date in a skill backup name.
 """
 
 import hashlib
@@ -23,13 +26,22 @@ import sys
 #   row ids (tsk_ + 32 hex), claim tokens (ct_ + 5 hex, cut by lib.sh),
 #   agent sessions (s- + 8 hex), git object ids (7–40 hex with a digit and a letter).
 TOKEN = re.compile(
-    r"\b(?P<row>[a-z]{2,4})_(?P<rowhex>[0-9a-f]{32})\b"
+    r"\b(?P<row>[a-z]{2,4})_(?P<rowhex>[0-9a-f]{32}|[0-9a-f]{64})\b"
     r"|\bct_(?P<ct>[0-9a-f]{5})"
     r"|\bs-(?P<sess>[0-9a-f]{8})\b"
     # git object ids and fingerprints: 7–64 hex digits standing alone between spaces,
-    # brackets, commas or a tab ("[branch sha]" too); dates, times and paths never match.
-    r"|(?:(?<=^)|(?<=[\s(,\[]))(?P<sha>[0-9a-f]{7,64})(?=$|[\s),;:…\]])"
+    # brackets, commas or a tab ("[branch sha]" too), or as a whole JSON string (the
+    # provenance "git": {"commit": "…"} of a row file: the commit's tree holds random
+    # row ids, so its sha differs on every run); dates, times and paths never match.
+    r'|(?:(?<=^)|(?<=[\s(,\["]))(?P<sha>[0-9a-f]{7,64})(?=$|[\s),;:…\]"])'
 )
+# A row or machine id printed short: its first 8 hex (`act_055c2238`, `mch_fac0df3a`) or
+# an ellipsis and its last 4 (`sal_…4e57`). Mapped after the full ids, so a short id on
+# the same transcript as its full id gets the full id's stand-in, cut the same way.
+SHORT_ID = re.compile(r"\b(?P<p>[a-z]{2,4})_(?:(?P<head>[0-9a-f]{8})|…(?P<tail>[0-9a-f]{4}))\b")
+# `lore skill install` names a hand-edited SKILL.md copy with the wall-clock date
+# (ops/skill/install.go uses time.Now, not LORE_NOW): one fixed stand-in, the test-clock day.
+SKILL_BAK = re.compile(r"\.bak-2\d{3}-\d\d-\d\d(?:-\d{6})?\b")
 # Wall-clock times lore records with nanoseconds (created_at / updated_at of a row):
 # the test clock does not reach them, so each distinct one gets a stable stand-in.
 NANOTIME = re.compile(r"\b2\d{3}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6,9}Z")
@@ -49,6 +61,8 @@ SHA256 = re.compile(r"\b[0-9a-f]{64}\b")
 # test clock); `lore restore` / `lore repair` name the set-aside database file with one.
 AUDIT_TIME = re.compile(r"(?m)^2\d{3}-\d\d-\d\dT\d\d:\d\d:\d\dZ(?=  [a-z_]+\.)")
 BROKEN_DB = re.compile(r"lore\.db\.broken\.\d{8}-\d{6}")
+# The wall-clock stamp in the name a damaged cache is moved aside under (lore-cache.db.corrupt-<UTC>).
+CORRUPT_CACHE = re.compile(r"lore-cache\.db\.corrupt-\d{8}T\d{6}Z")
 # Digits right before " bytes" are a size (`lore backup` prints "(1441792 bytes)").
 SIZE_AFTER = re.compile(r" bytes\b")
 # `lore search` hits with the same score: lore orders ties by row id, which is random,
@@ -141,7 +155,9 @@ def main(path: str) -> None:
 
     def repl(m: re.Match) -> str:
         if m.group("row"):
-            kind, value, prefix = "row", m.group("rowhex"), m.group("row") + "_"
+            # 64 hex is a machine id (mch_…): its own counter, so row stand-ins keep their order.
+            kind = "row" if len(m.group("rowhex")) == 32 else "row64"
+            value, prefix = m.group("rowhex"), m.group("row") + "_"
         elif m.group("ct"):
             kind, value, prefix = "ct", m.group("ct"), "ct_"
         elif m.group("sess"):
@@ -156,10 +172,31 @@ def main(path: str) -> None:
             seen[key] = stand_in(kind, counts[kind], len(value))
         return prefix + seen[key]
 
+    def short_repl(m: re.Match) -> str:
+        # The full id this short form names: same kind, matching head or tail. When none
+        # (or more than one) is on the transcript, the short form gets a stand-in of its own.
+        p, head, tail = m.group("p"), m.group("head"), m.group("tail")
+        part = head or tail
+        fulls = [(k, v) for (k, v) in seen if k in ("row", "row64") and full_prefix.get(v) == p
+                 and (v.startswith(part) if head else v.endswith(part))]
+        if len(fulls) == 1:
+            full = seen[fulls[0]]
+        else:
+            key = ("short", p + "_" + ("" if head else "…") + part)
+            if key not in seen:
+                counts["short"] = counts.get("short", 0) + 1
+                seen[key] = stand_in("short", counts["short"], 64)
+            full = seen[key]
+        return f"{p}_{full[:8]}" if head else f"{p}_…{full[-4:]}"
+
     text = open(path, encoding="utf-8").read()
+    # The prefix (tsk, act, mch, …) each full id was printed with, for short_repl.
+    full_prefix = {m.group("rowhex"): m.group("row") for m in TOKEN.finditer(text) if m.group("row")}
     text = "\n".join(sort_hits(sort_ties(text.split("\n"))))
     sha_map = hex_stand_ins(text)
     text = TOKEN.sub(lambda m: repl(m), text)
+    text = SHORT_ID.sub(lambda m: short_repl(m), text)
+    text = SKILL_BAK.sub(".bak-2026-11-02", text)
     times: dict[str, str] = {}
     text = NANOTIME.sub(lambda m: times.setdefault(m.group(0), f"2026-11-02T10:00:00.{len(times) + 1:09d}Z"), text)
     rtimes: dict[str, str] = {}
@@ -174,6 +211,7 @@ def main(path: str) -> None:
     text = AUDIT_TIME.sub("2026-11-02T10:00:00Z", text)
     broken: dict[str, str] = {}
     text = BROKEN_DB.sub(lambda m: broken.setdefault(m.group(0), f"lore.db.broken.20261102-1000{len(broken):02d}"), text)
+    text = CORRUPT_CACHE.sub("lore-cache.db.corrupt-20261102T100000Z", text)
     text = BACKUP.sub("20261102-100000.000000000-pre-sync", text)
     text = TRACE_TIME.sub(lambda m: m.group(1) + "<time>" + m.group(2), text)
     text = HOME_PATH.sub("~", text)

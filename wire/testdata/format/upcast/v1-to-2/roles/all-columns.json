@@ -1,0 +1,13 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "roles",
+  "_v": 2,
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "description": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "id": "rol_01a1a59b891c70b78914000000000022",
+  "label": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "name": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "retired": true,
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

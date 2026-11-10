@@ -25,16 +25,17 @@ Pass `--commitment` when you add the task. Neither task shows up in `lore task l
 ```console
 # alice, in website
 $ lore task add 'Try a dark mode for the shop' --commitment someday
-✓ tsk_3b62…e913 — Try a dark mode for the shop [medium]
+✓ tsk_f147…5139 — Try a dark mode for the shop [medium]
 lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
 $ lore task add 'Add a FAQ page' --commitment proposed
-✓ tsk_f147…5139 — Add a FAQ page [medium]
+✓ tsk_2537…6bbb — Add a FAQ page [medium]
 lore live: (live, pushed)
 $ lore task list
 ▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
-○ tsk_c0f3…b5b8 Write the welcome email [medium]
-○ tsk_76bd…3f10 Send the welcome email [medium]
-○ tsk_b4f4…a5b0 Check every link on the home page [medium]
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
 ```
 <!-- /example -->
 
@@ -46,9 +47,9 @@ $ lore task list
 ```console
 # alice, in website
 $ lore task triage
-○ tsk_f147…5139 Add a FAQ page [medium] (proposed)
+○ tsk_2537…6bbb Add a FAQ page [medium] (proposed)
 $ lore task someday
-○ tsk_3b62…e913 Try a dark mode for the shop [medium] (someday)
+○ tsk_f147…5139 Try a dark mode for the shop [medium] (someday)
 ```
 <!-- /example -->
 
@@ -59,15 +60,58 @@ To accept a proposal, change its commitment with `lore task edit`. It now shows 
 <!-- example: tasks#accept -->
 ```console
 # alice, in website
-$ lore task edit tsk_f147…5139 --commitment accepted
-✓ tsk_f147…5139 updated
+$ lore task edit tsk_2537…6bbb --commitment accepted
+✓ tsk_2537…6bbb updated
 lore live: (live, pushed)
 $ lore task triage
 (no tasks)
 ```
 <!-- /example -->
 
-To say no, cancel it with `lore task cancel` (see [Tasks › Step 8](tasks.md#step-8--cancel-or-delete-a-task)).
+The shorter way is `lore task accept`, which sets the commitment to `accepted` and can set `--priority` and `--mission` in the same step. To say no, `lore task decline` cancels the task with a close reason (`--reason wont_do` by default; also `duplicate`, `obsolete`, `stale`, `cancelled`) and keeps `--note` as a comment on the task, so the reason for the no is not lost:
+
+<!-- example: tasks#accept-and-decline -->
+```console
+# alice, in website
+$ lore task add 'Add a size guide' --commitment proposed
+✓ tsk_d191…45c2 — Add a size guide [medium]
+lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
+$ lore task add 'Rename the shop to Website Pro' --commitment proposed
+✓ tsk_b4d3…11aa — Rename the shop to Website Pro [medium]
+lore live: (live, pushed)
+$ lore task triage
+○ tsk_d191…45c2 Add a size guide [medium] (proposed)
+○ tsk_b4d3…11aa Rename the shop to Website Pro [medium] (proposed)
+$ lore task accept tsk_d191…45c2 --priority high
+✓ tsk_d191…45c2 updated
+lore live: (live, pushed)
+$ lore task decline tsk_b4d3…11aa --reason wont_do --note 'The client keeps the name'
+✓ tsk_b4d3…11aa cancelled
+  note kept as a comment
+lore live: (live, pushed)
+lore live: landed on main (34ee210); leaves live once main is fetched
+$ lore task triage
+(no tasks)
+$ lore task list --status cancelled
+✗ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
+$ lore task list --status cancelled --all
+✗ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
+✗ tsk_b4d3…11aa Rename the shop to Website Pro [medium] (proposed)
+$ lore task show tsk_b4d3…11aa
+tsk_b4d3…11aa
+  title:    Rename the shop to Website Pro
+  status:   cancelled
+  priority: medium
+  commit:   proposed
+  closed:   wont_do
+  notes:
+    2026-11-02 10:06  The client keeps the name
+created 2026-11-02T10:06:05Z by act_54fe…28f2 · updated 2026-11-02T10:06:20Z by act_54fe…28f2
+```
+<!-- /example -->
+
+A declined task keeps its `proposed` commitment, so `lore task list --status cancelled` still hides it like every proposal; `--all` (or `--include-proposed`) shows it. `lore task show` prints the close reason and the note.
 
 ## Step 4 — Snooze a task until a date
 
@@ -77,17 +121,17 @@ To say no, cancel it with `lore task cancel` (see [Tasks › Step 8](tasks.md#st
 ```console
 # alice, in website
 $ lore task add 'Renew the SSL certificate' --defer-until 2026-12-01
-✓ tsk_2537…6bbb — Renew the SSL certificate [medium]
+✓ tsk_b69e…5ed7 — Renew the SSL certificate [medium]
 lore live: (live, pushed)
 $ lore task deferred
-○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
+○ tsk_b69e…5ed7 Renew the SSL certificate [medium] ⏾2026-12-01
 $ lore task list --include-deferred
 ▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
-○ tsk_c0f3…b5b8 Write the welcome email [medium]
-○ tsk_76bd…3f10 Send the welcome email [medium]
-○ tsk_b4f4…a5b0 Check every link on the home page [medium]
-○ tsk_f147…5139 Add a FAQ page [medium]
-○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
+○ tsk_2537…6bbb Add a FAQ page [medium]
+○ tsk_b69e…5ed7 Renew the SSL certificate [medium] ⏾2026-12-01
 ```
 <!-- /example -->
 
@@ -100,8 +144,8 @@ On that day the task comes back into `lore task list` by itself. You do not need
 <!-- example: tasks#undefer -->
 ```console
 # alice, in website
-$ lore task edit tsk_2537…6bbb --clear-defer
-✓ tsk_2537…6bbb updated
+$ lore task edit tsk_b69e…5ed7 --clear-defer
+✓ tsk_b69e…5ed7 updated
 lore live: (live, pushed)
 $ lore task deferred
 (no tasks)
@@ -117,11 +161,11 @@ The full list with the snoozed task, from the same run:
 # alice, in website
 $ lore task list --include-deferred
 ▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
-○ tsk_c0f3…b5b8 Write the welcome email [medium]
-○ tsk_76bd…3f10 Send the welcome email [medium]
-○ tsk_b4f4…a5b0 Check every link on the home page [medium]
-○ tsk_f147…5139 Add a FAQ page [medium]
-○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
+○ tsk_2537…6bbb Add a FAQ page [medium]
+○ tsk_b69e…5ed7 Renew the SSL certificate [medium] ⏾2026-12-01
 ```
 <!-- /example -->
 
@@ -136,9 +180,11 @@ $ lore task list --include-deferred
 
 ## Pitfalls
 
-- <!-- ds:block id=task-commitment-agent-rule-lxfnerf7 --> **Agents must say how sure they are.** When a coding agent adds a task, `--commitment` is required; lore refuses the task without it. A person may leave it out and gets `accepted`.
+- **Agents must say how sure they are.** When a coding agent adds a task (`LORE_ACTOR=agent:…`, or a detected coding agent), `--commitment` is required; lore refuses the task without it (`E_INVALID_INPUT` naming `--commitment`). A person may leave it out and gets `accepted`, and a sub-task added with `--parent` inherits its parent's commitment, so it needs none.
 - **A proposed task is invisible in the normal list.** If you cannot find a task you just added, check `lore task triage` and `lore task someday`.
 - **Dates are whole days in `YYYY-MM-DD` form.** `--defer-until 2026-12-01` hides the task until that date; a time of day is not accepted.
+- **Decline is only for proposals.** On an accepted or someday task `lore task decline` is refused (`E_REFUSED`) and the task stays open; stop it with `lore task cancel <id> --reason <why>`.
+- **A declined task stays proposed.** `decline` cancels it but does not change its commitment, so it only shows in lists with `--all` or `--include-proposed`.
 - **Snooze is not a reminder.** A snoozed task comes back quietly; nothing tells you. If you need to be told, add a [reminder](reminders.md).
 
 ## Related
@@ -146,4 +192,5 @@ $ lore task list --include-deferred
 - [Tasks](tasks.md): add, list, finish and change tasks.
 - [Reminders](reminders.md): dates that tell you, and come back every year if you want.
 - [Missions and plans](missions-and-plans.md): group tasks under a bigger goal.
+- [Task tools](task-tools.md): repeating tasks, templates, checklists and the stale sweep.
 - [Team commands › lore task list](../team/commands.md#lore-task-list): `--mine` and the other team filters.

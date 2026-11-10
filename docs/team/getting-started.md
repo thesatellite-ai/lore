@@ -4,7 +4,13 @@
 
 This page takes you from nothing to a first live task, a first landing and a first org. The examples follow Alice (an agency developer).
 
-## 1. Install or upgrade
+## Before you start
+
+- A git repo with a remote you can push to (here `github.com/alice/notes-app`). Live rows and landings travel through that remote.
+- `git` configured with your email (`git config user.email`): with no lore config at all, that email is your identity.
+- For Step 7 only: a new, empty private repo for your company's notes (the store), and the URL patterns of your company's repos and of the client repos you work in.
+
+## Step 1 — Install or upgrade
 
 The team features are part of the normal `lore` binary. There is nothing extra to install. Install or upgrade the same way you installed lore (the [README](../../README.md#install) lists Homebrew, the install script and Windows). Then check the version:
 
@@ -12,13 +18,13 @@ The team features are part of the normal `lore` binary. There is nothing extra t
 ```console
 # alice, in notes-app
 $ lore --version
-lore version 0.1.0-dev
+lore version dev
 ```
 <!-- /example -->
 
 Every teammate who works with live rows should run the same or a newer lore. A live ref records the lowest version allowed to write to it. An older binary can only read there, and says so (`E_OLD_LORE`).
 
-## 2. Set up lore in a repo
+## Step 2 — Set up lore in a repo
 
 In a repo that has a remote (here `github.com/alice/notes-app`), run `lore init` once and commit what it wrote:
 
@@ -26,21 +32,21 @@ In a repo that has a remote (here `github.com/alice/notes-app`), run `lore init`
 ```console
 # alice, in notes-app
 $ lore init --non-interactive --name=notes-app
-✓ lore initialized at ~/work/notes-app
+lore initialized
     project_id: prj_7a67…9504
     name:       notes-app
-    origin:     https://github.com/alice/notes-app
-    db:         ~/work/notes-app/.lore/lore.db
-    identity:   human:alice@example.com (git config)
-  next: lore learn-from docs   to bootstrap from existing markdown
-lore sync: exported 2 rows to .lore/data — review and commit it
+    repo_id:    rep_2ad3…f891
+· context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
+✓ ~/work/notes-app/AGENTS.md (pointer → .lore/LORE.md)
+· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
+  next: lore render            to write .lore/LORE.md for those tools
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
 ```
 <!-- /example -->
 
 `lore init` also installs lore's merge driver: a small helper git calls to combine two edits of the same note. It adds a few small git hook blocks too (scripts git runs at set moments: `pre-commit`, `commit-msg`, `post-commit`, `pre-push`, and fetch helpers). They chain into whatever hooks you already have. They do nothing when lore is not installed.
 
-## 3. See who lore thinks you are
+## Step 3 — See who lore thinks you are
 
 With no config at all, there is no org. Your identity comes from your git email:
 
@@ -49,17 +55,19 @@ With no config at all, there is no org. Your identity comes from your git email:
 # alice, in notes-app
 $ lore whoami
 org        none  (matched by: nothing matched)
-identity   alice <human:alice@example.com>   act_2ad3…f891  (from: git config)
-repo       no org  (fallback identity, personal everywhere/ notes only)
+identity   alice <human:alice@example.com>   act_162d…9666  (from: git config user.email)
+repo       no org  (fallback identity)
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
 project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
-personal   local: everywhere/
+personal   not set
 config     ~/.lore/config.yaml does not exist (no orgs configured)
 ```
 <!-- /example -->
 
-## 4. Your first live task
+## Step 4 — Your first live task
 
 Tasks are live by default. Adding one writes it to a hidden list on GitHub that is not a branch (the hidden ref `refs/lore/live`), and pushes it at once. Your branch, your staging area and your working folder do not change:
 
@@ -67,33 +75,33 @@ Tasks are live by default. Adding one writes it to a hidden list on GitHub that 
 ```console
 # alice, in notes-app
 $ lore task add 'fix login timeout'
-✓ tsk_162d…9666 — fix login timeout [medium]
+✓ tsk_54fe…28f2 — fix login timeout [medium]
 lore live: (live, pushed)
 $ lore task list
-○ tsk_162d…9666 fix login timeout [medium]
+○ tsk_54fe…28f2 fix login timeout [medium]
 $ git status --short
 $ git ls-remote origin
 601d2850ffd0	HEAD
 601d2850ffd0	refs/heads/main
 86dbae476bd6	refs/lore/live
 $ lore live show
-task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
-tasks      tsk_162d…9666     live      since 2026-11-02 10:00
+task_lists tlt_05e9…4603     live      since 2026-11-02 10:00
+tasks      tsk_54fe…28f2     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 ```
 <!-- /example -->
 
 Look at what `git status` and `git ls-remote` show. No file changed in your checkout. The remote now has a `refs/lore/live` next to `main`. Every teammate's next lore command fetches it, whatever branch they are on. `lore live show` lists the rows that are live right now. The task list row is the default list lore created for the task.
 
-## 5. Your first landing
+## Step 5 — Your first landing
 
 Finishing a task lands it. Lore writes it to `main`'s `.lore/data` with a commit of its own and pushes that straight to the remote. Your local `main` is not touched:
 
 <!-- example: getting-started#first-landing -->
 ```console
 # alice, in notes-app
-$ lore task done tsk_162d…9666
-✓ tsk_162d…9666 done
+$ lore task done tsk_54fe…28f2
+✓ tsk_54fe…28f2 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: landed on main (9b40ce7); leaves live once main is fetched
@@ -102,12 +110,12 @@ $ git fetch -q origin && git log --oneline origin/main
 601d285 lore: init
 05513aa init
 $ lore live show
-task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
-tasks      tsk_162d…9666     live      since 2026-11-02 10:00
+task_lists tlt_05e9…4603     live      since 2026-11-02 10:00
+tasks      tsk_54fe…28f2     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 $ lore sync
-· already in sync
 lore live: 2 row(s) left live (main holds them)
+lore live: pushed waiting live writes
 $ lore live show
 0 live rows in _root (epoch 1)
 ```
@@ -115,39 +123,51 @@ $ lore live show
 
 Right after the landing the rows are still live ("leaves live once main is fetched"). The next command that fetches (here `lore sync`) sees that `main` holds the same content. It then removes them from live. If your `main` is protected, the landing rides along on your next push instead. See [Small team in one repo](use-cases/small-team.md#when-main-is-protected).
 
-## 6. Old TOML identity files move to YAML by themselves
+## Step 6 — A v0.1.17 identity file moves into config.yaml
 
-If you used lore before, your identity may be in `~/.lore/identity.toml`. The first command of the new version moves it to `identity.yaml`. It keeps the old file:
+If you used lore v0.1.17, your identity may be in `~/.lore/identity.yaml`. 0.1.18 still reads it, but only while `identity:` in `~/.lore/config.yaml` is empty, and `lore identity show` warns about it. `lore migrate run` moves it into `config.yaml` and keeps the old file as `identity.yaml.migrated`:
 
-<!-- example: getting-started#toml-migration -->
+<!-- example: getting-started#old-identity-file -->
 ```console
 # alice, in notes-app
-$ lore whoami
-lore: migrated ~/.lore/identity.toml → identity.yaml (old file kept as identity.toml.migrated)
-org        none  (matched by: nothing matched)
-identity   Alice Doe <human:alice@example.com>   act_2ad3…f891  (from: identity.yaml)
-repo       no org  (fallback identity, personal everywhere/ notes only)
-project    prj_7a67…9504
-remotes    github.com/alice/notes-app
-links      not checked  store links are not read yet (they arrive with `lore org link` and stores)
-personal   local: everywhere/
-config     ~/.lore/config.yaml does not exist (no orgs configured)
+$ lore identity show
+resolved:    human:alice@example.com
+display:     Alice Doe
+kind:        human
+source:      ~/.lore/identity.yaml
+stable:      yes
+warning: ~/.lore/identity.yaml is from v0.1.17 and is read only while identity: in ~/.lore/config.yaml is unset: `lore migrate run` moves it into identity:
+$ lore migrate run
+Upgraded 1 row
+  identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
+  actor_copies: refreshed 1 actor copy from their source: Alice Doe (act_162d…9666)
+team lock: taken on refs/lore/signals until 2026-11-02T10:11:20Z (renewed every 2m0s)
+backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
+branch (.lore/data): 1 files upgraded; commit them: git add .lore/data && git commit -m "lore: migrate format"
+undo: lore migrate rollback
+team lock released
 
 # alice, in ~
-$ ls ~/.lore; cat ~/.lore/identity.yaml
+$ ls ~/.lore; cat ~/.lore/config.yaml
 cache
-identity.toml.migrated
-identity.yaml
-display_name: Alice Doe
-stable_key: human:alice@example.com
+config.yaml
+config.yaml.lock
+identity.yaml.migrated
+machine.json
+state
+identity:
+  key: human:alice@example.com
+  name: Alice Doe
 ```
 <!-- /example -->
 
-Nothing else is needed. The same happens to a project's shared-database pointer, `.lore/lore.toml`, which becomes `.lore/lore.yaml` (commit the rename if it is tracked).
+The `actor_copies` line is the copy of Alice's actor row in this repo, written before the v0.1.17 identity file named her Alice Doe, brought up to date from her identity; commit `.lore/data` as the run says.
+
+An identity file from before v0.1.17 (`~/.lore/identity.toml`) is not read at all: set who you are with `lore identity set <email>`, and `lore identity unset` removes the old file. A project's v0.1.17 shared-database pointer (`.lore/lore.yaml`, or the older `.lore/lore.toml`) is read only by `lore migrate run`, which converts the project to row files (see [Shared database (Mode B)](../sync/shared-database-mode-b.md)).
 
 Your **identity key** is your email address with `human:` in front (`human:alice@example.com`). Lore uses it, not your name, to tell people apart. So keep it the same on every machine.
 
-## 7. A first config with an org
+## Step 7 — A first config with an org
 
 Everything that involves a company is set in `~/.lore/config.yaml`. That means stores (separate private repos for the company's notes), a roster (the list of people and agents in the company) and client guards (checks that keep internal notes out of the client's repo). Here is a minimal config for someone at the agency. It also has a fallback identity for personal repos:
 
@@ -181,29 +201,30 @@ orgs:
 | `orgs[].own` | URL patterns of the org's own repos (no client guards) |
 | `orgs[].repos` | URL patterns of client repos (guards on) |
 
-Check it. Create the store (once per company, in a new empty repo). Then see the result in one of the org's own repos:
+Check it. Create the store (once per company, from a new empty repo): `lore store init <name> <url>` runs inside one of the org's own repos and attaches the store there by name. Then see the result in that repo:
 
-<!-- example: getting-started#first-config only=2,3,5,6 -->
+<!-- example: getting-started#first-config only=2,4,5,6 -->
 ```console
 # alice, in ~
 $ lore config check
 ✓ ~/.lore/config.yaml is valid: 1 org entry (agency)
-$ lore store init git@github.com:agency/notes
-✓ wrote lore-store.yaml to github.com/agency/notes (new branch main, first commit) and pushed
 
 # alice, in tools
+$ lore store init agency git@github.com:agency/notes --yes
+✓ created store agency (sto_d431…313a) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 $ lore whoami
 org        agency  (matched by: own pattern github.com/agency/* of agency)
-identity   Alice Doe <human:alice@agency.example>   act_c0f3…b5b8  @alice  (from: org entry (config.yaml))
+identity   Alice Doe <human:alice@agency.example>   act_b4f4…a5b0  @alice  (from: org entry (config.yaml orgs[agency].identity))
 repo       own repo  (no client guards)
-project    prj_05e9…4603
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
+project    prj_c0f3…b5b8
 remotes    github.com/agency/tools
 stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
-personal   local: agency/, everywhere/
+personal   me -> ~/.lore/personal
 $ lore actor register
-✓ act_c0f3…b5b8 Alice Doe (@alice) registered in agency org/
-lore: [agency/org] 3 file(s) pushed
+✓ act_b4f4…a5b0 Alice Doe (@alice) registered in <redacted>
 ```
 <!-- /example -->
 
@@ -216,20 +237,31 @@ Repos outside the org keep your fallback identity, never a company one:
 # alice, in notes-app
 $ lore whoami
 org        none  (matched by: nothing matched)   hint: lore org use agency
-identity   Alice Doe <human:alice@example.com>   act_2ad3…f891  (from: top-level identity (config.yaml))
-repo       no org  (fallback identity, personal everywhere/ notes only)
+identity   Alice Doe <human:alice@example.com>   act_162d…9666  (from: top-level identity (config.yaml))
+repo       no org  (fallback identity)
+machine    mch_98c3dece
+agent      none  (no coding agent detected)
 project    prj_7a67…9504
 remotes    github.com/alice/notes-app
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
-personal   local: everywhere/
+personal   me -> ~/.lore/personal
 ```
 <!-- /example -->
 
-## Next
+## Try it
 
-- Working with teammates in one repo: [Small team in one repo](use-cases/small-team.md).
-- Working in a client's repo: [Agency with a client repo](use-cases/agency-client-repo.md).
-- Every option of `config.yaml`: [Commands reference](commands.md#config-keys).
+In any repo where you ran `lore init`, add a task and list it. The task is live at once: teammates see it after their next fetch, before any commit lands on main:
+
+<!-- example: getting-started#first-live-task only=1,2 -->
+```console
+# alice, in notes-app
+$ lore task add 'fix login timeout'
+✓ tsk_54fe…28f2 — fix login timeout [medium]
+lore live: (live, pushed)
+$ lore task list
+○ tsk_54fe…28f2 fix login timeout [medium]
+```
+<!-- /example -->
 
 ## Pitfalls
 
@@ -237,8 +269,12 @@ personal   local: everywhere/
 - **Use your email as the identity key** (`human:alice@example.com`), never a display name.
 - **Run `lore config check` after every config edit.** A wrong key is reported there, before any command uses it.
 - **A teammate's new row may take up to 60 seconds to show.** Run `lore sync` to fetch now.
+- **Every teammate needs the same or a newer lore.** A live ref records the lowest version allowed to write to it; an older binary can only read there and answers `E_OLD_LORE` to a write.
 
 ## Related
 
+- Working with teammates in one repo: [Small team in one repo](use-cases/small-team.md).
+- Working in a client's repo: [Agency with a client repo](use-cases/agency-client-repo.md).
+- Every option of `config.yaml`: [Commands reference](commands.md#config-keys).
 - [Identity and stores](identity-and-stores.md): change your identity, join an org with `lore org import`.
 - [Troubleshooting](troubleshooting.md): the errors you may see on the way.

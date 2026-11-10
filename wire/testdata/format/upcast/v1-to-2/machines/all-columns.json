@@ -1,0 +1,52 @@
+{
+  "_hlc": "2026-11-04T08:09:56.252Z/0000/act_0e45506e64357c94a87e70ef1c6bbba9",
+  "_table": "machines",
+  "_v": 2,
+  "arch": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "cpu": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "created_at": "2026-11-04T08:09:56.252002659Z",
+  "hostname": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "id": "mch_01a1a59b891c70b78914000000000013",
+  "id_source": "os_machine_id",
+  "install_method": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "kernel": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "label": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "libc": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "machine_id": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "os": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "os_user": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "ram_mb": 3,
+  "runtime": {
+    "k": "v",
+    "n": [
+      1,
+      2
+    ]
+  },
+  "updated_at": "2026-11-04T08:09:56.252002659Z",
+  "updated_by": "act_0e45506e64357c94a87e70ef1c6bbba9"
+}

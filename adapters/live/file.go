@@ -1,0 +1,268 @@
+package live
+
+import (
+	"fmt"
+	"maps"
+	"strings"
+	"time"
+
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/merge3"
+	lorerow "github.com/thesatellite-ai/lore/model/row"
+)
+
+// BlockKey is the key of the `_live` block inside a live file (§3.3). Lore
+// columns never start with "_", so it can never clash with a row field.
+const BlockKey = "_live"
+
+// Keys inside the `_live` block (§1 "Files and folders").
+const (
+	blockLiveSince  = "live_since"
+	blockHLC        = "hlc"
+	blockDeleted    = "deleted"
+	blockLastCopyAt = "last_copy_at"
+	blockConflict   = "conflict"
+	blockCompanion  = "companion"
+)
+
+// idKey is the row id key every row document carries.
+const idKey = "id"
+
+// blockTimeLayout is how block times are written: UTC, whole seconds, the
+// form §3.3 shows. Block times only drive max-age decisions measured in
+// days, so sub-second precision would only add noise to diffs.
+const blockTimeLayout = time.RFC3339
+
+// Block is a live file's `_live` block. It is removed when the row lands
+// (the landed file is the plain row).
+type Block struct {
+	// LiveSince is when the row first became live; it never moves forward
+	// on later edits, so max age is measured from the first live write.
+	LiveSince time.Time
+	// HLC orders edits (F4).
+	HLC HLC
+	// Deleted marks a tombstone: the body is gone, only the id remains, so
+	// lookup stops here instead of falling through to an older branch copy.
+	Deleted bool
+	// LastCopyAt is the time of the last max-age copy to main (F5 rule 6c).
+	LastCopyAt time.Time
+	// Conflict is set when a merge left conflict markers in a text field;
+	// such a row is shown with a warning and never lands (F4).
+	Conflict bool
+	// Companion marks a supporting row that went live only because rows of
+	// the same command did (rowroute.DecideAll: the writer's actor row on
+	// their first write). It lands only together with a content row, so a
+	// plain live write never moves main on its own (F2).
+	Companion bool
+}
+
+// File is one decoded live file: the row body (exactly what lands on main)
+// and its block.
+//
+// Invariant: Body never contains BlockKey; a tombstone's Body is {"id": id}.
+type File struct {
+	Body  canonjson.Object
+	Block Block
+}
+
+// ID returns the row id the file carries ("" when missing).
+func (f File) ID() string {
+	return f.Body.Str(idKey)
+}
+
+// Deleted reports a tombstone.
+func (f File) Deleted() bool { return f.Block.Deleted }
+
+// Tombstone returns the tombstone for a row: only the id is kept, never the
+// body (§3.3: a deleted secret must not survive in the live tree).
+func Tombstone(id string, b Block) File {
+	b.Deleted = true
+	b.Conflict = false
+	return File{Body: canonjson.Object{idKey: canonjson.String(id)}, Block: b}
+}
+
+// DecodeFile parses a live file. A file without a block (written by hand,
+// or a plain row file) decodes with a zero block.
+func DecodeFile(b []byte) (File, error) {
+	doc, err := canonjson.Decode(b, canonjson.DefaultMaxDepth)
+	if err != nil {
+		return File{}, fmt.Errorf("live: decode file: %w", err)
+	}
+	f := File{Body: doc}
+	raw, has := doc[BlockKey]
+	if !has {
+		return f, nil
+	}
+	delete(doc, BlockKey)
+	m, ok := raw.AsObject()
+	if !ok {
+		return File{}, fmt.Errorf("live: %s must be an object", BlockKey)
+	}
+	if f.Block, err = decodeBlock(m); err != nil {
+		return File{}, err
+	}
+	return f, nil
+}
+
+func decodeBlock(m canonjson.Object) (Block, error) {
+	var b Block
+	var err error
+	if b.LiveSince, err = blockTime(m, blockLiveSince); err != nil {
+		return b, err
+	}
+	if b.LastCopyAt, err = blockTime(m, blockLastCopyAt); err != nil {
+		return b, err
+	}
+	if s, ok := m[blockHLC].AsString(); ok {
+		if b.HLC, err = ParseHLC(s); err != nil {
+			return b, err
+		}
+	}
+	// Flags are omitted when false (toMap), so absent reads false; a
+	// non-bool value also reads false, the conservative choice for each.
+	b.Deleted, _ = m[blockDeleted].AsBool()
+	b.Conflict, _ = m[blockConflict].AsBool()
+	b.Companion, _ = m[blockCompanion].AsBool()
+	return b, nil
+}
+
+func blockTime(m canonjson.Object, key string) (time.Time, error) {
+	s, ok := m[key].AsString()
+	if !ok || s == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("live: %s.%s: %w", BlockKey, key, err)
+	}
+	return t.UTC(), nil
+}
+
+// Encode renders the live file canonically (body plus block).
+func (f File) Encode() ([]byte, error) {
+	doc := maps.Clone(f.Body)
+	if doc == nil {
+		doc = canonjson.Object{}
+	}
+	doc[BlockKey] = canonjson.ObjectValue(f.Block.toMap())
+	return canonjson.Encode(doc)
+}
+
+// EncodeBody renders the body alone, canonically: the bytes that land on
+// main and that the content comparisons (Confirm, ride snapshots) use.
+func (f File) EncodeBody() ([]byte, error) {
+	return canonjson.Encode(f.Body)
+}
+
+func (b Block) toMap() canonjson.Object {
+	m := canonjson.Object{}
+	if !b.LiveSince.IsZero() {
+		m[blockLiveSince] = canonjson.String(b.LiveSince.UTC().Format(blockTimeLayout))
+	}
+	if !b.HLC.IsZero() {
+		m[blockHLC] = canonjson.String(b.HLC.String())
+	}
+	if b.Deleted {
+		m[blockDeleted] = canonjson.Bool(true)
+	}
+	if !b.LastCopyAt.IsZero() {
+		m[blockLastCopyAt] = canonjson.String(b.LastCopyAt.UTC().Format(blockTimeLayout))
+	}
+	if b.Conflict {
+		m[blockConflict] = canonjson.Bool(true)
+	}
+	if b.Companion {
+		m[blockCompanion] = canonjson.Bool(true)
+	}
+	return m
+}
+
+// HasConflictMarkers reports whether the body holds an unsettled conflict
+// (F4): merge conflict markers in any string at any depth (a text clash,
+// including one inside a meta entry or an object value), or a structured
+// meta conflict entry {"conflict": {base, ours, theirs}} (METADATA 3.12:
+// every conflict scanner recurses into meta, so ShouldLand never lands it).
+func (f File) HasConflictMarkers() bool {
+	for _, v := range f.Body {
+		if valueHasMarkers(v) {
+			return true
+		}
+	}
+	return metaHasConflictEntry(f.Body[lorerow.KeyMeta])
+}
+
+// metaConflict is the member a strict meta clash writes into an entry
+// (logic/merge entryConflict, unexported there; METADATA 3.12 shape).
+const metaConflict = "conflict"
+
+// valueHasMarkers walks v and reports a string holding a conflict block.
+func valueHasMarkers(v canonjson.Value) bool {
+	if s, ok := v.AsString(); ok {
+		return merge3.ContainsConflictMarkers(s)
+	}
+	if arr, ok := v.AsArray(); ok {
+		for _, it := range arr {
+			if valueHasMarkers(it) {
+				return true
+			}
+		}
+		return false
+	}
+	if obj, ok := v.AsObject(); ok {
+		for k, it := range obj {
+			if merge3.ContainsConflictMarkers(k) || valueHasMarkers(it) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// metaHasConflictEntry reports a meta object with an entry holding a
+// structured conflict (a strict key both sides changed, 3.12).
+func metaHasConflictEntry(meta canonjson.Value) bool {
+	entries, ok := meta.AsObject()
+	if !ok {
+		return false
+	}
+	for _, e := range entries {
+		if obj, ok := e.AsObject(); ok {
+			if _, has := obj[metaConflict]; has {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// SameBody reports whether two files hold the same row body (block
+// ignored). Tombstones compare by id only.
+func SameBody(a, b File) (bool, error) {
+	if a.Deleted() != b.Deleted() {
+		return false, nil
+	}
+	ab, err := a.EncodeBody()
+	if err != nil {
+		return false, err
+	}
+	bb, err := b.EncodeBody()
+	if err != nil {
+		return false, err
+	}
+	return string(ab) == string(bb), nil
+}
+
+// stripKey returns doc without key; comparisons use it to ignore a bare
+// updated_at bump (an edit that changed nothing else is not a change).
+func stripKey(doc canonjson.Object, key string) canonjson.Object {
+	out := maps.Clone(doc)
+	delete(out, key)
+	return out
+}
+
+// isReservedFolder reports a folder name lore keeps for itself inside the
+// live tree (fixed rule 3: names beginning with "_" other than a project's
+// own "_root").
+func isReservedFolder(name string) bool {
+	return strings.HasPrefix(name, reservedPrefix) && name != RootFolder
+}

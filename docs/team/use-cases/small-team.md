@@ -36,10 +36,11 @@ Bob, on `feat/payments`, gives Alice a task. Alice, on `feat/login`, sees it. He
 <!-- example: small-team#assign-across-branches -->
 ```console
 # bob, in billing
-$ git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
+$ git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
 ✓ tsk_162d…9666 — check the checkout page on a phone [medium]
 lore live: (live, pushed)
 lore live: 1 row(s) left live (main holds them)
+lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
@@ -48,7 +49,7 @@ $ lore sync && lore task list --mine
 · already in sync
 ○ tsk_162d…9666 check the checkout page on a phone [medium]
 $ lore inbox
--  assigned              tsk_162d…9666  check the checkout page on a phone
+-  assigned              tsk_162d…9666  check the checkout page on a phone (lead)
 ```
 <!-- /example -->
 
@@ -65,15 +66,16 @@ $ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the chec
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed)
 lore live: landed on main (05513aa); leaves live once main is fetched
+lore live: landed on main; this checkout is on feat/login, so those rows show here after you merge main
 $ git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3
 05513aa lore: land 2 rows (_root)
 86dbae4 lore: land 1 row (_root)
 601d285 lore: land 1 row (_root)
 dfd8dc8 lore: init
 cf563f3 init
- .../tlt_54fe…28f2.json      | 11 ++++++
- .../tsk_162d…9666.json      | 40 ++++++++++++++++++++++
- 2 files changed, 51 insertions(+)
+ .../tlt_54fe…28f2.json      | 27 +++++++
+ .../tsk_162d…9666.json      | 87 ++++++++++++++++++++++
+ 2 files changed, 114 insertions(+)
 $ git log --oneline -1 && git status --short
 9b40ce7 fix the checkout page on phones
 ```
@@ -81,20 +83,14 @@ $ git log --oneline -1 && git status --short
 
 Alice's branch and working folder are untouched. The landing was pushed to the remote's `main` directly.
 
-An urgent rule can be added from any branch with `--live`. Everyone sees it at once. A rule counts as finished on write, so a copy lands on `main` at once:
+An urgent rule learned on a feature branch can reach `main` without switching branches. Add it as usual, copy it onto `main` with `lore sync promote`, then push `main` (or open a pull request for it):
 
-<!-- example: small-team#urgent-rule -->
 ```console
-# bob, in billing
-$ lore rule add --body 'Never deploy on a Friday' --live
-✓ rul_05e9…4603 
-  scope: [master] severity: must
-lore live: (live, pushed)
-lore live: landed on main (df3a55c); leaves live once main is fetched
-$ git fetch -q origin && git log --oneline -1 origin/main
-df3a55c lore: land 1 row (_root)
+$ lore rule add --body 'Never deploy on a Friday'
+$ lore sync promote rul_05e9…4603 --to main --dry-run
+$ lore sync promote rul_05e9…4603 --to main
+$ git push origin main
 ```
-<!-- /example -->
 
 ## When main is protected
 
@@ -106,7 +102,8 @@ Most teams protect `main` (only pull requests may change it). Then the landing w
 $ lore task add 'ask the client for the new logo' --assign @alice
 ✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
 lore live: (live, pushed)
-lore live: 3 row(s) left live (main holds them)
+lore live: 2 row(s) left live (main holds them)
+lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
 $ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
@@ -117,7 +114,7 @@ lore live: main is protected: the rows ride on your next push (lore: land N rows
 $ lore explain tsk_c0f3…b5b8
 tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
-  live (local 34ee210): row, live since 2026-11-02T10:01:10Z, hlc 2026-11-02T10:01:15.000Z/0000/act_7a67…9504
+  live (local 34ee210): row, live since 2026-11-02T10:01:20Z, hlc 2026-11-02T10:01:25.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: not present
   wins: the live copy (rule 4: if a row id is in live, live wins)
@@ -151,7 +148,14 @@ $ git status --short
 ## Pitfalls
 
 - **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
-- **Register first.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your clone has fetched since.
-- **Rules and decisions travel with the code** unless you pass `--live`. That is on purpose: most rules belong with the change that needs them.
+- **Register first, then branch from a fresh main.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your branch holds her roster entry. A roster entry lands on main at once and then leaves the live list, so a branch cut before it landed does not see it: `git pull` main before `git switch -c`, or `git merge origin/main` into an existing branch (the same rule as any row that left live, see `lore sync peek`).
+- **Rules, decisions and memories travel with the code.** That is on purpose: most rules belong with the change that needs them. Use `lore sync promote <id> --to main` for the one that cannot wait.
 - **`git push --no-verify`** skips every local check lore runs at push: the ride-along (the rows simply wait and ride on a later push) and, in a client repo, the push leak check (see [Agency with a client repo](agency-client-repo.md)).
 - **Unprotected `main`** receives small `lore: land N rows` commits directly. They change only files under `.lore/data`.
+
+## Related
+
+- [Getting started](../getting-started.md): one person, the first live task.
+- [Agents](../agents.md): adding coding agents to the same repo.
+- [Team profiles](../profiles.md): roles and project memberships for the roster.
+- [How it works](../how-it-works.md): live rows and landing in git.

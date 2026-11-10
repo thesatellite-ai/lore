@@ -30,17 +30,45 @@ case "$OS" in
 esac
 
 ASSET="${BINARY}_${OS}_${ARCH}.tar.gz"
-# Use GitHub's /releases/latest/download/ redirect — it resolves to the
-# newest non-prerelease asset WITHOUT calling the rate-limited GitHub API
-# (anonymous api.github.com is 60 req/hr/IP; this path has no such limit).
-URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
+# Resolve the newest tag from GitHub's /releases/latest redirect — it
+# names the newest non-prerelease WITHOUT calling the rate-limited GitHub
+# API (anonymous api.github.com is 60 req/hr/IP; this path has no limit).
+# The archive and checksums.txt then both come from that exact tag, so a
+# release published between two requests cannot mix files.
+LATEST=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest")
+TAG=${LATEST##*/tag/}
+case "$TAG" in
+  v*) ;;
+  *) echo "Error: could not find the latest release (${LATEST})" >&2; exit 1 ;;
+esac
+BASE="https://github.com/${REPO}/releases/download/${TAG}"
 
-echo "Downloading latest ${BINARY} for ${OS}/${ARCH}..."
+echo "Downloading ${BINARY} ${TAG} for ${OS}/${ARCH}..."
 tmpdir=$(mktemp -d)
-if ! curl -fsSL "$URL" | tar xz -C "$tmpdir" 2>/dev/null; then
-  echo "Error: could not download ${ASSET} from" >&2
-  echo "  ${URL}" >&2
+if ! curl -fsSL -o "$tmpdir/$ASSET" "$BASE/$ASSET" || ! curl -fsSL -o "$tmpdir/checksums.txt" "$BASE/checksums.txt"; then
+  echo "Error: could not download ${ASSET} or checksums.txt from" >&2
+  echo "  ${BASE}" >&2
   echo "Check that a release exists: https://github.com/${REPO}/releases" >&2
+  exit 1
+fi
+
+# Check the archive's sha256 against its line in checksums.txt (catches a
+# corrupt or truncated download; signed releases are a later step).
+WANT=$(awk -v a="$ASSET" '$2 == a || $2 == "*" a { print $1 }' "$tmpdir/checksums.txt")
+if command -v sha256sum >/dev/null 2>&1; then
+  GOT=$(sha256sum "$tmpdir/$ASSET" | awk '{ print $1 }')
+else
+  GOT=$(shasum -a 256 "$tmpdir/$ASSET" | awk '{ print $1 }')
+fi
+if [ -z "$WANT" ] || [ "$WANT" != "$GOT" ]; then
+  echo "Error: sha256 of ${ASSET} does not match checksums.txt; nothing installed." >&2
+  rm -rf "$tmpdir"
+  exit 1
+fi
+echo "sha256 ok"
+
+if ! tar xzf "$tmpdir/$ASSET" -C "$tmpdir" 2>/dev/null; then
+  echo "Error: could not unpack ${ASSET}" >&2
   exit 1
 fi
 

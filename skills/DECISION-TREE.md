@@ -85,21 +85,21 @@ Free-form note on ONE specific entity?            → comment add
 ```
 Diagnose first:  lore doctor --json
 │
-├── doctor OK    → check `lore errors list --json` for the specific code you saw
+├── doctor OK    → look the code up in docs/reference/cli-commands.md#errors
 │
 └── doctor BROKEN:
     │
-    Backup exists?  ls .lore/backups/
+    .lore/data present?  ls .lore/data
     │
-    ├── Yes  → lore repair --tier=2 --confirm
+    ├── Yes  → rm -f .lore/lore-cache.db*   (the next command rebuilds it from the files)
     │
     └── No:
         │
-        Is .lore/LORE.md in git?
+        Is .lore/data in git?
         │
-        ├── Yes → lore repair --tier=3 --confirm  (then learn-from .lore/LORE.md)
+        ├── Yes → git checkout HEAD -- .lore/data && lore sync
         │
-        └── No  → support-bundle + file bug + restore from a clone if possible
+        └── No  → support-bundle + file bug + copy .lore/data from a teammate's clone if possible
 ```
 
 ## "I want to render"
@@ -113,7 +113,7 @@ Preview without writing?   → lore render --dry-run        (prints the .lore/LO
 Different pointer file?    → lore render --target=AGENTS.md
 Different generated path?  → lore render --out=docs/LORE.md
 Generated file only?       → lore render --no-pointer
-Different scope?           → lore render --repo=<mount>
+Different scope?           → cd <repo> && lore render
 ```
 
 ## What goes into `.lore/LORE.md` vs what lives in search
@@ -136,9 +136,9 @@ Searched on demand (run `lore search "<keywords>"` per turn):
 ## "I want to know what the agent saw"
 
 ```
-Most recent render?        → lore why-context --last-render
-Print the rendered text?   → lore why-context --last-render --rendered
-JSON for piping?           → lore why-context --last-render --json
+Most recent render?        → lore why-context
+Print the rendered text?   → lore why-context --rendered
+JSON for piping?           → lore why-context --json
 ```
 
 ## "I want to introspect at runtime"
@@ -146,7 +146,7 @@ JSON for piping?           → lore why-context --last-render --json
 ```
 What commands exist?   → lore --help
 What flags for X?      → lore <X> --help
-What errors can occur? → lore errors list --json
+What errors can occur? → docs/reference/cli-commands.md#errors
 What version?          → lore version --json
 ```
 
@@ -175,7 +175,7 @@ search (any entity)        <kind> search "<q>" --json   (23 entities: task/rule/
 search syntax              auth*  /  "exact phrase"  /  redis OR cache  /  auth NOT login
 search index admin         search status (drift health) | search rebuild [--kind=<e>]
 list / show                memory list | memory show <id>  (and `<kind> list / show` for every entity)
-post-upgrade migrate       setup  (runs ent migrate + rebuilds FTS index + stamps fingerprint; auto-runs in init)
+post-upgrade migrate       nothing to run (cache + search index rebuild themselves); v0.1.17 data: migrate run [--dry-run]
 edit in place              <kind> edit <id> --field=…  (16 entities; only flags you pass are applied)
 move/reparent task         task edit <id> --tasklist=… --mission=… --plan=… --assigned-to=… (+ --clear-* for nullable fields)
 archive (soft-delete)      <kind> archive <id>  (memory|rule|decision|hotfix|pattern|playbook|prompt|project|repo)
@@ -185,11 +185,11 @@ invalidate (bitemporal)    memory invalidate <id>  (sets valid_until=now; preser
 pause/resume mission       mission pause <id> | mission resume <id>
 ack handoff                handoff ack <id>
 install agent directive    directive install [--target=CLAUDE.md,AGENTS.md]
-inspect render             why-context --last-render
+inspect render             why-context
 recompile context          render
 diagnose                   doctor
-fix DB                     repair --tier=1|2|3 --confirm
-back up DB                 backup
-restore                    restore <path> --confirm
+fix DB                     rm -f .lore/lore-cache.db* (next command rebuilds from .lore/data)
+rebuild search             search rebuild
+back up notes              commit .lore/data
 report bug                 support-bundle
 ```

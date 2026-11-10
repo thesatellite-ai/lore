@@ -8,6 +8,11 @@ appearance in the file, to a stable stand-in of the same shape: the 1st task id 
 becomes the same tsk_… on every run, the 2nd the next one, and so on. Equal values
 stay equal, so an id printed by one command still matches the id the next command uses.
 Times are already stable: run-examples.sh runs every section on the test clock.
+
+Machine ids (mch_ + 64 hex) depend on the host that runs the examples, so they get
+stand-ins too, and so do their short forms (`mch_fac0df3a`, the first 8 hex): a short
+id on the same transcript as its full id gets the full id's stand-in cut to 8, the same
+way tests/docs/normalize.py does it.
 """
 
 import hashlib
@@ -18,15 +23,22 @@ import sys
 #   row ids (tsk_ + 32 hex), claim tokens (ct_ + 5 hex, cut by lib.sh),
 #   agent sessions (s- + 8 hex), anonymous ids (anon: + 12 hex), git object ids (7–40 hex with a digit and a letter).
 TOKEN = re.compile(
-    r"\b(?P<row>[a-z]{2,4})_(?P<rowhex>[0-9a-f]{32})\b"
+    r"\b(?P<row>[a-z]{2,4})_(?P<rowhex>[0-9a-f]{32}|[0-9a-f]{64})\b"
     r"|\bct_(?P<ct>[0-9a-f]{5})"
     r"|\bs-(?P<sess>[0-9a-f]{8})\b"
     # anonymous-mode actor ids (anon: + 12 hex, random per `lore identity anonymize on`).
     r"|\banon:(?P<anon>[0-9a-f]{12})\b"
     # git object ids: any 7–40 hex digits (a short id can be all digits) standing alone
-    # between spaces, brackets, commas or a tab ("[branch sha]" too); dates, times and paths never match.
-    r"|(?:(?<=^)|(?<=[\s(,\[]))(?P<sha>[0-9a-f]{7,40})(?=$|[\s),;:…\]])"
+    # between spaces, brackets, commas or a tab ("[branch sha]" too), or as a whole JSON
+    # string (the provenance "git": {"commit": "…"} of a row file: the commit's tree holds
+    # random row ids, so its sha differs on every run); dates, times and paths never match.
+    # A backup ref (refs/lore/backup/compact-<epoch>-<sha12>) ends in one after "<digit>-".
+    r'|(?:(?<=^)|(?<=[\s(,\["])|(?<=\d-))(?P<sha>[0-9a-f]{7,40})(?=$|[\s),;:…\]"])'
 )
+# A row or machine id printed short: its first 8 hex (`mch_fac0df3a`) or an ellipsis and
+# its last 4 (`sal_…4e57`). Mapped after the full ids, so a short id on the same
+# transcript as its full id gets the full id's stand-in, cut the same way.
+SHORT_ID = re.compile(r"\b(?P<p>[a-z]{2,4})_(?:(?P<head>[0-9a-f]{8})|…(?P<tail>[0-9a-f]{4}))\b")
 # Wall-clock times lore records with nanoseconds (created_at / updated_at of a row):
 # the test clock does not reach them, so each distinct one gets a stable stand-in.
 NANOTIME = re.compile(r"\b2\d{3}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6,9}Z")
@@ -76,7 +88,9 @@ def main(path: str) -> None:
 
     def repl(m: re.Match) -> str:
         if m.group("row"):
-            kind, value, prefix = "row", m.group("rowhex"), m.group("row") + "_"
+            # 64 hex is a machine id (mch_…): its own counter, so row stand-ins keep their order.
+            kind = "row" if len(m.group("rowhex")) == 32 else "row64"
+            value, prefix = m.group("rowhex"), m.group("row") + "_"
         elif m.group("ct"):
             kind, value, prefix = "ct", m.group("ct"), "ct_"
         elif m.group("sess"):
@@ -100,8 +114,28 @@ def main(path: str) -> None:
                 seen[key] = stand_in(kind, counts[kind], len(value) if kind != "sha" else 40)[: len(value)]
         return prefix + seen[key]
 
+    def short_repl(m: re.Match) -> str:
+        # The full id this short form names: same prefix, matching head or tail. When none
+        # (or more than one) is on the transcript, the short form gets a stand-in of its own.
+        p, head, tail = m.group("p"), m.group("head"), m.group("tail")
+        part = head or tail
+        fulls = [(k, v) for (k, v) in seen if k in ("row", "row64") and full_prefix.get(v) == p
+                 and (v.startswith(part) if head else v.endswith(part))]
+        if len(fulls) == 1:
+            full = seen[fulls[0]]
+        else:
+            key = ("short", p + "_" + ("" if head else "…") + part)
+            if key not in seen:
+                counts["short"] = counts.get("short", 0) + 1
+                seen[key] = stand_in("short", counts["short"], 64)
+            full = seen[key]
+        return f"{p}_{full[:8]}" if head else f"{p}_…{full[-4:]}"
+
     text = open(path, encoding="utf-8").read()
+    # The prefix (tsk, act, mch, …) each full id was printed with, for short_repl.
+    full_prefix = {m.group("rowhex"): m.group("row") for m in TOKEN.finditer(text) if m.group("row")}
     text = TOKEN.sub(lambda m: repl(m), "\n".join(sort_ties(text.split("\n"))))
+    text = SHORT_ID.sub(lambda m: short_repl(m), text)
     times: dict[str, str] = {}
     text = NANOTIME.sub(lambda m: times.setdefault(m.group(0), f"2026-11-02T10:00:00.{len(times) + 1:09d}Z"), text)
     text = BACKUP.sub("20261102-100000.000000000-pre-sync", text)

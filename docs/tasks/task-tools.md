@@ -1,0 +1,564 @@
+# Task tools
+
+**In short:** beyond add, list and done, lore has a set of smaller task tools: a board view, a checklist inside a task, splitting a task into sub-tasks, a check of the sub-task tree, relations between tasks, watching a task, a task's history, templates for work you repeat, repeating tasks and a sweep for tasks nobody touched in months. This page walks through each with one person and one repo.
+
+## What it is and when you want it
+
+[Tasks](tasks.md) covers the everyday commands. The tools here help once the list grows:
+
+- **Board** (`lore task board`): the open tasks in columns by status, priority, assignee, mission, repo or parent. It only reads.
+- **Checklist** (`lore task checklist`): small steps inside one task that nobody would ever claim on their own, ticked as you go.
+- **Split** (`lore task split`): turn one task into sub-tasks in one go. **Tree check** (`lore task tree check`) finds loops and other damage in the sub-task tree.
+- **Relations** (`lore task relate` / `unrelate`): mark a duplicate, say one task waits for another, or point at a task that caused this one.
+- **Watch** (`lore task watch` / `unwatch`): changes to a watched task reach your inbox.
+- **History** (`lore task history`): who changed what on a task, and when.
+- **Templates** (`lore task template`): a saved task tree, such as "a release", filled in with arguments each time.
+- **Repeating tasks** (`lore task add --recur`, `lore task recur`): a task that comes back every week or month.
+- **Stale tasks** (`lore task stale`): open tasks with no change for 60 days, and a way to cancel them in one batch.
+
+Alice (an agency developer) plans the launch of the client's online shop in `github.com/client/website`.
+
+## Before you start
+
+- lore set up in the repo (see [Your first project](../knowledge/first-project.md)) and the basics from [Tasks](tasks.md).
+
+## Step 1 — See the tasks as a board
+
+`lore task board` groups the tasks by status; `--group-by priority` (or `assignee`, `mission`, `repo`, `parent`) picks another column. It takes the same filters as `lore task list` (`--mission`, `--mine`, `--where` and so on) and never writes anything.
+
+<!-- example: task-tools#board -->
+```console
+# alice, in website
+$ lore task add 'Write the launch email' --priority high
+✓ tsk_7a67…9504 — Write the launch email [high]
+lore live: (live, pushed)
+$ lore task add 'Pick the product photos' --priority low
+✓ tsk_2ad3…f891 — Pick the product photos [low]
+lore live: (live, pushed)
+$ lore task add 'Set up the payment provider' --priority urgent
+✓ tsk_162d…9666 — Set up the payment provider [urgent]
+lore live: (live, pushed)
+$ lore task start tsk_162d…9666
+✓ tsk_162d…9666 started
+lore live: (live, pushed)
+$ lore task board
+todo (2)
+  tsk_7a67…9504  Write the launch email
+  tsk_2ad3…f891  Pick the product photos
+in_progress (1)
+  tsk_162d…9666  Set up the payment provider
+done (0)
+cancelled (0)
+blocked (0)
+$ lore task board --group-by priority
+urgent (1)
+  tsk_162d…9666  Set up the payment provider
+high (1)
+  tsk_7a67…9504  Write the launch email
+medium (0)
+low (1)
+  tsk_2ad3…f891  Pick the product photos
+```
+<!-- /example -->
+
+## Step 2 — Keep a checklist inside a task
+
+A checklist item is a small step of one task: no owner, no status, no claim. Add the first item as an argument and more with `--item`; tick and untick by position (`1`, `2`, …) or by `chk_` id. Ticking an item does not change the task's status.
+
+<!-- example: task-tools#checklist -->
+```console
+# alice, in website
+$ lore task checklist add tsk_7a67…9504 'Subject line' --item 'Product links' --item 'Discount code' --item 'Send a test to the client'
+✓ 4 checklist items on tsk_7a67…9504 (chk_54fe…28f2, chk_05e9…4603, chk_c0f3…b5b8, chk_76bd…3f10)
+lore live: (live, pushed)
+$ lore task checklist tick tsk_7a67…9504 1
+✓ [x] Subject line (1/4)
+lore live: (live, pushed)
+$ lore task checklist edit tsk_7a67…9504 3 'Discount code LAUNCH10'
+✓ chk_c0f3…b5b8 Discount code LAUNCH10
+lore live: (live, pushed)
+$ lore task checklist list tsk_7a67…9504
+1. [x] Subject line  chk_54fe…28f2
+2. [ ] Product links  chk_05e9…4603
+3. [ ] Discount code LAUNCH10  chk_c0f3…b5b8
+4. [ ] Send a test to the client  chk_76bd…3f10
+1/4 done
+```
+<!-- /example -->
+
+`untick` takes a tick back, and `rm` removes an item. The positions close up after a removal, so read `checklist list` again before using a position:
+
+<!-- example: task-tools#checklist-untick-and-rm -->
+```console
+# alice, in website
+$ lore task checklist untick tsk_7a67…9504 1
+✓ [ ] Subject line (0/4)
+lore live: (live, pushed)
+$ lore task checklist rm tsk_7a67…9504 2
+✓ removed chk_05e9…4603 Product links
+lore live: (live, pushed)
+$ lore task checklist list tsk_7a67…9504
+1. [ ] Subject line  chk_54fe…28f2
+2. [ ] Discount code LAUNCH10  chk_c0f3…b5b8
+3. [ ] Send a test to the client  chk_76bd…3f10
+0/3 done
+```
+<!-- /example -->
+
+If a step turns out to be real work that someone could pick up on its own, `promote` turns it into a sub-task with the same text and removes the item, in one batch:
+
+<!-- example: task-tools#checklist-promote -->
+```console
+# alice, in website
+$ lore task checklist promote tsk_7a67…9504 3
+✓ chk_76bd…3f10 became tsk_d431…313a "Send a test to the client" under tsk_7a67…9504
+lore live: (live, pushed)
+$ lore task list --parent tsk_7a67…9504
+○ tsk_d431…313a Send a test to the client [high]
+```
+<!-- /example -->
+
+A task whose body already has `- [ ]` / `- [x]` lines (copied from an issue, say) can turn them into checklist items with `checklist import --from body`. It shows the items and asks first; `--yes` answers without a terminal:
+
+<!-- example: task-tools#checklist-import -->
+```console
+# alice, in website
+$ lore task add 'Check the shop on a phone' --body $'- [ ] iPhone\n- [ ] Android\n- [x] Tablet'
+✓ tsk_b4f4…a5b0 — Check the shop on a phone [medium]
+lore live: (live, pushed)
+$ lore task checklist import tsk_b4f4…a5b0 --from body
+ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_b4f4…a5b0?
+  [ ] iPhone
+  [ ] Android
+  [x] Tablet
+  hint: ask the person, then rerun with --yes
+(exit 26)
+$ lore task checklist import tsk_b4f4…a5b0 --from body --yes
+✓ 3 checklist items from the body of tsk_b4f4…a5b0
+lore live: (live, pushed)
+$ lore task checklist list tsk_b4f4…a5b0
+1. [ ] iPhone  chk_28f8…03df
+2. [ ] Android  chk_4c59…6c38
+3. [x] Tablet  chk_3b62…e913
+1/3 done
+```
+<!-- /example -->
+
+## Step 3 — Split a task into sub-tasks
+
+`lore task split <id> <title> <title> …` adds one sub-task per title, in order, as one batch. A flag before the first title applies to every sub-task; a flag after a title applies to that one only (here `--priority high` after "Shoot the mugs"). What a sub-task does not set it takes from the parent, and the output says what it inherited. `--dry-run` shows the plan and writes nothing:
+
+<!-- example: task-tools#split -->
+```console
+# alice, in website
+$ lore task split tsk_2ad3…f891 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos' --dry-run
+would add 3 sub-tasks under tsk_2ad3…f891 Pick the product photos:
+  1  Shoot the shirts
+  2  Shoot the mugs  (priority high)
+  3  Edit the photos
+  inherited: tasklist tlt_f147…5139, priority low, commitment accepted
+nothing written (--dry-run)
+$ lore task split tsk_2ad3…f891 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos'
+✓ 3 sub-tasks under tsk_2ad3…f891 Pick the product photos (batch bat_2537…6bbb):
+  1  tsk_b69e…5ed7 Shoot the shirts
+  2  tsk_0aae…a61f Shoot the mugs  (priority high)
+  3  tsk_6a86…ed8c Edit the photos
+  inherited: tasklist tlt_f147…5139, priority low, commitment accepted
+lore live: (live, pushed)
+$ lore task list --parent tsk_2ad3…f891
+○ tsk_b69e…5ed7 Shoot the shirts [low]
+○ tsk_0aae…a61f Shoot the mugs [high]
+○ tsk_6a86…ed8c Edit the photos [low]
+```
+<!-- /example -->
+
+`--title` may be repeated instead of positional titles, `--from <file>` reads one title per line (or a YAML list with priority, assignees and due dates), and `--key <key>` makes a rerun add nothing.
+
+## Step 4 — Check the sub-task tree
+
+`lore task tree check` looks for parent loops, orphans, open sub-tasks under a closed parent, trees that are too deep and shared ranks. A healthy tree prints one line:
+
+<!-- example: task-tools#tree-check -->
+```console
+# alice, in website
+$ lore task tree check
+✓ task tree ok (8 tasks)
+```
+<!-- /example -->
+
+When copies of the notes were merged and two tasks ended up as each other's parent, `--fix` breaks the loop (the smallest id becomes top level). The other findings are only reported; fix them with `lore task edit`.
+
+## Step 5 — Relate tasks to each other
+
+`lore task relate <id>` records how a task stands to another:
+
+- `--duplicates <tsk>`: this task is the same as that one. It is cancelled with close reason `duplicate`.
+- `--blocked-by <tsk>`: this task waits for that one (the same as `lore task edit --after`). `--blocks <tsk>` writes it the other way round.
+- `--follows-up <id>`: this task exists because of that row.
+- `--relates-to <id>`: see also; any row id.
+
+<!-- example: task-tools#relate -->
+```console
+# alice, in website
+$ lore task add 'Write the launch mail'
+✓ tsk_4f89…b64b — Write the launch mail [medium]
+lore live: (live, pushed)
+$ lore task relate tsk_4f89…b64b --duplicates tsk_7a67…9504
+✓ tsk_4f89…b64b duplicates tsk_7a67…9504; tsk_4f89…b64b cancelled (close_reason duplicate)
+lore live: (live, pushed)
+lore live: landed on main (601d285); leaves live once main is fetched
+$ lore task add 'Thank-you email after the first order'
+✓ tsk_77cb…76c4 — Thank-you email after the first order [medium]
+lore live: (live, pushed)
+lore live: 2 row(s) left live (main holds them)
+$ lore task relate tsk_77cb…76c4 --follows-up tsk_7a67…9504 --blocked-by tsk_162d…9666
+✓ tsk_77cb…76c4 waits for tsk_162d…9666
+✓ tsk_77cb…76c4 follows up tsk_7a67…9504
+lore live: (live, pushed)
+```
+<!-- /example -->
+
+`lore task unrelate` takes the same flags and removes the relation:
+
+<!-- example: task-tools#unrelate -->
+```console
+# alice, in website
+$ lore task unrelate tsk_77cb…76c4 --blocked-by tsk_162d…9666
+✓ tsk_77cb…76c4 no longer waits for tsk_162d…9666
+lore live: (live, pushed)
+```
+<!-- /example -->
+
+## Step 6 — Watch a task
+
+Whoever creates a task, and everyone assigned to it, watches it already (unless the team policy sets `tasks.auto_watch: false`), so the first `watch` below says so. `unwatch` stops the changes reaching your inbox, and `watch` starts them again:
+
+<!-- example: task-tools#watch -->
+```console
+# alice, in website
+$ lore task watch tsk_162d…9666
+already watching tsk_162d…9666
+$ lore task unwatch tsk_162d…9666
+✓ stopped watching tsk_162d…9666
+lore live: (live, pushed)
+$ lore task watch tsk_162d…9666
+✓ watching tsk_162d…9666
+lore live: (live, pushed)
+```
+<!-- /example -->
+
+## Step 7 — Read a task's history
+
+`lore task history <id>` lists each change with its time and who made it: status changes, field changes and claims. Older entries are folded; `--git` also reads earlier versions of the row from git history for the full detail.
+
+<!-- example: task-tools#history -->
+```console
+# alice, in website
+$ lore task edit tsk_162d…9666 --priority high
+✓ tsk_162d…9666 updated
+lore live: (live, pushed)
+$ lore task done tsk_162d…9666 --no-lesson
+✓ tsk_162d…9666 done
+lore live: (live, pushed)
+lore live: landed on main (86dbae4); leaves live once main is fetched
+$ lore task history tsk_162d…9666
+2026-11-02 10:00  alice               created
+2026-11-02 10:00  alice               status todo → in_progress
+2026-11-02 10:02  alice               priority urgent → high
+2026-11-02 10:02  alice               status in_progress → done (open_items_at_close: 0)
+2026-11-02 10:02  alice               close_reason none → completed
+```
+<!-- /example -->
+
+## Step 8 — Save work you repeat as a template
+
+A template is a task tree in YAML: a title, optional checklist and sub-tasks (`after: [0]` makes a sub-task wait for an earlier sibling by position), and `args` that fill `${arg:name}` placeholders when you use it. Alice writes one for every release of the shop:
+
+<!-- example: task-tools#template-add -->
+```console
+# alice, in website
+$ cat ~/release.yaml
+name: release
+description: Ship one release of the shop
+args:
+  version: {type: text, required: true}
+task:
+  title: "Release ${arg:version}"
+  priority: high
+  checklist:
+    - "CHANGELOG has ${arg:version}"
+    - "Tag pushed"
+  children:
+    - {title: "Bump the version to ${arg:version}"}
+    - {title: "Run the tests", after: [0]}
+    - {title: "Deploy to the shop", after: [1]}
+$ lore task template add release --from-file ~/release.yaml
+✓ ttp_d191…45c2 — template release: 1 task, 3 sub-tasks, 2 checklist items
+$ lore task template list
+release  repo  1 task, 3 sub-tasks, 2 checklist items
+$ lore task template show release
+# ttp_d191…45c2 (repo)
+name: release
+description: Ship one release of the shop
+args:
+    version:
+        type: text
+        required: true
+        default: ""
+task:
+    title: Release ${arg:version}
+    body: ""
+    priority: high
+    repo: ""
+    estimate: ""
+    gate: ""
+    role: ""
+    checklist:
+        - CHANGELOG has ${arg:version}
+        - Tag pushed
+    after: []
+    children:
+        - title: Bump the version to ${arg:version}
+          body: ""
+          priority: ""
+          repo: ""
+          estimate: ""
+          gate: ""
+          role: ""
+          checklist: []
+          after: []
+          children: []
+        - title: Run the tests
+          body: ""
+          priority: ""
+          repo: ""
+          estimate: ""
+          gate: ""
+          role: ""
+          checklist: []
+          after:
+            - 0
+          children: []
+        - title: Deploy to the shop
+          body: ""
+          priority: ""
+          repo: ""
+          estimate: ""
+          gate: ""
+          role: ""
+          checklist: []
+          after:
+            - 1
+          children: []
+```
+<!-- /example -->
+
+`template show` prints the saved form with every field, the empty ones too; that is the shape `template edit --from-file` reads back. `lore task template add <name> --from <tsk>` saves an existing task and its sub-tasks as a template instead of a file. Use a template with `lore task add --template <name> --arg name=value`. A required argument that is missing is refused, and `--dry-run` shows the tasks without writing them:
+
+<!-- example: task-tools#template-use -->
+```console
+# alice, in website
+$ lore task add --template release
+ERROR: [E_TEMPLATE] task template: argument version is required: --arg version=<value>
+(exit 23)
+$ lore task add --template release --arg version=1.4 --dry-run
+would add 4 tasks (template release):
+  Release 1.4
+    Bump the version to 1.4
+    Run the tests
+    Deploy to the shop
+$ lore task add --template release --arg version=1.4
+✓ tsk_b4d3…11aa — Release 1.4 [high]
+  template release: added 1 task and 3 sub-tasks
+lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
+```
+<!-- /example -->
+
+`rename` keeps the template's id, `edit <name> --from-file <file>` replaces its content, and `delete` moves it to the trash like any row:
+
+<!-- example: task-tools#template-rename-and-delete -->
+```console
+# alice, in website
+$ lore task template rename release shop_release
+✓ ttp_d191…45c2 — template release renamed to shop_release
+$ lore task template list
+shop_release  repo  1 task, 3 sub-tasks, 2 checklist items
+$ lore task template delete shop_release --yes
+✓ ttp_d191…45c2 — template shop_release moved to the trash (restore: lore trash restore ttp_d191…45c2)
+```
+<!-- /example -->
+
+## Step 9 — Make a task repeat
+
+`lore task add --recur '<rule>'` makes a task part of a series. Rules read like `every day`, `every weekday`, `every week`, `every month on 1`, `every mon,thu`, `every 3 months`, and `every! 14 days` (counted from when you finish, not from the due date); add `until <date>` or `for N` to end it. `lore task recur show` prints the rule and the next dates:
+
+<!-- example: task-tools#recur -->
+```console
+# alice, in website
+$ lore task add 'Back up the shop database' --recur 'every week'
+✓ tsk_9a34…b418 — Back up the shop database [medium]
+  recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_bfed…eeea, #1)
+lore live: (live, pushed)
+$ lore task recur show tsk_9a34…b418
+tsk_9a34…b418 Back up the shop database
+  rule: every week
+  series: rcs_bfed…eeea #1 (active)
+  next: 2026-11-02, 2026-11-09, 2026-11-16
+```
+<!-- /example -->
+
+Finishing an instance creates the next one, and `lore task list --series <rcs_…> --all` lists the whole series:
+
+<!-- example: task-tools#recur-done -->
+```console
+# alice, in website
+$ lore task done tsk_9a34…b418 --no-lesson
+✓ tsk_9a34…b418 done
+  every week due 2026-11-02
+  next instance: tsk_376c…8e1a due 2026-11-09 (series rcs_bfed…eeea, #2)
+lore live: (live, pushed)
+lore live: landed on main (9b40ce7); leaves live once main is fetched
+$ lore task list --series rcs_bfed…eeea --all
+✓ tsk_9a34…b418 Back up the shop database [medium] due:2026-11-02
+○ tsk_376c…8e1a Back up the shop database [medium] due:2026-11-09
+```
+<!-- /example -->
+
+`recur skip` closes this instance as skipped and creates the next one:
+
+<!-- example: task-tools#recur-skip -->
+```console
+# alice, in website
+$ lore task recur skip tsk_376c…8e1a
+✓ tsk_376c…8e1a skipped
+  every week due 2026-11-09
+  next instance: tsk_67e2…291e due 2026-11-16 (series rcs_bfed…eeea, #3)
+lore live: (live, pushed)
+lore live: landed on main (05513aa); leaves live once main is fetched
+lore live: 1 row(s) left live (main holds them)
+```
+<!-- /example -->
+
+`recur edit` changes the rule for this instance and the later ones:
+
+<!-- example: task-tools#recur-edit -->
+```console
+# alice, in website
+$ lore task recur edit tsk_67e2…291e 'every! 14 days'
+✓ tsk_67e2…291e updated
+  recurs: every! 14 days → next: 2026-11-16, 2026-11-30, 2026-12-14 (series rcs_bfed…eeea, #3)
+lore live: (live, pushed)
+lore live: 1 row(s) left live (main holds them)
+$ lore task recur show tsk_67e2…291e
+tsk_67e2…291e Back up the shop database
+  rule: every! 14 days
+  series: rcs_bfed…eeea #3 (active)
+  next: 2026-11-16, 2026-11-30, 2026-12-14
+```
+<!-- /example -->
+
+`recur stop` ends the series: the current instance stays, no further one is made. It asks first:
+
+<!-- example: task-tools#recur-stop -->
+```console
+# alice, in website
+$ lore task recur stop tsk_67e2…291e
+ERROR: [E_NEEDS_CONFIRM] task recur stop tsk_67e2…291e?
+  hint: ask the person, then rerun with --yes
+(exit 26)
+$ lore task recur stop tsk_67e2…291e --yes
+✓ tsk_67e2…291e series rcs_bfed…eeea stopped (no further instances; this one stays)
+lore live: (live, pushed)
+$ lore task recur show tsk_67e2…291e
+tsk_67e2…291e Back up the shop database
+  rule: every! 14 days
+  series: rcs_bfed…eeea #3 (stopped)
+```
+<!-- /example -->
+
+## Step 10 — Sweep out stale tasks
+
+Three months later, many of the launch tasks have not been touched. `lore task stale` lists open tasks with no change for 60 days (`--days N`, or the `tasks.stale_days` setting). It leaves out tasks that are claimed, in an active mission, due in the future, with open sub-tasks, or repeating. `--close --dry-run` shows what would be cancelled, and `--close --yes` cancels them with close reason `stale`, as one batch you can look at with `lore batch show`:
+
+<!-- example: task-tools#stale -->
+```console
+# alice, in website
+$ lore task stale
+9 tasks with no change for 60 days (excluded: claimed, in an active mission, future due, open sub-tasks, recurring)
+  tsk_d431…313a  Send a test to the client
+  tsk_b4f4…a5b0  Check the shop on a phone
+  tsk_b69e…5ed7  Shoot the shirts
+  tsk_0aae…a61f  Shoot the mugs
+  tsk_6a86…ed8c  Edit the photos
+  tsk_77cb…76c4  Thank-you email after the first order
+  tsk_8567…366f  Bump the version to 1.4
+  tsk_71f0…c07d  Run the tests
+  tsk_ada3…c018  Deploy to the shop
+$ lore task stale --close --dry-run
+9 tasks with no change for 60 days (excluded: claimed, in an active mission, future due, open sub-tasks, recurring)
+  tsk_d431…313a  Send a test to the client
+  tsk_b4f4…a5b0  Check the shop on a phone
+  tsk_b69e…5ed7  Shoot the shirts
+  tsk_0aae…a61f  Shoot the mugs
+  tsk_6a86…ed8c  Edit the photos
+  tsk_77cb…76c4  Thank-you email after the first order
+  tsk_8567…366f  Bump the version to 1.4
+  tsk_71f0…c07d  Run the tests
+  tsk_ada3…c018  Deploy to the shop
+would cancel them with close_reason stale (nothing written, --dry-run)
+$ lore task stale --close --yes
+✓ 9 tasks cancelled (close_reason stale, batch bat_78c8…5b6c); lore batch show bat_78c8…5b6c
+lore live: (live, pushed)
+lore live: landed on main (dfd8dc8); 4 open row(s) copied, they stay live; leaves live once main is fetched
+$ lore task list
+○ tsk_7a67…9504 Write the launch email [high] 0/0
+○ tsk_2ad3…f891 Pick the product photos [low] 0/0
+○ tsk_b4d3…11aa Release 1.4 [high] 0/0
+○ tsk_67e2…291e Back up the shop database [medium] due:2026-11-16
+```
+<!-- /example -->
+
+## Try it
+
+Every example on this page comes from one script. In a checkout of lore you can run it yourself; it builds lore and works in a throwaway folder, so nothing on your machine changes:
+
+```console
+$ tests/docs/run-examples.sh task-tools
+```
+
+The commands and their output are written to `tests/docs/transcripts/task-tools.txt`. The quickest single check is the board after the first three tasks:
+
+<!-- example: task-tools#board only=5 -->
+```console
+# alice, in website
+$ lore task board
+todo (2)
+  tsk_7a67…9504  Write the launch email
+  tsk_2ad3…f891  Pick the product photos
+in_progress (1)
+  tsk_162d…9666  Set up the payment provider
+done (0)
+cancelled (0)
+blocked (0)
+```
+<!-- /example -->
+
+## Pitfalls
+
+- **A checklist item is not a task.** It has no owner, no status and cannot be claimed. If anyone might ever pick it up alone, make it a sub-task (`checklist promote`, or `lore task split`).
+- **Checklist positions move.** After `rm` or `promote` the numbers close up. In scripts use the `chk_` id that `checklist list` prints.
+- **`checklist import` and `recur stop` ask first.** Without a terminal they stop with `E_NEEDS_CONFIRM` until you add `--yes`.
+- **`relate --duplicates` cancels the task.** It is the duplicate that closes, not the one it points at; pick the order with care.
+- **`lore task show` does not print relations.** A follow-up shows as a `ref:` line; a `--blocked-by` relation shows in `lore mission status` ("waits for …"), not in `task show`.
+- **A template refuses unknown keys and undeclared arguments.** A typo in the YAML, or a `${arg:x}` with no `x` under `args`, is refused with `E_TEMPLATE` when you add the template, and an unknown `--arg` when you use it.
+- **A series moves on only when an instance closes.** A repeating task's next instance only appears when you finish or skip the current one; a series that is never closed never moves on.
+- **`task stale --close` cancels in bulk.** Run `--dry-run` first. The batch can be undone with `lore batch undo <bat_…>` (see [Trash and purge](../sync/trash-and-purge.md)).
+
+## Related
+
+- [Tasks](tasks.md): add, list, start, finish and change tasks.
+- [Commitment and snooze](commitment-and-snooze.md): proposals, ideas and tasks for later.
+- [Missions and plans](missions-and-plans.md): group tasks under a goal; plan files with sub-tasks.
+- [Run log](run-log.md): time spent on a task.
+- [Agents](../team/agents.md): claims and leases, which `task stale` leaves alone.

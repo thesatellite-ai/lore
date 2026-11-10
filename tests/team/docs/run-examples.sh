@@ -20,12 +20,16 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 OUT="$HERE/transcripts"
-SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/lore-docs-examples.XXXXXX")"
+# The worlds live under /tmp, never under $TMPDIR: lore prints real paths (a file:// store url
+# under ~) and aligns table columns to them, and clean() shortens the home folder to "~"
+# only afterwards, so the padding left in a transcript follows the length of this path. A
+# fixed-length root keeps every run (any TMPDIR, any gate step) byte-identical.
+SCRATCH="$(mktemp -d "/tmp/lore-docs-examples.XXXXXX")"
 [ -n "${KEEP:-}" ] && echo "keeping worlds in $SCRATCH" >&2 || trap 'rm -rf "$SCRATCH"' EXIT
 
 if [ -z "${LORE_BIN:-}" ]; then
   LORE_BIN="$SCRATCH/bin/lore"
-  (cd "$REPO" && CGO_ENABLED=0 go build -tags loretest -o "$LORE_BIN" ./saas/cmd/cli)
+  (cd "$REPO" && CGO_ENABLED=0 go build -tags loretest -o "$LORE_BIN" ./cmd/lore)
 fi
 export LORE_BIN
 
@@ -53,6 +57,13 @@ note() { printf '\n### %s\n' "$*" >> "$TRANSCRIPT"; }
 config() {
   mkdir -p "$HOMES/$1/.lore"
   cat > "$HOMES/$1/.lore/config.yaml"
+}
+
+# make_store PERSON NAME URL: setup step, URL becomes a lore store (0.1.18: `lore store init <name> <url>`
+# runs inside a repo and attaches the store there by name). It runs in ~/work/stores, a plain git
+# folder of PERSON's that no example reads, so no client repo ever names the store.
+make_store() {
+  quiet "$1" work "mkdir -p stores && cd stores && { [ -d .git ] || git init -q; } && lore store init $2 '$3' --yes"
 }
 
 # client_repo SLUG DIR [PERSON]: the client (default carol) creates SLUG with an initial commit and lore set up.
@@ -114,10 +125,13 @@ s_getting_started() {
   on alice work/notes-app "lore sync"
   on alice work/notes-app "lore live show"
 
-  note "toml migration"
-  quiet alice . "mkdir -p .lore && printf 'stable_key = \"human:alice@example.com\"\ndisplay_name = \"Alice Doe\"\n' > .lore/identity.toml"
-  on alice work/notes-app "lore whoami"
-  on alice . "ls ~/.lore; cat ~/.lore/identity.yaml"
+  note "old identity file"
+  # A v0.1.17 ~/.lore/identity.yaml: read until `lore migrate run` moves it into
+  # identity: of config.yaml (CFG9); the old file is kept as .migrated (OWNERQ-8).
+  quiet alice . "mkdir -p .lore && printf 'stable_key: human:alice@example.com\ndisplay_name: Alice Doe\n' > .lore/identity.yaml"
+  on alice work/notes-app "lore identity show"
+  on alice work/notes-app "lore migrate run"
+  on alice . "ls ~/.lore; cat ~/.lore/config.yaml"
 
   note "first config"
   config alice <<'Y'
@@ -138,10 +152,12 @@ Y
   on alice . "cat ~/.lore/config.yaml"
   on alice . "lore config check"
   remote agency/notes
-  on alice . "lore store init git@github.com:agency/notes"
   remote agency/tools
   quiet alice work "git clone -q https://github.com/agency/tools && cd tools && echo '# tools' > README.md && git add . && git commit -qm init && git push -q origin main"
   on alice work/tools "lore init --non-interactive --name=tools"
+  # 0.1.18: a store is made from inside a repo, which attaches it by name (.lore/stores.yaml);
+  # the agency's own repo is the place (a client repo never names the store).
+  on alice work/tools "lore store init agency git@github.com:agency/notes --yes"
   TTY=1 on alice work/tools "lore whoami"
   on alice work/tools "lore actor register"
   on alice work/notes-app "lore whoami"
@@ -185,7 +201,7 @@ s_small_team() {
   on bob work/billing "lore actor register"
 
   note "assign across branches"
-  on bob work/billing "git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice"
+  on bob work/billing "git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice"
   local t1; t1=$(id tsk)
   on alice work/billing "git switch -q -c feat/login && lore task list --mine"
   on alice work/billing "lore sync && lore task list --mine"
@@ -198,8 +214,13 @@ s_small_team() {
   on alice work/billing "git log --oneline -1 && git status --short"
 
   note "urgent rule"
-  on bob work/billing "lore rule add --body 'Never deploy on a Friday' --live"
-  on bob work/billing "git fetch -q origin && git log --oneline -1 origin/main"
+  # 0.1.18: no --live on rules (no live ref on the core); the rule is copied onto main with sync promote.
+  on bob work/billing "lore rule add --body 'Never deploy on a Friday'"
+  local r1; r1=$(id rul)
+  on bob work/billing "lore sync promote $r1 --to main --dry-run"
+  # promote commits onto the LOCAL main (it never pushes): bring it up to date first.
+  on bob work/billing "git fetch -q origin main:main && lore sync promote $r1 --to main"
+  on bob work/billing "git push -q origin main && git fetch -q origin && git log --oneline -1 origin/main"
 
   note "explain"
   on alice work/billing "lore explain $t1"
@@ -226,9 +247,13 @@ s_agency() {
   agency_config bob "human:bob@agency.example" "Bob Roe" bob
   client_repo client/website app
   remote agency/notes
+  remote agency/tools
+  quiet alice work "git clone -q https://github.com/agency/tools && cd tools && echo '# tools' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=tools >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
 
   note "store init"
-  on alice . "lore store init git@github.com:agency/notes"
+  # 0.1.18: the store is made from the agency's own repo, which attaches it by name;
+  # the client repo never names it (the link below lives only in the store).
+  on alice work/tools "lore store init agency git@github.com:agency/notes --yes"
   quiet alice work "git clone -q https://github.com/client/website website"
   quiet bob work "git clone -q https://github.com/client/website website"
 
@@ -257,9 +282,11 @@ s_agency() {
   on bob work/website "git status --short"
 
   note "render"
-  on alice work/website "lore render"
-  on alice work/website "cat CLAUDE.local.md; git check-ignore -v CLAUDE.local.md"
-  on alice work/website "head -12 ~/.lore/render/*.md"
+  # 0.1.18: one private render file per internal store under ~/.lore/render/<repo_id>/, with an index;
+  # the checkout gets nothing (no CLAUDE.local.md import line). TTY: a person's terminal, paths unredacted.
+  TTY=1 on alice work/website "lore render"
+  on alice work/website "cat ~/.lore/render/*/index.md"
+  on alice work/website "git status --short"
 
   note "leak blocked"
   on alice work/website "mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts"
@@ -276,10 +303,11 @@ s_agency() {
   actor=$(grep -o 'LORE_ACTOR=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2); session=$(grep -o 'LORE_SESSION=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2)
   EXTRA_ENV="LORE_ACTOR=$actor LORE_SESSION=$session" on! alice work/website "lore rule add --body 'require prepayment from this client'"
 
-  note "share"
+  note "move"
   on alice work/website "lore memory add --body 'checkout must support INR and USD'"
   local m2; m2=$(id mem)
-  TTY=1 ANSWER=y on alice work/website "lore share $m2 --to repo"
+  # 0.1.18: lore share is removed (a row has one home); lore move gives it to the client repo, same id.
+  TTY=1 ANSWER=y on alice work/website "lore move $m2 --to repo"
   on alice work/website "git status --short"
 
   note "client view"
@@ -297,7 +325,7 @@ s_group() {
   person alice alice@agency.example
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
   remote agency/notes
-  quiet alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   for r in api app infra; do client_repo "client2/$r" "$r" client2dev; quiet alice work "git clone -q https://github.com/client2/$r"; done
 
   note "link three repos"
@@ -339,12 +367,13 @@ orgs:
 Y
   remote agency/notes
   client_repo client/website app
-  quiet alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   quiet alice work "git clone -q https://github.com/client/website website"
   quiet alice work/website "lore org link agency --project client --yes"
 
   note "staging branch"
-  on alice work/website "lore store init git@github.com:agency/notes --branch staging"
+  # 0.1.18: a store branch is made on purpose with ?branch= (never from a client repo, which must not name the store).
+  on alice work/stores "lore store init agency_stag 'git@github.com:agency/notes?branch=staging' --yes"
   on alice work/website "lore org use agency-stag"
   on alice work/website "lore whoami"
   on alice work/website "lore org link agency-stag --project client --yes"
@@ -387,7 +416,8 @@ orgs:
     repos: [github.com/client/website]
 Y
   note "one store per client"
-  on alice . "lore store init git@github.com:agency/notes && lore store init git@github.com:agency/notes-client && lore store init git@github.com:agency/notes-client2"
+  quiet alice work "mkdir -p stores && cd stores && git init -q"
+  on alice work/stores "lore store init agency git@github.com:agency/notes --yes && lore store init client git@github.com:agency/notes-client --yes && lore store init client2 git@github.com:agency/notes-client2 --yes"
   quiet alice work "git clone -q https://github.com/client/website website"
   on alice work/website "lore org link agency --project client --store git@github.com:agency/notes-client --yes"
   on alice work/website "lore actor register"
@@ -431,7 +461,8 @@ Y
   client_repo client/website app
   client_repo client3/api api client3dev
   client_repo someone/tool tool somedev
-  quiet alice . "lore store init git@github.com:agency/notes && lore store init git@github.com:client3/notes"
+  make_store alice agency git@github.com:agency/notes
+  make_store alice client3 git@github.com:client3/notes
   quiet alice work "git clone -q https://github.com/client/website website && git clone -q https://github.com/client3/api client3-api && git clone -q https://github.com/someone/tool forked-tool"
   quiet alice work/website "lore org link agency --project client --yes"
 
@@ -456,7 +487,7 @@ s_personal() {
   person alice alice@agency.example
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
   remote agency/notes; client_repo client/website app; remote alice/scratch
-  quiet alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   quiet alice work "git clone -q https://github.com/client/website website"
   quiet alice work/website "lore org link agency --project client --yes"
   quiet alice work "git clone -q https://github.com/alice/scratch 2>/dev/null; cd scratch && git commit -q --allow-empty -m init && git push -q origin main && lore init --non-interactive --name=scratch >/dev/null 2>&1"
@@ -464,7 +495,6 @@ s_personal() {
   note "local personal store"
   on alice work/website "lore memory add --body 'I always forget the staging VPN profile' --to me"
   on alice work/scratch "lore memory add --body 'I prefer tabs over spaces' --to me"
-  TTY=1 ANSWER=n on! alice work/website "lore memory add --body 'agency invoices go to the finance inbox' --to me --everywhere"
   on alice work/website "lore memory list"
   on alice work/scratch "lore memory list"
   on alice . "find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'"
@@ -476,8 +506,8 @@ s_personal() {
     agency_config "$who" "human:alice@agency.example" "Alice Doe" alice
     sed -i 's#^  store: local#  store: git@github.com:alice/lore-me#' "$HOMES/$who/.lore/config.yaml"
   done
-  on alice . "lore store init git@github.com:alice/lore-me"
-  on alice work/website "lore memory add --body 'the client invoice template lives in the shared drive' --to me"
+  on alice work/scratch "lore store init me git@github.com:alice/lore-me --yes"
+  on alice work/website "lore memory add --body 'my invoice template lives in the shared drive' --to me"
   quiet alice-devbox work "git clone -q https://github.com/client/website website"
   on alice-devbox work/website "lore memory list"
 }
@@ -498,13 +528,16 @@ start_agent() {
 # ag LABEL DIR CMD: run CMD as agent LABEL (alice's HOME, the agent's env).
 ag()  { AS="$1" EXTRA_ENV="${AGENT_ENV[$1]}" on alice "$2" "$3"; }
 ag!() { AS="$1" EXTRA_ENV="${AGENT_ENV[$1]}" on! alice "$2" "$3"; }
+# agk BUG LABEL DIR CMD / agk! …: ag / ag! for an example that misbehaves today because of a reported bug (on_known).
+agk()  { AS="$2" EXTRA_ENV="${AGENT_ENV[$2]}" on_known "$1" alice "$3" "$4"; }
+agk!() { AS="$2" EXTRA_ENV="${AGENT_ENV[$2]}" on_known_fail "$1" alice "$3" "$4"; }
 
 s_agents() {
   section agents
   person alice alice@agency.example
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
   remote agency/notes
-  quiet alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   for r in api app infra; do
     client_repo "client2/$r" "$r" client2dev
     quiet alice work "git clone -q https://github.com/client2/$r && cd $r && lore org link agency --project client2 --yes"
@@ -525,9 +558,9 @@ tasks:
 Y
   on alice work/api "cat invite.yaml"
   start_agent agent-coord work/api
-  ag agent-coord work/api "lore plan apply invite.yaml"
+  ag agent-coord work/api "lore mission apply invite.yaml"
   local mis; mis=$(id msn)
-  ag agent-coord work/api "lore plan apply invite.yaml"
+  ag agent-coord work/api "lore mission apply invite.yaml"
   ag agent-coord work/api "lore task claim $mis"
 
   note "workers start"
@@ -542,9 +575,10 @@ Y
   ag agent-infra work/agents/infra "lore task next --mission $mis --repo infra --owns nginx/sites/invite.conf"
   local tp; tp=$(id tsk)
 
-  note "finding"
-  ag agent-infra work/agents/infra "lore finding add --mission $mis 'invite links must use the public website address, not the server name'"
-  ag agent-backend work/agents/api "lore inbox"
+  note "shared fact"
+  # lore finding add is not in 0.1.18 (dropped): a fact every agent needs is a live memory.
+  ag agent-infra work/agents/infra "lore memory add --live --body 'invite links must use the public website address, not the server name'"
+  ag agent-backend work/agents/api "lore sync >/dev/null && lore search 'invite links'"
   ag agent-infra work/agents/infra "lore task done $tp"
 
   note "done then merged"
@@ -595,7 +629,7 @@ s_leak_cleanup() {
   person alice alice@agency.example
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
   remote agency/notes; client_repo client/website app
-  quiet alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   quiet alice work "git clone -q https://github.com/client/website website && cd website && lore org link agency --project client --yes"
 
   note "the mistake"
@@ -604,7 +638,7 @@ s_leak_cleanup() {
   on carol work/app "lore sync >/dev/null; lore task list"
 
   note "purge"
-  on alice work/website "lore live purge $t"
+  on alice work/website "lore live purge $t --confirm"
   on alice work/website "lore live compact --dry-run"
   on alice work/website "lore live compact"
   on alice work/website "lore live log"
@@ -621,7 +655,7 @@ s_errors() {
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
   agency_config bob "human:bob@agency.example" "Bob Roe" bob
   remote agency/notes; client_repo client/website app
-  quiet alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   quiet alice work "git clone -q https://github.com/client/website website && cd website && lore org link agency --project client --yes && lore actor register"
 
   note "config invalid"
@@ -699,14 +733,14 @@ s_internals() {
   person alice alice@agency.example
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
   remote agency/notes; client_repo client/website app
-  quiet alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   quiet alice work "git clone -q https://github.com/client/website website && cd website && lore org link agency --project client --yes && lore actor register"
 
   note "refspec"
   on alice work/website "git config --get-all remote.origin.fetch"
 
   note "monorepo live tree"
-  on carol work/app "mkdir -p web && cd web && lore init --non-interactive --name=web >/dev/null 2>&1; cd .. && lore task add 'fix header' --to repo && cd web && lore rule add --body 'Buttons are blue' --live --to repo"
+  on carol work/app "mkdir -p web && cd web && lore init --non-interactive --name=web >/dev/null 2>&1; cd .. && lore task add 'fix header' --to repo && cd web && lore rule add --body 'Buttons are blue' --to repo"
   on carol work/app "git ls-tree -r --name-only refs/lore/live"
   on carol work/app "git log --oneline refs/lore/live"
   on carol work/app "git cat-file -p refs/lore/live:_live/meta.json; echo; git cat-file -p refs/lore/live:_live/epoch"
@@ -719,7 +753,6 @@ s_internals() {
   on alice work/website "lore memory add --body 'the client wants a demo every second Friday'"
   on alice . "git -C ~/.lore/clones/github.com/agency/notes.git ls-tree -r --name-only main | grep -v '_meta.json\|.gitattributes' | head -20"
   on alice . "git -C ~/.lore/clones/github.com/agency/notes.git for-each-ref --format='%(refname)'"
-  on alice . "git -C ~/.lore/clones/github.com/agency/notes.git ls-tree -r --name-only refs/lore-remote/origin/live/main"
   on alice . "git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client/.lore/data/_meta.json"
 
   note "signals"
@@ -727,10 +760,10 @@ s_internals() {
   local a s2
   a=$(grep -o 'LORE_ACTOR=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2); s2=$(grep -o 'LORE_SESSION=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2)
   EXTRA_ENV="LORE_ACTOR=$a LORE_SESSION=$s2" AS=agent-backend on alice work/website "lore task claim $t"
-  on alice . "cd ~/.lore/clones/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main"
-  on alice . "cd ~/.lore/clones/github.com/agency/notes.git && git cat-file -p refs/lore-remote/origin/signals/main:\$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)"
+  on alice . "cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main"
+  on alice . "cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p refs/lore-remote/origin/signals/main:\$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)"
   EXTRA_ENV="LORE_ACTOR=$a LORE_SESSION=$s2" AS=agent-backend on alice work/website "lore task heartbeat $t"
-  on alice . "cd ~/.lore/clones/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main"
+  on alice . "cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main"
 
   note "hooks"
   on alice work/website "ls .git/hooks | grep -v sample; grep -h 'lore' .git/hooks/pre-commit | head -5"
@@ -738,35 +771,34 @@ s_internals() {
 }
 
 # ---------------------------------------------------------------------------
-# team-ops: teams, and the claim commands a person uses on an agent's work
+# team-ops: assigning by @handle, and the claim commands a person uses on an agent's work
 # (release, revoke, reassign) plus shared resources (docs/team/agents.md).
 s_team_ops() {
   section team-ops
   person alice alice@agency.example; person bob bob@agency.example
   # 70 s per step: past lore's 60 s fetch cache, so each person sees the other's last write.
   STEP=70
-  # First a repo with no org config (like the small-team page): teams and shared resources.
+  # First a repo with no org config (like the small-team page): the roster and shared resources.
   remote agency/billing
   quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main && lore actor register"
   quiet bob work "git clone -q https://github.com/agency/billing && cd billing && lore actor register"
 
   note "teams"
-  on alice work/billing "lore team add @frontend --name 'Frontend' --members @alice,@bob"
-  on alice work/billing "lore team list"
-  on alice work/billing "lore task add 'make the buttons blue' --assign @frontend"
+  on alice work/billing "lore actor list"
+  on alice work/billing "lore task add 'make the buttons blue' --assign @bob"
   on bob work/billing "lore task list"
 
   note "resource"
-  on alice work/billing "lore resource claim full-suite --ttl 30m"
-  on! bob work/billing "lore resource claim full-suite --ttl 30m"
-  on alice work/billing "lore resource release full-suite"
-  on bob work/billing "lore resource claim full-suite --ttl 30m"
+  on alice work/billing "lore hold claim full-suite --ttl 30m"
+  on! bob work/billing "lore hold claim full-suite --ttl 30m"
+  on alice work/billing "lore hold release full-suite"
+  on bob work/billing "lore hold claim full-suite --ttl 30m"
 
   # Then the agency's client repo, with the org config: claims a person takes back or moves.
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
   agency_config bob "human:bob@agency.example" "Bob Roe" bob
   remote agency/notes; client_repo client/website app
-  quiet alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   quiet alice work "git clone -q https://github.com/client/website website && cd website && lore org link agency --project client --yes && lore actor register"
   quiet bob work "git clone -q https://github.com/client/website website && cd website && lore actor register"
 
@@ -779,9 +811,9 @@ s_team_ops() {
 
   note "revoke"
   start_agent agent-backend work/website
-  ag agent-backend work/website "lore task claim $t1"
+  AS=agent-backend EXTRA_ENV="${AGENT_ENV[agent-backend]}" on alice work/website "lore task claim $t1"
   on alice work/website "lore task revoke $t1"
-  ag! agent-backend work/website "lore task done $t1"
+  AS=agent-backend EXTRA_ENV="${AGENT_ENV[agent-backend]}" on! alice work/website "lore task done $t1"
 
   note "reassign"
   on alice work/website "lore task add 'update the contact page' --to agency --assign @bob"
@@ -804,14 +836,12 @@ s_people() {
   on alice work/website "lore identity show"
   on alice . "lore identity set alice@example.com"
   on alice work/website "lore identity show"
-  on alice . "lore identity anonymize on"
-  on alice . "lore identity anonymize off"
   on alice . "lore identity unset"
   on alice work/website "lore identity show"
 
   note "identity per org"
   agency_config alice "human:alice@agency.example" "Alice Doe" alice
-  on alice . "lore store init git@github.com:agency/notes"
+  make_store alice agency git@github.com:agency/notes
   on alice . "lore identity set --org agency --key human:alice@agency.example --name 'Alice Doe' --handle alice"
   quiet alice work/website "lore org link agency --project client --yes && lore actor register"
   on alice work/website "lore identity show"
@@ -828,6 +858,7 @@ Y
   on alice notes-checkout "git add org/.lore/lore-org.yaml && git commit -qm 'suggest the agency org entry' && git push -q origin main"
 
   note "org import"
+  # Run outside any repo: the register step opens only the org store (BUG-T3).
   on bob . "lore org import git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes"
   on bob . "cat ~/.lore/config.yaml"
   quiet bob work "git clone -q https://github.com/client/website website"
@@ -852,7 +883,85 @@ Y
   on bob . "lore store forget git@github.com:agency/notes"
 
   note "cache prune"
-  on alice . "lore cache prune --older-than 30d"
+  on alice . "lore cache prune --dry-run"
+}
+
+# ---------------------------------------------------------------------------
+# store-push: how writes to the personal store and an org store reach the remote
+# (push modes, batches, history compaction; docs/team/identity-and-stores.md).
+s_store_push() {
+  section store-push
+  person alice alice@agency.example; person bob bob@agency.example
+  remote alice/lore-me; remote agency/notes; client_repo client/website app
+  for who in alice bob; do
+    config "$who" <<Y
+orgs:
+  - name: agency
+    identity: {key: "human:$who@agency.example", name: "${who^}", handle: $who}
+    stores:
+      - url: git@github.com:agency/notes
+        org_folder: org
+    own:   [github.com/agency/*]
+    repos: [github.com/client/*]
+    defaults:
+      client_repos: {memory: agency}
+Y
+  done
+  # Alice's machine holds an admin setup of the agency: she decides the org store's settings.
+  cat >> "$HOMES/alice/.lore/config.yaml" <<'Y'
+setups:
+  - name: agency
+    kind: admin
+    org: agency
+Y
+  # The org store gets its first rows in August, so a compaction has old history to fold.
+  CLOCK=2026-08-03T09:00:00Z
+  make_store alice agency git@github.com:agency/notes
+  quiet alice work "git clone -q https://github.com/client/website website"
+  quiet alice work/website "lore org link agency --project client --yes && lore actor register"
+  quiet alice work/website "lore memory add --body 'the client signs off designs on Thursdays' --to agency"
+  quiet alice work/website "lore memory add --body 'staging resets every Sunday night' --to agency"
+  CLOCK=2026-11-02T10:00:00Z
+  quiet alice . "lore store init me git@github.com:alice/lore-me"
+  quiet bob work "git clone -q https://github.com/client/website website"
+  quiet bob work/website "lore actor register && lore sync"
+
+  note "show"
+  on alice work/website "lore store show me"
+
+  note "batch"
+  on alice work/website "lore store set me push=batch push_every=10m"
+  on alice work/website "lore memory add --body 'I always forget the staging VPN profile' --to me"
+  on alice work/website "lore memory add --body 'I prefer short standups' --to me"
+  on alice work/website "lore store show me"
+  on alice work/website "lore sync"
+  on alice work/website "git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD"
+
+  note "manual"
+  on alice work/website "lore store set me push=manual"
+  on alice work/website "lore doctor | grep 'store me:'"
+
+  note "refused"
+  on! alice work/website "lore store set repo push=batch"
+  on! bob work/website "lore store set agency push=batch"
+  on! alice work/website "lore store set me push_every=30s"
+
+  note "org settings"
+  on alice work/website "lore store set agency push=batch push_every=15m"
+  on bob work/website "lore sync >/dev/null && lore store show agency"
+
+  note "compact"
+  # Bob's write waits for his next batch: his clone holds work the remote has not seen.
+  on bob work/website "lore memory add --body 'the client wants the invoice on the 1st' --to agency"
+  on alice work/website "lore store compact agency --before 30d --dry-run"
+  on! alice work/website "lore store compact agency --before 30d"
+  on alice work/website "lore store compact agency --before 30d --yes"
+  on bob work/website "lore sync"
+  on bob work/website "lore memory list"
+  on bob work/website "git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH_HEAD"
+
+  note "auto compact"
+  on alice work/website "lore store set me compact=on compact_after=90d"
 }
 
 # ---------------------------------------------------------------------------
@@ -882,8 +991,354 @@ s_live_repair() {
   on alice work/billing "lore sync --trace 2>&1 | grep -e '^trace: git fetch' -e '^trace: git push' -e '^·'"
 }
 
+# ---------------------------------------------------------------------------
+# profiles: team profiles on the org roster: fields, contacts, contact types,
+# statuses, company periods, project memberships and roles, offboarding and
+# rejoining, org create/rename and machine profiles (docs/team/profiles.md).
+s_profiles() {
+  section profiles
+  person tomas tomas@agency.example; person mira mira@agency.example
+  agency_config tomas "human:tomas@agency.example" "Tomas Weber" tomas
+  agency_config mira "human:mira@agency.example" "Mira Patel" mira
+  remote agency/notes; client_repo client/acme-hub acme-hub; client_repo client/northwind-app northwind-app
+  make_store tomas agency git@github.com:agency/notes
+  quiet tomas work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore org link agency --project acme-hub --yes && lore actor register"
+  quiet tomas work "git clone -q https://github.com/client/northwind-app && cd northwind-app && lore org link agency --project northwind-app --yes"
+  quiet mira work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore actor register"
+  # Mira joined on 2026-01-12: the story starts then.
+  CLOCK=2026-01-12T09:00:00Z
+
+  note "profile fields"
+  on tomas work/acme-hub "lore actor edit @mira --title 'Backend engineer' --timezone Europe/Istanbul --location 'Ankara, TR'"
+  on tomas work/acme-hub "lore actor edit @mira --bio 'Payments and billing.' --photo-url https://example.com/mira.png"
+  on tomas work/acme-hub "lore actor edit @mira --clear photo_url,bio"
+  on! tomas work/acme-hub "lore actor edit @mira --timezone 'Istanbul time'"
+
+  note "contacts"
+  on tomas work/acme-hub "lore actor contact add @mira email mira@agency.example --label work --primary --identity"
+  on tomas work/acme-hub "lore actor contact add @mira email mira.patel@example.com --label personal --identity"
+  on tomas work/acme-hub "lore actor contact add @mira github mira-agency --label work --primary --identity"
+  on tomas work/acme-hub "lore actor contact add @mira github mirap --label personal --identity"
+  on tomas work/acme-hub "lore actor contact add @mira phone '+90 532 000 0000' --label work --primary"
+  on tomas work/acme-hub "lore actor contact add @mira github mirap --label personal --identity"
+  on tomas work/acme-hub "lore actor contact list --type phone"
+  on! tomas work/acme-hub "lore actor contact add @mira phone 12 --label work"
+  on! tomas work/acme-hub "lore actor contact add @tomas github mirap --identity"
+  on tomas work/acme-hub "lore actor show github:mirap"
+
+  note "contact edit and remove"
+  on tomas work/acme-hub "lore actor contact add @mira linkedin mira-patel --label work"
+  local li; li=$(id acn)
+  on tomas work/acme-hub "lore actor contact edit $li --note 'old profile, not updated'"
+  on tomas work/acme-hub "lore actor contact remove $li --reason 'account closed'"
+  on tomas work/acme-hub "lore actor contact list @mira --identity"
+
+  note "contact types"
+  on tomas work/acme-hub "lore contact-type add bitbucket --kind handle --identity --url-template 'https://bitbucket.org/{value}'"
+  on tomas work/acme-hub "lore contact-type edit github --label GitHub"
+  on tomas work/acme-hub "lore contact-type list"
+  on! tomas work/acme-hub "lore contact-type add email --kind email"
+
+  note "periods"
+  on tomas work/acme-hub "lore actor period add @mira --type employee --started-on 2026-01-12 --org-role 'Senior engineer'"
+  on tomas work/acme-hub "lore actor period list @mira"
+  on! tomas work/acme-hub "lore actor period add @mira --type contractor --started-on 2026-02-01"
+
+  note "roles"
+  on tomas work/acme-hub "lore role add tech_writer --label 'Technical writer'"
+  on tomas work/acme-hub "lore role list"
+  on! tomas work/acme-hub "lore project member add acme-hub @mira --role wizard"
+  on tomas work/acme-hub "lore role edit tech_writer --description 'writes the user docs'"
+  on tomas work/acme-hub "lore role edit qa --retire"
+
+  note "members"
+  on tomas work/acme-hub "lore project member add acme-hub @mira --role dev,reviewer"
+  CLOCK=2026-03-01T09:00:00Z
+  on tomas work/northwind-app "lore project member add northwind-app @mira --role lead"
+  on tomas work/acme-hub "lore project member add acme-hub @tomas --role lead"
+  on tomas work/acme-hub "lore project member list acme-hub"
+  on tomas work/acme-hub "lore actor show @mira"
+
+  note "member edit and remove"
+  on tomas work/acme-hub "lore project member edit acme-hub @tomas --role lead,pm"
+  on tomas work/northwind-app "lore project member add northwind-app @tomas --role reviewer"
+  on tomas work/northwind-app "lore project member remove northwind-app @tomas --reason 'Mira reviews her own project now'"
+  on! tomas work/northwind-app "lore project member remove northwind-app @tomas"
+  on tomas work/northwind-app "lore project member list northwind-app --history"
+
+  note "status"
+  CLOCK=2026-05-20T09:00:00Z
+  on tomas work/acme-hub "lore actor status @mira on_leave --from 2026-06-01 --until 2026-06-30"
+  CLOCK=2026-07-03T09:00:00Z
+  on tomas work/acme-hub "lore actor list"
+  on tomas work/acme-hub "lore actor status @mira active"
+  on! tomas work/acme-hub "lore actor status @mira left"
+
+  note "offboard"
+  CLOCK=2026-09-30T17:00:00Z
+  on tomas work/acme-hub "lore task add 'move the invoice export to the new API' --to agency --assign @mira"
+  on! tomas work/acme-hub "lore actor offboard @mira --reason 'moved abroad'"
+  on tomas work/acme-hub "lore actor offboard @mira --reason 'moved abroad' --yes"
+  on tomas work/acme-hub "lore actor list"
+  on! tomas work/acme-hub "lore task add 'review the refund flow' --to agency --assign @mira"
+  CLOCK=2026-10-15T09:00:00Z
+  on tomas work/acme-hub "lore actor status @mira archived"
+  on tomas work/acme-hub "lore actor list --archived"
+
+  note "rejoin"
+  CLOCK=2026-11-02T09:00:00Z
+  on tomas work/acme-hub "lore actor rejoin @mira --type contractor --org-role 'Contract engineer' --yes"
+  on tomas work/acme-hub "lore project member add acme-hub @mira --role reviewer"
+  on tomas work/acme-hub "lore project member list acme-hub --history"
+  on tomas work/acme-hub "lore actor period list @mira"
+
+  note "whole year"
+  on tomas work/acme-hub "lore actor show @mira"
+  on tomas work/acme-hub "lore project member list --actor @mira --history"
+
+  note "org create and rename"
+  remote acme/handbook; remote acme/lore-notes
+  person ana ana@acme.example
+  quiet ana work "git clone -q https://github.com/acme/handbook && cd handbook && echo '# handbook' > README.md && git add . && git commit -qm init && git push -q origin main"
+  on ana work/handbook "lore store init acme git@github.com:acme/lore-notes --yes"
+  on ana work/handbook "lore org create acme --store acme --own 'github.com/acme/*' --key human:ana@acme.example --name 'Ana Lima' --handle ana --yes"
+  on ana work/handbook "lore org rename acme acme-studio"
+  on ana work/handbook "lore whoami"
+
+  note "machines"
+  on tomas work/acme-hub "lore machine label 'office desktop'"
+  # Only the columns that do not describe the build machine's hardware (and never its OS user).
+  on tomas work/acme-hub "lore machine list | cut -c1-38"
+  local m; m=$(grep -o 'mch_[0-9a-f]\{8\}' <<<"$LAST_OUT" | head -1 || true)
+  on tomas work/acme-hub "lore machine show ${m:-mch_missing} | grep -e '^mch_' -e 'label:' -e 'host:' -e 'runtime:' -e 'last_write:'"
+  on tomas work/acme-hub "lore machine label ''"
+}
+
+# ---------------------------------------------------------------------------
+# setup-cli: several setups on one machine, managed with the lore setup
+# subcommands instead of the page (docs/team/setup-cli.md). No command here
+# probes ssh or GitHub: aliases and discover would, so they are not run.
+s_setup_cli() {
+  section setup-cli
+  person tomas tomas@agency.example
+  agency_config tomas "human:tomas@agency.example" "Tomas Weber" tomas
+  remote agency/notes; remote agency/site; remote tomas/dotfiles
+  make_store tomas agency git@github.com:agency/notes
+  quiet tomas work "mkdir -p agency personal && git clone -q https://github.com/agency/site agency/site && cd agency/site && echo '# site' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=site >/dev/null 2>&1"
+  quiet tomas work "git clone -q https://github.com/tomas/dotfiles personal/dotfiles && cd personal/dotfiles && echo '# dotfiles' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=dotfiles >/dev/null 2>&1"
+  cat >> "$HOMES/tomas/.lore/config.yaml" <<'Y'
+setups:
+  - name: agency
+    kind: admin
+    org: agency
+    default: true
+    folders:
+      - ~/work/agency/**
+  - name: personal
+    kind: solo
+    folders:
+      - ~/work/personal/**
+    identity:
+      key: human:tomas@home.example
+      name: Tomas Weber
+    personal_store: none
+Y
+
+  note "list"
+  on tomas work/agency/site "lore setup list"
+  on tomas work/personal/dotfiles "lore setup list"
+  on tomas work/personal/dotfiles "lore whoami --explain | sed -n '/setup resolution/,\$p'"
+
+  note "show"
+  on tomas . "lore setup show personal"
+
+  note "choose"
+  on tomas work/agency/site "lore --setup personal whoami | head -2"
+  on tomas work/agency/site "lore setup use personal"
+  on tomas work/agency/site "lore setup use personal --here"
+  on tomas work/agency/site "lore setup list | tail -2"
+  on tomas work/agency/site "lore setup use --here --clear"
+  on! tomas work/agency/site "lore --setup nope task add 'check the sitemap'"
+
+  note "edit"
+  on tomas . "lore setup edit personal --folder '~/work/personal/**' --folder '~/src/**' --note 'side projects and dotfiles'"
+  on tomas . "lore setup show personal"
+
+  note "disable and enable"
+  on tomas . "lore setup disable personal"
+  on! tomas work/personal/dotfiles "lore --setup personal task add 'rotate the backup key'"
+  on tomas . "lore setup enable personal"
+
+  note "remove and restore"
+  on tomas work/personal/dotfiles "lore setup use personal --here"
+  on tomas . "lore setup remove personal"
+  on tomas . "lore setup trash list"
+  on tomas . "lore setup trash restore personal"
+  on tomas . "lore setup remove personal"
+  on tomas . "lore setup trash purge personal --dry-run"
+  on! tomas . "lore setup trash purge personal"
+  on tomas . "lore setup trash purge personal --confirm"
+  on tomas . "lore setup trash list"
+
+  note "steps"
+  # The plan's HELP column is long: only the step ids and titles are shown.
+  on tomas . "lore setup plan --kind solo | cut -c1-52"
+  # Only the step lines: the checks table under them carries how long each check took.
+  on tomas . "lore setup apply side --step kind --answers '{\"kind\":\"solo\",\"name\":\"side\"}' | head -4"
+  on tomas . "lore setup check side --step identity --answers '{\"name\":\"Tomas Weber\",\"email\":\"tomas@home.example\"}' | head -2"
+  on! tomas . "lore setup apply side --step github --answers '{\"user\":\"tomas-dev\"}'"
+
+  note "import"
+  on tomas . "lore setup import-scan --folder ~/work"
+  on tomas . "lore setup import --setups '[{\"name\":\"personal\",\"kind\":\"solo\"}]'"
+
+  note "join"
+  on! tomas . "lore setup join lore-invite:v1:garbage"
+}
+
+# ---------------------------------------------------------------------------
+# invites: lore team invite and its list/resend/revoke, from an admin setup
+# (docs/team/invites.md). No --github or --grant: those ask GitHub through gh.
+s_invites() {
+  section invites
+  person tomas tomas@agency.example
+  agency_config tomas "human:tomas@agency.example" "Tomas Weber" tomas
+  remote agency/notes; client_repo client/acme-hub acme-hub
+  make_store tomas agency git@github.com:agency/notes
+  quiet tomas work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore org link agency --project acme-hub --yes && lore actor register"
+  cat >> "$HOMES/tomas/.lore/config.yaml" <<'Y'
+setups:
+  - name: agency
+    kind: admin
+    org: agency
+    default: true
+    folders:
+      - ~/work/**
+  - name: personal
+    kind: solo
+    folders:
+      - ~/personal/**
+    identity:
+      key: human:tomas@home.example
+      name: Tomas Weber
+Y
+
+  note "invite"
+  on tomas work/acme-hub "lore team invite mira@agency.example --role dev,reviewer --project acme-hub"
+  on tomas work/acme-hub "lore team invite ana@agency.example --type contractor --expires 30d"
+
+  note "invite refusals"
+  on! tomas work/acme-hub "lore team invite mira@agency.example"
+  on! tomas work/acme-hub "lore team invite bo@agency.example --role dev"
+  on! tomas work/acme-hub "lore --setup personal team invite bo@agency.example"
+
+  note "list"
+  on tomas work/acme-hub "lore team invite list"
+  on tomas work/acme-hub "lore team invite list --status pending --json"
+
+  note "resend and revoke"
+  on tomas work/acme-hub "lore team invite resend mira@agency.example"
+  on! tomas work/acme-hub "lore team invite revoke ana@agency.example"
+  on tomas work/acme-hub "lore team invite revoke ana@agency.example --yes"
+  on! tomas work/acme-hub "lore team invite resend ana@agency.example"
+  on tomas work/acme-hub "lore team invite list"
+}
+
+# fake_ssh LOGIN: an ssh on PATH that answers GitHub's greeting as LOGIN for every
+# host (ssh -T), and a gh with no login; nothing else is faked, nothing reaches the network.
+fake_ssh() {
+  cat > "$SHIM/ssh" <<SH
+#!/bin/sh
+case " \$* " in *" -T "*) echo "Hi $1! You've successfully authenticated, but GitHub does not provide shell access." >&2; exit 1;; esac
+echo "ssh: not available in the docs world" >&2; exit 255
+SH
+  cat > "$SHIM/gh" <<'SH'
+#!/bin/sh
+echo "To get started with GitHub CLI, please run:  gh auth login" >&2
+exit 4
+SH
+  chmod +x "$SHIM/ssh" "$SHIM/gh"
+}
+
+# ---------------------------------------------------------------------------
+# guided-setup: what a setup is and how lore picks one, shown with the commands
+# behind the setup page (docs/team/guided-setup.md). A fake ssh and a fake gh
+# (not logged in) stand in for GitHub's: nothing reaches the network.
+s_guided_setup() {
+  section guided-setup
+  person tomas tomas@agency.example
+  agency_config tomas "human:tomas@agency.example" "Tomas Weber" tomas
+  fake_ssh tomas-dev
+  remote agency/notes; remote agency/site; remote acme/lab
+  make_store tomas agency git@github.com:agency/notes
+  quiet tomas work "mkdir -p agency personal clients && git clone -q https://github.com/agency/site agency/site && cd agency/site && echo '# site' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=site >/dev/null 2>&1"
+  quiet tomas work "git clone -q https://github.com/acme/lab lab && cd lab && echo '# lab' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=lab >/dev/null 2>&1"
+  mkdir -p "$HOMES/tomas/.ssh"
+  printf 'Host github.com\n  HostName github.com\n  IdentityFile ~/.ssh/id_ed25519\n\nHost gh-agency\n  HostName github.com\n  IdentityFile ~/.ssh/id_agency\n  IdentitiesOnly yes\n' > "$HOMES/tomas/.ssh/config"
+  cat >> "$HOMES/tomas/.lore/config.yaml" <<'Y'
+setups:
+  - name: agency
+    kind: admin
+    org: agency
+    default: true
+    folders:
+      - ~/work/agency/**
+    github:
+      user: tomas-dev
+      host_alias: github.com
+  - name: personal
+    kind: solo
+    folders:
+      - ~/work/personal/**
+    identity:
+      key: human:tomas@home.example
+      name: Tomas Weber
+    personal_store: none
+Y
+
+  note "plan"
+  on tomas . "lore setup plan --kind member | cut -c1-52"
+  on tomas . "lore setup < /dev/null; echo \"exit \$?\""
+
+  note "aliases"
+  on tomas . "lore setup aliases"
+
+  note "this folder"
+  on tomas work/agency/site "lore setup list | tail -1"
+  on tomas work/lab "lore setup list | tail -2"
+
+  note "tie"
+  on tomas . "lore setup edit personal --folder '~/work/**'"
+  # setup edit refuses to make a tie; a hand-edited config.yaml can still hold one
+  on! tomas . "lore setup edit agency --folder '~/work/**'"
+  sed -i 's#^      - ~/work/agency/\*\*$#      - ~/work/**#' "$HOMES/tomas/.lore/config.yaml"
+  on! tomas work/lab "lore task add 'renew the certificate'"
+  on tomas work/lab "lore task list"
+  on tomas . "lore setup edit agency --folder '~/work/agency/**'"
+
+  note "unknown name"
+  on! tomas work/agency/site "lore --setup nope task add 'check the sitemap'"
+  on! tomas work/agency/site "lore --setup nope task list"
+
+  note "no personal store"
+  on! tomas work/agency/site "lore --setup personal memory add --to me --body 'Renew the domain in March.'"
+
+  note "invite and join"
+  quiet tomas work/agency/site "lore actor register"
+  on tomas work/agency/site "lore team invite mira@agency.example"
+  # The line holds the random invite id: Mira's command reads it from $INVITE, so the
+  # transcript stays the same on every run.
+  local invite
+  invite=$(grep -o 'lore-invite:v1:[A-Za-z0-9_=-]*' <<<"$LAST_OUT" | head -1)
+  person mira mira@agency.example
+  EXTRA_ENV="INVITE=$invite" on mira . "lore setup join \"\$INVITE\" --json | python3 -m json.tool | sed -n '/\"invite\": {/,/}/p'"
+
+  note "fix"
+  on! tomas work/agency/site "lore setup fix agency --check github.gh_account"
+}
+
 main() {
-  local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people live_repair)
+  local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people store_push live_repair profiles setup_cli invites guided_setup)
   local want=("$@")
   [ ${#want[@]} -eq 0 ] && want=("${all[@]}")
   for s in "${want[@]}"; do
