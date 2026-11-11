@@ -68,7 +68,7 @@ func (e engine) Edit(ctx context.Context, in EditIn) (EditOut, error) {
 	// writes nothing. The default moves afterwards.
 	first := after
 	first.Default = before.Default
-	if _, err := st.PutSetup(ctx, first); err != nil {
+	if err := putEdit(ctx, st, before, first); err != nil {
 		// config.yaml was valid when read (st.Config), so a refusal here is
 		// about the edited values: say nothing was saved, not "fix the
 		// entries" of a file the edit never wrote.
@@ -82,7 +82,7 @@ func (e engine) Edit(ctx context.Context, in EditIn) (EditOut, error) {
 	// other setup under the config lock, so neither a stale read of the
 	// others nor a default another process set meanwhile can leave two.
 	if after.Default != first.Default {
-		if _, err := st.PutSetup(ctx, after); err != nil {
+		if err := putEdit(ctx, st, first, after); err != nil {
 			return EditOut{}, err
 		}
 	}
@@ -292,4 +292,15 @@ func checkPersonalStore(v string) error {
 		}
 	}
 	return nil
+}
+
+// putEdit saves the edit from before to after: only the changed keys when
+// the store can (SetupPatcher: no lost update of a key another process
+// wrote since the read), else the whole entry.
+func putEdit(ctx context.Context, st Store, before, after onboard.SetupEntry) error {
+	if p, ok := st.(SetupPatcher); ok {
+		return p.PatchSetup(ctx, before, after)
+	}
+	_, err := st.PutSetup(ctx, after)
+	return err
 }

@@ -421,6 +421,15 @@ type Applied struct {
 	Paths []string
 }
 
+// AddCreated records a file this batch created beside its row files (the
+// store marker a first write adds): it is committed with the batch, and
+// Undo removes it again. full is its path on disk, rel the slash path
+// from the store root.
+func (a *Applied) AddCreated(full, rel string) {
+	a.undo = append(a.undo, undoStep{full: full})
+	a.Paths = append(a.Paths, rel)
+}
+
 // undoStep restores one file: prev nil means the file did not exist.
 type undoStep struct {
 	full string

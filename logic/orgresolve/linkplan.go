@@ -13,6 +13,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/model/ids"
 )
 
 // LinkRequest is what `lore org link` asks for (F11, client side).
@@ -23,7 +24,7 @@ type LinkRequest struct {
 	Default   bool     // --default
 	StoreURL  string   // --store <url>; "" = the entry's first store
 	Remote    string   // --remote <url>; needed only when the repo has several
-	ProjectID string   // this project's id
+	ProjectID string   // this project's id; "" = the repo holds no lore data (RemoteProjectID)
 	Remotes   []string // this repo's normalised remotes
 }
 
@@ -43,19 +44,40 @@ type LinkPlan struct {
 	// refuses a folder that lives in another store instead of following
 	// it (F13, cookbook 14).
 	StoreExplicit bool
+	// FromRemote is true when the repo holds no project id (no
+	// .lore/data/_meta.json: a client repo that must never hold lore
+	// files) and ProjectID is RemoteProjectID(Remote): the id lives only
+	// in the store's link row.
+	FromRemote bool
+}
+
+// remoteProjectDomain keys the natural project id of a repo that holds no
+// lore data, so it can never equal a folder's or a `lore init` id.
+const remoteProjectDomain = "lore-remote-project"
+
+// RemoteProjectID is the project id of a repo that holds no lore data,
+// derived from its normalised remote: every machine computes the same id
+// from the same remote, so the link written into the store is found again
+// by the repo's remote alone, and nothing is written into the repo.
+func RemoteProjectID(remote string) (string, error) {
+	id, err := ids.Natural(ids.PrefixProject, remoteProjectDomain, remote)
+	if err != nil {
+		return "", fmt.Errorf("orgresolve: project id of %s: %w", remote, err)
+	}
+	return id.String(), nil
 }
 
 // Errors from PlanLink (same text as v0.1.17).
 var (
-	ErrLinkNoProjectID = errors.New("orgresolve: this project has no project id yet (.lore/data/_meta.json)")
-	ErrLinkNoRemote    = errors.New("orgresolve: this repo has no hosted remote; a link is made for a project id AND a remote")
-	ErrLinkOwnPattern  = errors.New("orgresolve: --own is allowed only for repos matching the entry's own: patterns")
+	ErrLinkNoRemote   = errors.New("orgresolve: this repo has no hosted remote; a link is made for a project id AND a remote")
+	ErrLinkOwnPattern = errors.New("orgresolve: --own is allowed only for repos matching the entry's own: patterns")
 )
 
 // PlanLink validates a link request against the config without touching
 // any store: the entry exists, the folder name is valid, the project has
-// an id, exactly one remote is meant, the store is one of the entry's, and
-// --own only on a repo matching the entry's own: patterns.
+// remote is meant, the store is one of the entry's, and --own only on a
+// repo matching the entry's own: patterns. A repo with no project id (no
+// lore data in it) is linked by its remote: ProjectID is RemoteProjectID.
 func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 	o := cfg.FindOrg(req.Entry)
 	if o == nil {
@@ -64,12 +86,16 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 	if err := orgconf.ValidateFolderName(req.Folder); err != nil {
 		return LinkPlan{}, fmt.Errorf("orgresolve: --project %q: %w", req.Folder, err)
 	}
-	if req.ProjectID == "" {
-		return LinkPlan{}, ErrLinkNoProjectID
-	}
 	remote, err := pickRemote(req.Remote, req.Remotes)
 	if err != nil {
 		return LinkPlan{}, err
+	}
+	pid, fromRemote := req.ProjectID, false
+	if pid == "" {
+		if pid, err = RemoteProjectID(remote); err != nil {
+			return LinkPlan{}, err
+		}
+		fromRemote = true
 	}
 	if len(o.Stores) == 0 {
 		return LinkPlan{}, fmt.Errorf("orgresolve: entry %s lists no stores under stores", o.Name)
@@ -99,7 +125,7 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 		return LinkPlan{}, fmt.Errorf("orgresolve: store url %q: %w", st.URL, err)
 	}
 	return LinkPlan{Entry: o.Name, StoreURL: storeURL, Branch: st.EffectiveBranch(), Folder: req.Folder,
-		ProjectID: req.ProjectID, Remote: remote, Own: req.Own, Default: req.Default, StoreExplicit: req.StoreURL != ""}, nil
+		ProjectID: pid, Remote: remote, Own: req.Own, Default: req.Default, StoreExplicit: req.StoreURL != "", FromRemote: fromRemote}, nil
 }
 
 // pickRemote returns the one remote a link is for: --remote when given (it

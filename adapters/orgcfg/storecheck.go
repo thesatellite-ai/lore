@@ -54,8 +54,9 @@ func storeAllowed(p string) bool {
 	return first != "" && first != storeLoreDir && strings.HasPrefix(rest, storeLoreDir+"/")
 }
 
-// checkStoreTree refuses a branch tip that has no marker or holds files a
-// store may not (E_NOT_A_STORE naming up to maxListedOffenders of them).
+// checkStoreTree refuses a branch tip that holds files a store may not
+// (E_NOT_A_STORE naming up to maxListedOffenders of them, and a missing
+// marker). A tip of lore files only passes with or without the marker.
 func checkStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
 	out, err := gitRun(ctx, "-C", dir, "ls-tree", "-r", "-z", "--name-only", rev)
 	if err != nil {
@@ -72,7 +73,11 @@ func checkStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
 			bad = append(bad, p)
 		}
 	}
-	if marker && len(bad) == 0 {
+	if len(bad) == 0 {
+		// Lore files only. Without the marker it is a store whose first
+		// write went out before lore wrote markers on a first write (a
+		// folder's _meta.json in a brand-new repo): it is adopted, not
+		// refused, and the next store write adds the marker.
 		return nil
 	}
 	var parts []string

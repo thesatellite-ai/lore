@@ -154,7 +154,7 @@ func LeavesRepo(name string) bool {
 // never the repo's .lore/stores.yaml. init, add, remove and set-url write
 // that file and keep needing a repo (`store init me` excepted, see wire).
 func RunsWithoutRepo(name string) bool {
-	return slices.Contains([]string{OpList, OpVisibility, OpFolderAdd, OpFolderList, OpSet, OpCompact}, name)
+	return slices.Contains([]string{OpList, OpVisibility, OpFolderAdd, OpFolderList, OpFolderRemove, OpSet, OpCompact}, name)
 }
 
 // noneShown fills an empty column of the folder table.

@@ -104,6 +104,12 @@ func (s setupStore) PutSetup(_ context.Context, e onboard.SetupEntry) (bool, err
 	return PutSetup(s.a.opts.Home, e)
 }
 
+// PatchSetup implements opssetup.SetupPatcher: only the keys the edit
+// changed are written (PatchSetup).
+func (s setupStore) PatchSetup(_ context.Context, before, after onboard.SetupEntry) error {
+	return PatchSetup(s.a.opts.Home, before, after)
+}
+
 // RemoveSetup implements opssetup.Store: the entry, its repo_setups pins
 // and its setup_progress rows (ONB 3.4: "lore setup remove deletes them").
 // Progress goes first so a failed config write never leaves orphan rows

@@ -24,6 +24,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -226,7 +227,14 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	}
 	org := s.Config.FindOrg(plan.Entry)
 	g := &orgcfg.GitLinks{Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
-	res, err := g.WriteLink(ctx, orgcfg.LinkWrite{Plan: plan, Signature: storeSignature(org), FolderProjectID: storeFolderProjectID})
+	res, err := g.WriteLink(ctx, orgcfg.LinkWrite{Plan: plan, Signature: storeSignature(org), FolderProjectID: storeFolderProjectID,
+		NewMarker: func() ([]byte, error) {
+			m, merr := rowfs.NewMarker(h.wall()())
+			if merr != nil {
+				return nil, merr
+			}
+			return m.Encode()
+		}})
 	if err != nil {
 		return opsorgcmd.Report{Lines: lines}, linkError(err)
 	}
@@ -267,8 +275,8 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 			WithHint("entries here: " + strings.Join(s.Config.OrgNames(), ", "))
 	}
 	if s.ProjectID == "" {
-		return opsorgcmd.Report{}, errs.New(errs.NotProjectRoot, "this repo has no project id yet (.lore/data/_meta.json), so no store links it").
-			WithHint("run lore init here first")
+		return opsorgcmd.Report{}, errs.New(errs.NotProjectRoot, "no store links this repo: it has no project id (.lore/data/_meta.json) and no link names its remote").
+			WithHint("`lore whoami` says what this repo resolves to; `lore org link <org> --project <folder>` links it by its remote")
 	}
 	g := &orgcfg.GitLinks{Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
 	found, err := g.FindLinks(ctx, org.Name, s.ProjectID, strings.Trim(in.Project, "/"))

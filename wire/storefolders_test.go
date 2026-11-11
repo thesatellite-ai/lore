@@ -61,7 +61,11 @@ func TestStoreFoldersWithoutRepo(t *testing.T) {
 		if err != nil {
 			t.Fatalf("folder add %s %s outside a repo: %v", c.store, c.folder, err)
 		}
-		if !strings.Contains(res, `"project_id":"prj_`) || !strings.Contains(res, `"store":"acme"`) {
+		want := `"store":"acme"`
+		if c.store == url {
+			want = `"store":"` + url + `"` // an org store named by its url is shown by it (an org may have several)
+		}
+		if !strings.Contains(res, `"project_id":"prj_`) || !strings.Contains(res, want) {
 			t.Fatalf("folder add %s %s: %s", c.store, c.folder, res)
 		}
 		if _, err = os.Stat(filepath.Join(storeDir(url), c.folder, rowfs.LoreDir, rowfs.DataDir, rowfs.MetaFileName)); err != nil {

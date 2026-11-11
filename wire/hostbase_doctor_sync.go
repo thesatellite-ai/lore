@@ -60,6 +60,13 @@ const (
 	gitInsideTrue = "true"
 )
 
+// doctorLinkedByRemoteNote is the [sync] line of a repo with no lore data
+// that a store links by its remote: lore writes nothing into it, so no
+// merge driver, hooks or ignore lines are installed (by design).
+func doctorLinkedByRemoteNote(remote string) string {
+	return "this repo holds no lore data: a store links it by its remote " + remote + ", its rows live in that store folder, and lore writes nothing into it (no .lore/, hooks, merge driver or .gitignore lines)"
+}
+
 // doctor [sync] lines.
 const (
 	doctorDataIgnoredWarning = ".lore/data is gitignored, so lore knowledge is never shared; remove the ignore rule (lore sync refuses with E_SYNC_DATA_IGNORED meanwhile)"
@@ -131,7 +138,11 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	s.InGitRepo = true
 	switch out, gerr := git("config", "--get", mergeDriverConfigKey); {
 	case gerr != nil || strings.TrimSpace(string(out)) == "":
-		note(doctorNoMergeDriverNote)
+		if remote := linkedByRemote(ctx, a.opts); remote != "" {
+			note(doctorLinkedByRemoteNote(remote)) // nothing is ever wired in such a repo
+		} else {
+			note(doctorNoMergeDriverNote)
+		}
 	case !reposync.DriverRuns(string(out)):
 		note(doctorBrokenMergeDriverNote)
 	default:

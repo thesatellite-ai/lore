@@ -14,6 +14,7 @@ package wire
 // leaves config.yaml with an invalid setups list.
 
 import (
+	"bytes"
 	"errors"
 	"io/fs"
 	neturl "net/url"
@@ -301,6 +302,64 @@ func PutSetup(home string, e onboard.SetupEntry) (created bool, err error) {
 		return nil
 	})
 	return created, err
+}
+
+// PatchSetup writes into setup e.Name only the keys after changes from
+// before, against config.yaml as it is under the config lock; every other
+// key keeps what the file holds now. An edit read from an earlier copy of
+// the file (`lore setup edit main --note …`) then never writes back a key
+// another process changed in between (machines
+// TestCampaignSetup_ConcurrentMixed: an identity set beside a setup edit
+// of the same setup was lost, because PutSetup rewrote every key from the
+// edit's stale copy). A setup removed meanwhile is E_NOT_FOUND; after
+// marked default clears the others, as PutSetup does.
+func PatchSetup(home string, before, after onboard.SetupEntry) error {
+	var bn, an yaml.Node
+	if err := bn.Encode(before); err != nil {
+		return errs.Wrap(errs.Internal, "wire: encode setup "+before.Name, err)
+	}
+	if err := an.Encode(after); err != nil {
+		return errs.Wrap(errs.Internal, "wire: encode setup "+after.Name, err)
+	}
+	plainBools(&bn)
+	plainBools(&an)
+	return editSetups(home, func(root *yaml.Node) error {
+		seq := setupsSeq(root)
+		i := setupIndex(seq, after.Name)
+		if i < 0 {
+			return errs.New(errs.NotFound, "setup "+strconv.Quote(after.Name)+" is no longer in ~/.lore/"+ConfigFile+" (another lore command removed it)").
+				WithHint("lore setup list shows the setups")
+		}
+		cur := seq.Content[i]
+		for _, k := range knownSetupKeys {
+			b, a := mapGet(&bn, k), mapGet(&an, k)
+			if sameYAML(b, a) {
+				continue
+			}
+			if a == nil {
+				mapDelete(cur, k)
+				continue
+			}
+			if old := mapGet(cur, k); old != nil {
+				keepComments(old, a)
+			}
+			mapSet(cur, k, a)
+		}
+		if after.Default {
+			clearOtherDefaults(seq, after.Name)
+		}
+		return nil
+	})
+}
+
+// sameYAML reports whether two values (nil = absent) encode the same.
+func sameYAML(x, y *yaml.Node) bool {
+	if x == nil || y == nil {
+		return x == nil && y == nil
+	}
+	bx, ex := yaml.Marshal(x)
+	by, ey := yaml.Marshal(y)
+	return ex == nil && ey == nil && bytes.Equal(bx, by)
 }
 
 // knownSetupKeys are the entry keys SetupEntry owns; on replace they come

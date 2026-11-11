@@ -10,10 +10,12 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
@@ -269,6 +271,9 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	}
 	switch len(rows) {
 	case 0:
+		if st, serr := a.state(ctx); serr == nil && st.linkedByRemote != "" {
+			return a.linkedFolderProject(ctx, st)
+		}
 		return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "wire: this repository has no lore project").
 			WithHint("run `lore init` in the repository first (or `lore sync`, which writes the project's row file to .lore/data)")
 	case 1:
@@ -647,4 +652,29 @@ func unreachableHint(unreachable map[store.Source]error, offline, rest string) s
 		}
 	}
 	return offline + rest
+}
+
+// linkedFolderProject is the project of a repo that holds no lore data and
+// is linked by its remote (state.linkedByRemote): the project of the store
+// folder it is linked to, whose row lives in that folder, never in the
+// repo. A write creates the row when the folder has none yet (rosterProject:
+// its id is the folder's _meta.json project_id, so two machines agree); a
+// read only names that id.
+func (a *App) linkedFolderProject(ctx context.Context, st *state) (ids.ID[ids.Project], error) {
+	src, ok := orgAliases(ctx, a.opts, st.repoTop)[attach.ReservedTeam]
+	if !ok || st.byName[src] == nil {
+		return ids.ID[ids.Project]{}, errs.New(errs.StoreUnreachable, "wire: this repo is linked to a store folder by its remote ("+st.linkedByRemote+"), and that folder is not attached").
+			WithHint("run `lore whoami` to see the link, or `lore sync` to fetch the store")
+	}
+	if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
+		pid, err := folderProjectIDOf(ctx, st, src)
+		if err != nil || !pid.IsZero() {
+			return pid, err
+		}
+	}
+	ref, err := a.rosterProject(ctx, st, src, st.folders[src])
+	if err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	return ids.Parse[ids.Project](ref.ID().String())
 }

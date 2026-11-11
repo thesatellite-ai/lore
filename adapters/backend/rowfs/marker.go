@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -66,6 +67,21 @@ type Marker struct {
 	// They are read leniently: a bad value is reported by `lore store
 	// show` and `lore doctor`, and the store pushes as mode now.
 	Push storepush.Raw
+}
+
+// MarkerDateLayout is the created: date of a marker (YYYY-MM-DD).
+const MarkerDateLayout = "2006-01-02"
+
+// NewMarker is the marker `lore store init` writes: a new sto_ id,
+// visibility internal, created now (UTC date), the org folder suggestion
+// FolderOrg. Every first write to a store with no marker writes this one,
+// so a store is never left holding lore files without its marker.
+func NewMarker(now time.Time) (Marker, error) {
+	id, err := ids.New[ids.Store]()
+	if err != nil {
+		return Marker{}, errs.Wrap(errs.Internal, "rowfs: new store id", err)
+	}
+	return Marker{Version: MarkerVersion, ID: id, Visibility: VisibilityInternal, Created: now.UTC().Format(MarkerDateLayout), OrgFolder: FolderOrg}, nil
 }
 
 // markerWire is the YAML shape; field names are a file format.

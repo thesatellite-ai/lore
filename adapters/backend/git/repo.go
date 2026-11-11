@@ -40,6 +40,14 @@ func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts
 	return &Backend{cfg: cfg, git: g, mode: modeRepo, readOnly: o.ReadOnly, root: root, folder: f, work: root.Dir()}, nil
 }
 
+// MarkReadOnly makes the handle refuse every write from now on
+// (store.ErrReadOnly), as OpenOptions.ReadOnly does at open: for a repo
+// that turns out, once open, to be one lore must never write into (a
+// client repo linked by its remote, with no lore data of its own). Call
+// it right after the open, before the handle is shared: readOnly is read
+// without the lock, as the open set it.
+func (b *Backend) MarkReadOnly() { b.readOnly = true }
+
 // RepoRoot is the folder OpenRepo would make the repo store's root for dir
 // (projectRoot: the nearest folder holding .lore up to the work tree top,
 // symlinks resolved), found without opening anything: no rowfs root, no

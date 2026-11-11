@@ -143,6 +143,15 @@ const (
 	WhyNone    = "none"    // no setup: lore behaves as before
 )
 
+// SetupPatcher is the optional Store upgrade setup.edit writes through:
+// only the keys after changes from before are written, against the file
+// as it is when written, so an edit made from an earlier read never puts
+// back a key another process changed meanwhile (a lost update). Without
+// it the edit replaces the whole entry (PutSetup).
+type SetupPatcher interface {
+	PatchSetup(ctx context.Context, before, after onboard.SetupEntry) error
+}
+
 // Store is setups[] in config.yaml plus setup_progress and known_repos in
 // machine.db (wire). Every write of setups[] validates the whole
 // candidate list first (E_CONFIG_INVALID naming the entry, nothing

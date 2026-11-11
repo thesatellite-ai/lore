@@ -107,6 +107,11 @@ type Situation struct {
 	CommittedErr error
 	Result       orgresolve.Result
 	ResolveErr   error
+	// LinkedByRemote is the remote whose store link gave ProjectID when
+	// the repo holds no project id of its own (no .lore/data/_meta.json:
+	// a client repo linked by `lore org link` without any lore data in
+	// it); "" otherwise.
+	LinkedByRemote string
 }
 
 // ConfigPath is ~/.lore/config.yaml under home.
@@ -290,7 +295,31 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 		links = in.Links
 		defBranch = func(norm string) string { return in.Links.DefaultBranch(ctx, norm) }
 	}
-	lr, err := links.Links(ctx, s.ProjectID, s.Remotes)
+	var lr orgresolve.LinkResult
+	if s.ProjectID == "" {
+		// A repo with no lore data in it is linked by its remote
+		// (orgresolve.RemoteProjectID): the first remote a store links
+		// gives the project id, which lives only in that link row.
+		for _, r := range s.Remotes {
+			pid, perr := orgresolve.RemoteProjectID(r)
+			if perr != nil {
+				continue
+			}
+			got, lerr := links.Links(ctx, pid, []string{r})
+			if lerr != nil {
+				// a store that cannot be read as one (a code repo listed
+				// under stores:) is reported by the project's own lookup and
+				// by whoami, as before; here it only means no remote link
+				// was found, so `lore init` in such a repo still runs
+				break
+			}
+			if len(got.Links) > 0 {
+				s.ProjectID, s.LinkedByRemote = pid, r
+				break
+			}
+		}
+	}
+	lr, err = links.Links(ctx, s.ProjectID, s.Remotes)
 	if err != nil {
 		return nil, err
 	}

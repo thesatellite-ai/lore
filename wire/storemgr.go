@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitcommit"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -588,7 +590,48 @@ func (a *App) OrgStoreEntries(ctx context.Context) ([]opsstores.Entry, error) {
 	for _, s := range orgStores(ctx, a.opts, top) {
 		out = append(out, opsstores.Entry{Name: string(s.Name), URL: s.URL, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch, Source: opsstores.SourceOrg})
 	}
-	return out, nil
+	return append(out, a.otherOrgStores(out)...), nil
+}
+
+// otherOrgStores are the stores of the org entries behind got (the org
+// folder's store and the linked folder's) that got does not already hold:
+// an org entry lists every store (`lore org refresh` takes them from
+// lore-org.yaml), and store list and store folder list show each once.
+// They attach no folder here, so each is named by its url, the name every
+// store command takes for an org store (owner report 2026-11-11: only the
+// org's first store was listed).
+func (a *App) otherOrgStores(got []opsstores.Entry) []opsstores.Entry {
+	orgs := map[string]bool{}
+	seen := map[string]bool{}
+	for _, e := range got {
+		org, _, _ := strings.Cut(e.Name, targetSep)
+		orgs[org] = true
+		if k, ok := storeKey(e.URL); ok {
+			seen[k] = true
+		}
+	}
+	if len(orgs) == 0 {
+		return nil
+	}
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return nil // the attached ones are listed; config errors are doctor's
+	}
+	var out []opsstores.Entry
+	for _, o := range cfg.Orgs {
+		if !orgs[o.Name] {
+			continue
+		}
+		for _, sc := range o.Stores {
+			k, ok := storeKey(sc.URL)
+			if !ok || seen[k] {
+				continue
+			}
+			seen[k] = true
+			out = append(out, opsstores.Entry{Name: sc.URL, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg})
+		}
+	}
+	return out
 }
 
 // QuietOutput implements opsstores.OrgLister (quietOutput: no terminal, CI).
@@ -874,9 +917,30 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 	if !ok {
 		return errs.New(errs.StoreScheme, "wire: the store has no local folder")
 	}
+	// A brand-new store (no marker yet) gets the marker `lore store init`
+	// writes in the same commit as this first write, before the edit, so
+	// what the edit derives from the store id (a folder's natural prj_ id)
+	// uses it (owner report 2026-11-11: a folder pushed to an empty org
+	// store without it made every later command refuse the store).
+	newMarker := gb.Marker().Version == 0
+	if newMarker {
+		m, merr := rowfs.NewMarker(a.opts.Wall())
+		if merr != nil {
+			return merr
+		}
+		if merr = rowfs.WriteMarker(gb.Dir(), m); merr != nil {
+			return merr
+		}
+	}
 	paths, err := edit(gb.Dir())
+	if newMarker && (err != nil || len(paths) == 0) {
+		_ = os.Remove(filepath.Join(gb.Dir(), rowfs.MarkerFile)) // nothing to commit it with
+	}
 	if err != nil || len(paths) == 0 {
 		return err
+	}
+	if newMarker && !slices.Contains(paths, rowfs.MarkerFile) {
+		paths = append([]string{rowfs.MarkerFile}, paths...)
 	}
 	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), subject, paths...); err != nil {
 		return err
@@ -907,6 +971,12 @@ func (a *App) StoreVisibility(ctx context.Context, name string) (opsstores.Visib
 		return opsstores.VisibilityOut{}, err
 	}
 	m, err := rowfs.ReadMarker(dir)
+	if errs.Has(err, errs.NotAStore) && !strings.HasPrefix(src.URL, folderURLScheme) {
+		// a configured git store nothing has written to yet (a brand-new
+		// org store): it has the visibility its first write gives it
+		v := string(rowfs.VisibilityInternal)
+		return opsstores.VisibilityOut{Name: name, Visibility: v, Previous: v}, nil
+	}
 	if err != nil {
 		return opsstores.VisibilityOut{}, err
 	}

@@ -1293,6 +1293,19 @@ Y
   quiet tomas work "mv north-web clients/north-web"
   on tomas work/clients/north-web "lore org link agency --project client_north --yes"
   on tomas work/clients/north-web "lore store folder list team"
+
+  note "a client repo with no lore files"
+  remote client/south-app
+  quiet tomas work/clients "git clone -q https://github.com/client/south-app south-app && cd south-app && echo '# south-app' > README.md && git add . && git commit -qm init && git push -q origin main"
+  on tomas work/clients/south-app "lore org link agency --project client_south --yes"
+  on tomas work/clients/south-app "lore task add 'set up the staging deploy'"
+  on tomas work/clients/south-app "lore task list"
+  on tomas work/clients/south-app "git status --short --ignored && ls -A"
+
+  note "remove a folder made by mistake"
+  on tomas work/clients "lore store folder add team client_old"
+  on tomas work/clients "lore store folder remove team client_old --yes"
+  on! tomas work/clients "lore store folder remove team client_north --yes"
 }
 
 # fake_ssh LOGIN: an ssh on PATH that answers GitHub's greeting as LOGIN for every
