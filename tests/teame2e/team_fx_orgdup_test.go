@@ -129,9 +129,8 @@ func TestRosterFolderWithOldDuplicateProjectRowsStillResolves(t *testing.T) {
 
 // A refused @handle writes nothing anywhere: every command that resolves a
 // handle refuses before a row (or the roster folder's skeleton, on a store
-// nobody registered in yet) can reach the store. (The `team add` cases went
-// with `lore team add|list`, dropped in 0.1.18: p3/dropped.md; the roster
-// reads below use `lore actor list`.)
+// nobody registered in yet) can reach the store. (The roster reads below
+// use `lore actor list`.)
 func TestUnknownHandleRefusalLeavesTheStoreUntouched(t *testing.T) {
 	r := newOrgRace(t, th.Flag("to", "task", "add"), th.Flag("assign", "task", "add"),
 		th.Cmd("agent", "start"), th.Flag("for", "handoff", "add"), th.Flag("assign", "task", "reassign"))

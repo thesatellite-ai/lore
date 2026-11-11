@@ -163,7 +163,7 @@ $ lore org link agency --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_76bd…3f10 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_76bd…3f10, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+✓ github.com/client/website (prj_76bd…3f10) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 ```
 <!-- /example -->
@@ -464,7 +464,7 @@ stores:
 
 ## `<org_folder>/.lore/lore-org.yaml`
 
-The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file.
+The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; `lore org refresh <org>` copies `stores`, `own`, `repos` and `defaults` again when the team changed the file (a key the file no longer has is removed from your entry). lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file.
 
 | Key | What it means |
 |---|---|

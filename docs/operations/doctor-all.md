@@ -46,12 +46,12 @@ Run it anywhere; inside a repo, the normal `lore doctor` lines for that repo fol
 # tomas, in agency/site
 $ lore doctor --all
 setup agency (admin of agency, default) ─ ~/work/agency/**
-  ⚠ identity    tomas@agency.example · roster – · period –
+  ⚠ identity    tomas@agency.example · roster @tomas · employee since 2026-11-02
   ⚠ github      tomas-dev via github.com
   ✓ store me    read – write – private –
   ? store agency   read ✓ write ✓ private ?
   ✓ secrets     none
-  ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+  ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ⚠ github.gh_account  gh has no login for tomas-dev
       fix: gh auth login --hostname github.com
@@ -60,13 +60,13 @@ setup personal (solo) ─ ~/work/personal/**
   ⚠ identity    tomas@home.example
   ✓ github       via github.com
   ✓ secrets     none
-  ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+  ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
 This repo, warnings:
-  - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
-2 setups · 20 ok · 5 warnings · 0 errors · 1 could not run → degraded (exit 1)
+  - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
+2 setups · 22 ok · 5 warnings · 0 errors · 1 could not run → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
@@ -98,12 +98,12 @@ setup personal (solo) ─ ~/work/personal/**
   ⚠ identity    tomas@home.example
   ✓ github       via github.com
   ✓ secrets     none
-  ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+  ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
 This repo, warnings:
-  - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
+  - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
 1 setup · 7 ok · 3 warnings · 0 errors → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
@@ -122,12 +122,12 @@ Here Tomas's `~/.ssh/config` was changed so that `github.com` now offers his col
 # tomas, in agency/site
 $ lore doctor --all --setup agency --fresh
 setup agency (admin of agency, default) ─ ~/work/agency/**
-  ⚠ identity    tomas@agency.example · roster – · period –
+  ⚠ identity    tomas@agency.example · roster @tomas · employee since 2026-11-02
   ✗ github      tomas-dev via github.com
   ✓ store me    read – write – private –
   ? store agency   read ✓ write ✓ private ?
   ✓ secrets     none
-  ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+  ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ✗ github.ssh_user  github.com logs in as mira-dev
       fix: github.com logs in as mira-dev, not tomas-dev. In ~/.ssh/config point Host github.com at tomas-dev's key (IdentityFile <that key>, IdentitiesOnly yes), or pick the mira-dev account
@@ -138,8 +138,8 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
   ? store.private  agency: could not tell whether agency/notes is private: To get started with GitHub CLI, please run:  gh auth login
       repair: lore setup repair agency
 This repo, warnings:
-  - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (the identity of org agency (config.yaml)) says "Tomas Weber"; fix: lore actor refresh
-1 setup · 12 ok · 3 warnings · 2 errors · 1 could not run → broken (exit 2)
+  - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
+1 setup · 14 ok · 3 warnings · 2 errors · 1 could not run → broken (exit 2)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
@@ -164,8 +164,8 @@ A check that could not run makes the result degraded, never broken, because the 
 ```console
 # tomas, in agency/site
 $ lore doctor --all --setup agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["status"], r["exit_status"], r["counts"]); [print(c["check"], c["status"], c["level"], c.get("target","-"), "|", c.get("detail","")) for s in r["setups"] for c in s["checks"] if c["status"] not in ("ok", "skip")]'
-broken 2 {'ok': 12, 'warn': 3, 'fail': 2, 'skip': 14, 'error': 1}
-identity.actor_copies warn warn - | Tomas Weber (act_7a67…9504) in repo has "tomas", the identity of org agency (config.yaml) says "Tomas Weber"
+broken 2 {'ok': 14, 'warn': 3, 'fail': 2, 'skip': 12, 'error': 1}
+identity.actor_copies warn warn - | Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
 github.ssh_user fail error - | github.com logs in as mira-dev
 github.key_matches fail error - | github.com logs in as mira-dev, but this setup's account is tomas-dev
 github.gh_account warn warn - | gh has no login for tomas-dev
@@ -232,8 +232,8 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `identity.email_format` | error | the email is a valid address (for a member or admin setup, the org entry's identity email, `orgs[<org>].identity`) | type the address you use for this work |
 | `identity.invite_email` | error | a member's email is the invite's | use the invite's address, or ask for a new invite |
 | `identity.git_email` | warn | git commits here carry this email (for a member or admin setup, the org entry's identity email) | `git config --global user.email <email>` (shown, never run) |
-| `identity.roster` | warn | your email is on the team roster | finish the join step, or `lore actor contact add …` |
-| `identity.period` | warn | you are an active team member, not marked as left | ask an admin to run `lore actor rejoin` |
+| `identity.roster` | warn | your email is on the team roster, read from the org store that holds it (the rows `lore actor show` reads); the identity line shows `roster @<handle>` | finish the join step, or `lore actor contact add …` |
+| `identity.period` | warn | you are an active team member, not marked as left: the identity line shows the open period (`employee since 2025-03-01`) | ask an admin to run `lore actor rejoin` |
 | `identity.top_level` | warn | no old top-level `identity:` is left beside a solo setup's identity (the setup is the one source) | `lore identity migrate --keep setup --setup <name>` (Run it) |
 | `identity.top_level_keep` | warn | only when the top-level `identity:` and the setup's differ: the other choice | `lore identity migrate --keep top --setup <name>` (Run it) |
 | `github.ssh_key` | error | the key file the setup records exists, private key or `.pub` (skipped when none is recorded) | `ssh-keygen -t ed25519 …`, then add its `.pub` on GitHub |

@@ -22,8 +22,11 @@ import (
 // Which App: the roster's (rosterApp), so outside a repo the store-only
 // App answers with the org store it opened, and inside a repo the full
 // App answers with every attached store. A prj_ id matches by id, anything
-// else by exact name; copies of one row in several stores count once. No
-// match is E_NOT_FOUND; a name two different projects share is
+// else by exact name; copies of one row in several stores count once. With
+// no row matching, a folder of any of the org's stores (orgFolders: names
+// are unique across them, the id is the folder's _meta.json one) is the
+// project, so a folder name works before the folder has a row. No match
+// is E_NOT_FOUND naming the stores searched; a name two different projects share is
 // E_PROJECT_NAME_COLLISION (fail closed: a membership never lands on a
 // guessed project).
 var _ opsmember.ProjectFinder = (*App)(nil)
@@ -63,10 +66,18 @@ func (a *App) FindProject(ctx context.Context, ref string) (opsmember.Project, e
 			}
 		}
 	}
+	if len(hits) == 0 {
+		// A folder of any store of the org is a project, row or not
+		// (orgfolders.go): outside a repo the roster App attaches only the
+		// org folder, in a linked repo only its own folder too.
+		scan := x.orgFolders(ctx)
+		if f, ok := scan.match(ref, byID); ok {
+			return opsmember.Project{ID: f.ID, Name: f.Folder}, nil
+		}
+		return opsmember.Project{}, errs.New(errs.NotFound, "no project or store folder "+ref+" in the stores this command reads"+scan.missDetail()).
+			WithHint("lore project list shows the projects and folders of the org; name one by its name or prj_ id, or make the folder first: lore store folder add <store> " + ref)
+	}
 	switch len(hits) {
-	case 0:
-		return opsmember.Project{}, errs.New(errs.NotFound, "no project "+ref+" in the stores this repo reads").
-			WithHint("lore project list shows the projects; name one by its name or prj_ id")
 	case 1:
 		for _, p := range hits {
 			id, perr := ids.As[ids.Project](p.ID)

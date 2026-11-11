@@ -66,7 +66,7 @@ var auditSeedSkip = map[string]string{}
 // seeds their rows into opstest.OrgRoster.
 var auditOrgLists = map[string]bool{
 	"contact_type.list": true, "role.list": true, "actor.contact.list": true,
-	"actor.period.list": true, "project.member.list": true, "team.invite.list": true,
+	"actor.period.list": true, "project.member.list": true, "team.invite.list": true, "team.list": true,
 }
 
 // TestAuditOnEveryList is INTEG-AUDIT-1's command-tree walk over wire's

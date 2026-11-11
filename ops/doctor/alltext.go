@@ -292,7 +292,14 @@ func areaLine(a string, rs []onboard.CheckResult, s SetupReport) string {
 		}
 		parts := []string{email}
 		if r, ok := resultOf(rs, onboard.CheckIdentityRoster); ok {
-			parts = append(parts, "roster "+symOf(r))
+			// ok names the roster row ("roster @mira"), as the period's
+			// detail names the stint, so the line says who the roster
+			// found, not only that it found someone.
+			if r.Status == onboard.StatusOK && r.Detail != "" {
+				parts = append(parts, "roster "+r.Detail)
+			} else {
+				parts = append(parts, "roster "+symOf(r))
+			}
 		}
 		if r, ok := resultOf(rs, onboard.CheckIdentityPeriod); ok {
 			if r.Status == onboard.StatusOK && r.Detail != "" {

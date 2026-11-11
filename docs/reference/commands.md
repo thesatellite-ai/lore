@@ -440,7 +440,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore org create` | Start a new org on a lore store: suggest it to teammates, add it with your identity, join its roster | [team/profiles › Step 9 — Create or rename an org](../../docs/team/profiles.md#step-9--create-or-rename-an-org) |
 | `lore org import` | Adopt the org entry a team suggests in its store, with your identity, and join its roster | [team/identity-and-stores › Step 4 — Join your company's setup in one command: lore org import](../../docs/team/identity-and-stores.md#step-4--join-your-companys-setup-in-one-command-lore-org-import) |
 | `lore org link` | Link this repo to an internal project in the org's store | [team/commands › lore org link](../../docs/team/commands.md#lore-org-link) |
-| `lore org refresh` | Copy an org entry's stores, own and repos from the store's lore-org.yaml (the team's source) and record its version | — |
+| `lore org refresh` | Copy an org entry's stores, own, repos and defaults from the store's lore-org.yaml (the team's source) and record its version | — |
 | `lore org rename` | Rename an org entry on this machine (a label change; the org's id and every row stay) | [team/profiles › Step 9 — Create or rename an org](../../docs/team/profiles.md#step-9--create-or-rename-an-org) |
 | `lore org set` | Write the committed .lore/org.yaml (only in the org's own repos) | [team/identity-and-stores › Step 5 — Let a repo name its org for everyone: lore org set](../../docs/team/identity-and-stores.md#step-5--let-a-repo-name-its-org-for-everyone-lore-org-set) |
 | `lore org use` | Choose the org entry for this project on this machine (not committed) | [team/commands › lore org use](../../docs/team/commands.md#lore-org-use) |

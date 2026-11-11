@@ -62,7 +62,7 @@ Continue? [y/N] y
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_162d…9666 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_162d…9666, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+✓ github.com/client/website (prj_162d…9666) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 $ git status --short
 $ lore actor register

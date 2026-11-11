@@ -59,9 +59,9 @@ func TestF16_TaskDoneFailsClosedWithoutTheStore(t *testing.T) {
 // client repo (team names are internal). The team lives on the org roster,
 // not in the client's lore.db, so the refusal must still recognise the
 // handle as a team — not answer "no person or team" — and write nothing.
-// 0.1.18 has no command that makes a team (`lore team add` is dropped,
-// p3/dropped.md), but teams a v0.1.17 lore made still sit on org rosters, so
-// the team row is planted in the store as that version left it.
+// The team row is planted in the store as a v0.1.17 `lore team add` left
+// it (teams that version made still sit on org rosters; `lore team add`
+// makes the same row today, docs/team/teams.md).
 func TestF14_TeamAssignInClientRepoRefused(t *testing.T) {
 	a := newAgency(t, th.Flag("assign", "task", "add"), th.Flag("to", "task", "add"))
 	a.plantRosterTeam(t, "backend")
@@ -79,7 +79,7 @@ func TestF14_TeamAssignInClientRepoRefused(t *testing.T) {
 
 // plantRosterTeam writes a team row with handle (and no members) into the
 // org folder's roster on the store's main branch, the way a v0.1.17
-// `lore team add` left it: no 0.1.18 command creates a team.
+// `lore team add` left it.
 func (a *agency) plantRosterTeam(t *testing.T, handle string) {
 	t.Helper()
 	meta, ok := a.store.Read(refMain, folderOrg+"/"+dataDir+"/"+metaFile)

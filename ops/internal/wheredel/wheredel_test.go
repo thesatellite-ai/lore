@@ -206,6 +206,8 @@ var noTrashReason = map[string]string{
 	"store.remove":          "detaches a store; its rows stay",
 	"task.checklist.rm":     "an in-row tombstone on the checklist item",
 	"task.time.rm":          "an in-row tombstone on the time entry",
+	"team.remove":           "marks the team removed (active false, left_at); its row stays so tasks that named it still read",
+	"team.member.remove":    "edits the team's member list; no row is deleted",
 }
 
 // TestEveryTrashMoveTakesReason (INTEG-TRASH-3): every operation that

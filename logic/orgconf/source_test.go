@@ -35,3 +35,43 @@ func TestStateOfAndRefresh(t *testing.T) {
 		t.Fatal("default branch spelled two ways differs")
 	}
 }
+
+// TestRefreshCopiesDefaults (owner report, 0.1.18-dev): defaults is one of
+// the copied fields, like stores, own and repos: a refresh adds it,
+// replaces it when the store's file changed it, and removes it when the
+// file has none; a different defaults map is a change.
+func TestRefreshCopiesDefaults(t *testing.T) {
+	t.Parallel()
+	const sto = "sto_01a1bf3249ed7319a7f26569ae4e79f6"
+	stores := []Store{{URL: "git@h:acme/store.git", OrgFolder: "org"}}
+	o := &Org{Name: "acme", Stores: stores}
+	with := func(m map[string]string) Shared {
+		return Shared{Stores: stores, Defaults: OrgDefaults{ClientRepos: m}}
+	}
+	if !Refresh(o, with(map[string]string{"task": "acme"}), OrgSource{Store: sto, Version: "v1"}) {
+		t.Fatal("new defaults are a change")
+	}
+	if got := o.Defaults.ClientRepos["task"]; got != "acme" {
+		t.Fatalf("defaults not copied: %+v", o.Defaults)
+	}
+	src := map[string]string{"task": "repo", "memory": "acme"}
+	if !Refresh(o, with(src), OrgSource{Store: sto, Version: "v2"}) {
+		t.Fatal("changed defaults are a change")
+	}
+	src["task"] = "acme" // the entry holds its own copy, not the caller's map
+	if o.Defaults.ClientRepos["task"] != "repo" || o.Defaults.ClientRepos["memory"] != "acme" {
+		t.Fatalf("defaults not replaced: %+v", o.Defaults)
+	}
+	if Refresh(o, with(map[string]string{"task": "repo", "memory": "acme"}), OrgSource{Store: sto, Version: "v3"}) {
+		t.Fatal("the same defaults are no change")
+	}
+	if !Refresh(o, with(nil), OrgSource{Store: sto, Version: "v4"}) {
+		t.Fatal("removed defaults are a change")
+	}
+	if len(o.Defaults.ClientRepos) != 0 {
+		t.Fatalf("defaults not removed: %+v", o.Defaults)
+	}
+	if !with(nil).Equal(with(map[string]string{})) {
+		t.Fatal("no defaults and empty defaults differ")
+	}
+}

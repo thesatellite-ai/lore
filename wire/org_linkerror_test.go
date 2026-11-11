@@ -25,7 +25,7 @@ func TestLinkErrorMatrix(t *testing.T) {
 		{"not a store", wrap(orgcfg.ErrNotAStore), errs.NotAStore, true},
 		{"no branch", wrap(orgcfg.ErrNoStoreBranch), errs.InvalidInput, true},
 		{"offline", wrap(orgcfg.ErrStoreOffline), errs.Offline, true},
-		{"folder elsewhere", wrap(orgcfg.ErrFolderElsewhere), errs.InvalidInput, false},
+		{"folder elsewhere", wrap(orgcfg.ErrFolderElsewhere), errs.InvalidInput, true},
 		{"store refused (hook)", wrap(orgcfg.ErrStoreRefused), errs.PolicyDenied, true},
 		{"race lost every time", wrap(orgcfg.ErrLinkRace), errs.BusyTimeout, true},
 		{"a lore error keeps its code", errs.New(errs.StoreLocked, "busy"), errs.StoreLocked, false},

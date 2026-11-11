@@ -2,8 +2,8 @@ package wire
 
 // orgsource.go — the org entry in ~/.lore/config.yaml as a stamped copy
 // of the store's lore-org.yaml (SOURCE_OF_TRUTH row 9). lore-org.yaml is
-// the source of stores, own and repos; the entry keeps its machine-local
-// fields (label, identity, defaults, live, …) and carries
+// the source of stores, own, repos and defaults; the entry keeps its
+// machine-local fields (label, identity, live, …) and carries
 // `source: {store: sto_…, version: <blob id>}`.
 //
 //	refresh trigger: every core open (afterAttach) compares each entry's
@@ -145,12 +145,15 @@ func setOrgSourceNode(root *yaml.Node, name string, sh orgconf.Shared, src orgco
 	if err := setOrgKey(entry, orgKeyRepos, sh.Repos, len(sh.Repos) == 0); err != nil {
 		return err
 	}
+	if err := setOrgKey(entry, orgKeyDefaults, sh.Defaults, len(sh.Defaults.ClientRepos) == 0); err != nil {
+		return err
+	}
 	return setOrgKey(entry, orgKeySource, src, false)
 }
 
 // orgKeyValue is a value setOrgSourceNode writes.
 type orgKeyValue interface {
-	[]orgconf.Store | []string | orgconf.OrgSource
+	[]orgconf.Store | []string | orgconf.OrgDefaults | orgconf.OrgSource
 }
 
 // setOrgKey sets key of entry to v (removed when empty).
@@ -195,7 +198,7 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 			if orgconf.SharedOf(o).Equal(sg.Shared()) {
 				continue // stamped by the next open
 			}
-			msg = "org entry " + o.Name + " differs from the store's suggestion " + orgFileShown(sg) + " and records no source version (stores, own or repos were changed by hand or by an older lore)"
+			msg = "org entry " + o.Name + " differs from the store's suggestion " + orgFileShown(sg) + " and records no source version (stores, own, repos or defaults were changed by hand or by an older lore)"
 		}
 		out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorWarning, Message: msg, Fix: "lore org refresh " + o.Name})
 	}
@@ -220,8 +223,8 @@ func short(v string) string {
 }
 
 // Refresh implements opsorgcmd.Refresher: fetch the org store, read its
-// lore-org.yaml and copy stores, own and repos into the entry with the
-// new stamp (the doctor's fix for org_source).
+// lore-org.yaml and copy stores, own, repos and defaults into the entry
+// with the new stamp (the doctor's fix for org_source).
 func (h *standaloneOrg) Refresh(ctx context.Context, in opsorgcmd.RefreshIn) (opsorgcmd.Report, error) {
 	cfg, err := h.loadOrgConfig()
 	if err != nil {

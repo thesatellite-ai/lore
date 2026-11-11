@@ -1,8 +1,9 @@
 package orgcmd
 
 // refresh.go — `lore org refresh <org>` (SOURCE_OF_TRUTH row 9): the org
-// entry in ~/.lore/config.yaml copies stores, own and repos from the
-// store's lore-org.yaml (the source) and records which version it copied.
+// entry in ~/.lore/config.yaml copies stores, own, repos and defaults
+// from the store's lore-org.yaml (the source) and records which version
+// it copied.
 // Every open refreshes a stale entry by itself after a fetch; this verb is
 // the doctor's fix (org_source) and the way to adopt a suggestion an entry
 // changed by hand no longer matches.
@@ -35,7 +36,7 @@ type Refresher interface {
 
 // refreshOp is org.refresh bound to o.
 func refreshOp(o ops, spec func(name, summary string, errCodes []errs.Code, mayAsk bool, ex ...op.Example) op.Spec, codes []errs.Code) op.Entry {
-	return op.Define(spec(OpRefresh, "Copy an org entry's stores, own and repos from the store's lore-org.yaml (the team's source) and record its version", codes, false,
+	return op.Define(spec(OpRefresh, "Copy an org entry's stores, own, repos and defaults from the store's lore-org.yaml (the team's source) and record its version", codes, false,
 		op.Example{Title: "the store's suggestion changed", CLI: "lore org refresh agency", Want: "agency"}),
 		func(ctx context.Context, in RefreshIn) (Report, error) {
 			if strings.TrimSpace(in.Org) == "" {

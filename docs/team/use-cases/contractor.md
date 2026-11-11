@@ -52,7 +52,7 @@ $ lore org link agency --project client --store git@github.com:agency/notes-clie
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe…28f2 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
-✓ github.com/client/website (prj_54fe…28f2, github.com/client/website) linked to github.com/agency/notes-client client/ (created; pushed)
+✓ github.com/client/website (prj_54fe…28f2) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
 ✓ act_05e9…4603 Alice Doe (@alice) registered in <redacted>

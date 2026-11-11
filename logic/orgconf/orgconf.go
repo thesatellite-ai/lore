@@ -122,7 +122,7 @@ type Org struct {
 	Own []string `yaml:"own,omitempty"`
 	// Repos are patterns of client repos the org works in.
 	Repos        []string     `yaml:"repos,omitempty"`
-	Source       *OrgSource   `yaml:"source,omitempty"` // source.go: the lore-org.yaml stores, own and repos were copied from
+	Source       *OrgSource   `yaml:"source,omitempty"` // source.go: the lore-org.yaml stores, own, repos and defaults were copied from
 	Defaults     OrgDefaults  `yaml:"defaults,omitempty"`
 	AgentDetails AgentDetails `yaml:"agent_details,omitempty"`
 	// Live overrides the top level's live.fetch_ttl for this entry.

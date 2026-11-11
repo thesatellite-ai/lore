@@ -28,7 +28,7 @@ You do not need to read the design spec to use any of this. Every command exampl
 3. [Getting started](getting-started.md): install, first config, first live task, first landing.
 4. One or two [use cases](#use-cases) close to your situation.
 5. [How it works](how-it-works.md) when you want to know what lore does in git for each command.
-6. [Commands reference](commands.md), [Agents](agents.md), [Identity and stores](identity-and-stores.md), [Team profiles](profiles.md) and [Troubleshooting](troubleshooting.md) as you need them, [Guided setup](guided-setup.md), [Setups from the command line](setup-cli.md), [Team invites](invites.md).
+6. [Commands reference](commands.md), [Agents](agents.md), [Identity and stores](identity-and-stores.md), [Team profiles](profiles.md) and [Troubleshooting](troubleshooting.md) as you need them, [Guided setup](guided-setup.md), [Setups from the command line](setup-cli.md), [Team invites](invites.md), [Teams](teams.md).
 
 ## Use cases
 
@@ -90,5 +90,5 @@ All names are role words, not real companies: **the agency** (org `agency`, priv
 - [Overview](overview.md) and [Concepts](concepts.md): the picture and the words before the commands.
 - [Getting started](getting-started.md): the first live task and the first landing.
 - [Commands reference](commands.md) and [Troubleshooting](troubleshooting.md).
-- [Guided setup](guided-setup.md), [Setups from the command line](setup-cli.md), [Team invites](invites.md), [Client folders from the parent folder](client-folders.md) and [Team profiles](profiles.md).
+- [Guided setup](guided-setup.md), [Setups from the command line](setup-cli.md), [Team invites](invites.md), [Teams](teams.md), [Client folders from the parent folder](client-folders.md) and [Team profiles](profiles.md).
 - [Docs home](../README.md): lore for one person, knowledge, tasks, sync and operations.

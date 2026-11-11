@@ -255,6 +255,19 @@ func (p *profileRoster) Delete(ctx context.Context, table row.Table, id ids.AnyI
 	return err
 }
 
+var _ profilestore.FolderProjecter = (*profileRoster)(nil)
+
+// FolderProject implements profilestore.FolderProjecter: the org folder's
+// project row (rosterProject, as RosterTeamPut uses), made when the folder
+// has none yet.
+func (p *profileRoster) FolderProject(ctx context.Context) (ids.ID[ids.Project], error) {
+	ref, err := p.app.rosterProject(ctx, p.st, p.at.src, rosterFolderName(p.at.src))
+	if err != nil {
+		return ids.ID[ids.Project]{}, err
+	}
+	return ids.Parse[ids.Project](ref.ID().String())
+}
+
 // Push implements profilestore.Roster.
 func (p *profileRoster) Push(ctx context.Context) { p.app.rosterPush(ctx, p.at) }
 

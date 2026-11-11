@@ -4,19 +4,19 @@ alice (work/api)$ lore org link agency --project client2 --yes
 This marks github.com/client2/api as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_7a670ae8548ed05bf57ad29ad0759504 at github.com/client2/api → github.com/agency/notes@main:client2/ (default=false)
-✓ github.com/client2/api (prj_7a670ae8548ed05bf57ad29ad0759504, github.com/client2/api) linked to github.com/agency/notes client2/ (created; pushed)
+✓ github.com/client2/api (prj_7a670ae8548ed05bf57ad29ad0759504) linked to github.com/agency/notes client2/ (created; pushed)
   nothing was written to this repo
 alice (work/app)$ lore org link agency --project client2 --yes
 This marks github.com/client2/app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_2ad3618e878ebbf527d34d446ef4f891 at github.com/client2/app → github.com/agency/notes@main:client2/ (default=false)
-✓ github.com/client2/app (prj_2ad3618e878ebbf527d34d446ef4f891, github.com/client2/app) linked to github.com/agency/notes client2/ (pushed)
+✓ github.com/client2/app (prj_2ad3618e878ebbf527d34d446ef4f891) linked to github.com/agency/notes client2/ (pushed)
   nothing was written to this repo
 alice (work/infra)$ lore org link agency --project client2 --yes
 This marks github.com/client2/infra as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_162df51b7f78b785c97c26b41ea89666 at github.com/client2/infra → github.com/agency/notes@main:client2/ (default=false)
-✓ github.com/client2/infra (prj_162df51b7f78b785c97c26b41ea89666, github.com/client2/infra) linked to github.com/agency/notes client2/ (pushed)
+✓ github.com/client2/infra (prj_162df51b7f78b785c97c26b41ea89666) linked to github.com/agency/notes client2/ (pushed)
   nothing was written to this repo
 alice (work/api)$ lore actor register
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/api/.git/hooks)

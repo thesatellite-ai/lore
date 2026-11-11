@@ -92,7 +92,7 @@ func (g *GitLinks) suggestionAt(ctx context.Context, dir, norm, branch string) (
 
 // Shared is the suggestion's shared fields as an org entry holds them.
 func (s Suggestion) Shared() orgconf.Shared {
-	sh := orgconf.Shared{Own: s.Doc.Own, Repos: s.Doc.Repos}
+	sh := orgconf.Shared{Own: s.Doc.Own, Repos: s.Doc.Repos, Defaults: orgconf.OrgDefaults{ClientRepos: s.Doc.Defaults.ClientRepos}}
 	for _, st := range s.Doc.Stores {
 		sh.Stores = append(sh.Stores, orgconf.Store{URL: st.URL, Branch: st.Branch, OrgFolder: st.OrgFolder})
 	}
