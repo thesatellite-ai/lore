@@ -154,7 +154,7 @@ func (r *Repo) MakeCommit(ctx context.Context, req CommitRequest) (Commit, error
 		}
 	}
 	args = append(args, "-F", "-")
-	oid, err := r.run(ctx, signatureEnv(req.Signature), []byte(req.Message), args...)
+	oid, err := r.runObjectWrite(ctx, signatureEnv(req.Signature), []byte(req.Message), args...)
 	if err != nil {
 		return Commit{}, err
 	}
@@ -229,7 +229,7 @@ func (r *Repo) buildTree(ctx context.Context, base string, ch Changes) (string, 
 			list.WriteString(f)
 			list.WriteByte('\n')
 		}
-		out, err := r.run(ctx, nil, list.Bytes(), "hash-object", "-w", "--no-filters", "--stdin-paths")
+		out, err := r.runObjectWrite(ctx, nil, list.Bytes(), "hash-object", "-w", "--no-filters", "--stdin-paths")
 		if err != nil {
 			return "", err
 		}
@@ -250,7 +250,7 @@ func (r *Repo) buildTree(ctx context.Context, base string, ch Changes) (string, 
 			return "", err
 		}
 	}
-	return r.run(ctx, env, nil, "write-tree")
+	return r.runObjectWrite(ctx, env, nil, "write-tree")
 }
 
 // blobFileMode is the permission of staged blob files: private, since they

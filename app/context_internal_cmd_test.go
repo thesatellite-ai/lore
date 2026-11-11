@@ -7,11 +7,12 @@ package app
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // TestContextInternalCmd: with an internal store "inner" (a memory and a
@@ -35,7 +36,7 @@ func TestContextInternalCmd(t *testing.T) {
 		}
 		return out
 	}
-	run(t, "store", "init", "inner", "file://"+filepath.ToSlash(t.TempDir()), "--yes")
+	run(t, "store", "init", "inner", fileuri.URL(t.TempDir(), ""), "--yes")
 	run(t, "store", "init", "me", "--yes")
 	run(t, "memory", "add", "--body", "inner zebra memory", "--to", "inner")
 	run(t, "memory", "add", "--body", "inner plain memory", "--to", "inner")

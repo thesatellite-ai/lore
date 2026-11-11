@@ -3,6 +3,8 @@ package gitref
 import (
 	"context"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // FLAG4 (owner, r2-ident): GitIdentity is what git itself would sign with in
@@ -11,7 +13,7 @@ import (
 func TestGitIdentityMatrix(t *testing.T) {
 	// No global/system git config may leak in: the matrix sets only the
 	// repo's own config.
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	cases := []struct {

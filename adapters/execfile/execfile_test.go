@@ -70,7 +70,8 @@ func TestWriteFileSetsModeOnAnExistingFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != scriptMode {
+	// Windows has no POSIX mode bits (os.Chmod only sets read-only)
+	if runtime.GOOS != "windows" && info.Mode().Perm() != scriptMode {
 		t.Errorf("mode = %v, want %v", info.Mode().Perm(), scriptMode)
 	}
 }

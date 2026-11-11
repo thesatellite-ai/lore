@@ -133,7 +133,7 @@ func TestPruneAsksThenDeletes(t *testing.T) {
 		t.Fatalf("unconfirmed prune: %v, want E_NEEDS_CONFIRM", err)
 	}
 	env := errs.EnvelopeOf(err).Error
-	if !strings.Contains(env.Message, f.detached) || env.Next == nil || strings.Join(env.Next.Args, " ") != "cache prune --yes" {
+	if !strings.Contains(env.Message, filepath.FromSlash(f.detached)) || env.Next == nil || strings.Join(env.Next.Args, " ") != "cache prune --yes" {
 		t.Fatalf("refusal = %+v", env)
 	}
 	if !exists(t, f.root, f.orphan) {

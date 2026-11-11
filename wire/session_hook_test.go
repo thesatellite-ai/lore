@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	opsagent "github.com/thesatellite-ai/lore/ops/agent"
 	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 	"github.com/thesatellite-ai/lore/wire"
@@ -27,7 +28,7 @@ func withStandaloneSessionHosts(o *wire.Options) {
 // toolSession as its id and no model (HOME has no settings file).
 func claudeSessionEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Setenv("CLAUDECODE", "1")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", toolSession)
 	for _, k := range []string{"ANTHROPIC_MODEL", "CLAUDE_MODEL", "LORE_NO_DETECT", "LORE_HUMAN", "LORE_SESSION"} {

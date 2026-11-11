@@ -3,12 +3,12 @@ package wire
 import (
 	"context"
 	"database/sql"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -86,7 +86,7 @@ func newCopyEngineOver(t *testing.T, home string, defs []schema.TableDef) *engin
 // time text and 0/1 bools, and a row of NULLs.
 func writeV017DB(t *testing.T, path string, stmts ...string) {
 	t.Helper()
-	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
+	dsn := fileuri.URL(path, "")
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		t.Fatal(err)

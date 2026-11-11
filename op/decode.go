@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -240,11 +241,30 @@ func bodyError(err error) error {
 	case strings.HasPrefix(err.Error(), jsonUnknownField):
 		return errs.Wrap(errs.InvalidInput, "unknown field "+strings.TrimPrefix(err.Error(), jsonUnknownField), err).WithHint(bodyFieldsHint)
 	case errors.As(err, &typeErr) && typeErr.Field != "":
-		return errs.Wrap(errs.InvalidInput, "field "+strconv.Quote(typeErr.Field)+" takes "+jsonKindName(typeErr.Type)+", not a JSON "+typeErr.Value, err).WithHint(bodyFieldsHint)
+		return errs.Wrap(errs.InvalidInput, "field "+strconv.Quote(jsonFieldPath(typeErr.Field))+" takes "+jsonKindName(typeErr.Type)+", not a JSON "+typeErr.Value, err).WithHint(bodyFieldsHint)
 	case errors.As(err, &syntaxErr):
 		return errs.Wrap(errs.InvalidInput, "the request body is not valid JSON (byte "+strconv.FormatInt(syntaxErr.Offset, 10)+": "+syntaxErr.Error()+")", err)
 	}
 	return errs.Wrap(errs.InvalidInput, "the request body does not fit the operation's input", err)
+}
+
+// jsonFieldPath is a decode error's field as the request names it: some Go
+// releases (1.26) put an embedded struct's Go name in front
+// (LiveFlags.live), which is no member of the body. Members are snake_case,
+// so a segment starting with a capital is a Go type name.
+func jsonFieldPath(field string) string {
+	segs := strings.Split(field, ".")
+	kept := make([]string, 0, len(segs))
+	for _, s := range segs {
+		if s != "" && unicode.IsUpper([]rune(s)[0]) {
+			continue
+		}
+		kept = append(kept, s)
+	}
+	if len(kept) == 0 {
+		return field
+	}
+	return strings.Join(kept, ".")
 }
 
 // jsonKindName names the JSON value a Go field type decodes from, in the

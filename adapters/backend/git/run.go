@@ -89,7 +89,11 @@ type call struct {
 func (r runner) run(ctx context.Context, c call) ([]byte, error) {
 	args := c.args
 	if r.owned {
-		args = append([]string{"-c", "commit.gpgsign=false", "-c", "core.hooksPath=" + r.noHooks}, args...)
+		// core.autocrlf=false: row files are bytes lore hashes and
+		// compares, never text to convert. Git for Windows defaults to
+		// autocrlf=true, which checked rows out with CRLF, so a second
+		// clone read other bytes than the first wrote.
+		args = append([]string{"-c", "commit.gpgsign=false", "-c", "core.hooksPath=" + r.noHooks, "-c", "core.autocrlf=false"}, args...)
 	}
 	if len(r.routeArgs) > 0 {
 		args = append(append([]string(nil), r.routeArgs...), args...)

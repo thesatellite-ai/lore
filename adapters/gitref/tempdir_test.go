@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // TestWriteRefWithTMPDIRGone: a ref write works on every repo kind when
@@ -15,7 +17,7 @@ func TestWriteRefWithTMPDIRGone(t *testing.T) {
 	for _, kind := range allKinds {
 		t.Run(string(kind), func(t *testing.T) {
 			r := newRepo(t, kind)
-			t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "gone"))
+			testenv.SetTemp(t, filepath.Join(t.TempDir(), "gone"))
 			if _, err := r.WriteRef(context.Background(), WriteRequest{Ref: "refs/lore/live", Message: "m", Signature: testSig,
 				Changes: Changes{Put: map[string][]byte{"_root/x.json": []byte("{}")}}}); err != nil {
 				t.Fatalf("write with TMPDIR gone: %v", err)

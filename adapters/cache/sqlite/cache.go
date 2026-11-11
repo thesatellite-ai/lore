@@ -172,6 +172,13 @@ func fileDSN(path string) (string, error) {
 	q.Add("_pragma", "busy_timeout("+strconv.Itoa(busyTimeoutMS)+")")
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "synchronous(NORMAL)")
+	if !tempUsable() {
+		// SQLite's own temp files (statement journals, the fts5 build) go
+		// to the temp folder; on Windows it does not fall back when TMP
+		// names a folder that is gone, and creating the fts tables failed
+		// with "unable to open database file". Kept in memory instead.
+		q.Add("_pragma", "temp_store(MEMORY)")
+	}
 	// Every transaction here writes. A deferred one that reads first and
 	// then writes fails at once with SQLITE_BUSY_SNAPSHOT (517) when another
 	// process committed in between, and busy_timeout does not apply to
@@ -181,6 +188,12 @@ func fileDSN(path string) (string, error) {
 	q.Add("_txlock", "immediate")
 	u.RawQuery = q.Encode()
 	return u.String(), nil
+}
+
+// tempUsable reports whether the system temp folder exists as a folder.
+func tempUsable() bool {
+	fi, err := os.Stat(os.TempDir())
+	return err == nil && fi.IsDir()
 }
 
 // init resets a file of another layout, creates the internal tables and

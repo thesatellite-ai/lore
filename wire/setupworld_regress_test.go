@@ -27,8 +27,9 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 	"github.com/thesatellite-ai/lore/wire"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
 )
 
 // rwAccount is one GitHub account of the fake machine.
@@ -102,7 +103,7 @@ func newRegressWorld(t *testing.T, s rwShape) *rwWorld {
 			t.Fatal(err)
 		}
 	}
-	t.Setenv("HOME", w.Home)
+	testenv.SetHome(t, w.Home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(w.Home, ".config"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("GH_TOKEN", "")
@@ -173,7 +174,7 @@ func newRegressWorld(t *testing.T, s rwShape) *rwWorld {
 		w.IncludeDirs = append(w.IncludeDirs, cdir)
 		inc := filepath.Join(w.Home, ".gitconfig-client-"+n)
 		w.write(inc, "[user]\n\tname = Client "+n+"\n\temail = client-"+n+"@example.org\n", 0o644)
-		gc.WriteString("[includeIf \"gitdir:~/clients/" + n + "/\"]\n\tpath = " + inc + "\n")
+		gc.WriteString("[includeIf \"gitdir:~/clients/" + n + "/\"]\n\tpath = " + filepath.ToSlash(inc) + "\n")
 	}
 	w.write(filepath.Join(w.Home, ".gitconfig"), gc.String(), 0o644)
 
@@ -202,7 +203,7 @@ func (w *rwWorld) Reopen() { w.open() }
 
 func (w *rwWorld) write(path, body string, mode os.FileMode) {
 	w.T.Helper()
-	fakebin.Write(w.T, path, body, mode)
+	fakeexec.Write(w.T, path, body, mode)
 }
 
 // Log is the path of tool's call log.
@@ -369,11 +370,14 @@ prog="${cmd%% *}"; repo=$(echo "$cmd" | sed "s/^[^ ]* //; s/'//g; s#^/##")
 owner="${repo%%/*}"
 bare="$R/$repo"; case "$bare" in *.git) ;; *) bare="$bare.git";; esac
 if [ "$acct" != "$owner" ] || [ ! -d "$bare" ]; then
+  echo "ssh notfound account=$acct owner=$owner bare=$bare cmd=$cmd" >> "$L"
   echo "ERROR: Repository not found." >&2
   echo "fatal: Could not read from remote repository." >&2
   exit 128
 fi
-case "$prog" in git-upload-pack|git-receive-pack) exec "$prog" "$bare";; esac
+# "git upload-pack", not "git-upload-pack": Git for Windows keeps the
+# dashed programs out of PATH (in libexec); only git itself is there.
+case "$prog" in git-upload-pack|git-receive-pack) exec git "${prog#git-}" "$bare";; esac
 echo "fake ssh: unsupported command $cmd" >&2; exit 1
 `
 }
@@ -567,4 +571,15 @@ func rwPersonalConfig(login, email string) string {
 	return "setups:\n  - name: personal\n    kind: solo\n    default: true\n" +
 		"    identity: {key: \"human:" + email + "\", name: Pat Example, emails: [" + email + "]}\n" +
 		"    github: {user: " + login + "}\n"
+}
+
+// Calls is every call log (ssh, gh, git) as text, for a failure message:
+// which fake ran, as whom, and why it refused.
+func (w *rwWorld) Calls() string {
+	var b strings.Builder
+	for _, tool := range []string{"ssh", "gh", "git"} {
+		data, _ := os.ReadFile(w.Log(tool))
+		b.WriteString("[" + tool + ".log]\n" + string(data))
+	}
+	return b.String()
 }

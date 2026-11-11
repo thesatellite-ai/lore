@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -31,7 +32,7 @@ func TestSetupStoreWithABrokenAttachedStore(t *testing.T) {
 		t.Fatalf("git init: %v %s", err, out)
 	}
 	sy := filepath.Join(h.Repo, ".lore", "stores.yaml")
-	if err := os.WriteFile(sy, []byte("stores:\n  - name: team_notes\n    url: file://"+bare+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(sy, []byte("stores:\n  - name: team_notes\n    url: "+fileuri.URL(bare, "")+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	// A repo `lore init` made has .lore/data/_meta.json (opssetup.LoreRepoAt);

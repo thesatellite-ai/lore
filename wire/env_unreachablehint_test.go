@@ -10,7 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // storeOpenErr is the real E_STORE_UNREACHABLE of a first clone whose ssh
@@ -19,9 +19,9 @@ func storeOpenErr(t *testing.T, sshStderr string) error {
 	t.Helper()
 	dir := t.TempDir()
 	sshFake := filepath.Join(dir, "ssh")
-	fakebin.Write(t, sshFake, "#!/bin/sh\necho '"+sshStderr+"' >&2\nexit 255\n", 0o755)
+	sshFake = fakeexec.Write(t, sshFake, "#!/bin/sh\necho '"+sshStderr+"' >&2\nexit 255\n", 0o755)
 	route := git.WithRoute(func(context.Context, string) ([]string, []string) {
-		return nil, []string{"GIT_SSH_COMMAND=" + sshFake}
+		return nil, []string{"GIT_SSH_COMMAND=" + filepath.ToSlash(sshFake)}
 	})
 	_, err := git.OpenClone(t.Context(), "git@github.com:octo-work/lore-me.git", filepath.Join(dir, "c"), rowfs.FolderRoot, store.OpenOptions{}, route)
 	if !errs.Has(err, errs.StoreUnreachable) {

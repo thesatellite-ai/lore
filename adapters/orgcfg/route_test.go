@@ -39,7 +39,7 @@ func sshWorld(t *testing.T, origin string) (url, log string) {
 		t.Fatal(err)
 	}
 	log = filepath.Join(t.TempDir(), "ssh.log")
-	t.Setenv("GIT_SSH_COMMAND", bin)
+	t.Setenv("GIT_SSH_COMMAND", filepath.ToSlash(bin)) // git runs it through sh
 	t.Setenv("FAKE_SSH_ROOT", root)
 	t.Setenv("FAKE_SSH_LOG", log)
 	return "git@github.com:acme/hub.git", log

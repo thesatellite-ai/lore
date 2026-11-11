@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -193,7 +194,7 @@ func TestResourcesRowMoveBetweenLevels(t *testing.T) {
 	if err := os.MkdirAll(opsDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	c.MustLore("store", "init", "ops", "file://"+opsDir, "--yes")
+	c.MustLore("store", "init", "ops", fileuri.URL(opsDir, ""), "--yes")
 	c.MustLore("resource", "add", "host", "mv1", "--set", "provider=aws")
 	id := resShow(t, c, "mv1").ID
 	c.Lore("row", "move", "mv1", "--to", "ops", "--yes").Fails(t, resExitInvalid, "E_INVALID_ID", "is not a row id")

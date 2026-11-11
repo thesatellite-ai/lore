@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -62,10 +63,14 @@ func TestRestTokenSource_RotateOnRunningServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	ok("re-created token", third)
-	if err := os.Chmod(TokenPath(home), 0o644); err != nil {
-		t.Fatal(err)
+	// Windows has no POSIX mode bits (os.Chmod only sets read-only): the
+	// file cannot be made readable by others there; Unix-only case.
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(TokenPath(home), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		refused("token file readable by others", third)
 	}
-	refused("token file readable by others", third)
 	if err := os.Chmod(TokenPath(home), tokenMode); err != nil {
 		t.Fatal(err)
 	}

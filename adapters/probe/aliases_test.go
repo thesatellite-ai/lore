@@ -4,10 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // keyHome is a home with ~/.ssh holding: a key pair (work), a private key
@@ -119,18 +122,18 @@ func TestFolderStorePath(t *testing.T) {
 		want string
 		ok   bool
 	}{
-		{"file://" + folder, folder, true},
-		{"file://localhost" + folder, folder, true},
-		{"file://~/stores/me", folder, true},                 // host "~"
-		{"file:///~/stores/me", folder, true},                // path /~/
-		{"file://" + folder + "/new", folder + "/new", true}, // not there yet: the read check says so
-		{"file://" + bare, "", false},                        // a bare git repo takes the git probes
-		{"file://" + work, "", false},                        // a work tree too
-		{"file://elsewhere" + folder, "", false},             // another host
+		{fileuri.URL(folder, ""), folder, true},
+		{"file://localhost" + fileuri.URLPath(folder), folder, true},
+		{"file://~/stores/me", folder, true},                                   // host "~"
+		{"file:///~/stores/me", folder, true},                                  // path /~/
+		{fileuri.URL(folder, "") + "/new", filepath.Join(folder, "new"), true}, // not there yet: the read check says so
+		{fileuri.URL(bare, ""), "", false},                                     // a bare git repo takes the git probes
+		{fileuri.URL(work, ""), "", false},                                     // a work tree too
+		{"file://elsewhere" + fileuri.URLPath(folder), "", false},              // another host
 		{"file:relative/path", "", false},
 		{"git@github.com:octo-personal/notes.git", "", false},
 		{"https://github.com/octo-personal/notes.git", "", false},
-		{"file://user@localhost" + folder, "", false},
+		{"file://user@localhost" + fileuri.URLPath(folder), "", false},
 		{"", "", false},
 	}
 	for _, c := range cases {
@@ -183,6 +186,9 @@ func TestFolderStoreChecks(t *testing.T) {
 	// Read-only folder: write fails with a plain reason, no temp path.
 	if os.Getuid() == 0 {
 		t.Skip("root writes anywhere")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("a folder's read-only mode does not stop new files on Windows")
 	}
 	if err := os.Chmod(dir, 0o555); err != nil {
 		t.Fatal(err)

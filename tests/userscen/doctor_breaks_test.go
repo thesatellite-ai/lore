@@ -33,6 +33,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -96,7 +97,7 @@ func TestDoctorBreak_CacheHeaderDamagedIsMovedAsideAndRebuilt(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := p.c.MustLore("rule", "list")
-	if !strings.Contains(res.Stderr, "the cache "+cache+" was damaged; moved it to "+p.file(".lore/backups")+"/lore-cache.db.corrupt-") ||
+	if !strings.Contains(res.Stderr, "the cache "+cache+" was damaged; moved it to "+p.file(".lore/backups/lore-cache.db.corrupt-")) ||
 		!strings.Contains(res.Stderr, "rebuilt it from the row files (nothing lost)") || !strings.Contains(res.Stdout, "Run the tests before you push") {
 		t.Fatalf("a damaged cache is moved aside, rebuilt, and said once: %s", res)
 	}
@@ -269,11 +270,11 @@ func TestDoctorBreak_LoreBinariesOnPath(t *testing.T) {
 	if err := os.MkdirAll(other, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	th.WriteExecutable(t, filepath.Join(other, "lore"), "#!/bin/sh\necho old lore\n")
+	th.WriteProgram(t, filepath.Join(other, "lore"), "#!/bin/sh\necho old lore\n") // lore.exe on Windows
 	res := p.c.With("PATH="+other+string(os.PathListSeparator)+p.path).Lore("doctor", "--json")
 	rep := doctorDecode(t, res)
 	if rep.Status != "degraded" || len(rep.PathConflicts) != 2 ||
-		!hasLine(rep.Warnings, "multiple lore binaries on PATH: "+filepath.Join(other, "lore")+", "+filepath.Join(shim, "lore")) {
+		!hasLine(rep.Warnings, "multiple lore binaries on PATH: "+filepath.Join(other, fakeexec.Exe("lore"))+", "+filepath.Join(shim, fakeexec.Exe("lore"))) {
 		t.Fatalf("two lore binaries on PATH: %s", res)
 	}
 

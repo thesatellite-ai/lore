@@ -25,9 +25,7 @@ package userscen
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
@@ -94,12 +92,8 @@ func TestMergeDriverConfigMatrix(t *testing.T) {
 func mergeDriverCase(t *testing.T, runner mdRunner, kind mdKind) {
 	w := newWorld(t)
 	a := w.Human("person", "person@example.com")
-	git, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	withShim := strings.Join([]string{filepath.Join(w.Root, "shim"), filepath.Dir(git), "/usr/bin", "/bin"}, string(os.PathListSeparator))
-	noShim := strings.Join([]string{filepath.Dir(git), "/usr/bin", "/bin"}, string(os.PathListSeparator))
+	withShim := narrowPath(t, filepath.Join(w.Root, "shim"))
+	noShim := narrowPath(t)
 	a.SetEnv("PATH", withShim)
 
 	// Another lore that exists (abs-present) and one that is gone.
@@ -124,7 +118,8 @@ func mergeDriverCase(t *testing.T, runner mdRunner, kind mdKind) {
 	runBin := w.Bin
 	switch runner {
 	case mdScratch:
-		scratch := filepath.Join(w.Root, "scratch", "lore-scratch")
+		// with the binary's own extension: Windows runs only lore-scratch.exe
+		scratch := filepath.Join(w.Root, "scratch", "lore-scratch"+filepath.Ext(w.Bin))
 		body, rerr := os.ReadFile(filepath.Clean(w.Bin))
 		if rerr != nil {
 			t.Fatal(rerr)

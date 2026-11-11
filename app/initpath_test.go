@@ -59,7 +59,12 @@ func TestEnterInitDir(t *testing.T) {
 	if err := enterInitDir(dir); err != nil {
 		t.Fatal(err)
 	}
-	if now, _ := os.Getwd(); now != dir {
+	// compared resolved: os.Chdir does not set PWD, so Getwd names the
+	// folder with its links resolved (macOS: /private/var for /var)
+	now, _ := os.Getwd()
+	nowReal, _ := filepath.EvalSymlinks(now)
+	dirReal, _ := filepath.EvalSymlinks(dir)
+	if nowReal != dirReal {
 		t.Fatalf("wd %s, want %s", now, dir)
 	}
 }

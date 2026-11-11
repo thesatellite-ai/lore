@@ -1,6 +1,7 @@
 package toolprofile
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -123,7 +124,8 @@ func TestSkillDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{NameClaudeCode: "/h/.claude/skills/lore", NameCodex: "/h/.codex/skills/lore",
+	// SkillPath joins with the system's separator (\h\.claude\... on Windows)
+	want := map[string]string{NameClaudeCode: filepath.FromSlash("/h/.claude/skills/lore"), NameCodex: filepath.FromSlash("/h/.codex/skills/lore"),
 		NameCursor: "", NameGeminiCLI: "", NameCopilot: "", NameGeneric: ""}
 	for name, dir := range want {
 		p, _ := r.Lookup(name)
@@ -145,7 +147,7 @@ func TestSkillDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, _ := r2.Lookup("mytool")
-	if p.SkillDir != "~/.mytool/skills/lore" || p.SkillPath("/h") != "/h/.mytool/skills/lore" {
+	if p.SkillDir != "~/.mytool/skills/lore" || p.SkillPath("/h") != filepath.FromSlash("/h/.mytool/skills/lore") {
 		t.Fatalf("user skill dir: %q %q", p.SkillDir, p.SkillPath("/h"))
 	}
 	for _, bad := range []string{"/etc/x", "~/../x", "../x", `a\b`, "~", "~/", "~other/x", "."} {

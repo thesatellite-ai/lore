@@ -74,3 +74,31 @@ func OSPathFor(goos, urlPath string) string {
 
 // OSPath is OSPathFor on this machine's operating system.
 func OSPath(urlPath string) string { return OSPathFor(runtime.GOOS, urlPath) }
+
+// FoldDriveHost reads a file url whose host is a drive letter
+// (`file://C:/Users/a/x`, how people and naive code write a Windows path
+// as a url) as the drive path it means (`file:///C:/Users/a/x`): the host
+// moves to the front of the path. Any other url is left as it is. Without
+// it the drive was taken for another machine's name: the folder backend
+// refused the store, and a store url cleaned for config.yaml came out as
+// `file://C:/C:/Users/a/x`, which lore then refused to read.
+func FoldDriveHost(u *url.URL) {
+	if u == nil || u.Scheme != Scheme || len(u.Host) != drivePrefixLen || !hasDrive(u.Host) {
+		return
+	}
+	u.Path = "/" + u.Host + u.Path
+	u.Host, u.RawPath = "", "" // RawPath is derived again from Path when printed
+}
+
+// LocalPath is the local path a file: URL string names on this machine
+// ("" when raw is no file url): the inverse of URL. Callers that cut the
+// "file://" prefix off by hand get "/C:/Users/a/x" on Windows, a path
+// Windows reads as `\C:\Users\a\x` and refuses.
+func LocalPath(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != Scheme {
+		return ""
+	}
+	FoldDriveHost(u)
+	return OSPath(u.Path)
+}

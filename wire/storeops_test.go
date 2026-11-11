@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
@@ -31,7 +32,7 @@ func TestStoreOpsFolderMatrix(t *testing.T) {
 		t.Fatalf("init: %v", err)
 	}
 	other := folderStoreAt(t, shareStoreID, "shareable")
-	if err := os.MkdirAll(filepath.Join(strings.TrimPrefix(other, "file://"), "acme", ".lore", "data"), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Join(fileuri.LocalPath(other), "acme", ".lore", "data"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := run(t, a, opsstores.OpAdd, `{"name":"shared","url":"`+other+`","folder":"acme","read_only":true}`, true); err != nil {

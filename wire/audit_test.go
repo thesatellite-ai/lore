@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -76,7 +77,7 @@ func TestAuditFileFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi.Mode().Perm() != auditFileMode {
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != auditFileMode { // no POSIX mode bits on Windows
 		t.Fatalf("audit file mode %v, want %v", fi.Mode().Perm(), os.FileMode(auditFileMode))
 	}
 	raw := string(mustRead(t, path))
@@ -176,10 +177,10 @@ func TestAttachedStoreAuditMachineLocal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("injected=%v: no machine-local store audit file: %v", injected, err)
 		}
-		if fi.Mode().Perm() != auditFileMode {
+		if runtime.GOOS != "windows" && fi.Mode().Perm() != auditFileMode { // no POSIX mode bits on Windows
 			t.Fatalf("store audit file mode %v", fi.Mode().Perm())
 		}
-		if di, derr := os.Stat(dir); derr != nil || di.Mode().Perm() != storeAuditDirMode {
+		if di, derr := os.Stat(dir); derr != nil || (runtime.GOOS != "windows" && di.Mode().Perm() != storeAuditDirMode) {
 			t.Fatalf("store audit dir: %v %v", di, derr)
 		}
 		raw := string(mustRead(t, path))

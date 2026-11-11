@@ -15,6 +15,8 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -27,7 +29,7 @@ import (
 func bridgeHarness(t *testing.T) *opstest.H {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	return opstest.New(t)
@@ -117,7 +119,7 @@ func bareStore(t *testing.T) string {
 	if out, err := exec.Command("git", "init", "--bare", "-q", dir).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)
 	}
-	return "file://" + dir
+	return fileuri.URL(dir, "")
 }
 
 func TestSetupProberFileStore(t *testing.T) {
@@ -190,13 +192,13 @@ func TestSetupApplierIdempotent(t *testing.T) {
 		t.Fatalf("identity second apply changed: %+v", res)
 	}
 
-	url := "file://" + filepath.Join(t.TempDir(), "me")
+	url := fileuri.URL(filepath.Join(t.TempDir(), "me"), "")
 	psAns := onboard.Answers{"personal_store": {Text: "existing"}, "store_url": {Text: url}}
 	res := apply(onboard.ApplyPersonalStore, onboard.StepPersonalStore, psAns)
 	if !res.Changed || setup.PersonalStore != url {
 		t.Fatalf("personal store first apply = %+v", res)
 	}
-	if _, err = os.Stat(filepath.Join(filepath.Join(filepath.Dir(url[len("file://"):]), "me"), rowfs.MarkerFile)); err != nil {
+	if _, err = os.Stat(filepath.Join(fileuri.LocalPath(url), rowfs.MarkerFile)); err != nil {
 		t.Fatalf("store.init me wrote no marker: %v", err)
 	}
 	if res = apply(onboard.ApplyPersonalStore, onboard.StepPersonalStore, psAns); res.Changed {
@@ -277,7 +279,7 @@ func TestSetupApplierMemberDeferAndStoreTargets(t *testing.T) {
 		Answers: onboard.Answers{"personal_store": {Text: onboard.PersonalStoreExisting}, "store_url": {Text: bareStore(t)}}}); !errs.Has(berr, errs.InvalidInput) {
 		t.Fatalf("a file:// bare repo as the personal store = %v, want E_INVALID_INPUT", berr)
 	}
-	url := "file://" + filepath.Join(t.TempDir(), "me")
+	url := fileuri.URL(filepath.Join(t.TempDir(), "me"), "")
 	solo := onboard.SetupEntry{Name: "personal", Kind: onboard.KindSolo, Default: true}
 	// The repo is the setup's own personal_store (personal.store is never
 	// written from a setup, realmac N2); "store me" resolves it.
@@ -365,7 +367,7 @@ func TestSkillToolsFollowSetup(t *testing.T) {
 func TestSetupStoreOutsideRepo(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("LORE_ACTOR", "human:mira@agency.example")
@@ -419,7 +421,7 @@ func TestSetupApplierOwnPersonalStoreInit(t *testing.T) {
 		return res.Setup, aerr
 	}
 	existing := func(url string) onboard.Answers {
-		return onboard.Answers{"personal_store": {Text: "existing"}, "store_url": {Text: "file://" + url}}
+		return onboard.Answers{"personal_store": {Text: "existing"}, "store_url": {Text: fileuri.URL(url, "")}}
 	}
 	octo := filepath.Join(t.TempDir(), "octo-user-store")
 	work := filepath.Join(t.TempDir(), "work-user-store")
@@ -428,7 +430,7 @@ func TestSetupApplierOwnPersonalStoreInit(t *testing.T) {
 		if aerr != nil {
 			t.Fatalf("apply %s: %v", name, aerr)
 		}
-		if e.PersonalStore != "file://"+url {
+		if e.PersonalStore != fileuri.URL(url, "") {
 			t.Errorf("%s personal_store = %q, want its own url", name, e.PersonalStore)
 		}
 		if _, serr := os.Stat(filepath.Join(url, rowfs.MarkerFile)); serr != nil {
@@ -443,7 +445,7 @@ func TestSetupApplierOwnPersonalStoreInit(t *testing.T) {
 	if _, aerr := apply("third", inherit); !errs.Has(aerr, errs.InvalidInput) {
 		t.Fatalf("inherit with no personal.store: %v", aerr)
 	}
-	if werr := os.WriteFile(filepath.Join(h.Home, wire.ConfigFile), append(raw, []byte("personal:\n  store: file://"+octo+"\n")...), 0o600); werr != nil {
+	if werr := os.WriteFile(filepath.Join(h.Home, wire.ConfigFile), append(raw, []byte("personal:\n  store: "+fileuri.URL(octo, "")+"\n")...), 0o600); werr != nil {
 		t.Fatal(werr)
 	}
 	if e, aerr := apply("third", inherit); aerr != nil || e.PersonalStore != onboard.PersonalStoreInherit {

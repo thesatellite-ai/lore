@@ -226,12 +226,6 @@ func TestMineAndClaimedBy(t *testing.T) {
 	if got, want := listIDs(t, h, ctx, `{"mine":true}`), sortedCopy([]string{mineFree, mineClaimedByMe, mineExpired, viaTeam}); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("--mine: got %v want %v", got, want)
 	}
-	// The same answer from a cold process: team members decoded from the
-	// team row file (value.ItemStrings), not the in-memory list.
-	cold := h.ReopenCold(repoClient(false))
-	if got, want := listIDs(t, cold, ctx, `{"mine":true}`), sortedCopy([]string{mineFree, mineClaimedByMe, mineExpired, viaTeam}); strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("--mine, cold: got %v want %v", got, want)
-	}
 	want := sortedCopy([]string{mineClaimedByBob, bobs})
 	for _, by := range []string{"@bob", bob, "Bob", "human:bob"} {
 		if got := listIDs(t, h, ctx, `{"claimed_by":"`+by+`"}`); strings.Join(got, ",") != strings.Join(want, ",") {
@@ -255,6 +249,12 @@ func TestMineAndClaimedBy(t *testing.T) {
 	}
 	if got := opstest.Text(mustCtx(h, broken, opstask.OpList, ``)); strings.Contains(got, "  working") {
 		t.Errorf("states without a board: %q", got)
+	}
+	// The same answer from a cold process: team members decoded from the
+	// team row file (value.ItemStrings), not the in-memory list.
+	cold := h.ReopenCold(repoClient(false))
+	if got, want := listIDs(t, cold, ctx, `{"mine":true}`), sortedCopy([]string{mineFree, mineClaimedByMe, mineExpired, viaTeam}); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("--mine, cold: got %v want %v", got, want)
 	}
 }
 

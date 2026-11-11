@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/schema"
@@ -72,7 +73,7 @@ func TestTrashWritesActorRowFirst(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			actorFile := filepath.Join(filepath.FromSlash(strings.TrimPrefix(kb, "file://")), ".lore", "data", schema.TableActors, who.String()+".json")
+			actorFile := filepath.Join(filepath.FromSlash(fileuri.LocalPath(kb)), ".lore", "data", schema.TableActors, who.String()+".json")
 			mustRead(t, actorFile)
 			if err = os.Remove(actorFile); err != nil {
 				t.Fatal(err)

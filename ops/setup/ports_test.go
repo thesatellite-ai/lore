@@ -3,6 +3,7 @@ package setup
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -117,8 +118,8 @@ func TestTeamInviteOutText(t *testing.T) {
 // TestTargetRepo: a fix runs in the repo its check's target names.
 func TestTargetRepo(t *testing.T) {
 	for in, want := range map[string]string{
-		"/w/acme-hub":             "/w/acme-hub",
-		"claude_code /w/acme-hub": "/w/acme-hub",
+		absHub():                  absHub(),
+		"claude_code " + absHub(): absHub(),
 		"store agency":            "",
 		"store /w/x":              "",
 		"machine":                 "",
@@ -128,4 +129,13 @@ func TestTargetRepo(t *testing.T) {
 			t.Errorf("TargetRepo(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+// absHub is an absolute repo path on this system (/w/acme-hub is not
+// absolute on Windows, where it has no drive).
+func absHub() string {
+	if runtime.GOOS == "windows" {
+		return `C:\w\acme-hub`
+	}
+	return "/w/acme-hub"
 }

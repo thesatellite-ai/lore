@@ -1,0 +1,147 @@
+name: platforms
+
+# Runs the core's tests on Windows and macOS (Linux as a control), which the
+# local gate (task check, Linux) cannot. It runs only on a push to the
+# ci/platforms branch or by hand: never on main or on pull requests.
+on:
+  push:
+    branches: [ci/platforms]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platforms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Phase 1, the quick tier: build, vet and every unit test, no -race and no
+  # end-to-end build tags, in 4 shards per system run side by side.
+  # .github/ci/shard.sh deals the packages longest first by their measured
+  # time (.github/ci/test-weights.tsv), so the shards end together; build
+  # and vet run in shard 3, the lightest.
+  quick:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        shard: [0, 1, 2, 3]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: go build
+        if: matrix.shard == 3
+        run: go build ./...
+
+      - name: go vet
+        if: matrix.shard == 3
+        run: go vet ./...
+
+      - name: go test (quick tier, shard ${{ matrix.shard }} of 4)
+        run: |
+          pkgs=$(.github/ci/shard.sh 4 ${{ matrix.shard }})
+          echo "$pkgs" | wc -l | sed 's/^/packages: /'
+          go test -p 4 -timeout 25m $pkgs
+
+  # Phase 2: the end-to-end suites through the real binary, run beside the
+  # quick tier (no needs:), so every system's e2e result shows at once.
+  # Each suite runs in 3 parts (.github/ci/e2e-part.sh deals its tests by
+  # name): whole, userscen and machines ran past 80 minutes on macOS.
+  # tests/machines is built only off Windows so far (its fake gh and ssh are
+  # POSIX sh with a /usr/bin:/bin PATH); on Windows that job reports the
+  # build-tag exclusion until the suite is ported. Linux e2e runs in the
+  # local gate (task check).
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        suite: [userscen, teame2e, machines]
+        # 6 parts: in 3, Windows userscen and macOS machines ran past the
+        # 60 min test timeout (slow, not hung)
+        part: [0, 1, 2, 3, 4, 5]
+        exclude:
+          # one job is enough to report the Windows skip below
+          - { os: windows-latest, suite: machines, part: 1 }
+          - { os: windows-latest, suite: machines, part: 2 }
+          - { os: windows-latest, suite: machines, part: 3 }
+          - { os: windows-latest, suite: machines, part: 4 }
+          - { os: windows-latest, suite: machines, part: 5 }
+    runs-on: ${{ matrix.os }}
+    # Long on purpose: TestSweepKnowledge on a 3-core macOS runner and
+    # Windows userscen (every git call through MSYS sh) take about an hour
+    # per part; a hang still names itself sooner through the harness's
+    # per-command deadline.
+    timeout-minutes: 160
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: "0"
+      # Each git call lore makes goes through the harness's sh wrapper,
+      # which costs far more on Windows (MSYS); a 150-task split makes
+      # ~4000 of them, past the 5 min per-command default there.
+      TEAMHARNESS_CMD_TIMEOUT: ${{ matrix.os == 'windows-latest' && '20m' || '' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      # Commands as in Taskfile.lore.yml (test:scen, test:team:run,
+      # test:machines:run); -parallel sized for a hosted runner.
+      - name: ${{ matrix.suite }} (part ${{ matrix.part }} of 6)
+        run: |
+          set -o pipefail
+          part() { .github/ci/e2e-part.sh 6 ${{ matrix.part }} "$@"; }
+          bin="$RUNNER_TEMP/lore-e2e"
+          [ "$RUNNER_OS" = Windows ] && bin="$bin.exe"
+          case "${{ matrix.suite }}" in
+            userscen)
+              go test -tags userscen -count=1 -timeout 150m -run "$(part tests/userscen)" ./tests/userscen/...
+              ;;
+            teame2e)
+              go build -tags loretest -o "$bin" ./cmd/lore
+              # the raw -json stream is kept for the artifact below: the
+              # matrix shows one line per failure
+              LORE_TEAM_BIN="$bin" go test -tags teame2e -count=1 -timeout 150m -json \
+                -run "$(part tests/teame2e '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)')" ./tests/teame2e/ \
+                | tee "$RUNNER_TEMP/teame2e.json" | go run ./tests/teame2e/teamharness/matrix
+              ;;
+            machines)
+              if [ "$RUNNER_OS" = Windows ]; then
+                # tests/machines is built for !windows: its fake gh, ssh and
+                # editors are POSIX sh scripts run by name from PATH, and
+                # its machines are POSIX homes. Skipped here, on purpose.
+                echo "machines: skipped on Windows (POSIX-only suite, build tag !windows)"
+                exit 0
+              fi
+              go build -o "$bin" ./cmd/lore
+              MACHINES_LORE="$bin" go test -tags machines -count=1 -parallel 8 -timeout 150m -run "$(part tests/machines)" ./tests/machines/
+              ;;
+          esac
+
+      - name: keep the teame2e output
+        if: failure() && matrix.suite == 'teame2e'
+        uses: actions/upload-artifact@v4
+        with:
+          name: teame2e-${{ matrix.os }}-${{ matrix.part }}
+          path: ${{ runner.temp }}/teame2e.json
+          retention-days: 3

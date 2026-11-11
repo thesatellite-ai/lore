@@ -3,7 +3,9 @@ package mergewatch
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -16,15 +18,17 @@ func TestExecRunner(t *testing.T) {
 	}
 	ctx := context.Background()
 	dir := t.TempDir()
-	out, err := ExecRunner(ctx, dir, "sh", "-c", "pwd; echo noise >&2")
+	out, err := ExecRunner(ctx, dir, "sh", "-c", ": > ran-here; pwd; echo noise >&2")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.TrimSpace(string(out)) == "" || strings.Contains(string(out), "noise") {
 		t.Fatalf("stdout only: %q", out)
 	}
-	if !strings.HasSuffix(strings.TrimSpace(string(out)), strings.TrimPrefix(dir, "/private")) {
-		t.Fatalf("runs in dir %q: %q", dir, out)
+	// a file made in the working folder, not pwd's text: Git for
+	// Windows' sh prints its own /tmp/... spelling of a Windows folder
+	if _, serr := os.Stat(filepath.Join(dir, "ran-here")); serr != nil {
+		t.Fatalf("runs in dir %q: %q (%v)", dir, out, serr)
 	}
 	_, err = ExecRunner(ctx, dir, "sh", "-c", "echo 'gh: not logged in' >&2; exit 4")
 	var ee *exec.ExitError

@@ -29,13 +29,12 @@ package check
 
 import (
 	"context"
-	"errors"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 
+	"github.com/thesatellite-ai/lore/adapters/fsreason"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -218,15 +217,11 @@ func readBody(file string) ([]byte, error) {
 
 // ReadFileError is the refusal for an input file the person named that
 // cannot be read (E_INVALID_INPUT): what names the file, and the reason is
-// the operating system's own words ("no such file or directory",
+// the operating system's reason, worded alike on every OS by fsreason
+// ("no such file or directory",
 // "permission denied", "is a directory"), because a surface prints Message
 // and Hint but never Cause, so a bare "read the body" left the person
 // guessing which file and why. Callers add the hint for their flag.
 func ReadFileError(what string, err error) *errs.Error {
-	reason := err.Error()
-	var pe *fs.PathError
-	if errors.As(err, &pe) {
-		reason = pe.Err.Error()
-	}
-	return errs.Wrap(errs.InvalidInput, what+": "+reason, err)
+	return errs.Wrap(errs.InvalidInput, what+": "+fsreason.Of("", err), err)
 }

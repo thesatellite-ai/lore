@@ -57,7 +57,7 @@ func TestRouteReachesEveryNetworkCall(t *testing.T) {
 	}
 	g := &gitremote.Git{Repo: repo, Name: "origin",
 		RouteArgs: []string{"-c", "url.git@github-work:.insteadOf=git@github.com:"},
-		RouteEnv:  []string{"GIT_SSH_COMMAND=" + bin}}
+		RouteEnv:  []string{"GIT_SSH_COMMAND=" + filepath.ToSlash(bin)}}
 	ctx := context.Background()
 	head := run(t, local, "rev-parse", "HEAD")
 	if _, err := g.Push(ctx, gitremote.PushRequest{Updates: []gitremote.RefUpdate{{Src: head, Dst: "refs/heads/main", Mode: gitremote.ModeFastForward}}}); err != nil {
@@ -112,7 +112,7 @@ func TestTraceNamesTheHostReached(t *testing.T) {
 				t.Fatal(err)
 			}
 			inner.opened = true
-			g := &gitremote.Git{Repo: repo, Name: "origin", RouteArgs: c.routeArgs, RouteEnv: []string{"GIT_SSH_COMMAND=" + bin}}
+			g := &gitremote.Git{Repo: repo, Name: "origin", RouteArgs: c.routeArgs, RouteEnv: []string{"GIT_SSH_COMMAND=" + filepath.ToSlash(bin)}}
 			var lines []string
 			ctx := gitref.WithTracer(context.Background(), func(tc gitref.TraceCall) { lines = append(lines, gitref.TraceLine(tc)) })
 			head := run(t, local, "rev-parse", "HEAD")

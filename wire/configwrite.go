@@ -24,7 +24,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 
+	"github.com/thesatellite-ai/lore/adapters/fsreason"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -82,16 +84,21 @@ func modeString(perm fs.FileMode) string {
 // otherwise it is fallbackHint. An opaque E_INTERNAL "write <file>" left
 // the person guessing what to change.
 func WriteError(what, path string, err error, fallbackHint string) *errs.Error {
-	reason := err.Error()
-	var pe *fs.PathError
-	if errors.As(err, &pe) {
-		reason = pe.Err.Error()
-	}
-	e := errs.Wrap(errs.BadPath, what+" "+path+": "+reason, err)
+	e := errs.Wrap(errs.BadPath, what+" "+path+": "+fsreason.Of(path, err), err)
 	if !errors.Is(err, fs.ErrPermission) {
 		return e.WithHint(fallbackHint)
 	}
-	return e.WithHint("to let lore write it: chmod u+w " + refusingPath(path) + ", then run the command again")
+	return e.WithHint(permissionHint(runtime.GOOS, refusingPath(path)))
+}
+
+// permissionHint is how to give lore write access to p on goos. Windows
+// has no chmod: a file lore may not write is read-only (its attribute) or
+// closed to the account by its permissions.
+func permissionHint(goos, p string) string {
+	if goos == "windows" {
+		return "to let lore write it: clear its read-only attribute (attrib -r \"" + p + "\") or give your account write access to it, then run the command again"
+	}
+	return "to let lore write it: chmod u+w " + p + ", then run the command again"
 }
 
 // refusingPath is the file or folder whose missing owner write bit blocks

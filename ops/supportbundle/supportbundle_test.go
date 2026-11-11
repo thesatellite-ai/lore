@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -71,7 +72,8 @@ func TestBundleStdoutAndFile(t *testing.T) {
 		t.Fatalf("file: %v %d/%d", err, len(data), out.Bytes)
 	}
 	fi, err := os.Stat(file)
-	if err != nil || fi.Mode().Perm() != fileMode {
+	// Windows has no POSIX mode bits (os.Chmod only sets read-only)
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != fileMode) {
 		t.Fatalf("file mode: %v %v", err, fi.Mode())
 	}
 	if err := json.Unmarshal(data, &b); err != nil || b.Sanitized || !b.IncludeContent {

@@ -1,7 +1,9 @@
 package probe
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -67,15 +69,27 @@ func TestKeyFileFingerprint(t *testing.T) {
 	}
 	p := New(Options{Home: s.home})
 	key := s.home + "/.ssh/main-key"
-	if out, err := exec.Command("sh", "-c", "mkdir -p "+s.home+"/.ssh && ssh-keygen -q -t ed25519 -N '' -C octo-user -f "+key+" && rm "+key+".pub").CombinedOutput(); err != nil {
+	if err := os.MkdirAll(filepath.Dir(key), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// ssh-keygen run directly, not through sh -c: a Windows temp path's
+	// backslashes would be read as escapes.
+	if out, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "octo-user", "-f", key).CombinedOutput(); err != nil {
 		t.Fatalf("keygen: %v %s", err, out)
+	}
+	if err := os.Remove(key + ".pub"); err != nil {
+		t.Fatal(err)
 	}
 	k := p.KeyFileFingerprint(ctxT(t), "~/.ssh/main-key")
 	if k.Class != ClassOK || !strings.HasPrefix(k.Fingerprint, "SHA256:") {
 		t.Fatalf("private key: %+v", k)
 	}
-	if out, err := exec.Command("sh", "-c", "ssh-keygen -y -f "+key+" > "+key+".pub").CombinedOutput(); err != nil {
-		t.Fatalf("pub: %v %s", err, out)
+	pub, err := exec.Command("ssh-keygen", "-y", "-f", key).Output()
+	if err != nil {
+		t.Fatalf("pub: %v", err)
+	}
+	if err = os.WriteFile(key+".pub", pub, 0o600); err != nil {
+		t.Fatal(err)
 	}
 	if k2 := p.KeyFileFingerprint(ctxT(t), key); k2.Fingerprint != k.Fingerprint || !strings.HasSuffix(k2.Path, ".pub") {
 		t.Errorf("with .pub: %+v, want %s from the .pub", k2, k.Fingerprint)
@@ -96,8 +110,11 @@ func TestIdentityPath(t *testing.T) {
 	s := newSandbox(t)
 	dir := s.home + "/.ssh"
 	for _, f := range []string{"pair", "pair.pub", "lonely.pub", "only"} {
-		if out, err := exec.Command("sh", "-c", "mkdir -p "+dir+" && touch "+dir+"/"+f).CombinedOutput(); err != nil {
-			t.Fatalf("%v %s", err, out)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dir+"/"+f, nil, 0o600); err != nil {
+			t.Fatal(err)
 		}
 	}
 	for in, want := range map[string]string{dir + "/pair.pub": dir + "/pair", dir + "/lonely.pub": dir + "/lonely.pub", dir + "/only": dir + "/only"} {
@@ -105,7 +122,7 @@ func TestIdentityPath(t *testing.T) {
 			t.Errorf("identityPath(%s) = %s, want %s", in, got, want)
 		}
 	}
-	if c := (Route{SSHKey: "~/.ssh/pair.pub"}).GitSSHCommand(s.home); !strings.Contains(c, "-i "+dir+"/pair ") {
+	if c := (Route{SSHKey: "~/.ssh/pair.pub"}).GitSSHCommand(s.home); !strings.Contains(c, "-i "+shellQuote(filepath.ToSlash(dir+"/pair"))+" ") {
 		t.Errorf("GIT_SSH_COMMAND = %s", c)
 	}
 }

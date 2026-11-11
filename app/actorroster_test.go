@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // rosterWorld is a repo with a personal store me, a person (git email
@@ -21,7 +23,7 @@ func rosterWorld(t *testing.T) (*cliWorld, string, string) {
 	}
 	dir := w.initRepo(t)
 	meDir := filepath.Join(t.TempDir(), "me")
-	w.mustLore(t, dir, "store", "init", "me", "file://"+filepath.ToSlash(meDir), "--yes")
+	w.mustLore(t, dir, "store", "init", "me", fileuri.URL(meDir, ""), "--yes")
 	w.mustLore(t, dir, "memory", "add", "--body", "person repo note")
 	w.mustLore(t, dir, "memory", "add", "--to", "me", "--body", "person me note")
 	w.claude("sess-0001")

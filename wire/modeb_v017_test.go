@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -38,7 +39,7 @@ const (
 // add leave, columns as ent created them) at path.
 func v017SharedDB(t *testing.T, path string) {
 	t.Helper()
-	dsn := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
+	dsn := fileuri.URL(path, "")
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -82,6 +83,9 @@ func v017SharedDB(t *testing.T, path string) {
 
 // v017ModeBRepo is a git repo holding only a Mode B pointer (pointerName,
 // body) and a shared lore.db built by v017SharedDB under shared.
+//
+// SHARED is written with forward slashes, as a person writes it (a TOML
+// "..." string reads a backslash as an escape).
 func v017ModeBRepo(t *testing.T, pointerName, body string) (repo, shared, pointer string) {
 	t.Helper()
 	repo = gitRepo(t)
@@ -91,7 +95,7 @@ func v017ModeBRepo(t *testing.T, pointerName, body string) (repo, shared, pointe
 	if err := os.MkdirAll(filepath.Dir(pointer), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(pointer, []byte(strings.ReplaceAll(body, "SHARED", shared)), 0o600); err != nil {
+	if err := os.WriteFile(pointer, []byte(strings.ReplaceAll(body, "SHARED", filepath.ToSlash(shared))), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return repo, shared, pointer
@@ -205,7 +209,7 @@ func TestV017ModeBExportRefusals(t *testing.T) {
 // TestExpandModeBPath: v0.1.17's placeholders and its ".." refusal.
 func TestExpandModeBPath(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	cases := []struct {
 		name, in, loreHome, allow, want string
 		bad                             bool
@@ -213,7 +217,7 @@ func TestExpandModeBPath(t *testing.T) {
 		{name: "plain", in: "/data/lore.db", want: "/data/lore.db"},
 		{name: "relative kept", in: "db/lore.db", want: "db/lore.db"},
 		{name: "home", in: "${HOME}/s/lore.db", want: home + "/s/lore.db"},
-		{name: "lore home default", in: "${LORE_HOME}/lore.db", want: home + "/.lore/lore.db"},
+		{name: "lore home default", in: "${LORE_HOME}/lore.db", want: filepath.Join(home, ".lore") + "/lore.db"},
 		{name: "lore home set", in: "${LORE_HOME}/lore.db", loreHome: "/lh", want: "/lh/lore.db"},
 		{name: "project root", in: "${PROJECT_ROOT}/x.db", want: "/repo/x.db"},
 		{name: "dot dot refused", in: "/a/../b.db", bad: true},
@@ -232,8 +236,8 @@ func TestExpandModeBPath(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || got != tc.want {
-				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
+			if want := filepath.FromSlash(tc.want); err != nil || got != want {
+				t.Fatalf("got %q, %v; want %q", got, err, want)
 			}
 		})
 	}

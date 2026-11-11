@@ -2,6 +2,7 @@ package probe
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -118,7 +119,9 @@ func (r Route) httpsArgs() []string {
 func (r Route) sshOptions(home string) []string {
 	opts := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=" + SSHConnectTimeoutSeconds}
 	if r.HostAlias == "" && r.SSHKey != "" {
-		opts = append(opts, "-i", identityPath(expandHome(r.SSHKey, home)), "-o", "IdentitiesOnly=yes")
+		// Forward slashes: git runs GIT_SSH_COMMAND through sh, and ssh
+		// reads C:/Users/... on Windows as it reads C:\Users\....
+		opts = append(opts, "-i", filepath.ToSlash(identityPath(expandHome(r.SSHKey, home))), "-o", "IdentitiesOnly=yes")
 		if r.NoAgent {
 			opts = append(opts, "-o", "IdentityAgent=none")
 		}
@@ -160,13 +163,15 @@ func shellQuote(w string) string {
 	return "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
 }
 
-// expandHome turns a leading ~/ into home.
+// expandHome turns a leading ~/ into home, joined with the system's
+// separator: on Windows a "/" glued to `C:\Users\a` gave a path that no
+// longer equalled the same file found by listing ~/.ssh.
 func expandHome(p, home string) string {
 	if p == "~" {
 		return home
 	}
 	if rest, ok := strings.CutPrefix(p, "~/"); ok && home != "" {
-		return strings.TrimSuffix(home, "/") + "/" + rest
+		return filepath.Join(home, filepath.FromSlash(rest))
 	}
 	return p
 }

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -47,6 +48,9 @@ func runMain(m *testing.M) int {
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	scenBin = filepath.Join(tmp, "lore")
+	if runtime.GOOS == "windows" {
+		scenBin += ".exe" // Windows starts only programs named .exe
+	}
 	goBin, err := exec.LookPath("go")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "build lore for userscen:", err)

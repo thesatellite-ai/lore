@@ -377,12 +377,13 @@ func userHome(q SetupQuery) string {
 	return h
 }
 
-// setupResolver is q.Resolve, else filepath.EvalSymlinks.
+// setupResolver is q.Resolve, else resolveSetupPath (links, and the
+// on-disk case of names on macOS).
 func setupResolver(q SetupQuery) onboard.Resolver {
 	if q.Resolve != nil {
 		return q.Resolve
 	}
-	return filepath.EvalSymlinks
+	return resolveSetupPath
 }
 
 // setupQueryFor is the production query for a folder: the context's

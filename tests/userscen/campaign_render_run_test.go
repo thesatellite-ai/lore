@@ -17,6 +17,7 @@ package userscen
 
 import (
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -109,13 +110,21 @@ func TestCampaignRender_RunOneReadModeAtATime(t *testing.T) {
 	campSameTree(t, "refused combinations", before, campTree(t, c.Dir))
 }
 
+// nameTooLong is the system's own words for a file name over its limit.
+func nameTooLong() string {
+	if runtime.GOOS == "windows" {
+		return "The filename, directory name, or volume label syntax is incorrect"
+	}
+	return "file name too long"
+}
+
 func TestCampaignRender_RunTargetsThatCannotBeFiles(t *testing.T) {
 	c := renderSolo(t)
 	c.WriteFile("docs/README.md", "docs\n")
 	before := campTree(t, c.Dir)
 	for _, tc := range []struct{ name, target, reason string }{
 		{"a folder", "./docs/", "is a directory"},
-		{"a name too long", "./" + strings.Repeat("y", 300) + ".md", "file name too long"},
+		{"a name too long", "./" + strings.Repeat("y", 300) + ".md", nameTooLong()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			campRefusal(t, c, campExitBadInput, "E_INVALID_INPUT", "--target", "render", "--target", tc.target)

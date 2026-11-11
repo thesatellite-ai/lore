@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -150,7 +151,8 @@ func TestDebugLogRotates(t *testing.T) {
 	if b, _ := os.ReadFile(path); b[0] != '5' {
 		t.Fatalf("live file starts with %q", b[0])
 	}
-	if fi, _ := os.Stat(path); fi.Mode().Perm() != debugFileMode {
+	// Windows has no POSIX mode bits (os.Chmod only sets read-only)
+	if fi, _ := os.Stat(path); runtime.GOOS != "windows" && fi.Mode().Perm() != debugFileMode {
 		t.Fatalf("mode %v", fi.Mode().Perm())
 	}
 }

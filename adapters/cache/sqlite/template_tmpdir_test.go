@@ -3,6 +3,8 @@ package sqlite
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // TestBuildTemplateWithTMPDIRGone: the empty-cache template is built when
@@ -11,7 +13,7 @@ import (
 // left there.
 func TestBuildTemplateWithTMPDIRGone(t *testing.T) {
 	f := newFixture(t)
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "gone"))
+	testenv.SetTemp(t, filepath.Join(t.TempDir(), "gone"))
 	img, err := buildTemplate(f.ctx, f.reg, f.exp, f.dir)
 	if err != nil || len(img) == 0 {
 		t.Fatalf("template with TMPDIR gone: %d bytes, %v", len(img), err)

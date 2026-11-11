@@ -29,12 +29,10 @@ func cdFakeVault(t *testing.T, c *th.Clone) (*th.Clone, string) {
 		t.Fatal(err)
 	}
 	log := filepath.Join(c.A.Home, "fakevault.log")
-	script := "#!/bin/sh\necho \"$@\" >> '" + log + "'\n" +
+	script := "#!/bin/sh\necho \"$@\" >> '" + filepath.ToSlash(log) + "'\n" +
 		"if [ \"$1 $2 $3\" = \"show -o acme/db/password\" ]; then echo placeholder-value; exit 0; fi\n" +
 		"echo \"Error: entry is not in the password store\" >&2; exit 11\n"
-	if err := os.WriteFile(filepath.Join(bin, "gopass"), []byte(script), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	th.WriteProgram(t, filepath.Join(bin, "gopass"), script) // gopass.exe on Windows
 	path := ""
 	for _, kv := range c.Command("version").Env {
 		if p, ok := strings.CutPrefix(kv, "PATH="); ok {

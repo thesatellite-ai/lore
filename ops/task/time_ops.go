@@ -7,6 +7,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	// The zone database inside the binary: Windows has none of its own, and
+	// time.LoadLocation found only GOROOT's copy, so an IANA name failed on
+	// a machine without Go.
+	_ "time/tzdata"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"

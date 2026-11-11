@@ -5,10 +5,12 @@ import (
 	"errors"
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -52,7 +54,7 @@ func (f fixture) Open(t *testing.T, o store.OpenOptions) store.Backend {
 	return b
 }
 
-func fileURL(dir string) string { return "file://" + filepath.ToSlash(dir) }
+func fileURL(dir string) string { return fileuri.URL(dir, "") }
 
 func TestContract(t *testing.T) {
 	t.Parallel()
@@ -72,7 +74,17 @@ func TestContractOrgFolder(t *testing.T) {
 
 func TestPathOf(t *testing.T) {
 	t.Parallel()
+	// want "" = refused (E_STORE_SCHEME). An absolute path is the OS's own:
+	// on Windows a drive path, where /srv/store has no drive and is refused.
 	good := map[string]string{"file:///srv/store": "/srv/store", "file://localhost/srv/s": "/srv/s", "file:///srv/a/../b": ""}
+	if runtime.GOOS == "windows" {
+		good = map[string]string{
+			"file:///C:/srv/store": `C:\srv\store`, "file://localhost/C:/srv/s": `C:\srv\s`, "file:///C:/srv/a/../b": "",
+			// a drive written in the host place is that drive (fileuri.FoldDriveHost)
+			"file://C:/srv/store": `C:\srv\store`, "file://c:/srv/s?folder=k": `c:\srv\s`,
+			"file:///srv/store": "",
+		}
+	}
 	for raw, want := range good {
 		u, err := url.Parse(raw)
 		if err != nil {

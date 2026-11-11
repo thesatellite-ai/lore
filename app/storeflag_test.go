@@ -2,9 +2,10 @@ package app
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // TestStoreFlagSpellings (FB-FLAG-STORE): the store flag is --to on the
@@ -16,7 +17,7 @@ func TestStoreFlagSpellings(t *testing.T) {
 	t.Parallel()
 	w := newCLIWorld(t).person()
 	dir := w.initRepo(t)
-	w.mustLore(t, dir, "store", "init", "inner", "file://"+filepath.ToSlash(t.TempDir()), "--yes")
+	w.mustLore(t, dir, "store", "init", "inner", fileuri.URL(t.TempDir(), ""), "--yes")
 
 	// add: --store is --to
 	w.mustLore(t, dir, "memory", "add", "--body", "placeholder alpha", "--to", "inner")

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
@@ -54,7 +55,7 @@ func runOp(t *testing.T, a *wire.App, name, in string) (string, error) {
 // then the notes on the task's words; a superseded rule never shows; an
 // unknown task id is E_NOT_FOUND.
 func TestContextForTask(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	ctx := context.Background()
 	fx := newPlannerFixture(t)
 	h := New(Options{App: fx.a})

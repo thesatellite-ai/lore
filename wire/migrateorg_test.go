@@ -7,6 +7,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 )
 
@@ -20,7 +21,7 @@ func TestMigrateOrgMarker(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeV1Marker(t, dir)
-	url := "file://" + dir
+	url := fileuri.URL(dir, "")
 	hook := func(context.Context) ([]attach.Store, error) {
 		return []attach.Store{{Name: "agency", URL: url, Folder: "acme"}}, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -44,7 +45,8 @@ func TestStateFolderIsOwnerOnly(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if perm := info.Mode().Perm(); perm&0o077 != 0 {
+			// Windows has no POSIX mode bits (os.Chmod only sets read-only)
+			if perm := info.Mode().Perm(); runtime.GOOS != "windows" && perm&0o077 != 0 {
 				t.Errorf("%s: %s is %#o, want owner-only", name, d, perm)
 			}
 		}

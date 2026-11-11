@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -63,7 +64,7 @@ func TestAccountCoverFollowsTheSetup(t *testing.T) {
 	if n := len(a.readSuggestAgain().Keys); n != 1 {
 		t.Fatalf("recording twice stored %d keys", n)
 	}
-	if st, err := os.Stat(a.suggestAgainPath()); err != nil || st.Mode().Perm() != 0o600 {
+	if st, err := os.Stat(a.suggestAgainPath()); err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) { // no POSIX mode bits on Windows
 		t.Fatalf("state file: %v %v", st, err)
 	}
 	// Made again under another name and purged again: hidden again.

@@ -1,3 +1,15 @@
+# Every text file is checked out with LF on every system. Windows' git
+# defaults to core.autocrlf=true, which gave a Windows checkout CRLF in the
+# templates, skills and docs that go:embed bakes into lore (a lore built
+# there wrote CRLF workflow files and its docs drift test failed), and in
+# the golden files the tests compare byte for byte. Go and gofmt use LF.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.jpg binary
+*.gif binary
+*.woff2 binary
+
 # >>> lore-sync >>>
 .lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
 .lore/data/*.json text eol=lf merge=lore linguist-generated=true

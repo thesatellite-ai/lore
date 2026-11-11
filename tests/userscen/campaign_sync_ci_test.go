@@ -52,7 +52,7 @@ func TestCampaignSync_CIMergeAndAction(t *testing.T) {
 	if _, ok := a.ReadFile(camSyncWorkflow); ok {
 		t.Fatal("install-action --dry-run must write no file")
 	}
-	a.MustLore("sync", "install-action").Says(t, "created", camSyncWorkflow)
+	a.MustLore("sync", "install-action").Says(t, "created", filepath.FromSlash(camSyncWorkflow))
 	first, _ := a.ReadFile(camSyncWorkflow)
 	a.MustLore("sync", "install-action").Says(t, "already up to date")
 	if again, _ := a.ReadFile(camSyncWorkflow); again != first {

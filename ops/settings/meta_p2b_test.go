@@ -153,7 +153,7 @@ func TestMetaBulkListKeyAndJSONLines(t *testing.T) {
 	if err := os.WriteFile(good, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	imp := opstest.Text(h.MustYes(settings.OpMetaImport, `{"file":"`+filepath.ToSlash(good)+`"}`))
+	imp := opstest.Text(h.MustYes(settings.OpMetaImport, `{"file":`+opstest.Quote(filepath.ToSlash(good))+`}`))
 	if batches := batchIDs.FindAllString(imp, -1); len(batches) == 0 || !allSame(batches) {
 		t.Errorf("import used more than one batch: %q", imp)
 	}
@@ -166,7 +166,7 @@ func TestMetaBulkListKeyAndJSONLines(t *testing.T) {
 	if err := os.WriteFile(bad, []byte(`{"id":"`+a+`","key":"owner","value":"x","extra":1}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h.Fails(settings.OpMetaImport, `{"file":"`+filepath.ToSlash(bad)+`"}`, errs.InvalidInput)
+	h.Fails(settings.OpMetaImport, `{"file":`+opstest.Quote(filepath.ToSlash(bad))+`}`, errs.InvalidInput)
 	if got := opstest.Text(h.Must(settings.OpMetaGet, `{"id":"`+a+`"}`)); !strings.Contains(got, "owner\tops") {
 		t.Errorf("a refused import wrote: %q", got)
 	}

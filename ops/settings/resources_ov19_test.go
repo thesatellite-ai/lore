@@ -35,7 +35,7 @@ func TestResourceImportYAMLAndCycle(t *testing.T) {
 	y := write("hosts.yaml", "resources:\n"+
 		"  - kind: host\n    name: web\n    fields:\n      os: linux\n      peer: db\n      tags: [a, b]\n"+
 		"  - kind: host\n    name: db\n    fields:\n      os: \"bsd ✓\"\n")
-	if s := opstest.Text(h.MustYes(settings.OpResImport, `{"file":"`+y+`"}`)); !strings.Contains(s, "imported 2 rows (2 created, 0 updated) from yaml") {
+	if s := opstest.Text(h.MustYes(settings.OpResImport, `{"file":`+opstest.Quote(y)+`}`)); !strings.Contains(s, "imported 2 rows (2 created, 0 updated) from yaml") {
 		t.Fatalf("yaml import %q", s)
 	}
 	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"web"}`)); !strings.Contains(s, "peer = db") || !strings.Contains(s, "tags = a, b") {
@@ -49,7 +49,7 @@ func TestResourceImportYAMLAndCycle(t *testing.T) {
 		{"kind":"host","name":"b","fields":{"peer":"a"}}]}`)
 	// RESOURCES 3.20 (refs between rows of one file in any order) and
 	// 3.4/10 (a ref cycle is valid data): the cycle imports as one batch.
-	res, err := h.RunYes(settings.OpResImport, `{"file":"`+cyc+`"}`)
+	res, err := h.RunYes(settings.OpResImport, `{"file":`+opstest.Quote(cyc)+`}`)
 	if err != nil {
 		t.Fatalf("cycle import refused: %v (hosts left: %d)", err, countHosts(t, h))
 	}
@@ -80,7 +80,7 @@ func TestResourcesAllowedIn(t *testing.T) {
 	for _, w := range []struct{ op, in string }{
 		{settings.OpResAdd, `{"kind":"host","name":"h2"}`},
 		{settings.OpResClone, `{"from":"h1","name":"h3"}`},
-		{settings.OpResImport, `{"file":"` + p + `"}`},
+		{settings.OpResImport, `{"file":` + opstest.Quote(p) + `}`},
 	} {
 		msg := h.Fails(w.op, w.in, errs.ResourcePlace)
 		if !strings.Contains(msg, "resources.allowed_in: store") || !strings.Contains(msg, "set at level repo") {

@@ -27,10 +27,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // Environment variables the git wrapper reads. They are set per lore run by
@@ -89,7 +92,11 @@ if [ -n "$LORE_TEAM_KILL_ON" ]; then
         if [ "$LORE_TEAM_KILL_WHEN" = "after" ]; then
           "$LORE_TEAM_REAL_GIT" "$@"
         fi
-        kill -9 "$PPID"
+        if [ -n "$FAKEEXEC_PARENT_PID" ]; then
+          taskkill /F /PID "$FAKEEXEC_PARENT_PID" >/dev/null 2>&1
+        else
+          kill -9 "$PPID"
+        fi
         exit 137
       fi
       ;;
@@ -144,7 +151,13 @@ func New(t testing.TB, bin string) *World {
 	if bin, err = filepath.Abs(bin); err != nil {
 		t.Fatal(err)
 	}
-	root := t.TempDir()
+	// The temp folder with its links resolved, as lore and git report it:
+	// macOS's /var is /private/var, and Windows names C:\Users\RUNNER~1
+	// by its long name.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	w := &World{
 		T:         t,
 		Root:      root,
@@ -157,15 +170,76 @@ func New(t testing.TB, bin string) *World {
 	}
 	mustMkdir(t, w.hosts)
 	mustMkdir(t, w.shimDir)
-	writeExec(t, filepath.Join(w.shimDir, "git"), wrapperScript)
+	WriteProgram(t, filepath.Join(w.shimDir, "git"), wrapperScript) // git.exe on Windows
 	// Git hooks lore installs (pre-commit, post-commit, pre-push for the F6
 	// ride-along) call plain `lore` from PATH; the binary under test is
 	// built under another name (lore-team), so a `lore` link to it sits
 	// first on PATH or hooks would run whatever lore the machine has.
-	if err := os.Symlink(bin, filepath.Join(w.shimDir, loreName)); err != nil {
-		t.Fatalf("link lore into the shim dir: %v", err)
-	}
+	linkLore(t, bin, w.shimDir)
 	return w
+}
+
+// linkLore puts a `lore` for bin in dir: a symlink, or on Windows a hard
+// link named lore.exe (PATH finds only .exe names there; a fake program's
+// shim finds its script by its own name, so the script is copied too). A
+// hard link, not a copy: lore treats the `lore` PATH finds as itself only
+// when it is the same file (os.SameFile), so with a copy every git hook's
+// lore wrote another merge-driver program and fingerprint than the binary
+// under test, and each run re-wired the clone.
+func linkLore(t testing.TB, bin, dir string) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		if err := os.Symlink(bin, filepath.Join(dir, loreName)); err != nil {
+			t.Fatalf("link lore into the shim dir: %v", err)
+		}
+		return
+	}
+	base := strings.TrimSuffix(bin, filepath.Ext(bin))
+	for _, ext := range []string{filepath.Ext(bin), ".sh", ".shell"} {
+		if ext == filepath.Ext(bin) {
+			if err := os.Link(bin, filepath.Join(dir, loreName+ext)); err == nil {
+				parkLinkOnCleanup(t, bin, filepath.Join(dir, loreName+ext))
+				continue
+			}
+		}
+		b, err := os.ReadFile(base + ext)
+		if err != nil {
+			if ext == filepath.Ext(bin) {
+				t.Fatalf("copy lore into the shim dir: %v", err)
+			}
+			continue // a real lore build has no script beside it
+		}
+		if err = os.WriteFile(filepath.Join(dir, loreName+ext), b, harnessExecMode); err != nil {
+			t.Fatalf("copy lore into the shim dir: %v", err)
+		}
+	}
+}
+
+// parkLinkOnCleanup moves the hard link out of the test's folder before
+// its TempDir is removed (cleanups run last-registered first). Windows
+// refuses to delete any name of a program image that is running, and
+// parallel tests run bin (the same file) all the time, so deleting the
+// link failed every test's cleanup with "Access is denied"; renaming a
+// running image is allowed. The link lands beside bin, on the same volume,
+// and goes when bin's folder does.
+func parkLinkOnCleanup(t testing.TB, bin, link string) {
+	t.Cleanup(func() {
+		trash := filepath.Join(filepath.Dir(bin), "parked-links")
+		if err := os.MkdirAll(trash, 0o755); err != nil {
+			t.Logf("park the lore link: %v", err)
+			return
+		}
+		f, err := os.CreateTemp(trash, "lore-*"+filepath.Ext(link))
+		if err != nil {
+			t.Logf("park the lore link: %v", err)
+			return
+		}
+		name := f.Name()
+		_ = f.Close()
+		if err := os.Rename(link, name); err != nil {
+			t.Logf("park the lore link: %v", err)
+		}
+	})
 }
 
 // developerCredentials are the parent's variables that would let a test
@@ -189,6 +263,7 @@ func (w *World) baseEnv(home, actorName string) []string {
 	}
 	return append(env,
 		"HOME="+home,
+		"USERPROFILE="+home, // os.UserHomeDir on Windows
 		"PATH="+w.shimDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",
@@ -400,6 +475,21 @@ func WriteExecutable(t testing.TB, path, body string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// WriteProgram writes a stand-in program (a git shim, a fake lore) that a
+// test or lore runs by path or finds on PATH, and returns the path to run.
+// On Unix it is WriteExecutable; on Windows, which runs no script as a
+// program, tests/fakeexec writes path.exe beside the script. A git hook
+// is not a program here: git runs hooks through its own sh, so hooks keep
+// WriteExecutable.
+func WriteProgram(t testing.TB, path, body string) string {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		WriteExecutable(t, path, body)
+		return path
+	}
+	return fakeexec.Write(t, path, body, harnessExecMode)
 }
 
 func writeFile(t testing.TB, path, body string) {

@@ -69,13 +69,13 @@ func TestResourceReimportMatrix(t *testing.T) {
 	}
 	v1 := write("v1.json", `{"resources":[{"kind":"host","name":"h1","fields":{"os":"linux"}},{"kind":"host","name":"h2","fields":{"os":"bsd"}},{"kind":"host","name":"h3","fields":{"os":"mac"}}]}`)
 	v2 := write("v2.json", `{"resources":[{"kind":"host","name":"h1","fields":{"os":"linux-2"}},{"kind":"host","name":"h2","fields":{"os":"bsd-2"}},{"kind":"host","name":"h3","fields":{"os":"mac-2"}}]}`)
-	if out := importOut(t, h, `{"file":"`+v1+`"}`); out.Created != 3 {
+	if out := importOut(t, h, `{"file":`+opstest.Quote(v1)+`}`); out.Created != 3 {
 		t.Fatalf("first import %+v", out)
 	}
 	h3 := h.ID(h.Must(settings.OpResShow, `{"id":"h3"}`))
 
 	// Same file again, nothing edited: every row is a re-import, updated in place.
-	if out := importOut(t, h, `{"file":"`+v1+`"}`); out.Updated != 3 || out.Created != 0 || out.Kept != 0 {
+	if out := importOut(t, h, `{"file":`+opstest.Quote(v1)+`}`); out.Updated != 3 || out.Created != 0 || out.Kept != 0 {
 		t.Fatalf("unchanged re-import %+v", out)
 	}
 	h.MustYes(settings.OpResEdit, `{"id":"h2","set":["os=edited"]}`)
@@ -109,18 +109,18 @@ func TestResourceReimportMatrix(t *testing.T) {
 	}
 	h = h.ReopenCold(ownRepo)
 
-	out := importOut(t, h, `{"file":"`+v2+`"}`)
+	out := importOut(t, h, `{"file":`+opstest.Quote(v2)+`}`)
 	if got := actions(out); got["h1"] != "update" || got["h2"] != "kept" || got["h3"] != "kept" || out.Kept != 2 || out.Updated != 1 {
 		t.Fatalf("re-import after edits %+v", out)
 	}
-	if txt := opstest.Text(h.MustYes(settings.OpResImport, `{"file":"`+v2+`","dry_run":true}`)); !strings.Contains(txt, "kept 2 rows edited in lore since the last import") {
+	if txt := opstest.Text(h.MustYes(settings.OpResImport, `{"file":`+opstest.Quote(v2)+`,"dry_run":true}`)); !strings.Contains(txt, "kept 2 rows edited in lore since the last import") {
 		t.Errorf("kept line %q", txt)
 	}
 	show := func(n string) string { return opstest.Text(h.Must(settings.OpResShow, `{"id":"`+n+`"}`)) }
 	if !strings.Contains(show("h1"), "os = linux-2") || !strings.Contains(show("h2"), "os = edited") || !strings.Contains(show("h3"), "os = mac\n") {
 		t.Fatalf("after re-import: %q / %q / %q", show("h1"), show("h2"), show("h3"))
 	}
-	if out = importOut(t, h, `{"file":"`+v2+`","overwrite":true}`); out.Updated != 3 || out.Kept != 0 {
+	if out = importOut(t, h, `{"file":`+opstest.Quote(v2)+`,"overwrite":true}`); out.Updated != 3 || out.Kept != 0 {
 		t.Fatalf("--overwrite %+v", out)
 	}
 	if !strings.Contains(show("h2"), "os = bsd-2") || !strings.Contains(show("h3"), "os = mac-2") {
@@ -129,7 +129,7 @@ func TestResourceReimportMatrix(t *testing.T) {
 
 	// Another source names the same row: not a re-import.
 	csv := write("hosts.csv", "name,os\nh1,win\n")
-	_, err = h.RunYes(settings.OpResImport, `{"file":"`+csv+`","kind":"host"}`)
+	_, err = h.RunYes(settings.OpResImport, `{"file":`+opstest.Quote(csv)+`,"kind":"host"}`)
 	if !errs.Has(err, errs.ResourceBatch) || !strings.Contains(err.Error(), string(errs.ResourceTaken)) {
 		t.Fatalf("csv after json: %v", err)
 	}
@@ -144,8 +144,8 @@ func TestResourceReimportMatrix(t *testing.T) {
 		[2]string{settings.OpKindAdd, `{"kind":"host"}`},
 		[2]string{settings.OpFieldAdd, `{"kind":"host","field":"os","type":"text"}`},
 	)
-	importOut(t, c, `{"file":"`+v1+`"}`)
-	if _, err = c.RunYes(settings.OpResImport, `{"file":"`+v2+`"}`); err == nil || !strings.Contains(err.Error(), string(errs.ResourceTaken)) {
+	importOut(t, c, `{"file":`+opstest.Quote(v1)+`}`)
+	if _, err = c.RunYes(settings.OpResImport, `{"file":`+opstest.Quote(v2)+`}`); err == nil || !strings.Contains(err.Error(), string(errs.ResourceTaken)) {
 		t.Fatalf("client re-import: %v", err)
 	}
 }

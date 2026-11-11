@@ -27,11 +27,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
 
@@ -79,7 +81,12 @@ func newCLIWorld(t *testing.T) *cliWorld {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &cliWorld{gitBin: git, root: root, env: map[string]string{"HOME": t.TempDir(), "GIT_CONFIG_NOSYSTEM": "1"}}
+	home := t.TempDir()
+	env := map[string]string{"GIT_CONFIG_NOSYSTEM": "1"}
+	for _, k := range testenv.HomeVars { // HOME, and USERPROFILE for Windows
+		env[k] = home
+	}
+	return &cliWorld{gitBin: git, root: root, env: env}
 }
 
 // set makes every later command of this world see k=v ("" is an empty
@@ -126,6 +133,13 @@ func (w *cliWorld) claude(session string) *cliWorld {
 // builds on its PATH must not change the result.
 func (w *cliWorld) hermeticPath(t *testing.T) *cliWorld {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		// git.exe finds its own install through its real location, and a
+		// link named "git" is no program there: PATH is git's own folder
+		// (Git\cmd holds git and its gui launchers, never a lore).
+		w.set("PATH", filepath.Dir(w.gitBin))
+		return w
+	}
 	bin := filepath.Join(t.TempDir(), "bin")
 	if err := os.Mkdir(bin, 0o700); err != nil {
 		t.Fatal(err)

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -174,7 +175,7 @@ func TestSetupsConfigCheck(t *testing.T) {
 // the lore home (a lore home elsewhere must not change what ~/ means).
 func TestSetupsTildeIsUserHome(t *testing.T) {
 	user := t.TempDir()
-	t.Setenv("HOME", user)
+	testenv.SetHome(t, user)
 	loreHome := writeSetupsConfig(t, "setups:\n  - {name: a, kind: solo, folders: [~/www/**]}\n")
 	if _, err := ValidateSetupsConfig(loreHome); err != nil {
 		t.Fatalf("~/ glob refused: %v", err)

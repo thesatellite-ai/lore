@@ -97,7 +97,7 @@ func TestDoctorBundle_StdoutFileAndJSON(t *testing.T) {
 	if w.Stdout != "✓ wrote support bundle to "+out+" ("+strconv.Itoa(len(data))+" bytes)\n" {
 		t.Fatalf("--out line names the file and its exact size: %q", w.Stdout)
 	}
-	if st, serr := os.Stat(out); serr != nil || st.Mode().Perm() != 0o600 {
+	if st, serr := os.Stat(out); serr != nil || (hasModeBits && st.Mode().Perm() != 0o600) {
 		t.Fatalf("bundle file mode 0600: %v %v", st.Mode(), serr)
 	}
 	decodeBundle(t, string(data))

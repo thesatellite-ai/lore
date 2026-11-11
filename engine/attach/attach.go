@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -157,6 +158,10 @@ func parseStoreURL(raw string) (*url.URL, error) {
 	if err != nil || u.Scheme == "" {
 		return nil, errs.New(errs.StoreScheme, "attach: a store url has no scheme")
 	}
+	// file://C:/x (a Windows path written after file://) is the drive path
+	// file:///C:/x; read as is, "C:" was a host and the drive was lost from
+	// every later use of the cleaned url.
+	fileuri.FoldDriveHost(u)
 	return u, nil
 }
 

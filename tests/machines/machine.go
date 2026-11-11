@@ -180,6 +180,12 @@ func Build(t testing.TB, shape, bin string) *Machine {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	// The real path: on macOS the temp folder /var/... is /private/var/...,
+	// and lore and PlacesBefore name files by their resolved paths, so a
+	// /var root made every write of a linked file look foreign.
+	if real, rerr := filepath.EvalSymlinks(dir); rerr == nil {
+		dir = real
+	}
 	extra, isExtra := extraShapes[shape]
 	homeName := "h"
 	if isExtra && extra.HomeName != "" {

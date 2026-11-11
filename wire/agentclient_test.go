@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -133,7 +134,7 @@ func TestAgentWritesInClientRepoStampTheOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sf := rowFile(t, filepath.Join(strings.TrimPrefix(orgURL, "file://"), "acme", ".lore", "data", schema.TableMemories, idOf(t, stOut)+".json"))
+	sf := rowFile(t, filepath.Join(fileuri.LocalPath(orgURL), "acme", ".lore", "data", schema.TableMemories, idOf(t, stOut)+".json"))
 	if fieldString(t, sf, "created_by") != agent.String() {
 		t.Fatalf("the org store keeps the agent's own id: %v", sf)
 	}

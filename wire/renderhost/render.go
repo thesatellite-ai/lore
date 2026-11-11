@@ -27,13 +27,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/fsreason"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -670,12 +669,7 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 		// a folder, a name the file system refuses or a file they may not
 		// read is their input to fix, so name the file, the reason and the
 		// way out instead of an internal error.
-		reason := err.Error()
-		var pe *fs.PathError
-		if errors.As(err, &pe) {
-			reason = pe.Err.Error()
-		}
-		return errs.Wrap(errs.InvalidInput, "render: cannot read the pointer file "+absAgent+": "+reason, err).
+		return errs.Wrap(errs.InvalidInput, "render: cannot read the pointer file "+absAgent+": "+fsreason.Of(writeAt, err), err).
 			WithHint("give --target a tool profile name or the path of a file (not a folder) you can read and write")
 	}
 
@@ -723,7 +717,14 @@ func (h *Host) writeFullFile(w *strings.Builder, path, body string, quiet bool) 
 		return wire.WriteError("write", path, err, renderWriteHint)
 	}
 	if !quiet {
-		fmt.Fprintf(w, "%s %s (%d bytes, every pinned entry in full; not imported)\n", h.decor.check(), path, len(body))
+		// A relative path with slashes, as the LORE.md line above names
+		// its file (Windows printed ".lore\LORE.full.md" under
+		// ".lore/LORE.md").
+		shown := path
+		if !filepath.IsAbs(path) {
+			shown = filepath.ToSlash(path)
+		}
+		fmt.Fprintf(w, "%s %s (%d bytes, every pinned entry in full; not imported)\n", h.decor.check(), shown, len(body))
 	}
 	return nil
 }

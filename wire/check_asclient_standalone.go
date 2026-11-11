@@ -217,14 +217,12 @@ func asClientDataPrefix(top, root string) string {
 	return filepath.ToSlash(rel) + "/" + checkDataPrefix
 }
 
-// realGitPath is p with symlinks resolved (p itself when that fails), so
-// git's top and the project root compare on one spelling (macOS /var).
-func realGitPath(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return p
-}
+// realGitPath is p with symlinks resolved, so git's top and the project
+// root compare on one spelling (macOS /var). resolvedPath also resolves a
+// root that does not exist yet through its deepest existing folder; plain
+// EvalSymlinks left such a root unresolved and the prefix fell back to the
+// top's .lore/data/.
+func realGitPath(p string) string { return resolvedPath(p) }
 
 // trackedItems reads every tracked file of the checkout at top (work tree
 // copy) as a leak-check item; large files, symlinks and submodules are

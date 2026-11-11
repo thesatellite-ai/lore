@@ -14,7 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 )
 
@@ -81,7 +81,7 @@ func TestSecretManagersTimeout(t *testing.T) {
 	ctx := background()
 	bin := t.TempDir()
 	p := filepath.Join(bin, "gopass")
-	fakebin.Write(t, p, "#!/bin/sh\nsleep 20\n", fakeCLIMode)
+	fakeexec.Write(t, p, "#!/bin/sh\nsleep 20\n", fakeCLIMode)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	a := newTestApp(t, gitRepo(t))
 	withProject(t, a)

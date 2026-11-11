@@ -1,12 +1,16 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
+)
 
 // TestWindowsStartRemovesOldBinary (E-GAPS-1 G2, FORMAT_EVOLUTION 8.3 "The
 // atomic swap": call at every start on Windows): run removes the
 // lore.exe.old an upgrade left behind on Windows, and only there.
 func TestWindowsStartRemovesOldBinary(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Chdir(t.TempDir())
 	calls := 0
 	prevOS, prevRemove := hostOS, removeOldBinary

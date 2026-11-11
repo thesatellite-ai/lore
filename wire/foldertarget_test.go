@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -152,7 +153,7 @@ func TestPersonalStoreLoadedOnce(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			repo, storeDir, yamlPath, _ := folderStoreRepo(t)
-			url := "file://" + filepath.ToSlash(storeDir)
+			url := fileuri.URL(storeDir, "")
 			if c.yaml == nil {
 				if err := os.Remove(yamlPath); err != nil {
 					t.Fatal(err)

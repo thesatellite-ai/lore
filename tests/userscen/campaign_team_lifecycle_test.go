@@ -9,6 +9,7 @@ package userscen
 // until confirmed.
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -325,7 +326,7 @@ func TestCampaignTeam_OrgCommandsTwice(t *testing.T) {
 	if st := c.Status(); st != "" {
 		t.Fatalf("org use commits nothing: %q", st)
 	}
-	c.MustLore("org", "set", orgName, "--commit").Says(t, ".lore/org.yaml", "commit it with git")
+	c.MustLore("org", "set", orgName, "--commit").Says(t, filepath.FromSlash(".lore/org.yaml"), "commit it with git")
 	first, _ := c.ReadFile(".lore/org.yaml")
 	c.MustLore("org", "set", orgName, "--commit")
 	if again, _ := c.ReadFile(".lore/org.yaml"); again != first || !strings.Contains(first, orgName) {

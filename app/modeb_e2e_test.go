@@ -13,12 +13,12 @@ package app
 import (
 	"database/sql"
 	"encoding/json"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -39,7 +39,7 @@ func modeBReleaseRepo(t *testing.T, w *cliWorld) (repo, shared string) {
 	repo = w.root
 	w.git(t, repo, "init", "-q", "-b", "main")
 	shared = t.TempDir()
-	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(shared, "lore.db"))}).String())
+	db, err := sql.Open("sqlite", fileuri.URL(filepath.Join(shared, "lore.db"), "")) // file:///C:/... on Windows
 	if err != nil {
 		t.Fatal(err)
 	}

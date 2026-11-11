@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -99,7 +100,7 @@ func picksOf(t *testing.T, data []byte) map[string]contextPick {
 // --max-bytes keeps the header and the "more:" line and prints fewer
 // rows in full.
 func TestContextPlanner(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	ctx := context.Background()
 	fx := newPlannerFixture(t)
 	h := New(Options{App: fx.a})
@@ -227,7 +228,7 @@ func runHook(t *testing.T, h *Host, f contextFlags, stdin string) (hookSpecific,
 // ~/.lore/logs/hooks.log.
 func TestContextHookPlanner(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	fx := newPlannerFixture(t)
 	h := New(Options{App: fx.a})
 	cc := contextFlags{hook: toolprofile.NameClaudeCode, hookStdin: true}

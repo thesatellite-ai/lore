@@ -631,7 +631,7 @@ func TestCampaignQuery_TokenRotate(t *testing.T) {
 			t.Errorf("rotate %d: token %d chars, reused %v", i, len(tok), seen[tok])
 		}
 		seen[tok] = true
-		if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 {
+		if fi, err := os.Stat(path); err != nil || (hasModeBits && fi.Mode().Perm() != 0o600) {
 			t.Errorf("rotate %d: token file mode %v %v", i, fi.Mode().Perm(), err)
 		}
 	}

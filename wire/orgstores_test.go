@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -147,7 +148,7 @@ func TestOrgStoresAttach(t *testing.T) {
 	if n := countMemories(t, a, "agency/org"); n != 1 {
 		t.Fatalf("company folder holds %d memories, want 1", n)
 	}
-	assertNoURLInRepo(t, repo, strings.TrimPrefix(orgURL, "file://"))
+	assertNoURLInRepo(t, repo, fileuri.LocalPath(orgURL))
 
 	// stores.yaml names the org store root as agency: the linked folder is
 	// attached as agency/acme instead (r4), and team points there.

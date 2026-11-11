@@ -150,7 +150,11 @@ func telemetryDefs() []TableDef {
 		// Why the tool and parent session ids are LoreRecord: they are the
 		// session's own bookkeeping that lore writes, so the session-id
 		// rule (which keeps them out of shared rows) must not refuse the
-		// one row meant to hold them (OQ14, P3-LOCAL-5).
+		// one row meant to hold them (OQ14, P3-LOCAL-5). run_id and ci are
+		// LoreRecord for the same reason: in CI they carry the run id, which
+		// is the tool session id of the run's first session, so a second
+		// session in the same run (a person's, then an agent's) was refused
+		// and every write after it failed its audit.
 		Table(TableSessions, ids.PrefixSession, MachineLocal(), Description("a coding agent's, CI's or person's session on this machine"),
 			Text(FieldSessionProjectID, Required()),
 			DateTime(FieldSessionStartedAt, Required()),
@@ -162,12 +166,12 @@ func telemetryDefs() []TableDef {
 			Text(FieldSessionToolVersion),
 			Text(FieldSessionModel),
 			Text(FieldSessionMachineID),
-			Text(FieldSessionRunID),
+			Text(FieldSessionRunID, LoreRecord()),
 			Text(FieldSessionRepo),
 			Text(FieldSessionBranch),
 			Text(FieldSessionCwd),
 			Text(FieldSessionTerminal),
-			Text(FieldSessionCI),
+			Text(FieldSessionCI, LoreRecord()),
 			Text(FieldSessionParentSessionID, LoreRecord()),
 			Text(FieldSessionSignal),
 			JSON(FieldSessionSources),

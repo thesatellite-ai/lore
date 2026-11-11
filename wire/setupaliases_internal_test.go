@@ -15,9 +15,11 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/probe"
+	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // fakeSSH is an ssh that greets per alias or -i key after 0.1 s; the alias
@@ -60,7 +62,7 @@ func aliasWorld(t *testing.T) (setupProber, string) {
 			t.Fatal(err)
 		}
 	}
-	fakebin.Write(t, filepath.Join(bin, "ssh"), "#!/bin/sh\n"+fakeSSH+"\n", 0o755)
+	fakeexec.Write(t, filepath.Join(bin, "ssh"), "#!/bin/sh\n"+fakeSSH+"\n", 0o755)
 	files := map[string]string{"config": fakeSSHConfig, "work_key": "k", "octo-p": "k", "octo-p.pub": "ssh-ed25519 AAAA pat", "work": "k", "work.pub": "ssh-ed25519 AAAA work", "slow": "k"}
 	for n, body := range files {
 		if err := os.WriteFile(filepath.Join(ssh, n), []byte(body+"\n"), 0o600); err != nil {
@@ -68,7 +70,7 @@ func aliasWorld(t *testing.T) (setupProber, string) {
 		}
 	}
 	look := func(name string) (string, error) {
-		if p := filepath.Join(bin, name); name == "ssh" || name == "gh" {
+		if p := fakeexec.Exe(filepath.Join(bin, name)); name == "ssh" || name == "gh" { // ssh.exe on Windows
 			if _, err := os.Stat(p); err == nil {
 				return p, nil
 			}
@@ -76,7 +78,7 @@ func aliasWorld(t *testing.T) (setupProber, string) {
 		return exec.LookPath(name)
 	}
 	p := probe.New(probe.Options{Home: home, TmpDir: t.TempDir(), LookPath: look,
-		Env: []string{"PATH=" + bin + ":/usr/bin:/bin", "HOME=" + home}})
+		Env: append([]string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH")}, testenv.HomeEnv(home)...)})
 	a := &App{aliasCache: newAliasCache(nil), prefillCache: newPrefillCache(nil)}
 	// As the lore binary does at exit: Close ends the probes a check left
 	// running, before TempDir removes the home their ssh writes to.
@@ -286,7 +288,7 @@ func TestFolderStoreChecksThroughProber(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	ans := onboard.Answers{onboard.QIDStoreURL: {Text: "file://" + dir}}
+	ans := onboard.Answers{onboard.QIDStoreURL: {Text: fileuri.URL(dir, "")}}
 	run := func(id onboard.CheckID) opssetup.ProbeResult {
 		return sp.Probe(context.Background(), []opssetup.ProbeRequest{{Check: onboard.Check{ID: id, Level: onboard.LevelError}, Answers: ans}})[0]
 	}
@@ -437,7 +439,7 @@ func TestKeyMatchesWaitsWhenNoFixKnown(t *testing.T) {
 // writeGH puts a fake gh in the world's bin.
 func writeGH(t *testing.T, home, script string) {
 	t.Helper()
-	fakebin.Write(t, filepath.Join(home, "bin", "gh"), "#!/bin/sh\n"+script+"\n", 0o755)
+	fakeexec.Write(t, filepath.Join(home, "bin", "gh"), "#!/bin/sh\n"+script+"\n", 0o755)
 }
 
 // store.private when gh cannot answer: the visibility is unknown, so the

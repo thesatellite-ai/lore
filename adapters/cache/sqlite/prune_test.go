@@ -3,6 +3,7 @@ package sqlite
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -25,7 +26,7 @@ func TestRecordUseRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi.Mode().Perm() != useFileMode {
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != useFileMode { // no POSIX mode bits on Windows
 		t.Fatalf("the record is the owner's only: %v", fi.Mode().Perm())
 	}
 	got, err := ReadUses(root)

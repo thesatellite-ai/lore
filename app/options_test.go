@@ -14,6 +14,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/surface/setupweb"
 )
 
@@ -32,7 +33,7 @@ func keepProcessState(t *testing.T) {
 
 func TestRunAppliesOptions(t *testing.T) {
 	keepProcessState(t)
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Chdir(t.TempDir())
 	const v = "9.8.7"
 	var ui setupweb.UI = optionsTestUI{}
@@ -49,7 +50,7 @@ func TestRunAppliesOptions(t *testing.T) {
 
 func TestRunWithoutOptionsKeepsDefaults(t *testing.T) {
 	keepProcessState(t)
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Chdir(t.TempDir())
 	version, setupUI = "dev", optionsTestUI{} // as a previous Run in this process may have left them
 	code, out, errOut := captureRun(t, func() int {

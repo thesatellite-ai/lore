@@ -5,11 +5,11 @@ package wire
 
 import (
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
@@ -55,7 +55,7 @@ func TestCheckStores(t *testing.T) {
 		t.Fatalf("add: %v", err)
 	}
 	gone := t.TempDir()
-	writeStoresYAML(t, repo, "stores:\n  - name: far\n    url: "+farURL+"\n  - name: lost\n    url: file://"+filepath.ToSlash(gone)+"\n")
+	writeStoresYAML(t, repo, "stores:\n  - name: far\n    url: "+farURL+"\n  - name: lost\n    url: "+fileuri.URL(gone, "")+"\n")
 
 	list := a.CheckStores(background())
 	me := checkOf(t, list, "me")

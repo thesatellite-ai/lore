@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -175,7 +176,7 @@ func TestWhoamiMachineLabel(t *testing.T) {
 	if err = os.MkdirAll(store, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = app.InitStore(ctx, opsstores.InitIn{Name: "mine", URL: "file://" + filepath.ToSlash(store)}); err != nil {
+	if _, err = app.InitStore(ctx, opsstores.InitIn{Name: "mine", URL: fileuri.URL(store, "")}); err != nil {
 		t.Fatalf("store init: %v", err)
 	}
 	// The next command is a new process: a fresh App over the new stores.yaml.

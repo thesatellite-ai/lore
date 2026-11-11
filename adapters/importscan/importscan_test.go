@@ -8,11 +8,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -344,7 +346,7 @@ func TestFolderScan(t *testing.T) {
 	if !ok || p.Entry.PersonalStore != "git@github.com:octo-personal/a.git" || p.Entry.GitHub.HostAlias != "" {
 		t.Errorf("personal %+v", p.Entry)
 	}
-	if missing := scan(t, w, "/no/such/folder"); sourceState(missing, KindFolder, "folder") != StateMissing {
+	if missing := scan(t, w, filepath.Join(w.home, "no", "such", "folder")); sourceState(missing, KindFolder, "folder") != StateMissing {
 		t.Errorf("missing folder not reported")
 	}
 }
@@ -475,7 +477,14 @@ func snapshot(t *testing.T, root string) map[string]string {
 			}
 			h.Write(b)
 		}
-		out[p] = hex.EncodeToString(h.Sum(nil)) + " " + info.Mode().String() + " " + info.ModTime().String()
+		stamp := info.ModTime().String()
+		if d.IsDir() && runtime.GOOS == "windows" {
+			// NTFS updates a folder's write time lazily in its parent's
+			// index (what a directory listing reports): it moves without a
+			// write under it. The listing above covers what a folder holds.
+			stamp = ""
+		}
+		out[p] = hex.EncodeToString(h.Sum(nil)) + " " + info.Mode().String() + " " + stamp
 		return nil
 	})
 	if err != nil {
@@ -588,7 +597,7 @@ func TestMachineDBWithTMPDIRGone(t *testing.T) {
 	notes := filepath.Join(w.home, "code", "notes")
 	repo(t, notes, "stores:\n  - name: me\n    url: git@github-personal:octo-personal/notes.git\n")
 	machineDB(t, w, notes)
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "gone"))
+	testenv.SetTemp(t, filepath.Join(t.TempDir(), "gone"))
 	res, err := Scan(context.Background(), Options{LoreHome: w.lore, Home: w.home}) // TempDir "": the system one, as lore runs it
 	if err != nil {
 		t.Fatal(err)

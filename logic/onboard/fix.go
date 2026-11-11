@@ -1,6 +1,7 @@
 package onboard
 
 import (
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -297,6 +298,21 @@ func AnswersVars(a Answers) map[string]string {
 	return out
 }
 
+// slashPaths is vars with every path value in forward slashes: a Windows
+// path (C:\Users\a\hub) would fail the shell-character rule on its
+// backslashes, and git, ssh and lore read C:/Users/a/hub the same. A no-op
+// elsewhere (a backslash is a plain name character there).
+func slashPaths(vars map[string]string) map[string]string {
+	out := make(map[string]string, len(vars))
+	for k, v := range vars {
+		if placeholderKinds[k] == vkPath {
+			v = filepath.ToSlash(v)
+		}
+		out[k] = v
+	}
+	return out
+}
+
 // FillFix fills fix's placeholders from vars and re-validates every value:
 // with the placeholder's own value rule (stricter inside Command) and with
 // the Rules of step's question of the same id, when one applies. Any
@@ -314,6 +330,7 @@ func FillFix(check CheckID, fix Fix, vars map[string]string, step Step) (Fix, er
 			inArgv[m[1]] = true
 		}
 	}
+	vars = slashPaths(vars)
 	for _, p := range Placeholders(fix) {
 		v := vars[p]
 		k, known := placeholderKinds[p]

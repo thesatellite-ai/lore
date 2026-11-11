@@ -29,8 +29,8 @@ func TestWhoamiPersonalLine(t *testing.T) {
 		{"not set", "", false, ""},
 		{"git personal store", "personal:\n  store: git@github.com:alice/lore-me\n", false, "git@github.com:alice/lore-me"},
 		{"folder personal store", "personal:\n  store: file:///srv/me\n", false, "file:///srv/me"},
-		{"v0.1.17 local", "personal:\n  store: local\n", false, "<home>/" + personalDirV017},
-		{"v0.1.17 folder on disk, no key", "", true, "<home>/" + personalDirV017},
+		{"v0.1.17 local", "personal:\n  store: local\n", false, filepath.Join("<home>", personalDirV017)},
+		{"v0.1.17 folder on disk, no key", "", true, filepath.Join("<home>", personalDirV017)},
 		{"url wins over a leftover folder", "personal:\n  store: git@github.com:alice/lore-me\n", true, "git@github.com:alice/lore-me"},
 		// The setup in effect holds its own store (what the setup page
 		// saves): that store, not "not set" (journey solo/day1).

@@ -191,10 +191,10 @@ func campTasksStr(m map[string]json.RawMessage, k string) string {
 	return s
 }
 
-// campTasksTreeHash hashes every file under dir except .git internals the
+// campTasksTreeHash lists every file under dir with its hash, except .git internals the
 // read path may touch (index stat data, FETCH_HEAD) and the local cache:
 // two equal hashes mean a command wrote nothing a person would see (rows,
-// refs, committed files).
+// refs, committed files), and campTasksTreeDiff names what differs.
 func campTasksTreeHash(t *testing.T, dir string) string {
 	t.Helper()
 	var files []string
@@ -227,15 +227,32 @@ func campTasksTreeHash(t *testing.T, dir string) string {
 		t.Fatal(err)
 	}
 	sort.Strings(files)
-	h := sha256.New()
+	var out strings.Builder
 	for _, f := range files {
 		b, err := os.ReadFile(filepath.Join(dir, f))
 		if err != nil {
 			t.Fatal(err)
 		}
-		h.Write([]byte(f + "\x00"))
-		h.Write(b)
-		h.Write([]byte{0})
+		sum := sha256.Sum256(b)
+		out.WriteString(filepath.ToSlash(f) + " " + hex.EncodeToString(sum[:8]) + "\n")
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	return out.String()
+}
+
+// campTasksTreeDiff names the files that differ between two
+// campTasksTreeHash results (added, removed or changed).
+func campTasksTreeDiff(before, after string) string {
+	in := func(list, line string) bool { return strings.Contains("\n"+list, "\n"+line+"\n") }
+	var d []string
+	for _, l := range strings.Split(strings.TrimSpace(before), "\n") {
+		if !in(after, l) {
+			d = append(d, "- "+l)
+		}
+	}
+	for _, l := range strings.Split(strings.TrimSpace(after), "\n") {
+		if !in(before, l) {
+			d = append(d, "+ "+l)
+		}
+	}
+	return strings.Join(d, "; ")
 }

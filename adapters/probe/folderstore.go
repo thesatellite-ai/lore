@@ -16,12 +16,12 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // Folder-store facts a git repository has and a folder store has not.
@@ -49,6 +49,7 @@ func (p *Prober) FolderStorePath(rawURL string) (string, bool) {
 	if err != nil || u.Scheme != fileScheme || u.User != nil || u.RawQuery != "" || u.Opaque != "" {
 		return "", false
 	}
+	fileuri.FoldDriveHost(u) // file://C:/x is the drive path, not a host
 	dir := u.Path
 	switch {
 	case u.Host == homeTildeHost:
@@ -57,8 +58,12 @@ func (p *Prober) FolderStorePath(rawURL string) (string, bool) {
 		dir = expandHome(strings.TrimPrefix(dir, "/"), p.o.Home)
 	case u.Host != "" && u.Host != "localhost":
 		return "", false
+	default:
+		// "/C:/Users/a/x" names C:\Users\a\x on Windows; used as-is it
+		// was `\C:\Users\a\x`, which Windows refuses.
+		dir = fileuri.OSPath(dir)
 	}
-	if !path.IsAbs(filepath.ToSlash(dir)) {
+	if !filepath.IsAbs(dir) {
 		return "", false
 	}
 	dir = filepath.Clean(dir)

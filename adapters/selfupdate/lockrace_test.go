@@ -29,8 +29,11 @@ const (
 
 // TestMain lets the test binary act as one lore process taking the
 // upgrade lock when envLockHelper is set (see lockHelper); otherwise it
-// runs the tests.
+// runs the tests. It removes envCI first: an update in CI without a pin is
+// refused on purpose (8.4), so on a CI runner the tests that expect an
+// update to go ahead failed; a test about CI sets the variable itself.
 func TestMain(m *testing.M) {
+	_ = os.Unsetenv(envCI)
 	if os.Getenv(envLockHelper) == "1" {
 		os.Exit(lockHelper(helperLockRel))
 	}

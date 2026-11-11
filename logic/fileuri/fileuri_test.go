@@ -1,6 +1,10 @@
 package fileuri
 
-import "testing"
+import (
+	"net/url"
+	"path/filepath"
+	"testing"
+)
 
 // TestURLPath: a drive path gains the slash that keeps "C:" out of the
 // url's host; a unix path and a UNC slash path are unchanged.
@@ -55,5 +59,46 @@ func TestOSPathFor(t *testing.T) {
 	}
 	if got := OSPathFor("windows", URLPath("C:/Users/a/x.db")); got != `C:\Users\a\x.db` {
 		t.Errorf("round trip = %q", got)
+	}
+}
+
+// TestFoldDriveHost: a drive letter in the host place becomes the start of
+// the path; every other url, file or not, is left alone.
+func TestFoldDriveHost(t *testing.T) {
+	for in, want := range map[string]string{
+		"file://C:/Users/a/x":        "file:///C:/Users/a/x",
+		"file://c:/a%20b/x?folder=k": "file:///c:/a%20b/x?folder=k",
+		"file:///C:/Users/a/x":       "file:///C:/Users/a/x",
+		"file:///srv/x":              "file:///srv/x",
+		"file://localhost/srv/x":     "file://localhost/srv/x",
+		"file://host/srv/x":          "file://host/srv/x",
+		"file://CC/x":                "file://CC/x",
+		"https://C:/x":               "https://C:/x",
+	} {
+		u, err := url.Parse(in)
+		if err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		FoldDriveHost(u)
+		if got := u.String(); got != want {
+			t.Errorf("FoldDriveHost(%s) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+// TestLocalPath: the url of a temp folder names that folder again, on
+// every system (on Windows a hand-cut "file://" left "/C:/..."); an
+// escaped character comes back; a non-file url names nothing.
+func TestLocalPath(t *testing.T) {
+	t.Parallel()
+	dir := filepath.Join(t.TempDir(), "a b%3Fc")
+	if got := LocalPath(URL(dir, "")); got != dir {
+		t.Fatalf("LocalPath(URL(%s)) = %s", dir, got)
+	}
+	if got := LocalPath(URL(dir, "folder=k")); got != dir {
+		t.Fatalf("with a query: %s", got)
+	}
+	if got := LocalPath("https://example.com/x"); got != "" {
+		t.Fatalf("https url: %q", got)
 	}
 }

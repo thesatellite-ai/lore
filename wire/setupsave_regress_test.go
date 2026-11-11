@@ -56,7 +56,7 @@ func saveDoesNotRerunFreshChecks(t *testing.T) {
 		out := w.Check(setup, s.id, s.answers)
 		for _, c := range out.Checks {
 			if c.Status == "fail" && c.Level == "error" {
-				t.Fatalf("step %s: check %s failed in a healthy world: %s", s.id, c.Check, c.Detail)
+				t.Fatalf("step %s: check %s failed in a healthy world: %s\n%s", s.id, c.Check, c.Detail, w.Calls())
 			}
 		}
 		warned := 0

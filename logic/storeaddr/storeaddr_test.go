@@ -115,3 +115,12 @@ func TestRefusal(t *testing.T) {
 		t.Errorf("Fix = %q", got)
 	}
 }
+
+// TestKeyDriveHost: file://C:/x (a drive written after file://) and
+// file:///C:/x are one address; before, the first lost its drive.
+func TestKeyDriveHost(t *testing.T) {
+	t.Parallel()
+	if a, b := Key("file://C:/Users/a/kb"), Key("file:///C:/Users/a/kb"); a != b || a != "file:///C:/Users/a/kb" {
+		t.Fatalf("Key = %s and %s, want both file:///C:/Users/a/kb", a, b)
+	}
+}

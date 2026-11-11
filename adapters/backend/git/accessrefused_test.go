@@ -70,7 +70,7 @@ func TestFirstOpenAccessRefused(t *testing.T) {
 			dir := t.TempDir()
 			// the shared fake ssh (TestMain) prints this case's answer from its environment
 			route := WithRoute(func(context.Context, string) ([]string, []string) {
-				return nil, []string{"GIT_SSH_COMMAND=" + refusingSSHBin, sshStderrEnv + "=" + c.sshStderr}
+				return nil, []string{"GIT_SSH_COMMAND=" + filepath.ToSlash(refusingSSHBin), sshStderrEnv + "=" + c.sshStderr}
 			})
 			_, err := OpenClone(t.Context(), remote, filepath.Join(dir, "c"), rowfs.FolderRoot, store.OpenOptions{}, route)
 			if !errs.Has(err, errs.StoreUnreachable) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -46,7 +47,7 @@ func v017StoreAt(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(dir, rowfs.MarkerFile), []byte("lore_store: 1\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return "file://" + filepath.ToSlash(dir)
+	return fileuri.URL(dir, "")
 }
 
 // gitIn runs git in dir and fails the test on error.

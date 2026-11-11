@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
 
@@ -69,7 +70,7 @@ func TestInitCLIMatchesRepoInitOp(t *testing.T) {
 		t.Skip("git not installed")
 	}
 	asPerson(t)
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv(hosthooks.EnvRepo, "")
 	t.Setenv(hosthooks.EnvProjectID, "")

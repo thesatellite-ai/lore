@@ -15,6 +15,7 @@ package probe
 
 import (
 	"context"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -319,17 +320,20 @@ func (p *Prober) word(w string) string {
 	return shellQuote(w)
 }
 
-// tilde writes a path under the home folder as ~/…
+// tilde writes a path under the home folder as ~/… (slash separated, on
+// Windows too, where the path itself uses backslashes).
 func (p *Prober) tilde(path string) string {
-	h := strings.TrimSuffix(p.o.Home, "/")
+	h := strings.TrimRight(p.o.Home, `/\`)
 	if h == "" {
 		return path
 	}
 	if path == h {
 		return "~"
 	}
-	if rest, ok := strings.CutPrefix(path, h+"/"); ok {
-		return "~/" + rest
+	for _, sep := range []string{"/", string(filepath.Separator)} {
+		if rest, ok := strings.CutPrefix(path, h+sep); ok {
+			return "~/" + filepath.ToSlash(rest)
+		}
 	}
 	return path
 }

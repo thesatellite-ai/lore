@@ -44,12 +44,12 @@ func TestTemplates(t *testing.T) {
 		return p
 	}
 	file := write("release.yaml", releaseYAML)
-	h.Must(opstask.OpTemplateAdd, `{"name":"release","from_file":"`+file+`"}`)
-	h.Fails(opstask.OpTemplateAdd, `{"name":"release","from_file":"`+file+`"}`, errs.Template)
-	h.Fails(opstask.OpTemplateAdd, `{"name":"Bad-Name","from_file":"`+file+`"}`, errs.Template)
-	h.Fails(opstask.OpTemplateAdd, `{"name":"x","from_file":"`+write("bad1.yaml", "task: {title: \"${arg:nope}\"}\n")+`"}`, errs.Template)
-	h.Fails(opstask.OpTemplateAdd, `{"name":"x","from_file":"`+write("bad2.yaml", "task: {title: a, children: [{title: b, after: [0]}]}\n")+`"}`, errs.Template)
-	h.Fails(opstask.OpTemplateAdd, `{"name":"x","from_file":"`+write("bad3.yaml", "task: {title: a, colour: red}\n")+`"}`, errs.Template)
+	h.Must(opstask.OpTemplateAdd, `{"name":"release","from_file":`+opstest.Quote(file)+`}`)
+	h.Fails(opstask.OpTemplateAdd, `{"name":"release","from_file":`+opstest.Quote(file)+`}`, errs.Template)
+	h.Fails(opstask.OpTemplateAdd, `{"name":"Bad-Name","from_file":`+opstest.Quote(file)+`}`, errs.Template)
+	h.Fails(opstask.OpTemplateAdd, `{"name":"x","from_file":`+opstest.Quote(write("bad1.yaml", "task: {title: \"${arg:nope}\"}\n"))+`}`, errs.Template)
+	h.Fails(opstask.OpTemplateAdd, `{"name":"x","from_file":`+opstest.Quote(write("bad2.yaml", "task: {title: a, children: [{title: b, after: [0]}]}\n"))+`}`, errs.Template)
+	h.Fails(opstask.OpTemplateAdd, `{"name":"x","from_file":`+opstest.Quote(write("bad3.yaml", "task: {title: a, colour: red}\n"))+`}`, errs.Template)
 	if got := opstest.Text(h.Must(opstask.OpTemplateList, `{}`)); !strings.Contains(got, "release") || !strings.Contains(got, "3 sub-tasks, 2 checklist items") {
 		t.Fatalf("list: %s", got)
 	}
@@ -80,7 +80,7 @@ func TestTemplates(t *testing.T) {
 	}
 	h.Must(opstask.OpTemplateRename, `{"name":"release","new_name":"ship_release"}`)
 	h.Fails(opstask.OpTemplateShow, `{"name":"release"}`, errs.NotFound)
-	h.Must(opstask.OpTemplateAdd, `{"name":"snap","from":"`+root+`"}`)
+	h.Must(opstask.OpTemplateAdd, `{"name":"snap","from":`+opstest.Quote(root)+`}`)
 	snap := opstest.Text(h.Must(opstask.OpTemplateShow, `{"name":"snap"}`))
 	if !strings.Contains(snap, "Deploy to staging") || !strings.Contains(snap, "gate: required") || !strings.Contains(snap, "changelog has 0.4.2") {
 		t.Fatalf("snapshot: %s", snap)

@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // TestCampaignData_ResourceAdopt: a kind defined in the repo is adopted
@@ -30,7 +32,7 @@ func TestCampaignData_ResourceAdopt(t *testing.T) {
 	if err := os.MkdirAll(opsDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	c.MustLore("store", "init", "ops", "file://"+opsDir, "--yes")
+	c.MustLore("store", "init", "ops", fileuri.URL(opsDir, ""), "--yes")
 	kindID := func() (id, place string) {
 		for _, l := range strings.Split(c.MustLore("resource", "kinds").Stdout, "\n") {
 			if f := strings.Fields(l); len(f) > 2 && strings.HasPrefix(f[0], "knd_") && f[1] == "laptop" {

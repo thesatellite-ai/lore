@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
@@ -92,7 +93,7 @@ func TestCleanFileURLCredentials(t *testing.T) {
 		}
 	}
 	dir := t.TempDir()
-	if got, err := cleanFileURL("file://" + filepath.ToSlash(dir)); err != nil || got != "file://"+filepath.ToSlash(dir) {
+	if got, err := cleanFileURL(fileuri.URL(dir, "")); err != nil || got != fileuri.URL(dir, "") {
 		t.Errorf("file url: %q %v", got, err)
 	}
 

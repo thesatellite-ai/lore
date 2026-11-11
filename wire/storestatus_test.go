@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 )
@@ -32,7 +33,7 @@ func TestStoreStatusReachRealClone(t *testing.T) {
 	ctx := background()
 	kb := opsstores.Entry{Name: "kb", URL: "https://" + histHost + "/acme/kb"}
 	folderDir := filepath.Join(t.TempDir(), "notes")
-	notes := opsstores.Entry{Name: "notes", URL: "file://" + filepath.ToSlash(folderDir)}
+	notes := opsstores.Entry{Name: "notes", URL: fileuri.URL(folderDir, "")}
 
 	check := func(label string, e opsstores.Entry, reach opsstores.Reach, vis string) {
 		t.Helper()

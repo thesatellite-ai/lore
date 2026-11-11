@@ -13,7 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 )
 
@@ -23,7 +23,7 @@ func fakeLoreDir(t *testing.T) string {
 	d := t.TempDir()
 	p := filepath.Join(d, doctorBinaryName)
 	execMode := os.FileMode(0o700) // the check under test needs an executable
-	fakebin.Write(t, p, "#!/bin/sh\n", execMode)
+	fakeexec.Write(t, p, "#!/bin/sh\n", execMode)
 	return d
 }
 
@@ -46,10 +46,12 @@ func TestLorePathBinaries(t *testing.T) {
 			if exec {
 				mode = 0o700
 			}
-			fakebin.Write(t, p, "#!/bin/sh\n", mode)
+			fakeexec.Write(t, p, "#!/bin/sh\n", mode)
 		}
 		return d
 	}
+	// bin is the lore found in d: lore.exe on Windows (fakeexec writes one)
+	bin := func(d string) string { return fakeexec.Exe(filepath.Join(d, doctorBinaryName)) }
 	one, two := mk(true, false), mk(true, false)
 	noExec, folder := mk(false, false), mk(false, true)
 	missing := filepath.Join(t.TempDir(), "gone")
@@ -59,12 +61,12 @@ func TestLorePathBinaries(t *testing.T) {
 		want []string
 	}{
 		"empty":                  {"", nil},
-		"one":                    {one, []string{filepath.Join(one, doctorBinaryName)}},
-		"two in order":           {two + sep + one, []string{filepath.Join(two, doctorBinaryName), filepath.Join(one, doctorBinaryName)}},
-		"same folder twice":      {one + sep + one + sep + one + "/", []string{filepath.Join(one, doctorBinaryName)}},
-		"not executable skipped": {noExec + sep + one, []string{filepath.Join(one, doctorBinaryName)}},
+		"one":                    {one, []string{bin(one)}},
+		"two in order":           {two + sep + one, []string{bin(two), bin(one)}},
+		"same folder twice":      {one + sep + one + sep + one + "/", []string{bin(one)}},
+		"not executable skipped": {noExec + sep + one, []string{bin(one)}},
 		"folder named lore":      {folder, nil},
-		"missing and empty":      {missing + sep + sep + one, []string{filepath.Join(one, doctorBinaryName)}},
+		"missing and empty":      {missing + sep + sep + one, []string{bin(one)}},
 	}
 	for name, c := range cases {
 		if got := lorePathBinaries(c.path); !slices.Equal(got, c.want) {

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/ops/settings"
@@ -173,7 +174,7 @@ func TestFromHistoryShallowAndEmpty(t *testing.T) {
 	histAddMemory(t, a, "", "two")
 	commitAll(t, repo, "two")
 	clone := filepath.Join(t.TempDir(), "shallow")
-	gitIn(t, repo, nil, "clone", "-q", "--depth", "1", "file://"+repo, clone)
+	gitIn(t, repo, nil, "clone", "-q", "--depth", "1", fileuri.URL(repo, ""), clone)
 	b := openWith(t, clone, Options{})
 	_, err := run(t, b, opstrash.OpList, `{"from_history":true}`, false)
 	var e *errs.Error

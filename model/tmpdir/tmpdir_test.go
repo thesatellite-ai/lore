@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // TestFallbackWhenTMPDIRGone: with TMPDIR naming a folder that is gone,
@@ -13,11 +15,11 @@ import (
 func TestFallbackWhenTMPDIRGone(t *testing.T) {
 	good := t.TempDir()
 	fb := t.TempDir()
-	t.Setenv("TMPDIR", good)
+	testenv.SetTemp(t, good)
 	if d, err := Dir("x-", fb); err != nil || !strings.HasPrefix(d, good) {
 		t.Fatalf("TMPDIR fine: %q %v", d, err)
 	}
-	t.Setenv("TMPDIR", filepath.Join(good, "gone"))
+	testenv.SetTemp(t, filepath.Join(good, "gone"))
 	d, err := Dir("x-", "", filepath.Join(good, "also-gone"), fb)
 	if err != nil || filepath.Dir(d) != fb {
 		t.Fatalf("Dir with TMPDIR gone: %q %v", d, err)

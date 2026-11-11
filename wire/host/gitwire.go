@@ -173,15 +173,17 @@ func hookBlocks(rel string) map[string]struct {
 	}
 }
 
-// hooksDir is the folder git runs hooks from (core.hooksPath when set).
+// hooksDir is the folder git runs hooks from (core.hooksPath when set),
+// in this system's own spelling: git prints C:/Users/... on Windows, and
+// the folder is shown to the person and joined with file names.
 func (s *liveSession) hooksDir(ctx context.Context) (string, error) {
 	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-path", "hooks"}})
 	if err != nil {
 		return "", err
 	}
-	dir := strings.TrimSpace(string(out))
+	dir := filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(out))))
 	if hp, herr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); herr == nil {
-		if p := strings.TrimSpace(string(hp)); p != "" {
+		if p := filepath.FromSlash(strings.TrimSpace(string(hp))); p != "" {
 			if !filepath.IsAbs(p) {
 				p = filepath.Join(s.top, p)
 			}

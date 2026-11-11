@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -26,7 +27,8 @@ func TestUpdateOutFolder(t *testing.T) {
 				t.Fatalf("Update into a missing folder: %v", err)
 			}
 			st, err := os.Stat(filepath.Dir(js))
-			if err != nil || st.Mode().Perm() != newDirMode {
+			// Windows has no POSIX mode bits (os.Chmod only sets read-only)
+			if err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != newDirMode) {
 				t.Fatalf("folder %v mode %v, want %v", err, st.Mode().Perm(), newDirMode)
 			}
 			first, err := os.ReadFile(filepath.Clean(js))

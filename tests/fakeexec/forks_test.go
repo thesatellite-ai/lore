@@ -1,4 +1,4 @@
-package fakebin
+package fakeexec
 
 import (
 	"os/exec"
@@ -15,7 +15,8 @@ import (
 // ETXTBSY on a multi-core machine.
 const stressRounds = 100
 
-// TestWriteThenExecUnderConcurrentForks pins the package's promise: a fake
+// TestWriteThenExecUnderConcurrentForks pins Write's promise (moved here
+// from wire/internal/fakebin, which this package replaces): a fake
 // written by Write runs at once, even while other goroutines of the same
 // process start programs, which is when a plain os.WriteFile gives "text
 // file busy".

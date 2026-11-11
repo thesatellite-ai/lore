@@ -3,13 +3,13 @@ package incident_test
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/ops/incident"
@@ -28,7 +28,7 @@ func clientWithOrg(t *testing.T) func(*wire.Options) {
 	if err := folder.Init(dir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: sid, Visibility: rowfs.VisibilityInternal}); err != nil {
 		t.Fatal(err)
 	}
-	url := "file://" + filepath.ToSlash(dir)
+	url := fileuri.URL(dir, "")
 	return func(o *wire.Options) {
 		o.RepoIsClient = func(context.Context) (bool, error) { return true, nil }
 		o.OrgStores = func(context.Context) ([]attach.Store, error) {

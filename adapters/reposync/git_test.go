@@ -135,7 +135,9 @@ func TestMergeNoCommitWithDriver(t *testing.T) {
 	if parents := strings.Fields(gitT(t, dir, "log", "-1", "--format=%P")); len(parents) != 2 {
 		t.Fatalf("not a merge commit: %v", parents)
 	}
-	if got, _ := os.ReadFile(filepath.Clean(filepath.Join(dir, "c.txt"))); string(got) != "main only\n" {
+	// line ends as the checkout writes them: CRLF under core.autocrlf=true
+	// (Git for Windows' default), which is the person's setting, not lore's
+	if got, _ := os.ReadFile(filepath.Clean(filepath.Join(dir, "c.txt"))); strings.ReplaceAll(string(got), "\r\n", "\n") != "main only\n" {
 		t.Fatalf("main's non-conflicting change lost: %q", got)
 	}
 	if _, cerr := run(ctx, dir, "config", "--get", "merge.pick.driver"); cerr == nil {

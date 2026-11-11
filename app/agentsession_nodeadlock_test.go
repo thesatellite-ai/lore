@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // agentWriteTimeout bounds each command: a deadlock never returns, a
@@ -77,7 +79,7 @@ func TestFirstMoveIntoAStoreFinishes(t *testing.T) {
 		t.Fatalf("memory add: exit %d\n%s\n%s", code, out, errOut)
 	}
 	mem := strings.TrimSuffix(filepath.Base(rowFiles(t, dir, "memories")[0]), ".json")
-	if code, out, errOut := w.loreWithin(t, dir, agentWriteTimeout, "store", "init", "scratch", "file://"+filepath.Join(t.TempDir(), "scratch")); code != 0 {
+	if code, out, errOut := w.loreWithin(t, dir, agentWriteTimeout, "store", "init", "scratch", fileuri.URL(filepath.Join(t.TempDir(), "scratch"), "")); code != 0 {
 		t.Fatalf("store init: exit %d\n%s\n%s", code, out, errOut)
 	}
 	// The person moves (as in TestShortcutsRunTheirCommand); the hang needed

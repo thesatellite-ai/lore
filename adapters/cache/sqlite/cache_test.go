@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -316,7 +317,13 @@ func TestOpenRefusals(t *testing.T) {
 	if _, err := Open(f.ctx, filepath.Join(f.dir, "x.db"), nil, f.exp); !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("nil registry: %v", err)
 	}
-	odd := filepath.Join(f.dir, "a b?mode=ro#x", "c.db")
+	// a name with URI syntax in it (a space, ? and #) must reach SQLite as
+	// a path; Windows forbids ? in file names, so there it is space, % and #
+	oddName := "a b?mode=ro#x"
+	if runtime.GOOS == "windows" {
+		oddName = "a b%3Fmode=ro#x"
+	}
+	odd := filepath.Join(f.dir, oddName, "c.db")
 	if err := mkdirAll(filepath.Dir(odd)); err != nil {
 		t.Fatal(err)
 	}

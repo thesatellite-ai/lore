@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -305,7 +306,8 @@ func TestCheckStale(t *testing.T) {
 			t.Errorf("updated markdown lacks %q", keep)
 		}
 	}
-	if st, _ := os.Stat(md); st.Mode().Perm() != 0o600 {
+	// Windows has no POSIX mode bits (os.Chmod only sets read-only)
+	if st, _ := os.Stat(md); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("mode changed to %v", st.Mode().Perm())
 	}
 	changed := registry(t, "Add one memory", false)

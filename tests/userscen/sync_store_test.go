@@ -31,6 +31,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -149,7 +150,7 @@ var syncStoreBackends = []syncStoreBackend{
 	},
 	{
 		name: "folder",
-		url:  func(w *th.World) string { return "file://" + filepath.Join(w.Root, "shared", "notes") },
+		url:  func(w *th.World) string { return fileuri.URL(filepath.Join(w.Root, "shared", "notes"), "") },
 		holds: func(t *testing.T, w *th.World, id string) bool {
 			return syncFolderHolds(t, filepath.Join(w.Root, "shared", "notes"), id)
 		},

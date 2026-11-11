@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -48,6 +49,9 @@ func TestHelperHoldCache(t *testing.T) {
 // WAL into the new file (SQLITE_IOERR_SHORT_READ: E_INTERNAL "sqlite
 // cache: open" on every command until the other process exited).
 func TestOpenAfterDeleteWhileOpen(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows refuses to delete a file another process holds open, so a cache deleted under a running lore cannot happen there")
+	}
 	f := newFixture(t)
 	path := filepath.Join(f.dir, "c.db")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperHoldCache$", "-test.count=1")
