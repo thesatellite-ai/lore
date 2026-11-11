@@ -135,6 +135,42 @@ ERROR: [E_REFUSED] store folder remove: folder client_north of agency holds 1 re
 - For an org store only the org's admin removes folders; for any other store, whoever can push to it. `agents.person_only` can keep coding agents out (`lore policy set agents.person_only '[store.folder.remove]'`).
 - A repo whose `.lore/stores.yaml` still attaches a removed folder gets a `removed_store_folder` warning from `lore doctor`, naming the commit that removed it and `lore store remove <name>`.
 
+## Step 7 — Move a whole repo into its folder
+
+A repo that kept its notes in its own `.lore/data` (or a lore 0.1.17 repo, with rows on its `refs/lore/live` ref or only in its `.lore/lore.db`) moves into a store folder in one pass: `lore store adopt <store>/<folder> --from <repo>`. Every row keeps its id, its HLC and its links to other rows (parent tasks, comments, tags); `project_id` becomes the folder's project, the repo's own project row stays behind. It is one store commit and one push however many rows there are, it asks first (`--yes` without a terminal), and it runs from any folder of the setup, like the other store commands:
+
+<!-- example: client-folders#adopt-a-whole-repo -->
+```console
+# tomas, in clients
+$ lore store adopt team/client_east --from east-api --dry-run
+would adopt 5 rows of ~/work/clients/east-api into agency/client_east (prj_162d…9666), ids and HLCs kept
+  actors 1, memories 1, policies 1, task_lists 1, tasks 1
+  from the repo's live ref (refs/lore/live): 2
+  left in the repo: projects: 1 row (the folder is its own project)
+  left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
+$ lore store adopt team/client_east --from east-api --yes
+✓ adopted 5 rows of ~/work/clients/east-api into agency/client_east (prj_162d…9666), ids and HLCs kept
+  actors 1, memories 1, policies 1, task_lists 1, tasks 1
+  from the repo's live ref (refs/lore/live): 2
+  left in the repo: projects: 1 row (the folder is its own project)
+  left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
+$ lore store adopt team/client_east --from east-api --yes
+✓ nothing to adopt: agency/client_east already holds every row of ~/work/clients/east-api (no commit)
+  already there: 5 unchanged, 0 newer or deleted in the folder (kept)
+  left in the repo: projects: 1 row (the folder is its own project)
+  left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
+
+# tomas, in clients/east-api
+$ git status --short
+```
+<!-- /example -->
+
+- The repo is not changed: run it again and it writes nothing (no commit), so it is safe to rerun after a failed push or once the repo got new notes (only rows newer than the folder's copy are written; a row edited or deleted in the folder since is kept).
+- `--dry-run` counts what would move, per table, and what stays in the repo and why.
+- `--remove-source` then deletes the adopted row files from the repo's `.lore/data` as an ordinary diff you review and commit (the project's `_meta.json` and project row stay). Rows that were only on a lore 0.1.17 live ref stay on that ref.
+- A v0.1.17 repo needs no `lore migrate run` first: its rows are read as migrate would write them (format steps, tags folded into `tag_ids`, an agent's live stamp `…/agent` read as a stable actor).
+- Moving a single row is still `lore move <id> --to <store>/<folder>`.
+
 ## An org with several stores
 
 An org entry lists every store (`lore org refresh <org>` takes them from the store's `lore-org.yaml`). `lore store list` and `lore store folder list` show each of them once; the org's other stores are named by their url (in output that must name no url, the folder list shows `<redacted>-<6 hex>` for each). Every store command that takes a store takes that url: `lore store folder add|list|remove <url>`, `lore store show|set|visibility|compact <url>`, and `lore org link <org> --project <folder> --store <url>`. A brand-new empty repo becomes a lore store with the first write to it: the `lore-store.yaml` marker goes into that same commit. A repo that an older lore left with a folder's `_meta.json` and no marker is adopted the same way on its next write.
@@ -147,6 +183,7 @@ An org entry lists every store (`lore org refresh <org>` takes them from the sto
 | `lore store folder add <store> <folder>` | `team`, `me`, the org's name, or the org store's url |
 | `lore store folder list [store]` | same names; every store of the setup when none is named |
 | `lore store folder remove <store> <folder>` | same names |
+| `lore store adopt <store>/<folder> --from <repo>` | same names (without `--from`, the repo you run it in) |
 | `lore store visibility`, `lore store set`, `lore store compact` | same names |
 | `lore store show`, `open`, `forget`, `doctor` | always (they read this machine's clones) |
 | `lore store init <name>`, `add`, `remove`, `set-url` | need a repo: they edit its `.lore/stores.yaml` (`lore store init me` works anywhere) |

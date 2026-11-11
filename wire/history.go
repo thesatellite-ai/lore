@@ -143,7 +143,7 @@ func liveVersions(ctx context.Context, top, ref string, table row.Table, id ids.
 		if gerr != nil {
 			continue // the commit removed the file (landed or deleted)
 		}
-		r, derr := decodeLiveRow(bytes.TrimSpace(doc))
+		r, _, derr := decodeLiveRow(bytes.TrimSpace(doc))
 		if derr != nil || r.Table != table || r.ID != id {
 			continue // never guess a version
 		}

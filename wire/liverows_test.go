@@ -260,7 +260,7 @@ func TestDecodeLiveRow(t *testing.T) {
 		{"array", `[1]`, "", true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			r, err := decodeLiveRow([]byte(c.doc))
+			r, _, err := decodeLiveRow([]byte(c.doc))
 			if c.bad {
 				if err == nil {
 					t.Fatal("want an error")
@@ -289,7 +289,7 @@ func TestMergeRowNewerWins(t *testing.T) {
 	project := "prj_01a1a5aca7f57659be7320c5f4b70009"
 	decode := func(doc string) row.Row {
 		t.Helper()
-		r, err := decodeLiveRow([]byte(doc))
+		r, _, err := decodeLiveRow([]byte(doc))
 		if err != nil {
 			t.Fatal(err)
 		}

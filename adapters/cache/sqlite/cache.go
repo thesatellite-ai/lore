@@ -33,8 +33,11 @@ const driverName = "sqlite"
 // 2: typed tables keyed by (_source, id); join tables filled from
 // list-of-ref fields (O10, O11). 3: _task_nodes, the parent/rank copy the
 // task_tree closure is built from per write (P3-PERF-1); a layout-2 file
-// has no nodes and an older binary would not keep them.
-const layoutVersion = 3
+// has no nodes and an older binary would not keep them. 4: an FTS row
+// carries its typed row's rowid (found by key, not by a scan), and the
+// typed rows are upserted so that rowid stays; a layout-3 file's FTS rows
+// have other rowids and could never be removed.
+const layoutVersion = 4
 
 // busyTimeoutMS is how long a writer waits for another process's lock
 // before failing with SQLITE_BUSY.

@@ -30,25 +30,12 @@ import (
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
-// GitignoreLines are the lore paths every project's .gitignore lists: the
-// v0.1.17 lore.db files (kept so both binaries write the same block), the
-// machine-local state and backups, and the core's repo cache and lock.
-var GitignoreLines = []string{
-	".lore/lore.db",
-	".lore/lore.db-shm",
-	".lore/lore.db-wal",
-	// restore/repair kept the replaced DB as lore.db.broken.<stamp>: a
-	// whole database with private rows, never to be committed.
-	".lore/lore.db.broken.*",
-	".lore/state/",
-	".lore/backups/",
-	".lore/lore-cache.db",
-	".lore/lore-cache.db-shm",
-	".lore/lore-cache.db-wal",
-	".lore/lock",
-}
+// GitignoreLines are the lore paths every project's .gitignore lists
+// (wire.GitignoreLines, which `lore doctor` checks too).
+var GitignoreLines = wire.GitignoreLines
 
 // gitignoreName is the file the lines go to, at the project root.
 const gitignoreName = ".gitignore"
@@ -74,6 +61,15 @@ func GitignoreHook(workDir string) Hook {
 		once.Do(func() {
 			root := projectRoot(ctx, workDir)
 			if root == "" {
+				return
+			}
+			if readRun(run) {
+				// A read never edits the tracked .gitignore: the cache and
+				// lock it creates stay out of git status through the
+				// clone's own exclude file, and `lore doctor` names the
+				// missing lines and `lore doctor --fix` (best effort: a
+				// read never fails for it).
+				_, _ = wire.EnsureLocalExclude(ctx, root)
 				return
 			}
 			if e := EnsureGitignore(ctx, root); e != nil {
@@ -124,13 +120,10 @@ func EnsureGitignore(ctx context.Context, root string) (err error) {
 	if b, rerr := dir.ReadFile(gitignoreName); rerr == nil {
 		existing = string(b)
 	}
-	var add []string
-	for _, line := range GitignoreLines {
-		if strings.Contains(existing, line) || gitIgnores(ctx, root, line) {
-			continue
-		}
-		add = append(add, line)
-	}
+	// wire.MissingGitignoreLines: a line only this clone's info/exclude
+	// covers (put there by a read) still goes into .gitignore, which is
+	// what teammates get.
+	add := wire.MissingGitignoreLines(ctx, root)
 	if len(add) == 0 {
 		return nil
 	}
@@ -153,17 +146,6 @@ func EnsureGitignore(ctx context.Context, root string) (err error) {
 	}
 	_, err = f.WriteString(b.String())
 	return err
-}
-
-// gitIgnores reports whether git already ignores path in root (a folder
-// pattern is probed with a path inside it). Any git failure is "no".
-func gitIgnores(ctx context.Context, root, path string) bool {
-	probe := strings.TrimSuffix(path, "/")
-	if strings.HasSuffix(path, "/") {
-		probe += "/x" // check-ignore needs a path inside an ignored folder
-	}
-	_, err := gitOutput(ctx, "-C", root, "check-ignore", "-q", "--", probe)
-	return err == nil
 }
 
 // gitProgram is the git executable looked up on PATH.

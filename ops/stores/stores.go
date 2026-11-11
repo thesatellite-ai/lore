@@ -514,6 +514,7 @@ func Ops(m Manager) []op.Entry {
 		}),
 		folderListOp(m),
 		folderRemoveOp(m),
+		adoptOp(m),
 		setURLOp(m),
 	}, append(cloneOps(m), pushOps(m)...)...)
 }

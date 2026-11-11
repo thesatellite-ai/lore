@@ -39,6 +39,7 @@ import (
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
+	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -509,11 +510,15 @@ func skipLive(name string) bool {
 const doctorFixFlag = "fix"
 
 // runWireMode is the wiring mode of the command run is: wireInstall for
-// `lore doctor --fix` (CLI flag or REST body), else wireAuto (init wires
-// through Live.Prime and the repo.init path in around, both wireInstall).
-// An input it cannot read is wireAuto, the side that changes less.
+// `lore doctor --fix` (CLI flag or REST body), wireRead for a read (plain
+// `lore doctor` and readSpec), else wireAuto (init wires through
+// Live.Prime and the repo.init path in around, both wireInstall). An input
+// it cannot read is wireRead, the side that changes less.
 func runWireMode(run *Run) wireMode {
 	if run.Entry.Spec().Name != opsdoctor.OpRun {
+		if readSpec(run.Entry.Spec()) {
+			return wireRead
+		}
 		return wireAuto
 	}
 	fix := false
@@ -527,7 +532,24 @@ func runWireMode(run *Run) wireMode {
 	if fix {
 		return wireInstall
 	}
-	return wireAuto
+	return wireRead // doctor without --fix reads
+}
+
+// readSpec reports whether an operation only reads: read permission and
+// read access (list, show, search, status, whoami, …). AccessRead alone is
+// not a read: render, the store and setup commands write files or stores
+// outside the engine and carry write permission. `lore sync` is the one
+// read-permission command that is an explicit action on the repo's git
+// state (it wires the clone after its pass, as v0.1.17 did), so it is not
+// a read here.
+func readSpec(s op.Spec) bool {
+	return s.Permission == op.PermRead && s.Access == op.AccessRead && s.Name != opssync.OpRun
+}
+
+// readRun reports whether run is a read (runWireMode wireRead): it never
+// writes a tracked file of the work tree (wireRead, GitignoreHook).
+func readRun(run *Run) bool {
+	return run.Entry != nil && runWireMode(run) == wireRead
 }
 
 // around is LiveHook's Around (see the file comment).

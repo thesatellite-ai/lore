@@ -12,11 +12,13 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -61,6 +63,52 @@ type liveRow struct {
 	ref  string // the ref it was read from
 	path string // its path in the ref's tree
 	row  row.Row
+	// writer is the bare writer name the live block's hlc carried in
+	// place of an act_ id ("agent"), "" when it named an actor; the row's
+	// HLC then names LiveWriterActor(writer) instead (LiveStamp).
+	writer string
+}
+
+// liveWriterKey prefixes the stable key a bare live-hlc writer name maps
+// to (identity.ActorID): the same name gives the same act_ id on every
+// machine, so two clones migrating one row write the same _hlc.
+const liveWriterKey = "lore-live-writer:"
+
+// LiveWriterActor is the act_ id a live block's bare writer name stands
+// for in a row's _hlc (LiveStamp).
+func LiveWriterActor(writer string) (ids.ID[ids.Actor], error) {
+	return identity.ActorID(liveWriterKey + writer)
+}
+
+// LiveStamp reads the hlc of a live block as the core's HLC. The live
+// format keeps any writer text in its third part: v0.1.17 and this
+// core's live writer stamp an agent's edit as the bare word "agent" (D8:
+// an agent is never named in a live hlc; the stamp only breaks ties),
+// which is no act_ id, so the core's own parser refuses it ("hlc: …:
+// actor"). Such a writer is mapped to the stable LiveWriterActor id and
+// returned in writer so the caller can report it; an act_ writer, or
+// none, is kept as it is. A wall time or counter that does not parse is
+// still an error.
+func LiveStamp(s string) (h hlc.HLC, writer string, err error) {
+	if h, err = hlc.Parse(s); err == nil {
+		return h, "", nil
+	}
+	lh, lerr := live.ParseHLC(s)
+	if lerr != nil {
+		return hlc.HLC{}, "", err // the core parser's reason: wall, counter or form
+	}
+	if lh.Actor == "" || strings.HasPrefix(lh.Actor, string(ids.PrefixActor)+"_") {
+		return hlc.HLC{}, "", err // none, or a damaged act_ id: the failure is the form, never guessed
+	}
+	actor, aerr := LiveWriterActor(lh.Actor)
+	if aerr != nil {
+		return hlc.HLC{}, "", aerr
+	}
+	h = hlc.HLC{Wall: lh.Wall, Counter: lh.Counter, Actor: actor}
+	if _, perr := hlc.Parse(h.String()); perr != nil {
+		return hlc.HLC{}, "", err
+	}
+	return h, lh.Actor, nil
 }
 
 // liveGit runs one read-only git command in top.
@@ -145,14 +193,14 @@ func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Tabl
 		if err != nil {
 			return nil, err
 		}
-		r, err := decodeLiveRow(b)
+		r, writer, err := decodeLiveRow(b)
 		if err != nil {
 			return nil, errs.Prefix("wire: live row "+path, err)
 		}
 		if r.Table != table {
 			continue // a row filed under another table's folder: not ours to guess
 		}
-		out = append(out, liveRow{ref: ref, path: path, row: r})
+		out = append(out, liveRow{ref: ref, path: path, row: r, writer: writer})
 	}
 	return out, nil
 }
@@ -181,29 +229,50 @@ func liveRowFolder(path string) string {
 }
 
 // decodeLiveRow turns a live document into a row: the `_live` block's hlc
-// becomes the row's `_hlc` (the stamp v0.1.17 compared edits by) and the
-// block is dropped; the rest is the `_v: 1` document model/row upcasts.
-func decodeLiveRow(b []byte) (row.Row, error) {
+// becomes the row's `_hlc` (the stamp v0.1.17 compared edits by; a bare
+// writer name such as "agent" read through LiveStamp, and returned) and
+// the block is dropped; the rest is the `_v: 1` document model/row
+// upcasts.
+func decodeLiveRow(b []byte) (row.Row, string, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
 	var doc map[string]json.RawMessage
 	if err := dec.Decode(&doc); err != nil {
-		return row.Row{}, errs.Wrap(errs.InvalidInput, "wire: live row is not a JSON object", err)
+		return row.Row{}, "", errs.Wrap(errs.InvalidInput, "wire: live row is not a JSON object", err)
 	}
+	writer := ""
 	if raw, ok := doc[liveBlockKey]; ok {
 		var block map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &block); err == nil {
 			if h, ok := block[liveHLCKey]; ok {
 				doc[row.KeyHLC] = h
+				var text string
+				if json.Unmarshal(h, &text) == nil {
+					stamp, w, serr := LiveStamp(text)
+					if serr != nil {
+						return row.Row{}, "", serr
+					}
+					if w != "" {
+						writer = w
+						doc[row.KeyHLC] = canonString(stamp.String())
+					}
+				}
 			}
 		}
 		delete(doc, liveBlockKey)
 	}
 	clean, err := json.Marshal(doc)
 	if err != nil {
-		return row.Row{}, errs.Wrap(errs.Internal, "wire: re-encode a live row", err)
+		return row.Row{}, "", errs.Wrap(errs.Internal, "wire: re-encode a live row", err)
 	}
-	return row.Decode(clean)
+	r, err := row.Decode(clean)
+	return r, writer, err
+}
+
+// canonString is s as a JSON string.
+func canonString(s string) json.RawMessage {
+	b, _ := json.Marshal(s) // a Go string always encodes
+	return b
 }
 
 // mergeRow merges two copies of one row with no common base: the newer
@@ -530,6 +599,11 @@ func (a *App) MigrateLive(ctx context.Context, dryRun bool) ([]string, error) {
 		line := x.live.row.Table.String() + "/" + x.live.row.ID.String()
 		if x.source != store.SourceRepo {
 			line += " (" + string(x.source) + ")"
+		}
+		if x.live.writer != "" {
+			// the migration report names the mapping (LiveStamp), so a
+			// reader of the row's _hlc knows where the actor came from
+			line += " (live hlc writer " + strconv.Quote(x.live.writer) + " recorded as " + x.live.row.HLC.Actor.String() + ")"
 		}
 		out = append(out, line)
 		r := x.live.row

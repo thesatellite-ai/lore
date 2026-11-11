@@ -32,6 +32,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -42,6 +43,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -556,4 +558,134 @@ func v017TagLinks(ctx context.Context, db *sql.DB, exported map[string]bool) ([]
 		return nil, errs.Wrap(errs.Internal, "migrate: list "+v017EntityTagsTable, err)
 	}
 	return out, nil
+}
+
+// ExportRepoDB implements RepoDBExporter: the rows of a checkout's own
+// v0.1.17 lore.db (Mode A), for a repo whose rows never reached
+// .lore/data (v0.1.17 with LORE_SYNC=0, or a repo from before row files):
+// the project's rows as ExportModeB picks them, plus the project's own
+// row and the actor rows they name, which a repo store holds and a Mode
+// B folder store does not. projectID "" means the database's only
+// project; a database with several is refused naming them.
+func (V017ModeB) ExportRepoDB(ctx context.Context, dbPath, projectID string) (_ ModeBExport, err error) {
+	db, err := sql.Open(sqliteDriver, fileuri.URL(dbPath, "mode=ro"))
+	if err != nil {
+		return ModeBExport{}, errs.Wrap(errs.Internal, "migrate: open "+dbPath, err)
+	}
+	defer func() { _ = db.Close() }() // read-only handle: nothing to flush
+	if projectID == "" {
+		if projectID, err = v017OnlyProject(ctx, db, dbPath); err != nil {
+			return ModeBExport{}, err
+		}
+	}
+	out := ModeBExport{DBPath: dbPath, ProjectID: projectID}
+	reg, err := builtinRegistry()
+	if err != nil {
+		return ModeBExport{}, err
+	}
+	picked, err := modeBPickRows(ctx, db, reg.Tables(), projectID)
+	if err != nil {
+		return ModeBExport{}, err
+	}
+	exported := map[string]bool{}
+	actors := map[string]bool{}
+	for _, p := range picked {
+		for _, doc := range p.docs {
+			out.Docs = append(out.Docs, doc.raw)
+			exported[doc.id] = true
+			for _, a := range v017ActorRefs(doc.raw) {
+				actors[a] = true
+			}
+		}
+	}
+	for table, want := range map[string][]string{v017ProjectsTable: {projectID}, string(schema.TableActors): slices.Sorted(maps.Keys(actors))} {
+		def, ok := reg.Table(row.Table(table))
+		if !ok || len(want) == 0 {
+			continue
+		}
+		cols, cerr := v017Columns(ctx, db, table)
+		if cerr != nil {
+			return ModeBExport{}, cerr
+		}
+		if !cols[row.KeyID] {
+			continue
+		}
+		list, jerr := json.Marshal(want)
+		if jerr != nil {
+			return ModeBExport{}, errs.Wrap(errs.Internal, "migrate: encode ids", jerr)
+		}
+		docs, rerr := v017ReadDocs(ctx, db, def, cols, `"`+row.KeyID+`" IN (SELECT value FROM json_each(?1))`, string(list))
+		if rerr != nil {
+			return ModeBExport{}, rerr
+		}
+		for _, d := range docs {
+			if !exported[d.id] {
+				out.Docs = append(out.Docs, d.raw)
+				exported[d.id] = true
+			}
+		}
+	}
+	if out.TagLinks, err = v017TagLinks(ctx, db, exported); err != nil {
+		return ModeBExport{}, err
+	}
+	return out, nil
+}
+
+// v017OnlyProject is the one project of a checkout's lore.db; none or
+// several is E_INVALID_INPUT naming what is there.
+func v017OnlyProject(ctx context.Context, db *sql.DB, dbPath string) (string, error) {
+	cols, err := v017Columns(ctx, db, v017ProjectsTable)
+	if err != nil {
+		return "", err
+	}
+	if !cols[row.KeyID] {
+		return "", errs.New(errs.InvalidInput, "migrate: "+dbPath+" has no projects table, so its rows belong to no project; nothing imported").
+			WithHint("this is not a v0.1.17 lore.db; move it aside if nothing in it is needed")
+	}
+	rows, err := db.QueryContext(ctx, `SELECT id FROM "`+v017ProjectsTable+`" ORDER BY id`)
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "migrate: list the projects of "+dbPath, err)
+	}
+	defer func() { _ = rows.Close() }() // read-only cursor
+	var found []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", errs.Wrap(errs.Internal, "migrate: list the projects of "+dbPath, err)
+		}
+		found = append(found, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", errs.Wrap(errs.Internal, "migrate: list the projects of "+dbPath, err)
+	}
+	switch len(found) {
+	case 1:
+		return found[0], nil
+	case 0:
+		return "", errs.New(errs.InvalidInput, "migrate: "+dbPath+" holds no project, so there is nothing of this repo's to import").
+			WithHint("move the file aside if nothing in it is needed")
+	default:
+		return "", errs.New(errs.InvalidInput, "migrate: "+dbPath+" holds "+strconv.Itoa(len(found))+" projects ("+strings.Join(found, ", ")+") and .lore/data/_meta.json names none, so lore cannot tell which is this repo's; nothing imported").
+			WithHint(`write {"_v": 1, "project_id": "<one of them>"} to .lore/data/_meta.json, then run ` + "`lore migrate run`" + ` again`)
+	}
+}
+
+// v017ActorRefs lists the act_ ids a v0.1.17 row document names in its
+// *_id fields (created_by_actor_id, validated_by_actor_id, …).
+func v017ActorRefs(doc []byte) []string {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(doc, &m) != nil {
+		return nil
+	}
+	var out []string
+	for k, raw := range m {
+		if !strings.HasSuffix(k, v017IDSuffix) {
+			continue
+		}
+		var s string
+		if json.Unmarshal(raw, &s) == nil && strings.HasPrefix(s, string(ids.PrefixActor)+"_") {
+			out = append(out, s)
+		}
+	}
+	return out
 }

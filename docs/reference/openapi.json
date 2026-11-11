@@ -73664,6 +73664,220 @@
         }
       }
     },
+    "/v1/stores/adopt": {
+      "post": {
+        "operationId": "store.adopt",
+        "summary": "Copy a repo's lore data (row files, v0.1.17 live rows) into a store folder in one commit, keeping every id and HLC; asks first",
+        "tags": [
+          "store"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "count what would be written; change nothing"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "the repo whose lore data moves (default: the repo this command runs in)"
+                  },
+                  "remove_source": {
+                    "type": "boolean",
+                    "description": "after the store commit, delete the adopted row files from the repo's .lore/data (an ordinary diff you commit)"
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "\u003cstore\u003e/\u003cfolder\u003e: the store (team, an org's name, an org store's url, or a .lore/stores.yaml name) and its folder (made first with lore store folder add)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "target"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "kept": {
+                      "type": "integer"
+                    },
+                    "left": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "live": {
+                      "type": "integer"
+                    },
+                    "lore_db": {
+                      "type": "integer"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "push": {
+                      "type": "string"
+                    },
+                    "pushed": {
+                      "type": "boolean"
+                    },
+                    "removed": {
+                      "type": "integer"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rows": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "rows"
+                        ]
+                      }
+                    },
+                    "unchanged": {
+                      "type": "integer"
+                    },
+                    "written": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "store",
+                    "folder",
+                    "id",
+                    "from",
+                    "written",
+                    "unchanged",
+                    "kept"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT, E_STORE_SCHEME",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CANCELLED, E_NOT_PROJECT_ROOT, E_POLICY_DENIED, E_REFUSED, E_STALE, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/stores/compact": {
       "post": {
         "operationId": "store.compact",

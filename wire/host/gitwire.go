@@ -48,8 +48,11 @@ const (
 	hookPostCheckout    = "post-checkout"
 	hookPostMerge       = "post-merge"
 	hookPostRewrite     = "post-rewrite"
-	// gitWiringStamp is the fingerprint file in .git/lore.
-	gitWiringStamp = "git-wiring"
+	// gitWiringStamp is the fingerprint file in .git/lore;
+	// gitWiringReadSuffix names the one a read writes when it left a
+	// tracked file for the next write (wireRead).
+	gitWiringStamp      = "git-wiring"
+	gitWiringReadSuffix = ".read"
 	// gitWiringVersion changes whenever what is installed changes.
 	gitWiringVersion = "1"
 	binaryName       = "lore"
@@ -96,10 +99,19 @@ func mergeDriverBinary() string { return reposync.RunningDriverBinary() }
 type wireMode int
 
 const (
-	// wireAuto is every command's own wiring (the live hook's prepare).
+	// wireAuto is every writing command's own wiring (the live hook's
+	// prepare).
 	wireAuto wireMode = iota
 	// wireInstall is init and doctor --fix.
 	wireInstall
+	// wireRead is a read command's wiring: what lives in the clone's own
+	// git folder (merge driver config, hook blocks) is set up as for
+	// wireAuto, but no tracked file of the work tree is written. A read
+	// that found .gitattributes without lore's block, or a .gitignore rule
+	// hiding row files, says so and leaves both for the next write or
+	// `lore doctor --fix` (owner report 2026-11-11: `lore task list` in a
+	// v0.1.17 repo rewrote .gitignore and asked for a commit).
+	wireRead
 )
 
 // driverConfigAction is what wiring does with one merge driver key whose
@@ -224,9 +236,20 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	sort.Strings(names)
 	fp := wiringFingerprint(s.h.cfg.Version, bin, rel, paths)
 	stamp := filepath.Join(s.stateDir, gitWiringStamp)
-	if b, rerr := os.ReadFile(filepath.Clean(stamp)); mode == wireAuto && rerr == nil && strings.TrimSpace(string(b)) == fp {
+	if b, rerr := os.ReadFile(filepath.Clean(stamp)); mode != wireInstall && rerr == nil && strings.TrimSpace(string(b)) == fp {
 		return
 	}
+	// A read that had to leave a tracked file alone records that in its own
+	// stamp: later reads of the same state stay quiet (it was said once),
+	// while the wiring stamp stays unwritten for the next write.
+	readStamp := stamp + gitWiringReadSuffix
+	if b, rerr := os.ReadFile(filepath.Clean(readStamp)); mode == wireRead && rerr == nil && strings.TrimSpace(string(b)) == fp {
+		return
+	}
+	// deferred: a read left a tracked file as it was although it needs
+	// lore's lines; the fingerprint is then not recorded, so the next write
+	// (or doctor --fix) wires the clone instead of finding it "unchanged".
+	deferred := false
 	// The config, attributes and hook files (not .gitignore, which has its
 	// own notice): any byte changed means this command wired the clone.
 	wired := make([]string, 0, len(paths)-1)
@@ -243,7 +266,20 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 			return
 		}
 	}
-	if err := ensureFileBlock(filepath.Join(root, gitAttributesFile), gitBlockMarker, gitAttributeLines); err != nil {
+	attrs := filepath.Join(root, gitAttributesFile)
+	if mode == wireRead {
+		if stale, err := fileBlockStale(attrs, gitBlockMarker, gitAttributeLines); err != nil {
+			s.warn("git wiring: " + err.Error())
+			return
+		} else if stale {
+			deferred = true // the next write adds the block
+			if dataDirExists(root) {
+				// the rules only matter for row files: a repo whose rows live
+				// in a store (a converted Mode B repo) is not told
+				s.syncNotice(gitAttributesFile + " lacks lore's merge rules; a read leaves it as it is: the next lore write here or `lore doctor --fix` adds them (then commit " + gitAttributesFile + ")")
+			}
+		}
+	} else if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
 		s.warn("git wiring: " + err.Error())
 		return
 	}
@@ -259,6 +295,28 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	}
 	// Row files git would not commit (OWNERQ-9): re-include them, once
 	// per state of .gitignore; `lore sync` refuses while some stay hidden.
+	// A read only reports them (wireRead): the rewrite is a write's, or
+	// `lore doctor --fix`'s, never a side effect of looking.
+	if mode == wireRead {
+		switch still, err := stillIgnoredData(ctx, root, false); {
+		case err != nil:
+			s.warn("git wiring: " + err.Error())
+			return
+		case len(still) > 0:
+			deferred = true
+			shown, more := still, ""
+			if len(still) > maxIgnoredShown {
+				shown, more = still[:maxIgnoredShown], "\n  and "+strconv.Itoa(len(still)-maxIgnoredShown)+" more"
+			}
+			s.warn("git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed); a read leaves " + gitignoreName + " as it is: `lore doctor --fix` re-includes " + dataRel + " (then commit " + gitignoreName + "):\n  " + strings.Join(shown, "\n  ") + more)
+		}
+		if deferred {
+			writeWiringStamp(s.stateDir, readStamp, s.h.cfg.Version, bin, rel, paths)
+		} else {
+			writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
+		}
+		return
+	}
 	switch changed, still, err := EnsureDataNotIgnored(ctx, root); {
 	case err != nil:
 		s.warn("git wiring: " + err.Error())
@@ -268,8 +326,21 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	case len(still) > 0:
 		s.warn("git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed):\n  " + strings.Join(still, "\n  "))
 	}
-	if err := os.MkdirAll(s.stateDir, liveStateMode); err == nil {
-		_ = os.WriteFile(stamp, []byte(wiringFingerprint(s.h.cfg.Version, bin, rel, paths)+"\n"), liveNoteMode) // a lost stamp only means the next command checks again
+	writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
+}
+
+// dataDirExists reports whether the project at root has a .lore/data
+// folder (row files the .gitattributes rules apply to).
+func dataDirExists(root string) bool {
+	fi, err := os.Stat(filepath.Join(root, filepath.FromSlash(dataRel)))
+	return err == nil && fi.IsDir()
+}
+
+// writeWiringStamp records the fingerprint of what is wired now in the
+// clone's git folder (.git/lore, never the work tree).
+func writeWiringStamp(stateDir, stamp, version, bin, rel string, paths []string) {
+	if err := os.MkdirAll(stateDir, liveStateMode); err == nil {
+		_ = os.WriteFile(stamp, []byte(wiringFingerprint(version, bin, rel, paths)+"\n"), liveNoteMode) // a lost stamp only means the next command checks again
 	}
 }
 
@@ -317,9 +388,29 @@ func ensureFileBlock(path, marker string, lines []string) error {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
+	content := string(cur)
+	next := withFileBlock(content, marker, lines)
+	if next == content {
+		return nil
+	}
+	return root.WriteFile(name, []byte(next), gitAttributesMode)
+}
+
+// fileBlockStale reports whether ensureFileBlock would change path (the
+// file or lore's block in it is missing or differs), reading only.
+func fileBlockStale(path, marker string, lines []string) (bool, error) {
+	cur, err := os.ReadFile(filepath.Clean(path))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return false, err
+	}
+	return withFileBlock(string(cur), marker, lines) != string(cur), nil
+}
+
+// withFileBlock is content with lore's block for marker holding exactly
+// lines: replaced in place, or appended when there is none.
+func withFileBlock(content, marker string, lines []string) string {
 	start, end := "# >>> "+marker+" >>>", "# <<< "+marker+" <<<"
 	block := start + "\n" + strings.Join(lines, "\n") + "\n" + end + "\n"
-	content := string(cur)
 	next := content
 	if i := strings.Index(content, start); i >= 0 {
 		if j := strings.Index(content[i:], end); j >= 0 {
@@ -336,8 +427,5 @@ func ensureFileBlock(path, marker string, lines []string) error {
 		}
 		next += block
 	}
-	if next == content {
-		return nil
-	}
-	return root.WriteFile(name, []byte(next), gitAttributesMode)
+	return next
 }

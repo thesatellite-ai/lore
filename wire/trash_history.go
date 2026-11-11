@@ -348,7 +348,7 @@ func liveHistRow(ctx context.Context, b store.Backend, src liveSource, ref strin
 	if berr != nil {
 		return hr, false, nil // created and removed in one commit, or a root commit
 	}
-	r, derr := decodeLiveRow(blob)
+	r, _, derr := decodeLiveRow(blob)
 	if derr != nil || r.Table != tb || r.ID != aid || r.Deleted {
 		return hr, false, nil // never guess a version
 	}
