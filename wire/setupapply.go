@@ -769,7 +769,7 @@ func (o orgRosterStore) Roster(ctx context.Context, write bool) (profilestore.Ro
 		done()
 		return nil, noop, err
 	}
-	return &profileRoster{app: x, st: st, at: r}, done, nil
+	return &profileRoster{app: x, st: st, at: r, person: x.rosterPerson(ctx, st, r)}, done, nil
 }
 
 // orgFolderStore is the "<org>/<org folder>" store of the orgs[] entry org
@@ -831,9 +831,19 @@ func openOrgFolderApp(ctx context.Context, opts Options, org string, one attach.
 }
 
 // ensureRegistered registers the caller on r's roster when st has no
-// actors row for the caller's actor id (see orgRosterStore.Roster).
+// actors row for the caller's actor id (see orgRosterStore.Roster). An
+// agent's caller is the person it acts for (rosterCaller), so the row
+// looked for is the person's, never the agent's.
 func (x *App) ensureRegistered(ctx context.Context, st *state, r rosterAt) error {
-	_, got, err := st.eng.Get(ctx, engine.Ref{Store: r.src, Table: schema.TableActors, ID: st.actor.Any()})
+	who, err := x.rosterCaller(ctx, r)
+	if err != nil {
+		return err
+	}
+	id := st.actor.Any()
+	if !who.ID.IsZero() {
+		id = who.ID.Any()
+	}
+	_, got, err := st.eng.Get(ctx, engine.Ref{Store: r.src, Table: schema.TableActors, ID: id})
 	if err == nil && !got.Deleted {
 		return nil
 	}

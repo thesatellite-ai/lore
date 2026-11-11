@@ -146,7 +146,10 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 		return nil, errs.New(errs.LinkUnknown, "cannot tell whether this repo is a client repo; refusing to write coordination data").
 			WithHint("`lore whoami` shows the link status; fetch the store and retry")
 	}
-	if who.Kind == identity.KindAgent && sit.Result.Org != nil {
+	if who.Kind == identity.KindAgent && who.Owner == nil && sit.Result.Org != nil {
+		// An agent actor (LORE_ACTOR) must be on the roster; a detected
+		// coding agent acts for its person (owner rule 2026-11-11), who
+		// is not checked here either.
 		if err = a.requireRosterAgent(ctx, who.StableKey, sit.Result.Org.Name); err != nil {
 			return nil, err
 		}
@@ -583,17 +586,47 @@ func (w *coordWorld) defaultBranch(ctx context.Context) string {
 	return fallbackDefaultBranch
 }
 
-// requireHuman refuses agents for human overrides (§7.4): a fixed lore
-// rule, so E_REFUSED (exit 23, B-ERRS-4; v0.1.17 said E_INVALID_INPUT),
-// with needs_person set: the agent must hand it to its person.
-func (w *coordWorld) requireHuman(what string) error {
-	if w.who.Kind == identity.KindHuman {
+// requireHuman refuses a human override (§7.4) by an agent with no person
+// behind it: a fixed lore rule, so E_REFUSED (exit 23, B-ERRS-4; v0.1.17
+// said E_INVALID_INPUT), with needs_person set. A person, a detected
+// coding agent and an agent actor whose roster row names an owner act for
+// a person (owner rule 2026-11-11) and pass; a team that wants these
+// overrides kept to people lists the operation in agents.person_only,
+// which the engine checks before this (task.revoke, task.reassign,
+// task.cancel, task.done).
+func (w *coordWorld) requireHuman(ctx context.Context, what string) error {
+	if w.who.Kind == identity.KindHuman || w.who.Owner != nil {
 		return nil
 	}
-	e := errs.New(errs.Refused, what+" is a human override; an agent actor may not do it").
-		WithHint("run it as yourself (the identity in ~/.lore/config.yaml), not from an agent session")
+	if w.a == nil {
+		return w.refuseOverride(what)
+	}
+	if r, err := w.a.coordRoster(ctx); err == nil {
+		if _, perr := w.a.personBehind(ctx, r, w.who, what); perr == nil {
+			return nil
+		}
+	}
+	return w.refuseOverride(what)
+}
+
+// refuseOverride is requireHuman's refusal, naming the fix.
+func (w *coordWorld) refuseOverride(what string) error {
+	e := errs.New(errs.Refused, what+" is a human override; the agent "+w.who.StableKey+" has no person behind it").
+		WithHint("its person runs it in their own terminal, or registers the agent with an owner: `lore agent start --label <l> --owner @<person>`")
 	e.NeedsPerson = true
 	return e
+}
+
+// personID is the actor id of the person the caller is or acts for: a
+// detected coding agent's person (owner rule 2026-11-11), else the
+// caller's own actor id.
+func (w *coordWorld) personID() string {
+	if w.who.Owner != nil {
+		if id, err := w.who.Owner.ActorID(); err == nil {
+			return id.String()
+		}
+	}
+	return w.actorID
 }
 
 // ---- the row store: the engine ----

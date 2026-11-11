@@ -105,7 +105,7 @@ func (h standaloneCoord) reassignCaller(ctx context.Context, in opscoord.Reassig
 	if err != nil {
 		return nil, "", err
 	}
-	if err = w.requireHuman("reassign"); err != nil {
+	if err = w.requireHuman(ctx, "reassign"); err != nil {
 		return nil, "", err
 	}
 	to, err := h.resolveActor(ctx, in.Assign)
@@ -373,14 +373,23 @@ func (h standaloneCoord) GateApprove(ctx context.Context, in opscoord.GateIn) (o
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if w.who.Kind != identity.KindHuman || w.who.Step == identity.StepEnv || w.who.Step == identity.StepFlag {
+	// A person approves, from their identity file or config. A detected
+	// coding agent approves as the person it acts for (owner rule
+	// 2026-11-11; the output says "<person> via <tool>"); a team keeps
+	// approvals to people with `agents.person_only gate.approve`.
+	person := w.who
+	if w.who.Kind == identity.KindAgent && w.who.Owner != nil {
+		person = *w.who.Owner
+	}
+	if person.Kind != identity.KindHuman || person.Step == identity.StepEnv || person.Step == identity.StepFlag {
 		return opscoord.Report{}, errs.New(errs.InvalidInput, "only a person approves a gate (TEAM-028); you are "+w.who.StableKey).
 			WithHint("set your identity with `lore identity set` and approve from your own shell")
 	}
-	if err = h.checkApprover(ctx, in.ID, w.actorID); err != nil {
+	approver := w.personID()
+	if err = h.checkApprover(ctx, in.ID, approver); err != nil {
 		return opscoord.Report{}, err
 	}
-	ap, err := coord.Approve(ctx, w.env(ctx), coord.ApproveRequest{ID: in.ID, ApproverID: w.actorID})
+	ap, err := coord.Approve(ctx, w.env(ctx), coord.ApproveRequest{ID: in.ID, ApproverID: approver})
 	if err != nil {
 		return opscoord.Report{}, coordErr(err)
 	}

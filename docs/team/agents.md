@@ -47,6 +47,12 @@ Words used below:
    └─▶ back to lore task next
 ```
 
+## Your coding agent acts as you
+
+A coding agent lore detects (Claude Code, Codex and the rest, with no `LORE_ACTOR` set) acts for the person it runs for and may do anything that person tells it: start a team through the admin setup, register people, invite, add store folders, cancel, reassign or revoke a claim, approve a gate. What it changes for you is made as you (you are the org's admin and the roster member, you are the approver), and every row it writes records the agent ("Ada via claude_code"), so the history shows who typed it. An agent actor you start with `lore agent start --label <l>` acts for its owner the same way. lore refuses only an agent with no person behind it, and names the fix (`--owner @<person>`).
+
+A team that wants some of this left to people opts in by policy: `lore policy set agents.may_manage_people false --to <store>/org` keeps roster and profile changes to people, and `lore policy set agents.person_only gate.approve,task.revoke --to <store>/org` keeps any operation listed to people. Gate approvals never come from `LORE_ACTOR`.
+
 ## Which command when
 
 | Moment | Command | Why |
@@ -58,7 +64,7 @@ Words used below:
 | during long steps (tests, builds) | `lore task heartbeat --daemon <id>` in the background, started from a process that lives as long as the step | a lease runs out after `lease.ttl` (20m) without a heartbeat; the daemon stops when the process that started it exits |
 | after each meaningful step | `lore task note <id> "…"` | a replacement agent reads your notes and fetches your pushed branch |
 | learned something others need | `lore memory add "…"` | every agent finds it with `lore search` |
-| about to do something risky | `lore gate request <id>`, then stop | a person approves with `lore gate approve`; you never can |
+| about to do something risky | `lore gate request <id>`, then stop | a person approves with `lore gate approve`; a `LORE_ACTOR` session never can |
 | need the shared test suite alone | `lore hold claim full-suite --ttl 30m`, then `lore hold release full-suite` | one heavy run at a time |
 | finished | `lore task done <id> --commit <sha>` or `--pr <n>` | dependents in other repos wait until that code is merged |
 | giving up the task | `lore task release <id>` | frees it at once instead of after the lease |

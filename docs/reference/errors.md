@@ -95,7 +95,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
 | `E_INVALID_ID` | 20 | an id does not have the right shape (a typo, an id cut short); lore never reports a malformed id as `E_NOT_FOUND` | copy the id from `list` output |
-| `E_INVALID_INPUT` | 20 | a flag or value is not allowed (the most common error) | read the message; it names the value |
+| `E_INVALID_INPUT` | 20 | a flag or value is not allowed (the most common error); also "the agent … has no person behind it" when an agent actor whose roster row names no owner changes the roster (a person's own coding agent acts for them and passes) | read the message; it names the value. For no person behind it: the person runs it, or `lore agent start --label <l> --owner @<person>` |
 | `E_EMPTY_BODY` | 20 | the text is empty after trimming spaces | give some text |
 | `E_INVALID_UTF8` | 1 | the text is not valid UTF-8 | save the text as UTF-8 |
 | `E_BODY_TOO_LARGE` | 20 | a row file is larger than 4 MB | shorten the text, or keep the long part in a file and link to it |
@@ -136,7 +136,7 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 | `E_INTERNAL` | 1 | something failed inside lore | run `lore support-bundle` and file a bug report with it |
 | `E_NOT_IMPLEMENTED` | 23 | this option exists but this build cannot do it yet | read the message; it says what to use instead |
 | `E_UNSUPPORTED` | 23 | the command does not work here, for example outside a git repo, or `lore migrate rollback` after a shared-database conversion | run it inside a git repo; a shared-database conversion has no rollback (see [the shared-database guide](../sync/shared-database-mode-b.md#pitfalls)) |
-| `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule. On coordination commands: an agent doing what only a person may do (the `--json` error has `"needs_person": true`), the WIP limit, a poisoned task, or a task that is no longer open | do what the message says instead; do not retry the same command |
+| `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule. On coordination commands: an agent with no person behind it (an agent actor whose roster row names no owner) doing a human override such as cancel, reassign or revoke (the `--json` error has `"needs_person": true`; a person's own coding agent acts for them and passes), the WIP limit, a poisoned task, or a task that is no longer open | do what the message says instead; do not retry the same command |
 | `E_NEEDS_CONFIRM` | 26 | the command asks first, and ran with no terminal and no `--yes`; the error carries the question | read the question, then run the command again with `--yes` |
 | `E_POLICY_DENIED` | 23 | a team policy refuses this | read the message for the policy key; `lore policy show` lists them |
 | `E_STALE` | 23 | the row changed between lore's read and its write, and the two changes could not be merged | look at the row again and repeat your change |

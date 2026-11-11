@@ -181,7 +181,7 @@ Before you see `E_LOST_CLAIM`, lore has already checked it is not stale. Lore re
 
 A task a teammate added after your clone's last fetch is not missing for long. When a command on one task or gate id (claim, heartbeat, merged, note, release, revoke, reassign, gate request and approve, `task show`, `task done`, `task cancel`, checklist, time and recur commands, and every other task or gate command whose first argument is the id) answers `E_NOT_FOUND` in a run that did not fetch, lore fetches once, takes in the teammates' changes and runs the command again. It happens only on that failure path and only once, and never after the command has written anything (the id is looked up before any write). A well-formed id that no row has stays `E_NOT_FOUND` (exit 27) after that one fetch: check the id, or run `lore sync`.
 
-`E_REFUSED` (exit 23) on a claim, cancel, reassign, revoke or done is not about the network: a fixed rule or the task's state says no. An agent tried something only a person may do (cancelling, reassigning or revoking, or finishing someone else's claim; the `--json` error has `"needs_person": true`), the WIP limit is reached, the task is poisoned (its claim ran out too many times, so it needs a person), or it is no longer open. Retrying will not help: hand it to a person, or pick other work.
+`E_REFUSED` (exit 23) on a claim, cancel, reassign, revoke or done is not about the network: a fixed rule or the task's state says no. An agent with no person behind it (an agent actor whose roster row names no owner) tried a human override (cancelling, reassigning or revoking, or finishing someone else's claim; the `--json` error has `"needs_person": true`; give it an owner with `lore agent start --label <l> --owner @<person>`, or a person runs it; a person's own coding agent acts for them and passes), the WIP limit is reached, the task is poisoned (its claim ran out too many times, so it needs a person), or it is no longer open. Retrying will not help: hand it to a person, or pick other work.
 
 ## A row I just wrote is gone on my feature branch
 
@@ -327,6 +327,10 @@ A date would make two company periods overlap, end a period before it starts, or
 ### `E_POLICY_DENIED` naming `agents.may_manage_people`
 
 An agent ran a command that changes profiles, contacts, statuses, stints, memberships, roles or contact types, and a team set the policy flag `agents.may_manage_people` to false. The flag is true by default (an agent acts for its person), so this refusal only comes from a team's choice; `lore policy show agents.may_manage_people` names the level that set it. Hand the change to a person, or have a person unset the flag at that level (`lore policy unset agents.may_manage_people --to <store>/org`) if agents should manage people. Reading (`show`, `list`) is always allowed. Creating an org or a team is never refused by this flag: the new store has no policy yet.
+
+### "has no person behind it"
+
+A coding agent acts for its person: what it changes on the roster (the team step of an admin setup, `lore actor register`, `lore agent start --label`) is made as that person, and the rows record the agent as the writer. lore refuses only an agent with no person behind it: an agent actor (`LORE_ACTOR=agent:<label>`) whose roster row names no owner. Its person runs the command in their own terminal, or registers the agent with an owner: `lore agent start --label <label> --owner @<person>`. A team that wants roster changes left to people sets `agents.may_manage_people` to false (see above).
 
 ### `E_REFUSED` "team profiles live in an org store"
 

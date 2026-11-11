@@ -422,6 +422,7 @@ func (h standaloneCoord) Inbox(ctx context.Context, in opscoord.InboxIn) (opscoo
 // inbox lists every item for the caller (v0.1.17 coordView.inbox).
 func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 	me := cv.w.actorID
+	person := cv.w.personID() // a detected coding agent approves as its person
 	missions := cv.projectDocs(ctx, schema.TableMissions)
 	owned, approverOf := map[string]bool{}, map[string]bool{}
 	for _, m := range missions {
@@ -429,7 +430,7 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 		if m.Str(docKeyAuthor) == me {
 			owned[id] = true
 		}
-		if ap := m.Strs(fieldApprovers); len(ap) == 0 || slices.Contains(ap, me) {
+		if ap := m.Strs(fieldApprovers); len(ap) == 0 || slices.Contains(ap, person) {
 			approverOf[id] = true
 		}
 	}
@@ -471,7 +472,7 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 		if d.Status() == schema.TaskStatusBlocked && ownsIt && cv.w.agents.MaxAttempts > 0 && d.Int(vkAttempts) >= cv.w.agents.MaxAttempts {
 			out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxBlocked, Text: fmt.Sprintf("%s %s: failed %d times", id, title, d.Int(vkAttempts))})
 		}
-		if open && !cv.w.isAgent() && coord.Gated(d) && approverOf[mission] {
+		if open && (!cv.w.isAgent() || cv.w.who.Owner != nil) && coord.Gated(d) && approverOf[mission] {
 			out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxGate, Text: fmt.Sprintf("%s %s: gate needs approval (lore gate approve %s)", id, title, id)})
 		}
 		if open && claimed && active && ownsIt && docHas(d, vkTimebox) {

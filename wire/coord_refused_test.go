@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -10,7 +11,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
-// TestCoordRuleRefusalsAreRefused pins B-ERRS-4: an agent doing a human
+// TestCoordRuleRefusalsAreRefused pins B-ERRS-4: an agent with no person
+// behind it doing a human
 // override, the WIP limit, a poisoned task and a task that is not open are
 // refusals by rule or data state (E_REFUSED, exit 23), never bad input;
 // the human-override refusal also says a person must act (needs_person).
@@ -18,13 +20,19 @@ import (
 func TestCoordRuleRefusalsAreRefused(t *testing.T) {
 	t.Parallel()
 	agent := &coordWorld{who: identity.Resolved{StableKey: "agent:ci", Kind: identity.KindAgent}}
-	err := agent.requireHuman("cancelling a claimed task")
+	err := agent.requireHuman(context.Background(), "cancelling a claimed task")
 	env := errs.EnvelopeOf(err)
 	if env.Error.Code != errs.Refused || env.Error.Exit != 23 || !env.Error.NeedsPerson {
 		t.Fatalf("agent override: %+v", env.Error)
 	}
-	if err := (&coordWorld{who: identity.Resolved{Kind: identity.KindHuman}}).requireHuman("x"); err != nil {
+	if err := (&coordWorld{who: identity.Resolved{Kind: identity.KindHuman}}).requireHuman(context.Background(), "x"); err != nil {
 		t.Fatalf("a person may override: %v", err)
+	}
+	// Owner rule 2026-11-11: a detected coding agent acts for its person.
+	ada := identity.Resolved{StableKey: "human:ada@example.test", Kind: identity.KindHuman}
+	detected := &coordWorld{who: identity.Resolved{StableKey: "agent:auto/claude_code/abcdef", Kind: identity.KindAgent, Owner: &ada}}
+	if err := detected.requireHuman(context.Background(), "x"); err != nil {
+		t.Fatalf("a person's coding agent may override for them: %v", err)
 	}
 	for name, in := range map[string]error{
 		"wip":      &signals.WIPError{Max: 1},

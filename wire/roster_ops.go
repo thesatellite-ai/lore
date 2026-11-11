@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -85,7 +86,7 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 		return opsinfra.ActorRegisterOut{}, err
 	}
 	defer done()
-	who, err := x.rosterCaller(ctx)
+	who, err := x.rosterCaller(ctx, r)
 	if err != nil {
 		return opsinfra.ActorRegisterOut{}, err
 	}
@@ -131,10 +132,11 @@ func (x *App) registerSpec(ctx context.Context, r rosterAt, sp RosterActor, kind
 	return opsinfra.ActorRegisterOut{ID: id, Kind: kind, Name: sp.Name, Handle: sp.Handle, Label: sp.Label, Created: created, Where: r.shown()}, nil
 }
 
-// registerCaller registers the caller (a person) on r's roster, as
+// registerCaller registers the caller (a person, or the person an agent
+// acts for: rosterCaller) on r's roster, as
 // `lore actor register` would, with x the roster App.
 func (x *App) registerCaller(ctx context.Context, r rosterAt) (opsinfra.ActorRegisterOut, error) {
-	who, err := x.rosterCaller(ctx)
+	who, err := x.rosterCaller(ctx, r)
 	if err != nil {
 		return opsinfra.ActorRegisterOut{}, err
 	}
@@ -156,7 +158,7 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 		return opsinfra.ActorDeactivateOut{}, err
 	}
 	defer done()
-	if _, err = x.rosterCaller(ctx); err != nil {
+	if _, err = x.rosterCaller(ctx, r); err != nil {
 		return opsinfra.ActorDeactivateOut{}, err
 	}
 	act, err := x.rosterByHandle(ctx, r, handle)
@@ -337,22 +339,105 @@ func (a *App) repoRoster(ctx context.Context) (rosterAt, error) {
 	return r, nil
 }
 
-// rosterCaller is the caller's identity as the roster App a resolves it
-// (a is a store-only App outside a repo: rosterApp). An agent never
-// registers (F18: its owner runs `lore agent start`); no identity is
-// refused.
-func (a *App) rosterCaller(ctx context.Context) (whoIs, error) {
+// rosterCaller is the person a roster change is made as (x is the roster
+// App, rosterApp; r the roster). Owner rule 2026-11-11: a coding agent
+// acts for its person and may do anything the person tells it, so its
+// changes are made AS that person, and the write itself still records the
+// agent ("<person> via <tool>", like every other write of it):
+//
+//	a person                         ─▶ themselves
+//	a detected coding agent          ─▶ the person it was detected for (Resolved.Owner)
+//	an agent actor (LORE_ACTOR)      ─▶ the owner its roster row names
+//	an agent with no person behind   ─▶ E_INVALID_INPUT naming the fix
+//
+// An agent's change then passes agents.may_manage_people (default true; a
+// team that sets it false opts into the refusal, profileWriter). No
+// identity is refused.
+func (a *App) rosterCaller(ctx context.Context, r rosterAt) (whoIs, error) {
 	who, err := a.Who(ctx)
 	if err != nil {
 		return whoIs{}, err
 	}
-	if who.Kind == schema.ActorKindAgent {
-		return whoIs{}, errs.New(errs.InvalidInput, "an agent cannot register actors; its owner runs `lore agent start --label <l> --owner @<owner>`")
-	}
 	if who.StableKey == "" {
 		return whoIs{}, errs.New(errs.InvalidInput, "no identity: lore cannot tell who you are").WithHint("run `lore whoami` to see the identity chain")
 	}
-	return whoIs{StableKey: who.StableKey, DisplayName: who.DisplayName, Handle: who.Handle}, nil
+	person := whoIs{StableKey: who.StableKey, DisplayName: who.DisplayName, Handle: who.Handle}
+	if who.Kind == schema.ActorKindAgent {
+		if person, err = a.personBehind(ctx, r, who, "change the roster"); err != nil {
+			return whoIs{}, err
+		}
+	}
+	if a.agentCaller(ctx, who) {
+		st, serr := a.rosterState(ctx, r.src, false)
+		if serr != nil {
+			return whoIs{}, serr
+		}
+		if serr = a.profileWriter(ctx, st, r.src); serr != nil {
+			return whoIs{}, serr
+		}
+	}
+	return person, nil
+}
+
+// agentCaller reports a caller lore sees as an agent: an agent identity
+// (detected or LORE_ACTOR=agent:…), or a surface that fixed an agent on the
+// call (REST X-Lore-Agent, profileContext).
+func (a *App) agentCaller(ctx context.Context, who identity.Resolved) bool {
+	if who.Kind == schema.ActorKindAgent || who.Agent != "" {
+		return true
+	}
+	c, ok := ctx.Value(profileCallerKey{}).(op.Caller)
+	return ok && c.Agent != ""
+}
+
+// personBehind is the person agent who acts for on r: the person a coding
+// agent was detected for, else the owner the agent actor's roster row
+// names. An agent with neither has no person behind it and is refused for
+// what (the change it tried), with the two ways to give it one.
+func (a *App) personBehind(ctx context.Context, r rosterAt, who identity.Resolved, what string) (whoIs, error) {
+	if o := who.Owner; o != nil && o.StableKey != "" {
+		id, err := o.ActorID()
+		if err != nil {
+			return whoIs{}, err
+		}
+		return whoIs{StableKey: o.StableKey, DisplayName: o.DisplayName, Handle: o.Handle, ID: id}, nil
+	}
+	ag, ok, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.StableKey == who.StableKey })
+	if err != nil {
+		return whoIs{}, err
+	}
+	if ok && ag.OwnerID != "" {
+		own, found, ferr := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.ID == ag.OwnerID && x.Kind == schema.ActorKindHuman })
+		if ferr != nil {
+			return whoIs{}, ferr
+		}
+		if found {
+			id, perr := ids.Parse[ids.Actor](own.ID)
+			if perr != nil {
+				return whoIs{}, errs.Wrap(errs.Internal, "roster: owner id of "+who.StableKey, perr)
+			}
+			return whoIs{StableKey: own.StableKey, DisplayName: own.Name, Handle: own.Handle, ID: id}, nil
+		}
+	}
+	e := errs.New(errs.InvalidInput, "the agent "+who.StableKey+" has no person behind it on "+r.shown()+", so it cannot "+what).
+		WithHint("its person runs it in their own terminal, or registers the agent with an owner: `lore agent start --label <l> --owner @<person>`")
+	e.NeedsPerson = true
+	return whoIs{}, e
+}
+
+// rosterPerson is the actor id of the person st's caller is or acts for on
+// r (profilestore.Roster.Caller): the caller's own actor for a person, the
+// person behind a coding agent (personBehind). An agent with no person
+// behind it keeps its own id; its writes are refused by rosterCaller.
+func (a *App) rosterPerson(ctx context.Context, st *state, r rosterAt) ids.ID[ids.Actor] {
+	if st.who.Kind != schema.ActorKindAgent {
+		return st.actor
+	}
+	p, err := a.personBehind(ctx, r, st.who, "act on the roster")
+	if err != nil || p.ID.IsZero() {
+		return st.actor
+	}
+	return p.ID
 }
 
 // orgRosterSource is the "<org>/<org folder>" store OrgStores attaches for
@@ -374,8 +459,13 @@ func (a *App) orgRosterSource(ctx context.Context, org string) (store.Source, st
 	return "", "", false, nil
 }
 
-// whoIs is the part of the identity a registration uses.
-type whoIs struct{ StableKey, DisplayName, Handle string }
+// whoIs is the part of the identity a registration uses. ID is the
+// person's actor id when an agent acts for them (personBehind); zero for a
+// person, whose id is the App's own actor.
+type whoIs struct {
+	StableKey, DisplayName, Handle string
+	ID                             ids.ID[ids.Actor]
+}
 
 // agentStableKeyPrefix starts an agent actor's stable key (F18).
 const agentStableKeyPrefix = "agent:"

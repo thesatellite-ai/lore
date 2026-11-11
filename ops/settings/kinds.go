@@ -86,7 +86,7 @@ type KindEditIn struct {
 	SecretManager string `json:"secret_manager,omitempty" flag:"secret-manager" desc:"the secret manager a bare secret_ref path means"`
 	// Reviewed approves an agent-added kind with no other change; any edit
 	// by a person approves it too (MQ7, as meta keys).
-	Reviewed bool `json:"reviewed,omitempty" flag:"reviewed" desc:"mark an agent-added kind reviewed (a person only)"`
+	Reviewed bool `json:"reviewed,omitempty" flag:"reviewed" desc:"mark an agent-added kind reviewed"`
 }
 
 // KindRef names one kind.
@@ -484,12 +484,13 @@ func (o ops) kindEdit(ctx context.Context, in KindEditIn) (RowOut, error) {
 	if err := optTexts(patch, map[string]string{kDescription: in.Description, kNameFormat: in.NameFormat, kRender: in.Render, kSecretMgr: in.SecretManager}); err != nil {
 		return RowOut{}, err
 	}
+	// MQ7: a person's edit approves an agent-added kind, and so does
+	// --reviewed from anyone: a coding agent reviews for its person (owner
+	// rule 2026-11-11; the row records the agent as the writer). A team
+	// that keeps reviews to people lists resource.kind.edit.reviewed in
+	// agents.person_only, which the engine checks before this runs.
 	person := addedBy(ctx) == schema.MetaAddedByPerson
-	if in.Reviewed && !person {
-		return RowOut{}, &errs.Error{Code: errs.PolicyDenied, Message: "resource kind edit --reviewed: only a person reviews a kind", Hint: "ask your human to review it", NeedsPerson: true}
-	}
-	// MQ7: a person's edit approves an agent-added kind.
-	if person && isUnreviewed(k.Row) {
+	if (person || in.Reviewed) && isUnreviewed(k.Row) {
 		patch[kReviewed] = value.BoolOf(true)
 	}
 	if len(patch) == 0 {

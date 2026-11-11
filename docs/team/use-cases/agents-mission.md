@@ -235,7 +235,7 @@ $ lore task merged tsk_05e9…4603
 ```
 <!-- /example -->
 
-Now the deploy task is ready except for its gate. The coordinator stops there. An agent session cannot approve, even when it runs on Alice's machine. Approval comes from a person's own identity, never from `LORE_ACTOR`. Alice approves from her own shell, and the coordinator claims the task:
+Now the deploy task is ready except for its gate. The coordinator stops there. An agent session started with `LORE_ACTOR` cannot approve, even when it runs on Alice's machine. Approval comes from a person's own identity, never from `LORE_ACTOR` (Alice's own coding agent, detected with no `LORE_ACTOR`, approves as Alice). Alice approves from her own shell, and the coordinator claims the task:
 
 <!-- example: agents#gate -->
 ```console

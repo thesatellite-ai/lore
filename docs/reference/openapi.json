@@ -51406,7 +51406,7 @@
                   },
                   "reviewed": {
                     "type": "boolean",
-                    "description": "mark an agent-added kind reviewed (a person only)"
+                    "description": "mark an agent-added kind reviewed"
                   },
                   "secret_manager": {
                     "type": "string",
