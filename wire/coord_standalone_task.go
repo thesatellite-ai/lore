@@ -279,7 +279,7 @@ func (h standaloneCoord) TaskRevoke(ctx context.Context, in opscoord.RevokeIn) (
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.requireHuman("revoke"); err != nil {
+	if err = w.requireHuman(ctx, "revoke"); err != nil {
 		return opscoord.Report{}, err
 	}
 	removed, err := coord.Override(ctx, w.env(ctx), in.ID, coord.OverrideRevoke, nil)

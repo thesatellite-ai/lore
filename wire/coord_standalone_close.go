@@ -105,7 +105,7 @@ func (t standaloneTeam) CloseHeldDone(ctx context.Context, taskID, commit string
 			taskID, holderName(hs.sig), hs.sig.Expires.UTC().Format(time.Kitchen))).
 			WithHint("a person can `lore task revoke " + taskID + "` first")
 	case hs.claimed:
-		if err = w.requireHuman("finishing a task someone else claimed"); err != nil {
+		if err = w.requireHuman(ctx, "finishing a task someone else claimed"); err != nil {
 			return commit, err
 		}
 		if _, err = coord.OverrideChecked(ctx, env, taskID, coord.OverrideRevoke, coord.MarkDone(w.actorID, commit, pr)); err != nil {
@@ -126,7 +126,7 @@ func (t standaloneTeam) CloseHeldCancel(ctx context.Context, taskID string) (str
 	if err != nil || !hs.claimed {
 		return "", false, err
 	}
-	if err = w.requireHuman("cancelling a claimed task"); err != nil {
+	if err = w.requireHuman(ctx, "cancelling a claimed task"); err != nil {
 		return "", false, err
 	}
 	if _, err = coord.Override(ctx, env, taskID, coord.OverrideCancel, func(d coord.Doc) {

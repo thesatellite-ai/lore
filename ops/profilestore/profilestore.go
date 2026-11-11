@@ -52,7 +52,9 @@ type Roster interface {
 	Source() store.Source
 	// Where names it for messages ("agency org/"); hidden in quiet output.
 	Where() string
-	// Caller is the writing actor (the person running the command).
+	// Caller is the person running the command: for a coding agent, the
+	// person it acts for (owner rule 2026-11-11); the rows still record
+	// the agent as the writer.
 	Caller() ids.ID[ids.Actor]
 	// Today is the App's wall-clock day as midnight UTC (the default of
 	// every --on; teamprofile.Day).

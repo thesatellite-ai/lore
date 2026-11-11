@@ -16,7 +16,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsagent "github.com/thesatellite-ai/lore/ops/agent"
-	"github.com/thesatellite-ai/lore/schema"
 )
 
 // errNoHookApp: the host was built without an App to record through.
@@ -34,20 +33,15 @@ type standaloneAgent struct {
 
 var _ opsagent.Host = (*standaloneAgent)(nil)
 
-// CallerIsAgent implements opsagent.Host (detected or LORE_ACTOR=agent:…).
-func (h *standaloneAgent) CallerIsAgent(ctx context.Context) (bool, error) {
-	id, err := resolveIdentity(ctx, h.opts)
-	if err != nil {
-		return false, err
-	}
-	return id.Kind == schema.ActorKindAgent, nil
-}
-
-// CallerLabel implements opsagent.Host: @handle, else the display name.
+// CallerLabel implements opsagent.Host: @handle, else the display name;
+// for a detected coding agent, those of the person it acts for.
 func (h *standaloneAgent) CallerLabel(ctx context.Context) (string, error) {
 	id, err := resolveIdentity(ctx, h.opts)
 	if err != nil {
 		return "", err
+	}
+	if id.Owner != nil {
+		id = *id.Owner
 	}
 	if id.Handle != "" {
 		return rosterHandleMark + id.Handle, nil

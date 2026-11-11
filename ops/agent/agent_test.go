@@ -12,11 +12,9 @@ import (
 )
 
 type fakeHost struct {
-	agent bool
 	hooks []HookIn
 }
 
-func (f *fakeHost) CallerIsAgent(context.Context) (bool, error) { return f.agent, nil }
 func (f *fakeHost) CallerLabel(context.Context) (string, error) { return "@alice", nil }
 func (f *fakeHost) RecordHook(_ context.Context, in HookIn)     { f.hooks = append(f.hooks, in) }
 
@@ -77,19 +75,17 @@ func TestStartLabel(t *testing.T) {
 // without a roster) and registers nobody.
 func TestStartRefusals(t *testing.T) {
 	for name, tc := range map[string]struct {
-		in    StartIn
-		agent bool
-		want  errs.Code
+		in   StartIn
+		want errs.Code
 	}{
-		"no label":         {StartIn{}, false, errs.InvalidInput},
-		"upper-case label": {StartIn{Label: "Agent"}, false, errs.InvalidInput},
-		"label with space": {StartIn{Label: "a b"}, false, errs.InvalidInput},
-		"label too long":   {StartIn{Label: strings.Repeat("a", 64)}, false, errs.InvalidInput},
-		"agent starts one": {StartIn{Label: "x"}, true, errs.InvalidInput},
-		"label and tool":   {StartIn{Label: "x", Tool: "codex"}, false, errs.InvalidInput},
-		"session only":     {StartIn{Session: "abc"}, false, errs.InvalidInput},
+		"no label":         {StartIn{}, errs.InvalidInput},
+		"upper-case label": {StartIn{Label: "Agent"}, errs.InvalidInput},
+		"label with space": {StartIn{Label: "a b"}, errs.InvalidInput},
+		"label too long":   {StartIn{Label: strings.Repeat("a", 64)}, errs.InvalidInput},
+		"label and tool":   {StartIn{Label: "x", Tool: "codex"}, errs.InvalidInput},
+		"session only":     {StartIn{Session: "abc"}, errs.InvalidInput},
 	} {
-		env := &fakeEnv{h: &fakeHost{agent: tc.agent}}
+		env := &fakeEnv{h: &fakeHost{}}
 		if _, err := Start(context.Background(), env, tc.in); code(err) != tc.want {
 			t.Fatalf("%s: got %v", name, err)
 		}

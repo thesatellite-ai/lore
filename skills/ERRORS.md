@@ -86,7 +86,7 @@ With `--json` (and every `lore api` error body), one object:
 | `E_INVALID_ID` | 20 | an id is malformed (expected `<prefix>_<32 hex>`, for example `tsk_` + 32 hex). Never reported as not found | copy the id from `list` or `--json` output; do not guess or shorten it |
 | `E_NOT_FOUND` | 27 | a well-formed id or name that does not exist here (also a missing project or repo) | `lore <kind> list`, or check you are in the right repo; it may be in the trash (`lore trash list`) |
 | `E_POLICY_DENIED` | 23 | a team policy refuses this. With `needs_person: true` the policy `agents.person_only` lists this command, or a team set `agents.may_manage_people` to false for a people write, and you look like an agent | do not retry or work around it: tell the person the command and let them run it in their own terminal |
-| `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule. Coordination refusals use it too: an agent doing a human override (cancel, reassign, revoke, finishing another's claim; `needs_person: true`), the WIP limit, a poisoned task, a task that is not open | follow the message; for `needs_person`, hand it to the person |
+| `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule. Coordination refusals use it too: an agent with no person behind it doing a human override (cancel, reassign, revoke, finishing another's claim; `needs_person: true`; a person's own coding agent acts for them and passes), the WIP limit, a poisoned task, a task that is not open | follow the message; for `needs_person`, hand it to the person |
 | `E_STALE` | 23 | the row changed between read and write and could not be merged | read the row again and redo the edit |
 | `E_OLD_LORE` | 19 | this binary is below the project's `min_lore_version` or does not know one of its features (reads still work) | `lore upgrade` |
 | `E_LEAK_BLOCKED` | 19 | the write would put internal content where the client can read it (or lore cannot check it) | write it to the internal store (`--to`), or `lore check leaks --explain` |
@@ -97,7 +97,7 @@ With `--json` (and every `lore api` error body), one object:
 | `E_URL_CREDENTIALS` | 20 | a url holds a password or token | remove it; use your git credential helper or ssh |
 | `E_HAS_DEPENDENTS` | 23 | a delete while other live rows still point at this one | delete or repoint them first (the message lists them) |
 | `E_OPEN_CHILDREN` / `E_HAS_OPEN_CHILDREN` | 23 | done/cancel of a parent with open sub-tasks; a claim of a parent with open sub-tasks | ask the person, then `--children --yes`; claim a leaf, or `--coordinate` |
-| `E_INVALID_INPUT` | 20 | a flag value or field failed validation | fix the value (the message names it) |
+| `E_INVALID_INPUT` | 20 | a flag value or field failed validation; also "the agent … has no person behind it": an agent actor whose roster row names no owner tried a roster change (`needs_person: true`) | fix the value (the message names it); for no person behind it, the person runs it or `lore agent start --label <l> --owner @<person>` |
 
 ---
 
@@ -168,7 +168,7 @@ E_NEEDS_CONFIRM
     → with error.findings (a secret): --yes alone is not an answer; pick one of
       error.next.add_args_one_of with the person
 
-needs_person: true (E_POLICY_DENIED, E_REFUSED on a human override)
+needs_person: true (E_POLICY_DENIED from a team policy; E_REFUSED or E_INVALID_INPUT "has no person behind it")
     → stop; tell the person which command to run in their own terminal
 
 E_INVALID_ID

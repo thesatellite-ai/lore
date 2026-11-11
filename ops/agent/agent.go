@@ -4,7 +4,8 @@
 // SessionStart hook, record that tool session's details.
 //
 //	agent.start --label L [--owner @h]
-//	    ─▶ label check ─▶ Host.CallerIsAgent? E_INVALID_INPUT (an agent cannot start another)
+//	    ─▶ label check (a coding agent may start one for its person, owner rule
+//	       2026-11-11; an agent with no person behind it is refused by the roster)
 //	    ─▶ Roster.ActorRegister(kind agent, L, @h) ─▶ a fresh session id
 //	    ─▶ "✓ <id> agent L (owner …) registered in …; LORE_ACTOR=… LORE_SESSION=…"
 //	       "export LORE_ACTOR=agent:L LORE_SESSION=s-…"   (the line `eval "$(… | tail -1)"` runs)
@@ -75,11 +76,9 @@ type HookIn struct {
 // only the empty fields of the detected agent's session row, each with
 // source session_hook, and reports a problem as at most one stderr line.
 type Host interface {
-	// CallerIsAgent reports whether the caller is itself an agent
-	// (detected or LORE_ACTOR=agent:…).
-	CallerIsAgent(ctx context.Context) (bool, error)
 	// CallerLabel is how the caller is shown as the default owner
-	// (@handle, else the display name).
+	// (@handle, else the display name): for a coding agent, the person it
+	// acts for.
 	CallerLabel(ctx context.Context) (string, error)
 	// RecordHook is the --tool mode.
 	RecordHook(ctx context.Context, in HookIn)
@@ -175,13 +174,9 @@ func Start(ctx context.Context, env Env, in StartIn) (StartOut, error) {
 	if !labelPattern.MatchString(in.Label) {
 		return StartOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("agent label %q: use lower-case letters, digits, '.', '_' or '-' (max 63, starting with a letter or digit)", in.Label))
 	}
-	agent, err := h.CallerIsAgent(ctx)
-	if err != nil {
-		return StartOut{}, err
-	}
-	if agent {
-		return StartOut{}, errs.New(errs.InvalidInput, "an agent cannot start another agent; run `lore agent start` as its owner")
-	}
+	// A coding agent may start an agent for its person (owner rule
+	// 2026-11-11): the roster registers it as that person, and refuses
+	// only an agent with no person behind it (wire rosterCaller).
 	r, ok := upgrade.As[opsinfra.Roster](env)
 	if !ok {
 		return StartOut{}, errs.New(errs.Unsupported, "this binary has no roster")

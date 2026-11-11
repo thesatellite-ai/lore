@@ -875,7 +875,7 @@ Quick reactions:
 |---|---|
 | `E_NEEDS_CONFIRM` (exit 26) | Show the person `error.question` word for word; only after they say yes, rerun your command with `--yes`. |
 | `E_SECRET_DETECTED` / `E_NEEDS_CONFIRM` with `findings` | Strip the secret, or rerun with `--secret-ref "<manager>://<entry>"` or `--secret-unstored`. A bare `--yes` does not store it; `--not-a-secret --reason "<why>" --yes` only with explicit user consent. |
-| `E_POLICY_DENIED` / `E_REFUSED` with `needs_person: true` | An agent may not do this (`agents.person_only`, `agents.may_manage_people` set false by a team, or a human override such as cancel/reassign). Tell the person the command; do not retry or work around it. |
+| `E_POLICY_DENIED` / `E_REFUSED` with `needs_person: true` | A team kept this to people (`agents.person_only`, `agents.may_manage_people` set false), or the agent has no person behind it (an agent actor with no owner). By default you act for your person and may run anything they tell you. Tell the person the command; do not retry or work around it. |
 | `E_INVALID_ID` (exit 20) | The id is malformed; copy it from `list --json` output, never guess or shorten it. |
 | `E_NOT_FOUND` (exit 27) | Well-formed but not here: check the repo, `lore <kind> list`, `lore trash list`. |
 | `E_STORE_LOCKED` / `E_CONTENDED` | Another writer is busy or won a race; wait a few seconds and retry. |

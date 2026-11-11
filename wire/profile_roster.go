@@ -78,12 +78,13 @@ func (a *App) Roster(ctx context.Context, write bool) (profilestore.Roster, func
 		done()
 		return nil, noop, err
 	}
-	return &profileRoster{app: x, st: st, at: r}, done, nil
+	return &profileRoster{app: x, st: st, at: r, person: x.rosterPerson(ctx, st, r)}, done, nil
 }
 
 // profileWriter refuses a profile write by no identity, and by an agent
 // unless agents.may_manage_people is true for target (TS-4, TP-20; the
-// roster verbs refuse agents outright, rosterCaller).
+// roster verbs make an agent's change as its person and check this same
+// flag, rosterCaller).
 func (a *App) profileWriter(ctx context.Context, st *state, target store.Source) error {
 	who, err := a.Who(ctx)
 	if err != nil {
@@ -122,6 +123,9 @@ type profileRoster struct {
 	app *App
 	st  *state
 	at  rosterAt
+	// person is the caller's person (Caller): a coding agent acts for its
+	// person (owner rule 2026-11-11, rosterPerson).
+	person ids.ID[ids.Actor]
 	// warns are the engine's warnings of every write so far (Warnings).
 	warns []string
 }
@@ -150,7 +154,7 @@ func (p *profileRoster) Source() store.Source { return p.at.src }
 func (p *profileRoster) Where() string { return p.at.shown() }
 
 // Caller implements profilestore.Roster.
-func (p *profileRoster) Caller() ids.ID[ids.Actor] { return p.st.actor }
+func (p *profileRoster) Caller() ids.ID[ids.Actor] { return p.person }
 
 // Today implements profilestore.Roster: the wall clock's day.
 func (p *profileRoster) Today() time.Time { return teamprofile.Day(p.app.opts.Wall()) }
