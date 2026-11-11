@@ -42,7 +42,7 @@ const OpAdopt = "store.adopt"
 
 // AdoptIn is the input of store.adopt.
 type AdoptIn struct {
-	Target string `json:"target" arg:"0" desc:"<store>/<folder>: the store (team, an org's name, an org store's url, or a .lore/stores.yaml name) and its folder (made first with lore store folder add)"`
+	Target string `json:"target" arg:"0" desc:"<store>/<folder>: the store (team, an org's name, an org store's url, or a .lore/stores.yaml name) and its folder (made first with lore store folder add); an org's name, or a folder named alone, means whichever of the org's stores holds that folder"`
 	From   string `json:"from,omitempty" flag:"from" desc:"the repo whose lore data moves (default: the repo this command runs in)"`
 	// RemoveSource deletes the adopted row files from the repo's
 	// .lore/data once the store commit is made: a normal diff the person
@@ -77,6 +77,16 @@ type AdoptOut struct {
 	// Left names what stays in the repo, with why ("projects: 1 (the
 	// folder is its own project)").
 	Left []string `json:"left,omitempty"`
+	// Relinked counts the --supersedes links lore 0.1.16 and older wrote
+	// on the new row that the adoption moved onto the old row (the shape
+	// since v0.1.17); Conflicts names the rows two links claim (left as
+	// they are: one row has one successor, the person picks).
+	Relinked  int      `json:"relinked,omitempty"`
+	Conflicts []string `json:"conflicts,omitempty"`
+	// Actors names each actor of the repo mapped onto the org roster's
+	// actor of the same identity (stable key): "act_A (human:x) → act_B".
+	// The mapped row is not written; the adopted rows name act_B.
+	Actors []string `json:"actors,omitempty"`
 	// Removed counts the row files --remove-source deleted from the repo.
 	Removed int  `json:"removed,omitempty"`
 	DryRun  bool `json:"dry_run,omitempty"`
@@ -106,12 +116,17 @@ type Adopter interface {
 var adoptErrors = append(append([]errs.Code{}, visibilityErrors...), errs.Refused, errs.PolicyDenied, errs.NotProjectRoot, errs.Stale)
 
 // SplitTarget splits "<store>/<folder>" at its last slash (a store url
-// holds slashes, a folder name never does).
+// holds slashes, a folder name never does). A bare "<folder>" has no
+// store: the folder is looked up across the org's stores (folder names
+// are unique there), so store is "".
 func SplitTarget(verb, target string) (string, string, error) {
 	i := strings.LastIndex(target, "/")
-	if i <= 0 || i == len(target)-1 {
-		return "", "", errs.New(errs.InvalidInput, verb+": "+quote(target)+" names no folder; give <store>/<folder>").
+	if target == "" || i == len(target)-1 || i == 0 {
+		return "", "", errs.New(errs.InvalidInput, verb+": "+quote(target)+" names no folder; give <store>/<folder> or a folder of the org").
 			WithHint("e.g. lore store adopt team/client_north (`lore store folder list` shows the folders)")
+	}
+	if i < 0 {
+		return "", target, nil
 	}
 	return target[:i], target[i+1:], nil
 }
@@ -133,7 +148,7 @@ func adoptOp(m Manager) op.Entry {
 		if err != nil {
 			return AdoptOut{}, err
 		}
-		if err := CheckStoreArg(st); err != nil {
+		if err := CheckStoreArg(st); st != "" && err != nil {
 			return AdoptOut{}, err
 		}
 		if err := checkSnakeFolder(verb, folder); err != nil {
@@ -207,6 +222,15 @@ func (o AdoptOut) Text() string {
 	}
 	if o.Unchanged > 0 || o.Kept > 0 {
 		b.WriteString("  already there: " + strconv.Itoa(o.Unchanged) + " unchanged, " + strconv.Itoa(o.Kept) + " newer or deleted in the folder (kept)\n")
+	}
+	for _, l := range o.Actors {
+		b.WriteString("  actor " + l + " (the same person; references rewritten)\n")
+	}
+	if o.Relinked > 0 {
+		b.WriteString("  " + plural(o.Relinked, "--supersedes link") + " written by lore 0.1.16 or older moved onto the row each replaces\n")
+	}
+	for _, c := range o.Conflicts {
+		b.WriteString("  left as is: " + c + "\n")
 	}
 	for _, l := range o.Left {
 		b.WriteString("  left in the repo: " + l + "\n")

@@ -57,6 +57,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckActorRoster, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorActorRoster(c, fix) }}, // doctor_roster.go
 		{DoctorCheckActorCopies, a.DoctorActorCopies},                                                                     // doctor_actorcopies.go (SOURCE_OF_TRUTH rows 2-3)
 		{DoctorCheckDuplicateActors, a.DoctorDuplicateActors},                                                             // doctor_dupactors.go
+		{DoctorCheckSharedKeys, a.DoctorSharedKeys},                                                                       // actor_merge.go
 		{DoctorCheckIdentitySource, a.DoctorIdentitySource},                                                               // doctor_identitysource.go (SOURCE_OF_TRUTH row 1)
 		{DoctorCheckRenderedCopy, a.DoctorRenderedCopies},                                                                 // doctor_render.go (SOURCE_OF_TRUTH rows 10-12)
 		{DoctorCheckSkillCopy, a.DoctorSkillCopies},                                                                       // doctor_skillcopies.go (SOURCE_OF_TRUTH row 13)

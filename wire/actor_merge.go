@@ -1,0 +1,543 @@
+package wire
+
+// actor_merge.go — one identity, two actor ids (owner report 2026-11-12:
+// adopting a v0.1.17 repo brought in act_A with stable_key human:<email>
+// while the org roster already had act_B with the same key).
+//
+//	MergeActor (opsinfra.ActorMerger, `lore actor merge <from> <into>`)
+//	   both actors read in the stores this command reads ─▶ refusals
+//	   every live row naming <from> (a ref, a text id, a list item) in a
+//	   writable store ─▶ an ordinary edit naming <into> (new HLC, audit)
+//	   each copy of <from>'s row ─▶ merged_into <into>, active false,
+//	   status left (actors are never deleted: the marked row is the
+//	   tombstone, and reports follow merged_into)
+//	DoctorSharedKeys (`lore doctor`, check actor_stable_key)
+//	   two live, unmerged actors with one stable key ─▶ warning naming
+//	   both ids and `lore actor merge <from> <into>` (into: the roster's,
+//	   else the id the key derives, else the older)
+//	   human:<login> with no email whose login is a roster person's
+//	   handle ─▶ note: likely the same person, never merged on its own
+//	adoptActorMap (store adopt) / migrateActorKeys (migrate run): a
+//	   source actor whose stable key the roster (or the folder) already
+//	   has under another id is mapped onto it: its row is not brought in,
+//	   the rows naming it name the existing actor, and the output says so.
+
+import (
+	"cmp"
+	"context"
+	"maps"
+	"slices"
+	"strings"
+
+	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
+)
+
+var _ opsinfra.ActorMerger = (*App)(nil)
+
+// actorMergeVerb starts the merge's messages.
+const actorMergeVerb = "actor merge"
+
+// mapActorValue is v with every actor id of m replaced: a ref, a text that
+// is exactly the id, or the items of a list. changed is false when
+// nothing named an id of m.
+func mapActorValue(v value.Value, m map[string]ids.AnyID) (value.Value, bool) {
+	switch x := v.(type) {
+	case value.Ref:
+		if to, ok := m[x.String()]; ok {
+			if r, err := value.RefOf(to); err == nil {
+				return r, true
+			}
+		}
+	case value.Text:
+		if to, ok := m[x.String()]; ok {
+			if t, err := value.TextOf(to.String()); err == nil {
+				return t, true
+			}
+		}
+	case value.List:
+		items := x.Items()
+		hit := false
+		for i, it := range items {
+			if nv, ok := mapActorValue(it, m); ok {
+				items[i], hit = nv, true
+			}
+		}
+		if hit {
+			if l, err := value.ListOf(x.Elem(), items...); err == nil {
+				return l, true
+			}
+		}
+	}
+	return v, false
+}
+
+// mapActorFields is the patch that makes fields name the actors of m:
+// only the changed fields (nil when none).
+func mapActorFields(fields map[string]value.Value, m map[string]ids.AnyID) map[string]value.Value {
+	var patch map[string]value.Value
+	for k, v := range fields {
+		if v == nil {
+			continue
+		}
+		if nv, ok := mapActorValue(v, m); ok {
+			if patch == nil {
+				patch = map[string]value.Value{}
+			}
+			patch[k] = nv
+		}
+	}
+	return patch
+}
+
+// actorCopy is one store's copy of an actor row.
+type actorCopy struct {
+	src store.Source
+	r   row.Row
+}
+
+// MergeActor implements opsinfra.ActorMerger.
+func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfra.ActorMergeOut, error) {
+	from, err := ids.ParseAny(in.From)
+	if err != nil || !strings.HasPrefix(in.From, string(ids.PrefixActor)+actorIDSep) {
+		return opsinfra.ActorMergeOut{}, errs.New(errs.InvalidInput, actorMergeVerb+": "+quoteName(in.From)+" is not an actor id (act_…)").WithHint("`lore actor list` shows the ids")
+	}
+	into, err := ids.ParseAny(in.Into)
+	if err != nil || !strings.HasPrefix(in.Into, string(ids.PrefixActor)+actorIDSep) {
+		return opsinfra.ActorMergeOut{}, errs.New(errs.InvalidInput, actorMergeVerb+": "+quoteName(in.Into)+" is not an actor id (act_…)").WithHint("`lore actor list` shows the ids")
+	}
+	if from == into {
+		return opsinfra.ActorMergeOut{}, errs.New(errs.InvalidInput, actorMergeVerb+": "+in.From+" is both actors; give two different ids")
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return opsinfra.ActorMergeOut{}, err
+	}
+	fromCopies, intoCopies, err := actorCopies(ctx, st, from, into)
+	if err != nil {
+		return opsinfra.ActorMergeOut{}, err
+	}
+	stores := storeNames(st.eng.Stores())
+	if len(fromCopies) == 0 || len(intoCopies) == 0 {
+		missing := in.From
+		if len(fromCopies) > 0 {
+			missing = in.Into
+		}
+		return opsinfra.ActorMergeOut{}, errs.New(errs.NotFound, actorMergeVerb+": no actor "+missing+" in the stores this command reads ("+strings.Join(stores, ", ")+")").
+			WithHint("run it in a repo that attaches the store holding it (the org roster's actors: a repo linked to the org); `lore actor list` shows the ids")
+	}
+	f, t := fromCopies[0].r, intoCopies[0].r
+	if fk, tk := actorKindOf(fieldText(f, actorFieldKind)), actorKindOf(fieldText(t, actorFieldKind)); fk != tk {
+		return opsinfra.ActorMergeOut{}, errs.New(errs.Refused, actorMergeVerb+": "+in.From+" is a "+fk+" and "+in.Into+" a "+tk+"; only one person's (or one agent's) two ids are merged").
+			WithHint("check the ids with `lore actor show <id>`")
+	}
+	if m := fieldText(f, schema.FieldActorMergedInto); m != "" && m != into.String() {
+		return opsinfra.ActorMergeOut{}, errs.New(errs.Refused, actorMergeVerb+": "+in.From+" is already merged into "+m).
+			WithHint("merge into that actor instead: lore actor merge " + in.From + " " + m)
+	}
+	out := opsinfra.ActorMergeOut{From: from.String(), Into: into.String(), FromName: fieldText(f, actorFieldDisplay), IntoName: fieldText(t, actorFieldDisplay),
+		Stores: stores, DryRun: in.DryRun}
+	if k := fieldText(f, actorFieldKey); k != "" && k == fieldText(t, actorFieldKey) {
+		out.Key = k
+	}
+	m := map[string]ids.AnyID{from.String(): into}
+	edits, readOnly, err := actorRefEdits(ctx, st, m, map[ids.AnyID]bool{from: true})
+	if err != nil {
+		return opsinfra.ActorMergeOut{}, err
+	}
+	out.ReadOnly = readOnly
+	perTable := map[string]int{}
+	for _, e := range edits {
+		perTable[string(e.ref.Table)]++
+	}
+	out.Rows = len(edits)
+	for _, tb := range slices.Sorted(maps.Keys(perTable)) {
+		out.Tables = append(out.Tables, opsinfra.ActorMergeTable{Table: tb, Rows: perTable[tb]})
+	}
+	if in.DryRun {
+		return out, nil
+	}
+	for _, e := range edits {
+		if _, err := a.Update(ctx, e.ref, e.patch); err != nil {
+			return out, errs.Prefix(actorMergeVerb+": edit "+string(e.ref.Table)+" "+e.ref.ID.String(), err).
+				WithHint("run the same command again: rows already edited name " + in.Into + " and are not counted again")
+		}
+	}
+	marked, err := a.markMerged(ctx, st, fromCopies, into)
+	out.Marked = marked
+	return out, err
+}
+
+// actorCopies reads every live copy of the two actors' rows.
+func actorCopies(ctx context.Context, st *state, from, into ids.AnyID) ([]actorCopy, []actorCopy, error) {
+	var f, t []actorCopy
+	for _, src := range st.eng.Stores() {
+		rows, err := st.eng.List(ctx, src, schema.TableActors)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, r := range rows {
+			switch {
+			case r.Deleted:
+			case r.ID == from:
+				f = append(f, actorCopy{src, r})
+			case r.ID == into:
+				t = append(t, actorCopy{src, r})
+			}
+		}
+	}
+	return f, t, nil
+}
+
+// actorEdit is one row a merge edits.
+type actorEdit struct {
+	ref   engine.Ref
+	patch map[string]value.Value
+}
+
+// actorRefEdits lists the edits that make every live row of st's
+// writable stores name the actors of m (skip: actor rows left alone, the
+// merged ones themselves), and the read-only stores holding such rows.
+func actorRefEdits(ctx context.Context, st *state, m map[string]ids.AnyID, skip map[ids.AnyID]bool, only ...store.Source) ([]actorEdit, []string, error) {
+	var out []actorEdit
+	var readOnly []string
+	for _, src := range st.eng.Stores() {
+		if len(only) > 0 && !slices.Contains(only, src) {
+			continue
+		}
+		ro := st.eng.ReadOnly(src)
+		for _, def := range st.eng.Registry().Tables() {
+			rows, err := st.eng.List(ctx, src, def.Name)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, r := range rows {
+				if r.Deleted || (def.Name == schema.TableActors && skip[r.ID]) {
+					continue
+				}
+				p := mapActorFields(r.Fields, m)
+				if p == nil {
+					continue
+				}
+				if ro {
+					if !slices.Contains(readOnly, string(src)) {
+						readOnly = append(readOnly, string(src))
+					}
+					continue
+				}
+				out = append(out, actorEdit{ref: engine.Ref{Store: src, Table: def.Name, ID: r.ID}, patch: p})
+			}
+		}
+	}
+	slices.SortFunc(out, func(x, y actorEdit) int {
+		return cmp.Or(strings.Compare(string(x.ref.Store), string(y.ref.Store)), strings.Compare(string(x.ref.Table), string(y.ref.Table)), strings.Compare(x.ref.ID.String(), y.ref.ID.String()))
+	})
+	return out, readOnly, nil
+}
+
+// markMerged marks each writable copy of the merged actor's row: merged_into
+// into, inactive, status left (TEAM_PROFILES 6.4's marking, which every
+// report follows). A copy already marked is left alone. A store that keeps
+// only an actor's id, name and kind (a repo or client store, F18) drops
+// the Internal merged_into and stable_key on the write: that copy is then
+// inactive and no longer carries the shared key; the roster's copy keeps
+// the mark.
+func (a *App) markMerged(ctx context.Context, st *state, copies []actorCopy, into ids.AnyID) (int, error) {
+	mv, err := value.TextOf(into.String())
+	if err != nil {
+		return 0, err
+	}
+	left, err := value.TextOf(schema.ActorStatusLeft)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, c := range copies {
+		marked := fieldText(c.r, schema.FieldActorMergedInto) == into.String() ||
+			(fieldText(c.r, schema.FieldActorActive) == "false" && fieldText(c.r, actorFieldKey) == "") // a store that keeps no merged_into: already inactive
+		if st.eng.ReadOnly(c.src) || marked {
+			continue
+		}
+		patch := map[string]value.Value{schema.FieldActorMergedInto: mv, schema.FieldActorActive: value.BoolOf(false), schema.FieldActorStatus: left}
+		if _, err := a.Update(ctx, engine.Ref{Store: c.src, Table: schema.TableActors, ID: c.r.ID}, patch); err != nil {
+			return n, errs.Prefix(actorMergeVerb+": mark "+c.r.ID.String()+" merged in "+string(c.src), err).
+				WithHint("run the same command again")
+		}
+		n++
+	}
+	return n, nil
+}
+
+// storeNames is srcs as text.
+func storeNames(srcs []store.Source) []string {
+	out := make([]string, 0, len(srcs))
+	for _, s := range srcs {
+		out = append(out, string(s))
+	}
+	return out
+}
+
+// DoctorCheckSharedKeys is the check's JSON name.
+const DoctorCheckSharedKeys DoctorCheck = "actor_stable_key"
+
+// keyActor is one live, unmerged actor as the check sees it.
+type keyActor struct {
+	id      ids.AnyID
+	name    string
+	key     string
+	handle  string
+	created string
+	roster  bool
+}
+
+// DoctorSharedKeys is the doctor check (registered in doctor_op.go).
+func (a *App) DoctorSharedKeys(ctx context.Context) ([]DoctorFinding, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	roster := a.actorRosterStore(ctx, st)
+	byID := map[ids.AnyID]keyActor{}
+	merged := map[ids.AnyID]bool{}
+	for _, src := range st.eng.Stores() {
+		rows, lerr := st.eng.List(ctx, src, schema.TableActors)
+		if lerr != nil {
+			continue // an unreadable store: the store checks report it
+		}
+		for _, r := range rows {
+			if r.Deleted {
+				continue
+			}
+			if fieldText(r, schema.FieldActorMergedInto) != "" {
+				merged[r.ID] = true
+				continue
+			}
+			k := keyActor{id: r.ID, name: fieldText(r, actorFieldDisplay), key: fieldText(r, actorFieldKey), handle: fieldText(r, actorFieldHandle),
+				created: fieldText(r, row.KeyCreatedAt), roster: roster != "" && src == roster}
+			have, ok := byID[r.ID]
+			if !ok || (have.key == "" && k.key != "") {
+				k.roster = k.roster || have.roster
+				byID[r.ID] = k
+			} else if k.roster {
+				have.roster = true
+				byID[r.ID] = have
+			}
+		}
+	}
+	byKey := map[string][]keyActor{}
+	for id, k := range byID {
+		if !merged[id] && k.key != "" {
+			byKey[k.key] = append(byKey[k.key], k)
+		}
+	}
+	var out []DoctorFinding
+	for _, key := range slices.Sorted(maps.Keys(byKey)) {
+		g := byKey[key]
+		if len(g) < 2 {
+			continue
+		}
+		into := keepOf(g)
+		var fixes, names []string
+		for _, k := range g {
+			names = append(names, k.id.String())
+			if k.id != into.id {
+				fixes = append(fixes, "lore actor merge "+k.id.String()+" "+into.id.String())
+			}
+		}
+		slices.Sort(names)
+		out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorWarning, Store: roster,
+			Message: plural(len(g), "actor") + " share the stable key " + key + " (" + strings.Join(names, ", ") + "): one identity with two ids, as an adopt or migrate by an older lore left it; merge into " +
+				into.id.String() + " (asks first; rows naming the other are edited to name it, the other keeps its row marked merged_into)",
+			Fix: strings.Join(fixes, "; ")})
+	}
+	out = append(out, likelyHandleDuplicates(byID, merged)...)
+	return out, nil
+}
+
+// keepOf is the actor a merge keeps: the roster's, else the one whose id
+// the key derives (as every key-made actor's), else the oldest.
+func keepOf(g []keyActor) keyActor {
+	slices.SortFunc(g, func(x, y keyActor) int {
+		return cmp.Or(strings.Compare(x.created, y.created), strings.Compare(x.id.String(), y.id.String()))
+	})
+	for _, k := range g {
+		if k.roster {
+			return k
+		}
+	}
+	for _, k := range g {
+		if id, err := identity.ActorID(k.key); err == nil && id.Any() == k.id {
+			return k
+		}
+	}
+	return g[0]
+}
+
+// likelyHandleDuplicates are the notes for a human actor keyed by a git
+// host login (human:<login>, no email) whose login is another person's
+// roster handle: likely one person, but a login is no proof, so it is
+// never merged on its own.
+func likelyHandleDuplicates(byID map[ids.AnyID]keyActor, merged map[ids.AnyID]bool) []DoctorFinding {
+	byHandle := map[string]keyActor{}
+	for id, k := range byID {
+		if k.roster && k.handle != "" && !merged[id] {
+			byHandle[strings.ToLower(k.handle)] = k
+		}
+	}
+	var out []DoctorFinding
+	for _, id := range slices.SortedFunc(maps.Keys(byID), func(x, y ids.AnyID) int { return strings.Compare(x.String(), y.String()) }) {
+		k := byID[id]
+		login, ok := strings.CutPrefix(k.key, identity.KindHuman+":")
+		if !ok || login == "" || strings.Contains(login, "@") || merged[id] {
+			continue
+		}
+		p, hit := byHandle[strings.ToLower(login)]
+		if !hit || p.id == id || p.key == k.key {
+			continue
+		}
+		out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorNote,
+			Message: id.String() + " (" + k.key + ", no email) is likely @" + p.handle + " " + p.id.String() + " (" + p.name + "): the login is that person's roster handle; lore does not merge on a login alone",
+			Fix:     "if it is the same person: lore actor merge " + id.String() + " " + p.id.String()})
+	}
+	return out
+}
+
+// knownActorKeys maps the stable key of every live, unmerged actor the
+// org roster holds to its id (an empty map with no org: a solo repo has
+// no roster). A roster that cannot be read is an error naming it: the
+// mapping must not guess.
+func (a *App) knownActorKeys(ctx context.Context) (map[string]ids.AnyID, error) {
+	out := map[string]ids.AnyID{}
+	r, err := a.repoRoster(ctx)
+	if err != nil || r.src == store.SourceRepo {
+		return out, nil // no org roster here: only the folder's own actors count
+	}
+	x, done, err := a.rosterApp(ctx, r)
+	if err != nil {
+		return nil, errs.Prefix("read the org roster ("+r.where+")", err)
+	}
+	defer done()
+	st, err := x.state(ctx)
+	if err != nil {
+		return nil, errs.Prefix("read the org roster ("+r.where+")", err)
+	}
+	rows, err := st.eng.List(ctx, r.src, schema.TableActors)
+	if err != nil {
+		return nil, errs.Prefix("read the org roster ("+r.where+")", err)
+	}
+	addActorKeys(out, rows)
+	return out, nil
+}
+
+// addActorKeys adds each live, unmerged actor's stable key → id to m (the
+// first id seen for a key stays: two are doctor's actor_stable_key).
+func addActorKeys(m map[string]ids.AnyID, rows []row.Row) {
+	slices.SortFunc(rows, func(x, y row.Row) int { return strings.Compare(x.ID.String(), y.ID.String()) })
+	for _, r := range rows {
+		k := fieldText(r, actorFieldKey)
+		if r.Deleted || r.Table != schema.TableActors || k == "" || fieldText(r, schema.FieldActorMergedInto) != "" {
+			continue
+		}
+		if _, ok := m[k]; !ok {
+			m[k] = r.ID
+		}
+	}
+}
+
+// actorKeyMap maps each source actor whose stable key known holds under
+// another id onto that id, with one line per mapping for the output:
+// "act_A (human:x) → act_B".
+func actorKeyMap(src []row.Row, known map[string]ids.AnyID) (map[string]ids.AnyID, []string) {
+	m := map[string]ids.AnyID{}
+	var lines []string
+	for _, r := range src {
+		k := fieldText(r, actorFieldKey)
+		if r.Deleted || r.Table != schema.TableActors || k == "" {
+			continue
+		}
+		if to, ok := known[k]; ok && to != r.ID {
+			m[r.ID.String()] = to
+			lines = append(lines, r.ID.String()+" ("+k+") → "+to.String())
+		}
+	}
+	slices.Sort(lines)
+	return m, lines
+}
+
+// StepActors is the migrate step that maps actors onto the roster's.
+const StepActors = "actors"
+
+// migrateActorKeys is `lore migrate run`'s mapping of the repo's actors
+// onto the org roster's (owner report 2026-11-12): an actor of the repo
+// whose stable key the roster holds under another id is merged into the
+// roster's actor in the repo's own rows (every row naming it is edited to
+// name the roster's; its row is marked as merge marks it), one step line
+// per mapping. A repo with no org roster maps nothing; a rerun finds the
+// marked rows and does nothing.
+func (a *App) migrateActorKeys(ctx context.Context, dryRun bool) ([]string, int, error) {
+	known, err := a.knownActorKeys(ctx)
+	if err != nil || len(known) == 0 {
+		return nil, 0, err
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := st.eng.List(ctx, store.SourceRepo, schema.TableActors)
+	if err != nil {
+		return nil, 0, err
+	}
+	var live []row.Row
+	for _, r := range rows {
+		if !r.Deleted && fieldText(r, schema.FieldActorMergedInto) == "" && fieldText(r, schema.FieldActorActive) != "false" {
+			live = append(live, r)
+		}
+	}
+	m, lines := actorKeyMap(live, known)
+	if len(m) == 0 {
+		return nil, 0, nil
+	}
+	skip := map[ids.AnyID]bool{}
+	for from := range m {
+		if id, perr := ids.ParseAny(from); perr == nil {
+			skip[id] = true
+		}
+	}
+	edits, _, err := actorRefEdits(ctx, st, m, skip, store.SourceRepo)
+	if err != nil {
+		return nil, 0, err
+	}
+	verb := "would map"
+	if !dryRun {
+		verb = "mapped"
+		for _, e := range edits {
+			if _, err := a.Update(ctx, e.ref, e.patch); err != nil {
+				return nil, 0, errs.Prefix("migrate: "+StepActors+": edit "+string(e.ref.Table)+" "+e.ref.ID.String(), err)
+			}
+		}
+		for _, r := range live {
+			to, ok := m[r.ID.String()]
+			if !ok {
+				continue
+			}
+			if _, err := a.markMerged(ctx, st, []actorCopy{{store.SourceRepo, r}}, to); err != nil {
+				return nil, 0, err
+			}
+		}
+	}
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		out = append(out, StepActors+": "+verb+" "+l+", the org roster's actor of the same identity")
+	}
+	if len(edits) > 0 {
+		out = append(out, StepActors+": "+plural(len(edits), "row")+" of this repo name the roster's actor instead")
+	}
+	return out, len(m) + len(edits), nil
+}

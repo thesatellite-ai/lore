@@ -137,6 +137,8 @@ type Scope struct {
 	// Store is `search --store` (alias --to): only rows of that attached
 	// store ("" = every store).
 	Store string
+	// All is a list's --all: every row, whatever its repo, archived too.
+	All bool
 }
 
 // Create is what an add writes beyond the noun's typed fields.
@@ -354,32 +356,56 @@ func (f filter) keeps(r row.Row) bool {
 // List returns the live rows of noun n in scope from every attached store
 // (or the one named), in id order within each store (v0.1.17 ordered by
 // id). Archived rows are kept only when withArchived is set; keep, when
-// set, filters further (a --tag).
-func List(ctx context.Context, env Env, n Noun, s Scope, withArchived bool, only store.Source, keep func(row.Row) bool) ([]Item, error) {
+// set, filters further (a --tag). Hidden counts the live rows keep
+// accepts that the scope or the archive filter left out, so the list can
+// say so (owner report 2026-11-12: 6 of 251 adopted decisions, scoped to
+// their v0.1.17 repo, were missing with nothing saying why). s.All keeps
+// every row: every repo's and the archived ones.
+func List(ctx context.Context, env Env, n Noun, s Scope, withArchived bool, only store.Source, keep func(row.Row) bool) ([]Item, Hidden, error) {
+	if s.All {
+		s.AllRepos, withArchived = true, true
+	}
 	f, err := s.resolve(ctx, env, n)
 	if err != nil {
-		return nil, err
+		return nil, Hidden{}, err
 	}
 	sources := engine.ReadStoresOf(env)
 	if only != "" {
 		sources = []store.Source{only}
 	}
 	var out []Item
+	var hid Hidden
 	for _, src := range sources {
 		rows, err := env.List(ctx, src, n.Table)
 		if err != nil {
-			return nil, err
+			return nil, Hidden{}, err
 		}
 		slices.SortFunc(rows, func(a, b row.Row) int { return cmp.Compare(a.ID.String(), b.ID.String()) })
 		for _, r := range rows {
-			if r.Deleted || (!withArchived && Archived(r)) || !f.keeps(r) || (keep != nil && !keep(r)) {
+			if r.Deleted || (f.project != "" && Field(r, FieldProject) != f.project) || (keep != nil && !keep(r)) {
+				continue
+			}
+			inScope := f.scope.keeps(Field(r, FieldRepo), f.repo)
+			archived := !withArchived && Archived(r)
+			switch {
+			case !inScope:
+				hid.Repo++
+				continue
+			case archived:
+				hid.Archived++
 				continue
 			}
 			out = append(out, Item{Source: src, Row: r})
 		}
 	}
-	return out, nil
+	return out, hid, nil
 }
+
+// Hidden counts the rows a list left out, by why (metalist.Hidden).
+type Hidden = metalist.Hidden
+
+// WithHidden appends h's footer to notes.
+func WithHidden(notes []string, h Hidden) []string { return h.Notes(notes) }
 
 // Show returns one live row of noun n by a user-given id.
 func Show(ctx context.Context, env Env, n Noun, raw string) (Item, error) {

@@ -477,7 +477,7 @@ var notUserRun = map[string]string{
 	"hold claim": whyHook, "hold release": whyHook, "gate request": whyHook, "gate approve": whyHook,
 	"migrate run": whyMigration, "migrate enable": whyMigration, "migrate unlock": whyMigration,
 	"actor contact add": whyTeam, "actor contact edit": whyTeam, "actor contact remove": whyTeam, "actor deactivate": whyTeam,
-	"actor delete": whyTeam, "actor edit": whyTeam, "actor offboard": whyTeam, "actor period add": whyTeam, "actor period edit": whyTeam,
+	"actor delete": whyTeam, "actor edit": whyTeam, "actor merge": whyTeam, "actor offboard": whyTeam, "actor period add": whyTeam, "actor period edit": whyTeam,
 	"actor period list": whyTeam, "actor register": whyTeam, "actor rejoin": whyTeam, "actor show": whyTeam, "actor status": whyTeam,
 	"contact-type add": whyTeam, "contact-type edit": whyTeam, "role add": whyTeam, "role edit": whyTeam,
 	"org create": whyTeam, "org link": whyTeam, "org unlink": whyTeam, "org rename": whyTeam, "org set": whyTeam,

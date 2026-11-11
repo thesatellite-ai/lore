@@ -72,6 +72,7 @@ $ lore rule add --repo shop --body 'Buttons are blue.'
   scope: [repo:shop] severity: must
 $ lore rule list
 rul_c0f3…b5b8 [must/always] Run the tests before you push.
+1 hidden (1 scoped to a repo); --all shows them
 $ lore rule list --repo shop
 rul_c0f3…b5b8 [must/always] Run the tests before you push.
 rul_76bd…3f10 [must/always] Buttons are blue.
@@ -176,6 +177,7 @@ rul_c0f3…b5b8 [must/always] Run the tests before you push.
 rul_76bd…3f10 [must/always] Buttons are blue.
 $ LORE_REPO=shop lore rule list --repo website
 rul_c0f3…b5b8 [must/always] Run the tests before you push.
+1 hidden (1 scoped to a repo); --all shows them
 $ LORE_PROJECT_ID=prj_7a67…9504 LORE_REPO=shop lore rule list
 rul_c0f3…b5b8 [must/always] Run the tests before you push.
 rul_76bd…3f10 [must/always] Buttons are blue.

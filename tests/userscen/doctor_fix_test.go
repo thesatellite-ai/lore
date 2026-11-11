@@ -42,7 +42,7 @@ func TestDoctorFix_ReversedSupersedesLink(t *testing.T) {
 
 	link := "rule " + oldID + " → " + newID
 	rep, res := p.doctor(t)
-	if rep.Status != "degraded" || !hasLine(rep.Warnings, "1 --supersedes link(s) written by an older lore point the wrong way ("+link+"); run `lore doctor --fix`") {
+	if rep.Status != "degraded" || !hasLine(rep.Warnings, "1 --supersedes link(s) written by lore 0.1.16 or older point from the new row to the old one ("+link+"; each read as old → new, the row that replaces it); run `lore doctor --fix`") {
 		t.Fatalf("doctor lists the reversed link: %s", res)
 	}
 	before, _ := p.c.ReadFile(oldFile)

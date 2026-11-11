@@ -2101,6 +2101,202 @@
         }
       }
     },
+    "/v1/actors/merge": {
+      "post": {
+        "operationId": "actor.merge",
+        "summary": "Merge one actor into another (one person, two actor ids): rows naming it are edited to name the other; its row stays, marked merged_into; asks first",
+        "tags": [
+          "actor"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "count the rows that name \u003cfrom\u003e; change nothing"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "the actor id to merge away (act_…; its row stays, marked merged_into)"
+                  },
+                  "into": {
+                    "type": "string",
+                    "description": "the actor id that stays (act_…; usually the org roster's)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "from",
+                  "into"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "from_name": {
+                      "type": "string"
+                    },
+                    "into": {
+                      "type": "string"
+                    },
+                    "into_name": {
+                      "type": "string"
+                    },
+                    "marked": {
+                      "type": "integer"
+                    },
+                    "read_only": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rows": {
+                      "type": "integer"
+                    },
+                    "stable_key": {
+                      "type": "string"
+                    },
+                    "stores": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rows": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "rows"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "into",
+                    "rows",
+                    "marked"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_IDENTIFIER, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_MOUNT_NAME_TAKEN, E_POLICY_DENIED, E_REFUSED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/actors/offboard": {
       "post": {
         "operationId": "actor.offboard",
@@ -4081,6 +4277,16 @@
             "schema": {
               "type": "boolean",
               "description": "list across every repo (ignore --repo)"
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "every row: every repo's and the archived ones (the default list says how many it hides)",
+            "schema": {
+              "type": "boolean",
+              "description": "every row: every repo's and the archived ones (the default list says how many it hides)"
             }
           },
           {
@@ -11820,6 +12026,16 @@
             }
           },
           {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "every row: every repo's and the archived ones (the default list says how many it hides)",
+            "schema": {
+              "type": "boolean",
+              "description": "every row: every repo's and the archived ones (the default list says how many it hides)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -17782,6 +17998,16 @@
             "schema": {
               "type": "boolean",
               "description": "list across every repo (ignore --repo)"
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "every row: every repo's and the archived ones (the default list says how many it hides)",
+            "schema": {
+              "type": "boolean",
+              "description": "every row: every repo's and the archived ones (the default list says how many it hides)"
             }
           },
           {
@@ -24686,6 +24912,16 @@
             }
           },
           {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "every memory: every repo's and the archived ones (the default list says how many it hides)",
+            "schema": {
+              "type": "boolean",
+              "description": "every memory: every repo's and the archived ones (the default list says how many it hides)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -31579,6 +31815,10 @@
                     "type": "boolean",
                     "description": "list the files that would be rewritten; change nothing"
                   },
+                  "machine_local": {
+                    "type": "boolean",
+                    "description": "also copy the repo's v0.1.17 machine-local rows (runs, render histories, sessions) into this machine's store when this checkout is a copy, not this machine's checkout of the repo"
+                  },
                   "no_push": {
                     "type": "boolean",
                     "description": "commit the store changes but do not push them"
@@ -36673,6 +36913,16 @@
             "schema": {
               "type": "boolean",
               "description": "list across every repo (ignore --repo)"
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "every row: every repo's and the archived ones (the default list says how many it hides)",
+            "schema": {
+              "type": "boolean",
+              "description": "every row: every repo's and the archived ones (the default list says how many it hides)"
             }
           },
           {
@@ -58411,6 +58661,16 @@
             }
           },
           {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "every row: every repo's and the archived ones (the default list says how many it hides)",
+            "schema": {
+              "type": "boolean",
+              "description": "every row: every repo's and the archived ones (the default list says how many it hides)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -73692,7 +73952,7 @@
                   },
                   "target": {
                     "type": "string",
-                    "description": "\u003cstore\u003e/\u003cfolder\u003e: the store (team, an org's name, an org store's url, or a .lore/stores.yaml name) and its folder (made first with lore store folder add)"
+                    "description": "\u003cstore\u003e/\u003cfolder\u003e: the store (team, an org's name, an org store's url, or a .lore/stores.yaml name) and its folder (made first with lore store folder add); an org's name, or a folder named alone, means whichever of the org's stores holds that folder"
                   },
                   "yes": {
                     "type": "boolean",
@@ -73715,6 +73975,18 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "actors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "dry_run": {
                       "type": "boolean"
                     },
@@ -73750,6 +74022,9 @@
                     },
                     "pushed": {
                       "type": "boolean"
+                    },
+                    "relinked": {
+                      "type": "integer"
                     },
                     "removed": {
                       "type": "integer"

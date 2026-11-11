@@ -462,6 +462,9 @@ func (o ops) projectFilter(ctx context.Context, flag string) (string, error) {
 // list returns the live memories of every attached store (or one).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	ctx = in.Deleted(ctx, table) // DELETION 3.2: --include-deleted / --deleted-only
+	if in.All {
+		in.AllRepos, in.Archived = true, true // --all: every repo's memories, the archived ones too
+	}
 	sc, repo, err := o.readScope(ctx, in.Repo, in.NoInherit, in.MasterOnly, in.AllRepos)
 	if err != nil {
 		return ListOut{}, err
@@ -483,15 +486,24 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	var kept []row.Row
 	var keptSrc []store.Source
+	var hid metalist.Hidden
 	for _, src := range sources {
 		rows, lerr := o.env.List(ctx, src, table)
 		if lerr != nil {
 			return ListOut{}, lerr
 		}
 		for _, r := range rows {
-			archived := field(r, fieldArchivedAt) != ""
-			if (archived && !in.Archived) || (in.Kind != "" && field(r, fieldKind) != in.Kind) ||
-				!sc.keeps(repoOf(r), repo) || (project != "" && field(r, fieldProject) != project) || !hasTags(idx, r, in.Tags) {
+			if (in.Kind != "" && field(r, fieldKind) != in.Kind) || (project != "" && field(r, fieldProject) != project) || !hasTags(idx, r, in.Tags) {
+				continue
+			}
+			// what the scope and the archive filter leave out is counted
+			// for the footer (metalist.Hidden)
+			if !sc.keeps(repoOf(r), repo) {
+				hid.Repo++
+				continue
+			}
+			if field(r, fieldArchivedAt) != "" && !in.Archived {
+				hid.Archived++
 				continue
 			}
 			kept, keptSrc = append(kept, r), append(keptSrc, src)
@@ -506,7 +518,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		out.Data = append(out.Data, withMeta(ctx, o.env, recordOf(LabelerOf(o.env), keptSrc[i], kept[i]), kept[i]))
 		listed = append(listed, kept[i])
 	}
-	out.Notes = sel.Notes
+	out.Notes = hid.Notes(sel.Notes)
 	out.Notes = append(out.Notes, in.TrashNotes(listed)...)
 	out.Count = len(out.Data)
 	return out, nil

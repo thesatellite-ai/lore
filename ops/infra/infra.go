@@ -157,6 +157,7 @@ func Ops(env Env) []op.Entry {
 		}
 	}
 	entries = append(entries, o.actorSourceOps()...) // actor.refresh (actor_source.go)
+	entries = append(entries, o.actorMergeOps()...)  // actor.merge (actor_merge.go)
 	return entries
 }
 

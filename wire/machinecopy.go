@@ -29,17 +29,21 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
+	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/validate"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -60,6 +64,13 @@ var v017TimeLayouts = []string{"2006-01-02 15:04:05.999999999-07:00", "2006-01-0
 // migrateMachineLocal copies the checkout's v0.1.17 machine-local rows
 // into the machine store; see the file comment. It returns the step lines
 // and the rows copied (under dryRun: the rows that would be).
+//
+// Only from this machine's own checkout of the repo (owner report
+// 2026-11-12: `migrate run` in a copied checkout put its 50 render
+// histories and 20 runs into ~/.lore/state): a copy's lore.db holds the
+// original checkout's history, not this machine's. ownCheckout says when
+// the checkout is a copy; then the rows are counted, named in a skipped
+// line with why, and copied only with `--machine-local`.
 func (a *App) migrateMachineLocal(ctx context.Context, dryRun bool) ([]string, int, error) {
 	st, err := a.state(ctx)
 	if err != nil {
@@ -68,46 +79,127 @@ func (a *App) migrateMachineLocal(ctx context.Context, dryRun bool) ([]string, i
 	if !st.eng.HasMachineStore() {
 		return nil, 0, nil // no machine-local table in this build: nothing to copy
 	}
-	return copyMachineLocal(ctx, st.eng, filepath.Join(st.repoTop, filepath.FromSlash(v017LoreDB)), dryRun)
+	path := filepath.Join(st.repoTop, filepath.FromSlash(v017LoreDB))
+	if !opsmigrate.MachineLocalAsked(ctx) {
+		if why := a.notOwnCheckout(ctx, st); why != "" {
+			counts, err := readMachineLocal(ctx, st.eng, path, true)
+			if err != nil || len(counts) == 0 {
+				return nil, 0, err
+			}
+			parts := make([]string, 0, len(counts))
+			for _, c := range counts {
+				if c.n > 0 {
+					parts = append(parts, strconv.Itoa(c.n)+" "+string(c.table))
+				}
+			}
+			if len(parts) == 0 {
+				return nil, 0, nil
+			}
+			return []string{StepMachineLocal + ": skipped " + strings.Join(parts, ", ") + " rows of " + v017LoreDB + ": " + why +
+				"; they stay in " + v017LoreDB + " (to copy them into this machine's store anyway: lore migrate run --machine-local)"}, 0, nil
+		}
+	}
+	return copyMachineLocal(ctx, st.eng, path, dryRun)
+}
+
+// notOwnCheckout says why the checkout at st.repoTop is not this
+// machine's checkout of its repo ("" when it is, or nothing tells):
+//
+//   - another root of the same repo id is in known_repos (every command
+//     records where lore runs) and still holds a git repo: that one is
+//     this machine's checkout, this one a copy;
+//   - this machine's setups name folders (`lore setup list`) and none
+//     holds the checkout: a scratch copy outside the person's code.
+func (a *App) notOwnCheckout(ctx context.Context, st *state) string {
+	top := resolvedPath(st.repoTop)
+	if meta, ok, err := rowfs.ReadRepoMeta(st.repoTop); err == nil && ok && meta.RepoID != "" {
+		if rows, lerr := st.eng.List(ctx, store.SourceMachine, schema.TableKnownRepos); lerr == nil {
+			for _, r := range rows {
+				root := fieldText(r, schema.FieldKnownRepoRoot)
+				if r.Deleted || fieldText(r, schema.FieldKnownRepoID) != meta.RepoID || root == "" || root == top {
+					continue
+				}
+				if _, serr := os.Stat(filepath.Join(root, ".git")); serr == nil {
+					return "this checkout is a copy: " + root + " is this machine's checkout of the repo (" + meta.RepoID + ")"
+				}
+			}
+		}
+	}
+	cfg, err := ReadSetupsConfig(a.opts.Home)
+	if err != nil {
+		return "" // config errors are doctor's; nothing tells
+	}
+	enabled := cfg.Enabled()
+	if !slices.ContainsFunc(enabled, func(e onboard.SetupEntry) bool { return len(e.Folders) > 0 }) {
+		return ""
+	}
+	home, herr := os.UserHomeDir()
+	if herr != nil {
+		home = ""
+	}
+	if fr := onboard.MatchFolder(enabled, st.repoTop, home, resolveSetupPath); fr.Found || fr.Ambiguous() {
+		return ""
+	}
+	return st.repoTop + " is in no folder of this machine's setups (`lore setup list` shows them), so it is taken for a copy"
 }
 
 // copyMachineLocal is the copy from the lore.db at path through eng.
 func copyMachineLocal(ctx context.Context, eng *engine.Engine, path string, dryRun bool) ([]string, int, error) {
+	counts, err := readMachineLocal(ctx, eng, path, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	var steps []string
+	total := 0
+	for _, c := range counts {
+		if c.n > 0 {
+			verb := "copied"
+			if dryRun {
+				verb = "would copy"
+			}
+			steps = append(steps, StepMachineLocal+": "+verb+" "+strconv.Itoa(c.n)+" "+string(c.table)+" rows from "+v017LoreDB+" into the machine store")
+		}
+		for _, sk := range c.skipped {
+			steps = append(steps, StepMachineLocal+": skipped "+string(c.table)+" row "+sk)
+		}
+		total += c.n
+	}
+	return steps, total, nil
+}
+
+// machineCount is what the copy did (or would do) for one table.
+type machineCount struct {
+	table   row.Table
+	n       int
+	skipped []string
+}
+
+// readMachineLocal runs the copy (dryRun: counts only) table by table.
+func readMachineLocal(ctx context.Context, eng *engine.Engine, path string, dryRun bool) ([]machineCount, error) {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-		return nil, 0, nil
+		return nil, nil
 	} else if err != nil {
-		return nil, 0, errs.Wrap(errs.Internal, "migrate: stat "+v017LoreDB, err)
+		return nil, errs.Wrap(errs.Internal, "migrate: stat "+v017LoreDB, err)
 	}
 	// read-only: v0.1.17 may still be using the file
 	dsn := fileuri.URL(path, "mode=ro")
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
-		return nil, 0, errs.Wrap(errs.Internal, "migrate: open "+v017LoreDB, err)
+		return nil, errs.Wrap(errs.Internal, "migrate: open "+v017LoreDB, err)
 	}
 	defer func() { _ = db.Close() }() // read-only handle: nothing to flush
-	var steps []string
-	total := 0
+	var out []machineCount
 	for _, def := range eng.Registry().Tables() {
 		if !def.MachineLocal {
 			continue
 		}
 		n, skipped, err := copyMachineTable(ctx, eng, db, def, dryRun)
 		if err != nil {
-			return nil, 0, errs.Wrap(errs.CodeOf(err), "migrate: "+StepMachineLocal+" "+string(def.Name)+": "+err.Error(), err)
+			return nil, errs.Wrap(errs.CodeOf(err), "migrate: "+StepMachineLocal+" "+string(def.Name)+": "+err.Error(), err)
 		}
-		if n > 0 {
-			verb := "copied"
-			if dryRun {
-				verb = "would copy"
-			}
-			steps = append(steps, StepMachineLocal+": "+verb+" "+strconv.Itoa(n)+" "+string(def.Name)+" rows from "+v017LoreDB+" into the machine store")
-		}
-		for _, sk := range skipped {
-			steps = append(steps, StepMachineLocal+": skipped "+string(def.Name)+" row "+sk)
-		}
-		total += n
+		out = append(out, machineCount{table: def.Name, n: n, skipped: skipped})
 	}
-	return steps, total, nil
+	return out, nil
 }
 
 // copyMachineTable copies one table; a table lore.db lacks copies nothing.

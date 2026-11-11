@@ -34,9 +34,10 @@ func node(id, project, next string, m int) supersedeNode {
 func TestPlanSupersedeRepairMatrix(t *testing.T) {
 	t.Parallel()
 	type want struct {
-		fixes []supersedeFix
-		set   map[string]string
-		skips int
+		fixes     []supersedeFix
+		set       map[string]string
+		skips     int
+		conflicts int
 	}
 	cases := map[string]struct {
 		nodes []supersedeNode
@@ -46,7 +47,7 @@ func TestPlanSupersedeRepairMatrix(t *testing.T) {
 		"correct link": {[]supersedeNode{node("a", "p", "b", 1), node("b", "p", "", 2)}, want{set: map[string]string{}}},
 		"reversed":     {[]supersedeNode{node("a", "p", "", 1), node("b", "p", "a", 2)}, want{fixes: []supersedeFix{{"rule", "a", "b"}}, set: map[string]string{"a": "b", "b": ""}}},
 		"same instant": {[]supersedeNode{node("a", "p", "", 1), node("b", "p", "a", 1)}, want{set: map[string]string{}, skips: 1}},
-		"two into one": {[]supersedeNode{node("a", "p", "", 1), node("b", "p", "a", 2), node("c", "p", "a", 3)}, want{set: map[string]string{}, skips: 2}},
+		"two into one": {[]supersedeNode{node("a", "p", "", 1), node("b", "p", "a", 2), node("c", "p", "a", 3)}, want{set: map[string]string{}, conflicts: 1}},
 		"target has a real successor": {[]supersedeNode{node("a", "p", "d", 1), node("b", "p", "a", 3), node("d", "p", "", 2)},
 			want{set: map[string]string{}, skips: 1}},
 		"chain written backwards": {[]supersedeNode{node("a", "p", "", 1), node("b", "p", "a", 2), node("c", "p", "b", 3)},
@@ -72,6 +73,19 @@ func TestPlanSupersedeRepairMatrix(t *testing.T) {
 		if len(got.skips) != c.want.skips {
 			t.Errorf("%s: skips %v, want %d", name, got.skips, c.want.skips)
 		}
+		if len(got.conflicts) != c.want.conflicts {
+			t.Errorf("%s: conflicts %v, want %d", name, got.conflicts, c.want.conflicts)
+		}
+	}
+	// two rows replacing one: one finding with both ids and the target,
+	// the next step, and no fix
+	two := planSupersedeRepair("rule", []supersedeNode{node("a", "p", "", 1), node("b", "p", "a", 2), node("c", "p", "a", 3)})
+	if len(two.conflicts) != 1 || len(two.fixes) != 0 {
+		t.Fatalf("two into one = %+v", two)
+	}
+	if got := conflictText(two.conflicts[0]); !strings.Contains(got, "rule rows b and c each claim to replace a") || !strings.Contains(got, "lore rule delete <id>") ||
+		!strings.Contains(got, "lore doctor --fix") {
+		t.Errorf("conflict finding = %q", got)
 	}
 	// applying a plan's set yields an empty plan (idempotent)
 	n := []supersedeNode{node("a", "p", "", 1), node("b", "p", "a", 2), node("c", "p", "b", 3)}
@@ -200,5 +214,60 @@ func TestDoctorSupersedesRepair(t *testing.T) {
 	}
 	if err = runIt(op.WithConfirmed(ctx, true), true); err != nil || len(warns)+len(fails) != 0 || hasLine(notes, "repaired") {
 		t.Errorf("second run: err %v warns %v notes %v fails %v, want nothing", err, warns, notes, fails)
+	}
+}
+
+// TestMigrateConvertsOldSupersedes is the owner's adopted v0.1.17 data
+// (2026-11-12): links lore 0.1.16 and older wrote on the new row are moved
+// onto the old row by `lore migrate run`'s supersedes step (dry run counts,
+// run writes, rerun nothing), so doctor no longer reports them; two rules
+// both replacing one stay as they are and doctor names both ids.
+func TestMigrateConvertsOldSupersedes(t *testing.T) {
+	t.Parallel()
+	repo := gitRepo(t)
+	a := openWith(t, repo, Options{})
+	withProject(t, a)
+	ctx := background()
+	oldRule := addRow(t, a, opsrule.OpAdd, `{"body":"Always use tabs in Go files"}`)
+	newRule := addRow(t, a, opsrule.OpAdd, `{"body":"Always run gofmt on Go files"}`)
+	shared := addRow(t, a, opsrule.OpAdd, `{"body":"Review every change"}`)
+	twinA := addRow(t, a, opsrule.OpAdd, `{"body":"Review every change twice"}`)
+	twinB := addRow(t, a, opsrule.OpAdd, `{"body":"Review every change in pairs"}`)
+	for _, l := range [][2]string{{newRule, oldRule}, {twinA, shared}, {twinB, shared}} {
+		if err := a.setSuccessor(ctx, row.Table(schema.TableRules), l[0], l[1], ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	steps, n, err := a.migrateSupersedes(ctx, true)
+	if err != nil || n != 1 || len(steps) != 1 || !strings.Contains(steps[0], "would move 1 --supersedes link") || !strings.Contains(steps[0], "rule "+oldRule+" → "+newRule) {
+		t.Fatalf("dry run = %q, %d, %v", steps, n, err)
+	}
+	if next, _ := successor(t, a, schema.TableRules, oldRule); next != "" {
+		t.Fatal("the dry run wrote")
+	}
+	if steps, n, err = a.migrateSupersedes(ctx, false); err != nil || n != 1 || !strings.Contains(steps[0], "moved 1 --supersedes link") {
+		t.Fatalf("run = %q, %d, %v", steps, n, err)
+	}
+	if next, _ := successor(t, a, schema.TableRules, oldRule); next != newRule {
+		t.Errorf("old rule link = %q, want %s", next, newRule)
+	}
+	if next, _ := successor(t, a, schema.TableRules, newRule); next != "" {
+		t.Errorf("new rule link = %q, want cleared", next)
+	}
+	if steps, n, err = a.migrateSupersedes(ctx, false); err != nil || n != 0 || len(steps) != 0 {
+		t.Fatalf("rerun = %q, %d, %v; want nothing", steps, n, err)
+	}
+	var warns []string
+	if err = a.doctorSupersedes(ctx, false, func(s string) { warns = append(warns, s) }, func(string) {}, func(s string) { t.Error(s) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], twinA) || !strings.Contains(warns[0], twinB) || !strings.Contains(warns[0], "claim to replace "+shared) ||
+		strings.Contains(warns[0], "point from the new row") {
+		t.Fatalf("doctor after the run = %q, want only the two-into-one finding naming both ids", warns)
+	}
+	for _, id := range []string{twinA, twinB} {
+		if next, _ := successor(t, a, schema.TableRules, id); next != shared {
+			t.Errorf("%s link = %q; the two-into-one rows must be left as they are", id, next)
+		}
 	}
 }

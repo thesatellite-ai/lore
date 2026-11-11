@@ -111,6 +111,14 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 	if err != nil || !found {
 		return "", "", newFolder{}, err // not found: the engine answers "no store named … is attached"
 	}
+	if folderName != rowfs.FolderRoot {
+		// the folder may live in another store of the org (foldertarget.go):
+		// the target is that store's folder, never a new folder here
+		if f, ok := a.otherOrgStoreFolder(ctx, src, folderName); ok {
+			src = attach.Store{Name: src.Name, URL: f.URL, Branch: f.Branch, ReadOnly: src.ReadOnly}
+			fromOrg = true // an org store's url is never written into the repo
+		}
+	}
 	isRoot := folderName == rowfs.FolderRoot
 	if isRoot && (src.Folder == "" || src.Folder == rowfs.FolderRoot) {
 		return to, base, newFolder{}, nil
