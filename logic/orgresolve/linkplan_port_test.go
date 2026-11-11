@@ -48,7 +48,6 @@ func TestPlanLinkMatrix(t *testing.T) {
 	cases := []tc{
 		{"unknown entry", func(r *LinkRequest) { r.Entry = "ghost" }, "no org entry", nil},
 		{"reserved folder", func(r *LinkRequest) { r.Folder = "_live" }, "reserved", nil},
-		{"no project id", func(r *LinkRequest) { r.ProjectID = "" }, "", ErrLinkNoProjectID},
 		{"no remote", func(r *LinkRequest) { r.Remotes = nil }, "", ErrLinkNoRemote},
 		{"two remotes, no --remote", func(r *LinkRequest) { r.Remotes = []string{"github.com/acme/app", "github.com/me/fork"} }, "choose one with --remote", nil},
 		{"--remote not ours", func(r *LinkRequest) { r.Remote = "github.com/x/y" }, "not a remote of this repo", nil},
@@ -76,5 +75,43 @@ func TestPlanLinkMatrix(t *testing.T) {
 	own.Own, own.Remotes, own.Remote = true, []string{"github.com/northwind/tools", "github.com/me/fork"}, "git@github.com:northwind/tools.git"
 	if p, err := PlanLink(cfg, own); err != nil || !p.Own || p.Remote != "github.com/northwind/tools" {
 		t.Fatalf("own plan = %+v, %v", p, err)
+	}
+}
+
+// TestPlanLinkWithoutProjectID: a repo with no lore data (no project id)
+// is linked by its remote: the plan's id is RemoteProjectID of the picked
+// remote, the same on every machine and for every spelling of the remote,
+// and differs from remote to remote.
+func TestPlanLinkWithoutProjectID(t *testing.T) {
+	cfg := fixture()
+	req := LinkRequest{Entry: "northwind", Folder: "acme", Remotes: []string{"github.com/acme/app"}}
+	p, err := PlanLink(cfg, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := RemoteProjectID("github.com/acme/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.FromRemote || p.ProjectID != want || !strings.HasPrefix(want, "prj_") {
+		t.Fatalf("plan = %+v, want FromRemote with %s", p, want)
+	}
+	again, _ := PlanLink(cfg, req)
+	if again.ProjectID != p.ProjectID {
+		t.Fatalf("not deterministic: %s then %s", p.ProjectID, again.ProjectID)
+	}
+	other, _ := RemoteProjectID("github.com/acme/api")
+	if other == want {
+		t.Fatal("two remotes share one id")
+	}
+	withID := req
+	withID.ProjectID = pid
+	if p, err = PlanLink(cfg, withID); err != nil || p.FromRemote || p.ProjectID != pid {
+		t.Fatalf("a repo with a project id: %+v %v", p, err)
+	}
+	none := req
+	none.Remotes = nil
+	if _, err = PlanLink(cfg, none); !errors.Is(err, ErrLinkNoRemote) {
+		t.Fatalf("no id and no remote: %v, want ErrLinkNoRemote", err)
 	}
 }

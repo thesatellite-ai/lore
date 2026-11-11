@@ -78,6 +78,11 @@ type LinkWrite struct {
 	// FolderProjectID names the project of a folder the link creates
 	// (normalised store url, branch, folder).
 	FolderProjectID func(store, branch, folder string) (string, error)
+	// NewMarker encodes a new lore-store.yaml for a store whose branch has
+	// lore files but no marker yet (its first lore write predates it): the
+	// link commit adds it, as `lore store init` would have. nil refuses
+	// such a store (ErrNotAStore).
+	NewMarker func() ([]byte, error)
 }
 
 // LinkWriteResult says what happened.
@@ -107,7 +112,7 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 		return LinkWriteResult{}, err
 	}
 	res := LinkWriteResult{StoreURL: target, NoPush: !g.autopush(o.Live)}
-	cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(target), Store: target, Branch: w.Plan.Branch, NoPush: res.NoPush, Route: g.Route,
+	cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(target), Store: target, Branch: w.Plan.Branch, NoPush: res.NoPush, Route: g.Route, NewMarker: w.NewMarker,
 		Message: fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature,
 		Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
 			put, created, changed, cerr := linkChange(ctx, repo, tip, target, w)
@@ -134,6 +139,9 @@ type storeCommit struct {
 	Change func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error)
 	// Route reaches the store as its setup's account (fetch, push).
 	Route Router
+	// NewMarker, when set, adds a marker to a tip of lore files only that
+	// has none (LinkWrite.NewMarker), in the same commit.
+	NewMarker func() ([]byte, error)
 }
 
 // storeCommitResult says where the commit went.
@@ -178,12 +186,27 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 				tip = t
 			}
 		}
-		if _, found, merr := repo.ReadFile(ctx, tip, storeMarkerFile); merr != nil || !found {
-			return res, fmt.Errorf("%w: %s@%s has no %s", ErrNotAStore, target, branch, storeMarkerFile)
+		_, hasMarker, merr := repo.ReadFile(ctx, tip, storeMarkerFile)
+		if merr != nil {
+			return res, merr
+		}
+		var marker []byte
+		if !hasMarker {
+			// lore files only and no marker: adopted (the marker goes in
+			// this commit); anything else is not a store
+			if c.NewMarker == nil || checkStoreTree(ctx, dir, tip, target, branch) != nil {
+				return res, fmt.Errorf("%w: %s@%s has no %s", ErrNotAStore, target, branch, storeMarkerFile)
+			}
+			if marker, err = c.NewMarker(); err != nil {
+				return res, err
+			}
 		}
 		put, err := c.Change(ctx, repo, tip)
 		if err != nil {
 			return res, err
+		}
+		if len(put) > 0 && marker != nil {
+			put[storeMarkerFile] = marker
 		}
 		if len(put) == 0 && attempt == 0 {
 			return res, nil // already so: nothing to commit or push

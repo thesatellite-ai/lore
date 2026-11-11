@@ -91,6 +91,21 @@ func Confirmed(ctx context.Context) bool {
 	return ok && c.caller.Yes
 }
 
+// WithConfirmed is ctx with the running call marked confirmed, as --yes
+// would: for an operation that has already asked the person a question
+// naming everything its writes do (`store folder remove --purge
+// --confirm` names every row it moves to the trash), so the engine does
+// not ask again per write (a cascade's group question). Outside Run it
+// is ctx unchanged.
+func WithConfirmed(ctx context.Context) context.Context {
+	c, ok := ctx.Value(callKey{}).(call)
+	if !ok {
+		return ctx
+	}
+	c.caller.Yes = true
+	return context.WithValue(ctx, callKey{}, c)
+}
+
 // Interactive reports whether the running operation's caller is a person
 // at a terminal (op.Caller.Interactive): an op that reads a value from the
 // terminal (resource --prompt, RES 3.3) refuses otherwise, so REST and

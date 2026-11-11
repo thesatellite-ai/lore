@@ -52,6 +52,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckKindRoute, a.DoctorKindRoutes},                                                                        // doctor_kindroutes.go (G-META-9)
 		{DoctorCheckIdentityContacts, a.DoctorIdentityContacts},                                                           // doctor_identity.go (TEAM_PROFILES 6.4)
 		{DoctorCheckStoreClone, a.DoctorStoreClones},                                                                      // doctor_clones.go
+		{DoctorCheckRemovedFolder, a.DoctorRemovedFolders},                                                                // doctor_removedfolder.go
 		{DoctorCheckConfigStyle, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorConfigStyle(c, fix) }}, // doctor_configstyle.go
 		{DoctorCheckActorRoster, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorActorRoster(c, fix) }}, // doctor_roster.go
 		{DoctorCheckActorCopies, a.DoctorActorCopies},                                                                     // doctor_actorcopies.go (SOURCE_OF_TRUTH rows 2-3)
@@ -65,7 +66,11 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckOldDBEdits, a.DoctorOldDBEdits},                                                                       // v017edits.go
 	}
 	if NoCreate(ctx) && a.gitRepoWithoutLore(ctx) { // doctor_nocreate.go
-		return []opsdoctor.CheckRun{{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: opsdoctor.LevelNote, Line: doctorNoProjectNote}}}}
+		line := doctorNoProjectNote
+		if remote := linkedByRemote(ctx, a.opts); remote != "" {
+			line = doctorLinkedByRemoteNote(remote)
+		}
+		return []opsdoctor.CheckRun{{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: opsdoctor.LevelNote, Line: line}}}}
 	}
 	// Outside any git work tree there is no repo store to open: a check
 	// that needs it is skipped (one note below), not counted as a check

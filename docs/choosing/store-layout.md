@@ -33,11 +33,11 @@ All of these are plain config in `~/.lore/config.yaml`; the commands are the sam
 ## Pitfalls
 
 - **GitHub permissions are the access control.** Leaving a store out of someone's config is a convenience. Removing their access to the store repo is what keeps it out of reach.
-- **Folder names are unique across all of an org's stores,** and exactly one store sets `org_folder`.
+- **Folder names are unique across all of an org's stores,** and exactly one store sets `org_folder`. A folder made in the wrong store is removed with `lore store folder remove <store> <folder>` (an empty one at once; one with rows only with `--purge --confirm`, rows to the trash first), which frees the name for another store.
 - **A store is never a code repo.** `lore store init` writes a `lore-store.yaml` marker, and lore refuses to use a repo that holds code as a store.
 - **Lore never moves rows between store branches.** Each store branch is a separate lore; staging notes stay on staging.
 - **Copies already fetched stay fetched.** When someone loses access, what they already downloaded stays on their machine, like any git clone. Plan the layout before you write private notes, not after.
-- **A link lives only in the store.** `lore org link` writes nothing into the client's repo; everyone at the agency finds the link on their next command.
+- **A link lives only in the store.** `lore org link` writes nothing into the client's repo, which needs no `lore init`: a repo with no lore data is linked by its remote, and lore never writes into it (no `.lore/`, ignore lines or hooks). Everyone at the agency finds the link on their next command.
 
 ## Guides and examples for each layout
 

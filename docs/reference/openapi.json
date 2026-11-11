@@ -73186,6 +73186,191 @@
         }
       }
     },
+    "/v1/store/folders/remove": {
+      "post": {
+        "operationId": "store.folder.remove",
+        "summary": "Remove a folder from a store: an empty one at once; one with rows or repo links only with --purge --confirm (its rows go to the trash first); asks first",
+        "tags": [
+          "store"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "boolean",
+                    "description": "required with --purge: the folder's repo links and id go for good (DQ2)"
+                  },
+                  "folder": {
+                    "type": "string",
+                    "description": "the folder to remove"
+                  },
+                  "purge": {
+                    "type": "boolean",
+                    "description": "also remove a folder that holds rows or repo links: its rows go to the store's trash first, its links are dropped (needs --confirm)"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "with --purge: why the rows go to the trash (stored as their deleted_reason; default: store folder remove --purge)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "store",
+                  "folder"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "integer"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "purged": {
+                      "type": "boolean"
+                    },
+                    "push": {
+                      "type": "string"
+                    },
+                    "pushed": {
+                      "type": "boolean"
+                    },
+                    "rows": {
+                      "type": "integer"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "trashed": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "store",
+                    "folder",
+                    "id",
+                    "rows",
+                    "trashed",
+                    "links"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT, E_STORE_SCHEME",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CANCELLED, E_HAS_DEPENDENTS, E_POLICY_DENIED, E_REFUSED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/stores": {
       "get": {
         "operationId": "store.list",

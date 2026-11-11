@@ -83,6 +83,18 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err != nil {
 		return nil, err
 	}
+	// A repo with no lore data that a store links by its remote (`lore org
+	// link` in a client repo, never `lore init`) is never written to: its
+	// repo store is read-only and its cache lives under ~/.lore. Decided
+	// from the root OpenRepo found (no further git call), and only for a
+	// repo with no .lore/, so a lore project pays nothing for it.
+	remote := ""
+	if !repoOnly && opts.RepoLinkedByRemote != nil && !loreFolderAt(repo.Dir()) {
+		if remote = opts.RepoLinkedByRemote(ctx); remote != "" {
+			repo.MarkReadOnly()
+		}
+	}
+	st.linkedByRemote = remote
 	st.backends = append(st.backends, repo)
 	st.repoTop = repo.Dir()
 	var repoBackend store.Backend = repo
@@ -124,11 +136,17 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	rv := newResolver(st)
 	exp := refs.Expander{Resolver: rv}
 	repoCache := filepath.Join(st.repoTop, filepath.FromSlash(RepoCacheFile))
-	if NoCreate(ctx) && !loreFolderAt(st.repoTop) { // doctor_nocreate.go: a read never creates .lore/
+	switch {
+	case remote != "":
+		if repoCache, err = remoteRepoCachePath(opts.Home, st.repoTop); err != nil {
+			return fail(err)
+		}
+	case NoCreate(ctx) && !loreFolderAt(st.repoTop): // doctor_nocreate.go: a read never creates .lore/
 		return fail(noProjectErr(st.repoTop))
-	}
-	if mkErr := os.MkdirAll(filepath.Dir(repoCache), cacheDirMode); mkErr != nil {
-		return fail(errs.Wrap(errs.Internal, "wire: create the .lore folder", mkErr))
+	default:
+		if mkErr := os.MkdirAll(filepath.Dir(repoCache), cacheDirMode); mkErr != nil {
+			return fail(errs.Wrap(errs.Internal, "wire: create the .lore folder", mkErr))
+		}
 	}
 	if err = st.caches.open(ctx, store.SourceRepo, repoCache, reg, exp); err != nil {
 		return fail(err)
@@ -731,6 +749,40 @@ func combinedCachePath(home, repoTop string) (string, error) {
 		return "", errs.Wrap(errs.Internal, "wire: create the cache folder", err)
 	}
 	return filepath.Join(dir, hex.EncodeToString(sum[:])+cacheExt), nil
+}
+
+// remoteRepoDir holds the repo caches of repos that hold no lore data
+// (<home>/cache/remote/<sha256 of the repo top>.db).
+const remoteRepoDir = "remote"
+
+// remoteRepoCachePath is the repo store's cache of a repo linked by its
+// remote with no .lore/ of its own: outside the repo, one file per
+// checkout, so nothing is ever created in the client's repository.
+func remoteRepoCachePath(home, repoTop string) (string, error) {
+	sum := sha256.Sum256([]byte(repoTop))
+	dir := filepath.Join(home, cacheDir, remoteRepoDir)
+	if err := os.MkdirAll(dir, cacheDirMode); err != nil {
+		return "", errs.Wrap(errs.Internal, "wire: create the cache folder", err)
+	}
+	return filepath.Join(dir, hex.EncodeToString(sum[:])+cacheExt), nil
+}
+
+// linkedByRemote is the remote a store link names the repo of opts by
+// when the repo holds no lore data (no .lore/ at its top); "" when it has
+// .lore/, is not a git repo, or no store links it by its remote.
+func linkedByRemote(ctx context.Context, opts Options) string {
+	if opts.RepoLinkedByRemote == nil {
+		return ""
+	}
+	remote := opts.RepoLinkedByRemote(ctx) // "" for a repo with its own project id: no git call below
+	if remote == "" {
+		return ""
+	}
+	top, err := git.RepoRoot(ctx, opts.RepoDir, opts.Home)
+	if err != nil || loreFolderAt(top) {
+		return ""
+	}
+	return remote
 }
 
 // markerBackend is a backend that knows its store marker (folder and git

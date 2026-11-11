@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -231,6 +232,14 @@ func TestEveryPurgePathRefusesYes(t *testing.T) {
 		purgers++
 		modes := purgeModes
 		switch {
+		case name == opsstores.OpFolderRemove:
+			// `lore store folder remove --purge` asks for the literal
+			// --confirm once it has counted the folder's rows and links,
+			// so it needs a store with that folder, which this harness has
+			// none of: wire TestFolderRemoveWithRows walks --purge --yes
+			// (E_NEEDS_CONFIRM naming --confirm, never --yes) and
+			// --confirm.
+			continue
 		case hasInput(e, "purge") && hasInput(e, "confirm"):
 			// A delete's op.PurgeFlags (P3-DEL-1): the engine refuses
 			// before the id is looked up, so the memory's id serves every

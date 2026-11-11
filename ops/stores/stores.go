@@ -202,12 +202,21 @@ type FolderAddOut struct {
 // CheckFolderName refuses a folder name store.folder.add cannot create:
 // not snake_case, or `org`, the org folder's name (CLI_REFERENCE 3.21).
 func CheckFolderName(name string) error {
-	if !row.ValidName(name) {
-		return errs.New(errs.InvalidInput, "store folder add: the folder name "+quote(name)+" must be snake_case")
+	if err := checkSnakeFolder("store folder add", name); err != nil {
+		return err
 	}
 	if name == rowfs.FolderOrg {
 		return errs.New(errs.InvalidInput, "store folder add: "+quote(name)+" is the org folder's name").
 			WithHint("write to the company folder with --to company (or --to <store>/org)")
+	}
+	return nil
+}
+
+// checkSnakeFolder refuses a folder name that is not snake_case (the
+// names lore makes), for the command verb.
+func checkSnakeFolder(verb, name string) error {
+	if !row.ValidName(name) {
+		return errs.New(errs.InvalidInput, verb+": the folder name "+quote(name)+" must be snake_case")
 	}
 	return nil
 }
@@ -429,6 +438,9 @@ func Ops(m Manager) []op.Entry {
 			if hasOrg && ol.QuietOutput() {
 				for i := range got {
 					if got[i].Source == SourceOrg {
+						if got[i].Name == got[i].URL {
+							got[i].Name = redactedURL // an org store named by its url
+						}
 						got[i].URL = redactedURL
 					}
 					if strings.HasPrefix(got[i].Address, addressSecond) {
@@ -501,6 +513,7 @@ func Ops(m Manager) []op.Entry {
 			return m.AddFolder(ctx, in)
 		}),
 		folderListOp(m),
+		folderRemoveOp(m),
 		setURLOp(m),
 	}, append(cloneOps(m), pushOps(m)...)...)
 }

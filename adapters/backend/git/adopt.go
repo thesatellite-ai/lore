@@ -16,8 +16,11 @@ import (
 //
 //	checkMarker: HEAD has no marker
 //	  └─ hostedFiles(HEAD) → every tracked file is a hosting starter file
-//	       yes → passes like an empty store (marker zero): store init
-//	             writes the marker on top of the existing commits
+//	       or a store folder's _meta.json (a folder made in a brand-new
+//	       repo before lore wrote the marker with the first write)
+//	       yes → passes like an empty store (marker zero): store init, or
+//	             the next write (Backend.addMissingMarker), writes the
+//	             marker on top of the existing commits
 //	       no  → E_NOT_A_STORE naming the other files (a lore store needs a
 //	             repository of its own; init never mixes rows into code)
 
@@ -48,8 +51,22 @@ func isStarterFile(p string) bool {
 	return slices.Contains(starterFiles, stem)
 }
 
+// isFolderMeta reports whether p is a store folder's _meta.json
+// (<folder>/.lore/data/_meta.json, folder a name lore makes): lore folder
+// metadata, which a store that lost its marker may hold and still be
+// adopted (owner report 2026-11-11: `store folder add` on a brand-new
+// repo pushed the folder without the marker).
+func isFolderMeta(p string) bool {
+	dir, ok := strings.CutSuffix(p, "/"+rowfs.FolderDataPath(rowfs.FolderRoot)+"/"+rowfs.MetaFileName)
+	if !ok || dir == "" {
+		return false
+	}
+	_, err := rowfs.CleanFolder(dir)
+	return err == nil
+}
+
 // foreignFiles lists the files tracked at commit h that are not hosting
-// starter files.
+// starter files or store folders' _meta.json.
 func (b *Backend) foreignFiles(ctx context.Context, h string) ([]string, error) {
 	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"ls-tree", "-r", "--name-only", "-z", h}})
 	if err != nil {
@@ -57,7 +74,7 @@ func (b *Backend) foreignFiles(ctx context.Context, h string) ([]string, error) 
 	}
 	var foreign []string
 	for _, p := range splitZ(out) {
-		if !isStarterFile(path.Clean(p)) {
+		if c := path.Clean(p); !isStarterFile(c) && !isFolderMeta(c) {
 			foreign = append(foreign, p)
 		}
 	}

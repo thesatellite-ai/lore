@@ -21,6 +21,7 @@ package git
 
 import (
 	"context"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -265,9 +266,39 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 	}
 	applied, err := b.folder.ApplyAudited(ctx, changes, recs)
 	if err == nil && b.mode == modeClone {
-		err = b.commitBatch(ctx, batch, changes, applied)
+		var undo func()
+		if undo, err = b.addMissingMarker(applied); err == nil {
+			if err = b.commitBatch(ctx, batch, changes, applied); err != nil {
+				undo()
+			}
+		}
 	}
 	return releaseKeep(err, lock)
+}
+
+// addMissingMarker gives a store clone that has no marker yet (a brand-new
+// empty repo, or one adopted holding only lore folder files) the marker
+// `lore store init` writes, in the same commit as this first write: a
+// store must never hold lore rows without it (every later open would
+// refuse it as "not a lore store"). It runs under the store lock; the
+// marker joins applied's paths, so a failed commit removes the file again
+// (Undo), and the returned undo forgets it on the handle.
+func (b *Backend) addMissingMarker(applied *rowfs.Applied) (undo func(), err error) {
+	undo = func() {}
+	if b.marker.Version > 0 || applied == nil || len(applied.Paths) == 0 {
+		return undo, nil
+	}
+	m, err := rowfs.NewMarker(b.cfg.now())
+	if err != nil {
+		return undo, err
+	}
+	if err = rowfs.WriteMarker(b.work, m); err != nil {
+		return undo, err
+	}
+	applied.AddCreated(filepath.Join(b.work, rowfs.MarkerFile), rowfs.MarkerFile)
+	old := b.marker
+	b.marker = m
+	return func() { b.marker = old }, nil
 }
 
 // WritePurge writes changes like Write and, in the same batch and the same
@@ -302,13 +333,19 @@ func (b *Backend) writePurge(ctx context.Context, changes []store.Change, purged
 		return err
 	}
 	applied, err := b.folder.ApplyPurgeAudited(ctx, changes, purged, recs)
+	undo := func() {}
+	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {
+		undo, err = b.addMissingMarker(applied)
+	}
 	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {
 		subj := changes
 		if len(subj) == 0 {
 			// only the list changed: name the first purged id in the subject
 			subj = []store.Change{{Row: store.Row{ID: purged[0]}}}
 		}
-		err = b.commitBatch(ctx, Batch{Op: purgeOp}, subj, applied)
+		if err = b.commitBatch(ctx, Batch{Op: purgeOp}, subj, applied); err != nil {
+			undo()
+		}
 	}
 	return releaseKeep(err, lock)
 }

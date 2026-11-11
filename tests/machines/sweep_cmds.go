@@ -510,7 +510,7 @@ var notUserRun = map[string]string{
 	"batch show":     whyBatch, "batch undo": whyBatch,
 	"link add": whyNoCommit, "link remove": whyNoCommit, "land run": whyNoCommit,
 	"identity set": whyIdentity, "identity unset": whyIdentity,
-	"store init": whyStoreAdmin, "store folder add": whyStoreAdmin, "store visibility": whyStoreAdmin,
+	"store init": whyStoreAdmin, "store folder add": whyStoreAdmin, "store folder remove": whyStoreAdmin, "store visibility": whyStoreAdmin,
 	"sync fix-projects": whySyncFixture, "sync merge-rows": whySyncFixture, "sync promote": whySyncFixture, "sync resolve": whySyncFixture,
 	"sync trash restore": whySyncFixture, "sync peek": whySyncFixture,
 

@@ -22,6 +22,8 @@ package wire
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io/fs"
 	"os"
@@ -218,9 +220,13 @@ func (a *App) orgStoreAt(ctx context.Context, verb, raw string) (attach.Store, e
 }
 
 // storeLabel is the name a store command's output gives the store name
-// resolved to: the org's name for team and an org url, else name.
+// resolved to: the org's name for team (the org's team store), else name
+// as given. An org store named by its url keeps the url: an org may have
+// several stores, and the output must name the one written to, not the
+// org (owner report 2026-11-11: "created folder x in <org>" for the
+// org's second store).
 func storeLabel(name string, src attach.Store) string {
-	if name == attach.ReservedTeam || opsstores.IsStoreURL(name) {
+	if name == attach.ReservedTeam {
 		if org, _, _ := strings.Cut(string(src.Name), targetSep); org != "" {
 			return org
 		}
@@ -250,8 +256,11 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 				continue
 			}
 			seen[k] = true
-			base, _, _ := strings.Cut(e.Name, targetSep)
-			stores = append(stores, one{base, attach.Store{Name: store.Source(base), URL: e.URL, Branch: e.Branch}})
+			label, _, _ := strings.Cut(e.Name, targetSep)
+			if opsstores.IsStoreURL(e.Name) {
+				label = a.urlLabel(e.Name) // an org's other store, named by its url
+			}
+			stores = append(stores, one{label, attach.Store{Name: store.Source(label), URL: e.URL, Branch: e.Branch}})
 		}
 	}
 	attached := a.attachedFolders(ctx)
@@ -275,6 +284,24 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 	}
 	return out, nil
 }
+
+// urlLabel is how store folder list names an org store known only by its
+// url: the url, or in quiet output (no terminal, CI), which must name no
+// store url, "<redacted>" and a short digest of the url, so two such
+// stores stay apart in one listing.
+func (a *App) urlLabel(raw string) string {
+	if !a.QuietOutput() {
+		return raw
+	}
+	sum := sha256.Sum256([]byte(raw))
+	return redactedLabel + "-" + hex.EncodeToString(sum[:])[:urlDigestLen]
+}
+
+// redactedLabel and urlDigestLen shape urlLabel's quiet form.
+const (
+	redactedLabel = "<redacted>"
+	urlDigestLen  = 6
+)
 
 // storesHere are the stores this command sees: the repo's (stores.yaml
 // and its org's, when there is a repo) and the setup's (its org's stores,

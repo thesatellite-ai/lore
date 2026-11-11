@@ -169,6 +169,9 @@ func (r *OrgResolution) Apply(o *Options) {
 	if o.OrgStores == nil {
 		o.OrgStores = r.OrgStores
 	}
+	if o.RepoLinkedByRemote == nil {
+		o.RepoLinkedByRemote = r.LinkedByRemote
+	}
 	if o.OrgEntryStore == nil {
 		o.OrgEntryStore = r.OrgEntryStore
 	}
@@ -184,6 +187,17 @@ func (r *OrgResolution) Apply(o *Options) {
 	if o.GuardRepoWrite == nil {
 		o.GuardRepoWrite = r.GuardRepoWrite
 	}
+}
+
+// LinkedByRemote is Options.RepoLinkedByRemote: the remote a store link
+// names this repo by when it holds no project id of its own (orgcfg
+// Situation.LinkedByRemote); "" when it has one, or nothing links it.
+func (r *OrgResolution) LinkedByRemote(ctx context.Context) string {
+	s, err := r.Situation(ctx)
+	if err != nil || s == nil {
+		return ""
+	}
+	return s.LinkedByRemote
 }
 
 // Org is Options.Org: the resolved entry's name and identity; nil when no

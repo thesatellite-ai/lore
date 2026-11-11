@@ -197,6 +197,13 @@ type Options struct {
 	// org-store noun migrates. Nil, or an error, makes the repo a client
 	// repo (fail closed); the reason is kept for RepoClassNote.
 	RepoIsClient func(ctx context.Context) (bool, error)
+	// RepoLinkedByRemote reports the remote a store link names this repo
+	// by when the repo holds no lore data of its own (no .lore/: a client
+	// repo linked with `lore org link` and never `lore init`), "" when it
+	// is not such a repo. Such a repo is never written to: its cache lives
+	// under ~/.lore, its repo store is read-only, and its git is never
+	// wired (no hooks, .gitignore or .gitattributes lines).
+	RepoLinkedByRemote func(ctx context.Context) string
 	// OrgStores lists the store folders the repo's org brings (CONFIG_GUIDE
 	// section 4 step 5b: the org's stores plus the folder this repo is
 	// linked to), attached for this process beside stores.yaml and never
@@ -380,10 +387,14 @@ type App struct {
 
 // state is everything Open built; nil until the first use.
 type state struct {
-	eng      *engine.Engine
-	actor    ids.ID[ids.Actor]
-	caches   *caches
-	backends []store.Backend
+	eng *engine.Engine
+	// linkedByRemote is the remote a store link names this repo by when it
+	// holds no lore data (Options.RepoLinkedByRemote): the repo store is
+	// read-only and the repo cache lives under ~/.lore; "" otherwise.
+	linkedByRemote string
+	actor          ids.ID[ids.Actor]
+	caches         *caches
+	backends       []store.Backend
 	// machine closes the machine store's backend (P3-LOCAL-2); nil when
 	// none was opened. Kept apart from backends, which follow Stores().
 	machine io.Closer
