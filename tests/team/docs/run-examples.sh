@@ -1255,6 +1255,53 @@ Y
 }
 
 # ---------------------------------------------------------------------------
+# teams: lore team add|list|show|remove and team member add|remove, from the
+# plain work folder (no repo) and from a linked repo (docs/team/teams.md).
+s_teams() {
+  section teams
+  person tomas tomas@agency.example; person mira mira@agency.example
+  agency_config tomas "human:tomas@agency.example" "Tomas Weber" tomas
+  agency_config mira "human:mira@agency.example" "Mira Patel" mira
+  remote agency/notes; client_repo client/acme-hub acme-hub
+  make_store tomas agency git@github.com:agency/notes
+  quiet tomas work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore org link agency --project acme-hub --yes && lore actor register"
+  quiet mira work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore actor register"
+  cat >> "$HOMES/tomas/.lore/config.yaml" <<'Y'
+setups:
+  - name: agency
+    kind: admin
+    org: agency
+    default: true
+    folders:
+      - ~/work/**
+Y
+
+  note "add"
+  on tomas work "lore team add @web --name 'Web' --members @tomas,@mira"
+  on tomas work "lore team list"
+  on tomas work/acme-hub "lore team show @web"
+
+  note "assign"
+  on tomas work/acme-hub "lore task add 'ship the checkout page' --to agency --assign @web"
+
+  note "members"
+  on tomas work "lore team member remove @web @mira"
+  on tomas work "lore team member add @web @mira,@tomas"
+  on tomas work "lore team add @web --name 'Web platform'"
+  on tomas work "lore team list --json"
+
+  note "refusals"
+  on! tomas work "lore team add @mira"
+  on! tomas work "lore team add @ops --members @nobody"
+  on! tomas work "lore team show @ops"
+
+  note "remove"
+  on tomas work "lore team remove @web"
+  on tomas work "lore team list --all"
+  on tomas work "lore team add @web"
+}
+
+# ---------------------------------------------------------------------------
 # client-folders: an admin keeps the clients' repos in one plain parent folder
 # (not a git repo) and makes, lists and attaches the team store's client
 # folders from there (docs/team/client-folders.md).
@@ -1402,7 +1449,7 @@ Y
 }
 
 main() {
-  local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people store_push live_repair profiles setup_cli invites client_folders guided_setup)
+  local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people store_push live_repair profiles setup_cli invites teams client_folders guided_setup)
   local want=("$@")
   [ ${#want[@]} -eq 0 ] && want=("${all[@]}")
   if [ ${#want[@]} -gt 1 ] && [ "$JOBS" -gt 1 ]; then

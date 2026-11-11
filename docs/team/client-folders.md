@@ -76,7 +76,7 @@ $ lore org link agency --project client_north --yes
 This marks github.com/client/north-web as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_north/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe…28f2 at github.com/client/north-web → github.com/agency/notes@main:client_north/ (default=false)
-✓ github.com/client/north-web (prj_54fe…28f2, github.com/client/north-web) linked to github.com/agency/notes client_north/ (pushed)
+✓ github.com/client/north-web (prj_54fe…28f2) linked to github.com/agency/notes client_north/ (pushed)
   nothing was written to this repo
 $ lore store folder list team
 store agency folders:
@@ -98,7 +98,7 @@ $ lore org link agency --project client_south --yes
 This marks github.com/client/south-app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_south/,
 and the leak guards turn on for everyone in agency.
   link: project prj_05e9…4603 at github.com/client/south-app → github.com/agency/notes@main:client_south/ (default=false)
-✓ github.com/client/south-app (prj_05e9…4603, github.com/client/south-app) linked to github.com/agency/notes client_south/ (pushed)
+✓ github.com/client/south-app (prj_05e9…4603) linked to github.com/agency/notes client_south/ (pushed)
   nothing was written to this repo
 $ lore task add 'set up the staging deploy'
 ✓ tsk_c0f3…b5b8 — set up the staging deploy [medium]

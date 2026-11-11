@@ -54,7 +54,7 @@ $ lore org link agency-stag --project client --yes
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency-stag.
   link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
-✓ github.com/client/website (prj_2ad3…f891, github.com/client/website) linked to github.com/agency/notes client/ (created; pushed)
+✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 $ lore task add 'seed staging with demo data' --to agency-stag
 ✓ tsk_54fe…28f2 — seed staging with demo data [medium] → [agency-stag/client]

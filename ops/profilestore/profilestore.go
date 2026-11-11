@@ -99,6 +99,17 @@ type Roster interface {
 	Push(ctx context.Context)
 }
 
+// FolderProjecter is an optional upgrade of an opened Roster: the project
+// row of the roster's own folder (the org folder's), made on the folder's
+// first write when it has none. A teams row belongs to it (teams
+// project_id is required, LORE_TEAM_SPEC F18), and its id is the folder's
+// _meta.json project_id, so two machines that add the first team at once
+// write one project row. wire's roster implements it; an op whose Roster
+// lacks it refuses with E_UNSUPPORTED.
+type FolderProjecter interface {
+	FolderProject(ctx context.Context) (ids.ID[ids.Project], error)
+}
+
 // ProjectNamer is an optional upgrade of a profile op's Env: the name of
 // the project a prj_ id names, looked up in every store the host can read.
 //
@@ -178,6 +189,14 @@ const (
 	OpRoleList     = "role.list"
 	OpRoleAdd      = "role.add"
 	OpRoleEdit     = "role.edit"
+	// ops/team teams.go: the org's teams (LORE_TEAM_SPEC F18, v0.1.17
+	// `lore team add|list`).
+	OpTeamAdd          = "team.add"
+	OpTeamList         = "team.list"
+	OpTeamShow         = "team.show"
+	OpTeamRemove       = "team.remove"
+	OpTeamMemberAdd    = "team.member.add"
+	OpTeamMemberRemove = "team.member.remove"
 )
 
 // directOps is the set IsDirect answers from. Read-only after init.
@@ -192,6 +211,9 @@ var directOps = map[string]struct{}{
 	// direct like the profile ops: outside a repo too, with --yes and the
 	// caller carried (revoke and --grant ask first).
 	setup.OpTeamInvite: {}, setup.OpTeamInviteList: {}, setup.OpTeamInviteRevoke: {}, setup.OpTeamInviteResend: {},
+	// The teams rows live in the org roster store too (owner report
+	// 2026-11-11: the team commands were missing), so they run direct.
+	OpTeamAdd: {}, OpTeamList: {}, OpTeamShow: {}, OpTeamRemove: {}, OpTeamMemberAdd: {}, OpTeamMemberRemove: {},
 }
 
 // IsDirect reports whether op name runs on the roster App (wire hostRunOp):
@@ -203,7 +225,7 @@ func IsDirect(name string) bool {
 }
 
 // OpNames lists every direct op name (the profile ops, then the team
-// invite ops), sorted as declared above.
+// invite ops and the team ops), sorted as declared above.
 func OpNames() []string {
 	return []string{
 		OpActorEdit, OpContactAdd, OpContactEdit, OpContactRemove, OpContactList,
@@ -212,5 +234,6 @@ func OpNames() []string {
 		OpMemberAdd, OpMemberEdit, OpMemberRemove, OpMemberList,
 		OpRoleList, OpRoleAdd, OpRoleEdit,
 		setup.OpTeamInvite, setup.OpTeamInviteList, setup.OpTeamInviteRevoke, setup.OpTeamInviteResend,
+		OpTeamAdd, OpTeamList, OpTeamShow, OpTeamRemove, OpTeamMemberAdd, OpTeamMemberRemove,
 	}
 }

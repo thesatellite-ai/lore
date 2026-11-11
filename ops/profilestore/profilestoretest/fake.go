@@ -61,6 +61,11 @@ type Fake struct {
 	// Pushes counts Push calls; Opened counts Roster calls; Closed counts
 	// done calls.
 	Pushes, Opened, Closed int
+	// FolderProjectID is the roster folder's project
+	// (profilestore.FolderProjecter); its projects row is made on the
+	// first FolderProject call, as the real roster makes it on the
+	// folder's first write.
+	FolderProjectID ids.ID[ids.Project]
 
 	mu   sync.Mutex
 	rows map[row.Table]map[ids.AnyID]row.Row
@@ -144,6 +149,25 @@ func (r roster) Today() time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 func (r roster) Push(context.Context) { r.f.mu.Lock(); r.f.Pushes++; r.f.mu.Unlock() }
+
+var _ profilestore.FolderProjecter = roster{}
+
+// FolderProject implements profilestore.FolderProjecter: FolderProjectID,
+// its projects row written on the first call.
+func (r roster) FolderProject(context.Context) (ids.ID[ids.Project], error) {
+	r.f.mu.Lock()
+	defer r.f.mu.Unlock()
+	if r.f.FolderProjectID.IsZero() {
+		return ids.ID[ids.Project]{}, errs.New(errs.Unsupported, "the fake roster has no folder project (set FolderProjectID)")
+	}
+	if r.f.rows[schema.TableProjects] == nil {
+		r.f.rows[schema.TableProjects] = map[ids.AnyID]row.Row{}
+	}
+	if _, ok := r.f.rows[schema.TableProjects][r.f.FolderProjectID.Any()]; !ok {
+		r.f.rows[schema.TableProjects][r.f.FolderProjectID.Any()] = row.Row{Table: schema.TableProjects, ID: r.f.FolderProjectID.Any(), CreatedAt: r.f.Now, UpdatedAt: r.f.Now}
+	}
+	return r.f.FolderProjectID, nil
+}
 func (r roster) def(t row.Table) (schema.TableDef, error) {
 	d, ok := r.f.defs[t]
 	if !ok {

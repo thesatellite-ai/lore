@@ -53,6 +53,9 @@ setups:
       name: Tomas Weber
     personal_store: none
 Y
+# Tomas is on the agency roster (his row and its open employee period), so the identity
+# line shows his roster handle and period.
+quiet tomas work/agency/site "lore actor register"
 
 note "run it"
 on! tomas work/agency/site "lore doctor --all"

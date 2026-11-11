@@ -61,8 +61,10 @@ func TestNotHereSkipIsUserWording(t *testing.T) {
 		id   onboard.CheckID
 		want string
 	}{
-		{onboard.CheckIdentityRoster, "lore actor list"},
-		{onboard.CheckIdentityPeriod, "lore actor list"},
+		// identity.roster and identity.period are run now
+		// (TestDoctorAllReadsRosterAndPeriod); with no org they skip.
+		{onboard.CheckIdentityRoster, skipNoOrg},
+		{onboard.CheckIdentityPeriod, skipNoOrg},
 		{onboard.CheckInvitePending, "lore team invite list"},
 		{onboard.CheckLiveMode, "not checked here"},
 	} {

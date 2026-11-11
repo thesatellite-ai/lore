@@ -65,8 +65,13 @@ func TestPlanLinkMatrix(t *testing.T) {
 		if c.is != nil && !errors.Is(err, c.is) {
 			t.Errorf("%s: err = %v, want %v", c.name, err, c.is)
 		}
-		if c.want != "" && !strings.Contains(err.Error(), c.want) {
-			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
+		var lr *LinkRefusal
+		if !errors.As(err, &lr) || lr.Next == "" {
+			t.Errorf("%s: err = %#v, want a LinkRefusal naming the next step", c.name, err)
+			continue
+		}
+		if c.want != "" && !strings.Contains(lr.Msg+"; "+lr.Next, c.want) {
+			t.Errorf("%s: err = %v (next: %s), want %q", c.name, err, lr.Next, c.want)
 		}
 	}
 

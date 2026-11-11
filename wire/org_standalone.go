@@ -208,17 +208,9 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	plan, err := orgresolve.PlanLink(s.Config, orgresolve.LinkRequest{Entry: in.Org, ProjectID: s.ProjectID, Remotes: s.Remotes,
 		Folder: in.Project, Own: in.Own, Default: in.Default, StoreURL: in.Store, Remote: in.Remote})
 	if err != nil {
-		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, err.Error())
+		return opsorgcmd.Report{}, planLinkError(err)
 	}
-	role := "a CLIENT repo"
-	if plan.Own {
-		role = "one of " + plan.Entry + "'s OWN repos"
-	}
-	lines := []string{fmt.Sprintf("This marks %s as %s of %s: internal notes default to %s %s/,", plan.Remote, role, plan.Entry, plan.StoreURL, plan.Folder)}
-	if !plan.Own {
-		lines = append(lines, fmt.Sprintf("and the leak guards turn on for everyone in %s.", plan.Entry))
-	}
-	lines = append(lines, fmt.Sprintf("  link: project %s at %s → %s@%s:%s/ (default=%v)", plan.ProjectID, plan.Remote, plan.StoreURL, plan.Branch, plan.Folder, plan.Default))
+	lines := linkPlanLines(plan)
 	if in.DryRun {
 		return opsorgcmd.Report{Lines: append(lines, "  --dry-run: nothing written")}, nil
 	}
@@ -251,9 +243,45 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if res.CreatedFolder {
 		created = "created; "
 	}
-	lines = append(lines, fmt.Sprintf("✓ %s (%s, %s) linked to %s %s/ (%s%s)", plan.Remote, plan.ProjectID, plan.Remote, res.StoreURL, plan.Folder, created, state),
-		"  nothing was written to this repo")
+	lines = append(lines, linkDoneLine(plan, res.StoreURL, created+state), "  nothing was written to this repo")
 	return opsorgcmd.Report{Lines: lines}, nil
+}
+
+// linkPlanLines are the plan lines `lore org link` prints before it asks
+// (and alone with --dry-run). A client repo's sentence goes on to the
+// leak guards; an own repo's ends after the default, so it has no comma
+// left hanging. The org is named once: "one of <org>'s OWN repos of
+// <org>" said it twice (owner report, 0.1.18-dev).
+func linkPlanLines(plan orgresolve.LinkPlan) []string {
+	notes := fmt.Sprintf("internal notes default to %s %s/", plan.StoreURL, plan.Folder)
+	var lines []string
+	if plan.Own {
+		lines = []string{fmt.Sprintf("This marks %s as one of %s's OWN repos: %s.", plan.Remote, plan.Entry, notes)}
+	} else {
+		lines = []string{fmt.Sprintf("This marks %s as a CLIENT repo of %s: %s,", plan.Remote, plan.Entry, notes),
+			fmt.Sprintf("and the leak guards turn on for everyone in %s.", plan.Entry)}
+	}
+	return append(lines, fmt.Sprintf("  link: project %s at %s → %s@%s:%s/ (default=%v)", plan.ProjectID, plan.Remote, plan.StoreURL, plan.Branch, plan.Folder, plan.Default))
+}
+
+// linkDoneLine is the success line of `lore org link`: the remote and its
+// project id once each (it printed the remote twice: "<remote> (<id>,
+// <remote>)").
+func linkDoneLine(plan orgresolve.LinkPlan, storeURL, state string) string {
+	return fmt.Sprintf("✓ %s (%s) linked to %s %s/ (%s)", plan.Remote, plan.ProjectID, storeURL, plan.Folder, state)
+}
+
+// planLinkError is a refused link plan as a lore error: the cause and,
+// from orgresolve.LinkRefusal, the next step as the hint. Anything else
+// PlanLink returns is not the request's fault (a project id that could
+// not be derived): E_INTERNAL.
+func planLinkError(err error) error {
+	var lr *orgresolve.LinkRefusal
+	if errors.As(err, &lr) {
+		return errs.New(errs.InvalidInput, lr.Msg).WithHint(lr.Next)
+	}
+	return errs.Wrap(errs.Internal, "wire: plan the link: "+err.Error(), err).
+		WithHint("run it again; if it fails the same way, report it with the output of lore doctor --json")
 }
 
 // Unlink implements opsorgcmd.Host (F11 `lore org unlink`): list every
@@ -271,8 +299,11 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 	}
 	org := s.Config.FindOrg(in.Org)
 	if org == nil {
-		return opsorgcmd.Report{}, errs.New(errs.NotFound, fmt.Sprintf("no org entry named %q in ~/.lore/config.yaml", in.Org)).
-			WithHint("entries here: " + strings.Join(s.Config.OrgNames(), ", "))
+		hint := "this machine has no org entry yet; import the org first: lore org import <store url>"
+		if names := s.Config.OrgNames(); len(names) > 0 {
+			hint = "name one of the org entries: " + strings.Join(names, ", ")
+		}
+		return opsorgcmd.Report{}, errs.New(errs.NotFound, fmt.Sprintf("no org entry named %q in ~/.lore/config.yaml", in.Org)).WithHint(hint)
 	}
 	if s.ProjectID == "" {
 		return opsorgcmd.Report{}, errs.New(errs.NotProjectRoot, "no store links this repo: it has no project id (.lore/data/_meta.json) and no link names its remote").
@@ -360,7 +391,10 @@ func linkError(err error) error {
 	case errors.Is(err, orgcfg.ErrStoreOffline):
 		return errs.New(errs.Offline, err.Error()).WithHint("retry when the store is reachable")
 	case errors.Is(err, orgcfg.ErrFolderElsewhere):
-		return errs.New(errs.InvalidInput, err.Error())
+		// --store named one store and the folder lives in another (F13):
+		// the refusal named both but no way on.
+		return errs.New(errs.InvalidInput, err.Error()).
+			WithHint("drop --store to link into the store that holds the folder, or pick another --project folder for this store")
 	case errors.Is(err, orgcfg.ErrStoreRefused):
 		// The store answered and said no (a hook, branch protection): the
 		// git backend's remote refusal code (adapters/backend/git sync).

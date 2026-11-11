@@ -21,6 +21,7 @@ var ownNotFound = map[string]string{
 	"skill":   "",
 	"machine": "machine-local rows never land; hint: lore machine list",
 	"scope":   "show takes a path, not a row id",
+	"team":    "an org roster row, read on the roster App, not a repo row; hint: lore team list",
 }
 
 // TestNotFoundHintForEveryCoreNoun: `lore <noun> show <own-prefix id>` of

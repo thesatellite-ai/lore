@@ -41,8 +41,9 @@ type Project struct {
 	OriginURL  string          `json:"origin_url,omitempty"`
 	ArchivedAt string          `json:"archived_at,omitempty"`
 	Store      store.SourceRef `json:"_source,omitempty,omitzero"`
-	// line is the v0.1.17 human line of this project.
-	line string
+	// line is the v0.1.17 human line of this project; label the [store]
+	// Text ends it with ("" for a repo row, whose line stays v0.1.17's).
+	line, label string
 	// CreatedBy / UpdatedBy are the row envelope's writers (INTEG-AUDIT-1,
 	// auditrec), last so the older keys keep their order.
 	CreatedBy string `json:"created_by,omitempty"`
@@ -66,7 +67,7 @@ func (o ProjectListOut) Text() string {
 	}
 	var b strings.Builder
 	for _, p := range o.Data {
-		b.WriteString(p.line)
+		b.WriteString(withStoreLabel(p.line, p.label))
 	}
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
@@ -155,17 +156,88 @@ func (o ops) projectList(ctx context.Context, in ProjectListIn) (ProjectListOut,
 		out.Data = append(out.Data, Project{
 			ID: r.ID.String(), CreatedAt: timeOf(r, true), UpdatedAt: timeOf(r, false), Name: work.Field(r, fieldName), CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 			OriginURL: work.Field(r, fieldOrigin), ArchivedAt: work.TimeText(r, fieldArchivedAt), Store: sourceOf(work.LabelerOf(o.env), s.Source),
-			line: listLine(r, work.Field(r, fieldName)),
+			line: listLine(r, work.Field(r, fieldName)), label: work.Label(work.LabelerOf(o.env), s.Source),
 		})
 	}
-	out.Count = len(out.Data)
 	listed := make([]row.Row, 0, len(rows))
 	for _, s := range rows {
 		listed = append(listed, s.Row)
 	}
 	out.Notes = in.TrashNotes(listed)
+	if in.Store == "" && !in.DeletedOnly {
+		if fl, ok := upgrade.As[OrgFolderLister](o.env); ok {
+			folders, notes, ferr := fl.OrgFolderProjects(ctx)
+			if ferr != nil {
+				return ProjectListOut{}, ferr
+			}
+			out.Data = appendFolderProjects(out.Data, folders)
+			out.Notes = append(out.Notes, notes...)
+		}
+	}
+	out.Count = len(out.Data)
 	return out, nil
 }
+
+// OrgFolderLister is the optional Env upgrade (wire.App) that lists every
+// folder of every store of the org as a project (owner report 2026-11-11:
+// in a linked repo `project list` showed only the org folder and the
+// repo's own folder, although a folder of any store of the org is a
+// project its people work on, and `team invite --project` takes its name).
+// A folder's id is its _meta.json project_id, so a folder whose project
+// row is not written yet is listed too. notes name the stores it could not
+// read.
+type OrgFolderLister interface {
+	OrgFolderProjects(ctx context.Context) (folders []FolderProject, notes []string, err error)
+}
+
+// FolderProject is one folder of one of the org's stores.
+type FolderProject struct {
+	ID     string
+	Name   string
+	Source store.SourceRef
+}
+
+// appendFolderProjects adds the folders no listed row already names (a
+// folder's row, once written, carries the folder's id), sorted by name. A
+// listed row of a folder is named by the folder's store: the repo attaches
+// its linked folder under the org's name, whichever store holds it.
+func appendFolderProjects(data []Project, folders []FolderProject) []Project {
+	at := map[string]int{}
+	for i, p := range data {
+		at[p.ID] = i
+	}
+	slices.SortFunc(folders, func(a, b FolderProject) int { return strings.Compare(a.Name, b.Name) })
+	for _, f := range folders {
+		if i, ok := at[f.ID]; ok {
+			if data[i].Store.Store != "" { // a store row, not the repo's own
+				data[i].Store.Store = f.Source.Store
+				data[i].label = storeMark(f.Source.Store, f.Source.Folder)
+			}
+			continue
+		}
+		at[f.ID] = len(data)
+		data = append(data, Project{ID: f.ID, Name: f.Name, Store: f.Source,
+			line: f.ID + "  " + f.Name + folderOnlyMark + "\n", label: storeMark(f.Source.Store, f.Source.Folder)})
+	}
+	return data
+}
+
+// storeMark is the [store/folder] a list line ends with.
+func storeMark(store, folder string) string { return "[" + store + "/" + folder + "]" }
+
+// withStoreLabel ends a list line with the [store] its row lives in, so
+// a list that spans the org's stores says where each project is; a repo
+// row (label "") keeps v0.1.17's line.
+func withStoreLabel(line, label string) string {
+	if label == "" {
+		return line
+	}
+	return strings.TrimSuffix(line, "\n") + "  " + label + "\n"
+}
+
+// folderOnlyMark follows the name of a folder whose project row is not
+// written yet (store folder add made it; its first row writes the row).
+const folderOnlyMark = "  (folder, no rows yet)"
 
 // projectShow shows one project (a prj_ id or a name, work.ProjectRef)
 // with its repos.

@@ -21,7 +21,7 @@ $ lore org link agency --project client2 --yes
 This marks github.com/client2/api as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_7a67…9504 at github.com/client2/api → github.com/agency/notes@main:client2/ (default=false)
-✓ github.com/client2/api (prj_7a67…9504, github.com/client2/api) linked to github.com/agency/notes client2/ (created; pushed)
+✓ github.com/client2/api (prj_7a67…9504) linked to github.com/agency/notes client2/ (created; pushed)
   nothing was written to this repo
 
 # alice, in app
@@ -29,7 +29,7 @@ $ lore org link agency --project client2 --yes
 This marks github.com/client2/app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_2ad3…f891 at github.com/client2/app → github.com/agency/notes@main:client2/ (default=false)
-✓ github.com/client2/app (prj_2ad3…f891, github.com/client2/app) linked to github.com/agency/notes client2/ (pushed)
+✓ github.com/client2/app (prj_2ad3…f891) linked to github.com/agency/notes client2/ (pushed)
   nothing was written to this repo
 
 # alice, in infra
@@ -37,7 +37,7 @@ $ lore org link agency --project client2 --yes
 This marks github.com/client2/infra as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_162d…9666 at github.com/client2/infra → github.com/agency/notes@main:client2/ (default=false)
-✓ github.com/client2/infra (prj_162d…9666, github.com/client2/infra) linked to github.com/agency/notes client2/ (pushed)
+✓ github.com/client2/infra (prj_162d…9666) linked to github.com/agency/notes client2/ (pushed)
   nothing was written to this repo
 ```
 <!-- /example -->

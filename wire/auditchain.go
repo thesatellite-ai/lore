@@ -179,12 +179,36 @@ func (c *chainAudit) boundApp() *App { return c.app }
 
 // Session implements SessionSource: this process's ses_ id (App.CurrentSession),
 // "" before New bound an App or when no session applies.
+//
+// Finding the session may itself write: in a repo linked by its remote,
+// CurrentSession's project is the linked folder's, whose row the first
+// write makes (linkedFolderProject). That row's audit record asks for the
+// session again, from inside sesOnce, and a sync.Once re-entered on its
+// own goroutine waits forever (owner report 2026-11-11: the first
+// `lore team invite` from such a repo hung at 0% CPU). So the lookup runs
+// with findingSession on its context, and a write made under it records
+// without a session link (as a sessions row's own event does) instead of
+// asking again.
 func (c *chainAudit) Session(ctx context.Context) (string, error) {
-	if c.app == nil {
+	if c.app == nil || findingSessionOf(ctx) {
 		return "", nil
 	}
-	c.sesOnce.Do(func() { c.ses, c.sesErr = c.app.CurrentSession(ctx) })
+	c.sesOnce.Do(func() { c.ses, c.sesErr = c.app.CurrentSession(withFindingSession(ctx)) })
 	return c.ses, c.sesErr
+}
+
+// findingSessionKey marks a context inside chainAudit.Session's lookup.
+type findingSessionKey struct{}
+
+// withFindingSession marks ctx as the session lookup's own.
+func withFindingSession(ctx context.Context) context.Context {
+	return context.WithValue(ctx, findingSessionKey{}, true)
+}
+
+// findingSessionOf reports whether ctx is inside the session lookup.
+func findingSessionOf(ctx context.Context) bool {
+	v, _ := ctx.Value(findingSessionKey{}).(bool)
+	return v
 }
 
 // ToolSessionIDs implements ToolSessionSource (OV11, later 434): the raw

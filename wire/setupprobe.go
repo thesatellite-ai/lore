@@ -65,7 +65,6 @@ const (
 	// org store rows); each names where the user can look instead. User
 	// words only: they show in doctor --all and its --json.
 	skipNotHere       = "not checked here yet"
-	skipNotHereRoster = skipNotHere + "; lore actor list in a repo of the org shows the roster"
 	skipNotHereInvite = skipNotHere + "; lore team invite list --status pending shows the pending invites"
 	skipNoOrg         = "no org for this setup"
 	skipNoName        = "no name answered yet"
@@ -88,6 +87,9 @@ func (sp setupProber) Probe(ctx context.Context, reqs []opssetup.ProbeRequest) [
 	// store.marker and org.free share one fetch, store.write one dry-run
 	// push (adapters/probe/snapshot.go). The memo ends with this call.
 	ctx = probe.WithRemoteMemo(ctx)
+	// One roster read per org and person for this batch: identity.roster
+	// and identity.period share it (setupprobe_roster.go).
+	ctx = withRosterMemo(ctx)
 	reqs = sp.withCreateTarget(ctx, reqs)
 	// At most opsdoctor.MaxParallel checks at once (min(4, CPUs)): one
 	// goroutine per request ran every check of every setup together.
@@ -378,13 +380,15 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		return sp.storePrivate(ctx, r)
 	case onboard.CheckInviteGitHubAccess:
 		return sp.collaborator(ctx, r)
+	case onboard.CheckIdentityRoster, onboard.CheckIdentityPeriod:
+		return sp.rosterCheck(ctx, r) // setupprobe_roster.go
 	case onboard.CheckSecretsBackendPresent:
 		return sp.secretsBackend(ctx, r)
 	case onboard.CheckFoldersExist:
 		return sp.foldersExist(r)
 	}
-	// Roster, invite, period and live checks read org store rows: the
-	// ops that own those reads answer them (A7/A9), not this prober.
+	// Invite and live checks read org store rows: the ops that own those
+	// reads answer them (A7/A9), not this prober.
 	return skip(notHereDetail(r.Check.ID))
 }
 
@@ -435,8 +439,6 @@ func repoTarget(t string) string { return opssetup.TargetRepo(t) }
 // where the user can look instead, when there is a command for it.
 func notHereDetail(id onboard.CheckID) string {
 	switch id {
-	case onboard.CheckIdentityRoster, onboard.CheckIdentityPeriod:
-		return skipNotHereRoster
 	case onboard.CheckInvitePending:
 		return skipNotHereInvite
 	}

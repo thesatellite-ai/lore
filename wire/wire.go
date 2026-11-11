@@ -561,6 +561,7 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opssetup.FolderOps(a)...)   // setup.folders / setup.browse: the Folders step's suggestions and folder browser
 	entries = append(entries, opssetup.ImportOps(a)...)   // setup.import_scan / setup.import: import an existing lore install
 	entries = append(entries, opsteam.Ops(a)...)          // ONB 4.6: team.invite, .list, .revoke, .resend
+	entries = append(entries, opsteam.TeamOps(a)...)      // F18: team.add, .list, .show, .remove, .member.add|remove
 	entries = append(entries, opsrepoinit.Ops(a)...)      // ONB 4.10: lore init as a registry op (repo.init) for the setup page
 	entries = append(entries, opscoord.Ops(a)...)
 	entries = append(entries, opssupportbundle.Ops(a)...)
