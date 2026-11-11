@@ -34,6 +34,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/thesatellite-ai/lore/tests/e2eenv"
 )
 
 // Account is one GitHub login of the world.
@@ -498,6 +500,9 @@ func (w *World) env(loreDir, apiURL string) []string {
 		"HOME=" + w.Home, "TERM=dumb", "LANG=C.UTF-8", "GIT_CONFIG_NOSYSTEM=1",
 		"LORE_NO_UPDATE_CHECK=1", "LORE_HUMAN=1", "TMPDIR=" + os.TempDir(),
 	}
+	// The gate's Go runtime settings for lore processes (LORE_E2E_GOENV, package e2eenv): they
+	// change what a lore process costs, never what it does.
+	e = append(e, e2eenv.LoreGoEnv()...)
 	if apiURL != "" {
 		e = append(e, "LORE_GITHUB_API="+apiURL)
 	}

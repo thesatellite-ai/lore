@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/tests/e2eenv"
 )
 
 // Shape names, the closed set Build accepts.
@@ -163,12 +165,14 @@ func (m *Machine) env() []string {
 	if len(m.PathPrefix) > 0 {
 		path = strings.Join(m.PathPrefix, ":") + ":" + path
 	}
-	return append([]string{
+	// e2eenv: the gate's Go runtime settings for lore processes (LORE_E2E_GOENV).
+	env := append([]string{
 		"PATH=" + path,
 		"HOME=" + m.Home, "TERM=dumb", "LANG=C.UTF-8", "GIT_CONFIG_NOSYSTEM=1",
 		"LORE_NO_UPDATE_CHECK=1", "LORE_HUMAN=1", "LORE_GITHUB_API=" + deadAPI,
 		"TMPDIR=" + filepath.Join(m.Dir, "tmp"), "FAKE_W=" + m.Dir,
-	}, m.ExtraEnv...)
+	}, e2eenv.LoreGoEnv()...)
+	return append(env, m.ExtraEnv...)
 }
 
 // Build makes a machine of the shape under a fresh short directory

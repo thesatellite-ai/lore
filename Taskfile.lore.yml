@@ -24,6 +24,19 @@ version: "3"
 # the release build does. check:gocache bounds what is left (docs/DEVELOPMENT.md).
 env:
   GOFLAGS: "-trimpath -buildvcs=false"
+  # Go runtime settings of every lore process the end-to-end suites start (the harnesses add
+  # them to lore's environment: tests/e2eenv for teamharness, machines and setupe2e, envfor in
+  # the docs runners). A lore command lives a fraction of a second, but Go sizes it for every
+  # core: on the 48-core gate server about 40 % of each process's CPU went to 12 garbage-
+  # collector workers and idle scheduler threads, and the gate was bound by CPU (measured
+  # 2026-11-11 on the docs examples, ~1400 lore processes: 371 CPU-s with Go's defaults, 266
+  # with GOMAXPROCS=8 GOGC=200, 260 with GOMAXPROCS=2 GOGC=400, 233 with GC off up to a 512 MiB
+  # soft limit; each process peaks at 64 to 105 MB either way). Two procs also keep a process's
+  # bursts small, so the load follows the cores each gate step declares. They change what a
+  # run costs, never what lore does; the Go toolchain and the test binaries keep Go's defaults
+  # (the linker needs ~700 MB, over that limit), and a person's lore is untouched. An
+  # environment value of LORE_E2E_GOENV wins; set it empty for Go's defaults.
+  LORE_E2E_GOENV: '{{env "LORE_E2E_GOENV" | default "GOMAXPROCS=2 GOGC=off GOMEMLIMIT=512MiB"}}'
 
 vars:
   BIN_DIR: "{{.ROOT_DIR}}/tmp/bin"
@@ -33,6 +46,9 @@ vars:
   # File inside .git where `task check` records the tree it passed for; the
   # pre-push hook (.githooks/pre-push) reads the same name.
   CHECK_STAMP: "lore-check-passed"
+  # File inside .git where `task check:fast` records the tree it passed for. The pre-push hook
+  # accepts either stamp (the landing rule, docs/DEVELOPMENT.md "Landing").
+  CHECK_FAST_STAMP: "lore-check-fast-passed"
   # File inside .git holding the tree when `task check` started: the stamp is
   # refused if any gate step (or a concurrent edit) changed tracked files.
   CHECK_BEGIN: "lore-check-begin"
@@ -81,6 +97,114 @@ vars:
   # requests through apiRunner.
   # Folder of the per-step logs and timing tables of lore:check (gitignored tmp/).
   GATE_LOG_DIR: "{{.ROOT_DIR}}/tmp/check"
+  # The gate's load budget: how many cores its steps may keep busy at once (GATE_SLOTS of
+  # tests/lib/gate-parallel.sh; each step names its cores). 40 of the 48-core gate server: the
+  # load stays under the core count, so no step waits for a core and the kernel does not spend
+  # the CPU switching between hundreds of runnable processes (the old e2e stage averaged a load
+  # of 161 and spent 42 % of its CPU in the kernel). One full gate runs at a time (testlock).
+  # Override for another machine: GATE_SLOTS=12 task check.
+  GATE_SLOTS: '{{env "GATE_SLOTS" | default "40"}}'
+  # Every step of the gate (lore:check), one per line: name, the cores it keeps busy on average
+  # (its share of GATE_SLOTS: CPU seconds / wall seconds measured in the gate of 2026-11-11 at
+  # the -parallel, JOBS or SHARDS it is given), the task with its vars. Heaviest first, so the
+  # steps that take longest at their share never start late: tests/lib/gate-parallel.sh starts
+  # them in this order as cores free up. The journeys are long walks of a few serial tests, so
+  # they cost few cores but go early too. Each e2e step builds its own binary under its own name (lore-team,
+  # lore-docs-verify, lore-setupe2e, lore-machines-<part>, lore-journeys-<part>, userscen's temp
+  # dir), so no two steps write one file. lore:check:fast runs a subset of these same lines
+  # (FAST_MAP). tests/lib/gate-steps.sh reads the table.
+  GATE_STEPS: |
+    userscen          13  test:scen PARALLEL=13
+    setupe2e          11  test:setupe2e:run PARALLEL=10
+    journey-teamlead  3   test:journeys:teamlead PARALLEL=2
+    journey-solo      2   test:journeys:solo PARALLEL=4
+    machines          7   test:machines:core PARALLEL=8
+    journey-agency    2   test:journeys:agency PARALLEL=2
+    journey-joiner    2   test:journeys:joiner PARALLEL=2
+    sweep-rest        7   test:machines:sweep:rest PARALLEL=8
+    teame2e           7   test:team:run PARALLEL=10
+    race-wire         12  test:race:wire SHARDS=6
+    life-teams        4   test:machines:life:teams PARALLEL=4
+    test-all          6   test:all
+    docs-examples     5   docs:examples:verify JOBS=4
+    sweep-tasks       4   test:machines:sweep:tasks PARALLEL=4
+    life-setups       3   test:machines:life:setups PARALLEL=3
+    life-objects      3   test:machines:life:objects PARALLEL=3
+    life-rest         3   test:machines:life:rest PARALLEL=3
+    journey-agents    2   test:journeys:agents PARALLEL=2
+    journey-folders   2   test:journeys:folders PARALLEL=2
+    journey-land      2   test:journeys:land PARALLEL=2
+    journey-upgrader  2   test:journeys:upgrader PARALLEL=2
+    scenarios         3   scenarios:run JOBS=4
+    chaos             1   chaos:run JOBS=4
+    race              2   test:race:rest
+    cross-builds      4   build:cross
+    staticcheck       2   lint:staticcheck
+    vet               2   lint:vet
+    journey-frame     1   test:journeys:frame PARALLEL=1
+    gofmt             1   lint:fmt
+    tidy              1   check:tidy
+    docsync           1   check:docs
+  # Lines lore:check:fast puts in front of GATE_STEPS (same format; a name listed twice keeps
+  # its first line): the race detector on just the race-set packages the change touches
+  # (lore:test:race:changed, a step only the fast tier has), and a larger share, started first,
+  # for the two suites product code always brings in. The fast tier runs a handful of steps, so
+  # userscen at its full-gate share (13 cores) took 407 of its 426 s while half the budget sat
+  # idle (sample of 2026-11-11).
+  FAST_EXTRA_STEPS: |
+    race-changed      6   test:race:changed
+    userscen          24  test:scen PARALLEL=28
+    teame2e           8   test:team:run PARALLEL=12
+  # The steps lore:check:fast always runs, whatever the change (names from GATE_STEPS and
+  # FAST_EXTRA_STEPS); FAST_MAP adds the end-to-end ones.
+  FAST_UNIT_STEPS: "test-all race-changed cross-builds staticcheck vet gofmt tidy docsync"
+  # The fast tier's mapping (lore:check:fast): which end-to-end steps of GATE_STEPS a change
+  # needs, by the paths it changes. One rule per line, "<bash glob> <step>..." ("-" = no e2e
+  # step; the fast tier always runs build, vet, gofmt, staticcheck, cross-builds, tidy, docsync,
+  # every unit test and the race set of the touched packages). The first rule that matches a
+  # changed file wins; a file no rule names falls to "*", which runs every e2e step: when unsure,
+  # run it (tests/lib/fast-plan.sh). Product code (any other .go file) runs what reads the
+  # binary's output and behaviour most widely (every docs section, the scenarios, chaos, the
+  # user scenarios and the team suite); the setup, doctor, store and migration code adds the
+  # suites built around them. The full gate still runs every step on the landed main
+  # (lore:check:after-land), so the map decides what a small fix waits for, not what is tested.
+  FAST_MAP: |
+    docs/team/*                     docs-examples
+    docs/*                          docs-examples
+    tests/docs/*                    docs-examples
+    tests/team/docs/*               docs-examples
+    tests/lib/parallel-sections.sh  docs-examples
+    tests/userscen/*                userscen
+    tests/teame2e/teamharness/*     teame2e userscen journey-frame journey-teamlead journey-solo journey-agency journey-joiner journey-agents journey-folders journey-upgrader journey-land
+    tests/teame2e/*                 teame2e
+    tests/setupe2e/*                setupe2e
+    tests/machines/*                machines sweep-rest sweep-tasks life-teams life-setups life-objects life-rest
+    tests/journeys/*                journey-frame journey-teamlead journey-solo journey-agency journey-joiner journey-agents journey-folders journey-upgrader journey-land
+    tests/scenarios/*               scenarios
+    tests/chaos/*                   chaos
+    tests/lib/common.sh             scenarios chaos
+    tests/lib/run-scripts.sh        scenarios chaos
+    tests/tools/*                   scenarios chaos
+    tests/lib/gotest-shards.sh      race-wire
+    tests/lib/gate-*.sh             -
+    tests/lib/fast-plan.sh          -
+    tests/lib/gocache-trim.sh       -
+    .githooks/*                     -
+    Taskfile*.yml                   -
+    *_test.go                       -
+    *.md                            -
+    skills/*                        -
+    .ds/*                           -
+    ops/setup/*                     docs-examples scenarios chaos userscen teame2e setupe2e machines life-setups life-teams life-rest journey-joiner journey-teamlead
+    surface/setupweb/*              docs-examples scenarios chaos userscen teame2e setupe2e life-rest
+    wire/setup*                     docs-examples scenarios chaos userscen teame2e setupe2e machines life-setups life-teams life-rest
+    ops/doctor/*                    docs-examples scenarios chaos userscen teame2e machines sweep-rest sweep-tasks
+    adapters/orgcfg/*               docs-examples scenarios chaos userscen teame2e setupe2e machines life-teams journey-agency journey-joiner
+    ops/migrate/*                   docs-examples scenarios chaos userscen teame2e journey-upgrader machines
+    *.go                            docs-examples scenarios chaos userscen teame2e
+    go.mod                          docs-examples scenarios chaos userscen teame2e
+    go.sum                          docs-examples scenarios chaos userscen teame2e
+    *                               journey-teamlead journey-solo userscen setupe2e journey-agency journey-joiner teame2e machines sweep-rest life-teams docs-examples journey-land journey-agents journey-folders journey-upgrader life-setups sweep-tasks life-objects life-rest scenarios chaos journey-frame
   # Runs one step of lore:check as its own task process (tests/lib/gate-parallel.sh starts each
   # step in a separate shell). TASKFILE is this file's own path, so it works when this file is
   # included as `lore:` and when it is run alone with `task -t Taskfile.lore.yml`.
@@ -98,6 +222,17 @@ tasks:
       # installs keeps its commit (the setup page's About shows it).
       - CGO_ENABLED=0 go build -trimpath -buildvcs=auto -ldflags='-buildid= -s -w -X main.version={{.VERSION}}' -o {{.LORE_BIN}} ./cmd/lore
       - echo "Built {{.LORE_BIN}} ({{.VERSION}})"
+
+  build:warm:
+    desc: "Compile every package of the root module once, plain and in the race set's -race variant, so the gate's parallel steps find them in Go's build cache instead of each compiling the same packages at the same time (lore:check's warm stage; next to free when the cache already has them)"
+    cmds:
+      # Why: after the cache was emptied (check:gocache, or another worktree's gate), ~20 steps
+      # started together and each compiled lore, the modernc SQLite translation and the test
+      # packages on its own: gate run 1 of 2026-11-11 spent most of its first minutes compiling
+      # the same code many times over. Build tags do not change a shared package's cache entry,
+      # so one plain and one race compile serve every step.
+      - go build ./...
+      - go build -race -gcflags='{{.RACE_GCFLAGS}}' {{.RACE_PKGS}}
 
   build:test:
     desc: "Build tmp/bin/lore for the gate's shell scenarios and chaos runs: the test version \"dev\" and no VCS stamp, so a new commit does not change how the binary is built (lore:build stamps the real version)"
@@ -160,15 +295,56 @@ tasks:
     deps: [test:all, test:race]
 
   test:race:
-    desc: "Race detector on the packages with real concurrency, RACE_PKGS (engine, adapters, logic, model, store, surface/rest, surface/setupweb, ops/setup, ops/memory, ops/doctor, wire, wire/host, teamharness); Taskfile.lore.yml says why each is there"
+    desc: "Race detector on the packages with real concurrency, RACE_PKGS (engine, adapters, logic, model, store, surface/rest, surface/setupweb, ops/setup, ops/memory, ops/doctor, wire, wire/host, teamharness); Taskfile.lore.yml says why each is there. The two parts below run in parallel"
+    deps: [test:race:rest, test:race:wire]
+
+  test:race:rest:
+    desc: "The race set without ./wire (lore:test:race:wire runs it in shards)"
     cmds:
-      - go test -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m {{.RACE_PKGS}}
+      - go test -p 8 -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m $(printf '%s\n' {{.RACE_PKGS}} | grep -vx './wire')
+
+  test:race:wire:
+    desc: "./wire under the race detector in SHARDS processes of one test binary (tests/lib/gotest-shards.sh): 123 of its 569 tests are serial (113 use t.Setenv), so one process took 200 s while the rest of the race set took 25 s"
+    vars:
+      SHARDS: '{{.SHARDS | default "6"}}'
+    cmds:
+      # GOMAXPROCS=4 per shard: each shard's parallel tests run on at most four cores, so the
+      # six shards stay near their share of the gate's load budget (run unbounded, the shards
+      # took 13 cores on average and bursts far above).
+      - GOMAXPROCS=4 tests/lib/gotest-shards.sh {{.SHARDS}} ./wire -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m
+
+  test:race:changed:
+    desc: "Race detector on the RACE_PKGS packages that hold a changed .go file (since the merge base with FAST_BASE, default origin/main; go.mod/go.sum changes select the whole set; tests/lib/fast-plan.sh race). Part of lore:check:fast"
+    env:
+      RACE_PKGS: "{{.RACE_PKGS}}"
+    cmds:
+      - |
+        pkgs=$(tests/lib/fast-plan.sh race)
+        if [ -z "$pkgs" ]; then
+          echo "no race-set package changed"
+          exit 0
+        fi
+        echo "race on:" $pkgs
+        # ./wire goes through the same shards as the full gate (lore:test:race:wire); one process
+        # of it alone took 200 s.
+        rest=$(printf '%s\n' $pkgs | grep -vx './wire' || true)
+        rc=0
+        if printf '%s\n' $pkgs | grep -qx './wire'; then
+          GOMAXPROCS=4 tests/lib/gotest-shards.sh 6 ./wire -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m & wire=$!
+        fi
+        if [ -n "$rest" ]; then
+          go test -p 8 -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m $rest || rc=1
+        fi
+        if [ -n "${wire:-}" ]; then wait "$wire" || rc=1; fi
+        exit $rc
 
   test:all:
     desc: "Every Go test of the root module without -race, incl. cmd/lore's docs drift test (the team suite is lore:test:team)"
     cmds:
       # No -count=1: go test reruns a package when its code, the env vars or the files it reads change.
-      - go test ./...
+      # -p 8: at most eight package test binaries at once (each runs its parallel tests on every
+      # core), the cap of one go test process in the gate's load budget.
+      - go test -p 8 ./...
 
   check:tidy:
     desc: "Fail when `go mod tidy` would change go.mod or go.sum (go mod tidy -diff: never writes them)"
@@ -215,7 +391,9 @@ tasks:
       - rm -rf "{{.ROOT_DIR}}/tmp/check"
 
   check:stamp:
-    desc: "Record that the gate passed for the tracked files as they are now (read by the pre-push hook); refused if they changed while it ran"
+    desc: "Record that the gate passed for the tracked files as they are now (read by the pre-push hook); refused if they changed while it ran. STAMP names the file inside .git (default the full gate's; check:fast passes its own)"
+    vars:
+      STAMP: '{{.STAMP | default .CHECK_STAMP}}'
     cmds:
       - |
         set -e
@@ -227,11 +405,11 @@ tasks:
           echo "  (a gate step must not modify tracked files; or an edit happened during the run)"
           exit 1
         fi
-        echo "$tree" > "$(git rev-parse --git-path {{.CHECK_STAMP}})"
-        echo "✓ gate passed for tree $tree"
+        echo "$tree" > "$(git rev-parse --git-path {{.STAMP}})"
+        echo "✓ gate passed for tree $tree ({{.STAMP}})"
 
   check:
-    desc: "FULL tier, THE gate — run before every push (the pre-push hook enforces it): build, then lint, cross-builds, tidy, docsync, every unit test and the race set in parallel, then every end-to-end suite (userscen, teame2e, setupe2e with the page e2e, machines, scenarios, chaos, docs example runners) in parallel; per-step logs and wall times in tmp/check"
+    desc: "FULL tier, THE gate — run before every push (the pre-push hook enforces it; a small fix may land on lore:check:fast, then this runs on main): bound the Go cache, compile once, build, then every step of GATE_STEPS (lint, cross-builds, tidy, docsync, every unit test, the race set, every end-to-end suite) under the GATE_SLOTS load budget, heaviest first; per-step logs, wall and CPU times in tmp/check"
     cmds:
       - testlock task --taskfile "{{.TASKFILE}}" check:run
 
@@ -239,57 +417,59 @@ tasks:
     desc: "Body of lore:check WITHOUT the machine-wide test lock; call lore:check instead"
     env:
       GATE_LOG_DIR: "{{.GATE_LOG_DIR}}"
+      GATE_STEPS: "{{.GATE_STEPS}}"
+      GATE_SELF: "{{.SELF}}"
     cmds:
       - task: check:begin
       # Stage cache: bound the shared Go build cache before anything builds (check:gocache), alone,
       # because emptying it under a running build would fail that build.
       - tests/lib/gate-parallel.sh cache 'gocache={{.SELF}} check:gocache'
+      # Stage warm: compile the module once (plain and race) before the steps that all use it.
+      - tests/lib/gate-parallel.sh warm 'warm={{.SELF}} build:warm'
       # Stage build: the test binary the shell scenarios and chaos runs use (build:test: version
       # "dev", no VCS stamp). Built alone first because scenarios and chaos only read it; their
       # public tasks rebuild it (deps: [build]), which two parallel steps must not do to one path.
       - tests/lib/gate-parallel.sh build 'build={{.SELF}} build:test'
-      # Stage unit: everything that only needs the source. Each step is its own process; Go's
-      # build cache is shared and safe for concurrent builds.
-      - >-
-        tests/lib/gate-parallel.sh unit
-        'vet={{.SELF}} lint:vet'
-        'gofmt={{.SELF}} lint:fmt'
-        'staticcheck={{.SELF}} lint:staticcheck'
-        'cross-builds={{.SELF}} build:cross'
-        'tidy={{.SELF}} check:tidy'
-        'docsync={{.SELF}} check:docs'
-        'test-all={{.SELF}} test:all'
-        'race={{.SELF}} test:race'
-      # Stage e2e: the suites that run the real binary. Run after stage unit, not beside it: both
-      # stages saturate every core, and the e2e suites' timeouts assume a machine they share only
-      # with each other. Each builds its own binary under its own name (lore-team, lore-docs,
-      # lore-setupe2e, userscen's temp dir).
-      - >-
-        tests/lib/gate-parallel.sh e2e
-        'userscen={{.SELF}} test:scen'
-        'teame2e={{.SELF}} test:team:run'
-        'setupe2e={{.SELF}} test:setupe2e:run'
-        'machines={{.SELF}} test:machines:core'
-        'sweep-tasks={{.SELF}} test:machines:sweep:tasks'
-        'sweep-rest={{.SELF}} test:machines:sweep:rest'
-        'life-setups={{.SELF}} test:machines:life:setups'
-        'life-teams={{.SELF}} test:machines:life:teams'
-        'life-objects={{.SELF}} test:machines:life:objects'
-        'life-rest={{.SELF}} test:machines:life:rest'
-        'journey-frame={{.SELF}} test:journeys:frame'
-        'journey-solo={{.SELF}} test:journeys:solo'
-        'journey-agency={{.SELF}} test:journeys:agency'
-        'journey-teamlead={{.SELF}} test:journeys:teamlead'
-        'journey-joiner={{.SELF}} test:journeys:joiner'
-        'journey-agents={{.SELF}} test:journeys:agents'
-        'journey-folders={{.SELF}} test:journeys:folders'
-        'journey-upgrader={{.SELF}} test:journeys:upgrader'
-        'journey-land={{.SELF}} test:journeys:land'
-        'scenarios={{.SELF}} scenarios:run'
-        'chaos={{.SELF}} chaos:run'
-        'docs-examples={{.SELF}} docs:examples:verify'
+      # Stage test: every check, unit and end to end, in ONE stage under the load budget
+      # (GATE_SLOTS cores; tests/lib/gate-parallel.sh starts each step when its cores are free,
+      # in the order of GATE_STEPS, which says why it is longest first). Per-step wall and CPU
+      # seconds and the load are printed at the end (tmp/check/timings.tsv, stages.tsv).
+      - GATE_SLOTS={{.GATE_SLOTS}} tests/lib/gate-steps.sh test
       - task: check:stamp
       - echo "✓ task check — every gate passed (logs in {{.GATE_LOG_DIR}})"
+
+  check:fast:
+    desc: "FAST tier for landing a small fix, about 5 min: build, vet, gofmt, staticcheck, cross-builds, tidy, docsync, every unit test (go test ./..., cached), the race detector on the touched race-set packages, and the end-to-end steps the changed paths need (FAST_MAP; unsure = run it). Writes its own stamp (lore-check-fast-passed), which the pre-push hook accepts; the full gate then runs on the landed main (lore:check:after-land). docs/DEVELOPMENT.md \"Landing\""
+    cmds:
+      - testlock task --taskfile "{{.TASKFILE}}" check:fast:run
+
+  check:fast:run:
+    desc: "Body of lore:check:fast WITHOUT the machine-wide test lock; call lore:check:fast instead"
+    env:
+      GATE_LOG_DIR: "{{.GATE_LOG_DIR}}"
+      GATE_STEPS: "{{.FAST_EXTRA_STEPS}}{{.GATE_STEPS}}"
+      GATE_SELF: "{{.SELF}}"
+      FAST_MAP: "{{.FAST_MAP}}"
+      RACE_PKGS: "{{.RACE_PKGS}}"
+    cmds:
+      - task: check:begin
+      - tests/lib/gate-parallel.sh cache 'gocache={{.SELF}} check:gocache'
+      - tests/lib/gate-parallel.sh warm 'warm={{.SELF}} build:warm'
+      - tests/lib/gate-parallel.sh build 'build={{.SELF}} build:test'
+      - |
+        set -e
+        e2e=$(tests/lib/fast-plan.sh steps)
+        echo "changed files: $(tests/lib/fast-plan.sh files | wc -l | tr -d ' ') (since the merge base with ${FAST_BASE:-origin/main})"
+        echo "end-to-end steps for them: ${e2e:-none}" | tr '\n' ' '; echo
+        GATE_SLOTS={{.GATE_SLOTS}} tests/lib/gate-steps.sh fast {{.FAST_UNIT_STEPS}} $e2e
+      - task: check:stamp
+        vars: {STAMP: "{{.CHECK_FAST_STAMP}}"}
+      - echo "✓ task check:fast passed (logs in {{.GATE_LOG_DIR}}); the full gate runs on main after landing (task check:after-land)"
+
+  check:after-land:
+    desc: "The full gate on what landed: fetch origin, a fresh worktree of origin/main in a temp folder, task check there, then the result in LORE_GATE_REPORT (default ~/.local/state/lore-gate/last.md; first line PASS or FAIL with the commit, then the step timings) with the step logs beside it. Run it right after landing a fix that passed only check:fast; a FAIL is fixed at once (docs/DEVELOPMENT.md \"Landing\")"
+    cmds:
+      - tests/lib/after-land.sh
 
   hooks:install:
     desc: "Use the repo's committed hooks (.githooks): pre-push runs `task check` unless it already passed for the exact code being pushed"
@@ -312,7 +492,9 @@ tasks:
       # test process opens, never on the lore sources that subprocess compiles. A cached pass
       # would replay after any change to lore itself, so this step (and the userscen step of
       # task check, which calls it) always runs the binary built from the current tree.
-      - CGO_ENABLED=0 go test -tags userscen -count=1 -timeout 60m ./tests/userscen/... {{.CLI_ARGS}}
+      # -parallel: how many scenarios run at once (each drives lore processes one after another);
+      # the gate passes its share of the load budget, a manual run uses 32.
+      - "CGO_ENABLED=0 go test -tags userscen -count=1 -parallel {{.PARALLEL | default 32}} -timeout 60m ./tests/userscen/... {{.CLI_ARGS}}"
 
   test:team:
     desc: "Team e2e suite (LORE_TEAM_SPEC.md): real binary, real git, many actors. Not built yet = PENDING (skip); LORE_TEAM_STRICT=1 fails pending tests, LORE_TEAM_FORCE=1 skips the capability probe. Extra go test flags after --"
@@ -336,7 +518,9 @@ tasks:
       # took 630 s and the default killed a passing test mid-run.
       - |
         set -o pipefail
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -timeout 40m -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./tests/teame2e/ {{.CLI_ARGS}} \
+        # -parallel: how many team tests run at once (the gate passes its share of the load
+        # budget; a manual run uses 24).
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -parallel {{.PARALLEL | default 24}} -timeout 40m -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./tests/teame2e/ {{.CLI_ARGS}} \
           | go run ./tests/teame2e/teamharness/matrix
 
   test:setupe2e:
@@ -356,7 +540,8 @@ tasks:
       # -parallel 32, not the default 48 (GOMAXPROCS on a 48-core machine): measured 2026-11-07 back to back,
       # 189 s at 32 vs 194 s at 48; each shape spawns lore processes, so more Go-level
       # parallelism only adds load.
-      - SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel 32 -timeout 60m -run '^(TestAPIMatrix|TestBinaryServesDefaultUI|TestPairwiseCoversEveryPair|TestShapeValidate)$' ./tests/setupe2e/
+      # PARALLEL: the gate passes its share of the load budget.
+      - "SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel {{.PARALLEL | default 32}} -timeout 60m -run '^(TestAPIMatrix|TestBinaryServesDefaultUI|TestPairwiseCoversEveryPair|TestShapeValidate)$' ./tests/setupe2e/"
 
   test:machines:
     desc: "Real-machine suite (tests/machines, tag machines): homes shaped like real users' (fresh, v0.1.17, migrated with *.migrated backups, several gh accounts and ssh aliases with a key without .pub, org member, setups disabled/trashed/purged) and every valid 4-step setup lifecycle sequence on them, checking after each step that nothing purged or trashed is offered, disabled never applies, config check knows every key, doctor --all reports, and repo files are 0644 / ~/.lore owner-only. MACHINES_FULL=1 runs every sequence on every shape"
@@ -384,7 +569,8 @@ tasks:
     cmds:
       - mkdir -p {{.BIN_DIR}}
       - CGO_ENABLED=0 go build -o {{.MACHINES_BIN}} ./cmd/lore
-      - MACHINES_LORE={{.MACHINES_BIN}} go test -tags machines -count=1 -parallel 32 -timeout 20m {{.FILTER}} ./tests/machines/
+      # PARALLEL: the gate passes each part's share of the load budget.
+      - "MACHINES_LORE={{.MACHINES_BIN}} go test -tags machines -count=1 -parallel {{.PARALLEL | default 32}} -timeout 20m {{.FILTER}} ./tests/machines/"
 
   test:machines:core:
     desc: "tests/machines minus the sweep, life and REST parts: the shapes (built-in, links_*, env_*, foreign_*, repos_*), the 4-step setup sequences and the setup campaign"
@@ -440,7 +626,7 @@ tasks:
       JOURNEYS_BIN: "{{.BIN_DIR}}/lore-journeys-{{.PART}}"
     cmds:
       - CGO_ENABLED=0 go build -tags loretest -o {{.JOURNEYS_BIN}} ./cmd/lore
-      - JOURNEYS_LORE={{.JOURNEYS_BIN}} go test -tags journeys -count=1 -parallel 16 -timeout 15m {{.FILTER}} ./tests/journeys/
+      - "JOURNEYS_LORE={{.JOURNEYS_BIN}} go test -tags journeys -count=1 -parallel {{.PARALLEL | default 16}} -timeout 15m {{.FILTER}} ./tests/journeys/"
 
   test:journeys:frame:
     desc: "Journey harness self-tests: a walk through every harness action, every shared invariant bites, Pending records"
@@ -574,8 +760,20 @@ tasks:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW, so transcripts are stable.
       - CGO_ENABLED=0 go build -tags loretest -o {{.VERIFY_BIN}} ./cmd/lore
-      - LORE_BIN={{.VERIFY_BIN}} tests/docs/run-examples.sh
-      - LORE_BIN={{.VERIFY_BIN}} tests/team/docs/run-examples.sh
+      # Both runners at once, each running JOBS sections at a time (tests/lib/parallel-sections.sh);
+      # every section has its own world and transcript. Each runner's output is printed after
+      # both have ended, so the log reads as before.
+      - |
+        export LORE_BIN={{.VERIFY_BIN}} JOBS={{.JOBS | default 8}}
+        logs=$(mktemp -d)
+        tests/docs/run-examples.sh >"$logs/core" 2>&1 & core=$!
+        tests/team/docs/run-examples.sh >"$logs/team" 2>&1 & team=$!
+        rc=0
+        wait $core || rc=1
+        wait $team || rc=1
+        cat "$logs/core" "$logs/team"
+        rm -rf "$logs"
+        exit $rc
       - |
         if ! git diff --quiet -- tests/docs/transcripts tests/team/docs/transcripts; then
           echo "✘ docs example transcripts changed when re-run:"
@@ -662,7 +860,7 @@ tasks:
       - task: scenarios:run
 
   scenarios:run:
-    desc: "Body of lore:scenarios against the already built tmp/bin/lore (no rebuild; lore:check builds it once first)"
+    desc: "Body of lore:scenarios against the already built tmp/bin/lore (no rebuild; lore:check builds it once first). The scripts run in parallel, JOBS at a time (default 8; tests/lib/run-scripts.sh), slowest first"
     cmds:
       - |
         if [ ! -d {{.TESTS_DIR}}/scenarios ]; then
@@ -671,22 +869,7 @@ tasks:
         fi
         export LORE={{.LORE_BIN}}
         export WORKSPACE_ROOT={{.WORKSPACE_ROOT}}
-        FAIL=0
-        for f in {{.TESTS_DIR}}/scenarios/SC-*.sh; do
-          [ -f "$f" ] || continue
-          echo "▶ $(basename $f)"
-          if bash "$f"; then
-            echo "  ✓ PASS"
-          else
-            echo "  ✗ FAIL"
-            FAIL=$((FAIL+1))
-          fi
-        done
-        if [ $FAIL -gt 0 ]; then
-          echo "$FAIL scenario(s) FAILED"
-          exit 1
-        fi
-        echo "All scenarios PASSED"
+        JOBS={{.JOBS | default 8}} DURATIONS_DIR="{{.ROOT_DIR}}/tmp" tests/lib/run-scripts.sh scenarios {{.TESTS_DIR}}/scenarios/SC-*.sh
 
   chaos:
     desc: "Run FMEA chaos scenarios (tests/chaos/CH-*.sh) — slow"
@@ -695,7 +878,7 @@ tasks:
       - task: chaos:run
 
   chaos:run:
-    desc: "Body of lore:chaos against the already built tmp/bin/lore (no rebuild; lore:check builds it once first)"
+    desc: "Body of lore:chaos against the already built tmp/bin/lore (no rebuild; lore:check builds it once first). The scripts run in parallel, JOBS at a time (default 8; tests/lib/run-scripts.sh), slowest first"
     cmds:
       - |
         if [ ! -d {{.TESTS_DIR}}/chaos ]; then
@@ -704,22 +887,7 @@ tasks:
         fi
         export LORE={{.LORE_BIN}}
         export WORKSPACE_ROOT={{.WORKSPACE_ROOT}}
-        FAIL=0
-        for f in {{.TESTS_DIR}}/chaos/CH-*.sh; do
-          [ -f "$f" ] || continue
-          echo "▶ $(basename $f)"
-          if bash "$f"; then
-            echo "  ✓ PASS"
-          else
-            echo "  ✗ FAIL"
-            FAIL=$((FAIL+1))
-          fi
-        done
-        if [ $FAIL -gt 0 ]; then
-          echo "$FAIL chaos scenario(s) FAILED"
-          exit 1
-        fi
-        echo "All chaos scenarios PASSED"
+        JOBS={{.JOBS | default 8}} DURATIONS_DIR="{{.ROOT_DIR}}/tmp" tests/lib/run-scripts.sh chaos {{.TESTS_DIR}}/chaos/CH-*.sh
 
   bench:
     desc: "Performance regression check vs Round 21 SLAs"

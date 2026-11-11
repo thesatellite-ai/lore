@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/tests/e2eenv"
 	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
@@ -261,6 +262,10 @@ func (w *World) baseEnv(home, actorName string) []string {
 		}
 		env = append(env, kv)
 	}
+	// The gate's Go runtime settings for lore processes (LORE_E2E_GOENV, package e2eenv; the
+	// variable itself is dropped above with every LORE_ one): they change what a lore process
+	// costs, never what it does.
+	env = append(env, e2eenv.LoreGoEnv()...)
 	return append(env,
 		"HOME="+home,
 		"USERPROFILE="+home, // os.UserHomeDir on Windows

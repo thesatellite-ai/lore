@@ -22,6 +22,16 @@ tasks:
     cmds:
       - task: lore:check
 
+  check:fast:
+    desc: alias → lore:check:fast — the fast tier for landing a small fix (docs/DEVELOPMENT.md "Landing")
+    cmds:
+      - task: lore:check:fast
+
+  check:after-land:
+    desc: alias → lore:check:after-land — the full gate on the landed origin/main
+    cmds:
+      - task: lore:check:after-land
+
   upgrade:
     desc: update every Go dependency of the root module
     cmds:

@@ -13,6 +13,11 @@
 #   tests/docs/run-examples.sh start search     # only these sections
 #   LORE_BIN=/path/to/lore tests/docs/run-examples.sh start   # use a built binary
 #   KEEP=1 tests/docs/run-examples.sh start     # keep the worlds to look around
+#   JOBS=1 tests/docs/run-examples.sh           # one section at a time (default: JOBS=8)
+#
+# Two or more sections run in parallel, JOBS at a time, each as its own run of this script
+# (tests/lib/parallel-sections.sh): every section already lives in its own world and writes
+# its own transcript, so the order they run in changes nothing they print.
 #
 # The binary is built with -tags loretest so LORE_NOW (a fixed clock) works; that tag
 # changes nothing else in lore's behaviour or output. Exit 1 when any command that
@@ -39,6 +44,11 @@ export LORE_BIN
 
 # shellcheck source=lib.sh
 source "$HERE/lib.sh"
+# shellcheck source=../lib/parallel-sections.sh
+source "$REPO/tests/lib/parallel-sections.sh"
+# How many sections run at once. 8: each section keeps about one core busy, and the gate runs
+# this beside other suites under its load budget (docs/DEVELOPMENT.md "The gate").
+JOBS="${JOBS:-8}"
 
 # note TEXT: a heading inside a transcript; a page's paste marker names it (start#init).
 note() { printf '\n### %s\n' "$*" >> "$TRANSCRIPT"; }
@@ -71,6 +81,11 @@ main() {
   local want=("$@")
   if [ ${#want[@]} -eq 0 ]; then
     for f in "$SECTIONS"/*.sh; do want+=("$(basename "$f" .sh)"); done
+  fi
+  if [ ${#want[@]} -gt 1 ] && [ "$JOBS" -gt 1 ]; then
+    parallel_sections "$JOBS" "$SCRATCH/logs" "$OUT" "$HERE/run-examples.sh" "${want[@]}" || exit 1
+    echo "run-examples: every example ran as documented; transcripts in ${OUT#"$REPO"/}" >&2
+    return 0
   fi
   for s in "${want[@]}"; do run_section "$s"; done
   if [ ${#KNOWN[@]} -ne 0 ]; then
