@@ -194,7 +194,17 @@ func planFor(def schema.TableDef, view string) (plan, error) {
 	// showing whichever source applied last.
 	defs = append(defs, `PRIMARY KEY ("`+colSource+`", "`+colID+`")`)
 	p.create = append(p.create, "CREATE TABLE "+tq+" ("+strings.Join(defs, ", ")+")")
-	p.sql.insert = "INSERT OR REPLACE INTO " + tq + " (" + strings.Join(quoted, ", ") + ") VALUES (" + extractList(len(quoted)) + ")"
+	// An upsert, not INSERT OR REPLACE: REPLACE deletes the old row and
+	// gives the new one another rowid, and the FTS row of a typed row is
+	// keyed by that rowid (addFTS), so the rowid of (_source, id) must stay
+	// the same for as long as the row is in the cache.
+	sets := make([]string, 0, len(quoted))
+	for i, c := range p.columns {
+		if c.name != colID && c.name != colSource {
+			sets = append(sets, quoted[i]+" = excluded."+quoted[i])
+		}
+	}
+	p.sql.insert = "INSERT INTO " + tq + " (" + strings.Join(quoted, ", ") + ") VALUES (" + extractList(len(quoted)) + `) ON CONFLICT ("` + colSource + `", "` + colID + `") DO UPDATE SET ` + strings.Join(sets, ", ")
 	p.sql.deleteID = "DELETE FROM " + tq + ` WHERE "` + colSource + `" = ? AND "` + colID + `" = ?`
 	p.sql.clearSource = "DELETE FROM " + tq + ` WHERE "` + colSource + `" = ?`
 	bySource := ` WHERE entity_table = ? AND entity_id IN (SELECT "` + colID + `" FROM ` + tq + ` WHERE "` + colSource + `" = ?)`
@@ -311,6 +321,9 @@ const (
 	snippetTokens   = 32
 )
 
+// typedRowidCol names a typed table's rowid in the FTS statements (addFTS).
+const typedRowidCol = "_rowid_"
+
 // addFTS adds the FTS5 table of p's FTS fields.
 func (p *plan) addFTS() error {
 	if len(p.def.FTS) == 0 {
@@ -336,12 +349,32 @@ func (p *plan) addFTS() error {
 		names = append(names, cq)
 	}
 	p.create = append(p.create, "CREATE VIRTUAL TABLE "+fq+" USING fts5("+strings.Join(cols, ", ")+", tokenize='"+ftsTokenizer+"')")
-	p.sql.ftsDeleteID = "DELETE FROM " + fq + ` WHERE "` + colSource + `" = ? AND "` + colID + `" = ?`
-	p.sql.ftsClearSource = "DELETE FROM " + fq + ` WHERE "` + colSource + `" = ?`
+	// The FTS row of a typed row has that row's rowid, so one row's FTS
+	// entry is found through the typed table's primary key. A lookup by the
+	// UNINDEXED id and _source columns scans (and reads) the whole FTS
+	// table: once per applied row, a full refresh of 5,000 rows took
+	// minutes. Each statement runs while the typed row is still there
+	// (upsertFTS after the upsert, deleteTyped and clearSource before the
+	// typed delete).
+	tq, err := ident(p.def.Name.String())
+	if err != nil {
+		return err
+	}
+	// The typed table's rowid is read as _rowid_: a field may be named
+	// rowid or oid (sqlWords in ddl_test), which shadows those spellings,
+	// and no field name starts with "_" (row.ValidName). The FTS table's
+	// own columns are id, _source and f_<field>, so its rowid is plain.
+	typedRowid := `SELECT ` + typedRowidCol + ` FROM ` + tq + ` WHERE "` + colSource + `" = ? AND "` + colID + `" = ?`
+	p.sql.ftsDeleteID = "DELETE FROM " + fq + " WHERE rowid = (" + typedRowid + ")"
+	p.sql.ftsClearSource = "DELETE FROM " + fq + ` WHERE rowid IN (SELECT ` + typedRowidCol + ` FROM ` + tq + ` WHERE "` + colSource + `" = ?)`
 	rank := "bm25(" + fq + ", " + strings.Join(weights, ", ") + ")"
 	p.sql.search = `SELECT "` + colID + `", ` + rank + ", snippet(" + fq + ", -1, '" + snippetOpen + "', '" + snippetClose + "', '" + snippetEllipsis + "', " + strconv.Itoa(snippetTokens) + ") FROM " + fq +
 		" WHERE " + fq + " MATCH ? ORDER BY " + rank + " LIMIT ?"
-	p.sql.ftsInsert = "INSERT INTO " + fq + " (" + strings.Join(names, ", ") + ") VALUES (" + extractList(len(names)) + ")"
+	// The cells are (id, _source, fields…) in one JSON parameter; the FTS
+	// rowid is the typed row's, and a row the typed table does not hold
+	// gets no FTS entry (it could never be found again to be removed).
+	p.sql.ftsInsert = "INSERT INTO " + fq + " (rowid, " + strings.Join(names, ", ") + ") SELECT t." + typedRowidCol + ", " + extractList(len(names)) +
+		" FROM " + tq + ` AS t WHERE t."` + colSource + `" = json_extract(?1, '$[1]') AND t."` + colID + `" = json_extract(?1, '$[0]')`
 	p.objects = append(p.objects, dbObject{Type: objFTS, Name: p.fts})
 	return nil
 }

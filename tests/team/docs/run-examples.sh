@@ -1349,6 +1349,14 @@ Y
   on tomas work/clients/south-app "lore task list"
   on tomas work/clients/south-app "git status --short --ignored && ls -A"
 
+  note "adopt a whole repo"
+  client_repo client/east-api east-api tomas
+  quiet tomas work "mv east-api clients/east-api && cd clients/east-api && lore memory add --to repo --body 'The east API allows 50 requests a second.' >/dev/null && lore task add --to repo 'rotate the API key' >/dev/null && git add -A && git commit -qm notes"
+  on tomas work/clients "lore store adopt team/client_east --from east-api --dry-run"
+  on tomas work/clients "lore store adopt team/client_east --from east-api --yes"
+  on tomas work/clients "lore store adopt team/client_east --from east-api --yes"
+  on tomas work/clients/east-api "git status --short"
+
   note "remove a folder made by mistake"
   on tomas work/clients "lore store folder add team client_old"
   on tomas work/clients "lore store folder remove team client_old --yes"

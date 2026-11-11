@@ -168,7 +168,10 @@ func liveStoreRow(k live.RowKey, f live.File) (store.Row, error) {
 		body = canonjson.Object{}
 	}
 	if !body.Has(row.KeyHLC) {
-		if h, err := hlc.Parse(f.Block.HLC.String()); err == nil && !h.IsZero() {
+		// wire.LiveStamp: an agent's block stamp names the bare writer
+		// "agent" (liveAnonymousWriter), read as its stable actor id as
+		// `lore migrate run` reads it, instead of dropping the stamp.
+		if h, _, err := wire.LiveStamp(f.Block.HLC.String()); err == nil && !h.IsZero() {
 			body[row.KeyHLC] = canonjson.String(h.String())
 		}
 	}

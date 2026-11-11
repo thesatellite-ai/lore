@@ -38,6 +38,22 @@ func TestMaskMatrix(t *testing.T) {
 		{"known too short ignored", "abc short", []string{"abc"}, "abc short"},
 		{"known nested longest first", "xx_12345678_tail", []string{"12345678", "xx_12345678_tail"}, Redacted},
 		{"known blank ignored", "plain", []string{"", "   "}, "plain"},
+		// plain local paths are shown whole (owner report 2026-11-11: a
+		// store init hint redacted the middle of a scratch folder path)
+		{"path in a hint", `git config --global url."file:///tmp/agent/` + uuid + `/scratchpad/s.git".insteadOf ssh://lore-local/s.git`, nil,
+			`git config --global url."file:///tmp/agent/` + uuid + `/scratchpad/s.git".insteadOf ssh://lore-local/s.git`},
+		{"path alone", "/tmp/agent/" + uuid + "/scratchpad", nil, "/tmp/agent/" + uuid + "/scratchpad"},
+		{"file url", "file:///tmp/agent/" + uuid + "/s.git is a git repository", nil, "file:///tmp/agent/" + uuid + "/s.git is a git repository"},
+		{"home path", "see ~/work/" + uuid + "/notes", nil, "see ~/work/" + uuid + "/notes"},
+		{"quoted path", `{"dir":"/tmp/` + uuid + `/x"}`, nil, `{"dir":"/tmp/` + uuid + `/x"}`},
+		{"windows path", `at C:\Users\dev\` + uuid + `\scratch`, nil, `at C:\Users\dev\` + uuid + `\scratch`},
+		{"known id in a path", "/tmp/agent/ses_K7pQ2mZx9/log", []string{"ses_K7pQ2mZx9"}, "/tmp/agent/ses_K7pQ2mZx9/log"},
+		{"path then a session", "/tmp/agent/" + uuid + "/x session " + uuid, nil, "/tmp/agent/" + uuid + "/x session " + Redacted},
+		// not paths: still masked
+		{"one segment", "/" + uuid, nil, "/" + Redacted},
+		{"url path", "https://example.com/s/" + uuid + "/x", nil, "https://example.com/s/" + Redacted + "/x"},
+		{"scheme-relative", " //example.com/" + uuid + "/x", nil, " //example.com/" + Redacted + "/x"},
+		{"ratio-like", "a/" + uuid + "/b", nil, "a/" + Redacted + "/b"},
 	}
 	for _, c := range cases {
 		if got := Mask(c.in, c.known); got != c.want {

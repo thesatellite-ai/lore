@@ -137,6 +137,13 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 	if err != nil {
 		return nil, 0, err
 	}
+	// the checkout's own v0.1.17 lore.db (migrate_repodb.go): before the
+	// live rows and the v1 rewrite, which then see its rows in .lore/data
+	db, n, err := a.migrateRepoDB(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	steps, rows = append(steps, db...), rows+n
 	personal, n, err := a.migrateLocalPersonal(ctx, dryRun)
 	if err != nil {
 		return nil, 0, err
@@ -641,6 +648,16 @@ type v1TagLink struct {
 	EntityTable string `json:"entity_table"`
 	EntityID    string `json:"entity_id"`
 	TagID       string `json:"tag_id"`
+}
+
+// v1TagLinkOf decodes one v0.1.17 entity_tags row file (ok=false when it
+// is not one).
+func v1TagLinkOf(doc []byte) (opsmemory.TagLink, bool) {
+	var l v1TagLink
+	if err := json.Unmarshal(doc, &l); err != nil {
+		return opsmemory.TagLink{}, false
+	}
+	return opsmemory.TagLink{EntityTable: l.EntityTable, EntityID: l.EntityID, TagID: l.TagID}, true
 }
 
 // migrateTags turns the repo store's v0.1.17 entity_tags rows into the

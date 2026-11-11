@@ -353,13 +353,14 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 // E_AMBIGUOUS_ID state) deleting one copy also drops the other's until it
 // is applied again.
 func (c *Cache) deleteTyped(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID) error {
-	if _, err := tx.ExecContext(ctx, p.sql.deleteID, source, id.String()); err != nil {
-		return dbErr("delete", err)
-	}
+	// FTS first: its entry is found through the typed row (addFTS).
 	if p.fts != "" {
 		if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, source, id.String()); err != nil {
 			return dbErr("fts delete", err)
 		}
+	}
+	if _, err := tx.ExecContext(ctx, p.sql.deleteID, source, id.String()); err != nil {
+		return dbErr("delete", err)
 	}
 	for _, j := range p.joins {
 		if _, err := tx.ExecContext(ctx, j.deleteFrom, source, id.String()); err != nil {

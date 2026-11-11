@@ -61,6 +61,26 @@ tomas (work/clients/south-app)$ git status --short --ignored && ls -A
 .git
 README.md
 
+### adopt a whole repo
+tomas (work/clients)$ lore store adopt team/client_east --from east-api --dry-run
+would adopt 5 rows of ~/work/clients/east-api into agency/client_east (prj_162df51b7f78b785c97c26b41ea89666), ids and HLCs kept
+  actors 1, memories 1, policies 1, task_lists 1, tasks 1
+  from the repo's live ref (refs/lore/live): 2
+  left in the repo: projects: 1 row (the folder is its own project)
+  left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
+tomas (work/clients)$ lore store adopt team/client_east --from east-api --yes
+✓ adopted 5 rows of ~/work/clients/east-api into agency/client_east (prj_162df51b7f78b785c97c26b41ea89666), ids and HLCs kept
+  actors 1, memories 1, policies 1, task_lists 1, tasks 1
+  from the repo's live ref (refs/lore/live): 2
+  left in the repo: projects: 1 row (the folder is its own project)
+  left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
+tomas (work/clients)$ lore store adopt team/client_east --from east-api --yes
+✓ nothing to adopt: agency/client_east already holds every row of ~/work/clients/east-api (no commit)
+  already there: 5 unchanged, 0 newer or deleted in the folder (kept)
+  left in the repo: projects: 1 row (the folder is its own project)
+  left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
+tomas (work/clients/east-api)$ git status --short
+
 ### remove a folder made by mistake
 tomas (work/clients)$ lore store folder add team client_old
 ✓ created folder client_old in agency (prj_76bd560aff0771fab8457dbfa9823f10; shown only in repos that attach it)

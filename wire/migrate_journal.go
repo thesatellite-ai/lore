@@ -735,6 +735,36 @@ func (a *App) statusPlaces(ctx context.Context, out *opsmigrate.StatusOut) error
 	for _, t := range slices.Sorted(maps.Keys(pending)) {
 		out.Pending = append(out.Pending, t.String()+": "+plural(pending[t], "row")+" at v1")
 	}
+	// rows only the v0.1.17 live ref holds (MigrateLive brings them in):
+	// counted in their store's place and named
+	if live, lerr := pendingLiveRows(ctx, st, false); lerr == nil {
+		n := map[store.Source]int{}
+		for _, x := range live {
+			if x.live.row.SourceVersion < row.FormatVersion && !x.has {
+				n[x.source]++
+			}
+		}
+		for i := range out.Places {
+			if c := n[store.Source(out.Places[i].Place)]; c > 0 {
+				out.Places[i].V1 += c
+				out.Places[i].Total += c
+				out.Pending = append(out.Pending, "live ref of "+out.Places[i].Place+": "+plural(c, "row")+" not in its row files yet")
+			}
+		}
+	}
+	// rows only the checkout's v0.1.17 lore.db holds (migrate_repodb.go):
+	// counted in the repo's place (v0.1.17 rows, so v1) and named
+	if db, derr := a.repoDBRows(ctx); derr != nil {
+		out.Notes = append(out.Notes, derr.Error())
+	} else if dbRows := db.rows; len(dbRows) > 0 {
+		for i := range out.Places {
+			if out.Places[i].Place == string(store.SourceRepo) {
+				out.Places[i].V1 += len(dbRows)
+				out.Places[i].Total += len(dbRows)
+			}
+		}
+		out.Pending = append(out.Pending, v017LoreDB+": "+plural(len(dbRows), "row")+" not in .lore/data yet")
+	}
 	return nil
 }
 

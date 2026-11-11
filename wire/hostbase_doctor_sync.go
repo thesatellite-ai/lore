@@ -69,7 +69,7 @@ func doctorLinkedByRemoteNote(remote string) string {
 
 // doctor [sync] lines.
 const (
-	doctorDataIgnoredWarning = ".lore/data is gitignored, so lore knowledge is never shared; remove the ignore rule (lore sync refuses with E_SYNC_DATA_IGNORED meanwhile)"
+	doctorDataIgnoredWarning = ".lore/data is gitignored, so lore knowledge is never shared; `lore doctor --fix` re-includes it in .gitignore (then commit .gitignore), or remove the ignore rule (lore sync refuses with E_SYNC_DATA_IGNORED meanwhile)"
 	doctorNoMergeDriverNote  = "lore merge driver not configured in this clone (the next lore command installs it, unless LORE_SYNC_GIT=0)"
 	// doctorBrokenMergeDriverNote: merge.lore.driver is set to something
 	// that is not a lore merge driver (a missing absolute program is
@@ -179,7 +179,18 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	if s.DataIgnored {
 		warn(doctorDataIgnoredWarning)
 	}
+	// A read never adds these lines (wire/gitignorelines.go): the finding
+	// names them and the command that does.
+	if missing := MissingGitignoreLines(ctx, dir); len(missing) > 0 {
+		note(doctorGitignoreLinesNote(missing)) // clutter in a teammate's git status, never lost data: a note
+	}
 	return s
+}
+
+// doctorGitignoreLinesNote is the [sync] line of a .gitignore that lacks
+// lore's local files (a v0.1.17 repo before its first 0.1.18 write).
+func doctorGitignoreLinesNote(missing []string) string {
+	return ".gitignore does not list lore's local files (" + strings.Join(missing, ", ") + "), so a teammate's clone shows them in git status; `lore doctor --fix` adds them (then commit .gitignore); this clone keeps them out of git status meanwhile (.git/info/exclude)"
 }
 
 // doctorSyncFiles fills open_conflicts and file_errors from the repo
