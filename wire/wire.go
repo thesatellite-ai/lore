@@ -36,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -346,6 +347,9 @@ type App struct {
 	cfgOpened bool
 	cfgErr    error
 	cfg       *state
+	// top is repoTop's answer found without opening the repo (git.RepoRoot),
+	// kept once found: the repo of an App never changes.
+	top string
 
 	// probeLimiter bounds the onboarding probes of this process to
 	// probe.DefaultConcurrency at once across every op call (ONB 6.1: a
@@ -667,13 +671,59 @@ func (a *App) healedNotices(st *state) {
 	}
 }
 
-// repoTop is the code repository's top folder.
+// repoTop is the code repository's top folder (the lore project root in
+// it). Only the path is needed, so nothing is opened for it: the repo-only
+// state when it is already open, else git.RepoRoot, which creates nothing.
+// A store command run in a repo it does not change (store folder add,
+// store list) must leave that repo as it was: opening the repo-only state
+// would create .lore/ and its cache there.
 func (a *App) repoTop(ctx context.Context) (string, error) {
-	st, err := a.configState(ctx)
+	a.mu.Lock()
+	opened, st, err, known := a.cfgOpened, a.cfg, a.cfgErr, a.top
+	a.mu.Unlock()
+	if opened {
+		if err != nil {
+			return "", err
+		}
+		return st.repoTop, nil
+	}
+	if known != "" {
+		return known, nil
+	}
+	// doctor_nocreate.go: within one read run a refusal is answered from
+	// the run's memory (doctor's checks each ask), as configState does
+	run := noCreateOf(ctx)
+	a.mu.Lock()
+	if run != nil && run.configErr != nil {
+		err = run.configErr
+	}
+	a.mu.Unlock()
 	if err != nil {
 		return "", err
 	}
-	return st.repoTop, nil
+	top, err := git.RepoRoot(ctx, a.opts.RepoDir, a.opts.Home)
+	a.mu.Lock()
+	switch {
+	case err == nil:
+		a.top = top
+	case run != nil:
+		run.configErr = err
+	}
+	a.mu.Unlock()
+	return top, err
+}
+
+// storeRepoTop is repoTop for the store commands that need only the setup
+// (opsstores.RunsWithoutRepo): "" with no error when the command runs
+// outside any git work tree, so they resolve team, me, the org's stores and
+// an org store's url from the setup alone; a repo that cannot be read is
+// still its error.
+func (a *App) storeRepoTop(ctx context.Context) (string, error) {
+	top, err := a.repoTop(ctx)
+	if err != nil && errs.Has(err, errs.NotAStore) && !insideWorkTree(ctx, a.opts.RepoDir) {
+		return "", nil
+	}
+	return top, err
 }
 
 // Run implements op.Runner: open on first use, then the engine's Run path.
@@ -703,6 +753,14 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err := a.setupExplicitGate(ctx); err != nil {
 		return op.Result{}, err
 	}
+	// A store command that needs only the setup (store folder add|list,
+	// store list, store set, …) runs on it alone outside a lore repo, before
+	// anything opens the repo (the agent detection below would): from
+	// the plain parent folder of an org's client folders, or in a repo it
+	// does not change, which it must leave as it was (wire/storefolders.go).
+	if a.setupOnlyHere(ctx, e.Spec().Name) {
+		return a.runSetupOnly(ctx, e, d, c)
+	}
 	// AGENT_IDENTITY 8.2 (#7): the CLI caller carries the detected agent, so
 	// agents.person_only fires on the CLI too, not only for REST callers
 	// that send X-Lore-Agent. A surface that already set an agent or an
@@ -725,6 +783,9 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if opsstores.IsStoreOp(e.Spec().Name) {
 		if a.personalInitOutsideRepo(ctx, e, d) { // G-CORE-7: no repo needed
 			return runDirect(ctx, e, d)
+		}
+		if err := a.refuseStoresFileOutsideRepo(ctx, e.Spec().Name); err != nil {
+			return op.Result{}, err
 		}
 		if err := a.confirmClientStoresFile(ctx, e, d, c); err != nil {
 			return op.Result{}, err

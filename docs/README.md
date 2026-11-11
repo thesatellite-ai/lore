@@ -36,6 +36,7 @@ Each step builds on the one before, from your first rule in one repo to a team w
 | pick one command when lore has several ways to do a job | [Which command for which job](choosing/workflow-methods.md) | — |
 | set lore up on a new machine, or for a second company | [Setups from the command line](team/setup-cli.md), [Guided setup](team/guided-setup.md) | [`setup-cli`](../tests/team/docs/transcripts/setup-cli.txt) |
 | invite a teammate | [Team invites](team/invites.md) | [`invites`](../tests/team/docs/transcripts/invites.txt) |
+| make and list the team store's client folders from a parent folder that is not a repo | [Client folders from the parent folder](team/client-folders.md) | [`client-folders`](../tests/team/docs/transcripts/client-folders.txt) |
 | record who is on the team, their contacts and roles | [Team profiles](team/profiles.md) | [`profiles`](../tests/team/docs/transcripts/profiles.txt) |
 | bring in the notes I already have in markdown | [Bring in notes you already have](knowledge/import-existing-notes.md) | [`knowledge`](../tests/docs/sections/knowledge.sh) ([output](../tests/docs/transcripts/knowledge.txt)) |
 | move an existing repo onto lore with a coding tool's help | [Migration prompt](MIGRATE_TO_LORE.md) | — |
@@ -124,6 +125,7 @@ Each step builds on the one before, from your first rule in one repo to a team w
 - [Guided setup](team/guided-setup.md): `lore setup` / `lore onboard`, the local setup page (accounts found on this machine, fields with suggestions, import from an existing lore install, the current-folder line, Repair from Home), several setups on one machine chosen by folder, and `lore setup join`.
 - [Setups from the command line](team/setup-cli.md): every `lore setup` subcommand with real output: list, show, use, edit, disable/enable, remove/trash, plan/check/apply, import-scan/import, join.
 - [Team invites](team/invites.md): `lore team invite`, list, resend and revoke; single use, 14 days, `--grant`.
+- [Client folders from the parent folder](team/client-folders.md): `lore store folder add|list` from a folder that is not a repo, and which store commands need one.
 - [Team profiles](team/profiles.md): people, contacts, contact types, company periods, project members and roles, offboarding, orgs and machine labels.
 - [Setup and invite errors](team/setup-errors.md): every `E_SETUP_*`, `E_INVITE_*` and fix error with its cause and fix.
 - [Agents](team/agents.md): the loop an agent follows, and how a person takes work back.

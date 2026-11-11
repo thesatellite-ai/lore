@@ -153,6 +153,7 @@ var reads = []sweepStep{
 	{Cmd: "machine show", Args: []string{"mch_00000000"}, In: inHome},
 	{Cmd: "setup browse", In: inHome},
 	{Cmd: "store list", In: inBoth},
+	{Cmd: "store folder list", In: inBoth},
 	{Cmd: "store show", In: inRepo},
 	{Cmd: "store doctor", In: inRepo},
 	// The code repo is never a push-mode store: both answer E_REFUSED with

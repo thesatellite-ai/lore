@@ -10,6 +10,8 @@ import (
 
 	"github.com/thesatellite-ai/lore/op"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
+	opssetup "github.com/thesatellite-ai/lore/ops/setup"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
 // gitInit makes dir a git work tree, or skips when git is missing.
@@ -123,6 +125,14 @@ func TestNeedsGitignore(t *testing.T) {
 		{"write op", Run{Entry: specEntry{spec: op.Spec{Name: "memory.add"}}}, true},
 		{"read-only", Run{ReadOnly: true, Entry: specEntry{spec: op.Spec{Name: "memory.add"}}}, false},
 		{"live op", Run{Entry: specEntry{spec: op.Spec{Name: opslive.OpPurge}}}, false},
+		// owner report 2026-11-11: a command that changes only a store
+		// leaves the repo it runs in alone; the stores.yaml writers do not
+		{"store folder add", Run{Entry: specEntry{spec: op.Spec{Name: opsstores.OpFolderAdd}}}, false},
+		{"store folder list", Run{Entry: specEntry{spec: op.Spec{Name: opsstores.OpFolderList}}}, false},
+		{"store set", Run{Entry: specEntry{spec: op.Spec{Name: opsstores.OpSet}}}, false},
+		{"team invite", Run{Entry: specEntry{spec: op.Spec{Name: opssetup.OpTeamInvite}}}, false},
+		{"store add", Run{Entry: specEntry{spec: op.Spec{Name: opsstores.OpAdd}}}, true},
+		{"store init", Run{Entry: specEntry{spec: op.Spec{Name: opsstores.OpInit}}}, true},
 	}
 	for _, c := range cases {
 		if got := NeedsGitignore(&c.run); got != c.want {

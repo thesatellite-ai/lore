@@ -133,7 +133,9 @@ func TestCLI_ColourMatrix(t *testing.T) {
 
 // TestCLI_OutsideGitRepo: in a folder that is in no git repository, every
 // command that reads or writes notes refuses the same way, text and
-// --json; the machine-level commands still work.
+// --json; the machine-level commands still work, and so do the store
+// commands that need only the setup (`store list` lists the setup's stores:
+// none here, as alice has no setup).
 func TestCLI_OutsideGitRepo(t *testing.T) {
 	w := newWorld(t)
 	a := w.Human("alice", "alice@example.com")
@@ -142,7 +144,7 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 		{"init"}, {"init", "--non-interactive", "--name=app"},
 		{"rule", "list"}, {"rule", "add", "Run the tests"}, {"memory", "add", "a note"}, {"task", "list"}, {"task", "next"},
 		{"show", "mem_01a1b4a47d1e75c1aa1a0b15f1643889"}, {"search", "run", "tests"}, {"inbox"}, {"render"}, {"sync"},
-		{"sql", "run", "SELECT 1"}, {"sql", "SELECT 1"}, {"lint"}, {"trash"}, {"batch", "list"}, {"store", "list"},
+		{"sql", "run", "SELECT 1"}, {"sql", "SELECT 1"}, {"lint"}, {"trash"}, {"batch", "list"},
 		{"policy", "show"}, {"vars", "list"}, {"tag", "list"}, {"machine", "list"}, {"land"},
 	}
 	for _, args := range needRepo {
@@ -175,11 +177,15 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 		{[]string{"config", "list"}, "(no config keys)"},
 		{[]string{"identity", "show"}, "human:"},
 		{[]string{"whoami"}, "identity"},
+		{[]string{"store", "list"}, "count: 0"},
 		{[]string{"upgrade", "--check"}, "built from source"},
 		{[]string{"help"}, "Available Commands:"},
 		{[]string{"--help"}, "Available Commands:"},
 	} {
 		a.Lore(dir, tc.args...).OK(t).Says(t, tc.say).Never(t, "ERROR:")
+	}
+	if r := a.Lore(dir, "store", "list", "--json").OK(t); !strings.Contains(r.Stdout, `"count": 0`) || r.Stderr != "" {
+		t.Errorf("store list --json outside a repo with no setup: want an empty list: %s", r)
 	}
 	// lore never creates .lore in the folder it refused.
 	if _, err := os.Stat(filepath.Join(dir, ".lore")); !os.IsNotExist(err) {

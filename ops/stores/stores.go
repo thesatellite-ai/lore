@@ -163,7 +163,7 @@ type ListOut struct {
 
 // VisibilityIn is the input of store.visibility.
 type VisibilityIn struct {
-	Name       string `json:"name" arg:"0" desc:"the store (a stores.yaml name or me)"`
+	Name       string `json:"name" arg:"0" desc:"the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name)"`
 	Visibility string `json:"visibility" arg:"1" desc:"internal or shareable (CFG4)"`
 }
 
@@ -185,7 +185,7 @@ type VisibilityOut struct {
 
 // FolderAddIn is the input of store.folder.add.
 type FolderAddIn struct {
-	Store  string `json:"store" arg:"0" desc:"the store (a stores.yaml name, me or team)"`
+	Store  string `json:"store" arg:"0" desc:"the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name)"`
 	Folder string `json:"folder" arg:"1" desc:"the new folder's name (snake_case; not org)"`
 }
 
@@ -375,9 +375,12 @@ func Ops(m Manager) []op.Entry {
 			return out, nil
 		}),
 		op.Define(op.Spec{
-			Name: OpList, Summary: "List the stores this repo sees, in precedence order",
+			Name: OpList, Summary: "List the stores this repo sees, in precedence order (outside a repo: the stores of the setup)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: storeErrors,
-			Examples: []op.Example{{Title: "list", CLI: "lore store list", Want: "stores:"}},
+			Examples: []op.Example{
+				{Title: "list", CLI: "lore store list", Want: "stores:"},
+				{Title: "outside any repo: the org's and the personal store of the setup this folder is in", CLI: "lore store list --setup agency", Want: "stores:"},
+			},
 		}, func(ctx context.Context, _ ListIn) (ListOut, error) {
 			got, err := m.ListStores(ctx)
 			if err != nil {
@@ -444,7 +447,8 @@ func Ops(m Manager) []op.Entry {
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "make a store shareable", CLI: "lore store visibility docs_kit shareable --yes", Want: "docs_kit is shareable"}},
 		}, func(ctx context.Context, in VisibilityIn) (VisibilityOut, error) {
-			if err := CheckName(in.Name, true); err != nil {
+			in.Name = strings.TrimSpace(in.Name)
+			if err := CheckStoreArg(in.Name); err != nil {
 				return VisibilityOut{}, err
 			}
 			if in.Visibility != VisibilityInternal && in.Visibility != VisibilityShareable {
@@ -482,18 +486,21 @@ func Ops(m Manager) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpFolderAdd, Summary: "Create a folder in a store (shown only in repos that attach it)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: visibilityErrors,
-			Examples: []op.Example{{Title: "a folder for one topic", CLI: "lore store folder add golang concurrency", Want: "created folder concurrency"}},
+			Examples: []op.Example{
+				{Title: "a folder for one topic", CLI: "lore store folder add golang concurrency", Want: "created folder concurrency"},
+				{Title: "a client folder in the team store, from any folder of the setup (no repo needed)", CLI: "lore store folder add team client_north", Want: "created folder client_north"},
+			},
 		}, func(ctx context.Context, in FolderAddIn) (FolderAddOut, error) {
-			if in.Store != attach.ReservedTeam {
-				if err := CheckName(in.Store, true); err != nil {
-					return FolderAddOut{}, err
-				}
+			in.Store = strings.TrimSpace(in.Store)
+			if err := CheckStoreArg(in.Store); err != nil {
+				return FolderAddOut{}, err
 			}
 			if err := CheckFolderName(in.Folder); err != nil {
 				return FolderAddOut{}, err
 			}
 			return m.AddFolder(ctx, in)
 		}),
+		folderListOp(m),
 		setURLOp(m),
 	}, append(cloneOps(m), pushOps(m)...)...)
 }
@@ -775,5 +782,5 @@ func WritesStoresFile(name string) bool { return name == OpInit || name == OpAdd
 // opening the attached stores (one unreachable store must not block
 // `lore store remove`).
 func IsStoreOp(name string) bool {
-	return slices.Contains([]string{OpInit, OpAdd, OpRemove, OpList, OpVisibility, OpFolderAdd, OpSetURL}, name)
+	return slices.Contains([]string{OpInit, OpAdd, OpRemove, OpList, OpVisibility, OpFolderAdd, OpFolderList, OpSetURL}, name)
 }

@@ -1244,6 +1244,47 @@ Y
   on tomas work/acme-hub "lore team invite list"
 }
 
+# ---------------------------------------------------------------------------
+# client-folders: an admin keeps the clients' repos in one plain parent folder
+# (not a git repo) and makes, lists and attaches the team store's client
+# folders from there (docs/team/client-folders.md).
+s_client_folders() {
+  section client-folders
+  person tomas tomas@agency.example
+  agency_config tomas "human:tomas@agency.example" "Tomas Weber" tomas
+  remote agency/notes
+  make_store tomas agency git@github.com:agency/notes
+  cat >> "$HOMES/tomas/.lore/config.yaml" <<'Y'
+setups:
+  - name: agency
+    kind: admin
+    org: agency
+    default: true
+    folders:
+      - ~/work/clients/**
+Y
+  quiet tomas work/clients "true"
+
+  note "from the parent folder"
+  on tomas work/clients "lore store list"
+  on tomas work/clients "lore store folder add team client_north"
+  on tomas work/clients "lore store folder add team client_south"
+  on tomas work/clients "lore store folder add git@github.com:agency/notes client_east"
+
+  note "list the folders"
+  on tomas work/clients "lore store folder list team"
+
+  note "names that need a repo"
+  on! tomas work/clients "lore store folder add golang tips"
+  on! tomas work/clients "lore store add golang git@github.com:agency/notes"
+
+  note "a client repo attaches one"
+  client_repo client/north-web north-web tomas
+  quiet tomas work "mv north-web clients/north-web"
+  on tomas work/clients/north-web "lore org link agency --project client_north --yes"
+  on tomas work/clients/north-web "lore store folder list team"
+}
+
 # fake_ssh LOGIN: an ssh on PATH that answers GitHub's greeting as LOGIN for every
 # host (ssh -T), and a gh with no login; nothing else is faked, nothing reaches the network.
 fake_ssh() {
@@ -1338,7 +1379,7 @@ Y
 }
 
 main() {
-  local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people store_push live_repair profiles setup_cli invites guided_setup)
+  local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people store_push live_repair profiles setup_cli invites client_folders guided_setup)
   local want=("$@")
   [ ${#want[@]} -eq 0 ] && want=("${all[@]}")
   for s in "${want[@]}"; do

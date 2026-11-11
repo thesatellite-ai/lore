@@ -90,5 +90,5 @@ All names are role words, not real companies: **the agency** (org `agency`, priv
 - [Overview](overview.md) and [Concepts](concepts.md): the picture and the words before the commands.
 - [Getting started](getting-started.md): the first live task and the first landing.
 - [Commands reference](commands.md) and [Troubleshooting](troubleshooting.md).
-- [Guided setup](guided-setup.md), [Setups from the command line](setup-cli.md), [Team invites](invites.md) and [Team profiles](profiles.md).
+- [Guided setup](guided-setup.md), [Setups from the command line](setup-cli.md), [Team invites](invites.md), [Client folders from the parent folder](client-folders.md) and [Team profiles](profiles.md).
 - [Docs home](../README.md): lore for one person, knowledge, tasks, sync and operations.

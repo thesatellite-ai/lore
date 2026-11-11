@@ -38,6 +38,7 @@ import (
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -410,7 +411,10 @@ func liveProjectRoot(dir string) string {
 // liveSkip are operations that never touch the live ref (v0.1.17
 // liveSkipPrefixes): they run before a project exists, edit machine files
 // only, or hold their own locks (migrate takes M, ranked before L).
-var liveSkip = []string{"init", "config", "identity", "whoami", "org", "migrate", "stores", "version", "spec", "setup"}
+// The store operations that leave the repo alone (opsstores.LeavesRepo)
+// skip too: they write a store through its own clone and push it
+// themselves (skipLive).
+var liveSkip = []string{"init", "config", "identity", "whoami", "org", "migrate", "version", "spec", "setup"}
 
 // liveSkipOps are single operations that never touch the live ref although
 // their noun does. None today: see skipLiveRun for task heartbeat.
@@ -487,7 +491,7 @@ func noun(name string) string {
 }
 
 func skipLive(name string) bool {
-	if liveSkipOps[name] {
+	if liveSkipOps[name] || opsstores.LeavesRepo(name) {
 		return true
 	}
 	noun, _, _ := strings.Cut(name, ".")
@@ -545,7 +549,9 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if root := liveProjectRoot(h.cfg.WorkDir); root != "" {
 		top, _ := livePlace(root)
 		if s := r.session(ctx, top); s != nil {
-			s.ensureGitWiring(ctx, root, runWireMode(run)) // merge driver, attributes, hook blocks (gitwire.go)
+			if !leavesWorkRepo(spec.Name) { // repoleave.go: a store-only command leaves the repo's git alone
+				s.ensureGitWiring(ctx, root, runWireMode(run)) // merge driver, attributes, hook blocks (gitwire.go)
+			}
 			wired = true
 			if err := h.refuse(ctx, s, spec); err != nil {
 				return op.Result{}, err
@@ -553,7 +559,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		}
 	}
 	res, err := next(ctx)
-	if !wired && err == nil {
+	if !wired && err == nil && !leavesWorkRepo(spec.Name) {
 		// The operation made the project (repo.init from the setup page or
 		// `lore repo init`): wire the clone now, as `lore init` does through
 		// Live.Prime, so .gitattributes exists before the first commit.

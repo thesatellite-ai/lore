@@ -90,7 +90,10 @@ func TestLooksLikeRowID(t *testing.T) {
 // session (migrate holds M, ranked before L).
 func TestSkipLive(t *testing.T) {
 	for name, want := range map[string]bool{"migrate.run": true, "init": true, "config.get": true, "task.add": false, "live.compact": false,
-		"task.heartbeat": false, "task.claim": false, "task.done": false} {
+		"task.heartbeat": false, "task.claim": false, "task.done": false,
+		// a store command that leaves the repo alone opens no live session
+		// in it (repoleave.go); the stores.yaml writers keep theirs
+		"store.folder.add": true, "store.folder.list": true, "store.list": true, "store.set": true, "store.add": false, "store.init": false} {
 		if got := skipLive(name); got != want {
 			t.Errorf("skipLive(%q) = %v, want %v", name, got, want)
 		}
