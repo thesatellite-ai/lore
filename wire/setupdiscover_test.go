@@ -17,7 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/ghapi"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // Fake tokens, built at run time (no key-shaped literal in the source).
@@ -57,7 +57,7 @@ func discoverWorld(t *testing.T) (*probe.Prober, ghapi.Client, map[string]string
 		gh += u + ") echo " + tok + ";;\n"
 	}
 	gh += "*) echo \"no token, leaked " + toks["mira"] + "\" >&2; exit 1;;\nesac\n"
-	fakebin.Write(t, filepath.Join(bin, "gh"), gh, 0o755)
+	fakeexec.Write(t, filepath.Join(bin, "gh"), gh, 0o755)
 	writeT(t, filepath.Join(home, ".gitconfig"), "[user]\n\tname = Mira Doe\n\temail = mira@personal.example\n[includeIf \"gitdir:~/work/acme/\"]\n\tpath = ~/.gitconfig-acme\n")
 	writeT(t, filepath.Join(home, ".gitconfig-acme"), "[user]\n\tname = Mira Doe\n\temail = acme@acme.example\n")
 
@@ -101,10 +101,10 @@ func discoverWorld(t *testing.T) (*probe.Prober, ghapi.Client, map[string]string
 		}
 	}))
 	t.Cleanup(srv.Close)
-	env := []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + home,
+	env := []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + home, "USERPROFILE=" + home,
 		"GIT_CONFIG_NOSYSTEM=1", "XDG_CONFIG_HOME=" + filepath.Join(home, ".config")}
 	lookPath := func(name string) (string, error) {
-		if p := filepath.Join(bin, name); discoverIsFile(p) {
+		if p := fakeexec.Exe(filepath.Join(bin, name)); discoverIsFile(p) { // gh.exe on Windows
 			return p, nil
 		}
 		return exec.LookPath(name)

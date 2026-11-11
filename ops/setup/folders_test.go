@@ -1,6 +1,8 @@
 package setup
 
 import (
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -11,7 +13,11 @@ import (
 // folders, then another identity's (dimmed); a folder another setup covers
 // names that setup; the home folder and duplicates never show.
 func TestSuggestFolders(t *testing.T) {
-	const home = "/home/octo-user"
+	// an absolute home on this system (/home/octo-user is not on Windows)
+	home := "/home/octo-user"
+	if runtime.GOOS == "windows" {
+		home = "C:/Users/octo-user"
+	}
 	includes := []IncludeFolder{
 		{Folder: "~/projects/acme/", Email: "work-user@acme.example"},
 		{Folder: "~/projects/acme/sub/", Email: "work-user@acme.example"},
@@ -118,7 +124,12 @@ func TestPrefillFolder(t *testing.T) {
 // and its glob, and never allowed as the prefill; this identity's own
 // unclaimed includeIf folders are always offered, undimmed.
 func TestStartFolderMatrix(t *testing.T) {
-	const home = "/home/octo-user"
+	// a home of this system's own shape: on Windows a drive path, where
+	// /home/octo-user is not absolute
+	home := filepath.FromSlash("/home/octo-user")
+	if runtime.GOOS == "windows" {
+		home = `C:\Users\octo-user`
+	}
 	const (
 		workMail  = "octo-work@example.org"
 		otherMail = "octo-personal@example.com"
@@ -132,13 +143,13 @@ func TestStartFolderMatrix(t *testing.T) {
 		wantOwn, wantNone bool
 		claim, claimGlob  string
 	}{
-		{"under own includeIf", home + "/work/acme/proj", nil, true, true, "", ""},
-		{"under another identity's includeIf", home + "/personal/proj", nil, false, false, "", ""},
-		{"claimed by another setup", home + "/Downloads/lore1", []onboard.SetupEntry{{Name: "personal", Folders: []string{"~/Downloads/**"}}}, false, true, "personal", "~/Downloads/**"},
-		{"claimed, under own includeIf", home + "/work/acme/proj", []onboard.SetupEntry{{Name: "client", Folders: []string{"~/work/acme/**"}}}, true, true, "client", "~/work/acme/**"},
-		{"claimed by the setup being edited (not a conflict)", home + "/Downloads/lore1", []onboard.SetupEntry{{Name: "work", Folders: []string{"~/Downloads/lore1/**"}}}, false, true, "", ""},
-		{"claimed, under another identity's includeIf", home + "/personal/proj", []onboard.SetupEntry{{Name: "personal", Folders: []string{"~/personal/**"}}}, false, false, "", ""},
-		{"free (the realmac ~/Downloads case)", home + "/Downloads/lore1", nil, false, true, "", ""},
+		{"under own includeIf", filepath.Join(home, "work/acme/proj"), nil, true, true, "", ""},
+		{"under another identity's includeIf", filepath.Join(home, "personal/proj"), nil, false, false, "", ""},
+		{"claimed by another setup", filepath.Join(home, "Downloads/lore1"), []onboard.SetupEntry{{Name: "personal", Folders: []string{"~/Downloads/**"}}}, false, true, "personal", "~/Downloads/**"},
+		{"claimed, under own includeIf", filepath.Join(home, "work/acme/proj"), []onboard.SetupEntry{{Name: "client", Folders: []string{"~/work/acme/**"}}}, true, true, "client", "~/work/acme/**"},
+		{"claimed by the setup being edited (not a conflict)", filepath.Join(home, "Downloads/lore1"), []onboard.SetupEntry{{Name: "work", Folders: []string{"~/Downloads/lore1/**"}}}, false, true, "", ""},
+		{"claimed, under another identity's includeIf", filepath.Join(home, "personal/proj"), []onboard.SetupEntry{{Name: "personal", Folders: []string{"~/personal/**"}}}, false, false, "", ""},
+		{"free (the realmac ~/Downloads case)", filepath.Join(home, "Downloads/lore1"), nil, false, true, "", ""},
 	}
 	for _, ownIncludes := range []bool{true, false} {
 		for _, st := range starts {
@@ -171,7 +182,7 @@ func TestStartFolderMatrix(t *testing.T) {
 					case FolderInclude:
 						own = own || (r.Glob == "~/work/**" && !r.Dim)
 					case FolderGitRoot, FolderParent:
-						if !startFolderFits(f, onboard.ExpandHome(r.Folder, home)) {
+						if !startFolderFits(f.slashed(), expandSlashed(r.Folder, home)) {
 							t.Errorf("row %+v offered against the rule", r)
 						}
 					case FolderIncludeOther:
@@ -191,7 +202,7 @@ func TestStartFolderMatrix(t *testing.T) {
 	}
 	// the parent follows the same rule: started in ~/work/proj with an own
 	// includeIf at ~/work/proj/, the parent ~/work is not under it
-	f := FolderFacts{Home: home, Start: home + "/work/proj", Includes: []IncludeFolder{{Folder: "~/work/proj/", Email: workMail}}, Emails: []string{workMail}}
+	f := FolderFacts{Home: home, Start: filepath.Join(home, "work/proj"), Includes: []IncludeFolder{{Folder: "~/work/proj/", Email: workMail}}, Emails: []string{workMail}}
 	for _, r := range SuggestFolders(f) {
 		if r.Kind == FolderParent {
 			t.Errorf("parent outside the own includeIf folder offered: %+v", r)

@@ -13,10 +13,11 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 	"github.com/thesatellite-ai/lore/wire"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 )
 
@@ -166,13 +167,13 @@ func TestSetupProberToolsAndFolders(t *testing.T) {
 func toolsHarness(t *testing.T, version, pathLoreOut string) *opstest.H {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	bin := t.TempDir()
 	if pathLoreOut != "" {
 		script := "#!/bin/sh\nprintf '%s\\n' '" + pathLoreOut + "'\n"
-		fakebin.Write(t, filepath.Join(bin, "lore"), script, 0o755)
+		fakeexec.Write(t, filepath.Join(bin, "lore"), script, 0o755)
 	}
 	gitDir := ""
 	if g, err := exec.LookPath("git"); err == nil {

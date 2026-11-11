@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -367,7 +368,8 @@ func TestToken(t *testing.T) {
 	}
 	st, _ := os.Stat(TokenPath(home))
 	hs, _ := os.Stat(home)
-	if st.Mode().Perm() != 0o600 || hs.Mode().Perm() != 0o700 {
+	// Windows has no POSIX mode bits (os.Chmod only sets read-only)
+	if runtime.GOOS != "windows" && (st.Mode().Perm() != 0o600 || hs.Mode().Perm() != 0o700) {
 		t.Fatalf("modes %v %v", st.Mode().Perm(), hs.Mode().Perm())
 	}
 	again, err := LoadOrCreateToken(home)
@@ -385,11 +387,13 @@ func TestToken(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("leftover files: %v", entries)
 	}
-	if err := os.Chmod(TokenPath(home), tokenMode|groupReadBit); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := LoadOrCreateToken(home); !errs.Has(err, errs.ConfigInvalid) {
-		t.Fatalf("0640 accepted: %v", err)
+	if runtime.GOOS != "windows" { // no POSIX mode bits on Windows: the profile's ACL guards the token
+		if err := os.Chmod(TokenPath(home), tokenMode|groupReadBit); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadOrCreateToken(home); !errs.Has(err, errs.ConfigInvalid) {
+			t.Fatalf("0640 accepted: %v", err)
+		}
 	}
 	if err := os.WriteFile(TokenPath(home), []byte("short\n"), 0o600); err != nil {
 		t.Fatal(err)

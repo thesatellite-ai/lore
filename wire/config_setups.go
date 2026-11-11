@@ -25,6 +25,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -152,7 +153,9 @@ func (d setupsDoc) problems() []string {
 // home that cannot hold the file (errs.FileIO: ~/.lore a file, or not
 // writable) is reported the same way everywhere, with the path and the fix.
 func readConfigRaw(home string) ([]byte, error) {
-	b, err := os.ReadFile(filepath.Clean(configPath(home)))
+	// osrename.ReadFile: on Windows a read races another lore's rename of a
+	// new config.yaml over the old one; that refusal lasts a moment.
+	b, err := osrename.ReadFile(filepath.Clean(configPath(home)))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

@@ -13,6 +13,7 @@ package userscen
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -263,7 +264,7 @@ func TestSecretsCommitHookChecksEveryFile(t *testing.T) {
 	files := secDataHolding(t, s.c, id)
 	var rowFile string
 	for _, f := range files {
-		if strings.Contains(f, "/memories/") {
+		if strings.Contains(filepath.ToSlash(f), "/memories/") {
 			rowFile = f
 		}
 	}

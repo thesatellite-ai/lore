@@ -90,6 +90,9 @@ func TestCampaignRender_CheckUnreadableFiles(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.reason == "permission denied" && !hasModeBits {
+				t.Skip("Windows has no mode bits: a 0o000 file stays readable")
+			}
 			campRefusal(t, c, campExitBadInput, "E_INVALID_INPUT", tc.hint, tc.args...)
 			c.Lore(tc.args...).Says(t, tc.reason)
 		})

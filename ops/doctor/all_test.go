@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -318,7 +319,7 @@ func TestAllTextTwoSetups(t *testing.T) {
 		"  ✓ store me    read ✓ write ✓ private ✓\n",
 		"  ✓ secrets     gopass\n",
 		"  ⚠ identity.git_email  hub commits as mira@old.example\n",
-		"      fix: git -C " + repo + " config user.email mira@personal.example\n",
+		"      fix: git -C " + filepath.ToSlash(repo) + " config user.email mira@personal.example\n",
 		"\nsetup acme-hub (member of agency) ─ " + env.home + "/www/agency/**\n",
 		"  ✗ store agency   read ✓ write ✗ private ✓\n",
 		"  ✗ store.write  agency: Permission to agency-org/notes.git denied to mira-agency\n",

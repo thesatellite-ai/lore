@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -42,7 +43,9 @@ func TestEnsureHookBlock(t *testing.T) {
 			if tc.before != "" && strings.Index(got, "lore sync hook") > strings.Index(got, "echo mine") && strings.HasPrefix(tc.before, "#!") {
 				t.Fatalf("the block goes before the user's lines (an exit 0 must not skip it):\n%s", got)
 			}
-			if fi, _ := os.Stat(path); fi.Mode().Perm()&rideExecBits == 0 {
+			// Windows has no POSIX mode bits (os.Chmod only sets read-only);
+			// git for Windows runs a hook without one.
+			if fi, _ := os.Stat(path); runtime.GOOS != "windows" && fi.Mode().Perm()&rideExecBits == 0 {
 				t.Fatalf("the hook must be executable: %v", fi.Mode())
 			}
 		})
@@ -69,13 +72,17 @@ func TestEnsureHookBlockRunningScript(t *testing.T) {
 	if err := ensureHookBlock(dir, hookCommitMsg, "lore-sync", []string{"a new and much longer line than before"}); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := io.ReadAll(running); string(b) != old {
+	// Windows refuses to rename over a file another handle holds open, so
+	// replaceHookFile writes in place there (its documented fallback) and
+	// the open handle sees the new bytes.
+	if b, _ := io.ReadAll(running); runtime.GOOS != "windows" && string(b) != old {
 		t.Fatalf("the running hook must read on its old script, read:\n%s", b)
 	}
 	if b, _ := os.ReadFile(filepath.Clean(path)); !strings.Contains(string(b), "much longer line") {
 		t.Fatalf("the hook holds the new block:\n%s", b)
 	}
-	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o750 {
+	// Windows has no mode bits to keep (every file reads 0666).
+	if fi, _ := os.Stat(path); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o750 {
 		t.Fatalf("the hook keeps its permissions 0750, has %v", fi.Mode().Perm())
 	}
 	if m, _ := filepath.Glob(filepath.Join(dir, "*"+hookTmpSuffix+"*")); len(m) != 0 {

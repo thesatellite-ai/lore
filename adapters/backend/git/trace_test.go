@@ -48,7 +48,7 @@ func TestCloneTraceNamesTheHostReached(t *testing.T) {
 			}
 			t.Setenv("FAKE_SSH_ROOT", root)
 			route := WithRoute(func(context.Context, string) ([]string, []string) {
-				return c.routeArgs, []string{"GIT_SSH_COMMAND=" + bin}
+				return c.routeArgs, []string{"GIT_SSH_COMMAND=" + filepath.ToSlash(bin)}
 			})
 			var lines []string
 			ctx := gitref.WithTracer(context.Background(), func(tc gitref.TraceCall) { lines = append(lines, gitref.TraceLine(tc)) })

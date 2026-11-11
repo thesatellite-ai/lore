@@ -28,11 +28,9 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -751,24 +749,6 @@ func lockPID(top string) (int, bool) {
 		return 0, true
 	}
 	return pid, true
-}
-
-// processAlive reports whether pid runs on this machine. On Windows,
-// FindProcess opens the process and fails when it is gone; elsewhere
-// signal 0 probes it (EPERM: it runs under another user).
-func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		return true
-	}
-	err = p.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 // lockState is the status line of the migration lock.

@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -176,7 +177,7 @@ func TestAPIParity_SameRunPathAsCLI(t *testing.T) {
 	newFolder := c.Lore("memory", "add", "--body", "cli note into a new folder", "--to", "northwind/parity-cli")
 	c.Lore("memory", "add", "--body", "cli note into a new folder", "--to", "northwind/parity-cli", "--yes").OK(t)
 	leak := c.Lore("memory", "add", "--body", leakNote, "--to", "repo")
-	cfg7 := c.Lore("store", "init", "parity", "file://"+dir)
+	cfg7 := c.Lore("store", "init", "parity", fileuri.URL(dir, ""))
 	modeB(true)
 	retired := c.Lore("memory", "add", "--body", "after mode b")
 	modeB(false)
@@ -185,7 +186,7 @@ func TestAPIParity_SameRunPathAsCLI(t *testing.T) {
 	rNewFolder := srv.post(t, "/v1/memories", map[string]any{"body": "rest note into a new folder", "to": "northwind/parity-rest"})
 	rYes := srv.post(t, "/v1/memories", map[string]any{"body": "rest note into a new folder", "to": "northwind/parity-rest", "yes": true})
 	rLeak := srv.post(t, "/v1/memories", map[string]any{"body": leakNote, "to": "repo"})
-	rCFG7 := srv.post(t, "/v1/stores/init", map[string]any{"name": "parity", "url": "file://" + dir})
+	rCFG7 := srv.post(t, "/v1/stores/init", map[string]any{"name": "parity", "url": fileuri.URL(dir, "")})
 	modeB(true)
 	rRetired := srv.post(t, "/v1/memories", map[string]any{"body": "after mode b"})
 	modeB(false)
@@ -220,7 +221,13 @@ func TestAPIParity_SameRunPathAsCLI(t *testing.T) {
 func TestAPIParity_CLIBesideRunningAPI(t *testing.T) {
 	a := newAgency(t)
 	c := a.aliceApp
-	liveLock := filepath.Join(c.Dir, ".git", "lore", "live.lock")
+	// the trace names locks by their resolved path (/private/var/... for a
+	// macOS /var/... temp folder)
+	dir, err := filepath.EvalSymlinks(c.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	liveLock := filepath.Join(dir, ".git", "lore", "live.lock")
 	srv := startAPI(t, c)
 	if r := srv.post(t, "/v1/tasks", map[string]any{"title": "rest task before", "to": "repo", "commitment": "accepted"}); r.status/100 != 2 {
 		t.Fatalf("REST task add: %d %s", r.status, r.body)

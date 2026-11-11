@@ -86,12 +86,18 @@ func problem(r onboard.CheckResult) bool {
 // repoScoped reports whether a result is about one repo (an absolute root,
 // or "<tool> <root>"): such results never colour an area line.
 func repoScoped(target string) bool {
-	if filepath.IsAbs(target) || strings.HasPrefix(target, "/") {
+	if isRoot(target) {
 		return true
 	}
 	_, rest, ok := strings.Cut(target, " ")
-	return ok && strings.HasPrefix(rest, "/")
+	return ok && isRoot(rest)
 }
+
+// isRoot reports whether a target is a repo root: an absolute path, a
+// slash path from another system included. On Windows a root is
+// C:\Users\..., which "starts with /" never matched: the repo's name was
+// lost from its problem lines.
+func isRoot(p string) bool { return filepath.IsAbs(p) || strings.HasPrefix(p, "/") }
 
 // area is the area of a result: the check id's prefix, a store's name.
 func area(r onboard.CheckResult) string {
@@ -204,10 +210,10 @@ func targetLabel(t string) string {
 		return ""
 	case strings.HasPrefix(t, targetStore):
 		return strings.TrimPrefix(t, targetStore)
-	case strings.HasPrefix(t, "/"):
+	case isRoot(t):
 		return filepath.Base(t)
 	}
-	if tool, root, ok := strings.Cut(t, " "); ok && strings.HasPrefix(root, "/") {
+	if tool, root, ok := strings.Cut(t, " "); ok && isRoot(root) {
 		return tool + " in " + filepath.Base(root)
 	}
 	return t

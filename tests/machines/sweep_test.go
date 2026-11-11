@@ -476,7 +476,11 @@ func TestSweepSkillLinkRule(t *testing.T) {
 		{"foreign folder at the end", "# someone else's notes\n", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
+			// the real path, as Build makes it (macOS /var is /private/var)
+			dir, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
 			m := &Machine{Dir: dir, Home: filepath.Join(dir, "h"), Repos: map[string]string{}}
 			end := filepath.Join(dir, "store", "lore")
 			for _, d := range []string{end, filepath.Join(m.Home, ".lore"), filepath.Join(m.Home, ".agents", "skills"), filepath.Join(m.Home, ".claude", "skills")} {

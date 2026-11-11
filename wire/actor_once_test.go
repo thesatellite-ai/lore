@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -37,7 +38,7 @@ func TestActorRowOncePerStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := func(url string) string { return filepath.FromSlash(strings.TrimPrefix(url, "file://")) }
+	dir := func(url string) string { return filepath.FromSlash(fileuri.LocalPath(url)) }
 	files := map[string]string{
 		"repo": filepath.Join(repo, ".lore", "data", schema.TableActors, who.String()+".json"),
 		"kb":   filepath.Join(dir(kb), ".lore", "data", schema.TableActors, who.String()+".json"),

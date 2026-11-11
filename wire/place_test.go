@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -33,7 +34,7 @@ func placeAt(t *testing.T, dir, name string, n store.Source) string {
 func TestPlaceOf(t *testing.T) {
 	t.Parallel()
 	url := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
-	dir := strings.TrimPrefix(url, "file://")
+	dir := fileuri.LocalPath(url)
 
 	if got := placeAt(t, dir, rowfs.FolderRoot, "agency"); got != folderStore {
 		t.Fatalf("store root place = %q, want %q", got, folderStore)

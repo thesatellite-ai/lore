@@ -605,11 +605,11 @@ func TestFixRunsInTargetRepo(t *testing.T) {
 	e := newTestEngine(env)
 	env.prober.results[onboard.CheckToolsPointerFile] = ProbeResult{Status: onboard.StatusFail}
 	ctx := op.WithConfirmed(bg, true)
-	if _, err := e.Fix(ctx, FixIn{Setup: "acme-hub", Check: string(onboard.CheckToolsPointerFile), Target: "claude_code /w/acme-hub"}); err != nil {
+	if _, err := e.Fix(ctx, FixIn{Setup: "acme-hub", Check: string(onboard.CheckToolsPointerFile), Target: "claude_code " + absHub()}); err != nil {
 		t.Fatal(err)
 	}
-	if len(env.runner.dirs) != 1 || env.runner.dirs[0] != "/w/acme-hub" {
-		t.Fatalf("fix ran in %v, want /w/acme-hub (ran %v)", env.runner.dirs, env.runner.ran)
+	if len(env.runner.dirs) != 1 || env.runner.dirs[0] != absHub() {
+		t.Fatalf("fix ran in %v, want %s (ran %v)", env.runner.dirs, absHub(), env.runner.ran)
 	}
 }
 

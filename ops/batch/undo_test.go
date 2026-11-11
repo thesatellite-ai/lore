@@ -153,7 +153,7 @@ func TestBatchUndoMetaImport(t *testing.T) {
 	if err := os.WriteFile(file, []byte(`{"id":"`+a+`","key":"owner","value":"sales"}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bat := batchOf(t, opstest.Text(h.MustYes(settings.OpMetaImport, `{"file":"`+filepath.ToSlash(file)+`"}`)))
+	bat := batchOf(t, opstest.Text(h.MustYes(settings.OpMetaImport, `{"file":`+opstest.Quote(filepath.ToSlash(file))+`}`)))
 	if got := metaOf(h, a); !strings.Contains(got, "owner\tsales") {
 		t.Fatalf("after import %q", got)
 	}

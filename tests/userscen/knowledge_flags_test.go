@@ -26,6 +26,7 @@ package userscen
 //     actor id than its owner's, on every kind with a creator
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -219,6 +220,11 @@ func TestKnowledgeDeleteConfirmSpelling(t *testing.T) {
 func TestKnowledgeOddText(t *testing.T) {
 	scenParallel(t)
 	long := strings.Repeat("0123456789abcdef", 4096) // 64 KiB
+	if runtime.GOOS == "windows" {
+		// Windows caps a whole command line at 32767 characters, and the
+		// body goes in --body (and --title): 8 KiB each stays under it.
+		long = strings.Repeat("0123456789abcdef", 512)
+	}
 	texts := []struct{ name, in, want string }{
 		{"unicode", "日本語のメモ — ünïcødé", "日本語のメモ — ünïcødé"},
 		{"emoji", "ship it 🚀✅", "ship it 🚀✅"},

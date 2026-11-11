@@ -125,7 +125,7 @@ func TestDoctorSyncOSJunkNotDataIgnored(t *testing.T) {
 	if err := os.WriteFile(excludes, []byte(".DS_Store\n._*\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(gc, []byte("[core]\n\texcludesFile = "+excludes+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(gc, []byte("[core]\n\texcludesFile = "+filepath.ToSlash(excludes)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", gc)

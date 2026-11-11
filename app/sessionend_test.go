@@ -64,7 +64,7 @@ func TestSessionEndHookQuietZero(t *testing.T) {
 		{"outside a repo", plain, nil, []string{"agent", "end", "--tool", "claude_code"}},
 		{"git repo without lore", gitRepo, nil, []string{"agent", "end", "--tool", "codex"}},
 		{"unknown flag", gitRepo, nil, []string{"agent", "end", "--tool", "gemini_cli", "--from-a-newer-lore"}},
-		{"relative HOME", plain, map[string]string{"HOME": filepath.Join("relative", "home")}, []string{"agent", "end", "--tool", "claude_code"}},
+		{"relative HOME", plain, map[string]string{"HOME": filepath.Join("relative", "home"), "USERPROFILE": filepath.Join("relative", "home")}, []string{"agent", "end", "--tool", "claude_code"}},
 	}
 	for _, c := range cases {
 		start := time.Now()

@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -42,7 +43,7 @@ func TestCampaignSync_StoreForget(t *testing.T) {
 	a, alice := st.clones[0], st.people[0]
 	r := st.w.Remote(syncSlugStore)
 	a.MustLore("store", "init", "notes", r.URL(), "--yes")
-	folder := "file://" + filepath.Join(st.w.Root, "shared-folder-store")
+	folder := fileuri.URL(filepath.Join(st.w.Root, "shared-folder-store"), "")
 	a.MustLore("store", "init", "shelf", folder, "--yes")
 	a.MustLore("memory", "add", "a row in the git store", "--to", "notes")
 	a.MustLore("memory", "add", "a row in the folder store", "--to", "shelf")

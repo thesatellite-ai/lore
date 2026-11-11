@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/ops/mission"
@@ -94,7 +95,7 @@ func TestMissionApplyFolderTarget(t *testing.T) {
 		h := opstest.New(t, func(o *wire.Options) {
 			o.RepoIsClient = func(context.Context) (bool, error) { return true, nil }
 			o.OrgStores = func(context.Context) ([]attach.Store, error) {
-				return []attach.Store{{Name: "agency", URL: "file://" + filepath.ToSlash(dir), Folder: "client1"}}, nil
+				return []attach.Store{{Name: "agency", URL: fileuri.URL(dir, ""), Folder: "client1"}}, nil
 			}
 		})
 		var out mission.ApplyOut

@@ -4,11 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -30,7 +30,7 @@ func TestOrgTargetMatrix(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
-			dir := strings.TrimPrefix(orgURL, "file://")
+			dir := fileuri.LocalPath(orgURL)
 			hook := func(context.Context) ([]attach.Store, error) {
 				return []attach.Store{{Name: "northwind", URL: orgURL, Folder: "acme"}, {Name: "northwind/org", URL: orgURL, Folder: "org"}}, nil
 			}

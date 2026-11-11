@@ -67,7 +67,7 @@ func TestResourceImportRefMatrix(t *testing.T) {
 			if err := os.WriteFile(p, []byte(`{"resources":[`+strings.Join(parts, ",")+`]}`), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			in := `{"file":"` + p + `"}`
+			in := `{"file":` + opstest.Quote(p) + `}`
 			if c.refuse != "" {
 				if msg := h.Fails(settings.OpResImport, in, errs.ResourceBatch); !strings.Contains(msg, c.refuse) || !strings.Contains(msg, "nothing written") {
 					t.Fatalf("refusal %q, want %q and nothing written", msg, c.refuse)

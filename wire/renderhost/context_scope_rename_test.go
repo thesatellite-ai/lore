@@ -6,13 +6,15 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // renameRepo is a git work tree with one commit holding files, then a
 // second commit made by change (git mv / rm), in a HOME of its own.
 func renameRepo(t *testing.T, files []string, change ...[]string) string {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("GIT_AUTHOR_NAME", "t")
 	t.Setenv("GIT_AUTHOR_EMAIL", "t@example.invalid")

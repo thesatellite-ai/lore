@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -165,12 +166,12 @@ func TestCampaignSync_StoreInitBareRepoAsFolder(t *testing.T) {
 	c.Git("init", "-q", "--bare", bare)
 	before := camSyncTree(t, bare)
 	for _, name := range []string{"kb", "me"} {
-		r := c.Lore("store", "init", name, "file://"+filepath.ToSlash(bare))
+		r := c.Lore("store", "init", name, fileuri.URL(bare, ""))
 		r.Fails(t, 20, "[E_INVALID_INPUT]", "is a git repository", "nothing written")
 		if h := camSyncHint(r); !strings.Contains(h, "this is a git repository: attach it with its git url") || !strings.Contains(h, "lore store init "+name+" ssh://") {
 			t.Errorf("store init %s: the hint names the git-url spelling, got %q", name, h)
 		}
-		e := trashErr(t, c, "E_INVALID_INPUT", 20, "store", "init", name, "file://"+filepath.ToSlash(bare))
+		e := trashErr(t, c, "E_INVALID_INPUT", 20, "store", "init", name, fileuri.URL(bare, ""))
 		if !strings.Contains(e.Error.Hint, "git url") {
 			t.Errorf("--json: the hint names the git url: %+v", e.Error)
 		}
@@ -181,10 +182,10 @@ func TestCampaignSync_StoreInitBareRepoAsFolder(t *testing.T) {
 	}
 
 	plain := filepath.Join(w.Root, "srv", "plain")
-	c.MustLore("store", "init", "plain", "file://"+filepath.ToSlash(plain)).Says(t, "sto_")
+	c.MustLore("store", "init", "plain", fileuri.URL(plain, "")).Says(t, "sto_")
 	work := filepath.Join(w.Root, "srv", "work")
 	c.Git("init", "-q", work)
-	c.MustLore("store", "init", "work", "file://"+filepath.ToSlash(work)).Says(t, "sto_")
+	c.MustLore("store", "init", "work", fileuri.URL(work, "")).Says(t, "sto_")
 }
 
 // TestCampaignSync_RowMoveIntoItsOwnStore: `lore row move` (and `lore

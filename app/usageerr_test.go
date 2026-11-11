@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/surface/cli"
 )
@@ -62,7 +63,7 @@ func TestHostArgCountIsInvalidInput(t *testing.T) {
 // entry point, a wrong argument count on host commands exits 20 with
 // cobra's own text in the error line.
 func TestHostArgCountExit20(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Chdir(t.TempDir())
 	for _, c := range []struct {
 		args []string

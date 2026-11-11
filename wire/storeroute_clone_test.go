@@ -23,7 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // cloneRouteConfig: personal.store is shared by the inheriting setup
@@ -71,8 +71,8 @@ func TestCloneRouteOwnedInheritUnowned(t *testing.T) {
 		t.Setenv(k+"_EMAIL", "alice@example.com")
 	}
 	sshBin := filepath.Join(t.TempDir(), "ssh")
-	fakebin.Write(t, sshBin, cloneFakeSSH, 0o755)
-	t.Setenv("GIT_SSH_COMMAND", sshBin)
+	sshBin = fakeexec.Write(t, sshBin, cloneFakeSSH, 0o755) // ssh.exe on Windows
+	t.Setenv("GIT_SSH_COMMAND", filepath.ToSlash(sshBin))   // git runs it through sh
 
 	cases := []struct {
 		name, url, wantHost string

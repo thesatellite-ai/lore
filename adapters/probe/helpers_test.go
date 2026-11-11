@@ -9,15 +9,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
-// fakeBin writes an executable shell script name into dir.
+// fakeBin writes an executable shell script name into dir (name.exe on
+// Windows, tests/fakeexec), found on PATH by its bare name.
 func fakeBin(t *testing.T, dir, name, script string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	fakeexec.Write(t, filepath.Join(dir, name), "#!/bin/sh\n"+script+"\n", 0o755)
 }
 
 // sandbox is a temp HOME and a fake-bin folder first on PATH; real git
@@ -40,7 +41,7 @@ func newSandbox(t *testing.T) sandbox {
 		}
 	}
 	t.Setenv("PATH", s.bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("HOME", s.home)
+	testenv.SetHome(t, s.home)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(s.home, ".config"))
 	t.Setenv("GIT_SSH_COMMAND", "")

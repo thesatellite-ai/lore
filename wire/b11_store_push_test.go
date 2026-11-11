@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -90,7 +91,7 @@ func TestStorePushWrapsOnlyRemoteStores(t *testing.T) {
 				}
 				return
 			}
-			if sp.Unwrap() != tc.b || sp.stateDir != "/x/clone" {
+			if sp.Unwrap() != tc.b || sp.stateDir != filepath.FromSlash("/x/clone") {
 				t.Fatalf("unwrap/stateDir wrong: %q", sp.stateDir)
 			}
 		})

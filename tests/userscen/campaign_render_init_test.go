@@ -108,7 +108,7 @@ func TestCampaignRender_InitToolFileMatrix(t *testing.T) {
 				if hb, had := tc.files[f]; had && !strings.HasSuffix(got, hb) {
 					t.Errorf("%s keeps the person's text below the pointer:\n%s", f, got)
 				}
-				r.Says(t, f+" (pointer → ") // the path is relative to the pointer file
+				r.Says(t, filepath.FromSlash(f)+" (pointer → ") // the path is relative to the pointer file
 			}
 			for _, f := range tc.absent {
 				if _, ok := c.ReadFile(f); ok {
@@ -144,6 +144,9 @@ func TestCampaignRender_InitFolderShapes(t *testing.T) {
 		}
 	})
 	t.Run("read-only checkout", func(t *testing.T) {
+		if !hasModeBits {
+			t.Skip("a folder's read-only mode does not stop new files on Windows")
+		}
 		c := campFresh(t)
 		if err := os.Chmod(c.Dir, 0o555); err != nil {
 			t.Fatal(err)

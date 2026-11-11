@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -75,6 +76,7 @@ func Key(raw string) string {
 		return n
 	}
 	if u, err := url.Parse(s); err == nil && u.Scheme == "file" {
+		fileuri.FoldDriveHost(u) // file://C:/x and file:///C:/x are one place
 		return "file://" + path.Clean(u.Path)
 	}
 	if strings.HasPrefix(s, "/") {

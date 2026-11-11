@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // TestSnapshotWithTMPDIRGone: a migration snapshot of the working files
@@ -28,7 +30,7 @@ func TestSnapshotWithTMPDIRGone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "gone"))
+	testenv.SetTemp(t, filepath.Join(t.TempDir(), "gone"))
 	tree, err := s.Snapshot(context.Background(), work, work, ".lore/data")
 	if err != nil || tree == "" {
 		t.Fatalf("snapshot with TMPDIR gone: %q %v", tree, err)

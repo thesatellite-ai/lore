@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -47,10 +48,15 @@ func TestTokenFileAuthRotate(t *testing.T) {
 	want("old token after rotate", old, http.StatusUnauthorized)
 	want("new token after rotate", rot, http.StatusOK)
 
-	if err := os.Chmod(TokenPath(home), tokenMode|groupReadBit); err != nil {
-		t.Fatal(err)
+	// Windows has no POSIX mode bits (os.Chmod only sets read-only): a
+	// token file cannot be made group-readable there, so this case is
+	// Unix-only; the profile folder's ACL keeps the file private.
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(TokenPath(home), tokenMode|groupReadBit); err != nil {
+			t.Fatal(err)
+		}
+		want("group-readable file", rot, http.StatusUnauthorized)
 	}
-	want("group-readable file", rot, http.StatusUnauthorized)
 	if err := os.WriteFile(TokenPath(home), []byte("short\n"), tokenMode); err != nil {
 		t.Fatal(err)
 	}

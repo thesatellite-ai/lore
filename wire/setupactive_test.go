@@ -3,9 +3,11 @@ package wire
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -90,9 +92,18 @@ func TestResolveSetupMatrix(t *testing.T) {
 				h = home
 			}
 			gitRan := false
-			q := SetupQuery{Home: h, Dir: tc.dir, Flag: tc.flag, UserHome: "/home/mira",
+			// The folder is made absolute (on Windows /home/mira is
+			// D:\home\mira on the runner), so home and toplevel are too.
+			abs := func(p string) string {
+				if p == "" {
+					return ""
+				}
+				a, _ := filepath.Abs(p)
+				return a
+			}
+			q := SetupQuery{Home: h, Dir: tc.dir, Flag: tc.flag, UserHome: abs("/home/mira"),
 				Getenv:   func(k string) string { return map[string]string{opssetup.EnvSetup: tc.env}[k] },
-				TopLevel: func(context.Context, string) string { gitRan = true; return tc.top },
+				TopLevel: func(context.Context, string) string { gitRan = true; return abs(tc.top) },
 				RepoID:   func(string) string { return tc.repoID },
 				Resolve:  func(p string) (string, error) { return "", errors.New("no links") },
 				OrgOf:    tc.orgOf}
@@ -193,7 +204,7 @@ func TestRouteFor(t *testing.T) {
 // TestPersonalStoreOverride is 3.4's `me`: none refuses --to me, a url
 // replaces personal.store, inherit / no setup keep it.
 func TestPersonalStoreOverride(t *testing.T) {
-	t.Setenv("HOME", "/home/mira")
+	testenv.SetHome(t, "/home/mira")
 	t.Setenv(opssetup.EnvSetup, "")
 	home := writeSetupsConfig(t, activeConfig)
 	mc := machineConfig{}

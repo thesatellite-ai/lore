@@ -14,7 +14,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // fakeGHPath puts a gh on PATH that hands out tok for login mira and
@@ -30,7 +30,7 @@ case "$1 $2" in
   *) echo "unexpected $*" >&2; exit 2;;
 esac
 `
-	fakebin.Write(t, filepath.Join(dir, "gh"), script, 0o755)
+	fakeexec.Write(t, filepath.Join(dir, "gh"), script, 0o755)
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("GH_TOKEN", "")
 	return log

@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -159,7 +160,7 @@ func TestDoctorStoreLocks(t *testing.T) {
 	if got, err := a.DoctorStoreLocks(ctx); err != nil || len(got) != 0 {
 		t.Fatalf("free lock: %+v %v", got, err)
 	}
-	root, err := rowfs.Open(strings.TrimPrefix(url, "file://"))
+	root, err := rowfs.Open(fileuri.LocalPath(url))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +218,9 @@ func TestEditAfterPurge(t *testing.T) {
 			t.Fatal(werr)
 		}
 		git("add", rel)
-		git("commit", "-q", "-m", msg)
+		// its own identity: a machine with no global git identity (a fresh
+		// CI runner) refuses the commit otherwise
+		git("-c", "user.name=lore test", "-c", "user.email=test@example.com", "commit", "-q", "-m", msg)
 		return git("rev-parse", "HEAD")
 	}
 	body, err := value.TextOf("x")

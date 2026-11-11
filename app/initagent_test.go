@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
@@ -57,7 +58,7 @@ func TestInitAsAgentStampsEveryRow(t *testing.T) {
 				t.Setenv(k, v)
 			}
 			home := t.TempDir()
-			t.Setenv("HOME", home)
+			testenv.SetHome(t, home)
 			t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 			t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "gitconfig"))
 			if err := os.WriteFile(filepath.Join(home, "gitconfig"), []byte("[user]\n\tname = Tom\n\temail = tom@example.com\n"), 0o600); err != nil {

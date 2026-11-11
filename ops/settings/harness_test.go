@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -31,7 +32,7 @@ func newStore(t *testing.T, id string) string {
 	if err := folder.Init(dir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: sid, Visibility: rowfs.VisibilityInternal}); err != nil {
 		t.Fatal(err)
 	}
-	return "file://" + filepath.ToSlash(dir)
+	return fileuri.URL(dir, "")
 }
 
 // multiStore is a harness whose repo attaches, by stores.yaml, the folder

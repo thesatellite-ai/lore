@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -16,6 +17,9 @@ import (
 // journal path is a folder), the error a write under a quota gets too.
 func ioErrOf(t *testing.T) (string, error) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows' SQLite answers a folder in the journal's place with SQLITE_CANTOPEN_ISDIR, not an I/O error, and nothing short of a full disk makes it fail a write with SQLITE_IOERR")
+	}
 	p := filepath.Join(t.TempDir(), "c.db")
 	db, err := sql.Open(driverName, "file:"+p)
 	if err != nil {

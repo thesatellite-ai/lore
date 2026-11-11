@@ -3,8 +3,10 @@ package wire
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -18,20 +20,33 @@ func TestCleanFileURLMatrix(t *testing.T) {
 	if err != nil {
 		t.Skip("no home folder on this machine")
 	}
-	h := filepath.ToSlash(home)
-	cases := []struct {
+	type urlCase struct {
 		in, want string
 		code     errs.Code
-	}{
-		{in: "file://~/stores/me", want: "file://" + h + "/stores/me"},
-		{in: "file:///~/stores/me", want: "file://" + h + "/stores/me"},
-		{in: "file://~", want: "file://" + h},
-		{in: "file:///tmp/a/../b", want: "file:///tmp/b"},
-		{in: "file:///tmp/~notme", want: "file:///tmp/~notme"},
-		{in: "file:///tmp/störes", want: "file:///tmp/st%C3%B6res"},
+	}
+	cases := []urlCase{
+		{in: "file://~/stores/me", want: fileuri.URL(filepath.Join(home, "stores", "me"), "")},
+		{in: "file:///~/stores/me", want: fileuri.URL(filepath.Join(home, "stores", "me"), "")},
+		{in: "file://~", want: fileuri.URL(home, "")},
 		{in: "git@github.com:acme/lore.git", want: "git@github.com:acme/lore.git"},
 		{in: "https://github.com/acme/lore", want: "https://github.com/acme/lore"},
 		{in: "file://", code: errs.StoreScheme},
+	}
+	if runtime.GOOS == "windows" {
+		cases = append(cases,
+			urlCase{in: "file:///C:/tmp/a/../b", want: "file:///C:/tmp/b"},
+			urlCase{in: "file:///C:/tmp/störes", want: "file:///C:/tmp/st%C3%B6res"},
+			// a drive in the host place is that drive, not a machine named
+			// C: (before: file://C:/C:/Users/a/me, refused when read back)
+			urlCase{in: "file://C:/Users/a/me", want: "file:///C:/Users/a/me"},
+			urlCase{in: "file://d:/x/../y", want: "file:///d:/y"},
+		)
+	} else {
+		cases = append(cases,
+			urlCase{in: "file:///tmp/a/../b", want: "file:///tmp/b"},
+			urlCase{in: "file:///tmp/~notme", want: "file:///tmp/~notme"},
+			urlCase{in: "file:///tmp/störes", want: "file:///tmp/st%C3%B6res"},
+		)
 	}
 	for _, c := range cases {
 		got, err := cleanFileURL(c.in)

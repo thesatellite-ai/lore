@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
 
@@ -104,7 +106,7 @@ func TestInitName(t *testing.T) {
 	asPerson(t)
 	for _, c := range []struct{ flag, want string }{{"", ""}, {"My-App", "my-app"}} {
 		t.Run("name="+c.flag, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			testenv.SetHome(t, t.TempDir())
 			dir := gitRepo(t)
 			args := []string{"init"}
 			want := c.want
@@ -162,7 +164,7 @@ func TestShortcutsRunTheirCommand(t *testing.T) {
 			t.Fatalf("memory add: %d %s", code, errOut)
 		}
 		mem := strings.TrimSuffix(filepath.Base(rowFiles(t, root, "memories")[0]), ".json")
-		store := "file://" + filepath.Join(t.TempDir(), "scratch")
+		store := fileuri.URL(filepath.Join(t.TempDir(), "scratch"), "")
 		if code, _, errOut := w.lore(t, root, "store", "init", "scratch", store); code != 0 {
 			t.Fatalf("store init: %d %s", code, errOut)
 		}

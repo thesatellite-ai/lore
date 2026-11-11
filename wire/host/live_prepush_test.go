@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // commitFile writes rel in dir, commits it with msg and returns the commit.
@@ -40,7 +41,7 @@ func commitFile(t *testing.T, dir, rel, body, msg string) string {
 // of what the remote has send nothing; a tip lore cannot read is an error
 // (the hook then refuses the push), never an empty list.
 func TestPushDocsAreOnlyWhatTheRemoteLacks(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	ctx := context.Background()
 	origin := filepath.Join(t.TempDir(), "origin.git")

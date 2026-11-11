@@ -2,6 +2,7 @@ package reveal
 
 import (
 	"context"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -48,7 +49,8 @@ func TestArgv(t *testing.T) {
 		{"darwin folder is opened", "darwin", dir, noDisplay, []string{"open", "/h/.lore"}, true},
 		{"windows file is selected", "windows", file, noDisplay, []string{"explorer", "/select,/h/.lore/config.yaml"}, true},
 		{"windows folder", "windows", dir, noDisplay, []string{"explorer", "/h/.lore"}, true},
-		{"linux file opens its folder", "linux", file, display, []string{"xdg-open", "/h/.lore"}, true},
+		// the folder as this system cuts it (\h\.lore when the test runs on Windows)
+		{"linux file opens its folder", "linux", file, display, []string{"xdg-open", filepath.Dir(file.Path)}, true},
 		{"linux folder", "linux", dir, display, []string{"xdg-open", "/h/.lore"}, true},
 		{"linux without a display", "linux", dir, noDisplay, nil, false},
 		{"freebsd with wayland", "freebsd", dir, func(k string) string {

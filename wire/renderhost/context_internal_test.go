@@ -12,6 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -37,7 +38,7 @@ func internalStoreAt(t *testing.T, id string, vis rowfs.Visibility) string {
 	if err = folder.Init(dir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: sid, Visibility: vis}); err != nil {
 		t.Fatal(err)
 	}
-	return "file://" + filepath.ToSlash(dir)
+	return fileuri.URL(dir, "")
 }
 
 // internalApp is an App over a fresh git repo with a shareable store

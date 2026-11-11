@@ -21,6 +21,7 @@ package setup
 import (
 	"context"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -133,8 +134,23 @@ const (
 	globSuffix        = "/**"
 )
 
+// slashed is f with every folder in slash form. The rules below work on
+// slash paths (path.Clean, "/" joins, ~/ prefixes); on Windows the facts
+// come with backslashes, and then no folder was ever written as ~/….
+func (f FolderFacts) slashed() FolderFacts {
+	f.Home, f.Start, f.GitRoot = filepath.ToSlash(f.Home), filepath.ToSlash(f.Start), filepath.ToSlash(f.GitRoot)
+	inc := make([]IncludeFolder, len(f.Includes))
+	for i, x := range f.Includes {
+		x.Folder = filepath.ToSlash(x.Folder)
+		inc[i] = x
+	}
+	f.Includes = inc
+	return f
+}
+
 // SuggestFolders is the Folders step's rows, best first, each glob once.
 func SuggestFolders(f FolderFacts) []FolderSuggestion {
+	f = f.slashed()
 	var out []FolderSuggestion
 	seen := map[string]bool{}
 	add := func(abs string, kind FolderKind, label, email string, dim bool) {
@@ -171,14 +187,14 @@ func SuggestFolders(f FolderFacts) []FolderSuggestion {
 			continue
 		}
 		if in.Email != "" && containsFold(f.Emails, in.Email) {
-			add(onboard.ExpandHome(in.Folder, f.Home), FolderInclude, labelInclude, in.Email, false)
+			add(expandSlashed(in.Folder, f.Home), FolderInclude, labelInclude, in.Email, false)
 		} else {
 			other = append(other, in)
 		}
 	}
 	for _, in := range other {
 		label := strings.TrimSpace(labelIncludeOther + in.Email)
-		add(onboard.ExpandHome(in.Folder, f.Home), FolderIncludeOther, label, in.Email, true)
+		add(expandSlashed(in.Folder, f.Home), FolderIncludeOther, label, in.Email, true)
 	}
 	return out
 }
@@ -196,7 +212,8 @@ func ClaimNote(by, glob string) string {
 // the setup, owner 2026-11-07) but never prefilled: the person picks it
 // knowingly, after the page's conflict warning.
 func StartFolderAllowed(f FolderFacts, abs string) bool {
-	abs = strings.TrimSuffix(path.Clean(abs), "/")
+	f = f.slashed()
+	abs = strings.TrimSuffix(path.Clean(filepath.ToSlash(abs)), "/")
 	if by, _ := claimedBy(abs, f); by != "" {
 		return false
 	}
@@ -222,7 +239,7 @@ func startFolderFits(f FolderFacts, abs string) bool {
 		if in.Folder == "" {
 			continue
 		}
-		under := within(abs, onboard.ExpandHome(in.Folder, f.Home))
+		under := within(abs, expandSlashed(in.Folder, f.Home))
 		own := in.Email != "" && containsFold(f.Emails, in.Email)
 		switch {
 		case own:
@@ -248,6 +265,7 @@ func within(abs, dir string) bool {
 // made the new setup claim every folder under Downloads (realmac M1). The
 // parent stays a suggestion only (SuggestFolders).
 func PrefillFolder(home, start, gitRoot string) string {
+	home, start, gitRoot = filepath.ToSlash(home), filepath.ToSlash(start), filepath.ToSlash(gitRoot)
 	dir := start
 	if gitRoot != "" {
 		dir = gitRoot
@@ -268,7 +286,7 @@ func claimedBy(abs string, f FolderFacts) (string, string) {
 			continue
 		}
 		for _, g := range s.Folders {
-			eg := onboard.ExpandHome(g, f.Home)
+			eg := expandSlashed(g, f.Home)
 			if onboard.GlobMatch(eg, abs) || onboard.GlobMatch(eg, probe) {
 				return s.Name, g
 			}
@@ -277,9 +295,9 @@ func claimedBy(abs string, f FolderFacts) (string, string) {
 	return "", ""
 }
 
-// tildeForm writes abs under home as ~/…
+// tildeForm writes abs under home as ~/… (slash form on every system).
 func tildeForm(abs, home string) string {
-	home = strings.TrimSuffix(home, "/")
+	abs, home = filepath.ToSlash(abs), strings.TrimSuffix(filepath.ToSlash(home), "/")
 	if home != "" {
 		if rest, ok := strings.CutPrefix(abs, home+"/"); ok {
 			return "~/" + rest
@@ -401,4 +419,10 @@ func FolderOps(env Onboard) []op.Entry {
 			Examples: []op.Example{{Title: "folders in your home folder", CLI: "lore setup browse --json", Want: ""}}},
 			e.Browse),
 	}
+}
+
+// expandSlashed is onboard.ExpandHome in the slash form every folder here
+// is compared in (on Windows, filepath.Join gives C:\Users\a\work).
+func expandSlashed(p, home string) string {
+	return filepath.ToSlash(onboard.ExpandHome(p, home))
 }

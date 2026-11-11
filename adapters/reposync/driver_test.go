@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -27,6 +28,7 @@ func TestDriverValue(t *testing.T) {
 	}
 	missing := filepath.Join(dir, "gone", "lore")
 	q := func(p string) string { return "'" + filepath.ToSlash(p) + "'" }
+	onWindows := runtime.GOOS == "windows"
 	for _, tc := range []struct {
 		name, value       string
 		isLore, gone, run bool
@@ -37,7 +39,8 @@ func TestDriverValue(t *testing.T) {
 		{"bare other name", "lore-dev merge-driver %O %A %B %P", true, false, true, "lore-dev"},
 		{"abs present", q(present) + " merge-driver %O %A %B %P", true, false, true, filepath.ToSlash(present)},
 		{"abs missing", q(missing) + " merge-driver %O %A %B %P", true, true, false, filepath.ToSlash(missing)},
-		{"abs not executable", q(notExec) + " merge-driver %O %A %B %P", true, true, false, filepath.ToSlash(notExec)},
+		// Windows has no execute bits: any regular file runs (executableFile)
+		{"abs not executable", q(notExec) + " merge-driver %O %A %B %P", true, !onWindows, onWindows, filepath.ToSlash(notExec)},
 		{"padded", "  lore merge-driver %O %A %B %P\n", true, false, true, "lore"},
 		{"foreign", "cat %A", false, false, false, ""},
 		{"quoted foreign", q(present) + " %O %A %B", false, false, false, ""},

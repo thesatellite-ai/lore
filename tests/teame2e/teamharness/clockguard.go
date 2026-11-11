@@ -135,6 +135,7 @@ func probeEnv(home string) []string {
 	}
 	return append(env,
 		"HOME="+home,
+		"USERPROFILE="+home, // os.UserHomeDir on Windows
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_TERMINAL_PROMPT=0",
 		"LORE_HUMAN=1",

@@ -51,8 +51,11 @@ func (p *provenance) Place(ctx context.Context) origin.Facts {
 	p.once.Do(func() { p.git = readGitHead(ctx, p.repoTop) })
 	f := origin.Facts{
 		// PROV6: the folder the command ran in, relative to the repo root,
-		// omitted at the root; never the absolute path.
-		Dir: origin.RelDir(p.repoTop, p.workDir),
+		// omitted at the root; never the absolute path. Both resolved: git
+		// names the top with links resolved and the working folder may not
+		// be (macOS /var -> /private/var), and two spellings made every
+		// subfolder look outside the repo, so dir was dropped.
+		Dir: origin.RelDir(resolvedPath(p.repoTop), resolvedPath(p.workDir)),
 		Git: p.git,
 	}
 	if id, ok := repoIDAt(ctx, p.repoTop); ok {

@@ -51,3 +51,18 @@ func retry(op func() error, isTransient func(error) bool, sleep func(time.Durati
 		pause = min(2*pause, maxPause)
 	}
 }
+
+// ReadFile is os.ReadFile retrying the same transient Windows refusals: a
+// reader that opens a file while another process renames a new copy over
+// it is refused (sharing violation, or access denied on the old file being
+// replaced) for the moment the rename takes. Before, a concurrent
+// `lore config set` failed reading config.yaml with E_INTERNAL there.
+func ReadFile(name string) ([]byte, error) {
+	var b []byte
+	err := retry(func() error {
+		var rerr error
+		b, rerr = os.ReadFile(name) // #nosec G304 -- the caller's own path
+		return rerr
+	}, transient, time.Sleep, time.Now)
+	return b, err
+}

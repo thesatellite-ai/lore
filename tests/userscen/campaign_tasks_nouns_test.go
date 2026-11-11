@@ -47,8 +47,8 @@ func TestCampaignTasks_MissionsPlansLists(t *testing.T) {
 	}
 	before := campTasksTreeHash(t, c.Dir)
 	campTasksStep(t, c, "mission.apply", "mission", "apply", f, "--dry-run")
-	if campTasksTreeHash(t, c.Dir) != before {
-		t.Fatal("mission apply --dry-run changed the clone")
+	if after := campTasksTreeHash(t, c.Dir); after != before {
+		t.Fatalf("mission apply --dry-run changed the clone: %s", campTasksTreeDiff(before, after))
 	}
 	r := campTasksStep(t, c, "mission.apply", "mission", "apply", f, "--yes")
 	m := tasksIDRe.FindString(r.Stdout[strings.Index(r.Stdout, "msn_"):])

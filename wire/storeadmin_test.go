@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
@@ -28,7 +29,7 @@ func writeV1Marker(t *testing.T, dir string) {
 }
 
 // storeDir is the folder behind a file:// store url.
-func storeDir(url string) string { return strings.TrimPrefix(url, "file://") }
+func storeDir(url string) string { return fileuri.LocalPath(url) }
 
 // TestSetVisibility (OV23, CFG4): store visibility rewrites the store's
 // lore-store.yaml; the same value changes nothing; a v0.1.17 marker (no
@@ -75,7 +76,7 @@ func TestSetVisibility(t *testing.T) {
 	writeV1Marker(t, oldDir)
 	before := mustRead(t, filepath.Join(oldDir, rowfs.MarkerFile))
 	repo2 := gitRepo(t)
-	writeStoresYAML(t, repo2, "stores:\n  - name: old\n    url: file://"+filepath.ToSlash(oldDir)+"\n")
+	writeStoresYAML(t, repo2, "stores:\n  - name: old\n    url: "+fileuri.URL(oldDir, "")+"\n")
 	b := openWith(t, repo2, Options{})
 	_, err = run(t, b, opsstores.OpVisibility, `{"name":"old","visibility":"shareable"}`, true)
 	var e *errs.Error
@@ -140,7 +141,7 @@ func copyStore(t *testing.T, url string) string {
 	if err := os.CopyFS(dst, os.DirFS(storeDir(url))); err != nil {
 		t.Fatalf("copy store: %v", err)
 	}
-	return "file://" + filepath.ToSlash(dst)
+	return fileuri.URL(dst, "")
 }
 
 // TestSetStoreURL (OV61, PROV 11.9): store set-url re-points a stores.yaml
@@ -179,7 +180,7 @@ func TestSetStoreURL(t *testing.T) {
 	if _, err := setURL("kb", other); !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "another store") {
 		t.Fatalf("another store's address: %v", err)
 	}
-	if _, err := setURL("kb", "file://"+filepath.ToSlash(t.TempDir())); !errs.Has(err, errs.NotAStore) {
+	if _, err := setURL("kb", fileuri.URL(t.TempDir(), "")); !errs.Has(err, errs.NotAStore) {
 		t.Fatalf("not a store: %v", err)
 	}
 	if _, err := setURL("nope", url); !errs.Has(err, errs.NotFound) {

@@ -97,7 +97,7 @@ func TestMigrateModeBMissingDB(t *testing.T) {
 	alice := w.Human("alice", "person@example.com")
 	dir := migModeBRepo(t, w, alice, "infra", "${HOME}/.lore/client2.db", "prj_01a1b49c653f7c4a9bb4b63a24de3fca")
 	for _, args := range [][]string{{"migrate", "run", "--dry-run"}, {"migrate", "run"}} {
-		alice.Lore(dir, args...).Fails(t, th.ExitNotFound, "E_NOT_FOUND", "migrate: the shared lore.db", "client2.db", "named by", migModeBPointer, "is not there")
+		alice.Lore(dir, args...).Fails(t, th.ExitNotFound, "E_NOT_FOUND", "migrate: the shared lore.db", "client2.db", "named by", filepath.FromSlash(migModeBPointer), "is not there")
 	}
 	if !migExists(filepath.Join(dir, migModeBPointer)) || migExists(filepath.Join(dir, ".lore", "stores.yaml")) {
 		t.Fatal("a refused Mode B migration moved the pointer or attached a store")

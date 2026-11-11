@@ -199,7 +199,7 @@ func Shadows(setups []SetupEntry, name, home string, resolve Resolver) []Shadow 
 func LiteralPrefix(glob, home string) string {
 	segs := splitSlash(cleanSlash(ExpandHome(glob, home)))
 	n := Specificity(ExpandHome(glob, home))
-	return pathSep + strings.Join(segs[:n], pathSep)
+	return joinAbs(segs[:n])
 }
 
 // compiled is a glob split into segments, its literal prefix resolved.
@@ -210,7 +210,7 @@ type compiled struct {
 
 func (c compiled) match(p string) bool { return matchSegs(c.segs, splitSlash(p)) }
 
-func (c compiled) prefix() string { return pathSep + strings.Join(c.segs[:c.spec], pathSep) }
+func (c compiled) prefix() string { return joinAbs(c.segs[:c.spec]) }
 
 func (c compiled) rest() []string { return c.segs[c.spec:] }
 
@@ -220,7 +220,7 @@ func compileGlob(glob, home string, resolve Resolver) compiled {
 	abs := cleanSlash(ExpandHome(glob, home))
 	n := Specificity(abs)
 	segs := splitSlash(abs)
-	lit := resolvePath(pathSep+strings.Join(segs[:n], pathSep), resolve)
+	lit := resolvePath(joinAbs(segs[:n]), resolve)
 	out := append(splitSlash(lit), segs[n:]...)
 	return compiled{segs: out, spec: len(splitSlash(lit))}
 }
@@ -273,6 +273,23 @@ func resolvePath(p string, resolve Resolver) string {
 
 // cleanSlash cleans p as a slash path (Windows separators turned to /).
 func cleanSlash(p string) string { return path.Clean(filepath.ToSlash(p)) }
+
+// joinAbs is the absolute slash path of segs: "/a/b", or "C:/a/b" when the
+// first segment is a Windows drive. A "/" before the drive ("/C:/a") is no
+// path Windows can resolve: the glob's literal prefix then stayed
+// unresolved (C:/Users/RUNNER~1) while the folder resolved to its long
+// name (C:/Users/runneradmin), and no setup matched.
+func joinAbs(segs []string) string {
+	if len(segs) > 0 && isDrive(segs[0]) {
+		return strings.Join(segs, pathSep)
+	}
+	return pathSep + strings.Join(segs, pathSep)
+}
+
+// isDrive reports whether seg is a Windows drive ("C:").
+func isDrive(seg string) bool {
+	return len(seg) == 2 && seg[1] == ':' && ('a' <= seg[0]|0x20 && seg[0]|0x20 <= 'z')
+}
 
 // splitSlash splits a cleaned absolute slash path into its segments.
 func splitSlash(p string) []string {

@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -192,6 +193,10 @@ func TestRestAuth_CrossOrigin(t *testing.T) {
 	}
 }
 
+// hasModeBits: the system keeps POSIX file modes (Windows reports 0666 for
+// every writable file, so no mode is checked there).
+var hasModeBits = runtime.GOOS != "windows"
+
 // TestRestAuth_TokenFileLifecycle: the token is made once (0600, hex), a
 // restarted server keeps it, a rotate takes effect on the running server,
 // and the rotate output names the file.
@@ -206,7 +211,7 @@ func TestRestAuth_TokenFileLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode().Perm() != 0o600 {
+	if hasModeBits && st.Mode().Perm() != 0o600 {
 		t.Errorf("token file mode %o, want 600", st.Mode().Perm())
 	}
 	first := srv.token
@@ -235,7 +240,7 @@ func TestRestAuth_TokenFileLifecycle(t *testing.T) {
 	if second == first || !restHexToken.MatchString(second) {
 		t.Fatalf("rotate did not write a new hex token")
 	}
-	if st, err := os.Stat(tokPath); err != nil || st.Mode().Perm() != 0o600 {
+	if st, err := os.Stat(tokPath); err != nil || (hasModeBits && st.Mode().Perm() != 0o600) {
 		t.Errorf("rotated token file mode: %v %v", st, err)
 	}
 	old := first
@@ -316,6 +321,9 @@ func TestRestAuth_UnsafeTokenFileRefused(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			if !hasModeBits && strings.HasSuffix(c.name, " readable") {
+				t.Skip("Windows has no mode bits: lore checks no token file mode there")
+			}
 			c.setup()
 			r := rw.repo.Lore("api", "--port", "0")
 			r.Fails(t, 20, c.say...)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // countGit points b at a git wrapper that appends each subcommand line to
@@ -24,10 +25,7 @@ func countGit(t *testing.T, b *Backend) func(sub string) int {
 	log := filepath.Join(dir, "calls.log")
 	wrapper := filepath.Join(dir, "git")
 	script := "#!/bin/sh\necho \"$*\" >> '" + log + "'\nexec '" + b.git.bin + "' \"$@\"\n"
-	if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	b.git.bin = wrapper
+	b.git.bin = fakeexec.Write(t, wrapper, script, 0o700) // git.exe on Windows
 	return func(sub string) int {
 		raw, err := os.ReadFile(log)
 		if os.IsNotExist(err) {

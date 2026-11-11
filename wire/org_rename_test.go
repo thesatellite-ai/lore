@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -87,7 +88,8 @@ func TestOrgRenameKeepsCommentsAndJSON(t *testing.T) {
 	if strings.Contains(got, "agency") {
 		t.Fatalf("the old label is still in config.yaml:\n%s", got)
 	}
-	if fi, serr := os.Stat(configPath(home)); serr != nil || fi.Mode().Perm() != 0o600 {
+	// Windows has no POSIX mode bits (os.Chmod only sets read-only)
+	if fi, serr := os.Stat(configPath(home)); serr != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
 		t.Fatalf("config.yaml mode after rename: %v %v", fi, serr)
 	}
 	if out.RepoOrgs != 2 || out.Defaults != 2 || out.IDRecorded || out.ID != "" {

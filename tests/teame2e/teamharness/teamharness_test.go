@@ -33,8 +33,7 @@ func newFakeWorld(t *testing.T, cmds string) *World {
 	t.Helper()
 	// Named like the real team build (Taskfile TEAM_BIN), not "lore", so
 	// every harness test runs with the name lore's hooks do not call.
-	bin := filepath.Join(t.TempDir(), "lore-team")
-	writeExec(t, bin, fakeLore)
+	bin := WriteProgram(t, filepath.Join(t.TempDir(), "lore-team"), fakeLore) // lore-team.exe on Windows
 	t.Setenv("FAKE_LORE_CMDS", cmds)
 	return New(t, bin)
 }
@@ -132,10 +131,14 @@ func TestHarness_CrashInjectionKillsLore(t *testing.T) {
 	c := dev.Clone(app, "app")
 	counter := filepath.Join(w.Root, "kill-counter")
 	before := c.With(EnvKillOn+"=status", EnvKillWhen+"="+KillBefore, EnvKillCounter+"="+counter).Lore("fake-git", "status")
-	if before.Code != 137 && before.Code != -1 {
+	// killed: 137 or -1 from SIGKILL; taskkill /F leaves exit code 1 on Windows
+	if before.Code != 137 && before.Code != -1 && (runtime.GOOS != "windows" || before.Code != 1) {
 		t.Fatalf("lore must die at the injected step: %s", before)
 	}
-	if strings.Contains(before.Out(), "survived") {
+	// On Windows the kill ends the fake lore's shim (its stand-in for the
+	// lore process); the shell script under it is not lore and may still
+	// print, so only the exit code is checked there.
+	if runtime.GOOS != "windows" && strings.Contains(before.Out(), "survived") {
 		t.Fatal("lore kept running after the kill")
 	}
 	ok := c.Lore("fake-git", "status")

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // scriptMode lets the owner run a fake CLI script.
@@ -27,17 +28,12 @@ func fakeCLIs(t *testing.T, scripts map[string]string) (func(string) (string, er
 	t.Helper()
 	dir := t.TempDir()
 	for name, body := range scripts {
-		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		// owner-only execute: the fake CLI must run, and nobody else may.
-		if err := os.Chmod(p, scriptMode); err != nil {
-			t.Fatal(err)
-		}
+		// owner-only execute: the fake CLI must run, and nobody else may
+		// (name.exe on Windows, tests/fakeexec)
+		fakeexec.Write(t, filepath.Join(dir, name), "#!/bin/sh\n"+body+"\n", scriptMode)
 	}
 	return func(name string) (string, error) {
-		p := filepath.Join(dir, name)
+		p := filepath.Join(dir, fakeexec.Exe(name))
 		if _, err := os.Stat(p); err != nil {
 			return "", err
 		}
@@ -130,12 +126,15 @@ func TestRevealMatrix(t *testing.T) {
 }
 
 func TestRevealUnavailable(t *testing.T) {
-	look, _ := fakeCLIs(t, map[string]string{"gopass": "sleep 5"})
+	// The fake would run a minute; the reveal must end long before. The
+	// bound is loose because starting a freshly written program can take
+	// seconds on Windows (the virus scanner reads it first).
+	look, _ := fakeCLIs(t, map[string]string{"gopass": "sleep 60"})
 	set := Builtin(Options{LookPath: look, Timeout: 200 * time.Millisecond})
 	gp, _ := set.Get(Gopass)
 	start := time.Now()
 	_, err := gp.Reveal(context.Background(), Locator{Path: "a/b"})
-	if !errs.Has(err, errs.VaultEntryUnavailable) || !strings.Contains(err.Error(), "timed out") || time.Since(start) > 3*time.Second {
+	if !errs.Has(err, errs.VaultEntryUnavailable) || !strings.Contains(err.Error(), "timed out") || time.Since(start) > 30*time.Second {
 		t.Fatalf("timeout: %v after %s", err, time.Since(start))
 	}
 	op, _ := set.Get(OnePass)

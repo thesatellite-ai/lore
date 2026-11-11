@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 )
@@ -43,7 +44,7 @@ func TestStoreMarkerFixNamesTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := sp.Probe(context.Background(), []opssetup.ProbeRequest{{Check: onboard.Check{ID: onboard.CheckStoreMarker, Level: onboard.LevelWarn},
-		Answers: onboard.Answers{onboard.QIDStoreURL: {Text: "file://" + dir}}}})[0]
+		Answers: onboard.Answers{onboard.QIDStoreURL: {Text: fileuri.URL(dir, "")}}}})[0]
 	if r.Status == onboard.StatusOK || r.Vars[onboard.VarStoreName] != "me" {
 		t.Fatalf("store.marker = %+v, want a missing marker with store_name me", r)
 	}

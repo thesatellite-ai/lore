@@ -255,13 +255,27 @@ func levels(base, p string) int {
 }
 
 // resolvedPath is p absolute with symlinks resolved (ONB 3.3 compares
-// paths that way), or p as given when that fails.
+// paths that way). When p, or part of it, does not exist yet (a dangling
+// link's end, a folder about to be created), its deepest existing folder
+// is resolved and the missing names are kept after it, so the result still
+// compares with a resolved root. Before, such a p came back unresolved:
+// on macOS, where the temp and many home folders sit under a link
+// (/var -> /private/var), a path inside the repository then looked outside
+// it. p as given (made absolute) when nothing of it resolves.
 func resolvedPath(p string) string {
 	if abs, err := filepath.Abs(p); err == nil {
 		p = abs
 	}
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
+	var tail []string
+	for cur := p; ; {
+		if r, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(append([]string{r}, tail...)...)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p
+		}
+		tail = append([]string{filepath.Base(cur)}, tail...)
+		cur = parent
 	}
-	return p
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -52,7 +53,7 @@ func TestClaudeStartWarnings(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			home, root := t.TempDir(), t.TempDir()
-			t.Setenv("HOME", home)
+			testenv.SetHome(t, home)
 			if c.user > 0 {
 				write(t, filepath.Join(home, ".claude", "CLAUDE.md"), c.user)
 			}
@@ -92,7 +93,7 @@ func TestClaudeStartWarnings(t *testing.T) {
 
 	// The note: every file, private files summed, the total.
 	home, root := t.TempDir(), t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	write(t, filepath.Join(home, ".claude", "CLAUDE.md"), 7)
 	priv := filepath.Join(home, "p.md")
 	write(t, priv, 5)

@@ -33,7 +33,7 @@ func histGitWorld(t *testing.T) string {
 		t.Fatal(err)
 	}
 	cfg := filepath.Join(root, "gitconfig")
-	body := "[url \"" + hosts + "/\"]\n\tinsteadOf = https://" + histHost + "/\n" +
+	body := "[url \"" + filepath.ToSlash(hosts) + "/\"]\n\tinsteadOf = https://" + histHost + "/\n" +
 		"[user]\n\tname = t\n\temail = t@example.com\n[commit]\n\tgpgsign = false\n[init]\n\tdefaultBranch = main\n"
 	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
 		t.Fatal(err)

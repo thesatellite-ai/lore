@@ -42,7 +42,7 @@ func newLinkWorld(t *testing.T) *linkWorld {
 	root := t.TempDir()
 	hosts := filepath.Join(root, "hosts")
 	gc := filepath.Join(root, "gitconfig")
-	writeFile(t, gc, "[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n[url \""+hosts+"/\"]\n\tinsteadOf = https://github.com/\n")
+	writeFile(t, gc, "[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n[url \""+filepath.ToSlash(hosts)+"/\"]\n\tinsteadOf = https://github.com/\n")
 	t.Setenv("GIT_CONFIG_GLOBAL", gc)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv(envAutopush, "")

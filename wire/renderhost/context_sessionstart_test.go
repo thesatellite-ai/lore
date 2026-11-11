@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -17,7 +18,7 @@ import (
 // session" group; a session right after lists nothing changed again. A
 // missing or unreadable stamp reads as "no last session".
 func TestContextSessionStart(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	ctx := context.Background()
 	a, project := repoApp(t)
 	clock := time.Now().UTC().Add(-time.Hour)

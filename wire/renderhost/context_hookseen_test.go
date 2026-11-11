@@ -1,11 +1,15 @@
 package renderhost
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
+)
 
 // TestHookSeen: a session's set remembers what was sent; another session
 // and a call without a session id start empty (CONTEXT_BUDGET 6.9).
 func TestHookSeen(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	s := loadHookSeen("claude_code", "sess-1")
 	if len(s.ids) != 0 {
 		t.Fatalf("fresh set = %v", s.ids)

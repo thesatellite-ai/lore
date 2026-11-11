@@ -1,6 +1,11 @@
 package wire
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
+)
 
 // TestPathLoreOlder: the PATH lore versus this binary across the version
 // shapes lore builds carry (release, -dev, rc, git describe, dirty,
@@ -70,8 +75,8 @@ func TestParseLoreVersionOutput(t *testing.T) {
 // TestVersionRunDirWithTMPDIRGone: the PATH lore's version is asked in a
 // folder that exists, also when TMPDIR names one that is gone.
 func TestVersionRunDirWithTMPDIRGone(t *testing.T) {
-	t.Setenv("TMPDIR", t.TempDir()+"/gone")
-	if d := versionRunDir(); d != "/" {
-		t.Errorf("run dir %q, want /", d)
+	testenv.SetTemp(t, t.TempDir()+"/gone")
+	if d, want := versionRunDir(), string(filepath.Separator); d != want {
+		t.Errorf("run dir %q, want %q", d, want)
 	}
 }

@@ -12,6 +12,7 @@ package userscen
 //   - over REST (`lore api`) an out outside the repository is E_BAD_PATH.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,9 +76,9 @@ func TestRenderPaths_RESTStaysInRepo(t *testing.T) {
 	outside := t.TempDir()
 	for _, body := range []string{
 		`{"out":"../K.md"}`,
-		`{"out":"` + filepath.Join(outside, "K.md") + `"}`,
+		`{"out":` + renderJSONString(filepath.Join(outside, "K.md")) + `}`,
 		`{"target":["../x.md"]}`,
-		`{"target":["` + filepath.Join(outside, "x.md") + `"]}`,
+		`{"target":[` + renderJSONString(filepath.Join(outside, "x.md")) + `]}`,
 	} {
 		r := srv.post(t, "/v1/render/run", []byte(body))
 		if r.status != 400 || r.code != "E_BAD_PATH" {
@@ -90,4 +91,14 @@ func TestRenderPaths_RESTStaysInRepo(t *testing.T) {
 	if r := srv.post(t, "/v1/render/run", []byte(`{"out":"docs/K.md"}`)); r.status != 200 {
 		t.Errorf("REST out inside the repository is written, got %d %s", r.status, r.body)
 	}
+}
+
+// renderJSONString is s as a JSON string (a Windows path's backslashes
+// escaped).
+func renderJSONString(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }

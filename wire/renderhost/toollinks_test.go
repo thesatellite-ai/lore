@@ -58,13 +58,36 @@ func linkCases() []linkCase {
 	}
 }
 
+// namesEnd reports whether err names end, either as given or with its
+// folders' links resolved: a refusal names the end as wire.LinkEnd found
+// it, which on macOS is /private/var/... for a /var/... temp folder.
+func namesEnd(err error, end string) bool {
+	if err == nil {
+		return false
+	}
+	if strings.Contains(err.Error(), end) {
+		return true
+	}
+	// a dangling end does not exist: resolve its deepest existing folder
+	for dir, tail := end, ""; ; {
+		if r, rerr := filepath.EvalSymlinks(dir); rerr == nil {
+			return strings.Contains(err.Error(), filepath.Join(r, tail))
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		tail, dir = filepath.Join(filepath.Base(dir), tail), parent
+	}
+}
+
 // checkLinkWrite asserts the outcome of one write through c's layout:
 // refused with E_REFUSED and every file as it was, or the end written
 // (want in it) with each link of the chain still a link.
 func checkLinkWrite(t *testing.T, c linkCase, root, rel, end, want string, err error) {
 	t.Helper()
 	if c.refuse {
-		if errs.CodeOf(err) != errs.Refused || !strings.Contains(err.Error(), end) {
+		if errs.CodeOf(err) != errs.Refused || !namesEnd(err, end) {
 			t.Fatalf("want E_REFUSED naming %s, got %v", end, err)
 		}
 		if b, _ := os.ReadFile(end); string(b) != "x" {
@@ -175,7 +198,7 @@ func TestCleanStaleDirsThroughLinks(t *testing.T) {
 			}
 			err := New(Options{}).cleanStaleDirs(root, dirPlan{All: []string{"src"}}, map[string]bool{}, func(string) {})
 			if c.refuse {
-				if errs.CodeOf(err) != errs.Refused || !strings.Contains(err.Error(), end) {
+				if errs.CodeOf(err) != errs.Refused || !namesEnd(err, end) {
 					t.Fatalf("want E_REFUSED naming %s, got %v", end, err)
 				}
 				if b, _ := os.ReadFile(end); string(b) != "x"+body {
@@ -229,7 +252,7 @@ func TestCheckLocalFileNamesLinkEnd(t *testing.T) {
 				}
 				return
 			}
-			if errs.CodeOf(err) != errs.LeakBlocked || !strings.Contains(err.Error(), end) {
+			if errs.CodeOf(err) != errs.LeakBlocked || !namesEnd(err, end) {
 				t.Fatalf("want E_LEAK_BLOCKED naming %s, got %v", end, err)
 			}
 		})

@@ -3,6 +3,7 @@ package rowfs
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -77,6 +78,11 @@ func TestFindRow(t *testing.T) {
 		t.Errorf("no table: %v, want E_INVALID_INPUT", err)
 	}
 
+	if runtime.GOOS == "windows" {
+		// Windows has no POSIX mode bits: chmod 0 leaves a folder readable,
+		// so an unreadable folder cannot be made this way there.
+		return
+	}
 	locked := filepath.Join(dir, "locked")
 	if err = os.MkdirAll(locked, 0o750); err != nil {
 		t.Fatal(err)

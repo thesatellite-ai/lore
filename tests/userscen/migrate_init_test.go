@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -174,6 +175,12 @@ func TestMigrateInitOddNames(t *testing.T) {
 	w := newWorld(t)
 	alice := w.Human("alice", "person@example.com")
 	long := strings.Repeat("deep-", 40) + "end"
+	if runtime.GOOS == "windows" {
+		// Windows cannot start a process in a folder whose path is over
+		// MAX_PATH (260), whatever the long-path setting: a name that
+		// long would fail in CreateProcess, not in lore.
+		long = strings.Repeat("deep-", 20) + "end"
+	}
 	for _, c := range []struct {
 		folder string
 		flag   []string

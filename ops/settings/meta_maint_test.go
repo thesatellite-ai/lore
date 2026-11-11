@@ -104,7 +104,7 @@ func TestMetaMaintenance(t *testing.T) {
 	if err := os.WriteFile(file, []byte("id,key,value\n"+b+",customer,beta\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h.MustYes(settings.OpMetaImport, `{"file":"`+filepath.ToSlash(file)+`"}`)
+	h.MustYes(settings.OpMetaImport, `{"file":`+opstest.Quote(filepath.ToSlash(file))+`}`)
 	if got := opstest.Text(h.Must(settings.OpMetaGet, `{"id":"`+b+`"}`)); got != "customer\tbeta\n" {
 		t.Errorf("after import %q", got)
 	}

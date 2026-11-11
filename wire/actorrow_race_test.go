@@ -11,11 +11,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -139,7 +139,7 @@ func TestConcurrentFirstWriteOneActorRow(t *testing.T) {
 				t.Fatalf("round %d: clone %d's first write failed: %v", round, i, werr)
 			}
 		}
-		dir := filepath.FromSlash(strings.TrimPrefix(kb, "file://"))
+		dir := filepath.FromSlash(fileuri.LocalPath(kb))
 		actors, rerr := os.ReadDir(filepath.Join(dir, ".lore", "data", schema.TableActors))
 		if rerr != nil || len(actors) != 1 || actors[0].Name() != who.String()+".json" {
 			t.Fatalf("round %d: actor rows = %v, %v; want exactly %s.json", round, actors, rerr, who)

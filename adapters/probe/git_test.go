@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 )
 
-func fileURL(p string) string { return "file://" + filepath.ToSlash(p) }
+func fileURL(p string) string { return fileuri.URL(p, "") }
 
 // store.read and store.marker against real file:// remotes (ONB 4.4).
 func TestReadAndMarkerFile(t *testing.T) {

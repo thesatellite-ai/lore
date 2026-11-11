@@ -19,6 +19,7 @@ package userscen
 //     refuses and names the profile (fixed: the message had no cause).
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -266,7 +267,7 @@ func TestRenderUserProfileFromConfig(t *testing.T) {
 	}
 	// The row may name a user profile; render wires it with the built-ins.
 	c.MustLore("policy", "set", "context.targets", "mytool,codex", "--yes")
-	c.MustLore("render").Says(t, "budget 16000 codex", "docs/MYTOOL.md (pointer present)", "AGENTS.md")
+	c.MustLore("render").Says(t, "budget 16000 codex", filepath.FromSlash("docs/MYTOOL.md")+" (pointer present)", "AGENTS.md")
 
 	// The profile disappears from this machine's config (a teammate's
 	// row, a cleaned config): render refuses and names the profile.

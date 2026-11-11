@@ -98,7 +98,7 @@ func TestResourceImportQualifiedRefs(t *testing.T) {
 		if err := os.WriteFile(p, []byte(`{"resources":[`+body+`]}`), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		return `{"file":"` + p + `"}`
+		return `{"file":` + opstest.Quote(p) + `}`
 	}
 	h.MustYes(settings.OpResImport, file(`{"kind":"host","name":"a","fields":{"peer":"repo:host/b"}},{"kind":"host","name":"b"}`))
 	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"a"}`)); !strings.Contains(s, "peer = b") {

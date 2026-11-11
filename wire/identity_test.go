@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -102,7 +103,7 @@ func TestStoreIdentitiesAndShareable(t *testing.T) {
 // url's marker to vis ("" removes the line).
 func setVisibilityLine(t *testing.T, url, vis string) {
 	t.Helper()
-	p := filepath.Join(strings.TrimPrefix(url, "file://"), rowfs.MarkerFile)
+	p := filepath.Join(fileuri.LocalPath(url), rowfs.MarkerFile)
 	var out []string
 	found := false
 	for _, ln := range strings.Split(string(mustRead(t, p)), "\n") {

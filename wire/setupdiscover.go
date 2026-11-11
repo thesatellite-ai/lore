@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -437,7 +438,8 @@ func repoStores(ctx context.Context, a *App) ([]opssetup.KnownStore, []string) {
 // the way the person types them; home is os.UserHomeDir, not lore's ~/.lore).
 func tildeHome(p, home string) string {
 	if home != "" {
-		if rest, ok := strings.CutPrefix(p, strings.TrimRight(home, "/")+"/"); ok {
+		// compared in slash form: on Windows both come with backslashes
+		if rest, ok := strings.CutPrefix(filepath.ToSlash(p), strings.TrimRight(filepath.ToSlash(home), "/")+"/"); ok {
 			return "~/" + rest
 		}
 	}

@@ -9,21 +9,20 @@ package wire
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // leakSSHPrefix makes the fake ssh record its pid (one file per run) before
-// it does anything else.
-const leakSSHPrefix = `mkdir -p "$HOME/pids"; : > "$HOME/pids/$$"
+// it does anything else. On Windows that is the fakeexec shim's own pid,
+// the process lore started: $$ there is an MSYS pid, not a Windows one.
+const leakSSHPrefix = `mkdir -p "$HOME/pids"; : > "$HOME/pids/${FAKEEXEC_SHIM_PID:-$$}"
 `
 
 func TestKeyMatchesBackgroundProbesEndWithApp(t *testing.T) {
@@ -31,7 +30,7 @@ func TestKeyMatchesBackgroundProbesEndWithApp(t *testing.T) {
 		t.Skip("runs a fake ssh")
 	}
 	sp, home := aliasWorld(t)
-	fakebin.Write(t, filepath.Join(home, "bin", "ssh"), "#!/bin/sh\n"+leakSSHPrefix+fakeSSH+"\n", 0o755)
+	fakeexec.Write(t, filepath.Join(home, "bin", "ssh"), "#!/bin/sh\n"+leakSSHPrefix+fakeSSH+"\n", 0o755)
 	cfg := strings.Replace(fakeSSHConfig, "Host octo-p\n  HostName github.com\n  IdentityFile ~/.ssh/octo-p\n", "", 1)
 	if err := os.WriteFile(filepath.Join(home, ".ssh", "config"), []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
@@ -65,8 +64,9 @@ func TestKeyMatchesBackgroundProbesEndWithApp(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
-			t.Errorf("ssh pid %d is still running after App.Close (kill 0: %v)", pid, err)
+		// processAlive (migrate_journal.go) is the per-OS liveness probe.
+		if processAlive(pid) {
+			t.Errorf("ssh pid %d is still running after App.Close", pid)
 		}
 	}
 }

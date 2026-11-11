@@ -57,3 +57,21 @@ func TestDecodeBodyErrorsNameTheField(t *testing.T) {
 		t.Errorf("valid body refused: %v", err)
 	}
 }
+
+// TestJSONFieldPathDropsGoTypeNames: Go 1.26 names a member of an embedded
+// struct LiveFlags.live; the caller sent "live".
+func TestJSONFieldPathDropsGoTypeNames(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{
+		"LiveFlags.live":     "live",
+		"live":               "live",
+		"meta.key":           "meta.key",
+		"Outer.Inner.limit":  "limit",
+		"Only":               "Only",
+		"tags.LiveFlags.x_y": "tags.x_y",
+	} {
+		if got := jsonFieldPath(in); got != want {
+			t.Errorf("jsonFieldPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

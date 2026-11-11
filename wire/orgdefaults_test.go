@@ -8,6 +8,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -63,7 +64,7 @@ func TestOrgDefaultsToPolicy(t *testing.T) {
 	t.Parallel()
 	ctx := background()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
-	dir := strings.TrimPrefix(orgURL, "file://")
+	dir := fileuri.LocalPath(orgURL)
 	a := rosterApp(t, orgURL, false)
 	st, err := a.state(ctx)
 	if err != nil {
@@ -124,7 +125,7 @@ func TestOrgDefaultsToPolicyNothingToMove(t *testing.T) {
 	t.Parallel()
 	ctx := background()
 	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
-	dir := strings.TrimPrefix(orgURL, "file://")
+	dir := fileuri.LocalPath(orgURL)
 	a := rosterApp(t, orgURL, false)
 	st, err := a.state(ctx)
 	if err != nil {

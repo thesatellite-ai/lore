@@ -290,9 +290,12 @@ func (o *orgScen) orgAdminSetup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A folder that holds none of mira's repos, absolute on every OS
+	// ("/nowhere" is not absolute on Windows).
+	nowhere := filepath.ToSlash(filepath.Join(filepath.Dir(o.mira.Home), "nowhere"))
 	block := "setups:\n" +
 		"  - name: agency\n    kind: admin\n    org: " + orgName + "\n    default: true\n    folders:\n      - " + o.mira.Home + "/**\n" +
-		"  - name: personal\n    kind: solo\n    folders:\n      - /nowhere/**\n    identity:\n      key: human:mira@home.example\n      name: Mira Moe\n"
+		"  - name: personal\n    kind: solo\n    folders:\n      - " + nowhere + "/**\n    identity:\n      key: human:mira@home.example\n      name: Mira Moe\n"
 	if _, err := f.WriteString(block); err != nil {
 		t.Fatal(err)
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/logic/clock"
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -69,7 +70,7 @@ func newLiveFixture(t *testing.T) ltFixture { return newLiveFixtureWith(t, "", n
 func newLiveFixtureWith(t *testing.T, configYAML string, clk clock.Clock) ltFixture {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	t.Setenv(EnvLive, "")
 	t.Setenv(EnvSync, "")
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -370,7 +371,7 @@ func TestLandLines_NameRealBranch(t *testing.T) {
 // default branch, or while a rebase / cherry-pick / revert / merge / bisect
 // is in progress.
 func TestRideBranchSkipList(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	ctx := context.Background()
 	dir := t.TempDir()
 	gitT(t, dir, "init", "-q", "-b", "main")
@@ -508,7 +509,7 @@ func TestMainPurgedRefusesAnUnreadableList(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			testenv.SetHome(t, t.TempDir())
 			ctx := context.Background()
 			dir := t.TempDir()
 			gitT(t, dir, "init", "-q", "-b", "main")

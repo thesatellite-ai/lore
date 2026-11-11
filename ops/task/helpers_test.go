@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -44,7 +45,7 @@ func newFolderStore(t *testing.T, i int) string {
 	if err := folder.Init(dir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: sid, Visibility: rowfs.VisibilityInternal}); err != nil {
 		t.Fatal(err)
 	}
-	return "file://" + filepath.ToSlash(dir)
+	return fileuri.URL(dir, "")
 }
 
 // withOrg attaches an internal folder store as the org store (Options.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/store"
@@ -78,7 +79,7 @@ func TestBranchOf(t *testing.T) {
 // an unknown parameter there (E_STORE_SCHEME), never silently ignored.
 func TestFolderURLRefusesBranch(t *testing.T) {
 	t.Parallel()
-	u, err := url.Parse("file://" + filepath.ToSlash(t.TempDir()) + "?branch=staging")
+	u, err := url.Parse(fileuri.URL(t.TempDir(), "") + "?branch=staging")
 	if err != nil {
 		t.Fatal(err)
 	}

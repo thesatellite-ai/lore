@@ -256,7 +256,9 @@ func expandModeBPath(p, projectRoot string) (string, error) {
 		return "", errs.New(errs.BadPath, "migrate: db_path "+strconv.Quote(p)+" has a `..` part").
 			WithHint("set " + modeBAllowOutsideEnv + "=1 to allow it")
 	}
-	return out, nil
+	// The OS's separators: a pointer written C:/shared/lore.db on Windows
+	// names C:\shared\lore.db (a no-op elsewhere).
+	return filepath.FromSlash(out), nil
 }
 
 // v017Doc is one exported row document.

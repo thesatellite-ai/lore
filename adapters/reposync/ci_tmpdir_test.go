@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // TestMergeConfigWithTMPDIRGone: the merge's attributes file is written
@@ -11,7 +13,7 @@ import (
 // its cleanup removes it.
 func TestMergeConfigWithTMPDIRGone(t *testing.T) {
 	near := t.TempDir()
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "gone"))
+	testenv.SetTemp(t, filepath.Join(t.TempDir(), "gone"))
 	cfg, cleanup, err := mergeConfig("", "", near)
 	if err != nil || len(cfg) == 0 {
 		t.Fatalf("merge config with TMPDIR gone: %v %v", cfg, err)

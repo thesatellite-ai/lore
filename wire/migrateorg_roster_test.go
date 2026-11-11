@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -28,7 +29,7 @@ func TestMigrateOrgV1RosterRows(t *testing.T) {
 	dir := t.TempDir()
 	writeV1Marker(t, dir)
 	hook := func(context.Context) ([]attach.Store, error) {
-		return []attach.Store{{Name: "agency", URL: "file://" + dir}}, nil
+		return []attach.Store{{Name: "agency", URL: fileuri.URL(dir, "")}}, nil
 	}
 	opts := Options{OrgStores: hook, RepoIsClient: func(context.Context) (bool, error) { return false, nil }}
 	a := openWith(t, gitRepo(t), opts)

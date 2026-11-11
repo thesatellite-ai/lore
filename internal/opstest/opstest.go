@@ -30,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -57,6 +58,9 @@ type H struct {
 	Home string
 	// Project is the seeded project row's id.
 	Project string
+	// apps are every App opened over this repo by this harness and its
+	// Reopens; ReopenCold closes them all (see there).
+	apps *[]*wire.App
 }
 
 // New builds a harness with a seeded project row. Each mut may adjust the
@@ -80,7 +84,7 @@ func WithStores(t testing.TB, names []string, mut ...func(*wire.Options)) *H {
 	for _, n := range names {
 		in := `{"name":` + Quote(n) + `}`
 		if n != personalStore {
-			in = `{"name":` + Quote(n) + `,"url":` + Quote("file://"+filepath.ToSlash(t.TempDir())) + `}`
+			in = `{"name":` + Quote(n) + `,"url":` + Quote(fileuri.URL(t.TempDir(), "")) + `}`
 		}
 		h.MustYes("store.init", in)
 	}
@@ -127,7 +131,7 @@ func Bare(t testing.TB, mut ...func(*wire.Options)) *H {
 			t.Error(err)
 		}
 	})
-	return &H{T: t, App: a, Repo: repo, Home: opts.Home}
+	return &H{T: t, App: a, Repo: repo, Home: opts.Home, apps: &[]*wire.App{a}}
 }
 
 // Fixed returns an option setting the wall clock to a fixed instant, so
@@ -413,7 +417,7 @@ const orgIdentityKey = "human:owner@example.com"
 // seeded.
 func WithOrg(t testing.TB, mut ...func(*wire.Options)) *H {
 	t.Helper()
-	url := "file://" + filepath.ToSlash(t.TempDir())
+	url := fileuri.URL(t.TempDir(), "")
 	Bare(t).MustYes("store.init", `{"name":"`+OrgName+`","url":`+Quote(url)+`}`)
 	org := func(o *wire.Options) {
 		o.OrgStores = func(context.Context) ([]attach.Store, error) {
@@ -506,14 +510,32 @@ func (h *H) Reopen(mut ...func(*wire.Options)) *H {
 			h.T.Error(err)
 		}
 	})
-	return &H{T: h.T, App: a, Repo: h.Repo, Home: h.Home, Project: h.Project}
+	if h.apps == nil {
+		h.apps = &[]*wire.App{h.App}
+	}
+	*h.apps = append(*h.apps, a)
+	return &H{T: h.T, App: a, Repo: h.Repo, Home: h.Home, Project: h.Project, apps: h.apps}
 }
 
 // ReopenCold is Reopen with every cache gone: the repo cache files are
 // removed and the new App gets a fresh home, so each row is decoded from
 // its row file (what a teammate's fresh clone, or a deleted cache, sees).
+// Every App opened over the repo so far (h's, and those of earlier
+// Reopens) is closed first, as the processes that held the cache would
+// have exited: Windows refuses to remove a file another handle holds
+// open, and an App keeps the cache open. Use the returned harness
+// afterwards.
 func (h *H) ReopenCold(mut ...func(*wire.Options)) *H {
 	h.T.Helper()
+	open := []*wire.App{h.App}
+	if h.apps != nil {
+		open = *h.apps
+	}
+	for _, a := range open {
+		if err := a.Close(); err != nil {
+			h.T.Fatal(err)
+		}
+	}
 	files, err := filepath.Glob(filepath.Join(h.Repo, filepath.FromSlash(wire.RepoCacheFile)) + "*")
 	if err != nil {
 		h.T.Fatal(err)

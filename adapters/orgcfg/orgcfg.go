@@ -28,7 +28,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
+	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -116,8 +118,15 @@ func ConfigPath(home string) string {
 // an empty, valid config (exists false); a bad one is E_CONFIG_INVALID
 // naming every problem.
 func LoadConfig(home string) (cfg *orgconf.Config, exists bool, err error) {
-	b, err := os.ReadFile(filepath.Clean(ConfigPath(home)))
+	// osrename.ReadFile: on Windows a read races another lore's rename of a
+	// new config.yaml over the old one; that refusal lasts a moment.
+	b, err := osrename.ReadFile(filepath.Clean(ConfigPath(home)))
 	if errors.Is(err, fs.ErrNotExist) {
+		// Windows says "not found" where Unix says ENOTDIR when ~/.lore is
+		// a file: that is a broken home, not one without a config.
+		if fi, serr := os.Stat(home); serr == nil && !fi.IsDir() {
+			return nil, false, errs.FileIO("read", ConfigPath(home), syscall.ENOTDIR)
+		}
 		return &orgconf.Config{}, false, nil
 	}
 	if err != nil {

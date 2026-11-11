@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -78,6 +79,11 @@ func PathOf(u *url.URL) (string, error) {
 	if u.Scheme != Scheme {
 		return "", errs.Wrap(errs.StoreScheme, "folder: not a file:// url", store.ErrScheme)
 	}
+	// file://C:/x is the drive path file:///C:/x, not a host named C:
+	// (fileuri.FoldDriveHost); folded on a copy, the caller's url is theirs
+	c := *u
+	u = &c
+	fileuri.FoldDriveHost(u)
 	if u.Opaque != "" || (u.Host != "" && u.Host != localHost) || u.User != nil {
 		return "", errs.New(errs.StoreScheme, "folder: a file url needs an absolute path (file:///abs/path)")
 	}

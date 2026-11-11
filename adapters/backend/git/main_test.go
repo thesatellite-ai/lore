@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
 // main_test.go — the fake executables the package's tests run, written once
@@ -62,10 +64,18 @@ func runMain(m *testing.M) int {
 		loggingGitBin:  "#!/bin/sh\n[ -n \"$" + gitLogEnv + "\" ] && echo \"$*\" >> \"$" + gitLogEnv + "\"\nexec '" + real + "' \"$@\"\n",
 		refusingSSHBin: "#!/bin/sh\nprintf '%s\\n' \"$" + sshStderrEnv + "\" >&2\nexit 255\n",
 	}
+	// fakeexec.Make returns the path to run: name.exe on Windows, where a
+	// script cannot be run as a program.
 	for path, script := range fakes {
-		if err := os.WriteFile(path, []byte(script), fakeExecMode); err != nil {
+		run, err := fakeexec.Make(path, script, fakeExecMode)
+		if err != nil {
 			fmt.Fprintln(os.Stderr, "git backend tests:", err)
 			return 1
+		}
+		if path == loggingGitBin {
+			loggingGitBin = run
+		} else {
+			refusingSSHBin = run
 		}
 	}
 	return m.Run()

@@ -217,7 +217,7 @@ func (a *Actor) CloneURL(r *Remote, url, name string) *Clone {
 	mustMkdir(a.w.T, filepath.Dir(dir))
 	res := a.w.run(filepath.Dir(dir), a.environ(nil), a.w.realGit, "clone", "-q", url, dir)
 	if res.Code != 0 {
-		a.w.T.Fatalf("clone %s: %s", url, res.Stderr)
+		a.w.T.Fatalf("clone %s: %s", url, res)
 	}
 	c := &Clone{A: a, Dir: dir, Remote: r}
 	if head := c.TryGit("rev-parse", "--verify", "-q", "HEAD"); head.Code != 0 {

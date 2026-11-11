@@ -9,8 +9,6 @@ package userscen
 
 import (
 	"encoding/json"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -90,12 +88,7 @@ func newDoctorPerson(t *testing.T) *doctorPerson {
 	t.Helper()
 	w := newWorld(t)
 	a := w.Human("person", "person@example.com")
-	git, err := exec.LookPath("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := &doctorPerson{w: w, a: a,
-		path: strings.Join([]string{filepath.Join(w.Root, "shim"), filepath.Dir(git), "/usr/bin", "/bin"}, string(os.PathListSeparator))}
+	p := &doctorPerson{w: w, a: a, path: narrowPath(t, filepath.Join(w.Root, "shim"))}
 	a.SetEnv("PATH", p.path)
 	p.c = a.Clone(w.Remote(doctorSlug), "site")
 	p.c.MustLore("init", "--non-interactive", "--name=site")

@@ -20,10 +20,11 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
+	"github.com/thesatellite-ai/lore/tests/fakeexec"
 	"github.com/thesatellite-ai/lore/wire"
-	"github.com/thesatellite-ai/lore/wire/internal/fakebin"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 )
 
@@ -65,7 +66,7 @@ func realSSHWorld(t *testing.T) *opstest.H {
 		t.Skip("ssh-keygen not installed: the fingerprint of a key without .pub needs it")
 	}
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	bin := filepath.Join(home, "bin")
@@ -78,7 +79,7 @@ func realSSHWorld(t *testing.T) *opstest.H {
 	}
 	write := func(path, body string, mode os.FileMode) {
 		t.Helper()
-		fakebin.Write(t, path, body, mode)
+		fakeexec.Write(t, path, body, mode)
 	}
 	write(filepath.Join(bin, "ssh"), "#!/bin/sh\n"+realFakeSSH+"\n", 0o755)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))

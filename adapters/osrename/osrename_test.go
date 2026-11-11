@@ -2,6 +2,7 @@ package osrename
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -80,5 +81,24 @@ func TestRename(t *testing.T) {
 	}
 	if err := Rename(from, to); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing source: %v", err)
+	}
+}
+
+// TestReadFileReadsAndPassesNotExist: ReadFile returns the bytes, and a
+// missing file's error unchanged (not transient: no retry).
+func TestReadFileReadsAndPassesNotExist(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(p, []byte("placeholder: 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := ReadFile(p); err != nil || string(b) != "placeholder: 1\n" {
+		t.Fatalf("ReadFile = %q, %v", b, err)
+	}
+	start := time.Now()
+	if _, err := ReadFile(p + ".gone"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing file: %v", err)
+	}
+	if time.Since(start) > retryWindow/2 {
+		t.Fatal("a missing file was retried")
 	}
 }

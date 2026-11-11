@@ -19,6 +19,7 @@ package userscen
 //     them on.
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -131,7 +132,7 @@ func TestRenderScopeShowChainOrder(t *testing.T) {
 func TestRenderFolderFileOwnRepo(t *testing.T) {
 	c := renderSolo(t)
 	ids := renderBillingRows(t, c)
-	c.MustLore("render").Says(t, "src/billing/LORE.md")
+	c.MustLore("render").Says(t, filepath.FromSlash("src/billing/LORE.md"))
 	dir := renderRead(t, c, "src/billing/LORE.md")
 	if !strings.HasPrefix(dir, renderDirHeader+"src/billing") {
 		t.Fatalf("the folder file starts with lore's header: %q", dir[:min(len(dir), 120)])

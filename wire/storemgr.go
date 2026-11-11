@@ -796,6 +796,9 @@ func cleanFileURL(raw string) (string, error) {
 	if err != nil {
 		return "", errs.New(errs.StoreScheme, "store: a file url needs an absolute path (file:///abs/path)")
 	}
+	// file://C:/x names the drive path (fileuri.FoldDriveHost); kept as a
+	// host, the cleaned url came out as file://C:/C:/x.
+	fileuri.FoldDriveHost(u)
 	// `file://~/stores/x` (host "~") and `file:///~/stores/x` name a folder
 	// under the user's home, as a shell would read it (O7, docs examples).
 	if u.Host == homeTilde || u.Path == "/"+homeTilde || strings.HasPrefix(u.Path, "/"+homeTilde+"/") {

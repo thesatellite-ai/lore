@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
@@ -43,7 +44,7 @@ func newOrgWorld(t *testing.T) *orgWorld {
 	w := &orgWorld{root: t.TempDir()}
 	w.hosts = filepath.Join(w.root, "hosts")
 	gc := filepath.Join(w.root, "gitconfig")
-	cfg := "[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n[url \"" + w.hosts + "/\"]\n\tinsteadOf = https://github.com/\n\tinsteadOf = git@github.com:\n"
+	cfg := "[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n[url \"" + filepath.ToSlash(w.hosts) + "/\"]\n\tinsteadOf = https://github.com/\n\tinsteadOf = git@github.com:\n"
 	if err := os.WriteFile(gc, []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,7 @@ func (w *orgWorld) home(t *testing.T, who string) string {
 	if err := os.MkdirAll(h, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("HOME", h)
+	testenv.SetHome(t, h)
 	return filepath.Join(h, ".lore") // the binary's home is ~/.lore
 }
 

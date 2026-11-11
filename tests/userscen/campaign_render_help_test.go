@@ -82,9 +82,9 @@ func TestCampaignRender_CompletionScripts(t *testing.T) {
 		args  []string
 		want  string
 	}{
-		{"bash", []string{"--norc", "--noprofile", "-c", "source " + scripts["bash"] + " && complete -p lore"}, "__start_lore"},
-		{"zsh", []string{"-f", "-c", "autoload -U compinit && compinit -u -D && source " + scripts["zsh"] + " && print -r -- ${_comps[lore]}"}, "_lore"},
-		{"fish", []string{"--no-config", "-c", "source " + scripts["fish"] + "; and complete -c lore | head -n 1"}, "lore"},
+		{"bash", []string{"--norc", "--noprofile", "-c", "source " + filepath.ToSlash(scripts["bash"]) + " && complete -p lore"}, "__start_lore"},
+		{"zsh", []string{"-f", "-c", "autoload -U compinit && compinit -u -D && source " + filepath.ToSlash(scripts["zsh"]) + " && print -r -- ${_comps[lore]}"}, "_lore"},
+		{"fish", []string{"--no-config", "-c", "source " + filepath.ToSlash(scripts["fish"]) + "; and complete -c lore | head -n 1"}, "lore"},
 		{"pwsh", []string{"-NoProfile", "-NonInteractive", "-Command", ". " + scripts["powershell"] + "; 'loaded'"}, "loaded"},
 	}
 	for _, l := range loads {

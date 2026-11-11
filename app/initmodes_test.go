@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -22,6 +23,9 @@ const (
 )
 
 func TestInitWritesCommittedFilesShareable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX mode bits: a file's access is its folder's ACL")
+	}
 	t.Parallel()
 	w := newCLIWorld(t).person()
 	root := w.initRepo(t)
@@ -45,7 +49,7 @@ func TestInitTargetWritesTheChosenToolsFile(t *testing.T) {
 	w := newCLIWorld(t).person().unscoped()
 	w.git(t, w.root, "init", "-q", "-b", "main")
 	w.mustLore(t, w.root, "init", "--target", "claude_code")
-	if got := modeOf(t, filepath.Join(w.root, "CLAUDE.md")); got != committedFileMode {
+	if got := modeOf(t, filepath.Join(w.root, "CLAUDE.md")); runtime.GOOS != "windows" && got != committedFileMode { // no POSIX mode bits on Windows
 		t.Fatalf("CLAUDE.md mode %v, want %v", got, committedFileMode)
 	}
 	if _, err := os.Stat(filepath.Join(w.root, "AGENTS.md")); err == nil {
