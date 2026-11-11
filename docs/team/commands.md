@@ -228,7 +228,7 @@ Flags:
 
 ## People, profiles and projects
 
-Team profiles are in development for lore 0.1.18 (branch `feat/team-profiles`) and not released yet. Until they are built, the usage lines below are written by hand from the design, not pasted from `--help`; the guide with examples is [Team profiles](profiles.md). `<actor>` is any actor reference: `@handle`, an `act_` id, an identity key (`human:<email>`), an identity contact as `<type>:<value>` (`email:…`, `github:…`) or a bare email. Every write is for people only, unless the policy flag `agents.may_manage_people` is true; reads are open to agents. Writes go to the org's roster store and are refused in a repo without an org (`E_REFUSED`).
+Team profiles are in development for lore 0.1.18 (branch `feat/team-profiles`) and not released yet. Until they are built, the usage lines below are written by hand from the design, not pasted from `--help`; the guide with examples is [Team profiles](profiles.md). `<actor>` is any actor reference: `@handle`, an `act_` id, an identity key (`human:<email>`), an identity contact as `<type>:<value>` (`email:…`, `github:…`) or a bare email. Agents may run every write too (the policy flag `agents.may_manage_people` is true by default); a team that sets it false leaves the writes to people. Reads are open to agents. Writes go to the org's roster store and are refused in a repo without an org (`E_REFUSED`).
 
 | Command | Usage | What it does |
 |---|---|---|

@@ -25,7 +25,7 @@ Contacts, leave reasons and notes are stored and shown plain in the org store (n
 
 ## Who may change profiles
 
-Every command on this page that writes is for people. An agent that runs one gets `E_POLICY_DENIED` naming the policy flag `agents.may_manage_people`, unless that flag is set to true at some level (it is false by default, and a level that sets false cannot be turned back on below it). Every read (`show`, `list`) is open to agents.
+An agent acts for its person, so it may run every command on this page: the policy flag `agents.may_manage_people` is true by default. A team that wants these writes left to people sets it to false (`lore policy set agents.may_manage_people false --to <store>/org`); an agent then gets `E_POLICY_DENIED` naming the flag, and a level that sets false cannot be turned back on below it. Creating an org or a team (`lore org create`, the team step of an admin setup) is never refused by the flag: the store it creates holds no policy yet, so the default applies. Every read (`show`, `list`) is open to agents.
 
 ## Naming a person
 

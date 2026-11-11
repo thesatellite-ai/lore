@@ -69,7 +69,9 @@ const (
 	// KeyAgentsMayManagePeople lets an agent run the team profile writes
 	// (actor edit, contacts, periods, offboard, rejoin, members, roles,
 	// contact types; TEAM_PROFILES 3.4, TS-4, TP-20). A flag, default
-	// false; false is the stricter value. It is a new key because
+	// true (owner decision 2026-11-11: an agent acts for its person, so it
+	// may do what the person tells it; a team that wants otherwise sets
+	// false, the stricter value). It is a new key because
 	// agents.person_only only adds refusals and the roster verbs had no
 	// allow switch to reuse (TEAM_PROFILES 13).
 	KeyAgentsMayManagePeople Key = "agents.may_manage_people"
@@ -445,9 +447,12 @@ func Keys() []KeyDef {
 		{Key: KeyTrashPurgeOnDelete, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(false), Doc: "every delete purges (tombstone, no trash) and needs --confirm (DELETION 3.12)"},
 		{Key: KeyAgentsPersonOnly, Shape: ShapeSet, Default: mustList(), Doc: "operations only a person may run"},
 		// TS-4: false is stricter (agents refused), so a level that sets
-		// false cannot be switched back on below it.
-		{Key: KeyAgentsMayManagePeople, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(false),
-			Doc: "agents may run the team profile writes (actor edit, contacts, periods, offboard, rejoin, members, roles, contact types); off: E_POLICY_DENIED"},
+		// false cannot be switched back on below it. Default true (owner
+		// decision 2026-11-11): an agent acts for its person, and a store
+		// that does not exist yet (an org being created) has no row to
+		// read, so the default is what the creating step sees.
+		{Key: KeyAgentsMayManagePeople, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(true),
+			Doc: "agents may run the team profile writes (actor edit, contacts, periods, offboard, rejoin, members, roles, contact types); default true, false: E_POLICY_DENIED"},
 		// A set: every level's items join (union), and ClientRoutes then
 		// takes, per kind, a store target over "repo" (a store is
 		// stricter: the row stays out of the customer's repository), the

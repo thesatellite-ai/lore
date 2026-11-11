@@ -326,7 +326,7 @@ A date would make two company periods overlap, end a period before it starts, or
 
 ### `E_POLICY_DENIED` naming `agents.may_manage_people`
 
-An agent ran a command that changes profiles, contacts, statuses, stints, memberships, roles or contact types. These are for people unless the org turns on the policy flag `agents.may_manage_people` (false by default). Hand the change to a person, or have a person set the flag if agents should manage people. Reading (`show`, `list`) is always allowed.
+An agent ran a command that changes profiles, contacts, statuses, stints, memberships, roles or contact types, and a team set the policy flag `agents.may_manage_people` to false. The flag is true by default (an agent acts for its person), so this refusal only comes from a team's choice; `lore policy show agents.may_manage_people` names the level that set it. Hand the change to a person, or have a person unset the flag at that level (`lore policy unset agents.may_manage_people --to <store>/org`) if agents should manage people. Reading (`show`, `list`) is always allowed. Creating an org or a team is never refused by this flag: the new store has no policy yet.
 
 ### `E_REFUSED` "team profiles live in an org store"
 

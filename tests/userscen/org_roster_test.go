@@ -14,8 +14,9 @@ package userscen
 //     actor, a bad --status, a bad agent label, profile writes in a repo
 //     with no org;
 //   - agents: `lore agent start` registers one actor per label (twice is
-//     the same actor), an agent session may read people but not change
-//     them (E_POLICY_DENIED) until agents.may_manage_people is set.
+//     the same actor), an agent session may read and change people (it
+//     acts for its person) until a person sets agents.may_manage_people
+//     false (E_POLICY_DENIED).
 
 import (
 	"strings"
@@ -218,10 +219,11 @@ func TestOrgNoOrgRepoRefusesProfileWrites(t *testing.T) {
 }
 
 // TestOrgAgentSessionsAndPeopleChanges: `lore agent start` registers one
-// agent actor per label, owned by the caller (twice: the same actor); the
-// agent may read people but not change them (E_POLICY_DENIED naming
-// agents.may_manage_people, needs a person); once a person sets the
-// policy true, the agent may.
+// agent actor per label, owned by the caller (twice: the same actor); with
+// no policy set the agent may read and change people (default true, owner
+// decision 2026-11-11); once a person sets agents.may_manage_people false,
+// its writes are refused (E_POLICY_DENIED naming the key, needs a person)
+// and change nothing.
 func TestOrgAgentSessionsAndPeopleChanges(t *testing.T) {
 	o := newOrgScen(t)
 	r1 := o.app.MustLore("agent", "start", "--label", "fe-1").Says(t, "agent fe-1 (owner @mira) registered", "LORE_ACTOR=agent:fe-1", "LORE_SESSION=")
@@ -250,25 +252,26 @@ func TestOrgAgentSessionsAndPeopleChanges(t *testing.T) {
 	ag.MustLore("actor", "list").Says(t, orgMiraName)
 	ag.MustLore("actor", "show", "@mira").Says(t, orgMiraKey)
 	ag.MustLore("role", "list").Says(t, "dev")
+	// No policy row anywhere: the default lets the agent act for mira.
+	ag.MustLore("actor", "edit", "@mira", "--title", "by the agent")
+	ag.MustLore("role", "add", "agent_role").Says(t, "role agent_role added")
+
+	o.app.MustLore("policy", "set", "agents.may_manage_people", "false", "--yes")
 	writes := [][]string{
-		{"actor", "edit", "@mira", "--title", "by the agent"},
-		{"role", "add", "agent_role"},
+		{"actor", "edit", "@mira", "--title", "again by the agent"},
+		{"role", "add", "agent_role2"},
 		{"actor", "contact", "add", "@mira", "github", "mira-agent", "--identity"},
 		{"actor", "status", "@mira", "on_leave"},
 		{"actor", "offboard", "@mira", "--yes"},
 	}
 	for _, args := range writes {
-		ag.Lore(args...).Fails(t, th.ExitRefused, "E_POLICY_DENIED", "agents.may_manage_people", "agent:fe-1")
+		ag.Lore(args...).Fails(t, th.ExitRefused, "E_POLICY_DENIED", "agents.may_manage_people is false", "agent:fe-1")
 	}
-	j := ag.Lore("role", "add", "agent_role", "--json")
+	j := ag.Lore("role", "add", "agent_role2", "--json")
 	if !strings.Contains(j.Stdout, `"needs_person": true`) {
 		t.Fatalf("the refusal tells a script a person must act: %s", j)
 	}
-	if a := showActor(t, o.app, "@mira"); a.Profile.Title != "" || a.Status != "active" {
+	if a := showActor(t, o.app, "@mira"); a.Profile.Title != "by the agent" || a.Status != "active" {
 		t.Fatalf("a refused agent write changes nothing: %+v", a)
 	}
-
-	o.app.MustLore("policy", "set", "agents.may_manage_people", "true", "--yes")
-	ag.MustLore("actor", "edit", "@mira", "--title", "by the agent")
-	ag.MustLore("role", "add", "agent_role").Says(t, "role agent_role added")
 }
