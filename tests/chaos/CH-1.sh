@@ -6,10 +6,12 @@ source "$(dirname "$0")/../lib/common.sh"
 mk_tmp; init_project ch1
 
 # ~200 rows so most cache pages are in use (a blot in a fresh file tends to
-# hit free pages SQLite never reads).
-for i in $(seq 1 200); do
-    $LORE memory add --body "row-$i filler" >/dev/null || fail "seed $i"
-done
+# hit free pages SQLite never reads). Added 8 at a time: concurrent adds are
+# safe (SC-5 proves it), and one at a time this seed was most of the gate's
+# chaos step. Every add must succeed; the count is checked again below.
+seq 1 200 | xargs -P 8 -I{} "$LORE" memory add --body "row-{} filler" >/dev/null || fail "seed: an add failed"
+[ "$(find .lore/data/memories -name 'mem_*.json' | wc -l | tr -d ' ')" -eq 200 ] || fail "seed: not 200 row files"
+
 CACHE=.lore/lore-cache.db
 [ -f "$CACHE" ] || fail "no cache at $CACHE"
 

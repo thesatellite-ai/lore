@@ -39,7 +39,9 @@ Tests live beside each package; the team end-to-end suite is in `tests/teame2e` 
 | `task lore:test` | every package plain + the concurrent packages (`RACE_PKGS`) under the race detector |
 | `task lore:test:team` | team end-to-end suite (real binary, real git) |
 | `task lore:lint` | vet, gofmt, staticcheck, cross-build of the six release targets |
-| `task check` | FULL tier, the gate before every push: lint, cross-builds, unit + race, then every e2e suite, steps in parallel with per-step times (`docs/DEVELOPMENT.md`) |
+| `task check` | FULL tier, the gate before every push: lint, cross-builds, unit + race and every e2e suite, scheduled under a load budget with per-step wall and CPU times (`docs/DEVELOPMENT.md`) |
+| `task check:fast` | FAST tier for landing a small fix (~5 min): unit, lint, race on the touched packages and the e2e steps the changed paths need (`FAST_MAP`); then `task check:after-land` runs the full gate on the landed main (`docs/DEVELOPMENT.md` "Landing") |
+| `task check:after-land` | the full gate on a fresh worktree of origin/main; the result in `LORE_GATE_REPORT` (first line PASS or FAIL) |
 
 ## Critical Rules
 

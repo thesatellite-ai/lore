@@ -160,6 +160,46 @@ func TestPrePushRunsGateThenTrustsStamp(t *testing.T) {
 	}
 }
 
+// fastStamp runs the real check:begin and check:stamp with the fast tier's
+// stamp name (what `task check:fast` ends with) in the scratch repository.
+func (r *hookRepo) fastStamp() {
+	r.t.Helper()
+	taskfile, err := filepath.Abs(loreTaskfile)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"--taskfile", taskfile, "--dir", r.dir, "check:begin"},
+		{"--taskfile", taskfile, "--dir", r.dir, "check:stamp", "STAMP=lore-check-fast-passed"},
+	} {
+		cmd := testCmd(r.t, "task", args...)
+		cmd.Dir = r.dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			r.t.Fatalf("task %v: %v %s", args, err, out)
+		}
+	}
+}
+
+// The landing rule: a small fix lands after `task check:fast`, so the hook
+// trusts the fast tier's stamp for exactly that tree, and only that tree.
+func TestPrePushTrustsFastStamp(t *testing.T) {
+	r := newHookRepo(t)
+	r.standInTask(standInFail) // the full gate would block if the hook ran it
+	r.fastStamp()
+	if _, err := os.Stat(filepath.Join(r.dir, ".git", "lore-check-passed")); err == nil {
+		t.Fatal("the fast tier wrote the full gate's stamp")
+	}
+	head := r.git("rev-parse", "HEAD")
+	if code, out, runs := r.push(head, r.pathWithTask()); code != 0 || runs != 0 || !strings.Contains(out, "already passed") {
+		t.Fatalf("a check:fast pass for this tree must let the push through without the gate: %d runs=%d %s", code, runs, out)
+	}
+	r.write("a.txt", "two\n")
+	r.git("commit", "-qam", "two")
+	if code, out, runs := r.push(r.git("rev-parse", "HEAD"), r.pathWithTask()); code == 0 || runs != 1 {
+		t.Fatalf("a fast stamp of another tree must not pass new code: %d runs=%d %s", code, runs, out)
+	}
+}
+
 func TestPrePushBlocksFailingGate(t *testing.T) {
 	r := newHookRepo(t)
 	r.standInTask(standInFail)

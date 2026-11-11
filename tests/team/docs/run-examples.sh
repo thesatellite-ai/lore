@@ -10,6 +10,11 @@
 #   tests/team/docs/run-examples.sh                 # build lore, run every section
 #   tests/team/docs/run-examples.sh agents leaks    # only these sections
 #   LORE_BIN=/path/to/lore tests/team/docs/run-examples.sh   # use a built binary
+#   JOBS=1 tests/team/docs/run-examples.sh          # one section at a time (default: JOBS=8)
+#
+# Two or more sections run in parallel, JOBS at a time, each as its own run of this script
+# (tests/lib/parallel-sections.sh): every section starts its own world and transcript, so the
+# order they run in changes nothing they print.
 #
 # The binary is built with -tags loretest so LORE_NOW (a fixed clock) works:
 # the agents page shows a lease expiring without waiting twenty minutes. That
@@ -35,6 +40,11 @@ export LORE_BIN
 
 # shellcheck source=lib.sh
 source "$HERE/lib.sh"
+# shellcheck source=../../lib/parallel-sections.sh
+source "$REPO/tests/lib/parallel-sections.sh"
+# How many sections run at once. 8: each section keeps about one core busy, and the gate runs
+# this beside other suites under its load budget (docs/DEVELOPMENT.md "The gate").
+JOBS="${JOBS:-8}"
 
 # section NAME: start a transcript and a fresh world for one docs section.
 section() {
@@ -1382,6 +1392,11 @@ main() {
   local all=(getting_started solo small_team agency group staging contractor two_orgs personal agents leak_cleanup errors internals team_ops people store_push live_repair profiles setup_cli invites client_folders guided_setup)
   local want=("$@")
   [ ${#want[@]} -eq 0 ] && want=("${all[@]}")
+  if [ ${#want[@]} -gt 1 ] && [ "$JOBS" -gt 1 ]; then
+    parallel_sections "$JOBS" "$SCRATCH/logs" "$OUT" "$HERE/run-examples.sh" "${want[@]}" || exit 1
+    echo "run-examples: every example ran as documented; transcripts in ${OUT#"$REPO"/}" >&2
+    return 0
+  fi
   for s in "${want[@]}"; do
     "s_${s//-/_}"
   done

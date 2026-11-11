@@ -59,6 +59,13 @@ envfor() {
   local home="$HOMES/$1"
   echo env -i "HOME=$home" "PATH=$SHIM:/usr/local/bin:/usr/bin:/bin" "USER=$1" "TERM=dumb" "NO_COLOR=1" \
     "GIT_CONFIG_NOSYSTEM=1" "GIT_TERMINAL_PROMPT=0" "LANG=C.UTF-8" "LORE_HUMAN=1" "LORE_NO_DETECT=1"
+  # The gate's Go runtime settings for lore processes (LORE_E2E_GOENV, Taskfile.lore.yml; the
+  # names tests/e2eenv allows): they change what a lore process costs, never what it prints.
+  local kv
+  for kv in ${LORE_E2E_GOENV:-}; do
+    case "$kv" in GOMAXPROCS=?* | GOGC=?* | GOMEMLIMIT=?*) echo "$kv" ;; esac
+  done
+  return 0
 }
 
 # TRANSCRIPT is the file `on` appends to; run-examples.sh sets it per section.
