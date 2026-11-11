@@ -378,7 +378,7 @@ These come from the people commands (`lore actor edit|contact|status|offboard|re
 | `E_STATUS_CHANGE` | 23 | a status change the rules do not allow: offboarding someone who already left, rejoining someone who is active, adding a left person to a project, a person who left registering or starting an agent themselves, `status left` on an active person | the command that does it: `lore actor offboard`, `lore actor rejoin` or `lore actor status <actor> active` |
 | `E_PERIOD_OVERLAP` | 23 | a stint or membership date that overlaps another stint, ends before it starts, or (offboard) falls before the open stint's start | `lore actor period list <actor>`, then pick a date after the last end |
 
-A team profile write in a repo without an org answers `E_REFUSED` (profiles live in an org store; `lore org create <name>`), an agent running one while `agents.may_manage_people` is false answers `E_POLICY_DENIED`, and a contact, role, stint or membership row aimed at a client store answers `E_LEAK_BLOCKED`.
+A team profile write in a repo without an org answers `E_REFUSED` (profiles live in an org store; `lore org create <name>`), an agent running one where a team set `agents.may_manage_people` to false (it is true by default) answers `E_POLICY_DENIED`, and a contact, role, stint or membership row aimed at a client store answers `E_LEAK_BLOCKED`.
 
 ### Setup and invites
 

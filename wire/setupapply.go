@@ -39,10 +39,8 @@ import (
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
-	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/op"
 	opsidentity "github.com/thesatellite-ai/lore/ops/identity"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -574,9 +572,11 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		if req.DryRun {
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{url, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}
-		if err := ap.agentMayCreateOrg(ctx, org); err != nil {
-			return opssetup.ApplyResult{}, err
-		}
+		// An agent saving the team step is not refused up front (owner
+		// decision 2026-11-11): the org store it creates has no policy
+		// rows, so agents.may_manage_people has its default, true, at the
+		// roster write (profileWriter). A store that already holds the
+		// team's false still refuses there.
 		res, err = team.ApplyAdmin(ctx, team.AdminDeps{Stores: ap.a, Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
 			team.AdminRequest{Org: org, StoreURL: url, OrgFolder: answerText(ans, onboard.QIDOrgFolder), Own: slices.Clone(ans[onboard.QIDOwn].List),
 				Repos: slices.Clone(ans[onboard.QIDRepos].List), Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
@@ -864,44 +864,4 @@ func (s setupStore) OrgStoreURLs(_ context.Context, org string) ([]string, bool,
 		urls = append(urls, sc.URL)
 	}
 	return urls, true, nil
-}
-
-// agentMayCreateOrg is the team step's authorization, checked before
-// anything is written. Creating an org writes in order: the store's init
-// commit and this repo's stores.yaml entry, the org commit and the orgs[]
-// entry, then the admin's roster rows. The roster write is a team profile
-// write, which an agent may make only where agents.may_manage_people is
-// true (profileWriter, TS-4). A store the step is about to create has no
-// policy rows, so that flag has its default, false, and an agent's save
-// would be refused at the last write with every earlier one already done:
-// the half-written team step whose retry then failed org.name_free. So an
-// agent is refused here, before the first write, with profileWriter's own
-// error. An org that exists already (a resumed save) is left to
-// profileWriter, which reads that store's real policy.
-func (ap setupApplier) agentMayCreateOrg(ctx context.Context, org string) error {
-	if _, err := ap.a.TeamOrigin(ctx, org); err == nil || !errs.Has(err, errs.NotFound) {
-		return nil // exists (or unreadable: ApplyAdmin reports that itself)
-	}
-	// Outside a repo (lore setup started in ~ or a plain folder) there is
-	// no repo identity: Who is E_NOT_A_STORE. The caller (op.Caller below,
-	// CallerAgent on the CLI) still says whether an agent is saving, so a
-	// person starting a team there is not refused.
-	who, err := ap.a.Who(ctx)
-	if err != nil && !errs.Has(err, errs.NotAStore) {
-		return err
-	}
-	agent := who.Agent
-	if c, ok := ctx.Value(profileCallerKey{}).(op.Caller); ok && (c.AgentFixed || c.Agent != "") {
-		agent = c.Agent
-	}
-	if agent == "" && who.Kind != schema.ActorKindAgent {
-		return nil
-	}
-	if agent == "" {
-		agent = who.StableKey
-	}
-	e := errs.New(errs.PolicyDenied, string(policy.KeyAgentsMayManagePeople)+" is false for a new org store: an agent may not create the team and its profiles; this looks like "+agent+". Nothing was written.").
-		WithHint("a person saves the team step in their own terminal or browser (lore setup web)")
-	e.NeedsPerson = true
-	return e
 }

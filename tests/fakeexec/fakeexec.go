@@ -173,9 +173,12 @@ func shimExe() (string, error) {
 			shimErr = err
 			return
 		}
-		goBin := filepath.Join(runtime.GOROOT(), "bin", "go")
-		if p, err := exec.LookPath("go"); err == nil {
-			goBin = p
+		// The go tool is found on PATH (runtime.GOROOT is deprecated: the
+		// build root need not exist where the test runs).
+		goBin, err := exec.LookPath("go")
+		if err != nil {
+			shimErr = fmt.Errorf("building the fakeexec shim needs go on PATH: %w", err)
+			return
 		}
 		_, self, _, _ := runtime.Caller(0)
 		out := filepath.Join(dir, "shim.exe")
