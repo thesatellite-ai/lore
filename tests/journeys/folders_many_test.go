@@ -15,6 +15,7 @@ package journeys
 // doctor finding.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,7 +35,26 @@ const (
 	jManyMarker     = "lore-store.yaml"
 	jManyOrgFile    = "org/.lore/lore-org.yaml"
 	jManyTaskTitle  = "hub: wire the payment webhook"
+	jManyOldSlug    = "github.com/acme-co/old-app"
+	jManyOldProject = "prj_01a1cb5d817172998c6a1880a90a2001"
+	jManyOldActor   = "act_541757c158dc7fb58c1c338b0a602001"
 )
+
+// jManyOldNotes writes a small v0.1.17 repo's .lore/data into c (its
+// project, one actor, two memories and one rule) and commits it.
+func jManyOldNotes(t *testing.T, c *teamharness.Clone) {
+	t.Helper()
+	data := filepath.Join(c.Dir, ".lore", "data")
+	jWrite(t, filepath.Join(data, "_meta.json"), `{"_v": 1, "project_id": "`+jManyOldProject+`"}`+"\n")
+	jWrite(t, filepath.Join(data, "projects", jManyOldProject+".json"), `{"_table": "projects", "_v": 1, "created_at": "2026-11-01T09:00:00.000000000Z", "id": "`+jManyOldProject+`", "name": "old-app", "updated_at": "2026-11-01T09:00:00.000000000Z"}`+"\n")
+	jWrite(t, filepath.Join(data, "actors", jManyOldActor+".json"), `{"_table": "actors", "_v": 1, "display_name": "Lee Lead", "id": "`+jManyOldActor+`", "kind": "human", "stable_key": "human:`+tlLee.Email+`"}`+"\n")
+	for i, body := range []string{"the old app deploys on fridays", "the old app's cache is cold at boot"} {
+		id := fmt.Sprintf("mem_01a1cb5d827d726cabe90000000020%02d", i)
+		jWrite(t, filepath.Join(data, "memories", id+".json"), `{"_table": "memories", "_v": 1, "body": "`+body+`", "created_at": "2026-11-02T10:00:00.000000000Z", "created_by_actor_id": "`+jManyOldActor+
+			`", "id": "`+id+`", "kind": "retrieved", "project_id": "`+jManyOldProject+`", "source_kind": "manual", "trust_score": 0.5, "updated_at": "2026-11-02T10:00:00.000000000Z"}`+"\n")
+	}
+	c.CommitAll("v0.1.17 notes")
+}
 
 func TestJourneyFoldersManyStores(t *testing.T) {
 	t.Parallel()
@@ -127,6 +147,49 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.Lore(parent, "store", "set", three.SSHURL(), "push=now").OK(t)
 	})
 
+	w.Step("day2/a-folder-of-the-third-store-by-the-org-name", func() {
+		// client_d lives in the org's third store: <org>/client_d and a
+		// bare client_d name it (folder names are unique across the org's
+		// stores), never "<org> has no folder client_d" (owner report
+		// 2026-11-12, store adopt)
+		old := jPlainRepo(t, lee, w.Remote(jManyOldSlug), filepath.Join(parent, "old-app"))
+		jManyOldNotes(t, old)
+		// quiet output names an org store by a digest of its url, so the
+		// folder (and where its files land) is what is checked
+		// Lee's v0.1.17 actor id is mapped onto Lee's roster actor (one
+		// identity, one id): its row is not adopted, the memories name the
+		// roster's actor (owner report 2026-11-12)
+		lee.Lore(parent, "store", "adopt", tlOrg+"/client_d", "--from", old.Dir, "--dry-run").OK(t).Says(t, "would adopt 2 rows", "/client_d", "actor "+jManyOldActor+" (human:"+tlLee.Email+") → act_")
+		lee.Lore(parent, "store", "adopt", tlOrg+"/client_d", "--from", old.Dir, "--yes").OK(t).Says(t, "adopted 2 rows", "/client_d")
+		if got := three.FilesMatching(mainRef, "client_d/.lore/data/actors/"+jManyOldActor); len(got) != 0 {
+			t.Errorf("Lee's second actor id was adopted: %v", got)
+		}
+		for _, f := range three.FilesMatching(mainRef, "client_d/.lore/data/memories/") {
+			if doc, _ := three.Read(mainRef, f); strings.Contains(doc, jManyOldActor) {
+				t.Errorf("%s still names Lee's second actor id", f)
+			}
+		}
+		lee.Lore(parent, "store", "adopt", "client_d", "--from", old.Dir, "--yes").OK(t).Says(t, "nothing to adopt", "/client_d")
+		if len(three.FilesMatching(mainRef, "client_d/.lore/data/")) < 2 {
+			t.Errorf("the adopted rows are not in the third store's client_d: %v", three.Files(mainRef))
+		}
+		if got := tt.store.FilesMatching(mainRef, "client_d/"); len(got) != 0 {
+			t.Errorf("adopt made client_d in the org's first store: %v", got)
+		}
+		// an unknown folder names the stores searched and the folders found
+		lee.Lore(parent, "store", "adopt", tlOrg+"/client_q", "--from", old.Dir, "--yes").Refused(t).
+			Says(t, "has no folder client_q", "searched the org's stores", "client_a", "client_d")
+		lee.Lore(parent, "store", "adopt", "client_q", "--from", old.Dir, "--yes").Refused(t).
+			Says(t, "no store of the org has a folder client_q", "searched the org's stores", "client_d")
+
+		// store folder remove <org> <folder> removes it from its own store
+		lee.Lore(parent, "store", "folder", "add", three.SSHURL(), "client_e").OK(t)
+		lee.Lore(parent, "store", "folder", "remove", tlOrg, "client_e", "--yes").OK(t).Says(t, "removed folder client_e")
+		if got := three.FilesMatching(mainRef, "client_e/"); len(got) != 0 {
+			t.Errorf("the third store still has client_e: %v", got)
+		}
+	})
+
 	w.Step("day3/a-client-repo-with-no-lore-files", func() {
 		w.AdvanceDays(1)
 		hub = jPlainRepo(t, lee, w.Remote(jManyHubSlug), filepath.Join(parent, "hub"))
@@ -139,6 +202,17 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		if len(two.FilesMatching(mainRef, "client_a/.lore/data/tasks/")) != 1 {
 			t.Errorf("the task did not land in the second store's client_a/: %v", two.Files(mainRef))
 		}
+		// from the client repo linked to the second store, --to <org>/<folder>
+		// and --to <folder> write to the third store (nothing in the repo)
+		lee.LoreIn(hub, "task", "add", "client d: by the org name", "--to", tlOrg+"/client_d").OK(t)
+		lee.LoreIn(hub, "memory", "add", "client d: by the folder alone", "--to", "client_d").OK(t)
+		if n := len(three.FilesMatching(mainRef, "client_d/.lore/data/tasks/")); n < 1 {
+			t.Errorf("--to %s/client_d did not write into the third store: %v", tlOrg, three.Files(mainRef))
+		}
+		if got := tt.store.FilesMatching(mainRef, "client_d/"); len(got) != 0 {
+			t.Errorf("a --to write made client_d in the org's first store: %v", got)
+		}
+
 		if _, err := os.Stat(filepath.Join(hub.Dir, ".lore")); err == nil {
 			t.Error("lore made .lore/ in the client repo")
 		}

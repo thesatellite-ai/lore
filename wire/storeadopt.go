@@ -87,11 +87,16 @@ type adoptSourceRows struct {
 
 // Adopt implements opsstores.Adopter.
 func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName string) (opsstores.AdoptOut, error) {
+	at, err := a.folderStore(ctx, adoptVerb, name, folderName) // the org's store that holds the folder (foldertarget.go)
+	if err != nil {
+		return opsstores.AdoptOut{}, err
+	}
+	name = at.Name
 	src, err := a.findStore(ctx, adoptVerb, name)
 	if err != nil {
 		return opsstores.AdoptOut{}, err
 	}
-	label := storeLabel(name, src)
+	label := at.Label
 	top, err := a.adoptTop(ctx, in.From)
 	if err != nil {
 		return opsstores.AdoptOut{}, err
@@ -107,7 +112,7 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 	}
 	meta := filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(folderName)), rowfs.MetaFileName)
 	if _, serr := os.Stat(meta); errors.Is(serr, fs.ErrNotExist) {
-		return opsstores.AdoptOut{}, errs.New(errs.NotFound, adoptVerb+": "+label+" has no folder "+folderName+"; nothing written").
+		return opsstores.AdoptOut{}, errs.New(errs.NotFound, adoptVerb+": "+label+" has no folder "+folderName+a.folderMissDetail(ctx)+"; nothing written").
 			WithHint("make it first: lore store folder add " + name + " " + folderName + " (`lore store folder list " + name + "` lists its folders)")
 	}
 	root, err := rowfs.Open(dir, a.opts.rowfsOptions()...)
@@ -137,10 +142,16 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 	if err != nil {
 		return opsstores.AdoptOut{}, err
 	}
-	changes, adopted, err := adoptChanges(srcRows.rows, have, pid, &out)
+	adoptRelink(srcRows.rows, &out) // --supersedes links of lore 0.1.16 and older (hostbase_doctor_supersede.go)
+	rows, mapped, err := a.adoptActorMap(ctx, srcRows.rows, have, &out)
 	if err != nil {
 		return opsstores.AdoptOut{}, err
 	}
+	changes, adopted, err := adoptChanges(rows, have, pid, &out)
+	if err != nil {
+		return opsstores.AdoptOut{}, err
+	}
+	adopted = append(adopted, mapped...)
 	for _, k := range slices.Clone(adopted) {
 		adopted = append(adopted, srcRows.links[k.ID.String()]...)
 	}
@@ -527,4 +538,136 @@ func removeAdopted(top string, adopted []store.Key) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// adoptRelink moves the --supersedes links lore 0.1.16 and older wrote on
+// the new row onto the old row in the rows being adopted (the doctor
+// repair's plan, planSupersedeRepair), so adopted v0.1.17 data never
+// shows as degraded. The same rows give the same rewrite, so a rerun is
+// still byte-identical. Rows two links claim are named in out.Conflicts
+// and left as they are.
+func adoptRelink(rows []adoptRow, out *opsstores.AdoptOut) {
+	for _, k := range supersedeKinds {
+		var nodes []supersedeNode
+		at := map[string]int{}
+		for i, x := range rows {
+			if x.r.Table != k.table || x.r.Deleted {
+				continue
+			}
+			n := supersedeNode{id: x.r.ID.String(), projectID: fieldText(x.r, supersedeFieldProject), supersededBy: fieldText(x.r, supersedeFieldNext), createdAt: x.r.CreatedAt}
+			if k.table == schema.TableDecisions {
+				n.decisionStatus = fieldText(x.r, supersedeFieldStatus)
+			}
+			nodes = append(nodes, n)
+			at[n.id] = i
+		}
+		p := planSupersedeRepair(k.name, nodes)
+		for _, c := range p.conflicts {
+			out.Conflicts = append(out.Conflicts, conflictText(c))
+		}
+		if len(p.fixes) == 0 {
+			continue
+		}
+		for id, next := range p.set {
+			i := at[id]
+			r := rows[i].r
+			r.Fields = maps.Clone(r.Fields)
+			if r.Fields == nil {
+				r.Fields = map[string]value.Value{}
+			}
+			r.Fields[supersedeFieldNext] = value.Null{}
+			if next != "" {
+				nid, err := ids.ParseAny(next)
+				if err != nil {
+					continue // an id that does not parse is no row of the plan
+				}
+				ref, err := value.RefOf(nid)
+				if err != nil {
+					continue
+				}
+				r.Fields[supersedeFieldNext] = ref
+				if s := fieldText(r, supersedeFieldStatus); k.table == schema.TableDecisions && (s == schema.DecisionStatusProposed || s == schema.DecisionStatusAccepted) {
+					if st, err := value.TextOf(schema.DecisionStatusSuperseded); err == nil {
+						r.Fields[supersedeFieldStatus] = st
+					}
+				}
+			}
+			rows[i].r = r
+		}
+		out.Relinked += len(p.fixes)
+	}
+}
+
+// adoptActorMap maps each source actor whose stable key the org roster
+// or the folder already holds under another id onto that actor (owner
+// report 2026-11-12: adopting a v0.1.17 repo brought in a second actor
+// id for a person already on the roster). The mapped actor rows are not
+// adopted (their row files, for --remove-source, are returned), and every
+// other row names the existing actor instead; the same source gives the
+// same rows, so a rerun stays a no-op. out.Actors names each mapping.
+func (a *App) adoptActorMap(ctx context.Context, rows []adoptRow, have []store.Row, out *opsstores.AdoptOut) ([]adoptRow, []store.Key, error) {
+	var src []row.Row
+	for _, x := range rows {
+		if x.r.Table == schema.TableActors {
+			src = append(src, x.r)
+		}
+	}
+	if len(src) == 0 {
+		return rows, nil, nil
+	}
+	known, err := a.knownActorKeys(ctx)
+	if err != nil {
+		return nil, nil, errs.Prefix(adoptVerb, err).WithHint("an adopt maps the repo's actors onto the roster's; run it where the org roster is reachable (`lore sync`, then again)")
+	}
+	var folderActors []row.Row
+	for _, h := range have {
+		if h.Table != schema.TableActors {
+			continue
+		}
+		r, derr := h.Decode()
+		if derr != nil {
+			continue // an unreadable row file: doctor's row_file check names it
+		}
+		folderActors = append(folderActors, r)
+	}
+	addActorKeys(known, folderActors)
+	m, lines := actorKeyMap(src, known)
+	if len(m) == 0 {
+		return rows, nil, nil
+	}
+	out.Actors = lines
+	kept := make([]adoptRow, 0, len(rows))
+	var mapped []store.Key
+	for _, x := range rows {
+		if _, gone := m[x.r.ID.String()]; gone && x.r.Table == schema.TableActors {
+			if x.file {
+				mapped = append(mapped, store.Key{Table: x.r.Table, ID: x.r.ID})
+			}
+			continue
+		}
+		if p := mapActorFields(x.r.Fields, m); p != nil {
+			x.r.Fields = maps.Clone(x.r.Fields)
+			maps.Copy(x.r.Fields, p)
+		}
+		// the audit stamps too: the mapped actor has no row in the folder
+		x.r.CreatedBy = mapActorID(x.r.CreatedBy, m)
+		x.r.UpdatedBy = mapActorID(x.r.UpdatedBy, m)
+		kept = append(kept, x)
+	}
+	return kept, mapped, nil
+}
+
+// mapActorID is id, or the actor m maps it onto.
+func mapActorID(id ids.ID[ids.Actor], m map[string]ids.AnyID) ids.ID[ids.Actor] {
+	if id.IsZero() {
+		return id
+	}
+	to, ok := m[id.String()]
+	if !ok {
+		return id
+	}
+	if got, err := ids.As[ids.Actor](to); err == nil {
+		return got
+	}
+	return id
 }

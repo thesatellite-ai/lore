@@ -103,6 +103,10 @@ type RunIn struct {
 	NoPush bool `json:"no_push,omitempty" flag:"no-push" desc:"commit the store changes but do not push them"`
 	// Offline rewrites the repo's branch files only (FORMAT_EVOLUTION 7.3).
 	Offline bool `json:"offline,omitempty" flag:"offline" desc:"branch files only: skip the settings, live rows and stores (they need the network)"`
+	// MachineLocal copies the repo's v0.1.17 machine-local rows into this
+	// machine's store even from a checkout that is not this machine's own
+	// (wire machinecopy.go says when it is).
+	MachineLocal bool `json:"machine_local,omitempty" flag:"machine-local" desc:"also copy the repo's v0.1.17 machine-local rows (runs, render histories, sessions) into this machine's store when this checkout is a copy, not this machine's checkout of the repo"`
 }
 
 // RunOut is the output of migrate.run.
@@ -206,6 +210,9 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	defer func() { _ = unlock() }() // a failed release leaves a lock file `lore migrate unlock` clears
 	if !in.DryRun {
 		ctx = WithRun(ctx) // F-MIGRATE-1: this run's own writes answer the O6 question, never ask it
+	}
+	if in.MachineLocal {
+		ctx = WithMachineLocal(ctx)
 	}
 	pushes := !in.DryRun && !in.NoPush && !in.Offline
 	hold, err := takeTeamLock(ctx, pushes)

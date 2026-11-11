@@ -441,21 +441,83 @@ func TestListOrderAndFilters(t *testing.T) {
 	}
 	for _, x := range []struct {
 		archived bool
+		all      bool
 		only     store.Source
 		keep     func(row.Row) bool
 		want     []string
+		note     string
 	}{
-		{false, "", nil, []string{a, b}},
-		{true, "", nil, []string{a, c, b}},
-		{true, "team", nil, []string{b}},
-		{true, "", func(r row.Row) bool { return r.ID.String() != a }, []string{c, b}},
+		{false, false, "", nil, []string{a, b}, "1 hidden (1 archived); --all shows them"},
+		{true, false, "", nil, []string{a, c, b}, ""},
+		{false, true, "", nil, []string{a, c, b}, ""}, // --all: the archived row too
+		{true, false, "team", nil, []string{b}, ""},
+		{true, false, "", func(r row.Row) bool { return r.ID.String() != a }, []string{c, b}, ""},
 	} {
-		items, err := List(ctx, env, rules, Scope{}, x.archived, x.only, x.keep)
+		items, hid, err := List(ctx, env, rules, Scope{All: x.all}, x.archived, x.only, x.keep)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if got := ids(items); !slices.Equal(got, x.want) {
-			t.Fatalf("archived=%v only=%q: %v, want %v", x.archived, x.only, got, x.want)
+			t.Fatalf("archived=%v all=%v only=%q: %v, want %v", x.archived, x.all, x.only, got, x.want)
+		}
+		if got := hid.Note(); got != x.note {
+			t.Errorf("archived=%v all=%v only=%q: footer %q, want %q", x.archived, x.all, x.only, got, x.note)
+		}
+	}
+}
+
+// TestListSaysWhatItHides is the owner's adopted decisions (2026-11-12):
+// rows scoped to a v0.1.17 repo are left out of the default
+// (project-wide) list; the footer counts them and --all lists them, the
+// archived ones too.
+func TestListSaysWhatItHides(t *testing.T) {
+	ctx := context.Background()
+	env := newEnv(t)
+	wide := add(t, env, Create{})
+	scoped := add(t, env, Create{Repo: "web"})
+	old := add(t, env, Create{})
+	if _, _, err := Stamp(ctx, env, rules, old, FieldArchivedAt, Now(env)); err != nil {
+		t.Fatal(err)
+	}
+	items, hid, err := List(ctx, env, rules, Scope{}, false, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Row.ID.String() != wide {
+		t.Fatalf("default list: %v, want only %s", items, wide)
+	}
+	if got, want := hid.Note(), "2 hidden (1 scoped to a repo, 1 archived); --all shows them"; got != want {
+		t.Errorf("footer %q, want %q", got, want)
+	}
+	all, hid, err := List(ctx, env, rules, Scope{All: true}, false, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, it := range all {
+		got[it.Row.ID.String()] = true
+	}
+	if len(all) != 3 || !got[wide] || !got[scoped] || !got[old] {
+		t.Errorf("--all listed %v, want all three rows", got)
+	}
+	if hid.Note() != "" {
+		t.Errorf("--all still hides: %q", hid.Note())
+	}
+}
+
+// TestHiddenNote: the footer names each reason and the flag that shows
+// the rows; nothing hidden is no footer.
+func TestHiddenNote(t *testing.T) {
+	for _, x := range []struct {
+		h    Hidden
+		want string
+	}{
+		{Hidden{}, ""},
+		{Hidden{Repo: 6}, "6 hidden (6 scoped to a repo); --all shows them"},
+		{Hidden{Repo: 2, Archived: 3}, "5 hidden (2 scoped to a repo, 3 archived); --all shows them"},
+	} {
+		if got := x.h.Note(); got != x.want {
+			t.Errorf("%+v: %q, want %q", x.h, got, x.want)
 		}
 	}
 }

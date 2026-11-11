@@ -65,11 +65,16 @@ const (
 
 // FolderContents implements opsstores.FolderRemover.
 func (a *App) FolderContents(ctx context.Context, name, folderName string) (opsstores.FolderContents, error) {
+	at, err := a.folderStore(ctx, folderRemoveVerb, name, folderName) // the org's store that holds the folder (foldertarget.go)
+	if err != nil {
+		return opsstores.FolderContents{}, err
+	}
+	name = at.Name
 	src, err := a.findStore(ctx, folderRemoveVerb, name)
 	if err != nil {
 		return opsstores.FolderContents{}, err
 	}
-	label := storeLabel(name, src)
+	label := at.Label
 	dir, err := a.storeDir(ctx, src)
 	if err != nil {
 		return opsstores.FolderContents{}, errs.Prefix(folderRemoveVerb+": store "+label, err)
@@ -101,7 +106,7 @@ func (a *App) FolderContents(ctx context.Context, name, folderName string) (opss
 	meta := filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(folderName)), rowfs.MetaFileName)
 	raw, err := os.ReadFile(meta)
 	if errors.Is(err, fs.ErrNotExist) {
-		return opsstores.FolderContents{}, errs.New(errs.NotFound, folderRemoveVerb+": "+label+" has no folder "+folderName).
+		return opsstores.FolderContents{}, errs.New(errs.NotFound, folderRemoveVerb+": "+label+" has no folder "+folderName+a.folderMissDetail(ctx)).
 			WithHint("`lore store folder list " + name + "` lists its folders")
 	}
 	if err != nil {
@@ -204,6 +209,11 @@ func (a *App) isOrgFolder(src attach.Store, folderName string) bool {
 
 // RemoveFolder implements opsstores.FolderRemover.
 func (a *App) RemoveFolder(ctx context.Context, in opsstores.FolderRemoveIn, c opsstores.FolderContents) (opsstores.FolderRemoveOut, error) {
+	at, err := a.folderStore(ctx, folderRemoveVerb, in.Store, c.Folder)
+	if err != nil {
+		return opsstores.FolderRemoveOut{}, err
+	}
+	in.Store = at.Name
 	src, err := a.findStore(ctx, folderRemoveVerb, in.Store)
 	if err != nil {
 		return opsstores.FolderRemoveOut{}, err

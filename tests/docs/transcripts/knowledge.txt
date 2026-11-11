@@ -96,6 +96,7 @@ alice (work/website)$ lore rule archive rul_7a670ae8548ed05bf57ad29ad0759504
 alice (work/website)$ lore rule list
 rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code
 rul_162df51b7f78b785c97c26b41ea89666 [should/always] Keep pull requests under 400 lines
+1 hidden (1 archived); --all shows them
 alice (work/website)$ lore rule list --archived
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Run the tests before you push [archived]
 rul_2ad3618e878ebbf527d34d446ef4f891 [must/always] Never put passwords in the code

@@ -33,6 +33,7 @@ func (a *App) missingFolder(ctx context.Context, src attach.Store, base, folderN
 			msg += " (existing: " + strings.Join(have, ", ") + ")"
 		}
 	}
+	msg += a.folderMissDetail(ctx) // the org's other stores, when it has some
 	return errs.New(errs.NeedsConfirm, msg).
 		WithQuestion("create the folder " + folderName + " in store " + base + "?").
 		WithHint("check the spelling; to create it on purpose rerun with --create (or --yes)")

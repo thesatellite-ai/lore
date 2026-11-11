@@ -1,9 +1,15 @@
 package wire
 
 // hostbase_doctor_supersede.go — reversed --supersedes links in `lore doctor`
-// on cmd/lore (port of saas/cmd/cli/supersede_repair.go). An older lore
-// stored `<kind> add --supersedes <old>` on the NEW row (new.superseded_by_id
-// = old); the shape is the link on the OLD row (old.superseded_by_id = new).
+// on cmd/lore (port of saas/cmd/cli/supersede_repair.go). lore 0.1.16 and
+// older stored `<kind> add --supersedes <old>` on the NEW row
+// (new.superseded_by_id = old); since v0.1.17 the link is on the OLD row
+// (old.superseded_by_id = new). v0.1.17 wrote the new shape but repaired
+// the old links only on an explicit `lore doctor --fix`, so a v0.1.17 repo
+// can still hold them (owner report 2026-11-12: 84 such links in adopted
+// v0.1.17 data). `lore migrate run` and `lore store adopt` now convert
+// them as they bring the rows in (migrateSupersedes, adoptRelink); doctor
+// still finds any left.
 //
 //	lore doctor          ─▶ plan every kind ─▶ one warning listing each fix
 //	                        (a dry run: nothing written), notes for the links
@@ -73,12 +79,20 @@ type supersedeSkip struct {
 	kind, id, reason string
 }
 
+// supersedeConflict is two or more rows that each claim to replace one
+// older row: one row has one successor, so it is reported, never fixed.
+type supersedeConflict struct {
+	kind, target string
+	srcs         []string
+}
+
 // supersedePlan is one kind's repair: the fixes, the final link of every
 // row it touches ("" clears), the links it leaves.
 type supersedePlan struct {
-	fixes []supersedeFix
-	set   map[string]string
-	skips []supersedeSkip
+	fixes     []supersedeFix
+	set       map[string]string
+	skips     []supersedeSkip
+	conflicts []supersedeConflict
 }
 
 // planSupersedeRepair finds the reversed links among nodes (every live row
@@ -113,10 +127,7 @@ func planSupersedeRepair(kind string, nodes []supersedeNode) supersedePlan {
 		srcs := into[yID]
 		slices.Sort(srcs)
 		if len(srcs) > 1 {
-			for _, x := range srcs {
-				plan.skips = append(plan.skips, supersedeSkip{kind, x,
-					fmt.Sprintf("several rows (%s) claim to replace %s; keep one with `lore %s edit`", strings.Join(srcs, ", "), yID, kind)})
-			}
+			plan.conflicts = append(plan.conflicts, supersedeConflict{kind: kind, target: yID, srcs: srcs})
 			continue
 		}
 		x, y := srcs[0], byID[yID]
@@ -213,47 +224,89 @@ func describeSupersedeFixes(fixes []supersedeFix) string {
 // supersedeQuestion is the confirmation `doctor --fix` asks before writing.
 const supersedeQuestion = "Repair %d --supersedes link(s) written by an older lore (%s)?"
 
+// conflictText is the finding of one supersedeConflict: both ids, why
+// lore does not choose, and the next step.
+func conflictText(c supersedeConflict) string {
+	return fmt.Sprintf("%s rows %s each claim to replace %s (--supersedes links written by lore 0.1.16 or older); one row has one successor, so lore does not choose: "+
+		"if one is a duplicate, move it to the trash (`lore %s delete <id>`), then `lore doctor --fix` links the other", c.kind, strings.Join(c.srcs, " and "), c.target, c.kind)
+}
+
+// supersedeWarning is doctor's finding for the reversed links: each one
+// by its rows, and the fix command.
+func supersedeWarning(fixes []supersedeFix) string {
+	return fmt.Sprintf("%d --supersedes link(s) written by lore 0.1.16 or older point from the new row to the old one (%s; each read as old → new, the row that replaces it); "+
+		"run `lore doctor --fix` to move each link onto the old row (lore migrate run and lore store adopt convert them too)", len(fixes), describeSupersedeFixes(fixes))
+}
+
+// supersedeKindPlan is one kind's plan with its rows by id.
+type supersedeKindPlan struct {
+	k     supersedeKind
+	nodes map[string]supersedeNode
+	plan  supersedePlan
+}
+
+// planSupersedes plans every kind over the attached stores.
+func (a *App) planSupersedes(ctx context.Context) ([]supersedeKindPlan, []supersedeFix, error) {
+	var plans []supersedeKindPlan
+	var fixes []supersedeFix
+	for _, k := range supersedeKinds {
+		nodes, err := a.supersedeNodes(ctx, k)
+		if err != nil {
+			return nil, nil, errs.Prefix("supersede links: read "+k.name+" rows", err)
+		}
+		p := planSupersedeRepair(k.name, nodes)
+		byID := make(map[string]supersedeNode, len(nodes))
+		for _, n := range nodes {
+			byID[n.id] = n
+		}
+		plans = append(plans, supersedeKindPlan{k, byID, p})
+		fixes = append(fixes, p.fixes...)
+	}
+	return plans, fixes, nil
+}
+
 // doctorSupersedes reports reversed --supersedes links and, with fix and
 // the caller's confirmation, repairs them in one batch. Without the
 // confirmation it answers E_NEEDS_CONFIRM naming every fix (the terminal
 // asks; --yes answers). A read failure is an error line, never a crash.
 func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail func(string)) error {
-	type kindPlan struct {
-		k     supersedeKind
-		nodes map[string]supersedeNode
-		plan  supersedePlan
+	plans, fixes, err := a.planSupersedes(ctx)
+	if err != nil {
+		fail(err.Error())
+		return nil
 	}
-	var plans []kindPlan
-	var fixes []supersedeFix
-	for _, k := range supersedeKinds {
-		nodes, err := a.supersedeNodes(ctx, k)
-		if err != nil {
-			fail("supersede links: read " + k.name + " rows: " + err.Error())
-			return nil
-		}
-		p := planSupersedeRepair(k.name, nodes)
-		for _, s := range p.skips {
+	for _, kp := range plans {
+		for _, s := range kp.plan.skips {
 			note(s.kind + " " + s.id + ": --supersedes link left as is: " + s.reason)
 		}
-		byID := make(map[string]supersedeNode, len(nodes))
-		for _, n := range nodes {
-			byID[n.id] = n
+		for _, c := range kp.plan.conflicts {
+			warn(conflictText(c))
 		}
-		plans = append(plans, kindPlan{k, byID, p})
-		fixes = append(fixes, p.fixes...)
 	}
 	if len(fixes) == 0 {
 		return nil
 	}
 	list := describeSupersedeFixes(fixes)
 	if !fix {
-		warn(fmt.Sprintf("%d --supersedes link(s) written by an older lore point the wrong way (%s); run `lore doctor --fix`", len(fixes), list))
+		warn(supersedeWarning(fixes))
 		return nil
 	}
 	if !op.Confirmed(ctx) {
 		q := fmt.Sprintf(supersedeQuestion, len(fixes), list)
 		return errs.New(errs.NeedsConfirm, q).WithQuestion(q).WithHint("run `lore doctor` to list them; `lore doctor --fix --yes` repairs them")
 	}
+	done, err := a.applySupersedes(ctx, plans)
+	if err != nil {
+		fail(err.Error() + "; run `lore doctor --fix` again")
+		return nil
+	}
+	note(fmt.Sprintf("repaired %d --supersedes link(s): %s", done, list))
+	return nil
+}
+
+// applySupersedes writes every plan: new links first, clears after, so an
+// interruption never loses a link. It returns the links repaired.
+func (a *App) applySupersedes(ctx context.Context, plans []supersedeKindPlan) (int, error) {
 	done := 0
 	for _, kp := range plans {
 		rowIDs := make([]string, 0, len(kp.plan.set))
@@ -261,7 +314,6 @@ func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail f
 			rowIDs = append(rowIDs, id)
 		}
 		slices.Sort(rowIDs)
-		// New links first, clears after: an interruption never loses a link.
 		for _, id := range rowIDs {
 			next := kp.plan.set[id]
 			if next == "" || kp.nodes[id].supersededBy == next {
@@ -272,8 +324,7 @@ func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail f
 				status = schema.DecisionStatusSuperseded // a status a person set since (deprecated) is kept
 			}
 			if err := a.setSuccessor(ctx, kp.k.table, id, next, status); err != nil {
-				fail(fmt.Sprintf("supersede links: repair stopped at %s %s → %s: %v; run `lore doctor --fix` again", kp.k.name, id, next, err))
-				return nil
+				return done, errs.Prefix(fmt.Sprintf("supersede links: repair stopped at %s %s → %s", kp.k.name, id, next), err)
 			}
 		}
 		for _, id := range rowIDs {
@@ -281,12 +332,32 @@ func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail f
 				continue
 			}
 			if err := a.setSuccessor(ctx, kp.k.table, id, "", ""); err != nil {
-				fail(fmt.Sprintf("supersede links: repair stopped clearing %s %s: %v; run `lore doctor --fix` again", kp.k.name, id, err))
-				return nil
+				return done, errs.Prefix(fmt.Sprintf("supersede links: repair stopped clearing %s %s", kp.k.name, id), err)
 			}
 		}
 		done += len(kp.plan.fixes)
 	}
-	note(fmt.Sprintf("repaired %d --supersedes link(s): %s", done, list))
-	return nil
+	return done, nil
+}
+
+// StepSupersedes is the migrate step that converts the old links.
+const StepSupersedes = "supersedes"
+
+// migrateSupersedes is `lore migrate run`'s conversion of the --supersedes
+// links lore 0.1.16 and older wrote on the new row (the doctor repair,
+// without the question: the run is the person's yes to converting the
+// repo). Rows two links claim are left for doctor to name.
+func (a *App) migrateSupersedes(ctx context.Context, dryRun bool) ([]string, int, error) {
+	plans, fixes, err := a.planSupersedes(ctx)
+	if err != nil || len(fixes) == 0 {
+		return nil, 0, err
+	}
+	verb := "would move"
+	if !dryRun {
+		if _, err = a.applySupersedes(ctx, plans); err != nil {
+			return nil, 0, err
+		}
+		verb = "moved"
+	}
+	return []string{StepSupersedes + ": " + verb + " " + plural(len(fixes), "--supersedes link") + " written by lore 0.1.16 or older onto the row each replaces (" + describeSupersedeFixes(fixes) + ")"}, len(fixes), nil
 }

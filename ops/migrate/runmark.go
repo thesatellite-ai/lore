@@ -28,3 +28,20 @@ func InRun(ctx context.Context) bool {
 	v, _ := ctx.Value(runKey{}).(bool) // absent: not a migration run
 	return v
 }
+
+// machineLocalKey marks a run given --machine-local.
+type machineLocalKey struct{}
+
+// WithMachineLocal marks a run whose person asked to copy the repo's
+// v0.1.17 machine-local rows (runs, render histories, sessions) into this
+// machine's store even when the checkout is not this machine's checkout
+// of the repo (a copy, a scratch clone).
+func WithMachineLocal(ctx context.Context) context.Context {
+	return context.WithValue(ctx, machineLocalKey{}, true)
+}
+
+// MachineLocalAsked reports WithMachineLocal's mark.
+func MachineLocalAsked(ctx context.Context) bool {
+	v, _ := ctx.Value(machineLocalKey{}).(bool) // absent: not asked
+	return v
+}

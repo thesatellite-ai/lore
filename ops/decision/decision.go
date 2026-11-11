@@ -188,6 +188,7 @@ type ListIn struct {
 	NoInherit  bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope: --repo only, no master inheritance"`
 	MasterOnly bool     `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`
 	AllRepos   bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"list across every repo (ignore --repo)"`
+	All        bool     `json:"all,omitempty" flag:"all" desc:"every row: every repo's and the archived ones (the default list says how many it hides)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	Tags       []string `json:"tags,omitempty" flag:"tag" desc:"only decisions with this tag (repeatable: all must match)"`
 	Store      string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store (default every attached store)"`
@@ -457,11 +458,14 @@ func addRefs(ctx context.Context, env kn.Env, it kn.Item, raw []string, relation
 // list returns the decisions in scope (archived included, as v0.1.17).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	ctx = in.Deleted(ctx, noun.Table) // DELETION 3.2: --include-deleted / --deleted-only
+	if in.All {
+		in.Archived = true // --all: the metadata narrowing keeps them too
+	}
 	keep, err := kn.HasTags(ctx, o.env, in.Tags)
 	if err != nil {
 		return ListOut{}, err
 	}
-	items, err := kn.List(ctx, o.env, noun, kn.Scope{Repo: in.Repo, NoInherit: in.NoInherit, MasterOnly: in.MasterOnly, AllRepos: in.AllRepos, Project: in.Project},
+	items, hid, err := kn.List(ctx, o.env, noun, kn.Scope{Repo: in.Repo, NoInherit: in.NoInherit, MasterOnly: in.MasterOnly, AllRepos: in.AllRepos, Project: in.Project, All: in.All},
 		true, store.Source(in.Store), keep)
 	if err != nil {
 		return ListOut{}, err
@@ -470,7 +474,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if err != nil {
 		return ListOut{}, err
 	}
-	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, Notes: notes}
+	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}, Notes: kn.WithHidden(notes, hid)}
 	for _, it := range items {
 		out.Data = append(out.Data, withMeta(ctx, o.env, recordOf(kn.LabelerOf(o.env), it.Source, it.Row), it.Row))
 	}

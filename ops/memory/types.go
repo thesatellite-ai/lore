@@ -113,6 +113,7 @@ type ListIn struct {
 	NoInherit  bool   `json:"no_inherit,omitempty" flag:"no-inherit" desc:"with --repo: only that repo's memories, not the project-wide ones"`
 	MasterOnly bool   `json:"master_only,omitempty" flag:"master-only" desc:"only project-wide memories"`
 	AllRepos   bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"memories of every repo"`
+	All        bool   `json:"all,omitempty" flag:"all" desc:"every memory: every repo's and the archived ones (the default list says how many it hides)"`
 	Project    string `json:"project,omitempty" flag:"project" desc:"only memories of this project (prj_ id or name; default the repo's one project)"`
 	Kind       string `json:"kind,omitempty" flag:"kind" desc:"only memories of this kind"`
 	// Tags keeps memories carrying every named tag.

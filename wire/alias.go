@@ -81,6 +81,11 @@ func (a *App) resolveAlias(ctx context.Context, e op.Entry, d op.Decoder) (op.De
 		return aliasDecoder{inner: d, from: to, to: string(linked)}, nil
 	}
 	if to != attach.ReservedTeam && to != attach.ReservedCompany {
+		if target, ok := a.bareFolderTarget(ctx, to); ok {
+			// `--to <folder>`: a folder of one of the org's stores, named
+			// alone (foldertarget.go); attachFolderTarget finds its store
+			return aliasDecoder{inner: d, from: to, to: target}, nil
+		}
 		return d, nil
 	}
 	name, ok := orgAliases(ctx, a.opts, top)[to]

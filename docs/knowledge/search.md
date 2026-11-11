@@ -111,10 +111,13 @@ $ lore memory add --repo web --body 'The web repo deploys on every merge to main
 $ lore memory list --repo web
 mem_162d…9666 [retrieved] The client replies faster on WhatsApp than email
 mem_05e9…4603 [retrieved] The web repo deploys on every merge to main
+1 hidden (1 archived); --all shows them
 $ lore memory list --master-only
 mem_162d…9666 [retrieved] The client replies faster on WhatsApp than email
+2 hidden (1 scoped to a repo, 1 archived); --all shows them
 $ lore memory list --repo web --no-inherit
 mem_05e9…4603 [retrieved] The web repo deploys on every merge to main
+2 hidden (2 scoped to a repo); --all shows them
 $ lore search deploys --all-repos
 Found 1 hit for "deploys" across 1 entity type:
 memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.017)

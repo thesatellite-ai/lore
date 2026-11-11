@@ -53,6 +53,7 @@ type ListIn struct {
 	NoInherit  bool   `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope: --repo only, no master inheritance"`
 	MasterOnly bool   `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`
 	AllRepos   bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"list across every repo (ignore --repo)"`
+	All        bool   `json:"all,omitempty" flag:"all" desc:"every row: every repo's and the archived ones (the default list says how many it hides)"`
 	Project    string `json:"project,omitempty" flag:"project" desc:"only architecturenotes of this project (prj_ id or name)"`
 	Store      string `json:"store,omitempty" flag:"store" alias:"to" desc:"only architecturenotes of this store (default every attached store)"`
 }

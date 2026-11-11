@@ -42,6 +42,12 @@ type orgFolder struct {
 	Label  string
 	Folder string
 	ID     ids.ID[ids.Project]
+	// Org is the org whose store holds the folder ("" when the config
+	// names no org for that url); URL and Branch address the store, the
+	// name every store command takes for an org store.
+	Org    string
+	URL    string
+	Branch string
 }
 
 // orgFolderScan is what one walk of the org's stores found: the folders,
@@ -63,6 +69,7 @@ func (a *App) orgFolders(ctx context.Context) orgFolderScan {
 		return scan
 	}
 	orgOf := a.orgFolderStores()
+	orgOfAny := a.storeOrgs()
 	seen := map[string]bool{}
 	for _, e := range entries {
 		k := placeKey(e.URL, e.Branch)
@@ -90,7 +97,8 @@ func (a *App) orgFolders(ctx context.Context) orgFolderScan {
 			if perr != nil {
 				continue // a folder whose _meta.json names no project id is not a project
 			}
-			scan.Folders = append(scan.Folders, orgFolder{Label: label, Folder: r.Folder, ID: id})
+			sk, _ := storeKey(e.URL)
+			scan.Folders = append(scan.Folders, orgFolder{Label: label, Folder: r.Folder, ID: id, Org: orgOfAny[sk], URL: e.URL, Branch: e.Branch})
 		}
 	}
 	return scan
@@ -110,6 +118,24 @@ func (a *App) orgFolderStores() map[string]string {
 	for _, o := range cfg.Orgs {
 		for _, sc := range o.Stores {
 			if k, ok := storeKey(sc.URL); ok && sc.OrgFolder != "" {
+				out[k] = o.Name
+			}
+		}
+	}
+	return out
+}
+
+// storeOrgs maps the store key of every store of every configured org to
+// the org's name: which org a store belongs to, whatever its role.
+func (a *App) storeOrgs() map[string]string {
+	out := map[string]string{}
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return out
+	}
+	for _, o := range cfg.Orgs {
+		for _, sc := range o.Stores {
+			if k, ok := storeKey(sc.URL); ok {
 				out[k] = o.Name
 			}
 		}

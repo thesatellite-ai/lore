@@ -238,6 +238,20 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 		return nil, 0, err
 	}
 	steps, rows = append(steps, editSteps...), rows+n
+	// --supersedes links lore 0.1.16 and older wrote on the new row
+	// (hostbase_doctor_supersede.go)
+	supSteps, n, err := a.migrateSupersedes(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	steps, rows = append(steps, supSteps...), rows+n
+	// actors whose stable key the org roster holds under another id
+	// (actor_merge.go)
+	actorSteps, n, err := a.migrateActorKeys(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	steps, rows = append(steps, actorSteps...), rows+n
 	// P3-LOCAL-3: the checkout's v0.1.17 machine-local rows, copied once
 	machineSteps, n, err := a.migrateMachineLocal(ctx, dryRun)
 	if err != nil {

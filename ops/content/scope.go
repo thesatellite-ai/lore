@@ -1,6 +1,11 @@
 package content
 
-import "context"
+import (
+	"context"
+
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+)
 
 // Scope is which rows a read returns by their repo_id (v0.1.17
 // saas/cmd/cli/repo_scope.go, as ops/memory keeps it).
@@ -60,4 +65,22 @@ func (o Ops) ReadScope(ctx context.Context, repo string, noInherit, masterOnly, 
 		id = r.String()
 	}
 	return ScopeOf(id, noInherit, masterOnly, allRepos), id, nil
+}
+
+// Hidden counts what a list leaves out (metalist.Hidden).
+type Hidden = metalist.Hidden
+
+// KeepCounted is a list's scope test that counts what it hides: a row
+// scoped to a repo outside sc is left out and counted; an archived row
+// the list will drop (withArchived false: the metadata narrowing drops
+// it) is counted and kept for that step.
+func KeepCounted(h *Hidden, sc Scope, repo string, withArchived bool, r row.Row) bool {
+	if !sc.Keeps(Field(r, FieldRepo), repo) {
+		h.Repo++
+		return false
+	}
+	if !withArchived && Field(r, FieldArchivedAt) != "" {
+		h.Archived++
+	}
+	return true
 }

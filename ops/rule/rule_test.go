@@ -38,7 +38,9 @@ func TestTextMatchesV017(t *testing.T) {
 	}{
 		{rule.OpList, ``, "rul_ID [should/manual] never push on friday\nrul_ID [must/always] " + strings.Repeat("a", 57) + "...\n"},
 		{rule.OpArchive, `{"id":"` + id1 + `"}`, "✓ rul_ID archived\n"},
-		{rule.OpList, ``, "rul_ID [must/always] " + strings.Repeat("a", 57) + "...\n"},
+		// 0.1.18: the footer says what the list hides and how to see it
+		{rule.OpList, ``, "rul_ID [must/always] " + strings.Repeat("a", 57) + "...\n1 hidden (1 archived); --all shows them\n"},
+		{rule.OpList, `{"all":true}`, "rul_ID [should/manual] never push on friday [archived]\nrul_ID [must/always] " + strings.Repeat("a", 57) + "...\n"},
 		{rule.OpList, `{"archived":true}`, "rul_ID [should/manual] never push on friday [archived]\nrul_ID [must/always] " + strings.Repeat("a", 57) + "...\n"},
 		{rule.OpUnarchive, `{"id":"` + id1 + `"}`, "✓ rul_ID unarchived\n"},
 		{rule.OpEdit, `{"id":"` + id1 + `","body":"never push on fridays"}`, "✓ rul_ID updated\n"},

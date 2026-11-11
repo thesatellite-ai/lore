@@ -156,6 +156,7 @@ $ lore rule archive rul_7a67…9504
 $ lore rule list
 rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_162d…9666 [should/always] Keep pull requests under 400 lines
+1 hidden (1 archived); --all shows them
 $ lore rule list --archived
 rul_7a67…9504 [must/always] Run the tests before you push [archived]
 rul_2ad3…f891 [must/always] Never put passwords in the code

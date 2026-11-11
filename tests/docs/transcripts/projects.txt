@@ -33,6 +33,7 @@ alice (work/website)$ lore rule add --repo shop --body 'Buttons are blue.'
   scope: [repo:shop] severity: must
 alice (work/website)$ lore rule list
 rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
+1 hidden (1 scoped to a repo); --all shows them
 alice (work/website)$ lore rule list --repo shop
 rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Buttons are blue.
@@ -47,6 +48,7 @@ rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Buttons are blue.
 alice (work/website)$ LORE_REPO=shop lore rule list --repo website
 rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
+1 hidden (1 scoped to a repo); --all shows them
 alice (work/website)$ LORE_PROJECT_ID=prj_7a670ae8548ed05bf57ad29ad0759504 LORE_REPO=shop lore rule list
 rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Buttons are blue.
