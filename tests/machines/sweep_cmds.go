@@ -456,6 +456,7 @@ const (
 	whyNoCommit    = "needs a commit; the shapes' repos have none"
 	whyIdentity    = "replaces who the person is on this machine; the identity lifecycle tests run it"
 	whyStoreAdmin  = "makes or changes a store (a git repo of its own); the store lifecycle tests run it"
+	whyStoreAdopt  = "copies a whole repo into a store folder made first (a store of its own, a folder, a repo with rows); the journey TestJourneyFoldersAdopt and wire TestStoreAdopt run it"
 	whySyncFixture = "needs a conflict, a second branch or a live remote; the sync tests run it"
 	whySupport     = "writes a support bundle to send; the support-bundle tests run it"
 	whySourceCopy  = "rewrites copies from their one source of truth (SOURCE_OF_TRUTH), which needs a stale copy, a leftover or an org store; the sot_* tests and the doctor fixes in the env, repos and foreign tests run it"
@@ -511,7 +512,7 @@ var notUserRun = map[string]string{
 	"batch show":     whyBatch, "batch undo": whyBatch,
 	"link add": whyNoCommit, "link remove": whyNoCommit, "land run": whyNoCommit,
 	"identity set": whyIdentity, "identity unset": whyIdentity,
-	"store init": whyStoreAdmin, "store folder add": whyStoreAdmin, "store folder remove": whyStoreAdmin, "store visibility": whyStoreAdmin,
+	"store init": whyStoreAdmin, "store folder add": whyStoreAdmin, "store folder remove": whyStoreAdmin, "store adopt": whyStoreAdopt, "store visibility": whyStoreAdmin,
 	"sync fix-projects": whySyncFixture, "sync merge-rows": whySyncFixture, "sync promote": whySyncFixture, "sync resolve": whySyncFixture,
 	"sync trash restore": whySyncFixture, "sync peek": whySyncFixture,
 
