@@ -223,17 +223,19 @@ func (a *App) baseStore(ctx context.Context, name string) (src attach.Store, fou
 		p := effectivePersonalURL(ctx, a.opts.Home, a.projectDir(), mc) // ONBOARDING 3.4
 		return attach.Store{Name: store.Source(name), URL: p}, p != "", false, nil
 	}
-	top, err := a.repoTop(ctx)
+	top, err := a.storeRepoTop(ctx) // "" outside a repo: no stores.yaml, the org's stores still count
 	if err != nil {
 		return attach.Store{}, false, false, err
 	}
-	cfg, err := readStoresFile(top)
-	if err != nil {
-		return attach.Store{}, false, false, err
-	}
-	for _, s := range cfg.Stores {
-		if string(s.Name) == name {
-			return s, true, false, nil
+	if top != "" {
+		cfg, cerr := readStoresFile(top)
+		if cerr != nil {
+			return attach.Store{}, false, false, cerr
+		}
+		for _, s := range cfg.Stores {
+			if string(s.Name) == name {
+				return s, true, false, nil
+			}
 		}
 	}
 	for _, s := range a.orgStoresHere(ctx) {

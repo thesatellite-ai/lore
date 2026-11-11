@@ -282,6 +282,7 @@ tasks:
         'journey-teamlead={{.SELF}} test:journeys:teamlead'
         'journey-joiner={{.SELF}} test:journeys:joiner'
         'journey-agents={{.SELF}} test:journeys:agents'
+        'journey-folders={{.SELF}} test:journeys:folders'
         'journey-upgrader={{.SELF}} test:journeys:upgrader'
         'journey-land={{.SELF}} test:journeys:land'
         'scenarios={{.SELF}} scenarios:run'
@@ -482,6 +483,12 @@ tasks:
     cmds:
       - task: test:journeys:part
         vars: {PART: agents, FILTER: "-run '^TestJourneyAgents'"}
+
+  test:journeys:folders:
+    desc: "Journey: an admin makes and lists the team store's client folders from a plain parent folder (no git repo), then a client repo attaches one; store-only commands leave the repo they run in alone"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: folders, FILTER: "-run '^TestJourneyFolders'"}
 
   test:journeys:upgrader:
     desc: "Journey: Upgrader from v0.1.17: old lore.db, hooks and config, migrate, old and new binaries on two machines for a week"

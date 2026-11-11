@@ -83,8 +83,23 @@ func (h *standaloneOrg) situation(ctx context.Context) (*orgcfg.Situation, error
 	return h.res.Situation(ctx)
 }
 
+// needsRepo refuses an org verb that is about this repo (link, unlink,
+// set, use) run outside any git work tree, naming that cause and the next
+// step: the deeper checks would blame a missing project id or remote of a
+// repo that is not there.
+func (h *standaloneOrg) needsRepo(ctx context.Context, verb, what string) error {
+	if h.res == nil || insideWorkTree(ctx, h.res.dir) {
+		return nil
+	}
+	return errs.New(errs.NotAStore, "org "+verb+": it "+what+", and "+h.res.dir+" is not inside a git repo").
+		WithHint("cd into the repo (run `lore init` there first if it is not a lore project yet); a store's folders are made from anywhere in the setup with `lore store folder add team <folder>`")
+}
+
 // Use implements opsorgcmd.Host: the machine-only choice for this project.
 func (h *standaloneOrg) Use(ctx context.Context, in opsorgcmd.UseIn) (opsorgcmd.Report, error) {
+	if err := h.needsRepo(ctx, "use", "records the org of this repo's project"); err != nil {
+		return opsorgcmd.Report{}, err
+	}
 	s, err := h.situation(ctx)
 	if err != nil {
 		return opsorgcmd.Report{}, err
@@ -145,6 +160,9 @@ func (h *standaloneOrg) Use(ctx context.Context, in opsorgcmd.UseIn) (opsorgcmd.
 // Set implements opsorgcmd.Host: write the committed .lore/org.yaml after
 // checking that F10 rule 3 would accept it.
 func (h *standaloneOrg) Set(ctx context.Context, in opsorgcmd.SetIn) (opsorgcmd.Report, error) {
+	if err := h.needsRepo(ctx, "set", "writes this repo's committed .lore/org.yaml"); err != nil {
+		return opsorgcmd.Report{}, err
+	}
 	s, err := h.situation(ctx)
 	if err != nil {
 		return opsorgcmd.Report{}, err
@@ -179,6 +197,9 @@ func (h *standaloneOrg) Set(ctx context.Context, in opsorgcmd.SetIn) (opsorgcmd.
 // Link implements opsorgcmd.Host: validate, show the plan, and (confirmed,
 // not a dry run) write the link into the store.
 func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool) (opsorgcmd.Report, error) {
+	if err := h.needsRepo(ctx, "link", "links this repo to a folder of the org's store"); err != nil {
+		return opsorgcmd.Report{}, err
+	}
 	s, err := h.situation(ctx)
 	if err != nil {
 		return opsorgcmd.Report{}, err
@@ -233,6 +254,9 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 // out. The folders and their rows stay. Afterwards the repo resolves by
 // its own rules (own:/repos: patterns, setups), as before it was linked.
 func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes bool) (opsorgcmd.Report, error) {
+	if err := h.needsRepo(ctx, "unlink", "removes this repo's links"); err != nil {
+		return opsorgcmd.Report{}, err
+	}
 	s, err := h.situation(ctx)
 	if err != nil {
 		return opsorgcmd.Report{}, err

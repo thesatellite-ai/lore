@@ -8,6 +8,9 @@ lore 0.1.18: a new core under every command, and the first release whose source 
 
 ### Added
 
+- Store commands that need only the setup work outside any git repo (from the plain parent folder of an org's client folders): `lore store folder add team <folder>` (also with the org's name or the org store's url), `lore store list` (the setup's org and personal stores), `lore store visibility|set|compact`. A `.lore/stores.yaml` name outside a repo is refused naming that cause and the names that work there; `lore store init|add|remove|set-url` and `lore org link|unlink|set|use` outside a repo say they need one instead of blaming a client repo, a missing remote or a project id.
+- New op `store.folder.list` (`lore store folder list [store]`, `GET /v1/store/folders`): each folder of a store (every store the setup sees by default) with its id, who created it and when, whether this repo attaches it and its row files; `--json`. Guide: docs/team/client-folders.md.
+
 - New op `doctor.last` (`lore doctor last`, `POST /v1/doctor/last`) reads each setup's last recorded doctor results and when they were taken, without running a check.
 - Every warning and error of a doctor report is listed and counted: `findings[]` in `lore doctor --json` (check, status, level, detail, fix), counted in `counts` and in the text summary line, and the status is the worst of what the report lists, so it never reads "degraded" beside "0 warnings". A finding whose fix is one plain lore command (`lore render`, `lore sync`) can be run with `lore doctor fix <key>` (new op `doctor.fix`), which re-makes the report and runs only what it offers.
 - Changing a solo setup's email keeps you one actor: the old key is kept under `aliases:` in config and in `key_aliases` on your actor rows, `actor show human:<old email>` still finds you, `actor list` shows one row with the current email, and a new machine with only the new email finds the same actor. Repo copies never carry an email.
@@ -163,6 +166,7 @@ lore 0.1.18: a new core under every command, and the first release whose source 
 
 ### Fixed
 
+- A store command run inside a repo it does not change (`lore store folder add|list`, `store list`, `store set`) no longer edits that repo: no `.gitignore` lines, `.gitattributes`, git hooks or `.lore/` cache are written there, and `lore team invite …` (it writes only the org store) no longer sets that repo's git up either. The live-session skip listed the store commands as `stores`, a noun no operation has.
 - Editing a row written before 0.1.18 no longer leaves it without `created_by`, so `lore migrate run` no longer counts rows lore itself just rewrote.
 - `lore doctor` / `lore migrate run` no longer report an actor's name in a 0.1.17 `lore.db` as an unsaved edit or write it back over your current name.
 

@@ -49,6 +49,7 @@ var auditNoTable = map[string]string{
 	"secrets.list":        "lists the secret references found in fields of every table, not rows of one",
 	"setup.list":          "lists this machine's setups (local files, not synced rows)",
 	"setup.trash.list":    "lists this machine's removed setups (local files)",
+	"store.folder.list":   "lists a store's folders (their _meta.json files), not rows",
 	"store.list":          "lists the stores attached in .lore/stores.yaml, not rows",
 	"sync.trash.list":     "lists sync's trash of every table; the writer filters of each noun list apply there",
 	"task.checklist.list": "a checklist is a field of its task row, not rows of a table",

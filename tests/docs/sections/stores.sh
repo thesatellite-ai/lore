@@ -29,6 +29,7 @@ on alice work/website "lore store folder add notes golang"
 on alice work/website "lore memory add --to notes/golang --body 'Close every channel from the sender side.'"
 on alice work/website "cat .lore/stores.yaml"
 on alice work/website "lore memory list"
+on alice work/website "lore store folder list notes"
 
 note "move a row"
 on alice work/website "lore rule add --body 'Keep the agency hourly rate out of the client repo.'"

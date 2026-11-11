@@ -72880,6 +72880,168 @@
       }
     },
     "/v1/store/folders": {
+      "get": {
+        "operationId": "store.folder.list",
+        "summary": "List the folders of a store (default: every store the setup sees), and which ones this repo attaches",
+        "tags": [
+          "store"
+        ],
+        "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name); default: every store the setup sees",
+            "schema": {
+              "type": "string",
+              "description": "the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name); default: every store the setup sees"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "folders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "attached": {
+                            "type": "boolean"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "created_by": {
+                            "type": "string"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "rows": {
+                            "type": "integer"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "folder",
+                          "id",
+                          "rows"
+                        ]
+                      }
+                    },
+                    "stores": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "folders",
+                    "count",
+                    "stores"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_INVALID_INPUT, E_STORE_SCHEME",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CANCELLED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "operationId": "store.folder.add",
         "summary": "Create a folder in a store (shown only in repos that attach it)",
@@ -72899,7 +73061,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "the store (a stores.yaml name, me or team)"
+                    "description": "the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name)"
                   }
                 },
                 "required": [
@@ -73027,7 +73189,7 @@
     "/v1/stores": {
       "get": {
         "operationId": "store.list",
-        "summary": "List the stores this repo sees, in precedence order",
+        "summary": "List the stores this repo sees, in precedence order (outside a repo: the stores of the setup)",
         "tags": [
           "store"
         ],
@@ -74785,7 +74947,7 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "description": "the store (a stores.yaml name or me)"
+                    "description": "the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name)"
                   },
                   "visibility": {
                     "type": "string",

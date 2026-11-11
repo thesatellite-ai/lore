@@ -65,6 +65,10 @@ stores:
       folder: golang
 alice (work/website)$ lore memory list
 mem_162df51b7f78b785c97c26b41ea89666  Close every channel from the sender side.  [notes/golang]
+alice (work/website)$ lore store folder list notes
+store notes folders:
+  FOLDER  ID                                    CREATED BY  CREATED  ATTACHED HERE  ROWS
+  golang  prj_2ad3618e878ebbf527d34d446ef4f891  -           -        yes            3
 
 ### move a row
 alice (work/website)$ lore rule add --body 'Keep the agency hourly rate out of the client repo.'
@@ -83,7 +87,7 @@ rul_54fe984c9b495744c0217776765a28f2  Keep the agency hourly rate out of the cli
 alice (work/website)$ cat .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 {
   "_deleted": true,
-  "_hlc": "2026-11-02T10:01:35.000Z/0001/act_05e99e22e9e86e96fe4daa7777994603",
+  "_hlc": "2026-11-02T10:01:40.000Z/0001/act_05e99e22e9e86e96fe4daa7777994603",
   "_table": "rules",
   "_v": 2,
   "id": "rul_54fe984c9b495744c0217776765a28f2",

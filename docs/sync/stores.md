@@ -102,7 +102,7 @@ The `note:` line says the old address could not be read (the folder is gone), so
 
 ## Step 4 — Split a store into folders
 
-`lore store folder add <store> <folder>` creates a folder inside the store, one per topic or per client. A folder name is snake_case and cannot be `org`. Write to it with `--to <store>/<folder>`; the first write attaches the folder in `.lore/stores.yaml` as its own entry, so a repo only shows the folders it uses:
+`lore store folder add <store> <folder>` creates a folder inside the store, one per topic or per client. A folder name is snake_case and cannot be `org`. Write to it with `--to <store>/<folder>`; the first write attaches the folder in `.lore/stores.yaml` as its own entry, so a repo only shows the folders it uses. `lore store folder list [store]` lists a store's folders, who made each and whether this repo attaches it (`team`, `me` and an org's store work outside any repo too: [Client folders from the parent folder](../team/client-folders.md)):
 
 <!-- example: stores#store-folders -->
 ```console
@@ -121,6 +121,10 @@ stores:
       folder: golang
 $ lore memory list
 mem_162d…9666  Close every channel from the sender side.  [notes/golang]
+$ lore store folder list notes
+store notes folders:
+  FOLDER  ID                                    CREATED BY  CREATED  ATTACHED HERE  ROWS
+  golang  prj_2ad3…f891  -           -        yes            3
 ```
 <!-- /example -->
 
@@ -147,7 +151,7 @@ rul_54fe…28f2  Keep the agency hourly rate out of the client repo.  [notes]
 $ cat .lore/data/rules/rul_54fe…28f2.json
 {
   "_deleted": true,
-  "_hlc": "2026-11-02T10:01:35.000Z/0001/act_05e9…4603",
+  "_hlc": "2026-11-02T10:01:40.000Z/0001/act_05e9…4603",
   "_table": "rules",
   "_v": 2,
   "id": "rul_54fe…28f2",

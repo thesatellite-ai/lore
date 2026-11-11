@@ -89,14 +89,21 @@ func GitignoreHook(workDir string) Hook {
 }
 
 // NeedsGitignore reports whether run may add the .gitignore lines: never
-// under --read-only (v0.1.17 wrote nothing then), and never for a live ref
+// under --read-only (v0.1.17 wrote nothing then), never for a store-only
+// command (leavesWorkRepo), and never for a live ref
 // operation (ops/live), which writes no row file; v0.1.17's `lore live …`
 // left the checkout as it was (P3-LIVE-1).
 func NeedsGitignore(run *Run) bool {
 	if run.ReadOnly {
 		return false
 	}
-	return run.Entry == nil || !opslive.IsOp(run.Entry.Spec().Name)
+	if run.Entry == nil {
+		return true
+	}
+	// a live ref operation, and a command that changes only a store
+	// (repoleave.go), leave the repo's .gitignore alone
+	name := run.Entry.Spec().Name
+	return !opslive.IsOp(name) && !leavesWorkRepo(name)
 }
 
 // EnsureGitignore appends to root/.gitignore every GitignoreLines entry it

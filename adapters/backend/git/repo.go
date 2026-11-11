@@ -25,20 +25,11 @@ const notAWorkTreeHint = "cd into a git checkout, or run git init here first"
 
 func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts ...Option) (*Backend, error) {
 	cfg := build(opts)
-	bin, err := lookGit(cfg.bin)
+	g, dirRoot, err := repoRoot(ctx, cfg, dir, o.Home)
 	if err != nil {
 		return nil, err
 	}
-	g := runner{bin: bin}
-	out, err := g.run(ctx, call{dir: dir, args: []string{"rev-parse", "--show-toplevel"}})
-	if err != nil {
-		if _, ran := exitCode(err); ran {
-			return nil, notAWorkTree(ctx, g, dir)
-		}
-		return nil, errs.Wrap(errs.Internal, "git: run git", err)
-	}
-	top := filepath.FromSlash(trimmed(out))
-	root, err := rowfs.Open(projectRoot(dir, top, o.Home), rowfs.WithSharedModes(), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
+	root, err := rowfs.Open(dirRoot, rowfs.WithSharedModes(), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +38,39 @@ func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts
 		return nil, err
 	}
 	return &Backend{cfg: cfg, git: g, mode: modeRepo, readOnly: o.ReadOnly, root: root, folder: f, work: root.Dir()}, nil
+}
+
+// RepoRoot is the folder OpenRepo would make the repo store's root for dir
+// (projectRoot: the nearest folder holding .lore up to the work tree top,
+// symlinks resolved), found without opening anything: no rowfs root, no
+// lock, nothing created. A caller that only needs the path (which
+// .lore/stores.yaml applies here, the org link of this repo) uses it so a
+// command that changes a store, not this repo, leaves the repo as it was.
+// dir outside a git work tree is E_NOT_A_STORE, as for OpenRepo.
+func RepoRoot(ctx context.Context, dir, home string, opts ...Option) (string, error) {
+	_, root, err := repoRoot(ctx, build(opts), dir, home)
+	return root, err
+}
+
+// repoRoot is RepoRoot with the git runner OpenRepo goes on with.
+func repoRoot(ctx context.Context, cfg config, dir, home string) (runner, string, error) {
+	bin, err := lookGit(cfg.bin)
+	if err != nil {
+		return runner{}, "", err
+	}
+	g := runner{bin: bin}
+	out, err := g.run(ctx, call{dir: dir, args: []string{"rev-parse", "--show-toplevel"}})
+	if err != nil {
+		if _, ran := exitCode(err); ran {
+			return runner{}, "", notAWorkTree(ctx, g, dir)
+		}
+		return runner{}, "", errs.Wrap(errs.Internal, "git: run git", err)
+	}
+	root := projectRoot(dir, filepath.FromSlash(trimmed(out)), home)
+	if real, rerr := filepath.EvalSymlinks(root); rerr == nil {
+		root = real // as rowfs.Open resolves it: Backend.Dir() and RepoRoot agree
+	}
+	return g, root, nil
 }
 
 // Where git puts a folder that has no work tree (rev-parse answers).

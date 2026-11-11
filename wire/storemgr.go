@@ -547,14 +547,18 @@ func (a *App) RemoveStore(ctx context.Context, name string) (opsstores.Entry, er
 }
 
 // ListStores implements opsstores.Manager.
+// Outside any repo it lists the personal store only (stores.yaml is a
+// repo's); store.list adds the org's stores (OrgStoreEntries).
 func (a *App) ListStores(ctx context.Context) ([]opsstores.Entry, error) {
-	top, err := a.repoTop(ctx)
+	top, err := a.storeRepoTop(ctx)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := readStoresFile(top)
-	if err != nil {
-		return nil, err
+	var cfg attach.Config
+	if top != "" {
+		if cfg, err = readStoresFile(top); err != nil {
+			return nil, err
+		}
 	}
 	var out []opsstores.Entry
 	for _, s := range cfg.Stores {
@@ -576,7 +580,7 @@ var _ opsstores.OrgLister = (*App)(nil)
 // org brings (Options.OrgStores, with stores.yaml clashes renamed as the
 // open does), real urls (G-CORE-8).
 func (a *App) OrgStoreEntries(ctx context.Context) ([]opsstores.Entry, error) {
-	top, err := a.repoTop(ctx)
+	top, err := a.storeRepoTop(ctx) // "" outside a repo: the setup's org stores as they are
 	if err != nil {
 		return nil, err
 	}
@@ -829,31 +833,13 @@ const (
 	folderAddSubject  = "lore: store folder add "
 )
 
-// findStore is the store a store.visibility / store.folder.add names: a
-// stores.yaml entry, `me`, a store the repo's org brings, or `team` (the
-// org store of the linked folder). Unknown is E_NOT_FOUND; a read-only
-// attachment is E_STORE_READ_ONLY (both commands write the store).
+// findStore is the store a store command that writes it names
+// (store.visibility, store.folder.add, store.set): lookupStore, and a
+// read-only attachment is E_STORE_READ_ONLY.
 func (a *App) findStore(ctx context.Context, verb, name string) (attach.Store, error) {
-	look := name
-	if name == attach.ReservedTeam {
-		top, err := a.repoTop(ctx)
-		if err != nil {
-			return attach.Store{}, err
-		}
-		alias, ok := orgAliases(ctx, a.opts, top)[name]
-		if !ok {
-			return attach.Store{}, errs.New(errs.NotFound, verb+": this repository has no team store").
-				WithHint("link the repo to an org (`lore org link <org> --project <folder>`), or name the store")
-		}
-		look = string(alias)
-	}
-	src, found, _, err := a.baseStore(ctx, look)
+	src, err := a.lookupStore(ctx, verb, name)
 	if err != nil {
 		return attach.Store{}, err
-	}
-	if !found {
-		return attach.Store{}, errs.New(errs.NotFound, verb+": no store named "+name+" is attached").
-			WithHint("run `lore store list`")
 	}
 	if src.ReadOnly {
 		return attach.Store{}, errs.New(errs.StoreReadOnly, verb+": store "+name+" is attached read-only")
@@ -972,7 +958,8 @@ func (a *App) AddFolder(ctx context.Context, in opsstores.FolderAddIn) (opsstore
 	if err != nil {
 		return opsstores.FolderAddOut{}, err
 	}
-	out := opsstores.FolderAddOut{Store: in.Store, Folder: in.Folder}
+	// team and an org store's url are shown as the store they resolved to
+	out := opsstores.FolderAddOut{Store: storeLabel(in.Store, src), Folder: in.Folder}
 	err = a.withStoreDir(ctx, src, folderAddSubject+in.Folder, func(dir string) (paths []string, ferr error) {
 		root, oerr := rowfs.Open(dir, a.opts.rowfsOptions()...)
 		if oerr != nil {
