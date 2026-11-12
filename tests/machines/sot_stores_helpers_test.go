@@ -117,7 +117,7 @@ func ssEditConfig(t *testing.T, m *Machine, edit func(string) string) {
 // bare repo (the host's view).
 func ssOrgFile(t *testing.T, bare string) string {
 	t.Helper()
-	for _, p := range []string{"org/.lore/lore-org.yaml", ".lore/lore-org.yaml"} {
+	for _, p := range []string{"org/lore-org.yaml", "lore-org.yaml"} {
 		if out, err := exec.Command("/usr/bin/git", "-C", bare, "show", "main:"+p).Output(); err == nil {
 			return string(out)
 		}

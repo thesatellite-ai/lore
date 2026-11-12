@@ -18,15 +18,20 @@ A row lives in exactly one place, so there is no copy: `lore move <id> --to repo
 ```console
 # alice, in website
 $ lore memory add --body 'checkout must support INR and USD'
-✓ mem_4c59…6c38 [agency/client]
+lore: pushed store agency: commit 34ee210 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
+✓ mem_f147…5139 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [master]
-$ lore move mem_4c59…6c38 --to repo
+$ lore move mem_f147…5139 --to repo
 This becomes visible to everyone with access to repo (client):
-  "checkout must support INR and USD" (mem_4c59…6c38, id kept), now in agency
+  "checkout must support INR and USD" (mem_f147…5139, id kept), now in agency
   kept back: internal metadata, internal and sensitive resource fields, time entries and claim state (listed after the move)
 Move it? [y/N] y
-✓ mem_4c59…6c38 moved to store repo (same id; the old copy is tombstoned)
+lore: pushed store agency: commit 7898daa to branch main
+lore: wrote ~/work/website/.lore/data/memories/mem_f147…5139.json
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
+✓ mem_f147…5139 moved to store repo (same id; the old copy is tombstoned)
 $ git status --short
 ?? .lore/LORE.full.md
 ?? .lore/LORE.md

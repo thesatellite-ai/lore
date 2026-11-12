@@ -1,22 +1,37 @@
 package git
 
 import (
+	"cmp"
 	"context"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/store"
 )
 
-// Who signs a store clone's commits and merges. Q-R2-1: a store that
-// belongs to an org with an identity is always signed by that org
-// identity (WithSigner; LORE_TEAM_SPEC 6.5: org commits never carry a
-// person's personal git email). Every other store follows owner decision
-// FLAG4: the person's own git identity when git has one for the clone, else the
-// lore identity (`lore whoami`, WithIdentity), else the opener's author
-// (WithAuthor, default DefaultAuthor). lore never writes git config: the fallback is passed
+// Who signs a store clone's commits and merges, the same source a hand
+// edit in the clone uses (D-h) wherever that is safe:
+//
+//	org store (WithSigner)  the clone's git identity when its email is the
+//	                        org identity's (one author for lore's commits
+//	                        and hand edits; owner report 2026-11-12), else
+//	                        the org identity: a personal git email never
+//	                        signs an org store's commit (Q-R2-1, spec 6.5)
+//	any other store         FLAG4: the clone's git identity when git has
+//	                        one, else the lore identity (`lore whoami`,
+//	                        WithIdentity), else the opener's author
+//	                        (WithAuthor, default DefaultAuthor)
+//
+// To have lore's org commits carry your git name, give the clone a git
+// identity with the org email (an includeIf for ~/.lore/stores, or git
+// config in the clone). lore never writes git config: the fallback is passed
 // as GIT_AUTHOR_*/GIT_COMMITTER_* on that one git call only.
+//
+// One exception: a person's own change lore commits for them (a hand
+// edit, store.PersonAuthored) is authored by the person
+// (personSignature), with the org identity as committer (brief 2.1).
 
 // Environment variables through which a person already gives git an
 // identity; when one is set lore leaves that side to git.
@@ -46,9 +61,26 @@ func (b *Backend) identityEnv(ctx context.Context, explicit Signature) ([]string
 	if !explicit.IsZero() {
 		return signatureEnv(explicit), nil
 	}
-	// Q-R2-1: an org store's owner signature beats the person's git
-	// identity, because org commits must never carry a personal email.
+	// An org store (owner signature): the clone's git identity signs when
+	// it uses the org identity's email, as a hand edit there does (D-h),
+	// so lore's commits and the person's carry one author (owner report
+	// 2026-11-12: the org display name from lore beside the git user name from
+	// git, one email); any other git identity (a personal email) never
+	// signs an org store's commit (Q-R2-1, LORE_TEAM_SPEC 6.5): the org
+	// identity does.
 	if s, ok := b.cfg.ownerSigner(); ok {
+		if store.PersonAuthored(ctx) {
+			// brief 2.1: a hand edit is committed as the person who made it;
+			// the org identity signs as committer.
+			p, err := b.personSignature(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return append(authorEnv(p), committerEnv(s)...), nil
+		}
+		if sameEmail(gitEmail(ctx, b.git, b.work), s.Email) {
+			return nil, nil
+		}
 		return signatureEnv(s), nil
 	}
 	has, err := b.gitHasIdentity(ctx)
@@ -58,10 +90,10 @@ func (b *Backend) identityEnv(ctx context.Context, explicit Signature) ([]string
 	return signatureEnv(b.fallback(ctx)), nil
 }
 
-// WithSigner names the signature that signs every commit and merge of
-// the store, whatever git knows (Q-R2-1: the org identity of a store that
-// belongs to an org). A zero or unusable signature is ignored, leaving the
-// FLAG4 rule (git identity, else WithIdentity, else WithAuthor).
+// WithSigner names the org identity of a store that belongs to an org: it
+// signs the store's commits and merges unless the clone's git identity
+// uses the same email (then git signs). A zero or unusable signature is
+// ignored (the FLAG4 rule).
 func WithSigner(s Signature) Option { return func(c *config) { c.signer = s } }
 
 // ownerSigner is the WithSigner signature when it can be written into a
@@ -80,9 +112,22 @@ func validSignature(s Signature) bool {
 }
 
 // SignerEnv is the identity environment of a commit lore makes itself
-// (outside a Backend) in a store whose owner signs it (Q-R2-1, WithSigner):
-// s as GIT_AUTHOR_*/GIT_COMMITTER_*, whatever git knows. ok is false when s
-// is not usable; the caller then applies the FLAG4 rule (IdentityEnv).
+// (outside a Backend) in an org store signed by s: nil when the git
+// identity of dir uses s's email (git signs, as for a hand edit), else s
+// as GIT_AUTHOR_*/GIT_COMMITTER_*. ok is false when s is not usable; the
+// caller then applies the FLAG4 rule (IdentityEnv).
+func SignerEnvFor(ctx context.Context, dir string, s Signature) (env []string, ok bool) {
+	if !validSignature(s) {
+		return nil, false
+	}
+	if bin, err := lookGit(DefaultBinary); err == nil && sameEmail(gitEmail(ctx, runner{bin: bin}, dir), s.Email) {
+		return nil, true
+	}
+	return signatureEnv(s), true
+}
+
+// SignerEnv is s as GIT_AUTHOR_*/GIT_COMMITTER_*; ok is false when s is
+// not usable.
 func SignerEnv(s Signature) (env []string, ok bool) {
 	if !validSignature(s) {
 		return nil, false
@@ -170,10 +215,65 @@ func IdentityEnv(ctx context.Context, dir string, fallback func(context.Context)
 
 // signatureEnv names s as both author and committer.
 func signatureEnv(s Signature) []string {
-	return []string{
-		envAuthorName + "=" + s.Name, envAuthorEmail + "=" + s.Email,
-		envCommitterName + "=" + s.Name, envCommitterEmail + "=" + s.Email,
+	return append(authorEnv(s), committerEnv(s)...)
+}
+
+// authorEnv names s as a commit's author.
+func authorEnv(s Signature) []string {
+	return []string{envAuthorName + "=" + s.Name, envAuthorEmail + "=" + s.Email}
+}
+
+// committerEnv names s as a commit's committer.
+func committerEnv(s Signature) []string {
+	return []string{envCommitterName + "=" + s.Name, envCommitterEmail + "=" + s.Email}
+}
+
+// authorConfigKeys matches the git config keys that name a commit's
+// author: author.* first, then user.* (git-config(1)).
+const authorConfigKeys = `^(user|author)\.(name|email)$`
+
+// personSignature is the author of a person's own change in a store an
+// org identity signs (store.PersonAuthored): the lore identity (`lore
+// whoami`, the name and e-mail the org knows the person by, so no personal
+// git e-mail lands in an org store, spec 6.5) when it is usable; else the
+// author git names for the clone (GIT_AUTHOR_*, author.*, user.*); else
+// the opener's author.
+func (b *Backend) personSignature(ctx context.Context) (Signature, error) {
+	if b.cfg.identity != nil {
+		if s := b.cfg.identity(ctx); validSignature(s) {
+			return s, nil
+		}
 	}
+	s := Signature{Name: os.Getenv(envAuthorName), Email: os.Getenv(envAuthorEmail)}
+	if validSignature(s) {
+		return s, nil
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"config", "--get-regexp", authorConfigKeys}})
+	if err != nil {
+		if code, ran := exitCode(err); !ran || code != configNotFound {
+			return Signature{}, errs.Wrap(errs.Internal, "git: read the author identity", err)
+		}
+	}
+	var user, author Signature
+	for line := range strings.SplitSeq(string(out), "\n") {
+		key, value, _ := strings.Cut(line, " ")
+		value = strings.TrimSpace(value)
+		switch key {
+		case "user.name":
+			user.Name = value
+		case "user.email":
+			user.Email = value
+		case "author.name":
+			author.Name = value
+		case "author.email":
+			author.Email = value
+		}
+	}
+	s = Signature{Name: cmp.Or(s.Name, author.Name, user.Name), Email: cmp.Or(s.Email, author.Email, user.Email)}
+	if validSignature(s) {
+		return s, nil
+	}
+	return b.cfg.author, nil
 }
 
 // dateEnv dates a commit at the configured clock.
@@ -190,4 +290,23 @@ func (b *Backend) commitEnv(ctx context.Context, explicit Signature) ([]string, 
 		return nil, err
 	}
 	return append(b.dateEnv(), id...), nil
+}
+
+// gitEmail is the committer email git uses in dir ("" when none): the
+// environment first, then config, as git reads them.
+func gitEmail(ctx context.Context, r runner, dir string) string {
+	if e := os.Getenv(envCommitterEmail); e != "" {
+		return e
+	}
+	out, err := r.run(ctx, call{dir: dir, args: []string{"config", "--get", "user.email"}})
+	if err != nil {
+		return os.Getenv(envEmail)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// sameEmail reports whether a and b are one address (case-insensitive).
+func sameEmail(a, b string) bool {
+	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
+	return a != "" && strings.EqualFold(a, b)
 }

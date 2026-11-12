@@ -1,6 +1,6 @@
 package orgcfg
 
-// ensureBare on an existing clone follows the configured url: a clone made
+// ensureClone on an existing clone follows the configured url: a clone made
 // from an earlier config (a url git could not fetch, or a moved store) must
 // fetch the new address, not read as offline forever (docs reference
 // example `lore org link agency` after the config's store url changed).
@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestEnsureBareFollowsTheConfiguredURL(t *testing.T) {
+func TestEnsureCloneFollowsTheConfiguredURL(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	remote := filepath.Join(root, "notes.git")
@@ -28,11 +28,11 @@ func TestEnsureBareFollowsTheConfiguredURL(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "clone.git")
-			if err := ensureBare(ctx, dir, c.first); err != nil {
+			dir := filepath.Join(t.TempDir(), "clone")
+			if err := ensureClone(ctx, dir, c.first, false); err != nil {
 				t.Fatal(err)
 			}
-			if err := ensureBare(ctx, dir, remote); err != nil {
+			if err := ensureClone(ctx, dir, remote, false); err != nil {
 				t.Fatal(err)
 			}
 			if got := testGit(t, dir, "config", "--get", "remote."+remoteName+".url"); got != remote {
@@ -41,9 +41,10 @@ func TestEnsureBareFollowsTheConfiguredURL(t *testing.T) {
 			if err := fetch(ctx, nil, dir); err != nil {
 				t.Fatalf("fetch after the url change: %v", err)
 			}
-			// refspecs stay lore's two (set-url never touches them)
-			if got := testGit(t, dir, "config", "--get-all", "remote."+remoteName+".fetch"); got != fetchRefspecs[0]+"\n"+fetchRefspecs[1] {
-				t.Fatalf("fetch refspecs = %q", got)
+			// the clone's config keeps git's own refspec (a person's plain
+			// `git fetch`); lore's live refspec is passed per fetch only
+			if got := testGit(t, dir, "config", "--get-all", "remote."+remoteName+".fetch"); got != fetchRefspecs[0] {
+				t.Fatalf("fetch refspecs = %q, want git's default %q", got, fetchRefspecs[0])
 			}
 		})
 	}

@@ -20,8 +20,8 @@ import (
 const (
 	// FlagJSON prints the Out struct (or the error object) as JSON.
 	FlagJSON = "json"
-	// FlagYes answers a confirmation without a terminal; it is added only to
-	// operations whose Spec.Confirm can ask.
+	// FlagYes answers a confirmation without a terminal; it is added to
+	// every write operation and to any whose Spec.Confirm can ask.
 	FlagYes = "yes"
 	// flagHelp is cobra's own help flag.
 	flagHelp = "help"
@@ -323,7 +323,10 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		aliases[f.Flag] = f.Aliases
 	}
 	asJSON := c.Flags().Bool(FlagJSON, false, "print the result (or the error) as JSON")
-	asksFirst := s.Confirm.CanAsk()
+	// Every write takes --yes (owner report 2026-11-12: `lore member edit
+	// --yes` was "unknown flag"): on a write that never asks it is a no-op,
+	// so a script can pass it to every write command alike.
+	asksFirst := s.Confirm.CanAsk() || s.Permission == op.PermWrite
 	yes := new(bool)
 	if asksFirst {
 		c.Flags().BoolVar(yes, FlagYes, false, "answer yes to the confirmation without a terminal")

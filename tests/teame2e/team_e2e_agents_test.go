@@ -826,7 +826,7 @@ func TestRecipe09_OffboardingADeveloper(t *testing.T) {
 	cr.toolsC.MustLore("task", "revoke", id)
 	cr.toolsC.MustLore("task", "reassign", "--from", "@dev1", "--assign", "@alice")
 	cr.toolsC.MustLore("actor", "deactivate", "@dev1")
-	files := cr.store.FilesMatching(refMain, folderOrg+"/"+dataDir+"/"+tblActors+"/")
+	files := cr.store.FilesMatching(refMain, folderOrg+"/"+tblActors+"/")
 	found := false
 	for _, f := range files {
 		if body, _ := cr.store.Read(refMain, f); strings.Contains(body, dev1Key) {

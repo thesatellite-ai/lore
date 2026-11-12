@@ -48,7 +48,11 @@ func TestOrgTargetMatrix(t *testing.T) {
 					t.Fatalf("--to %s: %v", c.to, err)
 				}
 				id := idOf(t, out)
-				p := filepath.Join(dir, filepath.FromSlash(c.folder), ".lore", "data", schema.TableMemories, id+".json")
+				folder := c.folder
+				if folder == "" {
+					folder = rowfs.StoreDataDir // the store root folder's rows (D-ad)
+				}
+				p := filepath.Join(dir, filepath.FromSlash(folder), schema.TableMemories, id+".json")
 				if _, serr := os.Stat(p); serr != nil {
 					t.Fatalf("--to %s: the row is not in folder %q (%v)", c.to, c.folder, serr)
 				}

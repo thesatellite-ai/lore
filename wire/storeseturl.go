@@ -64,7 +64,7 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 	}
 	if newID.IsZero() {
 		return opsstores.SetURLOut{}, errs.New(errs.NotAStore, verb+": "+raw+" holds no lore store with an id ("+rowfs.MarkerFile+")").
-			WithHint("check the url; a v0.1.17 store needs `lore migrate run` first")
+			WithHint("check the url; a v0.1.17 store needs lore fix first")
 	}
 	out.ID = newID.String()
 	if !storeaddr.Same(raw, src.URL) {

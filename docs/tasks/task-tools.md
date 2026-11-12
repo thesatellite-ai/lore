@@ -30,34 +30,39 @@ Alice (an agency developer) plans the launch of the client's online shop in `git
 ```console
 # alice, in website
 $ lore task add 'Write the launch email' --priority high
-✓ tsk_7a67…9504 — Write the launch email [high]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ tsk_2ad3…f891 — Write the launch email [high]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task add 'Pick the product photos' --priority low
-✓ tsk_2ad3…f891 — Pick the product photos [low]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+✓ tsk_162d…9666 — Pick the product photos [low]
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add 'Set up the payment provider' --priority urgent
-✓ tsk_162d…9666 — Set up the payment provider [urgent]
-lore live: (live, pushed)
-$ lore task start tsk_162d…9666
-✓ tsk_162d…9666 started
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 — Set up the payment provider [urgent]
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+$ lore task start tsk_54fe…28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 started
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ lore task board
 todo (2)
-  tsk_7a67…9504  Write the launch email
-  tsk_2ad3…f891  Pick the product photos
+  tsk_2ad3…f891  Write the launch email
+  tsk_162d…9666  Pick the product photos
 in_progress (1)
-  tsk_162d…9666  Set up the payment provider
+  tsk_54fe…28f2  Set up the payment provider
 done (0)
 cancelled (0)
 blocked (0)
 $ lore task board --group-by priority
 urgent (1)
-  tsk_162d…9666  Set up the payment provider
+  tsk_54fe…28f2  Set up the payment provider
 high (1)
-  tsk_7a67…9504  Write the launch email
+  tsk_2ad3…f891  Write the launch email
 medium (0)
 low (1)
-  tsk_2ad3…f891  Pick the product photos
+  tsk_162d…9666  Pick the product photos
 ```
 <!-- /example -->
 
@@ -68,20 +73,23 @@ A checklist item is a small step of one task: no owner, no status, no claim. Add
 <!-- example: task-tools#checklist -->
 ```console
 # alice, in website
-$ lore task checklist add tsk_7a67…9504 'Subject line' --item 'Product links' --item 'Discount code' --item 'Send a test to the client'
-✓ 4 checklist items on tsk_7a67…9504 (chk_54fe…28f2, chk_05e9…4603, chk_c0f3…b5b8, chk_76bd…3f10)
-lore live: (live, pushed)
-$ lore task checklist tick tsk_7a67…9504 1
+$ lore task checklist add tsk_2ad3…f891 'Subject line' --item 'Product links' --item 'Discount code' --item 'Send a test to the client'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ 4 checklist items on tsk_2ad3…f891 (chk_05e9…4603, chk_c0f3…b5b8, chk_76bd…3f10, chk_d431…313a)
+lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
+$ lore task checklist tick tsk_2ad3…f891 1
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ [x] Subject line (1/4)
-lore live: (live, pushed)
-$ lore task checklist edit tsk_7a67…9504 3 'Discount code LAUNCH10'
-✓ chk_c0f3…b5b8 Discount code LAUNCH10
-lore live: (live, pushed)
-$ lore task checklist list tsk_7a67…9504
-1. [x] Subject line  chk_54fe…28f2
-2. [ ] Product links  chk_05e9…4603
-3. [ ] Discount code LAUNCH10  chk_c0f3…b5b8
-4. [ ] Send a test to the client  chk_76bd…3f10
+lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
+$ lore task checklist edit tsk_2ad3…f891 3 'Discount code LAUNCH10'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ chk_76bd…3f10 Discount code LAUNCH10
+lore live: (live, pushed) commit df3a55c to origin refs/lore/live
+$ lore task checklist list tsk_2ad3…f891
+1. [x] Subject line  chk_05e9…4603
+2. [ ] Product links  chk_c0f3…b5b8
+3. [ ] Discount code LAUNCH10  chk_76bd…3f10
+4. [ ] Send a test to the client  chk_d431…313a
 1/4 done
 ```
 <!-- /example -->
@@ -91,16 +99,18 @@ $ lore task checklist list tsk_7a67…9504
 <!-- example: task-tools#checklist-untick-and-rm -->
 ```console
 # alice, in website
-$ lore task checklist untick tsk_7a67…9504 1
+$ lore task checklist untick tsk_2ad3…f891 1
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ [ ] Subject line (0/4)
-lore live: (live, pushed)
-$ lore task checklist rm tsk_7a67…9504 2
-✓ removed chk_05e9…4603 Product links
-lore live: (live, pushed)
-$ lore task checklist list tsk_7a67…9504
-1. [ ] Subject line  chk_54fe…28f2
-2. [ ] Discount code LAUNCH10  chk_c0f3…b5b8
-3. [ ] Send a test to the client  chk_76bd…3f10
+lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
+$ lore task checklist rm tsk_2ad3…f891 2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ removed chk_c0f3…b5b8 Product links
+lore live: (live, pushed) commit 34ee210 to origin refs/lore/live
+$ lore task checklist list tsk_2ad3…f891
+1. [ ] Subject line  chk_05e9…4603
+2. [ ] Discount code LAUNCH10  chk_76bd…3f10
+3. [ ] Send a test to the client  chk_d431…313a
 0/3 done
 ```
 <!-- /example -->
@@ -110,11 +120,13 @@ If a step turns out to be real work that someone could pick up on its own, `prom
 <!-- example: task-tools#checklist-promote -->
 ```console
 # alice, in website
-$ lore task checklist promote tsk_7a67…9504 3
-✓ chk_76bd…3f10 became tsk_d431…313a "Send a test to the client" under tsk_7a67…9504
-lore live: (live, pushed)
-$ lore task list --parent tsk_7a67…9504
-○ tsk_d431…313a Send a test to the client [high]
+$ lore task checklist promote tsk_2ad3…f891 3
+lore: wrote ~/work/website/.lore/data/tasks/tsk_b4f4…a5b0.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ chk_d431…313a became tsk_b4f4…a5b0 "Send a test to the client" under tsk_2ad3…f891
+lore live: (live, pushed) commit 7898daa to origin refs/lore/live
+$ lore task list --parent tsk_2ad3…f891
+○ tsk_b4f4…a5b0 Send a test to the client [high]
 ```
 <!-- /example -->
 
@@ -124,22 +136,24 @@ A task whose body already has `- [ ]` / `- [x]` lines (copied from an issue, say
 ```console
 # alice, in website
 $ lore task add 'Check the shop on a phone' --body $'- [ ] iPhone\n- [ ] Android\n- [x] Tablet'
-✓ tsk_b4f4…a5b0 — Check the shop on a phone [medium]
-lore live: (live, pushed)
-$ lore task checklist import tsk_b4f4…a5b0 --from body
-ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_b4f4…a5b0?
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+✓ tsk_28f8…03df — Check the shop on a phone [medium]
+lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
+$ lore task checklist import tsk_28f8…03df --from body
+ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_28f8…03df?
   [ ] iPhone
   [ ] Android
   [x] Tablet
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore task checklist import tsk_b4f4…a5b0 --from body --yes
-✓ 3 checklist items from the body of tsk_b4f4…a5b0
-lore live: (live, pushed)
-$ lore task checklist list tsk_b4f4…a5b0
-1. [ ] iPhone  chk_28f8…03df
-2. [ ] Android  chk_4c59…6c38
-3. [x] Tablet  chk_3b62…e913
+$ lore task checklist import tsk_28f8…03df --from body --yes
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+✓ 3 checklist items from the body of tsk_28f8…03df
+lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
+$ lore task checklist list tsk_28f8…03df
+1. [ ] iPhone  chk_4c59…6c38
+2. [ ] Android  chk_3b62…e913
+3. [x] Tablet  chk_f147…5139
 1/3 done
 ```
 <!-- /example -->
@@ -151,24 +165,27 @@ $ lore task checklist list tsk_b4f4…a5b0
 <!-- example: task-tools#split -->
 ```console
 # alice, in website
-$ lore task split tsk_2ad3…f891 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos' --dry-run
-would add 3 sub-tasks under tsk_2ad3…f891 Pick the product photos:
+$ lore task split tsk_162d…9666 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos' --dry-run
+would add 3 sub-tasks under tsk_162d…9666 Pick the product photos:
   1  Shoot the shirts
   2  Shoot the mugs  (priority high)
   3  Edit the photos
-  inherited: tasklist tlt_f147…5139, priority low, commitment accepted
+  inherited: tasklist tlt_7a67…9504, priority low, commitment accepted
 nothing written (--dry-run)
-$ lore task split tsk_2ad3…f891 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos'
-✓ 3 sub-tasks under tsk_2ad3…f891 Pick the product photos (batch bat_2537…6bbb):
-  1  tsk_b69e…5ed7 Shoot the shirts
-  2  tsk_0aae…a61f Shoot the mugs  (priority high)
-  3  tsk_6a86…ed8c Edit the photos
-  inherited: tasklist tlt_f147…5139, priority low, commitment accepted
-lore live: (live, pushed)
-$ lore task list --parent tsk_2ad3…f891
-○ tsk_b69e…5ed7 Shoot the shirts [low]
-○ tsk_0aae…a61f Shoot the mugs [high]
-○ tsk_6a86…ed8c Edit the photos [low]
+$ lore task split tsk_162d…9666 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_b69e…5ed7.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_0aae…a61f.json
+✓ 3 sub-tasks under tsk_162d…9666 Pick the product photos (batch bat_6a86…ed8c):
+  1  tsk_2537…6bbb Shoot the shirts
+  2  tsk_b69e…5ed7 Shoot the mugs  (priority high)
+  3  tsk_0aae…a61f Edit the photos
+  inherited: tasklist tlt_7a67…9504, priority low, commitment accepted
+lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
+$ lore task list --parent tsk_162d…9666
+○ tsk_2537…6bbb Shoot the shirts [low]
+○ tsk_b69e…5ed7 Shoot the mugs [high]
+○ tsk_0aae…a61f Edit the photos [low]
 ```
 <!-- /example -->
 
@@ -201,20 +218,26 @@ When copies of the notes were merged and two tasks ended up as each other's pare
 ```console
 # alice, in website
 $ lore task add 'Write the launch mail'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b — Write the launch mail [medium]
-lore live: (live, pushed)
-$ lore task relate tsk_4f89…b64b --duplicates tsk_7a67…9504
-✓ tsk_4f89…b64b duplicates tsk_7a67…9504; tsk_4f89…b64b cancelled (close_reason duplicate)
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
+$ lore task relate tsk_4f89…b64b --duplicates tsk_2ad3…f891
+lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_77cb…76c4.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
+✓ tsk_4f89…b64b duplicates tsk_2ad3…f891; tsk_4f89…b64b cancelled (close_reason duplicate)
+lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
+lore live: landed on main (8c373dc); leaves live once main is fetched
 $ lore task add 'Thank-you email after the first order'
-✓ tsk_77cb…76c4 — Thank-you email after the first order [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+✓ tsk_d191…45c2 — Thank-you email after the first order [medium]
+lore live: (live, pushed) commit 6f11034 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
-$ lore task relate tsk_77cb…76c4 --follows-up tsk_7a67…9504 --blocked-by tsk_162d…9666
-✓ tsk_77cb…76c4 waits for tsk_162d…9666
-✓ tsk_77cb…76c4 follows up tsk_7a67…9504
-lore live: (live, pushed)
+$ lore task relate tsk_d191…45c2 --follows-up tsk_2ad3…f891 --blocked-by tsk_54fe…28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_b4d3…11aa.json
+✓ tsk_d191…45c2 waits for tsk_54fe…28f2
+✓ tsk_d191…45c2 follows up tsk_2ad3…f891
+lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -223,9 +246,10 @@ lore live: (live, pushed)
 <!-- example: task-tools#unrelate -->
 ```console
 # alice, in website
-$ lore task unrelate tsk_77cb…76c4 --blocked-by tsk_162d…9666
-✓ tsk_77cb…76c4 no longer waits for tsk_162d…9666
-lore live: (live, pushed)
+$ lore task unrelate tsk_d191…45c2 --blocked-by tsk_54fe…28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+✓ tsk_d191…45c2 no longer waits for tsk_54fe…28f2
+lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -236,14 +260,16 @@ Whoever creates a task, and everyone assigned to it, watches it already (unless 
 <!-- example: task-tools#watch -->
 ```console
 # alice, in website
-$ lore task watch tsk_162d…9666
-already watching tsk_162d…9666
-$ lore task unwatch tsk_162d…9666
-✓ stopped watching tsk_162d…9666
-lore live: (live, pushed)
-$ lore task watch tsk_162d…9666
-✓ watching tsk_162d…9666
-lore live: (live, pushed)
+$ lore task watch tsk_54fe…28f2
+already watching tsk_54fe…28f2
+$ lore task unwatch tsk_54fe…28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ stopped watching tsk_54fe…28f2
+lore live: (live, pushed) commit aba91f6 to origin refs/lore/live
+$ lore task watch tsk_54fe…28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ watching tsk_54fe…28f2
+lore live: (live, pushed) commit a8de760 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -254,14 +280,16 @@ lore live: (live, pushed)
 <!-- example: task-tools#history -->
 ```console
 # alice, in website
-$ lore task edit tsk_162d…9666 --priority high
-✓ tsk_162d…9666 updated
-lore live: (live, pushed)
-$ lore task done tsk_162d…9666 --no-lesson
-✓ tsk_162d…9666 done
-lore live: (live, pushed)
-lore live: landed on main (86dbae4); leaves live once main is fetched
-$ lore task history tsk_162d…9666
+$ lore task edit tsk_54fe…28f2 --priority high
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 updated
+lore live: (live, pushed) commit 9169078 to origin refs/lore/live
+$ lore task done tsk_54fe…28f2 --no-lesson
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 done
+lore live: (live, pushed) commit b733d8a to origin refs/lore/live
+lore live: landed on main (1833373); leaves live once main is fetched
+$ lore task history tsk_54fe…28f2
 2026-11-02 10:00  alice               created
 2026-11-02 10:00  alice               status todo → in_progress
 2026-11-02 10:02  alice               priority urgent → high
@@ -293,11 +321,12 @@ task:
     - {title: "Run the tests", after: [0]}
     - {title: "Deploy to the shop", after: [1]}
 $ lore task template add release --from-file ~/release.yaml
-✓ ttp_d191…45c2 — template release: 1 task, 3 sub-tasks, 2 checklist items
+lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34…b418.json
+✓ ttp_9a34…b418 — template release: 1 task, 3 sub-tasks, 2 checklist items
 $ lore task template list
 release  repo  1 task, 3 sub-tasks, 2 checklist items
 $ lore task template show release
-# ttp_d191…45c2 (repo)
+# ttp_9a34…b418 (repo)
 name: release
 description: Ship one release of the shop
 args:
@@ -368,9 +397,10 @@ would add 4 tasks (template release):
     Run the tests
     Deploy to the shop
 $ lore task add --template release --arg version=1.4
-✓ tsk_b4d3…11aa — Release 1.4 [high]
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
+✓ tsk_bfed…eeea — Release 1.4 [high]
   template release: added 1 task and 3 sub-tasks
-lore live: (live, pushed)
+lore live: (live, pushed) commit 59e9d31 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
@@ -381,11 +411,13 @@ lore live: 1 row(s) left live (main holds them)
 ```console
 # alice, in website
 $ lore task template rename release shop_release
-✓ ttp_d191…45c2 — template release renamed to shop_release
+lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34…b418.json
+✓ ttp_9a34…b418 — template release renamed to shop_release
 $ lore task template list
 shop_release  repo  1 task, 3 sub-tasks, 2 checklist items
 $ lore task template delete shop_release --yes
-✓ ttp_d191…45c2 — template shop_release moved to the trash (restore: lore trash restore ttp_d191…45c2)
+lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34…b418.json
+✓ ttp_9a34…b418 — template shop_release moved to the trash (restore: lore trash restore ttp_9a34…b418)
 ```
 <!-- /example -->
 
@@ -397,13 +429,14 @@ $ lore task template delete shop_release --yes
 ```console
 # alice, in website
 $ lore task add 'Back up the shop database' --recur 'every week'
-✓ tsk_9a34…b418 — Back up the shop database [medium]
-  recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_bfed…eeea, #1)
-lore live: (live, pushed)
-$ lore task recur show tsk_9a34…b418
-tsk_9a34…b418 Back up the shop database
+lore: wrote ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json
+✓ tsk_376c…8e1a — Back up the shop database [medium]
+  recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_67e2…291e, #1)
+lore live: (live, pushed) commit 7540e63 to origin refs/lore/live
+$ lore task recur show tsk_376c…8e1a
+tsk_376c…8e1a Back up the shop database
   rule: every week
-  series: rcs_bfed…eeea #1 (active)
+  series: rcs_67e2…291e #1 (active)
   next: 2026-11-02, 2026-11-09, 2026-11-16
 ```
 <!-- /example -->
@@ -413,15 +446,17 @@ Finishing an instance creates the next one, and `lore task list --series <rcs_�
 <!-- example: task-tools#recur-done -->
 ```console
 # alice, in website
-$ lore task done tsk_9a34…b418 --no-lesson
-✓ tsk_9a34…b418 done
+$ lore task done tsk_376c…8e1a --no-lesson
+lore: wrote ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_8567…366f.json
+✓ tsk_376c…8e1a done
   every week due 2026-11-02
-  next instance: tsk_376c…8e1a due 2026-11-09 (series rcs_bfed…eeea, #2)
-lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
-$ lore task list --series rcs_bfed…eeea --all
-✓ tsk_9a34…b418 Back up the shop database [medium] due:2026-11-02
-○ tsk_376c…8e1a Back up the shop database [medium] due:2026-11-09
+  next instance: tsk_8567…366f due 2026-11-09 (series rcs_67e2…291e, #2)
+lore live: (live, pushed) commit ef62c83 to origin refs/lore/live
+lore live: landed on main (dd85e7d); leaves live once main is fetched
+$ lore task list --series rcs_67e2…291e --all
+✓ tsk_376c…8e1a Back up the shop database [medium] due:2026-11-02
+○ tsk_8567…366f Back up the shop database [medium] due:2026-11-09
 ```
 <!-- /example -->
 
@@ -430,12 +465,14 @@ $ lore task list --series rcs_bfed…eeea --all
 <!-- example: task-tools#recur-skip -->
 ```console
 # alice, in website
-$ lore task recur skip tsk_376c…8e1a
-✓ tsk_376c…8e1a skipped
+$ lore task recur skip tsk_8567…366f
+lore: wrote ~/work/website/.lore/data/tasks/tsk_8567…366f.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
+✓ tsk_8567…366f skipped
   every week due 2026-11-09
-  next instance: tsk_67e2…291e due 2026-11-16 (series rcs_bfed…eeea, #3)
-lore live: (live, pushed)
-lore live: landed on main (05513aa); leaves live once main is fetched
+  next instance: tsk_71f0…c07d due 2026-11-16 (series rcs_67e2…291e, #3)
+lore live: (live, pushed) commit d18179e to origin refs/lore/live
+lore live: landed on main (f4b8da2); leaves live once main is fetched
 lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
@@ -445,15 +482,16 @@ lore live: 1 row(s) left live (main holds them)
 <!-- example: task-tools#recur-edit -->
 ```console
 # alice, in website
-$ lore task recur edit tsk_67e2…291e 'every! 14 days'
-✓ tsk_67e2…291e updated
-  recurs: every! 14 days → next: 2026-11-16, 2026-11-30, 2026-12-14 (series rcs_bfed…eeea, #3)
-lore live: (live, pushed)
+$ lore task recur edit tsk_71f0…c07d 'every! 14 days'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
+✓ tsk_71f0…c07d updated
+  recurs: every! 14 days → next: 2026-11-16, 2026-11-30, 2026-12-14 (series rcs_67e2…291e, #3)
+lore live: (live, pushed) commit 70f4f88 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore task recur show tsk_67e2…291e
-tsk_67e2…291e Back up the shop database
+$ lore task recur show tsk_71f0…c07d
+tsk_71f0…c07d Back up the shop database
   rule: every! 14 days
-  series: rcs_bfed…eeea #3 (active)
+  series: rcs_67e2…291e #3 (active)
   next: 2026-11-16, 2026-11-30, 2026-12-14
 ```
 <!-- /example -->
@@ -463,17 +501,18 @@ tsk_67e2…291e Back up the shop database
 <!-- example: task-tools#recur-stop -->
 ```console
 # alice, in website
-$ lore task recur stop tsk_67e2…291e
-ERROR: [E_NEEDS_CONFIRM] task recur stop tsk_67e2…291e?
+$ lore task recur stop tsk_71f0…c07d
+ERROR: [E_NEEDS_CONFIRM] task recur stop tsk_71f0…c07d?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore task recur stop tsk_67e2…291e --yes
-✓ tsk_67e2…291e series rcs_bfed…eeea stopped (no further instances; this one stays)
-lore live: (live, pushed)
-$ lore task recur show tsk_67e2…291e
-tsk_67e2…291e Back up the shop database
+$ lore task recur stop tsk_71f0…c07d --yes
+lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
+✓ tsk_71f0…c07d series rcs_67e2…291e stopped (no further instances; this one stays)
+lore live: (live, pushed) commit d33587e to origin refs/lore/live
+$ lore task recur show tsk_71f0…c07d
+tsk_71f0…c07d Back up the shop database
   rule: every! 14 days
-  series: rcs_bfed…eeea #3 (stopped)
+  series: rcs_67e2…291e #3 (stopped)
 ```
 <!-- /example -->
 
@@ -486,36 +525,37 @@ Three months later, many of the launch tasks have not been touched. `lore task s
 # alice, in website
 $ lore task stale
 9 tasks with no change for 60 days (excluded: claimed, in an active mission, future due, open sub-tasks, recurring)
-  tsk_d431…313a  Send a test to the client
-  tsk_b4f4…a5b0  Check the shop on a phone
-  tsk_b69e…5ed7  Shoot the shirts
-  tsk_0aae…a61f  Shoot the mugs
-  tsk_6a86…ed8c  Edit the photos
-  tsk_77cb…76c4  Thank-you email after the first order
-  tsk_8567…366f  Bump the version to 1.4
-  tsk_71f0…c07d  Run the tests
-  tsk_ada3…c018  Deploy to the shop
+  tsk_b4f4…a5b0  Send a test to the client
+  tsk_28f8…03df  Check the shop on a phone
+  tsk_2537…6bbb  Shoot the shirts
+  tsk_b69e…5ed7  Shoot the mugs
+  tsk_0aae…a61f  Edit the photos
+  tsk_d191…45c2  Thank-you email after the first order
+  tsk_ada3…c018  Bump the version to 1.4
+  tsk_78c8…5b6c  Run the tests
+  tsk_d7c7…7fe6  Deploy to the shop
 $ lore task stale --close --dry-run
 9 tasks with no change for 60 days (excluded: claimed, in an active mission, future due, open sub-tasks, recurring)
-  tsk_d431…313a  Send a test to the client
-  tsk_b4f4…a5b0  Check the shop on a phone
-  tsk_b69e…5ed7  Shoot the shirts
-  tsk_0aae…a61f  Shoot the mugs
-  tsk_6a86…ed8c  Edit the photos
-  tsk_77cb…76c4  Thank-you email after the first order
-  tsk_8567…366f  Bump the version to 1.4
-  tsk_71f0…c07d  Run the tests
-  tsk_ada3…c018  Deploy to the shop
+  tsk_b4f4…a5b0  Send a test to the client
+  tsk_28f8…03df  Check the shop on a phone
+  tsk_2537…6bbb  Shoot the shirts
+  tsk_b69e…5ed7  Shoot the mugs
+  tsk_0aae…a61f  Edit the photos
+  tsk_d191…45c2  Thank-you email after the first order
+  tsk_ada3…c018  Bump the version to 1.4
+  tsk_78c8…5b6c  Run the tests
+  tsk_d7c7…7fe6  Deploy to the shop
 would cancel them with close_reason stale (nothing written, --dry-run)
 $ lore task stale --close --yes
-✓ 9 tasks cancelled (close_reason stale, batch bat_78c8…5b6c); lore batch show bat_78c8…5b6c
-lore live: (live, pushed)
-lore live: landed on main (dfd8dc8); 4 open row(s) copied, they stay live; leaves live once main is fetched
+lore: wrote 9 row file(s) in ~/work/website/.lore/data
+✓ 9 tasks cancelled (close_reason stale, batch bat_06b1…3d1c); lore batch show bat_06b1…3d1c
+lore live: (live, pushed) commit 34010c1 to origin refs/lore/live
+lore live: landed on main (070bbeb); 4 open row(s) copied, they stay live; leaves live once main is fetched
 $ lore task list
-○ tsk_7a67…9504 Write the launch email [high] 0/0
-○ tsk_2ad3…f891 Pick the product photos [low] 0/0
-○ tsk_b4d3…11aa Release 1.4 [high] 0/0
-○ tsk_67e2…291e Back up the shop database [medium] due:2026-11-16
+○ tsk_2ad3…f891 Write the launch email [high] 0/0
+○ tsk_162d…9666 Pick the product photos [low] 0/0
+○ tsk_bfed…eeea Release 1.4 [high] 0/0
+○ tsk_71f0…c07d Back up the shop database [medium] due:2026-11-16
 ```
 <!-- /example -->
 
@@ -534,10 +574,10 @@ The commands and their output are written to `tests/docs/transcripts/task-tools.
 # alice, in website
 $ lore task board
 todo (2)
-  tsk_7a67…9504  Write the launch email
-  tsk_2ad3…f891  Pick the product photos
+  tsk_2ad3…f891  Write the launch email
+  tsk_162d…9666  Pick the product photos
 in_progress (1)
-  tsk_162d…9666  Set up the payment provider
+  tsk_54fe…28f2  Set up the payment provider
 done (0)
 cancelled (0)
 blocked (0)

@@ -45,8 +45,17 @@ const (
 	PersonalStoreCreate   = "create"
 	PersonalStoreExisting = "existing"
 	PersonalStoreLocal    = "local"
+	// LocalStoreFolder is the folder, under ~/.lore/stores, of the local
+	// personal store (a plain folder). It starts with "_": GitHub and
+	// GitLab owner names cannot, so it never clashes with the owner folder
+	// of a git clone (stores/<owner>/<repo>), and "_" marks lore's own, as
+	// _store/ does in a store (owner item 17, 2026-11-12).
+	LocalStoreFolder = "_me"
+	// LegacyLocalStoreFolder is LocalStoreFolder before 2026-11-12; lore
+	// moves a personal folder store found there to LocalStoreFolder.
+	LegacyLocalStoreFolder = "me"
 	// LocalStoreURL is the url the "local folder" choice stands for.
-	LocalStoreURL = "file://~/.lore/stores/me"
+	LocalStoreURL = "file://~/.lore/stores/" + LocalStoreFolder
 )
 
 // SecretsNone is the "no secret manager" choice of the secrets step (4.8).

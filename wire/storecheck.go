@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -82,16 +81,15 @@ func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time) op
 		c.Problems = append(c.Problems, s.err)
 		return c
 	}
-	base := filepath.Dir(s.dir)
-	found := gitbackend.StateOf(base, base)
-	if !isDirPath(base) && !isDirPath(found.Paths.Bare) {
+	found := gitbackend.StateOf(s.dir, s.dir)
+	if !isDirPath(found.Paths.GitDir) {
 		c.Clone = cloneNotCloned
 		c.Notes = append(c.Notes, checkNotCloned)
 		return c
 	}
 	c.Clone = string(found.State)
-	if found.State == gitbackend.CloneNoWork {
-		c.Notes = append(c.Notes, "the git data has no worktree yet; lore adds one the next time it opens the store")
+	if found.State == gitbackend.CloneNotCheckedOut {
+		c.Notes = append(c.Notes, "the first clone was cut short before its files were checked out; lore finishes it the next time it opens the store")
 		return c
 	}
 	if found.State != gitbackend.CloneWhole {
@@ -102,7 +100,7 @@ func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time) op
 	}
 	if err := gitbackend.ProbeRemote(ctx, s.dir, s.entry.URL, gitbackend.WithRoute(func(ctx context.Context, remote string) ([]string, []string) {
 		return cloneRoute(ctx, a.opts.Home, a.projectDir(), remote)
-	})); err != nil {
+	}), gitbackend.WithAccessNote(accessNoteFor(a.opts.Home))); err != nil {
 		c.Problems = append(c.Problems, checkUnreachable+reasonOf(err))
 	} else {
 		c.Reachable = true

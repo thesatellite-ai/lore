@@ -99,7 +99,7 @@ func camSyncSameTree(t *testing.T, what string, before, after map[string]string)
 // dry run may touch them.
 func camSyncIsCache(name string) bool {
 	switch name {
-	case "lock", "fetch-stamp", "lore-fetched-at":
+	case "lock", "fetch-stamp", "default-branch":
 		return true
 	}
 	for _, suf := range []string{".db", ".db-wal", ".db-shm", ".db-journal"} {

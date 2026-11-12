@@ -27,6 +27,7 @@ package team
 // session on the audit trail, as every roster write).
 
 import (
+	"cmp"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -103,6 +104,9 @@ type StaffAddOut struct {
 	// Rows is how many roster rows the add wrote (one store commit).
 	Rows     int      `json:"rows"`
 	Warnings []string `json:"warnings,omitempty"`
+	// Notes say what member add chose for someone (a handle lowercased or
+	// derived), one line each.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Text is one line per person, then how to join.
@@ -127,6 +131,9 @@ func (o StaffAddOut) Text() string {
 			line += " (was invite " + p.Invite + ", now accepted)"
 		}
 		b.WriteString(line + "\n")
+	}
+	for _, n := range o.Notes {
+		b.WriteString("  note: " + n + "\n")
 	}
 	for _, p := range o.Already {
 		b.WriteString("  already a member: " + p.Email + " (" + p.ID + ")\n")
@@ -220,11 +227,16 @@ type StaffWriteOut struct {
 	Member StaffRow `json:"member"`
 	Verb   string   `json:"verb"`
 	Where  string   `json:"where"`
+	Note   string   `json:"note,omitempty"`
 }
 
-// Text is one success line.
+// Text is one success line (and the note, when there is one).
 func (o StaffWriteOut) Text() string {
-	return work.Success + " " + o.Member.Email + " (" + o.Member.ID + ") " + o.Verb + " on " + o.Where + "'s roster\n"
+	t := work.Success + " " + o.Member.Email + " (" + o.Member.ID + ") " + o.Verb + " on " + o.Where + "'s roster\n"
+	if o.Note != "" {
+		t += "  note: " + o.Note + "\n"
+	}
+	return t
 }
 
 // Remover is the optional Env upgrade member.remove runs (ops/period's
@@ -415,6 +427,10 @@ func staffEmails(plans []staffPlan) string {
 func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staffSpec, pending map[string]inviteRow, out *StaffAddOut) ([]staffPlan, error) {
 	var plans []staffPlan
 	seen := map[string]bool{}
+	taken, err := takenHandles(ctx, r)
+	if err != nil {
+		return nil, err
+	}
 	for i, s := range specs {
 		where := "member add"
 		if len(specs) > 1 {
@@ -438,18 +454,41 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		if s.Name == "" {
 			s.Name, _, _ = strings.Cut(email, "@")
 		}
-		if s.Handle = strings.TrimPrefix(strings.TrimSpace(s.Handle), handleMark); s.Handle != "" {
-			if _, herr := teamHandle(s.Handle); herr != nil {
-				return nil, errs.Prefix(where+": --handle", herr)
-			}
-		}
-		if s.GitHub != "" {
-			gh, gerr := teamprofile.Normalize(schema.ContactKindHandle, s.GitHub)
-			if gerr != nil || gh == "" {
+		if s.GitHub = strings.TrimPrefix(strings.TrimSpace(s.GitHub), handleMark); s.GitHub != "" {
+			// the login is kept as given (its contact's norm is lowercase)
+			if gh, gerr := teamprofile.Normalize(schema.ContactKindHandle, s.GitHub); gerr != nil || gh == "" {
 				return nil, errs.New(errs.InvalidInput, where+": --github "+work.Quote(s.GitHub)+" is not a GitHub user name")
 			}
-			s.GitHub = gh
 		}
+		var notes []string
+		derived := ""
+		if strings.TrimSpace(s.Handle) == "" {
+			// no handle given: from the GitHub login (kept as given on its
+			// contact), else the email's name part, lowercased
+			derived = s.GitHub
+			if derived == "" {
+				derived, _, _ = strings.Cut(email, "@")
+			}
+		}
+		h, note, herr := personHandle(cmp.Or(strings.TrimSpace(s.Handle), derived))
+		if herr != nil {
+			return nil, errs.Prefix(where, herr)
+		}
+		if derived != "" && h != "" && taken[h] {
+			notes = append(notes, email+": no handle (@"+h+" is taken; member edit "+email+" --handle <h> sets one)")
+			h = ""
+		}
+		if h != "" {
+			taken[h] = true
+		}
+		switch {
+		case derived != "" && h != "":
+			notes = append(notes, email+": handle @"+h+" (from "+map[bool]string{true: "the GitHub login", false: "the email"}[s.GitHub != ""]+", lowercase)")
+		case note != "":
+			notes = append(notes, email+": "+note)
+		}
+		s.Handle = h
+
 		if len(s.Projects) > 0 && len(s.ProjectRoles) == 0 {
 			return nil, errs.New(errs.InvalidInput, where+": --project needs at least one --project-role (a project membership has roles, TP-10); the org-level role is --role").
 				WithHint("--project-role dev")
@@ -495,6 +534,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 			row.Invite = p.spec.invite.ID.String()
 		}
 		out.Added = append(out.Added, row)
+		out.Notes = append(out.Notes, notes...)
 		plans = append(plans, p)
 	}
 	return plans, nil
@@ -745,7 +785,7 @@ func staffRows(ctx context.Context, r profilestore.Roster, all bool) ([]StaffRow
 					m.Email = fieldText(c, schema.FieldContactValueNorm)
 				}
 			case teamprofile.ContactTypeGitHub:
-				m.GitHub = fieldText(c, schema.FieldContactValueNorm)
+				m.GitHub = cmp.Or(fieldText(c, schema.FieldContactValue), fieldText(c, schema.FieldContactValueNorm)) // the login as given
 			}
 		}
 		if m.Email == "" {
@@ -842,10 +882,11 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 			return StaffWriteOut{}, err
 		}
 	}
-	if h := strings.TrimPrefix(strings.TrimSpace(in.Handle), handleMark); h != "" {
-		if _, herr := teamHandle(h); herr != nil {
-			return StaffWriteOut{}, errs.Prefix("--handle", herr)
-		}
+	h, note, herr := personHandle(in.Handle)
+	if herr != nil {
+		return StaffWriteOut{}, errs.Prefix("member edit --handle", herr)
+	}
+	if h != "" {
 		if patch[actorFieldHandle], err = textValue("--handle", h); err != nil {
 			return StaffWriteOut{}, err
 		}
@@ -866,7 +907,7 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 	if err != nil {
 		return StaffWriteOut{}, err
 	}
-	return StaffWriteOut{Member: m, Verb: "updated", Where: r.Where()}, nil
+	return StaffWriteOut{Member: m, Verb: "updated", Where: r.Where(), Note: note}, nil
 }
 
 func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, error) {
@@ -893,6 +934,52 @@ func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, 
 	}
 	m.Status = schema.ActorStatusLeft
 	return StaffWriteOut{Member: m, Verb: "removed (left; the row stays for history)", Where: r.Where()}, nil
+}
+
+// personHandle is raw as a person's roster handle: without its @,
+// lowercased, other characters as '-' (a handle is one lowercase word, as
+// a team's; owner report 2026-11-12: `@OnurFromAgency` was refused as
+// a "team handle"). note says what changed ("" when raw was already one).
+func personHandle(raw string) (h, note string, err error) {
+	given := strings.TrimPrefix(strings.TrimSpace(raw), handleMark)
+	if given == "" {
+		return "", "", nil
+	}
+	h = strings.Trim(strings.ToLower(strings.Map(handleRune, given)), "-_")
+	if h == "" {
+		return "", "", errs.New(errs.InvalidInput, "person handle @"+given+" has no letter or digit").WithHint("--handle mira")
+	}
+	if _, terr := teamHandle(h); terr != nil {
+		return "", "", errs.New(errs.InvalidInput, "person handle @"+given+" is not one lowercase word (letters, digits, '_' and '-')").WithHint("--handle " + h)
+	}
+	if h != given {
+		note = "handle @" + given + " is stored as @" + h + " (handles are one lowercase word)"
+	}
+	return h, note, nil
+}
+
+// takenHandles are the handles of active people and of teams on r.
+func takenHandles(ctx context.Context, r profilestore.Roster) (map[string]bool, error) {
+	out := map[string]bool{}
+	actors, err := r.List(ctx, schema.TableActors)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range actors {
+		if h := fieldText(a, actorFieldHandle); h != "" && teamprofile.Pickable(teamprofile.StatusOf(a.Fields)) {
+			out[h] = true
+		}
+	}
+	teams, err := r.List(ctx, schema.TableTeams)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range teams {
+		if h := fieldText(t, teamFieldHandle); h != "" {
+			out[h] = true
+		}
+	}
+	return out, nil
 }
 
 // staffFieldKind is actors.kind.

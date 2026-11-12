@@ -1,9 +1,11 @@
 
 ### vars set
 alice (work/website)$ lore vars set api_host api.example.com --type dns --description 'The shop API the website reads'
-Added var_…28f2 api_host = api.example.com (dns) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_7a670ae8548ed05bf57ad29ad0759504.json
+Added var_…9504 api_host = api.example.com (dns) in repo (not shareable: clients see ${var:<name>}).
 alice (work/website)$ lore vars set cache_minutes 5 --type number
-Added var_…4603 cache_minutes = 5 (number) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_2ad3618e878ebbf527d34d446ef4f891.json
+Added var_…f891 cache_minutes = 5 (number) in repo (not shareable: clients see ${var:<name>}).
 alice (work/website)$ lore vars list
 NAME	VALUE	TYPE	WHERE
 cache_minutes	5	number	repo
@@ -13,72 +15,75 @@ alice (work/website)$ ls .lore/data/vars | wc -l
 
 ### vars use
 alice (work/website)$ lore memory add --body 'Products come from ${var:api_host} and are cached for ${var:cache_minutes} minutes'
-✓ mem_7a670ae8548ed05bf57ad29ad0759504
+lore: wrote ~/work/website/.lore/data/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+✓ mem_162df51b7f78b785c97c26b41ea89666
   scope: [master]
-alice (work/website)$ lore show mem_7a670ae8548ed05bf57ad29ad0759504
-mem_7a670ae8548ed05bf57ad29ad0759504  memories  repo
+alice (work/website)$ lore show mem_162df51b7f78b785c97c26b41ea89666
+mem_162df51b7f78b785c97c26b41ea89666  memories  repo
   body: Products come from ${var:api_host} and are cached for ${var:cache_minutes} minutes
-  created_by_actor_id: act_2ad3618e878ebbf527d34d446ef4f891
+  created_by_actor_id: act_54fe984c9b495744c0217776765a28f2
   kind: retrieved
-  project_id: prj_162df51b7f78b785c97c26b41ea89666
+  project_id: prj_05e99e22e9e86e96fe4daa7777994603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891 · updated 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891
-alice (work/website)$ lore show mem_7a670ae8548ed05bf57ad29ad0759504 --expand
-mem_7a670ae8548ed05bf57ad29ad0759504  memories  repo
+created 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2
+alice (work/website)$ lore show mem_162df51b7f78b785c97c26b41ea89666 --expand
+mem_162df51b7f78b785c97c26b41ea89666  memories  repo
   body: Products come from api.example.com and are cached for 5 minutes
-  created_by_actor_id: act_2ad3618e878ebbf527d34d446ef4f891
+  created_by_actor_id: act_54fe984c9b495744c0217776765a28f2
   kind: retrieved
-  project_id: prj_162df51b7f78b785c97c26b41ea89666
+  project_id: prj_05e99e22e9e86e96fe4daa7777994603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891 · updated 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891
+created 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2
 references:
-  ${var:api_host}  api.example.com  (var_54fe984c9b495744c0217776765a28f2)
-  ${var:cache_minutes}  5  (var_05e99e22e9e86e96fe4daa7777994603)
+  ${var:api_host}  api.example.com  (var_7a670ae8548ed05bf57ad29ad0759504)
+  ${var:cache_minutes}  5  (var_2ad3618e878ebbf527d34d446ef4f891)
 
 ### vars change
 alice (work/website)$ lore vars set cache_minutes 10
-Changed var_…4603 cache_minutes = 10 (number) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_2ad3618e878ebbf527d34d446ef4f891.json
+Changed var_…f891 cache_minutes = 10 (number) in repo (not shareable: clients see ${var:<name>}).
 alice (work/website)$ lore vars show cache_minutes
-var_05e99e22e9e86e96fe4daa7777994603 cache_minutes = 10 (number) in repo
-created 2026-11-02T10:00:10Z by act_2ad3618e878ebbf527d34d446ef4f891 · updated 2026-11-02T10:00:40Z by act_2ad3618e878ebbf527d34d446ef4f891
-alice (work/website)$ lore show mem_7a670ae8548ed05bf57ad29ad0759504 --expand
-mem_7a670ae8548ed05bf57ad29ad0759504  memories  repo
+var_2ad3618e878ebbf527d34d446ef4f891 cache_minutes = 10 (number) in repo
+created 2026-11-02T10:00:10Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:00:40Z by act_54fe984c9b495744c0217776765a28f2
+alice (work/website)$ lore show mem_162df51b7f78b785c97c26b41ea89666 --expand
+mem_162df51b7f78b785c97c26b41ea89666  memories  repo
   body: Products come from api.example.com and are cached for 10 minutes
-  created_by_actor_id: act_2ad3618e878ebbf527d34d446ef4f891
+  created_by_actor_id: act_54fe984c9b495744c0217776765a28f2
   kind: retrieved
-  project_id: prj_162df51b7f78b785c97c26b41ea89666
+  project_id: prj_05e99e22e9e86e96fe4daa7777994603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891 · updated 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891
+created 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2
 references:
-  ${var:api_host}  api.example.com  (var_54fe984c9b495744c0217776765a28f2)
-  ${var:cache_minutes}  10  (var_05e99e22e9e86e96fe4daa7777994603)
+  ${var:api_host}  api.example.com  (var_7a670ae8548ed05bf57ad29ad0759504)
+  ${var:cache_minutes}  10  (var_2ad3618e878ebbf527d34d446ef4f891)
 
 ### vars rename
 alice (work/website)$ lore vars rename api_host shop_api_host
-✓ renamed variable api_host → shop_api_host (old name kept as an alias) (var_…28f2)
+lore: wrote ~/work/website/.lore/data/vars/var_7a670ae8548ed05bf57ad29ad0759504.json
+✓ renamed variable api_host → shop_api_host (old name kept as an alias) (var_…9504)
 alice (work/website)$ lore vars list
 NAME	VALUE	TYPE	WHERE
 cache_minutes	10	number	repo
 shop_api_host	api.example.com	dns	repo
-alice (work/website)$ lore show mem_7a670ae8548ed05bf57ad29ad0759504 --expand
-mem_7a670ae8548ed05bf57ad29ad0759504  memories  repo
+alice (work/website)$ lore show mem_162df51b7f78b785c97c26b41ea89666 --expand
+mem_162df51b7f78b785c97c26b41ea89666  memories  repo
   body: Products come from api.example.com and are cached for 10 minutes
-  created_by_actor_id: act_2ad3618e878ebbf527d34d446ef4f891
+  created_by_actor_id: act_54fe984c9b495744c0217776765a28f2
   kind: retrieved
-  project_id: prj_162df51b7f78b785c97c26b41ea89666
+  project_id: prj_05e99e22e9e86e96fe4daa7777994603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891 · updated 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891
+created 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2
 references:
-  ${var:api_host}  api.example.com  (var_54fe984c9b495744c0217776765a28f2)
-  ${var:cache_minutes}  10  (var_05e99e22e9e86e96fe4daa7777994603)
+  ${var:api_host}  api.example.com  (var_7a670ae8548ed05bf57ad29ad0759504)
+  ${var:cache_minutes}  10  (var_2ad3618e878ebbf527d34d446ef4f891)
 alice (work/website)$ lore vars where shop_api_host
 NAME	VALUE	TYPE	WHERE
 shop_api_host	api.example.com	dns	repo
@@ -90,37 +95,44 @@ ERROR: [E_INVALID_INPUT] vars set: "not-an-email" is not a email
 
 ### vars rm
 alice (work/website)$ lore vars rm cache_minutes --yes
-✓ removed variable cache_minutes (var_…4603) from repo
+lore: wrote ~/work/website/.lore/data/vars/var_2ad3618e878ebbf527d34d446ef4f891.json
+✓ removed variable cache_minutes (var_…f891) from repo
 alice (work/website)$ lore vars list
 NAME	VALUE	TYPE	WHERE
 shop_api_host	api.example.com	dns	repo
-alice (work/website)$ lore show mem_7a670ae8548ed05bf57ad29ad0759504 --expand
-mem_7a670ae8548ed05bf57ad29ad0759504  memories  repo
+alice (work/website)$ lore show mem_162df51b7f78b785c97c26b41ea89666 --expand
+mem_162df51b7f78b785c97c26b41ea89666  memories  repo
   body: Products come from api.example.com and are cached for ${var:cache_minutes} minutes
-  created_by_actor_id: act_2ad3618e878ebbf527d34d446ef4f891
+  created_by_actor_id: act_54fe984c9b495744c0217776765a28f2
   kind: retrieved
-  project_id: prj_162df51b7f78b785c97c26b41ea89666
+  project_id: prj_05e99e22e9e86e96fe4daa7777994603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891 · updated 2026-11-02T10:00:25Z by act_2ad3618e878ebbf527d34d446ef4f891
+created 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:00:25Z by act_54fe984c9b495744c0217776765a28f2
 references:
-  ${var:api_host}  api.example.com  (var_54fe984c9b495744c0217776765a28f2)
+  ${var:api_host}  api.example.com  (var_7a670ae8548ed05bf57ad29ad0759504)
   ${var:cache_minutes}  dangling  no such target; left as written
 
 ### meta set
 alice (work/website)$ lore task add 'Fix the Safari checkout button'
-✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — Fix the Safari checkout button [medium]
-lore live: (live, pushed)
-alice (work/website)$ lore meta set tsk_c0f3c11a5724b0cfd74b256190d9b5b8 client=acme
-tasks tsk_…b5b8: set client = acme
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_c0f3c11a5724b0cfd74b256190d9b5b8.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
+✓ tsk_76bd560aff0771fab8457dbfa9823f10 — Fix the Safari checkout button [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+alice (work/website)$ lore meta set tsk_76bd560aff0771fab8457dbfa9823f10 client=acme
+lore: wrote ~/work/website/.lore/data/meta_keys/mky_d4314eba822f1bf5908b2b8ded5f313a.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
+tasks tsk_…3f10: set client = acme
 new keys in repo: client (text)
-lore live: (live, pushed)
-alice (work/website)$ lore meta set tsk_c0f3c11a5724b0cfd74b256190d9b5b8 cost_hours:number=3
-tasks tsk_…b5b8: set cost_hours = 3
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
+alice (work/website)$ lore meta set tsk_76bd560aff0771fab8457dbfa9823f10 cost_hours:number=3
+lore: wrote ~/work/website/.lore/data/meta_keys/mky_b4f4765e593d51fd1352985e8af3a5b0.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
+tasks tsk_…3f10: set cost_hours = 3
 new keys in repo: cost_hours (number)
-lore live: (live, pushed)
-alice (work/website)$ lore meta get tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+alice (work/website)$ lore meta get tsk_76bd560aff0771fab8457dbfa9823f10
 client	acme
 cost_hours	3
 
@@ -132,40 +144,48 @@ cost_hours	repo	number	1
 
 ### meta add
 alice (work/website)$ lore meta add priority_band --type text --strict --values low,normal,urgent --description 'How fast the client needs it'
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
 added mky_…7ab0 priority_band (text, strict, values low, normal, urgent) to this repo (not internal)
-alice (work/website)$ lore meta set tsk_c0f3c11a5724b0cfd74b256190d9b5b8 priority_band=urgent
-tasks tsk_…b5b8: set priority_band = urgent
-lore live: (live, pushed)
-alice (work/website)$ lore meta set tsk_c0f3c11a5724b0cfd74b256190d9b5b8 priority_band=asap
+alice (work/website)$ lore meta set tsk_76bd560aff0771fab8457dbfa9823f10 priority_band=urgent
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
+tasks tsk_…3f10: set priority_band = urgent
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
+alice (work/website)$ lore meta set tsk_76bd560aff0771fab8457dbfa9823f10 priority_band=asap
 ERROR: [E_META_VALUE] meta: "asap" is not an allowed value of priority_band; allowed: low, normal, urgent
   hint: lore meta value add priority_band <value>
 (exit 20)
 
 ### meta where
 alice (work/website)$ lore task add 'Update the footer links' --meta client=acme && lore task add 'Add dark mode' --meta client=globex
-✓ tsk_76bd560aff0771fab8457dbfa9823f10 — Update the footer links [medium]
-lore live: (live, pushed)
-✓ tsk_d4314eba822f1bf5908b2b8ded5f313a — Add dark mode [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json
+✓ tsk_28f8d32584b2db54ffb146bede5b03df — Update the footer links [medium]
+lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
+lore: wrote ~/work/website/.lore/data/tasks/tsk_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
+✓ tsk_4c590afb2a0cc7ae1b97b7e4e62d6c38 — Add dark mode [medium]
+lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 alice (work/website)$ lore meta set --where client=acme billing=monthly --dry-run
-would set billing on 2 rows (tasks 2): tsk_c0f3c11a5724b0cfd74b256190d9b5b8, tsk_76bd560aff0771fab8457dbfa9823f10
+would set billing on 2 rows (tasks 2): tsk_76bd560aff0771fab8457dbfa9823f10, tsk_28f8d32584b2db54ffb146bede5b03df
 dry run: nothing written
 alice (work/website)$ lore meta set --where client=acme billing=monthly --yes
-set billing on 2 rows; batch bat_b4f4765e593d51fd1352985e8af3a5b0 (undo: lore batch undo bat_b4f4765e593d51fd1352985e8af3a5b0)
+lore: wrote ~/work/website/.lore/data/meta_keys/mky_3b6283bc4392c556bbae5f094246e913.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json
+set billing on 2 rows; batch bat_f147dd95f1aaf742dd4f5214843a5139 (undo: lore batch undo bat_f147dd95f1aaf742dd4f5214843a5139)
 new keys in repo: billing (text)
-lore live: (live, pushed)
+lore live: (live, pushed) commit df3a55c to origin refs/lore/live
 alice (work/website)$ lore meta export --key client,billing
 id,key,value
-tsk_c0f3c11a5724b0cfd74b256190d9b5b8,billing,monthly
-tsk_c0f3c11a5724b0cfd74b256190d9b5b8,client,acme
 tsk_76bd560aff0771fab8457dbfa9823f10,billing,monthly
 tsk_76bd560aff0771fab8457dbfa9823f10,client,acme
-tsk_d4314eba822f1bf5908b2b8ded5f313a,client,globex
+tsk_28f8d32584b2db54ffb146bede5b03df,billing,monthly
+tsk_28f8d32584b2db54ffb146bede5b03df,client,acme
+tsk_4c590afb2a0cc7ae1b97b7e4e62d6c38,client,globex
 
 ### meta edit
 alice (work/website)$ lore meta edit priority_band --rename-value urgent=asap
-priority_band: renamed value val_…c1c9 urgent → asap; row labels refresh on each row's next write; no values changed
-alice (work/website)$ lore meta get tsk_c0f3c11a5724b0cfd74b256190d9b5b8 priority_band
+lore: wrote ~/work/website/.lore/data/meta_values/val_2537f9b2f7de77bfe5ca958860216bbb.json
+priority_band: renamed value val_…6bbb urgent → asap; row labels refresh on each row's next write; no values changed
+alice (work/website)$ lore meta get tsk_76bd560aff0771fab8457dbfa9823f10 priority_band
 priority_band	urgent
 alice (work/website)$ lore meta keys --key priority_band
 KEY	SCOPE	TYPE	ROWS	VALUES
@@ -173,21 +193,23 @@ priority_band	repo	text	1	asap, low, normal
 
 ### meta rename
 alice (work/website)$ lore meta rename client customer --rewrite-rows
-renamed client → customer in the registry; rewrote 3 row labels (batch bat_28f8d32584b2db54ffb146bede5b03df; labels only, no values or dates changed)
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
-alice (work/website)$ lore meta get tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
+renamed client → customer in the registry; rewrote 3 row labels (batch bat_b69e8368dd4986838455061d5d9e5ed7; labels only, no values or dates changed)
+lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
+lore live: landed on main (34ee210); leaves live once main is fetched
+alice (work/website)$ lore meta get tsk_76bd560aff0771fab8457dbfa9823f10
 billing	monthly
 cost_hours	3
 customer	acme
 priority_band	urgent
 
 ### meta unset
-alice (work/website)$ lore meta unset tsk_c0f3c11a5724b0cfd74b256190d9b5b8 cost_hours
-tasks tsk_…b5b8: removed cost_hours
-lore live: (live, pushed)
+alice (work/website)$ lore meta unset tsk_76bd560aff0771fab8457dbfa9823f10 cost_hours
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
+tasks tsk_…3f10: removed cost_hours
+lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 lore live: 4 row(s) left live (main holds them)
-alice (work/website)$ lore meta get tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+alice (work/website)$ lore meta get tsk_76bd560aff0771fab8457dbfa9823f10
 billing	monthly
 customer	acme
 priority_band	asap
@@ -197,7 +219,7 @@ alice (work/website)$ lore meta lint
 no metadata problems
 
 ### meta history
-alice (work/website)$ lore meta history tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+alice (work/website)$ lore meta history tsk_76bd560aff0771fab8457dbfa9823f10
 2026-11-02 10:01  alice           client  set acme
 2026-11-02 10:01  alice           cost_hours  set 3
 2026-11-02 10:02  alice           priority_band  set urgent

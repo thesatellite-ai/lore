@@ -77,11 +77,11 @@ func runOrgGitAgainstDecoy(t *testing.T, withWorkTree bool) {
 	ctx := context.Background()
 	origin := storeOrigin(t) // init --bare, clone, commit, push, all with -C
 	root := t.TempDir()
-	dir := filepath.Join(root, "clone.git")
-	if err := ensureBare(ctx, dir, filepath.Join(root, "moved.git")); err != nil {
+	dir := filepath.Join(root, "clone")
+	if err := ensureClone(ctx, dir, filepath.Join(root, "moved.git"), false); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureBare(ctx, dir, origin); err != nil { // remote set-url
+	if err := ensureClone(ctx, dir, origin, false); err != nil { // remote set-url
 		t.Fatal(err)
 	}
 	if err := fetch(ctx, nil, dir); err != nil {
@@ -90,8 +90,8 @@ func runOrgGitAgainstDecoy(t *testing.T, withWorkTree bool) {
 	if got := testGit(t, dir, "config", "--get", "remote."+remoteName+".url"); got != origin {
 		t.Fatalf("clone origin = %q, want %q", got, origin)
 	}
-	if got := testGit(t, dir, "rev-parse", "--is-bare-repository"); got != "true" {
-		t.Fatalf("clone is not bare: %q", got)
+	if got := testGit(t, dir, "rev-parse", "--is-bare-repository"); got != "false" {
+		t.Fatalf("the store clone is bare: %q", got)
 	}
 	check()
 }

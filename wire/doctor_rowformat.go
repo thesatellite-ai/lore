@@ -27,9 +27,9 @@ const DoctorCheckRowFormat DoctorCheck = "row_format"
 
 const (
 	rowFormatBeforeNote = "row files written by lore 0.1.17 (_v: 1) are not migrated yet (%s)"
-	rowFormatBeforeFix  = "lore migrate run, once everyone who writes here runs lore 0.1.18 or later"
+	rowFormatBeforeFix  = "lore fix"
 	rowFormatAfterWarn  = "row files at _v: 1 after this repo's migration (min_lore_version %s): a lore older than 0.1.18 still writes here, cannot read the migrated rows and cannot commit beside them (%s)"
-	rowFormatAfterFix   = "upgrade lore on the machine that wrote them, then lore migrate run"
+	rowFormatAfterFix   = "upgrade lore on the machine that wrote them (lore upgrade), then run lore fix"
 )
 
 // DoctorRowFormat reports the v1 row files a migration would rewrite.

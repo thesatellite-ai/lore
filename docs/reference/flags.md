@@ -35,7 +35,7 @@ ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
   hint: cd into a git checkout, or run git init here first
 (exit 19)
 $ cd work/website && lore rule list
-rul_162d…9666 [must/always] Run the tests before you push
+rul_54fe…28f2 [must/always] Run the tests before you push
 ```
 <!-- /example -->
 
@@ -76,24 +76,28 @@ These matter when you work for an org in client repos. A **store** is a separate
 | `--live` | share this row with everyone at once on the live list, before any commit | the `add` and `edit` commands of most row kinds |
 | `--no-live` | keep this row with the code: it travels with this branch's next commit | the same commands as `--live` |
 
-A note for yourself that should follow you into every repo is a plain `--to me` row. `lore store init me` makes the personal store first (here a folder store under `~/.lore/stores/me`); the note written in `website` is listed in `landing` too:
+A note for yourself that should follow you into every repo is a plain `--to me` row. `lore store init me` makes the personal store first (here a folder store under `~/.lore/stores/_me`); the note written in `website` is listed in `landing` too:
 
 <!-- example: reference#personal-everywhere -->
 ```console
 # alice, in website
 $ lore store init me
-✓ created store me (sto_28f8…03df) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to alice <alice@agency.example> (it was alice@agency.example, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/other/notes (.git/config) to alice <alice@agency.example> (it was alice@example.com, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+✓ created store me (sto_3b62…e913) at file://~/.lore/stores/_me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 $ lore memory add --to me --everywhere --body 'I write short commit messages'
 ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 $ lore memory add --to me --body 'I write short commit messages'
-✓ mem_4c59…6c38 [me]
+lore: wrote ~/.lore/stores/_me/_store/actors/act_f147…5139.json (store me)
+lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537…6bbb.json (store me)
+✓ mem_2537…6bbb [me]
   scope: [master]
 
 # alice, in landing
 $ lore memory list
-mem_4c59…6c38  I write short commit messages  [me]
+mem_2537…6bbb  I write short commit messages  [me]
 ```
 <!-- /example -->
 
@@ -137,7 +141,11 @@ ERROR: [E_INVALID_INPUT] unknown flag: --force-org
   hint: lore memory add --help lists its flags
 (exit 20)
 $ lore memory add --to freelance --body 'The client pays invoices in 30 days'
-✓ mem_d431…313a [freelance]
+lore: pushed store freelance: commit 6d00426 to branch main
+lore: pushed store agency: commit 34ee210 to branch main
+lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes/_store (store agency)
+lore: wrote 2 row file(s) in ~/.lore/stores/other/notes/_store (store freelance)
+✓ mem_b4f4…a5b0 [freelance]
   scope: [master]
 ```
 <!-- /example -->

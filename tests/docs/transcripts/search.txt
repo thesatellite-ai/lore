@@ -82,8 +82,10 @@ note: the core rebuilds a store's whole cache; --kind memory included
 
 ### repo scope
 alice (work/website)$ lore repo add web --origin https://github.com/client/website
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe984c9b495744c0217776765a28f2.json
 ✓ repo web registered (rep_54fe984c9b495744c0217776765a28f2)
 alice (work/website)$ lore memory add --repo web --body 'The web repo deploys on every merge to main'
+lore: wrote ~/work/website/.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 ✓ mem_05e99e22e9e86e96fe4daa7777994603
   scope: [repo:web]
 alice (work/website)$ lore memory list --repo web
@@ -103,6 +105,7 @@ memory  mem_05e99e22e9e86e96fe4daa7777994603  The web repo deploys on every merg
 
 ### word forms
 alice (work/website)$ lore memory add --body 'The client sends invoices on Fridays'
+lore: wrote ~/work/website/.lore/data/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json
 ✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8
   scope: [master]
 alice (work/website)$ lore search invoice

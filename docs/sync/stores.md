@@ -35,12 +35,12 @@ stores:
     - name: notes
       url: file://~/stores/notes
 $ ls ~/stores/notes; cat ~/stores/notes/lore-store.yaml
+README.md
 lore-store.yaml
-lore_store: 2
+lore_store: 4
 id: sto_7a67…9504
 visibility: internal
 created: "2026-11-02"
-org_folder: org
 $ lore store list
 stores:
   NAME   URL                                                                     FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS
@@ -110,6 +110,8 @@ The `note:` line says the old address could not be read (the folder is gone), so
 $ lore store folder add notes golang
 ✓ created folder golang in notes (prj_2ad3…f891; shown only in repos that attach it)
 $ lore memory add --to notes/golang --body 'Close every channel from the sender side.'
+lore: wrote 2 row file(s) in ~/stores/agency-notes/_store (store notes)
+lore: wrote 3 row file(s) in ~/stores/agency-notes/golang (store notes/golang)
 ✓ mem_162d…9666 [notes/golang]
   scope: [master]
 $ cat .lore/stores.yaml
@@ -136,6 +138,7 @@ Alice wrote a rule into the repo that belongs in her store. `lore row move <id> 
 ```console
 # alice, in website
 $ lore rule add --body 'Keep the agency hourly rate out of the client repo.'
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2
   scope: [master] severity: must
 $ lore row move rul_54fe…28f2 --to notes
@@ -145,6 +148,8 @@ Move it?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore row move rul_54fe…28f2 --to notes --yes
+lore: wrote ~/stores/agency-notes/_store/rules/rul_54fe…28f2.json (store notes)
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 moved to store notes (same id; the old copy is tombstoned)
 $ lore rule list
 rul_54fe…28f2  Keep the agency hourly rate out of the client repo.  [notes]
@@ -185,6 +190,8 @@ count: 0
 $ lore rule list
 (no rules)
 $ ls ~/stores/agency-notes
+README.md
+_store
 golang
 lore-store.yaml
 ```
@@ -208,6 +215,19 @@ rul_54fe…28f2  Keep the agency hourly rate out of the client repo.  [notes]
 ```
 <!-- /example -->
 
+## Sync every store from anywhere
+
+`lore sync` in a code repo syncs that repo's stores. Run it where there is no code repo (your home folder, the plain parent folder of your client repos) and it syncs every store the setup of that folder sees, the same set `lore store list` shows there: one line per store (`up to date`, `pulled`, `pushed`, `pulled and pushed`, with the counts), and the push lines of each store on stderr. `lore sync --json` lists them under `data.stores` (each with `store`, `url`, `status`, and for a store that failed `error` and `next`). Inside a store checkout (`cd ~/.lore/stores/<owner>/<repo>/<folder>`) it syncs that store only.
+
+A store that cannot be reached or fails does not stop the others: its line says why, and when any store failed `lore sync` ends with an error naming each failed store and its next step (exit non-zero, `E_STORE_UNREACHABLE` for a store it could not reach).
+
+```
+$ cd ~/code && lore sync
+store agency: up to date
+store notes-two: pulled (sent 0, received 1, merged 0)
+store me: up to date
+```
+
 ## Pitfalls
 
 - **Every confirm needs `--yes` without a terminal.** `store visibility`, `store set-url` onto a store whose old address still opens, `store remove`, `row move`, and `store init`, `add` or `set-url` when the url would land in `.lore/stores.yaml` of a client repo or is one of your org's stores (committed, so visible to everyone who can read the repo) stop with `E_NEEDS_CONFIRM` (exit 26) in a script or a coding agent's shell. Ask the person, then rerun with `--yes`.
@@ -215,6 +235,7 @@ rul_54fe…28f2  Keep the agency hourly rate out of the client repo.  [notes]
 - **A move is one way.** A row never returns to a place it left (`E_UNSUPPORTED`); pick the target with care, and write a new row if you change your mind.
 - **A moved row leaves a tombstone in the repo.** Commit it with your next change, so teammates who pull drop the row from the repo too.
 - **Two entries on one place.** Two `.lore/stores.yaml` entries can name the same place, for example `stag` as `<url>?branch=staging` and `stag2` as `<url> --branch staging`. Lists and search show its rows once under the first entry's name (`[stag]`), even a row written `--to stag2`; `--store stag2` still answers under that name. `lore sql` keeps both names as sources, so a query over both sees each row twice, once with `source` `stag` and once with `stag2`; filter on one of them (`WHERE source = 'stag'`) to count each row once.
+- **An ssh alias of yours is not a store url for the team.** `.lore/stores.yaml` is committed, so it holds the canonical url (`git@github.com:agency/notes.git`). Type your alias url (`git@work-gh:agency/notes.git`, where `~/.ssh/config` says `HostName github.com`) and `lore store init` or `lore store add` stores the canonical url, records your spelling under `access:` in `~/.lore/config.yaml`, scoped to the owner (`git@github.com:agency/` → `git@work-gh:agency/`, so your stores under another account are not sent through the alias), and says so ([Reaching stores through your own ssh alias](../reference/config.md#reaching-stores-through-your-own-ssh-alias-access)).
 - **`shareable` is about committed files.** It does not copy the store anywhere; it only allows its notes into renders and client repos. Check with `lore render --dry-run` before you commit the render.
 
 ## Related

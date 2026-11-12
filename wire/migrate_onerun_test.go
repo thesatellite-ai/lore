@@ -8,10 +8,8 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
-	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 )
@@ -65,9 +63,8 @@ func TestMigrateRunOneRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = a.Close() }) // a failed close is the other tests' report, not this one's
-	if _, aerr := run(t, a, opsmemory.OpAdd, `{"body":"new note"}`, false); !errs.Has(aerr, errs.NeedsConfirm) {
-		t.Fatalf("a write outside the run did not ask the O6 question: %v", aerr)
-	}
+	// (a write here would now run the migration itself, owner item 11:
+	// wire/fixproject.go; this test is about the explicit run)
 	raw, err := run(t, a, opsmigrate.OpRun, `{}`, false)
 	if err != nil {
 		t.Fatalf("first run: %v", err)

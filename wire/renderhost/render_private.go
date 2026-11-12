@@ -617,7 +617,9 @@ func privateRowText(r row.Row) string {
 	return body
 }
 
-// buildPrivateIndex is index.md: which file holds which store.
+// buildPrivateIndex is index.md: which file holds which store, one
+// paragraph per store line (never a hard-wrapped paragraph; the store
+// forget step drops a line by its "<file> " prefix).
 func buildPrivateIndex(repoName, repoKey string, ss []privateStore) string {
 	var b strings.Builder
 	b.WriteString(privateHeader + "\n")
@@ -631,7 +633,7 @@ func buildPrivateIndex(repoName, repoKey string, ss []privateStore) string {
 		if url == "" {
 			url = "-"
 		}
-		fmt.Fprintf(&b, "%s  store %s  %s  internal\n", s.stem+privateFileExt, strings.Join(names, ", "), url)
+		fmt.Fprintf(&b, "\n%s  store %s  %s  internal\n", s.stem+privateFileExt, strings.Join(names, ", "), url)
 	}
 	return b.String()
 }

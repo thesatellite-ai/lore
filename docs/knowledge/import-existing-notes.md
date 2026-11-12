@@ -35,14 +35,16 @@ The client pays invoices on the first Monday of the month.
 ```console
 # alice, in website
 $ lore rule add --body 'Ask the client before changing any price.'
-✓ rul_06b1…3d1c
+lore: wrote ~/work/website/.lore/data/rules/rul_4bfb…19ce.json
+✓ rul_4bfb…19ce
   scope: [master] severity: must
 $ lore memory add --body 'The client pays invoices on the first Monday of the month.'
-✓ mem_7289…c813
+lore: wrote ~/work/website/.lore/data/memories/mem_2e0c…0b6d.json
+✓ mem_2e0c…0b6d
   scope: [master]
 $ rm .ai/notes.md && git status --short
-?? .lore/data/memories/mem_7289…c813.json
-?? .lore/data/rules/rul_06b1…3d1c.json
+?? .lore/data/memories/mem_2e0c…0b6d.json
+?? .lore/data/rules/rul_4bfb…19ce.json
 ```
 <!-- /example -->
 
@@ -55,7 +57,7 @@ Search for a word from the old file, then render: the memory is found by `lore s
 # alice, in website
 $ lore search invoices
 Found 1 hit for "invoices" across 1 entity type:
-memory  mem_7289…c813  The client pays invoices on the first Monday of the month.  (score=0.017)
+memory  mem_2e0c…0b6d  The client pays invoices on the first Monday of the month.  (score=0.017)
 $ lore render >/dev/null && grep -c 'Ask the client before changing any price' .lore/LORE.md
 1
 ```
@@ -69,14 +71,17 @@ $ lore render >/dev/null && grep -c 'Ask the client before changing any price' .
 ```console
 # alice, in website
 $ lore external-source add --kind wiki --name 'Team wiki'
+lore: wrote ~/work/website/.lore/data/external_sources/ext_e9fa…224c.json
 ✓ external-source Team wiki added
 $ lore external-source list
-[off] Team wiki (wiki) ext_4bfb…19ce
-$ lore external-source enable ext_4bfb…19ce && lore external-source list
-✓ external-source ext_4bfb…19ce enabled
-[on] Team wiki (wiki) ext_4bfb…19ce
-$ lore external-source disable ext_4bfb…19ce
-✓ external-source ext_4bfb…19ce disabled
+[off] Team wiki (wiki) ext_e9fa…224c
+$ lore external-source enable ext_e9fa…224c && lore external-source list
+lore: wrote ~/work/website/.lore/data/external_sources/ext_e9fa…224c.json
+✓ external-source ext_e9fa…224c enabled
+[on] Team wiki (wiki) ext_e9fa…224c
+$ lore external-source disable ext_e9fa…224c
+lore: wrote ~/work/website/.lore/data/external_sources/ext_e9fa…224c.json
+✓ external-source ext_e9fa…224c disabled
 ```
 <!-- /example -->
 

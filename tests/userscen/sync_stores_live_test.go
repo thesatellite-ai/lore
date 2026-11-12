@@ -19,9 +19,10 @@ package userscen
 //     branch is refused and never created; a staging write never reaches
 //     main
 //   - `store open`: by name, by url, by url with ?branch=, by an entry with
-//     branch:, with --branch; the folder is under ~/.lore/worktrees at the
-//     remote's commit and holds the store files; an unknown name and a
-//     missing branch are refused
+//     branch:, with --branch; the folder is the store's own clone under
+//     ~/.lore/stores (<repo>@<branch> for another branch) at the remote's
+//     commit and holds the store files; an unknown name and a missing
+//     branch are refused
 //   - `live compact`: --dry-run changes nothing, compact keeps every row and
 //     a local backup only, raises the epoch by one (live log agrees), a
 //     second compact of the one-commit ref writes nothing and keeps the
@@ -35,7 +36,7 @@ package userscen
 //     second restore changes nothing
 
 import (
-	"path/filepath"
+	"os"
 	"strings"
 	"testing"
 
@@ -156,15 +157,18 @@ func TestSyncStores_BranchesAndOpen(t *testing.T) {
 			syncRemoteHolds(r, syncStagingRef, mem), syncRemoteHolds(r, syncStoreRef, mem))
 	}
 
-	worktrees := alice.LorePath("worktrees")
+	stores := alice.LorePath("stores")
 	main := th.DecodeJSON[syncOpenOut](t, a.MustLore("store", "open", "notes", "--json"))
-	if main.Branch != "main" || main.Commit != r.Rev(syncStoreRef) || !strings.HasPrefix(main.Dir, worktrees) {
+	if main.Branch != "main" || main.Commit != r.Rev(syncStoreRef) || !strings.HasPrefix(main.Dir, stores) {
 		t.Fatalf("store open notes: %+v (remote main %s)", main, r.Rev(syncStoreRef))
 	}
 	if !syncFolderHolds(t, main.Dir, "") || syncFolderHolds(t, main.Dir, mem) {
 		t.Fatalf("the main folder holds the store files and no staging row: %s", main.Dir)
 	}
-	a.MustLore("store", "open", "notes").Says(t, main.Dir, "detached; read-only by convention")
+	a.MustLore("store", "open", "notes").Says(t, main.Dir, "the store's own clone")
+	if _, err := os.Stat(alice.LorePath("worktrees")); err == nil {
+		t.Fatal("store open made a worktrees folder beside the store's own clone")
+	}
 
 	// INTEG-SYNC-5: every spelling of the staging branch opens it, the
 	// `?branch=` url form included (it failed with E_OFFLINE before).
@@ -176,7 +180,7 @@ func TestSyncStores_BranchesAndOpen(t *testing.T) {
 		{"notes", "--branch", "staging"},
 	} {
 		got := th.DecodeJSON[syncOpenOut](t, a.MustLore(append(append([]string{"store", "open"}, args...), "--json")...))
-		if got.Branch != "staging" || got.Commit != r.Rev(syncStagingRef) || got.Dir != filepath.Join(filepath.Dir(main.Dir), "staging") {
+		if got.Branch != "staging" || got.Commit != r.Rev(syncStagingRef) || got.Dir != main.Dir+"@staging" {
 			t.Fatalf("store open %v: %+v (remote staging %s)", args, got, r.Rev(syncStagingRef))
 		}
 		if !syncFolderHolds(t, got.Dir, mem) {

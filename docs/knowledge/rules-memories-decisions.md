@@ -24,12 +24,15 @@ All three share the same verbs: `add`, `list`, `show`, `edit`, `search`, `archiv
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
+lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
   scope: [master] severity: must
 $ lore rule add --body 'Never put passwords in the code' --severity must
+lore: wrote ~/work/website/.lore/data/rules/rul_2ad3…f891.json
 ✓ rul_2ad3…f891
   scope: [master] severity: must
 $ lore rule add --body 'Keep pull requests under 400 lines' --severity should
+lore: wrote ~/work/website/.lore/data/rules/rul_162d…9666.json
 ✓ rul_162d…9666
   scope: [master] severity: should
 $ lore rule list
@@ -53,11 +56,14 @@ A memory has a *kind* (`--kind`): `retrieved` (the default; found by search when
 ```console
 # alice, in website
 $ lore memory add --body 'The client replies faster on WhatsApp than email'
+lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ mem_05e9…4603
   scope: [master]
 $ lore tag add --name staging
+lore: wrote ~/work/website/.lore/data/tags/tag_c0f3…b5b8.json
 ✓ tag staging tag_c0f3…b5b8
 $ lore memory add --body 'The staging site is reset every Monday morning' --tag staging
+lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
 ✓ mem_76bd…3f10
   scope: [master]
 $ lore memory list
@@ -74,6 +80,7 @@ A decision needs a short `--title` (the choice) and a `--body` (the reason). `--
 ```console
 # alice, in website
 $ lore decision add --title 'We use Stripe for payments' --body 'Stripe already works in the client shop app, so we keep one payment provider.'
+lore: wrote ~/work/website/.lore/data/decisions/dec_d431…313a.json
 ✓ dec_d431…313a — We use Stripe for payments 
 $ lore decision list
 dec_d431…313a [accepted] We use Stripe for payments
@@ -94,6 +101,7 @@ created 2026-11-02T10:00:50Z by act_54fe…28f2 · updated 2026-11-02T10:00:50Z 
 ```console
 # alice, in website
 $ lore memory edit mem_05e9…4603 --body 'The client replies faster on WhatsApp than email, even on weekends'
+lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ mem_05e9…4603 updated
 $ lore memory show mem_05e9…4603
 mem_05e9…4603
@@ -113,6 +121,8 @@ When the meaning changes, add a new row and name the old one with `--supersedes 
 ```console
 # alice, in website
 $ lore decision add --title 'We use Stripe and bank transfer for payments' --body 'The client asked for bank transfer too.' --supersedes dec_d431…313a
+lore: wrote ~/work/website/.lore/data/decisions/dec_b4f4…a5b0.json
+lore: wrote ~/work/website/.lore/data/decisions/dec_d431…313a.json
 ✓ dec_b4f4…a5b0 — We use Stripe and bank transfer for payments 
 $ lore decision list
 dec_d431…313a [superseded] We use Stripe for payments
@@ -132,6 +142,7 @@ Rows linked by older versions point the wrong way; run `lore doctor --fix` once 
 ```console
 # alice, in website
 $ lore memory invalidate mem_28f8…03df
+lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
 ✓ mem_28f8…03df invalidated (valid_until=now)
 $ lore memory show mem_28f8…03df
 mem_28f8…03df
@@ -152,6 +163,7 @@ created 2026-11-02T10:01:25Z by act_54fe…28f2 · updated 2026-11-02T10:01:30Z 
 ```console
 # alice, in website
 $ lore rule archive rul_7a67…9504
+lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504 archived
 $ lore rule list
 rul_2ad3…f891 [must/always] Never put passwords in the code
@@ -164,6 +176,7 @@ rul_162d…9666 [should/always] Keep pull requests under 400 lines
 $ lore render >/dev/null && grep -c 'Run the tests before you push' .lore/LORE.md || true
 0
 $ lore rule unarchive rul_7a67…9504
+lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504 unarchived
 ```
 <!-- /example -->
@@ -178,6 +191,7 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 ```console
 # alice, in website
 $ lore memory delete mem_4c59…6c38 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
 ✓ mem_4c59…6c38 moved to the trash (restore: lore trash restore mem_4c59…6c38)
 $ lore memory show mem_4c59…6c38 || true
 ERROR: [E_IN_TRASH] mem_4c59…6c38 is in the trash (deleted by act_54fe…28f2 on 2026-11-02 10:02)
@@ -193,8 +207,10 @@ A repo can have more stores attached than its own `.lore/data`: a private store 
 ```console
 # alice, in website
 $ lore store init agency file://$HOME/stores/agency
-✓ created store agency (sto_2e0c…0b6d) at file://~/stores/agency; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_c11f…3d6b) at file://~/stores/agency; recorded in .lore/stores.yaml; commit it to share
 $ lore memory move mem_05e9…4603 --to agency --yes
+lore: wrote 3 row file(s) in ~/stores/agency/_store (store agency)
+lore: wrote 1 row file(s) in ~/work/website/.lore/data
 ✓ mem_05e9…4603 moved to agency
 $ lore memory show mem_05e9…4603
 mem_05e9…4603
@@ -220,11 +236,14 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: pas
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 $ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_f147…5139.json
 ✓ mem_3b62…e913
   scope: [master]
 $ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
 $ lore memory delete mem_3b62…e913 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
 ```
 <!-- /example -->

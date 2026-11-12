@@ -32,6 +32,8 @@ In a repo that has a remote (here `github.com/alice/notes-app`), run `lore init`
 ```console
 # alice, in notes-app
 $ lore init --non-interactive --name=notes-app
+lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/notes-app/.git/config; lore's merge rules in ~/work/notes-app/.gitattributes; hook blocks in ~/work/notes-app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 4 row file(s) in ~/work/notes-app/.lore/data
 lore initialized
     project_id: prj_7a67…9504
     name:       notes-app
@@ -75,18 +77,20 @@ Tasks are live by default. Adding one writes it to a hidden list on GitHub that 
 ```console
 # alice, in notes-app
 $ lore task add 'fix login timeout'
-✓ tsk_54fe…28f2 — fix login timeout [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
+lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
+✓ tsk_05e9…4603 — fix login timeout [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task list
-○ tsk_54fe…28f2 fix login timeout [medium]
+○ tsk_05e9…4603 fix login timeout [medium]
 $ git status --short
 $ git ls-remote origin
-601d2850ffd0	HEAD
-601d2850ffd0	refs/heads/main
-86dbae476bd6	refs/lore/live
+86dbae476bd6	HEAD
+86dbae476bd6	refs/heads/main
+9b40ce71af28	refs/lore/live
 $ lore live show
-task_lists tlt_05e9…4603     live      since 2026-11-02 10:00
-tasks      tsk_54fe…28f2     live      since 2026-11-02 10:00
+task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
+tasks      tsk_05e9…4603     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 ```
 <!-- /example -->
@@ -100,22 +104,23 @@ Finishing a task lands it. Lore writes it to `main`'s `.lore/data` with a commit
 <!-- example: getting-started#first-landing -->
 ```console
 # alice, in notes-app
-$ lore task done tsk_54fe…28f2
-✓ tsk_54fe…28f2 done
+$ lore task done tsk_05e9…4603
+lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
+✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
+lore live: landed on main (dfd8dc8); leaves live once main is fetched
 $ git fetch -q origin && git log --oneline origin/main
-9b40ce7 lore: land 2 rows (_root)
-601d285 lore: init
-05513aa init
+dfd8dc8 lore: land 2 rows (_root)
+86dbae4 lore: init
+cf563f3 init
 $ lore live show
-task_lists tlt_05e9…4603     live      since 2026-11-02 10:00
-tasks      tsk_54fe…28f2     live      since 2026-11-02 10:00
+task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
+tasks      tsk_05e9…4603     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 $ lore sync
 lore live: 2 row(s) left live (main holds them)
-lore live: pushed waiting live writes
+lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
 $ lore live show
 0 live rows in _root (epoch 1)
 ```
@@ -138,6 +143,7 @@ source:      ~/.lore/identity.yaml
 stable:      yes
 warning: ~/.lore/identity.yaml is from v0.1.17 and is read only while identity: in ~/.lore/config.yaml is unset: `lore migrate run` moves it into identity:
 $ lore migrate run
+lore: wrote ~/work/notes-app/.lore/data/actors/act_162d…9666.json
 Upgraded 1 row
   identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
   actor_copies: refreshed 1 actor copy from their source: Alice Doe (act_162d…9666)
@@ -149,6 +155,7 @@ team lock released
 
 # alice, in ~
 $ ls ~/.lore; cat ~/.lore/config.yaml
+README.md
 cache
 config.yaml
 config.yaml.lock
@@ -211,6 +218,8 @@ $ lore config check
 
 # alice, in tools
 $ lore store init agency git@github.com:agency/notes --yes
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
 ✓ created store agency (sto_d431…313a) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 $ lore whoami
 org        agency  (matched by: own pattern github.com/agency/* of agency)
@@ -224,6 +233,10 @@ stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore actor register
+lore: pushed store agency/org: commit 6d00426 to branch main
+lore: pushed store agency/org: commit 34ee210 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_28f8…03df.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4…a5b0.json (store agency/org)
 ✓ act_b4f4…a5b0 Alice Doe (@alice) registered in agency org/
 ```
 <!-- /example -->
@@ -256,10 +269,12 @@ In any repo where you ran `lore init`, add a task and list it. The task is live 
 ```console
 # alice, in notes-app
 $ lore task add 'fix login timeout'
-✓ tsk_54fe…28f2 — fix login timeout [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
+lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
+✓ tsk_05e9…4603 — fix login timeout [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task list
-○ tsk_54fe…28f2 fix login timeout [medium]
+○ tsk_05e9…4603 fix login timeout [medium]
 ```
 <!-- /example -->
 

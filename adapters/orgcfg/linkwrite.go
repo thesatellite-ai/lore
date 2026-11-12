@@ -2,15 +2,16 @@ package orgcfg
 
 // linkwrite.go — the store side of `lore org link` (LORE_TEAM_SPEC F11
 // steps 2-5, F13) for cmd/lore (P3-CMDLORE-4): set-union one link into a
-// store folder's _meta.json in the shared v0.1.17 bare clone (the same
-// clone Links reads, so the new link is seen at once), commit as the org
+// store folder's _meta.json in the store's clone (the same clone the store
+// backend and Links read, so the new link is seen at once), commit as the org
 // identity and push with retry. Ported from v0.1.17's stores.WriteLink and
 // the CLI's pickLinkStore.
 //
 //	WriteLink ─▶ pick the store (the one already holding the folder, else
 //	             --store / the entry's first) ─▶ loop: fetch ─▶ tip ─▶
 //	             marker check ─▶ read _meta.json (or a new one) ─▶ add the
-//	             link ─▶ commit on the tip ─▶ move the local branch ─▶ push
+//	             link ─▶ commit on the tip ─▶ advance the local branch
+//	             (the checkout follows when it is that branch) ─▶ push
 //	             (a lost race fetches and builds again on the new tip)
 
 import (
@@ -18,13 +19,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -124,7 +124,7 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 	return res, err
 }
 
-// storeCommit is one change to commit into a store's shared bare clone.
+// storeCommit is one change to commit into a store's clone.
 type storeCommit struct {
 	// Dir is the clone, Store its normalised url (for messages), Branch
 	// the store branch.
@@ -158,9 +158,10 @@ type storeCommitResult struct {
 func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) {
 	var res storeCommitResult
 	dir, branch, target := c.Dir, c.Branch, c.Store
-	// One writer per clone: processes share the clone (§5.3), and two
-	// racing commits would fight over its refs (F11 race).
-	unlock, err := lockClone(ctx, dir)
+	// One writer per clone: the store lock every writer of the store takes
+	// (row batches, folder edits, links), so two racing commits never
+	// fight over its refs or its checkout (F11 race).
+	ctx, unlock, err := gitbackend.LockClone(ctx, dir)
 	if err != nil {
 		return res, err
 	}
@@ -185,6 +186,13 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 			if t, tok, terr := repo.ResolveRef(ctx, trackingRef(branch)); terr == nil && tok {
 				tip = t
 			}
+		}
+		old, hasOld, oerr := repo.ResolveRef(ctx, localRef(branch))
+		if oerr != nil {
+			return res, oerr
+		}
+		if !hasOld {
+			old = ""
 		}
 		_, hasMarker, merr := repo.ReadFile(ctx, tip, storeMarkerFile)
 		if merr != nil {
@@ -220,8 +228,10 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 			}
 			oid = cm.OID
 		}
-		if err := moveRef(ctx, repo, localRef(branch), oid); err != nil {
-			return res, err
+		if old != oid {
+			if err := gitbackend.AdvanceBranch(ctx, dir, branch, oid, old); err != nil {
+				return res, err
+			}
 		}
 		if c.NoPush || offline {
 			res.Offline = offline
@@ -230,6 +240,7 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 		out, perr := netGit(ctx, c.Route, dir, "push", "--quiet", "--porcelain", remoteName, oid+":"+localRef(branch))
 		if perr == nil {
 			res.Pushed = true
+			reportPush(ctx, StorePush{Store: target, Branch: branch, Commit: oid})
 			_ = moveRef(ctx, repo, trackingRef(branch), oid) // the next fetch sets it anyway
 			return res, nil
 		}
@@ -250,7 +261,10 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 // _meta.json with the link set-unioned in (created when the folder has
 // none). An empty map means the link is already there.
 func linkChange(ctx context.Context, repo *gitref.Repo, tip, store string, w LinkWrite) (put map[string][]byte, created, changed bool, err error) {
-	path := metaPathOf(w.Plan.Folder)
+	path, err := metaPathAt(ctx, repo, tip, w.Plan.Folder)
+	if err != nil {
+		return nil, false, false, err
+	}
 	raw, found, err := repo.ReadFile(ctx, tip, path)
 	if err != nil {
 		return nil, false, false, err
@@ -333,29 +347,21 @@ func (g *GitLinks) pickLinkStore(ctx context.Context, plan orgresolve.LinkPlan) 
 		if n == plan.StoreURL && named == "" {
 			named = n
 		}
-		dir := g.cloneDirOf(n)
-		if berr := ensureBare(ctx, dir, sc.URL); berr != nil {
+		dir, own := cloneDir(g.Home, n)
+		if berr := ensureClone(ctx, dir, sc.URL, own); berr != nil {
 			return "", berr
 		}
-		unlock, lerr := lockClone(ctx, dir)
-		if lerr != nil {
-			return "", lerr
-		}
-		ferr := fetch(ctx, g.Route, dir)
-		unlock()
-		if ferr != nil {
-			if lastFetch(dir).IsZero() {
-				return "", fmt.Errorf("%w: %s (cannot tell which store holds %s/)", ErrStoreOffline, n, plan.Folder)
-			}
-		} else {
-			recordFetch(ctx, g.Route, dir, g.now())
+		if ferr := fetchLocked(ctx, g.Route, dir, g.now()); ferr != nil && lastFetch(dir).IsZero() {
+			return "", fmt.Errorf("%w: %s (cannot tell which store holds %s/)", ErrStoreOffline, n, plan.Folder)
 		}
 		if holder != "" {
 			continue
 		}
 		if tip, ok := branchTip(ctx, dir, sc.EffectiveBranch()); ok {
-			if _, rerr := gitRun(ctx, "-C", dir, "cat-file", "-e", tip+":"+metaPathOf(plan.Folder)); rerr == nil {
-				holder = n
+			for _, p := range []string{metaPathOf(plan.Folder), oldMetaPathOf(plan.Folder)} {
+				if _, rerr := gitRun(ctx, "-C", dir, "cat-file", "-e", tip+":"+p); rerr == nil {
+					holder = n
+				}
 			}
 		}
 	}
@@ -386,12 +392,31 @@ func (g *GitLinks) autopush(entry *orgconf.Live) bool {
 	return true
 }
 
-// metaPathOf is "<folder>/.lore/data/_meta.json" ("." = the store root).
+// metaPathOf is a folder's _meta.json in the store layout
+// ("<folder>/_meta.json"; "." = the store root's).
 func metaPathOf(folder string) string {
+	return rowfs.LayoutStore.StorePath(folder, rowfs.MetaFileName)
+}
+
+// oldMetaPathOf is the same file in the old layout (<folder>/.lore/data/_meta.json).
+func oldMetaPathOf(folder string) string {
 	if folder == "" || folder == "." {
-		return metaPathSuffix
+		return oldMetaPathSuffix
 	}
-	return folder + "/" + metaPathSuffix
+	return folder + "/" + oldMetaPathSuffix
+}
+
+// metaPathAt is where folder's _meta.json is at tip: the old place when
+// only that exists (a folder not moved yet keeps one _meta.json), else
+// the store layout's.
+func metaPathAt(ctx context.Context, repo *gitref.Repo, tip, folder string) (string, error) {
+	if _, found, err := repo.ReadFile(ctx, tip, metaPathOf(folder)); err != nil || found {
+		return metaPathOf(folder), err
+	}
+	if _, found, err := repo.ReadFile(ctx, tip, oldMetaPathOf(folder)); err != nil || found {
+		return oldMetaPathOf(folder), err
+	}
+	return metaPathOf(folder), nil
 }
 
 // localRef / trackingRef name a store branch in the clone.
@@ -468,48 +493,4 @@ func classifyPush(out string) (pushOutcome, string) {
 		return pushRefused, summary
 	}
 	return pushUnreachable, ""
-}
-
-// Clone lock: an O_EXCL file in the clone's state folder, polled; a lock
-// older than cloneLockStale is a crashed holder's and is taken over.
-const (
-	cloneLockFile  = "link.lock"
-	cloneLockPoll  = 50 * time.Millisecond
-	cloneLockWait  = 60 * time.Second
-	cloneLockStale = 2 * time.Minute
-)
-
-// ErrCloneBusy means another process held the clone for cloneLockWait.
-var ErrCloneBusy = errors.New("orgcfg: the store clone is busy (another lore command holds it)")
-
-// lockClone takes the clone's write lock; the returned func releases it.
-func lockClone(ctx context.Context, dir string) (func(), error) {
-	sdir := filepath.Join(dir, cloneStateDir)
-	if err := os.MkdirAll(sdir, cloneDirMode); err != nil {
-		return nil, fmt.Errorf("orgcfg: create clone state dir: %w", err)
-	}
-	path := filepath.Join(sdir, cloneLockFile)
-	deadline := time.Now().Add(cloneLockWait)
-	for {
-		f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_EXCL|os.O_WRONLY, cloneFileMode)
-		if err == nil {
-			_ = f.Close() // the file's existence is the lock
-			return func() { _ = os.Remove(path) }, nil
-		}
-		if !errors.Is(err, fs.ErrExist) {
-			return nil, fmt.Errorf("orgcfg: lock the store clone: %w", err)
-		}
-		if fi, serr := os.Stat(path); serr == nil && time.Since(fi.ModTime()) > cloneLockStale {
-			_ = os.Remove(path) // a crashed holder's lock
-			continue
-		}
-		if time.Now().After(deadline) {
-			return nil, ErrCloneBusy
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(cloneLockPoll):
-		}
-	}
 }

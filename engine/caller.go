@@ -21,10 +21,10 @@ func CallerOf(ctx context.Context) (op.Caller, bool) {
 }
 
 // AccessOf returns the access of the operation running in ctx (set by
-// Run), and false outside Run. A store whose writes wait for a batch push
-// reads it: a reading command pushes a batch that is due at its first
-// read, a writing one leaves it to the push after its write, so the batch
-// carries that write too (store push modes, 2026-11-09).
+// Run), and false outside Run. A store clone reads it: a reading command
+// never pushes (it fetches and names commits that wait), a writing one
+// pushes as the store's push mode says (store push modes 2026-11-09; no
+// hidden network writes 2026-11-12).
 func AccessOf(ctx context.Context) (op.Access, bool) {
 	c, ok := ctx.Value(callKey{}).(call)
 	if !ok || c.access == "" {

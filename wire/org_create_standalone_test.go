@@ -176,20 +176,20 @@ func TestOrgCreateImportRenameOnCmdLore(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	text := strings.Join(rep.Lines, "\n")
-	for _, want := range []string{"✓ wrote org/.lore/lore-org.yaml (pushed)", "✓ added org entry agency", "registered"} {
+	for _, want := range []string{"✓ wrote org/lore-org.yaml (pushed)", "✓ added org entry agency", "registered"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("create output lacks %q:\n%s", want, text)
 		}
 	}
 	files := w.storeFiles(t)
-	if !strings.Contains(files, "org/.lore/lore-org.yaml") || !strings.Contains(files, "org/.lore/data/actors/act_") {
+	if !strings.Contains(files, "org/lore-org.yaml") || !strings.Contains(files, "org/actors/act_") {
 		t.Fatalf("store after create:\n%s", files)
 	}
 	notes := filepath.Join(w.hosts, "agency/notes.git")
-	if a := orgGit(t, notes, "log", "-1", "--format=%ae", "main", "--", "org/.lore/lore-org.yaml"); a != "mira@agency.example" {
+	if a := orgGit(t, notes, "log", "-1", "--format=%ae", "main", "--", "org/lore-org.yaml"); a != "mira@agency.example" {
 		t.Fatalf("lore-org.yaml author %q, want the org identity", a)
 	}
-	if body := orgGit(t, notes, "show", "main:org/.lore/lore-org.yaml"); strings.Contains(body, "mira@") || !strings.Contains(body, "name: agency") {
+	if body := orgGit(t, notes, "show", "main:org/lore-org.yaml"); strings.Contains(body, "mira@") || !strings.Contains(body, "name: agency") {
 		t.Fatalf("lore-org.yaml must name the org and no identity:\n%s", body)
 	}
 	if !strings.Contains(readConfig(t, mira), "key: human:mira@agency.example") {
@@ -233,7 +233,7 @@ func TestOrgCreateImportRenameOnCmdLore(t *testing.T) {
 	if !strings.Contains(cfg, "name: agency") || !strings.Contains(cfg, "key: human:bob@agency.example") || !strings.Contains(cfg, "org_folder: org") {
 		t.Fatalf("config after import:\n%s", cfg)
 	}
-	if n := strings.Count(w.storeFiles(t), "org/.lore/data/actors/act_"); n != 2 {
+	if n := strings.Count(w.storeFiles(t), "org/actors/act_"); n != 2 {
 		t.Fatalf("roster rows after import = %d, want 2 (mira, bob)", n)
 	}
 	_, err = hb.Import(ctx, imp, true)

@@ -20,6 +20,7 @@ import (
 	"gopkg.in/yaml.v3"
 	_ "modernc.org/sqlite" // the pure-Go driver lore already ships
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/tmpdir"
@@ -369,8 +370,9 @@ func copyFile(src, dst string) error {
 var skipDirs = []string{"node_modules", ".git", "vendor"}
 
 // walkFolder finds folders holding .lore/ under base, at most depth levels
-// down and at most limit of them; hidden folders, node_modules, .git and
-// vendor are skipped, symlinks are not followed.
+// down and at most limit of them; hidden folders, node_modules, .git,
+// vendor and lore stores' clones (lore-store.yaml) are skipped, symlinks
+// are not followed.
 func walkFolder(ctx context.Context, base string, depth, limit int, seen map[string]bool, res *Result) ([]Repo, bool) {
 	src := Source{Kind: KindFolder, Path: base}
 	defer func() { res.Sources = append(res.Sources, src) }()
@@ -410,6 +412,9 @@ func walkFolder(ctx context.Context, base string, depth, limit int, seen map[str
 			if strings.Count(filepath.ToSlash(rel), "/")+1 > depth {
 				return fs.SkipDir
 			}
+		}
+		if fi, err := os.Lstat(filepath.Join(p, rowfs.MarkerFile)); err == nil && fi.Mode().IsRegular() {
+			return fs.SkipDir // a lore store's clone (a person's own, `lore store use`): never a repo to set up (STORE layout 1.5)
 		}
 		if fi, err := os.Lstat(filepath.Join(p, loreDir)); err == nil && fi.IsDir() {
 			if seen[p] {

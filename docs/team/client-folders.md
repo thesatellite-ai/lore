@@ -27,7 +27,7 @@ $ lore store folder add team client_north
 $ lore store folder add team client_south
 ✓ created folder client_south in agency (prj_2ad3…f891; shown only in repos that attach it)
 $ lore store folder add git@github.com:agency/notes client_east
-✓ created folder client_east in git@github.com:agency/notes (prj_162d…9666; shown only in repos that attach it)
+✓ created folder client_east in agency (prj_162d…9666; shown only in repos that attach it)
 ```
 <!-- /example -->
 
@@ -73,6 +73,7 @@ Once North's repo exists, link it to its folder. `lore store folder list` run in
 ```console
 # tomas, in clients/north-web
 $ lore org link agency --project client_north --yes
+lore: pushed store github.com/agency/notes: commit 601d285 to branch main
 This marks github.com/client/north-web as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_north/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe…28f2 at github.com/client/north-web → github.com/agency/notes@main:client_north/ (default=false)
@@ -95,12 +96,17 @@ A client's repo must never hold lore files. Link it without `lore init`: the lin
 ```console
 # tomas, in clients/south-app
 $ lore org link agency --project client_south --yes
+lore: pushed store github.com/agency/notes: commit 86dbae4 to branch main
 This marks github.com/client/south-app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_south/,
 and the leak guards turn on for everyone in agency.
   link: project prj_05e9…4603 at github.com/client/south-app → github.com/agency/notes@main:client_south/ (default=false)
 ✓ github.com/client/south-app (prj_05e9…4603) linked to github.com/agency/notes client_south/ (pushed)
   nothing was written to this repo
 $ lore task add 'set up the staging deploy'
+lore: pushed store agency: commit 9b40ce7 to branch main
+lore: pushed store agency: commit 05513aa to branch main
+lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
+lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)
 ✓ tsk_c0f3…b5b8 — set up the staging deploy [medium]
   filed: defaults.client_repos.task = agency (personal config) → the linked project client_south/
 $ lore task list
@@ -175,19 +181,19 @@ $ git status --short
 
 An older lore adopted a v0.1.17 repo's rows as they were. Two things can be left behind, and both are repaired in place, from the client repo linked to the folder (or any repo that attaches it):
 
-- **The repo's own actor id for someone already on the roster.** `lore doctor` names the pair; `lore actor merge <old id> <roster id>` rewrites every row naming the old id, all of a store's rows as one store commit and one push (1,000 rows take seconds), lists each store or folder it edits with its count (`git@host:org/notes-two.git/client_a: 66 edited`), and marks the old id `merged_into` the kept one, also on the org roster. A row it cannot edit does not stop it: the others are written, each row left is listed with its reason and fix, the command exits non-zero, and running it again writes only what is left. History stamps (`created_by`, `updated_by`) keep the old id as they were written; reads show the kept id for it: `lore task list --created-by <roster id>` lists the rows made under the old one.
+- **The repo's own actor id for someone already on the roster.** `lore doctor` names the pair; `lore actor merge <old id> <roster id>` rewrites every row naming the old id, all of a store's rows as one store commit and one push (1,000 rows take seconds), lists each store or folder it edits with its count (`notes-two/client_a: 66 edited`), and marks the old id `merged_into` the kept one, also on the org roster. A row it cannot edit does not stop it: the others are written, each row left is listed with its reason and fix, the command exits non-zero, and running it again writes only what is left. History stamps (`created_by`, `updated_by`) keep the old id as they were written; reads show the kept id for it: `lore task list --created-by <roster id>` lists the rows made under the old one.
 - **`tasklist_id: ""` (or another ref holding an empty string).** lore 0.1.17 wrote `""` for "none". Reads and edits treat it as none, so every edit works; `lore doctor` names the rows (`empty_ref`) and `lore doctor --fix` writes null in them, one store commit per store. `lore store adopt` and `lore migrate run` write null from the start. To take a task off its list on purpose: `lore task edit <id> --clear-tasklist`.
 
 ## An org with several stores
 
-An org entry lists every store (`lore org refresh <org>` takes them from the store's `lore-org.yaml`). `lore store list` and `lore store folder list` show each of them once; the org's other stores are named by their url, and each `store … folders:` block is headed by the store that holds those folders (the org's name only for the store holding the org folder), from any repo. Every store command that takes a store takes that url: `lore store folder add|list|remove <url>`, `lore store show|set|visibility|compact <url>`, and `lore org link <org> --project <folder> --store <url>`. A brand-new empty repo becomes a lore store with the first write to it: the `lore-store.yaml` marker goes into that same commit. A repo that an older lore left with a folder's `_meta.json` and no marker is adopted the same way on its next write.
+An org entry lists every store (`lore org refresh <org>` takes them from the store's `lore-org.yaml`; without `<org>` it refreshes the only org entry on the machine, else the org of the active setup of the folder, else it names the org entries and the command to run; `lore org link` and `lore org unlink` default the same way). `lore store list` and `lore store folder list` show each of them once; the org's other stores are named by their short name, the repo name of the url without `.git` (`git@github.com:agency/lore-x.git` is `lore-x`), with the url in its own column, and each `store … folders:` block is headed by the store that holds those folders (the org's name only for the store holding the org folder), from any repo. lore-org.yaml can set another short name with `stores[].name`, and must when two stores of the org have the same repo name: lore refuses such a file and names both urls. Every store command that takes a store takes the short name or the url: `lore store folder add|list|remove lore-x`, `lore store show|set|visibility|compact lore-x`, `--to lore-x/<folder>`, and `lore org link <org> --project <folder> --store <url>`. Output names the store by its short name. A brand-new empty repo becomes a lore store with the first write to it: the `lore-store.yaml` marker goes into that same commit. A repo that an older lore left with a folder's `_meta.json` and no marker is adopted the same way on its next write.
 
 ## Which store commands work outside a repo
 
 | Command | Outside a repo |
 |---|---|
-| `lore store list` | the setup's stores: the org's (`<org>`, `<org>/org`, each other store by its url) and `me` |
-| `lore store folder add <store> <folder>` | `team`, `me`, the org's name, or the org store's url |
+| `lore store list` | the setup's stores: the org's (`<org>`, `<org>/org`, each other store by its short name) and `me` |
+| `lore store folder add <store> <folder>` | `team`, `me`, the org's name, an org store's short name, or its url |
 | `lore store folder list [store]` | same names; every store of the setup when none is named |
 | `lore store folder remove <store> <folder>` | same names |
 | `lore store adopt <store>/<folder> --from <repo>` | same names (without `--from`, the repo you run it in) |

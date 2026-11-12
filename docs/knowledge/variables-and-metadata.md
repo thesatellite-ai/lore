@@ -28,9 +28,11 @@ Use **metadata** when you want to sort or count rows by something lore has no fi
 ```console
 # alice, in website
 $ lore vars set api_host api.example.com --type dns --description 'The shop API the website reads'
-Added var_…28f2 api_host = api.example.com (dns) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_7a67…9504.json
+Added var_…9504 api_host = api.example.com (dns) in repo (not shareable: clients see ${var:<name>}).
 $ lore vars set cache_minutes 5 --type number
-Added var_…4603 cache_minutes = 5 (number) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_2ad3…f891.json
+Added var_…f891 cache_minutes = 5 (number) in repo (not shareable: clients see ${var:<name>}).
 $ lore vars list
 NAME	VALUE	TYPE	WHERE
 cache_minutes	5	number	repo
@@ -50,31 +52,32 @@ Write `${var:<name>}` anywhere in a text field. `lore show <id>` prints the text
 ```console
 # alice, in website
 $ lore memory add --body 'Products come from ${var:api_host} and are cached for ${var:cache_minutes} minutes'
-✓ mem_7a67…9504
+lore: wrote ~/work/website/.lore/data/memories/mem_162d…9666.json
+✓ mem_162d…9666
   scope: [master]
-$ lore show mem_7a67…9504
-mem_7a67…9504  memories  repo
+$ lore show mem_162d…9666
+mem_162d…9666  memories  repo
   body: Products come from ${var:api_host} and are cached for ${var:cache_minutes} minutes
-  created_by_actor_id: act_2ad3…f891
+  created_by_actor_id: act_54fe…28f2
   kind: retrieved
-  project_id: prj_162d…9666
+  project_id: prj_05e9…4603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3…f891 · updated 2026-11-02T10:00:25Z by act_2ad3…f891
-$ lore show mem_7a67…9504 --expand
-mem_7a67…9504  memories  repo
+created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
+$ lore show mem_162d…9666 --expand
+mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for 5 minutes
-  created_by_actor_id: act_2ad3…f891
+  created_by_actor_id: act_54fe…28f2
   kind: retrieved
-  project_id: prj_162d…9666
+  project_id: prj_05e9…4603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3…f891 · updated 2026-11-02T10:00:25Z by act_2ad3…f891
+created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
 references:
-  ${var:api_host}  api.example.com  (var_54fe…28f2)
-  ${var:cache_minutes}  5  (var_05e9…4603)
+  ${var:api_host}  api.example.com  (var_7a67…9504)
+  ${var:cache_minutes}  5  (var_2ad3…f891)
 ```
 <!-- /example -->
 
@@ -90,24 +93,25 @@ Set the variable again with `lore vars set <name> <new value>`. Every note that 
 ```console
 # alice, in website
 $ lore vars rename api_host shop_api_host
-✓ renamed variable api_host → shop_api_host (old name kept as an alias) (var_…28f2)
+lore: wrote ~/work/website/.lore/data/vars/var_7a67…9504.json
+✓ renamed variable api_host → shop_api_host (old name kept as an alias) (var_…9504)
 $ lore vars list
 NAME	VALUE	TYPE	WHERE
 cache_minutes	10	number	repo
 shop_api_host	api.example.com	dns	repo
-$ lore show mem_7a67…9504 --expand
-mem_7a67…9504  memories  repo
+$ lore show mem_162d…9666 --expand
+mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for 10 minutes
-  created_by_actor_id: act_2ad3…f891
+  created_by_actor_id: act_54fe…28f2
   kind: retrieved
-  project_id: prj_162d…9666
+  project_id: prj_05e9…4603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3…f891 · updated 2026-11-02T10:00:25Z by act_2ad3…f891
+created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
 references:
-  ${var:api_host}  api.example.com  (var_54fe…28f2)
-  ${var:cache_minutes}  10  (var_05e9…4603)
+  ${var:api_host}  api.example.com  (var_7a67…9504)
+  ${var:cache_minutes}  10  (var_2ad3…f891)
 $ lore vars where shop_api_host
 NAME	VALUE	TYPE	WHERE
 shop_api_host	api.example.com	dns	repo
@@ -122,22 +126,23 @@ shop_api_host	api.example.com	dns	repo
 ```console
 # alice, in website
 $ lore vars rm cache_minutes --yes
-✓ removed variable cache_minutes (var_…4603) from repo
+lore: wrote ~/work/website/.lore/data/vars/var_2ad3…f891.json
+✓ removed variable cache_minutes (var_…f891) from repo
 $ lore vars list
 NAME	VALUE	TYPE	WHERE
 shop_api_host	api.example.com	dns	repo
-$ lore show mem_7a67…9504 --expand
-mem_7a67…9504  memories  repo
+$ lore show mem_162d…9666 --expand
+mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for ${var:cache_minutes} minutes
-  created_by_actor_id: act_2ad3…f891
+  created_by_actor_id: act_54fe…28f2
   kind: retrieved
-  project_id: prj_162d…9666
+  project_id: prj_05e9…4603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3…f891 · updated 2026-11-02T10:00:25Z by act_2ad3…f891
+created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
 references:
-  ${var:api_host}  api.example.com  (var_54fe…28f2)
+  ${var:api_host}  api.example.com  (var_7a67…9504)
   ${var:cache_minutes}  dangling  no such target; left as written
 ```
 <!-- /example -->
@@ -150,17 +155,23 @@ references:
 ```console
 # alice, in website
 $ lore task add 'Fix the Safari checkout button'
-✓ tsk_c0f3…b5b8 — Fix the Safari checkout button [medium]
-lore live: (live, pushed)
-$ lore meta set tsk_c0f3…b5b8 client=acme
-tasks tsk_…b5b8: set client = acme
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_c0f3…b5b8.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+✓ tsk_76bd…3f10 — Fix the Safari checkout button [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+$ lore meta set tsk_76bd…3f10 client=acme
+lore: wrote ~/work/website/.lore/data/meta_keys/mky_d431…313a.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+tasks tsk_…3f10: set client = acme
 new keys in repo: client (text)
-lore live: (live, pushed)
-$ lore meta set tsk_c0f3…b5b8 cost_hours:number=3
-tasks tsk_…b5b8: set cost_hours = 3
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
+$ lore meta set tsk_76bd…3f10 cost_hours:number=3
+lore: wrote ~/work/website/.lore/data/meta_keys/mky_b4f4…a5b0.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+tasks tsk_…3f10: set cost_hours = 3
 new keys in repo: cost_hours (number)
-lore live: (live, pushed)
-$ lore meta get tsk_c0f3…b5b8
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+$ lore meta get tsk_76bd…3f10
 client	acme
 cost_hours	3
 ```
@@ -186,11 +197,13 @@ cost_hours	repo	number	1
 ```console
 # alice, in website
 $ lore meta add priority_band --type text --strict --values low,normal,urgent --description 'How fast the client needs it'
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
 added mky_…7ab0 priority_band (text, strict, values low, normal, urgent) to this repo (not internal)
-$ lore meta set tsk_c0f3…b5b8 priority_band=urgent
-tasks tsk_…b5b8: set priority_band = urgent
-lore live: (live, pushed)
-$ lore meta set tsk_c0f3…b5b8 priority_band=asap
+$ lore meta set tsk_76bd…3f10 priority_band=urgent
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+tasks tsk_…3f10: set priority_band = urgent
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
+$ lore meta set tsk_76bd…3f10 priority_band=asap
 ERROR: [E_META_VALUE] meta: "asap" is not an allowed value of priority_band; allowed: low, normal, urgent
   hint: lore meta value add priority_band <value>
 (exit 20)
@@ -207,24 +220,29 @@ The refusal names the allowed values and the command that adds a new one (`lore 
 ```console
 # alice, in website
 $ lore task add 'Update the footer links' --meta client=acme && lore task add 'Add dark mode' --meta client=globex
-✓ tsk_76bd…3f10 — Update the footer links [medium]
-lore live: (live, pushed)
-✓ tsk_d431…313a — Add dark mode [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+✓ tsk_28f8…03df — Update the footer links [medium]
+lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
+lore: wrote ~/work/website/.lore/data/tasks/tsk_4c59…6c38.json
+✓ tsk_4c59…6c38 — Add dark mode [medium]
+lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 $ lore meta set --where client=acme billing=monthly --dry-run
-would set billing on 2 rows (tasks 2): tsk_c0f3…b5b8, tsk_76bd…3f10
+would set billing on 2 rows (tasks 2): tsk_76bd…3f10, tsk_28f8…03df
 dry run: nothing written
 $ lore meta set --where client=acme billing=monthly --yes
-set billing on 2 rows; batch bat_b4f4…a5b0 (undo: lore batch undo bat_b4f4…a5b0)
+lore: wrote ~/work/website/.lore/data/meta_keys/mky_3b62…e913.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+set billing on 2 rows; batch bat_f147…5139 (undo: lore batch undo bat_f147…5139)
 new keys in repo: billing (text)
-lore live: (live, pushed)
+lore live: (live, pushed) commit df3a55c to origin refs/lore/live
 $ lore meta export --key client,billing
 id,key,value
-tsk_c0f3…b5b8,billing,monthly
-tsk_c0f3…b5b8,client,acme
 tsk_76bd…3f10,billing,monthly
 tsk_76bd…3f10,client,acme
-tsk_d431…313a,client,globex
+tsk_28f8…03df,billing,monthly
+tsk_28f8…03df,client,acme
+tsk_4c59…6c38,client,globex
 ```
 <!-- /example -->
 
@@ -236,8 +254,9 @@ tsk_d431…313a,client,globex
 ```console
 # alice, in website
 $ lore meta edit priority_band --rename-value urgent=asap
-priority_band: renamed value val_…c1c9 urgent → asap; row labels refresh on each row's next write; no values changed
-$ lore meta get tsk_c0f3…b5b8 priority_band
+lore: wrote ~/work/website/.lore/data/meta_values/val_2537…6bbb.json
+priority_band: renamed value val_…6bbb urgent → asap; row labels refresh on each row's next write; no values changed
+$ lore meta get tsk_76bd…3f10 priority_band
 priority_band	urgent
 $ lore meta keys --key priority_band
 KEY	SCOPE	TYPE	ROWS	VALUES
@@ -249,10 +268,11 @@ priority_band	repo	text	1	asap, low, normal
 ```console
 # alice, in website
 $ lore meta rename client customer --rewrite-rows
-renamed client → customer in the registry; rewrote 3 row labels (batch bat_28f8…03df; labels only, no values or dates changed)
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
-$ lore meta get tsk_c0f3…b5b8
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
+renamed client → customer in the registry; rewrote 3 row labels (batch bat_b69e…5ed7; labels only, no values or dates changed)
+lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
+lore live: landed on main (34ee210); leaves live once main is fetched
+$ lore meta get tsk_76bd…3f10
 billing	monthly
 cost_hours	3
 customer	acme
@@ -267,11 +287,12 @@ priority_band	urgent
 <!-- example: meta#meta-unset -->
 ```console
 # alice, in website
-$ lore meta unset tsk_c0f3…b5b8 cost_hours
-tasks tsk_…b5b8: removed cost_hours
-lore live: (live, pushed)
+$ lore meta unset tsk_76bd…3f10 cost_hours
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+tasks tsk_…3f10: removed cost_hours
+lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 lore live: 4 row(s) left live (main holds them)
-$ lore meta get tsk_c0f3…b5b8
+$ lore meta get tsk_76bd…3f10
 billing	monthly
 customer	acme
 priority_band	asap
@@ -289,7 +310,7 @@ no metadata problems
 <!-- example: meta#meta-history -->
 ```console
 # alice, in website
-$ lore meta history tsk_c0f3…b5b8
+$ lore meta history tsk_76bd…3f10
 2026-11-02 10:01  alice           client  set acme
 2026-11-02 10:01  alice           cost_hours  set 3
 2026-11-02 10:02  alice           priority_band  set urgent
@@ -306,23 +327,24 @@ After Steps 1 and 2, change `cache_minutes` from 5 to 10 and expand the memory a
 ```console
 # alice, in website
 $ lore vars set cache_minutes 10
-Changed var_…4603 cache_minutes = 10 (number) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_2ad3…f891.json
+Changed var_…f891 cache_minutes = 10 (number) in repo (not shareable: clients see ${var:<name>}).
 $ lore vars show cache_minutes
-var_05e9…4603 cache_minutes = 10 (number) in repo
-created 2026-11-02T10:00:10Z by act_2ad3…f891 · updated 2026-11-02T10:00:40Z by act_2ad3…f891
-$ lore show mem_7a67…9504 --expand
-mem_7a67…9504  memories  repo
+var_2ad3…f891 cache_minutes = 10 (number) in repo
+created 2026-11-02T10:00:10Z by act_54fe…28f2 · updated 2026-11-02T10:00:40Z by act_54fe…28f2
+$ lore show mem_162d…9666 --expand
+mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for 10 minutes
-  created_by_actor_id: act_2ad3…f891
+  created_by_actor_id: act_54fe…28f2
   kind: retrieved
-  project_id: prj_162d…9666
+  project_id: prj_05e9…4603
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_2ad3…f891 · updated 2026-11-02T10:00:25Z by act_2ad3…f891
+created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
 references:
-  ${var:api_host}  api.example.com  (var_54fe…28f2)
-  ${var:cache_minutes}  10  (var_05e9…4603)
+  ${var:api_host}  api.example.com  (var_7a67…9504)
+  ${var:cache_minutes}  10  (var_2ad3…f891)
 ```
 <!-- /example -->
 

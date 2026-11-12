@@ -18,16 +18,17 @@ import (
 
 // The pending audit journal (store.AuditJournal; CLEANUP Qs): audit
 // records written in the same batch as the rows, kept until the engine
-// acknowledges them. It sits beside the store lock, in a state folder:
-// <repo>/.lore/state for the code repo (git-ignored by `lore init`),
-// <store>/.lore/state for a folder store, and the clone folder outside the
-// worktree for a git clone, so it is never committed and never synced.
+// acknowledges them. It sits in a state folder: <repo>/.lore/state for the
+// code repo (git-ignored by `lore init`), <store>/.lore-state for a folder
+// store, and the clone's .git/lore/state for a git clone, so it is never
+// committed and never synced.
 //
 //	ApplyAudited: journal (old + new lines) → Apply rows; a row failure
 //	              restores the journal; Applied.Undo restores both.
 //	AckJournal:   under the lock, rewrite the journal without the acked lines.
 const (
-	// JournalDir is the state folder beside the lock file.
+	// JournalDir is the state folder beside the lock file (a code repo, a
+	// git clone; a folder store keeps the journal in StoreStateDir itself).
 	JournalDir = "state"
 	// JournalFileName is the pending audit journal, one JSON object a line.
 	JournalFileName = "audit-pending.jsonl"
@@ -43,7 +44,7 @@ type journalLine struct {
 
 // JournalPath is the absolute path of the pending audit journal.
 func (r *Root) JournalPath() string {
-	return filepath.Join(filepath.Dir(r.lockPath), JournalDir, JournalFileName)
+	return filepath.Join(r.journalDir, JournalFileName)
 }
 
 // readJournal returns the journal's bytes (nil when absent) and records.

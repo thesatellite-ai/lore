@@ -138,7 +138,9 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	if err != nil {
 		return nil, err
 	}
-	sit, err := StandaloneOrgResolution(a.opts.Home, a.projectDir()).Situation(ctx)
+	res := StandaloneOrgResolution(a.opts.Home, a.projectDir())
+	res.Now = a.opts.Wall // the clone's fetch stamp is on the app clock (LORE_NOW in a test build), as every other writer of it
+	sit, err := res.Situation(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +325,7 @@ func (w *coordWorld) useStore(ctx context.Context) error {
 		remote.RouteArgs, remote.RouteEnv, _ = storeRoute(ctx, w.a.opts.Home, w.a.projectDir(), strings.TrimSpace(string(u)))
 	}
 	w.spot = sigSpot{repo: repo, remote: remote, remoteName: gitbackend.RemoteName,
-		ref: signals.StoreRef(branch), seen: filepath.Join(filepath.Dir(dir), signalsStateDir, signalsSeenFile), folder: folder, store: true}
+		ref: signals.StoreRef(branch), seen: filepath.Join(gitbackend.StateDirOf(dir), signalsSeenFile), folder: folder, store: true}
 	w.folder = folder
 	return nil
 }
@@ -975,9 +977,12 @@ func coordErr(err error) error {
 		// Reachable, but another writer won every attempt: contention, not
 		// a network problem (the remote answered each push).
 		return errs.New(errs.Contended, off.Error()).WithHint("other writers kept winning the signals ref; retry after a short wait")
+	case errors.As(err, &off) && off.AutopushOff():
+		return errs.New(errs.Offline, off.Error()).
+			WithHint("coordination writes (claims, releases, holds) are never queued; turn live.autopush on (or unset LORE_LIVE_AUTOPUSH=0) and run the command again")
 	case errors.As(err, &off):
 		return errs.New(errs.Offline, off.Error()).
-			WithHint("coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again")
+			WithHint("coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)")
 	case errors.As(err, &he):
 		msg := he.Error()
 		if coord.IsMission(he.By.Task) && !he.SameActor {

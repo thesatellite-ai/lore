@@ -59,6 +59,8 @@ func runInit(t *testing.T, git string, args ...string) initResult {
 	sort.Strings(tables)
 	ignore, _ := os.ReadFile(filepath.Join(dir, ".gitignore")) // absent reads as ""
 	mask := func(s string) string {
+		// each names itself on the lines of what it set up (wire/cmdname.go)
+		s = strings.ReplaceAll(s, "lore repo init: ", "lore init: ")
 		return strings.ReplaceAll(initIDs.ReplaceAllString(s, "${1}_ID"), parent, "<parent>")
 	}
 	return initResult{code: code, stdout: mask(out), stderr: mask(errOut), tables: strings.Join(tables, " "), ignore: string(ignore)}

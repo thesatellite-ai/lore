@@ -13,6 +13,10 @@ package folder
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -44,6 +48,7 @@ const windowsOS = "windows"
 type config struct {
 	lockTimeout time.Duration
 	now         func() time.Time
+	stderr      io.Writer // where the store-layout move line goes; nil = os.Stderr
 }
 
 // Option configures the folder backend.
@@ -55,6 +60,10 @@ func WithLockTimeout(d time.Duration) Option { return func(c *config) { c.lockTi
 
 // WithClock replaces time.Now for the stat cursor (tests).
 func WithClock(now func() time.Time) Option { return func(c *config) { c.now = now } }
+
+// WithStderr sets where Open prints the one line that reports a store-layout
+// move (default os.Stderr; tests).
+func WithStderr(w io.Writer) Option { return func(c *config) { c.stderr = w } }
 
 // NewOpener returns the store.Opener for file:// urls. Register it under
 // Scheme in the binary's store.Openers.
@@ -119,19 +128,54 @@ func Init(dir string, m rowfs.Marker, opts ...rowfs.Option) error {
 	if !errs.Has(err, errs.NotAStore) {
 		return err
 	}
-	if err = os.MkdirAll(filepath.Join(r.Dir(), rowfs.LoreDir, rowfs.DataDir), storeDirMode); err != nil {
-		return errs.Wrap(errs.Internal, "folder: create the data folder", err)
+	if err = rowfs.WriteMarker(r.Dir(), m); err != nil {
+		return err
 	}
-	return rowfs.WriteMarker(r.Dir(), m)
+	if _, err = rowfs.EnsureReadme(r.Dir()); err != nil {
+		return err
+	}
+	return ignoreStateDir(r.Dir())
 }
 
-// storeDirMode is the mode Init creates the folders inside the store with
-// (owner only, like rowfs); storeFolderMode the store folder itself and any
-// missing parent, made when the person chose "create" on a folder that did
-// not exist yet (0755, as a folder they made with mkdir).
+// ignoreStateDir keeps the store's own state folder (rowfs.StoreStateDir:
+// the lock and the pending audit journal) out of git when the store folder
+// is a git work tree's top (D-c): it adds the folder to .gitignore there,
+// once. A folder that is no git work tree gets no .gitignore.
+func ignoreStateDir(dir string) error {
+	if st, err := os.Lstat(filepath.Join(dir, ".git")); err != nil || st == nil {
+		return nil
+	}
+	p := filepath.Join(dir, gitignoreName)
+	b, err := os.ReadFile(filepath.Clean(p))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return errs.FileIO("read", p, err)
+	}
+	line := "/" + rowfs.StoreStateDir + "/"
+	for l := range strings.SplitSeq(string(b), "\n") {
+		if strings.TrimSpace(l) == line {
+			return nil
+		}
+	}
+	if len(b) > 0 && b[len(b)-1] != '\n' {
+		b = append(b, '\n')
+	}
+	b = append(b, []byte("# lore's lock and pending audit journal for this store (never committed)\n"+line+"\n")...)
+	if err := os.WriteFile(p, b, storeFileMode); err != nil {
+		return errs.FileIO("write", p, err)
+	}
+	return nil
+}
+
+// gitignoreName is git's ignore file.
+const gitignoreName = ".gitignore"
+
+// storeFolderMode is the mode of the store folder itself and any missing
+// parent, made when the person chose "create" on a folder that did not
+// exist yet (0755, as a folder they made with mkdir).
 const (
-	storeDirMode    = 0o750
 	storeFolderMode = 0o755
+	// storeFileMode is a .gitignore Init writes into a person's work tree.
+	storeFileMode = 0o644
 )
 
 // Backend is one open data folder of a folder store.
@@ -149,7 +193,9 @@ var _ store.Backend = (*Backend)(nil)
 
 // Open opens the data folder name of the store at dir. dir must hold
 // lore-store.yaml (else store.ErrNotAStore) and be on a local file system
-// (else E_NETWORK_FS).
+// (else E_NETWORK_FS). A store of the first plain layout (lore_store: 3)
+// opened for writing has its root folder's files moved into _store/ first
+// (rowfs.MoveRootToStoreDir).
 func Open(dir, name string, o store.OpenOptions, opts ...Option) (*Backend, error) {
 	var c config
 	for _, opt := range opts {
@@ -158,6 +204,22 @@ func Open(dir, name string, o store.OpenOptions, opts ...Option) (*Backend, erro
 	r, err := rowfs.Open(dir, rowfs.WithLockTimeout(c.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(c.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
 	if err != nil {
 		return nil, err
+	}
+	if !o.ReadOnly && rowfs.NeedsStoreDirMove(r.Dir()) {
+		// a store of the first plain layout: its root folder's rows move
+		// from the top into _store/ before anything reads them (D-ad;
+		// rowfs.MoveRootToStoreDir, under the store lock)
+		mv, err := r.MoveRootToStoreDir(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		if ch := mv.Change(); !ch.Empty() {
+			w := c.stderr
+			if w == nil {
+				w = os.Stderr
+			}
+			_, _ = fmt.Fprintln(w, StoreDirMoveLine(filepath.Base(r.Dir()), ch))
+		}
 	}
 	m, err := rowfs.ReadMarker(r.Dir())
 	if err != nil {
@@ -168,6 +230,14 @@ func Open(dir, name string, o store.OpenOptions, opts ...Option) (*Backend, erro
 		return nil, err
 	}
 	return &Backend{root: r, folder: f, marker: m, readOnly: o.ReadOnly}, nil
+}
+
+// StoreDirMoveLine is the stderr line Open prints after moving a folder
+// store's own rows into _store/ (the folder twin of the git layout commit's
+// line): what changed, by name, never a zero count — "lore: store x: layout
+// change — 12 rows moved to _store/, marker lore_store: 4".
+func StoreDirMoveLine(name string, c rowfs.LayoutChange) string {
+	return fmt.Sprintf("lore: store %s: layout change — %s", name, c.Summary())
 }
 
 // Marker is the store's lore-store.yaml as read at Open.

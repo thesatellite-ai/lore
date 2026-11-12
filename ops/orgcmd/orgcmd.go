@@ -106,11 +106,20 @@ type ImportIn struct {
 	Handle string `json:"handle,omitempty" flag:"handle" desc:"your @handle on the roster"`
 	As     string `json:"as,omitempty" flag:"as" desc:"entry name, when the suggested one is taken"`
 	Branch string `json:"branch,omitempty" flag:"branch" desc:"store branch to read the suggestion from (default: the store's default branch)"`
+	// Admit, when set, runs once the entry is in ~/.lore/config.yaml and
+	// before anything is written to the org's store (setup join: the
+	// member check, or the invite check, owner item 19). An error takes
+	// the entry out again and is returned as is. Not a flag: setup apply
+	// sets it.
+	Admit func(ctx context.Context, entry string) error `json:"-"`
+	// SkipRegister leaves the caller off the roster write: a person
+	// `lore member add` added is on the roster already. Not a flag.
+	SkipRegister bool `json:"-"`
 }
 
 // LinkIn is the input of org.link (F11).
 type LinkIn struct {
-	Org     string `json:"org" arg:"0" desc:"the org entry"`
+	Org     string `json:"org,omitempty" arg:"0" desc:"the org entry (default: the only org entry on this machine, else the active setup's org)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the internal project folder in the store (required)"`
 	Own     bool   `json:"own,omitempty" flag:"own" desc:"this is one of the org's own repos (only for own: patterns)"`
 	Default bool   `json:"default,omitempty" flag:"default" desc:"the link --to <org> uses when this repo has several"`
@@ -123,7 +132,7 @@ type LinkIn struct {
 // project in the org's stores (any remote, so a repo that moved is
 // unlinked whole), or only those of one folder.
 type UnlinkIn struct {
-	Org     string `json:"org" arg:"0" desc:"the org entry"`
+	Org     string `json:"org,omitempty" arg:"0" desc:"the org entry (default: the only org entry on this machine, else the active setup's org)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"only the links in this internal project folder (default: every folder linking this repo)"`
 	DryRun  bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show the links that would go, write nothing"`
 }
@@ -202,15 +211,20 @@ func Ops(env Env) []op.Entry {
 			op.Example{Title: "the default link of a repo with several, checked first", CLI: "lore org link agency --project client2 --default --dry-run", Want: "nothing written"}),
 			func(ctx context.Context, in LinkIn) (Report, error) {
 				if strings.TrimSpace(in.Project) == "" {
-					return Report{}, errs.New(errs.InvalidInput, "name the internal project folder with --project <folder>")
+					return Report{}, errs.New(errs.InvalidInput, "name the internal project folder with --project <folder>").
+						WithHint("`lore store folder list` shows the org store's folders; then: lore org link [org] --project <folder>")
 				}
-				return o.ask(ctx, OpLink, func(h Host, yes bool) (Report, error) { return h.Link(ctx, in, yes || in.DryRun) })
+				return o.ask(ctx, OpLink, func(h Host, yes bool) (Report, error) {
+					return withDefaultOrg(ctx, h, OpLink, &in.Org, func() (Report, error) { return h.Link(ctx, in, yes || in.DryRun) })
+				})
 			}),
 		op.Define(spec(OpUnlink, "Remove this repo's links to the org's internal projects (a finished client project); asks first", asking, true,
 			op.Example{Title: "the client project ended", CLI: "lore org unlink agency", Want: "unlinked"},
 			op.Example{Title: "see what would go", CLI: "lore org unlink agency --dry-run", Want: "nothing written"}),
 			func(ctx context.Context, in UnlinkIn) (Report, error) {
-				return o.ask(ctx, OpUnlink, func(h Host, yes bool) (Report, error) { return h.Unlink(ctx, in, yes || in.DryRun) })
+				return o.ask(ctx, OpUnlink, func(h Host, yes bool) (Report, error) {
+					return withDefaultOrg(ctx, h, OpUnlink, &in.Org, func() (Report, error) { return h.Unlink(ctx, in, yes || in.DryRun) })
+				})
 			}),
 		op.Define(spec(OpRename, "Rename an org entry on this machine (a label change; the org's id and every row stay)", codes, false,
 			op.Example{Title: "rename", CLI: "lore org rename agency northwind", Want: "is now"}),

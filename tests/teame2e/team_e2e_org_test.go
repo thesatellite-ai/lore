@@ -174,10 +174,9 @@ func TestF10_RemoteFormsNormaliseToTheSameOrg(t *testing.T) {
 // (E_LINK_UNKNOWN) while reads keep working.
 func TestF10_UnknownLinkStatusFailsClosed(t *testing.T) {
 	a := newAgency(t)
-	for _, dir := range []string{"clones", "cache"} {
-		if err := os.RemoveAll(a.alice.LorePath(dir)); err != nil {
-			t.Fatal(err)
-		}
+	a.alice.RemoveStoreClones(t)
+	if err := os.RemoveAll(a.alice.LorePath("cache")); err != nil {
+		t.Fatal(err)
 	}
 	a.alice.Offline()
 	a.aliceApp.Lore("memory", "add", "--body", "where does this go").Fails(t, th.ExitLinkUnknown, "E_LINK_UNKNOWN")
@@ -220,7 +219,7 @@ func TestF18_SamePersonTwoMachinesOneRosterFile(t *testing.T) {
 	sc := server.Clone(a.app, "app")
 	sc.MustLore("actor", "register")
 	n := 0
-	for _, f := range a.store.FilesMatching(refMain, folderOrg+"/"+dataDir+"/"+tblActors+"/") {
+	for _, f := range a.store.FilesMatching(refMain, folderOrg+"/"+tblActors+"/") {
 		if body, _ := a.store.Read(refMain, f); strings.Contains(body, aliceKey) {
 			n++
 		}
@@ -247,7 +246,7 @@ func TestF18_AgentStartRegistersAnAgentWithItsOwner(t *testing.T) {
 		t.Fatalf("agent start must set LORE_ACTOR=agent:… and LORE_SESSION: %q %q", ag.Env(th.EnvLoreActor), ag.Env(th.EnvLoreSession))
 	}
 	found := false
-	for _, f := range a.store.FilesMatching(refMain, folderOrg+"/"+dataDir+"/"+tblActors+"/") {
+	for _, f := range a.store.FilesMatching(refMain, folderOrg+"/"+tblActors+"/") {
 		body, _ := a.store.Read(refMain, f)
 		if strings.Contains(body, "frontend-2") {
 			found = true
@@ -284,10 +283,11 @@ func TestE12_PersonalNoteStaysInItsOrg(t *testing.T) {
 }
 
 // personalHas reports whether the local personal store's folder holds a row
-// containing text (~/.lore/personal/<folder>/.lore/data/**).
+// containing text: ~/.lore/personal/<folder>/** (a folder v0.1.17 made keeps
+// its rows in <folder>/.lore/data; one made since sits flat in the folder).
 func personalHas(t *testing.T, a *th.Actor, folder, text string) bool {
 	t.Helper()
-	root, err := os.OpenRoot(filepath.Join(a.LorePath("personal"), folder, ".lore", "data"))
+	root, err := os.OpenRoot(filepath.Join(a.LorePath("personal"), folder))
 	if err != nil {
 		return false // no data folder yet: nothing written
 	}

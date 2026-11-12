@@ -25,7 +25,7 @@ func (f *Folder) ProjectID(ctx context.Context) (ids.ID[ids.Project], error) {
 	if f.name == FolderRoot {
 		return ids.ID[ids.Project]{}, nil
 	}
-	rel := f.rel + "/" + MetaFileName
+	rel := f.storePath(MetaFileName)
 	if err := checkChain(f.root.dir, rel); err != nil {
 		return ids.ID[ids.Project]{}, err
 	}

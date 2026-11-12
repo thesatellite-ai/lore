@@ -50,7 +50,7 @@ TRANSCRIPTS = HERE / "transcripts"
 
 # Lines every first command in a fresh clone prints; they say nothing about the example.
 NOISE = re.compile(
-    r"^lore sync: (built \.lore/lore\.db|adopted \.lore/data|backup of lore\.db|configured git for lore data)"
+    r"^lore sync: (built \.lore/lore\.db|adopted \.lore/data|backup of lore\.db|configured git for lore data|set up git for lore.s row files)"
 )
 # Row ids are 32 hex digits after a table prefix; shortened so examples stay readable.
 ROW_ID = re.compile(r"\b([a-z]{2,4})_([0-9a-f]{32})\b")

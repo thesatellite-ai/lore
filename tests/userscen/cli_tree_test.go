@@ -440,7 +440,7 @@ func cliSkipped(path []string) bool {
 }
 
 // cliExits is every documented exit status (errors.md "Exit statuses"),
-// plus doctor's own 2.
+// plus doctor's own 2 (lore fix shares doctor's exits).
 var cliExits = []int{0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27}
 
 // cliErrorDoc is the documented --json error object (errors.md Pitfalls,
@@ -506,7 +506,8 @@ func cliCheckJSON(t *testing.T, r cliProc) {
 	if !slices.Contains(cliExits, r.Code) {
 		t.Errorf("exit %d is not a documented exit status: %s", r.Code, r)
 	}
-	isDoctor := len(r.Args) > 0 && r.Args[0] == "doctor"
+	// lore fix ends with doctor's status and exits as doctor does (0/1/2)
+	isDoctor := len(r.Args) > 0 && (r.Args[0] == "doctor" || r.Args[0] == "fix")
 	if r.Code == 1 && !isDoctor {
 		t.Errorf("exit 1 (E_INTERNAL, an unexpected failure) for a bare call: %s", r)
 	}

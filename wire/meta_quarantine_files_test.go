@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/ops/settings"
 	"github.com/thesatellite-ai/lore/schema"
@@ -56,7 +57,7 @@ func TestMetaQuarantinedAcrossCacheFiles(t *testing.T) {
 	// the files are read and written through an os.Root on their folder
 	saved := map[string][]byte{}
 	for _, f := range []struct{ dir, id string }{{repo, inRepo}, {storeDir, inStore}} {
-		dir, name := memRowRoot(t, f.dir), f.id+".json"
+		dir, name := memRowRoot(t, f.dir, f.dir == repo), f.id+".json"
 		b, err := dir.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
@@ -115,7 +116,7 @@ func TestMetaQuarantinedAcrossCacheFiles(t *testing.T) {
 		t.Fatalf("quarantined %v, want %v (clean row %s never)", got, want, clean)
 	}
 
-	if err := memRowRoot(t, repo).WriteFile(inRepo+".json", saved[inRepo], 0o600); err != nil {
+	if err := memRowRoot(t, repo, true).WriteFile(inRepo+".json", saved[inRepo], 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ = list(); !slices.Equal(got, []string{"northwind|memories|" + inStore}) {
@@ -124,10 +125,15 @@ func TestMetaQuarantinedAcrossCacheFiles(t *testing.T) {
 }
 
 // memRowRoot is an os.Root on the memories data folder at the root of
-// dir (the repo, and the store attached at its root), closed at cleanup.
-func memRowRoot(t *testing.T, dir string) *os.Root {
+// dir (the repo's .lore/data, or the store attached at its root, whose
+// root folder's tables sit at its top), closed at cleanup.
+func memRowRoot(t *testing.T, dir string, isRepo bool) *os.Root {
 	t.Helper()
-	r, err := os.OpenRoot(filepath.Join(dir, ".lore", "data", string(schema.TableMemories)))
+	data := filepath.Join(dir, rowfs.StoreDataDir)
+	if isRepo {
+		data = filepath.Join(dir, ".lore", "data")
+	}
+	r, err := os.OpenRoot(filepath.Join(data, string(schema.TableMemories)))
 	if err != nil {
 		t.Fatal(err)
 	}

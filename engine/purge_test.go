@@ -39,9 +39,10 @@ func purgeFixture(t *testing.T) (*fixture, string) {
 	return setup(t, WithStore(Attached{Name: kbStore, Backend: b, KeyNamespace: sid.String()})), dir
 }
 
-// rowPath is the file of table/id in the folder store at dir.
+// rowPath is the file of table/id in the root folder of the folder store at
+// dir (its tables sit at its top).
 func rowPath(dir string, table row.Table, id ids.AnyID) string {
-	return filepath.Clean(filepath.Join(dir, rowfs.LoreDir, rowfs.DataDir, filepath.FromSlash(rowfs.RowPath(table, id))))
+	return filepath.Clean(filepath.Join(dir, filepath.FromSlash(rowfs.LayoutStore.StorePath(rowfs.FolderRoot, rowfs.RowPath(table, id)))))
 }
 
 // TestPurgeNeverComesBack (DELETION_DESIGN 3.5, spec 6.1): a purge writes
@@ -75,7 +76,7 @@ func TestPurgeNeverComesBack(t *testing.T) {
 	if err != nil || !w.Row.Deleted {
 		t.Fatalf("purge: %+v %v", w.Row, err)
 	}
-	purgedFile := filepath.Join(dir, rowfs.LoreDir, rowfs.DataDir, rowfs.PurgedFileName)
+	purgedFile := filepath.Join(dir, rowfs.StoreDataDir, rowfs.PurgedFileName)
 	if raw := string(mustFile(t, purgedFile)); !strings.Contains(raw, tag.Row.ID.String()) {
 		t.Fatalf("_purged.json does not list %s: %s", tag.Row.ID, raw)
 	}
@@ -92,12 +93,12 @@ func TestPurgeNeverComesBack(t *testing.T) {
 	}
 
 	// an old clone brings the live file back over the tombstone
-	root, err := os.OpenRoot(dir)
+	root, err := os.OpenRoot(filepath.Join(dir, rowfs.StoreDataDir))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = root.Close() }() // test teardown
-	rel := filepath.Join(rowfs.LoreDir, rowfs.DataDir, filepath.FromSlash(rowfs.RowPath(schema.TableTags, tag.Row.ID)))
+	rel := filepath.FromSlash(rowfs.RowPath(schema.TableTags, tag.Row.ID))
 	if werr := root.WriteFile(rel, live, 0o600); werr != nil {
 		t.Fatal(werr)
 	}
@@ -158,7 +159,7 @@ func TestPurgeCascadesListEveryTombstone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw := string(mustFile(t, filepath.Join(dir, rowfs.LoreDir, rowfs.DataDir, rowfs.PurgedFileName)))
+	raw := string(mustFile(t, filepath.Join(dir, rowfs.StoreDataDir, rowfs.PurgedFileName)))
 	for _, c := range append([]Changed{{Store: kbStore, Row: w.Row}}, w.Also...) {
 		if c.Row.Deleted && !strings.Contains(raw, c.Row.ID.String()) {
 			t.Fatalf("tombstone %s not listed: %s", c.Row.ID, raw)

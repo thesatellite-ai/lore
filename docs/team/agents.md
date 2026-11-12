@@ -115,17 +115,25 @@ Use it when you started a task and cannot finish it. The task is free at once, s
 ```console
 # alice, in website
 $ lore task add 'send the invoice reminder before Friday' --to agency
-✓ tsk_54fe…28f2 — send the invoice reminder before Friday [medium] → [agency/client]
+lore: pushed store agency: commit 86dbae4 to branch main
+lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
+lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/client (store agency)
+✓ tsk_05e9…4603 — send the invoice reminder before Friday [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_54fe…28f2
-✓ claimed tsk_54fe…28f2 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
-$ lore task release tsk_54fe…28f2
-✓ released tsk_54fe…28f2
+$ lore task claim tsk_05e9…4603
+lore: pushed store agency: commit 9b40ce7 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/actors/act_7a67…9504.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_05e9…4603.json (store agency)
+✓ claimed tsk_05e9…4603 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+$ lore task release tsk_05e9…4603
+lore: pushed store agency: commit 05513aa to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_05e9…4603.json (store agency)
+✓ released tsk_05e9…4603
 
 # alice, in website
-$ lore task show tsk_54fe…28f2
-tsk_54fe…28f2
+$ lore task show tsk_05e9…4603
+tsk_05e9…4603
   title:    send the invoice reminder before Friday
   status:   in_progress
   priority: medium
@@ -148,20 +156,27 @@ Use it when an agent holds a task it should not work on any more. The agent's ne
 ```console
 # alice, in website
 $ lore agent start --label agent-backend --owner @alice
-✓ act_05e9…4603 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+lore: pushed store agency/org: commit dfd8dc8 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_c0f3…b5b8.json (store agency/org)
+✓ act_c0f3…b5b8 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 
 # agent-backend, in website
-$ lore task claim tsk_54fe…28f2
-✓ claimed tsk_54fe…28f2 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
+$ lore task claim tsk_05e9…4603
+lore: pushed store agency: commit cf563f3 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/actors/act_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_05e9…4603.json (store agency)
+✓ claimed tsk_05e9…4603 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
 
 # alice, in website
-$ lore task revoke tsk_54fe…28f2
-✓ revoked the claim on tsk_54fe…28f2 (was held by agent-backend)
+$ lore task revoke tsk_05e9…4603
+lore: pushed store agency: commit df3a55c to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_05e9…4603.json (store agency)
+✓ revoked the claim on tsk_05e9…4603 (was held by agent-backend)
 
 # agent-backend, in website
-$ lore task done tsk_54fe…28f2
-ERROR: [E_LOST_CLAIM] tsk_54fe…28f2: your claim (token ct_cb04f…) was revoked by act_2ad3…f891 at 10:16AM
+$ lore task done tsk_05e9…4603
+ERROR: [E_LOST_CLAIM] tsk_05e9…4603: your claim (token ct_cb04f…) was revoked by act_2ad3…f891 at 10:16AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 ```
@@ -175,19 +190,25 @@ Use it when the work should move to another person. The old holder's next write 
 ```console
 # alice, in website
 $ lore task add 'update the contact page' --to agency --assign @bob
-✓ tsk_c0f3…b5b8 — update the contact page [medium] → [agency/client]
+lore: pushed store agency: commit 6d00426 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
+✓ tsk_76bd…3f10 — update the contact page [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_c0f3…b5b8
-✓ claimed tsk_c0f3…b5b8 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
+$ lore task claim tsk_76bd…3f10
+lore: pushed store agency: commit 34ee210 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
+✓ claimed tsk_76bd…3f10 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
 
 # alice, in website
-$ lore task reassign tsk_c0f3…b5b8 --assign @alice
-✓ tsk_c0f3…b5b8 reassigned to @alice
+$ lore task reassign tsk_76bd…3f10 --assign @alice
+lore: pushed store agency: commit 7898daa to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
+✓ tsk_76bd…3f10 reassigned to @alice
 
 # bob, in website
-$ lore task done tsk_c0f3…b5b8
-ERROR: [E_REASSIGNED] tsk_c0f3…b5b8 was reassigned while you held it; stop work on it (now assigned to act_2ad3…f891)
+$ lore task done tsk_76bd…3f10
+ERROR: [E_REASSIGNED] tsk_76bd…3f10 was reassigned while you held it; stop work on it (now assigned to act_2ad3…f891)
   hint: stop work on this task; `lore task next` finds other work
 (exit 14)
 ```
@@ -206,13 +227,15 @@ $ lore actor list
 act_7a67…9504 [human] bob
 act_2ad3…f891 [human] alice
 $ lore task add 'make the buttons blue' --assign @bob
-✓ tsk_162d…9666 — make the buttons blue [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json
+lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 — make the buttons blue [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 
 # bob, in billing
 $ lore task list
-○ tsk_162d…9666 make the buttons blue [medium]
+○ tsk_54fe…28f2 make the buttons blue [medium]
 ```
 <!-- /example -->
 

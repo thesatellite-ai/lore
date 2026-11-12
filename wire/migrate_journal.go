@@ -27,6 +27,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -603,7 +604,7 @@ func (a *App) applyRollback(ctx context.Context, snaps git.Snapshots, top string
 		if pl.keepMeta && c.Path == rowfs.MetaFileName {
 			continue
 		}
-		rel := p.Data + "/" + c.Path
+		rel := path.Join(p.Data, c.Path) // Data is "." for a store's root folder
 		full := filepath.Join(p.Dir, filepath.FromSlash(rel))
 		if c.OldBlob == "" {
 			if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {

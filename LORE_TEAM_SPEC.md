@@ -170,7 +170,7 @@ One name per thing. Real row ids are long (`tsk_01a1985b…`, UUIDv7, `saas/pkg/
 | `_live/epoch`, `_live/meta.json` | in the live ref's tree: compaction epoch; `min_lore_version` and `features` |
 | `<folder>/claims/<task-id>.json`, `<folder>/resources/<name>.json` | in the signals ref's tree |
 | `lore-store.yaml` | store marker at a store's root, written by `lore store init` |
-| `<org_folder>/.lore/lore-org.yaml` | org defaults shared by the team, read on every resolve |
+| `<org_folder>/lore-org.yaml` | org defaults shared by the team, read on every resolve |
 | `.lore/org.yaml` | committed org choice, own repos only, names only |
 | `~/.lore/config.yaml` | orgs, personal store, `repo_orgs` (machine-only choices) |
 | `~/.lore/identity.yaml` | fallback identity when no org applies (migrated from `identity.toml`) |
@@ -1230,8 +1230,8 @@ when an org resolves: the org entry's identity is REQUIRED and the fallback chai
   LORE_ACTOR is ignored with a warning
 when no org resolves: the fallback identity of F10 rule 6 (legacy chain only when config.yaml has no orgs;
   otherwise the top-level identity:, else the chain skipping any org identity key)
-roster: <org_folder>/.lore/data/actors/<id>.json; id derived from stable_key (exists, saas/cmd/cli/natural_ids.go:37),
-  so registering on two machines gives one file; teams in <org_folder>/.lore/data/teams/
+roster: <org_folder>/actors/<id>.json; id derived from stable_key (exists, saas/cmd/cli/natural_ids.go:37),
+  so registering on two machines gives one file; teams in <org_folder>/teams/
 handle: unique per roster; @x resolves to one actor or one team, else error; with no org, handles resolve
   against the repo's own actors table (written by lore actor register)
 agent: kind agent, owner_actor_id = the human, label; one actor per session label; claims also record LORE_SESSION

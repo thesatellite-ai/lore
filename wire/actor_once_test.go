@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -41,8 +42,8 @@ func TestActorRowOncePerStore(t *testing.T) {
 	dir := func(url string) string { return filepath.FromSlash(fileuri.LocalPath(url)) }
 	files := map[string]string{
 		"repo": filepath.Join(repo, ".lore", "data", schema.TableActors, who.String()+".json"),
-		"kb":   filepath.Join(dir(kb), ".lore", "data", schema.TableActors, who.String()+".json"),
-		"kb2":  filepath.Join(dir(kb2), ".lore", "data", schema.TableActors, who.String()+".json"),
+		"kb":   filepath.Join(dir(kb), rowfs.StoreDataDir, schema.TableActors, who.String()+".json"),
+		"kb2":  filepath.Join(dir(kb2), rowfs.StoreDataDir, schema.TableActors, who.String()+".json"),
 	}
 	write := func(app *App, to string) {
 		t.Helper()
@@ -81,7 +82,7 @@ func TestActorRowOncePerStore(t *testing.T) {
 			t.Fatalf("%s: actor rows = %v, %v", name, entries, rerr)
 		}
 	}
-	if _, serr := os.Stat(filepath.Join(dir(idle), ".lore", "data", schema.TableActors)); !os.IsNotExist(serr) {
+	if _, serr := os.Stat(filepath.Join(dir(idle), schema.TableActors)); !os.IsNotExist(serr) {
 		t.Fatalf("a store never written to got an actor row: %v", serr)
 	}
 }

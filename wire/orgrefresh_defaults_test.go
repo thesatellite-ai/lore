@@ -33,7 +33,7 @@ func TestOrgRefreshCopiesDefaults(t *testing.T) {
 	}
 	clone := filepath.Join(w.root, "notes-edit")
 	orgGit(t, w.root, "clone", "-q", orgTestStoreURL, clone)
-	orgFile := filepath.Join(clone, "org", ".lore", "lore-org.yaml")
+	orgFile := filepath.Join(clone, "org", "lore-org.yaml")
 	base, err := os.ReadFile(orgFile)
 	if err != nil {
 		t.Fatal(err)

@@ -110,11 +110,11 @@ func TestMigrateModeBConvert(t *testing.T) {
 	alice := w.Human("alice", "person@example.com")
 	pid := migModeBDB(t, alice.LorePath("client2.db"), "infra")
 	dir := migModeBRepo(t, w, alice, "infra", "${HOME}/.lore/client2.db", pid)
-	const retired = "this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`"
+	const retired = "this repo uses the retired shared-database mode (.lore/lore.yaml); run lore fix"
 
 	// Every other command names the one next step.
 	for _, args := range [][]string{{"rule", "list"}, {"memory", "add", "new note"}, {"migrate", "enable", "vars"}} {
-		alice.Lore(dir, args...).Fails(t, th.ExitRefused, "E_UNSUPPORTED", retired, "lore migrate run --dry-run")
+		alice.Lore(dir, args...).Fails(t, th.ExitRefused, "E_UNSUPPORTED", retired, "lore fix --dry-run")
 	}
 	// status works there and says what to run.
 	st := th.DecodeJSON[migStatusOut](t, alice.Lore(dir, "migrate", "status", "--json"))

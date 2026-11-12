@@ -18,19 +18,23 @@ In a repo without a remote, nothing is ever pushed. Tasks are still live by defa
 ```console
 # alice, in scratch
 $ lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
+lore: wrote ~/work/scratch/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
   scope: [master] severity: must
 $ lore task add 'write the README'
-✓ tsk_2ad3…f891 — write the README [medium]
+lore: wrote ~/work/scratch/.lore/data/task_lists/tlt_2ad3…f891.json
+lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
+✓ tsk_162d…9666 — write the README [medium]
 lore live: (live, local: no remote)
-$ lore task done tsk_2ad3…f891
-✓ tsk_2ad3…f891 done
+$ lore task done tsk_162d…9666
+lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
+✓ tsk_162d…9666 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, local: no remote)
 $ lore land --all --dry-run
 would land 2 row(s) to main (_root/):
-  tlt_162d…9666     land  named by lore land
-  tsk_2ad3…f891     land  named by lore land
+  tlt_2ad3…f891     land  named by lore land
+  tsk_162d…9666     land  named by lore land
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -53,6 +57,7 @@ live:
 ```console
 # alice, in scratch
 $ lore task add 'tidy the scripts folder'
+lore: wrote ~/work/scratch/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — tidy the scripts folder [medium]
 $ git status --short
 ?? .gitattributes

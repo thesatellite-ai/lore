@@ -239,11 +239,10 @@ func TestLeak_WriteCheckNoOpWithoutOrg(t *testing.T) {
 func TestLeak_WriteCheckFailsClosedWhenStoreUnreadable(t *testing.T) {
 	a := newAgency(t)
 	a.storeMem(t, leakNote)
-	for _, d := range []string{"cache", "clones"} {
-		if err := os.RemoveAll(a.dev1.LorePath(d)); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.RemoveAll(a.dev1.LorePath("cache")); err != nil {
+		t.Fatal(err)
 	}
+	a.dev1.RemoveStoreClones(t)
 	a.dev1.Offline()
 	before := repoRows(t, a.dev1App, "rules")
 	r := a.dev1App.Lore("rule", "add", "--body", leakNote, "--to", "repo")
@@ -292,11 +291,10 @@ func TestLeak_TrialF7_PrePushFailsClosedWhenStoreUnreadable(t *testing.T) {
 	c.WriteFile("src/x.ts", "export const x = 'a perfectly ordinary line of client code here'\n")
 	c.Git("add", "-A")
 	c.Git("commit", "-q", "--no-verify", "-m", "add x")
-	for _, d := range []string{"cache", "clones"} {
-		if err := os.RemoveAll(a.dev1.LorePath(d)); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.RemoveAll(a.dev1.LorePath("cache")); err != nil {
+		t.Fatal(err)
 	}
+	a.dev1.RemoveStoreClones(t)
 	// The store goes away; the client's origin stays reachable.
 	if err := os.Rename(a.store.Dir, a.store.Dir+".gone"); err != nil {
 		t.Fatal(err)

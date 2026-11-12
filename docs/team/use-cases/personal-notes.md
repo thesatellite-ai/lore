@@ -25,27 +25,34 @@ With a git URL, each note is pushed to your repo at once. To push them in batche
 ```console
 # alice, in website
 $ lore memory add --body 'I always forget the staging VPN profile' --to me
-✓ mem_7a67…9504 [me/agency]
+lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
+lore: wrote ~/.lore/personal/agency/memories/mem_2ad3…f891.json (store me)
+lore: wrote ~/.lore/personal/agency/machines/mch_162d…9666.json (store me)
+✓ mem_2ad3…f891 [me/agency]
   scope: [master]
 
 # alice, in scratch
 $ lore memory add --body 'I prefer tabs over spaces' --to me
-✓ mem_2ad3…f891 [me/everywhere]
+lore: wrote ~/.lore/personal/everywhere/actors/act_54fe…28f2.json (store me)
+lore: wrote ~/.lore/personal/everywhere/memories/mem_05e9…4603.json (store me)
+lore: wrote ~/.lore/personal/everywhere/machines/mch_162d…9666.json (store me)
+✓ mem_05e9…4603 [me/everywhere]
   scope: [master]
 
 # alice, in website
 $ lore memory list
-mem_7a67…9504  I always forget the staging VPN profile  [me/agency]
-mem_2ad3…f891  I prefer tabs over spaces  [me/everywhere]
+mem_2ad3…f891  I always forget the staging VPN profile  [me/agency]
+mem_05e9…4603  I prefer tabs over spaces  [me/everywhere]
 
 # alice, in scratch
 $ lore memory list
-mem_2ad3…f891  I prefer tabs over spaces  [me/everywhere]
+mem_05e9…4603  I prefer tabs over spaces  [me/everywhere]
 
 # alice, in ~
 $ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
-everywhere/.lore/data/memories/mem_2ad3…f891.json
-agency/.lore/data/memories/mem_7a67…9504.json
+everywhere/memories/mem_05e9…4603.json
+agency/memories/mem_2ad3…f891.json
 ```
 <!-- /example -->
 
@@ -57,16 +64,26 @@ To sync between machines, make a private repo of your own into a store (a lore-o
 ```console
 # alice, in scratch
 $ lore store init me git@github.com:alice/lore-me --yes
-✓ created store me (sto_162d…9666) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/alice/lore-me (.git/config) to alice <alice@devbox>: your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: set up the store clone ~/.lore/stores/alice/lore-me for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+✓ created store me (sto_c0f3…b5b8) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 
 # alice, in website
 $ lore memory add --body 'my invoice template lives in the shared drive' --to me
-✓ mem_54fe…28f2 [me]
+lore memory add: set user.name and user.email in the store clone ~/.lore/stores/alice/lore-me (.git/config) to Alice Doe <alice@agency.example> (it was alice@devbox, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore: pushed store me: commit 601d285 to branch main
+lore: pushed store me: commit 86dbae4 to branch main
+lore: wrote ~/.lore/stores/alice/lore-me/_store/actors/act_7a67…9504.json (store me)
+lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_76bd…3f10.json (store me)
+lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (store me)
+✓ mem_76bd…3f10 [me]
   scope: [master]
 
 # alice-devbox, in website
 $ lore memory list
-mem_54fe…28f2  my invoice template lives in the shared drive  [me]
+lore memory list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore memory list: set user.name and user.email in the store clone ~/.lore/stores/alice/lore-me (.git/config) to Alice Doe <alice@agency.example>: your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+mem_76bd…3f10  my invoice template lives in the shared drive  [me]
 ```
 <!-- /example -->
 

@@ -4,8 +4,10 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -131,5 +133,34 @@ func TestLocatePurgedCopies(t *testing.T) {
 	}
 	if _, err := q.f.eng.Update(ctx, Ref{ID: q.ref.ID}, map[string]value.Value{"color": txt("red")}); !errs.Has(err, errs.Purged) {
 		t.Fatalf("update by bare id of the purged copy: %v, want E_PURGED", err)
+	}
+}
+
+// TestLocateActorInTwoStores (owner item 10): an actor id is global, so
+// live copies in two stores are one person, never E_AMBIGUOUS_ID: an
+// unqualified Get answers the newest copy whichever store is nearer, and
+// an unqualified Update goes through.
+func TestLocateActorInTwoStores(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	for _, newer := range []store.Source{store.SourceRepo, personal} {
+		t.Run(string(newer), func(t *testing.T) {
+			w := newF15World(t, false)
+			id := mustID(t, ids.PrefixActor)
+			older := personal
+			if newer == personal {
+				older = store.SourceRepo
+			}
+			w.place(t, schema.TableActors, id, "", false, older)
+			time.Sleep(2 * time.Millisecond)
+			w.place(t, schema.TableActors, id, "", false, newer)
+			src, got, err := w.eng.Get(ctx, Ref{ID: id})
+			if err != nil || src != newer || got.Deleted {
+				t.Fatalf("got %s %v, want the newest copy in %s", src, err, newer)
+			}
+			if _, err = w.eng.Update(ctx, Ref{ID: id}, map[string]value.Value{"kind": txt("human"), "display_name": txt("Una")}); err != nil {
+				t.Fatalf("unqualified actor update: %v", err)
+			}
+		})
 	}
 }

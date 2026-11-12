@@ -611,7 +611,7 @@ func (h *Host) runContextHook(ctx context.Context, f *contextFlags, stdin io.Rea
 	}
 	// 6.9: skip ids this session was already sent (machine-local seen set,
 	// keyed by the tool's session id; no id, no memory).
-	seen := loadHookSeen(f.hook, in.SessionID)
+	seen := loadHookSeen(h.loreHome(), f.hook, in.SessionID)
 	seen.now = h.now
 	if startEvent {
 		seen = hookSeen{} // the start lines never mute the per-file hook
@@ -648,20 +648,9 @@ func (h *Host) runContextHook(ctx context.Context, f *contextFlags, stdin io.Rea
 	return seen.add(sent)
 }
 
-// logHookError appends err to ~/.lore/logs/hooks.log (6.9); best effort.
+// logHookError appends err to <lore home>/logs/hooks.log (6.9); best
+// effort. The log is capped (hookslog.go): past hooksLogMax it moves to
+// hooks.log.1 and a new one starts, so it never grows without bound.
 func (h *Host) logHookError(err error) {
-	home, herr := os.UserHomeDir()
-	if herr != nil {
-		return
-	}
-	dir := filepath.Join(home, ".lore", "logs")
-	if os.MkdirAll(dir, 0o700) != nil {
-		return
-	}
-	fh, ferr := os.OpenFile(filepath.Clean(filepath.Join(dir, "hooks.log")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if ferr != nil {
-		return
-	}
-	_, _ = fmt.Fprintf(fh, "%s lore context --hook: %v\n", h.now().Format(time.RFC3339), err)
-	_ = fh.Close() // best effort: a hook log failure must not reach the tool
+	appendHooksLog(h.loreHome(), h.now(), "lore context --hook: "+err.Error())
 }

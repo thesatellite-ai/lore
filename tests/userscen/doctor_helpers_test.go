@@ -9,6 +9,7 @@ package userscen
 
 import (
 	"encoding/json"
+	"github.com/thesatellite-ai/lore/wire"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -107,6 +108,12 @@ func (p *doctorPerson) doctor(t *testing.T, extra ...string) (doctorReport, th.R
 // path is a file in the clone.
 func (p *doctorPerson) file(rel string) string {
 	return filepath.Join(p.c.Dir, filepath.FromSlash(rel))
+}
+
+// repoCache is the clone's repo cache, under the person's lore home
+// (wire.RepoCachePath; never in the work tree).
+func (p *doctorPerson) repoCache() string {
+	return wire.RepoCachePath(p.a.LorePath(), p.c.Dir)
 }
 
 // ruleID is the first rul_ id in out.

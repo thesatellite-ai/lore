@@ -185,7 +185,7 @@ func TestDoctorCachePrune_OrphanProjectCache(t *testing.T) {
 	if err := os.WriteFile(orphan, []byte(strings.Repeat("x", 5000)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	repoCache := p.file(".lore/lore-cache.db")
+	repoCache := p.repoCache()
 
 	dry := p.a.Lore(nowhere, "cache", "prune", "--dry-run").OK(t)
 	if !strings.Contains(dry.Stdout, orphan+"  4.9 KB\n") || !strings.Contains(dry.Stdout, "1 file(s), 4.9 KB\n--dry-run: nothing removed") {

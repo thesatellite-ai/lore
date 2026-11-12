@@ -40,11 +40,25 @@ tasks:
 ```console
 # alice, in api
 $ lore agent start --label agent-coord --owner @alice
+lore: pushed store agency/org: commit 601d285 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 agent agent-coord (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 
 # agent-coord, in api
 $ lore mission apply invite.yaml
+lore: pushed store agency: commit 86dbae4 to branch main
+lore: pushed store agency: commit 9b40ce7 to branch main
+lore: pushed store agency: commit 05513aa to branch main
+lore: pushed store agency: commit dfd8dc8 to branch main
+lore: pushed store agency: commit cf563f3 to branch main
+lore: pushed store agency: commit df3a55c to branch main
+lore: pushed store agency: commit 6d00426 to branch main
+lore: pushed store agency: commit 34ee210 to branch main
+lore: pushed store agency: commit 7898daa to branch main
+lore: pushed store agency: commit ccfb0bb to branch main
+lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
+lore: wrote 11 row file(s) in ~/.lore/stores/agency/notes/client2 (store agency)
 ✓ msn_2ad3…f891 Invite landing page (created) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
@@ -69,6 +83,9 @@ Each worker registers, reads its inbox and asks for the next ready task of its r
 ```console
 # alice, in agents/api
 $ lore agent start --label agent-backend --owner @alice
+lore agent start: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/agents/api/.git/config; hook blocks in ~/work/agents/api/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: pushed store agency/org: commit 9d655a5 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_76bd…3f10.json (store agency/org)
 ✓ act_76bd…3f10 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 
@@ -76,11 +93,17 @@ export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 $ lore inbox
 (inbox empty)
 $ lore task next --mission msn_2ad3…f891 --repo api
+lore: pushed store agency: commit 2fc021b to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_76bd…3f10.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
 ✓ claimed tsk_162d…9666 send the invite email from the API (lease 20m, token ct_cb04f…) on refs/lore/signals/main
   read its notes: lore task show tsk_162d…9666
 
 # alice, in agents/app
 $ lore agent start --label agent-frontend --owner @alice
+lore agent start: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/agents/app/.git/config; hook blocks in ~/work/agents/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: pushed store agency/org: commit 51886a5 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_d431…313a.json (store agency/org)
 ✓ act_d431…313a agent agent-frontend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 
@@ -93,11 +116,17 @@ ERROR: [E_NO_WORK] nothing ready:
 
 # alice, in agents/infra
 $ lore agent start --label agent-infra --owner @alice
+lore agent start: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/agents/infra/.git/config; hook blocks in ~/work/agents/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: pushed store agency/org: commit 22efc3b to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4…a5b0.json (store agency/org)
 ✓ act_b4f4…a5b0 agent agent-infra (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 export LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 
 # agent-infra, in agents/infra
 $ lore task next --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invite.conf
+lore: pushed store agency: commit 8c373dc to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_b4f4…a5b0.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
 ✓ claimed tsk_05e9…4603 allow /invite on the proxy (lease 20m, token ct_87f6f…) on refs/lore/signals/main
   read its notes: lore task show tsk_05e9…4603
 ```
@@ -111,6 +140,8 @@ $ lore task next --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invit
 ```console
 # agent-infra, in agents/infra
 $ lore memory add --live --body 'invite links must use the public website address, not the server name'
+lore: pushed store agency: commit 6f11034 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_28f8…03df.json (store agency)
 ✓ mem_28f8…03df [agency/client2]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client2/
   scope: [master]
@@ -122,6 +153,9 @@ memory  mem_28f8…03df  invite links must use the public website address, not t
 
 # agent-infra, in agents/infra
 $ lore task done tsk_05e9…4603
+lore: pushed store agency: commit 468e9a8 to branch main
+lore: pushed store agency: commit 9ea0ca8 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 ```
@@ -135,28 +169,41 @@ $ lore task done tsk_05e9…4603
 ```console
 # agent-backend, in agents/api
 $ lore task note tsk_162d…9666 'the API sends the invite email and returns a link; the email text is in invite.html'
+lore: pushed store agency: commit aba91f6 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/comments/cmt_4c59…6c38.json (store agency)
 ✓ note cmt_4c59…6c38 on tsk_162d…9666
 $ git switch -q -c agent-backend/invite && mkdir -p api && echo 'package api' > api/invite.go && git add api && git commit -qm 'send the invite email' && git push -q -u origin agent-backend/invite
+lore: set lore.clientrepo=true in ~/work/agents/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
-✓ tsk_162d…9666 done (commit 601d285); waiting for merge
+lore: pushed store agency: commit a8de760 to branch main
+lore: pushed store agency: commit 9169078 to branch main
+lore: pushed store agency: commit b733d8a to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_3b62…e913.json (store agency)
+✓ tsk_162d…9666 done (commit 1833373); waiting for merge
   lesson → mem_3b62…e913
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
-  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 601d285 not on the default branch yet)
+  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 1833373 not on the default branch yet)
   hint: lore task board shows what each task waits on
 (exit 10)
 
 # alice, in api
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
+lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 86dbae4)
+lore: pushed store agency: commit 59e9d31 to branch main
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 7540e63)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
+lore: pushed store agency: commit ef62c83 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
   read its notes: lore task show tsk_54fe…28f2
 ```
@@ -170,9 +217,14 @@ $ lore task next --mission msn_2ad3…f891 --repo app
 ```console
 # agent-frontend, in agents/app
 $ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page'
+lore: set lore.clientrepo=true in ~/work/agents/app/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task note tsk_54fe…28f2 'route + loader done, form next'
+lore: pushed store agency: commit dd85e7d to branch main
+lore: pushed store agency: commit d18179e to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/comments/cmt_f147…5139.json (store agency)
 ✓ note cmt_f147…5139 on tsk_54fe…28f2
-  work branch agent-frontend/invite-route pushed
+  pushed work branch agent-frontend/invite-route (commit f4b8da2) to remote origin so a replacement can fetch it
 
 # agent-coord, in api
 $ lore inbox
@@ -192,16 +244,22 @@ A replacement agent, `agent-frontend-2`, takes the task over (attempt 2), fetche
 ```console
 # alice, in agents/fe2/app
 $ lore agent start --label agent-frontend-2 --owner @alice
+lore agent start: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/agents/fe2/app/.git/config; hook blocks in ~/work/agents/fe2/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: pushed store agency/org: commit 70f4f88 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2537…6bbb.json (store agency/org)
 ✓ act_2537…6bbb agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 
 # agent-frontend-2, in agents/fe2/app
 $ lore task next --mission msn_2ad3…f891 --repo app
+lore: pushed store agency: commit d33587e to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_2537…6bbb.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_d57ca…) on refs/lore/signals/main; reclaim, attempt 2; previous holder agent-frontend timed out
   work branch agent-frontend/invite-route
   read its notes: lore task show tsk_54fe…28f2
 $ git fetch -q origin agent-frontend/invite-route && git log --oneline -1 FETCH_HEAD
-9b40ce7 invite page
+f4b8da2 invite page
 
 # agent-frontend, in agents/app
 $ lore task done tsk_54fe…28f2
@@ -211,7 +269,11 @@ ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 10
 
 # agent-frontend-2, in agents/fe2/app
 $ git switch -q -c agent-frontend-2/invite-route FETCH_HEAD && echo form >> src/routes/invite.tsx && git commit -qam 'invite form' && git push -q -u origin agent-frontend-2/invite-route && lore task done tsk_54fe…28f2 --commit $(git rev-parse HEAD)
-✓ tsk_54fe…28f2 done (commit 05513aa); waiting for merge
+lore: set lore.clientrepo=true in ~/work/agents/fe2/app/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
+lore: pushed store agency: commit 34010c1 to branch main
+lore: pushed store agency: commit 070bbeb to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
+✓ tsk_54fe…28f2 done (commit 2297d41); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 ```
 <!-- /example -->
@@ -231,6 +293,9 @@ ERROR: [E_NO_WORK] nothing ready:
 
 # alice, in infra
 $ lore task merged tsk_05e9…4603
+lore task merged: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: pushed store agency: commit 1c99293 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
 ✓ tsk_05e9…4603 merged (marked by hand, 11:04)
 ```
 <!-- /example -->
@@ -252,10 +317,14 @@ ERROR: [E_INVALID_INPUT] approvals come from your identity file, never from LORE
 
 # alice, in api
 $ lore gate approve tsk_c0f3…b5b8
-✓ tsk_c0f3…b5b8 approved by Alice Doe (org entry (config.yaml)), hash cf563f34…
+lore: pushed store agency: commit feabf31 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3…b5b8.json (store agency)
+✓ tsk_c0f3…b5b8 approved by Alice Doe (org entry (config.yaml)), hash 71fdf1e3…
 
 # agent-coord, in api
 $ lore task next --mission msn_2ad3…f891 --role coordinator
+lore: pushed store agency: commit 2d20e76 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ claimed tsk_c0f3…b5b8 deploy to staging (lease 20m, token ct_3de87…) on refs/lore/signals/main
   read its notes: lore task show tsk_c0f3…b5b8
 ```
@@ -305,7 +374,7 @@ tsk_54fe…28f2
   timebox:  1h
   attempts: 2
   branch:   agent-frontend/invite-route
-  commit:   df3a55c39644
+  commit:   389ede707167
   merged:   2026-11-02T11:02:20Z
   source:   agency/client2
   notes:

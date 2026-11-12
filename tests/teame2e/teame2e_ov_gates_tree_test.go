@@ -115,7 +115,7 @@ func TestGateReadOnlyEveryPath(t *testing.T) {
 				a := newAgency(t, th.Cmd("task", "claim"))
 				id := mustID(t, a.aliceApp.MustLore("task", "add", "store task", "--tasklist", a.tl), "tsk")
 				sc := a.dev1.Clone(a.store, "store-checkout")
-				rel := folderAcme + "/" + teCRepoMeta
+				rel := folderAcme + "/" + metaFile
 				if _, ok := sc.ReadFile(rel); !ok {
 					t.Fatalf("store project %s has no _meta.json on main: %v", folderAcme, a.store.Files(refMain))
 				}

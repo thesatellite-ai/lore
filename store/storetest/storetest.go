@@ -68,6 +68,8 @@ func Run(t *testing.T, newFixture NewFixture) {
 		{"CloseIdempotent", testClose},
 		{"AuditJournal", testAuditJournal},
 		{"PurgeAuditJournal", testPurgeAuditJournal},
+		{"PlainFiles", testPlainFiles},
+		{"StoreLayout", testStoreLayout},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, newFixture(t)) })

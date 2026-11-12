@@ -153,7 +153,7 @@ func anyCurrent(rows []store.Row) bool {
 // repoMetaProject is the project id of root's .lore/data/_meta.json (""
 // when there is none: the database's only project is used).
 func repoMetaProject(top string) (string, error) {
-	p := filepath.Join(top, filepath.FromSlash(rowfs.FolderDataPath(rowfs.FolderRoot)), rowfs.MetaFileName)
+	p := filepath.Join(top, filepath.FromSlash(rowfs.RepoMetaPath))
 	b, err := os.ReadFile(filepath.Clean(p))
 	if errors.Is(err, fs.ErrNotExist) {
 		return "", nil
@@ -179,7 +179,7 @@ func (a *App) migrateRepoDB(ctx context.Context, dryRun bool) ([]string, int, er
 		return nil, 0, err
 	}
 	steps := make([]string, 0, len(todo)+1)
-	meta := filepath.Join(got.top, filepath.FromSlash(rowfs.FolderDataPath(rowfs.FolderRoot)), rowfs.MetaFileName)
+	meta := filepath.Join(got.top, filepath.FromSlash(rowfs.RepoMetaPath))
 	if got.needsMeta {
 		steps = append(steps, repoDBStepPrefix+"project "+got.project+" → .lore/data/"+rowfs.MetaFileName)
 	}

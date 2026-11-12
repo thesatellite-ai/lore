@@ -65,12 +65,20 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 	}
 	note := func(msg string) { base.Notes = append(base.Notes, liveDoctorPrefix+msg) }
 	if s.ref.Remote != nil {
-		st, rerr := gitremote.EnsureTrackingRefspec(ctx, s.repo, s.ref.RemoteName)
+		// plain doctor reads: it looks at the refspec and adds none
+		// (owner bug 6); --fix adds it
+		look := gitremote.InspectTrackingRefspec
+		if fix {
+			look = gitremote.EnsureTrackingRefspec
+		}
+		st, rerr := look(ctx, s.repo, s.ref.RemoteName)
 		switch {
 		case rerr != nil:
 			warn("cannot check the fetch refspec: " + rerr.Error())
 		case len(st.Unsafe) > 0:
 			warn("a fetch refspec writes straight into refs/lore/* and can overwrite unpushed live writes on a plain git fetch: " + strings.Join(st.Unsafe, ", ") + " (remove it; lore uses refs/lore-remote/)")
+		case !st.Present:
+			note("tracking refspec not configured, so a plain `git fetch` does not fetch live rows (lore's own fetch does); `lore sync` or `lore doctor --fix` adds it")
 		default:
 			note("tracking refspec installed, not forced into refs/lore/*")
 		}
@@ -143,7 +151,8 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 }
 
 // doctorHooks checks that the ride-along blocks are in the hook folder git
-// uses (lore installs them on its next command in the project).
+// uses (lore installs them on its next write, lore sync or lore fix in the
+// project; a read never does).
 func (s *liveSession) doctorHooks(ctx context.Context, branch string, warn, note func(string)) {
 	dir, err := s.hooksDir(ctx)
 	if err != nil {
@@ -157,7 +166,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, warn, note
 		}
 	}
 	if len(missing) > 0 {
-		warn("git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + "); run any lore command (such as `lore sync`) to install it")
+		warn("git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + "); run `lore fix` (or `lore sync`) to install it; a read never does")
 		return
 	}
 	note("post-commit and pre-push hook blocks installed")

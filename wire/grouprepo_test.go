@@ -73,7 +73,7 @@ func TestGroupRepoID(t *testing.T) {
 		t.Fatalf("acme must keep its own row: %s %v (northwind %s)", other, err, first)
 	}
 	for name, dir := range dirs {
-		entries, rerr := os.ReadDir(filepath.Join(dir, ".lore", "data", schema.TableRepos))
+		entries, rerr := os.ReadDir(filepath.Join(dir, rowfs.StoreDataDir, schema.TableRepos))
 		if rerr != nil || len(entries) != 1 {
 			t.Fatalf("%s: want exactly one repos row file, got %d %v", name, len(entries), rerr)
 		}

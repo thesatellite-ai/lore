@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -323,7 +324,7 @@ func TestV017ModeBMigrateRun(t *testing.T) {
 	if got := migrateOut(t, raw); got.Count != 4 {
 		t.Fatalf("run: %+v, want 4 rows", got)
 	}
-	data := filepath.Join(shared, modeBStoresDir, "infra", ".lore", "data")
+	data := filepath.Join(shared, modeBStoresDir, "infra", rowfs.StoreDataDir)
 	for _, c := range []struct{ table, id string }{{"memories", v17MemA}, {"tags", v17Tag}, {"tasks", v17TaskA}, {"comments", v17CmtA}} {
 		f := rowFile(t, filepath.Join(data, c.table, c.id+".json"))
 		if string(f["_v"]) != "2" || len(f["_hlc"]) == 0 {

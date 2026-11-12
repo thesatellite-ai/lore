@@ -18,6 +18,7 @@ package machines
 
 import (
 	"encoding/json"
+	"github.com/thesatellite-ai/lore/wire"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,7 +83,7 @@ func sotCaches(t *testing.T) {
 
 	// A deleted cache file loses nothing: the next read rebuilds it.
 	kept := sotID(t, lsRun(t, m, repo, "memory", "add", "--body", "sot6 kept row"))
-	cacheDB := filepath.Join(repo, ".lore", "lore-cache.db")
+	cacheDB := wire.RepoCachePath(filepath.Join(m.Home, ".lore"), repo)
 	if err := os.Remove(cacheDB); err != nil {
 		t.Fatalf("remove the repo cache: %v", err)
 	}
@@ -117,7 +118,7 @@ func sotCaches(t *testing.T) {
 	if got := lsRun(t, m2, repo2, "memory", "show", mid); !strings.Contains(got, "sot6 store body") {
 		t.Fatalf("second machine reads the folder store row: %s", got)
 	}
-	sotEditRow(t, sotRowPath(kbDir, "memories", mid), "body", "sot6 store handedited")
+	sotEditRow(t, sotStoreRootRowPath(kbDir, "memories", mid), "body", "sot6 store handedited")
 	for _, w := range []struct {
 		m    *Machine
 		repo string
@@ -157,7 +158,7 @@ func sotMachineProfile(t *testing.T) {
 	lsRun(t, m, repo, "store", "init", "me", "file://"+meDir, "--yes")
 	lsRun(t, m, repo, "memory", "add", "--body", "sot5 one", "--to", "me")
 
-	rows, _ := filepath.Glob(filepath.Join(meDir, ".lore", "data", "machines", "*.json"))
+	rows, _ := filepath.Glob(filepath.Join(meDir, "_store", "machines", "*.json"))
 	if len(rows) != 1 {
 		t.Fatalf("personal store holds %d machine rows, want 1: %v", len(rows), rows)
 	}
@@ -237,7 +238,7 @@ func sotStoreClones(t *testing.T) {
 	if got := lsRun(t, b, rb, "memory", "list", "--store", "sotkb"); !strings.Contains(got, "sot8 one") {
 		t.Fatalf("b's first read of the store lacks a's row: %s", got)
 	}
-	stamp := filepath.Join(b.Home, ".lore", "clones", "github.com", "sotorg", "sot-kb", "fetch-stamp")
+	stamp := filepath.Join(b.Home, ".lore", "stores", "sotorg", "sot-kb", ".git", "lore", "fetch-stamp")
 	fetched := sotReadStamp(t, stamp)
 
 	// Within the TTL b reads its clone as it is (a's new row is not there
@@ -275,7 +276,7 @@ func sotStoreClones(t *testing.T) {
 	}
 
 	// The clone ends at the remote's commit.
-	work := filepath.Join(b.Home, ".lore", "clones", "github.com", "sotorg", "sot-kb", "work")
+	work := filepath.Join(b.Home, ".lore", "stores", "sotorg", "sot-kb")
 	if head, main := sotGit(t, b, work, "rev-parse", "HEAD"), sotGit(t, b, bare, "rev-parse", "main"); head != main {
 		t.Errorf("b's clone is at %s, the remote's main at %s", head, main)
 	}
@@ -553,6 +554,9 @@ func sotRepoURLs(t *testing.T) {
 	sotGit(t, m, a, "push", "-q", "origin", "main")
 	sotGit(t, m, code, "clone", "-q", sotAppOne, "sot-b")
 	b := filepath.Join(code, "sot-b")
+	// a read never wires git (owner item 6), so a fresh clone's doctor is
+	// degraded until the first sync installs lore's hook blocks
+	sotOK(t, m, b, "sync")
 	const notice = "is unconfirmed"
 	if got := sotOK(t, m, b, "doctor"); strings.Contains(got, notice) {
 		t.Fatalf("second clone at the confirmed address is flagged: %s", got)
@@ -757,8 +761,8 @@ func sotTeamProfile(t *testing.T) {
 	act := sotActorID(t, admin, ar)
 	lsRun(t, admin, ar, "actor", "edit", act, "--title", "Sot Lead")
 
-	roster := filepath.Join(admin.Home, ".lore", "clones", "github.com", "lifeorg", "lore-team", "work", "org")
-	if got := sotRowText(t, sotRowPath(roster, "actors", act), "title"); got != "Sot Lead" {
+	roster := filepath.Join(admin.Home, ".lore", "stores", "lifeorg", "lore-team", "org")
+	if got := sotRowText(t, sotStoreRowPath(roster, "actors", act), "title"); got != "Sot Lead" {
 		t.Errorf("roster row title = %q, want Sot Lead", got)
 	}
 	for _, repo := range []string{ar, admin.Repos[RepoLore]} {
@@ -777,7 +781,7 @@ func sotTeamProfile(t *testing.T) {
 
 	api := csStartAPI(t, admin, ar)
 	sotAPICall(t, api, "PATCH", "/v1/actors/"+act, `{"title":"Sot Lead Two"}`, sotStatusOK)
-	if got := sotRowText(t, sotRowPath(roster, "actors", act), "title"); got != "Sot Lead Two" {
+	if got := sotRowText(t, sotStoreRowPath(roster, "actors", act), "title"); got != "Sot Lead Two" {
 		t.Errorf("roster row title after REST = %q", got)
 	}
 	sotOK(t, member, mr, "sync")

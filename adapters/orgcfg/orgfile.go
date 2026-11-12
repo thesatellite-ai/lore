@@ -1,7 +1,7 @@
 package orgcfg
 
 // orgfile.go — the store side of `lore org create` and `lore org import`
-// for cmd/lore (P3-ORG-G-2): write and read <org folder>/.lore/
+// for cmd/lore (P3-ORG-G-2): write and read <org folder>/
 // lore-org.yaml, the team's suggested org entry (CLI_REFERENCE 2.26,
 // CONFIG_GUIDE 6.4: the org name, its stores, the repo patterns and the
 // client-repo defaults; never an identity), in the shared v0.1.17 bare
@@ -22,6 +22,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -63,19 +64,48 @@ type OrgFileDoc struct {
 
 // OrgFileStore is one store in lore-org.yaml.
 type OrgFileStore struct {
-	URL       string `yaml:"url"`
+	URL string `yaml:"url"`
+	// Name is the store's short name (orgconf.Store.ShortName); empty
+	// means the repo name of URL.
+	Name      string `yaml:"name,omitempty"`
 	Branch    string `yaml:"branch,omitempty"`
 	OrgFolder string `yaml:"org_folder,omitempty"`
 }
 
-// orgFilePath is lore-org.yaml's path for an org folder ("." = the root).
+// orgFilePath is lore-org.yaml's path for an org folder: <folder>/lore-org.yaml,
+// lore-org.yaml at the store's top for the root (D-e).
 func orgFilePath(folder string) string {
+	if folder == "" || folder == orgconf.OrgFolderRoot {
+		return orgDefaultsFile
+	}
+	return folder + "/" + orgDefaultsFile
+}
+
+// oldOrgFilePath is where stores kept lore-org.yaml before the plain-files
+// round (<folder>/.lore/lore-org.yaml): read until the store is moved.
+func oldOrgFilePath(folder string) string {
 	p := storeLoreDir + "/" + orgDefaultsFile
 	if folder == "" || folder == orgconf.OrgFolderRoot {
 		return p
 	}
 	return folder + "/" + p
 }
+
+// orgFilePaths are the places a reader looks for an org folder's
+// lore-org.yaml, the current one first.
+func orgFilePaths(folder string) []string {
+	return []string{orgFilePath(folder), oldOrgFilePath(folder)}
+}
+
+// OrgFilePath is where lore writes an org folder's lore-org.yaml, slash
+// separated from the store's top: <folder>/lore-org.yaml, or lore-org.yaml
+// when the org folder is the store root (D-e).
+func OrgFilePath(folder string) string { return orgFilePath(folder) }
+
+// OrgFilePaths are the places to read an org folder's lore-org.yaml from,
+// the current one first, then the old <folder>/.lore/lore-org.yaml of a
+// store not moved yet.
+func OrgFilePaths(folder string) []string { return orgFilePaths(folder) }
 
 // OrgFileWrite is one lore-org.yaml to write.
 type OrgFileWrite struct {
@@ -99,35 +129,24 @@ type OrgFileResult struct {
 	Pushed, Offline, NoPush bool
 }
 
-// openClone makes sure the store's shared bare clone exists and fetches
-// it; refuseOffline turns an unreachable remote into ErrStoreOffline even
+// openClone makes sure the store's clone exists and fetches it; refuseOffline turns an unreachable remote into ErrStoreOffline even
 // when a copy exists (import must read the team's current suggestion).
 func (g *GitLinks) openClone(ctx context.Context, url string, refuseOffline bool) (norm, dir string, err error) {
 	norm, err = repourl.Normalize(url)
 	if err != nil {
 		return "", "", fmt.Errorf("orgcfg: store url %q: %w", url, err)
 	}
-	dir = g.cloneDirOf(norm)
-	if err = ensureBare(ctx, dir, url); err != nil {
+	dir, own := cloneDir(g.Home, norm)
+	if err = ensureClone(ctx, dir, url, own); err != nil {
 		return "", "", err
 	}
-	unlock, err := lockClone(ctx, dir)
-	if err != nil {
-		return "", "", err
+	if ferr := fetchLocked(ctx, g.Route, dir, g.now()); ferr != nil && (refuseOffline || lastFetch(dir).IsZero()) {
+		return "", "", fmt.Errorf("%w: %s", ErrStoreOffline, norm)
 	}
-	ferr := fetch(ctx, g.Route, dir)
-	unlock()
-	if ferr != nil {
-		if refuseOffline || lastFetch(dir).IsZero() {
-			return "", "", fmt.Errorf("%w: %s", ErrStoreOffline, norm)
-		}
-		return norm, dir, nil
-	}
-	recordFetch(ctx, g.Route, dir, g.now())
 	return norm, dir, nil
 }
 
-// WriteOrgFile commits w.Doc as <org folder>/.lore/lore-org.yaml on the
+// WriteOrgFile commits w.Doc as <org folder>/lore-org.yaml on the
 // store's default branch and pushes it (autopush rules as for a link). A
 // file naming the same org is kept (Existed); one naming another org is
 // ErrOrgFileExists.
@@ -150,7 +169,13 @@ func (g *GitLinks) WriteOrgFile(ctx context.Context, w OrgFileWrite) (OrgFileRes
 				return nil, rerr
 			}
 			if !found {
-				return map[string][]byte{path: body}, nil
+				put := map[string][]byte{path: body}
+				if mk, ok, merr := markerNamingOrgFolder(ctx, repo, tip, w.OrgFolder); merr != nil {
+					return nil, merr
+				} else if ok {
+					put[storeMarkerFile] = mk
+				}
+				return put, nil
 			}
 			var cur OrgFileDoc
 			if perr := yaml.Unmarshal(old, &cur); perr != nil || cur.Name != w.Doc.Name {
@@ -163,6 +188,31 @@ func (g *GitLinks) WriteOrgFile(ctx context.Context, w OrgFileWrite) (OrgFileRes
 	return res, err
 }
 
+// markerNamingOrgFolder is the store marker at tip with org_folder set to
+// folder, when the marker exists and names another folder or none (D-e:
+// only the store that holds the org folder names it, and it does from the
+// commit that writes the folder's lore-org.yaml). ok is false when the
+// marker already says so or there is none to change.
+func markerNamingOrgFolder(ctx context.Context, repo *gitref.Repo, tip, folder string) ([]byte, bool, error) {
+	if folder == "" {
+		folder = orgconf.OrgFolderRoot
+	}
+	raw, found, err := repo.ReadFile(ctx, tip, storeMarkerFile)
+	if err != nil || !found {
+		return nil, false, err
+	}
+	m, err := rowfs.ParseMarker(raw)
+	if err != nil {
+		return nil, false, nil // a marker lore cannot read is left as it is (the store's opens name it)
+	}
+	if m.OrgFolder == folder {
+		return nil, false, nil
+	}
+	m.OrgFolder = folder
+	b, err := m.Encode()
+	return b, err == nil, err
+}
+
 // Suggestion is a store's suggested org entry.
 type Suggestion struct {
 	// Doc is lore-org.yaml; Folder the org folder it was read from.
@@ -173,6 +223,9 @@ type Suggestion struct {
 	// Version is the git blob id of the lore-org.yaml read (the stamp of
 	// a config copy, orgsource.go); StoreID the store marker's sto_ id.
 	Version, StoreID string
+	// Path is where the file was read (orgFilePath, or the old place in a
+	// store not moved yet).
+	Path string
 }
 
 // parseOrgFileDoc decodes a store's lore-org.yaml: a value of the wrong
@@ -183,6 +236,18 @@ func parseOrgFileDoc(raw string) (OrgFileDoc, error) {
 		return OrgFileDoc{}, err
 	}
 	return doc, nil
+}
+
+// checkShortNames refuses a lore-org.yaml whose stores share a short name
+// (or set a bad one): every problem, the urls of both stores and the key
+// to set (orgconf.CheckShortNames).
+func (d OrgFileDoc) checkShortNames() error {
+	in := make([]orgconf.ShortNameStore, 0, len(d.Stores))
+	for _, st := range d.Stores {
+		s := orgconf.Store{URL: st.URL, Name: st.Name}
+		in = append(in, orgconf.ShortNameStore{URL: st.URL, Name: s.ShortName(), Set: st.Name != ""})
+	}
+	return errors.Join(orgconf.CheckShortNames(in, orgconf.OrgFileName)...)
 }
 
 // ReadSuggestion reads the org entry a store suggests: its lore-org.yaml

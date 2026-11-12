@@ -182,6 +182,8 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
+	typed := canonicalTyped(ctx, url) // brief 3.7: lore-org.yaml names the canonical url
+	url = typed.URL
 	cfg, err := h.loadOrgConfig()
 	if err != nil {
 		return opsorgcmd.Report{}, err
@@ -196,12 +198,18 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	if ierr := needIdentity(entry); ierr != nil {
 		return opsorgcmd.Report{}, ierr
 	}
-	lines, err := orgEntryLines(fmt.Sprintf("This writes %s/.lore/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:", in.OrgFolder), entry)
+	lines, err := orgEntryLines(fmt.Sprintf("This writes %s into the store (no identity) and adds to ~/.lore/config.yaml:", orgcfg.OrgFilePath(in.OrgFolder)), entry)
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
+	if n := typed.Note(); n != "" {
+		lines = append(lines, "  "+n)
+	}
 	if !yes {
 		return opsorgcmd.Report{Lines: lines, Ask: askCreate}, nil
+	}
+	if err := recordAccess(h.home, typed); err != nil { // before the store is reached: the route needs it
+		return opsorgcmd.Report{Lines: lines}, err
 	}
 	// The entry must validate before anything reaches the store.
 	if _, verr := orgConfigWith(h.home, func(root *yaml.Node) error { return appendOrgNode(root, entry) }); verr != nil {
@@ -214,7 +222,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	if err != nil {
 		return opsorgcmd.Report{Lines: lines}, orgFileError(err, url)
 	}
-	file := in.OrgFolder + "/.lore/lore-org.yaml"
+	file := orgcfg.OrgFilePath(in.OrgFolder)
 	switch {
 	case res.Existed:
 		lines = append(lines, fmt.Sprintf("✓ the store already suggests org %s (%s kept)", in.Org, file))
@@ -251,7 +259,9 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
-	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}
+	typed := canonicalTyped(ctx, in.URL) // brief 3.7: the entry names the canonical url
+	in.URL = typed.URL
+	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: typed.withRule(h.router())}
 	sg, err := g.ReadSuggestion(ctx, in.URL, in.Branch)
 	if err != nil {
 		return opsorgcmd.Report{}, orgFileError(err, in.URL)
@@ -268,7 +278,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 			WithHint("pass --as <another name>, or edit the existing entry")
 	}
 	for _, s := range sg.Doc.Stores {
-		entry.Stores = append(entry.Stores, orgconf.Store{URL: s.URL, Branch: s.Branch, OrgFolder: s.OrgFolder})
+		entry.Stores = append(entry.Stores, orgconf.Store{URL: s.URL, Name: s.Name, Branch: s.Branch, OrgFolder: s.OrgFolder})
 	}
 	if len(entry.Stores) == 0 {
 		entry.Stores = []orgconf.Store{{URL: in.URL, OrgFolder: sg.Folder}}
@@ -284,12 +294,18 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
+	if n := typed.Note(); n != "" {
+		lines = append(lines, "  "+n)
+	}
 	if !yes {
 		ask := askImport
 		if len(riskyEntry(entry)) > 0 {
 			ask = askRisky
 		}
 		return opsorgcmd.Report{Lines: lines, Ask: ask}, nil
+	}
+	if err := recordAccess(h.home, typed); err != nil { // confirmed: this machine keeps reaching the store
+		return opsorgcmd.Report{Lines: lines}, err
 	}
 	if sg.Version != "" {
 		src := sg.Source() // SOURCE_OF_TRUTH row 9: the entry copies this lore-org.yaml
@@ -299,6 +315,20 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 		return opsorgcmd.Report{Lines: lines}, err
 	}
 	lines = append(lines, "✓ added org entry "+entry.Name)
+	if in.Admit != nil {
+		// setup join (owner item 19): the member or invite check reads the
+		// roster before anything is written to the org's store; a refusal
+		// takes the entry out again and registers nobody.
+		if aerr := in.Admit(ctx, entry.Name); aerr != nil {
+			if rerr := writeOrgConfig(h.home, func(root *yaml.Node) error { deleteOrgEntry(root, entry.Name); return nil }); rerr != nil {
+				return opsorgcmd.Report{Lines: lines}, errors.Join(aerr, rerr)
+			}
+			return opsorgcmd.Report{}, aerr
+		}
+	}
+	if in.SkipRegister { // an added member is on the roster already
+		return opsorgcmd.Report{Lines: lines}, nil
+	}
 	folder := sg.Folder
 	if sc := entry.OrgFolderStore(); sc != nil {
 		folder = sc.OrgFolder
@@ -525,7 +555,7 @@ func orgFileError(err error, url string) error {
 			WithHint("that store already suggests an org: adopt it with `lore org import " + url + "`")
 	case errors.Is(err, orgcfg.ErrNoOrgFile):
 		return errs.New(errs.InvalidInput, err.Error()).
-			WithHint("ask the team to commit <org_folder>/.lore/lore-org.yaml, or add the entry to ~/.lore/config.yaml by hand")
+			WithHint("ask the team to commit <org_folder>/lore-org.yaml, or add the entry to ~/.lore/config.yaml by hand")
 	}
 	return linkError(err)
 }

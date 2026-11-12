@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"testing"
 	"time"
 )
 
@@ -175,6 +176,41 @@ func (a *Actor) WriteHomeFile(rel, body string) {
 // LorePath is a path inside ~/.lore.
 func (a *Actor) LorePath(parts ...string) string {
 	return filepath.Join(append([]string{a.Home, ".lore"}, parts...)...)
+}
+
+// StoreClones lists every git store clone lore made under ~/.lore/stores
+// (each a folder with a .git inside, at any depth; folder stores such as
+// the personal stores/_me are not clones).
+func (a *Actor) StoreClones(t testing.TB) []string {
+	t.Helper()
+	root := a.LorePath("stores")
+	var clones []string
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil || !d.IsDir() || p == root {
+			return err
+		}
+		if _, serr := os.Lstat(filepath.Join(p, ".git")); serr == nil {
+			clones = append(clones, p)
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	return clones
+}
+
+// RemoveStoreClones deletes every store clone (StoreClones) and the clone
+// record, keeping folder stores: what a lost or wiped clone looks like to
+// the next command.
+func (a *Actor) RemoveStoreClones(t testing.TB) {
+	t.Helper()
+	for _, c := range append(a.StoreClones(t), a.LorePath("state", "store-clones.json")) {
+		if rerr := os.RemoveAll(c); rerr != nil {
+			t.Fatal(rerr)
+		}
+	}
 }
 
 // env returns the full environment for one command.

@@ -13,10 +13,15 @@ me: push batch every 10m, compact off
   set in    ~/.lore/config.yaml (personal:)
   epoch     0
 alice (work/website)$ lore memory add --body 'I always forget the staging VPN profile' --to me
-✓ mem_7a670ae8548ed05bf57ad29ad0759504 [me]
+lore memory add: set user.name and user.email in the store clone ~/.lore/stores/alice/lore-me (.git/config) to Alice <alice@agency.example> (it was alice@devbox, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore: wrote ~/.lore/stores/alice/lore-me/_store/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store me)
+lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_2ad3618e878ebbf527d34d446ef4f891.json (store me)
+lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162df51b7f78b785c97c26b41ea89666.json (store me)
+✓ mem_2ad3618e878ebbf527d34d446ef4f891 [me]
   scope: [master]
 alice (work/website)$ lore memory add --body 'I prefer short standups' --to me
-✓ mem_2ad3618e878ebbf527d34d446ef4f891 [me]
+lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json (store me)
+✓ mem_54fe984c9b495744c0217776765a28f2 [me]
   scope: [master]
 alice (work/website)$ lore store show me
 me: push batch every 10m, compact off
@@ -26,16 +31,17 @@ me: push batch every 10m, compact off
   epoch     0
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 alice (work/website)$ lore sync
+lore: pushed store me: commit 601d285 to branch main
 store me: sent 4, received 0, merged 0, refused 0
 store agency: sent 0, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 alice (work/website)$ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
 lore: batch 4 rows (actors 1, machines 1, memories 2)
 
-actors act_162df51b7f78b785c97c26b41ea89666
-machines mch_54fe984c9b495744c0217776765a28f2
-memories mem_7a670ae8548ed05bf57ad29ad0759504
+actors act_7a670ae8548ed05bf57ad29ad0759504
+machines mch_162df51b7f78b785c97c26b41ea89666
 memories mem_2ad3618e878ebbf527d34d446ef4f891
+memories mem_54fe984c9b495744c0217776765a28f2
 
 Lore-Version: dev
 
@@ -76,7 +82,9 @@ agency: push batch every 15m, compact off
 
 ### compact
 bob (work/website)$ lore memory add --body 'the client wants the invoice on the 1st' --to agency
-✓ mem_05e99e22e9e86e96fe4daa7777994603 [agency/client]
+lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e99e22e9e86e96fe4daa7777994603.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency)
+✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8 [agency/client]
   scope: [master]
 alice (work/website)$ lore store compact agency --before 30d --dry-run
 would squash 7 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 7 row file(s); epoch 0 → 1
@@ -85,19 +93,21 @@ ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agen
   hint: ask the person, then rerun with --yes
 (exit 26)
 alice (work/website)$ lore store compact agency --before 30d --yes
-✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-601d2850ffd0)
+✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae476bd6)
+  pushed store agency: commit 9b40ce7 to branch main
 bob (work/website)$ lore sync
+lore: pushed store agency: commit 05513aa to branch main
 store agency: sent 2, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 bob (work/website)$ lore memory list
-mem_c0f3c11a5724b0cfd74b256190d9b5b8  the client signs off designs on Thursdays  [agency/client]
-mem_76bd560aff0771fab8457dbfa9823f10  staging resets every Sunday night  [agency/client]
-mem_05e99e22e9e86e96fe4daa7777994603  the client wants the invoice on the 1st  [agency/client]
+mem_76bd560aff0771fab8457dbfa9823f10  the client signs off designs on Thursdays  [agency/client]
+mem_d4314eba822f1bf5908b2b8ded5f313a  staging resets every Sunday night  [agency/client]
+mem_c0f3c11a5724b0cfd74b256190d9b5b8  the client wants the invoice on the 1st  [agency/client]
 bob (work/website)$ git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH_HEAD
 lore: replay local work onto epoch 1
 lore: compact store history (epoch 1)
 lore: store set agency
-lore: write act_d4314eba822f1bf5908b2b8ded5f313a
+lore: write act_05e99e22e9e86e96fe4daa7777994603
 lore: snapshot of the store history before 2026-10-03
 
 ### auto compact

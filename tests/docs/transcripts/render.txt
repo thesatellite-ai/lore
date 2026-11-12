@@ -1,7 +1,8 @@
 
 ### init
 alice (work/website)$ lore init --non-interactive --name=website
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; lore's merge rules in ~/work/website/.gitattributes; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
 lore initialized
     project_id: prj_7a670ae8548ed05bf57ad29ad0759504
     name:       website
@@ -146,13 +147,16 @@ alice (work/website)$ git status --short
 
 ### pin
 alice (work/website)$ lore rule add --body 'Every price change needs the client written OK' --severity must
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 ✓ rul_54fe984c9b495744c0217776765a28f2
   scope: [master] severity: must
 alice (work/website)$ lore pin set rul_54fe984c9b495744c0217776765a28f2 --context line
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 ✓ rul_54fe984c9b495744c0217776765a28f2 pinned: context line (lore render to apply)
 alice (work/website)$ lore render >/dev/null && grep -n 'price change' .lore/LORE.md
 42:- `rul_54fe984c9b495744c0217776765a28f2` Every price change needs the client written OK Full: `lore show rul_54fe984c9b495744c0217776765a28f2`
 alice (work/website)$ lore pin set rul_54fe984c9b495744c0217776765a28f2 --context full
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 ✓ rul_54fe984c9b495744c0217776765a28f2 pinned: context full (lore render to apply)
 alice (work/website)$ lore render >/dev/null && grep -n -B1 -A2 'price change' .lore/LORE.md
 38-<rule id="rul_54fe984c9b495744c0217776765a28f2" severity="must" trust="0.50">
@@ -160,11 +164,14 @@ alice (work/website)$ lore render >/dev/null && grep -n -B1 -A2 'price change' .
 40-</rule>
 41-
 alice (work/website)$ lore pin unset rul_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 ✓ rul_54fe984c9b495744c0217776765a28f2 unpinned (render ranks it again)
 
 ### scope
 alice (work/website)$ lore rule add --body 'Checkout code never calls the payment API directly' --severity must --scope dir:src/checkout
-✓ rul_05e99e22e9e86e96fe4daa7777994603
+lore: wrote ~/work/website/.lore/data/scopes/scp_05e99e22e9e86e96fe4daa7777994603.json
+lore: wrote ~/work/website/.lore/data/rules/rul_c0f3c11a5724b0cfd74b256190d9b5b8.json
+✓ rul_c0f3c11a5724b0cfd74b256190d9b5b8
   scope: [dir:src/checkout] severity: must
 alice (work/website)$ lore scope list
 scope                            rules hotfixes notes  file                                  bytes
@@ -183,7 +190,8 @@ alice (work/website)$ lore render
 
 ### scope move
 alice (work/website)$ lore scope move src/checkout src/payments
-✓ scp_c0f3c11a5724b0cfd74b256190d9b5b8 path src/checkout -> src/payments (ids unchanged)
+lore: wrote ~/work/website/.lore/data/scopes/scp_05e99e22e9e86e96fe4daa7777994603.json
+✓ scp_05e99e22e9e86e96fe4daa7777994603 path src/checkout -> src/payments (ids unchanged)
 next: lore render
 alice (work/website)$ lore scope list
 scope                            rules hotfixes notes  file                                  bytes

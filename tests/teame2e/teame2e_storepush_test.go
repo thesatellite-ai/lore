@@ -622,8 +622,9 @@ func TestE52_StorePushCrashWhileFoldingLosesNothing(t *testing.T) {
 // and both machines read every row.
 func TestE51_StorePushLeftoverMergeLosesNothing(t *testing.T) {
 	p, _, bodies := spCrashSetup(t)
-	p.add(t, p.cb, "me", "other machine fact") // desktop pushes at once (push now)
-	work := filepath.Join(p.a.LorePath("clones"), spPersonalSlug, "work")
+	p.add(t, p.cb, "me", "other machine fact")         // desktop pushes at once (push now)
+	_, slugPath, _ := strings.Cut(spPersonalSlug, "/") // the host is never in a clone's path
+	work := p.a.LorePath("stores", filepath.FromSlash(slugPath))
 	p.w.Git(work, "fetch", "-q", p.store.Dir, spBranch)
 	// The merge may stop on conflicts (both machines changed their actor
 	// and machine rows): exactly the debris a run killed mid-merge leaves.

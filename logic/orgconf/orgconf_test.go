@@ -155,3 +155,20 @@ func TestWindowsUnsafeFolderNames(t *testing.T) {
 		t.Errorf("org named nul: %v, want refused for Windows", err)
 	}
 }
+
+// TestFolderNameNotATable (D-d): a store folder named like a table is
+// refused (a store folder's rows sit at <folder>/<table>/<id>.json, so it
+// could not be told from a table folder), with the reason and a next step;
+// names that only contain a table's name pass.
+func TestFolderNameNotATable(t *testing.T) {
+	t.Parallel()
+	for name, bad := range map[string]bool{"tasks": true, "rules": true, "teams": true, "tasks-notes": false, "my_rules": false, "org": false} {
+		err := orgconf.ValidateFolderName(name)
+		if (err != nil) != bad {
+			t.Errorf("ValidateFolderName(%q) = %v, want refused=%v", name, err, bad)
+		}
+		if bad && err != nil && (!strings.Contains(err.Error(), "name of a table") || !strings.Contains(err.Error(), "pick another name")) {
+			t.Errorf("ValidateFolderName(%q) = %v, want the cause and the next step", name, err)
+		}
+	}
+}

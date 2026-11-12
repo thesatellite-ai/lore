@@ -20,20 +20,6 @@ const (
 // Schemes lists every scheme NewOpener should be registered under.
 var Schemes = []string{SchemeSSH, SchemeHTTPS, SchemeHTTP}
 
-// Clone layout under the lore home (spec 6.1 Store clones,
-// saas/pkg/aicoder/stores/clone.go:58).
-const (
-	// ClonesDir is the folder under the home holding every store clone.
-	ClonesDir = "clones"
-	// bareSuffix ends the bare clone folder: <host>/<owner>/<repo>.git.
-	bareSuffix = ".git"
-	// workDir is the worktree lore owns: <host>/<owner>/<repo>/work.
-	workDir = "work"
-	// lockName is the clone's lock file beside the worktree, outside it so
-	// the lock never shows up in `git status` or a commit.
-	lockName = "lock"
-)
-
 // gitSuffix is stripped from a repo path; hosts accept both forms.
 const gitSuffix = ".git"
 
@@ -44,8 +30,9 @@ var hostPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$`)
 // Remote is a parsed store url.
 //
 // Invariant: URL never holds a password or token (D24). Norm is
-// `host/owner/repo` (lower-case host, no port, user or .git) and names the
-// clone folder, so every form of one url shares one clone. URL is the
+// `host/owner/repo` (lower-case host, no port, user or .git) and keys the
+// clone (CloneDirFor), so every form of one url shares one clone; the
+// folder itself is named by the path alone (CloneBase). URL is the
 // canonical (ssh:// for the scp-like form) credential-free url; the clone's
 // origin is the person's own spelling (OriginOf, WithOrigins), not URL.
 type Remote struct {
@@ -167,12 +154,15 @@ func OriginOf(raw string) (string, error) {
 // quoteScheme renders a scheme for a message (schemes never hold secrets).
 func quoteScheme(s string) string { return `"` + s + `"` }
 
-// CloneBase is the clone folder stem for a remote under home:
-// <home>/clones/<host>/<owner>/<repo>. The bare clone is CloneBase+".git"
-// and the worktree CloneBase/work (spec 6.1).
+// CloneBase is the default clone folder of a remote under home:
+// <home>/stores/<path>, the url's repository path without its host
+// (`git@github.com:acme/notes` → <home>/stores/acme/notes). The host never
+// appears in the path (owner decision D1); two stores whose paths agree on
+// different hosts are told apart by CloneDirFor (a "~2" suffix).
 func CloneBase(home string, r Remote) (string, error) {
 	if !filepath.IsAbs(home) {
 		return "", errs.New(errs.BadPath, "git: the lore home must be an absolute path")
 	}
-	return filepath.Join(home, ClonesDir, filepath.FromSlash(r.Norm)), nil
+	_, path, _ := strings.Cut(r.Norm, "/")
+	return filepath.Join(home, StoresDir, filepath.FromSlash(path)), nil
 }

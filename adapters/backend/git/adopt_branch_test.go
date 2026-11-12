@@ -53,7 +53,7 @@ func TestAdoptPinnedBranch(t *testing.T) {
 			t.Fatal(err)
 		}
 		_ = b.Close()
-		local := filepath.Join(base, workDir, "note.txt")
+		local := filepath.Join(base, "note.txt")
 		if err = os.WriteFile(local, []byte("mine\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}

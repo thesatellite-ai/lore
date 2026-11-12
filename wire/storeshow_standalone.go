@@ -3,8 +3,8 @@ package wire
 // storeshow_standalone.go — `lore store show|open|doctor` on cmd/lore
 // (ops/stores.Cloner, Options.Local.Clones; CLI_REFERENCE 3.21: the
 // v0.1.17 store commands stay as they are), ported from the old binary's
-// store_cmd.go onto adapters/orgcfg.Clones (the org layer's v0.1.17 bare
-// clones under ~/.lore/clones-v017). standaloneClones (store forget,
+// store_cmd.go onto adapters/orgcfg.Clones (the store clones under
+// ~/.lore/stores, the same the store backend writes). standaloneClones (store forget,
 // storeforget_standalone.go) forwards its three methods here.
 //
 //	show   ─▶ ~/.lore/config.yaml orgs[].stores, grouped by clone (entries
@@ -146,7 +146,9 @@ func (c *standaloneClones) hereLinks(ctx context.Context) []string {
 	if err != nil {
 		return []string{"this repo: " + err.Error()}
 	}
-	s, err := StandaloneOrgResolution(c.home, dir).Situation(ctx)
+	res := StandaloneOrgResolution(c.home, dir)
+	res.Now = c.now // the clone's fetch stamp clock (nil = wall clock)
+	s, err := res.Situation(ctx)
 	switch {
 	case err != nil:
 		return []string{"this repo: " + err.Error()}

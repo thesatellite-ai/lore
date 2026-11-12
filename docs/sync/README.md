@@ -16,6 +16,7 @@ The examples follow Alice and Bob (two agency developers) in the client's repo `
 | [Branches: peek and promote](branches-peek-promote.md) | You want to see a teammate's notes on their branch without switching to it, or move one urgent rule onto main now. |
 | [Conflicts and duplicates](conflicts-and-duplicates.md) | Two people changed the same note, the same fact was written twice, or two people set up lore on separate branches. |
 | [Trash, restore from git and purge](trash-and-purge.md) | A note disappeared, `.lore/data` was deleted, or you want old archived notes gone for good. |
+| [Editing by hand](editing-by-hand.md) | You opened a store's row files in a text editor, deleted or moved one, or used plain `git pull` / `git commit` in a store clone, and want to know what lore does with it. |
 | [Hooks and the merge driver](hooks-and-merge-driver.md) | You want to know what lore adds to `.git/hooks` and `.gitattributes`, and why a commit was refused. |
 | [The GitHub workflow](github-workflow.md) | Pull requests on GitHub show a conflict in `.lore/data` that lore could have merged. |
 | [Projects and repos](multi-repo-projects.md) | You want notes that apply to one part of the code only, or you want to see and tidy the projects in a database. |

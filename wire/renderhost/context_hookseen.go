@@ -4,7 +4,7 @@
 // the same rules.
 //
 //	runContextHook
-//	  ├─ loadHookSeen(tool, session_id) ─► ~/.lore/state/hook-seen/<tool>-<sha256(session)[:16]>.ids
+//	  ├─ loadHookSeen(home, tool, session_id) ─► <lore home>/state/hook-seen/<tool>-<sha256(session)[:16]>.ids
 //	  ├─ contextResult.without(seen)     (nothing new → print nothing)
 //	  └─ seen.add(printed ids)           append-only, one id per line
 //
@@ -42,23 +42,21 @@ type hookSeen struct {
 	now func() time.Time
 }
 
-// hookSeenFile is the set's path, "" without a session id or home folder.
-func hookSeenFile(tool, session string) string {
+// hookSeenFile is the set's path under the lore home, "" without a
+// session id or home folder.
+func hookSeenFile(home, tool, session string) string {
 	session = strings.TrimSpace(session)
-	if session == "" {
-		return ""
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if session == "" || home == "" {
 		return ""
 	}
 	sum := sha256.Sum256([]byte(tool + "\x00" + session))
-	return filepath.Join(home, ".lore", filepath.FromSlash(hookSeenDir), tool+"-"+hex.EncodeToString(sum[:])[:hookSeenHashLen]+".ids")
+	return filepath.Join(home, filepath.FromSlash(hookSeenDir), tool+"-"+hex.EncodeToString(sum[:])[:hookSeenHashLen]+".ids")
 }
 
-// loadHookSeen reads the set; a missing or unreadable file is an empty set.
-func loadHookSeen(tool, session string) hookSeen {
-	s := hookSeen{file: hookSeenFile(tool, session), ids: map[string]bool{}}
+// loadHookSeen reads the set under the lore home; a missing or unreadable
+// file is an empty set.
+func loadHookSeen(home, tool, session string) hookSeen {
+	s := hookSeen{file: hookSeenFile(home, tool, session), ids: map[string]bool{}}
 	if s.file == "" {
 		return s
 	}

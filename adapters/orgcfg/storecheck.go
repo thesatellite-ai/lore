@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -31,8 +32,10 @@ const (
 )
 
 // storeAllowed reports whether one path may exist in a store: the marker,
-// README*, LICENSE*, .gitattributes, .github/workflows/lore-*.yml, and
-// anything under a project's .lore/ folder (one path segment deep).
+// README*, LICENSE*, .gitattributes, .github/workflows/lore-*.yml, a
+// folder's row files (<folder>/<table>/<id>.json), its _meta.json and
+// _purged.json, an org folder's lore-org.yaml, and anything under a
+// project's .lore/ folder (one path segment deep: the old layout).
 // ds:def id=team-store-allowed-a7qb5uuj owner=@khanakia stability=stable desc="files a lore store may hold"
 func storeAllowed(p string) bool {
 	if p == "" || strings.HasPrefix(p, "/") || path.Clean(p) != p {
@@ -42,13 +45,27 @@ func storeAllowed(p string) bool {
 		return true
 	}
 	if !strings.Contains(p, "/") {
-		return strings.HasPrefix(p, allowedReadmePrefix) || strings.HasPrefix(p, allowedLicensePrefix)
+		return strings.HasPrefix(p, allowedReadmePrefix) || strings.HasPrefix(p, allowedLicensePrefix) || p == OrgFile || p == rowfs.MetaFileName || p == rowfs.PurgedFileName
 	}
 	if rest, ok := strings.CutPrefix(p, allowedWorkflowDir); ok {
 		return !strings.Contains(rest, "/") && strings.HasPrefix(rest, allowedWorkflowName) && strings.HasSuffix(rest, allowedWorkflowExt)
 	}
 	if strings.HasPrefix(p, storeLoreDir+"/") {
 		return true
+	}
+	if _, _, ok := rowfs.LayoutStore.SplitRowPath(p); ok {
+		return true
+	}
+	if _, _, ok := rowfs.ParseRowPath(p); ok {
+		return true // the root folder's row at the store's top: the first plain layout (lore_store: 3), moved into _store/ by the next lore
+	}
+	if _, _, ok := rowfs.LayoutStore.SplitFolderFile(p); ok {
+		return true
+	}
+	if dir, name := path.Split(p); name == OrgFile {
+		if _, err := rowfs.CleanFolder(strings.TrimSuffix(dir, "/")); err == nil {
+			return true
+		}
 	}
 	first, rest, _ := strings.Cut(p, "/")
 	return first != "" && first != storeLoreDir && strings.HasPrefix(rest, storeLoreDir+"/")

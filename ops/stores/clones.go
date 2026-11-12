@@ -9,8 +9,8 @@ package stores
 //
 //	store.show   ─► Cloner.ShowClones   (no network; --links adds the
 //	                                     cached link index and this repo's links)
-//	store.open   ─► Cloner.OpenClone    (fetch, detached worktree under
-//	                                     ~/.lore/worktrees)
+//	store.open   ─► Cloner.OpenClone    (fetch; the store's own clone of
+//	                                     the branch under ~/.lore/stores)
 //	store.forget ─► Cloner.ForgetClone  (refused while unpushed work waits,
 //	                                     side effect 20)
 //	store.doctor ─► StoreChecker.CheckStores (every store this repo and
@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
@@ -185,13 +186,13 @@ type OpenOut struct {
 	Commit string `json:"commit"`
 }
 
-// Text is the v0.1.17 line.
+// Text names the clone and what it is.
 func (o OpenOut) Text() string {
 	c := o.Commit
 	if len(c) > shortSHA {
 		c = c[:shortSHA]
 	}
-	return fmt.Sprintf("✓ %s at %s (%s, detached; read-only by convention — lore writes the branch itself)\n", o.Dir, o.Branch, c)
+	return fmt.Sprintf("✓ %s on %s (%s): the store's own clone, a plain git checkout to browse; lore commits and pulls here too\n", o.Dir, o.Branch, c)
 }
 
 // ForgetOut is the output of store.forget.
@@ -199,14 +200,22 @@ type ForgetOut struct {
 	URL string `json:"url"`
 	// Removed is the clone folder deleted ("" when there was none).
 	Removed string `json:"removed,omitempty"`
+	// Kept is a person's own clone (`lore store use`) lore stopped using
+	// and left in place: lore never deletes a clone it did not make.
+	Kept string `json:"kept,omitempty"`
 	// Shown is URL as printed.
 	Shown string `json:"-"`
 }
 
 // Text is the v0.1.17 line.
 func (o ForgetOut) Text() string {
-	if o.Removed == "" {
+	switch {
+	case o.Removed == "" && o.Kept == "":
 		return "no clone of " + o.Shown + " on this machine; nothing to forget\n"
+	case o.Removed == "":
+		return fmt.Sprintf("✓ forgot %s (lore no longer uses your own clone %s; it is left as it is, remove it yourself if you no longer need it)\n", o.Shown, o.Kept)
+	case o.Kept != "":
+		return fmt.Sprintf("✓ forgot %s (removed %s; your own clone %s is left as it is; the next command that needs the store clones it again)\n", o.Shown, o.Removed, o.Kept)
 	}
 	return fmt.Sprintf("✓ forgot %s (removed %s; the next command that needs it clones it again)\n", o.Shown, o.Removed)
 }
@@ -282,7 +291,7 @@ func (o ClonesOut) Text() string {
 		if v.LastFetch != "" {
 			fetched = v.LastFetch
 		}
-		fmt.Fprintf(&b, "  clone     %s (bare)   default branch %s   last fetch %s\n", v.Clone, v.DefaultBranch, fetched)
+		fmt.Fprintf(&b, "  clone     %s   default branch %s   last fetch %s\n", v.Clone, v.DefaultBranch, fetched)
 		if len(v.Unpushed) > 0 {
 			fmt.Fprintf(&b, "  unpushed  %s\n", strings.Join(v.Unpushed, ", "))
 		}
@@ -321,16 +330,26 @@ func cloner(m Manager, cmd string) (Cloner, error) {
 // a name is refused the same way with the url form in the hint.
 func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, error) {
 	name := strings.TrimSpace(raw)
-	if !row.ValidName(name) {
+	snake := row.ValidName(name)
+	if IsStoreURL(name) || (!snake && orgconf.ValidateStoreShortName(name) != nil) {
 		return Entry{}, false, nil
 	}
-	list, err := m.ListStores(ctx)
-	if err == nil {
-		for _, e := range list {
-			if e.Name == name {
-				return e, true, nil
-			}
+	var list []Entry
+	if l, err := m.ListStores(ctx); err == nil {
+		list = l
+	}
+	if ol, ok := upgrade.As[OrgLister](m); ok { // an org store by its short name (brief 3.6)
+		if org, oerr := ol.OrgStoreEntries(ctx); oerr == nil {
+			list = append(list, org...)
 		}
+	}
+	for _, e := range list {
+		if e.Name == name {
+			return e, true, nil
+		}
+	}
+	if !snake {
+		return Entry{}, false, nil // not a store name lore knows: a path or url as given
 	}
 	return Entry{}, false, errs.New(errs.NotFound, "store "+cmd+": no store named "+name+" in this repo").
 		WithHint("run `lore store list`, or give the store url (lore store " + cmd + " <url>)")
@@ -363,7 +382,7 @@ func cloneOps(m Manager) []op.Entry {
 			return withEmptyLists(out), err
 		}),
 		op.Define(op.Spec{
-			Name: OpOpen, Summary: "Check out a store branch for browsing (detached, under ~/.lore/worktrees)",
+			Name: OpOpen, Summary: "Print the store's own clone of a branch to browse (~/.lore/stores/<owner>/<repo>, or <repo>@<branch>), fetched first",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: cloneErrors, Local: true,
 			Examples: []op.Example{{Title: "browse a store", CLI: "lore store open git@github.com:agency/notes", Want: "✓"}},
 		}, func(ctx context.Context, in OpenIn) (OpenOut, error) {

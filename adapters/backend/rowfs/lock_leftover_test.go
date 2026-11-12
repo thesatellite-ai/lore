@@ -2,7 +2,7 @@ package rowfs
 
 // The v0.1.17 processlock leftover-file cases (later 623; saas/pkg/aicoder/
 // processlock TestAcquire_LeftoverFileNeverBlocks, StaleLockReclaim) on the
-// store lock (.lore/lock): the OS lock decides, never the file, so a lock
+// store lock (.lore-state/lock): the OS lock decides, never the file, so a lock
 // file left by a crashed or older lore never blocks a writer, whatever pid
 // it records (even our own, alive). A free lock is taken at once, so the
 // 50ms timeout here never decides the outcome, however loaded the machine
@@ -28,7 +28,7 @@ func TestLockLeftoverFileNeverBlocks(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
-			p := filepath.Join(dir, LoreDir, LockFileName)
+			p := filepath.Join(dir, StoreStateDir, LockFileName)
 			if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 				t.Fatal(err)
 			}

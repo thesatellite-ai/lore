@@ -117,12 +117,12 @@ const fullBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 > ## Source of truth
 >
 > This project uses **lore** (CLI on PATH) as the single source of truth for persisted knowledge AND work tracking
+>
 > Any ` + "`<rule>`" + ` / ` + "`<hotfix>`" + ` / ` + "`<memory>`" + ` blocks elsewhere in this file are *generated output*, not the database
 >
 > ## Action map
 >
-> - **Remember / persist anything** the user said, decided, or you learned →
->   ` + "`lore memory add --body=\"<body>\"`" + ` (or ` + "`rule add`" + `, ` + "`decision add`" + `, ` + "`hotfix add`" + `, ` + "`pattern add`" + `, ` + "`playbook add`" + `, ` + "`tastepref add`" + ` — match the kind)
+> - **Remember / persist anything** the user said, decided, or you learned → ` + "`lore memory add --body=\"<body>\"`" + ` (or ` + "`rule add`" + `, ` + "`decision add`" + `, ` + "`hotfix add`" + `, ` + "`pattern add`" + `, ` + "`playbook add`" + `, ` + "`tastepref add`" + ` — match the kind)
 > - **Track work** → ` + "`task add`" + ` / ` + "`mission add`" + ` / ` + "`tasklist add`" + ` / ` + "`plan add`" + `
 > - **Edit existing rows** → ` + "`lore <kind> edit <id>`" + ` (16 entities). For audited body changes on knowledge entities: ` + "`<kind> add ... --supersedes=<old_id>`" + `
 > - **Find anything** → ` + "`lore <kind> search \"<query>\"`" + ` — FTS5 across 23 entities. Run this BEFORE creating a new row, every time

@@ -140,6 +140,11 @@ func (x Exec) Run(ctx context.Context, inv Invocation) ([]byte, error) {
 	if err != nil {
 		return nil, ErrNoGit
 	}
+	if why, refused := gitenv.RepoNetRefused(os.Environ(), inv.Args); refused {
+		// LORE_OFFLINE: not run (LORE_NO_FETCH covers store clones only), answered as a remote that
+		// is not there
+		return nil, &Error{Args: inv.Args, ExitCode: 128, Stderr: why, Err: errors.New(why)}
+	}
 	if obs := observeWrite(ctx, inv); obs != nil {
 		// Before and after, as ReadCache.runWrite drops its own answers:
 		// no read stored while this runs may predate it.

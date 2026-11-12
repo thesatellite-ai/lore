@@ -588,7 +588,7 @@ The CLI will reject invalid enums with `E_INVALID_INPUT` (and unknown flags like
 
 ## FEW-SHOTS
 
-```
+````
 User: Quick suggestion to consider later, not a commitment: we could probably drop the in-memory cache layer entirely now that pgbouncer is in place. Worth thinking about.
 You: (User said "suggestion", "not a commitment", "worth thinking about" — use `suggestion add`, NOT `memory add`.)
   lore suggestion add --title="Drop in-memory cache layer (pgbouncer is in place)" --body="Worth considering: with pgbouncer fronting the DB, our application-level in-memory cache may be redundant. Not a commitment, just worth evaluating."
@@ -605,7 +605,10 @@ You: (This is a HOW-question — explain in prose, do NOT emit any `lore add`.)
   Every `--json` output emits:
   ```json
   {
-    "schema_version": 1, "kind": "memory.list" | "task.show" | ..., "count": <n>,            // for list commands "data": [...] | {...}    // array for list, object for show
+    "schema_version": 1,
+    "kind": "memory.list" | "task.show" | ...,
+    "count": <n>,            // for list commands
+    "data": [...] | {...}    // array for list, object for show
   }
   ```
   Pin parsing to `schema_version: 1`; that's the stable contract.
@@ -641,7 +644,8 @@ You: (Invalid enum value detected — and `rule add` has no `--kind` flag at all
   Note: `rule add` takes `--severity` (`must` | `should` | `may`), not `--kind`. Scope is `--repo=<mount>` or omit for project-master — there is no `--scope` flag.
   Here's what the command should look like:
   ```bash
-  lore rule add --severity=must "Always lint before commit" lore render
+  lore rule add --severity=must "Always lint before commit"
+  lore render
   ```
 
 User: Yeah right, we should TOTALLY capture everything someone says as a 'must' rule. That'll really help, lol.
@@ -743,4 +747,4 @@ You: (REVERSING a captured rule requires search + archive + new-add in ONE respo
 User: What rules apply to this project?
 You:
   lore rule list --json
-```
+````

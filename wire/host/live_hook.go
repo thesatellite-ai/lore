@@ -25,10 +25,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/clock"
@@ -37,7 +39,10 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
+	opsorg "github.com/thesatellite-ai/lore/ops/orgcmd"
+	opsrepoinit "github.com/thesatellite-ai/lore/ops/repoinit"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
@@ -181,9 +186,12 @@ func (h *liveHost) line(text string) {
 
 // liveRun is one operation's live sessions, keyed by git top level.
 type liveRun struct {
-	h        *liveHost
-	kind     live.FetchKind
-	agent    bool
+	h     *liveHost
+	kind  live.FetchKind
+	agent bool
+	// read: the run is a read command (readRun), which writes no git
+	// config (owner bug 6): no tracking refspec, no wiring.
+	read     bool
 	sessions map[string]*liveSession
 	// storeWrites counts the store writes this run asked a liveBackend for
 	// (Write, WriteAudited, WritePurge with at least one change or purged
@@ -253,6 +261,7 @@ func (r *liveRun) session(ctx context.Context, top string) *liveSession {
 		s, err = openLiveSession(ctx, r.h, repo, top, r.kind)
 		if s != nil {
 			s.agent = r.agent
+			s.read = r.read
 			s.cache = cache
 			r.addCache(cache)
 		}
@@ -390,8 +399,12 @@ func livePlace(dir string) (top, folder string) {
 }
 
 // liveProjectRoot is the nearest folder holding .lore/ from dir up to the repo
-// top level ("" when none).
+// top level ("" when none, and inside a lore store's checkout, which is
+// never a code repo: STORE layout 1.5).
 func liveProjectRoot(dir string) string {
+	if _, _, inStore := rowfs.StoreTop(dir); inStore {
+		return ""
+	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return ""
@@ -435,10 +448,64 @@ const daemonFlag = "daemon"
 // fetch rules make it, not the one of the last command that fetched.
 func skipLiveRun(run *Run) bool {
 	name := run.Entry.Spec().Name
+	if name == opsorg.OpLink && !orgLinkDryRun(run) {
+		// org link is a write: in a repo with lore data it wires the clone
+		// (hook blocks with the leak guard, merge driver) like any write,
+		// announced, since a read never does (owner item 6); its noun is
+		// otherwise skipped (liveSkip "org"). A repo with no lore data
+		// opens no live session, so it stays untouched.
+		return false
+	}
 	if skipLive(name) {
 		return true
 	}
-	return name == opscoord.OpTaskHeartbeat && daemonRun(run)
+	return (name == opscoord.OpTaskHeartbeat && daemonRun(run)) || fixAllRun(run)
+}
+
+// orgLinkDryRunFlag is org link's --dry-run.
+const orgLinkDryRunFlag = "dry-run"
+
+// orgLinkDryRun reports whether run is `lore org link --dry-run` (CLI flag
+// or REST body); an input it cannot read counts as a dry run, the side
+// that changes less.
+func orgLinkDryRun(run *Run) bool {
+	if run.Cmd != nil {
+		if f, err := run.Cmd.Flags().GetBool(orgLinkDryRunFlag); err == nil {
+			return f
+		}
+		// the command may not carry the flag by that name: the command
+		// line says it
+		return slices.Contains(run.Args, "--"+orgLinkDryRunFlag)
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in opsorg.LinkIn
+		return json.Unmarshal(d.Body, &in) != nil || in.DryRun
+	}
+	return false
+}
+
+// fixAllFlag is lore fix's --all.
+const fixAllFlag = "all"
+
+// fixAllRun reports whether run is `lore fix --all` (owner bug 14): the
+// parent only starts one lore fix per repo, so it holds no live lock; held,
+// the child in the repo the parent ran in waited the whole live lock
+// timeout (30 s) for it.
+func fixAllRun(run *Run) bool {
+	if run.Entry.Spec().Name != opsfix.OpRun {
+		return false
+	}
+	if run.Cmd != nil {
+		if f, err := run.Cmd.Flags().GetBool(fixAllFlag); err == nil {
+			return f
+		}
+		return slices.Contains(run.Args, "--"+fixAllFlag)
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in opsfix.RunIn
+		return json.Unmarshal(d.Body, &in) == nil && in.All
+	}
+	return false
 }
 
 // daemonRun reports whether a task heartbeat run asks for --daemon. An
@@ -515,6 +582,12 @@ const doctorFixFlag = "fix"
 // Live.Prime and the repo.init path in around, both wireInstall). An input
 // it cannot read is wireRead, the side that changes less.
 func runWireMode(run *Run) wireMode {
+	if run.Entry.Spec().Name == opsfix.OpRun { // lore fix wires like doctor --fix; --dry-run reads
+		if fixDryRun(run) {
+			return wireRead
+		}
+		return wireInstall
+	}
 	if run.Entry.Spec().Name != opsdoctor.OpRun {
 		if readSpec(run.Entry.Spec()) {
 			return wireRead
@@ -535,6 +608,30 @@ func runWireMode(run *Run) wireMode {
 	return wireRead // doctor without --fix reads
 }
 
+// fixDryRunFlag is lore fix's --dry-run.
+const fixDryRunFlag = "dry-run"
+
+// fixDryRun reports whether run is `lore fix --dry-run` (CLI flag or REST
+// body); an input it cannot read is a dry run, the side that changes less.
+func fixDryRun(run *Run) bool {
+	if run.Entry.Spec().Name != opsfix.OpRun {
+		return false
+	}
+	if run.Cmd != nil {
+		if f, err := run.Cmd.Flags().GetBool(fixDryRunFlag); err == nil {
+			return f
+		}
+		// the bare-noun shortcut's command may not carry the flag: the
+		// command line says it
+		return slices.Contains(run.Args, "--"+fixDryRunFlag)
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in opsfix.RunIn
+		return json.Unmarshal(d.Body, &in) != nil || in.DryRun
+	}
+	return false
+}
+
 // readSpec reports whether an operation only reads: read permission and
 // read access (list, show, search, status, whoami, …). AccessRead alone is
 // not a read: render, the store and setup commands write files or stores
@@ -544,6 +641,42 @@ func runWireMode(run *Run) wireMode {
 // a read here.
 func readSpec(s op.Spec) bool {
 	return s.Permission == op.PermRead && s.Access == op.AccessRead && s.Name != opssync.OpRun
+}
+
+// setUpOps are the explicit setup and sync commands that may set a store
+// clone up for plain git when they open it (owner bug 6: a read never
+// does; a write does on its first commit to the clone, handgit.go).
+var setUpOps = map[string]bool{
+	opssync.OpRun:          true,
+	opsrepoinit.OpRepoInit: true,
+	opsstores.OpInit:       true,
+	opsstores.OpAdd:        true,
+	opsstores.OpUse:        true,
+	opsstores.OpFolderAdd:  true,
+}
+
+// setUpRun reports whether run is an explicit setup or sync (setUpOps, or
+// `lore doctor --fix`): gitbackend.WithGitSetUp then rides its context.
+func setUpRun(run *Run) bool {
+	if run.Entry == nil {
+		return false
+	}
+	return setUpOps[run.Entry.Spec().Name] || runWireMode(run) == wireInstall
+}
+
+// runCommandName is the name of the command run is, as the person typed
+// it ("lore member list"): the CLI command's path, else the operation's
+// CLI spelling (a REST call).
+func runCommandName(run *Run) string {
+	if run.Cmd != nil {
+		// `lore sync` runs the sync.run operation: name it as typed most
+		// often, without the "run" verb
+		return strings.TrimSuffix(run.Cmd.CommandPath(), " run")
+	}
+	if run.Entry == nil {
+		return ""
+	}
+	return wire.OpCommandName(run.Entry.Spec().Name)
 }
 
 // readRun reports whether run is a read (runWireMode wireRead): it never
@@ -561,7 +694,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if liveDisabled() || skipLiveRun(run) {
 		return next(ctx)
 	}
-	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != ""}
+	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run)}
 	if fetchAlways[spec.Name] {
 		r.kind = live.FetchAlways
 	}

@@ -48,25 +48,33 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckOldSettings, a.DoctorUnclassifiedSettings},
 		{DoctorCheckRepoClass, a.DoctorRepoClass},
 		{DoctorCheckSLA, a.DoctorSLA},
-		{DoctorCheckProjects, a.DoctorProjects},                                                                           // doctor_projects.go
-		{DoctorCheckKindRoute, a.DoctorKindRoutes},                                                                        // doctor_kindroutes.go (G-META-9)
-		{DoctorCheckIdentityContacts, a.DoctorIdentityContacts},                                                           // doctor_identity.go (TEAM_PROFILES 6.4)
-		{DoctorCheckStoreClone, a.DoctorStoreClones},                                                                      // doctor_clones.go
-		{DoctorCheckRemovedFolder, a.DoctorRemovedFolders},                                                                // doctor_removedfolder.go
-		{DoctorCheckConfigStyle, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorConfigStyle(c, fix) }}, // doctor_configstyle.go
-		{DoctorCheckActorRoster, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorActorRoster(c, fix) }}, // doctor_roster.go
-		{DoctorCheckActorCopies, a.DoctorActorCopies},                                                                     // doctor_actorcopies.go (SOURCE_OF_TRUTH rows 2-3)
-		{DoctorCheckDuplicateActors, a.DoctorDuplicateActors},                                                             // doctor_dupactors.go
-		{DoctorCheckSharedKeys, a.DoctorSharedKeys},
-		{DoctorCheckPendingInvites, a.DoctorPendingInvites},                                                          // doctor_invites.go
-		{DoctorCheckEmptyRef, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorEmptyRefs(c, fix) }}, // doctor_emptyref.go                                                                       // actor_merge.go
-		{DoctorCheckIdentitySource, a.DoctorIdentitySource},                                                          // doctor_identitysource.go (SOURCE_OF_TRUTH row 1)
-		{DoctorCheckRenderedCopy, a.DoctorRenderedCopies},                                                            // doctor_render.go (SOURCE_OF_TRUTH rows 10-12)
-		{DoctorCheckSkillCopy, a.DoctorSkillCopies},                                                                  // doctor_skillcopies.go (SOURCE_OF_TRUTH row 13)
-		{DoctorCheckStoreAddress, a.DoctorStoreAddresses},                                                            // storeaddr.go (SOURCE_OF_TRUTH row 7)
-		{DoctorCheckOrgSource, a.DoctorOrgSources},                                                                   // orgsource.go (SOURCE_OF_TRUTH row 9)
-		{DoctorCheckRowFormat, a.DoctorRowFormat},                                                                    // doctor_rowformat.go
-		{DoctorCheckOldDBEdits, a.DoctorOldDBEdits},                                                                  // v017edits.go
+		{DoctorCheckProjects, a.DoctorProjects},                 // doctor_projects.go
+		{DoctorCheckKindRoute, a.DoctorKindRoutes},              // doctor_kindroutes.go (G-META-9)
+		{DoctorCheckIdentityContacts, a.DoctorIdentityContacts}, // doctor_identity.go (TEAM_PROFILES 6.4)
+		{DoctorCheckStoreClone, a.DoctorStoreClones},            // doctor_clones.go
+		{DoctorCheckRemovedFolder, a.DoctorRemovedFolders},      // doctor_removedfolder.go
+		{DoctorCheckStoreReadme, a.DoctorStoreReadmes},          // doctor_storereadme.go
+		{DoctorCheckStoreFiles, a.DoctorStoreFiles},             // doctor_storefiles.go
+		{DoctorCheckStoreIdentity, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorStoreIdentities(c, fix) }}, // doctor_storeidentity.go
+		{DoctorCheckConfigStyle, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorConfigStyle(c, fix) }},       // doctor_configstyle.go
+		{DoctorCheckActorRoster, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorActorRoster(c, fix) }},       // doctor_roster.go
+		{DoctorCheckActorCopies, a.DoctorActorCopies},                                                                       // doctor_actorcopies.go (SOURCE_OF_TRUTH rows 2-3)
+		{DoctorCheckDuplicateActors, a.DoctorDuplicateActors},                                                               // doctor_dupactors.go
+		{DoctorCheckSharedKeys, a.DoctorSharedKeys},                                                                         // actor_merge.go
+		{DoctorCheckPendingInvites, a.DoctorPendingInvites},                                                                 // doctor_invites.go
+		{DoctorCheckOrgAdmin, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorOrgAdmin(c, fix) }},         // doctor_orgadmin.go
+		{DoctorCheckEmptyRef, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorEmptyRefs(c, fix) }},        // doctor_emptyref.go
+		{DoctorCheckIdentitySource, a.DoctorIdentitySource},                                                                 // doctor_identitysource.go (SOURCE_OF_TRUTH row 1)
+		{DoctorCheckRenderedCopy, a.DoctorRenderedCopies},                                                                   // doctor_render.go (SOURCE_OF_TRUTH rows 10-12)
+		{DoctorCheckSkillCopy, a.DoctorSkillCopies},                                                                         // doctor_skillcopies.go (SOURCE_OF_TRUTH row 13)
+		{DoctorCheckStoreAccess, a.storeAccess(fix)},                                                                        // doctor_storeaccess.go (brief 3.7)
+		{DoctorCheckStoreAddress, a.DoctorStoreAddresses},                                                                   // storeaddr.go (SOURCE_OF_TRUTH row 7)
+		{DoctorCheckOrgSource, a.DoctorOrgSources},                                                                          // orgsource.go (SOURCE_OF_TRUTH row 9)
+		{DoctorCheckRowFormat, a.DoctorRowFormat},                                                                           // doctor_rowformat.go
+		{DoctorCheckOldDBEdits, a.DoctorOldDBEdits},                                                                         // v017edits.go
+		{DoctorCheckHomeLeftovers, a.DoctorHomeLeftovers},                                                                   // hometidy.go
+		{DoctorCheckOldRepoCache, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorOldRepoCache(c, fix) }}, // doctor_oldrepocache.go (owner item 16)
+		{DoctorCheckOldClones, a.DoctorOldClones},                                                                           // doctor_oldclones.go (plain files 1.6)
 	}
 	// A repo linked to a store folder by its remote opens without making
 	// anything (its rows live in the folder), so the store checks run

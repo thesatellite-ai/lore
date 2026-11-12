@@ -43,10 +43,22 @@ func sotID(t *testing.T, out string) string {
 	return o.ID
 }
 
-// sotRowPath is the row file of id in table under a store's root (a repo
-// or a folder store): <root>/.lore/data/<table>/<id>.json.
+// sotRowPath is the row file of id in table in a code repo's checkout:
+// <root>/.lore/data/<table>/<id>.json.
 func sotRowPath(root, table, id string) string {
 	return filepath.Join(root, ".lore", "data", table, id+".json")
+}
+
+// sotStoreRowPath is the row file of id in table in a store folder (a
+// project or org folder of a store): <folder>/<table>/<id>.json.
+func sotStoreRowPath(folder, table, id string) string {
+	return filepath.Join(folder, table, id+".json")
+}
+
+// sotStoreRootRowPath is the row file of id in table among a store's own
+// rows (its root folder, D-ad): <store>/_store/<table>/<id>.json.
+func sotStoreRootRowPath(store, table, id string) string {
+	return filepath.Join(store, "_store", table, id+".json")
 }
 
 // sotRow reads a row file's top-level fields.

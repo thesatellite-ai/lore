@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -25,15 +26,21 @@ const (
 	trackingRefNS = "refs/remotes/" + RemoteName + "/"
 )
 
-// noHooksName is a folder inside the bare clone that never exists; it is
-// the owned clone's core.hooksPath so no hook runs on lore's commits.
-const noHooksName = "lore-no-hooks"
+// noHooksName is a folder inside the clone's .git/lore that never exists;
+// it is the owned clone's core.hooksPath for lore's own git calls (passed
+// with -c on each call, never written to the clone's config), so no hook
+// runs on lore's commits: lore validates before it writes (D-g).
+const noHooksName = "no-hooks"
 
-// rowAttributes goes into the bare clone's info/attributes, which wins
-// over any .gitattributes in the store: git never merges a row file as
-// text (a text merge of JSON can silently produce a wrong row); it keeps
-// ours and marks the file conflicted, and Sync hands it to the Merger.
-const rowAttributes = "*.json -merge\n"
+// pendingBranch is the branch HEAD names between `git init` of a new clone
+// and the checkout of the store's branch (the store's default branch is
+// known only after the first fetch). A clone whose HEAD still names it was
+// cut short and is finished on the next open; it is never committed to.
+const pendingBranch = PendingBranch
+
+// PendingBranch is pendingBranch for readers outside this package (a
+// clone whose HEAD names it has no branch checked out yet).
+const PendingBranch = "lore-clone-pending"
 
 // cloneDirMode is the mode of clone folders: owner only, since a clone of
 // an internal store is internal.
@@ -65,8 +72,8 @@ func validBranch(name string) bool {
 
 // NewOpener returns the store.Opener for ssh, https and http store urls
 // (register it under each of Schemes). It needs store.OpenOptions.Home:
-// clones live under <home>/clones. Scp-like urls must go through
-// CanonicalURL first.
+// clones live under <home>/stores (CloneDirFor). Scp-like urls must go
+// through CanonicalURL first.
 func NewOpener(opts ...Option) store.Opener {
 	return func(ctx context.Context, u *url.URL, o store.OpenOptions) (store.Backend, error) {
 		r, err := RemoteOf(u)
@@ -81,35 +88,41 @@ func NewOpener(opts ...Option) store.Opener {
 		if err != nil {
 			return nil, err
 		}
-		base, err := CloneBase(o.Home, r)
+		// A pinned branch gets its own clone (<repo>@<branch>): a checkout
+		// holds one branch, and the default branch's clone may be open in
+		// another process.
+		dir, own, err := CloneDirFor(o.Home, r, branch)
 		if err != nil {
 			return nil, err
 		}
 		// callOpts is per call: appending to the captured opts would pin
 		// every later open of this Opener to the first pinned branch.
 		callOpts := opts
+		if branch != "" || own {
+			callOpts = slices.Clone(opts)
+		}
 		if branch != "" {
-			// A pinned branch gets its own clone (bare + worktree + lock):
-			// a worktree holds one branch, and the default branch's clone
-			// may be open in another process.
-			base += branchCloneSep + filepath.FromSlash(branch)
-			callOpts = append(slices.Clone(opts), WithBranch(branch))
+			callOpts = append(callOpts, WithBranch(branch))
+		}
+		if own {
+			callOpts = append(callOpts, withOwnClone())
 		}
 		remote := r.URL
 		if spelled, ok := build(opts).origins[r.URL]; ok && spelled != "" {
 			remote = spelled
 		}
-		return OpenClone(ctx, remote, base, folder, o, callOpts...)
+		return OpenClone(ctx, remote, dir, folder, o, callOpts...)
 	}
 }
 
-// OpenClone opens (creating on first use) the store clone of remote whose
-// folders stem is base: the bare clone base+".git", the worktree
-// base/work, the lock base/lock. remote is any url or path git can fetch
+// OpenClone opens (creating on first use) the store clone of remote at
+// dir: a normal git clone with its files checked out, the store lock in
+// dir/.git/lore/lock (PathsOf). remote is any url or path git can fetch
 // (tests use a local bare repository); NewOpener passes a credential-free
-// url (the WithOrigins spelling, else Remote.URL). The first open fetches the store: if it cannot be reached then,
-// E_STORE_UNREACHABLE. Later opens never touch the network (Sync does).
-func OpenClone(ctx context.Context, remote, base, folder string, o store.OpenOptions, opts ...Option) (*Backend, error) {
+// url (the WithOrigins spelling, else Remote.URL). The first open fetches
+// the store: if it cannot be reached then, E_STORE_UNREACHABLE. Later
+// opens never touch the network (Sync does).
+func OpenClone(ctx context.Context, remote, dir, folder string, o store.OpenOptions, opts ...Option) (*Backend, error) {
 	cfg := build(opts)
 	bin, err := lookGit(cfg.bin)
 	if err != nil {
@@ -118,30 +131,38 @@ func OpenClone(ctx context.Context, remote, base, folder string, o store.OpenOpt
 	if cfg.branch != "" && !validBranch(cfg.branch) {
 		return nil, errs.New(errs.InvalidInput, "git: the branch name is not valid")
 	}
-	if err = os.MkdirAll(base, cloneDirMode); err != nil {
+	if !filepath.IsAbs(dir) {
+		return nil, errs.New(errs.BadPath, "git: the store clone folder must be an absolute path")
+	}
+	paths := PathsOf(dir)
+	if err = checkCloneFolder(paths, cfg.own); err != nil {
+		return nil, err
+	}
+	if err = os.MkdirAll(paths.StateDir, cloneDirMode); err != nil {
 		return nil, errs.Wrap(errs.Internal, "git: create the clone folder", err)
 	}
-	paths := PathsOf(base)
-	lockPath := paths.Lock
-	setupRoot, err := rowfs.Open(base, rowfs.WithLockPath(lockPath), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
+	lockOpts := []rowfs.Option{rowfs.WithLockPath(paths.Lock), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithAllowNetworkFS(o.AllowNetworkFS)}
+	setupRoot, err := rowfs.Open(dir, lockOpts...)
 	if err != nil {
 		return nil, err
 	}
-	bare := paths.Bare
-	b := &Backend{cfg: cfg, git: runner{bin: bin, owned: true, noHooks: filepath.Join(bare, noHooksName)}, mode: modeClone, readOnly: o.ReadOnly, work: paths.Work}
+	b := &Backend{cfg: cfg, git: runner{bin: bin, owned: true, noHooks: filepath.Join(paths.StateDir, noHooksName)}, mode: modeClone, readOnly: o.ReadOnly, work: dir}
 	b.git.remote = remote // named in --trace lines (run.go)
 	if cfg.route != nil { // ONBOARDING 3.4 / Q5: the active setup's ssh route
 		b.git.routeArgs, b.git.routeEnv = cfg.route(ctx, remote)
+	}
+	if cfg.accessNote != nil {
+		b.git.accessNote = cfg.accessNote(remote)
 	}
 	lock, err := setupRoot.Lock(ctx)
 	if err != nil {
 		return nil, err
 	}
-	err = b.setup(ctx, remote, bare)
+	err = b.setup(ctx, remote)
 	if err = releaseKeep(err, lock); err != nil {
 		return nil, err
 	}
-	if b.root, err = rowfs.Open(b.work, rowfs.WithLockPath(lockPath), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS)); err != nil {
+	if b.root, err = rowfs.Open(dir, append(lockOpts, rowfs.WithClock(cfg.now))...); err != nil {
 		return nil, err
 	}
 	if b.folder, err = b.root.Folder(folder); err != nil {
@@ -157,34 +178,85 @@ func OpenClone(ctx context.Context, remote, base, folder string, o store.OpenOpt
 	return b, nil
 }
 
-// setup makes the bare clone and the worktree when missing. The caller
-// holds the clone lock, so two processes opening one new store make one
-// clone.
-func (b *Backend) setup(ctx context.Context, remote, bare string) error {
-	if !exists(filepath.Join(bare, "HEAD")) {
-		if err := b.initBare(ctx, remote, bare); err != nil {
-			return err
-		}
-	} else if err := b.ensureRemote(ctx, remote, bare); err != nil {
-		return err
+// checkCloneFolder refuses a clone folder lore cannot use as it is: a
+// folder that holds files but no git clone (lore never clones over a
+// person's files), or a .git that is a file (a linked worktree or a
+// separate git dir: lore keeps its lock and state in a .git folder). A
+// missing or empty folder is fine: the first open makes the clone.
+func checkCloneFolder(p ClonePaths, own bool) error {
+	st, err := os.Lstat(p.GitDir)
+	switch {
+	case err == nil && st.IsDir():
+		return nil
+	case err == nil:
+		return errs.New(errs.BadPath, "git: "+p.GitDir+" is a file, not a git folder (a linked worktree or a separate git dir); lore keeps its lock and state in the clone's .git folder").
+			WithHint("make a plain clone there (`git clone <url> " + p.Dir + "`), or point lore back at its own clone: lore store use --default <store>")
+	case !errors.Is(err, fs.ErrNotExist):
+		return errs.FileIO("read", p.GitDir, err)
 	}
-	if exists(filepath.Join(b.work, ".git")) {
-		out, err := b.git.run(ctx, call{dir: b.work, args: []string{"symbolic-ref", "--short", "HEAD"}})
-		if err != nil {
-			return errs.Wrap(errs.Internal, "git: the clone worktree is not on a branch", err)
-		}
-		b.branch = trimmed(out)
-		return b.adoptPinnedBranch(ctx, bare)
+	if own {
+		return errs.New(errs.NotFound, "git: "+p.Dir+" is no longer a git clone (its .git folder is gone)").
+			WithHint("clone the store there again, or go back to lore's own clone: lore store use --default <store>")
 	}
-	return b.addWorktree(ctx, bare)
+	entries, err := os.ReadDir(p.Dir)
+	if errors.Is(err, fs.ErrNotExist) || (err == nil && len(entries) == 0) {
+		return nil
+	}
+	if err != nil {
+		return errs.FileIO("read", p.Dir, err)
+	}
+	return errs.New(errs.BadPath, "git: "+p.Dir+" holds files but is not a git clone, so lore will not clone the store into it").
+		WithHint("move those files away (or remove the folder), then run the command again")
 }
 
-// adoptPinnedBranch moves a pinned-branch worktree that has no commit yet
+// setup makes the clone when it is missing and checks the store's branch
+// out when an earlier first open was cut short. The caller holds the
+// clone lock, so two processes opening one new store make one clone.
+func (b *Backend) setup(ctx context.Context, remote string) error {
+	fresh := !exists(filepath.Join(b.work, gitDirName, headFileName))
+	if fresh {
+		if err := b.initClone(ctx, remote); err != nil {
+			return err
+		}
+	} else if err := b.ensureRemote(ctx, remote); err != nil {
+		return err
+	}
+	if GitSetUp(ctx) {
+		if err := b.ensureHandGit(ctx); err != nil {
+			return err
+		}
+	} else {
+		b.handPending = true // a read sets nothing up (owner bug 6); the first write does
+	}
+	if fresh || GitSetUp(ctx) {
+		// the clone lore makes now, or an explicit setup or sync
+		if err := b.ensureCloneIdentity(ctx, remote); err != nil {
+			return err
+		}
+	} else {
+		b.identityRemote = remote // a read writes no identity (owner bug 6); the first write does
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"symbolic-ref", "--short", "HEAD"}})
+	if err != nil {
+		return errs.Wrap(errs.Internal, "git: the store clone is not on a branch", err).
+			WithHint("check a branch out in " + b.work + " (`git -C " + b.work + " switch <branch>`)")
+	}
+	if b.branch = trimmed(out); b.branch == pendingBranch {
+		return b.checkout(ctx)
+	}
+	if b.cfg.branch != "" && b.branch != b.cfg.branch {
+		return errs.New(errs.InvalidInput, "git: the store clone "+b.work+" has branch "+b.branch+" checked out, but the store is pinned to "+b.cfg.branch).
+			WithHint("switch it back: git -C " + b.work + " switch " + b.cfg.branch)
+	}
+	return b.adoptPinnedBranch(ctx)
+}
+
+// adoptPinnedBranch moves a pinned-branch clone that has no commit yet
 // (an earlier open made the branch new because the store lacked it, D3)
 // onto the remote branch once the store has it, so the clone does not
 // stay a second, empty store under that name (G-CORE-5). Only an unborn,
-// clean worktree is touched; an offline fetch leaves it as it is.
-func (b *Backend) adoptPinnedBranch(ctx context.Context, bare string) error {
+// clean checkout is touched; an offline fetch leaves it as it is.
+func (b *Backend) adoptPinnedBranch(ctx context.Context) error {
 	if b.cfg.branch == "" {
 		return nil
 	}
@@ -196,13 +268,13 @@ func (b *Backend) adoptPinnedBranch(ctx context.Context, bare string) error {
 	if err != nil || trimmed(st) != "" {
 		return err
 	}
-	if ferr := b.fetch(ctx, bare); ferr != nil {
+	if ferr := b.fetch(ctx, b.work); ferr != nil {
 		if isOffline(ferr) {
 			return nil
 		}
 		return ferr
 	}
-	tracking, err := b.resolve(ctx, bare, trackingRefNS+b.branch)
+	tracking, err := b.resolve(ctx, b.work, trackingRefNS+b.branch)
 	if err != nil || tracking == "" {
 		return err
 	}
@@ -212,43 +284,74 @@ func (b *Backend) adoptPinnedBranch(ctx context.Context, bare string) error {
 	return nil
 }
 
-// initBare makes an empty bare clone with origin and the row attributes.
-func (b *Backend) initBare(ctx context.Context, remote, bare string) error {
-	if _, err := b.git.run(ctx, call{dir: filepath.Dir(bare), args: []string{"init", "--quiet", "--bare", "--", bare}}); err != nil {
+// initClone makes an empty, normal (non-bare) git repository at the clone
+// folder with origin and the row attributes, its HEAD on pendingBranch
+// until checkout knows the store's branch.
+func (b *Backend) initClone(ctx context.Context, remote string) error {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"init", "--quiet", "--", b.work}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: create the store clone", err)
 	}
-	if _, err := b.git.run(ctx, call{dir: bare, args: []string{"remote", "add", "--", RemoteName, remote}}); err != nil {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"symbolic-ref", "HEAD", headsPrefix + pendingBranch}}); err != nil {
+		return errs.Wrap(errs.Internal, "git: prepare the store clone", err)
+	}
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"remote", "add", "--", RemoteName, remote}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: add the store remote", err)
-	}
-	info := filepath.Join(bare, "info")
-	if err := os.MkdirAll(info, cloneDirMode); err != nil {
-		return errs.Wrap(errs.Internal, "git: create info/", err)
-	}
-	if err := os.WriteFile(filepath.Join(info, "attributes"), []byte(rowAttributes), 0o600); err != nil {
-		return errs.Wrap(errs.Internal, "git: write info/attributes", err)
 	}
 	return nil
 }
 
+// ensureAttributes makes sure the clone's .git/info/attributes holds
+// lore's row line (a person's own clone, `lore store use`, starts without
+// it); other lines are kept. A clone whose config names lore's merge
+// driver gets `*.json merge=lore` (handgit.go), any other `*.json
+// -merge`: git never merges a row file as text (a text merge of JSON can
+// silently produce a wrong row).
+func (b *Backend) ensureAttributes() error {
+	out, err := os.ReadFile(filepath.Join(b.work, gitDirName, "config"))
+	if err == nil && strings.Contains(string(out), "[merge \""+MergeDriverName+"\"]") {
+		return b.ensureAttributeLine(rowAttributesDriver, rowAttributesNoDriver)
+	}
+	return b.ensureAttributeLine(rowAttributesNoDriver, rowAttributesDriver)
+}
+
 // ensureRemote points origin at remote when it changed (a moved store, or
-// an old config that still held a credential).
-func (b *Backend) ensureRemote(ctx context.Context, remote, bare string) error {
-	out, err := b.git.run(ctx, call{dir: bare, args: []string{"remote", "get-url", "--", RemoteName}})
+// an old config that still held a credential), and adds it when a first
+// open was cut short before it. A person's own clone (`lore store use`)
+// keeps its own spelling of the same store (and one re-pointed at another
+// repository is refused); keepSpelling (the org link code, PrepareClone)
+// keeps any spelling of the same store too.
+func (b *Backend) ensureRemote(ctx context.Context, remote string) error {
+	// the url as configured, not `git remote get-url` (which applies the
+	// person's url.<base>.insteadOf rules and so never equals remote)
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"config", "--get", "remote." + RemoteName + ".url"}})
 	if err == nil && trimmed(out) == remote {
 		return nil
 	}
-	if _, err := b.git.run(ctx, call{dir: bare, args: []string{"remote", "set-url", "--", RemoteName, remote}}); err != nil {
+	if err != nil {
+		if _, aerr := b.git.run(ctx, call{dir: b.work, args: []string{"remote", "add", "--", RemoteName, remote}}); aerr != nil {
+			return errs.Wrap(errs.Internal, "git: add the store remote", aerr)
+		}
+		return nil
+	}
+	if cur := trimmed(out); sameStore(cur, remote) && (b.cfg.own || b.cfg.keepSpelling) {
+		return nil // the same store spelled another way: the clone's own spelling stays
+	} else if b.cfg.own {
+		return errs.New(errs.InvalidInput, "git: your clone "+b.work+" now points origin at another repository than the store").
+			WithHint("point it back (`git -C " + b.work + " remote set-url origin <store url>`), or go back to lore's own clone: lore store use --default <store>")
+	}
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"remote", "set-url", "--", RemoteName, remote}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: update the store remote", err)
 	}
 	return nil
 }
 
-// addWorktree fetches the store and checks out the worktree on the store
-// branch: an existing local branch (unpushed commits survive a deleted
-// worktree), else the remote branch, else a new orphan branch for an empty
-// store.
-func (b *Backend) addWorktree(ctx context.Context, bare string) error {
-	head, fetchErr := b.openFetch(ctx, bare)
+// checkout fetches the store and checks its branch out in a clone whose
+// HEAD is still pendingBranch: an existing local branch (unpushed commits
+// survive a cut-short open), else the remote branch, else a new branch with
+// no commit for an empty store. The branch tracks origin, so a plain
+// `git pull` in the clone works.
+func (b *Backend) checkout(ctx context.Context) error {
+	head, fetchErr := b.openFetch(ctx, b.work)
 	if fetchErr != nil && !isOffline(fetchErr) {
 		return fetchErr
 	}
@@ -258,14 +361,11 @@ func (b *Backend) addWorktree(ctx context.Context, bare string) error {
 			b.branch = head
 		}
 	}
-	if _, err := b.git.run(ctx, call{dir: bare, args: []string{"worktree", "prune"}}); err != nil {
-		return errs.Wrap(errs.Internal, "git: prune worktrees", err)
-	}
-	local, err := b.resolve(ctx, bare, headsPrefix+b.branch)
+	local, err := b.resolve(ctx, b.work, headsPrefix+b.branch)
 	if err != nil {
 		return err
 	}
-	tracking, err := b.resolve(ctx, bare, trackingRefNS+b.branch)
+	tracking, err := b.resolve(ctx, b.work, trackingRefNS+b.branch)
 	if err != nil {
 		return err
 	}
@@ -276,17 +376,30 @@ func (b *Backend) addWorktree(ctx context.Context, bare string) error {
 		return errs.Wrap(errs.StoreUnreachable, "git: the store has no local copy yet and cannot be reached", fetchErr).
 			WithHint("go online once; afterwards the local copy is used")
 	}
+	return b.switchTo(ctx, local, tracking)
+}
+
+// switchTo checks b.branch out from the pending branch: the local branch
+// when it has a commit, else a new local branch at the tracking one, else
+// the branch with no commit yet. It tracks origin either way, so a plain
+// `git pull` in the clone works.
+func (b *Backend) switchTo(ctx context.Context, local, tracking string) error {
 	var args []string
 	switch {
 	case local != "":
-		args = []string{"worktree", "add", "--quiet", "--", b.work, b.branch}
+		args = []string{"checkout", "--quiet", b.branch}
 	case tracking != "":
-		args = []string{"worktree", "add", "--quiet", "-b", b.branch, "--", b.work, trackingRefNS + b.branch}
+		args = []string{"checkout", "--quiet", "-b", b.branch, trackingRefNS + b.branch}
 	default:
-		args = []string{"worktree", "add", "--quiet", "--orphan", "-b", b.branch, "--", b.work}
+		args = []string{"symbolic-ref", "HEAD", headsPrefix + b.branch}
 	}
-	if _, err := b.git.run(ctx, call{dir: bare, args: args}); err != nil {
-		return errs.Wrap(errs.Internal, "git: check out the store worktree", err)
+	if _, err := b.git.run(ctx, call{dir: b.work, args: args}); err != nil {
+		return errs.Wrap(errs.Internal, "git: check out the store branch "+b.branch, err)
+	}
+	for _, kv := range [][2]string{{"remote", RemoteName}, {"merge", headsPrefix + b.branch}} {
+		if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"config", "branch." + b.branch + "." + kv[0], kv[1]}}); err != nil {
+			return errs.Wrap(errs.Internal, "git: set the store branch's upstream", err)
+		}
 	}
 	return nil
 }
@@ -358,8 +471,7 @@ func accessRefused(err error) bool {
 // msgMissingRemoteRef is git's text for a fetched ref the remote lacks.
 const msgMissingRemoteRef = "couldn't find remote ref"
 
-// fetch updates every tracking branch of the clone (dir is the bare clone
-// or the worktree). A failed fetch is errOffline: lore treats any fetch it
+// fetch updates every tracking branch of the clone (dir is the clone). A failed fetch is errOffline: lore treats any fetch it
 // could not complete as "remote unreachable", and nothing local changes.
 func (b *Backend) fetch(ctx context.Context, dir string) error {
 	if b.openFetchFresh(ctx) {
@@ -372,6 +484,13 @@ func (b *Backend) fetch(ctx context.Context, dir string) error {
 // its result the way fetch documents: stamp on success or on a missing
 // remote ref, errOffline for any other failure git reported.
 func (b *Backend) runFetch(ctx context.Context, dir string, args ...string) error {
+	if gitenv.NoFetch(os.Environ()) {
+		// LORE_NO_FETCH: the parent fetched this clone moments ago;
+		// LORE_OFFLINE: this run reads what is on disk. Either way the
+		// tracking refs there are what the store reads, and no stamp is
+		// written (nothing was fetched by this process).
+		return nil
+	}
 	_, err := b.git.run(ctx, call{dir: dir, args: args})
 	if err == nil {
 		b.stampFetch(ctx, dir) // RES 3.6: the remote answered (fresh.go)
@@ -437,34 +556,34 @@ func scopeOf(ctx context.Context) *FetchScope {
 // default branch: DefaultBranch for an empty store, and an ls-remote only
 // when the remote has branches but git did not record its HEAD (a git
 // older than followRemoteHEAD, or a remote HEAD naming no branch).
-func (b *Backend) openFetch(ctx context.Context, bare string) (head string, err error) {
+func (b *Backend) openFetch(ctx context.Context, dir string) (head string, err error) {
 	remote := "remote." + RemoteName + "."
-	err = b.runFetch(ctx, bare, "-c", remote+"followRemoteHEAD=always", "-c", remote+"fetch="+headsRefspec, "-c", remote+"fetch="+liveRefspec,
+	err = b.runFetch(ctx, dir, "-c", remote+"followRemoteHEAD=always", "-c", remote+"fetch="+headsRefspec, "-c", remote+"fetch="+liveRefspec,
 		"fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", RemoteName)
 	if err != nil {
 		return DefaultBranch, err
 	}
 	b.openScope.Store(scopeOf(ctx))
 	b.openLive = true
-	out, serr := b.git.run(ctx, call{dir: bare, args: []string{"symbolic-ref", "--quiet", remoteHeadRef}})
+	out, serr := b.git.run(ctx, call{dir: dir, args: []string{"symbolic-ref", "--quiet", remoteHeadRef}})
 	if serr == nil {
 		// remove it again: no other code path ever made it, and a clone
 		// opened by an older lore has none.
-		if _, derr := b.git.run(ctx, call{dir: bare, args: []string{"symbolic-ref", "--delete", remoteHeadRef}}); derr != nil {
+		if _, derr := b.git.run(ctx, call{dir: dir, args: []string{"symbolic-ref", "--delete", remoteHeadRef}}); derr != nil {
 			return DefaultBranch, errs.Wrap(errs.Internal, "git: remove the remote HEAD ref", derr)
 		}
 		if name, ok := strings.CutPrefix(trimmed(out), trackingRefNS); ok && validBranch(name) {
 			return name, nil
 		}
 	}
-	heads, lerr := b.git.run(ctx, call{dir: bare, args: []string{"for-each-ref", "--count=1", "--format=%(refname)", trackingRefNS}})
+	heads, lerr := b.git.run(ctx, call{dir: dir, args: []string{"for-each-ref", "--count=1", "--format=%(refname)", trackingRefNS}})
 	if lerr != nil {
 		return DefaultBranch, errs.Wrap(errs.Internal, "git: list the fetched branches", lerr)
 	}
 	if trimmed(heads) == "" {
 		return DefaultBranch, nil // an empty store: ls-remote would say the same
 	}
-	return b.remoteHead(ctx, bare), nil
+	return b.remoteHead(ctx, dir), nil
 }
 
 // dropLiveRefs removes the live refs openFetch copied when the store is
@@ -472,7 +591,7 @@ func (b *Backend) openFetch(ctx context.Context, bare string) (head string, err 
 // wire's v0.1.17 path fetched them, so a migrated store keeps reading no
 // live ref, as it did.
 func (b *Backend) dropLiveRefs(ctx context.Context) error {
-	if !b.openLive || b.marker.Version < rowfs.MarkerVersion {
+	if !b.openLive || b.marker.Version < rowfs.MarkerFirstStores {
 		return nil
 	}
 	b.openLive = false
@@ -571,7 +690,17 @@ func (b *Backend) commitBatch(ctx context.Context, batch Batch, changes []store.
 		env, err = b.commitEnv(ctx, batch.Author)
 	}
 	if err == nil {
-		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", b.cfg.withTrailers(subjectOf(ctx, batch.Op, changes), store.CommitTrailers(ctx)...)}, env: env})
+		msg := subjectOf(ctx, batch.Op, changes)
+		if own, ok := store.CommitMessage(ctx); ok {
+			msg = own // a write path that names its commit (the pick-up of hand edits)
+		}
+		trailers := store.CommitTrailers(ctx)
+		if store.PersonAuthored(ctx) {
+			// a person's own change: the batch squash keeps it a commit of
+			// its own, so its author survives push mode batch (squashOnto)
+			trailers = append(trailers, handEditTrailer)
+		}
+		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", b.cfg.withTrailers(msg, trailers...)}, env: env})
 	}
 	if err == nil {
 		return nil
@@ -614,15 +743,16 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 			return rows, store.Cursor(h), nil
 		}
 	}
-	paths, err := b.changedPaths(ctx, from, h, b.folder.DataPath())
+	paths, err := b.changedPaths(ctx, from, h, b.folder.Pathspecs())
 	if err != nil {
 		return nil, "", err
 	}
-	prefix := b.folder.DataPath() + "/"
 	names := make([]string, 0, len(paths))
+	rels := make(map[string]string, len(paths))
 	for _, p := range paths {
-		if _, _, ok := rowfs.ParseRowPath(strings.TrimPrefix(p, prefix)); ok && strings.HasPrefix(p, prefix) {
+		if rel, ok := b.folder.FileRel(p); ok {
 			names = append(names, h+":"+p)
+			rels[h+":"+p] = rel
 		}
 	}
 	blobs, err := b.readBlobs(ctx, names)
@@ -635,8 +765,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 		if !ok || len(doc) > rowfs.MaxFileSize {
 			continue
 		}
-		rel := strings.TrimPrefix(strings.TrimPrefix(name, h+":"), prefix)
-		r, derr := rowfs.DecodeRowFile(rel, doc)
+		r, derr := rowfs.DecodeRowFile(rels[name], doc)
 		if derr != nil {
 			continue // reported by Problems
 		}
@@ -677,17 +806,17 @@ func copyRows(rows []store.Row) []store.Row {
 	return out
 }
 
-// changedPaths lists the files under pathspec added or modified between
+// changedPaths lists the files under pathspecs added or modified between
 // from and to (every file at to when from is ""), root-relative.
-func (b *Backend) changedPaths(ctx context.Context, from, to, pathspec string) ([]string, error) {
+func (b *Backend) changedPaths(ctx context.Context, from, to string, pathspecs []string) ([]string, error) {
 	if from == "" {
-		out, err := b.git.run(ctx, call{dir: b.work, args: []string{"ls-tree", "-r", "-z", "--name-only", to, "--", pathspec}})
+		out, err := b.git.run(ctx, call{dir: b.work, args: append([]string{"ls-tree", "-r", "-z", "--name-only", to, "--"}, pathspecs...)})
 		if err != nil {
 			return nil, errs.Wrap(errs.Internal, "git: list row files", err)
 		}
 		return splitZ(out), nil
 	}
-	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"diff", "--name-status", "-z", "--no-renames", from, to, "--", pathspec}})
+	out, err := b.git.run(ctx, call{dir: b.work, args: append([]string{"diff", "--name-status", "-z", "--no-renames", from, to, "--"}, pathspecs...)})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "git: diff row files", err)
 	}
@@ -715,14 +844,15 @@ func (b *Backend) missingCommits(ctx context.Context, cursor store.Cursor) ([]st
 	if err != nil || h == "" {
 		return nil, err
 	}
-	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"diff", "--name-only", "-z", "--no-renames", "--diff-filter=D", from, h, "--", b.folder.DataPath()}})
+	out, err := b.git.run(ctx, call{dir: b.work, args: append([]string{"diff", "--name-only", "-z", "--no-renames", "--diff-filter=D", from, h, "--"}, b.folder.Pathspecs()...)})
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "git: diff row files", err)
 	}
-	prefix := b.folder.DataPath() + "/"
 	var missing []string
 	for _, p := range splitZ(out) {
-		missing = append(missing, strings.TrimPrefix(p, prefix))
+		if rel, ok := b.folder.FileRel(p); ok {
+			missing = append(missing, rel)
+		}
 	}
 	return missing, nil
 }
@@ -739,8 +869,8 @@ func exists(path string) bool {
 // key of .lore/stores.yaml, as it builds rowfs.FolderParam.
 const BranchParam = "branch"
 
-// branchCloneSep joins the clone stem and a pinned branch:
-// <home>/clones/<host>/<owner>/<repo>@<branch>.git and …@<branch>/work.
+// branchCloneSep joins the clone folder and a pinned branch:
+// <home>/stores/<owner>/<repo>@<branch>.
 const branchCloneSep = "@"
 
 // branchOf takes BranchParam out of u: the branch (validated like
@@ -780,4 +910,15 @@ func (b *Backend) sharedFile(ctx context.Context, rel string) ([]byte, bool, err
 	}
 	doc, ok := got[name]
 	return doc, ok, nil
+}
+
+// sameStore reports whether two origin urls name the same store (one
+// host/path); a url lore cannot parse (a local path) matches only itself.
+func sameStore(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ra, ea := RemoteOfRaw(a)
+	rb, eb := RemoteOfRaw(b)
+	return ea == nil && eb == nil && ra.Norm == rb.Norm
 }

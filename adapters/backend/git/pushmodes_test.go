@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -72,6 +73,41 @@ func TestSquashMakesOneBatchCommit(t *testing.T) {
 	if n, _ := a.Unpushed(context.Background()); n != 0 {
 		t.Fatalf("Unpushed after the push = %d", n)
 	}
+}
+
+// TestUnpulledCountsFetchedCommits: commits a plain fetch brought into the
+// tracking ref but not into the branch are counted until a sync merges
+// them; a clone level with its remote, or holding only its own commits,
+// has none.
+func TestUnpulledCountsFetchedCommits(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithMerger(newestMerger{}))
+	b := clone(t, remote, WithMerger(newestMerger{}))
+	ga, gb := newGen(t), newGen(t)
+	if n, err := b.Unpulled(ctx); err != nil || n != 0 {
+		t.Fatalf("fresh clone: Unpulled = %d, %v; want 0", n, err)
+	}
+	write(t, b, store.Change{Row: gb.row(newID(t), "own", hlc.HLC{})})
+	if n, err := b.Unpulled(ctx); err != nil || n != 0 {
+		t.Fatalf("own unpushed commit: Unpulled = %d, %v; want 0", n, err)
+	}
+	pushed := ga.row(newID(t), "from a", hlc.HLC{})
+	write(t, a, store.Change{Row: pushed})
+	write(t, a, store.Change{Row: ga.row(newID(t), "from a again", hlc.HLC{})})
+	syncOK(t, a)
+	gitT(t, b.Dir(), "fetch", "--quiet", RemoteName)
+	if n, err := b.Unpulled(ctx); err != nil || n != 2 {
+		t.Fatalf("after a tracking-only fetch: Unpulled = %d, %v; want 2", n, err)
+	}
+	if _, err := b.SyncWith(ctx, SyncOptions{NoPush: true}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := b.Unpulled(ctx); err != nil || n != 0 {
+		t.Fatalf("after the merge: Unpulled = %d, %v; want 0", n, err)
+	}
+	get(t, b, pushed.ID)
 }
 
 // TestNoPushKeepsTheOutbox: a fetch-only sync merges the remote but sends
@@ -219,5 +255,107 @@ func TestRepoModeRefusesCompaction(t *testing.T) {
 	var e *errs.Error
 	if !errors.As(err, &e) || e.Code != errs.Refused {
 		t.Fatalf("Compact in repo mode = %v, want E_REFUSED", err)
+	}
+}
+
+// TestCompactDryRunCountsTheRemote: a teammate's commit pushed after this
+// clone's last fetch is counted by the dry run as the real run will (the
+// real run syncs first), and the dry run pushes nothing of its own
+// (machines TestLifeStorePush/compaction: "dry run said Kept 1", the run
+// kept 2).
+func TestCompactDryRunCountsTheRemote(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithMerger(newestMerger{}))
+	b := clone(t, remote, WithMerger(newestMerger{}))
+	ga, gb := newGen(t), newGen(t)
+	write(t, a, store.Change{Row: ga.row(newID(t), "a's row", hlc.HLC{})})
+	syncOK(t, a)
+	write(t, b, store.Change{Row: gb.row(newID(t), "b's row", hlc.HLC{})})
+	syncOK(t, b)
+	write(t, a, store.Change{Row: ga.row(newID(t), "a's unpushed row", hlc.HLC{})})
+	remoteTip := gitT(t, remote, "rev-parse", "main")
+	cutoff := time.Now().Add(time.Hour) // every commit so far is history
+	plan, err := a.Compact(ctx, CompactRequest{Cutoff: cutoff, DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := gitT(t, remote, "rev-parse", "main"); got != remoteTip {
+		t.Fatal("a dry run pushed")
+	}
+	res, err := a.Compact(ctx, CompactRequest{Cutoff: cutoff})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Nothing || plan.Kept != res.Kept || plan.Squashed != res.Squashed || plan.Rows != res.Rows {
+		t.Fatalf("dry run planned %+v; the run did %+v", plan, res)
+	}
+}
+
+// TestSquashKeepsHandEditCommits: push mode batch never erases the person
+// of a hand edit (brief 2.1). Lore's own commits around a hand edit are
+// squashed into one batch commit each side; the hand edit stays a commit
+// of its own, authored by the person with the org identity as committer,
+// and the pushed tree is the clone's. When the local history holds a
+// merge (a teammate pushed meanwhile), it is pushed as it is, the hand
+// edit's author kept.
+func TestSquashKeepsHandEditCommits(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	org := Signature{Name: "Northwind", Email: "lore@northwind.invalid"}
+	mira := Signature{Name: "Mira Lore", Email: "mira@northwind.invalid"}
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithMerger(newestMerger{}), WithSigner(org), WithIdentity(func(context.Context) Signature { return mira }))
+	g := newGen(t)
+	hand := store.WithPersonAuthor(store.WithCommitMessage(ctx, "hand edit: memories x"))
+	lw := func(b *Backend, gen *gen) {
+		t.Helper()
+		write(t, b, store.Change{Row: gen.row(newID(t), "lore", hlc.HLC{})})
+	}
+	before := remoteCount(t, remote)
+	lw(a, g)
+	lw(a, g)
+	if err := a.Write(hand, []store.Change{{Row: g.row(newID(t), "by hand", hlc.HLC{})}}); err != nil {
+		t.Fatal(err)
+	}
+	lw(a, g)
+	lw(a, g)
+	if _, err := a.SyncWith(ctx, SyncOptions{Squash: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := remoteCount(t, remote); got != before+3 {
+		t.Fatalf("remote has %d new commits, want 3 (batch, hand edit, batch):\n%s", got-before, gitT(t, remote, "log", "--format=%s|%an", testBranch))
+	}
+	want := []string{
+		"lore: batch 2 rows (memories 2)|Northwind|Northwind",
+		"hand edit: memories x|Mira Lore|Northwind",
+		"lore: batch 2 rows (memories 2)|Northwind|Northwind",
+	}
+	got := strings.Split(gitT(t, remote, "log", "--reverse", "--format=%s|%an|%cn", "-3", testBranch), "\n")
+	if !slices.Equal(got, want) {
+		t.Fatalf("pushed history:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if gitT(t, remote, "rev-parse", testBranch+"^{tree}") != gitT(t, a.Dir(), "rev-parse", "HEAD^{tree}") {
+		t.Fatal("the pushed tree is not the clone's")
+	}
+
+	// A teammate pushes meanwhile: a's sync merges, the history is not
+	// linear, and it goes out as it is with the hand edit's author.
+	b := clone(t, remote, WithMerger(newestMerger{}))
+	gb := newGen(t)
+	lw(b, gb)
+	syncOK(t, b)
+	lw(a, g)
+	if err := a.Write(hand, []store.Change{{Row: g.row(newID(t), "by hand again", hlc.HLC{})}}); err != nil {
+		t.Fatal(err)
+	}
+	lw(a, g)
+	if _, err := a.SyncWith(ctx, SyncOptions{Squash: true}); err != nil {
+		t.Fatal(err)
+	}
+	authors := gitT(t, remote, "log", "--format=%s|%an", "--grep=^hand edit", testBranch)
+	if strings.Count(authors, "hand edit: memories x|Mira Lore") != 2 {
+		t.Fatalf("hand edits on the remote:\n%s\nwant two by Mira Lore", authors)
 	}
 }

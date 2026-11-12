@@ -44,7 +44,7 @@ This lore (dev) was built from source. Update it with: git pull && task lore:bui
 $ lore upgrade
 ```
 
-On a script install it prints the old and new version and where the program lives, the archive it downloaded and its size, `sha256 ok`, then `Done. Running lore processes keep 0.1.18 until they exit.` Inside a project it also runs the new program's `lore setup --schema-only`, which brings the local cache's schema up to date. Only one upgrade runs at a time on a machine: a second one waits for the lock in `~/.lore/state/upgrade.lock` and then finds the new version already there.
+On a script install it prints the old and new version and where the program lives, the archive it downloaded and its size, `sha256 ok`, then `Done. Running lore processes keep 0.1.18 until they exit.` Inside a project it also runs the new program's `lore setup --schema-only`, which brings the local cache's schema up to date, and then the new program's `lore fix` for that project (next section; `--no-fix` skips it, and outside a project it says it skipped it). Only one upgrade runs at a time on a machine: a second one waits for the lock in `~/.lore/state/upgrade.lock` and then finds the new version already there.
 
 `lore upgrade --version v0.1.18` installs exactly that release, older ones included. Homebrew keeps only the newest formula, so `--version` is refused for a Homebrew install (`E_UNSUPPORTED`).
 
@@ -123,6 +123,59 @@ auto_upgrade: true      # upgrade instead of printing the line
 ```
 
 With `auto_upgrade: true` lore installs the new release itself and prints one line naming both versions (for example, upgraded 0.1.18 → 0.1.19). It only does this for Homebrew and script installs (others get `not upgraded automatically (installed by …)`), never past a pin, and a failed attempt leaves the old program in place and says why.
+
+## Fix a project: `lore fix`
+
+`lore fix` brings the project you are in up to date in one go. It runs, in order, everything `lore doctor` can repair for it and prints one line per step (what, where, result), then checks again and prints the status last:
+
+```text
+$ lore fix
+lore fix: /home/alice/website
+  ok     migrate (/home/alice/website/.lore/data): Upgraded 2 rows
+         memories/mem_01a1cb5743e371b7bab946c6cf489ddf
+         branch (.lore/data): 2 files upgraded; commit them: git add .lore/data && git commit -m "lore: migrate format"
+  ok     render (/home/alice/website/.lore/LORE.md): rendered
+  --     agent hooks (/home/alice/website): current
+  --     old clones (/home/alice/.lore/clones): current
+  ok     doctor fixes: fixed 1
+         store_identity: …
+Status: HEALTHY
+```
+
+- **migrate** rewrites the row files lore 0.1.17 wrote (`_v: 1`) and finishes an interrupted migration, exactly as `lore migrate run` does (backup ref, team lock, `lore migrate rollback` undoes it).
+- **render** refreshes `.lore/LORE.md` and the tools' files when they are stale, or when the migration just rewrote rows.
+- **agent hooks** writes what `lore setup --agent-hooks` writes for the tools set up here; never in a client repo, whose tracked files lore does not change.
+- **old clones** removes the store clones an earlier 0.1.18 build left in `~/.lore/clones`, only those `lore doctor` proved everything is in the new clone; a half clone or an old org link clone stays, and doctor names it.
+- **doctor fixes** are the checks' own repairs: `.git/info/exclude` in a client repo, a store clone's git identity, lore's merge driver, `config.yaml` style, your actor row, reversed `--supersedes` links and the rest.
+
+A step that cannot run says why on its line (`FAILED`) and the others still run. A second `lore fix` changes nothing and says `Everything is current.`. `lore fix --dry-run` changes nothing and says what each step would do. `lore fix --json` gives the steps and the status as JSON. The exit status is doctor's: 0 healthy, 1 degraded, 2 broken.
+
+`lore doctor --fix` runs the same steps (it says so above its report), so the two never differ.
+
+`lore fix --all` runs it in every repo the setups know: the repos in the enabled setups' folders and the known repos. Each repo gets its own block, a repo that fails does not stop the others, and the last line names the repos that failed (exit 1 when one did).
+
+**A project with lore 0.1.17 rows.** Every command run there first says what to do. A read prints `lore: this project has rows written by lore 0.1.17; run lore fix` on stderr and changes nothing. The first write fixes the project by itself with the steps that are safe without asking (migrate, render), says so in one line, then writes; `lore fix` does the rest.
+
+## From an earlier 0.1.18 build: lore moves your stores itself
+
+Builds of 0.1.18 before the plain store layout kept each store as a bare clone plus a linked worktree under `~/.lore/clones/<host>/<owner>/<repo>.git` and `<repo>/work`, with the rows under `<folder>/.lore/data/` and the org config at `org/.lore/lore-org.yaml`. The first command of this lore (any command but `help`, `version` and the git hooks) moves all of it, without asking, and says what it moved:
+
+```text
+lore: moved store clone ~/.lore/clones/github.com/acme/lore-hub -> ~/.lore/stores/acme/lore-hub (branch main; 1 commit(s) the remote does not have carried)
+lore: moved store clone ~/.lore/clones/work-gh/acme/lore-east -> ~/.lore/stores/acme/lore-east (branch main)
+lore: the old clone folders are left in place; once you have checked the moved clones, `lore doctor` names the command that removes each
+lore: ~/.lore/clones-v017 holds 1 org link clone(s) of the earlier build; this lore no longer uses them (`lore doctor` names the command that removes them)
+lore: pushed store lore-hub: commit 3f2a9c1 to branch main
+lore: store lore-hub: rows moved from <folder>/.lore/data/ to <folder>/ (14 file(s); folders: org, team): commit 8d04e7b
+lore: pushed store lore-hub: commit 8d04e7b to branch main
+```
+
+- **The clone move** makes a plain clone at `~/.lore/stores/<owner>/<repo>` (`<repo>@<branch>` for a pinned branch) from the old one, on this machine, without the network: every branch is copied, so a commit that was never pushed is still waiting to be pushed, and uncommitted changes in the old worktree are copied as uncommitted changes. The host never appears in the path, also when the old clone's origin uses an ssh alias of yours (`git@work-gh:acme/lore-east.git` lands at `stores/acme/lore-east`, and the origin keeps your spelling); lore reads your `~/.ssh/config` to tell that `work-gh` is github.com, and only for a host the config does not name takes a host without a dot for an alias. A worktree in the middle of a merge or rebase, or a file changed differently in both places, is refused with the reason and the step to take, and nothing of that clone moves.
+- **Pending commits** are pushed right away when the store's push mode is `now` and the remote answers; otherwise they wait in the new clone and `lore sync` pushes them, as any local commit.
+- **The layout commit**: each store whose files are still in the old layout gets one commit, signed like lore's other commits there, titled `lore: store layout 0.1.18 — rows move from <folder>/.lore/data/ to <folder>/`. It moves every row and each folder's `_meta.json` and `_purged.json`, moves `org/.lore/lore-org.yaml` to `org/lore-org.yaml`, drops a wrong `org_folder` from `lore-store.yaml`, writes the store's `README.md`, and sets `lore_store: 3` in `lore-store.yaml`. It is pushed per the store's push mode, with the push line printed. A teammate who runs the new lore first already pushed it; you then only fetch it.
+- **A teammate still on an older 0.1.18 build** cannot read the new layout. After the layout commit reaches them, their lore refuses the store with `E_OLD_LORE` (`lore-store.yaml was written by a newer lore`) instead of writing rows into the old place: they upgrade, and their next command moves their own clones the same way. If an older lore did write a row into an old place after the move, the next run of the new lore moves it too (a row found at both places is merged field by field).
+- **The old folders stay until you run `lore fix`.** Commands never delete `~/.lore/clones` or `~/.lore/clones-v017`; `lore fix` removes only the old clones doctor proved safe. `lore doctor` lists each old clone under `old_clones`: once everything in it is in the new clone (carried or pushed) it is a note with the exact command, for example `rm -rf ~/.lore/clones/github.com/acme/lore-hub ~/.lore/clones/github.com/acme/lore-hub.git`; while it still holds something the new clone lacks (a commit made there later, other uncommitted changes) it is a warning saying what, and the folder must stay.
+- **It runs once.** The next command finds nothing to move and prints nothing; the check is a look at two folders. A run cut short (a closed laptop, a killed process) is finished by the next command: a half-built clone (`<repo>.moving`) is made again, and a layout commit cut short after the files moved is completed. What was moved is recorded in `~/.lore/state/layout-move.json`.
 
 ## Try it
 

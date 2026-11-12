@@ -22,8 +22,8 @@ func TestStoreTextLines(t *testing.T) {
 			"✓ created store agency (sto_1) at git@h:a/n; recorded in .lore/stores.yaml; commit it to share\n"},
 		{"init already", InitOut{Name: "agency", URL: "git@h:a/n", ID: "sto_1", Already: true}.Text(),
 			"✓ git@h:a/n is already a lore store (sto_1); recorded as agency in .lore/stores.yaml; commit it to share\n"},
-		{"init personal", InitOut{Name: "me", URL: "file:///h/.lore/stores/me", ID: "sto_2", Personal: true}.Text(),
-			"✓ created store me (sto_2) at file:///h/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)\n"},
+		{"init personal", InitOut{Name: "me", URL: "file:///h/.lore/stores/_me", ID: "sto_2", Personal: true}.Text(),
+			"✓ created store me (sto_2) at file:///h/.lore/stores/_me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)\n"},
 		{"init personal already", InitOut{Name: "me", URL: "file:///m", ID: "sto_2", Personal: true, Already: true}.Text(),
 			"✓ file:///m is already a lore store (sto_2); recorded as me in ~/.lore/config.yaml (personal.store, the target of --to me)\n"},
 		{"add git whole", AddOut{Name: "golang", URL: "git@github.com:a/g", Declared: "internal"}.Text(),
@@ -214,6 +214,27 @@ func TestStoreNamed(t *testing.T) {
 				t.Fatalf("opened %+v err %v, want %s @%q", f.got, err, c.url, c.branch)
 			}
 		})
+	}
+}
+
+// orgOpenFake is openFake whose Manager also lists org stores.
+type orgOpenFake struct {
+	openFake
+	org []Entry
+}
+
+func (o *orgOpenFake) OrgStoreEntries(context.Context) ([]Entry, error) { return o.org, nil }
+
+// TestStoreNamedShortName: store open takes an org store's short name
+// (lore-x, not snake_case); a path-shaped argument that names no store is
+// still passed on as it is.
+func TestStoreNamedShortName(t *testing.T) {
+	f := &orgOpenFake{org: []Entry{{Name: "lore-x", URL: "git@h:acme/lore-x.git", Source: SourceOrg}}}
+	if _, _, err := invoke(t, f, OpOpen, `{"url":"lore-x"}`); err != nil || f.got.URL != "git@h:acme/lore-x.git" {
+		t.Fatalf("open lore-x: %+v %v", f.got, err)
+	}
+	if _, _, err := invoke(t, f, OpOpen, `{"url":"bare.git"}`); err != nil || f.got.URL != "bare.git" {
+		t.Fatalf("open bare.git: %+v %v", f.got, err)
 	}
 }
 

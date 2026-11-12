@@ -27,6 +27,7 @@ import (
 	opscheck "github.com/thesatellite-ai/lore/ops/check"
 	opsconfig "github.com/thesatellite-ai/lore/ops/config"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
@@ -61,6 +62,9 @@ func (a *App) runLocal(ctx context.Context, e op.Entry, d op.Decoder, c op.Calle
 	}
 	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
 		ctx = WithNoCreate(ctx) // doctor_nocreate.go: a read never sets a repo up
+	}
+	if dry, _ := in.Bool("dry_run"); dry && e.Spec().Name == opsfix.OpRun {
+		ctx = WithNoCreate(ctx) // lore fix --dry-run changes nothing, not even git's wiring
 	}
 	// P3-MISC-2: a Local MayAsk operation reads the caller's yes itself.
 	return e.Invoke(op.WithConfirmed(ctx, c.Yes), in)

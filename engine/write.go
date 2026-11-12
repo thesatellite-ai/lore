@@ -258,11 +258,18 @@ func sameKey(a, b map[string]value.Value, keyFields []string) bool {
 // by field and retried once (spec 5.3); a text clash, a second race or a
 // concurrent delete is E_STALE, so no edit is ever lost silently.
 func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Value) (Written, error) {
-	cl := e.callOf(ctx)
 	src, cur, err := e.locate(ctx, ref)
 	if err != nil {
 		return Written{}, err
 	}
+	return e.updateFrom(ctx, src, cur, patch)
+}
+
+// updateFrom is Update of the row cur of store src: Update reads cur
+// from the cache, the pick-up of a hand edit (handedit.go) passes the row
+// as the last commit holds it.
+func (e *Engine) updateFrom(ctx context.Context, src store.Source, cur row.Row, patch map[string]value.Value) (Written, error) {
+	cl := e.callOf(ctx)
 	st, err := e.writable(src)
 	if err != nil {
 		return Written{}, err
@@ -953,7 +960,8 @@ type copyHit struct {
 // moved row stays addressable by its bare id. One live copy is the
 // answer; two or more are E_AMBIGUOUS_ID naming the stores. With no live
 // copy the nearest tombstone answers (`show` says deleted, a purged id
-// says E_PURGED on a write).
+// says E_PURGED on a write). An actor id is the exception: its copies are
+// one person and the newest answers (newestCopy).
 func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	var live []copyHit
 	for _, h := range found {
@@ -967,12 +975,32 @@ func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	case 1:
 		return live[0], nil
 	}
+	if id.Prefix() == ids.PrefixActor {
+		return newestCopy(live), nil
+	}
 	parts := make([]string, len(live))
 	for i, h := range live {
 		parts[i] = string(h.src)
 	}
 	return copyHit{}, errs.New(errs.AmbiguousID, ""+id.String()+" is in "+strings.Join(parts, " and ")).
 		WithHint("name the store with --to")
+}
+
+// newestCopy is the copy an unqualified actor ref means when several
+// stores hold the actor. An actor id is global (derived from the person's
+// identity), so copies in the repo and in the personal store are one
+// person, never E_AMBIGUOUS_ID: the newest copy (highest HLC) answers, a
+// tie going to the nearest store (live is in precedence order). Commands
+// that care which store's copy is the source (wire's actor source) ask
+// each store by name.
+func newestCopy(live []copyHit) copyHit {
+	best := live[0]
+	for _, h := range live[1:] {
+		if h.row.HLC.Compare(best.row.HLC) > 0 {
+			best = h
+		}
+	}
+	return best
 }
 
 // put writes one row with expect and returns it as stored, in both forms:

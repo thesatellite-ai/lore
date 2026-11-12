@@ -3,15 +3,16 @@ package wire
 // storeforget_standalone.go — `lore store forget <url>` on cmd/lore
 // (ops/stores.Cloner, Options.Local.Clones; P3-CMDLORE-9), ported from the
 // old binary's store_cmd.go forgetClone + store_forget_core.go: this
-// machine's clones of a store (the core's git-backend clone and its branch
-// clones, and the shared v0.1.17 link clone) are deleted, refused while any
-// of them holds unpushed commits or uncommitted changes (side effect 20).
+// machine's clones of a store (its clone under ~/.lore/stores and its
+// branch clones) are deleted, refused while any of them holds unpushed
+// commits or uncommitted changes (side effect 20). A person's own clone
+// (`lore store use`) is never deleted: lore drops its record and leaves
+// the folder.
 // store show|open|doctor forward to storeshow_standalone.go.
 
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -21,17 +22,14 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
-	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
-// Clone folder names (adapters/backend/git and adapters/orgcfg layouts).
-const (
-	bareCloneExt   = ".git"
-	branchCloneSep = "@"
-)
+// branchCloneSep joins a clone folder and its pinned branch
+// (adapters/backend/git layout: <repo>@<branch>).
+const branchCloneSep = "@"
 
 // standaloneClones implements opsstores.Cloner for cmd/lore.
 type standaloneClones struct {
@@ -60,11 +58,14 @@ func (c *standaloneClones) DoctorClones(ctx context.Context) (opsstores.ClonesOu
 // folderURLScheme starts a folder store's url (the folder backend).
 const folderURLScheme = "file://"
 
-// cloneDirs is one clone: its git dir and the folders a forget removes.
+// cloneDirs is one clone: its folder and what a forget does with it.
 type cloneDirs struct {
 	git    string   // the repository to ask about unpushed commits
-	work   string   // a worktree to ask about uncommitted changes ("" none)
-	remove []string // what the forget deletes
+	work   string   // a checkout to ask about uncommitted changes ("" none)
+	remove []string // what the forget deletes (none for an own clone)
+	// own is a person's own clone: never removed; key is its record entry.
+	own bool
+	key string
 }
 
 // ForgetClone implements opsstores.Cloner.
@@ -102,9 +103,23 @@ func (c *standaloneClones) ForgetClone(ctx context.Context, in opsstores.ForgetI
 	// read before the clones are deleted.
 	ids := c.storeIDsOf(ctx, clones)
 	for _, cl := range clones {
+		if cl.own {
+			if ferr := gitbackend.ForgetCloneRecord(c.home, cl.key); ferr != nil {
+				return opsstores.ForgetOut{}, ferr
+			}
+			if out.Kept == "" {
+				out.Kept = cl.work
+			}
+			continue
+		}
 		for _, d := range cl.remove {
 			if rerr := os.RemoveAll(d); rerr != nil {
 				return opsstores.ForgetOut{}, errs.Wrap(errs.Internal, "remove the store clone", rerr)
+			}
+		}
+		if cl.key != "" {
+			if ferr := gitbackend.ForgetCloneRecord(c.home, cl.key); ferr != nil {
+				return opsstores.ForgetOut{}, ferr
 			}
 		}
 		if out.Removed == "" {
@@ -120,7 +135,7 @@ func (c *standaloneClones) ForgetClone(ctx context.Context, in opsstores.ForgetI
 }
 
 // storeIDsOf is the sto_ id of every clone's store (its lore-store.yaml,
-// read from the worktree, else from the bare repo's HEAD): what the store's
+// read from the checkout, else from the clone's HEAD): what the store's
 // other copies on this machine are named by. A clone with no readable id (a
 // v0.1.17 marker) has no id-named copy to remove.
 func (c *standaloneClones) storeIDsOf(ctx context.Context, clones []cloneDirs) []string {
@@ -192,41 +207,59 @@ const (
 	privateRenderFileMode = 0o600
 )
 
-// clonesOf lists the clones of a store on this machine that exist.
+// clonesOf lists the clones of a store on this machine that exist: its
+// clone (CloneDirFor), its pinned-branch and collision siblings whose
+// origin is this store, and every recorded clone of it (own clones
+// included, marked own).
 func (c *standaloneClones) clonesOf(raw, norm string) ([]cloneDirs, error) {
+	r, err := gitbackend.RemoteOfRaw(raw)
+	if err != nil {
+		r = gitbackend.Remote{Norm: norm} // a host/path spelling
+	}
 	var out []cloneDirs
-	if canon, err := gitbackend.CanonicalURL(raw); err == nil {
-		if u, perr := url.Parse(canon); perr == nil {
-			if r, rerr := gitbackend.RemoteOf(u); rerr == nil {
-				base, berr := gitbackend.CloneBase(c.home, r)
-				if berr != nil {
-					return nil, errs.Wrap(errs.Internal, "locate the store clone", berr)
-				}
-				bases := []string{base}
-				more, gerr := filepath.Glob(base + branchCloneSep + "*")
-				if gerr != nil {
-					return nil, errs.Wrap(errs.Internal, "list the store's branch clones", gerr)
-				}
-				// A branch clone is <stem> and <stem>.git; either half may
-				// be all that is left, so each stem is taken from whichever
-				// half the glob found, once.
-				for _, m := range more {
-					if stem := strings.TrimSuffix(m, bareCloneExt); !slices.Contains(bases, stem) {
-						bases = append(bases, stem)
-					}
-				}
-				for _, b := range bases {
-					p := gitbackend.PathsOf(b)
-					if exists(p.Bare) || exists(p.Base) {
-						out = append(out, cloneDirs{git: p.Bare, work: p.Work, remove: []string{p.Base, p.Bare}})
-					}
-				}
-			}
+	seen := map[string]bool{}
+	add := func(dir, key string, own bool) {
+		if dir == "" || seen[dir] || !exists(dir) {
+			return
+		}
+		seen[dir] = true
+		cl := cloneDirs{git: dir, work: dir, own: own, key: key}
+		if !own {
+			cl.remove = []string{dir}
+		}
+		out = append(out, cl)
+	}
+	rec := gitbackend.ReadCloneRecord(c.home)
+	keys := make([]string, 0, len(rec.Clones))
+	for k := range rec.Clones {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		if k == r.Norm || strings.HasPrefix(k, r.Norm+branchCloneSep) {
+			e := rec.Clones[k]
+			add(e.Path, k, e.Why == gitbackend.WhyOwn)
 		}
 	}
-	link := filepath.Join(c.home, orgcfg.ClonesDir, filepath.FromSlash(norm)+bareCloneExt)
-	if exists(link) {
-		out = append(out, cloneDirs{git: link, remove: []string{link}})
+	dir, own, err := gitbackend.CloneDirFor(c.home, r, "")
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "locate the store clone", err)
+	}
+	add(dir, "", own)
+	base, err := gitbackend.CloneBase(c.home, r)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "locate the store clone", err)
+	}
+	for _, pattern := range []string{base + branchCloneSep + "*", base + "~*"} {
+		more, gerr := filepath.Glob(pattern)
+		if gerr != nil {
+			return nil, errs.Wrap(errs.Internal, "list the store's branch clones", gerr)
+		}
+		for _, m := range more {
+			if o, oerr := gitbackend.RemoteOfRaw(gitbackend.OriginAt(m)); oerr == nil && o.Norm == r.Norm {
+				add(m, "", false)
+			}
+		}
 	}
 	return out, nil
 }

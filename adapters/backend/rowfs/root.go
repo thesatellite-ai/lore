@@ -30,6 +30,10 @@ type Root struct {
 	// modes are the modes of the row files and folders it writes
 	// (privateModes unless WithSharedModes).
 	modes fileModes
+	// layout is where its folders' rows sit (LayoutStore unless WithLayout).
+	layout Layout
+	// journalDir holds the pending audit journal (journal.go).
+	journalDir string
 }
 
 // Option configures a Root.
@@ -44,8 +48,10 @@ func WithLockTimeout(d time.Duration) Option {
 	}
 }
 
-// WithLockPath puts the lock file somewhere other than <root>/.lore/lock.
-// The git backend uses it to keep the lock out of the worktree it commits.
+// WithLockPath puts the lock file somewhere other than the layout's
+// default (<root>/.lore-state/lock for a store, <root>/.lore/lock for a
+// code repo). The git backend uses it to keep the lock in the clone's
+// .git/lore. The journal goes in a "state" folder beside it.
 func WithLockPath(path string) Option { return func(r *Root) { r.lockPath = path } }
 
 // WithAllowNetworkFS skips the CheckLocal refusal when allow is true: the
@@ -58,6 +64,11 @@ func WithAllowNetworkFS(allow bool) Option { return func(r *Root) { r.allowNetwo
 // owner-only: for a repo checkout, whose .lore/data is committed and read
 // by everyone who clones it. Folder stores keep the owner-only default.
 func WithSharedModes() Option { return func(r *Root) { r.modes = sharedModes } }
+
+// WithLayout says where the folders' rows sit: LayoutStore (the default:
+// a store checkout, rows right under each folder) or LayoutRepo (a code
+// repo's .lore/data). Every Open of a code repo passes LayoutRepo.
+func WithLayout(l Layout) Option { return func(r *Root) { r.layout = l } }
 
 // WithClock replaces time.Now for the stat cursor and tmp cleanup (tests).
 func WithClock(now func() time.Time) Option {
@@ -99,14 +110,28 @@ func Open(dir string, opts ...Option) (*Root, error) {
 			return nil, err
 		}
 	}
-	if r.lockPath == "" {
+	switch {
+	case r.lockPath != "":
+		r.journalDir = filepath.Join(filepath.Dir(r.lockPath), JournalDir)
+	case r.layout == LayoutRepo:
 		r.lockPath = filepath.Join(real, LoreDir, LockFileName)
+		r.journalDir = filepath.Join(real, LoreDir, JournalDir)
+	default:
+		// a folder store: one plainly named state folder (D-c)
+		r.lockPath = filepath.Join(real, StoreStateDir, LockFileName)
+		r.journalDir = filepath.Join(real, StoreStateDir)
 	}
 	return r, nil
 }
 
 // Dir is the store folder (absolute, symlinks resolved).
 func (r *Root) Dir() string { return r.dir }
+
+// Layout is where this root's folders keep their rows.
+func (r *Root) Layout() Layout { return r.layout }
+
+// LockPath is the lock file's absolute path.
+func (r *Root) LockPath() string { return r.lockPath }
 
 // Folder returns one data folder of the store; name is FolderRoot ("." or
 // ""), a project folder or FolderOrg. The folder need not exist yet: a
@@ -116,8 +141,21 @@ func (r *Root) Folder(name string) (*Folder, error) {
 	if err != nil {
 		return nil, err
 	}
-	rel := FolderDataPath(clean)
-	return &Folder{root: r, name: clean, rel: rel, dataDir: filepath.Join(r.dir, filepath.FromSlash(rel))}, nil
+	l := r.layout
+	if l == LayoutStore && isDir(filepath.Join(r.dir, filepath.FromSlash(LayoutRepo.DataPath(clean)))) {
+		// a folder still in the old layout (<folder>/.lore/data: v0.1.17,
+		// and stores before the plain-files round) is read and written
+		// where its rows are until it is moved (Folder.OldLayout)
+		l = LayoutRepo
+	}
+	rel := l.DataPath(clean)
+	return &Folder{root: r, name: clean, layout: l, rel: rel, dataDir: filepath.Join(r.dir, filepath.FromSlash(rel))}, nil
+}
+
+// isDir reports whether p is a folder (not a link to one).
+func isDir(p string) bool {
+	st, err := os.Lstat(p)
+	return err == nil && st.IsDir()
 }
 
 // Lock is the held store lock. Release is idempotent.

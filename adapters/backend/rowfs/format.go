@@ -73,7 +73,7 @@ func readFormatFile(full, rel string) (d formatgate.Declared, doc []byte, exists
 // e.g. a store root, whose identity is lore-store.yaml). An unreadable
 // file is an E_OLD_LORE error: the folder is read-only until fixed.
 func (f *Folder) Format(_ context.Context) (formatgate.Declared, error) {
-	rel := f.rel + "/" + MetaFileName
+	rel := f.storePath(MetaFileName)
 	if err := checkChain(f.root.dir, rel); err != nil {
 		return formatgate.Declared{}, err
 	}
@@ -95,7 +95,7 @@ func (f *Folder) declare(a *Applied, changes []store.Change) error {
 
 // raise adds need to the folder's declaration (see raiseFile).
 func (f *Folder) raise(a *Applied, need []string) ([]string, error) {
-	return raiseFile(f.root.dir, f.rel+"/"+MetaFileName, filepath.Join(f.dataDir, MetaFileName), a, need, f.root.modes)
+	return raiseFile(f.root.dir, f.storePath(MetaFileName), filepath.Join(f.dataDir, MetaFileName), a, need, f.root.modes)
 }
 
 // raiseFile adds need to the declaration of the _meta.json at full (rel

@@ -35,11 +35,24 @@ func newStore(t *testing.T) string {
 }
 
 // fixture opens one store folder, through the Opener so the url path is
-// what the contract exercises.
+// what the contract exercises. dir and folder are the store's top and the
+// folder the url names (storetest.StoreLayout, PlainFiles).
 type fixture struct {
-	url  string
-	open store.Opener
+	url         string
+	open        store.Opener
+	dir, folder string
 }
+
+// Layout implements storetest.StoreLayout: a folder store is a store checkout.
+func (f fixture) Layout(*testing.T) (string, string) { return f.dir, f.folder }
+
+// Files implements storetest.PlainFiles: the store folder is what a person
+// browses; lore's lock and pending journal live in .lore-state.
+func (f fixture) Files(*testing.T) (string, []string) { return f.dir, []string{rowfs.StoreStateDir} }
+
+// Tracked implements storetest.PlainFiles: a folder store has no commits,
+// so every file outside its state folder is its data.
+func (f fixture) Tracked(*testing.T, string) bool { return true }
 
 func (f fixture) Open(t *testing.T, o store.OpenOptions) store.Backend {
 	t.Helper()
@@ -59,7 +72,8 @@ func fileURL(dir string) string { return fileuri.URL(dir, "") }
 func TestContract(t *testing.T) {
 	t.Parallel()
 	storetest.Run(t, func(t *testing.T) storetest.Fixture {
-		return fixture{url: fileURL(newStore(t)), open: NewOpener()}
+		dir := newStore(t)
+		return fixture{url: fileURL(dir), open: NewOpener(), dir: dir, folder: rowfs.FolderRoot}
 	})
 }
 
@@ -68,7 +82,8 @@ func TestContract(t *testing.T) {
 func TestContractOrgFolder(t *testing.T) {
 	t.Parallel()
 	storetest.Run(t, func(t *testing.T) storetest.Fixture {
-		return fixture{url: fileURL(newStore(t)) + "?" + rowfs.FolderParam + "=" + rowfs.FolderOrg, open: NewOpener()}
+		dir := newStore(t)
+		return fixture{url: fileURL(dir) + "?" + rowfs.FolderParam + "=" + rowfs.FolderOrg, open: NewOpener(), dir: dir, folder: rowfs.FolderOrg}
 	})
 }
 

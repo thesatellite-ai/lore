@@ -606,3 +606,24 @@ func TestMachineDBWithTMPDIRGone(t *testing.T) {
 		t.Fatalf("machine.db state %q with TMPDIR gone", got)
 	}
 }
+
+// TestWalkFolderSkipsStoreClones (STORE layout 1.5): a lore store's clone
+// (lore-store.yaml at its top, a person's own made with git clone) is
+// never offered as a repo to set up, even with a .lore folder inside it;
+// a repo beside it is.
+func TestWalkFolderSkipsStoreClones(t *testing.T) {
+	base := t.TempDir()
+	for _, d := range []string{filepath.Join(base, "notes", "client_a", ".lore", "data"), filepath.Join(base, "app", ".lore")} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(base, "notes", "lore-store.yaml"), []byte("version: 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var res Result
+	got, _ := walkFolder(t.Context(), base, 4, 10, map[string]bool{}, &res)
+	if len(got) != 1 || got[0].Root != filepath.Join(base, "app") {
+		t.Fatalf("walk found %+v, want only the app repo", got)
+	}
+}

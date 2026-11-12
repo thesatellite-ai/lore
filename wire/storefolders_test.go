@@ -68,7 +68,7 @@ func TestStoreFoldersWithoutRepo(t *testing.T) {
 		if !strings.Contains(res, `"project_id":"prj_`) || !strings.Contains(res, want) {
 			t.Fatalf("folder add %s %s: %s", c.store, c.folder, res)
 		}
-		if _, err = os.Stat(filepath.Join(storeDir(url), c.folder, rowfs.LoreDir, rowfs.DataDir, rowfs.MetaFileName)); err != nil {
+		if _, err = os.Stat(filepath.Join(storeDir(url), c.folder, rowfs.MetaFileName)); err != nil {
 			t.Fatalf("folder %s not in the store: %v", c.folder, err)
 		}
 	}

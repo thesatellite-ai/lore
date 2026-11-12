@@ -34,10 +34,13 @@ Alice makes "Buttons are blue" a must-have rule (the `severity` field). At the s
 ```console
 # alice, in website
 $ lore rule edit rul_b4f4…a5b0 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 
 # bob, in website
 $ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
+lore: wrote ~/work/website/.lore/data/actors/act_28f8…03df.json
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 $ git pull --no-rebase origin main
 From /srv/git/github.com/client/website
@@ -59,10 +62,12 @@ Now Alice writes "dark blue" and Bob writes "light blue". Alice pulls and gets a
 ```console
 # alice, in website
 $ lore rule edit rul_b4f4…a5b0 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 
 # bob, in website
 $ lore rule edit rul_b4f4…a5b0 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 
 # alice, in website
@@ -88,6 +93,7 @@ ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/
 (exit 1)
 $ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue.'
 lore: invalid-file store repo: .lore/data/rules/rul_b4f4…a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4…a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main
 ```
@@ -110,6 +116,7 @@ For shared notes (rules, memories, tasks and the other core notes) the file is t
 # alice, in website
 $ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_05e9…4603.json
 $ lore memory list
+lore: picked up a hand edit of memories mem_05e9…4603 (body): checked and stamped with your name and the time in ~/work/website/.lore/data/memories/mem_05e9…4603.json; commit it with your code
 mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email or phone.
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ lore sync
@@ -129,11 +136,13 @@ Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" o
 ```console
 # alice, in website
 $ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
+lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
 ✓ mem_4c59…6c38
   scope: [master]
 
 # bob, in website
 $ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913
   scope: [master]
 $ git pull -q --no-rebase origin main
@@ -141,6 +150,7 @@ $ lore memory list | grep -i invoice
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 mem_3b62…e913 [retrieved] send the invoice reminder before the demo on friday.
 $ lore sync merge-rows memories --keep mem_4c59…6c38 --drop mem_3b62…e913
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ merged mem_3b62…e913 into mem_4c59…6c38 (0 row(s) re-pointed; mem_3b62…e913 is in the trash, batch bat_f147…5139)
 $ lore memory list
 mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
@@ -172,6 +182,8 @@ prj_b4d3…11aa  app  https://github.com/client2/app
 $ lore sync fix-projects --dry-run
 2 project row(s): would keep prj_d191…45c2 and merge prj_b4d3…11aa (1 row(s) to re-point)
 $ lore sync fix-projects
+lore: wrote ~/work/app/.lore/data/repos/rep_77cb…76c4.json
+lore: wrote ~/work/app/.lore/data/projects/prj_b4d3…11aa.json
 ✓ kept prj_d191…45c2, merged prj_b4d3…11aa (1 row(s) re-pointed)
 $ lore project list
 prj_d191…45c2  app  https://github.com/client2/app
@@ -187,18 +199,22 @@ Merges, folds and deletes can leave a note pointing at a row that is gone. `lore
 ```console
 # alice, in website
 $ lore memory add --body 'The client signs off every release on Fridays.'
+lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
 ✓ mem_9a34…b418
   scope: [master]
 $ lore rule add --body 'Ship only after the client sign-off, see ${row:mem_9a34…b418}.'
+lore: wrote ~/work/website/.lore/data/rules/rul_bfed…eeea.json
 ✓ rul_bfed…eeea
   scope: [master] severity: must
 $ lore memory delete mem_9a34…b418 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
 ✓ mem_9a34…b418 moved to the trash (restore: lore trash restore mem_9a34…b418)
 $ lore lint
 dangling_ref rul_bfed…eeea (repo): body: ${row:mem_9a34…b418} points at no live row
   fix: lore edit the row, or restore mem_9a34…b418 (lore trash restore mem_9a34…b418)
 1 finding(s)
 $ lore trash restore mem_9a34…b418 >/dev/null && lore lint --code dangling_ref
+lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
 lint: no findings
 ```
 <!-- /example -->

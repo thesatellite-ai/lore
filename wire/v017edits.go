@@ -51,7 +51,7 @@ const StepOldDBEdits = "old_db_edits"
 
 const (
 	oldDBEditsWarn = "%s saved by lore 0.1.17 only in " + v017LoreDB + " (it could not write the migrated row files): %s; no file holds them, so no other machine or command sees them"
-	oldDBEditsFix  = "lore migrate run (writes them into their rows)"
+	oldDBEditsFix  = "run lore fix (writes them into their rows)"
 	// v017UpdatedAt is the update time column of every v0.1.17 ent table.
 	v017UpdatedAt = "updated_at"
 )

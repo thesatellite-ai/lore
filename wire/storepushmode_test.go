@@ -54,18 +54,13 @@ func TestOtherClonesUnpushed(t *testing.T) {
 	spGit(t, filepath.Dir(seed), "init", "-q", "-b", "main", seed)
 	spGit(t, seed, "commit", "-q", "--allow-empty", "-m", "init")
 	spGit(t, seed, "push", "-q", remote, "main")
-	base := filepath.Join(home, "clones", "github.com", "acme", "team")
-	mk := func(stem string) string {
-		bare := stem + ".git"
-		spGit(t, home, "clone", "-q", "--bare", remote, bare)
-		spGit(t, bare, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
-		spGit(t, bare, "fetch", "-q", "origin")
-		work := filepath.Join(stem, cloneWorkDir)
-		if err := os.MkdirAll(stem, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		spGit(t, bare, "worktree", "add", "-q", work, "main")
-		return work
+	base := filepath.Join(home, "stores", "acme", "team")
+	mk := func(dir string) string {
+		spGit(t, home, "clone", "-q", remote, dir)
+		// the store url as origin (the clone found its siblings by it); no
+		// network is used: the unpushed check compares local refs only
+		spGit(t, dir, "remote", "set-url", "origin", "https://github.com/acme/team")
+		return dir
 	}
 	work := mk(base)
 	if got := otherClonesUnpushed(context.Background(), home, work); len(got) != 0 {
@@ -83,7 +78,7 @@ func TestOtherClonesUnpushed(t *testing.T) {
 		t.Fatalf("the branch clone's unpushed commit was not named: %v", got)
 	}
 	if got := otherClonesUnpushed(context.Background(), home, filepath.Join(t.TempDir(), "elsewhere", "work")); len(got) == 0 {
-		t.Fatal("a clone outside the lore home was not refused (fail closed)")
+		t.Fatal("a folder with no store origin was not refused (fail closed)")
 	}
 }
 

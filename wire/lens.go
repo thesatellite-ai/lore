@@ -75,7 +75,7 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool, 
 func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqlite.LensSource, []string, error) {
 	repo := sqlite.LensSource{
 		Name: string(store.SourceRepo),
-		Path: filepath.Join(st.repoTop, filepath.FromSlash(RepoCacheFile)),
+		Path: st.repoCacheOf(),
 	}
 	srcs := []sqlite.LensSource{repo}
 	client := st.eng.IsClient(store.SourceRepo)

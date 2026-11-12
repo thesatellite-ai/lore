@@ -3,12 +3,13 @@ package wire
 // storebranch.go — the BRANCH column of `lore store list` for a store that
 // pins no branch (opsstores.DefaultBrancher). Flow:
 //
-//	entry without a branch ─▶ localStoreDir (the clone worktree
-//	  <home>/clones/<host>/<repo>/work, no network) ─▶ its .git file names
-//	  the worktree's git dir ─▶ that HEAD's `ref: refs/heads/<b>` ─▶ <b>
+//	entry without a branch ─▶ localStoreDir (the store's clone
+//	  <home>/stores/<owner>/<repo>, no network) ─▶ its .git/HEAD's
+//	  `ref: refs/heads/<b>` ─▶ <b> (a linked worktree's .git file is
+//	  followed too)
 //
-// The git backend checks the worktree out on the remote's default branch
-// when it first clones an unpinned store (clone.go addWorktree) and reads
+// The git backend checks the clone out on the remote's default branch
+// when it first clones an unpinned store (clone.go checkout) and reads
 // the same HEAD back on every later open (setup), so this is the branch
 // the store's rows really come from on this machine. Anything else (a
 // file:// folder, no clone yet, a detached HEAD) answers "": the column
@@ -20,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
@@ -61,8 +63,8 @@ func worktreeBranch(dir string) string {
 		return ""
 	}
 	b, _ := strings.CutPrefix(strings.TrimSpace(string(head)), headRefPrefix)
-	if b == strings.TrimSpace(string(head)) {
-		return "" // detached, or not a branch ref
+	if b == strings.TrimSpace(string(head)) || b == gitbackend.PendingBranch {
+		return "" // detached, not a branch ref, or a first clone not checked out yet
 	}
 	return b
 }

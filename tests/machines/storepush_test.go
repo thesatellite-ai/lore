@@ -126,8 +126,9 @@ func spBatchMachine(t *testing.T, shape string) {
 		}
 	}
 
-	// sync status needs the remote current: it pushes what waits, as one
-	// batch commit per store too.
+	// sync status is a read: it never pushes (plain files 3.3); it shows
+	// what waits and that `lore sync` sends it. lore sync then pushes one
+	// batch commit per store.
 	for s, b := range bare {
 		before[s] = spLog(t, b)
 		ids[s] = []string{spMemAdd(t, m, repo, s, "status fact one in "+s), spMemAdd(t, m, repo, s, "status fact two in "+s)}
@@ -136,8 +137,10 @@ func spBatchMachine(t *testing.T, shape string) {
 		}
 	}
 	spDoctorLines(t, m, repo, shape+"/waiting again", true)
-	spStatusLines(t, m, repo, shape+"/sync status")
-	spBatchPushed(t, m, repo, bare, before, ids, "sync status")
+	spStatusWaiting(t, m, repo, shape+"/sync status waiting", bare, before)
+	lsRun(t, m, repo, "sync")
+	spBatchPushed(t, m, repo, bare, before, ids, "sync after sync status")
+	spStatusLines(t, m, repo, shape+"/sync status after sync")
 	m.CheckMachine(t, shape+"/after sync", gone)
 }
 
@@ -205,6 +208,27 @@ func spDoctorLines(t *testing.T, m *Machine, repo, step string, waiting bool) {
 // spStatusLines: lore sync status names both stores' push modes on their
 // lines under "stores:" in text, and in JSON's data.stores with nothing
 // waiting (sync status pushes first).
+// spStatusWaiting: sync status with commits waiting names each store's
+// waiting commits and `lore sync`, and pushes nothing.
+func spStatusWaiting(t *testing.T, m *Machine, repo, step string, bare map[string]string, before map[string][]spCommit) {
+	t.Helper()
+	st := m.Lore(t, repo, "sync", "status")
+	if st.Code != 0 {
+		t.Errorf("[%s] sync status: %s", step, st)
+	}
+	_, block, _ := strings.Cut(st.Stdout, "stores:")
+	for _, s := range []string{"me", spOrg} {
+		if !regexp.MustCompile(`(?m)^  ` + regexp.QuoteMeta(s) + `: ahead [1-9].*; ` + regexp.QuoteMeta(spModeLine) + " \\(`lore sync` pushes the waiting commits\\)$").MatchString(block) {
+			t.Errorf("[%s] sync status has no line \"%s: ahead N, …; %s (`lore sync` pushes the waiting commits)\":\n%s", step, s, spModeLine, st.Stdout)
+		}
+	}
+	for s, b := range bare {
+		if got := spLog(t, b); len(got) != len(before[s]) {
+			t.Errorf("[%s] sync status, a read, pushed %s: %v", step, s, spSubjects(got))
+		}
+	}
+}
+
 func spStatusLines(t *testing.T, m *Machine, repo, step string) {
 	t.Helper()
 	st := m.Lore(t, repo, "sync", "status")

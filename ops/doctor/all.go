@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -651,6 +652,9 @@ func (sr *setupRun) reposBySetup(ctx context.Context, setups []onboard.SetupEntr
 			return
 		}
 		seen[root] = true
+		if _, _, inStore := rowfs.StoreTop(root); inStore {
+			return // a lore store's checkout is no repo of any setup (STORE layout 1.5)
+		}
 		m := onboard.MatchFolder(setups, root, sr.home, filepath.EvalSymlinks)
 		switch {
 		case m.Found:

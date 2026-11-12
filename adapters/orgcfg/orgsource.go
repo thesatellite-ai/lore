@@ -30,7 +30,7 @@ import (
 const orgMoveMessage = "lore: org %s store moved to %s"
 
 // LocalSuggestion is ReadSuggestion from this machine's copy only: the
-// shared bare clone of url as last fetched, no network. A store never
+// store's clone as last fetched, no network. A store never
 // cloned here is ErrStoreOffline.
 func (g *GitLinks) LocalSuggestion(ctx context.Context, url, branch string) (Suggestion, error) {
 	norm, err := repourl.Normalize(url)
@@ -71,30 +71,43 @@ func (g *GitLinks) suggestionAt(ctx context.Context, dir, norm, branch string) (
 			}
 		}
 	}
-	for _, folder := range candidates {
-		p := orgFilePath(folder)
-		raw, rerr := gitRun(ctx, "-C", dir, "cat-file", "blob", tip+":"+p)
-		if rerr != nil {
-			continue // no lore-org.yaml in this folder
+	for _, cand := range candidates {
+		for _, p := range orgFilePaths(cand) {
+			sg, found, serr := readSuggestionFile(ctx, dir, tip, p, cand, norm, branch, storeID)
+			if serr != nil || found {
+				return sg, serr
+			}
 		}
-		doc, perr := parseOrgFileDoc(raw)
-		if perr != nil {
-			return Suggestion{}, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, perr)
-		}
-		blob, berr := gitRun(ctx, "-C", dir, "rev-parse", tip+":"+p)
-		if berr != nil {
-			return Suggestion{}, berr
-		}
-		return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch, Version: strings.TrimSpace(blob), StoreID: storeID}, nil
 	}
 	return Suggestion{}, fmt.Errorf("%w: %s@%s", ErrNoOrgFile, norm, branch)
+}
+
+// readSuggestionFile reads the lore-org.yaml at p in tip (folder its org
+// folder); found is false when tip has no file there.
+func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, storeID string) (Suggestion, bool, error) {
+	raw, rerr := gitRun(ctx, "-C", dir, "cat-file", "blob", tip+":"+p)
+	if rerr != nil {
+		return Suggestion{}, false, nil // no lore-org.yaml here
+	}
+	doc, perr := parseOrgFileDoc(raw)
+	if perr != nil {
+		return Suggestion{}, false, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, perr)
+	}
+	if serr := doc.checkShortNames(); serr != nil {
+		return Suggestion{}, false, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, serr)
+	}
+	blob, berr := gitRun(ctx, "-C", dir, "rev-parse", tip+":"+p)
+	if berr != nil {
+		return Suggestion{}, false, berr
+	}
+	return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch, Version: strings.TrimSpace(blob), StoreID: storeID, Path: p}, true, nil
 }
 
 // Shared is the suggestion's shared fields as an org entry holds them.
 func (s Suggestion) Shared() orgconf.Shared {
 	sh := orgconf.Shared{Own: s.Doc.Own, Repos: s.Doc.Repos, Defaults: orgconf.OrgDefaults{ClientRepos: s.Doc.Defaults.ClientRepos}}
 	for _, st := range s.Doc.Stores {
-		sh.Stores = append(sh.Stores, orgconf.Store{URL: st.URL, Branch: st.Branch, OrgFolder: st.OrgFolder})
+		sh.Stores = append(sh.Stores, orgconf.Store{URL: st.URL, Name: st.Name, Branch: st.Branch, OrgFolder: st.OrgFolder})
 	}
 	return sh
 }
@@ -144,7 +157,7 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 		return OrgFileMoveResult{}, err
 	}
 	branch := cur.Branch
-	path := orgFilePath(cur.Folder)
+	path := cur.Path
 	res := OrgFileMoveResult{NoPush: !g.autopush(nil)}
 	cr, err := commitStore(ctx, storeCommit{Dir: dir, Store: norm, Branch: branch, NoPush: res.NoPush, Route: g.Route,
 		Message: fmt.Sprintf(orgMoveMessage, m.Org, m.New), Signature: m.Signature,

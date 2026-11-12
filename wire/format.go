@@ -15,8 +15,10 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// MigrateCommand is the command that answers the O6 question.
-const MigrateCommand = "lore migrate run"
+// MigrateCommand is the command that answers the O6 question and every
+// "this project has v0.1.17 rows" message (owner item 11: lore fix runs
+// the migration with the project's other repairs).
+const MigrateCommand = "lore fix"
 
 // formatState is the DOCS O6 answer for one open App (FORMAT_EVOLUTION
 // rule 2, F5): the first 0.1.18 write in a repo whose rows were written by
@@ -43,8 +45,8 @@ func (f formatState) check() error {
 	return errs.New(errs.NeedsConfirm, "wire: this repository's rows were written by teammates with lore 0.1.17; "+
 		"the first 0.1.18 write changes the file format they would need 0.1.18 to read").
 		WithQuestion("has everyone who shares this repository upgraded to lore 0.1.18?").
-		WithHint("once they have, run `" + MigrateCommand + "` (it rewrites the files as _v: 2), then retry").
-		WithNext(MigrateCommand)
+		WithHint("once they have, run `"+MigrateCommand+"` (it rewrites the files as _v: 2), then retry").
+		WithNext("lore", "fix")
 }
 
 // checkStore is check for a write into an attached v0.1.17 org store
@@ -56,9 +58,9 @@ func (f formatState) checkStore(name store.Source) error {
 	}
 	return errs.New(errs.NeedsConfirm, "wire: store "+string(name)+" is still a lore 0.1.17 store whose rows teammates wrote; "+
 		"the first 0.1.18 write there changes the file format they would need 0.1.18 to read").
-		WithQuestion("has everyone who shares store " + string(name) + " upgraded to lore 0.1.18?").
-		WithHint("once they have, run `" + MigrateCommand + "` (it converts the org store), then retry").
-		WithNext(MigrateCommand)
+		WithQuestion("has everyone who shares store "+string(name)+" upgraded to lore 0.1.18?").
+		WithHint("once they have, run `"+MigrateCommand+"` (it converts the org store), then retry").
+		WithNext("lore", "fix")
 }
 
 // readStoreFormats computes the O6 state of every attached org store
@@ -71,7 +73,7 @@ func readStoreFormats(ctx context.Context, opts Options, top string, byName map[
 		if !ok {
 			continue
 		}
-		if mb, isMarker := b.(markerBackend); !isMarker || mb.Marker().Version >= rowfs.MarkerVersion {
+		if mb, isMarker := b.(markerBackend); !isMarker || mb.Marker().Version >= rowfs.MarkerFirstStores {
 			continue
 		}
 		f, err := readFormat(ctx, b, caller)

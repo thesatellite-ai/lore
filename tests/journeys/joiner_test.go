@@ -360,8 +360,8 @@ func TestJourneyJoiner(t *testing.T) {
 				}
 			}
 		}
-		if !strings.Contains(detail, "file://~/.lore/stores/me ") || !strings.Contains(detail, "shared with your setup "+jJoinerSetupB) {
-			t.Errorf("the page offers job A the local folder %q; want ~/.lore/stores/me, shared with setup %s", detail, jJoinerSetupB)
+		if !strings.Contains(detail, "file://~/.lore/stores/_me ") || !strings.Contains(detail, "shared with your setup "+jJoinerSetupB) {
+			t.Errorf("the page offers job A the local folder %q; want ~/.lore/stores/_me, shared with setup %s", detail, jJoinerSetupB)
 		}
 		for _, a := range steps[3:] {
 			jJoinerApply(t, m, app.Dir, jJoinerSetupA, a)
@@ -373,12 +373,12 @@ func TestJourneyJoiner(t *testing.T) {
 			t.Errorf("joba's GitHub account is %v, Pat chose %s over %s", a["github"], jJoinerLoginA, jJoinerAliasA)
 		}
 		// Both jobs picked "A local folder": one personal store `me` per
-		// person, so both setups share ~/.lore/stores/me.
-		if ps, _ := a["personal_store"].(string); !strings.HasSuffix(ps, "/.lore/stores/me") || a["org"] != jJoinerOrg || jJoinerJSON(a["folders"]) != jJoinerJSON([]string{foldersA}) {
-			t.Errorf("joba is saved as %v; want the shared personal store ~/.lore/stores/me, org %s, folders [%s]", a, jJoinerOrg, foldersA)
+		// person, so both setups share ~/.lore/stores/_me.
+		if ps, _ := a["personal_store"].(string); !strings.HasSuffix(ps, "/.lore/stores/_me") || a["org"] != jJoinerOrg || jJoinerJSON(a["folders"]) != jJoinerJSON([]string{foldersA}) {
+			t.Errorf("joba is saved as %v; want the shared personal store ~/.lore/stores/_me, org %s, folders [%s]", a, jJoinerOrg, foldersA)
 		}
-		if ps, _ := jJoinerShow(t, m, jJoinerSetupB)["personal_store"].(string); !strings.HasSuffix(ps, "/.lore/stores/me") {
-			t.Errorf("jobb's personal store is %q, want ~/.lore/stores/me", ps)
+		if ps, _ := jJoinerShow(t, m, jJoinerSetupB)["personal_store"].(string); !strings.HasSuffix(ps, "/.lore/stores/_me") {
+			t.Errorf("jobb's personal store is %q, want ~/.lore/stores/_me", ps)
 		}
 		if b := jJoinerJSON(jJoinerShow(t, m, jJoinerSetupB)); b != jobbBefore {
 			t.Errorf("joining job A changed the job B setup:\n%s\nwas\n%s", b, jobbBefore)
@@ -408,8 +408,8 @@ func TestJourneyJoiner(t *testing.T) {
 		m.LoreIn(site, "memory", "add", "--body", jJoinerBNote, "--to", "me").OK(t)
 		m.LoreIn(app, "memory", "add", "--body", jJoinerANote, "--to", "me").OK(t)
 		for _, n := range []string{jJoinerANote, jJoinerBNote} {
-			if hits := jJoinerGrep(m.LorePath("stores", "me"), n); len(hits) == 0 {
-				t.Errorf("Pat's own note %q is not in the shared personal store ~/.lore/stores/me", n)
+			if hits := jJoinerGrep(m.LorePath("stores", "_me"), n); len(hits) == 0 {
+				t.Errorf("Pat's own note %q is not in the shared personal store ~/.lore/stores/_me", n)
 			}
 		}
 		// Each repo reads its own job's team and repo notes, and Pat's own
@@ -434,17 +434,17 @@ func TestJourneyJoiner(t *testing.T) {
 			}
 			_ = json.Unmarshal([]byte(r.Stdout), &out)
 			v := out.Push
-			if v.Store != "me" || !strings.HasSuffix(v.URL, "/.lore/stores/me") || !v.Folder || jJoinerJSON(v.SharedBy) != jJoinerJSON([]string{jJoinerSetupB, jJoinerSetupA}) {
-				t.Errorf("lore store show me in %s: want the folder store ~/.lore/stores/me shared by [%s %s], got %s", rp.Dir, jJoinerSetupB, jJoinerSetupA, r.Stdout)
+			if v.Store != "me" || !strings.HasSuffix(v.URL, "/.lore/stores/_me") || !v.Folder || jJoinerJSON(v.SharedBy) != jJoinerJSON([]string{jJoinerSetupB, jJoinerSetupA}) {
+				t.Errorf("lore store show me in %s: want the folder store ~/.lore/stores/_me shared by [%s %s], got %s", rp.Dir, jJoinerSetupB, jJoinerSetupA, r.Stdout)
 			}
 			txt := m.LoreIn(rp, "store", "show", "me").OK(t).Stdout
-			if !strings.Contains(txt, "shared by your setups "+jJoinerSetupB+", "+jJoinerSetupA) || !strings.Contains(txt, "/.lore/stores/me") {
+			if !strings.Contains(txt, "shared by your setups "+jJoinerSetupB+", "+jJoinerSetupA) || !strings.Contains(txt, "/.lore/stores/_me") {
 				t.Errorf("lore store show me does not say the personal store is shared by both setups:\n%s", txt)
 			}
 		}
 	})
 	w.Fact("job A's notes never reach job B's repo or personal store", func(c Ctx) {
-		for _, root := range []string{site.Dir, m.LorePath("stores")} {
+		for _, root := range []string{site.Dir, m.LorePath("stores", "_me")} { // job A's team store has its own clone beside me, under stores/
 			if hits := jJoinerGrep(root, jJoinerSecret); len(hits) > 0 {
 				c.Errorf("job A's note is in %v", hits)
 			}
@@ -461,8 +461,8 @@ func TestJourneyJoiner(t *testing.T) {
 			}
 		}
 		for _, n := range []string{jJoinerANote, jJoinerBNote} {
-			if hits := jJoinerGrep(m.LorePath("stores", "me"), n); len(hits) == 0 {
-				c.Errorf("Pat's own note %q is not in ~/.lore/stores/me", n)
+			if hits := jJoinerGrep(m.LorePath("stores", "_me"), n); len(hits) == 0 {
+				c.Errorf("Pat's own note %q is not in ~/.lore/stores/_me", n)
 			}
 		}
 	})
@@ -540,7 +540,7 @@ func TestJourneyJoiner(t *testing.T) {
 
 	w.AdvanceDays(90)
 	w.Step("month3/leave-job-a", func() {
-		meBefore := jJoinerTree(t, m.LorePath("stores", "me"))
+		meBefore := jJoinerTree(t, m.LorePath("stores", "_me"))
 		m.Lore("", "setup", "remove", jJoinerSetupA).OK(t)
 		r := m.Lore("", "setup", "trash", "purge", jJoinerSetupA, "--confirm").OK(t)
 		// The purge says the team's notes stay on this machine until
@@ -550,7 +550,7 @@ func TestJourneyJoiner(t *testing.T) {
 		}
 		// The personal store `me` is named as staying, shared by all of
 		// Pat's setups and never touched by the purge.
-		if !strings.Contains(r.Stdout, "/.lore/stores/me") || !strings.Contains(r.Stdout, "shared by all your setups") {
+		if !strings.Contains(r.Stdout, "/.lore/stores/_me") || !strings.Contains(r.Stdout, "shared by all your setups") {
 			t.Errorf("leaving job A, the purge does not say the shared personal store me stays untouched:\n%s", r.Stdout)
 		}
 		m.Lore("", "store", "forget", teamRemote.SSHURL()).OK(t)
@@ -574,16 +574,16 @@ func TestJourneyJoiner(t *testing.T) {
 		}
 		// Leaving job A never touches `me`: the same files, Pat's own
 		// notes from both jobs still in it.
-		if after := jJoinerTree(t, m.LorePath("stores", "me")); after != meBefore {
+		if after := jJoinerTree(t, m.LorePath("stores", "_me")); after != meBefore {
 			t.Errorf("leaving job A changed the personal store me:\n%s\nwas\n%s", after, meBefore)
 		}
 		// No store or clone but `me` names job A's address: Pat's own
 		// note written at job A carries the actor of that address, and `me`
 		// is Pat's own across jobs, so it keeps it.
-		for _, d := range []string{"stores", "clones", "clones-v017"} {
+		for _, d := range []string{"stores"} {
 			var hits []string
 			for _, h := range jJoinerGrep(m.LorePath(d), jJoinerWorkEmail) {
-				if !strings.HasPrefix(h, m.LorePath("stores", "me")+string(filepath.Separator)) {
+				if !strings.HasPrefix(h, m.LorePath("stores", "_me")+string(filepath.Separator)) {
 					hits = append(hits, h)
 				}
 			}

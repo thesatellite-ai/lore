@@ -107,22 +107,27 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 		return RosterResult{}, errs.New(errs.InviteInvalid, "this is not a lore invite; copy the whole line starting with "+onboard.InvitePrefix)
 	}
 	var res RosterResult
-	if res.Imported, err = ensureImported(ctx, d, req, email); err != nil {
+	// The invite check comes before anyone is registered (owner item 19):
+	// org.import runs it as Admit, so a missing, revoked, used, expired or
+	// mismatched invite writes no actor row, no commit and no push; an
+	// entry that was already here is checked before the write-mode open.
+	admit := func(ctx context.Context, _ string) error {
+		return checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email)
+	}
+	if res.Imported, err = ensureImported(ctx, d, req, email, admit, false); err != nil {
 		return RosterResult{}, err
+	}
+	if !res.Imported {
+		if err = checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email); err != nil {
+			return RosterResult{}, err
+		}
 	}
 	r, done, err := d.Profiles.Roster(ctx, true)
 	defer done()
 	if err != nil {
 		return RosterResult{}, err
 	}
-	invRow, err := r.Get(ctx, schema.TableInvites, inviteID)
-	if errs.Has(err, errs.NotFound) || (err == nil && invRow.Deleted) {
-		return RosterResult{}, errs.New(errs.InviteNotFound, "invite "+inv.ID+" is not in "+inv.Org+"'s store; ask "+inv.By+" to run lore team invite "+inv.Email+" again")
-	}
-	if err != nil {
-		return RosterResult{}, err
-	}
-	x, err := inviteOf(invRow)
+	x, err := readInvite(ctx, r, inv, inviteID)
 	if err != nil {
 		return RosterResult{}, err
 	}
@@ -179,10 +184,55 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 	return res, nil
 }
 
+// readInvite is the invites row the line names; E_INVITE_NOT_FOUND when
+// the store has none (or it is deleted).
+func readInvite(ctx context.Context, r profilestore.Roster, inv onboard.Invite, id ids.AnyID) (inviteRow, error) {
+	invRow, err := r.Get(ctx, schema.TableInvites, id)
+	if errs.Has(err, errs.NotFound) || (err == nil && invRow.Deleted) {
+		return inviteRow{}, errs.New(errs.InviteNotFound, "invite "+inv.ID+" is not in "+inv.Org+"'s store; ask "+inv.By+" to run lore team invite "+inv.Email+" again")
+	}
+	if err != nil {
+		return inviteRow{}, err
+	}
+	return inviteOf(invRow)
+}
+
+// checkInvite is the invite join's check before anyone is registered,
+// on a read-only open of the roster: the row exists and DecideInvite
+// accepts it (not revoked, not used by someone else, not expired, for
+// this email). The acceptor is the caller's actor when it is on the
+// roster, else the actor one of emails names (a rejoin, a re-run: the
+// same actor is Already), else nobody, so an accepted invite is used. The full decision runs
+// again on the write-mode open, as the registered actor.
+func checkInvite(ctx context.Context, profiles profilestore.Store, inv onboard.Invite, id ids.AnyID, emails []string, email string) error {
+	r, done, err := profiles.Roster(ctx, false)
+	defer done()
+	if err != nil {
+		return err
+	}
+	x, err := readInvite(ctx, r, inv, id)
+	if err != nil {
+		return err
+	}
+	who := onboard.Acceptor{Email: email}
+	if a, gerr := r.Get(ctx, schema.TableActors, r.Caller().Any()); gerr == nil && !a.Deleted {
+		who.Actor = a.ID.String() // a re-run: the caller is on the roster already
+	}
+	for _, e := range memberEmails(emails) {
+		for _, ref := range []string{"email:" + e, humanKeyPrefix + e} {
+			if a, rerr := r.ResolveActor(ctx, ref); rerr == nil && who.Actor == "" {
+				who.Actor = a.ID.String()
+			}
+		}
+	}
+	_, err = onboard.DecideInvite(x.record(), inv.By, r.Today(), who)
+	return err
+}
+
 // ensureImported runs org.import unless the orgs[] entry exists for the
 // same store (a re-run). An entry of that name on another store is
 // E_SETUP_ORG_MISMATCH: lore never re-points an org entry silently.
-func ensureImported(ctx context.Context, d JoinDeps, req JoinRequest, email string) (bool, error) {
+func ensureImported(ctx context.Context, d JoinDeps, req JoinRequest, email string, admit func(context.Context, string) error, skipRegister bool) (bool, error) {
 	inv := req.Invite
 	origin, err := d.Entries.TeamOrigin(ctx, inv.Org)
 	switch {
@@ -195,7 +245,7 @@ func ensureImported(ctx context.Context, d JoinDeps, req JoinRequest, email stri
 	case !errs.Has(err, errs.NotFound):
 		return false, err
 	}
-	rep, err := d.Orgs.Import(ctx, orgcmd.ImportIn{URL: inv.Store, Key: humanKeyPrefix + email, Name: req.Name, Handle: req.Handle, As: inv.Org}, true)
+	rep, err := d.Orgs.Import(ctx, orgcmd.ImportIn{URL: inv.Store, Key: humanKeyPrefix + email, Name: req.Name, Handle: req.Handle, As: inv.Org, Admit: admit, SkipRegister: skipRegister}, true)
 	if err != nil {
 		return false, err
 	}
@@ -276,7 +326,9 @@ func ApplyAdmin(ctx context.Context, d AdminDeps, req AdminRequest) (RosterResul
 			WithHint("lore actor register")
 	}
 	res.Actor = actor.ID.String()
-	w := &writer{r: r, actor: actor, today: r.Today()}
+	// whoever starts the team is its admin (owner report 2026-11-12: the
+	// creator showed org role "-" in member list)
+	w := &writer{r: r, actor: actor, today: r.Today(), orgRole: OrgRoleAdmin}
 	if err = w.identity(ctx, req.Emails, primary, req.GitHubUser); err != nil {
 		return RosterResult{}, err
 	}
@@ -826,15 +878,15 @@ type MemberJoinRequest struct {
 // the org entry (org.import, as an invite join), then the roster actor
 // whose email identity contact is one of the person's emails and who is
 // a member (an open stint). Nothing else is granted here: role, teams and
-// projects were written by member add. Someone not on the roster gets the
-// reason and the admin's command.
+// projects were written by member add.
+//
+// The member check comes before any write (owner item 19): org.import
+// runs with Admit, so the entry is checked against the roster before the
+// caller would be registered, and a person not on the roster gets the
+// reason and the admin's command with no actor row, no commit and no
+// push (the entry the import added is taken out again).
 func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (RosterResult, error) {
-	var emails []string
-	for _, e := range req.Emails {
-		if n, err := teamprofile.Normalize(schema.ContactKindEmail, e); err == nil && n != "" && !slices.Contains(emails, n) {
-			emails = append(emails, n)
-		}
-	}
+	emails := memberEmails(req.Emails)
 	if len(emails) == 0 {
 		return RosterResult{}, errs.New(errs.InvalidInput, "join "+req.Org+": no email to find you on the roster by").
 			WithHint("answer the identity step with your work email (git config user.email)")
@@ -842,7 +894,14 @@ func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (Ro
 	inv := onboard.Invite{Org: req.Org, Store: req.Store, Email: emails[0]}
 	var res RosterResult
 	var err error
-	if res.Imported, err = ensureImported(ctx, d, JoinRequest{Invite: inv, Emails: emails, Name: req.Name, Handle: req.Handle, GitHubUser: req.GitHubUser}, emails[0]); err != nil {
+	admit := func(ctx context.Context, entry string) error { return CheckMember(ctx, d.Profiles, entry, emails) }
+	if res.Imported, err = ensureImported(ctx, d, JoinRequest{Invite: inv, Emails: emails, Name: req.Name, Handle: req.Handle, GitHubUser: req.GitHubUser}, emails[0], admit, true); err != nil {
+		return RosterResult{}, err
+	}
+	// The read-only check again for an entry that was already here (a
+	// re-run, or the setup apply that imported it by url): still before
+	// the write-mode open, which registers nobody but is the write path.
+	if err = CheckMember(ctx, d.Profiles, req.Org, emails); err != nil {
 		return RosterResult{}, err
 	}
 	r, done, err := d.Profiles.Roster(ctx, true)
@@ -850,18 +909,9 @@ func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (Ro
 	if err != nil {
 		return RosterResult{}, err
 	}
-	var actor row.Row
-	matched := ""
-	for _, e := range emails {
-		a, rerr := r.ResolveActor(ctx, "email:"+e)
-		if rerr == nil && isMember(ctx, r, a) {
-			actor, matched = a, e
-			break
-		}
-	}
+	actor, matched := findMember(ctx, r, emails)
 	if matched == "" {
-		return RosterResult{}, errs.New(errs.NotFound, strings.Join(emails, ", ")+" is not a member of "+req.Org+" ("+r.Where()+")").
-			WithHint("ask an admin to run: lore member add " + emails[0] + " (an outsider joins with an invite line instead)")
+		return RosterResult{}, notMember(req.Org, r.Where(), emails)
 	}
 	res.Actor = actor.ID.String()
 	w := &writer{r: r, actor: actor, today: r.Today()}
@@ -876,3 +926,59 @@ func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (Ro
 	res.Wrote = w.wrote
 	return res, nil
 }
+
+// CheckMember is the member check of a join without an invite, run on a
+// read-only open of org's roster before anything is written: nil when
+// one of emails belongs to a member (an open stint), else E_NOT_FOUND
+// with the admin's command. setup apply passes it as org.import's Admit.
+func CheckMember(ctx context.Context, profiles profilestore.Store, org string, emails []string) error {
+	emails = memberEmails(emails)
+	if len(emails) == 0 {
+		return errs.New(errs.InvalidInput, "join "+org+": no email to find you on the roster by").
+			WithHint("answer the identity step with your work email (git config user.email)")
+	}
+	r, done, err := profiles.Roster(ctx, false)
+	defer done()
+	if err != nil {
+		return err
+	}
+	if _, matched := findMember(ctx, r, emails); matched == "" {
+		return notMember(org, r.Where(), emails)
+	}
+	return nil
+}
+
+// memberEmails are the normalized, distinct addresses of emails.
+func memberEmails(in []string) []string {
+	var emails []string
+	for _, e := range in {
+		if n, err := teamprofile.Normalize(schema.ContactKindEmail, e); err == nil && n != "" && !slices.Contains(emails, n) {
+			emails = append(emails, n)
+		}
+	}
+	return emails
+}
+
+// findMember is the member actor one of emails names (its email identity
+// contact, else the human:<email> key member add writes) and the address
+// that matched; "" when none is a member.
+func findMember(ctx context.Context, r profilestore.Roster, emails []string) (row.Row, string) {
+	for _, e := range emails {
+		for _, ref := range []string{"email:" + e, humanKeyPrefix + e} {
+			if a, err := r.ResolveActor(ctx, ref); err == nil && isMember(ctx, r, a) {
+				return a, e
+			}
+		}
+	}
+	return row.Row{}, ""
+}
+
+// notMember is the refusal of a join by someone not on org's roster: the
+// cause and the next step (an admin adds them, or an invite line).
+func notMember(org, where string, emails []string) error {
+	return errs.New(errs.NotFound, strings.Join(emails, ", ")+" is not a member of "+org+" ("+where+"); nothing was written").
+		WithHint("ask an admin to run: lore member add " + emails[0] + ", then lore setup join again (an outsider joins with an invite line instead)")
+}
+
+// OrgRoleAdmin is the org-level role of the person who created the org.
+const OrgRoleAdmin = "admin"

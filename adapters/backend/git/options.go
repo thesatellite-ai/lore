@@ -62,10 +62,35 @@ type config struct {
 	// trailers are appended to every commit and merge this backend makes
 	// (WithTrailers): lore's own commits only, never a person's (FQ7).
 	trailers []string
+	// trailerFuncs add trailers asked for at each commit (WithTrailerFunc)
+	trailerFuncs []func() []string
 	// route gives the per-call git options and environment of the active
 	// setup's ssh route (WithRoute); nil = none.
 	route func(ctx context.Context, remote string) (args, env []string)
+	// accessNote names the access rule a remote is reached through
+	// (WithAccessNote); nil = none.
+	accessNote func(remote string) string
+	// own marks a person's own clone (`lore store use`, withOwnClone):
+	// its origin spelling is kept and it is never removed by lore.
+	own bool
+	// keepSpelling keeps an existing origin that names the same store in
+	// another spelling (PrepareClone: the org link code never fights the
+	// backend over how origin is spelled).
+	keepSpelling bool
+	// handGit is the merge driver and pre-commit hook a store clone gets
+	// for plain git (WithHandGit, handgit.go); zero = none.
+	handGit HandGit
+	// cloneIdentity names the git identity a store clone gets in its own
+	// .git/config when it has none there (WithCloneIdentity,
+	// cloneidentity.go); nil = none.
+	cloneIdentity func(ctx context.Context, remote string) CloneIdentity
+	// identitySay is told when a write or sync gave an existing clone its
+	// identity (WithCloneIdentitySay); nil = nobody.
+	identitySay func(ctx context.Context, dir string, id CloneIdentity)
 }
+
+// withOwnClone marks the clone NewOpener opens as a person's own clone.
+func withOwnClone() Option { return func(c *config) { c.own = true } }
 
 // WithRoute sets how a store clone reaches its remote (ONBOARDING_DESIGN
 // 3.4, Q5): args are global git options put before every subcommand of the
@@ -76,6 +101,14 @@ type config struct {
 // never written into any git config, and only lore's own clone calls get it.
 func WithRoute(f func(ctx context.Context, remote string) (args, env []string)) Option {
 	return func(c *config) { c.route = f }
+}
+
+// WithAccessNote gives the backend the text a failed network call (clone,
+// fetch, push, ls-remote) of remote adds to its error: the access rule the
+// call went through and the next step ("" when no rule applies). wire
+// passes orgconf.AccessFailureNote of the person's config.yaml rule.
+func WithAccessNote(f func(remote string) string) Option {
+	return func(c *config) { c.accessNote = f }
 }
 
 // Option configures the git backend.
@@ -129,6 +162,18 @@ func WithTrailers(lines ...string) Option {
 	return func(c *config) { c.trailers = append(c.trailers, cp...) }
 }
 
+// WithTrailerFunc adds trailer lines asked for at each commit (f is
+// called then, so a caller can resolve them lazily): wire names the agent
+// a person's commits were made through (Lore-Agent) here, because a
+// clone's git identity is always the person (owner bug 12).
+func WithTrailerFunc(f func() []string) Option {
+	return func(c *config) {
+		if f != nil {
+			c.trailerFuncs = append(c.trailerFuncs, f)
+		}
+	}
+}
+
 // Join bundles several options into one (for callers that take a single
 // Option slot).
 func Join(opts ...Option) Option {
@@ -148,7 +193,11 @@ func Join(opts ...Option) Option {
 // there are none. A blank or multi-line entry is dropped.
 func (c config) withTrailers(msg string, extra ...string) string {
 	var keep []string
-	for _, t := range slices.Concat(c.trailers, extra) {
+	all := slices.Clone(c.trailers)
+	for _, f := range c.trailerFuncs {
+		all = append(all, f()...)
+	}
+	for _, t := range slices.Concat(all, extra) {
 		if t = strings.TrimSpace(t); t != "" && !strings.ContainsAny(t, "\r\n") {
 			keep = append(keep, t)
 		}

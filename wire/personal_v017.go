@@ -157,7 +157,8 @@ func localPersonalStores(ctx context.Context, opts Options) ([]attach.Store, err
 	return out, nil
 }
 
-// personalFoldersV017 lists the folders of dir holding a .lore/data.
+// personalFoldersV017 lists the folders of dir: each holding a .lore/data
+// (v0.1.17) or a _meta.json (made since, in the store layout).
 func personalFoldersV017(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -175,7 +176,9 @@ func personalFoldersV017(dir string) ([]string, error) {
 		if ferr != nil || f == rowfs.FolderRoot {
 			continue // .lore, .git and other tool folders
 		}
-		if fi, serr := os.Stat(filepath.Join(dir, e.Name(), rowfs.LoreDir, rowfs.DataDir)); serr == nil && fi.IsDir() {
+		// a folder v0.1.17 made keeps .lore/data; one the new lore made
+		// before the migration ran sits flat (both are read where they are)
+		if rowfs.HasStoreFolder(dir, f) {
 			out = append(out, f)
 		}
 	}

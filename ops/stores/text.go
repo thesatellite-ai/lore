@@ -116,7 +116,7 @@ func (o InitOut) Text() string {
 		line = "✓ " + o.URL + " is already a lore store (" + o.ID + "); recorded as " + o.Name + " in " + where + "\n"
 	}
 	if len(o.Following) > 0 {
-		line += "  your setups " + strings.Join(o.Following, ", ") + " were on ~/.lore/stores/me and now use it too (one personal store per person)\n"
+		line += "  your setups " + strings.Join(o.Following, ", ") + " were on ~/.lore/stores/_me and now use it too (one personal store per person)\n"
 	}
 	return line
 }

@@ -440,7 +440,7 @@ Y
   on bob work/website "lore actor register"
   on bob work/website "lore memory list"
   on bob . "lore store show"
-  on bob . "ls ~/.lore/clones/github.com/agency"
+  on bob . "ls ~/.lore/stores/agency"
 }
 
 # ---------------------------------------------------------------------------
@@ -761,19 +761,19 @@ s_internals() {
   on alice work/website "lore task add 'renew the client SSL certificate' --to agency"
   local t; t=$(id tsk)
   on alice work/website "lore memory add --body 'the client wants a demo every second Friday'"
-  on alice . "git -C ~/.lore/clones/github.com/agency/notes.git ls-tree -r --name-only main | grep -v '_meta.json\|.gitattributes' | head -20"
-  on alice . "git -C ~/.lore/clones/github.com/agency/notes.git for-each-ref --format='%(refname)'"
-  on alice . "git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client/.lore/data/_meta.json"
+  on alice . "git -C ~/.lore/stores/agency/notes ls-tree -r --name-only main | grep -v '_meta.json\|.gitattributes' | head -20"
+  on alice . "git -C ~/.lore/stores/agency/notes for-each-ref --format='%(refname)'"
+  on alice . "git -C ~/.lore/stores/agency/notes cat-file -p main:client/_meta.json"
 
   note "signals"
   on alice work/website "lore agent start --label agent-backend --owner @alice"
   local a s2
   a=$(grep -o 'LORE_ACTOR=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2); s2=$(grep -o 'LORE_SESSION=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2)
   EXTRA_ENV="LORE_ACTOR=$a LORE_SESSION=$s2" AS=agent-backend on alice work/website "lore task claim $t"
-  on alice . "cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main"
-  on alice . "cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p refs/lore-remote/origin/signals/main:\$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)"
+  on alice . "cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main"
+  on alice . "cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/signals/main:\$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)"
   EXTRA_ENV="LORE_ACTOR=$a LORE_SESSION=$s2" AS=agent-backend on alice work/website "lore task heartbeat $t"
-  on alice . "cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main"
+  on alice . "cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git log --oneline refs/lore-remote/origin/signals/main"
 
   note "hooks"
   on alice work/website "ls .git/hooks | grep -v sample; grep -h 'lore' .git/hooks/pre-commit | head -5"
@@ -858,14 +858,15 @@ s_people() {
 
   note "suggest an org entry"
   quiet alice . "git clone -q https://github.com/agency/notes notes-checkout"
-  cat > "$HOMES/alice/notes-checkout/org/.lore/lore-org.yaml" <<'Y'
+  mkdir -p "$HOMES/alice/notes-checkout/org"
+  cat > "$HOMES/alice/notes-checkout/org/lore-org.yaml" <<'Y'
 name: agency
 stores:
   - {url: "git@github.com:agency/notes", org_folder: org}
 own: [github.com/agency/*]
 repos: [github.com/client/*]
 Y
-  on alice notes-checkout "git add org/.lore/lore-org.yaml && git commit -qm 'suggest the agency org entry' && git push -q origin main"
+  on alice notes-checkout "git add org/lore-org.yaml && git commit -qm 'suggest the agency org entry' && git push -q origin main"
 
   note "org import"
   # Run outside any repo: the register step opens only the org store (BUG-T3).
@@ -889,7 +890,7 @@ Y
 
   note "store open and forget"
   on alice . "lore store open git@github.com:agency/notes"
-  on alice . "ls ~/.lore/worktrees/github.com/agency/notes/main"
+  on alice . "ls ~/.lore/stores/agency/notes"
   on bob . "lore store forget git@github.com:agency/notes"
 
   note "cache prune"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SC-26: a tampered cache is rebuilt from the row files, never trusted
-# Catches: R21-49 (0.1.18: the row files are the truth; .lore/lore-cache.db
+# Catches: R21-49 (0.1.18: the row files are the truth; the repo cache
 # records each table's schema fingerprint and its layout version, and a
 # table or file that does not match is rebuilt instead of read)
 source "$(dirname "$0")/../lib/common.sh"
@@ -8,7 +8,7 @@ need sqlite3
 need python3
 mk_tmp; init_project mig
 $LORE memory add --body "truth from the file" >/dev/null || fail "memory add"
-CACHE=.lore/lore-cache.db
+CACHE=$(repo_cache) # under the lore home: cache/repo/<folder>-<hash>.db
 [ -f "$CACHE" ] || fail "no cache file at $CACHE"
 
 body() { $LORE memory list --json | json_get '",".join(r["body"] for r in d["data"])'; }

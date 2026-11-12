@@ -55,8 +55,8 @@ Live always wins over branch data. So you see a teammate's edit on live, whateve
 <!-- example: small-team#explain -->
 ```console
 # alice, in billing
-$ lore explain tsk_162d…9666
-tsk_162d…9666 in ~/work/billing (folder _root)
+$ lore explain tsk_54fe…28f2
+tsk_54fe…28f2 in ~/work/billing (folder _root)
   fetched 50s ago
   live (local 6d00426): row, live since 2026-11-02T10:00:15Z, hlc 2026-11-02T10:00:40.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
@@ -98,7 +98,7 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-○ tsk_162d…9666 check the checkout page on a phone [medium]
+○ tsk_54fe…28f2 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
 
@@ -123,10 +123,12 @@ Your branch, your staged files and your working folder are never touched. Lore b
 ```console
 # bob, in portal
 $ lore task add 'set up the portal CI'
+lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
+lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
-local     601d2850ffd0
+local     86dbae476bd6
 tracking  (none)
 seen      (none)
 pending   2 write(s) not confirmed by the remote
@@ -158,7 +160,7 @@ lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: 
               → remove it from live (only if the live copy did not change meanwhile)
 ```
 
-Landing twice writes the same file and commits nothing. A row reopened after it landed differs from `main`, so it stays live and lands again later. A deleted row lands as a file delete plus an entry in `.lore/data/_purged.json`, so an old branch copy cannot bring it back. For a store project the same steps run on lore's own copy of the store (a bare clone: a git repo with no working folder) and the store branch. A store branch must accept direct pushes (`lore store doctor` checks). Your personal store and an org store may push in batches instead of at once, and their old history may be folded into one commit: see [How writes reach the remote](identity-and-stores.md#how-writes-reach-the-remote).
+Landing twice writes the same file and commits nothing. A row reopened after it landed differs from `main`, so it stays live and lands again later. A deleted row lands as a file delete plus an entry in `.lore/data/_purged.json`, so an old branch copy cannot bring it back. For a store project the same steps run on lore's own clone of the store (a plain git clone under `~/.lore/stores/<owner>/<repo>`) and the store branch. A store branch must accept direct pushes (`lore store doctor` checks). Your personal store and an org store may push in batches instead of at once, and their old history may be folded into one commit: see [How writes reach the remote](identity-and-stores.md#how-writes-reach-the-remote).
 
 **On a feature branch.** Between "landed on main" and your next pull, lore reads a landed row from `origin/main` only while this checkout is on the default branch (the "found nowhere, on main" step above). On any other branch, a row that landed and left live drops out of your lists and `lore show` until you merge main into the branch. The write that lands it says so on stderr:
 
@@ -187,19 +189,20 @@ A **protected branch** is one GitHub only lets you change through a pull request
 ```console
 # alice, in billing
 $ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
+lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed)
+lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
 lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
-[feat/login 7898daa] fix login timeout
+[feat/login 22efc3b] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 $ git log --oneline -3
-ccfb0bb lore: land 1 row (_root)
-7898daa fix login timeout
-9b40ce7 fix the checkout page on phones
+8c373dc lore: land 1 row (_root)
+22efc3b fix login timeout
+df3a55c fix the checkout page on phones
 ```
 <!-- /example -->
 
@@ -232,7 +235,7 @@ $ lore live compact
 ✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
 epoch 2
-601d285 2026-11-02 alice  lore: live compact (epoch 2)
+9b40ce7 2026-11-02 alice  lore: live compact (epoch 2)
 ```
 <!-- /example -->
 
@@ -267,13 +270,16 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 ```console
 # agent-backend, in website
 $ lore task claim tsk_76bd…3f10
+lore: pushed store agency: commit cf563f3 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client/actors/act_f147…5139.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
 ✓ claimed tsk_76bd…3f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 
 # alice, in ~
-$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
+$ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
 client/claims/tsk_76bd…3f10.json
-9b40ce7 lore: signals
-$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
+df3a55c lore: signals
+$ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
   "task": "tsk_76bd…3f10",
@@ -295,8 +301,8 @@ $ lore task heartbeat tsk_76bd…3f10
 ✓ tsk_76bd…3f10 renewed until 2026-11-02T10:21:25Z (seq 1)
 
 # alice, in ~
-$ cd ~/.lore/clones-v017/github.com/agency/notes.git && git fetch -q origin && git log --oneline refs/lore-remote/origin/signals/main
-05513aa lore: signals
+$ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git log --oneline refs/lore-remote/origin/signals/main
+6d00426 lore: signals
 ```
 <!-- /example -->
 
@@ -342,25 +348,35 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 ```console
 # agent-backend, in agents/api
 $ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
-✓ tsk_162d…9666 done (commit 601d285); waiting for merge
+lore: pushed store agency: commit a8de760 to branch main
+lore: pushed store agency: commit 9169078 to branch main
+lore: pushed store agency: commit b733d8a to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_3b62…e913.json (store agency)
+✓ tsk_162d…9666 done (commit 1833373); waiting for merge
   lesson → mem_3b62…e913
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
-  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 601d285 not on the default branch yet)
+  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 1833373 not on the default branch yet)
   hint: lore task board shows what each task waits on
 (exit 10)
 
 # alice, in api
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
+lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 86dbae4)
+lore: pushed store agency: commit 59e9d31 to branch main
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 7540e63)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
+lore: pushed store agency: commit ef62c83 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
   read its notes: lore task show tsk_54fe…28f2
 ```
@@ -390,7 +406,7 @@ Org resolution is how lore decides which org (which company setup) a repo belong
    1. pick the store: the one already holding client/, else the entry's first store (or --store <url>)
    2. check the store (marker, no code files) and that its branch exists
    3. create client/ as a lore project if missing
-   4. add {project_id, remote} to client/.lore/data/_meta.json "links"   (a set: concurrent links merge)
+   4. add {project_id, remote} to client/_meta.json "links"   (a set: concurrent links merge)
    5. commit on the store branch and push
 
  every command: scan each store's folders for links → index {(project id, remote) → folder},
@@ -402,7 +418,7 @@ The link file, as it sits in the store:
 <!-- example: internals#store-layout only=5 -->
 ```console
 # alice, in ~
-$ git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client/.lore/data/_meta.json
+$ git -C ~/.lore/stores/agency/notes cat-file -p main:client/_meta.json
 {
   "_v": 1,
   "features": [
@@ -426,7 +442,7 @@ A **link** tells lore that a store folder holds the agency's private notes for o
 ## Store checks
 
 <!-- ds:block id=team-store-allowed-a7qb5uuj -->
-A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore folders plus `README*`, `LICENSE*`, `.gitattributes` and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/clones` or committed to by lore. `lore store init <name> <url>` turns a new empty repo into a store and attaches it; `lore store init <name> '<url>?branch=staging'` creates another store branch, and `lore store add <name> <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
+A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore folders plus `README*`, `LICENSE*`, `.gitattributes` and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/stores` or committed to by lore. `lore store init <name> <url>` turns a new empty repo into a store and attaches it; `lore store init <name> '<url>?branch=staging'` creates another store branch, and `lore store add <name> <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
 
 ## Leak guards
 
@@ -452,7 +468,7 @@ A **leak** is internal or personal content reaching anything the client can read
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_05e9…4603 (10 words)
+  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
@@ -488,11 +504,11 @@ $ lore render
 ✓ .lore/LORE.md (2554 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topics)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
-✓ private context → ~/.lore/render/rep_d431…313a (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
+✓ private context → ~/.lore/render/rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
 $ cat ~/.lore/render/*/index.md
 <!-- generated by lore; private: never quote this content in committed files, client files, commits, PRs or chat -->
-repo website (rep_d431…313a)
-sto_b4f4…a5b0.md  store me, me/everywhere  -  internal
+repo website (rep_28f8…03df)
+sto_4c59…6c38.md  store me, me/everywhere  -  internal
 sto_7a67…9504.md  store agency, agency/org  -  internal
 $ git status --short
 ?? .lore/LORE.full.md

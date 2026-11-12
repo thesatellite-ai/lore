@@ -20,10 +20,14 @@ Tomas invites Mira as a developer and reviewer on `acme-hub`, and Ana as a contr
 ```console
 # tomas, in acme-hub
 $ lore team invite mira@agency.example --role dev,reviewer --project acme-hub
+lore: pushed store agency/org: commit 601d285 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
 Send this to mira@agency.example (it holds no secret):
   lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 $ lore team invite ana@agency.example --type contractor --expires 30d
+lore: pushed store agency/org: commit 86dbae4 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 ✓ invite inv_2ad3…f891 written to store agency (expires 2026-12-02)
 Send this to ana@agency.example (it holds no secret):
   lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
@@ -142,6 +146,8 @@ ERROR: [E_NEEDS_CONFIRM] Revoke invite inv_2ad3…f891 for ana@agency.example?
   hint: nothing written; confirm with --yes (or "yes": true over lore api)
 (exit 26)
 $ lore team invite revoke ana@agency.example --yes
+lore: pushed store agency/org: commit 9b40ce7 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 id: inv_2ad3…f891
 status: revoked
 $ lore team invite resend ana@agency.example

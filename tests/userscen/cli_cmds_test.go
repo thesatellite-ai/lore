@@ -143,7 +143,7 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 	needRepo := [][]string{
 		{"init"}, {"init", "--non-interactive", "--name=app"},
 		{"rule", "list"}, {"rule", "add", "Run the tests"}, {"memory", "add", "a note"}, {"task", "list"}, {"task", "next"},
-		{"show", "mem_01a1b4a47d1e75c1aa1a0b15f1643889"}, {"search", "run", "tests"}, {"inbox"}, {"render"}, {"sync"},
+		{"show", "mem_01a1b4a47d1e75c1aa1a0b15f1643889"}, {"search", "run", "tests"}, {"inbox"}, {"render"},
 		{"sql", "run", "SELECT 1"}, {"sql", "SELECT 1"}, {"lint"}, {"trash"}, {"batch", "list"},
 		{"policy", "show"}, {"vars", "list"}, {"tag", "list"}, {"machine", "list"}, {"land"},
 	}
@@ -172,6 +172,8 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 		say  string
 	}{
 		{[]string{"version"}, "lore dev"},
+		// outside a repo, sync goes over every store the setup sees (D-ae): none here
+		{[]string{"sync"}, "no stores to sync"},
 		{[]string{"--version"}, "lore version dev"},
 		{[]string{"config", "check"}, "does not exist: no orgs configured"},
 		{[]string{"config", "list"}, "(no config keys)"},

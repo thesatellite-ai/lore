@@ -308,19 +308,19 @@ func (a *App) actorIDs(ctx context.Context, st *state) ([]ids.AnyID, error) {
 }
 
 // actorSourceGet answers an unqualified Get of an actor id that several
-// stores hold (engine E_AMBIGUOUS_ID: one actor written once per store,
-// not two rows): the source's row when the roster holds it, else the
+// stores hold (one actor written once per store, not two rows; the engine
+// alone answers the newest copy): the source's row when the roster holds it, else the
 // first current copy, else the first copy, with display_name set to the
-// value a merged read shows. amb is returned when id has no live copy
-// here after all.
-func (a *App) actorSourceGet(ctx context.Context, ref engine.Ref, amb error) (store.Source, row.Row, error) {
+// value a merged read shows. An empty source (no error) means id has no
+// live copy here after all: the caller keeps the engine's answer.
+func (a *App) actorSourceGet(ctx context.Context, ref engine.Ref) (store.Source, row.Row, error) {
 	st, err := a.state(ctx)
 	if err != nil {
-		return "", row.Row{}, amb
+		return "", row.Row{}, err
 	}
 	rep := a.actorReport(ctx, st, ref.ID)
-	if len(rep.Copies) == 0 {
-		return "", row.Row{}, amb
+	if len(rep.Copies) < 2 {
+		return "", row.Row{}, nil // one copy: the engine's answer is it
 	}
 	pick := rep.Copies[0]
 	for _, c := range rep.Copies {

@@ -55,7 +55,7 @@ func pushFixture(t *testing.T) (origin, clone string) {
 	origin = storeOrigin(t)
 	clone = filepath.Join(t.TempDir(), "clone")
 	ctx := context.Background()
-	if err := ensureBare(ctx, clone, origin); err != nil {
+	if err := ensureClone(ctx, clone, origin, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := fetch(ctx, nil, clone); err != nil {

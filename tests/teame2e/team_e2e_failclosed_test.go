@@ -20,10 +20,9 @@ import (
 // network: lore can no longer read the store or its link index.
 func (a *agency) breakStoreAccess(t *testing.T) {
 	t.Helper()
-	for _, dir := range []string{"clones", "cache"} {
-		if err := os.RemoveAll(a.alice.LorePath(dir)); err != nil {
-			t.Fatal(err)
-		}
+	a.alice.RemoveStoreClones(t)
+	if err := os.RemoveAll(a.alice.LorePath("cache")); err != nil {
+		t.Fatal(err)
 	}
 	a.alice.Offline()
 }
@@ -82,7 +81,7 @@ func TestF14_TeamAssignInClientRepoRefused(t *testing.T) {
 // `lore team add` left it.
 func (a *agency) plantRosterTeam(t *testing.T, handle string) {
 	t.Helper()
-	meta, ok := a.store.Read(refMain, folderOrg+"/"+dataDir+"/"+metaFile)
+	meta, ok := a.store.Read(refMain, folderOrg+"/"+metaFile)
 	if !ok {
 		t.Fatal("test premise: the org folder has no _meta.json (nobody registered)")
 	}
@@ -114,7 +113,7 @@ func (a *agency) plantRosterTeam(t *testing.T, handle string) {
 		t.Fatal(err)
 	}
 	admin := a.w.Human("admin", "admin@northwind.example").Clone(a.store, "store-admin")
-	admin.WriteFile(folderOrg+"/"+dataDir+"/teams/"+id+".json", string(doc)+"\n")
+	admin.WriteFile(folderOrg+"/teams/"+id+".json", string(doc)+"\n")
 	admin.CommitAll("v0.1.17 lore: team @" + handle)
 	admin.AdminPush("origin", "HEAD:main")
 }

@@ -14,14 +14,12 @@ package host
 import (
 	"context"
 	crand "crypto/rand"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -58,10 +56,6 @@ const (
 	EnvSyncQuiet = "LORE_SYNC_QUIET"
 	envOff       = "0"
 )
-
-// syncLogPrefix starts the git wiring notices, v0.1.17's text byte for
-// byte (docs paste.py filters "lore sync: configured git for lore data").
-const syncLogPrefix = "lore sync: "
 
 // Live state and log constants (v0.1.17 live_wire.go).
 const (
@@ -100,6 +94,8 @@ type liveSession struct {
 	kind      live.FetchKind
 	// agent: an agent runs the operation (D8: never named in a live hlc).
 	agent bool
+	// read: the command is a read (liveRun.read): it writes no git config.
+	read bool
 	// fetchErr is the last fetch failure (offline).
 	fetchErr error
 	// fetched: this run fetched the remote successfully (refetch).
@@ -198,34 +194,6 @@ func (s *liveSession) warn(line string) { s.h.line(liveLogPrefix + line) }
 // syncQuiet reports LORE_SYNC_QUIET=1 (exact value, like every switch).
 func syncQuiet() bool { return os.Getenv(EnvSyncQuiet) == envOn }
 
-// syncNotice prints one `lore sync:` notice on the host's stderr unless
-// LORE_SYNC_QUIET=1. Only for news (what lore changed), never a warning.
-func (s *liveSession) syncNotice(line string) {
-	if syncQuiet() {
-		return
-	}
-	s.h.line(syncLogPrefix + line)
-}
-
-// wiredContent hashes the bytes of every path (missing reads as empty), so
-// the git wiring can tell whether it changed the clone's config or hooks:
-// a set that writes nothing new leaves the hash equal, so the notice is
-// printed once, by the command that wired the clone.
-func wiredContent(paths []string) [sha256.Size]byte {
-	h := sha256.New()
-	for _, p := range paths {
-		b, err := os.ReadFile(filepath.Clean(p))
-		if err != nil {
-			b = nil // missing or unreadable: the same as empty for "did it change"
-		}
-		_, _ = h.Write([]byte(p + "\x00" + strconv.Itoa(len(b)) + "\x00")) // a hash.Hash write never fails
-		_, _ = h.Write(b)
-	}
-	var out [sha256.Size]byte
-	copy(out[:], h.Sum(nil))
-	return out
-}
-
 // prepare runs F3 once per run: the live lock, the tracking refspec, a
 // fetch when due and the integration of the tracking ref.
 func (s *liveSession) prepare(ctx context.Context) {
@@ -244,7 +212,10 @@ func (s *liveSession) prepare(ctx context.Context) {
 		// lock; nothing read before it may be answered from the cache.
 		s.cache.Invalidate()
 	}
-	if s.ref.Remote != nil && os.Getenv(EnvSyncGit) != envOff {
+	if s.ref.Remote != nil && os.Getenv(EnvSyncGit) != envOff && !s.read {
+		// a read writes no git config (owner bug 6): lore's own fetch
+		// names its refspecs, the configured one only serves a plain
+		// `git fetch`, so the next write or sync adds it
 		if _, err = gitremote.EnsureTrackingRefspec(ctx, s.repo, s.ref.RemoteName); err != nil {
 			s.warn("tracking refspec: " + err.Error())
 		}
@@ -436,10 +407,11 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 	switch out.Status {
 	case live.PushNothing:
 	case live.PushDone:
+		where := livePushWhere(out) // no hidden network writes: the commit, the remote, the ref
 		if s.wrote > 0 {
-			s.warn("(live, pushed)")
+			s.warn("(live, pushed)" + where)
 		} else {
-			s.warn("pushed waiting live writes")
+			s.warn("pushed waiting live writes" + where)
 		}
 		_ = s.writeNote(liveNoteRefused, "") // best effort: clears a stale doctor note
 	case live.PushNoRemote:
@@ -529,4 +501,13 @@ func (s *liveSession) markFolder(folder string) {
 		s.folders = map[string]bool{}
 	}
 	s.folders[folder] = true
+}
+
+// livePushWhere is " commit <sha> to <remote> <ref>" for a push that sent
+// a commit, "" when the outcome names none.
+func livePushWhere(out live.PushOutcome) string {
+	if out.Commit == "" {
+		return ""
+	}
+	return " commit " + shortCommit(out.Commit) + " to " + out.Remote + " " + out.Ref
 }

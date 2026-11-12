@@ -12,7 +12,7 @@ This page lists every file and every key, with its default and a plain one-line 
 | `~/.lore/identity.yaml` | your home folder (v0.1.17 only) | no | v0.1.17 `lore identity set` | removed in 0.1.18: `lore migrate run` moves it into `identity:` of `config.yaml` |
 | `.lore/org.yaml` | in a repo the org owns | yes, it is committed | `lore org set` | the org's name, and optionally the project folder |
 | `lore-store.yaml` | at the top of a store repo | yes, everyone who can open the store | `lore store init` | the marker that makes a repo a store |
-| `<org_folder>/.lore/lore-org.yaml` | inside a store | yes, everyone who can open the store | a team member, by hand | the org entry the team suggests; `lore org import` copies it into your config |
+| `<org_folder>/lore-org.yaml` | inside a store | yes, everyone who can open the store | a team member, by hand | the org entry the team suggests; `lore org import` copies it into your config |
 | `.lore/lore.yaml` | in a project folder | it is committed if you commit it | v0.1.17 `lore project shared-init` (retired) | an old pointer to a shared database; `lore migrate run` converts it |
 | database settings | inside `.lore/lore.db` | no | lore itself | internal values such as the schema version; no command reads or sets them |
 
@@ -104,7 +104,7 @@ $ lore config check
 | `identity.key` | none | who you are in repos that match no org entry, written `human:<your email>`; your identity key is your email. `lore identity set <email>` writes it; this is the only place your identity lives |
 | `identity.name` | none | your name in those repos |
 | `identity.handle` | none | your short name after `@` (lowercase letters, digits, `_` or `-`) |
-| `personal.store` | none (no personal store) | your personal store, the target of `--to me`, shown in all your repos: a git URL of your own private store, or a local folder `file:///<absolute path>`. `lore store init me` with no URL makes `file://~/.lore/stores/me` and records it here; with another URL it also moves every setup whose own `personal_store` is that local folder to follow this key (`inherit`): a person has one personal store `me`. The v0.1.17 value `local` (`~/.lore/personal`) is still accepted and attached as `me`, in a folder named after your org when one resolves |
+| `personal.store` | none (no personal store) | your personal store, the target of `--to me`, shown in all your repos: a git URL of your own private store, or a local folder `file:///<absolute path>`. `lore store init me` with no URL makes `file://~/.lore/stores/_me` and records it here; with another URL it also moves every setup whose own `personal_store` is that local folder to follow this key (`inherit`): a person has one personal store `me`. The v0.1.17 value `local` (`~/.lore/personal`) is still accepted and attached as `me`, in a folder named after your org when one resolves |
 | `personal.push` | `now` | how your writes to the personal store reach its remote: `now` pushes each write at once; `batch` keeps them on this machine and pushes them as one commit once `personal.push_every` has passed, on `lore sync` and when a coding tool starts a session; `manual` pushes only on `lore sync`. `lore store set me push=…` writes it; see [How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote) |
 | `personal.push_every` | `5m` | how long a batch may wait before it is pushed, at least `1m` |
 | `personal.compact` | `off` | `on`: fold the personal store's history older than `personal.compact_after` into one commit by itself, at most once a day (`lore store compact me` does it by hand) |
@@ -128,6 +128,7 @@ $ lore config check
 | `auto_upgrade` | `false` | `true` upgrades lore instead of printing the notice, when lore was installed with Homebrew or the install script |
 | `policies.<key>` | none | a stricter limit for this machine only, for any key `lore policy show` lists (see below) |
 | `context.profiles` | none | your own tool profiles for `lore render`, added after the built-in ones (see below) |
+| `access` | none | how this machine reaches store urls that shared config names in their canonical form: a list of `url` (the prefix shared config uses, scoped to an owner, such as `git@github.com:agency/`) and `via` (the prefix this machine uses instead, such as `git@work-gh:agency/`); see [Reaching stores through your own ssh alias](#reaching-stores-through-your-own-ssh-alias-access) |
 
 When two org entries match a repo, `lore org use` records this machine's choice under `repo_orgs`:
 
@@ -139,7 +140,7 @@ org        refused  (the patterns of 2 org entries match this repo (agency, free
 identity   (not resolved: the org is refused above)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
-project    prj_76bd…3f10
+project    prj_d431…313a
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   not set
@@ -147,23 +148,24 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore org use agency
-✓ prj_76bd…3f10 uses org agency on this machine
+✓ prj_d431…313a uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 
 # alice, in ~
 $ grep -A4 repo_orgs ~/.lore/config.yaml
 repo_orgs:
-  prj_76bd…3f10:
+  prj_d431…313a:
     org: agency
     remotes:
       - github.com/client/website
 
 # alice, in website
 $ lore org link agency --project client --yes
+lore: pushed store github.com/agency/notes: commit df3a55c to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_76bd…3f10 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_76bd…3f10) linked to github.com/agency/notes client/ (created; pushed)
+  link: project prj_d431…313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_d431…313a) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 ```
 <!-- /example -->
@@ -178,18 +180,20 @@ default_branch: develop
 
 # alice, in website
 $ lore task add 'Fix the footer links'
-✓ tsk_54fe…28f2 — Fix the footer links [medium]
-lore live: (live, pushed)
-$ lore task done tsk_54fe…28f2
-✓ tsk_54fe…28f2 done
+lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
+✓ tsk_05e9…4603 — Fix the footer links [medium]
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+$ lore task done tsk_05e9…4603
+lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
+✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed)
-lore live: landed on develop (601d285); leaves live once develop is fetched
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
+lore live: landed on develop (dfd8dc8); leaves live once develop is fetched
 lore live: landed on develop; this checkout is on main, so those rows show here after you merge develop
 $ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
-601d285 lore: land 2 rows (_root)
-86dbae4 lore: init
-86dbae4 lore: init
+dfd8dc8 lore: land 2 rows (_root)
+cf563f3 lore: init
+cf563f3 lore: init
 ```
 <!-- /example -->
 
@@ -259,6 +263,7 @@ The keys of one `setups:` entry:
 | `identity.key` | required when the entry is used | who you are in this org: `human:<your email in this org>` |
 | `identity.name`, `identity.handle` | none | your name and `@handle` in this org |
 | `stores[].url` | required | a store repo of this org, as an address git can fetch: `git@github.com:agency/notes` or `https://github.com/agency/notes` (or `ssh://…`). The bare form `github.com/agency/notes` is refused when the config is read |
+| `stores[].name` | the repo name of `url` without `.git`, in lower case (`git@github.com:agency/lore-x.git` is `lore-x`) | the store's short name: `lore store list` shows it in the NAME column, output names the store by it, and store commands and `<store>/<folder>` targets take it (the url still works). Lowercase letters, digits, `.`, `_` or `-`; `team`, `me` and `repo` are taken. Two stores of one entry may not end up with the same short name: set `name` on one of them |
 | `stores[].branch` | `main` | the store branch this entry uses; no `/` in the name. A branch other than the store's main branch makes this a staging entry |
 | `stores[].org_folder` | none | set on exactly one store: the folder that holds the org's people list (the roster), teams and company rules; `.` means the top of the store |
 | `own` | none | patterns for the org's own code repos, such as `github.com/agency/*` |
@@ -268,6 +273,24 @@ The keys of one `setups:` entry:
 | `live`, `lease`, `agents`, `merge_check` | the top-level values | the same blocks as at the top level, for this org only |
 
 **Repo patterns.** A pattern is a repo address with `*` for exactly one part of the path and `**` for any number of parts. `github.com/client/*` matches `github.com/client/website` but not `github.com/client/web/site`; `github.com/client2/**` matches every repo under `client2`. The host (`github.com`) may not be a wildcard, `**` may appear once, and a part is either plain text or a whole wildcard (`web*` is refused). You can also paste a full remote URL as an exact pattern.
+
+### Reaching stores through your own ssh alias (`access:`)
+
+Shared files (a store's lore-org.yaml, a repo's `.lore/stores.yaml`) name each store by its canonical url, the one every teammate can reach: `git@github.com:agency/notes.git`. When your machine reaches that host through an ssh alias of its own (a `Host work-gh` block with `HostName github.com` in `~/.ssh/config`, for a second GitHub account), say so once in your own config:
+
+```yaml
+access:
+  - url: "git@github.com:agency/"
+    via: "git@work-gh:agency/"
+```
+
+Scope each rule to the owner or org the alias is for (`git@github.com:agency/`, or `https://github.com/agency/` for an https url), never to the whole host. A host-wide rule (`url: "git@github.com:"`) sends every github.com repo through the alias's account, so a store of another account, such as your personal store, is refused or pushed as the wrong account. Add one rule per owner the alias is for.
+
+Every git call lore makes to a store whose url starts with `url` then runs with `git -c url.git@work-gh:agency/.insteadOf=git@github.com:agency/ …`, for that one call. lore never writes this into your git config; `git config --global url."git@work-gh:agency/".insteadOf "git@github.com:agency/"` does the same for every program on the machine, if you prefer that.
+
+You rarely write the block by hand. When you type an ssh-alias url to a command that writes shared config (`lore org create`, `lore org import`, `lore store init`, `lore store add`), lore reads `~/.ssh/config`, stores the canonical url in the shared file, adds the `access:` item for your spelling scoped to the url's owner (`git@work-gh:agency/notes.git` records `url: "git@github.com:agency/"`, `via: "git@work-gh:agency/"`), and says so in one line. `lore doctor` (check `store_access`) warns about a shared url that is spelled with your alias, and about a store this machine cannot reach, with the exact owner-scoped `access:` lines and the git command for it; it never rewrites shared config itself.
+
+A host-wide rule already in your config still works, and `lore doctor` warns about it: it names the stores under another owner that go through the alias too (your personal store, say) and prints the owner-scoped lines that replace it. `lore doctor --fix` replaces the rule with one rule per owner of your org stores; doctor alone never rewrites the file. When a git call that went through an access rule fails (clone, fetch, push), the error names the rule (`url → via`, from `~/.lore/config.yaml`) and the next step.
 
 ### Stricter limits for this machine (`policies:`)
 
@@ -353,6 +376,8 @@ The rules it checks, in plain words:
 | `orgs[].stores[]` | a valid URL; two items may not name the same store and branch; at most one has `org_folder` |
 | `orgs[].stores[].branch`, `default_branch` | a valid git branch name; a store branch may not contain `/` |
 | `orgs[].stores[].org_folder` | `.` or one folder name (letters, digits, `.`, `_`, `-`), not starting with `_` |
+| `orgs[].stores[].name` | one lowercase word (letters, digits, `.`, `_`, `-`), not `team`, `me` or `repo`; two stores of one entry may not share a short name (the default short name included), and the refusal names both urls and says to set `stores[].name` in lore-org.yaml |
+| `access` | each item has both `url` and `via`, they differ, and each `url` appears once |
 | `orgs[].own`, `orgs[].repos` | valid repo patterns |
 | `orgs[].defaults.client_repos` | keys are lowercase kind names; values are `repo`, this org's name or `<org>/<folder>` |
 | `orgs[].agent_details` | `internal` or `client` |
@@ -452,7 +477,9 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 ```console
 # alice, in website
 $ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
-✓ created store agency (sto_05e9…4603) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Alice <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+✓ created store agency (sto_c0f3…b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 $ cat .lore/stores.yaml
 stores:
     - name: agency
@@ -462,14 +489,14 @@ stores:
 ```
 <!-- /example -->
 
-## `<org_folder>/.lore/lore-org.yaml`
+## `<org_folder>/lore-org.yaml`
 
 The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; `lore org refresh <org>` copies `stores`, `own`, `repos` and `defaults` again when the team changed the file (a key the file no longer has is removed from your entry). lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file.
 
 | Key | What it means |
 |---|---|
 | `name` | the suggested entry name |
-| `stores[]` | the org's stores, with `url`, `branch` and `org_folder` as in your config |
+| `stores[]` | the org's stores, with `url`, `name`, `branch` and `org_folder` as in your config. Write each `url` in its canonical form, the way every teammate reaches it (`git@github.com:agency/notes.git` or `https://…`), never with an ssh alias of your own; each machine maps it in its own `access:` |
 | `own`, `repos` | the repo patterns |
 | `defaults.client_repos.<kind>` | where rows of each kind go in client repos |
 
@@ -509,6 +536,7 @@ not set
 - `identity.key` is `human:` plus your email, not your email alone and not your name.
 - `1d12h` is refused; write `36h`.
 - `personal.push`, `push_every`, `compact` and `compact_after` apply to your personal store only. An org store keeps its own in its `lore-store.yaml`, set by the org admin with `lore store set`.
+- An ssh alias of yours in lore-org.yaml or `.lore/stores.yaml` works on your machine only: teammates cannot reach the store. Put the canonical url there and the alias in your own `access:`; `lore doctor` names every such url.
 - `LORE_HOME` does not move `~/.lore`: lore always keeps its config (your identity included) and caches under `~/.lore` in your home folder. `LORE_HOME` only fills in `${LORE_HOME}` in `db_path`.
 
 ## Related

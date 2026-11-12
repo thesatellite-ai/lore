@@ -515,7 +515,7 @@ func agProjectID(t *testing.T, c *th.Clone) string {
 // agStoreLinks reports whether the store's folder links project id pid.
 func agStoreLinks(t *testing.T, store *th.Remote, folder, pid string) bool {
 	t.Helper()
-	b, ok := store.Read("refs/heads/main", folder+"/.lore/data/_meta.json")
+	b, ok := store.Read("refs/heads/main", folder+"/_meta.json")
 	return ok && strings.Contains(b, pid)
 }
 

@@ -129,7 +129,7 @@ func TestStoreAdopt(t *testing.T) {
 	src := adoptRepo(t)
 	srcBefore := treeSums(t, src)
 	in := `{"target":"northwind/client_x","from":"` + filepath.ToSlash(src) + `"}`
-	folder := filepath.Join(storeDir, "client_x", ".lore", "data")
+	folder := filepath.Join(storeDir, "client_x")
 	storeBefore := treeSums(t, storeDir)
 
 	dry, err := adoptRun(t, a, `{"target":"northwind/client_x","from":"`+filepath.ToSlash(src)+`","dry_run":true}`, false)

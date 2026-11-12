@@ -11,6 +11,8 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -180,10 +182,13 @@ func appendAuditLine(path string, dirMode os.FileMode, line []byte) error {
 // before, and an attached-store write keeps a trail without its row id
 // ever reaching the checkout.
 type routedAudit struct {
-	repo  engine.AuditSink
-	dir   string                  // <home>/StoreAuditDir
-	stems map[store.Source]string // attached source -> file stem
-	mu    sync.Mutex
+	// rowFile is where a store keeps a row's file (writelog.go); nil
+	// leaves the write log without paths.
+	rowFile func(store.Source, row.Table, ids.AnyID) string
+	repo    engine.AuditSink
+	dir     string                  // <home>/StoreAuditDir
+	stems   map[store.Source]string // attached source -> file stem
+	mu      sync.Mutex
 }
 
 var _ engine.AuditSink = (*routedAudit)(nil)
@@ -215,6 +220,7 @@ func (r *routedAudit) Record(ctx context.Context, ev engine.Event) error {
 	// 6.6: the session link and the --yes mark, filled once here so every
 	// sink below records the same values.
 	ev.Confirmed = ev.Confirmed || engine.Confirmed(ctx)
+	r.noteWrite(ctx, ev)
 	// P3-LOCAL-5: a session row's own event is never linked: the session
 	// source writes that row from inside this call (the first write of a
 	// process), and asking it again would re-enter it.
@@ -259,4 +265,19 @@ func firstErr(es ...error) error {
 		}
 	}
 	return nil
+}
+
+// noteWrite adds ev's row file to ctx's write log (the command then names
+// it, writelog.go). Machine-local rows (store "machine", agent sessions)
+// are not files a person looks for: `lore where` names their file.
+func (r *routedAudit) noteWrite(ctx context.Context, ev engine.Event) {
+	l := writeLogOf(ctx)
+	if l == nil || ev.Store == store.SourceMachine || ev.Table == schema.TableSessions {
+		return
+	}
+	w := Written{Store: string(ev.Store)}
+	if r.rowFile != nil {
+		w.File = r.rowFile(ev.Store, ev.Table, ev.ID)
+	}
+	l.add(w)
 }

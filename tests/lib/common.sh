@@ -137,6 +137,14 @@ lore_count() {
 # identity, so a scenario that reads or tampers ~/.lore (the machine store,
 # the audit chain) never touches the developer's real one. mk_tmp calls it;
 # calling it again is harmless.
+# repo_cache prints the cache file of the code repo checkout at the current
+# folder (its top): <lore home>/cache/repo/<folder name>-<12 hex of sha256 of
+# the real path>.db (wire.RepoCachePath; the cache left the work tree, so a
+# command never creates a file in the repo). Needs python3.
+repo_cache() {
+    python3 -c 'import hashlib,os,re; t=os.path.realpath(os.getcwd()); n=re.sub(r"[^A-Za-z0-9._-]","_",os.path.basename(t)).strip(".") or "repo"; print(os.path.join(os.environ["HOME"],".lore","cache","repo",n+"-"+hashlib.sha256(t.encode()).hexdigest()[:12]+".db"))'
+}
+
 isolate_home() {
     export HOME="$TMP/home"
     mkdir -p "$HOME"

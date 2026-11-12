@@ -24,14 +24,16 @@ import (
 // The org's second store, the client repo and the v0.1.17 rows
 // (placeholders).
 const (
-	jMergeTwoSlug  = "github.com/acme-co/notes-merge"
-	jMergeHubSlug  = "github.com/client-co/merge-hub"
-	jMergeFolder   = "client_m"
-	jMergeProject  = "prj_01a1cb5d817172998c6a1880a90a3001"
-	jMergeOldActor = "act_541757c158dc7fb58c1c338b0a603001"
-	jMergeTaskStem = "tsk_01a1cb5d849374588a71"
-	jMergeAnnActor = "act_541757c158dc7fb58c1c338b0a603002"
-	jMergeAnnStem  = "tsk_01a1cb5d849374588a73"
+	jMergeTwoSlug = "github.com/acme-co/notes-merge"
+	// jMergeStoreName is the second store's short name: its repo name
+	jMergeStoreName = "notes-merge"
+	jMergeHubSlug   = "github.com/client-co/merge-hub"
+	jMergeFolder    = "client_m"
+	jMergeProject   = "prj_01a1cb5d817172998c6a1880a90a3001"
+	jMergeOldActor  = "act_541757c158dc7fb58c1c338b0a603001"
+	jMergeTaskStem  = "tsk_01a1cb5d849374588a71"
+	jMergeAnnActor  = "act_541757c158dc7fb58c1c338b0a603002"
+	jMergeAnnStem   = "tsk_01a1cb5d849374588a73"
 	// jMergeAnnTasks name another actor: the merge leaves them, so their
 	// tasklist_id "" is doctor --fix's to repair.
 	jMergeAnnTasks = 40
@@ -96,12 +98,12 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		old := jPlainRepo(t, lee, w.Remote(jAdoptLegacySlug), filepath.Join(parent, "merge-app"))
 		jMergeLegacy(t, old)
 		lee.Lore(parent, "store", "adopt", tlOrg+"/"+jMergeFolder, "--from", old.Dir, "--yes").OK(t)
-		task0 := jMergeFolder + "/.lore/data/tasks/" + jAdoptID(jMergeTaskStem, 0) + ".json"
+		task0 := jMergeFolder + "/tasks/" + jAdoptID(jMergeTaskStem, 0) + ".json"
 		if doc, _ := two.Read(mainRef, task0); strings.Contains(doc, `"tasklist_id": ""`) || !strings.Contains(doc, jMergeOldActor) {
 			t.Fatalf("adopt kept tasklist_id \"\" (or lost the actor):\n%s", doc)
 		}
 		c := lee.Clone(two, "notes-merge-older")
-		for _, f := range two.FilesMatching(mainRef, jMergeFolder+"/.lore/data/tasks/") {
+		for _, f := range two.FilesMatching(mainRef, jMergeFolder+"/tasks/") {
 			doc, _ := two.Read(mainRef, f)
 			doc = strings.Replace(doc, `"project_id"`, `"tasklist_id": "", "project_id"`, 1) // what 0.1.18-dev wrote
 			if strings.Contains(f, jAdoptID(jMergeTaskStem, jMergeTasks-1)) {
@@ -120,7 +122,7 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		r := lee.LoreIn(hub, "store", "folder", "list").OK(t)
 		t.Logf("store folder list:\n%s", r.Out())
 		out := r.Out()
-		head := "store " + two.SSHURL() + " folders:"
+		head := "store " + jMergeStoreName + " folders:" // the short name (brief 3.6)
 		if strings.Count(out, head) != 1 || strings.Count(out, "store "+tlOrg+" folders:") != 1 {
 			t.Errorf("each store must head its block once (%q, %q):\n%s", head, "store "+tlOrg+" folders:", out)
 		}
@@ -133,7 +135,7 @@ func TestJourneyFoldersMerge(t *testing.T) {
 
 	w.Step("day2/merge-the-old-id", func() {
 		into := tt.roster(t, tlLee)["human:"+tlLee.Email].ID
-		where := two.SSHURL() + "/" + jMergeFolder
+		where := jMergeStoreName + "/" + jMergeFolder
 		r := lee.LoreIn(hub, "actor", "merge", jMergeOldActor, into, "--dry-run").OK(t).
 			Says(t, fmt.Sprintf("%d rows would name %s", jMergeTasks, into), fmt.Sprintf("%s: %d to edit", where, jMergeTasks), "stores read: ", where).
 			Never(t, "stores read: repo, me, "+tlOrg+",")
@@ -166,7 +168,7 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		t.Logf("task show after the merge:\n%s", show.Out())
 		t.Logf("actor list after the merge:\n%s", lee.LoreIn(hub, "actor", "list").OK(t).Out())
 		// the roster keeps the merged id's mark, which reads follow
-		if got := tt.store.FilesMatching(mainRef, "org/.lore/data/actors/"+jMergeOldActor); len(got) != 1 {
+		if got := tt.store.FilesMatching(mainRef, "org/actors/"+jMergeOldActor); len(got) != 1 {
 			t.Errorf("the roster holds no marked row of the merged id: %v", got)
 		} else if doc, _ := tt.store.Read(mainRef, got[0]); !strings.Contains(doc, `"merged_into": "`+into+`"`) {
 			t.Errorf("the roster's row of the merged id has no merged_into:\n%s", doc)
@@ -188,7 +190,7 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		}
 		after := lee.LoreIn(hub, "doctor").Never(t, "empty_ref", "task_lead")
 		t.Logf("doctor after --fix:\n%s", after.Out())
-		for _, f := range two.FilesMatching(mainRef, jMergeFolder+"/.lore/data/tasks/") {
+		for _, f := range two.FilesMatching(mainRef, jMergeFolder+"/tasks/") {
 			if doc, _ := two.Read(mainRef, f); strings.Contains(doc, `": ""`) {
 				t.Errorf("%s still holds an empty-string ref", f)
 			}

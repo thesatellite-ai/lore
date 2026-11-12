@@ -23,14 +23,18 @@ Give each task a short title that says what to do. Add `--priority` (`low`, `med
 ```console
 # alice, in website
 $ lore task add "Send the invoice reminder before Friday's demo" --due 2026-11-06 --priority high
-✓ tsk_7a67…9504 — Send the invoice reminder before Friday's demo [high]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ tsk_2ad3…f891 — Send the invoice reminder before Friday's demo [high]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task add 'Fix the typo on the pricing page' --body 'The Pro plan says 9 a month; it should say 19.'
-✓ tsk_2ad3…f891 — Fix the typo on the pricing page [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+✓ tsk_162d…9666 — Fix the typo on the pricing page [medium]
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add 'Update the footer year'
-✓ tsk_162d…9666 — Update the footer year [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 — Update the footer year [medium]
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -45,9 +49,9 @@ The line `lore live: (live, pushed)` means lore shared the task at once: it put 
 ```console
 # alice, in website
 $ lore task list
-○ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
-○ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
-○ tsk_162d…9666 Update the footer year [medium]
+○ tsk_2ad3…f891 Send the invoice reminder before Friday's demo [high] due:2026-11-06
+○ tsk_162d…9666 Fix the typo on the pricing page [medium]
+○ tsk_54fe…28f2 Update the footer year [medium]
 ```
 <!-- /example -->
 
@@ -58,11 +62,12 @@ $ lore task list
 <!-- example: tasks#start -->
 ```console
 # alice, in website
-$ lore task start tsk_2ad3…f891
-✓ tsk_2ad3…f891 started
-lore live: (live, pushed)
+$ lore task start tsk_162d…9666
+lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+✓ tsk_162d…9666 started
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ lore task list --status in_progress
-▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
+▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
 ```
 <!-- /example -->
 
@@ -73,14 +78,14 @@ $ lore task list --status in_progress
 <!-- example: tasks#show -->
 ```console
 # alice, in website
-$ lore task show tsk_2ad3…f891
-tsk_2ad3…f891
+$ lore task show tsk_162d…9666
+tsk_162d…9666
   title:    Fix the typo on the pricing page
   status:   in_progress
   priority: medium
   commit:   accepted
 The Pro plan says 9 a month; it should say 19.
-created 2026-11-02T10:00:10Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
+created 2026-11-02T10:00:10Z by act_05e9…4603 · updated 2026-11-02T10:00:25Z by act_05e9…4603
 ```
 <!-- /example -->
 
@@ -91,17 +96,18 @@ created 2026-11-02T10:00:10Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z 
 <!-- example: tasks#edit -->
 ```console
 # alice, in website
-$ lore task edit tsk_162d…9666 --priority low --due 2026-11-20 --title 'Update the footer year to 2027'
-✓ tsk_162d…9666 updated
-lore live: (live, pushed)
-$ lore task show tsk_162d…9666
-tsk_162d…9666
+$ lore task edit tsk_54fe…28f2 --priority low --due 2026-11-20 --title 'Update the footer year to 2027'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 updated
+lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
+$ lore task show tsk_54fe…28f2
+tsk_54fe…28f2
   title:    Update the footer year to 2027
   status:   todo
   priority: low
   commit:   accepted
   due:      2026-11-20
-created 2026-11-02T10:00:15Z by act_54fe…28f2 · updated 2026-11-02T10:00:40Z by act_54fe…28f2
+created 2026-11-02T10:00:15Z by act_05e9…4603 · updated 2026-11-02T10:00:40Z by act_05e9…4603
 ```
 <!-- /example -->
 
@@ -112,18 +118,20 @@ created 2026-11-02T10:00:15Z by act_54fe…28f2 · updated 2026-11-02T10:00:40Z 
 <!-- example: tasks#done -->
 ```console
 # alice, in website
-$ lore task done tsk_7a67…9504 --lesson 'The client pays faster when the reminder goes out two days before the demo'
-✓ tsk_7a67…9504 done
-  lesson → mem_05e9…4603
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+$ lore task done tsk_2ad3…f891 --lesson 'The client pays faster when the reminder goes out two days before the demo'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
+✓ tsk_2ad3…f891 done
+  lesson → mem_c0f3…b5b8
+lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
+lore live: landed on main (df3a55c); leaves live once main is fetched
 $ lore task list
-▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
-○ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
+▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
+○ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
 $ lore task list --all
-✓ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
-▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
-○ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
+✓ tsk_2ad3…f891 Send the invoice reminder before Friday's demo [high] due:2026-11-06
+▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
+○ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
 ```
 <!-- /example -->
 
@@ -139,11 +147,11 @@ When a task is done, lore writes it into `main` on GitHub by itself ("landed on 
 ```console
 # alice, in website
 $ lore task search pricing
-tsk_2ad3…f891 [in_progress] Fix the typo on the pricing page
+tsk_162d…9666 [in_progress] Fix the typo on the pricing page
 $ lore task search invoice
 (no matches)
 $ lore task search invoice --all
-tsk_7a67…9504 [done] Send the invoice reminder before Friday's demo
+tsk_2ad3…f891 [done] Send the invoice reminder before Friday's demo
 ```
 <!-- /example -->
 
@@ -154,13 +162,14 @@ Cancel a task you will not do. It stays in the history, so you can still find it
 <!-- example: tasks#cancel -->
 ```console
 # alice, in website
-$ lore task cancel tsk_162d…9666
-✓ tsk_162d…9666 cancelled
-lore live: (live, pushed)
-lore live: landed on main (86dbae4); leaves live once main is fetched
+$ lore task cancel tsk_54fe…28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 cancelled
+lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
+lore live: landed on main (34ee210); leaves live once main is fetched
 lore live: 2 row(s) left live (main holds them)
 $ lore task list --status cancelled
-✗ tsk_162d…9666 Update the footer year to 2027 [low] due:2026-11-20
+✗ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
 ```
 <!-- /example -->
 
@@ -170,16 +179,18 @@ Delete only removes a task for good, with no undo. lore asks first (without a te
 ```console
 # alice, in website
 $ lore task add 'Test task, please ignore'
-✓ tsk_c0f3…b5b8 — Test task, please ignore [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+✓ tsk_76bd…3f10 — Test task, please ignore [medium]
+lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore task delete tsk_c0f3…b5b8
-ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3…b5b8 Test task, please ignore?
+$ lore task delete tsk_76bd…3f10
+ERROR: [E_NEEDS_CONFIRM] delete task tsk_76bd…3f10 Test task, please ignore?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore task delete tsk_c0f3…b5b8 --yes
-✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore tsk_c0f3…b5b8)
-lore live: (live, pushed)
+$ lore task delete tsk_76bd…3f10 --yes
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+✓ tsk_76bd…3f10 moved to the trash (restore: lore trash restore tsk_76bd…3f10)
+lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -193,18 +204,20 @@ Some work has an order: you cannot send the welcome email before you write it. `
 ```console
 # alice, in website
 $ lore task add 'Write the welcome email'
-✓ tsk_76bd…3f10 — Write the welcome email [medium]
-lore live: (live, pushed)
-$ lore task add 'Send the welcome email' --after tsk_76bd…3f10
-✓ tsk_d431…313a — Send the welcome email [medium]
-lore live: (live, pushed)
-$ lore task show tsk_d431…313a
-tsk_d431…313a
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
+✓ tsk_d431…313a — Write the welcome email [medium]
+lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
+$ lore task add 'Send the welcome email' --after tsk_d431…313a
+lore: wrote ~/work/website/.lore/data/tasks/tsk_b4f4…a5b0.json
+✓ tsk_b4f4…a5b0 — Send the welcome email [medium]
+lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
+$ lore task show tsk_b4f4…a5b0
+tsk_b4f4…a5b0
   title:    Send the welcome email
   status:   todo
   priority: medium
   commit:   accepted
-created 2026-11-02T10:01:50Z by act_54fe…28f2 · updated 2026-11-02T10:01:50Z by act_54fe…28f2
+created 2026-11-02T10:01:50Z by act_05e9…4603 · updated 2026-11-02T10:01:50Z by act_05e9…4603
 ```
 <!-- /example -->
 
@@ -213,8 +226,8 @@ A task can never wait on itself, not even through other tasks. lore refuses such
 <!-- example: tasks#cycle -->
 ```console
 # alice, in website
-$ lore task edit tsk_76bd…3f10 --after tsk_d431…313a
-ERROR: [E_CYCLE] dependency cycle: tsk_76bd…3f10 → tsk_d431…313a → tsk_76bd…3f10
+$ lore task edit tsk_d431…313a --after tsk_b4f4…a5b0
+ERROR: [E_CYCLE] dependency cycle: tsk_d431…313a → tsk_b4f4…a5b0 → tsk_d431…313a
   hint: drop one --after edge; a task may not wait on itself, even through others
 (exit 19)
 ```
@@ -230,22 +243,26 @@ A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from
 ```console
 # alice, in website
 $ lore tasklist add --title 'Launch week' --body 'Everything that must happen before the shop opens'
-✓ tlt_b4f4…a5b0
-$ lore task add 'Check every link on the home page' --tasklist tlt_b4f4…a5b0
-✓ tsk_28f8…03df — Check every link on the home page [medium]
-lore live: (live, pushed)
-$ lore task edit tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
-✓ tsk_76bd…3f10 updated
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_28f8…03df.json
+✓ tlt_28f8…03df
+$ lore task add 'Check every link on the home page' --tasklist tlt_28f8…03df
+lore: wrote ~/work/website/.lore/data/tasks/tsk_4c59…6c38.json
+✓ tsk_4c59…6c38 — Check every link on the home page [medium]
+lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
+$ lore task edit tsk_d431…313a --tasklist tlt_28f8…03df
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
+✓ tsk_d431…313a updated
+lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
 $ lore tasklist list
-TA  tlt_4c59…6c38
-TA  tlt_b4f4…a5b0
+TA  tlt_7a67…9504
+TA  tlt_28f8…03df
 $ lore tasklist search launch
-tlt_b4f4…a5b0 Launch week
-$ lore tasklist edit tlt_b4f4…a5b0 --status closed
-✓ tasklist tlt_b4f4…a5b0 updated
-lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
+tlt_28f8…03df Launch week
+$ lore tasklist edit tlt_28f8…03df --status closed
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_28f8…03df.json
+✓ tasklist tlt_28f8…03df updated
+lore live: (live, pushed) commit 8c373dc to origin refs/lore/live
+lore live: landed on main (6f11034); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -260,13 +277,14 @@ lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```console
 # alice, in website
 $ lore task view add open_todo --where 'status:todo'
+lore: wrote ~/work/website/.lore/data/task_views/tvw_3b62…e913.json
 tvw_3b62…e913  open_todo  where "status:todo"
 $ lore task view list
 tvw_3b62…e913  open_todo  where "status:todo"
 $ lore task list --view open_todo
-○ tsk_76bd…3f10 Write the welcome email [medium]
-○ tsk_d431…313a Send the welcome email [medium]
-○ tsk_28f8…03df Check every link on the home page [medium]
+○ tsk_d431…313a Write the welcome email [medium]
+○ tsk_b4f4…a5b0 Send the welcome email [medium]
+○ tsk_4c59…6c38 Check every link on the home page [medium]
 ```
 <!-- /example -->
 
@@ -285,22 +303,22 @@ Here alice prints her open tasks as Markdown and as CSV:
 ```console
 # alice, in website
 $ lore task export --where 'status:todo' --format markdown
-- [ ] Write the welcome email (tsk_76bd…3f10)
-- [ ] Send the welcome email (tsk_d431…313a)
-- [ ] Check every link on the home page (tsk_28f8…03df)
+- [ ] Write the welcome email (tsk_d431…313a)
+- [ ] Send the welcome email (tsk_b4f4…a5b0)
+- [ ] Check every link on the home page (tsk_4c59…6c38)
 - [ ] Try a dark mode for the shop (tsk_f147…5139)
 - [ ] Add a FAQ page (tsk_2537…6bbb)
 - [ ] Renew the SSL certificate (tsk_b69e…5ed7)
 - [ ] Add a size guide (tsk_d191…45c2)
 $ lore task export --where 'status:todo' --format csv
 id,title,body,priority,commitment,due,defer_until,tasklist,mission,plan,role,tasklist_name,mission_name,plan_name,status,estimate,parent,lead,created_at,completed_at
-tsk_76bd…3f10,Write the welcome email,,medium,accepted,,,tlt_b4f4…a5b0,,,,Launch week,,,todo,,,,2026-11-02T10:01:45Z,
-tsk_d431…313a,Send the welcome email,,medium,accepted,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:01:50Z,
-tsk_28f8…03df,Check every link on the home page,,medium,accepted,,,tlt_b4f4…a5b0,,,,Launch week,,,todo,,,,2026-11-02T10:02:10Z,
-tsk_f147…5139,Try a dark mode for the shop,,medium,someday,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:02:50Z,
-tsk_2537…6bbb,Add a FAQ page,,medium,accepted,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:02:55Z,
-tsk_b69e…5ed7,Renew the SSL certificate,,medium,accepted,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:03:25Z,
-tsk_d191…45c2,Add a size guide,,high,accepted,,,tlt_4c59…6c38,,,,default,,,todo,,,,2026-11-02T10:06:00Z,
+tsk_d431…313a,Write the welcome email,,medium,accepted,,,tlt_28f8…03df,,,,Launch week,,,todo,,,,2026-11-02T10:01:45Z,
+tsk_b4f4…a5b0,Send the welcome email,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:01:50Z,
+tsk_4c59…6c38,Check every link on the home page,,medium,accepted,,,tlt_28f8…03df,,,,Launch week,,,todo,,,,2026-11-02T10:02:10Z,
+tsk_f147…5139,Try a dark mode for the shop,,medium,someday,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:02:50Z,
+tsk_2537…6bbb,Add a FAQ page,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:02:55Z,
+tsk_b69e…5ed7,Renew the SSL certificate,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:03:25Z,
+tsk_d191…45c2,Add a size guide,,high,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:06:00Z,
 ```
 <!-- /example -->
 
@@ -322,8 +340,10 @@ would import 2 tasks from csv (dry run, nothing written)
   T-1  Add a cookie banner
   T-2  Compress the product photos
 $ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
-✓ 2 tasks imported from csv (batch bat_9a34…b418)
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_bfed…eeea.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json
+✓ 2 tasks imported from csv (batch bat_67e2…291e)
+lore live: (live, pushed) commit 40bd5f4 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 $ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
   2 already imported, nothing added for them:
@@ -340,10 +360,10 @@ After the steps above, the open list holds the task in progress and the tasks st
 ```console
 # alice, in website
 $ lore task list
-▶ tsk_2ad3…f891 Fix the typo on the pricing page [medium]
-○ tsk_76bd…3f10 Write the welcome email [medium]
-○ tsk_d431…313a Send the welcome email [medium]
-○ tsk_28f8…03df Check every link on the home page [medium]
+▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
+○ tsk_d431…313a Write the welcome email [medium]
+○ tsk_b4f4…a5b0 Send the welcome email [medium]
+○ tsk_4c59…6c38 Check every link on the home page [medium]
 ```
 <!-- /example -->
 

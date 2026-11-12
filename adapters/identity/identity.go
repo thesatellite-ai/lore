@@ -212,6 +212,40 @@ func (r Resolved) ActorID() (ids.ID[ids.Actor], error) { return ActorID(r.ActorK
 // Stable reports whether the next run on this machine gets the same key.
 func (r Resolved) Stable() bool { return r.Step != StepEphemeral && r.StableKey != "" }
 
+// Person is the person r writes for: the owner of a detected agent, else
+// r itself. A git identity (a store clone's user.name/user.email, the
+// author lore commits as) is always the person's, never the agent's
+// (owner bug 12); the agent goes into commit trailers.
+func (r Resolved) Person() Resolved {
+	if r.Owner != nil {
+		return *r.Owner
+	}
+	return r
+}
+
+// PersonEmails are the e-mail addresses of Person: its key's and its
+// earlier keys' (aliases), lower case, without repeats.
+func (r Resolved) PersonEmails() []string {
+	p := r.Person()
+	var out []string
+	for _, k := range append([]string{p.StableKey}, p.Aliases...) {
+		kind, v, ok := strings.Cut(strings.TrimSpace(k), kindSep)
+		if !ok {
+			kind, v = KindHuman, k
+		}
+		v = strings.ToLower(strings.TrimSpace(v))
+		if kind == KindHuman && strings.Contains(v, "@") && !slices.Contains(out, v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// CommitEmailDomain is the non-routable domain of a commit e-mail lore
+// makes for a key that holds no address (an agent or CI key): such an
+// address in a store clone's git identity is never a person's.
+const CommitEmailDomain = commitEmailDomain
+
 // commitEmailDomain is the non-routable domain of a commit e-mail made for
 // a key that holds no address (agent:<label>, a machine key).
 const commitEmailDomain = "lore.invalid"

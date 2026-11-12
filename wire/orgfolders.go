@@ -37,8 +37,7 @@ import (
 // orgFolder is one folder of one of the org's stores.
 type orgFolder struct {
 	// Label names the store as store folder list does: the org's name for
-	// the store holding the org folder, else its url (redacted in quiet
-	// output, urlLabel).
+	// the store holding the org folder, else its short name (shortLabel).
 	Label  string
 	Folder string
 	ID     ids.ID[ids.Project]
@@ -68,7 +67,6 @@ func (a *App) orgFolders(ctx context.Context) orgFolderScan {
 		scan.Unread[orgStoresLabel] = err
 		return scan
 	}
-	orgOf := a.orgFolderStores()
 	orgOfAny := a.storeOrgs()
 	seen := map[string]bool{}
 	for _, e := range entries {
@@ -77,10 +75,7 @@ func (a *App) orgFolders(ctx context.Context) orgFolderScan {
 			continue
 		}
 		seen[k] = true
-		label := a.urlLabel(e.URL)
-		if sk, ok := storeKey(e.URL); ok && orgOf[sk] != "" {
-			label = orgOf[sk]
-		}
+		label := a.shortLabel(e.URL) // the org's name for the org folder's store
 		scan.Searched = append(scan.Searched, label)
 		dir, derr := a.storeDir(ctx, attach.Store{Name: store.Source(label), URL: e.URL, Branch: e.Branch})
 		if derr != nil {

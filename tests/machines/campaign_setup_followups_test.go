@@ -102,7 +102,7 @@ func TestCampaignSetup_PurgeLeavesNothingInMachineDB(t *testing.T) {
 func csMachineDBHits(t *testing.T, m *Machine, needles ...string) []string {
 	t.Helper()
 	var hits []string
-	for _, rel := range []string{filepath.Join(".lore", "state", "machine.db"), filepath.Join(".lore", "cache", "machine.db")} {
+	for _, rel := range []string{filepath.Join(".lore", "state", "machine.db"), filepath.Join(".lore", "cache", "machine-store.db")} {
 		path := filepath.Join(m.Home, rel)
 		if _, err := os.Stat(path); err != nil {
 			continue

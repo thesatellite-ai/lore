@@ -111,12 +111,12 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 		return opsstores.AdoptOut{}, errs.New(errs.Refused, adoptVerb+": "+folderName+" is the org folder of "+label+" (org_folder): it holds the org's roster, teams and lore-org.yaml, not a repo's notes").
 			WithHint("adopt into a client or project folder: lore store folder add " + name + " <folder>")
 	}
-	meta := filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(folderName)), rowfs.MetaFileName)
+	meta := filepath.Join(dir, filepath.FromSlash(rowfs.LayoutStore.StorePath(folderName, rowfs.MetaFileName)))
 	if _, serr := os.Stat(meta); errors.Is(serr, fs.ErrNotExist) {
 		return opsstores.AdoptOut{}, errs.New(errs.NotFound, adoptVerb+": "+label+" has no folder "+folderName+a.folderMissDetail(ctx)+"; nothing written").
 			WithHint("make it first: lore store folder add " + name + " " + folderName + " (`lore store folder list " + name + "` lists its folders)")
 	}
-	root, err := rowfs.Open(dir, a.opts.rowfsOptions()...)
+	root, err := rowfs.Open(dir, a.opts.storeRowfsOptions(dir)...)
 	if err != nil {
 		return opsstores.AdoptOut{}, err
 	}
@@ -168,7 +168,7 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 	if len(changes) > 0 {
 		subject := adoptSubject + folderName + " from " + filepath.Base(top) + " (" + plural(len(changes), "row") + ")"
 		pushed, note, cerr := a.commitStoreEdit(ctx, src, name, subject, func(dir string) ([]string, error) {
-			return adoptWrite(ctx, a.opts.rowfsOptions(), dir, folderName, changes)
+			return adoptWrite(ctx, a.opts.storeRowfsOptions(dir), dir, folderName, changes)
 		})
 		if cerr != nil {
 			return opsstores.AdoptOut{}, errs.Prefix(adoptVerb+": write "+label+"/"+folderName, cerr)
@@ -224,7 +224,7 @@ func (a *App) readAdoptSource(ctx context.Context, top string) ([]adoptRow, map[
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	root, err := rowfs.Open(top, a.opts.rowfsOptions()...)
+	root, err := rowfs.Open(top, a.opts.repoRowfsOptions()...)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -502,18 +502,32 @@ func adoptWrite(ctx context.Context, opts []rowfs.Option, dir, folderName string
 		}
 		return nil, err
 	}
-	paths := []string{rowfs.FolderDataPath(folderName)}
-	for _, p := range applied.Paths {
-		if !strings.HasPrefix(p, paths[0]+"/") {
-			paths = append(paths, p) // a file beside the folder's data (the store marker)
+	return commitPaths(f, applied.Paths), nil
+}
+
+// commitPaths turns the files a batch wrote into the folder f into few git
+// pathspecs: one per table folder that got rows (however many rows), and
+// every other file (the folder's _meta.json, the store marker) as it is.
+// A pathspec never names the folder itself: in a store that would also
+// take in the folders below it and a person's files.
+func commitPaths(f *rowfs.Folder, written []string) []string {
+	var paths []string
+	for _, p := range written {
+		spec := p
+		if rel, ok := f.FileRel(p); ok {
+			table, _, _ := rowfs.ParseRowPath(rel)
+			spec = f.Layout().StorePath(f.Name(), table.String())
+		}
+		if !slices.Contains(paths, spec) {
+			paths = append(paths, spec)
 		}
 	}
-	return paths, nil
+	return paths
 }
 
 // countPresent counts the adopted branch row files still in the repo.
 func countPresent(top string, adopted []store.Key) int {
-	data := filepath.Join(top, filepath.FromSlash(rowfs.FolderDataPath(rowfs.FolderRoot)))
+	data := filepath.Join(top, filepath.FromSlash(rowfs.LayoutRepo.DataPath(rowfs.FolderRoot)))
 	n := 0
 	for _, k := range adopted {
 		if regularFile(filepath.Join(data, filepath.FromSlash(rowfs.RowPath(k.Table, k.ID)))) {
@@ -527,7 +541,7 @@ func countPresent(top string, adopted []store.Key) int {
 // (--remove-source) and returns how many it deleted. A file already gone
 // counts nothing (a rerun finishes the job).
 func removeAdopted(top string, adopted []store.Key) (int, error) {
-	data := filepath.Join(top, filepath.FromSlash(rowfs.FolderDataPath(rowfs.FolderRoot)))
+	data := filepath.Join(top, filepath.FromSlash(rowfs.LayoutRepo.DataPath(rowfs.FolderRoot)))
 	n := 0
 	for _, k := range adopted {
 		p := filepath.Join(data, filepath.FromSlash(rowfs.RowPath(k.Table, k.ID)))

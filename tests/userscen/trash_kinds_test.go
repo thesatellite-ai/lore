@@ -201,7 +201,7 @@ func trashRender(t *testing.T, c *th.Clone) string {
 func trashStoreDir(tw *trashWorld, store string) string {
 	switch store {
 	case trashStoreMe:
-		return tw.a.LorePath("stores", "me")
+		return tw.a.LorePath("stores", "_me")
 	case trashStoreKB:
 		return "" // a git store: checked on its remote
 	}

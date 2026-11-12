@@ -47,11 +47,12 @@ $ git pull -q --rebase origin main && git push -q origin main
 <!-- example: tasks#link -->
 ```console
 # alice, in website
-$ lore link add --entity tsk_2ad3…f891 --commit HEAD
-✓ linked 05513aa2 → tasks/tsk_2ad3…f891  (cml_4f89…b64b)
+$ lore link add --entity tsk_162d…9666 --commit HEAD
+lore: wrote ~/work/website/.lore/data/commit_links/cml_4f89…b64b.json
+✓ linked b733d8a0 → tasks/tsk_162d…9666  (cml_4f89…b64b)
   message: Fix the Pro plan price on the pricing page
-$ lore link list --entity tsk_2ad3…f891
-cml_4f89…b64b  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
+$ lore link list --entity tsk_162d…9666
+cml_4f89…b64b  b733d8a0 → tasks/tsk_162d…9666 — Fix the Pro plan price on the pricing page
 ```
 <!-- /example -->
 
@@ -63,14 +64,14 @@ cml_4f89…b64b  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price o
 ```console
 # alice, in website
 $ lore commit-show $(git rev-parse HEAD)
-Commit 05513aa29b78 — 1 linked entities:
-  tasks/tsk_2ad3…f891
+Commit b733d8a0360e — 1 linked entities:
+  tasks/tsk_162d…9666
 $ lore commit-show HEAD
-Commit 05513aa29b78 — 1 linked entities:
-  tasks/tsk_2ad3…f891
+Commit b733d8a0360e — 1 linked entities:
+  tasks/tsk_162d…9666
 $ lore commit show $(git rev-parse HEAD)
-Commit 05513aa29b78 — 1 linked entities:
-  tasks/tsk_2ad3…f891
+Commit b733d8a0360e — 1 linked entities:
+  tasks/tsk_162d…9666
 ```
 <!-- /example -->
 
@@ -83,18 +84,19 @@ Commit 05513aa29b78 — 1 linked entities:
 <!-- example: tasks#done-with-commit -->
 ```console
 # alice, in website
-$ lore task done tsk_2ad3…f891 --commit $(git rev-parse HEAD) --no-lesson
-✓ tsk_2ad3…f891 done (commit 05513aa); waiting for merge
-lore live: (live, pushed)
-lore live: landed on main (dfd8dc8); leaves live once main is fetched
+$ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --no-lesson
+lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+✓ tsk_162d…9666 done (commit b733d8a); waiting for merge
+lore live: (live, pushed) commit 1833373 to origin refs/lore/live
+lore live: landed on main (59e9d31); leaves live once main is fetched
 $ lore sync
 lore live: 1 row(s) left live (main holds them)
-lore live: pushed waiting live writes
+lore live: pushed waiting live writes commit 7540e63 to origin refs/lore/live
 $ lore task list --status done
-✓ tsk_2ad3…f891 merged 10:04 (found by: ancestry, 05513aa)
-✓ tsk_7a67…9504 Send the invoice reminder before Friday's demo [high] due:2026-11-06
-✓ tsk_2ad3…f891 Fix the typo on the pricing page [medium]  ✓ done · merged 10:04
-lore live: landed on main (cf563f3); leaves live once main is fetched
+✓ tsk_162d…9666 merged 10:04 (found by: ancestry, b733d8a)
+✓ tsk_2ad3…f891 Send the invoice reminder before Friday's demo [high] due:2026-11-06
+✓ tsk_162d…9666 Fix the typo on the pricing page [medium]  ✓ done · merged 10:04
+lore live: landed on main (ef62c83); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -106,16 +108,19 @@ Sometimes lore cannot see the merge: the task has no commit, or the change reach
 ```console
 # alice, in website
 $ lore task add 'Shrink the hero image'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
 ✓ tsk_77cb…76c4 — Shrink the hero image [medium]
-lore live: (live, pushed)
+lore live: (live, pushed) commit dd85e7d to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 $ lore task done tsk_77cb…76c4 --no-lesson
+lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
 ✓ tsk_77cb…76c4 done
-lore live: (live, pushed)
-lore live: landed on main (df3a55c); leaves live once main is fetched
+lore live: (live, pushed) commit d18179e to origin refs/lore/live
+lore live: landed on main (f4b8da2); leaves live once main is fetched
 $ lore task merged tsk_77cb…76c4
+lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
 ✓ tsk_77cb…76c4 merged (marked by hand, 10:05)
-lore live: landed on main (6d00426); leaves live once main is fetched
+lore live: landed on main (70f4f88); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -129,12 +134,13 @@ Merged matters when another task waits for this one with `--after <id>:merged` (
 ```console
 # alice, in website
 $ lore link list
-cml_4f89…b64b  05513aa2 → tasks/tsk_2ad3…f891 — Fix the Pro plan price on the pricing page
+cml_4f89…b64b  b733d8a0 → tasks/tsk_162d…9666 — Fix the Pro plan price on the pricing page
 $ lore link remove cml_4f89…b64b
 ERROR: [E_NEEDS_CONFIRM] link remove cml_4f89…b64b?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore link remove cml_4f89…b64b --yes
+lore: wrote ~/work/website/.lore/data/commit_links/cml_4f89…b64b.json
 ✓ link cml_4f89…b64b removed
 ```
 <!-- /example -->
@@ -146,8 +152,9 @@ The shortest path from a commit to its task, using the commands above:
 <!-- example: tasks#link only=1 -->
 ```console
 # alice, in website
-$ lore link add --entity tsk_2ad3…f891 --commit HEAD
-✓ linked 05513aa2 → tasks/tsk_2ad3…f891  (cml_4f89…b64b)
+$ lore link add --entity tsk_162d…9666 --commit HEAD
+lore: wrote ~/work/website/.lore/data/commit_links/cml_4f89…b64b.json
+✓ linked b733d8a0 → tasks/tsk_162d…9666  (cml_4f89…b64b)
   message: Fix the Pro plan price on the pricing page
 ```
 <!-- /example -->

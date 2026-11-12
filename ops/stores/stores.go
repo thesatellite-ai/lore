@@ -69,7 +69,7 @@ type Manager interface {
 	// InitStore makes url a 0.1.18 store (marker with a new sto_ id; a git
 	// store gets one commit, pushed) unless it already is one, then records
 	// it: `me` in config.yaml, any other name in stores.yaml. An empty url
-	// is allowed only for `me` (a folder store at <home>/stores/me).
+	// is allowed only for `me` (a folder store at <home>/stores/_me).
 	InitStore(ctx context.Context, in InitIn) (InitOut, error)
 	// AddStore attaches an existing store to this repo (stores.yaml).
 	AddStore(ctx context.Context, in AddIn) (Entry, error)
@@ -84,7 +84,7 @@ type Manager interface {
 	// SetVisibility writes in.Visibility into the store's lore-store.yaml
 	// (a git store gets one commit, pushed). The op has already asked.
 	SetVisibility(ctx context.Context, in VisibilityIn) (VisibilityOut, error)
-	// AddFolder creates <folder>/.lore/data/_meta.json in the store (a git
+	// AddFolder creates <folder>/_meta.json in the store (a git
 	// store gets one commit, pushed); an existing folder is left as it is.
 	AddFolder(ctx context.Context, in FolderAddIn) (FolderAddOut, error)
 }
@@ -116,7 +116,7 @@ type Entry struct {
 // InitIn is the input of store.init.
 type InitIn struct {
 	Name       string `json:"name" arg:"0" desc:"the store's name in this repo (me = your personal store)"`
-	URL        string `json:"url,omitempty" arg:"1" desc:"git url or file:// path (optional for me: default file://~/.lore/stores/me)"`
+	URL        string `json:"url,omitempty" arg:"1" desc:"git url or file:// path (optional for me: default file://~/.lore/stores/_me)"`
 	Visibility string `json:"visibility,omitempty" flag:"visibility" desc:"internal (default) or shareable (CFG4)"`
 	// RepoOptional (callers only, never the CLI): run outside a repo too.
 	// The setup page's Start a team step makes the team store from wherever
@@ -134,7 +134,7 @@ type InitOut struct {
 	// Already is true when the url was already a 0.1.18 store.
 	Already bool `json:"already,omitempty"`
 	// Following names the setups that were on the default local folder
-	// ~/.lore/stores/me and now follow personal.store (store init me with
+	// ~/.lore/stores/_me and now follow personal.store (store init me with
 	// another url): a person has one personal store `me`.
 	Following []string `json:"following,omitempty"`
 }
@@ -255,7 +255,7 @@ var storeErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInval
 
 // MissingInitURL is the refusal of `lore store init <name>` without a url.
 // BATCH2 #9: every store but `me` needs a url (me keeps its default,
-// file://~/.lore/stores/me, per O7), and the error names exactly what is
+// file://~/.lore/stores/_me, per O7), and the error names exactly what is
 // missing and the usage (owner rule: exact errors), exit 20.
 func MissingInitURL(name string) error {
 	return errs.New(errs.InvalidInput, "store init "+name+": the store url is missing; usage: lore store init <name> <url> (only `"+PersonalName+"` has a default url)").
@@ -392,18 +392,9 @@ func Ops(m Manager) []op.Entry {
 				{Title: "outside any repo: the org's and the personal store of the setup this folder is in", CLI: "lore store list --setup agency", Want: "stores:"},
 			},
 		}, func(ctx context.Context, _ ListIn) (ListOut, error) {
-			got, err := m.ListStores(ctx)
+			got, err := ListEntries(ctx, m)
 			if err != nil {
 				return ListOut{}, err
-			}
-			if got == nil {
-				got = []Entry{}
-			}
-			ol, hasOrg := upgrade.As[OrgLister](m)
-			if hasOrg {
-				if got, err = withOrgStores(ctx, ol, got); err != nil {
-					return ListOut{}, err
-				}
 			}
 			// BRANCH is the effective branch of every spelling (PinnedBranch,
 			// shared with store.open), set before the status reads so a
@@ -510,6 +501,7 @@ func Ops(m Manager) []op.Entry {
 		folderRemoveOp(m),
 		adoptOp(m),
 		setURLOp(m),
+		useOp(m),
 	}, append(cloneOps(m), pushOps(m)...)...)
 }
 
@@ -522,6 +514,24 @@ type OrgLister interface {
 	// OrgStoreEntries lists the stores the repo's org brings, with their
 	// real urls and Source SourceOrg.
 	OrgStoreEntries(ctx context.Context) ([]Entry, error)
+}
+
+// ListEntries is the set of stores `lore store list` shows, in its
+// order: m's own list (stores.yaml, me), then the stores the org brings
+// when m lists them (OrgLister), the personal store last. `lore sync`
+// outside a repo syncs exactly this set (wire/syncsetup.go).
+func ListEntries(ctx context.Context, m Manager) ([]Entry, error) {
+	got, err := m.ListStores(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if got == nil {
+		got = []Entry{}
+	}
+	if ol, ok := upgrade.As[OrgLister](m); ok {
+		return withOrgStores(ctx, ol, got)
+	}
+	return got, nil
 }
 
 // withOrgStores appends the org's stores to got, skipping a name got
@@ -784,5 +794,5 @@ func WritesStoresFile(name string) bool { return name == OpInit || name == OpAdd
 // opening the attached stores (one unreachable store must not block
 // `lore store remove`).
 func IsStoreOp(name string) bool {
-	return slices.Contains([]string{OpInit, OpAdd, OpRemove, OpList, OpVisibility, OpFolderAdd, OpFolderList, OpSetURL}, name)
+	return slices.Contains([]string{OpInit, OpAdd, OpRemove, OpList, OpVisibility, OpFolderAdd, OpFolderList, OpSetURL, OpUse}, name)
 }

@@ -20,8 +20,10 @@ Alice (an agency developer) times how long fixing a typo on the client's pricing
 ```console
 # alice, in website
 $ lore task add 'Fix the typo on the pricing page'
-✓ tsk_7a67…9504 — Fix the typo on the pricing page [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ tsk_2ad3…f891 — Fix the typo on the pricing page [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -32,8 +34,8 @@ lore live: (live, pushed)
 <!-- example: runs#run-start -->
 ```console
 # alice, in website
-$ lore run start --task tsk_7a67…9504 --agent manual --goal 'Find and fix the wrong price'
-run_2ad3…f891 started
+$ lore run start --task tsk_2ad3…f891 --agent manual --goal 'Find and fix the wrong price'
+run_162d…9666 started
 ```
 <!-- /example -->
 
@@ -44,9 +46,10 @@ run_2ad3…f891 started
 <!-- example: runs#run-end -->
 ```console
 # alice, in website
-$ lore run end run_2ad3…f891 --outcome success --summary 'The price now says 19'
-run_2ad3…f891 ended  (10m 0s)
-lore live: (live, pushed)
+$ lore run end run_162d…9666 --outcome success --summary 'The price now says 19'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+run_162d…9666 ended  (10m 0s)
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -59,8 +62,8 @@ The `lore live` line is the task: ending the run wrote its ten minutes onto the 
 <!-- example: runs#task-time -->
 ```console
 # alice, in website
-$ lore task time show tsk_7a67…9504
-tsk_7a67…9504  Fix the typo on the pricing page   (todo)
+$ lore task time show tsk_2ad3…f891
+tsk_2ad3…f891  Fix the typo on the pricing page   (todo)
 effort   10m     elapsed  10m     manual  0m   (included in effort)
 WORKER                        AUTO      MANUAL    TOTAL     LAST
 alice                         10m       0m        10m       2026-11-02 10:10
@@ -77,9 +80,9 @@ Spans from runs, claims and status changes add up the same way: overlapping auto
 ```console
 # alice, in website
 $ lore run start --agent manual --goal 'Try a new logo colour'
-run_162d…9666 started
-$ lore run cancel run_162d…9666 --reason 'The client wants to keep the old logo'
-run_162d…9666 cancelled
+run_54fe…28f2 started
+$ lore run cancel run_54fe…28f2 --reason 'The client wants to keep the old logo'
+run_54fe…28f2 cancelled
 ```
 <!-- /example -->
 
@@ -90,12 +93,13 @@ Work done away from lore (a phone call, a meeting) is logged with `lore task tim
 <!-- example: runs#time-log -->
 ```console
 # alice, in website
-$ lore task time log tsk_7a67…9504 30m --note 'Call with the client about the prices'
-✓ logged tme_54fe…28f2  30m  for alice  on 2026-11-02
-  hint: this overlaps run time 2026-11-02T10:00:10.000Z to 2026-11-02T10:10:10.000Z (tme_05e9…4603); if it is the same work, remove one: lore task time rm tme_54fe…28f2
-lore live: (live, pushed)
-$ lore task time show tsk_7a67…9504
-tsk_7a67…9504  Fix the typo on the pricing page   (todo)
+$ lore task time log tsk_2ad3…f891 30m --note 'Call with the client about the prices'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ logged tme_05e9…4603  30m  for alice  on 2026-11-02
+  hint: this overlaps run time 2026-11-02T10:00:10.000Z to 2026-11-02T10:10:10.000Z (tme_c0f3…b5b8); if it is the same work, remove one: lore task time rm tme_05e9…4603
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+$ lore task time show tsk_2ad3…f891
+tsk_2ad3…f891  Fix the typo on the pricing page   (todo)
 effort   40m     elapsed  10m     manual  30m   (included in effort)
 WORKER                        AUTO      MANUAL    TOTAL     LAST
 alice                         10m       30m       40m       2026-11-02 10:10
@@ -111,11 +115,12 @@ The hint is lore noticing that the new entry overlaps the run's span. If both ar
 <!-- example: runs#time-edit -->
 ```console
 # alice, in website
-$ lore task time edit tme_54fe…28f2 --duration 45m
-✓ updated tme_54fe…28f2  manual  45m (was 30m)
-lore live: (live, pushed)
-$ lore task time show tsk_7a67…9504
-tsk_7a67…9504  Fix the typo on the pricing page   (todo)
+$ lore task time edit tme_05e9…4603 --duration 45m
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ updated tme_05e9…4603  manual  45m (was 30m)
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
+$ lore task time show tsk_2ad3…f891
+tsk_2ad3…f891  Fix the typo on the pricing page   (todo)
 effort   55m     elapsed  10m     manual  45m   (included in effort)
 WORKER                        AUTO      MANUAL    TOTAL     LAST
 alice                         10m       45m       55m       2026-11-02 10:25
@@ -127,12 +132,14 @@ alice                         10m       45m       55m       2026-11-02 10:25
 <!-- example: runs#time-rm-and-restore -->
 ```console
 # alice, in website
-$ lore task time rm tme_54fe…28f2 --yes
-✓ removed tme_54fe…28f2
-lore live: (live, pushed)
-$ lore task time restore tme_54fe…28f2
-✓ restored tme_54fe…28f2
-lore live: (live, pushed)
+$ lore task time rm tme_05e9…4603 --yes
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ removed tme_05e9…4603
+lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
+$ lore task time restore tme_05e9…4603
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ restored tme_05e9…4603
+lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -143,19 +150,21 @@ While a task is `in_progress`, time runs for whoever started it. `lore task time
 <!-- example: runs#time-stop -->
 ```console
 # alice, in website
-$ lore task start tsk_7a67…9504
-✓ tsk_7a67…9504 started
-lore live: (live, pushed)
-$ lore task time stop tsk_7a67…9504
-✓ stopped your time on tsk_7a67…9504  (20m, entry tme_c0f3…b5b8); status stays in_progress
-lore live: (live, pushed)
-$ lore task time show tsk_7a67…9504
-tsk_7a67…9504  Fix the typo on the pricing page   (in_progress)
+$ lore task start tsk_2ad3…f891
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ tsk_2ad3…f891 started
+lore live: (live, pushed) commit df3a55c to origin refs/lore/live
+$ lore task time stop tsk_2ad3…f891
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ stopped your time on tsk_2ad3…f891  (20m, entry tme_76bd…3f10); status stays in_progress
+lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
+$ lore task time show tsk_2ad3…f891
+tsk_2ad3…f891  Fix the typo on the pricing page   (in_progress)
 effort   1h 15m     elapsed  30m     manual  45m   (included in effort)
 WORKER                        AUTO      MANUAL    TOTAL     LAST
 alice                         30m       45m       1h 15m    2026-11-02 10:31
-$ lore task show tsk_7a67…9504 | head -4
-tsk_7a67…9504
+$ lore task show tsk_2ad3…f891 | head -4
+tsk_2ad3…f891
   title:    Fix the typo on the pricing page
   status:   in_progress
   priority: medium
@@ -175,8 +184,8 @@ The commands and their output are written to `tests/docs/transcripts/runs.txt`. 
 <!-- example: runs#time-stop only=3 -->
 ```console
 # alice, in website
-$ lore task time show tsk_7a67…9504
-tsk_7a67…9504  Fix the typo on the pricing page   (in_progress)
+$ lore task time show tsk_2ad3…f891
+tsk_2ad3…f891  Fix the typo on the pricing page   (in_progress)
 effort   1h 15m     elapsed  30m     manual  45m   (included in effort)
 WORKER                        AUTO      MANUAL    TOTAL     LAST
 alice                         30m       45m       1h 15m    2026-11-02 10:31

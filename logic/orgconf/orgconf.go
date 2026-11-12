@@ -31,12 +31,14 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // Names fixed by v0.1.17's config format.
@@ -90,6 +92,8 @@ type Config struct {
 	// other keys are validated.
 	Live      Live      `yaml:"live,omitempty"`
 	LinkIndex LinkIndex `yaml:"link_index,omitempty"`
+	// Access is how this machine reaches canonical store urls (access.go).
+	Access []Access `yaml:"access,omitempty"`
 	// Settings are the machine's other keys, validated only (machine.go).
 	Settings `yaml:",inline"`
 }
@@ -143,6 +147,9 @@ type OrgIdentity struct {
 // Store is one item of an entry's `stores:` (D10, F13).
 type Store struct {
 	URL string `yaml:"url"`
+	// Name is the store's short name (storename.go); empty means the repo
+	// name of URL without ".git".
+	Name string `yaml:"name,omitempty"`
 	// Branch is the store branch; empty means DefaultStoreBranch.
 	Branch string `yaml:"branch,omitempty"`
 	// OrgFolder marks the store holding the roster and company rules; "."
@@ -386,6 +393,7 @@ func (c *Config) Validate() error {
 		add(fmt.Errorf("identity.handle %q: use lowercase letters, digits, '_' or '-' (no '@')", h))
 	}
 	all = append(all, c.validateSettings()...)
+	all = append(all, validateAccess(c.Access)...)
 	seen := map[string]int{}
 	for i := range c.Orgs {
 		o := &c.Orgs[i]
@@ -465,6 +473,7 @@ func (o *Org) validate() []error {
 			}
 		}
 	}
+	all = append(all, CheckShortNames(o.shortNameStores(), OrgFileName)...)
 	if orgFolders > 1 {
 		add(fmt.Errorf("stores: org_folder is set on %d stores; at most one store per entry holds the roster and company rules", orgFolders))
 	}
@@ -546,12 +555,25 @@ func ValidateFolderName(name string) error {
 		return errors.New("must be a folder name, not a relative path")
 	case !folderRe.MatchString(name):
 		return errors.New("one folder name: letters, digits, '.', '_' or '-' (no '/')")
+	case tableNames()[name]:
+		// inside a store a folder's rows sit at <folder>/<table>/<id>.json
+		// (D-d), so a folder named like a table could not be told from one
+		return fmt.Errorf("%q is the name of a table; inside a store a folder's rows sit at <folder>/<table>/<id>.json, so a folder may not be called like a table: pick another name (e.g. %s-notes)", name, name)
 	}
 	if why := windowsUnsafeName(name); why != "" {
 		return errors.New(why)
 	}
 	return nil
 }
+
+// tableNames is the set of table names (schema.Builtin), built once.
+var tableNames = sync.OnceValue(func() map[string]bool {
+	out := map[string]bool{}
+	for _, d := range schema.Builtin() {
+		out[d.Name.String()] = true
+	}
+	return out
+})
 
 // ValidateHumanKey checks a person's identity key: human:<email> (TEAM-029).
 func ValidateHumanKey(key string) error {

@@ -9,7 +9,8 @@ package userscen
 //   - what the clone already holds: nothing, the bare `lore merge-driver …`,
 //     an absolute path to a lore that exists, an absolute path to a lore
 //     that was deleted, and a value that is not a lore driver at all;
-//   - the command: an ordinary one (`lore check leaks`), `lore init` (in a
+//   - the command: an ordinary write (`lore memory add`; a read wires
+//     nothing at all, owner bug 6), `lore init` (in a
 //     fresh clone whose config already holds the value) and the repair
 //     step `lore doctor --fix`;
 //   - the binary running it: the `lore` on PATH, a scratch copy not on PATH
@@ -158,7 +159,7 @@ func mergeDriverCase(t *testing.T, runner mdRunner, kind mdKind) {
 		}
 		switch kind {
 		case mdCheck:
-			c.MustLore("check", "leaks")
+			c.MustLore("memory", "add", "--body", "the merge driver matrix case") // an ordinary write: a read wires nothing (owner bug 6)
 		case mdInit:
 			c.MustLore("init", "--non-interactive", "--name=site-"+ex.String())
 		case mdRepair:

@@ -50,7 +50,7 @@ func newFixture(t *testing.T) fixture {
 	}
 	f.v017Kept = write(prj.String()+v017CacheExt, 5)
 	f.v017Orphan = write(other.String()+v017CacheExt, 7)
-	write("machine.db", 3) // the machine store's cache: never a v0.1.17 cache
+	write("machine-store.db", 3) // the machine store's cache: never a v0.1.17 cache
 
 	// The live repo: stores.yaml names only "acme"; its v0.1.17 marker
 	// names prj.
@@ -151,7 +151,7 @@ func TestPruneAsksThenDeletes(t *testing.T) {
 			t.Fatalf("%s still there", rel)
 		}
 	}
-	for _, rel := range []string{f.kept, f.v017Kept, "machine.db"} {
+	for _, rel := range []string{f.kept, f.v017Kept, "machine-store.db"} {
 		if !exists(t, f.root, rel) {
 			t.Fatalf("%s was deleted", rel)
 		}

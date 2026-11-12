@@ -20,8 +20,11 @@ The mistake, and what the client sees:
 ```console
 # alice, in website
 $ lore task add 'chase the client about the unpaid March invoice' --to repo
+lore task add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
+lore: wrote 3 row file(s) in ~/work/website/.lore/data
 ✓ tsk_7a67…9504 — chase the client about the unpaid March invoice [medium]
-lore live: (live, pushed)
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 
 # carol, in app
 $ lore sync >/dev/null; lore task list
@@ -36,14 +39,14 @@ The cleanup has two steps. `lore live purge <id> --confirm` removes the row from
 # alice, in website
 $ lore live purge tsk_7a67…9504 --confirm
 ✓ purged tsk_7a67…9504 from live; run `lore live compact` to drop them from the ref's history too
-lore live: (live, pushed)
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore live compact --dry-run
 refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2
 $ lore live compact
 ✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
 epoch 2
-601d285 2026-11-02 alice  lore: live compact (epoch 2)
+9b40ce7 2026-11-02 alice  lore: live compact (epoch 2)
 
 # carol, in app
 $ lore sync >/dev/null; lore task list

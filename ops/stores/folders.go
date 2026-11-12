@@ -24,7 +24,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 )
@@ -121,8 +123,8 @@ func IsStoreURL(arg string) bool {
 }
 
 // CheckStoreArg checks the store argument of the commands that write or
-// read one store (store folder add|list): team, me, a store name, or an
-// org store's url (whose scheme must have a backend). Which store it is,
+// read one store (store folder add|list): team, me, a store name, an org
+// store's short name, or an org store's url (whose scheme must have a backend). Which store it is,
 // and whether it needs a repo here, the Manager answers.
 func CheckStoreArg(arg string) error {
 	switch {
@@ -130,6 +132,8 @@ func CheckStoreArg(arg string) error {
 		return nil
 	case IsStoreURL(arg):
 		return CheckScheme(arg)
+	case !row.ValidName(arg) && orgconf.ValidateStoreShortName(arg) == nil:
+		return nil // an org store's short name (lore-x); the Manager finds it
 	}
 	return CheckName(arg, true)
 }
@@ -154,7 +158,7 @@ func LeavesRepo(name string) bool {
 // never the repo's .lore/stores.yaml. init, add, remove and set-url write
 // that file and keep needing a repo (`store init me` excepted, see wire).
 func RunsWithoutRepo(name string) bool {
-	return slices.Contains([]string{OpList, OpVisibility, OpFolderAdd, OpFolderList, OpFolderRemove, OpAdopt, OpSet, OpCompact}, name)
+	return slices.Contains([]string{OpList, OpVisibility, OpFolderAdd, OpFolderList, OpFolderRemove, OpAdopt, OpSet, OpCompact, OpUse}, name)
 }
 
 // noneShown fills an empty column of the folder table.

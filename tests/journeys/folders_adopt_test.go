@@ -169,14 +169,14 @@ func TestJourneyFoldersAdopt(t *testing.T) {
 		if n := tt.store.CommitCount(mainRef); n != commits+1 {
 			t.Errorf("adopt made %d store commits, want exactly one", n-commits)
 		}
-		files = tt.store.FilesMatching(mainRef, jAdoptFolder+"/.lore/data/")
+		files = tt.store.FilesMatching(mainRef, jAdoptFolder+"/")
 		if got := len(slices.DeleteFunc(slices.Clone(files), func(p string) bool { return !strings.Contains(p, "/memories/") })); got != jAdoptMemories {
 			t.Errorf("the folder holds %d memories, want %d", got, jAdoptMemories)
 		}
 		// ids and HLCs kept: the live mission keeps its stamp's time and
 		// the bare "agent" writer is a stable actor; the row belongs to
 		// the folder's project
-		doc, ok := tt.store.Read(mainRef, jAdoptFolder+"/.lore/data/missions/"+jAdoptMission+".json")
+		doc, ok := tt.store.Read(mainRef, jAdoptFolder+"/missions/"+jAdoptMission+".json")
 		if !ok || !strings.Contains(doc, `"_hlc": "2026-11-03T14:44:58.429Z/0000/act_`) || strings.Contains(doc, jAdoptProject) {
 			t.Errorf("the adopted mission: %s", doc)
 		}
@@ -192,7 +192,7 @@ func TestJourneyFoldersAdopt(t *testing.T) {
 		if n := tt.store.CommitCount(mainRef); n != commits+1 {
 			t.Errorf("a second adopt committed (%d commits since day 2)", n-commits)
 		}
-		if again := tt.store.FilesMatching(mainRef, jAdoptFolder+"/.lore/data/"); !slices.Equal(again, files) {
+		if again := tt.store.FilesMatching(mainRef, jAdoptFolder+"/"); !slices.Equal(again, files) {
 			t.Errorf("a second adopt changed the folder's files: %d → %d", len(files), len(again))
 		}
 	})

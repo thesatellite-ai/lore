@@ -12,11 +12,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -64,7 +67,7 @@ func pushRes(t *testing.T) *OrgResolution {
 
 func TestStorePushWrapsOnlyRemoteStores(t *testing.T) {
 	t.Parallel()
-	remote := &fakePushBackend{caps: store.Capabilities{Remote: true}, dir: "/x/clone/work"}
+	remote := &fakePushBackend{caps: store.Capabilities{Remote: true}, dir: "/x/stores/acme/notes"}
 	local := &fakePushBackend{}
 	cases := []struct {
 		name string
@@ -91,7 +94,7 @@ func TestStorePushWrapsOnlyRemoteStores(t *testing.T) {
 				}
 				return
 			}
-			if sp.Unwrap() != tc.b || sp.stateDir != filepath.FromSlash("/x/clone") {
+			if sp.Unwrap() != tc.b || sp.stateDir != filepath.FromSlash("/x/stores/acme/notes/.git/lore") {
 				t.Fatalf("unwrap/stateDir wrong: %q", sp.stateDir)
 			}
 		})
@@ -226,16 +229,82 @@ func TestStorePushRefresh(t *testing.T) {
 	}
 }
 
-// TestStorePushFailureClearsStamp (item 8): a push that fails clears the
-// fetch stamp, so the next command's first read syncs (and pushes) at
-// once; a push that lands keeps it.
-func TestStorePushFailureClearsStamp(t *testing.T) {
+// TestStorePushRefreshMergesFetchedCommits: a clone whose fetch stamp is
+// fresh but whose tracking ref holds a teammate's commit its branch never
+// merged (the fetch moved only the tracking ref: a plain `git fetch` in the
+// clone, or another reader that fetches the same clone and stamps it)
+// syncs at the command's first read, so the teammate's row is found.
+// Before, the fresh stamp skipped the sync and a teammate's task was "no
+// such task" until the stamp aged past live.fetch_ttl (team docs example
+// team_ops: bob's `lore task claim` of alice's task). Break-verified by
+// dropping the hasUnpulled check in refresh (the Get answers not found).
+func TestStorePushRefreshMergesFetchedCommits(t *testing.T) {
+	t.Parallel()
+	ctx := background()
+	root := t.TempDir()
+	bare := filepath.Join(root, "notes.git")
+	seed := filepath.Join(root, "seed")
+	spGit(t, root, "init", "-q", "--bare", "-b", "main", bare)
+	spGit(t, root, "init", "-q", "-b", "main", seed)
+	id, err := ids.New[ids.Store]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker, err := rowfs.Marker{ID: id}.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(seed, rowfs.MarkerFile), marker, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	spGit(t, seed, "add", rowfs.MarkerFile)
+	spGit(t, seed, "commit", "-q", "-m", "init")
+	spGit(t, seed, "push", "-q", bare, "main")
+	open := func(name string) *gitbackend.Backend {
+		b, err := gitbackend.OpenClone(ctx, bare, filepath.Join(root, name, "clones", "host", "notes"), rowfs.FolderRoot, store.OpenOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = b.Close() })
+		return b
+	}
+	alice, bob := open("alice"), open("bob")
+	r := cloneTestRow(t)
+	if err := alice.Write(ctx, []store.Change{{Row: r}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := alice.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// bob's clone fetches alice's commit into its tracking ref only, and
+	// its stamp says it fetched just now.
+	spGit(t, bob.Dir(), "fetch", "-q", "origin")
+	state := t.TempDir()
+	if err := live.WriteFetchStamp(state, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	b := &storePush{inner: bob, name: "notes", res: pushRes(t), stateDir: state, notes: &bytes.Buffer{}}
+	if _, err := b.Get(ctx, r.Table, r.ID); err != nil {
+		t.Fatalf("alice's row, fetched but not merged, was not read: %v", err)
+	}
+	if n, err := bob.Unpulled(ctx); err != nil || n != 0 {
+		t.Fatalf("after the read bob's clone is still %d commit(s) behind (%v)", n, err)
+	}
+}
+
+// TestStorePushFailureKeepsStamp (item 8, STORE layout 2026-11-12): a
+// push that fails leaves the fetch stamp as it was — it is the clone's one
+// "last fetched" (.git/lore/fetch-stamp), which the org link index's
+// max-age rule reads too, so clearing it made a mere offline push turn the
+// link status unknown — and says the next command pushes (refresh retries
+// while commits wait, whatever the stamp); a push that lands keeps it.
+func TestStorePushFailureKeepsStamp(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name    string
-		rep     store.SyncReport
-		err     error
-		cleared bool
+		name   string
+		rep    store.SyncReport
+		err    error
+		failed bool
 	}{
 		{"pushed", store.SyncReport{Sent: 1}, nil, false},
 		{"offline", store.SyncReport{Offline: true}, nil, true},
@@ -254,10 +323,10 @@ func TestStorePushFailureClearsStamp(t *testing.T) {
 			if err := b.Write(background(), nil); err != nil {
 				t.Fatal(err)
 			}
-			if got := live.FetchStamp(dir).IsZero(); got != tc.cleared {
-				t.Fatalf("stamp cleared = %v, want %v", got, tc.cleared)
+			if live.FetchStamp(dir).IsZero() {
+				t.Fatal("the push cleared the clone's fetch stamp")
 			}
-			if tc.cleared && !strings.Contains(notes.String(), "the next lore command that reaches the store pushes it, or run `lore sync`") {
+			if tc.failed && !strings.Contains(notes.String(), "run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)") {
 				t.Fatalf("note %q", notes.String())
 			}
 		})

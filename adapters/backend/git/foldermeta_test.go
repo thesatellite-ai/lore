@@ -12,7 +12,7 @@ import (
 )
 
 // orgMeta is the org folder's _meta.json path in a store.
-const orgMeta = rowfs.FolderOrg + "/.lore/data/" + rowfs.MetaFileName
+const orgMeta = rowfs.FolderOrg + "/" + rowfs.MetaFileName
 
 // linkedMeta is a v0.1.17 `lore org link` _meta.json (v1, links[]).
 // It already declares the 0.1.18 row format (hlc), so the first core

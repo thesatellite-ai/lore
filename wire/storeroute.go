@@ -30,12 +30,35 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 )
 
 // storeRoute is the git args and env that reach store url as the setup
 // that owns it (see the file comment); ok is false when no setup owns it
 // or the owners disagree, and then args and env are empty.
 func storeRoute(ctx context.Context, home, dir, storeURL string) (args, env []string, ok bool) {
+	args, env, ok = ownerRoute(ctx, home, dir, storeURL)
+	// brief 3.7: this machine's access rules (config.yaml access:) map a
+	// canonical url to the person's own spelling, whoever owns the store
+	if acc := orgconf.AccessArgs(accessRules(home), strings.TrimSpace(storeURL)); len(acc) > 0 {
+		return append(acc, args...), env, true
+	}
+	return args, env, ok
+}
+
+// accessRules is config.yaml's access: rules (none when the file does not
+// read: every command refuses a broken config.yaml anyway).
+func accessRules(home string) []orgconf.Access {
+	cfg, _, err := orgcfg.LoadConfig(home)
+	if err != nil || cfg == nil {
+		return nil
+	}
+	return cfg.Access
+}
+
+// ownerRoute is the route of the setup that owns storeURL (see the file
+// comment).
+func ownerRoute(ctx context.Context, home, dir, storeURL string) (args, env []string, ok bool) {
 	owners := storeOwners(home, storeURL)
 	if len(owners) == 0 {
 		return nil, nil, false

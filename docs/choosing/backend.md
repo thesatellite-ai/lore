@@ -8,10 +8,10 @@
 |---|---|---|---|---|
 | **The repo** (always there) | `lore init`; every write without `--to` | writes `.lore/data/<table>/<id>.json` in your checkout and never commits: you commit the files with your code | everyone who can read the repo | `.lore/lore-cache.db`, listed in `.gitignore` |
 | **Folder store** | `lore store init <name> file:///<absolute path>`, then `--to <name>` | writes the same files under `<folder>/.lore/data`, with no git and no network | only people on this machine | `~/.lore/cache/stores/<store id>/local/<folder>.db` |
-| **Git store** | `lore store init <name> git@github.com:acme/notes` (or `ssh://`, `https://`, `http://`), then `--to <name>` or `lore org link` | keeps a clone under `~/.lore/clones/<host>/<owner>/<repo>`, makes one commit per write and pushes it at once; fetches again when the last fetch is older than `live.fetch_ttl` (60 seconds) | everyone GitHub lets open that repo | `~/.lore/cache/stores/<store id>/<branch>/<folder>.db` |
-| **Personal store `me`** | `personal.store` in `~/.lore/config.yaml`; `lore store init me` with no address makes `file://~/.lore/stores/me` | a folder store or a git store, as its address says; `--to me` writes there | only you | as for its kind |
+| **Git store** | `lore store init <name> git@github.com:acme/notes` (or `ssh://`, `https://`, `http://`), then `--to <name>` or `lore org link` | keeps a plain git clone at `~/.lore/stores/<owner>/<repo>` (or your own clone: `lore store use <path>`), makes one commit per write and pushes it at once; fetches again when the last fetch is older than `live.fetch_ttl` (60 seconds) | everyone GitHub lets open that repo | `~/.lore/cache/stores/<store id>/<branch>/<folder>.db` |
+| **Personal store `me`** | `personal.store` in `~/.lore/config.yaml`; `lore store init me` with no address makes `file://~/.lore/stores/_me` | a folder store or a git store, as its address says; `--to me` writes there | only you | as for its kind |
 | **Live list** of the repo | `--live`, and tasks, missions, handoffs and comments by default | rows on the hidden ref `refs/lore/live` of the repo's own remote, pushed and fetched by lore | everyone who can clone the repo | the repo cache |
-| **Machine store** (automatic) | nothing: runs, sessions and other rows that only mean something on this machine | `~/.lore/state/machine.db`, never synced | only this machine | `~/.lore/cache/machine.db` |
+| **Machine store** (automatic) | nothing: runs, sessions and other rows that only mean something on this machine | `~/.lore/state/machine.db`, never synced | only this machine | `~/.lore/cache/machine-store.db` |
 
 Both file backends lay rows out byte for byte the same way (`<store root>/<folder>/.lore/data/<table>/<id>.json`, plus a `lore-store.yaml` marker at the root of a store), so a folder store and a git store differ only in how the files travel. The older shared-database setup (v0.1.17 "Mode B": one database file and a `.lore/lore.yaml` pointer in each repo) is gone; `lore migrate run` turns such a repo into one that uses a store (see [Where your notes live](database-mode.md)).
 
@@ -54,24 +54,29 @@ A folder store and the repo side by side: where the note files go, that the repo
 $ lore store init notes file://$HOME/stores/notes
 ✓ created store notes (sto_7a67…9504) at file://~/stores/notes; recorded in .lore/stores.yaml; commit it to share
 $ lore memory add --to notes --body 'The client pays invoices on the 15th.'
-✓ mem_2ad3…f891 [notes]
+lore: wrote ~/stores/notes/_store/actors/act_2ad3…f891.json (store notes)
+lore: wrote ~/stores/notes/_store/memories/mem_162d…9666.json (store notes)
+lore: wrote ~/stores/notes/_store/machines/mch_54fe…28f2.json (store notes)
+✓ mem_162d…9666 [notes]
   scope: [master]
 $ lore rule add --body 'Run the tests before you push.'
-✓ rul_162d…9666
+lore: wrote ~/work/website/.lore/data/rules/rul_05e9…4603.json
+✓ rul_05e9…4603
   scope: [master] severity: must
 $ find ~/stores/notes -type f | sort
-~/stores/notes/.lore/data/actors/act_54fe…28f2.json
-~/stores/notes/.lore/data/machines/mch_05e9…4603.json
-~/stores/notes/.lore/data/memories/mem_2ad3…f891.json
-~/stores/notes/.lore/lock
+~/stores/notes/.lore-state/lock
+~/stores/notes/README.md
+~/stores/notes/_store/actors/act_2ad3…f891.json
+~/stores/notes/_store/machines/mch_54fe…28f2.json
+~/stores/notes/_store/memories/mem_162d…9666.json
 ~/stores/notes/lore-store.yaml
 $ ls .lore/data/rules
-rul_162d…9666.json
+rul_05e9…4603.json
 $ git check-ignore -v .lore/lore-cache.db
 .gitignore:9:.lore/lore-cache.db	.lore/lore-cache.db
 $ find ~/.lore/cache -name '*.db' | sed 's#/sto_[0-9a-z]*/#/<store id>/#'
 ~/.lore/cache/stores/<store id>/local/root.db
-~/.lore/cache/machine.db
+~/.lore/cache/machine-store.db
 ```
 <!-- /example -->
 

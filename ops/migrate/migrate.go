@@ -345,3 +345,8 @@ func baseOps(rw Rewriter) []op.Entry {
 		}),
 	}
 }
+
+// Run is migrate.run over rw, for a caller that runs the migration as one
+// step of a larger command (lore fix, the first write in a v0.1.17
+// project): the same lock, journal, steps and push as `lore migrate run`.
+func Run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) { return run(ctx, rw, in) }

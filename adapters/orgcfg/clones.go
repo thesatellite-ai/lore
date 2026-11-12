@@ -3,9 +3,9 @@ package orgcfg
 // clones.go — this machine's v0.1.17 store clones as `lore store show`,
 // `store open` and `store doctor` report them (CLI_REFERENCE 3.21: the
 // v0.1.17 store commands stay as they are; LORE_TEAM_SPEC F12, 5.3),
-// ported from v0.1.17's stores.Manager / store_cmd.go onto the bare clones
-// the org layer keeps under <home>/clones-v017 (the same clones GitLinks
-// reads links from).
+// ported from v0.1.17's stores.Manager / store_cmd.go onto the store
+// clones under <home>/stores (the clones the store backend writes and
+// GitLinks reads links from; storeclone.go).
 //
 //	Inspect ─▶ no network: cloned? opens? last fetch, default branch,
 //	           unpushed refs (a check that cannot run is a problem, never
@@ -13,7 +13,8 @@ package orgcfg
 //	Doctor  ─▶ ensure the clone, fetch (unreachable is a problem), every
 //	           entry branch: exists, F12 store tree check; then Inspect's
 //	           unpushed check
-//	Open    ─▶ fetch, detached worktree <home>/worktrees/<norm>/<branch>
+//	Open    ─▶ fetch; the store's clone for that branch (the default clone
+//	           when it has the branch checked out, else <repo>@<branch>)
 //	Links   ─▶ the cached link index of one branch (store show --links)
 //
 // Fail closed: a check that could not run is reported as a problem of its
@@ -24,17 +25,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
-
-// WorktreesDir holds the browsing worktrees of `lore store open` (v0.1.17
-// stores.WorktreesDir).
-const WorktreesDir = "worktrees"
 
 // Problem texts (v0.1.17's).
 const (
@@ -100,14 +97,11 @@ func (c Clones) git(ctx context.Context, args ...string) (string, error) {
 	return gitRun(ctx, args...)
 }
 
-// Dir is the bare clone folder of a normalised store url.
+// Dir is the clone folder of a normalised store url (its default-branch
+// clone).
 func (c Clones) Dir(norm string) string {
-	return filepath.Join(c.Home, ClonesDir, filepath.FromSlash(norm)+bareSuffix)
-}
-
-// WorktreeDir is the `store open` worktree of one store branch.
-func (c Clones) WorktreeDir(norm, branch string) string {
-	return filepath.Join(c.Home, WorktreesDir, filepath.FromSlash(norm), branch)
+	dir, _ := cloneDir(c.Home, norm)
+	return dir
 }
 
 // Inspect reads one clone without touching the network.
@@ -168,16 +162,14 @@ func (c Clones) unpushed(ctx context.Context, dir string) ([]string, error) {
 // Doctor runs every check of one store (always asking the remote): url is
 // the store's fetch url, branches the entry branches that must exist.
 func (c Clones) Doctor(ctx context.Context, norm, url string, branches []string) CloneInfo {
-	dir := c.Dir(norm)
+	dir, own := cloneDir(c.Home, norm)
 	info := CloneInfo{Dir: dir, Unpushed: []string{}, Problems: []string{}}
-	if err := ensureBare(ctx, dir, url); err != nil {
+	if err := ensureClone(ctx, dir, url, own); err != nil {
 		info.Problems = append(info.Problems, ProblemOpen+err.Error())
 		return info
 	}
-	if err := fetch(ctx, c.Route, dir); err != nil {
+	if err := fetchLocked(ctx, c.Route, dir, c.now()); err != nil {
 		info.Problems = append(info.Problems, ProblemUnreachable)
-	} else {
-		recordFetch(ctx, c.Route, dir, c.now())
 	}
 	base := c.Inspect(ctx, norm)
 	info.Cloned, info.LastFetch, info.DefaultBranch = base.Cloned, base.LastFetch, base.DefaultBranch
@@ -219,18 +211,20 @@ func (c Clones) tip(ctx context.Context, dir, branch string) (string, bool, erro
 	return tip, ok, nil
 }
 
-// Open fetches the store and checks branch out as a detached worktree
-// under <home>/worktrees (lore keeps writing the branch itself: a ref
-// checked out in a worktree is never written by lore).
+// Open fetches the store and returns the clone holding branch, a plain
+// git clone a person may browse: the store's default clone when it has
+// branch checked out, else the store's clone pinned to branch
+// (<repo>@<branch>, made here when missing, as attaching the store with
+// --branch would make it). Lore writes these clones too; nothing is
+// detached or copied.
 func (c Clones) Open(ctx context.Context, norm, url, branch string) (dir, commit string, err error) {
-	clone := c.Dir(norm)
-	if err = ensureBare(ctx, clone, url); err != nil {
+	clone, own := cloneDir(c.Home, norm)
+	if err = ensureClone(ctx, clone, url, own); err != nil {
 		return "", "", errs.Wrap(errs.Internal, "open the store clone", err)
 	}
-	if err = fetch(ctx, c.Route, clone); err != nil {
+	if err = fetchLocked(ctx, c.Route, clone, c.now()); err != nil {
 		return "", "", errs.Wrap(errs.Offline, "fetch the store", err).WithHint("retry when the store is reachable")
 	}
-	recordFetch(ctx, c.Route, clone, c.now())
 	tip, ok, err := c.tip(ctx, clone, branch)
 	if err != nil {
 		return "", "", errs.Wrap(errs.Internal, "read the store branch", err)
@@ -238,20 +232,37 @@ func (c Clones) Open(ctx context.Context, norm, url, branch string) (dir, commit
 	if !ok {
 		return "", "", errs.New(errs.InvalidInput, fmt.Sprintf("%s has no branch %s", norm, branch))
 	}
-	dir = c.WorktreeDir(norm, branch)
-	if _, serr := os.Stat(dir); serr == nil {
-		if _, err = c.git(ctx, "-C", dir, "checkout", "--quiet", "--detach", tip); err != nil {
-			return "", "", errs.Wrap(errs.Internal, "refresh the worktree", err)
-		}
-		return dir, tip, nil
+	if checkedOut(ctx, clone) == branch {
+		return clone, tip, nil
 	}
-	if err = os.MkdirAll(filepath.Dir(dir), cloneDirMode); err != nil {
-		return "", "", errs.Wrap(errs.Internal, "create the worktree dir", err)
+	dir, own, err = gitbackend.CloneDirFor(c.Home, gitbackend.Remote{Norm: norm}, branch)
+	if err != nil {
+		return "", "", errs.Wrap(errs.Internal, "locate the branch clone", err)
 	}
-	if _, err = c.git(ctx, "-C", clone, "worktree", "add", "--quiet", "--detach", dir, tip); err != nil {
-		return "", "", errs.Wrap(errs.Internal, "git worktree add", err)
+	if err = ensureClone(ctx, dir, url, own); err != nil {
+		return "", "", errs.Wrap(errs.Internal, "open the branch clone", err)
+	}
+	if err = fetchLocked(ctx, c.Route, dir, c.now(), branch); err != nil {
+		return "", "", errs.Wrap(errs.Offline, "fetch the store", err).WithHint("retry when the store is reachable")
+	}
+	if got := checkedOut(ctx, dir); got != branch {
+		return "", "", errs.New(errs.InvalidInput, fmt.Sprintf("the clone %s has branch %s checked out, not %s", dir, got, branch)).
+			WithHint("switch it back: git -C " + dir + " switch " + branch)
+	}
+	if tip, ok = branchTip(ctx, dir, branch); !ok {
+		return "", "", errs.New(errs.InvalidInput, fmt.Sprintf("%s has no branch %s", norm, branch))
 	}
 	return dir, tip, nil
+}
+
+// checkedOut is the branch the clone at dir has checked out ("" when
+// detached or unreadable).
+func checkedOut(ctx context.Context, dir string) string {
+	out, err := gitRun(ctx, "-C", dir, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
 }
 
 // Links is the cached link index of one store branch (no fetch); a clone

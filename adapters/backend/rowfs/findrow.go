@@ -6,8 +6,10 @@ package rowfs
 // a folder that repo does not attach is refused by F15 (E_LEAK_BLOCKED)
 // instead of answered "not found" (final smoke, PRINCIPLE EXACT ERRORS).
 //
-//	WalkDir(root) ─► skip .git and dot dirs except .lore
-//	              ─► <folder>/.lore/data/<table>/<id>.json exists? ─► folder
+//	WalkDir(root) ─► skip .git, dot dirs, table folders and _store/
+//	              ─► _store/<table>/<id>.json at the top? ─► the root folder
+//	              ─► <folder>/<table>/<id>.json exists? ─► folder
+//	                 (a code repo: <folder>/.lore/data/<table>/<id>.json)
 
 import (
 	"errors"
@@ -32,7 +34,21 @@ func (r *Root) FindRow(table row.Table, id ids.AnyID) (folder string, found bool
 	if !table.Valid() || id.IsZero() {
 		return "", false, errs.New(errs.InvalidInput, "rowfs: find needs a table and an id")
 	}
-	tail := filepath.FromSlash(LoreDir + "/" + DataDir + "/" + RowPath(table, id))
+	rel := filepath.FromSlash(RowPath(table, id))
+	// tailsAt are the places of the file below the folder at p: the
+	// store's root folder keeps its rows in _store/ (StoreDataDir), any
+	// other store folder right under it; a folder not moved yet (and a code
+	// repo) under .lore/data (Folder.OldLayout)
+	old := filepath.FromSlash(LayoutRepo.StorePath(FolderRoot, RowPath(table, id)))
+	tailsAt := func(p string) []string {
+		switch {
+		case r.layout == LayoutRepo:
+			return []string{old}
+		case p == r.dir:
+			return []string{filepath.FromSlash(LayoutStore.StorePath(FolderRoot, RowPath(table, id))), old}
+		}
+		return []string{rel, old}
+	}
 	werr := filepath.WalkDir(r.dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -41,21 +57,23 @@ func (r *Root) FindRow(table row.Table, id ids.AnyID) (folder string, found bool
 			return nil
 		}
 		name := d.Name()
-		if p != r.dir && strings.HasPrefix(name, ".") {
-			return filepath.SkipDir // .git, .lore (looked at directly below), tool dirs
+		if p != r.dir && (strings.HasPrefix(name, ".") || (r.layout == LayoutStore && (IsTableDir(name) || strings.HasPrefix(name, "_")))) {
+			return filepath.SkipDir // .git, .lore (looked at directly below), tool dirs; a store's table folders and _store/ (looked at from the top)
 		}
-		if _, serr := os.Lstat(filepath.Join(p, tail)); serr == nil {
-			rel, rerr := filepath.Rel(r.dir, p)
-			if rerr != nil {
-				return rerr
+		for _, tail := range tailsAt(p) {
+			if _, serr := os.Lstat(filepath.Join(p, tail)); serr == nil {
+				rel, rerr := filepath.Rel(r.dir, p)
+				if rerr != nil {
+					return rerr
+				}
+				folder = filepath.ToSlash(rel)
+				if folder == "." {
+					folder = FolderRoot
+				}
+				return errFound
+			} else if !errors.Is(serr, fs.ErrNotExist) {
+				return serr
 			}
-			folder = filepath.ToSlash(rel)
-			if folder == "." {
-				folder = FolderRoot
-			}
-			return errFound
-		} else if !errors.Is(serr, fs.ErrNotExist) {
-			return serr
 		}
 		return nil
 	})

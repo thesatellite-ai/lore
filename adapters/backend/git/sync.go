@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -78,9 +80,14 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 	if err = b.recoverMerge(ctx); err != nil {
 		return store.SyncReport{}, err
 	}
-	if err = b.requireClean(ctx); err != nil {
+	// Hand edits still in the files (refused by the pick-up, or made while
+	// lore ran) are set aside for the merge and put back after it: a sync
+	// never clobbers them and never stops on them (brief 2.2).
+	putBack, err := b.setAsideHandEdits(ctx)
+	if err != nil {
 		return store.SyncReport{}, err
 	}
+	defer func() { err = errors.Join(err, putBack()) }()
 	before, err := b.head(ctx)
 	if err != nil {
 		return store.SyncReport{}, err
@@ -238,20 +245,6 @@ func (b *Backend) countRows(ctx context.Context, from, to string) (int, error) {
 	return n, nil
 }
 
-// requireClean refuses to sync over tracked changes nobody committed: lore
-// owns the worktree, so they can only be debris of a crashed run, and a
-// merge on top would mix them into a commit.
-func (b *Backend) requireClean(ctx context.Context) error {
-	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"status", "--porcelain", "-z", "--untracked-files=no"}})
-	if err != nil {
-		return errs.Wrap(errs.Internal, "git: read the worktree status", err)
-	}
-	if len(bytes.TrimSpace(out)) > 0 {
-		return errs.New(errs.Internal, "git: the store clone has uncommitted changes").WithHint("run `lore doctor`")
-	}
-	return nil
-}
-
 // isAncestor reports whether commit a is an ancestor of (or equal to) b.
 func (b *Backend) isAncestor(ctx context.Context, a, c string) (bool, error) {
 	_, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge-base", "--is-ancestor", a, c}})
@@ -323,7 +316,11 @@ func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]
 // the index and worktree (MERGE_HEAD still set); a refusal or an error has
 // already aborted it.
 func (b *Backend) threeWayResolve(ctx context.Context, remote string, env []string) ([]ids.AnyID, []store.Refusal, error) {
-	_, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge", "--no-ff", "--no-commit", "--no-verify", "--quiet", "-s", "ort", "-X", "no-renames", remote}, env: env})
+	attrs, err := b.mergeAttributes()
+	if err != nil {
+		return nil, nil, err
+	}
+	_, err = b.git.run(ctx, call{dir: b.work, args: []string{"-c", "core.attributesFile=" + attrs, "merge", "--no-ff", "--no-commit", "--no-verify", "--quiet", "-s", "ort", "-X", "no-renames", remote}, env: env})
 	if err != nil {
 		if code, ran := exitCode(err); !ran || code != 1 {
 			return nil, nil, errors.Join(errs.Wrap(errs.Internal, "git: merge the remote", err), b.abortMerge(ctx))
@@ -485,7 +482,10 @@ func (b *Backend) push(ctx context.Context, tip string) (pushVerdict, string, er
 		return pushOffline, "", nil
 	}
 	switch flag {
-	case flagFastForward, flagForced, flagDeleted, flagNew, flagUpToDate:
+	case flagUpToDate:
+		return pushApplied, "", nil
+	case flagFastForward, flagForced, flagDeleted, flagNew:
+		b.recordPush(tip, flag == flagForced)
 		return pushApplied, "", nil
 	case flagRejected:
 		for _, r := range lostRaceReasons {
@@ -523,26 +523,14 @@ func rowRel(p string) (string, bool) {
 }
 
 // rowPlace is rowRel plus the folder that holds the row (rowfs.FolderRoot
-// for the store root's data dir).
+// for the store root's table folders). Only store clones sync, so the
+// path is read in the store layout (<folder>/<table>/<id>.json), or in the
+// old layout of a folder not moved yet (rowfs Folder.OldLayout).
 func rowPlace(p string) (folder, rel string, ok bool) {
-	const data = rowfs.LoreDir + "/" + rowfs.DataDir + "/"
-	folder = rowfs.FolderRoot
-	rest, ok := strings.CutPrefix(p, data)
-	if !ok {
-		i := strings.Index(p, "/"+data)
-		if i < 0 {
-			return "", "", false
-		}
-		f, err := rowfs.CleanFolder(p[:i])
-		if err != nil {
-			return "", "", false
-		}
-		folder, rest = f, p[i+1+len(data):]
+	if folder, rel, ok = rowfs.LayoutStore.SplitRowPath(p); ok {
+		return folder, rel, true
 	}
-	if _, _, ok := rowfs.ParseRowPath(rest); !ok {
-		return "", "", false
-	}
-	return folder, rest, true
+	return rowfs.LayoutRepo.SplitRowPath(p)
 }
 
 // appendNew appends the ids of add not already in list.
@@ -586,4 +574,30 @@ func (b *Backend) resolveFolderFile(ctx context.Context, path string) error {
 		return errs.Wrap(errs.Internal, "git: stage a merged "+path, err)
 	}
 	return nil
+}
+
+// mergeAttributesName is the attributes file of lore's own three-way
+// merge, in the clone's lore state folder (.git/lore, beside its lock).
+const mergeAttributesName = "merge-attributes"
+
+// mergeAttributes writes (when missing or different) the attributes file
+// lore's own merge passes as core.attributesFile: `*.json -merge`, so git
+// never text-merges a row file and leaves every row both sides changed to
+// the Merger, whether or not the clone's .git/info/attributes was set up
+// for plain git (owner bug 6: a read no longer writes that file, and a
+// read's refresh may merge).
+func (b *Backend) mergeAttributes() (string, error) {
+	dir := filepath.Dir(b.git.noHooks)
+	p := filepath.Join(dir, mergeAttributesName)
+	want := rowAttributesNoDriver + "\n"
+	if cur, err := os.ReadFile(filepath.Clean(p)); err == nil && string(cur) == want {
+		return filepath.ToSlash(p), nil
+	}
+	if err := os.MkdirAll(dir, cloneDirMode); err != nil {
+		return "", errs.FileIO("create", dir, err)
+	}
+	if err := os.WriteFile(p, []byte(want), 0o600); err != nil {
+		return "", errs.FileIO("write", p, err)
+	}
+	return filepath.ToSlash(p), nil
 }

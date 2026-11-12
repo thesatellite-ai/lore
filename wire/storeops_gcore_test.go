@@ -129,7 +129,7 @@ func TestStoreInitMeOutsideRepo(t *testing.T) {
 		t.Fatalf("init me outside a repo: %s %v", out, err)
 	}
 	mc, err := readMachineConfig(home)
-	if err != nil || !strings.HasSuffix(mc.personalURL(), "/stores/me") {
+	if err != nil || !strings.HasSuffix(mc.personalURL(), "/stores/_me") {
 		t.Fatalf("personal.store: %q %v", mc.personalURL(), err)
 	}
 	if out, err = run(t, a, opsstores.OpInit, `{"name":"me"}`, false); err != nil || !strings.Contains(out, `"already":true`) {

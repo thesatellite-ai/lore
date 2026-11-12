@@ -17,15 +17,23 @@ import (
 // under a dot dir (.git, .cache, a .lore that is not a folder's own); a
 // row in no folder is not found; a missing table or id is
 // E_INVALID_INPUT; an unreadable folder is an error, never "not found".
+// Both layouts: a store (<folder>/<table>/<id>.json) and a code repo's
+// (<folder>/.lore/data/...).
 func TestFindRow(t *testing.T) {
+	for _, l := range []Layout{LayoutStore, LayoutRepo} {
+		t.Run(l.String(), func(t *testing.T) { testFindRow(t, l) })
+	}
+}
+
+func testFindRow(t *testing.T, l Layout) {
 	dir := t.TempDir()
-	r, err := Open(dir)
+	r, err := Open(dir, WithLayout(l))
 	if err != nil {
 		t.Fatal(err)
 	}
 	put := func(folder string, id ids.AnyID) {
 		t.Helper()
-		p := filepath.Join(dir, filepath.FromSlash(folder), LoreDir, DataDir, filepath.FromSlash(RowPath(memories, id)))
+		p := filepath.Join(dir, filepath.FromSlash(l.StorePath(folder, RowPath(memories, id))))
 		if merr := os.MkdirAll(filepath.Dir(p), 0o750); merr != nil {
 			t.Fatal(merr)
 		}

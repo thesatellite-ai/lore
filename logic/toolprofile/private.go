@@ -44,7 +44,8 @@ func IsPrivateLine(line, dir string) bool {
 }
 
 // PrivateContent returns cur with every lore private line (IsPrivateLine
-// under dir) replaced by p's lines for files, appended at the end; the
+// under dir) replaced by p's lines for files, appended at the end (an @
+// line after a blank line, so it is a paragraph of its own); the
 // person's own lines stay. A Cursor rule file lore creates gets the
 // alwaysApply frontmatter first; when no lore line remains and only that
 // frontmatter is left, the result is "" (the caller deletes the file).
@@ -65,6 +66,13 @@ func (p Profile) PrivateContent(cur, dir string, files []string) string {
 		out += "\n"
 	}
 	for _, f := range files {
+		// An @ line is not a block of its own: right after another line
+		// it would continue that line's paragraph (the person's last line,
+		// or the previous import). A blank line before each keeps one
+		// physical line per paragraph; a read-style line is a bullet.
+		if p.Import == ImportAt && out != "" && !strings.HasSuffix(out, "\n\n") {
+			out += "\n"
+		}
 		out += p.PrivateLine(f) + "\n"
 	}
 	if out == "" {

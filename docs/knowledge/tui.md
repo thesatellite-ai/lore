@@ -54,7 +54,7 @@ decisions — 1–2 of 2 (page 1/1)
 dec_d431…313a  decisions  store repo
   body: Stripe already works in the client shop app, so we keep one payment provider.
   created_by_actor_id: act_54fe…28f2
-  project_id: prj_71f0…c07d
+  project_id: prj_78c8…5b6c
   source_kind: manual
   status: superseded
   superseded_by_id: dec_b4f4…a5b0
@@ -79,7 +79,7 @@ $ lore row show dec_d431…313a --origin
 dec_d431…313a  decisions  repo  "We use Stripe for payments"
   body: Stripe already works in the client shop app, so we keep one payment provider.
   created_by_actor_id: act_54fe…28f2
-  project_id: prj_71f0…c07d
+  project_id: prj_78c8…5b6c
   source_kind: manual
   status: superseded
   superseded_by_id: dec_b4f4…a5b0
@@ -88,8 +88,8 @@ dec_d431…313a  decisions  repo  "We use Stripe for payments"
 created 2026-11-02T10:00:50Z by act_54fe…28f2 · updated 2026-11-02T10:01:15Z by act_54fe…28f2
 origin (written once)
   store      repo
-  project    website  prj_71f0…c07d  (https://github.com/client/website)
-  repo       website  rep_ada3…c018  (https://github.com/client/website)
+  project    website  prj_78c8…5b6c  (https://github.com/client/website)
+  repo       website  rep_d7c7…7fe6  (https://github.com/client/website)
   git        branch main at 601d2850ffd0
   command    lore decision add
 who and when

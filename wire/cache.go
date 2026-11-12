@@ -104,8 +104,9 @@ func wrapOpen(err error, msg string) error {
 }
 
 // corruptSuffix names a damaged cache file moved aside:
-// <file>.corrupt-<UTC timestamp>. It is kept, never deleted, so nothing a
-// person might want to inspect is lost silently.
+// <file>.corrupt-<UTC timestamp>. It is kept for a week, so a person can
+// inspect it, then removed (hometidy.go; `lore doctor` names the copies
+// kept: a cache rebuilds from the row files, so nothing is lost).
 const corruptSuffix = ".corrupt-"
 
 // corruptStamp is the timestamp layout of a moved-aside file (sortable,

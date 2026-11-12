@@ -18,15 +18,18 @@ Each developer registers once. With no org, the roster entry itself is live. So 
 ```console
 # alice, in billing
 $ lore actor register
+lore: wrote ~/work/billing/.lore/data/actors/act_7a67…9504.json
 ✓ act_7a67…9504 alice (@alice) already registered (refreshed) in this repo
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: landed on main (86dbae4); leaves live once main is fetched
 
 # bob, in billing
 $ lore actor register
+lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/billing/.git/config; hook blocks in ~/work/billing/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote ~/work/billing/.lore/data/actors/act_2ad3…f891.json
 ✓ act_2ad3…f891 bob (@bob) registered in this repo
-lore live: (live, pushed)
-lore live: landed on main (86dbae4); leaves live once main is fetched
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+lore live: landed on main (05513aa); leaves live once main is fetched
 lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
@@ -37,8 +40,10 @@ Bob, on `feat/payments`, gives Alice a task. Alice, on `feat/login`, sees it. He
 ```console
 # bob, in billing
 $ git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
-✓ tsk_162d…9666 — check the checkout page on a phone [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json
+lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 — check the checkout page on a phone [medium]
+lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
@@ -47,9 +52,9 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-○ tsk_162d…9666 check the checkout page on a phone [medium]
+○ tsk_54fe…28f2 check the checkout page on a phone [medium]
 $ lore inbox
--  assigned              tsk_162d…9666  check the checkout page on a phone (lead)
+-  assigned              tsk_54fe…28f2  check the checkout page on a phone (lead)
 ```
 <!-- /example -->
 
@@ -58,26 +63,28 @@ Alice finishes it and names the commit that did the work. The task lands on `mai
 <!-- example: small-team#done-lands-on-main -->
 ```console
 # alice, in billing
-$ lore task start tsk_162d…9666
-✓ tsk_162d…9666 started
-lore live: (live, pushed)
-$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done tsk_162d…9666 --commit $(git rev-parse --short HEAD)
-✓ tsk_162d…9666 done (commit 9b40ce7); waiting for merge
+$ lore task start tsk_54fe…28f2
+lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 started
+lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
+$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done tsk_54fe…28f2 --commit $(git rev-parse --short HEAD)
+lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 done (commit df3a55c); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed)
-lore live: landed on main (05513aa); leaves live once main is fetched
+lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
+lore live: landed on main (34ee210); leaves live once main is fetched
 lore live: landed on main; this checkout is on feat/login, so those rows show here after you merge main
 $ git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3
-05513aa lore: land 2 rows (_root)
+34ee210 lore: land 2 rows (_root)
+05513aa lore: land 1 row (_root)
 86dbae4 lore: land 1 row (_root)
-601d285 lore: land 1 row (_root)
-dfd8dc8 lore: init
-cf563f3 init
- .../tlt_54fe…28f2.json      | 27 +++++++
- .../tsk_162d…9666.json      | 87 ++++++++++++++++++++++
+7898daa lore: init
+ccfb0bb init
+ .../tlt_162d…9666.json      | 27 +++++++
+ .../tsk_54fe…28f2.json      | 87 ++++++++++++++++++++++
  2 files changed, 114 insertions(+)
 $ git log --oneline -1 && git status --short
-9b40ce7 fix the checkout page on phones
+df3a55c fix the checkout page on phones
 ```
 <!-- /example -->
 
@@ -100,34 +107,36 @@ Most teams protect `main` (only pull requests may change it). Then the landing w
 ```console
 # bob, in billing
 $ lore task add 'ask the client for the new logo' --assign @alice
+lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
-lore live: (live, pushed)
+lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
 $ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
+lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed)
+lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ lore explain tsk_c0f3…b5b8
 tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
-  live (local 34ee210): row, live since 2026-11-02T10:01:20Z, hlc 2026-11-02T10:01:25.000Z/0000/act_7a67…9504
+  live (local 51886a5): row, live since 2026-11-02T10:01:20Z, hlc 2026-11-02T10:01:25.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: not present
   wins: the live copy (rule 4: if a row id is in live, live wins)
   land: waits: main is protected; rides on your next push
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
 lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
-[feat/login 7898daa] fix login timeout
+[feat/login 22efc3b] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 $ git log --oneline -3
-ccfb0bb lore: land 1 row (_root)
-7898daa fix login timeout
-9b40ce7 fix the checkout page on phones
+8c373dc lore: land 1 row (_root)
+22efc3b fix login timeout
+df3a55c fix the checkout page on phones
 $ git push -q -u origin feat/login
 $ git status --short
 ```

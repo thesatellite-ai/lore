@@ -33,28 +33,30 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 alice (work/blog)$ lore memory add --body 'the site deploys from the release branch'
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/blog/.git/hooks)
+lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 
 ### link unknown
 bob (work/website)$ lore memory add --body 'the client wants weekly demos'
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: cannot read agency: github.com/agency/notes (never fetched)
   hint: retry when the store is reachable, or pass --to repo|<org>|me to choose the target yourself
 (exit 18)
 
 ### offline claim
 alice (work/website)$ lore task claim tsk_2ad3618e878ebbf527d34d446ef4f891
-ERROR: [E_LINK_UNKNOWN] cannot tell whether this repo is a client repo; refusing to write coordination data
-  hint: `lore whoami` shows the link status; fetch the store and retry
-(exit 18)
+ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): git fetch: '/srv/git/github.com/agency/notes' does not appear to be a git repository
+  hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
+(exit 15)
 alice (work/website)$ lore memory add --body 'the API keys rotate every 90 days' --to agency || true
-lore: the change is committed in the local copy of store agency; the store is unreachable; the next lore command that reaches the store pushes it, or run `lore sync`
+lore: the change is committed in the local copy of store agency; the store is unreachable; run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store agency)
 ✓ mem_162df51b7f78b785c97c26b41ea89666 [agency/client]
   scope: [master]
 alice (work/website)$ lore sync
+lore: pushed store agency: commit 601d285 to branch main
 store me: sent 0, received 0, merged 0, refused 0
 store me/everywhere: sent 0, received 0, merged 0, refused 0
 store agency: sent 1, received 0, merged 0, refused 0
@@ -63,15 +65,17 @@ store agency/org: sent 0, received 0, merged 0, refused 0
 ### store branch missing
 alice (work/website)$ LORE_ORG=agency-stag lore org link agency-stag --project client --yes
 ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
-  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: `lore migrate run`)
+  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
 (exit 20)
 
 ### refs refused by the host
 bob (work/portal)$ lore task add 'set up the portal CI'
+lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
+lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — set up the portal CI [medium]
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 bob (work/portal)$ lore live diff
-local     601d2850ffd047c2890d2472633cc4dbdabe12fd
+local     86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
 tracking  (none)
 seen      (none)
 pending   2 write(s) not confirmed by the remote

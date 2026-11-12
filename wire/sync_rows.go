@@ -187,6 +187,9 @@ const syncStoreOffline = " (offline: local changes kept, sent on the next sync)"
 // report lines are printed first on stderr, since a failed run has no
 // stdout.
 func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut, error) {
+	if s.app.setupSyncHere(ctx) {
+		return s.app.SyncSetup(ctx) // no code repo here: every store of the setup (syncsetup.go)
+	}
 	out, err := s.Env.SyncRun(ctx, in)
 	if err != nil {
 		return out, err

@@ -34,7 +34,11 @@ func applyStore(t *testing.T) string {
 	if err = folder.Init(dir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: sid, Visibility: rowfs.VisibilityInternal}); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.MkdirAll(filepath.Join(dir, "client1", ".lore", "data"), 0o750); err != nil {
+	if err = os.MkdirAll(filepath.Join(dir, "client1"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// a store folder is one with its _meta.json (rowfs.HasStoreFolder)
+	if err = os.WriteFile(filepath.Join(dir, "client1", rowfs.MetaFileName), []byte(`{"_v":1}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -86,7 +90,7 @@ func TestMissionApplyFolderTarget(t *testing.T) {
 		if out.Store != "northwind/globex" || len(out.Tasks) != 3 {
 			t.Fatalf("apply --yes: store %q, %d tasks", out.Store, len(out.Tasks))
 		}
-		if _, serr := os.Stat(filepath.Join(dir, "globex", ".lore", "data", "missions", out.MissionID+".json")); serr != nil {
+		if _, serr := os.Stat(filepath.Join(dir, "globex", "missions", out.MissionID+".json")); serr != nil {
 			t.Fatalf("the mission is not in the new folder: %v", serr)
 		}
 	})
@@ -105,7 +109,7 @@ func TestMissionApplyFolderTarget(t *testing.T) {
 		if out.Store != "agency" {
 			t.Fatalf("store %q, want the attached alias agency", out.Store)
 		}
-		if _, serr := os.Stat(filepath.Join(dir, "client1", ".lore", "data", "missions", out.MissionID+".json")); serr != nil {
+		if _, serr := os.Stat(filepath.Join(dir, "client1", "missions", out.MissionID+".json")); serr != nil {
 			t.Fatalf("the mission is not in the linked folder: %v", serr)
 		}
 		if b, _ := os.ReadFile(filepath.Join(h.Repo, filepath.FromSlash(attach.FileName))); strings.Contains(string(b), "agency/client1") {

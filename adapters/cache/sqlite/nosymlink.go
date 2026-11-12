@@ -18,8 +18,8 @@ var sqliteSidecars = []string{"-wal", "-shm", "-journal"}
 // its sidecars, is a symbolic link (E_SYMLINK_DB, as v0.1.17 refused a
 // symlinked lore.db).
 //
-// Why: the repo cache lives inside the repository (.lore/lore-cache.db). A
-// cloned repository can commit a symlink there (a .gitignore entry does not
+// Why: an earlier build kept the repo cache inside the repository
+// (.lore/lore-cache.db; it now lives under the lore home). A cloned repository can commit a symlink there (a .gitignore entry does not
 // stop a committed file), and opening through it would create lore's
 // tables in, and rewrite, whatever SQLite file it points at, outside the
 // repository. The same holds for the files under the lore home. Only the

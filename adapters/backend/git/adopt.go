@@ -52,17 +52,17 @@ func isStarterFile(p string) bool {
 }
 
 // isFolderMeta reports whether p is a store folder's _meta.json
-// (<folder>/.lore/data/_meta.json, folder a name lore makes): lore folder
+// (<folder>/_meta.json, or <folder>/.lore/data/_meta.json from before the
+// plain-files round; folder a name lore makes): lore folder
 // metadata, which a store that lost its marker may hold and still be
 // adopted (owner report 2026-11-11: `store folder add` on a brand-new
 // repo pushed the folder without the marker).
 func isFolderMeta(p string) bool {
-	dir, ok := strings.CutSuffix(p, "/"+rowfs.FolderDataPath(rowfs.FolderRoot)+"/"+rowfs.MetaFileName)
-	if !ok || dir == "" {
-		return false
+	folder, name, ok := rowfs.LayoutStore.SplitFolderFile(p)
+	if !ok { // pushed by a lore before the plain-files round
+		folder, name, ok = rowfs.LayoutRepo.SplitFolderFile(p)
 	}
-	_, err := rowfs.CleanFolder(dir)
-	return err == nil
+	return ok && name == rowfs.MetaFileName && folder != rowfs.FolderRoot
 }
 
 // foreignFiles lists the files tracked at commit h that are not hosting

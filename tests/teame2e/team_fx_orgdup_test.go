@@ -21,13 +21,13 @@ const dev2Key = "human:dev2@northwind.example"
 
 // orgFolderProjectRows lists the project row files of the store's org folder.
 func orgFolderProjectRows(store *th.Remote) []string {
-	return store.FilesMatching(refMain, folderOrg+"/"+dataDir+"/projects/")
+	return store.FilesMatching(refMain, folderOrg+"/projects/")
 }
 
 // orgFolderMetaProject is the project_id the org folder's _meta.json names.
 func orgFolderMetaProject(t *testing.T, store *th.Remote) string {
 	t.Helper()
-	body, ok := store.Read(refMain, folderOrg+"/"+dataDir+"/"+metaFile)
+	body, ok := store.Read(refMain, folderOrg+"/"+metaFile)
 	if !ok {
 		t.Fatal("the org folder has no _meta.json")
 	}
@@ -110,7 +110,7 @@ func TestRosterFolderWithOldDuplicateProjectRowsStillResolves(t *testing.T) {
 	body, _ := r.store.Read(refMain, rows[0])
 	keep := strings.TrimSuffix(path.Base(rows[0]), ".json")
 	admin := r.w.Human("admin", "admin@northwind.example").Clone(r.store, "store")
-	admin.WriteFile(folderOrg+"/"+dataDir+"/projects/"+strayID+".json", strings.ReplaceAll(body, keep, strayID))
+	admin.WriteFile(folderOrg+"/projects/"+strayID+".json", strings.ReplaceAll(body, keep, strayID))
 	admin.CommitAll("older lore: second org project row")
 	admin.AdminPush("origin", "HEAD:main")
 	if got := len(orgFolderProjectRows(r.store)); got != 2 {

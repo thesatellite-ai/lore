@@ -9,7 +9,6 @@ package wire
 
 import (
 	"context"
-	"path"
 	"slices"
 	"strings"
 
@@ -36,10 +35,11 @@ type problemer interface {
 // one line.
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-// rowFilePlace is how a line names a file: "<folder>/.lore/data/<rel>"
-// prefixed by its store ("store repo: .lore/data/rules/x.json").
-func rowFilePlace(src store.Source, folder, rel string) string {
-	return "store " + string(src) + ": " + path.Join(folder, doctorDataDir, rel)
+// rowFilePlace is how a line names a file: its path from the store's top
+// prefixed by its store ("store repo: .lore/data/rules/x.json", "store
+// team: acme/rules/x.json").
+func rowFilePlace(b store.Backend, src store.Source, folder, rel string) string {
+	return "store " + string(src) + ": " + rowFileRel(b, src, folder, rel)
 }
 
 // What a left-out row file's line says about reads. A file that does not
@@ -80,7 +80,7 @@ func (a *App) rowFileNotices(st *state) {
 			continue
 		}
 		for _, p := range rp.ReadProblems() {
-			a.opts.Notice("lore: invalid-file " + rowFilePlace(n, st.folders[n], p.Path) + ": " + oneLine(p.Reason) + "; " + leftOutNote(p, rowFileNoticeLeftOut))
+			a.opts.Notice("lore: invalid-file " + rowFilePlace(st.byName[n], n, st.folders[n], p.Path) + ": " + oneLine(p.Reason) + "; " + leftOutNote(p, rowFileNoticeLeftOut))
 		}
 	}
 }
@@ -105,7 +105,7 @@ func (a *App) DoctorRowFiles(ctx context.Context) ([]DoctorFinding, error) {
 		}
 		for _, p := range probs {
 			out = append(out, DoctorFinding{Check: DoctorCheckRowFile, Level: DoctorError, Store: src, Plain: true,
-				Message: rowFilePlace(src, st.folders[src], p.Path) + " is not a usable row file: " + oneLine(p.Reason) + "; fix or remove it (" + leftOutNote(p, rowFileDoctorLeftOut) + ")"})
+				Message: rowFilePlace(st.byName[src], src, st.folders[src], p.Path) + " is not a usable row file: " + oneLine(p.Reason) + "; fix or remove it (" + leftOutNote(p, rowFileDoctorLeftOut) + ")"})
 		}
 	}
 	return out, nil

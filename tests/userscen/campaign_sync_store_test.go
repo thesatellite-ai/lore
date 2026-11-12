@@ -6,7 +6,7 @@ package userscen
 // store leaves a repo, the gaps sync_store_test.go leaves:
 //
 //   - store forget: by name and by url, for a git store (its clone under
-//     ~/.lore/clones goes; a second forget says nothing to forget) and for
+//     ~/.lore/stores goes; a second forget says nothing to forget) and for
 //     a folder store (file://: no clone, nothing to forget — it answered
 //     "not a store url" for a url store add had accepted); a malformed url
 //     is E_INVALID_INPUT with a hint
@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/fileuri"
@@ -48,9 +49,8 @@ func TestCampaignSync_StoreForget(t *testing.T) {
 	a.MustLore("memory", "add", "a row in the git store", "--to", "notes")
 	a.MustLore("memory", "add", "a row in the folder store", "--to", "shelf")
 
-	clones := alice.LorePath("clones")
-	if _, err := os.Stat(clones); err != nil {
-		t.Fatalf("the git store has a clone under %s: %v", clones, err)
+	if clones := alice.StoreClones(t); len(clones) != 1 || !strings.HasPrefix(clones[0], alice.LorePath("stores")) {
+		t.Fatalf("the git store has one clone under ~/.lore/stores: %v", clones)
 	}
 	a.MustLore("store", "forget", "notes").Says(t, "forgot")
 	a.MustLore("store", "forget", r.URL()).Says(t, "nothing to forget")

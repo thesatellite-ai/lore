@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
@@ -136,9 +137,53 @@ type OfflineError struct {
 
 func (e *OfflineError) Error() string {
 	if e.Err != nil {
-		return fmt.Sprintf("could not confirm the coordination write (%s): %v", e.Reason, e.Err)
+		return fmt.Sprintf("could not confirm the coordination write (%s): %s", e.Reason, ShortCause(e.Err))
 	}
 	return "could not confirm the coordination write (" + e.Reason + ")"
+}
+
+// AutopushOff reports whether the write failed only because autopush is
+// off (no network was tried).
+func (e *OfflineError) AutopushOff() bool {
+	return e.Err == nil && strings.HasPrefix(e.Reason, "autopush is off")
+}
+
+// maxCause bounds the git message a ShortCause repeats.
+const maxCause = 200
+
+// ShortCause is one line naming why a remote call failed: for a transport
+// error the git operation and git's first meaningful line ("git fetch:
+// '<url>' does not appear to be a git repository"), never git's whole
+// multi-line advice; else the error's first line.
+func ShortCause(err error) string {
+	var te *gitremote.TransportError
+	if errors.As(err, &te) {
+		line := firstLine(te.Stderr)
+		if line == "" {
+			line = "no answer from the remote"
+		}
+		return "git " + te.Op + ": " + line
+	}
+	return firstLine(err.Error())
+}
+
+// firstLine is the first non-empty line of s, without git's "fatal: " or
+// "error: " prefix, cut at maxCause.
+func firstLine(s string) string {
+	for l := range strings.SplitSeq(s, "\n") {
+		l = strings.TrimSpace(l)
+		for _, p := range []string{"fatal: ", "error: "} {
+			l = strings.TrimPrefix(l, p)
+		}
+		if l == "" {
+			continue
+		}
+		if len(l) > maxCause {
+			l = l[:maxCause] + "…"
+		}
+		return l
+	}
+	return ""
 }
 
 // Unwrap lets errors.Is(err, ErrOffline) match.

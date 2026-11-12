@@ -22,6 +22,12 @@ import (
 
 const memories row.Table = "memories"
 
+// rootRowPath is the clone-relative slash path of a memory row of the
+// store's root folder (_store/memories/<id>.json, D-ad).
+func rootRowPath(id ids.AnyID) string {
+	return rowfs.LayoutStore.StorePath(rowfs.FolderRoot, rowfs.RowPath(memories, id))
+}
+
 // testBranch is the branch every test remote is created on.
 const testBranch = "main"
 
@@ -104,6 +110,20 @@ func (f cloneFixture) Open(t *testing.T, o store.OpenOptions) store.Backend {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// Files implements storetest.PlainFiles: the clone is the folder a person
+// browses; lore's own files live in its .git (the lock, the journal and
+// the stamps in .git/lore).
+func (f cloneFixture) Files(*testing.T) (string, []string) { return f.base, []string{".git"} }
+
+// Layout implements storetest.StoreLayout: the clone is a store checkout.
+func (f cloneFixture) Layout(*testing.T) (string, string) { return f.base, f.folder }
+
+// Tracked implements storetest.PlainFiles: rel is in the clone's HEAD.
+func (f cloneFixture) Tracked(t *testing.T, rel string) bool {
+	_, err := tryGit(t, f.base, "cat-file", "-e", "HEAD:"+rel)
+	return err == nil
 }
 
 func TestContractClone(t *testing.T) {
@@ -256,7 +276,7 @@ func TestWriteIsOneCommitPerBatch(t *testing.T) {
 		t.Fatalf("commit = %q, want %q", got, want)
 	}
 	files := gitT(t, b.Dir(), "show", "--name-only", "--format=", "HEAD")
-	if !strings.Contains(files, ".lore/data/"+rowfs.RowPath(memories, a.ID)) || !strings.Contains(files, ".lore/data/"+rowfs.RowPath(memories, c.ID)) {
+	if !strings.Contains(files, rowfs.RowPath(memories, a.ID)) || !strings.Contains(files, rowfs.RowPath(memories, c.ID)) || strings.Contains(files, ".lore/") {
 		t.Fatalf("commit files:\n%s", files)
 	}
 	if status := gitT(t, b.Dir(), "status", "--porcelain"); status != "" {
@@ -548,7 +568,7 @@ func TestDeletedFileIsNotADelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gitT(t, b.Dir(), "rm", "--quiet", ".lore/data/"+rowfs.RowPath(memories, a.ID))
+	gitT(t, b.Dir(), "rm", "--quiet", rootRowPath(a.ID))
 	gitT(t, b.Dir(), "commit", "--quiet", "-m", "remove by hand")
 	rows, _, err := b.Read(ctx, cur)
 	if err != nil || len(rows) != 0 {

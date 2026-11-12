@@ -34,7 +34,7 @@ func TestStoreRootTarget(t *testing.T) {
 				t.Fatal(err)
 			}
 			if c.folderLine != "" {
-				if err = os.MkdirAll(filepath.Join(storeDir, "acme", ".lore", "data"), 0o750); err != nil {
+				if err = os.MkdirAll(filepath.Join(storeDir, "acme"), 0o750); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -54,7 +54,7 @@ func TestStoreRootTarget(t *testing.T) {
 				t.Fatalf("--to northwind/.: %v", err)
 			}
 			id := idOf(t, out)
-			if _, err = os.Stat(filepath.Join(storeDir, ".lore", "data", schema.TableMemories, id+".json")); err != nil {
+			if _, err = os.Stat(filepath.Join(storeDir, rowfs.StoreDataDir, schema.TableMemories, id+".json")); err != nil {
 				t.Fatalf("the row is not at the store root: %v", err)
 			}
 			if c.folderLine == "" {
