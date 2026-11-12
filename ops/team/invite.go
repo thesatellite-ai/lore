@@ -90,6 +90,10 @@ func (o ops) invite(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInvit
 	if err := checkRoles(ctx, r, roles); err != nil {
 		return setup.TeamInviteOut{}, err
 	}
+	teams, err := inviteTeams(ctx, r, in.Teams)
+	if err != nil {
+		return setup.TeamInviteOut{}, err
+	}
 	projects := make([]string, 0, len(projectRefs))
 	for _, ref := range projectRefs {
 		id, perr := resolveProject(ctx, o.env, r, ref)
@@ -115,6 +119,11 @@ func (o ops) invite(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInvit
 	if err != nil {
 		return setup.TeamInviteOut{}, err
 	}
+	if len(teams) > 0 {
+		if fields[schema.FieldInviteTeams], err = textList("--team", teams); err != nil {
+			return setup.TeamInviteOut{}, err
+		}
+	}
 	created, err := r.Create(ctx, schema.TableInvites, fields)
 	if err != nil {
 		return setup.TeamInviteOut{}, err
@@ -128,7 +137,7 @@ func (o ops) invite(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInvit
 	if err != nil {
 		return setup.TeamInviteOut{}, err
 	}
-	out := setup.TeamInviteOut{ID: inv.ID.String(), Line: text, ExpiresOn: inv.day(), Email: email, Org: e.Org, GitHub: ghUser}
+	out := setup.TeamInviteOut{ID: inv.ID.String(), Line: text, ExpiresOn: inv.day(), Email: email, Org: e.Org, GitHub: ghUser, Teams: inv.Teams}
 	if ghUser != "" && onGitHub {
 		out.Repo = repo.Owner + "/" + repo.Name
 		out.GitHubAccess, out.GitHubDetail = o.githubStep(ctx, e, repo, ghUser, in.Grant)
@@ -163,6 +172,34 @@ func (o ops) githubStep(ctx context.Context, e onboard.SetupEntry, repo Repo, us
 		return GitHubPending, ghUnknownDetail(out)
 	}
 	return GitHubPending, ""
+}
+
+// inviteTeams resolves --team values to the handles of active teams on
+// the roster (no @), each once; an unknown or removed team is refused
+// before anything is written, naming the fix.
+func inviteTeams(ctx context.Context, r profilestore.Roster, refs []string) ([]string, error) {
+	var out []string
+	for _, ref := range splitList(refs) {
+		h, err := teamHandle(ref)
+		if err != nil {
+			return nil, err
+		}
+		cur, ok, err := findTeam(ctx, r, h)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, teamMissErr(h, r.Where())
+		}
+		if fieldText(cur, teamFieldActive) == boolFalse {
+			return nil, errs.New(errs.StatusChange, "--team @"+h+": the team is removed; nobody joins it").
+				WithHint("lore team add @" + h + " brings it back first")
+		}
+		if h = fieldText(cur, teamFieldHandle); !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	return out, nil
 }
 
 // inviteFields is a new pending invites row.
@@ -206,6 +243,7 @@ type inviteRow struct {
 	GitHub     string
 	Roles      []string
 	Projects   []string
+	Teams      []string
 	PeriodType string
 	Status     string
 	ExpiresOn  time.Time
@@ -226,6 +264,7 @@ func (x inviteRow) record() onboard.InviteRecord {
 func inviteOf(r row.Row) (inviteRow, error) {
 	x := inviteRow{ID: r.ID, Email: fieldText(r, schema.FieldInviteEmail), GitHub: fieldText(r, schema.FieldInviteGitHub),
 		Roles: value.ItemStrings(r.Fields[schema.FieldInviteRoles]), Projects: value.ItemStrings(r.Fields[schema.FieldInviteProjects]),
+		Teams:      value.ItemStrings(r.Fields[schema.FieldInviteTeams]),
 		PeriodType: fieldText(r, schema.FieldInvitePeriodType), Status: fieldText(r, schema.FieldInviteStatus),
 		AcceptedBy: fieldText(r, schema.FieldInviteAcceptedBy), CreatedBy: r.CreatedBy, w: auditrec.Of(r)}
 	t, err := time.Parse(value.DateLayout, fieldText(r, schema.FieldInviteExpiresOn))
@@ -370,7 +409,7 @@ func (o ops) list(ctx context.Context, in setup.TeamInviteListIn) (setup.TeamInv
 			continue
 		}
 		out.Invites = append(out.Invites, setup.InviteRow{ID: x.ID.String(), Email: x.Email, GitHub: x.GitHub, Roles: x.Roles,
-			Projects: x.Projects, PeriodType: x.PeriodType, Status: status, ExpiresOn: x.day(), AcceptedBy: x.AcceptedBy,
+			Projects: x.Projects, Teams: x.Teams, PeriodType: x.PeriodType, Status: status, ExpiresOn: x.day(), AcceptedBy: x.AcceptedBy,
 			CreatedBy: x.w.CreatedBy, UpdatedBy: x.w.UpdatedBy})
 	}
 	return out, nil

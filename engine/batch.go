@@ -141,6 +141,23 @@ type stage struct {
 	bySrc   map[store.Source]*stagedStore
 	written map[store.Key]bool
 	created map[store.Key]bool // rows whose create event is staged
+	// scanned: the scanner's rules were refreshed for this stage (detect)
+	scanned bool
+}
+
+// stageScanned reports whether ctx's open stage already refreshed the
+// scanner's rules, and marks it so: the first write of a stage refreshes.
+// Outside a stage: false (every write refreshes).
+func stageScanned(ctx context.Context) bool {
+	s := stageOf(ctx)
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	was := s.scanned
+	s.scanned = true
+	return was
 }
 
 // stagedStore is what one store's part of a stage holds.
@@ -209,6 +226,9 @@ func (e *Engine) trackStage(s *stage, on bool) {
 	defer e.openMu.Unlock()
 	if !on {
 		delete(e.open, s)
+		if len(e.open) == 0 {
+			e.settingsMemo = nil // the stage's rows are in the store now: read settings afresh
+		}
 		return
 	}
 	if e.open == nil {

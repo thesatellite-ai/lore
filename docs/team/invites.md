@@ -35,6 +35,7 @@ The line after "Send this to" is what the person pastes. With `--github <user>`,
 | `--github <user>` | the GitHub user you expect to accept; lore checks whether they can push to the store |
 | `--role <r>` | a role name, applied on each `--project` (repeat it, or comma-separate) |
 | `--project <p>` | a project to join, by name or `prj_` id (repeat it); needs at least one `--role` |
+| `--team @t` | a team to join on accept (repeat it); the team must exist and be active |
 | `--type <t>` | `employee` (default), `contractor`, `intern` or `client_contact`: the kind of stint opened on join |
 | `--expires <n>d` | lifetime in days, 1 to 90; default `14d` |
 | `--grant` | also give `--github` push access to the store on GitHub with `gh` (asks first) |
@@ -88,9 +89,9 @@ Send it in chat or email; the person runs `lore setup join <line>` (see [Step 4]
 # tomas, in acme-hub
 $ lore team invite list
 invites:
-  ID                                    EMAIL                GITHUB  ROLES          PROJECTS                              PERIOD_TYPE  STATUS   EXPIRES_ON  ACCEPTED_BY  CREATED_BY                            UPDATED_BY
-  inv_7a67…9504  mira@agency.example          dev, reviewer  prj_162d…9666  employee     pending  2026-11-16               act_54fe…28f2  act_54fe…28f2
-  inv_2ad3…f891  ana@agency.example                                                                contractor   pending  2026-12-02               act_54fe…28f2  act_54fe…28f2
+  ID                                    EMAIL                GITHUB  ROLES          PROJECTS                              TEAMS  PERIOD_TYPE  STATUS   EXPIRES_ON  ACCEPTED_BY  CREATED_BY                            UPDATED_BY
+  inv_7a67…9504  mira@agency.example          dev, reviewer  prj_162d…9666         employee     pending  2026-11-16               act_54fe…28f2  act_54fe…28f2
+  inv_2ad3…f891  ana@agency.example                                                                       contractor   pending  2026-12-02               act_54fe…28f2  act_54fe…28f2
 $ lore team invite list --status pending --json
 {
   "invites": [
@@ -147,9 +148,9 @@ ERROR: [E_INVITE_REVOKED] invite inv_2ad3…f891 was revoked
 (exit 23)
 $ lore team invite list
 invites:
-  ID                                    EMAIL                GITHUB  ROLES          PROJECTS                              PERIOD_TYPE  STATUS   EXPIRES_ON  ACCEPTED_BY  CREATED_BY                            UPDATED_BY
-  inv_7a67…9504  mira@agency.example          dev, reviewer  prj_162d…9666  employee     pending  2026-11-16               act_54fe…28f2  act_54fe…28f2
-  inv_2ad3…f891  ana@agency.example                                                                contractor   revoked  2026-12-02               act_54fe…28f2  act_54fe…28f2
+  ID                                    EMAIL                GITHUB  ROLES          PROJECTS                              TEAMS  PERIOD_TYPE  STATUS   EXPIRES_ON  ACCEPTED_BY  CREATED_BY                            UPDATED_BY
+  inv_7a67…9504  mira@agency.example          dev, reviewer  prj_162d…9666         employee     pending  2026-11-16               act_54fe…28f2  act_54fe…28f2
+  inv_2ad3…f891  ana@agency.example                                                                       contractor   revoked  2026-12-02               act_54fe…28f2  act_54fe…28f2
 ```
 <!-- /example -->
 
@@ -163,8 +164,9 @@ When Mira runs `lore setup join <line>` and finishes the join step (see [Guided 
 2. records her email addresses and GitHub user as identity contacts on the roster;
 3. opens a stint of the invite's type, starting today;
 4. adds a membership with the invite's roles on each of its projects;
-5. marks the invite `accepted` by her;
-6. writes her `member` setup to `~/.lore/config.yaml`.
+5. adds her to each team the invite names (`--team`, or `lore team member add @web mira@agency.example` while the invite was pending); a team removed since is skipped;
+6. marks the invite `accepted` by her;
+7. writes her `member` setup to `~/.lore/config.yaml`.
 
 Someone who left the team and is invited again keeps their old roster entry and gets a new stint (see [Team profiles](profiles.md)).
 
@@ -177,9 +179,9 @@ After Step 1 and Step 3, `lore team invite list` shows one invite still pending 
 # tomas, in acme-hub
 $ lore team invite list
 invites:
-  ID                                    EMAIL                GITHUB  ROLES          PROJECTS                              PERIOD_TYPE  STATUS   EXPIRES_ON  ACCEPTED_BY  CREATED_BY                            UPDATED_BY
-  inv_7a67…9504  mira@agency.example          dev, reviewer  prj_162d…9666  employee     pending  2026-11-16               act_54fe…28f2  act_54fe…28f2
-  inv_2ad3…f891  ana@agency.example                                                                contractor   revoked  2026-12-02               act_54fe…28f2  act_54fe…28f2
+  ID                                    EMAIL                GITHUB  ROLES          PROJECTS                              TEAMS  PERIOD_TYPE  STATUS   EXPIRES_ON  ACCEPTED_BY  CREATED_BY                            UPDATED_BY
+  inv_7a67…9504  mira@agency.example          dev, reviewer  prj_162d…9666         employee     pending  2026-11-16               act_54fe…28f2  act_54fe…28f2
+  inv_2ad3…f891  ana@agency.example                                                                       contractor   revoked  2026-12-02               act_54fe…28f2  act_54fe…28f2
 ```
 <!-- /example -->
 

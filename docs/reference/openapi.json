@@ -2202,6 +2202,24 @@
                           "rows"
                         ]
                       }
+                    },
+                    "written": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rows": {
+                            "type": "integer"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "rows"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -89467,6 +89485,10 @@
                     "type": "boolean",
                     "description": "detach from plan"
                   },
+                  "clear_tasklist": {
+                    "type": "boolean",
+                    "description": "take the task off its task list (clear tasklist_id)"
+                  },
                   "commitment": {
                     "type": "string",
                     "description": "accepted | proposed | someday"
@@ -94698,6 +94720,10 @@
                     "type": "boolean",
                     "description": "detach from plan"
                   },
+                  "clear_tasklist": {
+                    "type": "boolean",
+                    "description": "take the task off its task list (clear tasklist_id)"
+                  },
                   "commitment": {
                     "type": "string",
                     "description": "accepted | proposed | someday"
@@ -99645,6 +99671,12 @@
                           "status": {
                             "type": "string"
                           },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "updated_by": {
                             "type": "string"
                           }
@@ -100018,6 +100050,12 @@
                         "type": "string"
                       }
                     },
+                    "pending": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "team": {
                       "type": "object",
                       "properties": {
@@ -100059,6 +100097,28 @@
                             },
                             "required": [
                               "id"
+                            ]
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "type": "string"
+                              },
+                              "expires_on": {
+                                "type": "string"
+                              },
+                              "invite": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "email",
+                              "invite",
+                              "expires_on"
                             ]
                           }
                         },
@@ -100232,6 +100292,12 @@
                         "type": "string"
                       }
                     },
+                    "pending": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "team": {
                       "type": "object",
                       "properties": {
@@ -100273,6 +100339,28 @@
                             },
                             "required": [
                               "id"
+                            ]
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "type": "string"
+                              },
+                              "expires_on": {
+                                "type": "string"
+                              },
+                              "invite": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "email",
+                              "invite",
+                              "expires_on"
                             ]
                           }
                         },
@@ -100490,6 +100578,28 @@
                               ]
                             }
                           },
+                          "pending": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "email": {
+                                  "type": "string"
+                                },
+                                "expires_on": {
+                                  "type": "string"
+                                },
+                                "invite": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "email",
+                                "invite",
+                                "expires_on"
+                              ]
+                            }
+                          },
                           "updated_by": {
                             "type": "string"
                           }
@@ -100636,6 +100746,12 @@
                         "type": "string"
                       }
                     },
+                    "pending": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "team": {
                       "type": "object",
                       "properties": {
@@ -100677,6 +100793,28 @@
                             },
                             "required": [
                               "id"
+                            ]
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "type": "string"
+                              },
+                              "expires_on": {
+                                "type": "string"
+                              },
+                              "invite": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "email",
+                              "invite",
+                              "expires_on"
                             ]
                           }
                         },
@@ -100845,6 +100983,13 @@
                       "type": "string"
                     }
                   },
+                  "teams": {
+                    "type": "array",
+                    "description": "a team to join on accept: @handle (repeat)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "type": {
                     "type": "string",
                     "description": "employee, contractor, intern or client_contact (default employee)"
@@ -100896,6 +101041,12 @@
                     },
                     "repo": {
                       "type": "string"
+                    },
+                    "teams": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "text": {
                       "type": "string"
@@ -101026,6 +101177,12 @@
                         "type": "string"
                       }
                     },
+                    "pending": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "team": {
                       "type": "object",
                       "properties": {
@@ -101067,6 +101224,28 @@
                             },
                             "required": [
                               "id"
+                            ]
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "type": "string"
+                              },
+                              "expires_on": {
+                                "type": "string"
+                              },
+                              "invite": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "email",
+                              "invite",
+                              "expires_on"
                             ]
                           }
                         },
@@ -101260,6 +101439,28 @@
                             },
                             "required": [
                               "id"
+                            ]
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "type": "string"
+                              },
+                              "expires_on": {
+                                "type": "string"
+                              },
+                              "invite": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "email",
+                              "invite",
+                              "expires_on"
                             ]
                           }
                         },

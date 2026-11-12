@@ -881,6 +881,7 @@ Flags:
       --clear-estimate                remove the estimate
       --clear-mission                 detach from mission
       --clear-plan                    detach from plan
+      --clear-tasklist                take the task off its task list (clear tasklist_id)
       --commitment string             accepted | proposed | someday
       --confirm                       v0.1.17 spelling: refused, use --yes
       --db string                     v0.1.17 lore.db path: not used by this command (refused)

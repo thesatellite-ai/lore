@@ -139,6 +139,7 @@ invites.period_type text required
 invites.projects list[text]
 invites.roles list[text]
 invites.status text required
+invites.teams list[text]
 kind_fields.changed_at datetime
 kind_fields.changed_by ref
 kind_fields.default text

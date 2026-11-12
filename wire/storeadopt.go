@@ -38,6 +38,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -429,7 +430,8 @@ func adoptChanges(rows []adoptRow, have []store.Row, pid ids.ID[ids.Project], ou
 				r.Fields = step(r.Fields)
 			}
 		}
-		r, _ = auditfill.Defaults(r) // audit_fields (step 9), as migrate writes them
+		r, _ = engine.NullEmptyRefs(reg, r) // v0.1.17's "" for "no ref" is written as null (engine/emptyref.go)
+		r, _ = auditfill.Defaults(r)        // audit_fields (step 9), as migrate writes them
 		if f, has := def.Field(adoptProjectField); has && f.RefTable == schema.TableProjects && r.Fields != nil {
 			if cur, set := r.Fields[adoptProjectField]; set && sourceProjects[cur.String()] {
 				r.Fields = maps.Clone(r.Fields)

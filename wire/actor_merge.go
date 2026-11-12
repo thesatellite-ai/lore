@@ -142,8 +142,12 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 		return opsinfra.ActorMergeOut{}, errs.New(errs.Refused, actorMergeVerb+": "+in.From+" is already merged into "+m).
 			WithHint("merge into that actor instead: lore actor merge " + in.From + " " + m)
 	}
+	labels := a.storeLabels(ctx, st)
 	out := opsinfra.ActorMergeOut{From: from.String(), Into: into.String(), FromName: fieldText(f, actorFieldDisplay), IntoName: fieldText(t, actorFieldDisplay),
-		Stores: stores, DryRun: in.DryRun}
+		DryRun: in.DryRun}
+	for _, s := range stores {
+		out.Stores = append(out.Stores, labels(store.Source(s)))
+	}
 	if k := fieldText(f, actorFieldKey); k != "" && k == fieldText(t, actorFieldKey) {
 		out.Key = k
 	}
@@ -152,27 +156,63 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	if err != nil {
 		return opsinfra.ActorMergeOut{}, err
 	}
-	out.ReadOnly = readOnly
+	for _, s := range readOnly {
+		out.ReadOnly = append(out.ReadOnly, labels(store.Source(s)))
+	}
 	perTable := map[string]int{}
+	perStore := map[store.Source]int{}
 	for _, e := range edits {
 		perTable[string(e.ref.Table)]++
+		perStore[e.ref.Store]++
 	}
 	out.Rows = len(edits)
 	for _, tb := range slices.Sorted(maps.Keys(perTable)) {
 		out.Tables = append(out.Tables, opsinfra.ActorMergeTable{Table: tb, Rows: perTable[tb]})
 	}
+	out.Written = mergeStoreCounts(perStore, labels)
 	if in.DryRun {
 		return out, nil
 	}
+	// every row of a store in ONE store commit and one push (owner report
+	// 2026-11-12: one commit and push per row took 10 s a row); a row that
+	// cannot be edited is listed with its reason, the rest are written
+	title := actorMergeVerb + " " + from.String() + " into " + into.String()
+	b := a.bulk(ctx, title, func(r engine.Ref) string {
+		return "`lore show " + r.ID.String() + "` shows the row; edit what the reason names, then rerun"
+	})
+	edited := map[store.Source]int{}
 	for _, e := range edits {
-		if _, err := a.Update(ctx, e.ref, e.patch); err != nil {
-			return out, errs.Prefix(actorMergeVerb+": edit "+string(e.ref.Table)+" "+e.ref.ID.String(), err).
-				WithHint("run the same command again: rows already edited name " + in.Into + " and are not counted again")
+		if b.update(e.ref, e.patch) {
+			edited[e.ref.Store]++
 		}
 	}
-	marked, err := a.markMerged(ctx, st, fromCopies, into)
-	out.Marked = marked
-	return out, err
+	marked := a.markMerged(ctx, st, b, fromCopies, into)
+	marked += a.rosterTombstone(ctx, st, b, fromCopies, into)
+	cerr := b.commit()
+	out.Rows = 0
+	for src, n := range edited {
+		edited[src] = min(n, b.written[src]) // a store whose commit failed wrote none
+		out.Rows += edited[src]
+	}
+	out.Marked = min(marked, b.total()-out.Rows)
+	out.Written = mergeStoreCounts(edited, labels)
+	if ferr := b.failedErr(actorMergeVerb+" "+from.String()+" "+into.String(), "lore actor merge "+from.String()+" "+into.String()+" --yes"); ferr != nil {
+		return out, ferr
+	}
+	return out, cerr
+}
+
+// mergeStoreCounts is per-store row counts as the output lists them,
+// sorted by label.
+func mergeStoreCounts(per map[store.Source]int, label func(store.Source) string) []opsinfra.ActorMergeStore {
+	var out []opsinfra.ActorMergeStore
+	for src, n := range per {
+		if n > 0 {
+			out = append(out, opsinfra.ActorMergeStore{Store: label(src), Rows: n})
+		}
+	}
+	slices.SortFunc(out, func(x, y opsinfra.ActorMergeStore) int { return strings.Compare(x.Store, y.Store) })
+	return out
 }
 
 // actorCopies reads every live copy of the two actors' rows.
@@ -244,19 +284,20 @@ func actorRefEdits(ctx context.Context, st *state, m map[string]ids.AnyID, skip 
 
 // markMerged marks each writable copy of the merged actor's row: merged_into
 // into, inactive, status left (TEAM_PROFILES 6.4's marking, which every
-// report follows). A copy already marked is left alone. A store that keeps
-// only an actor's id, name and kind (a repo or client store, F18) drops
-// the Internal merged_into and stable_key on the write: that copy is then
-// inactive and no longer carries the shared key; the roster's copy keeps
-// the mark.
-func (a *App) markMerged(ctx context.Context, st *state, copies []actorCopy, into ids.AnyID) (int, error) {
+// report follows), staged in b with the merge's edits. A copy already
+// marked is left alone. A store that keeps only an actor's id, name and
+// kind (a repo or client store, F18) drops the Internal merged_into and
+// stable_key on the write: that copy is then inactive and no longer
+// carries the shared key; the roster's copy keeps the mark. It returns
+// the copies staged.
+func (a *App) markMerged(ctx context.Context, st *state, b *bulkWrite, copies []actorCopy, into ids.AnyID) int {
 	mv, err := value.TextOf(into.String())
 	if err != nil {
-		return 0, err
+		return 0
 	}
 	left, err := value.TextOf(schema.ActorStatusLeft)
 	if err != nil {
-		return 0, err
+		return 0
 	}
 	n := 0
 	for _, c := range copies {
@@ -266,13 +307,70 @@ func (a *App) markMerged(ctx context.Context, st *state, copies []actorCopy, int
 			continue
 		}
 		patch := map[string]value.Value{schema.FieldActorMergedInto: mv, schema.FieldActorActive: value.BoolOf(false), schema.FieldActorStatus: left}
-		if _, err := a.Update(ctx, engine.Ref{Store: c.src, Table: schema.TableActors, ID: c.r.ID}, patch); err != nil {
-			return n, errs.Prefix(actorMergeVerb+": mark "+c.r.ID.String()+" merged in "+string(c.src), err).
-				WithHint("run the same command again")
+		if b.update(engine.Ref{Store: c.src, Table: schema.TableActors, ID: c.r.ID}, patch) {
+			n++
 		}
-		n++
 	}
-	return n, nil
+	return n
+}
+
+// rosterTombstone writes the merged actor's marked row into the org
+// roster when the roster holds no copy of it (owner report 2026-11-12:
+// the old id lived only in a client folder, whose actor copies keep no
+// merged_into (F18), so nothing said where it went and `--created-by
+// <kept id>` missed the rows its history stamps name). The roster's row
+// carries the mark every read follows (engine mergedActors). It returns
+// 1 when it staged the row.
+func (a *App) rosterTombstone(ctx context.Context, st *state, b *bulkWrite, copies []actorCopy, into ids.AnyID) int {
+	roster := a.actorRosterStore(ctx, st)
+	if roster == "" || st.eng.ReadOnly(roster) || len(copies) == 0 {
+		return 0
+	}
+	for _, c := range copies {
+		if c.src == roster {
+			return 0 // markMerged marks the roster's own copy
+		}
+	}
+	f := copies[0].r
+	fields := map[string]value.Value{}
+	for k, v := range map[string]string{actorFieldKind: actorKindOf(fieldText(f, actorFieldKind)), actorFieldDisplay: fieldText(f, actorFieldDisplay),
+		schema.FieldActorMergedInto: into.String(), schema.FieldActorStatus: schema.ActorStatusLeft} {
+		if v == "" {
+			continue
+		}
+		tv, err := value.TextOf(v)
+		if err != nil {
+			return 0
+		}
+		fields[k] = tv
+	}
+	fields[schema.FieldActorActive] = value.BoolOf(false)
+	if b.create(roster, schema.TableActors, f.ID, fields) {
+		return 1
+	}
+	return 0
+}
+
+// storeLabels names the stores of st as the merge's output lists them:
+// a folder of an org store by the store that holds it and the folder
+// ("git@host:org/notes-two.git/client_a", or "<org>/<folder>" for the
+// store holding the org folder), never by the org's name alone (owner
+// report 2026-11-12: the dry run named "<org>" for rows that live in the
+// org's second store); other stores by StoreLabel.
+func (a *App) storeLabels(ctx context.Context, st *state) func(store.Source) string {
+	byFolder := map[string]string{}
+	for _, f := range a.orgFolders(ctx).Folders {
+		byFolder[f.Folder] = f.Label + targetSep + f.Folder
+	}
+	a.mu.Lock()
+	folders := maps.Clone(st.folders)
+	a.mu.Unlock()
+	return func(src store.Source) string {
+		if l, ok := byFolder[strings.Trim(folders[src], "/")]; ok {
+			return l
+		}
+		return a.StoreLabel(src)
+	}
 }
 
 // storeNames is srcs as text.
@@ -517,19 +615,21 @@ func (a *App) migrateActorKeys(ctx context.Context, dryRun bool) ([]string, int,
 	verb := "would map"
 	if !dryRun {
 		verb = "mapped"
+		b := a.bulk(ctx, "migrate "+StepActors, nil) // one store commit for the step's rows
 		for _, e := range edits {
-			if _, err := a.Update(ctx, e.ref, e.patch); err != nil {
-				return nil, 0, errs.Prefix("migrate: "+StepActors+": edit "+string(e.ref.Table)+" "+e.ref.ID.String(), err)
-			}
+			b.update(e.ref, e.patch)
 		}
 		for _, r := range live {
-			to, ok := m[r.ID.String()]
-			if !ok {
-				continue
+			if to, ok := m[r.ID.String()]; ok {
+				a.markMerged(ctx, st, b, []actorCopy{{store.SourceRepo, r}}, to)
 			}
-			if _, err := a.markMerged(ctx, st, []actorCopy{{store.SourceRepo, r}}, to); err != nil {
-				return nil, 0, err
-			}
+		}
+		cerr := b.commit()
+		if ferr := b.failedErr("migrate: "+StepActors, "lore migrate run"); ferr != nil {
+			return nil, 0, ferr
+		}
+		if cerr != nil {
+			return nil, 0, cerr
 		}
 	}
 	out := make([]string, 0, len(lines))

@@ -9,6 +9,9 @@ package metalist
 // (created_by, updated_by) from the same struct; Select applies them.
 
 import (
+	"context"
+
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -41,15 +44,17 @@ func (a Audit) matcher() (auditMatcher, error) {
 // keep reports whether r passes the filters. The row's audit actors are
 // read through auditfill.Defaults, so an old row without the keys answers
 // as the `unknown` actor, exactly as `lore migrate run` would write it.
-func (m auditMatcher) keep(r row.Row) bool {
+// An actor merged into the one asked for (`lore actor merge`) counts as
+// it (engine.SameActor): history stamps keep the old id.
+func (m auditMatcher) keep(ctx context.Context, r row.Row) bool {
 	if m.created.IsZero() && m.updated.IsZero() {
 		return true
 	}
 	r, _ = auditfill.Defaults(r)
-	if !m.created.IsZero() && r.CreatedBy != m.created {
+	if !m.created.IsZero() && !engine.SameActor(ctx, r.CreatedBy, m.created) {
 		return false
 	}
-	return m.updated.IsZero() || r.UpdatedBy == m.updated
+	return m.updated.IsZero() || engine.SameActor(ctx, r.UpdatedBy, m.updated)
 }
 
 // Keep is the filter for a list that embeds Audit without Flags (task
@@ -61,7 +66,7 @@ func (a Audit) Keep(rows []row.Row) ([]int, error) {
 	}
 	out := make([]int, 0, len(rows))
 	for i, r := range rows {
-		if m.keep(r) {
+		if m.keep(context.Background(), r) {
 			out = append(out, i)
 		}
 	}

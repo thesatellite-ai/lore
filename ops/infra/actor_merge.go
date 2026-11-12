@@ -48,6 +48,13 @@ type ActorMergeTable struct {
 	Rows  int    `json:"rows"`
 }
 
+// ActorMergeStore is how many rows of one store (an org store's folder:
+// "<store>/<folder>") the merge edits there.
+type ActorMergeStore struct {
+	Store string `json:"store"`
+	Rows  int    `json:"rows"`
+}
+
 // ActorMergeOut is the merge.
 type ActorMergeOut struct {
 	From     string `json:"from"`
@@ -57,10 +64,13 @@ type ActorMergeOut struct {
 	// Key is the stable key the two share ("" when they do not).
 	Key string `json:"stable_key,omitempty"`
 	// Rows counts the rows edited to name Into (would be, under DryRun),
-	// Tables per table; Stores names the stores read.
-	Rows   int               `json:"rows"`
-	Tables []ActorMergeTable `json:"tables,omitempty"`
-	Stores []string          `json:"stores,omitempty"`
+	// Tables per table, Written per store or folder where they live;
+	// Stores names every store read (an org store's folder by the store
+	// holding it and the folder, never by the org's name alone).
+	Rows    int               `json:"rows"`
+	Tables  []ActorMergeTable `json:"tables,omitempty"`
+	Written []ActorMergeStore `json:"written,omitempty"`
+	Stores  []string          `json:"stores,omitempty"`
 	// ReadOnly names stores holding rows that name From but attached
 	// read-only here: those rows are left; merge again where they are
 	// writable.
@@ -92,10 +102,20 @@ func (o ActorMergeOut) Text() string {
 			rows = strconv.Itoa(o.Rows) + " rows would name " + o.Into + " (" + strings.Join(parts, ", ") + ")"
 		}
 	}
-	b.WriteString("  " + rows + "; stores read: " + strings.Join(o.Stores, ", ") + "\n")
+	b.WriteString("  " + rows + "\n")
+	for _, w := range o.Written {
+		verb := " edited"
+		if o.DryRun {
+			verb = " to edit"
+		}
+		b.WriteString("    " + w.Store + ": " + strconv.Itoa(w.Rows) + verb + "\n")
+	}
+	b.WriteString("  stores read: " + strings.Join(o.Stores, ", ") + "\n")
 	if !o.DryRun {
 		b.WriteString("  " + o.From + " keeps its row with merged_into " + o.Into + " (inactive; actors are never deleted)\n")
 	}
+	// history stamps are kept as written (adoptfix): say so plainly
+	b.WriteString("  history stamps (created_by, updated_by) keep " + o.From + "; reads show " + o.Into + " " + o.IntoName + " for it\n")
 	for _, s := range o.ReadOnly {
 		b.WriteString("  left: " + s + " is attached read-only here; run the merge again where it is writable\n")
 	}

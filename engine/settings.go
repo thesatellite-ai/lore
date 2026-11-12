@@ -48,6 +48,31 @@ func levelOf(a Attached) policy.Level {
 // settingsRows reads the live rows of table in every attached store with
 // their levels, in precedence order.
 func (s storeSettings) settingsRows(table row.Table) ([]policy.Leveled[row.Row], error) {
+	e := s.e
+	e.openMu.Lock()
+	staging := len(e.open) > 0
+	memo, ok := e.settingsMemo[table]
+	e.openMu.Unlock()
+	if staging && ok {
+		return memo, nil
+	}
+	out, err := s.readSettingsRows(table)
+	if err != nil || !staging {
+		return out, err
+	}
+	e.openMu.Lock()
+	if len(e.open) > 0 { // staged rows are not visible to reads, so the stores read the same until it lands
+		if e.settingsMemo == nil {
+			e.settingsMemo = map[row.Table][]policy.Leveled[row.Row]{}
+		}
+		e.settingsMemo[table] = out
+	}
+	e.openMu.Unlock()
+	return out, nil
+}
+
+// readSettingsRows is settingsRows read from the stores.
+func (s storeSettings) readSettingsRows(table row.Table) ([]policy.Leveled[row.Row], error) {
 	ctx := context.Background()
 	var out []policy.Leveled[row.Row]
 	for _, name := range s.e.order {

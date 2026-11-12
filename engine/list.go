@@ -94,7 +94,7 @@ func (e *Engine) List(ctx context.Context, source store.Source, table row.Table)
 		if !keepAuthor(ctx, r) {
 			continue // INTEG-AUDIT-1 --created-by / --updated-by (authors.go)
 		}
-		out = append(out, r)
+		out = append(out, e.readRow(ctx, r))
 	}
 	slices.SortFunc(out, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
 	return out, nil

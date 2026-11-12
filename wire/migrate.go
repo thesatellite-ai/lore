@@ -901,6 +901,10 @@ func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun 
 	if err != nil {
 		return nil, err
 	}
+	reg, err := builtinRegistry()
+	if err != nil {
+		return nil, err
+	}
 	var found []ids.AnyID
 	var changes []store.Change
 	for _, sr := range rows {
@@ -918,7 +922,8 @@ func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun 
 		if step, ok := formatSteps[table]; ok {
 			r.Fields = step(r.Fields)
 		}
-		r, _ = auditfill.Defaults(r) // audit_fields (step 9): a v1 row never had *_by actors
+		r, _ = engine.NullEmptyRefs(reg, r) // v0.1.17's "" for "no ref" is written as null (engine/emptyref.go)
+		r, _ = auditfill.Defaults(r)        // audit_fields (step 9): a v1 row never had *_by actors
 		up, err := store.FromRow(r)
 		if err != nil {
 			return nil, err

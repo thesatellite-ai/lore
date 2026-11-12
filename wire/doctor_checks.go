@@ -106,6 +106,11 @@ func (a *App) DoctorTaskLeads(ctx context.Context, fix bool) ([]DoctorFinding, e
 		return nil, err
 	}
 	var out []DoctorFinding
+	// every lead written back in ONE store commit per store (owner report
+	// 2026-11-12: a write per row made a large doctor --fix take minutes)
+	b := a.bulk(ctx, "doctor --fix: write task leads into their assignees", nil)
+	staged := map[int]bool{}
+	var rowIDs []string // the task of each finding, by index
 	for _, src := range a.Stores() {
 		rows, err := a.List(ctx, src, schema.TableTasks)
 		if err != nil {
@@ -120,13 +125,31 @@ func (a *App) DoctorTaskLeads(ctx context.Context, fix bool) ([]DoctorFinding, e
 				Message: "task " + r.ID.String() + ": lead " + lead + " is not in its assignees (readers count it; written back on the next edit)",
 				Fix:     "lore doctor --fix"}
 			if fix {
-				if werr := a.writeLeadBack(ctx, src, r, lead, assignees); werr != nil {
-					f.Message += " (not fixed: " + werr.Error() + ")"
-				} else {
-					f.Fixed = true
+				if patch, perr := leadBackPatch(lead, assignees); perr != nil {
+					f.Message += " (not fixed: " + perr.Error() + ")"
+				} else if b.update(engine.Ref{Store: src, Table: schema.TableTasks, ID: r.ID}, patch) {
+					staged[len(out)] = true
 				}
 			}
 			out = append(out, f)
+			rowIDs = append(rowIDs, r.ID.String())
+		}
+	}
+	if !fix || len(staged) == 0 {
+		return out, nil
+	}
+	_ = b.commit() // a failed store write is in b.failed
+	failed := map[string]string{}
+	for _, x := range b.failed {
+		failed[x.ID] = x.Reason
+	}
+	for i := range out {
+		id := rowIDs[i]
+		switch {
+		case failed[id] != "":
+			out[i].Message += " (not fixed: " + failed[id] + ")"
+		case staged[i]:
+			out[i].Fixed = true
 		}
 	}
 	return out, nil
@@ -141,22 +164,21 @@ func taskLead(r row.Row) (string, []string) {
 	return lead, value.ItemStrings(r.Fields[schema.FieldTaskAssignees])
 }
 
-// writeLeadBack writes assignees = [lead, assignees...] on one task.
-func (a *App) writeLeadBack(ctx context.Context, src store.Source, r row.Row, lead string, assignees []string) error {
+// leadBackPatch is the edit writing assignees = [lead, assignees...].
+func leadBackPatch(lead string, assignees []string) (map[string]value.Value, error) {
 	items := make([]value.Value, 0, len(assignees)+1)
 	for _, x := range append([]string{lead}, assignees...) {
 		t, err := value.TextOf(x)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		items = append(items, t)
 	}
 	l, err := value.ListOf(value.KindText, items...)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = a.Update(ctx, engine.Ref{Store: src, Table: schema.TableTasks, ID: r.ID}, map[string]value.Value{schema.FieldTaskAssignees: l})
-	return err
+	return map[string]value.Value{schema.FieldTaskAssignees: l}, nil
 }
 
 // agentKindPrefix is the "agent:" a display name may carry (identity

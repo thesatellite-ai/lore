@@ -236,6 +236,9 @@ func (e *Engine) dependents(ctx context.Context, table row.Table, id ids.AnyID) 
 	for _, r := range rules {
 		byTable[r.table] = append(byTable[r.table], r)
 	}
+	if out, ok, err := e.indexedDependents(ctx, byTable, table, id); ok { // a plan's one read (depindex.go)
+		return out, err
+	}
 	var out []dependent
 	for _, name := range e.allStores() { // P3-LOCAL-1: machine-local rows may point at the row too
 		rows, _, err := e.readRows(ctx, name, "")

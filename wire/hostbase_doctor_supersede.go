@@ -186,30 +186,39 @@ func (a *App) supersedeNodes(ctx context.Context, k supersedeKind) ([]supersedeN
 // setSuccessor writes id's superseded_by_id (next "" clears it) and, when
 // status is set, a decision's status.
 func (a *App) setSuccessor(ctx context.Context, t row.Table, id, next, status string) error {
+	ref, patch, err := successorEdit(t, id, next, status)
+	if err != nil {
+		return err
+	}
+	_, err = a.Update(ctx, ref, patch)
+	return err
+}
+
+// successorEdit is setSuccessor's edit: the row and its patch.
+func successorEdit(t row.Table, id, next, status string) (engine.Ref, map[string]value.Value, error) {
 	rid, err := ids.ParseAny(id)
 	if err != nil {
-		return errs.Wrap(errs.InvalidID, id+" is not an id", err)
+		return engine.Ref{}, nil, errs.Wrap(errs.InvalidID, id+" is not an id", err)
 	}
 	var v value.Value = value.Null{}
 	if next != "" {
 		nid, perr := ids.ParseAny(next)
 		if perr != nil {
-			return errs.Wrap(errs.InvalidID, next+" is not an id", perr)
+			return engine.Ref{}, nil, errs.Wrap(errs.InvalidID, next+" is not an id", perr)
 		}
 		if v, err = value.RefOf(nid); err != nil {
-			return err
+			return engine.Ref{}, nil, err
 		}
 	}
 	patch := map[string]value.Value{supersedeFieldNext: v}
 	if status != "" {
 		s, serr := value.TextOf(status)
 		if serr != nil {
-			return serr
+			return engine.Ref{}, nil, serr
 		}
 		patch[supersedeFieldStatus] = s
 	}
-	_, err = a.Update(ctx, engine.Ref{Table: t, ID: rid}, patch)
-	return err
+	return engine.Ref{Table: t, ID: rid}, patch, nil
 }
 
 // describeSupersedeFixes names each repair as "<kind> <old> → <new>".
@@ -304,10 +313,22 @@ func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail f
 	return nil
 }
 
-// applySupersedes writes every plan: new links first, clears after, so an
-// interruption never loses a link. It returns the links repaired.
+// applySupersedes writes every plan: new links first, clears after, all
+// of a store's rows in ONE store commit (owner report 2026-11-12: one
+// commit and push per link took 24 minutes for 85 links). A row that
+// cannot be written is listed with its reason; the others are written.
+// It returns the links repaired.
 func (a *App) applySupersedes(ctx context.Context, plans []supersedeKindPlan) (int, error) {
-	done := 0
+	b := a.bulk(ctx, "doctor --fix: --supersedes links onto the rows they replace", nil)
+	stage := func(t row.Table, id, next, status string) {
+		ref, patch, err := successorEdit(t, id, next, status)
+		if err != nil {
+			b.fail(bulkFailure{Table: string(t), ID: id}, err, ref)
+			return
+		}
+		b.update(ref, patch)
+	}
+	fixes := 0
 	for _, kp := range plans {
 		rowIDs := make([]string, 0, len(kp.plan.set))
 		for id := range kp.plan.set {
@@ -323,21 +344,23 @@ func (a *App) applySupersedes(ctx context.Context, plans []supersedeKindPlan) (i
 			if s := kp.nodes[id].decisionStatus; kp.k.table == schema.TableDecisions && (s == schema.DecisionStatusProposed || s == schema.DecisionStatusAccepted) {
 				status = schema.DecisionStatusSuperseded // a status a person set since (deprecated) is kept
 			}
-			if err := a.setSuccessor(ctx, kp.k.table, id, next, status); err != nil {
-				return done, errs.Prefix(fmt.Sprintf("supersede links: repair stopped at %s %s → %s", kp.k.name, id, next), err)
-			}
+			stage(kp.k.table, id, next, status)
 		}
 		for _, id := range rowIDs {
-			if kp.plan.set[id] != "" {
-				continue
-			}
-			if err := a.setSuccessor(ctx, kp.k.table, id, "", ""); err != nil {
-				return done, errs.Prefix(fmt.Sprintf("supersede links: repair stopped clearing %s %s", kp.k.name, id), err)
+			if kp.plan.set[id] == "" {
+				stage(kp.k.table, id, "", "")
 			}
 		}
-		done += len(kp.plan.fixes)
+		fixes += len(kp.plan.fixes)
 	}
-	return done, nil
+	cerr := b.commit()
+	if ferr := b.failedErr("supersede links", "lore doctor --fix"); ferr != nil {
+		return 0, ferr
+	}
+	if cerr != nil {
+		return 0, cerr
+	}
+	return fixes, nil
 }
 
 // StepSupersedes is the migrate step that converts the old links.

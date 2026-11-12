@@ -57,21 +57,24 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckActorRoster, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorActorRoster(c, fix) }}, // doctor_roster.go
 		{DoctorCheckActorCopies, a.DoctorActorCopies},                                                                     // doctor_actorcopies.go (SOURCE_OF_TRUTH rows 2-3)
 		{DoctorCheckDuplicateActors, a.DoctorDuplicateActors},                                                             // doctor_dupactors.go
-		{DoctorCheckSharedKeys, a.DoctorSharedKeys},                                                                       // actor_merge.go
-		{DoctorCheckIdentitySource, a.DoctorIdentitySource},                                                               // doctor_identitysource.go (SOURCE_OF_TRUTH row 1)
-		{DoctorCheckRenderedCopy, a.DoctorRenderedCopies},                                                                 // doctor_render.go (SOURCE_OF_TRUTH rows 10-12)
-		{DoctorCheckSkillCopy, a.DoctorSkillCopies},                                                                       // doctor_skillcopies.go (SOURCE_OF_TRUTH row 13)
-		{DoctorCheckStoreAddress, a.DoctorStoreAddresses},                                                                 // storeaddr.go (SOURCE_OF_TRUTH row 7)
-		{DoctorCheckOrgSource, a.DoctorOrgSources},                                                                        // orgsource.go (SOURCE_OF_TRUTH row 9)
-		{DoctorCheckRowFormat, a.DoctorRowFormat},                                                                         // doctor_rowformat.go
-		{DoctorCheckOldDBEdits, a.DoctorOldDBEdits},                                                                       // v017edits.go
+		{DoctorCheckSharedKeys, a.DoctorSharedKeys},
+		{DoctorCheckEmptyRef, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorEmptyRefs(c, fix) }}, // doctor_emptyref.go                                                                       // actor_merge.go
+		{DoctorCheckIdentitySource, a.DoctorIdentitySource},                                                          // doctor_identitysource.go (SOURCE_OF_TRUTH row 1)
+		{DoctorCheckRenderedCopy, a.DoctorRenderedCopies},                                                            // doctor_render.go (SOURCE_OF_TRUTH rows 10-12)
+		{DoctorCheckSkillCopy, a.DoctorSkillCopies},                                                                  // doctor_skillcopies.go (SOURCE_OF_TRUTH row 13)
+		{DoctorCheckStoreAddress, a.DoctorStoreAddresses},                                                            // storeaddr.go (SOURCE_OF_TRUTH row 7)
+		{DoctorCheckOrgSource, a.DoctorOrgSources},                                                                   // orgsource.go (SOURCE_OF_TRUTH row 9)
+		{DoctorCheckRowFormat, a.DoctorRowFormat},                                                                    // doctor_rowformat.go
+		{DoctorCheckOldDBEdits, a.DoctorOldDBEdits},                                                                  // v017edits.go
 	}
-	if NoCreate(ctx) && a.gitRepoWithoutLore(ctx) { // doctor_nocreate.go
-		line := doctorNoProjectNote
-		if remote := linkedByRemote(ctx, a.opts); remote != "" {
-			line = doctorLinkedByRemoteNote(remote)
-		}
-		return []opsdoctor.CheckRun{{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: opsdoctor.LevelNote, Line: line}}}}
+	// A repo linked to a store folder by its remote opens without making
+	// anything (its rows live in the folder), so the store checks run
+	// there: doctor --fix in the client repo repairs the folder's rows
+	// (owner report 2026-11-12). Its "holds no lore data" note comes from
+	// the repo class check. Only a repo neither set up nor linked stops at
+	// one note.
+	if NoCreate(ctx) && a.gitRepoWithoutLore(ctx) && linkedByRemote(ctx, a.opts) == "" { // doctor_nocreate.go
+		return []opsdoctor.CheckRun{{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: opsdoctor.LevelNote, Line: doctorNoProjectNote}}}}
 	}
 	// Outside any git work tree there is no repo store to open: a check
 	// that needs it is skipped (one note below), not counted as a check
