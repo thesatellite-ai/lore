@@ -236,9 +236,9 @@ func agStart(t *testing.T) *agJ {
 		if l := agLine(who.Stdout, "org"); !strings.Contains(l, "project id + remote") {
 			t.Errorf("whoami after the link does not say the link matched: %q", l)
 		}
-		// Off a terminal (an agent's shell, a log the client may read)
-		// whoami hides the store's address.
-		who.Never(t, agStoreSlug)
+		// Off a terminal (an agent's shell) whoami still names the store's
+		// address: it is no secret, and "<redacted>" told Dana nothing.
+		who.Says(t, agStoreSlug).Never(t, "<redacted>")
 	})
 
 	w.Step("day1/first-notes", func() {
