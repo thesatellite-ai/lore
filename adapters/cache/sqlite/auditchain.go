@@ -138,7 +138,7 @@ func (a *AuditChain) Imported(ctx context.Context, chain string) (bool, error) {
 // rows came from (a lore.db path), for doctor and support.
 func (a *AuditChain) Import(ctx context.Context, chain, source string, recs []auditchain.Record, now time.Time) (n int, err error) {
 	defer func() { err = a.writes.explain(err) }() // a quota or I/O failure names the file
-	tx, err := a.db.BeginTx(ctx, nil)
+	tx, err := beginWrite(ctx, a.db)
 	if err != nil {
 		return 0, dbErr("audit chain: begin import", err)
 	}
@@ -191,7 +191,7 @@ func (a *AuditChain) Append(ctx context.Context, chain string, e auditchain.Reco
 	if err != nil {
 		return auditchain.Record{}, errs.Wrap(errs.Internal, "audit chain: new id", err)
 	}
-	tx, err := a.db.BeginTx(ctx, nil)
+	tx, err := beginWrite(ctx, a.db)
 	if err != nil {
 		return auditchain.Record{}, dbErr("audit chain: begin", err)
 	}
