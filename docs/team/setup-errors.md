@@ -77,6 +77,19 @@ ERROR: [E_SETUP_STEP_ORDER] step identity needs kind first
 
 ## Invites
 
+### `E_JOIN_ORG_UNKNOWN` (exit 27)
+
+**Cause:** `lore setup join <name>` names an org this machine has no entry for. A member an admin added with `lore member add` joins from a fresh machine, where the org's name means nothing yet.
+
+```console
+$ lore setup join toy --no-open
+ERROR: [E_JOIN_ORG_UNKNOWN] setup join: no org named "toy" on this machine yet; join with the org's store url the admin gave you
+  hint: lore setup join <the org's store url> (lore member add printed it for your admin); an outsider: paste the whole line starting with lore-invite:v1:
+(exit 27)
+```
+
+**Fix:** run the command `lore member add` printed for your admin: `lore setup join <the org's store url>` (for example `lore setup join git@github.com:toyco/toy-team.git`).
+
 ### `E_INVITE_INVALID` (exit 20)
 
 **Cause:** the text given to `lore setup join` (or pasted on the page) is not a whole lore invite: the `lore-invite:v1:` prefix is missing, or the text after it was cut or changed (a chat app may break a long line).

@@ -54,7 +54,7 @@ const (
 	gitWiringStamp      = "git-wiring"
 	gitWiringReadSuffix = ".read"
 	// gitWiringVersion changes whenever what is installed changes.
-	gitWiringVersion = "1"
+	gitWiringVersion = "2"
 	binaryName       = "lore"
 )
 
@@ -155,7 +155,13 @@ func hookBlocks(rel string) map[string]struct {
 	}
 	bn := binaryName
 	guard := `command -v ` + bn + ` >/dev/null 2>&1 && `
-	refresh := []string{"( " + cd + guard + bn + " sync hook refresh >/dev/null 2>&1 ) || true"}
+	// The refresh blocks name their hook (and post-rewrite its "$1",
+	// "rebase" or "amend"): the refresh then tells the post-rewrite that
+	// ends a rebase, which may render, from a checkout or amend inside one,
+	// which must not (refreshDeferred).
+	refresh := func(hook, args string) []string {
+		return []string{"( " + cd + guard + bn + " sync hook refresh " + hook + args + " >/dev/null 2>&1 ) || true"}
+	}
 	probe := bn + " sync hook --help >/dev/null 2>&1"
 	tooOld := `echo "` + bn + `: installed ` + bn + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`
 	coreProbe := bn + " migrate --help >/dev/null 2>&1"
@@ -172,9 +178,9 @@ func hookBlocks(rel string) map[string]struct {
 	}
 	return map[string]block{
 		hookPreCommit:    {marker, []string{"( " + cd + "if command -v " + bn + " >/dev/null 2>&1; then if ! " + coreProbe + " && " + hasV2 + "; then " + needsCore + "; elif " + probe + "; then " + bn + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"}},
-		hookPostCheckout: {marker, refresh},
-		hookPostMerge:    {marker, refresh},
-		hookPostRewrite:  {marker, refresh},
+		hookPostCheckout: {marker, refresh(hookPostCheckout, "")},
+		hookPostMerge:    {marker, refresh(hookPostMerge, "")},
+		hookPostRewrite:  {marker, refresh(hookPostRewrite, ` "$1"`)},
 		hookCommitMsg: {marker, []string{
 			"( " + absMsg + cd + guard + bn + ` task hook commit-msg "$m" >/dev/null 2>&1 ) || true`,
 			"( " + absMsg + cd + "if command -v " + bn + " >/dev/null 2>&1 && " + bn + " check leaks --help >/dev/null 2>&1; then " + bn + ` check leaks --staged --commit-msg "$m"; ` + noChecker + `fi ) || exit $?`,
@@ -343,7 +349,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks, cfgPath, bin,
 		missing = append(missing, "hook blocks in "+hooks+" ("+strings.Join(stale, ", ")+")")
 	}
 	if len(missing) > 0 {
-		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
+		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
 	}
 	if data {
 		switch still, err := stillIgnoredData(ctx, root, false); {

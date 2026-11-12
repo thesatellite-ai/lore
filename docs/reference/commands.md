@@ -41,7 +41,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore actor register` | Put yourself (or, with --kind agent, an agent you own) on the org roster | [team/commands › lore actor register](../../docs/team/commands.md#lore-actor-register) |
 | `lore actor rejoin` | A person who left comes back: a new stint on the same actor (memberships are not restored); asks first | [team/profiles › Step 7 — Offboard someone who leaves](../../docs/team/profiles.md#step-7--offboard-someone-who-leaves), [Step 8 — Rejoin](../../docs/team/profiles.md#step-8--rejoin) |
 | `lore actor show` | Show actor details | [team/commands › lore actor register](../../docs/team/commands.md#lore-actor-register) |
-| `lore actor status` | Set a person's status: active, on_leave (--from, --until), left or archived (TEAM_PROFILES 5.3) | [team/profiles › Step 1 — Fill in a profile](../../docs/team/profiles.md#step-1--fill-in-a-profile), [Step 6 — Leave and come back](../../docs/team/profiles.md#step-6--leave-and-come-back) |
+| `lore actor status` | Set a person's status: active, on_leave (--from, --until), left or archived | [team/profiles › Step 1 — Fill in a profile](../../docs/team/profiles.md#step-1--fill-in-a-profile), [Step 6 — Leave and come back](../../docs/team/profiles.md#step-6--leave-and-come-back) |
 
 ### lore agent
 
@@ -366,8 +366,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore member` … | The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join <org> | — |
-| `lore member add` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join <org> | — |
+| `lore member` … | The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join <the org's store url> | — |
+| `lore member add` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join <the org's store url> | — |
 | `lore member edit` | Change a person's name, @handle or org-level role | — |
 | `lore member list` | List the org's people: email, name, org role, handle, teams | — |
 | `lore member remove` | Take a person off the org (actor offboard: their stint and memberships end; the row stays for history) | — |
@@ -603,7 +603,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore repo fork` | This clone is a fork (or --split): give it its own permanent repo id | [sync/multi-repo-projects › Step 5 — The repo moved](../../docs/sync/multi-repo-projects.md#step-5--the-repo-moved-record-its-new-address), [Step 6 — A fork gets its own repo id](../../docs/sync/multi-repo-projects.md#step-6--a-fork-gets-its-own-repo-id) |
 | `lore repo init` | Initialize a lore project in this repository (project row and repo id); the same as lore init | [sync/multi-repo-projects › Step 4 — Archive, unarchive and delete](../../docs/sync/multi-repo-projects.md#step-4--archive-unarchive-and-delete) |
 | `lore repo list` | List repos in the current project | [sync/multi-repo-projects › Step 4 — Archive, unarchive and delete](../../docs/sync/multi-repo-projects.md#step-4--archive-unarchive-and-delete) |
-| `lore repo merge-ids` | Rewrite _o.repo of rows stamped with an alias repo id to the winning id, then clear the aliases (PROVENANCE 11.9) | [sync/multi-repo-projects › Step 5 — The repo moved](../../docs/sync/multi-repo-projects.md#step-5--the-repo-moved-record-its-new-address), [Step 6 — A fork gets its own repo id](../../docs/sync/multi-repo-projects.md#step-6--a-fork-gets-its-own-repo-id) |
+| `lore repo merge-ids` | Rewrite _o.repo of rows stamped with an alias repo id to the winning id, then clear the aliases | [sync/multi-repo-projects › Step 5 — The repo moved](../../docs/sync/multi-repo-projects.md#step-5--the-repo-moved-record-its-new-address), [Step 6 — A fork gets its own repo id](../../docs/sync/multi-repo-projects.md#step-6--a-fork-gets-its-own-repo-id) |
 | `lore repo set-url` | Confirm this repo's address: the primary (moved or renamed), a --mirror, or --remove one | [sync/multi-repo-projects › Step 5 — The repo moved](../../docs/sync/multi-repo-projects.md#step-5--the-repo-moved-record-its-new-address), [Step 6 — A fork gets its own repo id](../../docs/sync/multi-repo-projects.md#step-6--a-fork-gets-its-own-repo-id) |
 | `lore repo unarchive` | Unarchive a repo (clear archived_at) | [sync/multi-repo-projects › Step 4 — Archive, unarchive and delete](../../docs/sync/multi-repo-projects.md#step-4--archive-unarchive-and-delete) |
 

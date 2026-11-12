@@ -421,6 +421,13 @@ func (o MoveOut) Text() string {
 	return b.String()
 }
 
+// Move is scope.move for a caller outside the registry: lore fix relabels
+// a folder scope git saw renamed (B3-5) with exactly what `lore scope
+// move` does, so the two can never drift.
+func Move(ctx context.Context, env Env, in MoveIn) (MoveOut, error) {
+	return ops{env: env}.move(ctx, in)
+}
+
 // move relabels the scope at old and every scope under it (6.2.3, D12):
 // only the scopes rows change, so no knowledge row is rewritten. A scope
 // already at a target path refuses the whole move before anything is
@@ -463,7 +470,7 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 	for _, m := range plan {
 		if taken[m.New] {
 			return MoveOut{}, errs.New(errs.InvalidInput, "scope move: a scope already exists at "+m.New).
-				WithHint("move its rows with `lore rule edit <id> --scope dir:" + m.New + "` instead")
+				WithHint("move its rows with each row's edit command (`lore <noun> edit <id> --scope dir:" + m.New + "`) instead")
 		}
 	}
 	out := MoveOut{Data: plan}

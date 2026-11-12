@@ -104,3 +104,57 @@ func TestSyncRepoAddressesAsksOnceInTerminal(t *testing.T) {
 		t.Fatalf("after the mirror answer:\n%s", again.String())
 	}
 }
+
+// TestSyncRepoAddressesFirstAddressIsRecorded (B3-16): a repo set up with
+// a local-path remote has no confirmed address; the first sync of a clone
+// with a real remote (a new laptop) records it as the primary, silently:
+// nothing changed, so there is no "remote changed" notice and no fork offer.
+func TestSyncRepoAddressesFirstAddressIsRecorded(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	ctx := context.Background()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = h.Repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v %s", cmd.Args, err, out)
+		}
+	}
+	git("remote", "add", "origin", "/srv/remotes/site.git") // a local path: no address
+	pid, err := h.App.Project(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.App.SeedRepoMeta(ctx, pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := h.App.EnsureRepoIdentity(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var local bytes.Buffer
+	h.App.SyncRepoAddresses(ctx, &local, strings.NewReader(""), true)
+	if local.String() != "" {
+		t.Fatalf("a local-path remote needs no notice:\n%s", local.String())
+	}
+	git("remote", "set-url", "origin", "git@git.example.test:pat/site.git")
+	var first bytes.Buffer
+	h.App.SyncRepoAddresses(ctx, &first, strings.NewReader("3\n"), true)
+	if first.String() != "" {
+		t.Fatalf("the first real address was reported instead of recorded:\n%s", first.String())
+	}
+	m, _, err := h.App.ReadRepoMeta(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.URLs) != 1 || m.URLs[0] != "git.example.test/pat/site" {
+		t.Fatalf("_meta.json urls = %v, want the first address confirmed", m.URLs)
+	}
+	// From now on a different address is a real change: the notice again.
+	git("remote", "set-url", "origin", "git@git.example.test:other/site.git")
+	var moved bytes.Buffer
+	h.App.SyncRepoAddresses(ctx, &moved, strings.NewReader(""), false)
+	if !strings.Contains(moved.String(), "! remote changed: this clone uses git.example.test/other/site, the repo record says git.example.test/pat/site") {
+		t.Fatalf("a later move:\n%s", moved.String())
+	}
+}

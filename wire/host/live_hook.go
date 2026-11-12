@@ -428,7 +428,11 @@ func liveProjectRoot(dir string) string {
 // The store operations that leave the repo alone (opsstores.LeavesRepo)
 // skip too: they write a store through its own clone and push it
 // themselves (skipLive).
-var liveSkip = []string{"init", "config", "identity", "whoami", "org", "migrate", "version", "spec", "setup"}
+//
+// upgrade (B4-4): it replaces the binary and then runs `lore fix` in its
+// own process for this project; holding the live lock around it made that
+// child wait on its parent's lock until it timed out.
+var liveSkip = []string{"init", "config", "identity", "whoami", "org", "migrate", "version", "spec", "setup", "upgrade"}
 
 // liveSkipOps are single operations that never touch the live ref although
 // their noun does. None today: see skipLiveRun for task heartbeat.
@@ -853,7 +857,7 @@ func staleRowsAnswer(e op.Entry, err error, storeWrites int) bool {
 func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) error {
 	if s.fetchErr != nil {
 		if age := s.fetchAge(); age != "" {
-			h.line(liveLogPrefix + "offline: using live rows as fetched " + age + " ago")
+			h.line(liveLogPrefix + s.fetchFault() + ": using live rows as fetched " + age + " ago")
 		}
 	}
 	if spec.Access != op.AccessWrite || opslive.IsOp(spec.Name) {

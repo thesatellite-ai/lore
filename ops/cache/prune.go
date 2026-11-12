@@ -5,8 +5,8 @@
 // the store again rebuilds its cache from the row files on its next
 // command.
 //
-//	cache.prune ─▶ Env.LoreHome ─▶ Plan (use records, store caches, v0.1.17 caches)
-//	            ─▶ nothing listed: "nothing to prune…" (+ drop dead use records)
+//	cache.prune ─▶ Env.LoreHome ─▶ Plan (use records, store caches, repo caches, v0.1.17 caches)
+//	            ─▶ nothing listed: drop dead use records; "nothing to prune…" only when none was dropped
 //	            ─▶ --dry-run: list + "--dry-run: nothing removed"
 //	            ─▶ not confirmed: E_NEEDS_CONFIRM (the surface asks [y/N] and runs again)
 //	            ─▶ delete each file, drop dead use records, "✓ removed …"
@@ -55,6 +55,9 @@ const (
 	// v017MetaRel is a v0.1.17 checkout's project marker, relative to its
 	// top; its project_id keeps that project's v0.1.17 cache.
 	v017MetaRel = ".lore/data/_meta.json"
+	// v017MetaMinVersionKey is the key a migrated repo's v017MetaRel
+	// sets (rowfs's repo format).
+	v017MetaMinVersionKey = "min_lore_version"
 	// v017MetaProjectKey is the project id key of v017MetaRel.
 	v017MetaProjectKey = "project_id"
 	// repoMarkerRel is the folder whose presence makes a recorded repo live.
@@ -66,7 +69,7 @@ var v017Sidecars = []string{"", "-wal", "-shm"}
 
 // Lines of the v0.1.17 command (CLI_REFERENCE 3.25 sample).
 const (
-	lineNothing   = "nothing to prune: every cache file belongs to a store a repo on this machine attaches"
+	lineNothing   = "nothing to prune: every cache file belongs to a repo on this machine or a store one attaches"
 	lineHeader    = "cache files no repo on this machine attaches:"
 	lineDryRun    = "--dry-run: nothing removed"
 	question      = "Delete these cache files?"
@@ -112,9 +115,13 @@ type PruneOut struct {
 // Text prints the v0.1.17 lines (CLI_REFERENCE 3.25).
 func (o PruneOut) Text() string {
 	var b strings.Builder
-	if o.Count == 0 {
+	switch {
+	case o.Count == 0 && o.Records == 0:
 		b.WriteString(lineNothing + "\n")
-	} else {
+	case o.Count == 0:
+		// Only lore's own bookkeeping went: saying "nothing to prune" next
+		// to "removed N records" would contradict itself.
+	default:
 		b.WriteString(listing(o.Files, o.Bytes))
 		switch {
 		case o.DryRun:
@@ -161,8 +168,15 @@ func Ops(env Env) []op.Entry {
 type Plan struct {
 	// Stores are store caches (relative to the root) no live record lists.
 	Stores []sqlite.File
+	// Repos are repo-store caches (repo/<name>-<hash>.db) no live repo is
+	// named by: the cache of a checkout that moved or was deleted.
+	Repos []sqlite.File
 	// V017 are leftover v0.1.17 per-project caches no live repo is.
 	V017 []sqlite.File
+	// V017Trees are 0.1.17's store cache trees (stores/<host>/…, each a
+	// folder relative to the root): this lore keeps its store caches at
+	// stores/<store id>/<branch>/<folder>.db and never reads them (B4-7).
+	V017Trees []sqlite.File
 	// Dead are use records of repos that are gone (or unreadable).
 	Dead []sqlite.RecordFile
 }
@@ -175,7 +189,7 @@ func Prune(_ context.Context, root string, dryRun, yes bool) (PruneOut, error) {
 		return PruneOut{}, err
 	}
 	out := PruneOut{DryRun: dryRun, Files: []File{}}
-	for _, f := range slices.Concat(plan.Stores, plan.V017) {
+	for _, f := range slices.Concat(plan.Stores, plan.Repos, plan.V017, plan.V017Trees) {
 		out.Files = append(out.Files, File{Path: filepath.Join(root, filepath.FromSlash(f.Rel)), Size: f.Size})
 		out.Bytes += f.Size
 	}
@@ -194,13 +208,18 @@ func Prune(_ context.Context, root string, dryRun, yes bool) (PruneOut, error) {
 		return PruneOut{}, errs.New(errs.NeedsConfirm, strings.TrimSuffix(listing(out.Files, out.Bytes), "\n")+"\n"+question).
 			WithQuestion(question).WithHint(confirmHint).WithNext("lore", "cache", "prune", "--yes")
 	}
-	for _, f := range plan.Stores {
+	for _, f := range slices.Concat(plan.Stores, plan.Repos) {
 		if rerr := sqlite.RemoveCache(root, f.Rel); rerr != nil {
 			return PruneOut{}, rerr
 		}
 	}
 	for _, f := range plan.V017 {
 		if rerr := removeV017Cache(root, f.Rel); rerr != nil {
+			return PruneOut{}, rerr
+		}
+	}
+	for _, f := range plan.V017Trees {
+		if rerr := removeV017Tree(root, f.Rel); rerr != nil {
 			return PruneOut{}, rerr
 		}
 	}
@@ -217,6 +236,9 @@ func Prune(_ context.Context, root string, dryRun, yes bool) (PruneOut, error) {
 // folder; a live record's cache stays, except a stores.yaml entry the
 // repo's stores.yaml no longer names (`lore store remove` counts at once;
 // org and personal attachments are refreshed by the repo's next command).
+// A repo-store cache (repo/<name>-<hash>.db, named from the checkout's
+// path) stays while a live record's repo is named by it: a checkout that
+// moved gets a new name, so the old file is unused from then on.
 // A v0.1.17 per-project cache stays while a live repo has that project id.
 // Everything else is derived data of a store nobody here uses.
 func MakePlan(root string) (Plan, error) {
@@ -240,17 +262,33 @@ func MakePlan(root string) (Plan, error) {
 			}
 			keep[u.Path] = true
 		}
+		keep[sqlite.RepoCacheRel(rec.Repo)] = true
 		if p := v017Project(rec.Repo); p != "" {
 			keepProjects[p] = true
 		}
+	}
+	if plan.V017Trees, err = v017StoreTrees(root); err != nil {
+		return plan, err
 	}
 	files, err := sqlite.StoreCaches(root)
 	if err != nil {
 		return plan, err
 	}
 	for _, f := range files {
+		if inTree(plan.V017Trees, f.Rel) {
+			continue // the whole tree goes (listed once)
+		}
 		if !keep[f.Rel] {
 			plan.Stores = append(plan.Stores, f)
+		}
+	}
+	repos, err := sqlite.RepoCaches(root)
+	if err != nil {
+		return plan, err
+	}
+	for _, f := range repos {
+		if !keep[f.Rel] {
+			plan.Repos = append(plan.Repos, f)
 		}
 	}
 	old, err := v017Caches(root)
@@ -299,7 +337,10 @@ func committedStoreNames(top string) (names map[string]bool, trusted bool) {
 }
 
 // v017Project is the project id of top's v0.1.17 marker (.lore/data/
-// _meta.json), "" when there is none or it does not hold a valid one.
+// _meta.json), "" when there is none or it does not hold a valid one, or
+// the repo is migrated (B4-20: its _meta.json declares min_lore_version,
+// which every 0.1.18 write and migration sets; from then on nothing reads
+// the 0.1.17 cache of that project, and it was kept forever).
 func v017Project(top string) string {
 	b, err := os.ReadFile(filepath.Clean(filepath.Join(top, filepath.FromSlash(v017MetaRel))))
 	if err != nil {
@@ -309,9 +350,12 @@ func v017Project(top string) string {
 	if json.Unmarshal(b, &doc) != nil {
 		return ""
 	}
-	var id string
+	var id, minVersion string
 	if json.Unmarshal(doc[v017MetaProjectKey], &id) != nil || !isProjectID(id) {
 		return ""
+	}
+	if raw, ok := doc[v017MetaMinVersionKey]; ok && json.Unmarshal(raw, &minVersion) == nil && minVersion != "" {
+		return "" // migrated: the 0.1.17 cache is never read again
 	}
 	return id
 }
@@ -336,6 +380,14 @@ func v017Caches(root string) ([]sqlite.File, error) {
 	var out []sqlite.File
 	for _, e := range entries {
 		name := e.Name()
+		if !e.IsDir() && isV017LinkIndex(name) {
+			// B4-20: 0.1.17's store link index (links-<org>.json): this
+			// lore keeps links in the store clones and never reads it
+			if fi, ierr := e.Info(); ierr == nil {
+				out = append(out, sqlite.File{Rel: name, Size: fi.Size()})
+			}
+			continue
+		}
 		if e.IsDir() || !strings.HasSuffix(name, v017CacheExt) || !isProjectID(strings.TrimSuffix(name, v017CacheExt)) {
 			continue
 		}
@@ -349,6 +401,87 @@ func v017Caches(root string) ([]sqlite.File, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Rel < out[j].Rel })
 	return out, nil
+}
+
+// v017StoreDir is where both layouts keep store caches under the root.
+const v017StoreDir = "stores"
+
+// v017TreeMarker is the folder only 0.1.17's store cache tree holds: it
+// mirrored each store folder's checkout, .lore/ included
+// (stores/<host>/<owner>/<repo>/<branch>/<folder>/.lore/…).
+const v017TreeMarker = ".lore"
+
+// v017StoreTrees lists 0.1.17's store cache trees: a folder directly under
+// stores/ named like a host (it holds a dot; a store id never does) with a
+// .lore folder somewhere inside. Each is one entry, its size the sum of
+// its files.
+func v017StoreTrees(root string) ([]sqlite.File, error) {
+	base := filepath.Join(root, v017StoreDir)
+	entries, err := os.ReadDir(base)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "list "+base, err)
+	}
+	var out []sqlite.File
+	for _, e := range entries {
+		if !e.IsDir() || !strings.Contains(e.Name(), ".") {
+			continue
+		}
+		dir := filepath.Join(base, e.Name())
+		var size int64
+		marked := false
+		werr := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil // unreadable: counted as nothing
+			}
+			if d.IsDir() {
+				marked = marked || d.Name() == v017TreeMarker
+				return nil
+			}
+			if fi, ierr := d.Info(); ierr == nil {
+				size += fi.Size()
+			}
+			return nil
+		})
+		if werr != nil {
+			return nil, errs.Wrap(errs.Internal, "walk "+dir, werr)
+		}
+		if marked {
+			out = append(out, sqlite.File{Rel: v017StoreDir + "/" + e.Name(), Size: size})
+		}
+	}
+	return out, nil
+}
+
+// inTree reports whether rel lies inside one of trees.
+func inTree(trees []sqlite.File, rel string) bool {
+	return slices.ContainsFunc(trees, func(t sqlite.File) bool { return strings.HasPrefix(rel, t.Rel+"/") })
+}
+
+// removeV017Tree deletes one 0.1.17 store cache tree (stores/<host>).
+func removeV017Tree(root, rel string) error {
+	dir, name := filepath.Split(filepath.FromSlash(rel))
+	if filepath.Clean(dir) != v017StoreDir || name == "" || !strings.Contains(name, ".") {
+		return errs.New(errs.Internal, "refusing to remove "+rel+": not a 0.1.17 store cache tree in "+root)
+	}
+	if err := os.RemoveAll(filepath.Join(root, v017StoreDir, name)); err != nil {
+		return errs.Wrap(errs.Internal, "remove the 0.1.17 cache tree "+rel, err)
+	}
+	return nil
+}
+
+// v017LinkIndexPrefix and v017LinkIndexExt name 0.1.17's per-org link
+// index in the cache root (links-<org>.json).
+const (
+	v017LinkIndexPrefix = "links-"
+	v017LinkIndexExt    = ".json"
+)
+
+// isV017LinkIndex reports whether name is 0.1.17's link index file.
+func isV017LinkIndex(name string) bool {
+	return strings.HasPrefix(name, v017LinkIndexPrefix) && strings.HasSuffix(name, v017LinkIndexExt) && len(name) > len(v017LinkIndexPrefix)+len(v017LinkIndexExt)
 }
 
 // removeV017Cache deletes one v0.1.17 cache (name directly in root) and its

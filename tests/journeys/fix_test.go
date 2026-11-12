@@ -111,6 +111,21 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		lap.LoreIn(two, "memory", "list").OK(t).Says(t, "the widget queue drains at noon").Never(t, "run lore fix")
 	})
 
+	var four *teamharness.Clone
+	w.Step("day1/a-repo-without-a-lore-project", func() {
+		// B1-7: a repo whose .lore/ holds only a LORE.md, with a committed
+		// Claude Code settings file: lore fix --all must leave its tool
+		// settings alone (a teammate without lore would get failing hooks)
+		four = lap.Clone(w.Remote("github.com/widgets/four"), "four")
+		four.WriteFile(".lore/LORE.md", "# notes\n")
+		four.WriteFile(".claude/settings.local.json", "{}\n")
+		// a checkout gives committed files 0644; the harness writes 0600
+		if err := os.Chmod(filepath.Join(four.Dir, ".lore", "LORE.md"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		four.CommitAll("no lore project")
+	})
+
 	w.Step("day1/fix-all-over-the-setup-folder", func() {
 		folder := filepath.Dir(three.Dir)
 		cfg := filepath.Join(lap.Home, ".lore", "config.yaml")
@@ -121,6 +136,10 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		r.Says(t, "== "+three.Dir, "== "+two.Dir, "== "+one.Dir, "none failed")
 		if fixV1Left(t, three) {
 			t.Fatal("lore fix --all left v1 rows in the third repo")
+		}
+		r.Says(t, "== "+four.Dir, "skipped: no lore project here")
+		if st := four.Git("status", "--porcelain"); strings.Contains(st, ".claude") {
+			t.Fatalf("lore fix --all changed the tool settings of a repo without a lore project:\n%s", st)
 		}
 		lap.Lore("", "fix", "--all").OK(t).Says(t, "Everything is current.").Never(t, "Upgraded")
 	})

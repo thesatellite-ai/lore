@@ -76,11 +76,18 @@ var homeLayout = []homeEntry{
 	{Pattern: "state/hook-seen", Dir: true, Collapse: true, What: "the rows already sent to an agent in its current session", ByHand: "safe to delete: the agent gets them again", Readme: true},
 	{Pattern: "state/" + ReadNoticeDir, Dir: true, Collapse: true, What: "notices a read gave once (a repo not yet wired for lore), so it does not repeat them", ByHand: "safe to delete: the notice shows once more", Readme: true},
 	{Pattern: "state/upgrade-check.json", What: "when lore last looked for a new version", ByHand: "safe to delete", Readme: true},
+	// B4-20: the record and lock of lore moving old store clones to stores/
+	{Pattern: "state/" + gitbackend.MoveRecordFile, What: "what lore moved when it put the store clones of lore 0.1.17 or an earlier build under stores/ (old place, new place, time), so doctor can tell a later change in an old clone", ByHand: "safe to delete once `lore doctor` names no old clone"},
+	{Pattern: "state/" + gitbackend.MoveLockFile, What: "the lock lore takes while it moves old store clones", ByHand: byHandLock},
 	{Pattern: "state/upgrade.lock", What: "the lock `lore upgrade` takes", ByHand: byHandLock, Readme: true},
 
 	{Pattern: "cache", Dir: true, What: "rebuildable caches: everything here is made again from the row files when deleted", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/**/*.corrupt-*", What: whatCorruptBak, ByHand: "safe to delete"},
 	{Pattern: "cache/" + machineCacheFile + "*", What: "the cache of state/machine.db, arranged for search", ByHand: byHandRebuilt, Readme: true},
+	// B4-7: 0.1.17 mirrored each store folder's checkout here
+	// (stores/<host>/<owner>/<repo>/<branch>/<folder>/.lore/…); a store id
+	// never holds a dot, a host does
+	{Pattern: "cache/stores/*.*", Dir: true, Collapse: true, What: "lore 0.1.17's store caches (stores/<host>/<owner>/<repo>/…); this lore does not read them", ByHand: "safe to delete; `lore cache prune` removes them"},
 	{Pattern: "cache/stores", Dir: true, What: "one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each)", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/stores/**", What: "a store folder's cache", ByHand: byHandRebuilt},
 	{Pattern: "cache/combined", Dir: true, What: "one cache per repo that attaches more stores than get a file each: combined/<hash of the repo path>.db", ByHand: byHandRebuilt, Readme: true},
@@ -89,19 +96,25 @@ var homeLayout = []homeEntry{
 	{Pattern: "cache/" + repoCacheDir + "/**", What: "a code repo's cache", ByHand: byHandRebuilt},
 	{Pattern: "cache/remote", Dir: true, What: "the cache of a repo linked by its remote that holds no .lore/ of its own: remote/<hash of the repo path>.db", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/remote/**", What: "a linked repo's cache", ByHand: byHandRebuilt},
-	{Pattern: "cache/repos", Dir: true, What: "one record per repo of the cache files it uses: repos/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)", ByHand: "deleting them lets `lore cache prune` remove caches a repo still uses (they are rebuilt)", Readme: true},
-	{Pattern: "cache/repos/**", What: "a repo's cache use record", ByHand: "safe to delete"},
+	{Pattern: "cache/uses", Dir: true, What: "one record per repo of the cache files it uses: uses/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)", ByHand: "deleting them lets `lore cache prune` remove caches a repo still uses (they are rebuilt)", Readme: true},
+	{Pattern: "cache/uses/**", What: "a repo's cache use record", ByHand: "safe to delete"},
+	{Pattern: "cache/repos", Dir: true, What: "the cache use records as an older lore kept them; the next command moves them to cache/uses", ByHand: "safe to delete"},
+	{Pattern: "cache/repos/**", What: "a repo's cache use record (older layout)", ByHand: "safe to delete"},
 	{Pattern: "cache/doctor-health.json", What: "the last `lore doctor` summary, for the setup page", ByHand: "safe to delete", Readme: true},
 	{Pattern: "cache/prj_*", What: "a cache from lore 0.1.17; `lore cache prune` removes it", ByHand: "safe to delete"},
+	{Pattern: "cache/links-*.json", What: "lore 0.1.17's index of an org's store links; this lore reads the links from the store clones; `lore cache prune` removes it", ByHand: "safe to delete"},
 
 	{Pattern: gitbackend.StoresDir, Dir: true, Collapse: true, What: "the stores lore keeps on this machine: stores/<owner>/<repo>/ is a plain git clone of each store (rows are JSON files you may open and edit; its .git/config holds lore's merge driver and your git identity for that store, user.name and user.email, so your own commits there carry it), stores/" + gitbackend.PersonalFolder + "/ the personal store when it is a plain folder (the _ keeps it apart from any owner folder); `lore where` lists each one", ByHand: "a clone with no unpushed work is safe to delete (lore clones it again); `lore store forget` removes one cleanly", Readme: true},
 	{Pattern: "personal", Dir: true, Collapse: true, What: "your personal notes as lore 0.1.17 kept them", ByHand: "your data: do not delete it before it is moved into the personal store", Readme: true},
 	{Pattern: "render", Dir: true, What: "private context rendered for repos from internal stores, one folder per repo (imported by that repo's CLAUDE.local.md)", ByHand: "safe to delete: the next `lore render` writes it again", Readme: true},
+	// B4-20: lore 0.1.17 wrote one file per project here, imported by the
+	// repo's CLAUDE.local.md until the next render points it at render/<repo id>/
+	{Pattern: "render/prj_*.md", What: "private context lore 0.1.17 rendered for one project (its CLAUDE.local.md imported it); this lore writes render/<repo id>/ instead", ByHand: "safe to delete once `lore render` (or `lore fix`) ran in that project's repos"},
 	{Pattern: "render/*", Dir: true, Collapse: true, What: "private context of one repo (imported by its CLAUDE.local.md)", ByHand: "safe to delete: the next `lore render` writes it again"},
 	{Pattern: "logs", Dir: true, What: "logs", ByHand: "safe to delete", Readme: true},
 	{Pattern: "logs/hooks.log*", What: "errors of agent hooks (`lore context --hook`), which must never print into the agent; capped, one older copy kept", ByHand: "safe to delete", Readme: true},
 	{Pattern: "tmp", Dir: true, Collapse: true, What: "scratch space for setup probes; lore removes what it left there after a day, and the folder once it is empty", ByHand: "safe to delete while no lore command runs", Readme: true},
-	{Pattern: "clones", Dir: true, Collapse: true, What: "store clones of an earlier 0.1.18 build (now under stores/)", ByHand: "safe to delete once `lore doctor` reports no unpushed work in it"},
+	{Pattern: "clones", Dir: true, Collapse: true, What: "store clones of lore 0.1.17 (<host>/<owner>/<repo>.git, a bare clone) or of an earlier 0.1.18 build (now under stores/; lore moves them itself)", ByHand: "safe to delete once `lore doctor` reports no unpushed work in it (`lore fix` removes the ones doctor proved safe)"},
 	{Pattern: "clones-v017", Dir: true, Collapse: true, What: "second store clones of an earlier 0.1.18 build (no longer used)", ByHand: "safe to delete"},
 	{Pattern: "worktrees", Dir: true, Collapse: true, What: "browse copies `lore store open` made in an earlier 0.1.18 build (it now prints the store's clone)", ByHand: "safe to delete"},
 }

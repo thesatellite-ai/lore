@@ -309,6 +309,8 @@ func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(mergeSubject)}, env: env}); err != nil {
 		return nil, nil, errors.Join(errs.Wrap(errs.Internal, "git: commit the merge", err), b.abortMerge(ctx))
 	}
+	b.clearOwnMerge(ctx)
+	b.clearSettlements(ctx)
 	return merged, nil, nil
 }
 
@@ -318,6 +320,9 @@ func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]
 func (b *Backend) threeWayResolve(ctx context.Context, remote string, env []string) ([]ids.AnyID, []store.Refusal, error) {
 	attrs, err := b.mergeAttributes()
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := b.markOwnMerge(ctx); err != nil {
 		return nil, nil, err
 	}
 	_, err = b.git.run(ctx, call{dir: b.work, args: []string{"-c", "core.attributesFile=" + attrs, "merge", "--no-ff", "--no-commit", "--no-verify", "--quiet", "-s", "ort", "-X", "no-renames", remote}, env: env})
@@ -332,6 +337,7 @@ func (b *Backend) threeWayResolve(ctx context.Context, remote string, env []stri
 	}
 	var merged []ids.AnyID
 	var refused []store.Refusal
+	var refusedPaths []string
 	for _, p := range paths {
 		if rowfs.IsFolderFile(p) {
 			if ferr := b.resolveFolderFile(ctx, p); ferr != nil {
@@ -345,11 +351,13 @@ func (b *Backend) threeWayResolve(ctx context.Context, remote string, env []stri
 		}
 		if refusal != nil {
 			refused = append(refused, *refusal)
+			refusedPaths = append(refusedPaths, p)
 			continue
 		}
 		merged = append(merged, id)
 	}
 	if len(refused) > 0 {
+		b.markSeen(ctx, refusedPaths) // a later local edit of these rows settles them (settle.go)
 		return nil, refused, b.abortMerge(ctx)
 	}
 	return merged, nil, nil
@@ -366,6 +374,7 @@ func (b *Backend) abortMerge(ctx context.Context) error {
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge", "--abort"}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: abort the merge", err)
 	}
+	b.clearOwnMerge(ctx)
 	return nil
 }
 
@@ -415,16 +424,18 @@ func (b *Backend) resolveRow(ctx context.Context, path string) (ids.AnyID, *stor
 	case theirs == nil:
 		result = ours
 	case b.cfg.merger == nil:
-		return id, &store.Refusal{ID: id, Code: errs.Stale, Reason: "both sides changed the row and no merger is configured", Folder: folder}, nil
+		if !b.settledSide(ctx, path, ours, theirs, &result) { // the person chose a side (settle.go)
+			return id, &store.Refusal{ID: id, Code: errs.Stale, Reason: "both sides changed the row and no merger is configured", Folder: folder}, nil
+		}
 	default:
 		m, conflict, merr := b.cfg.merger.Merge(base, ours, theirs)
 		if merr != nil {
 			return ids.AnyID{}, nil, errs.Wrap(errs.Internal, "git: merge a row", merr)
 		}
-		if conflict {
+		result = m
+		if conflict && !b.settledSide(ctx, path, ours, theirs, &result) { // the person chose a side (settle.go)
 			return id, &store.Refusal{ID: id, Code: conflictCode(table), Reason: "both sides changed the row and it cannot be merged automatically", Folder: folder}, nil
 		}
-		result = m
 	}
 	if err := checkMerged(rel, result); err != nil {
 		return ids.AnyID{}, nil, err

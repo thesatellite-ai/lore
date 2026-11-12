@@ -25,19 +25,19 @@ Pass `--commitment` when you add the task. Neither task shows up in `lore task l
 ```console
 # alice, in website
 $ lore task add 'Try a dark mode for the shop' --commitment someday
-lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
-✓ tsk_f147…5139 — Try a dark mode for the shop [medium]
+lore: wrote ~/work/website/.lore/data/tasks/tsk_3b62…e913.json
+✓ tsk_3b62…e913 — Try a dark mode for the shop [medium]
 lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 $ lore task add 'Add a FAQ page' --commitment proposed
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
-✓ tsk_2537…6bbb — Add a FAQ page [medium]
+lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
+✓ tsk_f147…5139 — Add a FAQ page [medium]
 lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
 $ lore task list
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
-○ tsk_d431…313a Write the welcome email [medium]
-○ tsk_b4f4…a5b0 Send the welcome email [medium]
-○ tsk_4c59…6c38 Check every link on the home page [medium]
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
 ```
 <!-- /example -->
 
@@ -49,9 +49,9 @@ $ lore task list
 ```console
 # alice, in website
 $ lore task triage
-○ tsk_2537…6bbb Add a FAQ page [medium] (proposed)
+○ tsk_f147…5139 Add a FAQ page [medium] (proposed)
 $ lore task someday
-○ tsk_f147…5139 Try a dark mode for the shop [medium] (someday)
+○ tsk_3b62…e913 Try a dark mode for the shop [medium] (someday)
 ```
 <!-- /example -->
 
@@ -62,9 +62,9 @@ To accept a proposal, change its commitment with `lore task edit`. It now shows 
 <!-- example: tasks#accept -->
 ```console
 # alice, in website
-$ lore task edit tsk_2537…6bbb --commitment accepted
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
-✓ tsk_2537…6bbb updated
+$ lore task edit tsk_f147…5139 --commitment accepted
+lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
+✓ tsk_f147…5139 updated
 lore live: (live, pushed) commit aba91f6 to origin refs/lore/live
 $ lore task triage
 (no tasks)
@@ -77,25 +77,25 @@ The shorter way is `lore task accept`, which sets the commitment to `accepted` a
 ```console
 # alice, in website
 $ lore task add 'Add a size guide' --commitment proposed
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
-✓ tsk_d191…45c2 — Add a size guide [medium]
+lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
+✓ tsk_77cb…76c4 — Add a size guide [medium]
 lore live: (live, pushed) commit d33587e to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 $ lore task add 'Rename the shop to Website Pro' --commitment proposed
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b4d3…11aa.json
-✓ tsk_b4d3…11aa — Rename the shop to Website Pro [medium]
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+✓ tsk_d191…45c2 — Rename the shop to Website Pro [medium]
 lore live: (live, pushed) commit 34010c1 to origin refs/lore/live
 $ lore task triage
-○ tsk_d191…45c2 Add a size guide [medium] (proposed)
-○ tsk_b4d3…11aa Rename the shop to Website Pro [medium] (proposed)
-$ lore task accept tsk_d191…45c2 --priority high
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
-✓ tsk_d191…45c2 updated
+○ tsk_77cb…76c4 Add a size guide [medium] (proposed)
+○ tsk_d191…45c2 Rename the shop to Website Pro [medium] (proposed)
+$ lore task accept tsk_77cb…76c4 --priority high
+lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
+✓ tsk_77cb…76c4 updated
 lore live: (live, pushed) commit 070bbeb to origin refs/lore/live
-$ lore task decline tsk_b4d3…11aa --reason wont_do --note 'The client keeps the name'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b4d3…11aa.json
-lore: wrote ~/work/website/.lore/data/comments/cmt_9a34…b418.json
-✓ tsk_b4d3…11aa cancelled
+$ lore task decline tsk_d191…45c2 --reason wont_do --note 'The client keeps the name'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+lore: wrote ~/work/website/.lore/data/comments/cmt_b4d3…11aa.json
+✓ tsk_d191…45c2 cancelled
   note kept as a comment
 lore live: (live, pushed) commit 2297d41 to origin refs/lore/live
 lore live: landed on main (c929695); leaves live once main is fetched
@@ -105,9 +105,9 @@ $ lore task list --status cancelled
 ✗ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
 $ lore task list --status cancelled --all
 ✗ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
-✗ tsk_b4d3…11aa Rename the shop to Website Pro [medium] (proposed)
-$ lore task show tsk_b4d3…11aa
-tsk_b4d3…11aa
+✗ tsk_d191…45c2 Rename the shop to Website Pro [medium] (proposed)
+$ lore task show tsk_d191…45c2
+tsk_d191…45c2
   title:    Rename the shop to Website Pro
   status:   cancelled
   priority: medium
@@ -115,7 +115,7 @@ tsk_b4d3…11aa
   closed:   wont_do
   notes:
     2026-11-02 10:06  The client keeps the name
-created 2026-11-02T10:06:05Z by act_05e9…4603 · updated 2026-11-02T10:06:20Z by act_05e9…4603
+created 2026-11-02T10:06:05Z by alice · updated 2026-11-02T10:06:20Z by alice
 ```
 <!-- /example -->
 
@@ -129,18 +129,18 @@ A declined task keeps its `proposed` commitment, so `lore task list --status can
 ```console
 # alice, in website
 $ lore task add 'Renew the SSL certificate' --defer-until 2026-12-01
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b69e…5ed7.json
-✓ tsk_b69e…5ed7 — Renew the SSL certificate [medium]
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
+✓ tsk_2537…6bbb — Renew the SSL certificate [medium]
 lore live: (live, pushed) commit a8de760 to origin refs/lore/live
 $ lore task deferred
-○ tsk_b69e…5ed7 Renew the SSL certificate [medium] ⏾2026-12-01
+○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
 $ lore task list --include-deferred
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
-○ tsk_d431…313a Write the welcome email [medium]
-○ tsk_b4f4…a5b0 Send the welcome email [medium]
-○ tsk_4c59…6c38 Check every link on the home page [medium]
-○ tsk_2537…6bbb Add a FAQ page [medium]
-○ tsk_b69e…5ed7 Renew the SSL certificate [medium] ⏾2026-12-01
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
+○ tsk_f147…5139 Add a FAQ page [medium]
+○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
 ```
 <!-- /example -->
 
@@ -153,9 +153,9 @@ On that day the task comes back into `lore task list` by itself. You do not need
 <!-- example: tasks#undefer -->
 ```console
 # alice, in website
-$ lore task edit tsk_b69e…5ed7 --clear-defer
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b69e…5ed7.json
-✓ tsk_b69e…5ed7 updated
+$ lore task edit tsk_2537…6bbb --clear-defer
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
+✓ tsk_2537…6bbb updated
 lore live: (live, pushed) commit 9169078 to origin refs/lore/live
 $ lore task deferred
 (no tasks)
@@ -171,11 +171,11 @@ The full list with the snoozed task, from the same run:
 # alice, in website
 $ lore task list --include-deferred
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
-○ tsk_d431…313a Write the welcome email [medium]
-○ tsk_b4f4…a5b0 Send the welcome email [medium]
-○ tsk_4c59…6c38 Check every link on the home page [medium]
-○ tsk_2537…6bbb Add a FAQ page [medium]
-○ tsk_b69e…5ed7 Renew the SSL certificate [medium] ⏾2026-12-01
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
+○ tsk_f147…5139 Add a FAQ page [medium]
+○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
 ```
 <!-- /example -->
 

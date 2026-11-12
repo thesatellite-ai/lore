@@ -2,11 +2,11 @@ package wire
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/execfile"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -26,7 +26,7 @@ func TestMigrateTeamLockRemoteGone(t *testing.T) {
 	fakeSSH := func(name, stderr string) string {
 		p := filepath.Join(bin, name)
 		body := "#!/bin/sh\nprintf '" + stderr + "' >&2\nexit 128\n"
-		if err := os.WriteFile(p, []byte(body), 0o700); err != nil {
+		if err := execfile.WriteFile(p, []byte(body), 0o700); err != nil {
 			t.Fatal(err)
 		}
 		return p

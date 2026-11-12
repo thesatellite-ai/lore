@@ -6,6 +6,8 @@ package wire
 // every other command:
 //
 //	FixSteps(dry) ─▶ migrate  (v0.1.17 rows, an interrupted migration)
+//	              ─▶ folder scopes (lore scope move for each folder scope
+//	              │   whose folder git saw renamed: scopegone.go)
 //	              ─▶ render   (a stale rendered copy, or rows just migrated)
 //	              ─▶ agent hooks (lore setup --agent-hooks; not in a client
 //	              │   repo, whose tracked files lore never changes)
@@ -44,6 +46,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -80,12 +83,43 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 		return []opsdoctor.FixStep{{Step: opsdoctor.StepMigrate, Result: "skipped: not inside a git repo"}}
 	}
 	mig := a.fixMigrate(ctx, top, dry, true)
+	scopes := a.fixScopes(ctx, top, dry, mig.Failed)
+	if !mig.Changed && !mig.Failed && !hasLoreProject(top) {
+		// B1-7, B1-8: a repo --all reached by a store link, or one whose
+		// .lore/ holds no project (only a LORE.md): nothing to render, and
+		// lore never adds its hooks to the tool settings of a repo whose
+		// team does not use lore (a teammate who pulls them gets a failing
+		// hook in every session)
+		rend := opsdoctor.FixStep{Step: opsdoctor.StepRender, Where: filepath.Join(top, filepath.FromSlash(opsrender.DefaultOut)), Result: skippedNoLoreProject}
+		hooks := opsdoctor.FixStep{Step: opsdoctor.StepAgentHooks, Where: top, Result: skippedNoLoreProject}
+		return []opsdoctor.FixStep{mig, scopes, rend, hooks, a.fixOldClones(ctx, dry)}
+	}
 	rend := a.fixRender(ctx, top, dry, mig.Changed && !mig.Failed)
 	if mig.Failed {
 		rend = renderAfterFailedMigrate(top)
 	}
-	steps := []opsdoctor.FixStep{mig, rend, a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)}
+	steps := []opsdoctor.FixStep{mig, scopes, rend, a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)}
+	if !mig.Failed && !(dry && mig.Changed) {
+		// B4-7: once migrate is current (a dry run that would migrate
+		// cannot tell yet), lore 0.1.17's database and backups go
+		steps = append(steps, a.fixOldFiles(ctx, top, dry))
+	}
 	return steps
+}
+
+// skippedNoLoreProject is the render and agent hooks steps' result in a
+// repo with no lore project of its own.
+const skippedNoLoreProject = "skipped: no lore project here (no .lore/data or " + attach.FileName + "), so lore leaves this repo's files as they are"
+
+// hasLoreProject reports whether the repo at top has a lore project of its
+// own: rows in .lore/data, or stores attached in .lore/stores.yaml.
+func hasLoreProject(top string) bool {
+	for _, p := range []string{filepath.Join(top, rowfs.LoreDir, rowfs.DataDir), filepath.Join(top, filepath.FromSlash(attach.FileName))} {
+		if _, err := os.Stat(p); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // FixRenderAgain renders once more after the doctor fixes, when their
@@ -106,7 +140,7 @@ func (a *App) FixRenderAgain(ctx context.Context) opsdoctor.FixStep {
 
 // renderAgainPrefix starts the result of the render step run again after
 // the doctor fixes.
-const renderAgainPrefix = "again, after the doctor fixes changed rows: "
+const renderAgainPrefix = "again, a rendered copy was stale after the doctor fixes: "
 
 // renderAfterFailedMigrate is the render step when the migrate step
 // failed (owner item 22): the rows are still in the format lore 0.1.17
@@ -132,6 +166,10 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 	// the stores and read every row (minutes on a big repo); a lock whose
 	// holder is gone is taken over by the run below
 	if err := migrateLockBlocked(top); err != nil {
+		if dryNeedsStores(dry, err) {
+			st.Result = dryStoresLine(err)
+			return st
+		}
 		st.Failed, st.Result = true, withHint(err)
 		return st
 	}
@@ -141,7 +179,13 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 		return st
 	}
 	_, modeB := FindModeBPointer(top)
-	if len(status.Pending) == 0 && !modeB && !strings.HasPrefix(status.Journal, "interrupted") {
+	// personal rows left in a 0.1.17 folder of the local personal store
+	// after its flatten are a migrate step too (personal_store_flatten)
+	orphans := false
+	if mc, cerr := readMachineConfig(a.opts.Home); cerr == nil {
+		orphans = mc.flattenedLocalPersonal(ctx, a.opts.Home, a.opts.rowfsOptions()...) != ""
+	}
+	if len(status.Pending) == 0 && !modeB && !orphans && !strings.HasPrefix(status.Journal, "interrupted") && len(a.v017Stores(ctx)) == 0 {
 		return st
 	}
 	via := migrateViaFirstSave
@@ -156,7 +200,20 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 		// does not ask for)
 		ctx = opsmigrate.WithTeamLock(ctx, a.fixTeamLock())
 	}
+	localBefore := ""
+	if mc, cerr := readMachineConfig(a.opts.Home); cerr == nil {
+		localBefore = mc.localPersonalV017(a.opts.Home)
+	}
 	out, err := opsmigrate.Run(ctx, a, opsmigrate.RunIn{DryRun: dry})
+	if localBefore != "" && !dry {
+		// personal_store_flatten switched personal.store to the folder's
+		// root: the open state still has `me` at the old folder, so the
+		// write after the first write's safe steps would land there (rows
+		// nothing reads any more) or fail on the tombstones; open again
+		if rerr := a.reopenState(); rerr != nil && err == nil {
+			err = rerr
+		}
+	}
 	if modeB && !dry {
 		// owner item 36: the conversion attached the "shared" store in
 		// stores.yaml, which this App's open state does not have; the steps
@@ -165,7 +222,21 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 			err = rerr
 		}
 	}
+	if err != nil && dry && errs.Has(err, errs.LinkUnknown) {
+		// B4-14: a dry run reaches no remote, so a store this lore never
+		// fetched (the first command after upgrading from 0.1.17) cannot
+		// answer whether this repo is a client repo; the real run fetches
+		// it first. Not a failure: say what the real run would do, from
+		// the rows on disk.
+		st.Changed, st.Result = true, "would migrate (the real run fetches the stores first; this dry run reached no remote, so it could not check this repo's store links)"
+		st.Detail = append(st.Detail, status.Pending...)
+		return st
+	}
 	if err != nil {
+		if dryNeedsStores(dry, err) {
+			st.Result = dryStoresLine(err)
+			return st
+		}
 		st.Failed, st.Result = true, err.Error()
 		if errs.Has(err, errs.MigrateLocked) {
 			st.Result = withHint(err) // what it waits for, or how to clear it
@@ -202,6 +273,54 @@ func withHint(err error) string {
 	return err.Error()
 }
 
+// passLockout prints the 0.1.17 lockout block a repo's run printed
+// (SayOldLoreLockout) on this process's stderr: a child's stderr is kept
+// only for its error, and the block must be seen wherever a store's
+// layout commit is made, `lore fix --all` included.
+func passLockout(stderr string) {
+	first, second := OldLoreLockoutLines[0], OldLoreLockoutLines[1]
+	head := first[:strings.Index(first, "%s")]
+	tail := first[strings.Index(first, "%s")+2:]
+	for line := range strings.SplitSeq(stderr, "\n") {
+		if (strings.HasPrefix(line, head) && strings.Contains(line, tail)) || line == second {
+			_, _ = fmt.Fprintln(os.Stderr, line)
+		}
+	}
+}
+
+// v017Stores names the stores this repo uses (stores.yaml, the personal
+// store, the org's stores) whose marker is still v0.1.17's (lore_store: 1)
+// and that this person may change. A repo whose only v0.1.17 data sits in
+// such a store has no v1 row of its own, so without this lore fix said
+// "current" and the store was never converted nor moved to the new
+// layout. A store that cannot be opened here is left to the migration,
+// which names it.
+func (a *App) v017Stores(ctx context.Context) []string {
+	var out []string
+	seen := map[string]bool{}
+	check := func(name string, s attach.Store) {
+		dir, err := a.storeDir(ctx, s)
+		if err != nil || seen[dir] {
+			return
+		}
+		seen[dir] = true
+		if m, merr := rowfs.ReadMarker(dir); merr == nil && m.Version < rowfs.MarkerFirstStores {
+			out = append(out, name)
+		}
+	}
+	if list, err := a.ListStores(ctx); err == nil {
+		for _, e := range list {
+			if !e.ReadOnly {
+				check(e.Name, attach.Store{URL: e.URL, Branch: e.Branch})
+			}
+		}
+	}
+	for _, s := range a.orgStoresHere(ctx) {
+		check(string(s.Name), s)
+	}
+	return out
+}
+
 // renderSkippedNoProject starts the render step's result when the repo
 // has no project to render (owner item 36): skipped with the reason, never
 // a failed repo.
@@ -210,6 +329,19 @@ const renderSkippedNoProject = "skipped: nothing to render: "
 // noProjectToRender reports whether err is Project's "no lore project".
 func noProjectToRender(err error) bool {
 	return errs.Has(err, errs.NotFound) && strings.Contains(err.Error(), noLoreProject)
+}
+
+// dryNeedsStores reports a dry run's migrate step stopped only because a
+// store is not on this machine yet: a dry run clones and moves nothing
+// (B4-14), so the stores the real run would read are missing, which is
+// not a failure of the migration.
+func dryNeedsStores(dry bool, err error) bool {
+	return dry && (errs.Has(err, errs.StoreUnreachable) || errs.Has(err, errs.LinkUnknown))
+}
+
+// dryStoresLine is the dry run's migrate line when the stores are missing.
+func dryStoresLine(err error) string {
+	return "would migrate once the stores are on this machine (a dry run clones and moves none; the next command that is not a dry run does): " + withHint(err)
 }
 
 // reopenState closes the App's open state so the next call opens it
@@ -249,11 +381,11 @@ func (a *App) fixRender(ctx context.Context, top string, dry, migrated bool) ops
 		return st
 	}
 	st.Changed = true
-	for _, f := range stale {
-		st.Detail = append(st.Detail, f.Line())
-	}
 	if dry {
 		st.Result = "would render"
+		for _, f := range stale {
+			st.Detail = append(st.Detail, f.Line())
+		}
 		return st
 	}
 	ans, err := h.Render(ctx, opsrender.RunIn{})
@@ -265,9 +397,17 @@ func (a *App) fixRender(ctx context.Context, top string, dry, migrated bool) ops
 		st.Failed, st.Result = true, err.Error()
 		return st
 	}
+	// B1-9, B4-6: the step reports what render wrote, never the findings
+	// from before it ran (they read as still wrong right after "rendered")
 	st.Result = "rendered"
-	if first := strings.TrimSpace(strings.SplitN(ans.Text, "\n", 2)[0]); first != "" {
+	lines := strings.Split(strings.TrimRight(ans.Text, "\n"), "\n")
+	if first := strings.TrimSpace(lines[0]); first != "" {
 		st.Result += ": " + first
+	}
+	for _, l := range lines[1:] {
+		if l = strings.TrimSpace(l); l != "" && !strings.Contains(l, PointerSkippedMark) {
+			st.Detail = append(st.Detail, l)
+		}
 	}
 	// A pointer file render left as it is (a symbolic link it does not
 	// write through) is named in the step: "skipped: <file>: <why>".
@@ -284,7 +424,14 @@ func (a *App) fixRender(ctx context.Context, top string, dry, migrated bool) ops
 // writes, for the tools set up here.
 func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor.FixStep {
 	st := opsdoctor.FixStep{Step: opsdoctor.StepAgentHooks, Where: top, Result: opsdoctor.ResultCurrent}
-	if client, _ := a.ClientRepo(ctx); client {
+	client, _ := a.ClientRepo(ctx)
+	if note, _ := a.RepoClassNote(ctx); client && dry && strings.Contains(note, string(errs.LinkUnknown)) {
+		// B4-14: see fixMigrate; the real run fetches the stores and then
+		// knows whether this is a client repo
+		st.Result = "would check once the stores are fetched (this dry run reached no remote): an own repo gets the hooks, a client repo none"
+		return st
+	}
+	if client {
 		st.Result = "skipped: a client repo (lore never changes its tracked files)"
 		return st
 	}
@@ -298,26 +445,45 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 		st.Failed, st.Result = true, err.Error()
 		return st
 	}
+	// A plan is one hook; a settings file holds several (B1-6: two files
+	// were "4 settings file(s)", each listed twice): one detail line per
+	// file, naming the hook events it gets.
 	var change []opssetup.HookPlan
+	var files []string
+	events := map[string][]string{}
 	for _, p := range plans {
-		if p.Change {
-			change = append(change, p)
-			st.Detail = append(st.Detail, p.Tool+": "+p.File)
+		if !p.Change {
+			continue
+		}
+		change = append(change, p)
+		key := p.Tool + ": " + p.File
+		if _, seen := events[key]; !seen {
+			files = append(files, key)
+		}
+		if ev := p.Hook.Event; ev != "" && !slices.Contains(events[key], ev) {
+			events[key] = append(events[key], ev)
 		}
 	}
 	if len(change) == 0 {
 		return st
 	}
+	for _, f := range files {
+		line := f
+		if len(events[f]) > 0 {
+			line += " (" + strings.Join(events[f], ", ") + ")"
+		}
+		st.Detail = append(st.Detail, line)
+	}
 	st.Changed = true
 	if dry {
-		st.Result = fmt.Sprintf("would write %d settings file(s)", len(change))
+		st.Result = fmt.Sprintf("would write %d settings file(s)", len(files))
 		return st
 	}
 	if err := h.WriteAgentHooks(ctx, change, false); err != nil {
 		st.Failed, st.Result = true, err.Error()
 		return st
 	}
-	st.Result = fmt.Sprintf("wrote %d settings file(s)", len(change))
+	st.Result = fmt.Sprintf("wrote %d settings file(s)", len(files))
 	return st
 }
 
@@ -340,22 +506,34 @@ func (a *App) fixOldClones(ctx context.Context, dry bool) opsdoctor.FixStep {
 			continue
 		}
 		n++
-		st.Detail = append(st.Detail, o.Base)
+		st.Detail = append(st.Detail, o.Paths()...) // B4-20: every folder it removes (the bare .git too)
 		if dry {
 			continue
 		}
-		for _, p := range []string{o.Base, o.Bare} {
+		for _, p := range o.Paths() {
 			if err := os.RemoveAll(p); err != nil {
 				st.Failed, st.Result = true, "remove "+p+": "+err.Error()
 				return st
 			}
 		}
 	}
+	// B4-20: the <host>/<owner>/ folders the clones sat in, and clones/
+	// itself, stay behind empty; they go too (only empty folders)
+	empty := 0
+	if !dry {
+		empty = removeEmptyDirs(st.Where)
+	}
 	if n == 0 {
+		if empty > 0 {
+			st.Changed, st.Result = true, fmt.Sprintf("removed %d empty folder(s) old clones left", empty)
+		}
 		return st
 	}
 	st.Changed = true
 	st.Result = fmt.Sprintf("removed %d old clone(s), everything in them is in the new clones", n)
+	if empty > 0 {
+		st.Result += fmt.Sprintf(", and %d empty folder(s) they left", empty)
+	}
 	if dry {
 		st.Result = fmt.Sprintf("would remove %d old clone(s)", n)
 	}
@@ -489,6 +667,7 @@ func runFixIn(ctx context.Context, root string, c fixChild) opsfix.RepoResult {
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	raw, runErr := cmd.Output()
+	passLockout(stderr.String())
 	var exitErr *exec.ExitError
 	if ctx.Err() != nil && cmd.Process != nil {
 		fixChildKill(cmd) // whatever of its group outlived the grace (git, ssh)
@@ -542,7 +721,7 @@ const stderrTailLines = 20
 // stderrTail is ": " and the last lines of a child's stderr ("" when it
 // printed none).
 func stderrTail(s string) string {
-	s = strings.TrimSpace(s)
+	s = strings.TrimSpace(crashDumpCut(s))
 	if s == "" {
 		return ""
 	}
@@ -551,6 +730,29 @@ func stderrTail(s string) string {
 		lines = append([]string{"…"}, lines[len(lines)-stderrTailLines:]...)
 	}
 	return ": " + strings.Join(lines, "\n")
+}
+
+// crashDumpStarts begin the goroutine and register dump the Go runtime
+// prints when a process is killed with SIGQUIT or crashes.
+var crashDumpStarts = []string{"SIGQUIT:", "SIGABRT:", "SIGSEGV:", "goroutine ", "panic: "}
+
+// crashDumpCut is a child's stderr up to the Go runtime's dump (B4-4: a
+// stopped child's register dump reached the terminal as its error); the
+// lines lore itself printed before it stay.
+func crashDumpCut(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		for _, p := range crashDumpStarts {
+			if strings.HasPrefix(l, p) {
+				head := strings.Join(lines[:i], "\n")
+				if strings.HasPrefix(l, "panic: ") {
+					head += "\n" + l // the panic message itself says what went wrong
+				}
+				return head + "\n(the Go runtime's stack dump left out)"
+			}
+		}
+	}
+	return s
 }
 
 // envelopeMessage is the message of a JSON error envelope a child printed
@@ -658,6 +860,19 @@ func isV1RowFile(p string) bool {
 	return slices.ContainsFunc(v1Markers, func(m []byte) bool { return bytes.Contains(head, m) })
 }
 
+// hasPendingV017Live reports whether the open state found lore 0.1.17
+// live rows its stores do not hold yet (state.pendingV017Live): a linked
+// client repo has no .lore/data of its own, so hasV017Rows never sees
+// them, and the write must still bring them in first (B4-5). Opening the
+// state costs a write nothing: it opens it anyway.
+func (a *App) hasPendingV017Live(ctx context.Context) bool {
+	if a.opts.Notice == nil {
+		return false // liveNote (which counts them) only runs with a notice writer
+	}
+	st, err := a.state(ctx)
+	return err == nil && st.pendingV017Live > 0
+}
+
 // oldRowsGate is the v0.1.17 gate of a command (owner item 11): a read in
 // a project with v0.1.17 rows prints OldRowsReadLine and changes nothing;
 // the first write runs the safe steps of lore fix (migrate, render), says
@@ -671,9 +886,10 @@ func (a *App) oldRowsGate(ctx context.Context, e op.Entry) error {
 	}
 	top := gitTopLevel(ctx, a.projectDir())
 	if !hasV017Rows(top) {
-		return nil
-	}
-	if e.Spec().Access != op.AccessWrite {
+		if e.Spec().Access != op.AccessWrite || !a.hasPendingV017Live(ctx) {
+			return nil
+		}
+	} else if e.Spec().Access != op.AccessWrite {
 		if a.opts.Notice != nil {
 			a.opts.Notice(OldRowsReadLine)
 		}
@@ -692,6 +908,13 @@ func (a *App) oldRowsGate(ctx context.Context, e op.Entry) error {
 	}
 	if a.opts.Notice != nil {
 		a.opts.Notice(fmt.Sprintf(oldRowsWriteLine, strings.Join(did, "; ")))
+		// the layout commits the migration made (FlattenAfterMigrate) are
+		// shared-store commits: named one per line, as lore fix names them
+		for _, l := range mig.Detail {
+			if strings.Contains(l, "layout commit") || strings.HasPrefix(l, "pushed store ") {
+				a.opts.Notice("lore: " + l)
+			}
+		}
 	}
 	return nil
 }

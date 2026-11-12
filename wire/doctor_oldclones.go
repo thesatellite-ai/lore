@@ -22,9 +22,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 )
 
 // DoctorCheckOldClones names the doctor check.
@@ -55,13 +57,17 @@ func (a *App) DoctorOldClones(ctx context.Context) ([]DoctorFinding, error) {
 		e, ok, why := git.MovedSafely(ctx, home, o)
 		if !ok {
 			out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorWarning,
-				Message: "old store clone " + o.Base + " still holds work the new layout does not have: " + why,
+				Message: "old store clone " + o.GitDir() + " still holds work the new layout does not have: " + why,
 				Fix:     "run any lore command so lore moves it (it prints why when it cannot); keep the folder until this check says it may go"})
 			continue
 		}
-		msg := "old store clone " + o.Base + " is left from an earlier build; everything in it is in " + e.To
+		where, from := o.Base, "an earlier build"
+		if o.V017 {
+			where, from = o.Bare, "lore 0.1.17 (its bare clone)"
+		}
+		msg := "old store clone " + where + " is left from " + from + "; everything in it is in " + e.To
 		if e.To == "" {
-			msg = "old store clone " + o.Base + " is left from an earlier build; it held no commit"
+			msg = "old store clone " + where + " is left from " + from + "; it held no commit of its own (nothing the remote lacks)"
 		}
 		out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorNote, Message: msg, Fix: o.RemoveCommand()})
 	}
@@ -82,7 +88,33 @@ func (a *App) DoctorOldClones(ctx context.Context) ([]DoctorFinding, error) {
 			Message: p + " is an org link clone of an earlier build; this lore no longer uses it (the org link code uses the store clone)",
 			Fix:     "rm -rf " + p})
 	}
-	return out, nil
+	return append(out, a.personalV017Findings(ctx)...), nil
+}
+
+// personalV017Findings names personal notes lore 0.1.17 filed per org
+// that this lore does not read yet: a git personal store clone that still
+// has 0.1.17 folders (the first-run step moves them; it says why when it
+// cannot), and live rows left in an old folder of the local personal
+// store after its flatten (lore migrate run moves them).
+func (a *App) personalV017Findings(ctx context.Context) []DoctorFinding {
+	home := a.opts.Home
+	var out []DoctorFinding
+	for _, p := range personalV017Candidates(home) {
+		out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorWarning,
+			Message: "personal store clone " + p.dir + " still holds notes lore 0.1.17 filed per org (" + strings.Join(git.PersonalFoldersV017At(p.dir), "/, ") + "/), which this lore does not read until they move to " + rowfs.StoreDataDir + "/",
+			Fix:     "run any lore command so lore moves them (it prints why when it cannot)"})
+	}
+	mc, err := readMachineConfig(home)
+	if err != nil {
+		return out
+	}
+	if dir := mc.flattenedLocalPersonal(ctx, home, a.opts.rowfsOptions()...); dir != "" {
+		n, folders := pendingLocalPersonal(ctx, dir, a.opts.rowfsOptions()...)
+		out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorWarning,
+			Message: strconv.Itoa(n) + " personal row(s) in " + dir + " (" + strings.Join(folders, "/, ") + "/) are in a lore 0.1.17 folder this lore does not read",
+			Fix:     "lore migrate run (moves them to the personal store's root)"})
+	}
+	return out
 }
 
 // freshOldCloneFinding is the warning for old-layout clones written after

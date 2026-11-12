@@ -172,7 +172,7 @@ func orgStoreURL(r opssetup.ProbeRequest, u string) error {
 	if answerText(r.Answers, onboard.QIDOrg) == "" {
 		return nil
 	}
-	if _, err := repourl.Normalize(u); err != nil {
+	if _, err := repourl.NormalizeStore(u); err != nil {
 		return errs.New(errs.InvalidInput, "a team store must be a hosted git repo such as git@github.com:agency/lore-team.git: "+err.Error())
 	}
 	if err := repourl.CheckFetchable(u); err != nil {
@@ -382,6 +382,8 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		return sp.collaborator(ctx, r)
 	case onboard.CheckIdentityRoster, onboard.CheckIdentityPeriod:
 		return sp.rosterCheck(ctx, r) // setupprobe_roster.go
+	case onboard.CheckInviteFound:
+		return sp.memberJoinFound(ctx, r) // setupprobe_memberjoin.go: a join by org name or store url (B2-13)
 	case onboard.CheckSecretsBackendPresent:
 		return sp.secretsBackend(ctx, r)
 	case onboard.CheckFoldersExist:
@@ -832,6 +834,18 @@ func (sp setupProber) storePrivate(ctx context.Context, r opssetup.ProbeRequest)
 	}
 	g := sp.p.GHRepoAs(ctx, v[onboard.VarOwner], v[onboard.VarRepo], opssetup.GHAccount(r.Setup))
 	res := outcome(g.Outcome, v)
+	if res.Status != onboard.StatusOK && !sp.isHTTPS(r) {
+		if what, ok := ghOptionalGap(g.Class); ok {
+			// gh is optional on the ssh route: its absence or a missing
+			// login says nothing about the store, so the unknown
+			// visibility is a note (B1-13: every repo's doctor was DEGRADED
+			// for it while lore fix said HEALTHY, and the line quoted gh's
+			// own help text).
+			v[onboard.VarLevel] = string(onboard.LevelInfo)
+			v[onboard.VarFixVariant] = string(onboard.FixGHOptional)
+			return result(onboard.StatusWarn, what+", so lore cannot check whether "+v[onboard.VarOwner]+"/"+v[onboard.VarRepo]+" is private", v)
+		}
+	}
 	if res.Status != onboard.StatusOK {
 		// gh could not answer (not logged in, no access, offline): the
 		// visibility is unknown. An error (the check could not run), never
@@ -850,6 +864,19 @@ func (sp setupProber) storePrivate(ctx context.Context, r opssetup.ProbeRequest)
 		return result(onboard.StatusFail, v[onboard.VarOwner]+"/"+v[onboard.VarRepo]+" is public", v)
 	}
 	return result(onboard.StatusError, "gh did not say whether the repo is private", v)
+}
+
+// ghOptionalGap names why gh could not answer when the reason is gh
+// itself (not installed, not logged in), not the store: ok is false for
+// every other class (no access, offline), which stays an error.
+func ghOptionalGap(c probe.Class) (what string, ok bool) {
+	switch c {
+	case probe.ClassNotLoggedIn:
+		return "gh is not logged in", true
+	case probe.ClassToolMissing:
+		return "gh is not installed", true
+	}
+	return "", false
 }
 
 // collaborator is invite.github_access (4.6): the invite's GitHub user is

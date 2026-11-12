@@ -6,8 +6,8 @@ import (
 )
 
 // TestCheckFetchable: the store url forms git can fetch pass; the bare
-// host/path id form, a relative or absolute local path and a blank value
-// are refused (D-DOCS-1).
+// host/path id form, a relative local path and a blank value
+// are refused (D-DOCS-1); an absolute path is a local git repository.
 func TestCheckFetchable(t *testing.T) {
 	for _, c := range []struct {
 		in   string
@@ -24,7 +24,7 @@ func TestCheckFetchable(t *testing.T) {
 		{"github.com/agency/notes.git", ErrNotFetchable},
 		{"GitHub.com/Agency/Notes", ErrNotFetchable},
 		{"agency/notes", ErrNotFetchable},
-		{"/srv/lore/me", ErrNotFetchable},
+		{"/srv/lore/me", nil}, // a git repository on this machine (NormalizeStore)
 		{"./notes", ErrNotFetchable},
 		{"", ErrEmpty},
 		{"   ", ErrEmpty},

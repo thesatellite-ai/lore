@@ -261,7 +261,14 @@ func TestDoctorClaudeLocal(t *testing.T) {
 	}{
 		{"no file", func(*testing.T, string) {}, "", true},
 		{"one import line", func(t *testing.T, repo string) { writeLocal(t, repo, "@.lore/LORE.md\n") }, "", true},
-		{"two lines", func(t *testing.T, repo string) { writeLocal(t, repo, "@.lore/LORE.md\nnotes here\n") }, "more than the one import line", false},
+		{"two lines", func(t *testing.T, repo string) { writeLocal(t, repo, "@.lore/LORE.md\nnotes here\n") }, "more than lore's import lines", false},
+		// what render writes for two private stores (B4-3): no warning
+		{"one import per store", func(t *testing.T, repo string) {
+			writeLocal(t, repo, "@~/.lore/render/prj_a/name-me.md\n\n@~/.lore/render/prj_a/sto_b.md\n")
+		}, "", true},
+		{"same import twice", func(t *testing.T, repo string) {
+			writeLocal(t, repo, "@~/.lore/render/prj_a/sto_b.md\n\n@~/.lore/render/prj_a/sto_b.md\n")
+		}, "more than once", false},
 		{"tracked", func(t *testing.T, repo string) {
 			writeLocal(t, repo, "@.lore/LORE.md\n")
 			gitIn(t, repo, nil, "add", claudeLocalFile)

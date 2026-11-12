@@ -211,3 +211,120 @@ func TestHumanBytes(t *testing.T) {
 type homeEnv string
 
 func (h homeEnv) LoreHome() string { return string(h) }
+
+// TestPruneMovedCheckoutRepoCache (B3-9): after a checkout moves, the repo
+// cache named from its old path is listed and removed with the old path's
+// record, the new path's cache stays, and the output never says "nothing to
+// prune" next to "removed N record(s)".
+func TestPruneMovedCheckoutRepoCache(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, CacheDir)
+	oldTop, newTop := filepath.Join(home, "w", "website"), filepath.Join(home, "w", "clients", "website")
+	mustWrite(t, filepath.Join(newTop, ".lore", "stores.yaml"), "stores: []\n")
+	oldCache, newCache := sqlite.RepoCacheRel(oldTop), sqlite.RepoCacheRel(newTop)
+	mustWrite(t, filepath.Join(root, filepath.FromSlash(oldCache)), "old")
+	mustWrite(t, filepath.Join(root, filepath.FromSlash(newCache)), "new")
+	for _, top := range []string{oldTop, newTop} {
+		if err := sqlite.RecordUse(root, top, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := Prune(context.Background(), root, false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Count != 1 || out.Records != 1 || !strings.HasSuffix(filepath.ToSlash(out.Files[0].Path), oldCache) {
+		t.Fatalf("out = %+v", out)
+	}
+	if exists(t, root, oldCache) || !exists(t, root, newCache) {
+		t.Fatalf("old cache there: %v, new cache there: %v", exists(t, root, oldCache), exists(t, root, newCache))
+	}
+	// Only a dead record left to drop: one line, no "nothing to prune".
+	if err := sqlite.RecordUse(root, filepath.Join(home, "gone"), nil); err != nil {
+		t.Fatal(err)
+	}
+	only, err := Prune(context.Background(), root, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := only.Text(); text != "removed 1 cache use record(s) of repos no longer on this machine\n" {
+		t.Fatalf("records-only text = %q", text)
+	}
+}
+
+// TestPruneRemovesV017StoreTree pins B4-7: 0.1.17's store cache tree
+// (stores/<host>/…/.lore/…) is listed once as a folder and removed whole,
+// json and lock files and empty folders included; a store id folder of
+// this lore (no dot) stays.
+func TestPruneRemovesV017StoreTree(t *testing.T) {
+	root := filepath.Join(t.TempDir(), CacheDir)
+	old := filepath.Join(root, "stores", "git.example", "acme", "notes", "main", "web")
+	mustWrite(t, filepath.Join(old, ".lore", "external.db"), "db")
+	mustWrite(t, filepath.Join(old, ".lore", "data", "rules", "r.json"), "{}")
+	mustWrite(t, filepath.Join(old, ".lore", "state", "sync.lock"), "")
+	mustWrite(t, filepath.Join(root, "stores", "acme", "main", "web.db"), "db")
+	out, err := Prune(context.Background(), root, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tree int
+	for _, f := range out.Files {
+		if strings.Contains(f.Path, "git.example") {
+			tree++
+			if filepath.Base(f.Path) != "git.example" {
+				t.Fatalf("the 0.1.17 tree is listed file by file: %s", f.Path)
+			}
+		}
+	}
+	if tree != 1 {
+		t.Fatalf("0.1.17 tree listed %d times:\n%s", tree, out.Text())
+	}
+	if _, err := Prune(context.Background(), root, false, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(t, root, "stores/git.example") {
+		t.Fatal("the 0.1.17 tree is still there")
+	}
+}
+
+// TestPruneMigratedProjectV017Cache pins B4-20: once the live repo of a
+// project is migrated (its _meta.json declares min_lore_version) nothing
+// reads that project's 0.1.17 cache, so prune lists it too.
+func TestPruneMigratedProjectV017Cache(t *testing.T) {
+	f := newFixture(t)
+	plan, err := MakePlan(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range plan.V017 {
+		if v.Rel == f.v017Kept {
+			t.Fatal("an unmigrated project's 0.1.17 cache is listed")
+		}
+	}
+	prj := strings.TrimSuffix(f.v017Kept, v017CacheExt)
+	mustWrite(t, filepath.Join(f.repo, filepath.FromSlash(v017MetaRel)), `{"min_lore_version":"0.1.18","project_id":"`+prj+`"}`)
+	if plan, err = MakePlan(f.root); err != nil {
+		t.Fatal(err)
+	}
+	listed := false
+	for _, v := range plan.V017 {
+		listed = listed || v.Rel == f.v017Kept
+	}
+	if !listed {
+		t.Fatalf("a migrated project's 0.1.17 cache is kept: %+v", plan.V017)
+	}
+}
+
+// TestPruneV017LinkIndex pins B4-20: 0.1.17's links-<org>.json in the
+// cache root is listed and removed with its other caches.
+func TestPruneV017LinkIndex(t *testing.T) {
+	root := filepath.Join(t.TempDir(), CacheDir)
+	mustWrite(t, filepath.Join(root, "links-acme.json"), "{}")
+	out, err := Prune(context.Background(), root, false, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Count != 1 || exists(t, root, "links-acme.json") {
+		t.Fatalf("out %+v, still there %v", out, exists(t, root, "links-acme.json"))
+	}
+}

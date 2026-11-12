@@ -52,3 +52,6 @@ func (s selfUpgrader) Upgrade(ctx context.Context, f opsselfupgrade.Flags, confi
 	}
 	return strings.Split(text, "\n"), nil
 }
+
+// FromSource implements opsselfupgrade.SourceBuild.
+func (s selfUpgrader) FromSource() bool { return s.u.FromSource() }

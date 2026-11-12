@@ -41,7 +41,7 @@ type AddIn struct {
 	Task  string `json:"task,omitempty" flag:"task" desc:"the task it is about (its mission is recorded too)"`
 	Body  string `json:"body,omitempty" flag:"body" desc:"the handoff text (instead of the positional text)" ui:"widget=markdown"`
 	Text  string `json:"text,omitempty" arg:"0" rest:"true" desc:"the handoff text"`
-	Store string `json:"store,omitempty" flag:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	Store string `json:"store,omitempty" flag:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	// Project is the project the handoff belongs to.
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 }
@@ -75,7 +75,7 @@ func (o ListOut) rowsText() string {
 	}
 	var b strings.Builder
 	for _, r := range o.Data {
-		b.WriteString(content.ListLine(badge, r.ID, r.Body))
+		b.WriteString(content.ListLine(badge, r.ID, r.Body, r.Label))
 	}
 	return b.String()
 }

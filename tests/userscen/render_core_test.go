@@ -29,7 +29,7 @@ import (
 
 // renderCanaryLine is the first line of every LORE.md (content-derived
 // canary, schema v2).
-const renderCanaryPrefix = "<!-- AICODER:CANARY=rnd_"
+const renderCanaryPrefix = "<!-- lore render stamp rnd_"
 
 func TestRenderEmptyStoreWiresAgentsMD(t *testing.T) {
 	c := renderSolo(t)
@@ -117,7 +117,7 @@ func TestRenderEveryKindLandsInItsTier(t *testing.T) {
 		}
 	}
 	idx := renderSection(md, "## Index: fetch on demand")
-	if !strings.Contains(idx, "| (no topic) | 3 rules, 4 hotfixes, 1 memories, 1 decisions") {
+	if !strings.Contains(idx, "| (no topic) | 3 rules, 4 hotfixes, 1 memory, 1 decision") {
 		t.Errorf("the index counts every rule, hotfix, memory and decision: %q", idx)
 	}
 	// LORE.full.md: every pinned entry in full, nothing search-only.

@@ -12,7 +12,7 @@ note "version json"
 on alice work/website "lore version --json"
 
 note "init"
-on alice work/website "lore init --non-interactive --name=website"
+on alice work/website "lore init --name=website"
 on alice work/website "git status --short"
 
 note "schema only"

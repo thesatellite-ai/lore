@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -115,6 +116,28 @@ func (a *App) RepoDirName(ctx context.Context) (string, error) {
 	}
 	return filepath.Base(top), nil
 }
+
+// RepoRootCommit implements opsinfra.RepoRootReader: the smallest root
+// commit hash of HEAD's history ("" in a repository without a commit), the
+// key of a derived repo id when the clone has no network remote (B2-7).
+func (a *App) RepoRootCommit(ctx context.Context) (string, error) {
+	top, err := a.knownRepoTop(ctx)
+	if err != nil {
+		return "", err
+	}
+	out, err := gitRun{dir: top, args: []string{"rev-list", "--max-parents=0", "HEAD"}}.output(ctx)
+	if err != nil {
+		return "", nil // no commit yet: no root to name
+	}
+	roots := strings.Fields(string(out))
+	if len(roots) == 0 {
+		return "", nil
+	}
+	slices.Sort(roots)
+	return roots[0], nil
+}
+
+var _ opsinfra.RepoRootReader = (*App)(nil)
 
 // RepoActor implements opsinfra.RepoFiles.
 func (a *App) RepoActor(ctx context.Context) string {

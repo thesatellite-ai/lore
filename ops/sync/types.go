@@ -239,6 +239,10 @@ type StoreState struct {
 	PushSummary string `json:"push_summary,omitempty"`
 	Epoch       int    `json:"epoch,omitempty"`
 	PushProblem string `json:"push_problem,omitempty"`
+	// SameCloneAs names the store listed earlier that shares this store's
+	// clone (a folder of it, B2-5): its commits are counted there once, so
+	// Ahead and Behind are 0 here.
+	SameCloneAs string `json:"same_clone_as,omitempty"`
 }
 
 // Store kinds of StoreState.
@@ -292,6 +296,13 @@ type Conflict struct {
 	OtherDoc string `json:"other_doc"`
 	At       string `json:"at"`
 	Resolved bool   `json:"resolved"`
+	// Store, Fields and KeptDoc are set for a row of an attached store
+	// that both this machine and the store's remote changed: the store's
+	// name, the fields both sides changed differently, and this machine's
+	// row file (OtherDoc is the remote's).
+	Store   string   `json:"store,omitempty"`
+	Fields  []string `json:"fields,omitempty"`
+	KeptDoc string   `json:"kept_doc,omitempty"`
 }
 
 // ConflictsOut is the output of sync.conflicts (envelope kind
@@ -406,6 +417,9 @@ const (
 	ExplainWorkTree ExplainPlace = "work_tree"
 	// ExplainDefault is the fetched default branch (<remote>/<default>).
 	ExplainDefault ExplainPlace = "default_branch"
+	// ExplainStore is an attached store's copy (a row of a team or
+	// personal store, not of this repo).
+	ExplainStore ExplainPlace = "store"
 )
 
 // ExplainCopy is one place explain looked for the row: whether a copy is
@@ -430,6 +444,8 @@ type ExplainCopy struct {
 	// Unpushed counts live writes not pushed yet (live copy only).
 	Unpushed int  `json:"unpushed,omitempty"`
 	Winner   bool `json:"winner"`
+	// Store is the attached store's name (place store only).
+	Store string `json:"store,omitempty"`
 }
 
 // ExplainLand is the landing plan's decision for a live row.

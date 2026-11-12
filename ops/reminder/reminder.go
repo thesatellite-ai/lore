@@ -156,7 +156,7 @@ type AddIn struct {
 	OnTable    string `json:"on_table,omitempty" flag:"on-table" desc:"optional target entity table"`
 	OnID       string `json:"on_id,omitempty" flag:"on-id" desc:"optional target entity id"`
 	Repo       string `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts; reminders have no repo scope"`
-	To         string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To         string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // ListIn is the input of reminder.list.
@@ -216,7 +216,7 @@ func (o ListOut) rowsText() string {
 		if r.Recurrence != "" {
 			rec = " (" + r.Recurrence + ")"
 		}
-		fmt.Fprintf(&b, "%s %s  %s%s\n    %s\n", mark, r.due.UTC().Format(work.DateLayout), r.Message, rec, r.ID)
+		fmt.Fprintf(&b, "%s %s  %s%s%s\n    %s\n", mark, r.due.UTC().Format(work.DateLayout), r.Message, rec, work.LabelSuffix(r.Label), r.ID)
 	}
 	return b.String()
 }

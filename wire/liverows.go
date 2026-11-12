@@ -350,6 +350,11 @@ type pendingLive struct {
 	live   liveRow
 	cur    row.Row
 	has    bool
+	// moved is the step line of a repo live row a newer lore moved to
+	// another store (migrate_moved.go): source is then that store, and
+	// leftOut says the live copy is older and nothing is written.
+	moved   string
+	leftOut bool
 }
 
 // liveSource is one place v0.1.17 kept live rows for an attached store:
@@ -466,6 +471,15 @@ func pendingLiveRows(ctx context.Context, st *state, fetchAll bool) ([]pendingLi
 		for _, lr := range rows {
 			sr, err := b.Get(ctx, lr.row.Table, lr.row.ID)
 			if errors.Is(err, store.ErrNotFound) {
+				if src.name == store.SourceRepo {
+					if own, ok := movedOwnerOf(ctx, st, lr.row.Table, lr.row.ID); ok {
+						// B1-5: moved away by a newer lore; never a second copy here
+						newer := lr.row.HLC.Compare(own.cur.HLC) > 0
+						out = append(out, pendingLive{source: own.src, live: lr, cur: own.cur, has: true, leftOut: !newer,
+							moved: movedLiveLine(lr.row.Table, lr.row.ID, own.src, newer)})
+						continue
+					}
+				}
 				out = append(out, pendingLive{source: src.name, live: lr})
 				continue
 			}
@@ -530,12 +544,16 @@ func servesLiveRef(b store.Backend) bool {
 func liveNote(ctx context.Context, st *state) string {
 	warn := liveResourceNote(ctx, st)
 	p, err := pendingLiveRows(ctx, st, false)
+	p = slices.DeleteFunc(p, func(x pendingLive) bool { return x.leftOut }) // nothing to bring in (migrate_moved.go)
 	if servesLiveRef(st.byName[store.SourceRepo]) {
 		// The repo store's live overlay (cmd/lore) shows the repo's live
 		// rows to every command that opens a live session; a run without
 		// one (a git hook, a skipped-live op such as task heartbeat) only
 		// misses them for itself. Not "not visible yet": no note.
 		p = slices.DeleteFunc(p, func(x pendingLive) bool { return x.source == store.SourceRepo })
+	}
+	if err == nil {
+		st.pendingV017Live = len(p)
 	}
 	if err != nil || len(p) == 0 {
 		return warn
@@ -610,7 +628,13 @@ func (a *App) MigrateLive(ctx context.Context, dryRun bool) ([]string, error) {
 			// reader of the row's _hlc knows where the actor came from
 			line += " (live hlc writer " + strconv.Quote(x.live.writer) + " recorded as " + x.live.row.HLC.Actor.String() + ")"
 		}
+		if x.moved != "" {
+			line = x.moved // a repo live row a newer lore moved away (migrate_moved.go)
+		}
 		out = append(out, line)
+		if x.leftOut {
+			continue // the moved copy is newer: nothing to write
+		}
 		r := x.live.row
 		var expect hlc.HLC
 		if x.has {

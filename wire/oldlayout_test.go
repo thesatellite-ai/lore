@@ -63,7 +63,9 @@ func TestDoctorOldClones(t *testing.T) {
 	home := t.TempDir()
 	v017 := filepath.Join(home, git.OldOrgClonesDir, "example.com", "acme", "notes.git")
 	half := filepath.Join(home, git.OldClonesDir, "example.com", "acme", "hub")
-	for _, f := range []string{filepath.Join(v017, "HEAD"), filepath.Join(half+".git", "HEAD")} {
+	// half: the bare clone and the stem's lock, its worktree gone (a bare
+	// clone alone is lore 0.1.17's whole clone, TestMoveOldCloneV017)
+	for _, f := range []string{filepath.Join(v017, "HEAD"), filepath.Join(half+".git", "HEAD"), filepath.Join(half, "lock")} {
 		if err := os.MkdirAll(filepath.Dir(f), 0o700); err != nil {
 			t.Fatal(err)
 		}

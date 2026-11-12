@@ -30,13 +30,13 @@ lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
   scope: [master] severity: must
 $ lore audit log
-2026-11-02T10:00:00Z  rules.write                  rules/rul_7a67…9504  by act_2ad3…f891
-2026-11-02T10:00:00Z  memories.write               memories/mem_162d…9666  by act_2ad3…f891
-2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe…28f2  by act_2ad3…f891
-2026-11-02T10:00:00Z  policies.write               policies/pol_05e9…4603  by act_2ad3…f891
-2026-11-02T10:00:00Z  repos.write                  repos/rep_c0f3…b5b8  by act_2ad3…f891
-2026-11-02T10:00:00Z  projects.write               projects/prj_76bd…3f10  by act_2ad3…f891
-2026-11-02T10:00:00Z  actors.write                 actors/act_2ad3…f891  by act_2ad3…f891
+2026-11-02T10:00:00Z  rules.write                  rules/rul_7a67…9504  by alice
+2026-11-02T10:00:00Z  memories.write               memories/mem_2ad3…f891  by alice
+2026-11-02T10:00:00Z  rules.write                  rules/rul_162d…9666  by alice
+2026-11-02T10:00:00Z  policies.write               policies/pol_54fe…28f2  by alice
+2026-11-02T10:00:00Z  repos.write                  repos/rep_05e9…4603  by alice
+2026-11-02T10:00:00Z  projects.write               projects/prj_c0f3…b5b8  by alice
+2026-11-02T10:00:00Z  actors.write                 actors/act_76bd…3f10  by alice
 $ lore audit verify
 ✓ audit chain intact (7 entries)
 ```
@@ -79,16 +79,16 @@ A row file under `.lore/data` is the note itself, so changing it by hand is an o
 ```console
 # alice, in website
 $ sed -i 's/Run the tests before you push/Pushing without tests is fine/' .lore/data/rules/*.json && lore rule list
-lore: picked up a hand edit of rules rul_54fe…28f2 (body): checked and stamped with your name and the time in ~/work/website/.lore/data/rules/rul_54fe…28f2.json; commit it with your code
-rul_54fe…28f2 [must/always] Pushing without tests is fine
+lore: picked up a hand edit of rules rul_162d…9666 (body): checked and stamped with your name and the time in ~/work/website/.lore/data/rules/rul_162d…9666.json; commit it with your code
+rul_162d…9666 [must/always] Pushing without tests is fine
 rul_7a67…9504 [must/always] Never put passwords in the code
 $ git status --short .lore/data
- M .lore/data/rules/rul_54fe…28f2.json
+ M .lore/data/rules/rul_162d…9666.json
 ?? .lore/data/rules/rul_7a67…9504.json
 $ lore audit verify
 ✓ audit chain intact (8 entries)
 $ git restore .lore/data && lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push
+rul_162d…9666 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
 ```
 <!-- /example -->

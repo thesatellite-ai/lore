@@ -982,8 +982,13 @@ func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	for i, h := range live {
 		parts[i] = string(h.src)
 	}
-	return copyHit{}, errs.New(errs.AmbiguousID, ""+id.String()+" is in "+strings.Join(parts, " and ")).
-		WithHint("name the store with --to")
+	// B1-5: the old hint ("name the store with --to") named a flag show,
+	// edit and migrate run do not take. row move does, and settles it: a
+	// move into a store that already holds the row only leaves a tombstone
+	// where the other copy was (Move, interrupted-move rule).
+	keep := parts[len(parts)-1]
+	return copyHit{}, errs.New(errs.AmbiguousID, ""+id.String()+" is in "+strings.Join(parts, " and ")+": two live copies of one row").
+		WithHint("keep one copy: `lore row move " + id.String() + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
 }
 
 // newestCopy is the copy an unqualified actor ref means when several

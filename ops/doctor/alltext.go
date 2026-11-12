@@ -146,12 +146,23 @@ func writeSetupBody(b *strings.Builder, s SetupReport, indent string) {
 	}
 	for _, a := range areaOrder(order) {
 		rs := byArea[a]
-		sym := symOK
+		// An area whose every check was skipped (no GitHub account set,
+		// no personal store) is "–", never "✓": nothing was checked
+		// (B1-19: "✓ github via github.com" where nothing logs in).
+		sym, ran := symOK, false
 		for _, r := range rs {
 			if repoScoped(r.Target) {
 				continue
 			}
+			if r.Status != onboard.StatusSkip {
+				ran = true
+			}
 			sym = worseSym(sym, symOf(r))
+		}
+		if !ran || (a == areaGitHub && s.summary.user == "" && sym == symOK) {
+			// no account: an ssh route that logs in as someone says
+			// nothing about this setup's GitHub access
+			sym = symSkip
 		}
 		fmt.Fprintf(b, "%s\n", strings.TrimRight(indent+sym+" "+padArea(a)+areaLine(a, rs, s), " "))
 	}
@@ -257,11 +268,13 @@ func worseSym(a, b string) string {
 	rank := func(s string) int {
 		switch s {
 		case symFail:
-			return 3
+			return 4
 		case symWarn:
-			return 2
+			return 3
 		case symErr:
-			return 1
+			return 2
+		case symNote:
+			return 1 // a note in an area shows on its line, never as ✓
 		}
 		return 0
 	}
@@ -310,6 +323,9 @@ func areaLine(a string, rs []onboard.CheckResult, s SetupReport) string {
 		}
 		return strings.Join(nonEmpty(parts), " · ")
 	case a == areaGitHub:
+		if s.summary.user == "" {
+			return "no GitHub account in this setup (lore setup apply " + s.Name + " --step github)"
+		}
 		if s.summary.https {
 			return s.summary.user + " over https (gh login)"
 		}

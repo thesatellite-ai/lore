@@ -5,10 +5,11 @@ alice (work/website)$ git config --get-all remote.origin.fetch
 +refs/lore/*:refs/lore-remote/origin/*
 
 ### monorepo live tree
-carol (work/app)$ mkdir -p web && cd web && lore init --non-interactive --name=web >/dev/null 2>&1; cd .. && lore task add 'fix header' --to repo && cd web && lore rule add --body 'Buttons are blue' --to repo
+carol (work/app)$ mkdir -p web && cd web && lore init --name=web >/dev/null 2>&1; cd .. && lore task add 'fix header' --to repo && cd web && lore rule add --body 'Buttons are blue' --to repo
 lore: wrote ~/work/app/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json
 lore: wrote ~/work/app/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — fix header [medium]
+  created tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 lore: wrote ~/work/app/web/.lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.json
 ✓ rul_162df51b7f78b785c97c26b41ea89666
@@ -80,20 +81,21 @@ lore: pushed store agency: commit 9b40ce7 to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/client (store agency)
 ✓ tsk_76bd560aff0771fab8457dbfa9823f10 — renew the client SSL certificate [medium] → [agency/client]
+  created tasklist tlt_d4314eba822f1bf5908b2b8ded5f313a "default" for tasks added without --tasklist
 alice (work/website)$ lore memory add --body 'the client wants a demo every second Friday'
 lore: pushed store agency: commit 05513aa to branch main
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_d4314eba822f1bf5908b2b8ded5f313a.json (store agency)
-✓ mem_d4314eba822f1bf5908b2b8ded5f313a [agency/client]
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_b4f4765e593d51fd1352985e8af3a5b0.json (store agency)
+✓ mem_b4f4765e593d51fd1352985e8af3a5b0 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [master]
 alice$ git -C ~/.lore/stores/agency/notes ls-tree -r --name-only main | grep -v '_meta.json\|.gitattributes' | head -20
 README.md
-client/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json
-client/memories/mem_d4314eba822f1bf5908b2b8ded5f313a.json
-client/task_lists/tlt_28f8d32584b2db54ffb146bede5b03df.json
+client/actors/act_28f8d32584b2db54ffb146bede5b03df.json
+client/memories/mem_b4f4765e593d51fd1352985e8af3a5b0.json
+client/task_lists/tlt_d4314eba822f1bf5908b2b8ded5f313a.json
 client/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
 lore-store.yaml
-org/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json
+org/actors/act_28f8d32584b2db54ffb146bede5b03df.json
 org/projects/prj_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
 alice$ git -C ~/.lore/stores/agency/notes for-each-ref --format='%(refname)'
 refs/heads/main

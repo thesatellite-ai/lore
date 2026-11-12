@@ -22,7 +22,7 @@ Alice (an agency developer) finds her cache damaged (here its first bytes were o
 # alice, in website
 $ lore rule list
 lore: the cache ~/.lore/cache/repo/website-<hash>.db was damaged; moved it to ~/.lore/cache/repo/website-<hash>.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
-rul_54fe…28f2 [must/always] Run the tests before you push
+rul_162d…9666 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore doctor | grep '^Status'
 Status: HEALTHY
@@ -40,7 +40,7 @@ You can also delete the cache yourself, for example to free space or to rule it 
 # alice, in website
 $ rm -f ~/.lore/cache/repo/website-*
 $ lore rule list
-rul_54fe…28f2 [must/always] Run the tests before you push
+rul_162d…9666 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore doctor | grep '^Status'
 Status: HEALTHY

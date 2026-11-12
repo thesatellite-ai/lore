@@ -19,10 +19,11 @@ The full list of changes is in [CHANGELOG.md](../CHANGELOG.md).
 
 ## Upgrading from 0.1.17
 
-- Run `lore migrate run` once in each repository that holds v0.1.17 data. It converts the notes to the new format, keeps a journal so an interrupted run can resume, and supports `--dry-run` and `rollback`. Old config files are moved aside as `*.migrated`, never deleted.
+- Run `lore fix` once in each repository that holds v0.1.17 data (`lore upgrade` runs it for the repo you are in). It converts the notes to the new format the way `lore migrate run` does (a journal so an interrupted run can resume, `lore migrate rollback` to undo), renders `LORE.md` again and repairs what `lore doctor` finds; `lore fix --dry-run` shows the steps and writes nothing. Old config files are moved aside as `*.migrated`, never deleted.
 - `lore skill install --all` updates the agent skill for every coding tool on the machine; `lore skill status` shows which ones are out of date.
 - Some changes break old habits, all listed under "Changed" in the changelog: exit codes now follow the kind of error, names of tags and metadata keys are snake_case, `--db` is refused, and `lore tui` is a read-only browser (add and edit with the commands).
 - Commands that were removed, and what replaces them, are listed under "Removed" in the changelog.
+- **Upgrade every machine of every teammate together.** The first lore command on 0.1.18 (a read included; also `lore fix` and the first write in a project with 0.1.17 rows) moves the shared stores it finds to the new layout and pushes that commit, printing right before it that everyone using the store with 0.1.17 must upgrade. lore 0.1.17 cannot read the new layout and cannot be told it is newer: a teammate (or another machine of yours) still on 0.1.17 gets `E_NOT_A_STORE … is not a lore store` (with the hint to run `lore store init`, which is wrong for them) on every lore write to that store, their `git commit` in a repo linked to an org store is refused by the 0.1.17 pre-commit hook, and their reads leave out the store's notes. Nothing is lost or corrupted: they install 0.1.18 and run `lore fix`; until then `git commit --no-verify` lets them commit code. See [Upgrade lore](operations/upgrade.md).
 
 ## License
 

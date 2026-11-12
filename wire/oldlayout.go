@@ -23,6 +23,9 @@ package wire
 //	                store's top) gets one commit moving those into _store/
 //	                (D-ad), pushed the same way
 //
+// A v0.1.17 store is moved by the run that migrates it instead (lore fix,
+// lore migrate run: FlattenAfterMigrate), in that same command.
+//
 // Every step is idempotent: a second run finds nothing to do and prints
 // nothing (the check is a scan of two folders, no git process). A run cut
 // short is finished by the next one. The old clones-v017 folder is never
@@ -37,6 +40,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
@@ -60,7 +64,8 @@ func (a *App) MoveOldLayout(ctx context.Context, w io.Writer) {
 	}
 	moveNeeded := git.MoveNeeded(home)
 	flat := flattenCandidates(home)
-	if !moveNeeded && len(flat) == 0 {
+	personal := personalV017Candidates(home)
+	if !moveNeeded && len(flat) == 0 && len(personal) == 0 {
 		return
 	}
 	say := func(line string) { _, _ = fmt.Fprintln(w, oldLayoutPrefix+line) }
@@ -79,6 +84,141 @@ func (a *App) MoveOldLayout(ctx context.Context, w io.Writer) {
 	for _, dir := range flat {
 		a.settleClone(ctx, dir, say)
 	}
+	for _, p := range personalV017Candidates(home) {
+		a.flattenPersonal(ctx, p, say)
+	}
+}
+
+// PreviewOldLayout is MoveOldLayout for a dry run: it writes nothing
+// (no clone, no move record, no commit) and says what the first command
+// that is not a dry run will move. Files only, like MoveOldLayout's check.
+func (a *App) PreviewOldLayout(w io.Writer) {
+	home := a.opts.Home
+	if home == "" {
+		return
+	}
+	say := func(line string) { _, _ = fmt.Fprintln(w, oldLayoutPrefix+line) }
+	if git.MoveNeeded(home) {
+		found, _ := git.ScanOldClones(home)
+		rec := git.ReadMoveRecord(home)
+		for _, o := range found {
+			if e, ok := rec.Moves[o.Base]; o.Whole && (!ok || git.WorktreeTip(o) != e.Tip) {
+				say(fmt.Sprintf("would move store clone %s to %s (dry run: nothing moved; the next command does it)", movedFrom(o), filepath.Join(home, git.StoresDir)))
+			}
+		}
+	}
+	for _, dir := range flattenCandidates(home) {
+		say(fmt.Sprintf("would give store clone %s its layout commit (dry run: nothing changed)", dir))
+	}
+	for _, p := range personalV017Candidates(home) {
+		say(fmt.Sprintf("would move lore 0.1.17's per-org personal notes in %s (%s/) to %s/ (dry run: nothing changed)", p.dir, strings.Join(git.PersonalFoldersV017At(p.dir), "/, "), rowfs.StoreDataDir))
+	}
+}
+
+// personalClone is a git personal store's clone on this machine: its url
+// as config.yaml spells it, and the clone folder.
+type personalClone struct{ raw, dir string }
+
+// personalV017Candidates are the git personal stores whose clone still
+// holds lore 0.1.17's per-org folders (git.PersonalFoldersV017At). Files
+// only, no git: a look at each personal clone's top folder.
+func personalV017Candidates(home string) []personalClone {
+	var out []personalClone
+	for _, raw := range personalStoreURLs(home) {
+		r, err := git.RemoteOfRaw(raw)
+		if err != nil {
+			continue // a folder personal store: personal_v017.go handles 0.1.17's
+		}
+		dir, _, err := git.CloneDirFor(home, r, "")
+		if err != nil || !isDirPath(filepath.Join(dir, ".git")) {
+			continue
+		}
+		if len(git.PersonalFoldersV017At(dir)) > 0 {
+			out = append(out, personalClone{raw: raw, dir: dir})
+		}
+	}
+	return out
+}
+
+// flattenPersonal moves the rows lore 0.1.17 filed under per-org folders of
+// a git personal store to its _store/ folder, the only one this lore reads
+// for `me` (git.Backend.FlattenPersonal), and pushes per the push mode.
+func (a *App) flattenPersonal(ctx context.Context, p personalClone, say func(string)) {
+	name := filepath.Base(p.dir)
+	canon, err := canonical(attach.Store{URL: p.raw})
+	if err != nil {
+		say(fmt.Sprintf("personal store %s holds lore 0.1.17's per-org notes, but its url is not one lore can open: %s", p.dir, errLine(err)))
+		return
+	}
+	b, err := a.openStore(ctx, canon, p.raw)
+	if err != nil {
+		say(fmt.Sprintf("could not open the personal store clone %s to move lore 0.1.17's notes: %s", p.dir, errLine(err)))
+		return
+	}
+	defer func() { _ = b.Close() }() // the move is committed or not by then
+	gb := gitOf(b)
+	if gb == nil || gb.Dir() != p.dir {
+		return
+	}
+	a.SayOldLoreLockout(name)
+	res, err := gb.FlattenPersonal(ctx)
+	if err != nil {
+		say(fmt.Sprintf("could not move lore 0.1.17's personal notes in %s, left as they are (they are not listed until moved): %s", p.dir, errLine(err)))
+		return
+	}
+	if res.Commit == "" {
+		return
+	}
+	mode := storepush.ModeNow
+	if s, serr := storepush.FromRaw(gb.Marker().Push); serr == nil {
+		mode = s.Push
+	}
+	// one line for the move and its push (B4-10: a first read makes this
+	// commit, which the docs promise; it says so once)
+	var pushLines []string
+	a.pushPerMode(ctx, gb, name, mode, "the personal store move", func(l string) { pushLines = append(pushLines, l) })
+	pushed := ", not pushed yet"
+	if len(pushLines) == 1 && strings.HasPrefix(pushLines[0], "pushed store ") {
+		pushed, pushLines = ", pushed", nil
+	}
+	merged := ""
+	if n := len(res.Merged); n > 0 {
+		merged = fmt.Sprintf(" (%d found in more than one folder, merged)", n)
+	}
+	say(fmt.Sprintf("personal store %s: %d row(s) lore 0.1.17 filed under %s moved to %s/%s: commit %s%s; they now load in every repo, as every personal note does", name, res.Rows, strings.Join(res.Folders, "/, ")+"/", rowfs.StoreDataDir, merged, short(res.Commit), pushed))
+	for _, m := range res.Kept {
+		say(fmt.Sprintf("personal store %s: %s was in more than one folder and could not be merged; the %s/ copy is kept, the other is in the history (git -C %s log --all -- '*%s')", name, m, rowfs.StoreDataDir, p.dir, filepath.Base(m)))
+	}
+	for _, l := range pushLines {
+		say(l)
+	}
+}
+
+// FlattenAfterMigrate makes the layout commit of every store clone that
+// needs one, in the command that migrated (lore fix, lore migrate run, the
+// first write's safe steps), and returns what it did as lines. The
+// migration turns a v0.1.17 store's marker into one this lore moves, so
+// without this the layout commit (and its push) waited for the next
+// command, even a read. Run only when the migration pushes: a --no-push or
+// --offline run leaves the move to the next command, which first fetches
+// what a teammate pushed. The App's open stores still point at the old
+// layout, so the state is closed first and the next use reopens it.
+func (a *App) FlattenAfterMigrate(ctx context.Context) []string {
+	home := a.opts.Home
+	if home == "" {
+		return nil
+	}
+	flat := flattenCandidates(home)
+	if len(flat) == 0 {
+		return nil
+	}
+	_ = a.reopenState() // a close error leaves nothing open that a reopen needs
+	var lines []string
+	say := func(line string) { lines = append(lines, line) }
+	for _, dir := range flat {
+		a.settleClone(ctx, dir, say)
+	}
+	return lines
 }
 
 // moveOldClones moves every old clone not moved yet (git.MoveOldClone)
@@ -103,13 +243,13 @@ func (a *App) moveOldClones(ctx context.Context, home string, say func(string)) 
 		res, merr := git.MoveOldClone(ctx, home, o, a.wall())
 		switch {
 		case merr != nil:
-			say(fmt.Sprintf("could not move the old store clone %s, left as it is: %s", o.Base, errLine(merr)))
+			say(fmt.Sprintf("could not move the old store clone %s, left as it is: %s", movedFrom(o), errLine(merr)))
 		case res.Already:
 		case res.To == "":
-			say(fmt.Sprintf("old store clone %s had no commit; nothing to move (the store's next use clones it to %s)", o.Base, filepath.Join(home, git.StoresDir)))
+			say(fmt.Sprintf("old store clone %s had no commit of its own (nothing the remote lacks); nothing to move (the store's next use clones it to %s)", movedFrom(o), filepath.Join(home, git.StoresDir)))
 			left = append(left, o.Base)
 		default:
-			say(fmt.Sprintf("moved store clone %s -> %s (branch %s%s)", o.Base, res.To, res.Branch, carriedText(res)))
+			say(fmt.Sprintf("moved store clone %s -> %s (branch %s%s)", movedFrom(o), res.To, res.Branch, carriedText(res)))
 			out = append(out, res.To)
 			left = append(left, o.Base)
 		}
@@ -121,6 +261,16 @@ func (a *App) moveOldClones(ctx context.Context, home string, say func(string)) 
 		}
 	}
 	return out
+}
+
+// movedFrom names an old clone in the first-run lines: its stem folder, or
+// for lore 0.1.17's clone the bare clone (the only folder it has), marked
+// as 0.1.17's so the person knows which lore left it.
+func movedFrom(o git.OldClone) string {
+	if o.V017 {
+		return o.Bare + " (lore 0.1.17)"
+	}
+	return o.Base
 }
 
 // carriedText describes what a move carried.
@@ -231,6 +381,9 @@ func (a *App) settleClone(ctx context.Context, dir string, say func(string)) {
 	if !gb.NeedsFlatten() {
 		return
 	}
+	if old, oerr := rowfs.IsOldStoreLayout(dir); oerr == nil && old {
+		a.SayOldLoreLockout(name)
+	}
 	res, err := gb.FlattenLayout(ctx)
 	if err != nil {
 		say(fmt.Sprintf("could not move the rows of store %s to the plain layout, left as it is: %s", name, errLine(err)))
@@ -250,6 +403,38 @@ func (a *App) settleClone(ctx context.Context, dir string, say func(string)) {
 		say(fmt.Sprintf("store %s: %s was at both places and could not be merged; the plain-layout copy is kept, the other is in the history (git -C %s log -- %s)", name, p, dir, p))
 	}
 	a.pushPerMode(ctx, gb, name, mode, "the layout commit", say)
+}
+
+// OldLoreLockoutLines are the block said once per store, on its own and
+// before the commit, wherever lore makes a commit lore 0.1.17 cannot read
+// (SayOldLoreLockout; %s: the store's name). lore 0.1.17 cannot be told
+// about the new layout (it checks only that every file sits under a .lore
+// folder and calls anything else "not a lore store"), so the person whose
+// lore makes the commit is the one who can warn the team.
+var OldLoreLockoutLines = []string{
+	"lore: store %s moves to the 0.1.18 layout now: anyone who uses it with lore 0.1.17 (a teammate, or another machine of yours) must upgrade lore.",
+	"lore:   lore 0.1.17 refuses the new layout with E_NOT_A_STORE (its hint to run lore store init is wrong) on every lore write to this store, and its pre-commit hook refuses git commits in repos linked to an org store; they upgrade and run lore fix.",
+}
+
+// lockoutSaid records the stores SayOldLoreLockout named in this process.
+var lockoutSaid sync.Map
+
+// SayOldLoreLockout prints OldLoreLockoutLines for store name to stderr,
+// once per store and process, right before a commit that 0.1.17 cannot
+// read: the layout commit (settleClone: the first command, lore fix, the
+// first write's safe steps) and the move of 0.1.17's per-org personal
+// notes (flattenPersonal: the first command, a read included). It is
+// printed on its own, never inside a step's report, so it is seen before
+// the push line on every path; `lore fix --all` passes it through from
+// each repo's run (runFixIn).
+func (a *App) SayOldLoreLockout(name string) {
+	if _, done := lockoutSaid.LoadOrStore(name, true); done {
+		return
+	}
+	w := a.pushNotes()
+	for _, l := range OldLoreLockoutLines {
+		_, _ = fmt.Fprintln(w, strings.ReplaceAll(l, "%s", name))
+	}
 }
 
 // LayoutCommitLine is the line (after the "lore: " prefix) for a store's

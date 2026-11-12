@@ -41,7 +41,7 @@ type AddIn struct {
 	Key       string   `json:"key,omitempty" flag:"key" desc:"idempotency key: a re-run with the same key adds nothing"`
 	// Plan links the mission to its plan document (TSQ9).
 	Plan    string `json:"plan,omitempty" flag:"plan" desc:"plan_id (pln_*) this mission carries out"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 }
 

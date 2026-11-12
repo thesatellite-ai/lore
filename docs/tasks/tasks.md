@@ -26,6 +26,7 @@ $ lore task add "Send the invoice reminder before Friday's demo" --due 2026-11-0
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 — Send the invoice reminder before Friday's demo [high]
+  created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task add 'Fix the typo on the pricing page' --body 'The Pro plan says 9 a month; it should say 19.'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
@@ -85,7 +86,7 @@ tsk_162d…9666
   priority: medium
   commit:   accepted
 The Pro plan says 9 a month; it should say 19.
-created 2026-11-02T10:00:10Z by act_05e9…4603 · updated 2026-11-02T10:00:25Z by act_05e9…4603
+created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:00:25Z by alice
 ```
 <!-- /example -->
 
@@ -107,7 +108,7 @@ tsk_54fe…28f2
   priority: low
   commit:   accepted
   due:      2026-11-20
-created 2026-11-02T10:00:15Z by act_05e9…4603 · updated 2026-11-02T10:00:40Z by act_05e9…4603
+created 2026-11-02T10:00:15Z by alice · updated 2026-11-02T10:00:40Z by alice
 ```
 <!-- /example -->
 
@@ -120,9 +121,9 @@ created 2026-11-02T10:00:15Z by act_05e9…4603 · updated 2026-11-02T10:00:40Z 
 # alice, in website
 $ lore task done tsk_2ad3…f891 --lesson 'The client pays faster when the reminder goes out two days before the demo'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
-lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
+lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ tsk_2ad3…f891 done
-  lesson → mem_c0f3…b5b8
+  lesson → mem_05e9…4603
 lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 lore live: landed on main (df3a55c); leaves live once main is fetched
 $ lore task list
@@ -179,17 +180,17 @@ Delete only removes a task for good, with no undo. lore asks first (without a te
 ```console
 # alice, in website
 $ lore task add 'Test task, please ignore'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
-✓ tsk_76bd…3f10 — Test task, please ignore [medium]
+lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
+✓ tsk_c0f3…b5b8 — Test task, please ignore [medium]
 lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore task delete tsk_76bd…3f10
-ERROR: [E_NEEDS_CONFIRM] delete task tsk_76bd…3f10 Test task, please ignore?
+$ lore task delete tsk_c0f3…b5b8
+ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3…b5b8 Test task, please ignore?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore task delete tsk_76bd…3f10 --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
-✓ tsk_76bd…3f10 moved to the trash (restore: lore trash restore tsk_76bd…3f10)
+$ lore task delete tsk_c0f3…b5b8 --yes
+lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
+✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore tsk_c0f3…b5b8)
 lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
 ```
 <!-- /example -->
@@ -204,20 +205,20 @@ Some work has an order: you cannot send the welcome email before you write it. `
 ```console
 # alice, in website
 $ lore task add 'Write the welcome email'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
-✓ tsk_d431…313a — Write the welcome email [medium]
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+✓ tsk_76bd…3f10 — Write the welcome email [medium]
 lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
-$ lore task add 'Send the welcome email' --after tsk_d431…313a
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b4f4…a5b0.json
-✓ tsk_b4f4…a5b0 — Send the welcome email [medium]
+$ lore task add 'Send the welcome email' --after tsk_76bd…3f10
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
+✓ tsk_d431…313a — Send the welcome email [medium]
 lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
-$ lore task show tsk_b4f4…a5b0
-tsk_b4f4…a5b0
+$ lore task show tsk_d431…313a
+tsk_d431…313a
   title:    Send the welcome email
   status:   todo
   priority: medium
   commit:   accepted
-created 2026-11-02T10:01:50Z by act_05e9…4603 · updated 2026-11-02T10:01:50Z by act_05e9…4603
+created 2026-11-02T10:01:50Z by alice · updated 2026-11-02T10:01:50Z by alice
 ```
 <!-- /example -->
 
@@ -226,8 +227,8 @@ A task can never wait on itself, not even through other tasks. lore refuses such
 <!-- example: tasks#cycle -->
 ```console
 # alice, in website
-$ lore task edit tsk_d431…313a --after tsk_b4f4…a5b0
-ERROR: [E_CYCLE] dependency cycle: tsk_d431…313a → tsk_b4f4…a5b0 → tsk_d431…313a
+$ lore task edit tsk_76bd…3f10 --after tsk_d431…313a
+ERROR: [E_CYCLE] dependency cycle: tsk_76bd…3f10 → tsk_d431…313a → tsk_76bd…3f10
   hint: drop one --after edge; a task may not wait on itself, even through others
 (exit 19)
 ```
@@ -237,36 +238,36 @@ To see which tasks are ready and which are waiting, put them in a mission and ru
 
 ## Step 10 — Group tasks in a tasklist
 
-A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from the demo". Every task belongs to one. If you do not pick one, lore uses the project's default list, which it creates the first time you add a task. Use `--tasklist` on `task add` or `task edit` to pick another.
+A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from the demo". Every task belongs to one. If you do not pick one, lore uses the project's default list, which it creates the first time you add a task; that add prints one more line, `created tasklist tlt_… "default" for tasks added without --tasklist`. Use `--tasklist` on `task add` or `task edit` to pick another.
 
 <!-- example: tasks#tasklist -->
 ```console
 # alice, in website
 $ lore tasklist add --title 'Launch week' --body 'Everything that must happen before the shop opens'
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_28f8…03df.json
-✓ tlt_28f8…03df
-$ lore task add 'Check every link on the home page' --tasklist tlt_28f8…03df
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4c59…6c38.json
-✓ tsk_4c59…6c38 — Check every link on the home page [medium]
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
+✓ tlt_b4f4…a5b0
+$ lore task add 'Check every link on the home page' --tasklist tlt_b4f4…a5b0
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+✓ tsk_28f8…03df — Check every link on the home page [medium]
 lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
-$ lore task edit tsk_d431…313a --tasklist tlt_28f8…03df
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
-✓ tsk_d431…313a updated
+$ lore task edit tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
+lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+✓ tsk_76bd…3f10 updated
 lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
 $ lore tasklist list
-TA  tlt_7a67…9504
-TA  tlt_28f8…03df
+TA  tlt_7a67…9504  default [active]  (4 tasks)
+TA  tlt_b4f4…a5b0  Launch week [active]  (2 tasks)
 $ lore tasklist search launch
-tlt_28f8…03df Launch week
-$ lore tasklist edit tlt_28f8…03df --status closed
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_28f8…03df.json
-✓ tasklist tlt_28f8…03df updated
+tlt_b4f4…a5b0 Launch week
+$ lore tasklist edit tlt_b4f4…a5b0 --status closed
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
+✓ tasklist tlt_b4f4…a5b0 updated
 lore live: (live, pushed) commit 8c373dc to origin refs/lore/live
 lore live: landed on main (6f11034); leaves live once main is fetched
 ```
 <!-- /example -->
 
-`lore tasklist list` prints only ids today (see [Pitfalls](#pitfalls)); `lore tasklist search` prints the titles.
+`lore tasklist list` prints one line per list: its id, title, status and how many tasks it holds. `lore plan list` prints plans the same way.
 
 ## Step 11 — Save a filter under a name
 
@@ -277,14 +278,14 @@ lore live: landed on main (6f11034); leaves live once main is fetched
 ```console
 # alice, in website
 $ lore task view add open_todo --where 'status:todo'
-lore: wrote ~/work/website/.lore/data/task_views/tvw_3b62…e913.json
-tvw_3b62…e913  open_todo  where "status:todo"
+lore: wrote ~/work/website/.lore/data/task_views/tvw_4c59…6c38.json
+tvw_4c59…6c38  open_todo  where "status:todo"
 $ lore task view list
-tvw_3b62…e913  open_todo  where "status:todo"
+tvw_4c59…6c38  open_todo  where "status:todo"
 $ lore task list --view open_todo
-○ tsk_d431…313a Write the welcome email [medium]
-○ tsk_b4f4…a5b0 Send the welcome email [medium]
-○ tsk_4c59…6c38 Check every link on the home page [medium]
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
 ```
 <!-- /example -->
 
@@ -303,22 +304,22 @@ Here alice prints her open tasks as Markdown and as CSV:
 ```console
 # alice, in website
 $ lore task export --where 'status:todo' --format markdown
-- [ ] Write the welcome email (tsk_d431…313a)
-- [ ] Send the welcome email (tsk_b4f4…a5b0)
-- [ ] Check every link on the home page (tsk_4c59…6c38)
-- [ ] Try a dark mode for the shop (tsk_f147…5139)
-- [ ] Add a FAQ page (tsk_2537…6bbb)
-- [ ] Renew the SSL certificate (tsk_b69e…5ed7)
-- [ ] Add a size guide (tsk_d191…45c2)
+- [ ] Write the welcome email (tsk_76bd…3f10)
+- [ ] Send the welcome email (tsk_d431…313a)
+- [ ] Check every link on the home page (tsk_28f8…03df)
+- [ ] Try a dark mode for the shop (tsk_3b62…e913)
+- [ ] Add a FAQ page (tsk_f147…5139)
+- [ ] Renew the SSL certificate (tsk_2537…6bbb)
+- [ ] Add a size guide (tsk_77cb…76c4)
 $ lore task export --where 'status:todo' --format csv
 id,title,body,priority,commitment,due,defer_until,tasklist,mission,plan,role,tasklist_name,mission_name,plan_name,status,estimate,parent,lead,created_at,completed_at
-tsk_d431…313a,Write the welcome email,,medium,accepted,,,tlt_28f8…03df,,,,Launch week,,,todo,,,,2026-11-02T10:01:45Z,
-tsk_b4f4…a5b0,Send the welcome email,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:01:50Z,
-tsk_4c59…6c38,Check every link on the home page,,medium,accepted,,,tlt_28f8…03df,,,,Launch week,,,todo,,,,2026-11-02T10:02:10Z,
-tsk_f147…5139,Try a dark mode for the shop,,medium,someday,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:02:50Z,
-tsk_2537…6bbb,Add a FAQ page,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:02:55Z,
-tsk_b69e…5ed7,Renew the SSL certificate,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:03:25Z,
-tsk_d191…45c2,Add a size guide,,high,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:06:00Z,
+tsk_76bd…3f10,Write the welcome email,,medium,accepted,,,tlt_b4f4…a5b0,,,,Launch week,,,todo,,,,2026-11-02T10:01:45Z,
+tsk_d431…313a,Send the welcome email,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:01:50Z,
+tsk_28f8…03df,Check every link on the home page,,medium,accepted,,,tlt_b4f4…a5b0,,,,Launch week,,,todo,,,,2026-11-02T10:02:10Z,
+tsk_3b62…e913,Try a dark mode for the shop,,medium,someday,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:02:50Z,
+tsk_f147…5139,Add a FAQ page,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:02:55Z,
+tsk_2537…6bbb,Renew the SSL certificate,,medium,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:03:25Z,
+tsk_77cb…76c4,Add a size guide,,high,accepted,,,tlt_7a67…9504,,,,default,,,todo,,,,2026-11-02T10:06:00Z,
 ```
 <!-- /example -->
 
@@ -336,19 +337,19 @@ id,title,priority,status
 T-1,Add a cookie banner,high,To Do
 T-2,Compress the product photos,medium,In Review
 $ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --dry-run
-would import 2 tasks from csv (dry run, nothing written)
+would import 2 tasks from csv as new tasks with new ids (dry run, nothing written); the ids below are the file's
   T-1  Add a cookie banner
   T-2  Compress the product photos
 $ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
+lore: wrote ~/work/website/.lore/data/tasks/tsk_9a34…b418.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_bfed…eeea.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json
-✓ 2 tasks imported from csv (batch bat_67e2…291e)
+✓ 2 tasks imported from csv (batch bat_376c…8e1a; `lore task list` shows their new ids)
 lore live: (live, pushed) commit 40bd5f4 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 $ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
   2 already imported, nothing added for them:
-    T-1  Add a cookie banner  (already imported as tsk_bfed…eeea)
-    T-2  Compress the product photos  (already imported as tsk_376c…8e1a)
+    T-1  Add a cookie banner  (already imported as tsk_9a34…b418)
+    T-2  Compress the product photos  (already imported as tsk_bfed…eeea)
 ```
 <!-- /example -->
 
@@ -361,9 +362,9 @@ After the steps above, the open list holds the task in progress and the tasks st
 # alice, in website
 $ lore task list
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
-○ tsk_d431…313a Write the welcome email [medium]
-○ tsk_b4f4…a5b0 Send the welcome email [medium]
-○ tsk_4c59…6c38 Check every link on the home page [medium]
+○ tsk_76bd…3f10 Write the welcome email [medium]
+○ tsk_d431…313a Send the welcome email [medium]
+○ tsk_28f8…03df Check every link on the home page [medium]
 ```
 <!-- /example -->
 
@@ -400,7 +401,6 @@ Other traps:
 
 - **Search misses a done task.** `lore task search` looks at open tasks only. Add `--all`.
 - **Deleting needs a yes.** Without a terminal, `task delete` stops with `E_NEEDS_CONFIRM` until you add `--yes` (the old spelling `--confirm` works the same on a delete; the task goes to the trash, `lore trash restore` brings it back). To keep the task but stop it, use `lore task cancel` instead.
-- **`lore tasklist list` prints only `TA` and the id**, not the title. `lore tasklist show <id>` prints the title, status, task count and body; `lore tasklist search <word>` shows titles.
 - **`lore task show` does not list the tasks a task in this repo waits for.** Use `lore mission status` for that: it prints "waits for <id> to be done" next to the task. (For a task kept in an org's notes store, `task show` does print an `after:` line.)
 - **Ids are long on purpose.** Copy them from `lore task list` or `--json` output rather than typing them.
 

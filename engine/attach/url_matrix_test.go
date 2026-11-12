@@ -61,7 +61,11 @@ func TestStoreURLCredentialMatrix(t *testing.T) {
 			}
 		})
 	}
-	for _, bad := range []string{"", "no scheme here", "/abs/path"} {
+	// A plain absolute path is a git repository on this machine (store.PathScheme).
+	if got, err := CleanURL("/srv/git/notes.git"); err != nil || got != "/srv/git/notes.git" {
+		t.Errorf("CleanURL(local path) = %q, %v", got, err)
+	}
+	for _, bad := range []string{"", "no scheme here", "rel/path"} {
 		if _, err := NormalizeURL(bad); !errs.Has(err, errs.StoreScheme) {
 			t.Errorf("NormalizeURL(%q) = %v, want E_STORE_SCHEME", bad, err)
 		}

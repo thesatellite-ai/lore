@@ -48,13 +48,13 @@ lore: wrote ~/work/website/.lore/data/rules/rul_7a670ae8548ed05bf57ad29ad0759504
 ✓ rul_7a670ae8548ed05bf57ad29ad0759504
   scope: [master] severity: must
 alice (work/website)$ lore audit log
-2026-11-02T10:00:00Z  rules.write                  rules/rul_7a670ae8548ed05bf57ad29ad0759504  by act_2ad3618e878ebbf527d34d446ef4f891
-2026-11-02T10:00:00Z  memories.write               memories/mem_162df51b7f78b785c97c26b41ea89666  by act_2ad3618e878ebbf527d34d446ef4f891
-2026-11-02T10:00:00Z  rules.write                  rules/rul_54fe984c9b495744c0217776765a28f2  by act_2ad3618e878ebbf527d34d446ef4f891
-2026-11-02T10:00:00Z  policies.write               policies/pol_05e99e22e9e86e96fe4daa7777994603  by act_2ad3618e878ebbf527d34d446ef4f891
-2026-11-02T10:00:00Z  repos.write                  repos/rep_c0f3c11a5724b0cfd74b256190d9b5b8  by act_2ad3618e878ebbf527d34d446ef4f891
-2026-11-02T10:00:00Z  projects.write               projects/prj_76bd560aff0771fab8457dbfa9823f10  by act_2ad3618e878ebbf527d34d446ef4f891
-2026-11-02T10:00:00Z  actors.write                 actors/act_2ad3618e878ebbf527d34d446ef4f891  by act_2ad3618e878ebbf527d34d446ef4f891
+2026-11-02T10:00:00Z  rules.write                  rules/rul_7a670ae8548ed05bf57ad29ad0759504  by alice
+2026-11-02T10:00:00Z  memories.write               memories/mem_2ad3618e878ebbf527d34d446ef4f891  by alice
+2026-11-02T10:00:00Z  rules.write                  rules/rul_162df51b7f78b785c97c26b41ea89666  by alice
+2026-11-02T10:00:00Z  policies.write               policies/pol_54fe984c9b495744c0217776765a28f2  by alice
+2026-11-02T10:00:00Z  repos.write                  repos/rep_05e99e22e9e86e96fe4daa7777994603  by alice
+2026-11-02T10:00:00Z  projects.write               projects/prj_c0f3c11a5724b0cfd74b256190d9b5b8  by alice
+2026-11-02T10:00:00Z  actors.write                 actors/act_76bd560aff0771fab8457dbfa9823f10  by alice
 alice (work/website)$ lore audit verify
 ✓ audit chain intact (7 entries)
 
@@ -69,22 +69,22 @@ alice (work/website)$ lore audit verify
 
 ### row file edit
 alice (work/website)$ sed -i 's/Run the tests before you push/Pushing without tests is fine/' .lore/data/rules/*.json && lore rule list
-lore: picked up a hand edit of rules rul_54fe984c9b495744c0217776765a28f2 (body): checked and stamped with your name and the time in ~/work/website/.lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json; commit it with your code
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Pushing without tests is fine
+lore: picked up a hand edit of rules rul_162df51b7f78b785c97c26b41ea89666 (body): checked and stamped with your name and the time in ~/work/website/.lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.json; commit it with your code
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Pushing without tests is fine
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ git status --short .lore/data
- M .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
+ M .lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.json
 ?? .lore/data/rules/rul_7a670ae8548ed05bf57ad29ad0759504.json
 alice (work/website)$ lore audit verify
 ✓ audit chain intact (8 entries)
 alice (work/website)$ git restore .lore/data && lore rule list
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 
 ### damaged database
 alice (work/website)$ lore rule list
 lore: the cache ~/.lore/cache/repo/website-<hash>.db was damaged; moved it to ~/.lore/cache/repo/website-<hash>.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ lore doctor | grep '^Status'
 Status: HEALTHY
@@ -92,7 +92,7 @@ Status: HEALTHY
 ### rebuild from data
 alice (work/website)$ rm -f ~/.lore/cache/repo/website-*
 alice (work/website)$ lore rule list
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ lore doctor | grep '^Status'
 Status: HEALTHY
@@ -156,7 +156,7 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
   hint: unset --read-only and LORE_READ_ONLY
 (exit 23)
 alice (work/website)$ lore rule list
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ lore rule add --read-only --body 'Buttons are blue'
 ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
@@ -165,8 +165,8 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 
 ### ci
 alice (work/ci-clone)$ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/ci-clone/.git/config; hook blocks in ~/work/ci-clone/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
+lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/ci-clone/.git/config; hook blocks in ~/work/ci-clone/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/ci-clone)$ lore doctor; echo "doctor exit $?"
 Status: DEGRADED
@@ -284,8 +284,8 @@ alice (work/website)$ cat .lore/data/_meta.json
     "trash"
   ],
   "min_lore_version": "0.1.18",
-  "project_id": "prj_76bd560aff0771fab8457dbfa9823f10",
-  "repo_id": "rep_c0f3c11a5724b0cfd74b256190d9b5b8",
+  "project_id": "prj_c0f3c11a5724b0cfd74b256190d9b5b8",
+  "repo_id": "rep_05e99e22e9e86e96fe4daa7777994603",
   "urls": [
     "github.com/client/website"
   ]

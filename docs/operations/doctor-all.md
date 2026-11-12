@@ -13,7 +13,7 @@ You want it after you set up a new machine, after you change `~/.ssh/config` or 
 ## Before you start
 
 - lore 0.1.18 or later, with at least one setup (`lore setup list` shows them).
-- `git` and `ssh` on PATH. `gh` is optional: without it the checks that ask GitHub's API (is the store private, does gh have a login for the account) say "could not run" or warn, and never fail.
+- `git` and `ssh` on PATH. `gh` is optional: without it, or without a gh login, the checks that ask GitHub's API (is the store private, does gh have a login for the account) are a note (`ℹ`) or a warning and never fail. Only a setup whose git route is https with the account's gh login needs gh, and there a missing login is a check that could not run.
 - The example machine belongs to Tomas Weber. He runs the `agency` org (store `git@github.com:agency/notes`) with an `admin` setup for `~/work/agency/**`, and keeps his own projects in a `solo` setup for `~/work/personal/**` with no personal store:
 
 ```yaml
@@ -48,18 +48,19 @@ $ lore doctor --all
 setup agency (admin of agency, default) ─ ~/work/agency/**
   ⚠ identity    tomas@agency.example · roster @tomas · employee since 2026-11-02
   ⚠ github      tomas-dev via github.com
-  ✓ store me    read – write – private –
-  ? store agency   read ✓ write ✓ private ?
-  ✓ secrets     none
+  – store me    read – write – private –
+  ℹ store agency   read ✓ write ✓ private ℹ
+  – secrets     none
   ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ⚠ github.gh_account  gh has no login for tomas-dev
       fix: gh auth login --hostname github.com
-  ? store.private  agency: could not tell whether agency/notes is private: To get started with GitHub CLI, please run:  gh auth login
+  ℹ store.private  agency: gh is not logged in, so lore cannot check whether agency/notes is private
+      fix: Optional: install gh and run gh auth login so lore can check that agency/notes is private
 setup personal (solo) ─ ~/work/personal/**
   ⚠ identity    tomas@home.example
-  ✓ github       via github.com
-  ✓ secrets     none
+  – github      no GitHub account in this setup (lore setup apply personal --step github)
+  – secrets     none
   ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
@@ -67,14 +68,14 @@ setup personal (solo) ─ ~/work/personal/**
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit act_7a67…9504 --role admin)
-2 setups · 22 ok · 6 warnings · 0 errors · 1 could not run → degraded (exit 1)
+2 setups · 23 ok · 6 warnings · 0 errors → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
 ```
 <!-- /example -->
 
-Each setup gets one block: a line per group (identity, GitHub, each store, secrets, tools), then every check that is not ok with its fix, then, when a check failed, the `lore setup repair` line for that setup. The marks are `✓` ok, `⚠` a warning, `✗` a failed check and `?` a check that could not run (here `store.private`: there is no `gh` login to ask GitHub with). The last line counts every result and gives the overall status and exit code.
+Each setup gets one block: a line per group (identity, GitHub, each store, secrets, tools), then every check that is not ok with its fix, then, when a check failed, the `lore setup repair` line for that setup. The marks are `✓` ok, `⚠` a warning, `✗` a failed check, `?` a check that could not run (a timeout, a missing program), `–` nothing checked (every check skipped: no personal store, no secrets backend, no GitHub account in the setup) and `ℹ` a note that changes nothing in the status (here `store.private`: there is no `gh` login to ask GitHub with, so lore cannot tell whether the store is private, and the fix says how to let it check). The last line counts every result and gives the overall status and exit code.
 
 | Flag | Effect |
 |---|---|
@@ -97,8 +98,8 @@ To find which alias logs in as which account, `github.key_matches` asks every `H
 $ lore doctor --all --setup personal
 setup personal (solo) ─ ~/work/personal/**
   ⚠ identity    tomas@home.example
-  ✓ github       via github.com
-  ✓ secrets     none
+  – github      no GitHub account in this setup (lore setup apply personal --step github)
+  – secrets     none
   ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
@@ -126,9 +127,9 @@ $ lore doctor --all --setup agency --fresh
 setup agency (admin of agency, default) ─ ~/work/agency/**
   ⚠ identity    tomas@agency.example · roster @tomas · employee since 2026-11-02
   ✗ github      tomas-dev via github.com
-  ✓ store me    read – write – private –
-  ? store agency   read ✓ write ✓ private ?
-  ✓ secrets     none
+  – store me    read – write – private –
+  ℹ store agency   read ✓ write ✓ private ℹ
+  – secrets     none
   ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ✗ github.ssh_user  github.com logs in as mira-dev
@@ -137,12 +138,13 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
       fix: Nothing lore can use logs in as tomas-dev. Run the GitHub step again so lore finds a route (an ssh alias that logs in as tomas-dev, or https with tomas-dev's gh login: gh auth login), or add a Host block for tomas-dev's key to ~/.ssh/config
   ⚠ github.gh_account  gh has no login for tomas-dev
       fix: gh auth login --hostname github.com
-  ? store.private  agency: could not tell whether agency/notes is private: To get started with GitHub CLI, please run:  gh auth login
+  ℹ store.private  agency: gh is not logged in, so lore cannot check whether agency/notes is private
+      fix: Optional: install gh and run gh auth login so lore can check that agency/notes is private
       repair: lore setup repair agency
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit act_7a67…9504 --role admin)
-1 setup · 14 ok · 4 warnings · 2 errors · 1 could not run → broken (exit 2)
+1 setup · 15 ok · 4 warnings · 2 errors → broken (exit 2)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
@@ -167,12 +169,12 @@ A check that could not run makes the result degraded, never broken, because the 
 ```console
 # tomas, in agency/site
 $ lore doctor --all --setup agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["status"], r["exit_status"], r["counts"]); [print(c["check"], c["status"], c["level"], c.get("target","-"), "|", c.get("detail","")) for s in r["setups"] for c in s["checks"] if c["status"] not in ("ok", "skip")]'
-broken 2 {'ok': 14, 'warn': 4, 'fail': 2, 'skip': 12, 'error': 1}
+broken 2 {'ok': 15, 'warn': 4, 'fail': 2, 'skip': 12, 'error': 0}
 identity.actor_copies warn warn - | Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
 github.ssh_user fail error - | github.com logs in as mira-dev
 github.key_matches fail error - | github.com logs in as mira-dev, but this setup's account is tomas-dev
 github.gh_account warn warn - | gh has no login for tomas-dev
-store.private error error store agency | could not tell whether agency/notes is private: To get started with GitHub CLI, please run:  gh auth login
+store.private warn info store agency | gh is not logged in, so lore cannot check whether agency/notes is private
 ```
 <!-- /example -->
 
@@ -225,7 +227,7 @@ Run outside a git repo (in your home folder, say), `lore doctor --all` skips the
 
 ## Every check
 
-Each check has a level: an **error** blocks saving its setup step and makes doctor exit 2; a **warn** is reported and makes doctor exit 1. An **info** check is shown for reading only and never changes the exit code. Two checks change level with the store: `store.private` is an error for a team's org store and a warning for your personal store, and `store.write` is a warning for a store attached `--read-only`.
+Each check has a level: an **error** blocks saving its setup step and makes doctor exit 2; a **warn** is reported and makes doctor exit 1. An **info** check is shown for reading only and never changes the exit code. Two checks change level with the store: `store.private` is an error for a team's org store and a warning for your personal store, and `store.write` is a warning for a store attached `--read-only`. When `gh` is missing or has no login on an ssh route, `store.private` is info: lore cannot ask, and nothing is known to be wrong.
 
 | Check | Level | What it checks | Fix it points to |
 |---|---|---|---|
@@ -275,6 +277,7 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `repo.org` | error | the repo's org matches the setup's org | run with `--setup <a setup of that org>`, or fix where the repo's org comes from |
 | `repo.stores` | error | the stores in `.lore/stores.yaml` are readable with this setup's key | ask the store's owner for access, or check the key |
 | `duplicate_actors` | warn / info | (repo, also in plain `lore doctor`) no two human actors share a name without one merged into the other, as an email change before 0.1.18 left them; a warning when the repo has an org, a note without one (both actors stay, nothing is lost) | `lore actor contact add <keep> email <old email> --identity --merge` (asks first; no row is rewritten, reports follow `merged_into`); without an org, none until the repo has one |
+| `duplicate_repos` | warn | (repo, also in plain `lore doctor`) no two repos rows describe one repository (same project and a shared address or mount name), as two machines upgrading one 0.1.17 repo before either pushed left them before repo ids were derived from the project and the address | `lore fix` (or `lore doctor --fix`) keeps the id `_meta.json` names, adds the other rows' addresses to it, re-points the rows that name them and moves them to the trash (`merged into <keep>`) |
 
 "Runnable" fixes can be run by `lore setup fix` or `lore setup repair --yes`; the ones marked "asks" change something on GitHub and always need an explicit yes. Only `lore`, `gh` and `git` are ever run, from a fixed list, never a shell string.
 

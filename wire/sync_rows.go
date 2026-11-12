@@ -200,6 +200,18 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 	// G-SYNC-2: a row file a git merge left with conflict markers is a
 	// conflict of this pass too (sync status / conflicts list it the same
 	// way), so the --json report names it instead of only a stderr line.
+	// B2-8: a live row this pass merged with conflict markers (both sides
+	// rewrote one text field) is named too, with its number for resolve;
+	// before, the sync printed only the store lines and exited 0.
+	if live, lerr := s.hostConflicts(ctx, opssync.ConflictsIn{}); lerr == nil {
+		for _, c := range live.Data {
+			if c.Resolved {
+				continue
+			}
+			out.Data.Conflicts = append(out.Data.Conflicts, opssync.ConflictNote{Path: c.Table + "/" + c.RowID, Kept: c.Kept, Why: syncLiveConflictWhy})
+			out.Lines = append(out.Lines, fmt.Sprintf("conflict #%d live %s/%s: %s (lore sync resolve %d --take kept|other)", c.ID, c.Table, c.RowID, syncLiveConflictWhy, c.ID))
+		}
+	}
 	if files, ferr := s.app.BranchConflicts(ctx); ferr == nil {
 		for _, f := range files {
 			out.Data.Conflicts = append(out.Data.Conflicts, opssync.ConflictNote{Path: f.Place, Kept: branchConflictKept, Why: syncMarkedFileWhy})
@@ -232,6 +244,12 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 			}
 		}
 	}
+	if serr == nil && len(out.Data.Conflicts) > 0 {
+		// the sync ran, but rows wait on a person: say so in the exit code
+		// too, as a refused store row does (E_STALE)
+		serr = errs.New(errs.Stale, fmt.Sprintf("sync: %d row(s) hold a conflict to settle", len(out.Data.Conflicts))).
+			WithHint("both edits are kept: `lore sync conflicts` shows both versions, `lore sync resolve <n> --take kept|other` settles one (or edit the row)")
+	}
 	if serr != nil {
 		for _, l := range out.Lines {
 			s.app.notice(l)
@@ -246,6 +264,10 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 
 // syncMarkedFileWhy is the why of a marked row file in the sync report.
 const syncMarkedFileWhy = "git conflict markers; it is left out of every read until settled (lore sync conflicts, lore sync resolve)"
+
+// syncLiveConflictWhy is the why of a live row with conflict markers in
+// the sync report.
+const syncLiveConflictWhy = "both sides edited a text field; both kept with conflict markers"
 
 // syncAlreadyInSync is v0.1.17's line for a `lore sync` with nothing to do
 // (stdout only; the --json report is unchanged).
@@ -264,7 +286,8 @@ const branchConflictKept = "both"
 
 // SyncConflicts implements opssync.Env: the host's conflicts, then the
 // repo's row files a git merge left with conflict markers (G-SYNC-2),
-// numbered after them.
+// then the rows of attached stores both sides changed (B2-2,
+// sync_store_conflicts.go), numbered in that order.
 func (s syncRows) SyncConflicts(ctx context.Context, in opssync.ConflictsIn) (opssync.ConflictsOut, error) {
 	out, err := s.hostConflicts(ctx, in)
 	if err != nil || !s.coreHost() {
@@ -274,7 +297,11 @@ func (s syncRows) SyncConflicts(ctx context.Context, in opssync.ConflictsIn) (op
 	if ferr != nil {
 		return out, ferr
 	}
-	if len(files) == 0 {
+	stores, serr := s.app.StoreConflicts(ctx)
+	if serr != nil {
+		return out, serr
+	}
+	if len(files) == 0 && len(stores) == 0 {
 		return out, nil
 	}
 	if out.Count == 0 {
@@ -286,13 +313,15 @@ func (s syncRows) SyncConflicts(ctx context.Context, in opssync.ConflictsIn) (op
 		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (%s: git conflict markers; settle with lore sync resolve %d --take kept|other, or fix the file)",
 			n, f.Table, f.RowID, branchConflictKept, f.Place, n))
 	}
+	storeConflictNumbered(&out, stores)
 	out.Count = len(out.Data)
 	return out, nil
 }
 
 // SyncResolve implements opssync.Env: a number past the host's conflicts
-// names a marked row file (SyncConflicts' numbering); kept keeps the first
-// side of each block (git's HEAD), other the second.
+// names a marked row file, then a store row (SyncConflicts' numbering);
+// kept keeps the first side of each block (git's HEAD) or this machine's
+// store copy, other the second or the store remote's copy.
 func (s syncRows) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssync.DoneOut, error) {
 	if !s.coreHost() {
 		return s.Env.SyncResolve(ctx, in)
@@ -311,7 +340,7 @@ func (s syncRows) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 	take := strings.TrimSpace(in.Take)
 	if take != resolveKept && take != resolveOther {
 		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "--take must be kept or other").
-			WithHint("kept keeps the first side of each clash (this branch), other the second (the branch merged in)")
+			WithHint("kept keeps the first side of each clash (this branch, or this machine's copy of a store row), other the second (the branch merged in, or the store's copy)")
 	}
 	files, err := s.app.BranchConflicts(ctx)
 	if err != nil {
@@ -319,7 +348,7 @@ func (s syncRows) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 	}
 	i := n - host.Count - 1
 	if i >= len(files) {
-		return opssync.DoneOut{}, errs.New(errs.NotFound, fmt.Sprintf("no open conflict #%d", n)).WithHint("lore sync conflicts lists them")
+		return s.resolveStore(ctx, n, i-len(files), take)
 	}
 	f := files[i]
 	if err = s.app.ResolveBranchConflict(ctx, f, take == resolveOther); err != nil {
@@ -329,16 +358,62 @@ func (s syncRows) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 	return opssync.DoneOut{Done: done, Lines: []string{"✓ " + done}}, nil
 }
 
+// resolveStore settles conflict #n, the i-th store conflict, and syncs.
+func (s syncRows) resolveStore(ctx context.Context, n, i int, take string) (opssync.DoneOut, error) {
+	stores, err := s.app.StoreConflicts(ctx)
+	if err != nil {
+		return opssync.DoneOut{}, err
+	}
+	if i >= len(stores) {
+		return opssync.DoneOut{}, errs.New(errs.NotFound, fmt.Sprintf("no open conflict #%d", n)).WithHint("lore sync conflicts lists them")
+	}
+	c := stores[i]
+	if err := s.app.ResolveStoreConflict(ctx, c, take == resolveOther); err != nil {
+		return opssync.DoneOut{}, err
+	}
+	side := "this machine's copy"
+	if take == resolveOther {
+		side = "the store's copy"
+	}
+	done := fmt.Sprintf("resolved #%d %s/%s in store %s (took %s: %s) and synced", n, c.Table, c.ID, c.Store, take, side)
+	return opssync.DoneOut{Done: done, Items: []string{c.ID.String()}, Lines: []string{"✓ " + done}}, nil
+}
+
+// Explain implements opssync.Env: the host's answer, and for a row the
+// repo does not hold, the attached store's copy (and its conflict).
+func (s syncRows) Explain(ctx context.Context, in opssync.ExplainIn) (opssync.ExplainOut, error) {
+	out, err := s.Env.Explain(ctx, in)
+	if err != nil && !errs.Has(err, errs.Unsupported) && !s.inStoreFolder(err) {
+		return out, err
+	}
+	if out.Winner != "" {
+		return out, err
+	}
+	if withStore, ok := s.app.explainStore(ctx, out, strings.TrimSpace(in.ID)); ok {
+		withStore.Items = []string{strings.TrimSpace(in.ID)}
+		return withStore, nil
+	}
+	return out, err
+}
+
 // hostConflicts is the host's conflict list; a core host with no live
 // rows here (not a git repo, LORE_LIVE=0: E_UNSUPPORTED) has none, so the
 // marked row files are still listed.
 func (s syncRows) hostConflicts(ctx context.Context, in opssync.ConflictsIn) (opssync.ConflictsOut, error) {
 	out, err := s.Env.SyncConflicts(ctx, in)
-	if err != nil && s.coreHost() && fallback(err) {
+	if err != nil && s.coreHost() && (fallback(err) || s.inStoreFolder(err)) {
 		return opssync.ConflictsOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindConflicts, Data: []opssync.Conflict{},
 			Lines: []string{"· no conflicts"}}, nil
 	}
 	return out, err
+}
+
+// inStoreFolder reports whether err is the host's "not a lore project"
+// for a command run inside a store's checkout: no repo, no live rows, but
+// the store's own conflicts and refusals are this folder's to show (lore's
+// hints send people there, B2-10).
+func (s syncRows) inStoreFolder(err error) bool {
+	return errs.Has(err, errs.NotProjectRoot) && inStore(s.app.opts.RepoDir)
 }
 
 // --take values of sync resolve (G-SYNC-1, G-SYNC-2).
@@ -353,7 +428,7 @@ const storeRefusalNext = "the commits wait in the local clone: fix what the stor
 // storeConflictNext is the next step of a push held back because both
 // sides changed the same rows (E_STALE, E_RESOURCE_CONFLICT): no push rule
 // is involved, the person settles the rows.
-const storeConflictNext = "the commits wait in the local clone: someone else changed the same row(s); compare each row here (lore show <id>) with theirs, edit it here so both agree, then run `lore sync`"
+const storeConflictNext = "the commits wait in the local clone: someone else changed the same row(s); `lore sync conflicts` shows both versions of each, `lore sync resolve <n> --take kept|other` settles one (or edit the row here so both agree, then run `lore sync`)"
 
 // storeRefusalNextFor is the next step for a refusal code.
 func storeRefusalNextFor(code string) string {
@@ -371,6 +446,9 @@ func storeRefusalNextFor(code string) string {
 // instead (status still answers).
 func (s syncRows) SyncStatus(ctx context.Context, in opssync.StatusIn) (opssync.StatusOut, error) {
 	out, err := s.Env.SyncStatus(ctx, in)
+	if err != nil && s.coreHost() && s.inStoreFolder(err) {
+		out, err = opssync.StatusOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindStatus}, nil
+	}
 	if err != nil {
 		return out, err
 	}

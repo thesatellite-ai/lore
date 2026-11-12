@@ -57,7 +57,7 @@ func TestFitPrivate(t *testing.T) {
 				if !strings.HasPrefix(txt, c.bodies[i].core) {
 					t.Fatalf("file %d lost its core: %q", i, txt)
 				}
-				ptr := strings.Contains(txt, "more notes left out by context.budget.internal")
+				ptr := strings.Contains(txt, "left out by context.budget.internal")
 				if ptr != c.pointers[i] {
 					t.Fatalf("file %d pointer=%v, want %v: %q", i, ptr, c.pointers[i], txt)
 				}

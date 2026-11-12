@@ -67,6 +67,9 @@ var whereGitLore = []struct{ pattern, what string }{
 	{gitbackend.IdentityRecordFile, "the user.email lore wrote into this clone's .git/config, so lore keeps only its own value current and never changes one you set"},
 	{"push_stamp", "when lore last pushed"},
 	{"push_fail_stamp", "when lore's last batch push failed"},
+	{waitSaidFile, "how many unpushed commits lore last told you about, so a read says it once, not every time"},
+	{"live-waiting-said", "the last \"not pushed yet\" line lore printed, so it is said once, not on every command"},
+	{"live-remote-fault", "why the last live push could not reach the remote (no repository there, refused credentials); lore doctor warns with it"},
 	{"compact_stamp", "when lore last compacted the store's history"},
 	{"git-wiring*", "a fingerprint of lore's git wiring (merge driver, hooks), so it is checked only when something changed"},
 	{"live.lock", "the lock of the live ref"},
@@ -131,19 +134,42 @@ func whereUses(home string) map[string]*cacheUse {
 	if err != nil {
 		return m
 	}
+	at := func(path string) *cacheUse {
+		c := m[path]
+		if c == nil {
+			c = &cacheUse{}
+			m[path] = c
+		}
+		return c
+	}
 	for _, r := range recs {
+		if r.Record.Repo == "" {
+			continue // a damaged record names nothing
+		}
+		repo := r.Record.Repo
+		if !loreFolderAt(repo) {
+			// The checkout moved or was deleted: the record is stale until
+			// `lore cache prune` drops it, so say so instead of listing a
+			// path that is not there.
+			repo += whereGoneRepo
+		} else {
+			// The repo store's own cache is named from the checkout's path
+			// (not in the record): show who uses it too.
+			own := at(sqlite.RepoCacheRel(r.Record.Repo))
+			own.repos = appendNew(own.repos, repo)
+		}
 		for _, u := range r.Record.Caches {
-			c := m[u.Path]
-			if c == nil {
-				c = &cacheUse{}
-				m[u.Path] = c
-			}
+			c := at(u.Path)
 			c.stores = appendNew(c.stores, u.Store)
-			c.repos = appendNew(c.repos, r.Record.Repo)
+			c.repos = appendNew(c.repos, repo)
 		}
 	}
 	return m
 }
+
+// whereGoneRepo marks a recorded repo path that no longer holds a lore
+// repo (B3-9: a moved checkout was still listed as a user of its caches).
+const whereGoneRepo = " (gone: moved or deleted; `lore cache prune` drops it)"
 
 // appendNew appends s to list unless it is empty or already there.
 func appendNew(list []string, s string) []string {
@@ -421,6 +447,12 @@ func whereRepo(ctx context.Context, top string) []opswhere.Entry {
 	for _, f := range []string{RepoCacheFile, RepoCacheFile + "-wal", RepoCacheFile + "-shm"} {
 		add(filepath.Join(top, filepath.FromSlash(f)), opswhere.KindFile, "an earlier lore build's search cache of this repo (the cache now lives under the lore home, cache/"+repoCacheDir+"/); untracked and rebuildable", "safe to delete; `lore fix` removes it")
 	}
+	// B4-7: what lore 0.1.17 kept in the repo (untracked or ignored): this
+	// lore reads lore.db only to migrate the edits only it held
+	for _, f := range []string{v017LoreDB, v017LoreDB + "-wal", v017LoreDB + "-shm"} {
+		add(filepath.Join(top, filepath.FromSlash(f)), opswhere.KindFile, "lore 0.1.17's database of this checkout; `lore fix` (migrate) copies the edits only it held into .lore/data, then nothing reads it; untracked", "`lore fix` removes it once every row it holds is in a store here")
+	}
+	add(filepath.Join(lore, "backups"), opswhere.KindFolder, "backups lore 0.1.17 made of this checkout's database; this lore does not read them; untracked", "`lore fix` removes them with lore.db")
 	add(filepath.Join(lore, rowfs.LockFileName), opswhere.KindFile, "the lock lore takes while it writes rows here; not committed", byHandLock)
 	add(filepath.Join(lore, "state"), opswhere.KindFolder, "local state of this checkout (the lock's audit journal, a migration's journal); not committed", "do not delete while a migration is half done")
 	add(filepath.Join(lore, "stores.yaml"), opswhere.KindFile, "the stores this repo attaches (committed)", "you may edit it; `lore store add|remove` does it for you")

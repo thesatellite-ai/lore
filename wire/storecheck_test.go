@@ -82,7 +82,10 @@ func TestCheckStores(t *testing.T) {
 		t.Fatal(err)
 	}
 	me = checkOf(t, a.CheckStores(background()), "me")
-	if me.Reachable || !hasProblem(me, "unreachable: ") || hasProblem(me, "[E_") {
+	// B3-12: the reason is git's whole telling line, never the tail of its
+	// advice ("and the repository exists."), and the kind is typed
+	if me.Reachable || me.Fault != "missing" || !hasProblem(me, "no git repository at ") || !hasProblem(me, "does not appear to be a git repository") ||
+		hasProblem(me, "repository exists") || hasProblem(me, "[E_") {
 		t.Fatalf("me with its remote gone: %+v", me)
 	}
 }

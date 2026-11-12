@@ -43,8 +43,9 @@ var repoKeys = []string{MetaKeyRepoID, MetaKeyURLs, MetaKeyForkedFrom, MetaKeySp
 // value is "no identity yet" (a v0.1.17 checkout before its first 0.1.18
 // sync).
 type RepoMeta struct {
-	// RepoID is the permanent random rep_ id (never derived from a name or
-	// a URL, PROV1).
+	// RepoID is the permanent rep_ id (PROV1): derived once from the
+	// project and the primary address or root commit (ops/infra
+	// MintRepoID, so two clones minting at once agree), never re-derived.
 	RepoID string `json:"repo_id,omitempty"`
 	// URLs are the confirmed addresses, normalised (repourl.Normalize),
 	// newest first.

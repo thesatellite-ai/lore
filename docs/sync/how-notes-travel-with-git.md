@@ -26,7 +26,7 @@ You want this page when you set up lore in a repo that other people also use, or
 <!-- example: sync#init -->
 ```console
 # alice, in website
-$ lore init --non-interactive --name=website
+$ lore init --name=website
 lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; lore's merge rules in ~/work/website/.gitattributes; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 lore initialized
@@ -133,7 +133,7 @@ $ git clone -q https://github.com/client/website
 
 # bob, in website
 $ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 rul_162d…9666 [must/always] Run the tests before you push.
 ```
 <!-- /example -->
@@ -164,6 +164,7 @@ refused pushes:   0
 | `trash rows` | rows removed because their file disappeared; see [Trash, restore from git and purge](trash-and-purge.md) |
 | `uncommitted` | files in `.lore/data` that git has not committed yet |
 | `live rows` | rows on the live list (tasks and other live rows, see [Lore for teams](../team/README.md)) |
+| `stores` | each store with the commits its remote has not confirmed (`ahead`) and the fetched ones not merged yet (`behind`); a folder of a store shares the store's clone, so its line says `same clone as <store>` and the commits are counted once, on the store's line (a read that says commits wait to be pushed names the store once too) |
 
 ## Try it — turn sync off for one command
 
@@ -209,7 +210,7 @@ $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsAp
 <!-- example: environment#sync-git-off -->
 ```console
 # alice, in shop
-$ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
+$ LORE_SYNC_GIT=0 lore init --name=shop
 lore: wrote 4 row file(s) in ~/work/shop/.lore/data
 lore initialized
     project_id: prj_76bd…3f10

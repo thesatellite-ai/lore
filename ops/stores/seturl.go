@@ -27,7 +27,7 @@ const OpSetURL = "store.set_url"
 // SetURLIn is the input of store.set_url.
 type SetURLIn struct {
 	Name string `json:"name" arg:"0" desc:"the store: a stores.yaml name, me, an org entry name, or its sto_ id"`
-	URL  string `json:"url" arg:"1" desc:"the store's new git url or file:// path"`
+	URL  string `json:"url" arg:"1" desc:"the store's new git url, local git repository path or file:// folder"`
 }
 
 // SetURLOut is the output of store.set_url.
@@ -51,6 +51,10 @@ type SetURLOut struct {
 	Places []string `json:"places,omitempty"`
 	// OrgFiles say what happened to each moved org's lore-org.yaml.
 	OrgFiles []string `json:"org_files,omitempty"`
+	// Clone says the clone at the old address, which held commits the
+	// store had not got, now fetches from and pushes to the new one, so
+	// the next sync sends them ("" when there was nothing to carry).
+	Clone string `json:"clone,omitempty"`
 }
 
 // URLSetter is the optional Manager upgrade behind store.set_url.
@@ -63,7 +67,7 @@ func setURLOp(m Manager) op.Entry {
 	return op.Define(op.Spec{
 		Name: OpSetURL, Summary: "Record a store's new address (the store repo moved or was renamed); its id and rows stay",
 		Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
-		Confirm:  op.ConfirmRule{MayAsk: true}, // CFG7: the url lands in stores.yaml, as for add
+		Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true}, // CFG7: the url lands in stores.yaml, as for add
 		Examples: []op.Example{{Title: "the store repo was renamed", CLI: "lore store set-url agency git@github.com:agency/lore-notes", Want: "is now at"}},
 	}, func(ctx context.Context, in SetURLIn) (SetURLOut, error) {
 		if err := checkSetURLName(in.Name); err != nil {

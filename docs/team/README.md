@@ -59,6 +59,7 @@ $ git pull -q && git switch -q -c feat/payments && lore task add 'check the chec
 lore: wrote ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — check the checkout page on a phone [medium]
+  created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main

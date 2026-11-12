@@ -33,6 +33,7 @@ $ lore task add 'Write the launch email' --priority high
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 — Write the launch email [high]
+  created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task add 'Pick the product photos' --priority low
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json

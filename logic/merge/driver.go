@@ -21,6 +21,9 @@ import (
 type Driver struct {
 	Registry *schema.Registry
 	Report   func(Result)
+	// OursFirst is Policy.OursFirst for every table (the git merge
+	// driver of a worktree merge).
+	OursFirst bool
 }
 
 // Merge implements the git backend's Merger. An empty or whitespace-only
@@ -50,6 +53,7 @@ func (d Driver) Merge(base, ours, theirs []byte) (merged []byte, conflict bool, 
 			p = PolicyFor(def)
 		}
 	}
+	p.OursFirst = d.OursFirst
 	res, err := Rows(p, b, o, t)
 	if err != nil {
 		return nil, false, err

@@ -12,6 +12,8 @@ package wire
 //	     committed secret_allows entries (only entries in the index count),
 //	     then its whole text for anything no field held; any other file as
 //	     plain text
+//	  ─▶ a commit: findings the same row already held at HEAD are not new
+//	     (hooksecrets_history.go), one notice line counts them
 //	  ─▶ E_LEAK_BLOCKED naming file, line and rule, never the value
 //
 // Fails closed: a scanner or allow list that cannot be built refuses.
@@ -34,6 +36,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -50,17 +53,31 @@ const (
 
 // HookSecrets scans docs for credentials before a commit or push from the
 // repository at root; where names the action ("commit", "push").
+// A commit's findings already in history (hooksecrets_history.go) go to
+// the notice sink as one line.
 func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[string][]byte) error {
+	old, err := a.hookSecrets(ctx, root, where, docs)
+	if old > 0 {
+		a.notice(historyLine(old))
+	}
+	return err
+}
+
+// hookSecrets is HookSecrets returning, instead of printing, how many
+// findings of a commit were let through as already in history: `lore check
+// leaks` runs on its own App, whose notice sink the command hooks never
+// set, so it prints that line as its result.
+func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[string][]byte) (inHistory int, err error) {
 	if len(docs) == 0 {
-		return nil
+		return 0, nil
 	}
 	sc, err := a.HookScanner(ctx)
 	if err != nil {
-		return errs.Wrap(errs.LeakBlocked, "cannot check for secrets: the scanner could not be built: "+err.Error(), err)
+		return 0, errs.Wrap(errs.LeakBlocked, "cannot check for secrets: the scanner could not be built: "+err.Error(), err)
 	}
 	allows, err := committedAllows(ctx, root)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	_, isGit, inStore := rowfs.StoreTop(root)
 	inStore = inStore && isGit
@@ -70,6 +87,12 @@ func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[stri
 	}
 	sort.Strings(paths)
 	hits := scanDocs(sc, allows, paths, docs, inStore)
+	if where == checkWhereCommit {
+		// D2: a commit is blocked only for what it adds; a value the same
+		// row already held at HEAD (a format rewrite, a moved row file) is
+		// counted and named once (hooksecrets_history.go).
+		hits, inHistory = dropHistoryHits(ctx, sc, root, inStore, paths, docs, hits)
+	}
 	var lines, refused []string
 	for i, p := range paths {
 		for _, h := range hits[i] {
@@ -82,10 +105,10 @@ func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[stri
 		}
 	}
 	if len(lines) == 0 {
-		return nil
+		return inHistory, nil
 	}
 	a.auditHookRefused(ctx, where, refused)
-	return errs.New(errs.LeakBlocked, "blocked, this "+where+" carries a secret:\n"+strings.Join(lines, "\n")).
+	return inHistory, errs.New(errs.LeakBlocked, "blocked, this "+where+" carries a secret:\n"+strings.Join(lines, "\n")).
 		WithHint(leakHint(inStore))
 }
 
@@ -95,7 +118,7 @@ func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[stri
 // writes and commits the entry itself, as <folder>/secret_allows/<id>.json
 // in the store, so the person only commits again.
 func leakHint(inStore bool) string {
-	const vault = "store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <hash> --reason \"<why>\""
+	const vault = "store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <the sha256:… match shown> --reason \"<why>\""
 	if inStore {
 		return vault + " (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again"
 	}
@@ -110,7 +133,7 @@ func leakHint(inStore bool) string {
 // `git commit -a` was never seen (docs bug B1). A relative value is
 // relative to the directory git ran the hook in, the worktree top.
 func hookIndexEnv(top string) []string {
-	idx := os.Getenv("GIT_INDEX_FILE")
+	idx := os.Getenv(envGitIndexFile)
 	if idx == "" {
 		return nil
 	}
@@ -341,4 +364,39 @@ func (a *App) auditHookRefused(ctx context.Context, where string, refused []stri
 			a.notice("lore: warning: secret.hook_refused was not recorded: " + err.Error())
 		}
 	}
+}
+
+var _ opssettings.FindingHasher = (*App)(nil)
+
+// FindingMatchHash implements opssettings.FindingHasher (bug B1-15): the
+// commit refusal names a finding by its fingerprint (scan.Mask,
+// "sha256:" + hex), the allow entry stores the finding's 32-bit match
+// hash. The field's texts are scanned with the commit check's rules
+// (HookScanner) and the one finding of rule whose fingerprint starts with
+// fingerprint (lower-case hex, no prefix) gives the hash; none, or two
+// different values, is refused with the command that lists every finding.
+func (a *App) FindingMatchHash(ctx context.Context, r row.Row, field, rule, fingerprint string) (uint32, error) {
+	sc, err := a.HookScanner(ctx)
+	if err != nil {
+		return 0, err
+	}
+	found := map[uint32]bool{}
+	for _, text := range fieldTexts(r.Fields[field]) {
+		for _, f := range sc.Scan(field, text) {
+			fp := strings.TrimPrefix(f.Preview, "sha256:")
+			if f.RuleID == rule && (strings.HasPrefix(fp, fingerprint) || strings.HasPrefix(fingerprint, fp)) {
+				found[f.MatchHash] = true
+			}
+		}
+	}
+	const list = "list the findings with their exact allow commands: lore check leaks --rows"
+	switch len(found) {
+	case 1:
+		for h := range found {
+			return h, nil
+		}
+	case 0:
+		return 0, errs.New(errs.NotFound, "secrets allow: no "+rule+" finding with fingerprint sha256:"+fingerprint+" in the "+field+" of "+r.ID.String()).WithHint(list)
+	}
+	return 0, errs.New(errs.InvalidInput, "secrets allow: fingerprint sha256:"+fingerprint+" names more than one "+rule+" finding in the "+field+" of "+r.ID.String()).WithHint("give more of the fingerprint, or " + list)
 }

@@ -142,7 +142,7 @@ type FieldEditIn struct {
 	Description  string   `json:"description,omitempty" flag:"description" desc:"what the field means"`
 	NoStrict     bool     `json:"no_strict,omitempty" flag:"no-strict" desc:"back to newer-wins on a both-sides change (asks)"`
 	NoDeprecated bool     `json:"no_deprecated,omitempty" flag:"no-deprecated" desc:"not deprecated any more"`
-	To           string   `json:"to,omitempty" flag:"to" desc:"tighten the field for a nearer place only (an extension row there; RES 3.6)"`
+	To           string   `json:"to,omitempty" flag:"to" desc:"tighten the field for a nearer place only (an extension row there)"`
 	Clear        []string `json:"clear,omitempty" flag:"clear" desc:"remove a rule: default, pattern, min, max, replaced_by, remind_before (repeatable; clearing pattern/min/max asks)"`
 	FieldRuleFlags
 }

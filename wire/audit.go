@@ -3,6 +3,8 @@ package wire
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -229,32 +231,102 @@ type routedAudit struct {
 	rowFile func(store.Source, row.Table, ids.AnyID) string
 	repo    engine.AuditSink
 	dir     string                  // <home>/StoreAuditDir
-	stems   map[store.Source]string // attached source -> file stem
-	mu      sync.Mutex
+	stems   map[store.Source]string // attached source -> its sto_ id, once known
+	// backends are the attached stores, so a store opened with a v0.1.17
+	// marker gets its sto_ stem as soon as `lore fix` gives it one
+	// (currentMarker), not on the next run (B4-17).
+	backends map[store.Source]store.Backend
+	mu       sync.Mutex
 }
 
 var _ engine.AuditSink = (*routedAudit)(nil)
 
 // newRoutedAudit wraps repo with the attached stores' machine-local trail.
 func newRoutedAudit(repo engine.AuditSink, home string, attached []attach.Opened) *routedAudit {
-	r := &routedAudit{repo: repo, dir: filepath.Join(home, filepath.FromSlash(StoreAuditDir)), stems: map[store.Source]string{}}
+	r := &routedAudit{repo: repo, dir: filepath.Join(home, filepath.FromSlash(StoreAuditDir)),
+		stems: map[store.Source]string{}, backends: map[store.Source]store.Backend{}}
 	for _, o := range attached {
-		stem := ""
-		if m, ok := concrete(o.Backend).(markerOf); ok && !m.Marker().ID.IsZero() {
-			stem = m.Marker().ID.String()
+		r.backends[o.Name] = o.Backend
+		if mk, ok := currentMarker(o.Backend); ok && !mk.ID.IsZero() {
+			// a store that already has its id: a name- file an earlier
+			// run left (before `lore fix` gave the id) is folded in now,
+			// so `lore audit` sees one file per store from the first run
+			r.stem(o.Name)
 		}
-		r.stems[o.Name] = stem
 	}
 	return r
 }
 
 // stem is the file stem of an attached source: its sto_ id, else
-// storeAuditNoIDPrefix + the sanitised name.
+// storeAuditNoIDPrefix + the sanitised name. The first time a source has
+// an id, a name- file it wrote before (a v0.1.17 store before `lore fix`)
+// is folded into the id's file (adoptNamedAudit), so one store keeps one
+// audit file. The caller holds r.mu.
 func (r *routedAudit) stem(name store.Source) string {
 	if s := r.stems[name]; s != "" {
 		return s
 	}
+	named := noIDAuditStem(name)
+	mk, ok := currentMarker(r.backends[name])
+	if !ok || mk.ID.IsZero() {
+		return named
+	}
+	id := mk.ID.String()
+	if err := adoptNamedAudit(r.dir, named, id); err != nil {
+		return named // the old file stays readable; the next run tries again
+	}
+	r.stems[name] = id
+	return id
+}
+
+// noIDAuditStem is the audit stem of a store without a sto_ id.
+func noIDAuditStem(name store.Source) string {
 	return storeAuditNoIDPrefix + storeAuditUnsafe.ReplaceAllString(string(name), "_")
+}
+
+// adoptNamedAudit folds <dir>/<named>.jsonl into <dir>/<id>.jsonl: the old
+// entries first (they are older), then any the id file already holds,
+// written to a temporary file and renamed over the id file, then the old
+// file is removed. No old file: nothing to do. Each line is a separate
+// JSON event (no chain across lines), so concatenation keeps every entry.
+func adoptNamedAudit(dir, named, id string) error {
+	oldPath := filepath.Join(dir, named+storeAuditExt)
+	old, err := os.ReadFile(filepath.Clean(oldPath))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: read the old store audit file", err)
+	}
+	newPath := filepath.Join(dir, id+storeAuditExt)
+	cur, err := os.ReadFile(filepath.Clean(newPath))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return errs.Wrap(errs.Internal, "wire: read the store audit file", err)
+	}
+	if len(old) > 0 && old[len(old)-1] != '\n' {
+		old = append(old, '\n')
+	}
+	tmp, err := os.CreateTemp(dir, ".audit-adopt-*")
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: merge the store audit files", err)
+	}
+	_, werr := tmp.Write(append(old, cur...))
+	serr := tmp.Sync()
+	cerr := tmp.Close()
+	if werr == nil && serr == nil && cerr == nil {
+		werr = os.Chmod(tmp.Name(), auditFileMode)
+	}
+	if werr == nil && serr == nil && cerr == nil {
+		werr = os.Rename(tmp.Name(), newPath)
+	}
+	if e := firstErr(werr, serr, cerr); e != nil {
+		_ = os.Remove(tmp.Name()) // best effort: a leftover temp holds no data the old file lacks
+		return errs.Wrap(errs.Internal, "wire: merge the store audit files", e)
+	}
+	if err := os.Remove(oldPath); err != nil {
+		return errs.Wrap(errs.Internal, "wire: remove the old store audit file", err)
+	}
+	return nil
 }
 
 // Record implements engine.AuditSink.

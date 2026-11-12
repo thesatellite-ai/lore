@@ -247,6 +247,11 @@ const (
 	SetupStepOrder Code = "E_SETUP_STEP_ORDER"
 	// InviteInvalid: the invite text does not parse (ONB 4.5).
 	InviteInvalid Code = "E_INVITE_INVALID"
+	// JoinOrgUnknown: `lore setup join <name>` names an org this machine has
+	// no entry for. A member an admin added (lore member add) is on a fresh
+	// machine, so the org's name means nothing there yet; only its store url
+	// does. Not an invite error: no invite is involved.
+	JoinOrgUnknown Code = "E_JOIN_ORG_UNKNOWN"
 	// InviteNotFound: no invites row with that id in the org store.
 	InviteNotFound Code = "E_INVITE_NOT_FOUND"
 	// InviteExpired: the invite is past expires_on.
@@ -448,6 +453,7 @@ var table = map[Code]entry{
 	SetupStepFailed:       {class: ClassRefused, desc: "a setup step still has failing error-level checks; fix them (lore setup check) before saving"},
 	SetupStepOrder:        {class: ClassRefused, desc: "a setup step was applied before the steps it needs are done"},
 	InviteInvalid:         {class: ClassBadInput, desc: "this is not a lore invite; copy the whole line starting with lore-invite:v1:"},
+	JoinOrgUnknown:        {class: ClassNotFound, desc: "this machine has no org by that name yet; join with the org's store url (the admin's lore member add prints the whole command)"},
 	InviteNotFound:        {class: ClassNotFound, desc: "the invite is not in the org's store; ask the inviter to run lore team invite again"},
 	InviteExpired:         {class: ClassRefused, desc: "the invite expired; ask the inviter for a new one"},
 	InviteRevoked:         {class: ClassRefused, desc: "the invite was revoked; ask the inviter"},

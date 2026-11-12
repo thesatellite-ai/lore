@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -99,12 +100,74 @@ type RuleOnIn struct {
 
 // AllowIn is the input of secrets.allow.
 type AllowIn struct {
-	Row       string `json:"row_id" arg:"0" desc:"the row id the finding is on"`
-	Rule      string `json:"rule" flag:"rule" desc:"the rule id of the finding"`
-	Reason    string `json:"reason" flag:"reason" desc:"why it is not a secret"`
-	Field     string `json:"field,omitempty" flag:"field" desc:"the field (default the one text field holding --match)"`
-	Match     string `json:"match,omitempty" flag:"match" desc:"the matched text (only its hash is stored)"`
-	MatchHash uint32 `json:"match_hash,omitempty" flag:"match-hash" desc:"the finding's match hash, instead of --match"`
+	Row    string `json:"row_id" arg:"0" desc:"the row id the finding is on"`
+	Rule   string `json:"rule" flag:"rule" desc:"the rule id of the finding"`
+	Reason string `json:"reason" flag:"reason" desc:"why it is not a secret"`
+	Field  string `json:"field,omitempty" flag:"field" desc:"the field (default the one text field holding --match)"`
+	Match  string `json:"match,omitempty" flag:"match" desc:"the matched text (only its hash is stored)"`
+	// MatchHash is text, not a number (bug B1-15): a commit refusal prints
+	// the finding as its sha256 fingerprint ("sha256:3fa9…"), `lore check
+	// leaks --rows` and `lore lint` print the number; both are taken.
+	MatchHash MatchHashArg `json:"match_hash,omitempty" flag:"match-hash" desc:"the finding's hash, instead of --match: the sha256:… fingerprint a refused commit prints, or the number lore check leaks --rows prints"`
+}
+
+// MatchHashArg is --match-hash as given: text on the command line, and in
+// JSON either a string or the number older API clients send.
+type MatchHashArg string
+
+// UnmarshalJSON implements json.Unmarshaler: a JSON string or number.
+func (m *MatchHashArg) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*m = MatchHashArg(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err != nil {
+		return errs.Wrap(errs.InvalidInput, "match_hash: want a sha256:… fingerprint or a number", err)
+	}
+	*m = MatchHashArg(n.String())
+	return nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler (the CLI flag).
+func (m *MatchHashArg) UnmarshalText(b []byte) error { *m = MatchHashArg(b); return nil }
+
+// MarshalText implements encoding.TextMarshaler.
+func (m MatchHashArg) MarshalText() ([]byte, error) { return []byte(m), nil }
+
+// FindingHasher is an optional Env upgrade (wire.App): the match hash of
+// the finding of rule in a row's field whose fingerprint (scan.Mask) is
+// fingerprint, scanned with the rules the commit check uses. Without it a
+// fingerprint cannot be resolved and only the number is taken.
+type FindingHasher interface {
+	FindingMatchHash(ctx context.Context, r row.Row, field, rule, fingerprint string) (uint32, error)
+}
+
+// Forms of --match-hash: an fnv number, or a sha256 fingerprint with or
+// without its prefix, at least minFingerprintHex hex characters.
+const (
+	fingerprintPrefix = "sha256:"
+	minFingerprintHex = 8
+)
+
+// parseMatchHash reads --match-hash: the number (n, "" fingerprint) or a
+// fingerprint (0, its lower-case hex). Checked before the row is read, so
+// a wrong value is refused at once.
+func parseMatchHash(s string) (uint32, string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, "", nil
+	}
+	if n, err := strconv.ParseUint(s, 10, 32); err == nil {
+		return uint32(n), "", nil
+	}
+	hexPart := strings.ToLower(strings.TrimPrefix(strings.ToLower(s), fingerprintPrefix))
+	if len(hexPart) >= minFingerprintHex && len(hexPart) <= 64 && strings.Trim(hexPart, "0123456789abcdef") == "" {
+		return 0, hexPart, nil
+	}
+	return 0, "", errs.New(errs.InvalidInput, "secrets allow: --match-hash "+quote(s)+" is neither the sha256:… fingerprint a refusal prints nor a match hash number").
+		WithHint("copy the match a refused commit printed (sha256:…), or the --match-hash number `lore check leaks --rows` prints")
 }
 
 // AllowRmIn is the input of secrets.allow.rm.
@@ -461,6 +524,13 @@ func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 	if in.Rule == "" || strings.TrimSpace(in.Reason) == "" {
 		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: --rule and --reason are required")
 	}
+	if in.Match != "" && strings.TrimSpace(string(in.MatchHash)) != "" {
+		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match or --match-hash, not both")
+	}
+	hash, fingerprint, err := parseMatchHash(string(in.MatchHash))
+	if err != nil {
+		return RowOut{}, err
+	}
 	src, r, err := o.env.Get(ctx, engine.Ref{ID: rowID})
 	if err != nil {
 		return RowOut{}, err
@@ -487,17 +557,23 @@ func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 		}
 		field = textFields[0]
 	}
-	hash := in.MatchHash
+	if fingerprint != "" {
+		fh, ok := o.env.(FindingHasher)
+		if !ok {
+			return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match-hash as the number `lore check leaks --rows` prints")
+		}
+		if hash, err = fh.FindingMatchHash(ctx, r, field, in.Rule, fingerprint); err != nil {
+			return RowOut{}, err
+		}
+	}
 	switch {
-	case in.Match != "" && hash != 0:
-		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match or --match-hash, not both")
 	case in.Match != "":
 		if v, ok := r.Fields[field]; !ok || !strings.Contains(v.String(), in.Match) {
 			return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: the "+field+" of "+rowID.String()+" does not contain that text")
 		}
 		hash = scan.HashMatch(in.Match)
 	case hash == 0:
-		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match <text> or --match-hash <n>")
+		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match <text> or --match-hash <sha256:… or number>")
 	}
 	fields := map[string]value.Value{aHash: value.Int(int64(hash))}
 	if err = optTexts(fields, map[string]string{aField: field, aRuleID: in.Rule, aReason: in.Reason}); err != nil {

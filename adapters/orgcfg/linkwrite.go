@@ -340,7 +340,7 @@ func (g *GitLinks) pickLinkStore(ctx context.Context, plan orgresolve.LinkPlan) 
 	named := ""
 	holder := ""
 	for _, sc := range o.Stores {
-		n, nerr := repourl.Normalize(sc.URL)
+		n, nerr := repourl.NormalizeStore(sc.URL)
 		if nerr != nil {
 			return "", fmt.Errorf("orgcfg: store url %q of %s: %w", sc.URL, o.Name, nerr)
 		}

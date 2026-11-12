@@ -36,6 +36,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/dataignore"
@@ -70,7 +72,13 @@ func doctorLinkedByRemoteNote(remote string) string {
 // doctor [sync] lines.
 const (
 	doctorDataIgnoredWarning = ".lore/data is gitignored, so lore knowledge is never shared; `lore doctor --fix` re-includes it in .gitignore (then commit .gitignore), or remove the ignore rule (lore sync refuses with E_SYNC_DATA_IGNORED meanwhile)"
-	doctorNoMergeDriverNote  = "lore merge driver not configured in this clone (a read leaves git as it is: `lore sync`, `lore doctor --fix` or the next lore write here installs it, unless LORE_SYNC_GIT=0)"
+	// doctorDataIgnoredPrefix starts the warning when lore files under
+	// .lore/data are ignored by a rule (named, B1-8: a broad rule such as
+	// `_*` catches only _meta.json, and "is gitignored" alone read as false
+	// when git check-ignore on a row file printed nothing).
+	doctorDataIgnoredPrefix = "git ignores lore files under .lore/data, so they are never shared: "
+	doctorDataIgnoredFix    = "; `lore doctor --fix` re-includes them in .gitignore (then commit .gitignore), or remove the ignore rule (lore sync refuses with E_SYNC_DATA_IGNORED meanwhile)"
+	doctorNoMergeDriverNote = "lore merge driver not configured in this clone (a read leaves git as it is: `lore sync`, `lore doctor --fix` or the next lore write here installs it, unless LORE_SYNC_GIT=0)"
 	// doctorBrokenMergeDriverNote: merge.lore.driver is set to something
 	// that is not a lore merge driver (a missing absolute program is
 	// repaired by the next lore command, see wire/host/gitwire.go).
@@ -173,11 +181,12 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	for i, p := range probes {
 		probes[i] = dataRel + strings.TrimPrefix(p, dataignore.DataRel)
 	}
-	if hit, perr := dataignore.Ignored(ctx, dir, probes); perr == nil && len(hit) > 0 {
+	hit, perr := dataignore.Ignored(ctx, dir, probes)
+	if perr == nil && len(hit) > 0 {
 		s.DataIgnored = true // a whole kind of lore file is ignored
 	}
 	if s.DataIgnored {
-		warn(doctorDataIgnoredWarning)
+		warn(dataIgnoredLine(hit))
 	}
 	// A read never adds these lines (wire/gitignorelines.go): the finding
 	// names them and the command that does.
@@ -228,4 +237,29 @@ func nulFields(b []byte) []string {
 		}
 	}
 	return out
+}
+
+// dataIgnoredLine is the [sync] warning of ignored lore data: each kind of
+// lore file a rule ignores, with the rule ("<file>:<line>:<pattern>"), so
+// the reader can check it with git check-ignore -v; the generic line when
+// only real row files were found ignored (git status names those).
+func dataIgnoredLine(hit map[string]string) string {
+	if len(hit) == 0 {
+		return doctorDataIgnoredWarning
+	}
+	paths := make([]string, 0, len(hit))
+	for p := range hit {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	const shown = 3
+	parts := make([]string, 0, shown+1)
+	for i, p := range paths {
+		if i == shown {
+			parts = append(parts, "and "+strconv.Itoa(len(paths)-shown)+" more")
+			break
+		}
+		parts = append(parts, dataignore.Shown(p)+" (by "+hit[p]+")")
+	}
+	return doctorDataIgnoredPrefix + strings.Join(parts, ", ") + doctorDataIgnoredFix
 }

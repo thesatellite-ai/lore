@@ -63,6 +63,13 @@ const restNoun = "fix"
 const (
 	LineCurrent = "Everything is current."
 	LineDryRun  = "Nothing changed (dry run)."
+	// LineStepsFailed starts the line of a run where a step could not run
+	// (B1-5: "Everything is current." after a FAILED migrate read as a
+	// clean repo); the failed steps follow.
+	// LineNoRepos is --all's line when it found no repo: how it chooses
+	// them and what to do.
+	LineNoRepos     = "lore fix --all found no repo: it fixes the repo you run it in, the known repos (where lore ran before) and the repos with .lore/ in your setups' folders (`lore setup list`); run `lore fix` inside each repo, or add the folder holding your repos to a setup"
+	LineStepsFailed = "Not everything is current: these steps failed, see their lines above: "
 )
 
 // Env is what fix.run needs; *wire.App implements it.
@@ -96,6 +103,9 @@ type Found struct {
 	// (a setup folder, the home holding ~/.lore): a note each, never a
 	// failure (owner item 26).
 	Skipped []Skip
+	// Note says how the repos were chosen when no setup has folders
+	// (B4-8: a machine upgraded from lore 0.1.17), "" otherwise.
+	Note string
 }
 
 // Skip is one folder --all passed over, and why.
@@ -250,6 +260,8 @@ type Out struct {
 	Repos []RepoResult `json:"repos,omitempty"`
 	// Skipped are the folders --all passed over (not git repos), noted.
 	Skipped []Skip `json:"skipped,omitempty"`
+	// Note says how --all chose the repos when no setup has folders.
+	Note string `json:"note,omitempty"`
 	// Failed names the repos (--all) or steps that failed.
 	Failed []string `json:"failed,omitempty"`
 	// OK counts the repos that did not fail (--all).
@@ -290,9 +302,16 @@ func (o Out) Text() string {
 	}
 	b.WriteString("lore fix: " + o.Repo + "\n")
 	b.WriteString(doctor.StepsText(o.Steps))
-	if o.DryRun {
+	failed := doctor.FailedSteps(o.Steps)
+	switch {
+	case len(failed) > 0:
+		b.WriteString(LineStepsFailed + strings.Join(failed, ", ") + "\n")
+		if o.DryRun {
+			b.WriteString(LineDryRun + "\n")
+		}
+	case o.DryRun:
 		b.WriteString(LineDryRun + "\n")
-	} else if !doctor.Changed(o.Steps) {
+	case !doctor.Changed(o.Steps):
 		b.WriteString(LineCurrent + "\n")
 	}
 	for _, e := range o.Errors {
@@ -314,6 +333,13 @@ func (o Out) Text() string {
 // repos, the wall time.
 func (o Out) Summary() string {
 	var b strings.Builder
+	if o.Note != "" && len(o.Repos) > 0 {
+		b.WriteString(o.Note + "\n")
+	}
+	if len(o.Repos) == 0 {
+		// B4-8: say how repos are chosen, never a bare "0 repo(s) … none failed"
+		b.WriteString(LineNoRepos + "\n")
+	}
 	fmt.Fprintf(&b, "lore fix --all: %d repo(s), %d ok, %d failed", len(o.Repos), o.OK, len(o.Failed))
 	if len(o.Failed) > 0 {
 		fmt.Fprintf(&b, ": %s", strings.Join(o.Failed, ", "))
@@ -429,7 +455,7 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 	roots := found.Roots
 	prep := env.FixPrepare(ctx, in.DryRun, jobs)
 	prep.Yes = op.Confirmed(ctx) // --yes reaches each repo's own run
-	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep, Skipped: found.Skipped}
+	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep, Skipped: found.Skipped, Note: found.Note}
 	var emit func(RepoResult)
 	if w := env.FixProgress(); w != nil {
 		out.Streamed = true

@@ -65,6 +65,23 @@ import (
 // clone (the hook block exports it): the pick-up never runs there.
 const EnvGitHook = "LORE_GIT_HOOK"
 
+// envGitIndexFile is set by git for every hook of a commit (pre-commit,
+// prepare-commit-msg, commit-msg, post-commit), naming the index being
+// committed.
+const envGitIndexFile = "GIT_INDEX_FILE"
+
+// inCommitHook reports whether this run is a hook of a `git commit` in
+// progress: a store clone's hook block exports EnvGitHook, and git sets
+// GIT_INDEX_FILE for a code repo's commit hooks (whose block, installed by
+// older lore releases too, exports nothing). Under a commit the pick-up of
+// hand edits must not run (the store sync after it still does, so the
+// post-commit landing sees fresh stores): the commit holds the checkout, the person's staged files
+// are what is being checked, and re-reading every changed row file there
+// (a `lore fix` migration commit changes thousands) only slows each hook.
+func inCommitHook() bool {
+	return os.Getenv(EnvGitHook) != "" || os.Getenv(envGitIndexFile) != ""
+}
+
 // Commit subjects of the pick-up.
 const (
 	handEditSubject = "hand edit: "
@@ -176,7 +193,7 @@ type handCheckout struct {
 // line; a failure is a line, never a refused command: the person's own
 // command still runs on what is committed.
 func (st *state) pickUpHandEdits(ctx context.Context, say func(string)) {
-	if os.Getenv(EnvGitHook) != "" || st.eng == nil {
+	if inCommitHook() || st.eng == nil {
 		return
 	}
 	if say == nil {
@@ -228,6 +245,12 @@ type handMove struct {
 func (st *state) pickUpCheckout(ctx context.Context, co *handCheckout, say func(string)) {
 	if co.gb.GitBusy(ctx) {
 		return // a git command holds the index (a person's commit running lore's hook)
+	}
+	// B2-9: a person's merge or rebase in the clone: the pick-up would
+	// unstage (git reset), which ends it; leave the clone alone and say so.
+	if op, way := co.gb.PersonGitOp(ctx); op != "" {
+		say(handLinePrefix + gitbackend.GitOpInProgressError(co.dir, op, way).Message + " (" + way + ")")
+		return
 	}
 	rep, err := co.gb.HandChanges(ctx)
 	if err != nil {
@@ -508,13 +531,24 @@ func (st *state) pickUpRepoEdits(ctx context.Context, gb *gitbackend.Backend, sa
 		if h.HLC != base.HLC {
 			continue // written by lore (or another branch), not by hand
 		}
-		_, cur, gerr := st.eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: c.Table, ID: c.ID})
-		if gerr != nil || cur.HLC != h.HLC {
-			continue // the engine reads this row elsewhere (a live row)
+		if base.SourceVersion != row.FormatVersion {
+			// B1-10/B1-16: a v1 file the migration rewrote (not committed
+			// yet) keeps its stamp; its field changes are the migration's
+			// (empty refs as null, audit defaults), not a hand edit
+			base = upcastV1(st.eng.Registry(), base)
 		}
+		// Compare the fields before asking the engine: a format rewrite
+		// (`lore fix` migrating every row file) changes thousands of files
+		// and no field, and engine.Get of a code-repo row reads the live
+		// tree, so asking first made every command after a migration decode
+		// the live tree once per changed file (~25 s on 5,400 rows).
 		fields := engine.PickUpChanged(base, h)
 		if len(fields) == 0 {
 			continue
+		}
+		_, cur, gerr := st.eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: c.Table, ID: c.ID})
+		if gerr != nil || cur.HLC != h.HLC {
+			continue // the engine reads this row elsewhere (a live row)
 		}
 		if _, err := st.eng.PickUp(ctx, store.SourceRepo, base, h); err != nil {
 			say(handRefusal(gb.Dir(), c, hand, err))

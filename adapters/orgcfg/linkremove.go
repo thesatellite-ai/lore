@@ -56,7 +56,7 @@ func (g *GitLinks) FindLinks(ctx context.Context, entry, projectID, folder strin
 	}
 	branches := map[string]string{}
 	for _, sc := range o.Stores {
-		if n, nerr := repourl.Normalize(sc.URL); nerr == nil {
+		if n, nerr := repourl.NormalizeStore(sc.URL); nerr == nil {
 			branches[n] = sc.EffectiveBranch()
 		}
 	}

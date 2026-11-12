@@ -66,7 +66,7 @@ stores:
       url: file://~/stores/agency-notes
       folder: golang
 alice (work/website)$ lore memory list
-mem_162df51b7f78b785c97c26b41ea89666  Close every channel from the sender side.  [notes/golang]
+mem_162df51b7f78b785c97c26b41ea89666 [retrieved] Close every channel from the sender side. [notes/golang]
 alice (work/website)$ lore store folder list notes
 store notes folders:
   FOLDER  ID                                    CREATED BY  CREATED  ATTACHED HERE  ROWS
@@ -88,7 +88,7 @@ lore: wrote ~/stores/agency-notes/_store/rules/rul_54fe984c9b495744c0217776765a2
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 ✓ rul_54fe984c9b495744c0217776765a28f2 moved to store notes (same id; the old copy is tombstoned)
 alice (work/website)$ lore rule list
-rul_54fe984c9b495744c0217776765a28f2  Keep the agency hourly rate out of the client repo.  [notes]
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Keep the agency hourly rate out of the client repo. [notes]
 alice (work/website)$ cat .lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 {
   "_deleted": true,
@@ -106,7 +106,7 @@ ERROR: [E_UNSUPPORTED] rul_54fe984c9b495744c0217776765a28f2 was in store repo be
   hint: keep it in notes
 (exit 23)
 alice (work/website)$ lore rule list
-rul_54fe984c9b495744c0217776765a28f2  Keep the agency hourly rate out of the client repo.  [notes]
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Keep the agency hourly rate out of the client repo. [notes]
 
 ### detach a store
 alice (work/website)$ lore store remove notes/golang --yes

@@ -8,12 +8,14 @@ package rule
 import (
 	"context"
 	"fmt"
-	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
-	"github.com/thesatellite-ai/lore/ops/internal/bulk"
-	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
+	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/contextfit"
@@ -131,11 +133,11 @@ type AddIn struct {
 	Severity   string   `json:"severity,omitempty" flag:"severity" desc:"must | should | may (default must)"`
 	Activation string   `json:"activation,omitempty" flag:"activation" desc:"always | glob | semantic | manual (default always)"`
 	Globs      string   `json:"globs,omitempty" flag:"globs" desc:"JSON array of glob patterns (when activation=glob)"`
-	AppliesTo  string   `json:"applies_to_description,omitempty" flag:"applies-to" desc:"when activation=semantic: words describing where the rule applies (lore context matches them, CONTEXT_BUDGET 6.8)"`
+	AppliesTo  string   `json:"applies_to_description,omitempty" flag:"applies-to" desc:"when activation=semantic: words describing where the rule applies (lore context matches them)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance pointer"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"rule_id (rul_*) this entry replaces"`
-	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata (METADATA 3.19)"`
+	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata"`
 	To         string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Repo       string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
@@ -227,19 +229,19 @@ func (o ListOut) rowsText() string {
 	if len(o.Data) == 0 {
 		return "(no rules)\n"
 	}
-	// v0.1.17 printed the repo's rules first, then each rule of another
-	// store as an external row (stores_reads.go: id, body, label).
+	// The repo's rules first, then each rule of another store (v0.1.17's
+	// order), every one in the same layout with the store label last.
 	var b, ext strings.Builder
 	for _, r := range o.Data {
+		w := &b
 		if r.Label != "" {
-			ext.WriteString(kn.ExternalLine(r.ID, "", r.Body, "", r.Label))
-			continue
+			w = &ext
 		}
 		badge := ""
 		if !r.ArchivedAt.IsZero() {
 			badge = " [archived]"
 		}
-		fmt.Fprintf(&b, "%s [%s/%s] %s%s\n", r.ID, r.Severity, r.Activation, kn.Cut(r.Body, kn.ListCut), badge)
+		fmt.Fprintf(w, "%s [%s/%s] %s%s%s\n", r.ID, r.Severity, r.Activation, kn.Cut(textcut.OneLine(r.Body), kn.ListCut), badge, kn.LabelSuffix(r.Label))
 	}
 	return b.String() + ext.String()
 }

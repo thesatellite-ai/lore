@@ -81,7 +81,7 @@ client_repo() {
   local slug="$1" dir="$2" who="${3:-carol}"
   remote "$slug"
   [ -d "$HOMES/$who" ] || person "$who" "$who@${slug%%/*}.example"
-  quiet "$who" work "git clone -q https://github.com/$slug $dir && cd $dir && echo '# $dir' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=$dir >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
+  quiet "$who" work "git clone -q https://github.com/$slug $dir && cd $dir && echo '# $dir' > README.md && git add . && git commit -qm init && lore init --name=$dir >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
 }
 
 # agency_config NAME KEY DISPLAY HANDLE: the agency's org entry (one monorepo store).
@@ -114,7 +114,7 @@ s_getting_started() {
   on alice work/notes-app "lore --version"
 
   note "init"
-  on alice work/notes-app "lore init --non-interactive --name=notes-app"
+  on alice work/notes-app "lore init --name=notes-app"
   on alice work/notes-app "git add -A && git commit -qm 'lore: init' && git push -q origin main"
 
   note "whoami without config"
@@ -164,7 +164,7 @@ Y
   remote agency/notes
   remote agency/tools
   quiet alice work "git clone -q https://github.com/agency/tools && cd tools && echo '# tools' > README.md && git add . && git commit -qm init && git push -q origin main"
-  on alice work/tools "lore init --non-interactive --name=tools"
+  on alice work/tools "lore init --name=tools"
   # 0.1.18: a store is made from inside a repo, which attaches it by name (.lore/stores.yaml);
   # the agency's own repo is the place (a client repo never names the store).
   on alice work/tools "lore store init agency git@github.com:agency/notes --yes"
@@ -181,7 +181,7 @@ s_solo() {
   quiet alice work "mkdir -p scratch && cd scratch && git init -q && git commit -q --allow-empty -m init"
 
   note "no remote"
-  on alice work/scratch "lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'"
+  on alice work/scratch "lore init --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'"
   on alice work/scratch "lore task add 'write the README'"
   local t; t=$(id tsk)
   on alice work/scratch "lore task done $t"
@@ -203,7 +203,7 @@ s_small_team() {
   section small-team
   remote agency/billing
   person alice alice@agency.example; person bob bob@agency.example
-  quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
+  quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
   quiet bob work "git clone -q https://github.com/agency/billing"
 
   note "register"
@@ -258,7 +258,7 @@ s_agency() {
   client_repo client/website app
   remote agency/notes
   remote agency/tools
-  quiet alice work "git clone -q https://github.com/agency/tools && cd tools && echo '# tools' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=tools >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
+  quiet alice work "git clone -q https://github.com/agency/tools && cd tools && echo '# tools' > README.md && git add . && git commit -qm init && lore init --name=tools >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
 
   note "store init"
   # 0.1.18: the store is made from the agency's own repo, which attaches it by name;
@@ -500,7 +500,7 @@ s_personal() {
   make_store alice agency git@github.com:agency/notes
   quiet alice work "git clone -q https://github.com/client/website website"
   quiet alice work/website "lore org link agency --project client --yes"
-  quiet alice work "git clone -q https://github.com/alice/scratch 2>/dev/null; cd scratch && git commit -q --allow-empty -m init && git push -q origin main && lore init --non-interactive --name=scratch >/dev/null 2>&1"
+  quiet alice work "git clone -q https://github.com/alice/scratch 2>/dev/null; cd scratch && git commit -q --allow-empty -m init && git push -q origin main && lore init --name=scratch >/dev/null 2>&1"
 
   note "local personal store"
   on alice work/website "lore memory add --body 'I always forget the staging VPN profile' --to me"
@@ -730,7 +730,7 @@ while read old new ref; do
 done
 HOOK
   chmod +x "$HOSTS/widgets/portal.git/hooks/pre-receive"
-  quiet bob work "git clone -q https://github.com/widgets/portal 2>/dev/null; cd portal && git commit -q --allow-empty -m init && git push -q origin main && lore init --non-interactive --name=portal >/dev/null 2>&1"
+  quiet bob work "git clone -q https://github.com/widgets/portal 2>/dev/null; cd portal && git commit -q --allow-empty -m init && git push -q origin main && lore init --name=portal >/dev/null 2>&1"
   on bob work/portal "lore task add 'set up the portal CI'"
   on bob work/portal "lore live diff"
   on bob work/portal "lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true"
@@ -750,7 +750,7 @@ s_internals() {
   on alice work/website "git config --get-all remote.origin.fetch"
 
   note "monorepo live tree"
-  on carol work/app "mkdir -p web && cd web && lore init --non-interactive --name=web >/dev/null 2>&1; cd .. && lore task add 'fix header' --to repo && cd web && lore rule add --body 'Buttons are blue' --to repo"
+  on carol work/app "mkdir -p web && cd web && lore init --name=web >/dev/null 2>&1; cd .. && lore task add 'fix header' --to repo && cd web && lore rule add --body 'Buttons are blue' --to repo"
   on carol work/app "git ls-tree -r --name-only refs/lore/live"
   on carol work/app "git log --oneline refs/lore/live"
   on carol work/app "git cat-file -p refs/lore/live:_live/meta.json; echo; git cat-file -p refs/lore/live:_live/epoch"
@@ -790,7 +790,7 @@ s_team_ops() {
   STEP=70
   # First a repo with no org config (like the small-team page): the roster and shared resources.
   remote agency/billing
-  quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main && lore actor register"
+  quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main && lore actor register"
   quiet bob work "git clone -q https://github.com/agency/billing && cd billing && lore actor register"
 
   note "teams"
@@ -877,7 +877,7 @@ Y
 
   note "org set"
   remote agency/tools
-  quiet alice work "git clone -q https://github.com/agency/tools && cd tools && echo '# tools' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=tools >/dev/null 2>&1"
+  quiet alice work "git clone -q https://github.com/agency/tools && cd tools && echo '# tools' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --name=tools >/dev/null 2>&1"
   on alice work/tools "lore org set agency --commit"
   on alice work/tools "cat .lore/org.yaml"
   on! alice work/website "lore org set agency --commit"
@@ -983,7 +983,7 @@ s_live_repair() {
   section live-repair
   remote agency/billing
   person alice alice@agency.example
-  quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --non-interactive --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
+  quiet alice work "git clone -q https://github.com/agency/billing && cd billing && echo '# billing' > README.md && git add . && git commit -qm init && lore init --name=billing >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
 
   note "live ref deleted"
   on alice work/billing "lore task add 'send the March invoices'"
@@ -1135,8 +1135,8 @@ s_setup_cli() {
   agency_config tomas "human:tomas@agency.example" "Tomas Weber" tomas
   remote agency/notes; remote agency/site; remote tomas/dotfiles
   make_store tomas agency git@github.com:agency/notes
-  quiet tomas work "mkdir -p agency personal && git clone -q https://github.com/agency/site agency/site && cd agency/site && echo '# site' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=site >/dev/null 2>&1"
-  quiet tomas work "git clone -q https://github.com/tomas/dotfiles personal/dotfiles && cd personal/dotfiles && echo '# dotfiles' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=dotfiles >/dev/null 2>&1"
+  quiet tomas work "mkdir -p agency personal && git clone -q https://github.com/agency/site agency/site && cd agency/site && echo '# site' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --name=site >/dev/null 2>&1"
+  quiet tomas work "git clone -q https://github.com/tomas/dotfiles personal/dotfiles && cd personal/dotfiles && echo '# dotfiles' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --name=dotfiles >/dev/null 2>&1"
   cat >> "$HOMES/tomas/.lore/config.yaml" <<'Y'
 setups:
   - name: agency
@@ -1391,8 +1391,8 @@ s_guided_setup() {
   fake_ssh tomas-dev
   remote agency/notes; remote agency/site; remote acme/lab
   make_store tomas agency git@github.com:agency/notes
-  quiet tomas work "mkdir -p agency personal clients && git clone -q https://github.com/agency/site agency/site && cd agency/site && echo '# site' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=site >/dev/null 2>&1"
-  quiet tomas work "git clone -q https://github.com/acme/lab lab && cd lab && echo '# lab' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --non-interactive --name=lab >/dev/null 2>&1"
+  quiet tomas work "mkdir -p agency personal clients && git clone -q https://github.com/agency/site agency/site && cd agency/site && echo '# site' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --name=site >/dev/null 2>&1"
+  quiet tomas work "git clone -q https://github.com/acme/lab lab && cd lab && echo '# lab' > README.md && git add . && git commit -qm init && git push -q origin main && lore init --name=lab >/dev/null 2>&1"
   mkdir -p "$HOMES/tomas/.ssh"
   printf 'Host github.com\n  HostName github.com\n  IdentityFile ~/.ssh/id_ed25519\n\nHost gh-agency\n  HostName github.com\n  IdentityFile ~/.ssh/id_agency\n  IdentitiesOnly yes\n' > "$HOMES/tomas/.ssh/config"
   cat >> "$HOMES/tomas/.lore/config.yaml" <<'Y'

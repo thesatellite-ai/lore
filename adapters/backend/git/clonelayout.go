@@ -9,6 +9,8 @@ package git
 //	<home>/stores/<owner>/<repo>@<branch>/   a store pinned to another branch
 //	<home>/stores/<owner>/<repo>~2/          a second store whose path is the
 //	                                         same on another host (D-a)
+//	<home>/stores/_local/<repo>/             a git repository on this machine
+//	                                         (/srv/git/<repo>.git; B3-21)
 //	<clone>/.git/lore/lock                   the one store lock
 //	<clone>/.git/lore/state/                 the lock's pending audit journal
 //	<clone>/.git/lore/fetch-stamp            when the store was last fetched
@@ -23,6 +25,7 @@ package git
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -71,6 +74,10 @@ const (
 	// WhyCollision: the default path holds another store's clone (same
 	// path on another host), so this one got a "~N" suffix.
 	WhyCollision = "collision"
+	// WhyMoved: `lore store set-url` kept the store's clone at the folder
+	// of its old address, because that clone held commits the store had
+	// not got yet (B3-15); its origin names the new address.
+	WhyMoved = "moved"
 )
 
 // ClonePaths is every path of one store clone, from its folder.
@@ -193,6 +200,12 @@ func otherStoreAt(dir string, r Remote) bool {
 	if err != nil {
 		return false
 	}
+	// A local-path origin under a hosted store (or the reverse) is a
+	// mirror or an insteadOf spelling lore cannot compare: not another
+	// store's, as before a local path parsed as a store url at all.
+	if o.isLocal() != r.isLocal() {
+		return false
+	}
 	return o.Norm != r.Norm && !SameRepoViaAlias(o, r)
 }
 
@@ -286,7 +299,7 @@ type CloneRecord struct {
 type CloneEntry struct {
 	// Path is the clone folder (absolute).
 	Path string `json:"path"`
-	// Why is WhyOwn or WhyCollision.
+	// Why is WhyOwn, WhyCollision or WhyMoved.
 	Why string `json:"why"`
 	// SetAt is when it was recorded (RFC 3339 UTC).
 	SetAt string `json:"set_at"`
@@ -492,4 +505,65 @@ func isFile(p string) bool {
 func isDir(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.IsDir()
+}
+
+// legacyLocalCloneDir is where a clone of a local store (a git repository
+// on this machine) lived before B3-21: <home>/stores/<its whole absolute
+// path without .git>[@<branch>].
+func legacyLocalCloneDir(home string, r Remote, branch string) string {
+	dir := filepath.Join(home, StoresDir, filepath.FromSlash(strings.TrimPrefix(r.Norm, LocalHost+"/")))
+	if branch != "" {
+		dir += branchCloneSep + filepath.FromSlash(branch)
+	}
+	return dir
+}
+
+// moveLegacyLocalClone moves the clone of the local store r from its
+// pre-B3-21 folder (legacyLocalCloneDir) to dir, the folder it has now
+// (<home>/stores/_local/<repo>), on the first open after the upgrade. The
+// whole clone moves by one rename, so its unpushed commits, lock and
+// stamps go with it; it runs under the layout-move lock (MoveLock), so two
+// lore processes never move it at once. Nothing happens when dir already
+// exists, when the old folder is missing, or when it holds no clone of r
+// (another store, or a person's own files there are left alone). Emptied
+// parent folders up to <home>/stores are removed.
+func moveLegacyLocalClone(ctx context.Context, home string, r Remote, branch, dir string) error {
+	old := legacyLocalCloneDir(home, r, branch)
+	if old == dir || !legacyCloneOf(old, r) {
+		return nil
+	}
+	if _, err := os.Stat(dir); err == nil {
+		return nil
+	}
+	lock, err := MoveLock(ctx, home)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Release() }() // the rename below already landed or failed
+	if _, err = os.Stat(dir); err == nil || !legacyCloneOf(old, r) {
+		return nil // another process moved it while this one waited
+	}
+	if err = os.MkdirAll(filepath.Dir(dir), cloneDirMode); err != nil {
+		return errs.FileIO("create", filepath.Dir(dir), err)
+	}
+	if err = osrename.Rename(old, dir); err != nil {
+		return errs.FileIO("move the store clone to", dir, err)
+	}
+	stores := filepath.Join(home, StoresDir)
+	for p := filepath.Dir(old); p != stores && strings.HasPrefix(p, stores+string(filepath.Separator)); p = filepath.Dir(p) {
+		if os.Remove(p) != nil {
+			break // not empty (another store's clone, a person's file): kept
+		}
+	}
+	return nil
+}
+
+// legacyCloneOf reports whether dir is a git clone whose origin is the
+// local store r.
+func legacyCloneOf(dir string, r Remote) bool {
+	if _, err := os.Stat(filepath.Join(dir, gitDirName)); err != nil {
+		return false
+	}
+	o, err := RemoteOfRaw(OriginAt(dir))
+	return err == nil && o.Norm == r.Norm
 }

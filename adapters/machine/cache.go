@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -78,8 +79,19 @@ func Load(home string, getenv func(string) string) (ids.MachineID, IDSource, err
 	return id, src, nil
 }
 
+// noWrites is SkipCacheWrites' process-wide switch.
+var noWrites atomic.Bool
+
+// SkipCacheWrites keeps machine.json as it is for the rest of the process
+// (`lore fix --dry-run` writes nothing, B4-14): the id is worked out the
+// same way and used, only not saved.
+func SkipCacheWrites() { noWrites.Store(true) }
+
 // writeCache writes machine.json atomically (temp file + rename).
 func writeCache(home string, w cacheWire) error {
+	if noWrites.Load() {
+		return nil
+	}
 	if err := os.MkdirAll(home, homeMode); err != nil {
 		return errs.Wrap(errs.Internal, "machine: create the lore home", err)
 	}

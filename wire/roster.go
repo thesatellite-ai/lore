@@ -71,7 +71,7 @@ func (a *App) rosterState(ctx context.Context, target store.Source, write bool) 
 	var st *state
 	var err error
 	if write {
-		st, err = a.writeState(ctx)
+		st, err = a.writeStateFor(ctx, target)
 	} else {
 		st, err = a.state(ctx)
 	}

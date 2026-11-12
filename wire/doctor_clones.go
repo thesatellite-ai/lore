@@ -11,9 +11,12 @@ package wire
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"strings"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/logic/storeaddr"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -22,7 +25,7 @@ const DoctorCheckStoreClone DoctorCheck = "store_clone"
 
 // DoctorStoreClones reports every store clone that is not whole. It only
 // reads.
-func (a *App) DoctorStoreClones(context.Context) ([]DoctorFinding, error) {
+func (a *App) DoctorStoreClones(ctx context.Context) ([]DoctorFinding, error) {
 	found, err := gitbackend.ScanClones(a.opts.Home)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "list the store clones", err)
@@ -33,7 +36,44 @@ func (a *App) DoctorStoreClones(context.Context) ([]DoctorFinding, error) {
 			out = append(out, f)
 		}
 	}
-	return out, nil
+	return append(out, a.strandedCloneFindings(ctx)...), nil
+}
+
+// strandedCloneFindings reports a whole clone left at a store's old
+// address that holds work the store has not got (B3-15: a set-url by an
+// older lore made a new clone and left the old one): no place on this
+// machine names its origin any more, so no sync ever sends those commits.
+// The fix is set-url run again, which carries the clone to the store's
+// address (storeseturl_clone.go).
+func (a *App) strandedCloneFindings(ctx context.Context) []DoctorFinding {
+	top, terr := a.repoTop(ctx)
+	if terr != nil {
+		top = ""
+	}
+	entries := addressEntries(a.opts.Home, top)
+	if len(entries) == 0 {
+		return nil
+	}
+	now := map[string]string{} // store id -> an address a place names it at
+	for _, e := range entries {
+		if e.StoreID != "" && now[e.StoreID] == "" {
+			now[e.StoreID] = e.URL
+		}
+	}
+	var out []DoctorFinding
+	for _, id := range slices.Sorted(maps.Keys(now)) {
+		addr := now[id]
+		for _, s := range strandedClones(ctx, a.opts.Home, id, addr) {
+			named := slices.ContainsFunc(entries, func(e storeaddr.Entry) bool { return storeaddr.Same(e.URL, s.found.Origin) })
+			if named {
+				continue // another place still uses that address: its own sync sends the work
+			}
+			out = append(out, DoctorFinding{Check: DoctorCheckStoreClone, Level: DoctorWarning,
+				Message: s.found.Paths.Dir + " is a clone of store " + id + " at its old address " + s.found.Origin + " and holds " + strings.Join(s.pending, ", ") + "; the store is now at " + addr + ", so no sync sends them",
+				Fix:     "lore store set-url " + id + " " + addr})
+		}
+	}
+	return out
 }
 
 // storeCloneFinding is the finding for one scanned clone; ok is false for

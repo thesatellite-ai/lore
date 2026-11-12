@@ -97,7 +97,7 @@ lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537…6bbb.json (store me)
 
 # alice, in landing
 $ lore memory list
-mem_2537…6bbb  I write short commit messages  [me]
+mem_2537…6bbb [retrieved] I write short commit messages [me]
 ```
 <!-- /example -->
 

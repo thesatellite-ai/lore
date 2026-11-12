@@ -98,7 +98,7 @@ func TestReadsLeaveAV017RepoAlone(t *testing.T) {
 	}
 	// the reads said what is wrong and how to fix it
 	_, out, errOut := w.lore(t, dir, "doctor")
-	for _, want := range []string{"`lore doctor --fix` re-includes it in .gitignore", ".gitignore does not list lore's local files (.lore/lore-cache.db", "`lore doctor --fix` adds them"} {
+	for _, want := range []string{"`lore doctor --fix` re-includes them in .gitignore", ".gitignore does not list lore's local files (", "`lore doctor --fix` adds them"} {
 		if !strings.Contains(out+errOut, want) {
 			t.Errorf("doctor does not say %q:\n%s\n%s", want, out, errOut)
 		}
@@ -109,7 +109,7 @@ func TestReadsLeaveAV017RepoAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"!.lore/data/", ".lore/lore-cache.db", ".lore/lock"} {
+	for _, want := range []string{"!.lore/data/", ".lore/lock"} {
 		if !strings.Contains(string(gi), want) {
 			t.Errorf("doctor --fix did not add %q to .gitignore:\n%s", want, gi)
 		}

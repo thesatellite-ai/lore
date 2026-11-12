@@ -33,7 +33,7 @@ on alice work/website "LORE_SYNC_QUIET=1 lore memory add --body 'The client repl
 
 note "sync git off"
 solo_repo alice client/shop
-on alice work/shop "LORE_SYNC_GIT=0 lore init --non-interactive --name=shop"
+on alice work/shop "LORE_SYNC_GIT=0 lore init --name=shop"
 on alice work/shop "ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'"
 on alice work/shop "lore sync"
 on alice work/shop "ls .git/hooks | grep -v sample; cat .gitattributes"

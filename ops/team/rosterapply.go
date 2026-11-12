@@ -577,6 +577,9 @@ func (w *writer) openPeriod(ctx context.Context, typ string) error {
 		}
 		kept = append(kept, p)
 	}
+	if reopened, err := w.reopenEndedToday(ctx, kept, typ, today); err != nil || reopened {
+		return err
+	}
 	next := teamprofile.Period{ActorID: w.actor.ID, Type: typ, StartedOn: today}
 	if err := teamprofile.CheckPeriods(append(kept, next)); err != nil {
 		return err
@@ -596,6 +599,36 @@ func (w *writer) openPeriod(ctx context.Context, typ string) error {
 	}
 	w.note(x.ID)
 	return nil
+}
+
+// reopenEndedToday undoes a removal made today (B2-14): a stored stint
+// that ended today is reopened (no end, no end reason; the type and org
+// role asked for now) instead of a new stint starting today, which would
+// overlap it (an end day is inclusive) and left no command able to bring
+// a person removed by mistake back before tomorrow. reopened is false
+// when no stint ended today.
+func (w *writer) reopenEndedToday(ctx context.Context, kept []teamprofile.Period, typ string, today time.Time) (reopened bool, err error) {
+	for i := len(kept) - 1; i >= 0; i-- {
+		p := kept[i]
+		if p.Synthesised() || p.Open() || !teamprofile.Day(p.EndedOn).Equal(today) {
+			continue
+		}
+		patch := map[string]value.Value{schema.FieldPeriodEndedOn: value.Null{}, schema.FieldPeriodEndReason: value.Null{}}
+		if patch[schema.FieldPeriodType], err = textValue("type", typ); err != nil {
+			return false, err
+		}
+		if w.orgRole != "" {
+			if patch[schema.FieldPeriodOrgRole], err = textValue("--role", w.orgRole); err != nil {
+				return false, err
+			}
+		}
+		if _, err = w.r.Update(ctx, schema.TableActorPeriods, p.ID, patch); err != nil {
+			return false, err
+		}
+		w.note(p.ID)
+		return true, nil
+	}
+	return false, nil
 }
 
 // setOrgRole puts w.orgRole on the actor's stored open stint (member edit

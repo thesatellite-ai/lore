@@ -75,6 +75,7 @@ var rideHookLines = map[string][]string{
 
 // rideInProgressMarkers are files in the git dir that mean the user's
 // history is being rewritten or assembled: no ride commit then.
+// The refresh hook and post-commit skip on them too (historyInProgress).
 var rideInProgressMarkers = []string{"rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD", "REVERT_HEAD", "MERGE_HEAD", "BISECT_LOG", "sequencer"}
 
 // Live is the live-rows wiring of a binary: the operation hook and the
@@ -93,8 +94,11 @@ const hookRefresh = "refresh"
 // checks .lore/data (precommit.go), refresh re-renders LORE.md after git
 // changed the rows (refresh: nil does nothing; it never fails git). Any
 // other name is E_INVALID_INPUT: a typo in a hook block must show, not pass
-// as a hook that checked nothing.
-func (l *Live) SyncHookCommand(stdin io.Reader, refresh func(context.Context)) *cobra.Command {
+// as a hook that checked nothing. afterCommit (nil: nothing) runs after
+// post-commit's ride-along, live rows on or off: the commit notices that
+// need the render side, such as a folder scope the commit moved away
+// (B3-5). It must be cheap and never fail the commit.
+func (l *Live) SyncHookCommand(stdin io.Reader, refresh, afterCommit func(context.Context)) *cobra.Command {
 	return &cobra.Command{
 		Use:    syncHookUse,
 		Short:  "Entry point for lore's git hook blocks",
@@ -114,12 +118,15 @@ func (l *Live) SyncHookCommand(stdin io.Reader, refresh func(context.Context)) *
 				if !liveDisabled() {
 					l.h.postCommit(cmd.Context())
 				}
+				if afterCommit != nil {
+					afterCommit(cmd.Context())
+				}
 			case hookPrePush:
 				return l.h.prePush(cmd.Context(), stdin, args[1:])
 			case hookPreCommit:
 				return l.h.preCommit(cmd.Context())
 			case hookRefresh:
-				if refresh != nil {
+				if cwd, err := os.Getwd(); refresh != nil && err == nil && !refreshDeferred(cmd.Context(), l.h.git(), cwd, args[1:]) {
 					refresh(cmd.Context())
 				}
 			}
@@ -201,6 +208,11 @@ func withRun(ctx context.Context, r *liveRun) context.Context {
 // postCommit is `lore sync hook post-commit`. It never fails the commit:
 // problems are printed and the rows keep waiting.
 func (h *liveHost) postCommit(ctx context.Context) {
+	// A rebase or cherry-pick runs post-commit for every commit it makes:
+	// opening the session would fetch and integrate in the middle of it.
+	if cwd, err := os.Getwd(); err != nil || historyInProgress(ctx, h.git(), cwd) {
+		return
+	}
 	r, s := h.hookSession(ctx)
 	if s == nil {
 		return
@@ -313,16 +325,58 @@ func (s *liveSession) rideBranch(ctx context.Context) (string, bool) {
 	if branch == "" || branch == s.defaultBranch(ctx) {
 		return "", false
 	}
-	gitDir, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--absolute-git-dir"}})
-	if err != nil {
+	if busy, err := repoHistoryInProgress(ctx, s.repo); err != nil || busy {
 		return "", false
+	}
+	return branch, true
+}
+
+// refreshDeferred reports whether `lore sync hook refresh <hook> [arg]`
+// must leave .lore/LORE.md alone: a rebase, merge, cherry-pick, revert,
+// bisect or am is under way in the checkout holding dir, and git
+// refuses its next step over a work tree file the hook changed ("cannot
+// rebase: You have unstaged changes"). The post-rewrite that ends a
+// rebase ("post-rewrite rebase") runs while git's rebase state is still on
+// disk, but every pick is done: that one renders, so the rows a pull
+// brought show at once. Anything else waits for that post-rewrite or the
+// next lore command. Blocks written before the hook name was passed (no
+// args) are treated as a checkout.
+func refreshDeferred(ctx context.Context, git gitref.Git, dir string, args []string) bool {
+	if len(args) >= 2 && args[0] == hookPostRewrite && args[1] == rewriteByRebase {
+		return false
+	}
+	return historyInProgress(ctx, git, dir)
+}
+
+// rewriteByRebase is post-rewrite's first argument after a rebase (the
+// other is "amend").
+const rewriteByRebase = "rebase"
+
+// historyInProgress reports whether the git checkout holding dir is in the
+// middle of a rebase, merge, cherry-pick, revert, bisect or am (one of
+// rideInProgressMarkers in its git dir). Not a git checkout: false.
+func historyInProgress(ctx context.Context, git gitref.Git, dir string) bool {
+	repo, err := gitref.Open(ctx, dir, git)
+	if err != nil {
+		return false
+	}
+	busy, err := repoHistoryInProgress(ctx, repo)
+	return err == nil && busy
+}
+
+// repoHistoryInProgress is historyInProgress for an open repo; the markers
+// are looked up in the worktree's own git dir, where git keeps them.
+func repoHistoryInProgress(ctx context.Context, repo *gitref.Repo) (bool, error) {
+	gitDir, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--absolute-git-dir"}})
+	if err != nil {
+		return false, err
 	}
 	for _, m := range rideInProgressMarkers {
 		if _, err := os.Stat(filepath.Join(strings.TrimSpace(string(gitDir)), m)); err == nil {
-			return "", false
+			return true, nil
 		}
 	}
-	return branch, true
+	return false, nil
 }
 
 // waitingRows are the rows whose direct landing the default branch refused

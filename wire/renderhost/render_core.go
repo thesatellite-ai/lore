@@ -103,6 +103,11 @@ type pinnedRule struct {
 	// replaces there (6.2, render_scopes.go); repo-store rows only.
 	ScopeID     string
 	OverridesID string
+	// Dir is the folder of the rule's dir: scope when the rule is printed
+	// outside that folder's own file (the root LORE.md or a parent
+	// folder's file: no file of its own, folder missing, too few entries),
+	// so the reader still sees where it applies (planDirs; "" otherwise).
+	Dir string
 	// Origin is where the row came from (render_stamp.go): its store, id
 	// and HLC, the input the files' stamps hash.
 	Origin string
@@ -121,6 +126,9 @@ type pinnedHotfix struct {
 	Pin contextfit.Form
 	// ScopeID is the folder scope (repo-store rows only, 6.2).
 	ScopeID string
+	// Dir is the folder of the dir: scope when printed outside its own
+	// folder file (pinnedRule.Dir).
+	Dir string
 	// Origin is where the row came from (render_stamp.go).
 	Origin string
 }

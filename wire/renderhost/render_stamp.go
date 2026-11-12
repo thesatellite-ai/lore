@@ -6,7 +6,7 @@
 // the settings that shape its text, and the text itself before the stamp
 // is added. The stamp sits where the file already had a generated header:
 //
-//	.lore/LORE.md                     the canary  <!-- AICODER:CANARY=rnd_<16 hex> SCHEMA=v2 -->
+//	.lore/LORE.md                     the canary  <!-- lore render stamp rnd_<16 hex> (schema v2): … -->
 //	~/.lore/render/<repo>/<store>.md  line 2      <!-- lore:inputs <16 hex> -->
 //
 // LORE.full.md, index.md and the import lines in CLAUDE.local.md carry no
@@ -49,8 +49,17 @@ const stampHexLen = 16
 // renderFixCommand is the fix of every rendered copy.
 const renderFixCommand = "lore render"
 
-// canaryRe finds LORE.md's canary (its stamp) in the first line.
-var canaryRe = regexp.MustCompile(`AICODER:CANARY=(` + string(ids.PrefixRenderHistory) + `_[0-9a-f]+)`)
+// canaryRe finds LORE.md's canary (its stamp) in the first line: the
+// line canaryLine writes, or the "AICODER:CANARY=" spelling renders before
+// 2026-11-13 wrote, so a file rendered then still reads as current.
+var canaryRe = regexp.MustCompile(`(?:AICODER:CANARY=|lore render stamp )(` + string(ids.PrefixRenderHistory) + `_[0-9a-f]+)`)
+
+// canaryLine is LORE.md's first line: the canary in an HTML comment that
+// says what it is (bug hunt B3-18: the bare "AICODER:CANARY=…" marker
+// meant nothing to a person opening the file).
+func canaryLine(canary string) string {
+	return "<!-- lore render stamp " + canary + " (schema v2): which render wrote this file; lore doctor and lore why-context read it -->\n"
+}
 
 // privateStampPrefix starts the stamp line of a private store file.
 const privateStampPrefix = "<!-- lore:inputs "
@@ -155,6 +164,16 @@ func copyMessage(kind opsrender.CopyKind, file, what string) string {
 	return file + " is stale: its rows or render settings changed since it was rendered, so " + what + " is out of date"
 }
 
+// localCopyMessage is copyMessage for a copy kept only on this machine:
+// a missing one was never rendered here (a fresh clone, a new laptop),
+// which is not something the person did wrong (B3-25).
+func localCopyMessage(kind opsrender.CopyKind, file, what string) string {
+	if kind == opsrender.CopyMissing {
+		return file + " is not rendered yet on this machine (" + what + ")"
+	}
+	return copyMessage(kind, file, what)
+}
+
 // copiesOf compares the rendered files of the repo at root with plan p:
 // LORE.md (out, as render was given it), LORE.full.md, the private store
 // files, index.md and the tools' private import files. It writes nothing.
@@ -223,7 +242,7 @@ func (h *Host) privateCopies(ctx context.Context, root string) ([]opsrender.Copy
 			}
 			if kind != "" {
 				file := h.redact(f.path)
-				found = append(found, opsrender.CopyFinding{Kind: kind, File: file, Message: copyMessage(kind, file, what), Fix: renderFixCommand})
+				found = append(found, opsrender.CopyFinding{Kind: kind, File: file, Message: localCopyMessage(kind, file, what), Fix: renderFixCommand, Local: true})
 			}
 		}
 	}
@@ -231,11 +250,11 @@ func (h *Host) privateCopies(ctx context.Context, root string) ([]opsrender.Copy
 		if l.in == l.out {
 			continue
 		}
-		kind, what := opsrender.CopyStale, "its lore import lines"
+		kind, what := opsrender.CopyStale, "the file with this machine's lore import lines"
 		if l.in == "" {
 			kind = opsrender.CopyMissing
 		}
-		found = append(found, opsrender.CopyFinding{Kind: kind, File: l.rel, Message: copyMessage(kind, l.rel, what), Fix: renderFixCommand})
+		found = append(found, opsrender.CopyFinding{Kind: kind, File: l.rel, Message: localCopyMessage(kind, l.rel, what), Fix: renderFixCommand, Local: true})
 	}
 	return found, nil
 }

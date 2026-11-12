@@ -13,7 +13,9 @@ import (
 
 // TestSweep is the lazy check's loop: the repo filter (with and without an
 // adapter), a found merge, a miss, a git failure kept per task, and a
-// never-fetched target that ends the sweep silently.
+// never-fetched target that ends the sweep silently. The trailer search
+// runs once for every candidate (B1-16), so its failure is a problem of
+// each task that needed it.
 func TestSweep(t *testing.T) {
 	f := newFixture(t)
 	sha := f.work(false)
@@ -29,9 +31,8 @@ func TestSweep(t *testing.T) {
 		{TaskID: "tsk_miss", Repo: "api"},
 		{TaskID: "tsk_bad", Repo: "api"},
 	}
-	// A git failure on one task's trailer search (tsk_bad), real git for
-	// everything else.
-	repo, err := gitref.Open(ctx, f.obs.Dir, failGit{bad: "tsk_bad"})
+	// A git failure of the trailer search, real git for everything else.
+	repo, err := gitref.Open(ctx, f.obs.Dir, failGit{bad: "--grep"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,8 +44,8 @@ func TestSweep(t *testing.T) {
 	if found[0].Finding.Method != MethodAncestry {
 		t.Fatalf("method %s", found[0].Finding.Method)
 	}
-	if len(probs) != 1 || probs[0].TaskID != "tsk_bad" || !strings.Contains(ProblemLine(probs[0]), "tsk_bad") {
-		t.Fatalf("a failing check is one problem naming its task: %+v", probs)
+	if len(probs) != 2 || probs[0].TaskID != "tsk_miss" || probs[1].TaskID != "tsk_bad" || !strings.Contains(ProblemLine(probs[1]), "tsk_bad") {
+		t.Fatalf("a failing trailer search is one problem per task that needed it, naming it: %+v", probs)
 	}
 	// here unknown: every candidate is checked.
 	if found, _ := ck.Sweep(ctx, "", cands); foundIDs(found) != "tsk_here,tsk_other,tsk_unknown_repo" {
@@ -65,8 +66,8 @@ func TestSweep(t *testing.T) {
 	}
 }
 
-// failGit fails the trailer search of the task bad and runs real git for
-// every other call.
+// failGit fails every git call whose arguments hold bad and runs real git
+// for every other call.
 type failGit struct{ bad string }
 
 func (g failGit) Run(ctx context.Context, inv gitref.Invocation) ([]byte, error) {
@@ -129,6 +130,63 @@ func TestMergedUpdatedAt(t *testing.T) {
 		got := MergedUpdatedAt(c.old, c.merged)
 		if !got.Equal(c.want) || got.Location() != time.UTC {
 			t.Fatalf("MergedUpdatedAt(%v, %v) = %v, want %v UTC", c.old, c.merged, got, c.want)
+		}
+	}
+}
+
+// countGit counts the git calls whose first argument is sub.
+type countGit struct {
+	sub string
+	n   *int
+}
+
+func (g countGit) Run(ctx context.Context, inv gitref.Invocation) ([]byte, error) {
+	if len(inv.Args) > 0 && inv.Args[0] == g.sub {
+		*g.n++
+	}
+	return gitref.Exec{}.Run(ctx, inv)
+}
+
+// TestSweepOneTrailerSearch (B1-16): a sweep of many done tasks runs one
+// trailer search, not one per task, and finds what Check finds per task:
+// the oldest commit for a task named twice, an exact trailer line only
+// (tsk_300 never counts for tsk_30, prose never counts).
+func TestSweepOneTrailerSearch(t *testing.T) {
+	f := newFixture(t)
+	first := f.commit(f.lead, "a.go", "first\n\nLore-Task: tsk_1")
+	f.commit(f.lead, "b.go", "follow-up\n\nLore-Task: tsk_1\nLore-Task: tsk_2")
+	f.commit(f.lead, "c.go", "other\n\nLore-Task: tsk_300")
+	f.commit(f.lead, "d.go", "mention Lore-Task: tsk_30 in prose")
+	f.git(f.lead, "push", "-q", "origin", "main")
+	f.git(f.obs, "fetch", "-q", "origin")
+	ctx := context.Background()
+	var cands []Candidate
+	for _, id := range []string{"tsk_1", "tsk_2", "tsk_30", "tsk_300", "tsk_none"} {
+		cands = append(cands, Candidate{TaskID: id})
+	}
+	for i := range 200 { // many unmerged done tasks
+		cands = append(cands, Candidate{TaskID: "tsk_gen" + strings.Repeat("x", i%7) + time.Duration(i).String()})
+	}
+	n := 0
+	repo, err := gitref.Open(ctx, f.obs.Dir, countGit{sub: "log", n: &n})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ck := Checker{Repo: repo, Target: target}
+	found, probs := ck.Sweep(ctx, "", cands)
+	if len(probs) != 0 || n != 1 {
+		t.Fatalf("one trailer search per sweep: %d git log calls, problems %+v", n, probs)
+	}
+	if got := foundIDs(found); got != "tsk_1,tsk_2,tsk_300" {
+		t.Fatalf("found %s", got)
+	}
+	if found[0].Finding.Commit != first {
+		t.Fatalf("tsk_1 must be the oldest commit naming it: %s, want %s", found[0].Finding.Commit, first)
+	}
+	for _, fd := range found { // the same answer as Check per task
+		want, ok, _, err := ck.Check(ctx, Candidate{TaskID: fd.TaskID})
+		if err != nil || !ok || want != fd.Finding {
+			t.Fatalf("%s: sweep %+v, check %+v %v %v", fd.TaskID, fd.Finding, want, ok, err)
 		}
 	}
 }

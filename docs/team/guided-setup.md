@@ -56,19 +56,124 @@ A setup is made one step at a time. Each step asks a few questions, runs its che
 # tomas, in ~
 $ lore setup plan --kind member | cut -c1-52
 steps:
-  ID              TITLE                             
-  kind            What kind of setup is this?       
-  identity        Who are you?                      
-  github          Which GitHub account?             
-  personal_store  Where do your own notes go?       
-  join            Join your team                    
-  tools           Which coding tools do you use?    
-  secrets         Where do you keep secrets?        
-  folders         Which folders is this setup for?  
-  this_folder     This folder                       
-  summary         Summary                           
+  - id: kind
+    title: What kind of setup is this?
+    help: A setup is one way you work on this machin
+    kinds: solo, member, admin
+    questions:
+      ID    LABEL       HELP                        
+      kind  Kind        lore setup join picks "Join 
+      name  Setup name  Used by --setup and in lore 
+    checks: setup.name_free
+    apply: setup.entry
+    values: {"kind":"member"}
+  - id: identity
+    title: Who are you?
+    help: Your name and the email you use for this w
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID      LABEL                    HELP         
+      name    Your name                             
+      email   Email                    The invite na
+      emails  Other addresses you use  Optional. Eac
+      handle  Handle                   Optional shor
+    checks: identity.email_format, identity.invite_e
+    apply: identity
+    values: {"name":"tomas"}
+  - id: github
+    title: Which GitHub account?
+    help: Pick the account this setup works as. lore
+    kinds: solo, member, admin
+    needs: identity
+    questions:
+      ID              LABEL             HELP        
+      github_account  GitHub account                
+      host_alias      ssh host alias    Optional: lo
+      ssh_key         ssh key file      Optional: th
+      route           How git connects  Optional: ss
+    checks: github.ssh_key, github.ssh_auth, github.
+    apply: github
+    values: {}
+  - id: personal_store
+    title: Where do your own notes go?
+    help: Your personal store (lore's `me`) is a pri
+    kinds: solo, member, admin
+    needs: github
+    questions:
+      ID              LABEL                      HEL
+      personal_store  Personal store                
+      store_url       Repo url                   An 
+      push            When notes reach the repo  Opt
+    checks: store.url, store.read, store.write, stor
+    apply: personal_store
+    values: {"personal_store":"inherit"}
+  - id: join
+    title: Join your team
+    help: If your admin added you (lore member add),
+    kinds: member
+    needs: identity, github
+    questions:
+      ID      LABEL          HELP                   
+      invite  Org or invite  Your org's store url (o
+    checks: invite.parse, store.read, invite.found, 
+    apply: join
+    values: {}
+  - id: tools
+    title: Which coding tools do you use?
+    help: lore installs its skill for each tool and 
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID     LABEL  HELP  TYPE   REQUIRED  PREFILL  
+      tools  Tools        multi  false     tools.det
+    checks: tools.skill_installed, tools.skill_versi
+    apply: tools
+    optional: true
+    values: {}
+  - id: secrets
+    title: Where do you keep secrets?
+    help: New secret references default to this mana
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID       LABEL           HELP  TYPE    REQUIRE
+      backend  Secret manager        choice  false  
+    checks: secrets.backend_present
+    apply: secrets
+    optional: true
+    values: {}
+  - id: folders
+    title: Which folders is this setup for?
+    help: lore picks this setup inside these folders
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID       LABEL                                
+      folders  Folders                              
+      default  Use this setup when no folder matches
+    checks: folders.exist, folders.overlap, folders.
+    apply: folders
+    optional: true
+    values: {"default":false}
+  - id: this_folder
+    title: This folder
+    help: The folder you started lore setup in: whic
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID  LABEL  HELP  TYPE  REQUIRED  PREFILL  CHOI
+    checks: repo.init, repo.org, repo.stores, identi
+    optional: true
+    values: {}
+  - id: summary
+    title: Summary
+    help: Every step and every warning with its fix.
+    kinds: solo, member, admin
+    questions:
+      ID  LABEL  HELP  TYPE  REQUIRED  PREFILL  CHOI
+    values: {}
 progress:
-  SETUP  STEP  ANSWERS  CHECKS  STATUS  UPDATED_AT
 ```
 <!-- /example -->
 
@@ -227,7 +332,7 @@ ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (persona
 
 ## Step 6 — Join a team from an invite
 
-If an admin added you ([Adding your staff](members.md)), run `lore setup join <org>` (or the org's store url): lore finds you on the roster by your email and needs no line. Otherwise an admin sends you one line ([Team invites](invites.md)). `lore setup join <line>` opens the page on the join flow, with the kind set to "Join a team" and the email prefilled from the invite; `--no-open` prints the address instead, and `--json` prints the decoded invite and the step plan without opening anything. Mira joins with the line Tomas sent (kept in `$INVITE` here):
+If an admin added you ([Adding your staff](members.md)), run `lore setup join <the org's store url>` (the command `lore member add` printed for them; the org's name works only once this machine has the org, else `E_JOIN_ORG_UNKNOWN`): lore finds you on the roster by your email and needs no line. Otherwise an admin sends you one line ([Team invites](invites.md)). `lore setup join <line>` opens the page on the join flow, with the kind set to "Join a team" and the email prefilled from the invite; `--no-open` prints the address instead, and `--json` prints the decoded invite and the step plan without opening anything. Mira joins with the line Tomas sent (kept in `$INVITE` here):
 
 <!-- example: guided-setup#invite-and-join -->
 ```console

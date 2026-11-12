@@ -449,7 +449,9 @@ const (
 // PushOutcome reports a Push.
 type PushOutcome struct {
 	Status PushStatus
-	// Detail is the remote's reason for a refusal.
+	// Detail is the remote's reason for a refusal, or git's stderr of an
+	// offline push (gitfault reads it: no answer, no repository, refused
+	// credentials).
 	Detail string
 	// Notes are merge decisions made while retrying.
 	Notes []MergeNote
@@ -493,6 +495,7 @@ func (r *Ref) Push(ctx context.Context) (PushOutcome, error) {
 		if err != nil {
 			if errors.Is(err, gitremote.ErrUnconfirmed) {
 				out.Status = PushOffline
+				out.Detail = transportStderr(err)
 				return out, nil
 			}
 			return out, err
@@ -510,6 +513,7 @@ func (r *Ref) Push(ctx context.Context) (PushOutcome, error) {
 			if err := r.Fetch(ctx); err != nil {
 				if errors.Is(err, gitremote.ErrUnconfirmed) {
 					out.Status = PushOffline
+					out.Detail = transportStderr(err)
 					return out, nil
 				}
 				return out, err
@@ -623,4 +627,14 @@ func (r *Ref) ForcePush(ctx context.Context, expect string) (PushOutcome, error)
 	}
 	out.Detail = rr.Message
 	return out, nil
+}
+
+// transportStderr is git's stderr of a failed remote call ("" when err
+// carries none): what PushOffline's Detail holds.
+func transportStderr(err error) string {
+	var te *gitremote.TransportError
+	if errors.As(err, &te) {
+		return te.Stderr
+	}
+	return ""
 }

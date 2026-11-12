@@ -36,7 +36,7 @@ type AddIn struct {
 	Text    string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
 	Source  string `json:"source,omitempty" flag:"source" desc:"where the snapshot came from: manual | learn-from | agent-proposal | plugin | imported | migrated (default manual)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // ListIn is the input of snapshot.list (archived snapshots are hidden, as
@@ -70,7 +70,7 @@ func (o ListOut) rowsText() string {
 	}
 	var b strings.Builder
 	for _, r := range o.Data {
-		b.WriteString(r.ID + " " + content.ListText(r.Title) + "   (" + r.TakenAt.Format(dayLayout) + ")\n") // a 10k title stays one line
+		b.WriteString(r.ID + " " + content.ListText(r.Title) + "   (" + r.TakenAt.Format(dayLayout) + ")" + content.LabelSuffix(r.Label) + "\n") // a 10k title stays one line
 	}
 	return b.String()
 }

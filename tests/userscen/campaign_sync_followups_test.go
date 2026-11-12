@@ -10,6 +10,7 @@ package userscen
 // trash texts. Helper names start with fsy so they never collide.
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -155,14 +156,14 @@ func TestCampaignSync_LivePurgeDryRunAndConfirm(t *testing.T) {
 	b.MustLore("task", "list").Says(t, keep).Never(t, leak)
 }
 
-// TestCampaignSync_StoreInitBareRepoAsFolder: a file:// url is always a
-// plain folder store, so `lore store init` of a bare git repository by
-// its file:// path is E_INVALID_INPUT saying why and writes nothing into
-// the repository. Its hint names a git url spelling that works for a
-// local bare repository, with the real path (owner report 2026-11-11:
-// the hint redacted the middle of a scratch folder path), and running
-// exactly that makes the store; a plain folder, and a folder that merely
-// holds a git work tree, still become folder stores as before.
+// TestCampaignSync_StoreInitBareRepoAsFolder: a bare git repository named
+// by its file:// url or its plain path is a git store, as `git clone`
+// reads either (B3-2): the store's first commit lands in the repository
+// and nothing is written beside git's objects; the stores.yaml entry is
+// the plain path. The repository's path is shown whole, never redacted
+// (owner report 2026-11-11: a scratch folder path). A plain folder, and a
+// folder that holds a git work tree (git refuses a push to it), still
+// become folder stores as before.
 func TestCampaignSync_StoreInitBareRepoAsFolder(t *testing.T) {
 	w, _, c := cliSolo(t)
 	// a folder named like a session id (an agent's scratch folder): the
@@ -170,37 +171,27 @@ func TestCampaignSync_StoreInitBareRepoAsFolder(t *testing.T) {
 	scratch := strings.Join([]string{"88f5c9c8", "3674", "4aaa", "9c3d", "971a4ab716df"}, "-")
 	bare := filepath.Join(w.Root, "srv", scratch, "scratchpad", "notes.git")
 	c.Git("init", "-q", "--bare", "-b", "main", bare)
-	before := camSyncTree(t, bare)
-	alias := "ssh://lore-local/notes.git"
-	for _, name := range []string{"kb", "me"} {
-		r := c.Lore("store", "init", name, fileuri.URL(bare, ""))
-		r.Fails(t, 20, "[E_INVALID_INPUT]", "is a git repository", "lore reads a store's kind from its url", "nothing written")
-		h := camSyncHint(r)
-		want := `git config --global url."` + fileuri.URL(bare, "") + `".insteadOf ` + alias + " && lore store init " + name + " " + alias
-		if !strings.Contains(h, want) || strings.Contains(r.Stderr+r.Stdout, "<redacted>") {
-			t.Errorf("store init %s: the hint does not give the working spelling %q with the real path, got %q", name, want, h)
-		}
-		e := trashErr(t, c, "E_INVALID_INPUT", 20, "store", "init", name, fileuri.URL(bare, ""))
-		if !strings.Contains(e.Error.Hint, "git url") {
-			t.Errorf("--json: the hint names the git url: %+v", e.Error)
-		}
+	r := c.MustLore("store", "init", "kb", fileuri.URL(bare, ""))
+	r.Says(t, "sto_", bare)
+	if strings.Contains(r.Stderr+r.Stdout, "<redacted>") {
+		t.Errorf("the path was redacted: %s", r.Stdout)
 	}
-	camSyncSameTree(t, "a refused store init", before, camSyncTree(t, bare))
-	if r := c.MustLore("store", "list"); strings.Contains(r.Stdout, "notes.git") {
-		t.Errorf("a refused init attaches nothing:\n%s", r.Stdout)
-	}
-	// the hint's spelling works: the bare repository is a git store
-	c.Git("config", "--global", "url."+fileuri.URL(bare, "")+".insteadOf", alias)
-	c.MustLore("store", "init", "kb", alias).Says(t, "sto_", alias)
 	if log := c.Git("--git-dir", bare, "log", "--oneline", "main"); !strings.Contains(log, "store init") {
 		t.Errorf("the store's first commit is not in the bare repository: %q", log)
+	}
+	if _, err := os.Stat(filepath.Join(bare, "lore-store.yaml")); err == nil {
+		t.Error("a folder store marker was written beside git's objects")
+	}
+	// --json: the human table cuts a long url cell, the JSON holds it whole.
+	if l := th.DecodeJSON[syncStoreList](t, c.MustLore("store", "list", "--json")); l.Count != 1 || l.Stores[0].Name != "kb" || l.Stores[0].URL != bare {
+		t.Errorf("the entry is not the repository's plain path %s: %+v", bare, l)
 	}
 
 	plain := filepath.Join(w.Root, "srv", "plain")
 	c.MustLore("store", "init", "plain", fileuri.URL(plain, "")).Says(t, "sto_")
 	work := filepath.Join(w.Root, "srv", "work")
 	c.Git("init", "-q", work)
-	c.MustLore("store", "init", "work", fileuri.URL(work, "")).Says(t, "sto_")
+	c.MustLore("store", "init", "work", fileuri.URL(work, "")).Says(t, "sto_", fileuri.URL(work, ""))
 }
 
 // TestCampaignSync_RowMoveIntoItsOwnStore: `lore row move` (and `lore

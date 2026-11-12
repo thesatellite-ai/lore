@@ -35,7 +35,7 @@ lore.
 - Report the findings before doing anything.
 
 ### 2. Initialize lore
-- `lore init --non-interactive` (refuses if `.lore/` exists — say so).
+- `lore init` (refuses if `.lore/` exists — say so).
 - Verify: `lore doctor`.
 
 ### 3. List candidates from existing `.ai/` docs
@@ -47,7 +47,7 @@ lore.
 - Drop obvious low-value items (intro paragraphs, outdated notes).
 - Add the rest with the matching command (`lore rule add`, `lore decision add`, `lore memory add`, `lore hotfix add`).
   You can promote-to-rule later.
-- Verify: `sqlite3 .lore/lore.db "SELECT COUNT(*) FROM memories;"`
+- Verify: `lore memory list`, `lore rule list`, `lore decision list`.
 
 ### 5. Capture an "always use lore" meta-rule
 - `lore rule add --severity=must "ALWAYS use the lore skill
@@ -88,13 +88,9 @@ lore.
 
 ## Known v0.1 gotchas (mention these proactively if you hit them)
 
-- `lore memory list` doesn't exist — use
-  `sqlite3 .lore/lore.db "SELECT id, body FROM memories;"` for now.
-- `learn promote --target=rules|hotfixes|patterns` returns
-  `E_NOT_IMPLEMENTED` — everything must go through `memories` first.
-- A rebuild of the `lore` binary CAN reset the DB schema in v0.1
-  (early-version migration churn). Backup `.lore/lore.db` before
-  upgrading the binary.
+- The notes are the files in `.lore/data`; commit them. lore's cache
+  is outside the repo (`~/.lore/cache/repo/<folder>-<hash>.db`) and is
+  rebuilt from those files, so there is no database to back up.
 - `--scope=foobar` and other invalid enum values: the skill bundle says to
   surface the error rather than forward.
 

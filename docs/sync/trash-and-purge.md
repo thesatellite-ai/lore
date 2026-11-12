@@ -111,12 +111,12 @@ $ lore memory delete mem_2537…6bbb --reason 'the demo moved' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
 ✓ mem_2537…6bbb moved to the trash (restore: lore trash restore mem_2537…6bbb)
 $ lore trash list
-mem_2537…6bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by act_54fe…28f2  reason "the demo moved"  bat_b69e…5ed7
-mem_3b62…e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by act_28f8…03df  reason "merged into mem_4c59…6c38"  bat_f147…5139
+mem_2537…6bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by alice  reason "the demo moved"  bat_b69e…5ed7
+mem_3b62…e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by bob  reason "merged into mem_4c59…6c38"  bat_f147…5139
 2 rows in the trash
 $ lore trash show mem_2537…6bbb
 memories mem_2537…6bbb  "The demo is on Friday at 10."  in the trash
-  deleted   2026-11-02 10:07 by act_54fe…28f2 (store repo)
+  deleted   2026-11-02 10:07 by alice (store repo)
   reason    the demo moved
   batch     bat_b69e…5ed7
   body: The demo is on Friday at 10.
@@ -170,10 +170,10 @@ by deleter
 tombstones (kept forever)
   repo  1
 $ lore batch list
-batch bat_4f89…b64b  delete  memory delete  by act_54fe…28f2  2026-11-02 10:07  2 rows (repo 2)
-batch bat_b69e…5ed7  delete  memory delete  by act_54fe…28f2  2026-11-02 10:07  1 row (repo 1); restore 1, trash 1
+batch bat_4f89…b64b  delete  memory delete  by alice  2026-11-02 10:07  2 rows (repo 2)
+batch bat_b69e…5ed7  delete  memory delete  by alice  2026-11-02 10:07  1 row (repo 1); restore 1, trash 1
 $ lore batch show bat_4f89…b64b
-batch bat_4f89…b64b  delete  memory delete  by act_54fe…28f2  2026-11-02 10:07  2 rows (repo 2)
+batch bat_4f89…b64b  delete  memory delete  by alice  2026-11-02 10:07  2 rows (repo 2)
   kind: delete; trash 2
   trash mem_0aae…a61f (memories, repo)
   trash mem_6a86…ed8c (memories, repo)

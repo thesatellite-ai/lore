@@ -199,7 +199,12 @@ func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, 
 	}
 	dir := mc.localPersonalV017(a.opts.Home)
 	if dir == "" {
-		return nil, 0, nil
+		// flattened already (personal.store names the folder's url): rows a
+		// 0.1.17 folder still holds live (written there after the flatten)
+		// are moved the same way, so none is left unread
+		if dir = mc.flattenedLocalPersonal(ctx, a.opts.Home, a.opts.rowfsOptions()...); dir == "" {
+			return nil, 0, nil
+		}
 	}
 	folders, err := personalFoldersV017(dir)
 	if err != nil {
@@ -236,6 +241,12 @@ func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, 
 		}
 		steps = append(steps, StepPersonalStoreFlatten+": "+f+"/: "+strconv.Itoa(n)+" row(s) moved to the root")
 		moved += n
+		// the tombstones left in the old folder are copies of rows the root
+		// now holds: removed, so a person browsing the folder sees no
+		// duplicates (its _meta.json stays, declaring personal_flat below)
+		if err := dropMovedTombstones(ctx, dir, f, root, a.opts.openOptions()); err != nil {
+			return nil, 0, errs.Prefix("migrate: personal folder "+f, err)
+		}
 		// Step 13: declare personal_flat in the old folder's _meta.json, so a
 		// v0.1.17 lore turns read-only there instead of writing rows into a
 		// folder 0.1.18 no longer reads. A folder without one has nothing to
@@ -260,6 +271,72 @@ func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, 
 		return nil, 0, err
 	}
 	return steps, moved, nil
+}
+
+// flattenedLocalPersonal is the 0.1.17 local personal store's dir when
+// personal_store_flatten ran already (personal.store is its file:// url)
+// and one of its old folders still holds a live row the root lacks; ""
+// otherwise. lore doctor's personal_folders check reads it too.
+func (c machineConfig) flattenedLocalPersonal(ctx context.Context, home string, opts ...rowfs.Option) string {
+	dir := filepath.Join(home, personalDirV017)
+	u := strings.TrimSpace(c.Personal.Store)
+	if u == "" || (u != fileURL(dir) && u != fileURL(dir)+"/") {
+		return ""
+	}
+	if n, _ := pendingLocalPersonal(ctx, dir, opts...); n == 0 {
+		return ""
+	}
+	return dir
+}
+
+// pendingLocalPersonal counts the live rows of the old folders of the
+// local personal store at dir that its root lacks, and names the folders
+// holding them.
+func pendingLocalPersonal(ctx context.Context, dir string, opts ...rowfs.Option) (int, []string) {
+	folders, err := personalFoldersV017(dir)
+	if err != nil {
+		return 0, nil
+	}
+	total := 0
+	var with []string
+	for _, f := range folders {
+		if n, perr := pendingFlatten(ctx, dir, f, opts...); perr == nil && n > 0 {
+			total += n
+			with = append(with, f)
+		}
+	}
+	return total, with
+}
+
+// dropMovedTombstones removes the row files of folder f of the store at
+// dir that are deleted there and live at root (personal_store_flatten
+// moved them): what is left in the old folder is then only what the root
+// does not hold.
+func dropMovedTombstones(ctx context.Context, dir, f string, root store.Backend, oo store.OpenOptions) error {
+	src, err := folder.Open(dir, f, oo)
+	if err != nil {
+		return err
+	}
+	rows, _, err := src.Read(ctx, "")
+	_ = src.Close() // read only
+	if err != nil {
+		return err
+	}
+	for _, sr := range rows {
+		if !sr.Deleted {
+			continue
+		}
+		if _, gerr := root.Get(ctx, sr.Table, sr.ID); gerr != nil {
+			continue // not at the root: the tombstone is the only record
+		}
+		name := string(sr.Table) + "/" + sr.ID.String() + ".json"
+		for _, p := range []string{filepath.Join(dir, f, rowfs.LoreDir, rowfs.DataDir, filepath.FromSlash(name)), filepath.Join(dir, f, filepath.FromSlash(name))} {
+			if rerr := os.Remove(p); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+				return errs.FileIO("remove", p, rerr)
+			}
+		}
+	}
+	return nil
 }
 
 // pendingFlatten counts the rows flattenFolder would move from folder f of

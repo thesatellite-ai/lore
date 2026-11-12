@@ -5,6 +5,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Scope is which rows a read returns by their repo_id (v0.1.17
@@ -71,12 +72,14 @@ func (o Ops) ReadScope(ctx context.Context, repo string, noInherit, masterOnly, 
 type Hidden = metalist.Hidden
 
 // KeepCounted is a list's scope test that counts what it hides: a row
-// scoped to a repo outside sc is left out and counted; an archived row
-// the list will drop (withArchived false: the metadata narrowing drops
-// it) is counted and kept for that step.
-func KeepCounted(h *Hidden, sc Scope, repo string, withArchived bool, r row.Row) bool {
+// scoped to a repo outside sc is left out and counted (as scoped to a
+// folder when it has a dir: scope, its folder read through dirs; folder
+// scopes are rows of the repo store); an archived row the list will drop
+// (withArchived false: the metadata narrowing drops it) is counted and
+// kept for that step.
+func KeepCounted(ctx context.Context, h *Hidden, dirs *metalist.Dirs, sc Scope, repo string, withArchived bool, r row.Row) bool {
 	if !sc.Keeps(Field(r, FieldRepo), repo) {
-		h.Repo++
+		h.OutOfScope(dirs.Of(ctx, store.SourceRepo, r))
 		return false
 	}
 	if !withArchived && Field(r, FieldArchivedAt) != "" {

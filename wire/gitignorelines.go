@@ -43,6 +43,20 @@ var GitignoreLines = []string{
 	".lore/lock",
 }
 
+// gitignoreOnlyIfThere are the GitignoreLines a project's .gitignore only
+// needs while the file is in the work tree (B4-7): the repo cache moved to
+// the lore home, so this lore never makes .lore/lore-cache.db* (an older
+// build's copy gets its line while it is there); the lock exists once a
+// write ran here. Adding them to every .gitignore named files no command
+// creates. .lore/lock stays on every list: each write here takes it, and
+// the hook adds the lines before the write, so a line added only once the
+// lock exists would leave it in git status after the first write.
+var gitignoreOnlyIfThere = map[string]bool{
+	".lore/lore-cache.db":     true,
+	".lore/lore-cache.db-shm": true,
+	".lore/lore-cache.db-wal": true,
+}
+
 // gitignoreFile is the project's ignore file the lines belong in.
 const gitignoreFile = ".gitignore"
 
@@ -58,7 +72,8 @@ const localExcludeHeader = "\n# lore: local files a read kept out of git status;
 const localExcludeMode = 0o644
 
 // MissingGitignoreLines lists the GitignoreLines that root's .gitignore
-// does not hold and no shared ignore rule covers (see the file comment).
+// does not hold and no shared ignore rule covers (see the file comment);
+// a gitignoreOnlyIfThere line only while its file is there.
 // Any git failure counts the line as missing (the doctor finding then
 // says so; adding a line twice is harmless).
 func MissingGitignoreLines(ctx context.Context, root string) []string {
@@ -73,6 +88,9 @@ func MissingGitignoreLines(ctx context.Context, root string) []string {
 	}
 	var out []string
 	for _, line := range GitignoreLines {
+		if gitignoreOnlyIfThere[line] && !localPathExists(root, line) {
+			continue
+		}
 		if strings.Contains(existing, line) || sharedIgnores(ctx, root, line) {
 			continue
 		}

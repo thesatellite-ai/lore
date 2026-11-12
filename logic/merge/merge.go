@@ -65,6 +65,15 @@ const (
 type Policy struct {
 	IsText   func(field string) bool
 	Strategy func(field string) schema.MergeStrategy
+	// OursFirst writes a text clash with ours first and labels both
+	// sides (MarkSides), as git does in a worktree merge: `lore sync
+	// resolve --take kept` keeps the first side, other the second (bug
+	// hunt B2-15: newer-first put the incoming text first whenever it
+	// was newer, so --take other kept the person's own text). Only a
+	// merge whose result one machine writes for itself sets it (the git
+	// merge driver); a merge every machine must compute alike (live rows,
+	// store sync) keeps the order-independent newer-first Mark.
+	OursFirst bool
 }
 
 // PolicyFor builds the policy of a known table: text fields with no closed
@@ -242,7 +251,11 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row, newerSide side) 
 			// should TextOf ever refuse it, the newer text is kept and the
 			// clash is still listed, so nothing is dropped silently.
 			merged[k] = n
-			if marked, err := value.TextOf(Mark(newer.HLC, n.String(), older.HLC, o.String())); err == nil {
+			text := Mark(newer.HLC, n.String(), older.HLC, o.String())
+			if p.OursFirst {
+				text = MarkSides(ours.HLC, ours.Fields[k].String(), theirs.HLC, theirs.Fields[k].String())
+			}
+			if marked, err := value.TextOf(text); err == nil {
 				merged[k] = marked
 			}
 			res.Conflicts = append(res.Conflicts, FieldConflict{Field: k, Newer: n, Older: o})
@@ -377,6 +390,19 @@ func isTextValue(v value.Value) bool { return v != nil && v.Kind() == value.Kind
 // Mark renders a text clash with conflict markers, the newer side first.
 func Mark(newerHLC hlc.HLC, newer string, olderHLC hlc.HLC, older string) string {
 	return MarkerOpen + newerHLC.String() + "\n" + newer + "\n" + MarkerSplit + "\n" + older + "\n" + MarkerClose + olderHLC.String()
+}
+
+// Labels of the two sides MarkSides writes after the markers.
+const (
+	LabelOurs   = "yours (this branch) "
+	LabelTheirs = "theirs (merged in) "
+)
+
+// MarkSides renders a text clash with this side's text first and the
+// incoming side's second, each label naming whose it is (git's order:
+// HEAD, then the branch merged in).
+func MarkSides(oursHLC hlc.HLC, ours string, theirsHLC hlc.HLC, theirs string) string {
+	return MarkerOpen + LabelOurs + oursHLC.String() + "\n" + ours + "\n" + MarkerSplit + "\n" + theirs + "\n" + MarkerClose + LabelTheirs + theirsHLC.String()
 }
 
 // HasMarkers reports whether s holds an unresolved conflict block (a Mark

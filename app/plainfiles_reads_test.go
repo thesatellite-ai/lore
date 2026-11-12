@@ -45,11 +45,13 @@ func pfLastPush(s string) string {
 // watch .git/lore/signals-seen.json (a reader must record when it first
 // saw a teammate's claim before it may treat the claim as expired,
 // LORE_TEAM_SPEC §1; `lore where` lists it) and lore's rebuildable repo
-// cache.
+// cache, and the "said once" notes (waiting_said, live-waiting-said:
+// what a read last told the person, so it does not repeat it, B3-13).
 func pfSkip(rel string) bool {
 	base := filepath.Base(rel)
 	switch {
-	case base == "index" || base == "FETCH_HEAD" || base == "fetch-stamp" || base == "ORIG_HEAD" || base == "lock" || base == "live.lock" || base == "signals-seen.json":
+	case base == "index" || base == "FETCH_HEAD" || base == "fetch-stamp" || base == "ORIG_HEAD" || base == "lock" || base == "live.lock" || base == "signals-seen.json" ||
+		base == "waiting_said" || base == "live-waiting-said":
 		return true
 	case strings.HasPrefix(base, "lore-cache.db"):
 		return true

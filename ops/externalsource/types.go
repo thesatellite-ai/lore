@@ -24,7 +24,7 @@ type AddIn struct {
 	Kind    string `json:"kind" flag:"kind" desc:"source kind (e.g. github | notion | gitlab)"`
 	Config  string `json:"config,omitempty" flag:"config" desc:"JSON config blob"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // ListIn is the input of external_source.list.
@@ -67,7 +67,7 @@ func (o ListOut) rowsText() string {
 		if r.Enabled {
 			state = stateOn
 		}
-		b.WriteString("[" + state + "] " + r.Name + " (" + r.Kind + ") " + r.ID + "\n")
+		b.WriteString("[" + state + "] " + r.Name + " (" + r.Kind + ") " + r.ID + content.LabelSuffix(r.Label) + "\n")
 	}
 	return b.String()
 }

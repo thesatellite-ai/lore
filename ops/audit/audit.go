@@ -117,7 +117,7 @@ type Env interface {
 // LogIn is the input of audit.log.
 type LogIn struct {
 	Limit int  `json:"limit,omitempty" flag:"limit" desc:"entries to show (default 50)"`
-	All   bool `json:"all,omitempty" flag:"all" desc:"show every entry (P3-AUDIT-3: v0.1.17's --limit 0)"`
+	All   bool `json:"all,omitempty" flag:"all" desc:"show every entry (the same as --limit 0)"`
 }
 
 // LogOut is v0.1.17's list envelope.

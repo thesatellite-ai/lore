@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -42,6 +43,10 @@ const (
 	brokenInvalidJSON     = "invalid JSON"
 	brokenMetaConflict    = "unsettled metadata conflict in "
 )
+
+// migrationLeftOut is the line of a commit made while a `lore fix` format
+// migration is still uncommitted: its files are not staged with it.
+const migrationLeftOut = "lore: %d row files rewritten by lore fix (format migration) are not added to this commit; commit them on their own: git add .lore/data && git commit -m \"lore: migrate format\""
 
 // brokenFilesHint is the next step of a refused pre-commit.
 const brokenFilesHint = "fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again"
@@ -73,6 +78,25 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	if err != nil {
 		return errs.Wrap(errs.Internal, "pre-commit: read the local live ref", err)
 	}
+	// D3 (B1-20): a pending `lore fix` format migration is committed on its
+	// own, never swept into this commit; the rest of lore's writes are
+	// staged as before. What the person staged themselves stays staged.
+	pending, err := wire.MigrationRewrites(ctx, root, changed)
+	if err != nil {
+		return err
+	}
+	if len(pending) > 0 {
+		kept := changed[:0:0]
+		for _, p := range changed {
+			if !pending[p] {
+				kept = append(kept, p)
+			}
+		}
+		changed = kept
+		if n := unstagedCount(ctx, repo, root, pending); n > 0 {
+			h.line(fmt.Sprintf(migrationLeftOut, n))
+		}
+	}
 	var bad []string
 	for _, p := range changed {
 		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(p)))) // p is a path git listed under .lore/data
@@ -90,14 +114,22 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 		return errs.New(errs.InvalidInput, "refusing to commit broken lore files: "+strings.Join(bad, ", ")).WithHint(brokenFilesHint)
 	}
 	if len(changed) > 0 {
-		specs := []string{loreDataPathspec}
-		if shadowed || junk {
-			specs = changed // stage the rest one by one, leaving the shadowed files and OS clutter out
+		before := wire.HookIndexBegin(ctx, root) // the index as the person staged it
+		inv := gitref.Invocation{Dir: root, Args: []string{"add", "-A", "--", loreDataPathspec}, Env: hookIndexEnv(ctx, repo, root)}
+		if shadowed || junk || len(pending) > 0 {
+			// stage the rest one by one, leaving the shadowed files, OS
+			// clutter and the pending migration out; the list goes on
+			// stdin (thousands of paths overflow a command line)
+			inv.Args = []string{"add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"}
+			inv.Stdin = []byte(strings.Join(changed, "\x00"))
 		}
-		args := append([]string{"add", "-A", "--"}, specs...)
-		if _, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: args, Env: hookIndexEnv(ctx, repo, root)}); err != nil {
+		if _, err := repo.Run(ctx, inv); err != nil {
+			wire.HookIndexRestore(ctx, root)
 			return errs.Wrap(errs.Internal, "pre-commit: stage "+loreDataPathspec, err)
 		}
+		wire.HookIndexStaged(ctx, root, before)
+	} else {
+		wire.HookIndexBegin(ctx, root) // nothing staged: no old snapshot may be restored later
 	}
 	// RX7 (OV64). No HEAD yet (a first commit) is a git error here, and
 	// then there is nothing to compare.
@@ -105,7 +137,11 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	if lerr != nil {
 		return nil
 	}
-	return looseningError(found)
+	if rerr := looseningError(found); rerr != nil {
+		wire.HookIndexRestore(ctx, root) // refused: the index is what the person staged
+		return rerr
+	}
+	return nil
 }
 
 // changedUnder lists the files under pathspec that differ from HEAD or are
@@ -140,6 +176,24 @@ func changedUnder(ctx context.Context, repo *gitref.Repo, root, pathspec string)
 		paths = append(paths, strings.TrimPrefix(p, prefix))
 	}
 	return paths, junk, nil
+}
+
+// unstagedCount is how many of paths (relative to root) differ between the
+// work tree and the index being committed: the migrated files the person
+// has not staged themselves (those already staged are committed as staged).
+func unstagedCount(ctx context.Context, repo *gitref.Repo, root string, paths map[string]bool) int {
+	out, err := repo.Run(ctx, gitref.Invocation{Dir: root, Env: hookIndexEnv(ctx, repo, root),
+		Args: []string{"-c", "core.quotePath=false", "diff", "--name-only", "--relative", "-z", "--", loreDataPathspec}})
+	if err != nil {
+		return len(paths)
+	}
+	n := 0
+	for _, p := range strings.Split(string(out), "\x00") {
+		if paths[p] {
+			n++
+		}
+	}
+	return n
 }
 
 // withoutLiveRows drops from changed (paths relative to root) the row

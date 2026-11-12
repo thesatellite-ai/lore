@@ -21,6 +21,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -78,8 +80,25 @@ func hasLocalState(home, wd string) bool {
 // actor row does not name, so the repos and context.targets rows of the
 // same init were written by nobody. The role check reads the org's links
 // and fails closed to client on a broken store, which never stops init.
+//
+// One exception (H-1): in a repo linked as a client, the rows init writes
+// into the repo get the F16 leak check, which reads the linked folder; with
+// the org's stores dropped it always refused ("cannot check: store
+// unreachable and nothing cached"), so init could never run there. A
+// client repo keeps the org's stores; any other repo still opens none.
+// The role is asked lazily, when the app first opens its stores (after
+// init has rooted the project), never before.
 func initScope(o *wire.Options) {
+	stores, isClient := o.OrgStores, o.RepoIsClient
 	o.OrgStores = nil
+	if stores != nil && isClient != nil {
+		o.OrgStores = func(ctx context.Context) ([]attach.Store, error) {
+			if client, err := isClient(ctx); err != nil || !client {
+				return nil, nil // not a client (or unknown: the guard fails closed on its own)
+			}
+			return stores(ctx)
+		}
+	}
 	o.OrgEntryStore = nil
 	o.DefaultTarget = nil
 }
@@ -122,6 +141,7 @@ func (h *host) initCommand(wd string) *cobra.Command {
 	cmd.Flags().StringVar(&in.Name, initFlagName, "", "project name (default: the repo name of origin's URL, else the folder name)")
 	cmd.Flags().StringSliceVar(&in.Target, flagTarget, nil, "AI tool profile(s) or file(s) to point at .lore/LORE.md (default: the tools of the setup that applies here, else tool files found in the repo, else AGENTS.md)")
 	cmd.Flags().BoolVar(&in.NonInteractive, flagNonInteractive, false, "accepted for v0.1.17 scripts; init never asks")
+	_ = cmd.Flags().MarkHidden(flagNonInteractive) // parsed for old scripts, never offered in --help (B3-17)
 	return cmd
 }
 
@@ -132,13 +152,17 @@ type initHost struct {
 	h     *host
 	wd    string
 	local bool
+	// hadLoreDir and atTop are read at process start (initHost): wd held a
+	// .lore/ folder, and wd is its git checkout's top folder.
+	hadLoreDir, atTop bool
 }
 
 // initHost is the repoinit.Host for wd; local is hasLocalState(wd) read at
 // process start. The registry's repo.init uses the same value through
 // wire (RepoInitHost), so `lore repo init` and `lore init` agree.
 func (h *host) initHost(wd string, local bool) *initHost {
-	return &initHost{h: h, wd: wd, local: local}
+	_, lerr := os.Lstat(filepath.Join(wd, rowfs.LoreDir))
+	return &initHost{h: h, wd: wd, local: local, hadLoreDir: lerr == nil, atTop: isGitTop(wd)}
 }
 
 // WorkDir implements repoinit.Host.
@@ -173,8 +197,14 @@ func (i *initHost) DefaultName(ctx context.Context) string { return defaultProje
 func (i *initHost) OriginURL(ctx context.Context) string { return projectOriginURL(ctx, i.wd) }
 
 // CreateProject implements repoinit.Host: the projects row in the repo store.
-func (i *initHost) CreateProject(ctx context.Context, fields map[string]value.Value) (string, ids.ID[ids.Project], error) {
-	w, err := i.h.app.Create(ctx, store.SourceRepo, schema.TableProjects, fields)
+func (i *initHost) CreateProject(ctx context.Context, id ids.ID[ids.Project], fields map[string]value.Value) (string, ids.ID[ids.Project], error) {
+	var w engine.Written
+	var err error
+	if id.IsZero() {
+		w, err = i.h.app.Create(ctx, store.SourceRepo, schema.TableProjects, fields)
+	} else {
+		w, err = i.h.app.CreateWithID(ctx, store.SourceRepo, schema.TableProjects, id.Any(), fields)
+	}
 	if err != nil {
 		return "", ids.ID[ids.Project]{}, err
 	}
@@ -183,6 +213,17 @@ func (i *initHost) CreateProject(ctx context.Context, fields map[string]value.Va
 		return "", ids.ID[ids.Project]{}, err
 	}
 	return w.Row.ID.String(), pid, nil
+}
+
+// LinkedProject implements repoinit.Host (wire.App.LinkedRemoteProject):
+// only for the repo's top folder, and only when it held no .lore/ when the
+// process started (a link by remote names a repo with no lore files; a
+// monorepo subfolder is its own project).
+func (i *initHost) LinkedProject(ctx context.Context) (ids.ID[ids.Project], string, bool) {
+	if i.hadLoreDir || !i.atTop {
+		return ids.ID[ids.Project]{}, "", false
+	}
+	return i.h.app.LinkedRemoteProject(ctx)
 }
 
 // SeedRepoMeta implements repoinit.Host.
@@ -275,4 +316,11 @@ func (l *lateInit) RepoInitHost(_ context.Context) (repoinit.Host, error) {
 		return nil, errs.New(errs.Unsupported, "repo init: the command host is not built yet")
 	}
 	return l.ih, nil
+}
+
+// isGitTop reports whether wd is the top folder of a git checkout (it
+// holds .git, a folder or a worktree's file).
+func isGitTop(wd string) bool {
+	_, err := os.Lstat(filepath.Join(wd, ".git"))
+	return err == nil
 }

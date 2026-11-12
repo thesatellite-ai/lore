@@ -36,6 +36,12 @@ func TestTextOneRepo(t *testing.T) {
 	if strings.Contains(changed.Text(), LineCurrent) {
 		t.Fatalf("a run that changed something says current:\n%s", changed.Text())
 	}
+	// B1-5: a failed step is never "everything is current"
+	failed := cur
+	failed.Steps = []doctor.FixStep{{Step: doctor.StepMigrate, Result: "[E_X] boom", Failed: true}, {Step: doctor.StepRender, Result: "skipped"}}
+	if ft := failed.Text(); strings.Contains(ft, LineCurrent) || !strings.Contains(ft, LineStepsFailed+doctor.StepMigrate) {
+		t.Fatalf("a run with a failed step:\n%s", ft)
+	}
 	dry := changed
 	dry.DryRun = true
 	if !strings.Contains(dry.Text(), LineDryRun) {

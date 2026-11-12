@@ -38,6 +38,11 @@ type CopyFinding struct {
 	Message string `json:"message"`
 	// Fix is the one command that refreshes the copy.
 	Fix string `json:"fix"`
+	// Local marks a copy kept only on this machine (the private render
+	// under ~/.lore/render, a tool's untracked import file): a fresh clone
+	// never has it, so its absence is "not rendered yet here", a note,
+	// not a degradation (B3-25).
+	Local bool `json:"local,omitempty"`
 }
 
 // CopyChecker is an optional upgrade of Host: the binary that renders

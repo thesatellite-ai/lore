@@ -73,7 +73,7 @@ type LeaksIn struct {
 	Staged    bool   `json:"staged,omitempty" flag:"staged" desc:"check the staged files (default unless --commit-msg is given alone)"`
 	CommitMsg string `json:"commit_msg,omitempty" flag:"commit-msg" desc:"also check this commit message file (the commit-msg hook's $1)"`
 	AsClient  bool   `json:"as_client,omitempty" flag:"as-client" desc:"check the whole repo as the client would see it (before a hand-over)"`
-	Rows      bool   `json:"rows,omitempty" flag:"rows" desc:"re-scan every stored row of every attached store with today's secret rules (SQ12)"`
+	Rows      bool   `json:"rows,omitempty" flag:"rows" desc:"re-scan every stored row of every attached store with today's secret rules"`
 }
 
 // Mode is the check the flags ask for.

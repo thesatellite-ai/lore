@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/merge"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
@@ -44,11 +45,10 @@ const (
 	// code still owns that file.
 	RepoCacheFile = ".lore/lore-cache.db"
 	// repoCacheDir holds the repo stores' caches under cacheDir, one file
-	// per checkout: <repo folder name>-<short hash of its path>.db.
-	repoCacheDir = "repo"
-	// repoCacheHashLen is how many hex digits of the path's sha256 the
-	// file name keeps: two checkouts of one repo name get two files.
-	repoCacheHashLen = 12
+	// per checkout: <repo folder name>-<short hash of its path>.db. The
+	// name is sqlite.RepoCacheRel's, so `lore cache prune` finds the cache
+	// of a checkout that moved.
+	repoCacheDir = sqlite.RepoDir
 	// cacheDir holds the other stores' caches under the lore home.
 	cacheDir = "cache"
 	// cacheStoresDir is the folder of per-store caches under cacheDir.
@@ -238,7 +238,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	if !repoOnly {
 		// FLAG3: every full open records which cache files this repo uses
-		// (~/.lore/cache/repos/<hash>.json), so `lore cache prune` can
+		// (~/.lore/cache/uses/<hash>.json), so `lore cache prune` can
 		// remove only caches no repo on this machine attaches any more:
 		// caches always rebuild from row files and old client data must
 		// not linger. A repoOnly open attaches nothing and must not wipe
@@ -331,6 +331,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	actor = st.actor
+	st.refuseWritesIfLeft(ctx, attached) // leftgate.go: a removed person writes only to their personal store (B2-12)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
 		// agent in a client repo is recorded as its owning person; an org
@@ -512,7 +513,9 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	}
 	var strict, maybe attach.Config
 	for _, s := range cfg.Stores {
-		if optional[s.Name] {
+		// a dry run clones nothing (git.NoClone): every store without a
+		// clone here is left out as unreachable, the way an org store is
+		if optional[s.Name] || git.NoClone(ctx) {
 			maybe.Stores = append(maybe.Stores, s)
 		} else {
 			strict.Stores = append(strict.Stores, s)
@@ -714,7 +717,9 @@ func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option,
 		}
 		return b, err
 	}
-	for _, s := range git.Schemes {
+	// store.PathScheme: a plain path is a git repository on this machine
+	// (wire/storelocalpath.go); a folder store is always file://.
+	for _, s := range append(slices.Clone(git.Schemes), store.PathScheme) {
 		if err := o.Register(s, gitOpen); err != nil {
 			return nil, err
 		}
@@ -759,6 +764,34 @@ func storeMergeReport(u *url.URL, notice func(string)) func(merge.Result) {
 // markerOf is implemented by both 0.1.18 backends: the store's
 // lore-store.yaml.
 type markerOf interface{ Marker() rowfs.Marker }
+
+// storeDirOf is implemented by the git and folder backends: the folder
+// that holds lore-store.yaml.
+type storeDirOf interface{ Dir() string }
+
+// currentMarker is b's lore-store.yaml: the one read at open, or, when
+// that one had no sto_ id (a v0.1.17 marker), the file on disk now. A
+// `lore fix` in this same process may have given the store its id since
+// (migrate writes marker v2), and the private render and the store audit
+// file must use that id, not a name- stem for one run and the id after
+// (B4-17: two names for one store). ok is false for a backend without a
+// marker.
+func currentMarker(b store.Backend) (rowfs.Marker, bool) {
+	c := concrete(b)
+	m, ok := c.(markerOf)
+	if !ok {
+		return rowfs.Marker{}, false
+	}
+	mk := m.Marker()
+	if mk.ID.IsZero() {
+		if d, dok := c.(storeDirOf); dok && d.Dir() != "" {
+			if fresh, err := rowfs.ReadMarker(d.Dir()); err == nil && !fresh.ID.IsZero() {
+				mk = fresh
+			}
+		}
+	}
+	return mk, true
+}
 
 // branchOf is implemented by the git backend.
 type branchOf interface{ Branch() string }
@@ -836,31 +869,7 @@ func hashedCacheFile(home, dir, repoTop string) string {
 // it); the hash of the (symlink-resolved) path gives two checkouts of one
 // name two files. Nothing is created.
 func RepoCachePath(home, repoTop string) string {
-	top := filepath.Clean(repoTop)
-	if real, err := filepath.EvalSymlinks(top); err == nil {
-		top = real
-	}
-	sum := sha256.Sum256([]byte(top))
-	name := repoCacheName(filepath.Base(top))
-	return filepath.Join(home, cacheDir, repoCacheDir, name+"-"+hex.EncodeToString(sum[:])[:repoCacheHashLen]+cacheExt)
-}
-
-// repoCacheName keeps a folder name to letters, digits, '.', '_' and '-'
-// (anything else becomes '_'), so the file name is plain on every system.
-func repoCacheName(base string) string {
-	var b strings.Builder
-	for _, r := range base {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
-			b.WriteRune(r)
-		default:
-			b.WriteByte('_')
-		}
-	}
-	if n := strings.Trim(b.String(), "."); n != "" {
-		return n
-	}
-	return "repo"
+	return filepath.Join(home, cacheDir, filepath.FromSlash(sqlite.RepoCacheRel(repoTop)))
 }
 
 // repoCacheOf is the cache file st's repo store was opened at ("" before
@@ -1251,3 +1260,29 @@ func (storeOnlyProvenance) Upstream(context.Context, string) bool { return false
 
 // Writer implements engine.Provenance.
 func (p storeOnlyProvenance) Writer() (string, ids.MachineID) { return p.inner.Writer() }
+
+// LinkedRemoteProject is the project id an org store link gives the repo
+// of a by its remote (orgresolve.RemoteProjectID(remote), the only place
+// that id lives), for `lore init` in a repo that held no lore files when
+// the process started (B1-18): the project then takes it, so the link
+// keeps naming the repo and its store folder's rows keep reaching it.
+// The caller checks that: init's own RootAt has made .lore/ by now, so the
+// "no .lore/" test of linkedByRemote cannot be used here.
+func (a *App) LinkedRemoteProject(ctx context.Context) (ids.ID[ids.Project], string, bool) {
+	if a.opts.RepoLinkedByRemote == nil {
+		return ids.ID[ids.Project]{}, "", false
+	}
+	remote := a.opts.RepoLinkedByRemote(ctx)
+	if remote == "" {
+		return ids.ID[ids.Project]{}, "", false
+	}
+	raw, err := orgresolve.RemoteProjectID(remote)
+	if err != nil {
+		return ids.ID[ids.Project]{}, "", false
+	}
+	pid, err := ids.Parse[ids.Project](raw)
+	if err != nil {
+		return ids.ID[ids.Project]{}, "", false
+	}
+	return pid, remote, true
+}

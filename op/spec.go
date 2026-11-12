@@ -64,6 +64,11 @@ type ConfirmRule struct {
 	// surfaces must still offer the yes answer (--yes, REST "yes"). Run never
 	// pre-confirms on MayAsk alone.
 	MayAsk bool `json:"may_ask"`
+	// NoSecretFindings: the operation's only question is its own yes/no
+	// (MayAsk); it writes no free text a secret scan could flag (a store
+	// name and url), so surfaces do not offer the secret answers
+	// (--not-a-secret, --secret-ref, ...) that could never apply to it.
+	NoSecretFindings bool `json:"-"`
 }
 
 // CanAsk reports whether the operation can answer E_NEEDS_CONFIRM at all,

@@ -2,11 +2,14 @@ package git
 
 import (
 	"net/url"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Url schemes the git backend answers (spec 7.2). The scp-like form
@@ -87,6 +90,9 @@ func isSCPLike(s string) bool {
 // the login name (it is not a secret) and loses any password. The query
 // (the folder parameter) and fragment are not part of the remote.
 func RemoteOf(u *url.URL) (Remote, error) {
+	if store.IsLocalPath(u) {
+		return localRemote(u)
+	}
 	switch u.Scheme {
 	case SchemeSSH, SchemeHTTPS, SchemeHTTP:
 	default:
@@ -112,6 +118,29 @@ func RemoteOf(u *url.URL) (Remote, error) {
 	}
 	return Remote{URL: clean.String(), Norm: host + "/" + path}, nil
 }
+
+// LocalHost is the host part of the Norm of a store that is a git
+// repository on this machine (/srv/git/notes.git): such a url has no host,
+// and the leading underscore keeps it apart from every real DNS host, so a
+// local repository and a hosted one with the same path never share a clone.
+const LocalHost = repourl.LocalStoreHost
+
+// localRemote is the Remote of a plain absolute path to a git repository
+// (store.PathScheme): git clones and pushes it as it is, the same as
+// `git clone /srv/git/notes.git`. URL is the cleaned path (no trailing
+// slash, .git kept as written); Norm is LocalHost/<path without .git>, so
+// /srv/git/notes and /srv/git/notes.git share one clone.
+func localRemote(u *url.URL) (Remote, error) {
+	clean := path.Clean(u.Path)
+	rel := strings.TrimSuffix(strings.Trim(clean, "/"), gitSuffix)
+	if rel == "" || strings.Contains(u.Path, "/../") || strings.HasSuffix(u.Path, "/..") {
+		return Remote{}, errs.New(errs.StoreScheme, "git: a local store path needs an absolute repository path (/path/to/repo.git)")
+	}
+	return Remote{URL: clean, Norm: LocalHost + "/" + rel}, nil
+}
+
+// isLocal reports a Remote that is a git repository on this machine.
+func (r Remote) isLocal() bool { return strings.HasPrefix(r.Norm, LocalHost+"/") }
 
 // OriginOf is the url lore writes as a store clone's origin for the store
 // url raw: the person's own spelling, as in stores.yaml or on the command
@@ -159,9 +188,16 @@ func quoteScheme(s string) string { return `"` + s + `"` }
 // (`git@github.com:acme/notes` → <home>/stores/acme/notes). The host never
 // appears in the path (owner decision D1); two stores whose paths agree on
 // different hosts are told apart by CloneDirFor (a "~2" suffix).
+// A git repository on this machine (/srv/git/notes.git) has no owner in
+// its url, so its clone is <home>/stores/_local/<repo> (B3-21): before, it
+// was <home>/stores/<the whole absolute path>, a copy of the disk's folder
+// tree; a second local repository of the same name gets "~2" the same way.
 func CloneBase(home string, r Remote) (string, error) {
 	if !filepath.IsAbs(home) {
 		return "", errs.New(errs.BadPath, "git: the lore home must be an absolute path")
+	}
+	if r.isLocal() {
+		return filepath.Join(home, StoresDir, LocalHost, path.Base(strings.TrimPrefix(r.Norm, LocalHost+"/"))), nil
 	}
 	_, path, _ := strings.Cut(r.Norm, "/")
 	return filepath.Join(home, StoresDir, filepath.FromSlash(path)), nil

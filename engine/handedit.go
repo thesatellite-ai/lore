@@ -20,6 +20,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -37,8 +38,16 @@ func (e *Engine) PickUp(ctx context.Context, src store.Source, base, hand row.Ro
 			WithHint("put the id and table back as the file name says (or restore it with git checkout -- <file>)")
 	}
 	if hand.Deleted && !base.Deleted {
+		del := "the delete command of its kind"
+		n := tableNoun(base.Table)
+		if def, derr := e.tableDef(base.Table); derr == nil && def.Noun != "" {
+			n = def.Noun
+		}
+		if n != "" {
+			del = "`lore " + n + " delete " + base.ID.String() + "`" // the row's own noun, never a fixed one (B2-3)
+		}
 		return Written{}, errs.New(errs.InvalidInput, "the file marks "+base.ID.String()+" deleted by hand").
-			WithHint("delete the file instead (lore moves the row to the trash), or run the delete command of its kind (lore task delete " + base.ID.String() + ", lore memory delete …)")
+			WithHint("delete the file instead (lore moves the row to the trash), or run " + del)
 	}
 	if !sameMeta(base.Meta, hand.Meta) {
 		return Written{}, errs.New(errs.InvalidInput, "the metadata (meta) of "+base.ID.String()+" was changed by hand; lore cannot check a raw metadata value").
@@ -104,4 +113,21 @@ func sameMeta[K comparable](a, b map[K]value.JSON) bool {
 // (the store clone's pre-commit hook).
 func RetypeFields(def schema.TableDef, fields map[string]value.Value) map[string]value.Value {
 	return retype(def, fields)
+}
+
+// tableNoun is the command noun of a table whose noun is its plain
+// singular (memories → memory, tasks → task); "" for a table whose noun
+// is spelled otherwise (an underscore, a declared schema.Noun), so a hint
+// never names a command that does not exist.
+func tableNoun(t row.Table) string {
+	name := string(t)
+	switch {
+	case strings.Contains(name, "_"):
+		return ""
+	case strings.HasSuffix(name, "ies"):
+		return strings.TrimSuffix(name, "ies") + "y"
+	case strings.HasSuffix(name, "s"):
+		return strings.TrimSuffix(name, "s")
+	}
+	return ""
 }

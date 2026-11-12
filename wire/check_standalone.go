@@ -119,11 +119,27 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	}
 	// The hook fails closed in a client repo when lore is gone (clientmark.go).
 	markClientRepo(ctx, root, l.res)
+	// A Local operation skips the registry's v0.1.17 gate (oldRowsGate):
+	// someone who only commits would never learn the repo still waits
+	// for `lore fix`, so the commit hook says it in the gate's one line.
+	if hasV017Rows(gitTopLevel(ctx, root)) {
+		a.notice(OldRowsReadLine)
+	}
 	// Secrets first, in every repo (hooksecrets.go), then F16 (client repos).
-	if serr := a.HookSecrets(ctx, root, checkWhereCommit, docs); serr != nil {
+	old, serr := a.hookSecrets(ctx, root, checkWhereCommit, docs)
+	if serr == nil {
+		serr = a.LeakCheckDocsExplain(ctx, l.res, checkWhereCommit, docs, in.Explain)
+	}
+	if serr != nil {
+		// D3: a refused commit leaves the index as the person staged it,
+		// without the files the pre-commit hook added (hookindex.go).
+		HookIndexRestore(ctx, root)
 		return opscheck.LeaksOut{}, serr
 	}
-	return opscheck.LeaksOut{}, a.LeakCheckDocsExplain(ctx, l.res, checkWhereCommit, docs, in.Explain) // silent when clean
+	if old > 0 { // values the same rows already held at HEAD: let through, named once
+		return opscheck.LeaksOut{Message: historyLine(old)}, nil
+	}
+	return opscheck.LeaksOut{}, nil // silent when clean
 }
 
 // checkCI is F16's CI mode over the checked-out tree's .lore/data.

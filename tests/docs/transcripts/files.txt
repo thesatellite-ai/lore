@@ -8,10 +8,11 @@ lore: pushed store notes: commit 601d285 to branch main
 lore: pushed store notes: commit 86dbae4 to branch main
 lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Renew the TLS certificate [medium] → [notes]
+  created tasklist tlt_162df51b7f78b785c97c26b41ea89666 "default" for tasks added without --tasklist
 alice (work/website)$ lore memory add --to notes --body 'The staging database is reset every Monday.'
 lore: pushed store notes: commit 9b40ce7 to branch main
-lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store notes)
-✓ mem_162df51b7f78b785c97c26b41ea89666 [notes]
+lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json (store notes)
+✓ mem_54fe984c9b495744c0217776765a28f2 [notes]
   scope: [master]
 
 ### the store clone
@@ -35,14 +36,14 @@ id: sto_7a670ae8548ed05bf57ad29ad0759504
 visibility: internal
 created: "2026-11-02"
 alice (.lore/stores/acme/notes)$ find _store -type f | sort
-_store/actors/act_54fe984c9b495744c0217776765a28f2.json
-_store/machines/mch_05e99e22e9e86e96fe4daa7777994603.json
-_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
-_store/task_lists/tlt_c0f3c11a5724b0cfd74b256190d9b5b8.json
+_store/actors/act_05e99e22e9e86e96fe4daa7777994603.json
+_store/machines/mch_c0f3c11a5724b0cfd74b256190d9b5b8.json
+_store/memories/mem_54fe984c9b495744c0217776765a28f2.json
+_store/task_lists/tlt_162df51b7f78b785c97c26b41ea89666.json
 _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
-alice (.lore/stores/acme/notes)$ cat _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+alice (.lore/stores/acme/notes)$ cat _store/memories/mem_54fe984c9b495744c0217776765a28f2.json
 {
-  "_hlc": "2026-11-02T10:00:15.000Z/0000/act_54fe984c9b495744c0217776765a28f2",
+  "_hlc": "2026-11-02T10:00:15.000Z/0000/act_05e99e22e9e86e96fe4daa7777994603",
   "_o": {
     "cmd": "memory add",
     "git": {
@@ -62,16 +63,16 @@ alice (.lore/stores/acme/notes)$ cat _store/memories/mem_162df51b7f78b785c97c26b
   },
   "body": "The staging database is reset every Monday.",
   "created_at": "2026-11-02T10:00:00.000000001Z",
-  "created_by": "act_54fe984c9b495744c0217776765a28f2",
-  "created_by_actor_id": "act_54fe984c9b495744c0217776765a28f2",
-  "id": "mem_162df51b7f78b785c97c26b41ea89666",
+  "created_by": "act_05e99e22e9e86e96fe4daa7777994603",
+  "created_by_actor_id": "act_05e99e22e9e86e96fe4daa7777994603",
+  "id": "mem_54fe984c9b495744c0217776765a28f2",
   "kind": "retrieved",
   "project_id": "prj_76bd560aff0771fab8457dbfa9823f10",
   "source_kind": "manual",
   "trust_score": 0.5,
   "tx_at": "2026-11-02T10:00:00.000000001Z",
   "updated_at": "2026-11-02T10:00:00.000000001Z",
-  "updated_by": "act_54fe984c9b495744c0217776765a28f2"
+  "updated_by": "act_05e99e22e9e86e96fe4daa7777994603"
 }
 alice (.lore/stores/acme/notes)$ ls .git/lore
 fetch-stamp
@@ -92,9 +93,9 @@ This folder is a lore store: notes, rules, decisions, tasks and the other record
 - `_meta.json` in a folder holds the folder's id; `_purged.json` lists records removed for good. Leave both to lore.
 - `org/` (when the store has one) holds the company's people, teams and rules, and `org/lore-org.yaml`, the company's settings.
 alice (.lore/stores/acme/notes)$ git log --format='%an <%ae>  %s'
-alice <alice@agency.example>  lore: write mem_162df51b7f78b785c97c26b41ea89666
-alice <alice@agency.example>  lore: write mch_05e99e22e9e86e96fe4daa7777994603
-alice <alice@agency.example>  lore: write act_54fe984c9b495744c0217776765a28f2 (+2 more)
+alice <alice@agency.example>  lore: memory add mem_54fe984c9b495744c0217776765a28f2
+alice <alice@agency.example>  lore: write mch_c0f3c11a5724b0cfd74b256190d9b5b8
+alice <alice@agency.example>  lore: task add: Renew the TLS certificate (3 rows)
 alice <alice@agency.example>  lore: store init
 
 ### the home folder
@@ -138,15 +139,15 @@ lore's home: ~/.lore
   cache/repo
       one cache per code repo checkout, of the rows in its .lore/data: repo/<repo folder name>-<short hash of the repo path>.db (kept here so a command never creates a file in the repo)
   cache/repo/website-<hash>.db
-      a code repo's cache
-  cache/repos
-      one record per repo of the cache files it uses: repos/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)
-  cache/repos/6d0042600cc73cca9cdb9f21bd9da5bd391c2f006142fdaa6b35b1750d1c72e5.json
-      a repo's cache use record
+      a code repo's cache; used by ~/work/website
   cache/stores
       one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each)
   cache/stores/sto_7a670ae8548ed05bf57ad29ad0759504/main/root.db
       a store folder's cache; store notes; used by ~/work/website
+  cache/uses
+      one record per repo of the cache files it uses: uses/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)
+  cache/uses/6d0042600cc73cca9cdb9f21bd9da5bd391c2f006142fdaa6b35b1750d1c72e5.json
+      a repo's cache use record
   machine.json
       this machine's id, kept so it stays the same between runs
   state
@@ -257,19 +258,19 @@ alice (work/website)$ lore row markdown tsk_2ad3618e878ebbf527d34d446ef4f891
 # An empty value (key:) clears an optional field. id, table, _hlc, created_* and updated_* are lore's own and cannot change.
 id: tsk_2ad3618e878ebbf527d34d446ef4f891
 table: tasks
-_hlc: 2026-11-02T10:00:10.000Z/0002/act_54fe984c9b495744c0217776765a28f2
+_hlc: 2026-11-02T10:00:10.000Z/0002/act_05e99e22e9e86e96fe4daa7777994603
 created_at: "2026-11-02T10:00:10Z"
-created_by: act_54fe984c9b495744c0217776765a28f2
+created_by: act_05e99e22e9e86e96fe4daa7777994603
 updated_at: "2026-11-02T10:00:10Z"
-updated_by: act_54fe984c9b495744c0217776765a28f2
+updated_by: act_05e99e22e9e86e96fe4daa7777994603
 project_id: prj_76bd560aff0771fab8457dbfa9823f10
 title: Renew the TLS certificate
 status: todo
 priority: medium
 commitment: accepted
-tasklist_id: tlt_c0f3c11a5724b0cfd74b256190d9b5b8
-created_by_actor_id: act_54fe984c9b495744c0217776765a28f2
-watchers: [act_54fe984c9b495744c0217776765a28f2]
+tasklist_id: tlt_162df51b7f78b785c97c26b41ea89666
+created_by_actor_id: act_05e99e22e9e86e96fe4daa7777994603
+watchers: [act_05e99e22e9e86e96fe4daa7777994603]
 # Not set (give one a value to set it):
 repo_id:
 deferred_until:
@@ -322,39 +323,37 @@ tsk_2ad3618e878ebbf527d34d446ef4f891
   commit:   accepted
 
 Ask the hosting provider for the new chain first.
-created 2026-11-02T10:00:10Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:01:25Z by act_54fe984c9b495744c0217776765a28f2
+created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:01:25Z by alice
 
 ### edit a row file by hand
-alice (.lore/stores/acme/notes)$ sed -i 's/reset every Monday/reset every Sunday night/' _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json && git status --short
- M _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+alice (.lore/stores/acme/notes)$ sed -i 's/reset every Monday/reset every Sunday night/' _store/memories/mem_54fe984c9b495744c0217776765a28f2.json && git status --short
+ M _store/memories/mem_54fe984c9b495744c0217776765a28f2.json
 alice (work/website)$ lore memory list --store notes
 lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-lore: picked up 1 row edited by hand in store notes: committed cf563f3 "hand edit: memories mem_162df51b7f78b785c97c26b41ea89666" in ~/.lore/stores/acme/notes
-  edited memories mem_162df51b7f78b785c97c26b41ea89666 (body): ~/.lore/stores/acme/notes/_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
-mem_162df51b7f78b785c97c26b41ea89666  The staging database is reset every Sunday night.  [notes]
+lore: picked up 1 row edited by hand in store notes: committed cf563f3 "hand edit: memories mem_54fe984c9b495744c0217776765a28f2" in ~/.lore/stores/acme/notes
+  edited memories mem_54fe984c9b495744c0217776765a28f2 (body): ~/.lore/stores/acme/notes/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json
+mem_54fe984c9b495744c0217776765a28f2 [retrieved] The staging database is reset every Sunday night. [notes]
 alice (.lore/stores/acme/notes)$ git log -1 --format='%an <%ae>  %s'; git status --short
-alice <alice@agency.example>  hand edit: memories mem_162df51b7f78b785c97c26b41ea89666
+alice <alice@agency.example>  hand edit: memories mem_54fe984c9b495744c0217776765a28f2
 
 ### a refused hand edit
 alice (.lore/stores/acme/notes)$ sed -i 's/"status": "todo"/"status": "finished"/' _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
 alice (work/website)$ lore task list --store notes
 lore: hand edit refused: ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json:28: tasks: field status: want one of todo, in_progress, done, cancelled, blocked
   it is not committed or pushed until the file is fixed (or put back: git -C ~/.lore/stores/acme/notes checkout -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json); the other edits went ahead
-lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
 ○ tsk_2ad3618e878ebbf527d34d446ef4f891 Renew the TLS certificate [high]  [notes]
 alice (.lore/stores/acme/notes)$ git checkout -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git status --short
 
 ### delete a row file by hand
-alice (.lore/stores/acme/notes)$ git rm -q _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json && git status --short
-D  _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+alice (.lore/stores/acme/notes)$ git rm -q _store/memories/mem_54fe984c9b495744c0217776765a28f2.json && git status --short
+D  _store/memories/mem_54fe984c9b495744c0217776765a28f2.json
 alice (work/website)$ lore memory list --store notes
-lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_162df51b7f78b785c97c26b41ea89666" in ~/.lore/stores/acme/notes
-  deleted memories mem_162df51b7f78b785c97c26b41ea89666 (moved to the trash; lore trash restore mem_162df51b7f78b785c97c26b41ea89666 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_54fe984c9b495744c0217776765a28f2" in ~/.lore/stores/acme/notes
+  deleted memories mem_54fe984c9b495744c0217776765a28f2 (moved to the trash; lore trash restore mem_54fe984c9b495744c0217776765a28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json
 (no memories)
 alice (work/website)$ lore trash list
-lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-mem_162df51b7f78b785c97c26b41ea89666  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by act_54fe984c9b495744c0217776765a28f2  bat_b4f4765e593d51fd1352985e8af3a5b0
+mem_54fe984c9b495744c0217776765a28f2  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by alice  bat_b4f4765e593d51fd1352985e8af3a5b0
 1 row in the trash
 
 ### plain git in the store
@@ -365,7 +364,7 @@ alice@agency.example
 alice (.lore/stores/acme/notes)$ sed -i 's/Renew the TLS certificate/Renew the TLS certificate (key AKIA''IOSFODNN7EXAMPLE)/' _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git add _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git commit -qm 'note the key'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit carries a secret:
   _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json:30 (field title) secret: rule aws_access_key match sha256:1a5d44a2dca1
-  hint: store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <hash> --reason "<why>" (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again
+  hint: store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <the sha256:… match shown> --reason "<why>" (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again
 (exit 1)
 alice (.lore/stores/acme/notes)$ git reset -q -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git checkout -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git status --short
 
@@ -394,18 +393,22 @@ alice (work/website)$ lore store use --default notes --yes
 alice (work/website)$ lore fix --dry-run
 lore fix: ~/work/website
   --     migrate (~/work/website/.lore/data): current
+  --     folder scopes (~/work/website): current
   --     render (~/work/website/.lore/LORE.md): current
   --     agent hooks (~/work/website): current
   --     old clones (~/.lore/clones): current
+  --     0.1.17 files (~/work/website/.lore): current
   --     doctor fixes: current
 Nothing changed (dry run).
 Status: HEALTHY
 alice (work/website)$ lore fix
 lore fix: ~/work/website
   --     migrate (~/work/website/.lore/data): current
+  --     folder scopes (~/work/website): current
   --     render (~/work/website/.lore/LORE.md): current
   --     agent hooks (~/work/website): current
   --     old clones (~/.lore/clones): current
+  --     0.1.17 files (~/work/website/.lore): current
   --     doctor fixes: current
 Everything is current.
 Status: HEALTHY

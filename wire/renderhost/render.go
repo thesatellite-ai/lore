@@ -37,6 +37,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/store"
@@ -249,9 +250,9 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 			return wire.WriteError("write", resolvedOut, err, renderWriteHint)
 		}
 		if !f.quiet {
-			fmt.Fprintf(f.out(), "%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes, %d topics)\n",
+			fmt.Fprintf(f.out(), "%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes, %s)\n",
 				h.decor.check(), resolvedOut, len(body), report.Budget, report.Profile,
-				report.MustFull, report.MustLine, report.Critical, report.HighLine, report.Topics)
+				report.MustFull, report.MustLine, report.Critical, report.HighLine, plural.Count(report.Topics, "topic"))
 		}
 	}
 	if report.Over {
@@ -286,6 +287,14 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	// 6.2.5: folder files and each target's folder file; stale ones go.
 	if err := h.writeDirs(f.out(), root, dirs, dirBodies, pick.targets, len(body), f.quiet); err != nil {
 		return errs.Wrap(errs.Internal, "folder files", err)
+	}
+	// B3-5: a folder scope whose folder moved or went renders into the root
+	// file; say so once per scope instead of letting its rules quietly
+	// leave the folder.
+	if !f.quiet {
+		for _, l := range h.ScopeGoneLines(ctx, root) {
+			fmt.Fprintln(os.Stderr, h.decor.warn("WARN: "+l))
+		}
 	}
 
 	if err := h.persistRenderHistory(ctx, projectID, repoID, resolvedOut, body, renderResult{

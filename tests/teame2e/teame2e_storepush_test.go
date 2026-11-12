@@ -632,6 +632,18 @@ func TestE51_StorePushLeftoverMergeLosesNothing(t *testing.T) {
 	if r := p.w.TryGit(work, "rev-parse", "-q", "--verify", "MERGE_HEAD"); r.Code != 0 {
 		t.Fatalf("precondition: a merge in progress in %s", work)
 	}
+	// Without lore's mark the merge is the person's own (the clone is set
+	// up for plain git): sync leaves it alone and says how to finish it.
+	p.ca.Lore("sync").Refused(t, "in the middle of a git merge", "git merge --abort")
+	if r := p.w.TryGit(work, "rev-parse", "-q", "--verify", "MERGE_HEAD"); r.Code != 0 {
+		t.Fatal("sync aborted a merge the person had in progress")
+	}
+	// lore marks the merges it starts (<git dir>/lore-merging); a run killed
+	// mid-merge leaves that mark beside MERGE_HEAD.
+	gitDir := p.w.Git(work, "rev-parse", "--absolute-git-dir")
+	if err := os.WriteFile(filepath.Join(gitDir, "lore-merging"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	p.ca.MustLore("sync").Says(t, "store me: sent")
 	if r := p.w.TryGit(work, "rev-parse", "-q", "--verify", "MERGE_HEAD"); r.Code == 0 {
 		t.Fatal("the leftover merge must be gone after sync")

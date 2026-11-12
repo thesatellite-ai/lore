@@ -241,9 +241,20 @@ func ccSharedFlag(t *testing.T, n cliNode, flag string, r cliProc) {
 	help := ccFlagHelp(n, flag)
 	isAdd := n.Path[len(n.Path)-1] == "add"
 	switch {
+	case help == "" && flag == "--db" && strings.HasPrefix(r.Stderr, "ERROR: [E_UNSUPPORTED] --db"):
+		// The v0.1.17 --db is hidden from --help (a newcomer must not read a
+		// flag that only refuses) but still parses, so an old script gets
+		// the typed refusal instead of an unknown-flag usage error.
+		ccTypedRefusal(t, r, true)
+	case help == "" && (flag == "--project" || flag == "--repo") && r.Code == 0:
+		// A hidden v0.1.17 --project / --repo is accepted and changes
+		// nothing: the read succeeds with no error line.
+		if strings.Contains(r.Stderr, "ERROR:") {
+			t.Errorf("%s hidden v0.1.17 %s: accepted, so no error line: %s", n.name(), flag, r)
+		}
 	case help == "":
 		if r.Code != cliExitUsage || !strings.Contains(r.Stderr, "unknown flag: "+flag) {
-			t.Errorf("%s does not list %s, so it must refuse it as unknown: %s", n.name(), flag, r)
+			t.Errorf("%s does not list %s (nor keeps it hidden for v0.1.17 scripts), so it must refuse it as unknown: %s", n.name(), flag, r)
 		}
 	case flag == "--json":
 		cliCheckJSON(t, r)

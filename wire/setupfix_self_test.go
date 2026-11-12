@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/adapters/execfile"
 )
 
 // TestFixRunsTheServingBinary: a `lore …` fix (the page's Run it, Set up
@@ -20,7 +22,7 @@ func TestFixRunsTheServingBinary(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, body string) string {
 		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o700); err != nil {
+		if err := execfile.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o700); err != nil {
 			t.Fatal(err)
 		}
 		return p
@@ -30,7 +32,7 @@ func TestFixRunsTheServingBinary(t *testing.T) {
 	if err := os.Mkdir(pathDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(pathDir, FixProgramLore), []byte("#!/bin/sh\necho path-lore\n"), 0o700); err != nil {
+	if err := execfile.WriteFile(filepath.Join(pathDir, FixProgramLore), []byte("#!/bin/sh\necho path-lore\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", pathDir+string(os.PathListSeparator)+os.Getenv("PATH"))

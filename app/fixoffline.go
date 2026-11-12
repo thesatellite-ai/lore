@@ -4,6 +4,8 @@ import (
 	"os"
 	"slices"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/machine"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 )
@@ -21,4 +23,6 @@ func offlineFixDryRun(args []string) {
 		return
 	}
 	_ = os.Setenv(gitenv.EnvOffline, gitenv.On) // one command per process: the CLI entry point
+	gitbackend.ForbidClones()                   // B4-14: no store clone either
+	machine.SkipCacheWrites()                   // … and no machine.json
 }

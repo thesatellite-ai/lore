@@ -301,7 +301,7 @@ func (a *App) unreachableFinding(ctx context.Context, t accessTarget) (DoctorFin
 		return DoctorFinding{}, false
 	}
 	return DoctorFinding{Check: DoctorCheckStoreAccess, Level: DoctorWarning,
-		Message: "store " + t.Label + " (" + t.URL + ", from " + t.Where + ") cannot be reached from this machine: " + reasonOf(perr),
+		Message: "store " + t.Label + " (from " + t.Where + "): " + reasonOf(perr), // reasonOf names the masked url and git's telling line
 		Fix:     accessFixText(t.URL, accessRules(a.opts.Home), sshAliasesFor(ctx, t.URL))}, true
 }
 

@@ -61,6 +61,7 @@ lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)
 ✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — set up the staging deploy [medium]
   filed: defaults.client_repos.task = agency (personal config) → the linked project client_south/
+  created tasklist tlt_76bd560aff0771fab8457dbfa9823f10 "default" for tasks added without --tasklist
 tomas (work/clients/south-app)$ lore task list
 ○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 set up the staging deploy [medium]  [agency/client_south]
 tomas (work/clients/south-app)$ git status --short --ignored && ls -A
@@ -89,9 +90,9 @@ tomas (work/clients/east-api)$ git status --short
 
 ### remove a folder made by mistake
 tomas (work/clients)$ lore store folder add team client_old
-✓ created folder client_old in agency (prj_76bd560aff0771fab8457dbfa9823f10; shown only in repos that attach it)
+✓ created folder client_old in agency (prj_d4314eba822f1bf5908b2b8ded5f313a; shown only in repos that attach it)
 tomas (work/clients)$ lore store folder remove team client_old --yes
-✓ removed folder client_old (prj_76bd560aff0771fab8457dbfa9823f10) from agency
+✓ removed folder client_old (prj_d4314eba822f1bf5908b2b8ded5f313a) from agency
 tomas (work/clients)$ lore store folder remove team client_north --yes
 ERROR: [E_REFUSED] store folder remove: folder client_north of agency holds 1 repo link; nothing was removed
   hint: unlink each repo with `lore org unlink <org> --project client_north` run in that repo; or remove it with everything in it: `lore store folder remove agency client_north --purge` (the rows go to the store's trash first)

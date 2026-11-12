@@ -161,23 +161,25 @@ func TestExternalRowLines(t *testing.T) {
 		o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
 	})
 	const lab = "[northwind/acme]"
-	long := strings.Repeat("w ", 60) // over v0.1.17's 80-byte repo cut: external rows are not cut
+	long := strings.Repeat("w ", 60) // over the 80-byte list cut
 	ext := h.ID(h.MustYes("memory.add", `{"body":"multi\n  line\tbody `+long+`","to":"northwind"}`))
 	repoAdd := h.MustYes("memory.add", `{"body":"repo memory"}`)
 	repo := h.ID(repoAdd)
 	if got, want := opstest.Text(repoAdd), "✓ "+repo+"\n  scope: [master]\n"; got != want {
 		t.Errorf("repo memory add %q, want %q", got, want)
 	}
+	// B3-7: a row of another store has the repo rows' layout, folded onto
+	// one line and cut like them, with its store label last
 	wantList := repo + " [retrieved] repo memory\n" +
-		ext + "  multi line body " + strings.TrimSpace(long) + "  " + lab + "\n"
+		ext + " [retrieved] " + ("multi line body " + strings.TrimSpace(long))[:77] + "... " + lab + "\n"
 	if got := opstest.Text(h.Must("memory.list", `{}`)); got != wantList {
 		t.Errorf("memory list\n got %q\nwant %q", got, wantList)
 	}
 	rext := h.ID(h.MustYes("rule.add", `{"body":"store rule","to":"northwind"}`))
 	rrepo := h.ID(h.MustYes("rule.add", `{"body":"repo rule"}`))
 	rl := opstest.Text(h.Must("rule.list", `{}`))
-	if !strings.HasSuffix(rl, rext+"  store rule  "+lab+"\n") || !strings.HasPrefix(rl, rrepo+" [") {
-		t.Errorf("rule list: repo rows first, then %q:\n%s", rext+"  store rule  "+lab, rl)
+	if !strings.HasSuffix(rl, rext+" [must/always] store rule "+lab+"\n") || !strings.HasPrefix(rl, rrepo+" [") {
+		t.Errorf("rule list: repo rows first, then %q:\n%s", rext+" [must/always] store rule "+lab, rl)
 	}
 	c := opstest.Text(h.MustYes("comment.add", `{"on_table":"memories","on_id":"`+ext+`","body":"hi","to":"northwind"}`))
 	if !strings.HasSuffix(c, " on memories/"+ext+" "+lab+"\n") {

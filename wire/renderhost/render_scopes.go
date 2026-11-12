@@ -29,6 +29,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/dirscope"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -190,6 +191,26 @@ func (h *Host) planDirs(ctx context.Context, root string, rules []pinnedRule, ho
 		rootRules = append(rootRules, g.Rules...)
 		rootHot = append(rootHot, g.Hotfixes...)
 	}
+	// a rule or hotfix printed outside its own folder's file names its
+	// folder (pinnedRule.Dir, bug hunt B3-18)
+	for _, g := range groups {
+		for i, r := range g.Rules {
+			if p := paths[r.ScopeID]; p != g.Path {
+				g.Rules[i].Dir = p
+			}
+		}
+		for i, x := range g.Hotfixes {
+			if p := paths[x.ScopeID]; p != g.Path {
+				g.Hotfixes[i].Dir = p
+			}
+		}
+	}
+	for i, r := range rootRules {
+		rootRules[i].Dir = paths[r.ScopeID]
+	}
+	for i, x := range rootHot {
+		rootHot[i].Dir = paths[x.ScopeID]
+	}
 	for _, g := range groups {
 		sort.Slice(g.Rules, func(i, j int) bool { return g.Rules[i].ID < g.Rules[j].ID })
 		sort.Slice(g.Hotfixes, func(i, j int) bool { return g.Hotfixes[i].ID < g.Hotfixes[j].ID })
@@ -247,7 +268,7 @@ func dirIndexText(groups []dirGroup) string {
 	var b strings.Builder
 	b.WriteString("## Folder files\n\n")
 	for _, g := range groups {
-		fmt.Fprintf(&b, "- %s: %d must rules, %d hotfixes; loads when you open a file there, or `lore context --for-file %s/`\n", g.Path, len(g.Rules), len(g.Hotfixes), g.Path)
+		fmt.Fprintf(&b, "- %s: %s, %s; loads when you open a file there, or `lore context --for-file %s/`\n", g.Path, plural.Of(len(g.Rules), "must rule", "must rules"), plural.Of(len(g.Hotfixes), "hotfix", "hotfixes"), g.Path)
 	}
 	b.WriteString("\n")
 	return b.String()

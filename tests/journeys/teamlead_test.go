@@ -260,7 +260,7 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 			t.Errorf("sync reports the conflict %d times, want once under %s:\n%s", n, holder, r)
 		}
 		r.Says(t, "store "+holder+": sent 0, received 0, merged 0, refused 1", "store "+tlOrg+"/org: "+heldLine, "store "+tlOrg+": "+heldLine)
-		st := tt.lore(loser, "sync", "status").OK(t).Says(t, ruleID, "edit it here so both agree")
+		st := tt.lore(loser, "sync", "status").OK(t).Says(t, ruleID, "edit the row here so both agree")
 		st.Never(t, "push rule", "store "+tlOrg+"/org: E_STALE", "store "+tlOrg+": E_STALE")
 		st.Says(t, "refused pushes:   1", "store "+holder+": E_STALE", "held pushes:      2",
 			"store "+tlOrg+"/org: "+heldLine, "store "+tlOrg+": "+heldLine)

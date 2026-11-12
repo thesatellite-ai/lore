@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -97,5 +99,21 @@ func TestPickUpRunsTheWriteChecks(t *testing.T) {
 	meta.Meta = map[ids.ID[ids.MetaKey]]value.JSON{key: v}
 	if _, err := f.eng.PickUp(ctx, store.SourceRepo, base, meta); !errs.Has(err, errs.InvalidInput) {
 		t.Errorf("meta by hand: %v", err)
+	}
+}
+
+// TestPickUpDeleteHintNamesTheRowsNoun (bug hunt B2-3 class): a hand
+// "deleted" flag on a memory is refused with the memory's own delete
+// command, never another noun's.
+func TestPickUpDeleteHintNamesTheRowsNoun(t *testing.T) {
+	t.Parallel()
+	f := setup(t)
+	base := f.memory(t, "kept")
+	hand := handOf(base, nil)
+	hand.Deleted = true
+	_, err := f.eng.PickUp(context.Background(), store.SourceRepo, base, hand)
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Hint, "lore memory delete "+base.ID.String()) || strings.Contains(e.Hint, "lore task") {
+		t.Fatalf("hand delete of a memory: %v (hint %q)", err, e.Hint)
 	}
 }

@@ -115,7 +115,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_54fe984c9b495744c021
 lore: wrote ~/work/website/.lore/data/memories/mem_54fe984c9b495744c0217776765a28f2.json
 ✓ mem_54fe984c9b495744c0217776765a28f2 moved to store agency (same id; the old copy is tombstoned)
 alice (work/website)$ lore memory list
-mem_54fe984c9b495744c0217776765a28f2  the client replies faster on WhatsApp than email  [agency/client]
+mem_54fe984c9b495744c0217776765a28f2 [retrieved] the client replies faster on WhatsApp than email [agency/client]
 
 ### store open and forget
 alice$ lore store open git@github.com:agency/notes
@@ -130,4 +130,4 @@ bob$ lore store forget git@github.com:agency/notes
 
 ### cache prune
 alice$ lore cache prune --dry-run
-nothing to prune: every cache file belongs to a store a repo on this machine attaches
+nothing to prune: every cache file belongs to a repo on this machine or a store one attaches

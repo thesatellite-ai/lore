@@ -31,9 +31,11 @@ import (
 	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -271,6 +273,9 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 	if len(changes) == 0 {
 		return nil
 	}
+	if o := store.CommitOp(ctx); batch.Op == "" && len(o) <= maxOpLen && opPattern.MatchString(o) {
+		batch.Op = o // the running operation names the commit (B2-4)
+	}
 	if batch.Op == "" {
 		batch.Op = DefaultOp
 	}
@@ -281,6 +286,9 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 		return errs.New(errs.InvalidInput, "git: the batch author has a forbidden character")
 	}
 	if b.mode == modeClone {
+		if err := b.refusePersonGitOp(ctx, b.work); err != nil {
+			return err // B2-9: never write over a person's merge or rebase
+		}
 		// a write to the store clone is the first point that may set it up
 		// for plain git (owner bug 6): said before the commit is made
 		b.setUpHandGitOnce(ctx)
@@ -394,6 +402,11 @@ func (b *Backend) writePurge(ctx context.Context, changes []store.Change, purged
 	if b.readOnly {
 		return store.ErrReadOnly
 	}
+	if b.mode == modeClone {
+		if err := b.refusePersonGitOp(ctx, b.work); err != nil {
+			return err // B2-9
+		}
+	}
 	lock, err := b.root.Lock(ctx)
 	if err != nil {
 		return err
@@ -458,14 +471,145 @@ func subjectOf(ctx context.Context, op string, changes []store.Change) string {
 	return "lore: " + t + " (" + n + ")"
 }
 
-// subject is the commit subject of a batch: `lore: <op> <first id>`, plus
-// how many more rows it holds.
+// subject is the commit subject of a batch (B2-4, B3-23): `lore: <op
+// words>: <title>` for a row with a short title (a task, a plan: `lore:
+// task add: Ship the beta (3 rows)`), else `lore: <op words> <id>`. The
+// row is the first whose table is the operation's noun, else the first
+// that is not an actor copy. Free text (a memory's or rule's body, a
+// comment) never goes into a subject: a subject is the most visible part
+// of git history (every `git log --oneline`, the forge's commit list) and
+// outlives a delete or purge. A delete, trash or purge subject names only
+// the operation and the id, and a title the secret scanner flags falls
+// back to the id too. A plain write or purge keeps `lore: <op> <id>`.
 func subject(op string, changes []store.Change) string {
-	s := "lore: " + op + " " + changes[0].Row.ID.String()
+	c := primaryChange(op, changes)
+	words := strings.ReplaceAll(op, ".", " ")
+	s := "lore: " + words + " " + c.Row.ID.String()
+	if op != DefaultOp && op != purgeOp {
+		if l := rowTitle(c.Row); l != "" && !removingOp(op) && !looksSecret(l) {
+			s = "lore: " + words + ": " + l
+		}
+		if len(changes) > 1 {
+			return s + " (" + strconv.Itoa(len(changes)) + " rows)"
+		}
+		return s
+	}
 	if n := len(changes) - 1; n > 0 {
 		s += " (+" + strconv.Itoa(n) + " more)"
 	}
 	return s
+}
+
+// removingVerbs are the operation words that take a row away; their
+// subjects carry no text at all (B3-23), only the operation and the id.
+var removingVerbs = map[string]bool{"delete": true, "purge": true, "trash": true, "remove": true, "forget": true, "archive": true, "merge": true}
+
+// removingOp reports whether op takes rows away (any dotted segment is a
+// removing verb: memory.delete, sync.purge, trash.restore is not).
+func removingOp(op string) bool {
+	for _, seg := range strings.Split(op, ".") {
+		if removingVerbs[seg] {
+			return true
+		}
+	}
+	return false
+}
+
+// actorsTable is the table of the actor copy a write may carry.
+const actorsTable = "actors"
+
+// primaryChange is the change a batch's subject names (see subject).
+func primaryChange(op string, changes []store.Change) store.Change {
+	noun, _, _ := strings.Cut(op, ".")
+	for _, c := range changes {
+		if tableOfNoun(string(c.Row.Table), noun) {
+			return c
+		}
+	}
+	for _, c := range changes {
+		if string(c.Row.Table) != actorsTable {
+			return c
+		}
+	}
+	return changes[0]
+}
+
+// tableOfNoun reports whether table is the plural of noun (task → tasks,
+// memory → memories, policy → policies).
+func tableOfNoun(table, noun string) bool {
+	if noun == "" {
+		return false
+	}
+	if table == noun || table == noun+"s" || table == noun+"es" {
+		return true
+	}
+	stem, ok := strings.CutSuffix(noun, "y")
+	return ok && table == stem+"ies"
+}
+
+// titleFields are the short title fields a subject may show, per table
+// ("" = any table): a title, and a task list's name. Never a body,
+// content, description or text field (B3-23).
+var titleFields = []struct{ table, field string }{{"", "title"}, {"task_lists", "name"}}
+
+// maxLabelLen bounds a title in a subject, in runes.
+const maxLabelLen = 60
+
+// rowTitle is the short title of a row: its title field's first line,
+// shortened; "" when its kind has none, the row is deleted, or it cannot
+// be read.
+func rowTitle(r store.Row) string {
+	if r.Deleted || len(r.Doc) == 0 {
+		return ""
+	}
+	d, err := r.Decode()
+	if err != nil {
+		return ""
+	}
+	for _, tf := range titleFields {
+		if tf.table != "" && tf.table != string(r.Table) {
+			continue
+		}
+		v, ok := d.Fields[tf.field]
+		if !ok || v == nil || v.Kind() != value.KindText {
+			continue
+		}
+		line, _, _ := strings.Cut(strings.TrimSpace(v.String()), "\n")
+		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+		if line == "" {
+			continue
+		}
+		if rs := []rune(line); len(rs) > maxLabelLen {
+			line = string(rs[:maxLabelLen-1]) + "…"
+		}
+		return line
+	}
+	return ""
+}
+
+// subjectScanner is lore's secret scanner (the gitleaks default rules),
+// built on the first titled subject; nil when it cannot be built.
+var subjectScanner = sync.OnceValue(func() *gitleaks.Scanner {
+	rules, err := gitleaks.Defaults()
+	if err != nil {
+		return nil
+	}
+	sc, err := gitleaks.New(rules)
+	if err != nil {
+		return nil
+	}
+	return sc
+})
+
+// looksSecret reports whether the secret scanner flags text; without a
+// scanner every title counts as flagged, so no subject carries text the
+// scan could not check.
+func looksSecret(text string) bool {
+	sc := subjectScanner()
+	if sc == nil {
+		return true
+	}
+	return len(sc.Scan("title", text)) > 0
 }
 
 var _ store.Holder = (*Backend)(nil)

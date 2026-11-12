@@ -1,90 +1,85 @@
-// context_scope_rename.go — the folder-rename hint of `lore sync`
-// (CONTEXT_BUDGET 6.2: "lore sync sees a folder rename in git and prints
-// the lore scope move command; it does not run it on its own"; D12: a
-// scope's id is permanent, its path a label).
+// context_scope_rename.go — the folder scope notices (CONTEXT_BUDGET 6.2:
+// "lore sync sees a folder rename in git and prints the lore scope move
+// command; it does not run it on its own"; D12: a scope's id is permanent,
+// its path a label; B3-5: a moved folder's rules must never vanish
+// silently). The detection is wire.GoneScopes; this file turns it into the
+// lines of lore sync (rename hints only), lore doctor and lore render
+// (every gone scope) and the post-commit hook (scopes the commit removed).
 //
-//	repo scopes rows ─▶ path gone from the checkout?
-//	  ─▶ git log -1 -- <path>/, then git show -M --diff-filter=R <that commit>
-//	  ─▶ new folder = the renamed file's path minus its path inside the old folder
-//	  ─▶ print "lore scope move <old> <new>" (never run)
+//	repo scopes rows ─▶ path gone from the checkout? (wire.GoneScopes)
+//	  ─▶ git saw the files renamed into one existing folder
+//	  ─▶ "lore scope move <old> <new>" (lore fix runs it; nothing else does)
 
 package renderhost
 
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io"
 	"strings"
 
-	"github.com/thesatellite-ai/lore/schema"
-	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
-// renameStatusPrefix starts a rename line of `git log --name-status`.
-const renameStatusPrefix = "R"
-
-// scopeRenameHints returns one hint per repo folder scope whose folder is
-// gone and whose files git saw renamed into one existing folder. Read
-// errors and a checkout without git give no hint (a hint is best effort;
-// lint --context still reports the missing folder).
-func (h *Host) scopeRenameHints(ctx context.Context, root string) []string {
+// goneScopes is wire.GoneScopes for the checkout at root; nil without an
+// app or on a read error (a notice is best effort; lint --context still
+// reports the missing folder).
+func (h *Host) goneScopes(ctx context.Context, root string) []wire.GoneScope {
 	if h.app == nil {
 		return nil
 	}
-	rows, err := h.app.List(ctx, store.SourceRepo, schema.TableScopes)
+	gone, err := h.app.GoneScopes(ctx, root)
 	if err != nil {
 		return nil
 	}
+	return gone
+}
+
+// scopeRenameHints returns one hint per repo folder scope whose folder is
+// gone and whose files git saw renamed into one existing folder (lore
+// sync's report).
+func (h *Host) scopeRenameHints(ctx context.Context, root string) []string {
 	var out []string
-	for _, r := range rows {
-		if r.Deleted {
-			continue
-		}
-		old := strings.Trim(renderField(r, schema.FieldScopePath), "/")
-		if old == "" || isDir(filepath.Join(root, filepath.FromSlash(old))) {
-			continue
-		}
-		if nd := renamedTo(ctx, root, old); nd != "" {
-			out = append(out, fmt.Sprintf("folder %s was renamed to %s in git; keep its rows' scope with: lore scope move %s %s", old, nd, old, nd))
+	for _, g := range h.goneScopes(ctx, root) {
+		if g.RenamedTo != "" {
+			out = append(out, fmt.Sprintf("folder %s was renamed to %s in git; keep its rows' scope with: lore scope move %s %s", g.Path, g.RenamedTo, g.Path, g.RenamedTo))
 		}
 	}
 	return out
 }
 
+// ScopeGoneLines is one line per repo folder scope whose folder is not in
+// the checkout at root (renamed in git or not): lore doctor's context
+// warnings and lore render's notices.
+func (h *Host) ScopeGoneLines(ctx context.Context, root string) []string {
+	var out []string
+	for _, g := range h.goneScopes(ctx, root) {
+		out = append(out, g.Line())
+	}
+	return out
+}
+
+// CommitScopeNotice is the post-commit hook's check (B3-5): when the HEAD
+// commit at root deleted or renamed away files under a folder scope's
+// folder and that folder is gone now, one line per such scope goes to w.
+// A commit that removed nothing costs one git call and opens no store.
+func (h *Host) CommitScopeNotice(ctx context.Context, root string, w io.Writer) {
+	removed := wire.HeadRemovedPaths(ctx, root)
+	if len(removed) == 0 {
+		return
+	}
+	for _, g := range h.goneScopes(ctx, root) {
+		for _, p := range removed {
+			if strings.HasPrefix(p, g.Path+"/") {
+				_, _ = fmt.Fprintln(w, "lore: "+g.Line()) // a hook notice: nothing to do when stderr is gone
+				break
+			}
+		}
+	}
+}
+
 // renamedTo is the folder the files of old moved to in the latest commit
 // that renamed them, "" when none is found or that folder is gone too.
 func renamedTo(ctx context.Context, root, old string) string {
-	// A path-limited log cannot pair a rename (the new side is outside the
-	// pathspec), so find the last commit that touched old/, then read that
-	// whole commit with rename detection.
-	sha, err := gitOutput(ctx, root, "log", "-1", "--format=%H", "--", old+"/")
-	if err != nil || sha == "" {
-		return ""
-	}
-	log, err := gitOutput(ctx, root, "show", "--format=", "--name-status", "-M", "--diff-filter=R", sha)
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(log, "\n") {
-		parts := strings.Split(line, "\t")
-		if len(parts) != 3 || !strings.HasPrefix(parts[0], renameStatusPrefix) {
-			continue
-		}
-		rel, ok := strings.CutPrefix(parts[1], old+"/")
-		if !ok {
-			continue
-		}
-		nd, ok := strings.CutSuffix(parts[2], "/"+rel)
-		if ok && nd != old && isDir(filepath.Join(root, filepath.FromSlash(nd))) {
-			return nd
-		}
-	}
-	return ""
-}
-
-// isDir reports whether path is an existing folder.
-func isDir(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.IsDir()
+	return wire.FolderRenamedTo(ctx, root, old)
 }

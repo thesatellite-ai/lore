@@ -4,7 +4,10 @@
 // (an invalid byte) before the "...". Every ops excerpt goes through Cut.
 package textcut
 
-import "unicode/utf8"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // Ellipsis is what a cut string ends with (v0.1.17's three dots).
 const Ellipsis = "..."
@@ -23,3 +26,8 @@ func Cut(s string, maxLen, keep int) string {
 	}
 	return s[:keep] + Ellipsis
 }
+
+// OneLine folds s onto one line: every whitespace run, newlines and tabs
+// included, becomes one space, so a multi-line body never breaks a list
+// row in two.
+func OneLine(s string) string { return strings.Join(strings.Fields(s), " ") }

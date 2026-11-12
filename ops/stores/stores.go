@@ -118,8 +118,8 @@ type Entry struct {
 // InitIn is the input of store.init.
 type InitIn struct {
 	Name       string `json:"name" arg:"0" desc:"the store's name in this repo (me = your personal store)"`
-	URL        string `json:"url,omitempty" arg:"1" desc:"git url or file:// path (optional for me: default file://~/.lore/stores/_me)"`
-	Visibility string `json:"visibility,omitempty" flag:"visibility" desc:"internal (default) or shareable (CFG4)"`
+	URL        string `json:"url,omitempty" arg:"1" desc:"git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)"`
+	Visibility string `json:"visibility,omitempty" flag:"visibility" desc:"internal (default) or shareable: whether its rows may reach client repos"`
 	// RepoOptional (callers only, never the CLI): run outside a repo too.
 	// The setup page's Start a team step makes the team store from wherever
 	// `lore setup` runs; the org entry in config.yaml is what points at it,
@@ -167,7 +167,7 @@ type ListOut struct {
 // VisibilityIn is the input of store.visibility.
 type VisibilityIn struct {
 	Name       string `json:"name" arg:"0" desc:"the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name)"`
-	Visibility string `json:"visibility" arg:"1" desc:"internal or shareable (CFG4)"`
+	Visibility string `json:"visibility" arg:"1" desc:"internal or shareable: whether its rows may reach client repos"`
 }
 
 // VisibilityOut is the output of store.visibility.
@@ -273,7 +273,7 @@ func Ops(m Manager) []op.Entry {
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
 			// CFG7: attaching in a client repo writes the url into a file
 			// the client reads, so it asks first (the composition root).
-			Confirm: op.ConfirmRule{MayAsk: true},
+			Confirm: op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
 			Examples: []op.Example{
 				{Title: "your personal store, a local folder", CLI: "lore store init me", Want: "sto_"},
 				{Title: "a team store on git", CLI: "lore store init agency git@github.com:agency/notes", Want: "sto_"},
@@ -299,7 +299,7 @@ func Ops(m Manager) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Attach an existing lore store to this repo (.lore/stores.yaml)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
-			Confirm: op.ConfirmRule{MayAsk: true}, // CFG7, as for init
+			Confirm: op.ConfirmRule{MayAsk: true, NoSecretFindings: true}, // CFG7, as for init
 			Examples: []op.Example{
 				{Title: "attach a store", CLI: "lore store add golang git@github.com:mira/lore-golang", Want: "attached store golang"},
 				{Title: "attach one folder, read-only", CLI: "lore store add tips git@github.com:agency/notes --folder tips --read-only", Want: "attached store tips"},
@@ -330,7 +330,7 @@ func Ops(m Manager) []op.Entry {
 			// CLI_REFERENCE 3.21: remove asks first (E_NEEDS_CONFIRM, then
 			// --yes), after the name is known to be attached: an unknown
 			// name is E_NOT_FOUND without a question (exact errors).
-			Confirm:  op.ConfirmRule{MayAsk: true},
+			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
 			Examples: []op.Example{{Title: "detach", CLI: "lore store remove golang --yes", Want: "detached store golang"}},
 		}, func(ctx context.Context, in RemoveIn) (RemoveOut, error) {
 			if in.Name == PersonalName {
@@ -443,7 +443,7 @@ func Ops(m Manager) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpVisibility, Summary: "Set whether a store's rows may reach client repos and committed files (internal or shareable)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: visibilityErrors,
-			Confirm:  op.ConfirmRule{MayAsk: true},
+			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
 			Examples: []op.Example{{Title: "make a store shareable", CLI: "lore store visibility docs_kit shareable --yes", Want: "docs_kit is shareable"}},
 		}, func(ctx context.Context, in VisibilityIn) (VisibilityOut, error) {
 			in.Name = strings.TrimSpace(in.Name)
@@ -706,7 +706,7 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	}
 	if len(problems) > 0 {
 		return out, errs.New(errs.Stale, "sync: "+strings.Join(problems, "; ")).
-			WithHint("both edits are kept; settle the row on one side (lore memory show <id> on each), then sync again")
+			WithHint("both edits are kept: `lore sync conflicts` shows both versions, `lore sync resolve <n> --take kept|other` settles one (or edit the row so both agree, then sync again)")
 	}
 	return out, nil
 }

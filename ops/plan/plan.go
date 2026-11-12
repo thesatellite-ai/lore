@@ -89,7 +89,7 @@ type AddIn struct {
 	// Body is required, by --body or as the first argument.
 	Body    string `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
 	Text    string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 }
 
@@ -167,9 +167,12 @@ type ListOut struct {
 	Data          []Record `json:"data"`
 	// Notes are the metadata filter's lines (METADATA 3.7, 3.13).
 	Notes []string `json:"notes,omitempty"`
+	// tasks is each listed row's live task count, by id (human only:
+	// the JSON keeps v0.1.17's record).
+	tasks map[string]int
 }
 
-// Text prints "PL  <id>" per plan; "(no plans)" when none.
+// Text prints one work.ListLine per plan ("PL  <id>  <title> [<status>]  (<n> tasks)"); "(no plans)" when none.
 func (o ListOut) Text() string { return o.rowsText() + work.NotesText(o.Notes) }
 
 // rowsText is the list lines.
@@ -179,7 +182,7 @@ func (o ListOut) rowsText() string {
 	}
 	var b strings.Builder
 	for _, r := range o.Data {
-		b.WriteString(badge + "  " + r.ID + "\n")
+		b.WriteString(work.ListLine(badge, r.ID, r.Title, r.Status, o.tasks[r.ID], r.Label))
 	}
 	return b.String()
 }
@@ -322,6 +325,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		}
 	}
 	out.Count = len(out.Data)
+	if out.tasks, err = work.TaskCounts(ctx, o.env, work.FieldPlan); err != nil {
+		return ListOut{}, err
+	}
 	return out, nil
 }
 

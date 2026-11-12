@@ -114,14 +114,29 @@ var ErrNoTarget = errors.New("mergewatch: default branch not fetched")
 // Check runs the checks in order and returns the first finding, or ok=false
 // ("done, not merged yet" / "merge unknown"). steps records every check.
 func (c Checker) Check(ctx context.Context, cand Candidate) (Finding, bool, []Step, error) {
-	var steps []Step
+	tip, err := c.tip(ctx)
+	if err != nil {
+		return Finding{}, false, nil, err
+	}
+	return c.checkAt(ctx, cand, tip, func(id string) (Finding, bool, string, error) { return c.byTrailer(ctx, id, tip) })
+}
+
+// tip resolves the target branch (ErrNoTarget when it was never fetched).
+func (c Checker) tip(ctx context.Context) (string, error) {
 	tip, ok, err := c.Repo.ResolveRef(ctx, c.Target)
 	if err != nil {
-		return Finding{}, false, nil, fmt.Errorf("mergewatch: resolve %s: %w", c.Target, err)
+		return "", fmt.Errorf("mergewatch: resolve %s: %w", c.Target, err)
 	}
 	if !ok {
-		return Finding{}, false, nil, ErrNoTarget
+		return "", ErrNoTarget
 	}
+	return tip, nil
+}
+
+// checkAt is Check against a resolved tip, with the trailer check given
+// (one git log per candidate for Check, one shared index for Sweep).
+func (c Checker) checkAt(ctx context.Context, cand Candidate, tip string, trailer func(id string) (Finding, bool, string, error)) (Finding, bool, []Step, error) {
+	var steps []Step
 	if cand.DoneCommit != "" {
 		f, found, why, aerr := c.byAncestry(ctx, cand.DoneCommit, tip)
 		if aerr != nil {
@@ -134,7 +149,7 @@ func (c Checker) Check(ctx context.Context, cand Candidate) (Finding, bool, []St
 	} else {
 		steps = append(steps, Step{Method: MethodAncestry, Result: "no done_commit recorded"})
 	}
-	f, ok, why, err := c.byTrailer(ctx, cand.TaskID, tip)
+	f, ok, why, err := trailer(cand.TaskID)
 	if err != nil {
 		return Finding{}, false, steps, err
 	}
@@ -258,6 +273,60 @@ func (c Checker) byTrailer(ctx context.Context, id, tip string) (Finding, bool, 
 		return Finding{}, false, "", fmt.Errorf("mergewatch: parse %q: %w", parts[1], err)
 	}
 	return Finding{Method: MethodTrailer, Commit: parts[0], At: at.UTC()}, true, TrailerKey + " trailer in " + short(parts[0]), nil
+}
+
+// trailerIndex is every `Lore-Task: <id>` line on the target, read with
+// one git log (B1-16: Sweep ran a git log over the whole history, plus a
+// ref lookup, per done task: ~2500 git processes and a minute per command
+// in a repo with 840 unmerged done tasks). Each id maps to its oldest
+// commit, as byTrailer picks it.
+type trailerIndex map[string]Finding
+
+// trailerRecordSep starts each commit's record in the index's git log.
+const trailerRecordSep = "\x1e"
+
+// buildTrailerIndex reads the trailer lines of every commit on tip that
+// has one: the same lines byTrailer's per-id --grep matches (a whole
+// message line `Lore-Task: <id>`, the subject included).
+func (c Checker) buildTrailerIndex(ctx context.Context, tip string) (trailerIndex, error) {
+	out, err := c.Repo.Run(ctx, gitref.Invocation{Args: []string{"log", "--format=" + "%x1e%H %cI%n%B", "--extended-regexp", "--grep", "^" + TrailerKey + ": ", tip}})
+	if err != nil {
+		return nil, fmt.Errorf("mergewatch: trailer search: %w", err)
+	}
+	idx := trailerIndex{}
+	prefix := TrailerKey + ": "
+	for _, rec := range strings.Split(string(out), trailerRecordSep) {
+		head, body, _ := strings.Cut(rec, "\n")
+		parts := strings.Fields(head)
+		if len(parts) != 2 {
+			continue // the empty record before the first separator
+		}
+		var at time.Time
+		parsed := false
+		for _, line := range strings.Split(body, "\n") {
+			id, ok := strings.CutPrefix(line, prefix)
+			if !ok || id == "" {
+				continue
+			}
+			if !parsed {
+				if at, err = time.Parse(time.RFC3339, parts[1]); err != nil {
+					return nil, fmt.Errorf("mergewatch: parse %q: %w", parts[1], err)
+				}
+				parsed = true
+			}
+			idx[id] = Finding{Method: MethodTrailer, Commit: parts[0], At: at.UTC()} // log is newest first: the oldest wins
+		}
+	}
+	return idx, nil
+}
+
+// lookup is byTrailer's answer from the index.
+func (idx trailerIndex) lookup(id, target string) (Finding, bool, string, error) {
+	f, ok := idx[id]
+	if !ok {
+		return Finding{}, false, "no " + TrailerKey + " trailer for " + id + " on " + target, nil
+	}
+	return f, true, TrailerKey + " trailer in " + short(f.Commit), nil
 }
 
 // trailerLine matches one RFC-822-style trailer line ("Key: value").
@@ -431,11 +500,42 @@ type Problem struct {
 func (c Checker) Sweep(ctx context.Context, here string, cands []Candidate) ([]Found, []Problem) {
 	var found []Found
 	var probs []Problem
+	// The target and the trailer index are read once for every candidate
+	// (B1-16), when the first candidate needs them; a failure is each
+	// candidate's problem, as a per-candidate Check reported it.
+	var (
+		tip, tipDone = "", false
+		tipErr       error
+		idx          trailerIndex
+		idxErr       error
+		idxDone      bool
+	)
+	trailer := func(id string) (Finding, bool, string, error) {
+		if !idxDone {
+			idx, idxErr = c.buildTrailerIndex(ctx, tip)
+			idxDone = true
+		}
+		if idxErr != nil {
+			return Finding{}, false, "", idxErr
+		}
+		return idx.lookup(id, c.Target)
+	}
 	for _, cand := range cands {
 		if c.Adapter == nil && cand.Repo != "" && here != "" && cand.Repo != here {
 			continue
 		}
-		f, ok, _, err := c.Check(ctx, cand)
+		if !tipDone {
+			tip, tipErr = c.tip(ctx)
+			tipDone = true
+		}
+		var (
+			f   Finding
+			ok  bool
+			err = tipErr
+		)
+		if err == nil {
+			f, ok, _, err = c.checkAt(ctx, cand, tip, trailer)
+		}
 		if errors.Is(err, ErrNoTarget) {
 			return nil, nil
 		}

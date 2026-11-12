@@ -163,3 +163,24 @@ func TestOriginOf(t *testing.T) {
 		}
 	}
 }
+
+// TestRemoteOfLocalPath: a plain absolute path is a git repository on this
+// machine (store.PathScheme): git clones it as written, and its Norm keeps
+// it apart from any hosted repository.
+func TestRemoteOfLocalPath(t *testing.T) {
+	t.Parallel()
+	canon, err := CanonicalURL("/srv/git/notes.git/")
+	if err != nil || canon != "/srv/git/notes.git" {
+		t.Fatalf("CanonicalURL = %q, %v", canon, err)
+	}
+	r, err := RemoteOfRaw(canon)
+	if err != nil || r.URL != "/srv/git/notes.git" || r.Norm != LocalHost+"/srv/git/notes" {
+		t.Fatalf("RemoteOfRaw = %+v, %v", r, err)
+	}
+	if o, err := OriginOf("/srv/git/notes.git"); err != nil || o != "/srv/git/notes.git" {
+		t.Fatalf("OriginOf = %q, %v", o, err)
+	}
+	if _, err := RemoteOfRaw("/srv/../x.git"); !errs.Has(err, errs.StoreScheme) {
+		t.Fatalf("a relative segment = %v, want E_STORE_SCHEME", err)
+	}
+}

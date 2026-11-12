@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
@@ -66,10 +68,13 @@ type OffboardOut struct {
 	// TasksNote says why open tasks could not be listed ("" when they were).
 	TasksNote string     `json:"tasks_note,omitempty"`
 	Agents    []AgentOut `json:"agents"`
-	From      string     `json:"from"`
-	To        string     `json:"to"`
-	Applied   bool       `json:"applied"`
-	Where     string     `json:"where"`
+	// Teams are the @handles of the teams the person is taken off (B2-12:
+	// a removed person no longer shows as a team member).
+	Teams   []string `json:"teams,omitempty"`
+	From    string   `json:"from"`
+	To      string   `json:"to"`
+	Applied bool     `json:"applied"`
+	Where   string   `json:"where"`
 	// Warnings are the engine's warnings of the write
 	// (profilestore.WarningLine), printed after the success line.
 	Warnings []string `json:"warnings,omitempty"`
@@ -115,6 +120,9 @@ func (o OffboardOut) Preview() string {
 	for _, a := range o.Agents {
 		fmt.Fprintf(&b, "%s%s becomes inactive\n", lead, a.Name)
 		lead = "             "
+	}
+	if len(o.Teams) > 0 {
+		fmt.Fprintf(&b, "  teams      @%s: taken off\n", strings.Join(o.Teams, ", @"))
 	}
 	fmt.Fprintf(&b, "  status     %s%s%s\n", o.From, arrow, o.To)
 	return b.String()
@@ -207,6 +215,7 @@ type offboardPlan struct {
 	period  *teamprofile.Period
 	members []membership
 	agents  []row.Row
+	teams   []row.Row // live teams listing the person, each written without them
 	reason  string
 	note    string
 	to      string
@@ -276,7 +285,58 @@ func (o ops) offboardPlan(ctx context.Context, r profilestore.Roster, a row.Row,
 	for _, g := range p.agents {
 		p.out.Agents = append(p.out.Agents, AgentOut{ID: g.ID.String(), Name: agentName(g)})
 	}
+	if p.teams, err = teamsListing(ctx, r, a.ID.String()); err != nil {
+		return offboardPlan{}, err
+	}
+	for _, t := range p.teams {
+		p.out.Teams = append(p.out.Teams, text(t, fieldTeamHandle))
+	}
 	return p, nil
+}
+
+// fieldTeamHandle is the teams row's @handle field.
+const fieldTeamHandle = "handle"
+
+// teamsListing is every teams row whose member list holds actor (B2-12:
+// offboard takes the person off them, so member show, team show and the
+// task team filters stop counting someone who left).
+func teamsListing(ctx context.Context, r profilestore.Roster, actor string) ([]row.Row, error) {
+	ts, err := r.List(ctx, schema.TableTeams)
+	if err != nil {
+		return nil, err
+	}
+	var out []row.Row
+	for _, t := range ts {
+		if slices.Contains(value.ItemStrings(t.Fields[schema.FieldTeamMembers]), actor) {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+// withoutMember is t's member list without actor, as the ref list the
+// teams table stores.
+func withoutMember(t row.Row, actor string) (value.Value, error) {
+	var refs []value.Value
+	for _, s := range value.ItemStrings(t.Fields[schema.FieldTeamMembers]) {
+		if s == actor {
+			continue
+		}
+		id, err := ids.ParseAny(s)
+		if err != nil {
+			return nil, errs.Wrap(errs.Internal, "team member id "+s+" is not valid", err)
+		}
+		ref, err := value.RefOf(id)
+		if err != nil {
+			return nil, errs.Wrap(errs.Internal, "team member id "+s+" is not a valid ref", err)
+		}
+		refs = append(refs, ref)
+	}
+	l, err := value.ListOf(value.KindRef, refs...)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "the team member list", err)
+	}
+	return l, nil
 }
 
 // apply writes the offboard in the 5.1 step 5 order: memberships, agents,
@@ -299,6 +359,15 @@ func (p offboardPlan) apply(ctx context.Context, r profilestore.Roster) error {
 		}
 		if _, err = r.Update(ctx, schema.TableProjectMembers, m.row.ID, map[string]value.Value{
 			schema.FieldMemberEndedOn: endOn, schema.FieldMemberEndReason: offboarded}); err != nil {
+			return err
+		}
+	}
+	for _, t := range p.teams { // B2-12: off every team
+		ml, terr := withoutMember(t, p.actor.ID.String())
+		if terr != nil {
+			return terr
+		}
+		if _, err = r.Update(ctx, schema.TableTeams, t.ID, map[string]value.Value{schema.FieldTeamMembers: ml}); err != nil {
 			return err
 		}
 	}

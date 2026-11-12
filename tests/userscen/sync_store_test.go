@@ -403,12 +403,12 @@ func TestSyncStore_OfflineWriteIsSentByTheNextSync(t *testing.T) {
 }
 
 // A store write whose push failed offline waits in the local clone: a
-// read that reaches the store again never pushes it (plain files 3.3) but
-// says it waits and that `lore sync` sends it, and the next write to the
-// store pushes it with its own commit, even when that store was fetched
-// moments before (refresh retries while commits wait).
+// read never pushes it (plain files 3.3) but the first read says it waits
+// and that `lore sync` sends it (once per count, B3-13), and the next
+// write to the store pushes it with its own commit, even when that store
+// was fetched moments before (refresh retries while commits wait).
 func TestSyncStore_OfflineWriteIsPushedByTheNextWrite(t *testing.T) {
-	// fetch_ttl 1h: without the cleared stamp no read would sync again
+	// fetch_ttl 1h: no read fetches again, only the next write retries
 	st := newSyncTeam(t, 1, th.Config{Live: &th.Live{FetchTTL: "1h"}})
 	a := st.clones[0]
 	r := st.w.Remote(syncSlugStore)
@@ -430,13 +430,17 @@ func TestSyncStore_OfflineWriteIsPushedByTheNextWrite(t *testing.T) {
 	if onRemote() {
 		t.Fatal("an offline write cannot be on the store remote yet")
 	}
-	a.MustLore("memory", "list", "--store", "notes") // still offline: nothing pushed, nothing fails
+	// still offline: nothing pushed, nothing fails; the first read says
+	// what waits and how it is sent
+	a.MustLore("memory", "list", "--store", "notes").Says(t, "local commit(s) wait to be pushed; a read never pushes: run `lore sync`")
 	if onRemote() {
 		t.Fatal("an offline read cannot push")
 	}
 
 	st.people[0].Online()
-	a.MustLore("memory", "list", "--store", "notes").Says(t, "local commit(s) wait to be pushed; a read never pushes: run `lore sync`")
+	// The fetch is not due (fetch_ttl 1h), so this read does not learn the
+	// store answers again: the same count is not said on every read (B3-13).
+	a.MustLore("memory", "list", "--store", "notes").Never(t, "local commit(s) wait to be pushed")
 	if onRemote() {
 		t.Fatal("a read that reaches the store must not push the waiting write")
 	}

@@ -39,7 +39,7 @@ type AddIn struct {
 	// Language is new on the CLI (the v0.1.17 column had no add flag).
 	Language string `json:"language,omitempty" flag:"language" desc:"programming language of the recipe (go, ts, …)"`
 	Project  string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To       string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To       string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // ListIn is the input of cookbookrecipe.list.
@@ -71,7 +71,7 @@ func (o ListOut) rowsText() string {
 	}
 	var b strings.Builder
 	for _, r := range o.Data {
-		b.WriteString(content.ListLine(badge, r.ID, r.Title))
+		b.WriteString(content.ListLine(badge, r.ID, r.Title, r.Label))
 	}
 	return b.String()
 }

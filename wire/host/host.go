@@ -141,19 +141,32 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 	}
 	run0 := &Run{Entry: e, Decoder: d, Cmd: r.State.Cmd, Args: r.State.Args}
 	if fixDryRun(run0) {
-		ctx = wire.WithNoCreate(ctx) // lore fix --dry-run changes nothing
+		ctx = wire.WithNoCreate(ctx)      // lore fix --dry-run changes nothing
+		ctx = gitbackend.WithNoClone(ctx) // … not even a store clone (B4-14)
 	}
 	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: r.State.ReadOnly || os.Getenv(EnvReadOnly) == envOn, Cmd: r.State.Cmd, Args: r.State.Args}
 	ctx = wire.WithCommandName(ctx, runCommandName(run)) // the prefix of what lore prints it set up (wire/cmdname.go)
 	if setUpRun(run) {
 		ctx = gitbackend.WithGitSetUp(ctx) // an explicit setup or sync may set store clones up for plain git (handgit.go)
 	}
+	// B1-1: a write that ends refused leaves the clone's git set-up as it
+	// was (refusalundo.go)
+	var snap *setupSnapshot
+	if e.Spec().Access == op.AccessWrite && !run.ReadOnly && !leavesWorkRepo(e.Spec().Name) {
+		if wd, werr := os.Getwd(); werr == nil {
+			snap = takeSetupSnapshot(ctx, wd)
+		}
+	}
+	undo := func(err error) error {
+		announceUndo(os.Stderr, snap.restore())
+		return err
+	}
 	for _, h := range r.hooks {
 		if h.Before == nil {
 			continue
 		}
 		if err := h.Before(ctx, run); err != nil {
-			return op.Result{}, err
+			return op.Result{}, undo(err)
 		}
 	}
 	if e.Spec().Access == op.AccessWrite && run.ReadOnly {
@@ -169,7 +182,7 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 			err = h.OnError(ctx, run, err)
 		}
 	}
-	return res, err
+	return res, undo(err)
 }
 
 // around runs the Around hooks from index i inward, then the app.

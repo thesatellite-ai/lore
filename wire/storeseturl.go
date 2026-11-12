@@ -18,6 +18,9 @@ package wire
 //	                orgs[].stores[].url, personal.store,
 //	                setups[].personal_store (one validated config write)
 //	                the address record (state/store-addresses.json)
+//	            → a clone at an old address holding unpushed commits:
+//	              carried to the new address, or refused before any
+//	              write (storeseturl_clone.go)
 //	            → for an org whose store moved: its lore-org.yaml in the
 //	              store (at the new url), then the entry's source stamp;
 //	              a store that cannot take the commit is a note, the move
@@ -80,6 +83,13 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 				WithHint("attach it under its own name: lore store add <name> " + raw)
 		}
 	}
+	// B3-15: a clone at an old address holding unpushed work is carried
+	// to the new one (storeseturl_clone.go), or the move is refused here,
+	// before anything is written.
+	carry, carrying, err := a.planCloneCarry(ctx, out.ID, raw, src.Branch)
+	if err != nil {
+		return opsstores.SetURLOut{}, err
+	}
 	top, terr := a.repoTop(ctx)
 	if terr != nil {
 		top = "" // outside a repo: the machine's places only
@@ -109,6 +119,13 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 	out.Changed = len(out.Places)+len(out.Folders) > 0
 	if rerr := recordStoreAddress(a.opts.Home, out.ID, raw, a.opts.Wall()); rerr != nil {
 		return out, rerr
+	}
+	if carrying {
+		line, cerr := a.applyCloneCarry(ctx, carry, raw)
+		if cerr != nil {
+			return out, errs.Prefix(verb+": the places moved, but the clone "+carry.from+" holding unpushed work was not carried (run this command again)", cerr)
+		}
+		out.Clone, out.Changed = line, true
 	}
 	for _, org := range moved.orgs {
 		out.OrgFiles = append(out.OrgFiles, a.moveOrgFile(ctx, org, old, raw))

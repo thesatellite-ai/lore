@@ -96,7 +96,7 @@ type ops struct{ env Env }
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	return []op.Entry{
-		op.Define(op.Spec{Name: profilestore.OpActorStatus, Summary: "Set a person's status: active, on_leave (--from, --until), left or archived (TEAM_PROFILES 5.3)",
+		op.Define(op.Spec{Name: profilestore.OpActorStatus, Summary: "Set a person's status: active, on_leave (--from, --until), left or archived",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: opErrors,
 			Examples: []op.Example{
 				{Title: "on leave", CLI: "lore actor status @mira on_leave --from 2026-06-01 --until 2026-06-30", Want: "on_leave"},

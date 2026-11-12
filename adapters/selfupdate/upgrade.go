@@ -97,6 +97,14 @@ func (u Updater) probe(ctx context.Context, bin string) (string, error) {
 // sourceUpdateHint is how a source build is updated (8.8).
 const sourceUpdateHint = "git pull && task lore:build"
 
+// FromSource reports whether the running binary is a source build, which
+// Run never replaces (it only prints how to update it): `lore upgrade`
+// then has no new binary to run lore fix with (B4-4).
+func (u Updater) FromSource() bool {
+	exe, err := resolvedExe()
+	return err == nil && detectInstall(exe, u.Version) == installSource
+}
+
 // Run upgrades (or, with Check, only reports), writing its lines to out.
 func (u Updater) Run(ctx context.Context, out io.Writer, f Flags) error {
 	exe, err := resolvedExe()

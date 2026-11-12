@@ -241,6 +241,10 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	// staged is the batch the default list and the task land in, when the
 	// add has to create the list (nil otherwise).
 	var staged context.Context
+	// newList is the default list this add created ("" when it existed or
+	// the add named --tasklist): the add line says so (bug hunt B3-8: the
+	// first task add wrote a tasklist the person never asked for, silently).
+	var newList string
 	// --assign resolves before anything is written (v0.1.17: the default
 	// task list is not created for a handle on no roster).
 	assign, err := o.resolveAssigns(ctx, in.Assign)
@@ -361,8 +365,12 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		if terr != nil {
 			return AddOut{}, terr
 		}
-		if in.Tasklist, err = o.defaultTasklist(ctx, listTo, project); err != nil {
+		var created bool
+		if in.Tasklist, created, err = o.defaultTasklist(ctx, listTo, project); err != nil {
 			return AddOut{}, err
+		}
+		if created {
+			newList = in.Tasklist
 		}
 	}
 	if err = setRefs(fields, []refFlag{
@@ -469,6 +477,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		out.Human += par.human()
 	}
 	out.Human += metaNotes.String()
+	if newList != "" {
+		out.Human += newListLine(newList)
+	}
 	return out, nil
 }
 
@@ -553,8 +564,6 @@ func (o ops) byKey(ctx context.Context, project, mission, key string) (work.Sour
 	return work.Sourced{}, false, nil
 }
 
-// defaultTasklist returns the project's "default" task list in the target
-// store, creating it on demand (v0.1.17 defaultTasklist).
 // addOp is task.add as the op runs it: the agent commitment rule, then
 // add. Lore's own adds (split, checklist promote, import, templates, the
 // secret rotation task) call add directly and keep the default.
@@ -606,33 +615,42 @@ func (o ops) routedTarget(ctx context.Context, to string) (string, error) {
 	return string(src), err
 }
 
-func (o ops) defaultTasklist(ctx context.Context, target string, project ids.ID[ids.Project]) (string, error) {
+// newListLine is the one line a task add prints when it created the
+// project's default task list for the task.
+func newListLine(id string) string {
+	return "  created tasklist " + id + " \"" + DefaultTasklistTitle + "\" for tasks added without --tasklist\n"
+}
+
+// defaultTasklist returns the project's "default" task list in the target
+// store, creating it on demand (v0.1.17 defaultTasklist); created says it
+// was made now.
+func (o ops) defaultTasklist(ctx context.Context, target string, project ids.ID[ids.Project]) (id string, created bool, err error) {
 	src := store.Source(target)
 	if src == "" {
 		src = store.SourceRepo
 	}
 	rows, err := o.env.List(ctx, src, schema.TableTasklists)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	slices.SortFunc(rows, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
 	for _, r := range rows {
 		if !r.Deleted && work.Field(r, work.FieldProject) == project.String() && work.Field(r, work.FieldTitle) == DefaultTasklistTitle {
-			return r.ID.String(), nil
+			return r.ID.String(), false, nil
 		}
 	}
 	fields, err := work.Texts(Noun, map[string]string{work.FieldTitle: DefaultTasklistTitle, fieldStatusStr: DefaultTasklistStatus})
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
-		return "", err
+		return "", false, err
 	}
 	w, err := o.env.Create(ctx, store.Source(target), schema.TableTasklists, fields)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	return w.Row.ID.String(), nil
+	return w.Row.ID.String(), true, nil
 }
 
 // dep is one --after edge (dbent/schema TaskDependency).

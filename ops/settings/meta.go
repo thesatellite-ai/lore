@@ -76,7 +76,7 @@ type MetaAddIn struct {
 	Values      string `json:"values,omitempty" flag:"values" desc:"allowed values, comma separated (a closed set, at most 100)"`
 	Internal    bool   `json:"internal,omitempty" flag:"internal" desc:"never reaches a client repo"`
 	NoInternal  bool   `json:"no_internal,omitempty" flag:"no-internal" desc:"may reach client repos"`
-	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"hide the values from agents, render and lists (OQ2)"`
+	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"hide the values from agents, render and lists"`
 }
 
 // MetaEditIn is the input of meta.edit.
@@ -86,7 +86,7 @@ type MetaEditIn struct {
 	NoStrict    bool   `json:"no_strict,omitempty" flag:"no-strict" desc:"turn mismatches back into warnings"`
 	Internal    bool   `json:"internal,omitempty" flag:"internal" desc:"mark it internal"`
 	NoInternal  bool   `json:"no_internal,omitempty" flag:"no-internal" desc:"mark it not internal"`
-	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"mark it sensitive (values hidden, OQ2)"`
+	Sensitive   bool   `json:"sensitive,omitempty" flag:"sensitive" desc:"mark it sensitive (values hidden)"`
 	NoSensitive bool   `json:"no_sensitive,omitempty" flag:"no-sensitive" desc:"mark it not sensitive"`
 	Values      string `json:"values,omitempty" flag:"values" desc:"the new allowed values, comma separated"`
 	// Value maintenance (3.8, OQ-AV): ids stay, only meta_values rows change.

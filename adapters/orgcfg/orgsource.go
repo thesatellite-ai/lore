@@ -33,7 +33,7 @@ const orgMoveMessage = "lore: org %s store moved to %s"
 // store's clone as last fetched, no network. A store never
 // cloned here is ErrStoreOffline.
 func (g *GitLinks) LocalSuggestion(ctx context.Context, url, branch string) (Suggestion, error) {
-	norm, err := repourl.Normalize(url)
+	norm, err := repourl.NormalizeStore(url)
 	if err != nil {
 		return Suggestion{}, fmt.Errorf("orgcfg: store url %q: %w", url, err)
 	}

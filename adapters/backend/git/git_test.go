@@ -271,7 +271,7 @@ func TestWriteIsOneCommitPerBatch(t *testing.T) {
 	if after := gitT(t, b.Dir(), "rev-list", "--count", "HEAD"); after != "2" || before != "1" {
 		t.Fatalf("commits %s → %s, want 1 → 2", before, after)
 	}
-	want := "lore: memory.add " + a.ID.String() + " (+1 more)|Mira|mira@example.invalid"
+	want := "lore: memory add " + a.ID.String() + " (2 rows)|Mira|mira@example.invalid"
 	if got := gitT(t, b.Dir(), "log", "-1", "--format=%s|%an|%ae"); got != want {
 		t.Fatalf("commit = %q, want %q", got, want)
 	}

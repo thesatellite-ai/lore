@@ -597,9 +597,14 @@ func TestRealCatalogPlanAndJoin(t *testing.T) {
 		t.Fatalf("bad invite: %v", err)
 	}
 	// a member an admin added joins by the org's store url (or the name
-	// of an org entry here): no line; a name no entry has is refused
-	if _, err := e.Join(bg, JoinIn{Invite: "acme-hub"}); !errs.Has(err, errs.InviteInvalid) || !strings.Contains(err.Error(), "store url") {
+	// of an org entry here): no line; a name no entry has is refused as
+	// an unknown org (a fresh machine), not as a bad invite (B2-1)
+	if _, err := e.Join(bg, JoinIn{Invite: "acme-hub"}); !errs.Has(err, errs.JoinOrgUnknown) || !strings.Contains(err.Error(), "store url") || !strings.Contains(err.Error(), "on this machine") {
 		t.Fatalf("join by an unknown org name: %v", err)
+	}
+	// text that is neither a name, a url nor an invite stays E_INVITE_INVALID
+	if _, err := e.Join(bg, JoinIn{Invite: "not an org!"}); !errs.Has(err, errs.InviteInvalid) {
+		t.Fatalf("join by garbage: %v", err)
 	}
 	if u, err := e.Join(bg, JoinIn{Invite: "git@github.com:acme/notes.git"}); err != nil || u.Invite.Store != "git@github.com:acme/notes.git" {
 		t.Fatalf("join by store url = %+v, %v", u, err)

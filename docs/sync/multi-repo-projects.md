@@ -31,7 +31,7 @@ Project: prj_7a67…9504
   created: 2026-11-02 10:00:00Z
 Repos:
   rep_2ad3…f891  website
-created 2026-11-02T10:00:00Z by act_162d…9666 · updated 2026-11-02T10:00:00Z by act_162d…9666
+created 2026-11-02T10:00:00Z by alice · updated 2026-11-02T10:00:00Z by alice
 ```
 <!-- /example -->
 
@@ -45,15 +45,15 @@ Give each part a short mount name. `--origin` records where its code lives and `
 $ lore repo list
 rep_2ad3…f891  website  https://github.com/client/website
 $ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
-lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
-✓ repo shop registered (rep_54fe…28f2)
+lore: wrote ~/work/website/.lore/data/repos/rep_162d…9666.json
+✓ repo shop registered (rep_162d…9666)
 $ lore repo add help --display-name 'Help pages'
-lore: wrote ~/work/website/.lore/data/repos/rep_05e9…4603.json
-✓ repo help registered (rep_05e9…4603)
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
+✓ repo help registered (rep_54fe…28f2)
 $ lore repo list
 rep_2ad3…f891  website  https://github.com/client/website
-rep_54fe…28f2  shop  https://github.com/client/website
-rep_05e9…4603  help
+rep_162d…9666  shop  https://github.com/client/website
+rep_54fe…28f2  help
 ```
 <!-- /example -->
 
@@ -67,19 +67,19 @@ Without `--repo`, a rule applies to the whole project. With `--repo shop` it app
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
-lore: wrote ~/work/website/.lore/data/rules/rul_c0f3…b5b8.json
-✓ rul_c0f3…b5b8
+lore: wrote ~/work/website/.lore/data/rules/rul_05e9…4603.json
+✓ rul_05e9…4603
   scope: [master] severity: must
 $ lore rule add --repo shop --body 'Buttons are blue.'
-lore: wrote ~/work/website/.lore/data/rules/rul_76bd…3f10.json
-✓ rul_76bd…3f10
+lore: wrote ~/work/website/.lore/data/rules/rul_c0f3…b5b8.json
+✓ rul_c0f3…b5b8
   scope: [repo:shop] severity: must
 $ lore rule list
-rul_c0f3…b5b8 [must/always] Run the tests before you push.
+rul_05e9…4603 [must/always] Run the tests before you push.
 1 hidden (1 scoped to a repo); --all shows them
 $ lore rule list --repo shop
-rul_c0f3…b5b8 [must/always] Run the tests before you push.
-rul_76bd…3f10 [must/always] Buttons are blue.
+rul_05e9…4603 [must/always] Run the tests before you push.
+rul_c0f3…b5b8 [must/always] Buttons are blue.
 $ lore rule list --repo blog
 ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
   hint: run `lore repo list` to see the mount names
@@ -100,15 +100,15 @@ $ lore repo archive help
 ERROR: [E_INVALID_ID] repo: "help" is not a repo id (rep_…)
   hint: copy the whole id (its prefix, an underscore and 32 hex characters) from the list or show output of that kind
 (exit 20)
-$ lore repo archive rep_05e9…4603
-lore: wrote ~/work/website/.lore/data/repos/rep_05e9…4603.json
+$ lore repo archive rep_54fe…28f2
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
 ✓ help archived
 $ lore repo list
 rep_2ad3…f891  website  https://github.com/client/website
-rep_54fe…28f2  shop  https://github.com/client/website
-rep_05e9…4603  help [archived]
-$ lore repo unarchive rep_05e9…4603
-lore: wrote ~/work/website/.lore/data/repos/rep_05e9…4603.json
+rep_162d…9666  shop  https://github.com/client/website
+rep_54fe…28f2  help [archived]
+$ lore repo unarchive rep_54fe…28f2
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
 ✓ help unarchived
 $ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 ```
@@ -135,8 +135,8 @@ lore: wrote ~/work/website/.lore/data/repos/rep_2ad3…f891.json
   .lore/data/_meta.json updated; commit it with your next push
 $ lore repo list
 rep_2ad3…f891  website  git@github.com:client/website-v2.git
-rep_54fe…28f2  shop  https://github.com/client/website
-rep_05e9…4603  help
+rep_162d…9666  shop  https://github.com/client/website
+rep_54fe…28f2  help
 $ lore repo merge-ids --dry-run
 ✓ rep_2ad3…f891 has no alias ids; nothing to merge
 $ git add -A && git commit -qm 'lore: repo address' && git push -q origin main
@@ -157,22 +157,24 @@ $ git clone -q https://github.com/alice/website website-fork
 # alice, in website-fork
 $ git remote add upstream https://github.com/client/website-v2 && git remote set-url origin https://github.com/client/website-v2 && lore repo fork
 lore repo fork: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: the command was refused, so the git set-up it made first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_INVALID_INPUT] this clone's remote github.com/client/website-v2 is a confirmed address of rep_2ad3…f891, so it is that repo, not a fork
   hint: change the remote to the fork's address first (git remote set-url origin <fork url>)
 (exit 20)
 $ git remote set-url origin https://github.com/alice/website
 $ lore repo fork
-lore: wrote ~/work/website-fork/.lore/data/repos/rep_b4f4…a5b0.json
-✓ new repo rep_b4f4…a5b0 (website-fork), forked_from rep_2ad3…f891
+lore repo fork: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote ~/work/website-fork/.lore/data/repos/rep_d431…313a.json
+✓ new repo rep_d431…313a (website-fork), forked_from rep_2ad3…f891
 ✓ .lore/data/_meta.json updated; commit it with your next push
 $ lore repo list
 rep_2ad3…f891  website  git@github.com:client/website-v2.git
-rep_54fe…28f2  shop  https://github.com/client/website
-rep_05e9…4603  help
-rep_b4f4…a5b0  website-fork  https://github.com/alice/website
+rep_162d…9666  shop  https://github.com/client/website
+rep_54fe…28f2  help
+rep_d431…313a  website-fork  https://github.com/alice/website
 $ git status --short
  M .lore/data/_meta.json
-?? .lore/data/repos/rep_b4f4…a5b0.json
+?? .lore/data/repos/rep_d431…313a.json
 ```
 <!-- /example -->
 
@@ -184,16 +186,16 @@ $ git status --short
 ```console
 # alice, in website
 $ LORE_REPO=shop lore rule list
-rul_c0f3…b5b8 [must/always] Run the tests before you push.
-rul_76bd…3f10 [must/always] Buttons are blue.
+rul_05e9…4603 [must/always] Run the tests before you push.
+rul_c0f3…b5b8 [must/always] Buttons are blue.
 $ LORE_REPO=shop lore rule list --repo website
-rul_c0f3…b5b8 [must/always] Run the tests before you push.
+rul_05e9…4603 [must/always] Run the tests before you push.
 1 hidden (1 scoped to a repo); --all shows them
 $ LORE_PROJECT_ID=prj_7a67…9504 LORE_REPO=shop lore rule list
-rul_c0f3…b5b8 [must/always] Run the tests before you push.
-rul_76bd…3f10 [must/always] Buttons are blue.
-$ LORE_PROJECT_ID=prj_d431…313a lore rule list
-ERROR: [E_NOT_FOUND] rule: no project "prj_d431…313a"
+rul_05e9…4603 [must/always] Run the tests before you push.
+rul_c0f3…b5b8 [must/always] Buttons are blue.
+$ LORE_PROJECT_ID=prj_76bd…3f10 lore rule list
+ERROR: [E_NOT_FOUND] rule: no project "prj_76bd…3f10"
   hint: run `lore project list` to see the projects
 (exit 27)
 ```
@@ -205,6 +207,7 @@ ERROR: [E_NOT_FOUND] rule: no project "prj_d431…313a"
 - **An unknown `--repo` is an error, not an empty list.** A typo in the mount name stops the command, so you never act on the wrong set of notes by mistake.
 - **A note's repo is fixed when you add it.** To move a rule, use `lore rule edit <id> --rebind-repo <mount>` or `--rebind-master` (back to the whole project).
 - **Two `lore init`s on two branches make two projects.** When those branches merge, run `lore sync fix-projects`; see [Conflicts and duplicates](conflicts-and-duplicates.md#step-5--two-people-set-up-lore-on-separate-branches).
+- **A repo set up with a local-path remote has no address yet.** A path (`/srv/git/website.git`) cannot identify a repo across clones, so lore records none. The first `lore sync` in a clone whose remote is a real address (a fresh clone on a new laptop) records it as the primary, silently, in the repos row and `.lore/data/_meta.json`: there is no "remote changed" notice, because nothing changed. Commit the two files with your next push.
 - **`lore repo set-url` does not change your git remote.** Run `git remote set-url origin <url>` yourself; lore only records the address for its own matching.
 - **Delete is for mistakes.** Archive is reversible and keeps history; delete is not.
 

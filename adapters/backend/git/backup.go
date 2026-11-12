@@ -234,6 +234,9 @@ func (s Snapshots) Blob(ctx context.Context, dir, blob string) ([]byte, error) {
 // ResetClone moves a lore-owned store clone's branch and files back to
 // commit (a personal undo before push; never used on a person's repo).
 func (s Snapshots) ResetClone(ctx context.Context, dir, commit string) error {
+	if err := refusePersonGitOpIn(ctx, s.g, dir); err != nil {
+		return err // B2-9: reset --hard ends the person's merge
+	}
 	if _, err := s.g.run(ctx, call{dir: dir, args: []string{"reset", "-q", "--hard", commit}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: reset the store clone to its backup", err)
 	}

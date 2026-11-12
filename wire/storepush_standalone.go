@@ -48,6 +48,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -101,6 +102,10 @@ type storePush struct {
 	// waitSaid: this read command already said its commits wait for
 	// `lore sync` (one line per store and command).
 	waitSaid bool
+	// reach is what this command's read fetch learned of the remote
+	// (reachOnline, reachOffline; reachUnknown without one): sayWaiting
+	// says the waiting commits again when it changed.
+	reach string
 }
 
 var (
@@ -190,7 +195,7 @@ const piggybackTimeout = 15 * time.Second
 func (b *storePush) begin(ctx context.Context) {
 	if r := requestOf(ctx); r != b.req {
 		b.req, b.fetched, b.earlier, b.pushFailed = r, false, store.SyncReport{}, false
-		b.push, b.compacted, b.waitSaid = nil, false, false
+		b.push, b.compacted, b.waitSaid, b.reach = nil, false, false, reachUnknown
 	}
 }
 
@@ -220,8 +225,8 @@ func (b *storePush) refresh(ctx context.Context) {
 	// the fetch is due and says when local commits wait (readRefresh); the
 	// push is a write's, `lore sync`'s or a hook's. A writing command (or
 	// one whose access is unknown here) pushes as its store's mode says.
-	if readRun(ctx) {
-		b.readRefresh(ctx, in, autopush)
+	if readRun(ctx) || opsmigrate.NoPushAsked(ctx) {
+		b.readRefresh(ctx, in, autopush) // a --no-push migration fetches like a read
 		return
 	}
 	push := !held || (autopush && b.pushSettings().Push == storepush.ModeBatch && in.Kind == live.FetchAlways)
@@ -318,7 +323,11 @@ func (b *storePush) pushNow(ctx context.Context) {
 		defer cancel()
 	}
 	waiting := b.hasUnpushed(ctx)
-	rep, err := b.syncInner(ctx, false)
+	noPush := opsmigrate.NoPushAsked(ctx) // a --no-push migration's sync merges only
+	if noPush {
+		waiting = false
+	}
+	rep, err := b.syncInner(ctx, noPush)
 	b.reportPushes()
 	b.carry(rep, err)
 	b.observeSync(ctx, rep, err)
@@ -358,6 +367,7 @@ func (b *storePush) pushed(ctx context.Context, sent bool) {
 	if !sent {
 		return
 	}
+	b.forgetWaitSaid()
 	writeStamp(b.stateDir, pushStampFile, b.res.now())
 	b.autoCompact(ctx)
 }
@@ -368,6 +378,9 @@ func (b *storePush) pushed(ctx context.Context, sent bool) {
 func (b *storePush) pushAfterWrite(ctx context.Context) {
 	if fetchDeferred(ctx) {
 		return // the sync after the pick-up pushes it (handedit.go)
+	}
+	if opsmigrate.NoPushAsked(ctx) {
+		return // `lore migrate run --no-push`: the commit stays local
 	}
 	b.begin(ctx)
 	if b.pushFailed {
@@ -434,7 +447,11 @@ func (b *storePush) Get(ctx context.Context, table row.Table, id ids.AnyID) (sto
 func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
 	b.begin(ctx)
 	waiting := b.hasUnpushed(ctx)
-	rep, err := b.syncInner(ctx, false)
+	noPush := opsmigrate.NoPushAsked(ctx) // a --no-push migration's sync merges only
+	if noPush {
+		waiting = false
+	}
+	rep, err := b.syncInner(ctx, noPush)
 	b.reportPushes()
 	b.observeSync(ctx, rep, err)
 	if err != nil {

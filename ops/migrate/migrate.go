@@ -281,6 +281,9 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		ctx = WithMachineLocal(ctx)
 	}
 	pushes := !in.DryRun && !in.NoPush && !in.Offline
+	if !in.DryRun && !pushes {
+		ctx = WithNoPush(ctx) // --no-push / --offline: no write or sync of the run pushes
+	}
 	hold, err := takeTeamLock(ctx, pushes)
 	if err != nil {
 		return RunOut{}, err

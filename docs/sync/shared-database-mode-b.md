@@ -26,7 +26,7 @@ Alice (an agency developer) has client 2's repos in `~/work`. In the first repo 
 ```console
 # alice, in app
 $ lore store init client2 file://$HOME/stores/client2
-✓ created store client2 (sto_28f8…03df) at file://~/stores/client2; recorded in .lore/stores.yaml; commit it to share
+✓ created store client2 (sto_b4f4…a5b0) at file://~/stores/client2; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in api
 $ lore store add client2 file://$HOME/stores/client2
@@ -51,7 +51,7 @@ The attachment is recorded in the repo's `.lore/stores.yaml`.
 ```console
 # alice, in app
 $ lore rule add --to client2 --body 'Every screen works on a phone.'
-lore: wrote ~/stores/client2/_store/actors/act_162d…9666.json (store client2)
+lore: wrote ~/stores/client2/_store/actors/act_28f8…03df.json (store client2)
 lore: wrote ~/stores/client2/_store/rules/rul_4c59…6c38.json (store client2)
 lore: wrote ~/stores/client2/_store/machines/mch_3b62…e913.json (store client2)
 ✓ rul_4c59…6c38 [client2]
@@ -68,13 +68,13 @@ lore: wrote ~/work/api/.lore/data/rules/rul_2537…6bbb.json
   scope: [master] severity: must
 $ lore rule list
 rul_2537…6bbb [must/always] The API answers in JSON only.
-rul_4c59…6c38  Every screen works on a phone.  [client2]
-rul_f147…5139  Every change comes with a test.  [client2]
+rul_4c59…6c38 [must/always] Every screen works on a phone. [client2]
+rul_f147…5139 [must/always] Every change comes with a test. [client2]
 
 # alice, in app
 $ lore rule list
-rul_4c59…6c38  Every screen works on a phone.  [client2]
-rul_f147…5139  Every change comes with a test.  [client2]
+rul_4c59…6c38 [must/always] Every screen works on a phone. [client2]
+rul_f147…5139 [must/always] Every change comes with a test. [client2]
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -126,7 +126,7 @@ $ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
 project_id: prj_4f89…b64b
 $ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run lore fix
   hint: `lore fix --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)
@@ -138,7 +138,7 @@ Would upgrade 2 rows
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 Nothing written (dry run).
 $ lore migrate run
-lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 2 rows
   mode-b: memories/mem_77cb…76c4 → store shared (~/.lore/stores/infra)
   mode-b: rules/rul_d191…45c2 → store shared (~/.lore/stores/infra)
@@ -156,8 +156,8 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 $ lore rule list; lore memory list
-rul_d191…45c2  Terraform changes need a plan in the pull request.  [shared]
-mem_77cb…76c4  The staging cluster sleeps at night.  [shared]
+rul_d191…45c2 [must/always] Terraform changes need a plan in the pull request. [shared]
+mem_77cb…76c4 [retrieved] The staging cluster sleeps at night. [shared]
 ```
 <!-- /example -->
 

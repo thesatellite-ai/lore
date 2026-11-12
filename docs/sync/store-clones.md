@@ -27,10 +27,11 @@ lore: pushed store notes: commit 601d285 to branch main
 lore: pushed store notes: commit 86dbae4 to branch main
 lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)
 ✓ tsk_2ad3…f891 — Renew the TLS certificate [medium] → [notes]
+  created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
 $ lore memory add --to notes --body 'The staging database is reset every Monday.'
 lore: pushed store notes: commit 9b40ce7 to branch main
-lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_162d…9666.json (store notes)
-✓ mem_162d…9666 [notes]
+lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json (store notes)
+✓ mem_54fe…28f2 [notes]
   scope: [master]
 ```
 <!-- /example -->
@@ -64,14 +65,14 @@ id: sto_7a67…9504
 visibility: internal
 created: "2026-11-02"
 $ find _store -type f | sort
-_store/actors/act_54fe…28f2.json
-_store/machines/mch_05e9…4603.json
-_store/memories/mem_162d…9666.json
-_store/task_lists/tlt_c0f3…b5b8.json
+_store/actors/act_05e9…4603.json
+_store/machines/mch_c0f3…b5b8.json
+_store/memories/mem_54fe…28f2.json
+_store/task_lists/tlt_162d…9666.json
 _store/tasks/tsk_2ad3…f891.json
-$ cat _store/memories/mem_162d…9666.json
+$ cat _store/memories/mem_54fe…28f2.json
 {
-  "_hlc": "2026-11-02T10:00:15.000Z/0000/act_54fe…28f2",
+  "_hlc": "2026-11-02T10:00:15.000Z/0000/act_05e9…4603",
   "_o": {
     "cmd": "memory add",
     "git": {
@@ -91,16 +92,16 @@ $ cat _store/memories/mem_162d…9666.json
   },
   "body": "The staging database is reset every Monday.",
   "created_at": "2026-11-02T10:00:00.000000001Z",
-  "created_by": "act_54fe…28f2",
-  "created_by_actor_id": "act_54fe…28f2",
-  "id": "mem_162d…9666",
+  "created_by": "act_05e9…4603",
+  "created_by_actor_id": "act_05e9…4603",
+  "id": "mem_54fe…28f2",
   "kind": "retrieved",
   "project_id": "prj_76bd…3f10",
   "source_kind": "manual",
   "trust_score": 0.5,
   "tx_at": "2026-11-02T10:00:00.000000001Z",
   "updated_at": "2026-11-02T10:00:00.000000001Z",
-  "updated_by": "act_54fe…28f2"
+  "updated_by": "act_05e9…4603"
 }
 $ ls .git/lore
 fetch-stamp
@@ -118,9 +119,9 @@ This folder is a lore store: notes, rules, decisions, tasks and the other record
 - `_meta.json` in a folder holds the folder's id; `_purged.json` lists records removed for good. Leave both to lore.
 - `org/` (when the store has one) holds the company's people, teams and rules, and `org/lore-org.yaml`, the company's settings.
 $ git log --format='%an <%ae>  %s'
-alice <alice@agency.example>  lore: write mem_162d…9666
-alice <alice@agency.example>  lore: write mch_05e9…4603
-alice <alice@agency.example>  lore: write act_54fe…28f2 (+2 more)
+alice <alice@agency.example>  lore: memory add mem_54fe…28f2
+alice <alice@agency.example>  lore: write mch_c0f3…b5b8
+alice <alice@agency.example>  lore: task add: Renew the TLS certificate (3 rows)
 alice <alice@agency.example>  lore: store init
 ```
 <!-- /example -->

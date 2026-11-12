@@ -375,6 +375,7 @@ func List(ctx context.Context, env Env, n Noun, s Scope, withArchived bool, only
 	}
 	var out []Item
 	var hid Hidden
+	dirs := metalist.NewDirs(env)
 	for _, src := range sources {
 		rows, err := env.List(ctx, src, n.Table)
 		if err != nil {
@@ -389,7 +390,7 @@ func List(ctx context.Context, env Env, n Noun, s Scope, withArchived bool, only
 			archived := !withArchived && Archived(r)
 			switch {
 			case !inScope:
-				hid.Repo++
+				hid.OutOfScope(dirs.Of(ctx, src, r))
 				continue
 			case archived:
 				hid.Archived++

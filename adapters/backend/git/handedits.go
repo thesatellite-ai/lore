@@ -257,6 +257,11 @@ func (b *Backend) Unstage(ctx context.Context) error {
 	if h, err := b.head(ctx); err != nil || h == "" {
 		return err
 	}
+	if b.mode == modeClone {
+		if err := b.refusePersonGitOp(ctx, b.work); err != nil {
+			return err // B2-9: git reset ends a merge in progress
+		}
+	}
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"reset", "--quiet"}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: unstage the files staged by hand in "+b.work, err)
 	}

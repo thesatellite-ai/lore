@@ -148,6 +148,9 @@ func (b *Backend) FlattenLayout(ctx context.Context) (FlattenResult, error) {
 	if b.mode != modeClone {
 		return res, nil
 	}
+	if err := b.refusePersonGitOp(ctx, b.work); err != nil {
+		return res, err // B2-9
+	}
 	if b.readOnly {
 		return res, store.ErrReadOnly
 	}

@@ -520,7 +520,12 @@ func (a *App) writeStateFor(ctx context.Context, target store.Source) (*state, e
 	// F-MIGRATE-1: `lore migrate run` is the answer to the O6 question,
 	// so its own writes (the machine-local copy, the session row its first
 	// audited write creates, …) pass; every other write still asks.
-	if err := st.format.check(); err != nil && !opsmigrate.InRun(ctx) {
+	// The question is about this repository's row files: a write whose
+	// target is another store (an org store's roster, `--to <store>`, the
+	// machine store) changes none of them, so the repo's format never
+	// blocks it (an attached v0.1.17 store asks its own, checkTarget).
+	repoTarget := target == "" || target == store.SourceRepo
+	if err := st.format.check(); err != nil && repoTarget && !opsmigrate.InRun(ctx) {
 		return nil, err
 	}
 	// ONBOARDING 3.3: an unresolvable setup or a setup/org disagreement

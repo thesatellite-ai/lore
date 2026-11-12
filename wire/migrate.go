@@ -148,6 +148,13 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 		return nil, 0, err
 	}
 	steps, rows = append(steps, personal...), rows+n
+	// rows a newer lore moved to another store whose old copy is still
+	// here (migrate_moved.go): before every step that looks an id up
+	moved, n, err := a.migrateMovedLeftovers(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	steps, rows = append(steps, moved...), rows+n
 	legacy, ok, err := identity.ReadLegacy(a.opts.Home)
 	if err != nil {
 		return nil, 0, err
@@ -600,7 +607,7 @@ type orgDefaultsProbe struct {
 // defaults.client_repos becomes a routing.client_repos policy row (step
 // org_defaults_to_policy, orgDefaultsToPolicy; the original file is kept as
 // lore-org.yaml.migrated). seen lists store folders whose marker was
-// already handled. Commits wait in the store clone for `lore sync`. The
+// already handled. Commits are pushed by the run's Finish (or wait for `lore sync` on --no-push). The
 // int counts the rows written: roster rows rewritten and policy rows.
 func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool) ([]string, int, error) {
 	org := a.orgStoresHere(ctx)
@@ -654,9 +661,9 @@ func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool)
 			}
 		}
 	}
-	if !dryRun && len(steps) > 0 {
-		steps = append(steps, "org: run `lore sync` to push the org store changes")
-	}
+	// No "run lore sync" line here: the run's last lines say per store
+	// whether its commit was pushed or waits (Finish), so a step line
+	// asking for a push contradicted a run that had pushed.
 	return steps, rows, nil
 }
 
@@ -935,12 +942,7 @@ func rewriteStoreTables(ctx context.Context, b store.Backend, tables []row.Table
 			continue
 		}
 		found[sr.Table] = append(found[sr.Table], r.ID)
-		if step, ok := formatSteps[sr.Table]; ok {
-			r.Fields = step(r.Fields)
-		}
-		r, _ = engine.NullEmptyRefs(reg, r) // v0.1.17's "" for "no ref" is written as null (engine/emptyref.go)
-		r, _ = auditfill.Defaults(r)        // audit_fields (step 9): a v1 row never had *_by actors
-		up, err := store.FromRow(r)
+		up, err := store.FromRow(upcastV1(reg, r))
 		if err != nil {
 			return nil, err
 		}
@@ -982,6 +984,20 @@ func migrateCommitSubject(ctx context.Context, n int) string {
 		via = migrateViaRun
 	}
 	return fmt.Sprintf("lore: migrate %s to format %d (%s)", plural(n, "row"), row.FormatVersion, via)
+}
+
+// upcastV1 is the row a v1 row file becomes when the migration rewrites
+// it as `_v: 2`: the table's format step, v0.1.17's "" for "no ref" as
+// null (engine/emptyref.go) and the audit_fields defaults (step 9: a v1
+// row never had *_by actors). The hand-edit pick-up compares a migrated
+// file with it, so the rewrite itself is never taken for a hand edit.
+func upcastV1(reg *schema.Registry, r row.Row) row.Row {
+	if step, ok := formatSteps[r.Table]; ok {
+		r.Fields = step(r.Fields)
+	}
+	r, _ = engine.NullEmptyRefs(reg, r)
+	r, _ = auditfill.Defaults(r)
+	return r
 }
 
 // RewriteAllV1 implements opsmigrate.AllTablesRewriter: RewriteV1 (or

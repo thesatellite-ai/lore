@@ -119,6 +119,7 @@ lore: pushed store agency: commit 86dbae4 to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/client (store agency)
 ✓ tsk_05e9…4603 — send the invoice reminder before Friday [medium] → [agency/client]
+  created tasklist tlt_c0f3…b5b8 "default" for tasks added without --tasklist
 
 # bob, in website
 $ lore task claim tsk_05e9…4603
@@ -142,7 +143,7 @@ tsk_05e9…4603
   attempts: 1
   source:   agency/client
   claim:    none on refs/lore/signals/main
-created 2026-11-02T10:09:20Z by act_2ad3…f891 · updated 2026-11-02T10:11:40Z by act_7a67…9504
+created 2026-11-02T10:09:20Z by alice · updated 2026-11-02T10:11:40Z by bob
 ```
 <!-- /example -->
 
@@ -157,14 +158,14 @@ Use it when an agent holds a task it should not work on any more. The agent's ne
 # alice, in website
 $ lore agent start --label agent-backend --owner @alice
 lore: pushed store agency/org: commit dfd8dc8 to branch main
-lore: wrote ~/.lore/stores/agency/notes/org/actors/act_c0f3…b5b8.json (store agency/org)
-✓ act_c0f3…b5b8 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_76bd…3f10.json (store agency/org)
+✓ act_76bd…3f10 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 
 # agent-backend, in website
 $ lore task claim tsk_05e9…4603
 lore: pushed store agency: commit cf563f3 to branch main
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/actors/act_76bd…3f10.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_05e9…4603.json (store agency)
 ✓ claimed tsk_05e9…4603 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
 
@@ -191,24 +192,24 @@ Use it when the work should move to another person. The old holder's next write 
 # alice, in website
 $ lore task add 'update the contact page' --to agency --assign @bob
 lore: pushed store agency: commit 6d00426 to branch main
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
-✓ tsk_76bd…3f10 — update the contact page [medium] → [agency/client]
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
+✓ tsk_d431…313a — update the contact page [medium] → [agency/client]
 
 # bob, in website
-$ lore task claim tsk_76bd…3f10
+$ lore task claim tsk_d431…313a
 lore: pushed store agency: commit 34ee210 to branch main
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
-✓ claimed tsk_76bd…3f10 update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
+✓ claimed tsk_d431…313a update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
 
 # alice, in website
-$ lore task reassign tsk_76bd…3f10 --assign @alice
+$ lore task reassign tsk_d431…313a --assign @alice
 lore: pushed store agency: commit 7898daa to branch main
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
-✓ tsk_76bd…3f10 reassigned to @alice
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
+✓ tsk_d431…313a reassigned to @alice
 
 # bob, in website
-$ lore task done tsk_76bd…3f10
-ERROR: [E_REASSIGNED] tsk_76bd…3f10 was reassigned while you held it; stop work on it (now assigned to act_2ad3…f891)
+$ lore task done tsk_d431…313a
+ERROR: [E_REASSIGNED] tsk_d431…313a was reassigned while you held it; stop work on it (now assigned to act_2ad3…f891)
   hint: stop work on this task; `lore task next` finds other work
 (exit 14)
 ```
@@ -230,6 +231,7 @@ $ lore task add 'make the buttons blue' --assign @bob
 lore: wrote ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — make the buttons blue [medium]
+  created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 

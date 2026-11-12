@@ -58,7 +58,7 @@ type Purger interface {
 // MetaForgetIn is the input of meta.forget.
 type MetaForgetIn struct {
 	Keys    string `json:"keys" arg:"0" rest:"true" desc:"the unused keys to remove (names or mky_ ids, space separated)"`
-	Confirm bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: forget removes the key rows for good (DQ2)"`
+	Confirm bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: forget removes the key rows for good"`
 	// Reason is the deleted_reason of the key rows: required while
 	// delete.require_reason is true (E_REASON_REQUIRED), as for every other
 	// delete; without it no key could be forgotten under that policy.

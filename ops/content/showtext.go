@@ -5,6 +5,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
+	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 )
 
 // ShowText is the plain-text `show` of a knowledge row without its own
@@ -59,14 +60,20 @@ const listTextMax = 80
 // kind without one, cut to listTextMax. v0.1.17 printed only "<badge>
 // <id>", so `lore pattern list` showed a column of ids and nothing a
 // person could recognise (campaign knowledge 2026-11-08, the list half of
-// INTEG-KNOWLEDGE-3).
-func ListLine(badge, id, text string) string {
+// INTEG-KNOWLEDGE-3). label is the record's `_label` ("" for a repo row):
+// a row of another store keeps the same layout with its store label last
+// (opsmemory.LabelSuffix), so one list never mixes two layouts.
+func ListLine(badge, id, text, label string) string {
 	s := badge + "  " + id
 	if t := ListText(text); t != "" {
 		s += "  " + t
 	}
-	return s + "\n"
+	return s + opsmemory.LabelSuffix(label) + "\n"
 }
+
+// LabelSuffix is the " [<label>]" end of a list line of a row of another
+// store (opsmemory.LabelSuffix; "" for a repo row).
+func LabelSuffix(label string) string { return opsmemory.LabelSuffix(label) }
 
 // ListText is text as one list line shows it: its first line, trimmed,
 // cut to listTextMax on a character boundary ("" for blank text).

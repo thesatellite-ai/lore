@@ -22,16 +22,16 @@ Alice (an agency developer) keeps the dates for the client's website, `github.co
 ```console
 # alice, in website
 $ lore reminder add 'Renew the domain name' --due 2027-06-01 --recurrence 1y
-lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
-✓ reminder rmd_0aae…a61f due 2027-06-01
+lore: wrote ~/work/website/.lore/data/reminders/rmd_b69e…5ed7.json
+✓ reminder rmd_b69e…5ed7 due 2027-06-01
 $ lore reminder add 'Call the client about the new logo' --due 2026-11-01
-lore: wrote ~/work/website/.lore/data/reminders/rmd_6a86…ed8c.json
-✓ reminder rmd_6a86…ed8c due 2026-11-01
+lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
+✓ reminder rmd_0aae…a61f due 2026-11-01
 $ lore reminder list
 ! 2026-11-01  Call the client about the new logo
-    rmd_6a86…ed8c
-  2027-06-01  Renew the domain name (1y)
     rmd_0aae…a61f
+  2027-06-01  Renew the domain name (1y)
+    rmd_b69e…5ed7
 ```
 <!-- /example -->
 
@@ -44,18 +44,18 @@ Reminders are listed by date, soonest first. A `!` at the start of the line mean
 <!-- example: tasks#reminder-done -->
 ```console
 # alice, in website
+$ lore reminder done rmd_b69e…5ed7
+lore: wrote ~/work/website/.lore/data/reminders/rmd_b69e…5ed7.json
+✓ rescheduled to 2028-06-01
 $ lore reminder done rmd_0aae…a61f
 lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
-✓ rescheduled to 2028-06-01
-$ lore reminder done rmd_6a86…ed8c
-lore: wrote ~/work/website/.lore/data/reminders/rmd_6a86…ed8c.json
-✓ reminder rmd_6a86…ed8c completed
+✓ reminder rmd_0aae…a61f completed
 $ lore reminder list
   2028-06-01  Renew the domain name (1y)
-    rmd_0aae…a61f
+    rmd_b69e…5ed7
 $ lore reminder list --done
   2026-11-01  Call the client about the new logo
-    rmd_6a86…ed8c
+    rmd_0aae…a61f
 ```
 <!-- /example -->
 
@@ -66,13 +66,13 @@ Delete only for mistakes. lore asks first; without a terminal it stops with `E_N
 <!-- example: tasks#reminder-delete -->
 ```console
 # alice, in website
-$ lore reminder delete rmd_6a86…ed8c
-ERROR: [E_NEEDS_CONFIRM] reminder delete rmd_6a86…ed8c?
+$ lore reminder delete rmd_0aae…a61f
+ERROR: [E_NEEDS_CONFIRM] reminder delete rmd_0aae…a61f?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore reminder delete rmd_6a86…ed8c --yes
-lore: wrote ~/work/website/.lore/data/reminders/rmd_6a86…ed8c.json
-✓ rmd_6a86…ed8c moved to the trash (restore: lore trash restore rmd_6a86…ed8c)
+$ lore reminder delete rmd_0aae…a61f --yes
+lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
+✓ rmd_0aae…a61f moved to the trash (restore: lore trash restore rmd_0aae…a61f)
 ```
 <!-- /example -->
 
@@ -97,10 +97,10 @@ After `done`, the yearly reminder from Step 1 sits one year later, and the one-t
 # alice, in website
 $ lore reminder list
   2028-06-01  Renew the domain name (1y)
-    rmd_0aae…a61f
+    rmd_b69e…5ed7
 $ lore reminder list --done
   2026-11-01  Call the client about the new logo
-    rmd_6a86…ed8c
+    rmd_0aae…a61f
 ```
 <!-- /example -->
 

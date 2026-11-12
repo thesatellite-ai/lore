@@ -56,6 +56,8 @@ const (
 	warnGitignore       = "could not update .gitignore: "
 	warnToolFiles       = "could not wire AI tool files: "
 	alreadyInitializedF = "a lore project already exists here (%s)"
+	// linkedRemoteF says the project id came from an org store link (remote).
+	linkedRemoteF = "  the org store already links %s: this project keeps that link's id, so its store folder's notes reach this repo\n"
 	// toolsFromSetupF says which setup chose the tool files (setup, files).
 	toolsFromSetupF = "  tool files from setup %s: %s\n"
 	// alreadyInitializedHint is the next step of a second init
@@ -91,8 +93,13 @@ type Host interface {
 	// OriginURL is origin's URL without credentials, or "".
 	OriginURL(ctx context.Context) string
 	// CreateProject writes the projects row into the repo store and returns
-	// its row id as stored and as a project id.
-	CreateProject(ctx context.Context, fields map[string]value.Value) (string, ids.ID[ids.Project], error)
+	// its row id as stored and as a project id. A zero id mints a new one;
+	// otherwise the row takes id (the project a store link already names).
+	CreateProject(ctx context.Context, id ids.ID[ids.Project], fields map[string]value.Value) (string, ids.ID[ids.Project], error)
+	// LinkedProject is the project id an org store link already gives this
+	// repo by its remote (a repo linked with `lore org link` before it had
+	// any lore files), with that remote; ok false when nothing links it.
+	LinkedProject(ctx context.Context) (pid ids.ID[ids.Project], remote string, ok bool)
 	// SeedRepoMeta writes _meta.json naming pid.
 	SeedRepoMeta(ctx context.Context, pid ids.ID[ids.Project]) error
 	// InheritRepoID gives the new project the checkout's repo identity.
@@ -154,6 +161,9 @@ type InitOut struct {
 	ToolsFromSetup string `json:"tools_from_setup,omitempty"`
 	// ToolFiles are those tools' pointer files (with ToolsFromSetup).
 	ToolFiles []string `json:"tool_files,omitempty"`
+	// LinkedRemote is the remote an org store link already named this repo
+	// by; the project took that link's id (B1-18). "" for a new project.
+	LinkedRemote string `json:"linked_remote,omitempty"`
 	// Warnings are the non-fatal failures (.gitignore, tool files), each
 	// without the "WARN: " prefix; the CLI prints them on stderr.
 	Warnings []string `json:"warnings,omitempty"`
@@ -168,8 +178,12 @@ func (o InitOut) Body() string {
 	if o.ToolsFromSetup != "" {
 		from = fmt.Sprintf(toolsFromSetupF, o.ToolsFromSetup, strings.Join(o.ToolFiles, ", "))
 	}
+	linked := ""
+	if o.LinkedRemote != "" {
+		linked = fmt.Sprintf(linkedRemoteF, o.LinkedRemote)
+	}
 	return fmt.Sprintf("lore initialized\n    project_id: %s\n    name:       %s\n    repo_id:    %s\n\n", o.ProjectID, o.Name, o.RepoID) +
-		from + o.ToolLines + NextHint + "\n"
+		linked + from + o.ToolLines + NextHint + "\n"
 }
 
 // WarningLines are the warnings as printed ("WARN: …", one per line).
@@ -249,7 +263,11 @@ func Run(ctx context.Context, h Host, in InitIn) (InitOut, error) {
 	if err != nil {
 		return InitOut{}, err
 	}
-	rowID, pid, err := h.CreateProject(ctx, fields)
+	// B1-18: the org store may already link this repo by its remote; a new
+	// id would leave that link naming nothing, and the folder's rows would
+	// stop reaching the repo, so a fresh project takes the linked id.
+	linked, linkedRemote, isLinked := h.LinkedProject(ctx)
+	rowID, pid, err := h.CreateProject(ctx, linked, fields)
 	if err != nil {
 		return InitOut{}, err
 	}
@@ -269,6 +287,9 @@ func Run(ctx context.Context, h Host, in InitIn) (InitOut, error) {
 	out.addWarning(warnGitignore, h.EnsureGitignore(ctx))
 	h.Prime(ctx) // the first fetch happens here, as v0.1.17's init did
 	out.ProjectID, out.Name, out.RepoID = rowID, name, repoID
+	if isLinked {
+		out.LinkedRemote = linkedRemote
+	}
 	targets := in.Target
 	if len(targets) == 0 {
 		// --target always wins; else the applying setup's tools; else

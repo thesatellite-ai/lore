@@ -17,7 +17,7 @@ In a repo without a remote, nothing is ever pushed. Tasks are still live by defa
 <!-- example: solo#no-remote -->
 ```console
 # alice, in scratch
-$ lore init --non-interactive --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
+$ lore init --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
 lore: wrote ~/work/scratch/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
   scope: [master] severity: must
@@ -25,6 +25,7 @@ $ lore task add 'write the README'
 lore: wrote ~/work/scratch/.lore/data/task_lists/tlt_2ad3…f891.json
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — write the README [medium]
+  created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 lore live: (live, local: no remote)
 $ lore task done tsk_162d…9666
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json

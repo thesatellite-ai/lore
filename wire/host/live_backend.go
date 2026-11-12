@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/live"
@@ -144,6 +145,9 @@ func (b *liveBackend) liveFiles(ctx context.Context, s *liveSession) (string, ma
 	if !ok {
 		return "", map[live.RowKey]live.File{}, nil
 	}
+	if rows, hit := s.decoded.get(oid, b.folder); hit {
+		return oid, rows, nil
+	}
 	tree, err := s.ref.ReadTree(ctx, oid)
 	if err != nil {
 		return "", nil, err
@@ -157,7 +161,42 @@ func (b *liveBackend) liveFiles(ctx context.Context, s *liveSession) (string, ma
 		sort.Strings(paths)
 		return "", nil, fmt.Errorf("unreadable live rows: %s (first: %w)", strings.Join(paths, ", "), bad[paths[0]])
 	}
+	s.decoded.put(oid, b.folder, rows)
 	return oid, rows, nil
+}
+
+// liveDecoded is a session's decoded live rows of one live ref commit,
+// per live folder (B1-10: engine.Get per row of a 5000-row lore.db decoded
+// the whole live tree on every call, minutes of CPU in lore fix). A commit
+// id names fixed content, so an entry never goes stale: the ref moving to
+// another commit is a miss and replaces it. The maps it hands out are
+// shared and read-only (no caller of liveFiles changes the map or a
+// file's body; liveStoreRow clones the body before use).
+type liveDecoded struct {
+	mu      sync.Mutex
+	oid     string
+	folders map[string]map[live.RowKey]live.File
+}
+
+// get returns folder's rows decoded from commit oid, when held.
+func (d *liveDecoded) get(oid, folder string) (map[live.RowKey]live.File, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.oid != oid {
+		return nil, false
+	}
+	rows, ok := d.folders[folder]
+	return rows, ok
+}
+
+// put records folder's rows of commit oid, dropping another commit's.
+func (d *liveDecoded) put(oid, folder string, rows map[live.RowKey]live.File) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.oid != oid || d.folders == nil {
+		d.oid, d.folders = oid, map[string]map[live.RowKey]live.File{}
+	}
+	d.folders[folder] = rows
 }
 
 // liveStoreRow is the backend row of a live file: its `_v: 2` body, with the

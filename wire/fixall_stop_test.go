@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/adapters/execfile"
 )
 
 // fakeFixChild writes a shell script standing in for a `lore fix --all`
@@ -25,7 +27,7 @@ func fakeFixChild(t *testing.T, trap string) string {
 		"sleep 60 &\n" +
 		"echo $! > helper.pid\n" +
 		"wait\nwait\n"
-	if err := os.WriteFile(script, []byte(body), 0o700); err != nil { // #nosec G306 -- an executable test script
+	if err := execfile.WriteFile(script, []byte(body), 0o700); err != nil { // #nosec G306 -- an executable test script
 		t.Fatal(err)
 	}
 	return script

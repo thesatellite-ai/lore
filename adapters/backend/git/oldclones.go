@@ -8,6 +8,10 @@ package git
 //	<home>/clones/<host>/<owner>/<repo>/lock   the clone lock
 //	<home>/clones/<host>/<owner>/<repo>/state  the lock's journal
 //	<home>/clones/<host>/<owner>/<repo>@<branch>…  a pinned branch's clone
+//	<home>/clones/<host>/<owner>/<repo>.git    alone, no <repo>/ beside it:
+//	                                           lore 0.1.17's bare clone (it
+//	                                           wrote commits into the bare
+//	                                           clone, never had a worktree)
 //	<home>/clones-v017/<host>/<path>.git       the org link code's bare
 //	                                           clones (not moved: the org
 //	                                           link code now uses the store
@@ -60,8 +64,8 @@ const (
 	oldLockName     = "lock"
 	// MoveRecordFile is the record of moved clones, under <home>/state.
 	MoveRecordFile = "layout-move.json"
-	// moveLockFile serialises two lore processes moving at once.
-	moveLockFile = "layout-move.lock"
+	// MoveLockFile serialises two lore processes moving at once (lore where names it).
+	MoveLockFile = "layout-move.lock"
 	// movingSuffix ends the folder a new clone is built in.
 	movingSuffix = ".moving"
 	// movedRefNS holds an old clone's branch fetched into a clone that
@@ -88,15 +92,41 @@ type OldClone struct {
 	// Pinned is the branch of a pinned-branch clone ("" otherwise).
 	Pinned string
 	// Whole is false when one half is missing (nothing to move: its rows
-	// are wherever the other half is, or gone).
+	// are wherever the other half is, or gone). A 0.1.17 bare clone (V017)
+	// is whole on its own.
 	Whole bool
+	// V017 marks lore 0.1.17's clone: the bare clone alone (no stem folder,
+	// no worktree, no lock). Its commits are on the bare clone's branches;
+	// it has no uncommitted changes to carry.
+	V017 bool
+}
+
+// GitDir is the folder git commands about the old clone run in (and a
+// person's check names): the worktree, or a 0.1.17 bare clone itself.
+func (o OldClone) GitDir() string {
+	if o.V017 {
+		return o.Bare
+	}
+	return o.Work
 }
 
 // RemoveCommand is the exact command that removes the old clone (both
 // halves); doctor prints it, and lore fix removes the same two folders
 // once MovedSafely proves it safe.
 func (o OldClone) RemoveCommand() string {
+	if o.V017 {
+		return "rm -rf " + shellPath(o.Bare)
+	}
 	return "rm -rf " + shellPath(o.Base) + " " + shellPath(o.Bare)
+}
+
+// Paths are the folders the old clone occupies (what RemoveCommand
+// removes): a 0.1.17 clone is its bare clone only.
+func (o OldClone) Paths() []string {
+	if o.V017 {
+		return []string{o.Bare}
+	}
+	return []string{o.Base, o.Bare}
 }
 
 // shellPath quotes a path for a shell command line when it needs it.
@@ -115,7 +145,13 @@ func oldClone(root, base string) OldClone {
 	if i := strings.LastIndex(rel, branchCloneSep); i >= 0 && !strings.Contains(rel[i:], "/") {
 		o.Pinned = rel[i+len(branchCloneSep):]
 	}
-	o.Whole = isFile(filepath.Join(o.Bare, headFileName)) && isFile(filepath.Join(o.Work, gitDirName))
+	bare := isFile(filepath.Join(o.Bare, headFileName))
+	o.Whole = bare && isFile(filepath.Join(o.Work, gitDirName))
+	if _, err := os.Lstat(base); bare && errors.Is(err, fs.ErrNotExist) {
+		// lore 0.1.17 kept only the bare clone (no stem folder at all): its
+		// commits are all there, so it is whole and can be moved
+		o.V017, o.Whole = true, true
+	}
 	return o
 }
 
@@ -270,7 +306,7 @@ func MoveLock(ctx context.Context, home string) (*rowfs.Lock, error) {
 	if err := os.MkdirAll(dir, cloneDirMode); err != nil {
 		return nil, errs.FileIO("create", dir, err)
 	}
-	root, err := rowfs.Open(dir, rowfs.WithLockPath(filepath.Join(dir, moveLockFile)), rowfs.WithAllowNetworkFS(true))
+	root, err := rowfs.Open(dir, rowfs.WithLockPath(filepath.Join(dir, MoveLockFile)), rowfs.WithAllowNetworkFS(true))
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +339,10 @@ func MoveNeeded(home string) bool {
 // process): HEAD of its git dir, then the branch ref loose or packed in
 // the bare clone. "" when it cannot be read or the branch has no commit.
 func worktreeTip(o OldClone) string {
-	gitdir := worktreeGitDir(o.Work)
+	gitdir := o.Bare // a 0.1.17 bare clone: its HEAD names the branch
+	if !o.V017 {
+		gitdir = worktreeGitDir(o.Work)
+	}
 	if gitdir == "" {
 		return ""
 	}
@@ -363,6 +402,11 @@ func MoveOldClone(ctx context.Context, home string, o OldClone, now time.Time) (
 		return res, err
 	}
 	g := runner{bin: bin, owned: true, noHooks: filepath.Join(o.Base, noHooksName)}
+	if o.V017 {
+		// lore 0.1.17 locked nothing lore can take here (its lock was in
+		// the project); the move only reads the bare clone
+		return moveV017(ctx, home, g, o, now)
+	}
 	lockRoot, err := rowfs.Open(o.Base, rowfs.WithLockPath(o.Lock), rowfs.WithLockTimeout(moveLockWait), rowfs.WithAllowNetworkFS(true))
 	if err != nil {
 		return res, err
@@ -396,6 +440,34 @@ func MoveOldClone(ctx context.Context, home string, o OldClone, now time.Time) (
 	for _, c := range changes {
 		res.Files = append(res.Files, c.path)
 	}
+	return finishMove(ctx, home, g, o, res, tip, digest, changes, now)
+}
+
+// moveV017 is MoveOldClone for lore 0.1.17's bare clone: the branch its
+// HEAD names is carried (every branch is fetched), with no worktree and
+// no uncommitted changes. A commit 0.1.17 made and never pushed is on
+// that branch, so it lands in the new clone as a commit the remote lacks.
+func moveV017(ctx context.Context, home string, g runner, o OldClone, now time.Time) (MoveResult, error) {
+	res := MoveResult{Old: o}
+	out, err := g.run(ctx, call{dir: o.Bare, args: []string{"config", "--get", "remote." + RemoteName + ".url"}})
+	if err != nil {
+		return res, errs.Wrap(errs.NotFound, "git: the lore 0.1.17 store clone "+o.Bare+" has no origin remote, so lore cannot tell which store it is", err).
+			WithHint("set it (git -C " + o.Bare + " remote add origin <store url>), then run the command again")
+	}
+	res.Origin = trimmed(out)
+	if out, err = g.run(ctx, call{dir: o.Bare, args: []string{"symbolic-ref", "--short", "HEAD"}}); err != nil {
+		return res, errs.Wrap(errs.InvalidInput, "git: the lore 0.1.17 store clone "+o.Bare+" has no branch at HEAD", err).
+			WithHint("point it at the store's branch (git -C " + o.Bare + " symbolic-ref HEAD refs/heads/<branch>), then run the command again")
+	}
+	res.Branch = trimmed(out)
+	return finishMove(ctx, home, g, o, res, worktreeTip(o), "", nil, now)
+}
+
+// finishMove is the part of a move both kinds of old clone share: a move
+// recorded already with the same tip and changes does nothing; otherwise
+// the new clone is made (or the old branch merged into the one there) and
+// the move recorded.
+func finishMove(ctx context.Context, home string, g runner, o OldClone, res MoveResult, tip, digest string, changes []change, now time.Time) (MoveResult, error) {
 	if e, ok := ReadMoveRecord(home).Moves[o.Base]; ok && e.Tip == tip && e.Changes == digest && (e.To == "" || isDir(filepath.Join(e.To, gitDirName))) {
 		res.To, res.Carried, res.Already = e.To, e.Carried, true
 		return res, nil
@@ -551,6 +623,9 @@ func changesDigest(work string, list []change) string {
 // changes now (lore doctor compares it with the record); ok is false when
 // git cannot read the worktree or a path is conflicted.
 func ChangesDigestOf(ctx context.Context, o OldClone) (string, bool) {
+	if o.V017 {
+		return "", true // a bare clone has no uncommitted changes
+	}
 	bin, err := lookGit("git")
 	if err != nil {
 		return "", false
@@ -589,7 +664,7 @@ func moveFresh(ctx context.Context, g runner, o OldClone, origin, branch, dest s
 		}
 		if _, err := g.run(ctx, call{dir: dir, args: args}); err != nil {
 			return errs.Wrap(errs.Internal, "git: copy the old store clone "+o.Bare+" into "+tmp, err).
-				WithHint("check the old clone with git -C " + o.Work + " status, then run the command again")
+				WithHint("check the old clone with git -C " + o.GitDir() + " status, then run the command again")
 		}
 	}
 	has, err := g.run(ctx, call{dir: tmp, args: []string{"rev-parse", "--verify", "--quiet", headsPrefix + branch}})
@@ -648,11 +723,11 @@ func moveInto(ctx context.Context, g runner, o OldClone, branch, tip, dest strin
 		behind := head == "" || ancestor(ctx, g, dest, head, tip)
 		switch {
 		case trimmed(cur) != branch && trimmed(cur) != pendingBranch:
-			return errs.New(errs.InvalidInput, "git: the store clone "+dest+" has branch "+trimmed(cur)+" checked out, the old clone "+o.Work+" has "+branch+"; nothing was moved").
+			return errs.New(errs.InvalidInput, "git: the store clone "+dest+" has branch "+trimmed(cur)+" checked out, the old clone "+o.GitDir()+" has "+branch+"; nothing was moved").
 				WithHint("switch it (git -C " + dest + " switch " + branch + "), then run the command again")
 		case !behind:
-			return errs.New(errs.Stale, "git: the old store clone "+o.Work+" and the new clone "+dest+" both have commits the other lacks; nothing was moved").
-				WithHint("push the old clone's commits (git -C " + o.Work + " push origin " + branch + "), then run lore sync; or remove the new clone (it is lore's) and run the command again")
+			return errs.New(errs.Stale, "git: the old store clone "+o.GitDir()+" and the new clone "+dest+" both have commits the other lacks; nothing was moved").
+				WithHint("push the old clone's commits (git -C " + o.GitDir() + " push origin " + branch + "), then run lore sync; or remove the new clone (it is lore's) and run the command again")
 		}
 		args := []string{"merge", "--quiet", "--ff-only", moved}
 		if head == "" {

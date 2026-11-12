@@ -70,7 +70,7 @@ type TimeShowIn struct {
 	Until   string `json:"until,omitempty" flag:"until" desc:"only entries on or before this day (YYYY-MM-DD or a date phrase)"`
 	TZ      string `json:"tz,omitempty" flag:"tz" desc:"time zone for display (e.g. Europe/Prague; default local)"`
 	// IncludeDeleted reads a task in the trash (DQ10, D16).
-	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"the task may be in the trash: show its time anyway (DQ10)"`
+	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"the task may be in the trash: show its time anyway"`
 	// NoChildren drops the subtree total of a parent task (TASK 6.11).
 	NoChildren bool `json:"no_children,omitempty" flag:"no-children" desc:"own time only: no subtree total of the sub-tasks"`
 }

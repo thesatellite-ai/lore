@@ -36,14 +36,14 @@ type Env interface {
 
 // Flag is the --expand flag, embedded in each show input.
 type Flag struct {
-	Expand bool `json:"expand,omitempty" flag:"expand" desc:"fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"`
+	Expand bool `json:"expand,omitempty" flag:"expand" desc:"fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"`
 }
 
 // RevealFlag is --reveal / --force of a show that can reveal (2.7, SQ10):
 // embedded only in the shows that call Reveal, so no show offers a flag it
 // ignores.
 type RevealFlag struct {
-	Reveal bool `json:"reveal,omitempty" flag:"reveal" desc:"--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"`
+	Reveal bool `json:"reveal,omitempty" flag:"reveal" desc:"--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"`
 	Force  bool `json:"force,omitempty" flag:"force" desc:"with --reveal: reveal without a person's answer (agents; audited as FORCED)"`
 }
 

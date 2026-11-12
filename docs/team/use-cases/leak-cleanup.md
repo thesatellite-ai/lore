@@ -23,6 +23,7 @@ $ lore task add 'chase the client about the unpaid March invoice' --to repo
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/work/website/.lore/data
 ✓ tsk_7a67…9504 — chase the client about the unpaid March invoice [medium]
+  created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 
 # carol, in app

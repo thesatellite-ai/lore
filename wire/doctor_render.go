@@ -38,16 +38,32 @@ func (a *App) DoctorRenderedCopies(ctx context.Context) ([]DoctorFinding, error)
 		return nil, errs.New(errs.NotAStore, "not inside a git repo, so there are no rendered files to compare").WithHint("run lore doctor in a repo")
 	}
 	found, err := cc.RenderedCopies(ctx, root)
+	if noProjectToRender(err) {
+		return nil, nil // B1-8: no lore project here, so nothing is rendered to compare (not a check that could not run)
+	}
 	if err != nil {
 		return nil, err
 	}
 	out := make([]DoctorFinding, 0, len(found))
 	for _, f := range found {
-		check := DoctorCheckRenderedCopy
-		if f.Kind == opsrender.PointerOrphan || f.Kind == opsrender.PointerMissing {
-			check = DoctorCheckToolPointer
-		}
-		out = append(out, DoctorFinding{Check: check, Level: DoctorWarning, Message: f.Message, Fix: f.Fix})
+		out = append(out, renderedCopyFinding(f))
 	}
 	return out, nil
+}
+
+// renderedCopyFinding is the doctor line of one rendered copy: a warning,
+// except a copy kept only on this machine that was never rendered here (a
+// fresh clone, a new laptop), which is a note: lore writes it itself on
+// the next lore render, lore fix or doctor --fix, and nothing is wrong
+// (B3-25: every new laptop's first doctor said DEGRADED for it).
+func renderedCopyFinding(f opsrender.CopyFinding) DoctorFinding {
+	check := DoctorCheckRenderedCopy
+	if f.Kind == opsrender.PointerOrphan || f.Kind == opsrender.PointerMissing {
+		check = DoctorCheckToolPointer
+	}
+	level := DoctorWarning
+	if f.Local && f.Kind == opsrender.CopyMissing {
+		level = DoctorNote
+	}
+	return DoctorFinding{Check: check, Level: level, Message: f.Message, Fix: f.Fix}
 }

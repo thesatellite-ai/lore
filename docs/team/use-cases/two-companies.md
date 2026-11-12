@@ -104,15 +104,15 @@ lore: wrote ~/.lore/personal/client3/machines/mch_d431…313a.json (store me)
 
 # alice, in website
 $ lore memory list
-mem_76bd…3f10  ask the client PM before touching the payment flow  [me/agency]
+mem_76bd…3f10 [retrieved] ask the client PM before touching the payment flow [me/agency]
 
 # alice, in client3-api
 $ lore memory list
-mem_b4f4…a5b0  client3 deploys only on Tuesdays  [me/client3]
+mem_b4f4…a5b0 [retrieved] client3 deploys only on Tuesdays [me/client3]
 
 # alice, in forked-tool
 $ lore memory list
-lore memory list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/forked-tool/.git/config; hook blocks in ~/work/forked-tool/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore memory list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/forked-tool/.git/config; hook blocks in ~/work/forked-tool/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 (no memories)
 ```
 <!-- /example -->

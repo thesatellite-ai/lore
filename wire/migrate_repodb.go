@@ -109,6 +109,12 @@ func (a *App) repoDBRows(ctx context.Context) (repoDB, error) {
 		}
 		switch _, gerr := b.Get(ctx, c.Row.Table, c.Row.ID); {
 		case errors.Is(gerr, store.ErrNotFound):
+			if own, ok := movedOwnerOf(ctx, st, c.Row.Table, c.Row.ID); ok {
+				// B1-5: a newer lore moved it away; bringing lore.db's
+				// copy back would make a second live copy (migrate_moved.go)
+				out.moved = append(out.moved, movedStepPrefix+c.Row.Table.String()+"/"+c.Row.ID.String()+" ("+v017LoreDB+") is in "+string(own.src)+" (moved there by a newer lore); lore.db's copy is not brought back")
+				continue
+			}
 			out.rows = append(out.rows, c)
 		case gerr != nil:
 			return repoDB{}, gerr
@@ -119,6 +125,9 @@ func (a *App) repoDBRows(ctx context.Context) (repoDB, error) {
 
 // repoDB is what the checkout's lore.db adds to .lore/data.
 type repoDB struct {
+	// moved are the step lines of lore.db rows left out because a newer
+	// lore moved them to another store (migrate_moved.go).
+	moved   []string
 	top     string
 	project string // the database's project the rows belong to
 	// needsMeta: .lore/data/_meta.json is missing, so the import writes
@@ -176,9 +185,10 @@ func (a *App) migrateRepoDB(ctx context.Context, dryRun bool) ([]string, int, er
 	got, err := a.repoDBRows(ctx)
 	todo := got.rows
 	if err != nil || len(todo) == 0 {
-		return nil, 0, err
+		return got.moved, 0, err
 	}
-	steps := make([]string, 0, len(todo)+1)
+	steps := make([]string, 0, len(todo)+1+len(got.moved))
+	steps = append(steps, got.moved...)
 	meta := filepath.Join(got.top, filepath.FromSlash(rowfs.RepoMetaPath))
 	if got.needsMeta {
 		steps = append(steps, repoDBStepPrefix+"project "+got.project+" → .lore/data/"+rowfs.MetaFileName)

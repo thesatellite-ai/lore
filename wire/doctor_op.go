@@ -49,7 +49,8 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckOldSettings, a.DoctorUnclassifiedSettings},
 		{DoctorCheckRepoClass, a.DoctorRepoClass},
 		{DoctorCheckSLA, a.DoctorSLA},
-		{DoctorCheckProjects, a.DoctorProjects},                 // doctor_projects.go
+		{DoctorCheckProjects, a.DoctorProjects}, // doctor_projects.go
+		{DoctorCheckDuplicateRepos, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorDuplicateRepos(c, fix) }}, // doctor_duprepos.go (B2-7)
 		{DoctorCheckKindRoute, a.DoctorKindRoutes},              // doctor_kindroutes.go (G-META-9)
 		{DoctorCheckIdentityContacts, a.DoctorIdentityContacts}, // doctor_identity.go (TEAM_PROFILES 6.4)
 		{DoctorCheckStoreClone, a.DoctorStoreClones},            // doctor_clones.go

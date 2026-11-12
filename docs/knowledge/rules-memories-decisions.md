@@ -44,7 +44,7 @@ rul_7a67…9504
   severity:   must
   activation: always
 Run the tests before you push
-created 2026-11-02T10:00:05Z by act_54fe…28f2 · updated 2026-11-02T10:00:05Z by act_54fe…28f2
+created 2026-11-02T10:00:05Z by alice · updated 2026-11-02T10:00:05Z by alice
 ```
 <!-- /example -->
 
@@ -56,19 +56,19 @@ A memory has a *kind* (`--kind`): `retrieved` (the default; found by search when
 ```console
 # alice, in website
 $ lore memory add --body 'The client replies faster on WhatsApp than email'
-lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
-✓ mem_05e9…4603
+lore: wrote ~/work/website/.lore/data/memories/mem_54fe…28f2.json
+✓ mem_54fe…28f2
   scope: [master]
 $ lore tag add --name staging
-lore: wrote ~/work/website/.lore/data/tags/tag_c0f3…b5b8.json
-✓ tag staging tag_c0f3…b5b8
+lore: wrote ~/work/website/.lore/data/tags/tag_05e9…4603.json
+✓ tag staging tag_05e9…4603
 $ lore memory add --body 'The staging site is reset every Monday morning' --tag staging
-lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
-✓ mem_76bd…3f10
+lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
+✓ mem_c0f3…b5b8
   scope: [master]
 $ lore memory list
-mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email
-mem_76bd…3f10 [retrieved] The staging site is reset every Monday morning
+mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email
+mem_c0f3…b5b8 [retrieved] The staging site is reset every Monday morning
 ```
 <!-- /example -->
 
@@ -80,16 +80,16 @@ A decision needs a short `--title` (the choice) and a `--body` (the reason). `--
 ```console
 # alice, in website
 $ lore decision add --title 'We use Stripe for payments' --body 'Stripe already works in the client shop app, so we keep one payment provider.'
-lore: wrote ~/work/website/.lore/data/decisions/dec_d431…313a.json
-✓ dec_d431…313a — We use Stripe for payments 
+lore: wrote ~/work/website/.lore/data/decisions/dec_76bd…3f10.json
+✓ dec_76bd…3f10 — We use Stripe for payments 
 $ lore decision list
-dec_d431…313a [accepted] We use Stripe for payments
-$ lore decision show dec_d431…313a
-dec_d431…313a
+dec_76bd…3f10 [accepted] We use Stripe for payments
+$ lore decision show dec_76bd…3f10
+dec_76bd…3f10
   title:  We use Stripe for payments
   status: accepted
 Stripe already works in the client shop app, so we keep one payment provider.
-created 2026-11-02T10:00:50Z by act_54fe…28f2 · updated 2026-11-02T10:00:50Z by act_54fe…28f2
+created 2026-11-02T10:00:50Z by alice · updated 2026-11-02T10:00:50Z by alice
 ```
 <!-- /example -->
 
@@ -100,16 +100,16 @@ created 2026-11-02T10:00:50Z by act_54fe…28f2 · updated 2026-11-02T10:00:50Z 
 <!-- example: knowledge#edit -->
 ```console
 # alice, in website
-$ lore memory edit mem_05e9…4603 --body 'The client replies faster on WhatsApp than email, even on weekends'
-lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
-✓ mem_05e9…4603 updated
-$ lore memory show mem_05e9…4603
-mem_05e9…4603
+$ lore memory edit mem_54fe…28f2 --body 'The client replies faster on WhatsApp than email, even on weekends'
+lore: wrote ~/work/website/.lore/data/memories/mem_54fe…28f2.json
+✓ mem_54fe…28f2 updated
+$ lore memory show mem_54fe…28f2
+mem_54fe…28f2
   kind:   retrieved
   trust:  0.50
   source: manual
 The client replies faster on WhatsApp than email, even on weekends
-created 2026-11-02T10:00:30Z by act_54fe…28f2 · updated 2026-11-02T10:01:05Z by act_54fe…28f2
+created 2026-11-02T10:00:30Z by alice · updated 2026-11-02T10:01:05Z by alice
 ```
 <!-- /example -->
 
@@ -120,13 +120,13 @@ When the meaning changes, add a new row and name the old one with `--supersedes 
 <!-- example: knowledge#supersedes -->
 ```console
 # alice, in website
-$ lore decision add --title 'We use Stripe and bank transfer for payments' --body 'The client asked for bank transfer too.' --supersedes dec_d431…313a
-lore: wrote ~/work/website/.lore/data/decisions/dec_b4f4…a5b0.json
+$ lore decision add --title 'We use Stripe and bank transfer for payments' --body 'The client asked for bank transfer too.' --supersedes dec_76bd…3f10
 lore: wrote ~/work/website/.lore/data/decisions/dec_d431…313a.json
-✓ dec_b4f4…a5b0 — We use Stripe and bank transfer for payments 
+lore: wrote ~/work/website/.lore/data/decisions/dec_76bd…3f10.json
+✓ dec_d431…313a — We use Stripe and bank transfer for payments 
 $ lore decision list
-dec_d431…313a [superseded] We use Stripe for payments
-dec_b4f4…a5b0 [accepted] We use Stripe and bank transfer for payments
+dec_76bd…3f10 [superseded] We use Stripe for payments
+dec_d431…313a [accepted] We use Stripe and bank transfer for payments
 ```
 <!-- /example -->
 
@@ -141,17 +141,17 @@ Rows linked by older versions point the wrong way; run `lore doctor --fix` once 
 <!-- example: knowledge#invalidate only=2,4 -->
 ```console
 # alice, in website
-$ lore memory invalidate mem_28f8…03df
-lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
-✓ mem_28f8…03df invalidated (valid_until=now)
-$ lore memory show mem_28f8…03df
-mem_28f8…03df
+$ lore memory invalidate mem_b4f4…a5b0
+lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
+✓ mem_b4f4…a5b0 invalidated (valid_until=now)
+$ lore memory show mem_b4f4…a5b0
+mem_b4f4…a5b0
   kind:   retrieved
   trust:  0.50
   source: manual
   valid-until: 2026-11-02T10:30:00Z
 The office printer is on the second floor
-created 2026-11-02T10:01:25Z by act_54fe…28f2 · updated 2026-11-02T10:01:30Z by act_54fe…28f2
+created 2026-11-02T10:01:25Z by alice · updated 2026-11-02T10:01:30Z by alice
 ```
 <!-- /example -->
 
@@ -190,12 +190,12 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 <!-- example: knowledge#delete only=2,3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_4c59…6c38 --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
-✓ mem_4c59…6c38 moved to the trash (restore: lore trash restore mem_4c59…6c38)
-$ lore memory show mem_4c59…6c38 || true
-ERROR: [E_IN_TRASH] mem_4c59…6c38 is in the trash (deleted by act_54fe…28f2 on 2026-11-02 10:02)
-  hint: lore trash show mem_4c59…6c38; bring it back with lore trash restore mem_4c59…6c38
+$ lore memory delete mem_28f8…03df --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
+✓ mem_28f8…03df moved to the trash (restore: lore trash restore mem_28f8…03df)
+$ lore memory show mem_28f8…03df || true
+ERROR: [E_IN_TRASH] mem_28f8…03df is in the trash (deleted by act_4c59…6c38 on 2026-11-02 10:02)
+  hint: lore trash show mem_28f8…03df; bring it back with lore trash restore mem_28f8…03df
 ```
 <!-- /example -->
 
@@ -208,17 +208,17 @@ A repo can have more stores attached than its own `.lore/data`: a private store 
 # alice, in website
 $ lore store init agency file://$HOME/stores/agency
 ✓ created store agency (sto_c11f…3d6b) at file://~/stores/agency; recorded in .lore/stores.yaml; commit it to share
-$ lore memory move mem_05e9…4603 --to agency --yes
+$ lore memory move mem_54fe…28f2 --to agency --yes
 lore: wrote 3 row file(s) in ~/stores/agency/_store (store agency)
 lore: wrote 1 row file(s) in ~/work/website/.lore/data
-✓ mem_05e9…4603 moved to agency
-$ lore memory show mem_05e9…4603
-mem_05e9…4603
+✓ mem_54fe…28f2 moved to agency
+$ lore memory show mem_54fe…28f2
+mem_54fe…28f2
   kind:   retrieved
   trust:  0.50
   source: manual
 The client replies faster on WhatsApp than email, even on weekends
-created 2026-11-02T10:00:30Z by act_54fe…28f2 · updated 2026-11-02T10:07:15Z by act_54fe…28f2
+created 2026-11-02T10:00:30Z by alice · updated 2026-11-02T10:07:15Z by alice
 ```
 <!-- /example -->
 

@@ -133,7 +133,7 @@ type TargetIn struct {
 	Target     string `json:"target" arg:"0" desc:"a row id or a batch id (bat_…)"`
 	Parent     string `json:"parent,omitempty" flag:"parent" desc:"new parent task (tsk_…) for a sub-task whose parent was purged"`
 	NoParent   bool   `json:"no_parent,omitempty" flag:"no-parent" desc:"restore a sub-task whose parent was purged as a top-level task"`
-	Tasklist   string `json:"tasklist,omitempty" flag:"tasklist" desc:"new tasklist (tl_…) for a task whose tasklist was purged"`
+	Tasklist   string `json:"tasklist,omitempty" flag:"tasklist" desc:"new tasklist (tlt_…) for a task whose tasklist was purged"`
 	NoTasklist bool   `json:"no_tasklist,omitempty" flag:"no-tasklist" desc:"restore a task whose tasklist was purged with no tasklist"`
 	Mission    string `json:"mission,omitempty" flag:"mission" desc:"new mission id for the restored row"`
 	Plan       string `json:"plan,omitempty" flag:"plan" desc:"new plan id for the restored row"`
@@ -153,7 +153,7 @@ type PurgeIn struct {
 	// an age), the v0.1.17 `lore sync purge --archived-before` (DEL-ARCH).
 	ArchivedBefore string `json:"archived_before,omitempty" flag:"archived-before" desc:"purge archived rows archived before a date (2006-01-02) or an age (90d)"`
 	DryRun         bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be purged; write nothing"`
-	Confirm        bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: purge removes content for good (DQ2)"`
+	Confirm        bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: purge removes content for good"`
 	// Local and Purged together drop this machine's safety copies of rows
 	// the repo's _purged.json lists (local_purged.go, DELETION 3.10).
 	Local  bool `json:"local,omitempty" flag:"local" desc:"with --purged: this machine's safety copies (_lore_sync_trash) only"`
@@ -178,7 +178,8 @@ type Item struct {
 	LastIn string `json:"last_content_in,omitempty"`
 	at     time.Time
 	// byLabel is DeletedBy as the text shows it: "@handle" when the roster
-	// knows the actor, else "" (the text falls back to the act_ id).
+	// knows the actor's handle, else its display name, else "" (the text
+	// falls back to the act_ id).
 	// --json keeps the id in deleted_by.
 	byLabel string
 }
@@ -909,7 +910,8 @@ func (it Item) when() string {
 }
 
 // deleter is who deleted the row as the text shows it: the person's
-// @handle when the roster knows it, else the act_ id as stored.
+// @handle when the roster knows it, else their display name, else the
+// act_ id as stored.
 func (it Item) deleter() string {
 	if it.byLabel != "" {
 		return it.byLabel
@@ -917,9 +919,9 @@ func (it Item) deleter() string {
 	return it.DeletedBy
 }
 
-// labelDeleters sets each item's @handle from the actors of the attached
-// stores (an Env without the Actors upgrade, or an actor without a
-// handle, keeps the id). A failed roster read only costs the label.
+// labelDeleters sets each item's @handle or display name from the actors
+// of the attached stores (an Env without the Actors upgrade, or an actor
+// with neither, keeps the id). A failed roster read only costs the label.
 func (o ops) labelDeleters(ctx context.Context, items []Item) {
 	if len(items) == 0 {
 		return
@@ -935,8 +937,16 @@ func (o ops) labelDeleters(ctx context.Context, items []Item) {
 			return
 		}
 		for _, r := range rows {
-			if h := fieldText(r, fieldHand); h != "" && !r.Deleted {
+			if r.Deleted {
+				continue
+			}
+			// the @handle, else the display name (bug hunt B3-11: an actor
+			// with no handle, the common case on a fresh machine, showed
+			// as its act_ id while every other list showed the name)
+			if h := fieldText(r, fieldHand); h != "" {
 				handles[r.ID.String()] = handleSign + h
+			} else if n := fieldText(r, fieldName); n != "" {
+				handles[r.ID.String()] = n
 			}
 		}
 	}

@@ -343,7 +343,7 @@ const claudeLocalFile = "CLAUDE.local.md"
 
 // doctorClaudeLocal warns when the checkout's CLAUDE.local.md is a symlink
 // (lore never writes through one), tracked by git (its content would be
-// committed) or holds more than the one import line.
+// committed) or holds anything but lore's import lines, each once.
 func (a *App) doctorClaudeLocal(ctx context.Context, warn func(string)) {
 	top, err := a.repoTop(ctx)
 	if err != nil || top == "" {
@@ -361,10 +361,37 @@ func (a *App) doctorClaudeLocal(ctx context.Context, warn func(string)) {
 	if out, gerr := (gitRun{dir: top, args: []string{"ls-files", "--", claudeLocalFile}}).output(ctx); gerr == nil && strings.TrimSpace(string(out)) != "" {
 		warn(claudeLocalFile + " is tracked by git: its content would be committed (`git rm --cached " + claudeLocalFile + "`)")
 	}
-	if text, rerr := os.ReadFile(filepath.Clean(local)); rerr == nil && strings.Count(strings.TrimSpace(string(text)), "\n") > 0 {
-		warn(claudeLocalFile + " holds more than the one import line; internal context belongs in ~/.lore/render")
+	if text, rerr := os.ReadFile(filepath.Clean(local)); rerr == nil {
+		if msg := claudeLocalProblem(string(text)); msg != "" {
+			warn(msg)
+		}
 	}
 }
+
+// claudeLocalProblem is the warning for CLAUDE.local.md's text, "" when it
+// holds only import lines (`@<path>`), each once. Render writes one import
+// line per private store, separated by blank lines, so several lines are
+// normal; a line that is not an import (pasted notes) or the same import
+// twice is not.
+func claudeLocalProblem(text string) string {
+	seen := map[string]bool{}
+	for _, l := range strings.Split(text, "\n") {
+		l = strings.TrimSpace(l)
+		switch {
+		case l == "":
+			continue
+		case !strings.HasPrefix(l, claudeImportPrefix):
+			return claudeLocalFile + " holds more than lore's import lines; internal context belongs in ~/.lore/render"
+		case seen[l]:
+			return claudeLocalFile + " holds the import line " + l + " more than once (`lore render` writes it once)"
+		}
+		seen[l] = true
+	}
+	return ""
+}
+
+// claudeImportPrefix starts a Claude Code import line.
+const claudeImportPrefix = "@"
 
 // envVersionPin is the CI pin; it overrides the team pin (FORMAT_EVOLUTION 8.4).
 const envVersionPin = "LORE_VERSION_PIN"

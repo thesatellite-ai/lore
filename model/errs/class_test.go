@@ -37,7 +37,7 @@ func allConstants() []Code {
 		ResourceAmbiguous, ResourceTaken, ResourceArchived, ResourceBatch, ResourceConflict, KindLimit,
 		ContactTaken, ContactType, RoleUnknown, StatusChange, PeriodOverlap,
 		SetupNotFound, SetupAmbiguous, SetupNameTaken, SetupOrgMismatch, SetupNoPersonalStore,
-		SetupStepFailed, SetupStepOrder, InviteInvalid, InviteNotFound, InviteExpired, InviteRevoked,
+		SetupStepFailed, SetupStepOrder, InviteInvalid, JoinOrgUnknown, InviteNotFound, InviteExpired, InviteRevoked,
 		InviteUsed, InviteEmail, StoreNoAccess, StoreNoWrite, FixRefused, SkillLinked,
 	}
 }

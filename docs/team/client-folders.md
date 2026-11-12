@@ -90,7 +90,7 @@ store agency folders:
 
 ## Step 5 — A client repo that holds no lore files
 
-A client's repo must never hold lore files. Link it without `lore init`: the link is made for the repo's remote (with several remotes, `--remote` picks one) and kept only in the store, so nothing is written into the repo: no `.lore/`, no `.gitignore` lines, no `.gitattributes`, no git hooks. Every later command in that repo finds the link from the store by the remote; its rows go to the linked folder, and its cache lives under `~/.lore`. `lore doctor` there says so.
+A client's repo must never hold lore files. Link it without `lore init`: the link is made for the repo's remote (with several remotes, `--remote` picks one) and kept only in the store, so nothing is written into the repo: no `.lore/`, no `.gitignore` lines, no `.gitattributes`, no git hooks. Every later command in that repo finds the link from the store by the remote; its rows go to the linked folder, and its cache lives under `~/.lore`. `lore doctor` there says so. If someone later runs `lore init` in that repo (an own repo that should hold lore files after all), the project keeps the link's id (`prj_…` above) instead of minting a new one, and init says `the org store already links <remote>`, so the folder's notes still reach the repo.
 
 <!-- example: client-folders#a-client-repo-with-no-lore-files -->
 ```console
@@ -109,6 +109,7 @@ lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)
 ✓ tsk_c0f3…b5b8 — set up the staging deploy [medium]
   filed: defaults.client_repos.task = agency (personal config) → the linked project client_south/
+  created tasklist tlt_76bd…3f10 "default" for tasks added without --tasklist
 $ lore task list
 ○ tsk_c0f3…b5b8 set up the staging deploy [medium]  [agency/client_south]
 $ git status --short --ignored && ls -A
@@ -125,9 +126,9 @@ Folder names are unique across all of an org's stores, so a folder made in the w
 ```console
 # tomas, in clients
 $ lore store folder add team client_old
-✓ created folder client_old in agency (prj_76bd…3f10; shown only in repos that attach it)
+✓ created folder client_old in agency (prj_d431…313a; shown only in repos that attach it)
 $ lore store folder remove team client_old --yes
-✓ removed folder client_old (prj_76bd…3f10) from agency
+✓ removed folder client_old (prj_d431…313a) from agency
 $ lore store folder remove team client_north --yes
 ERROR: [E_REFUSED] store folder remove: folder client_north of agency holds 1 repo link; nothing was removed
   hint: unlink each repo with `lore org unlink <org> --project client_north` run in that repo; or remove it with everything in it: `lore store folder remove agency client_north --purge` (the rows go to the store's trash first)

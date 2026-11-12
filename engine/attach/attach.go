@@ -155,8 +155,9 @@ func parseStoreURL(raw string) (*url.URL, error) {
 		raw = "ssh://" + m[1] + "@" + m[2] + "/" + m[3]
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme == "" {
-		return nil, errs.New(errs.StoreScheme, "attach: a store url has no scheme")
+	if err != nil || (u.Scheme == "" && !store.IsLocalPath(u)) {
+		return nil, errs.New(errs.StoreScheme, "attach: a store url has no scheme").
+			WithHint("give a git url (git@host:owner/repo.git), the path of a git repository on this machine (/path/to/repo.git), or a folder store (file:///path/to/folder)")
 	}
 	// file://C:/x (a Windows path written after file://) is the drive path
 	// file:///C:/x; read as is, "C:" was a host and the drive was lost from

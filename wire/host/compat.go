@@ -180,11 +180,16 @@ func recordCommand(c *cobra.Command, r *Runner) {
 func addCompatFlags(c *cobra.Command, r *Runner, o CompatOptions) {
 	var db, project string
 	var readOnly, confirm bool
+	// --db, --project and --confirm exist only so a v0.1.17 script gets a
+	// clear answer (refused, or ignored); they are hidden from --help, where
+	// a newcomer would read flags that only refuse (B3-6).
 	if c.Flags().Lookup(FlagDB) == nil {
 		c.Flags().StringVar(&db, FlagDB, "", "v0.1.17 lore.db path: not used by this command (refused)")
+		_ = c.Flags().MarkHidden(FlagDB) // just defined: MarkHidden cannot fail
 	}
 	if c.Flags().Lookup(FlagProject) == nil {
 		c.Flags().StringVar(&project, FlagProject, "", "accepted for v0.1.17 scripts; a row id already names its project")
+		_ = c.Flags().MarkHidden(FlagProject)
 	}
 	if c.Flags().Lookup(FlagReadOnly) == nil {
 		c.Flags().BoolVar(&readOnly, FlagReadOnly, false, "refuse writes (also "+EnvReadOnly+"=1)")
@@ -192,6 +197,7 @@ func addCompatFlags(c *cobra.Command, r *Runner, o CompatOptions) {
 	ownConfirm := c.Flags().Lookup(cli.FlagYes) != nil && c.Flags().Lookup(FlagConfirm) == nil
 	if ownConfirm {
 		c.Flags().BoolVar(&confirm, FlagConfirm, false, "v0.1.17 spelling: refused, use --yes")
+		_ = c.Flags().MarkHidden(FlagConfirm)
 	}
 	printed := func() {
 		if o.Printed != nil {

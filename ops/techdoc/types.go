@@ -31,7 +31,7 @@ type AddIn struct {
 	BaseURL     string `json:"base_url,omitempty" flag:"base-url" desc:"base URL"`
 	Description string `json:"description,omitempty" flag:"description" desc:"description"`
 	Project     string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To          string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To          string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // ListIn is the input of techdoc.list.
@@ -67,7 +67,7 @@ func (o ListOut) rowsText() string {
 		if r.BaseURL != "" {
 			b.WriteString(" " + r.BaseURL)
 		}
-		b.WriteString("\n")
+		b.WriteString(content.LabelSuffix(r.Label) + "\n")
 	}
 	return b.String()
 }

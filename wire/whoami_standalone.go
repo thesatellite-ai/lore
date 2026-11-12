@@ -356,6 +356,43 @@ func orgUseHint(cfg *orgconf.Config) string {
 	}
 }
 
+// whoamiRepoRow is the value of whoami's "repo" line: where the command
+// ran and the guards that apply there.
+//
+// Why: the resolution gives every folder a role, and a folder nothing
+// marks as the org's own is a client's (fail closed), so a plain folder
+// under a setup, or a clone whose only remote is a local path, resolved
+// "client" and whoami printed "client repo" there (B1-4). The guards do
+// apply; the line now names the place (not a git repo, no hosted remote)
+// and says the client role is lore's default, not a match.
+func whoamiRepoRow(s *orgcfg.Situation) string {
+	r := s.Result
+	place := ""
+	switch {
+	case s.NotGitRepo:
+		place = "not a git repo"
+	case len(s.Remotes) == 0:
+		place = "git repo with no hosted remote"
+	}
+	switch r.Role {
+	case orgresolve.RoleClient:
+		if place != "" {
+			return place + "  (treated as a client repo: guards on)"
+		}
+		return "client repo  (guards on)"
+	case orgresolve.RoleOwn:
+		if place != "" {
+			return place + "  (own: no client guards)"
+		}
+		return "own repo  (no client guards)"
+	default:
+		if place != "" {
+			return place + "  (no org, fallback identity)"
+		}
+		return "no org  (fallback identity)"
+	}
+}
+
 // whoamiLines are the human lines (v0.1.17 printWhoami without colour).
 // idErr is the identity error ("missing" line); a refused org
 // (s.ResolveErr) prints "refused" and no identity or repo role.
@@ -391,14 +428,7 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, idErr error, explain
 		row("identity", v+"  (from: "+id.Source()+")")
 	}
 	if s.ResolveErr == nil {
-		switch r.Role {
-		case orgresolve.RoleClient:
-			row("repo", "client repo  (guards on)")
-		case orgresolve.RoleOwn:
-			row("repo", "own repo  (no client guards)")
-		default:
-			row("repo", "no org  (fallback identity)")
-		}
+		row("repo", whoamiRepoRow(s))
 	}
 	if m == "" {
 		row("machine", "(no OS machine id readable here)")

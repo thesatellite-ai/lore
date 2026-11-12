@@ -318,12 +318,21 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 		}
 		changed = true
 		line := placeLabel(*p) + ": " + strconv.Itoa(len(diff)) + " files upgraded"
+		if n := metaFilesIn(diff); n > 0 {
+			// B1-9: "Upgraded 16 rows" then "17 files upgraded" read as a
+			// row gone missing; the extra file is the format file
+			line += " (" + strconv.Itoa(len(diff)-n) + " row files and " + rowfs.MetaFileName + ")"
+		}
 		switch {
 		case p.Entry == repoEntry && !p.Clone:
 			// owner item C2: the commit hint is the run's last line
 			// (opsmigrate.CommitLine), not buried in this one
 			line += ", not committed (lore never commits a code repo)"
 			uncommitted += len(diff)
+			if w := a.migratedSecretsLine(ctx, top, p.TreeAfter, p.Data, diff); w != "" {
+				lines = append(lines, line)
+				line = w // B1-14: named before the person commits, never the values
+			}
 		case p.Clone && p.TipAfter != p.TipBefore && push:
 			if !pushed[p.Dir] {
 				if serr := a.syncPlace(ctx, p.Name); serr != nil {
@@ -342,13 +351,21 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 	if len(j.ConfigKeys) > 0 {
 		lines = append(lines, "~/.lore/"+ConfigFile+": "+strconv.Itoa(len(j.ConfigKeys))+" personal settings set")
 	}
-	if !changed && count == 0 && len(j.ConfigKeys) == 0 {
+	// the stores this run upgraded get their layout commit now, not from
+	// the next command (FlattenAfterMigrate); a store whose only change
+	// was its marker (no row of it in this repo's places) counts too
+	var layout []string
+	if push {
+		layout = a.FlattenAfterMigrate(ctx)
+	}
+	if !changed && count == 0 && len(j.ConfigKeys) == 0 && len(layout) == 0 {
 		return none, a.dropBackup(ctx, snaps, top, path, j)
 	}
 	j.Phase = phaseDone
 	if err := writeJournal(path, j); err != nil {
 		return none, err
 	}
+	lines = append(lines, layout...)
 	if j.ModeBPointer != "" {
 		return opsmigrate.Finished{Lines: append(lines, modeBNoUndoLine), Uncommitted: uncommitted}, nil
 	}
@@ -878,4 +895,16 @@ func setFields(fields map[string]value.Value) map[string]value.Value {
 		}
 	}
 	return out
+}
+
+// metaFilesIn counts the format files (_meta.json) among a migration's
+// changed paths.
+func metaFilesIn(diff []git.TreeChange) int {
+	n := 0
+	for _, d := range diff {
+		if path.Base(d.Path) == rowfs.MetaFileName {
+			n++
+		}
+	}
+	return n
 }

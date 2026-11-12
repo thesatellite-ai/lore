@@ -220,13 +220,19 @@ func run(ctx context.Context, args []string) int {
 	// build moves its store clones and store trees into the plain layout,
 	// saying what it moved; afterwards a scan of two folders and silent.
 	if runsOldLayoutMove(args) {
-		app.MoveOldLayout(ctx, os.Stderr)
+		if isDryRun(args) {
+			// B4-14: a dry run writes nothing; it only says what the first
+			// real command will move
+			app.PreviewOldLayout(os.Stderr)
+		} else {
+			app.MoveOldLayout(ctx, os.Stderr)
+		}
 	}
 	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now, External: renderhost.CoreExternal(app), Decor: renderDecor(flags)})
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
 	// setupweb.go: setup.run / join / repair returning a WebStart open the page (ONB 5.1).
-	root := cli.Build(app.Registry(), newPageRunner(app, home, runner, args), cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette), cli.WithArgs(args))
+	root := cli.Build(app.Registry(), newPageRunner(app, home, runner, args), cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette), cli.WithArgs(args), cli.WithActorNamer(app.ActorNamer))
 	root.Version = version
 	addRootFlags(root, flags)
 	hosthooks.Install(root, runner)
@@ -244,7 +250,7 @@ func run(ctx context.Context, args []string) int {
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
 	// The git hook blocks call `lore sync hook <name>` (F6 ride-along).
 	if sync := find(root, opssync.Noun); sync != nil {
-		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, refreshHook(rend.h, wd)))
+		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, refreshHook(rend.h, wd), commitScopeHook(rend.h, wd)))
 	}
 	mountSessionEnd(root, app) // sessionend.go: the tools' session-end hook, `lore agent end`
 	// After the last AddCommand: every command is in the tree now. cobra
@@ -340,7 +346,7 @@ func commandName(args []string) string {
 // git (merge driver, the repo hooks) or the agent's session hooks, nor
 // for help and version.
 func runsOldLayoutMove(args []string) bool {
-	if wire.OldLayoutSkips(commandName(args)) || isSessionEndHook(args) || isSessionStartHook(args) {
+	if wire.OldLayoutSkips(commandName(args)) || isHelpOrVersionCall(args) || isSessionEndHook(args) || isSessionStartHook(args) {
 		return false
 	}
 	for i := 0; i+1 < len(args); i++ {
@@ -349,6 +355,38 @@ func runsOldLayoutMove(args []string) bool {
 		}
 	}
 	return true
+}
+
+// isHelpOrVersionCall reports whether args only ask for help or the
+// version (`lore migrate run --help`, `lore -h`, `lore --version`): cobra
+// prints the text and runs no command, so nothing that runs before cobra
+// may write either. Without this a help call on a subcommand made and
+// pushed the store layout commit. Arguments after `--` are values, never
+// these flags.
+func isHelpOrVersionCall(args []string) bool {
+	for _, a := range args {
+		switch a {
+		case "--":
+			return false
+		case "--help", "-h", "--version", "--help=true", "--version=true":
+			return true
+		}
+	}
+	return false
+}
+
+// isDryRun reports a command run with --dry-run (any value but false):
+// it must change nothing, the first-run layout move included.
+func isDryRun(args []string) bool {
+	for _, a := range args {
+		if a == "--" {
+			return false
+		}
+		if a == "--dry-run" || (strings.HasPrefix(a, "--dry-run=") && a != "--dry-run=false") {
+			return true
+		}
+	}
+	return false
 }
 
 // isGitPushHook reports whether args run one of the repo git hooks that

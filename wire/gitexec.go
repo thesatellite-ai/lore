@@ -17,9 +17,10 @@ import (
 // backend: these are repo-level reads of refs/lore/live and one-off commits
 // of files the backend does not own (store markers, lore-org.yaml).
 type gitRun struct {
-	dir  string   // working directory ("" = the process's)
-	env  []string // extra KEY=VALUE entries on top of the process's environment (see gitEnv)
-	args []string // git arguments, one argv entry each
+	dir   string   // working directory ("" = the process's)
+	env   []string // extra KEY=VALUE entries on top of the process's environment (see gitEnv)
+	args  []string // git arguments, one argv entry each
+	stdin []byte   // fed to git's standard input (nil: none)
 }
 
 // output runs g and returns its stdout. A failure is E_INTERNAL carrying
@@ -39,6 +40,9 @@ func (g gitRun) output(ctx context.Context) ([]byte, error) {
 		return nil, errs.New(errs.Offline, why) // LORE_OFFLINE / LORE_NO_FETCH: not run
 	}
 	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, g.args...), Dir: g.dir, Env: gitEnv(g.env)}
+	if g.stdin != nil {
+		cmd.Stdin = bytes.NewReader(g.stdin)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if rerr := runCancellable(ctx, cmd); rerr != nil {

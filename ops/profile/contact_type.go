@@ -215,7 +215,7 @@ type ContactTypeAddIn struct {
 	Name        string `json:"name" arg:"0" desc:"snake_case name (bitbucket); never renamed"`
 	Kind        string `json:"kind" flag:"kind" desc:"email, handle, phone, url or text: picks the value check"`
 	Label       string `json:"label,omitempty" flag:"label" desc:"the shown name (Bitbucket)"`
-	Identity    bool   `json:"identity,omitempty" flag:"identity" desc:"contacts of this type may be flagged for identity (TP-4)"`
+	Identity    bool   `json:"identity,omitempty" flag:"identity" desc:"contacts of this type may be flagged for identity"`
 	URLTemplate string `json:"url_template,omitempty" flag:"url-template" desc:"how actor show links a value: https://bitbucket.org/{value}"`
 }
 

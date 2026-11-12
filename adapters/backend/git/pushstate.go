@@ -22,6 +22,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/fsreason"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -166,20 +169,60 @@ func ProbeRemote(ctx context.Context, work, remote string, opts ...Option) error
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	if _, err = g.run(ctx, call{dir: work, args: []string{"ls-remote", "--heads", "--", RemoteName}}); err != nil {
-		if msg := strings.TrimSpace(stderrOf(err)); msg != "" {
-			line := lastLine(msg)
-			if g.accessNote != "" {
-				line += " — " + g.accessNote
-			}
-			return errs.New(errs.StoreUnreachable, line)
-		}
-		return errs.Wrap(errs.StoreUnreachable, "the store's remote did not answer", err)
+		return probeError(remote, stderrOf(err), g.accessNote, err)
 	}
 	return nil
 }
 
-// lastLine is the last non-empty line of s (git's error is its last line).
-func lastLine(s string) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	return strings.TrimSpace(lines[len(lines)-1])
+// probeError is ProbeRemote's typed answer: git's whole telling line, never
+// the tail of its advice (B3-12 printed "and the repository exists."),
+// the url with its credentials masked, and the next step for that kind of
+// failure (gitfault: no answer, no repository there, credentials refused).
+func probeError(remote, stderr, accessNote string, cause error) error {
+	shown := repourl.Mask(remote)
+	kind := gitfault.ClassifyAt(stderr, fsreason.GitPathState)
+	msg := gitfault.Describe(stderr, shown, fsreason.GitPathState)
+	if strings.TrimSpace(stderr) == "" {
+		msg = gitfault.Summary(kind, shown) + " (" + repourl.MaskText(cause.Error()) + ")"
+	}
+	if accessNote != "" {
+		msg += " — " + accessNote
+	}
+	return errs.Wrap(errs.StoreUnreachable, msg, &FaultError{Kind: kind, Text: msg}).WithHint(ProbeHint(kind, shown))
+}
+
+// FaultError is the cause of ProbeRemote's error: the kind of failure, so
+// a caller (`lore store doctor`) can tell "no answer" from "no repository
+// there" without reading text. Text is the message already shown.
+type FaultError struct {
+	Kind gitfault.Kind
+	Text string
+}
+
+// Error is the message the wrapping error already carries.
+func (e *FaultError) Error() string { return e.Text }
+
+// ProbeFault is the kind of a ProbeRemote error ("" for nil or another
+// error).
+func ProbeFault(err error) gitfault.Kind {
+	var f *FaultError
+	if errors.As(err, &f) {
+		return f.Kind
+	}
+	return ""
+}
+
+// ProbeHint is the next step for a store remote that failed a probe, by
+// kind: wait (the commits stay in the local clone), fix the address, or
+// fix the credentials.
+func ProbeHint(k gitfault.Kind, shown string) string {
+	switch k {
+	case gitfault.Missing:
+		return "check the store's address (" + shown + "): `lore store set-url <store> <url>` fixes a wrong one; local commits stay in the clone meanwhile"
+	case gitfault.Unreadable:
+		return "the address is right; check the permissions of the folder it names (`ls -ld`); local commits stay in the clone meanwhile"
+	case gitfault.Denied:
+		return "check which account this machine's key or token logs in as and that it may read " + shown + "; local commits stay in the clone meanwhile"
+	}
+	return "lore keeps working offline: local commits stay in the clone and the next lore command that reaches " + shown + " pushes them, or run `lore sync`"
 }

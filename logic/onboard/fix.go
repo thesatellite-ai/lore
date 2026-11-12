@@ -36,6 +36,10 @@ const (
 	FixNoVersionLine FixVariant = "no_version_line"
 	// FixRepo: identity.git_email checked per repo (doctor, 4.10, 6.2).
 	FixRepo FixVariant = "repo"
+	// FixMemberJoin: invite.found of a join by the org's name or store url
+	// (no invite line): the person is not on the roster, so the fix is the
+	// admin's lore member add, never an invite resend (B2-13).
+	FixMemberJoin FixVariant = "member_join"
 	// FixKeyPair: github.key_matches knows an alias that logs in as the
 	// account and its key's .pub ({fix_alias}, {fix_key}).
 	FixKeyPair FixVariant = "key_pair"
@@ -54,6 +58,10 @@ const (
 	// host refused the read itself: no access, auth, host key), so "you
 	// can read it but not write it" would be false.
 	FixNoRead FixVariant = "no_read"
+	// FixGHOptional: store.private could not ask GitHub because gh is not
+	// installed or not logged in, on the ssh route where gh is optional:
+	// a note naming how to let lore check, never "make it private".
+	FixGHOptional FixVariant = "gh_optional"
 	// FixWriteUnknown: store.write failed for a reason that says nothing
 	// about the write right (git failed some other way).
 	FixWriteUnknown FixVariant = "write_unknown"
@@ -498,13 +506,16 @@ var fixes = map[fixKey]Fix{
 	{check: CheckStoreMarker}: {Text: "This repo is not a lore store yet; Save will run lore store init {store_name} {url}"},
 	{check: CheckStorePrivate}: {Text: "This repo is public. Your personal notes would be readable by anyone: gh repo edit {owner}/{repo} --visibility private",
 		Command: argv(cmdGH, "repo", "edit", "{owner}/{repo}", "--visibility", "private"), Runnable: true, Outward: true},
+	{check: CheckStorePrivate, variant: FixGHOptional}:                 {Text: "Optional: install gh and run gh auth login so lore can check that {owner}/{repo} is private"},
+	{check: CheckStorePrivate, step: StepTeam, variant: FixGHOptional}: {Text: "Optional: install gh and run gh auth login so lore can check that {owner}/{repo} is private"},
 	{check: CheckStorePrivate, step: StepTeam}: {Text: "This repo is public. Your team's notes would be readable by anyone: gh repo edit {owner}/{repo} --visibility private",
 		Command: argv(cmdGH, "repo", "edit", "{owner}/{repo}", "--visibility", "private"), Runnable: true, Outward: true},
 
-	{check: CheckInviteParse}:  {Text: "This is not a lore invite. Copy the whole line starting with lore-invite:v1:"},
-	{check: CheckInviteFound}:  {Text: "Invite {id} is not in {org}'s store. Ask {by} to run lore team invite {invite_email} again"},
-	{check: CheckInviteStatus}: {Text: "Invite {id} is {status}. Ask {by} for a new one"},
-	{check: CheckInviteEmail}:  {Text: "This invite is for {invite_email}. Use that address, or ask {inviter} for a new invite to {email}"},
+	{check: CheckInviteParse}:                         {Text: "This is not a lore invite. Copy the whole line starting with lore-invite:v1:"},
+	{check: CheckInviteFound}:                         {Text: "Invite {id} is not in {org}'s store. Ask {by} to run lore team invite {invite_email} again"},
+	{check: CheckInviteFound, variant: FixMemberJoin}: {Text: "{email} is not on the org's roster. Ask an admin to run lore member add {email}, then join again (an outsider joins with an invite line instead)"},
+	{check: CheckInviteStatus}:                        {Text: "Invite {id} is {status}. Ask {by} for a new one"},
+	{check: CheckInviteEmail}:                         {Text: "This invite is for {invite_email}. Use that address, or ask {inviter} for a new invite to {email}"},
 	{check: CheckInvitePending}: {Text: "Invite {id} for {invite_email} is still pending. Resend it (lore team invite resend {id}) or revoke it (lore team invite revoke {id})",
 		Command: argv(cmdLore, "team", "invite", "resend", "{id}"), Runnable: true},
 	// --grant (Q9): runs only after an explicit confirm.

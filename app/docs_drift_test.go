@@ -88,7 +88,7 @@ func newDriftRoot(t *testing.T) *cobra.Command {
 	h.mountTaskHook(root)
 	mountSessionEnd(root, app) // lore agent end (main.go mounts it too)
 	if sync := find(root, opssync.Noun); sync != nil {
-		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, nil))
+		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, nil, nil))
 	}
 	// cobra adds `completion` and `help` only when the root executes; add
 	// them now so docs that run them are checked like any other command.

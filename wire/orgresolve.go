@@ -68,6 +68,11 @@ type OrgResolution struct {
 	// fetch stamp says (FetchLinksAlways).
 	fetchAlways bool
 
+	// waited names the store clones whose waiting commits this process
+	// already reported (pushreport.go, B2-5): a store and its folders share
+	// one clone, so its commits are named once, not once per folder.
+	waited waitedClones
+
 	// routed is the F14 rule of the routed create this process made, for
 	// the "filed: <rule>" line (Routed).
 	routed string
@@ -442,8 +447,17 @@ func (r *OrgResolution) DefaultTarget(ctx context.Context, q WriteQuery) (store.
 	if err != nil {
 		return "", err
 	}
-	if dec.Repo || s.Result.Org == nil {
+	if s.Result.Org == nil {
 		return "", nil
+	}
+	if dec.Repo {
+		// H-2: a repo linked by its remote holds no lore files, and its repo
+		// store is a read-only cache under ~/.lore: the write goes to the
+		// folder the link names, as a person would expect from "linked".
+		if s.LinkedByRemote == "" {
+			return "", nil
+		}
+		return r.linkedFolderTarget(ctx, s)
 	}
 	attached, err := r.OrgStores(ctx)
 	if err != nil {
@@ -452,6 +466,23 @@ func (r *OrgResolution) DefaultTarget(ctx context.Context, q WriteQuery) (store.
 	for _, a := range attached {
 		if a.Folder == dec.Folder {
 			r.routed = dec.Rule
+			return a.Name, nil
+		}
+	}
+	return "", nil
+}
+
+// linkedFolderTarget is the attached store of the folder a link by remote
+// names (OrgStores attaches it under the entry's name); "" when it is not
+// attached, and then the write fails on the read-only repo cache as before.
+func (r *OrgResolution) linkedFolderTarget(ctx context.Context, s *orgcfg.Situation) (store.Source, error) {
+	attached, err := r.OrgStores(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, a := range attached {
+		if a.Name == store.Source(s.Result.Org.Name) {
+			r.routed = "this repo holds no lore files; its store link by remote (" + s.LinkedByRemote + ") names " + string(a.Name) + "/" + a.Folder
 			return a.Name, nil
 		}
 	}

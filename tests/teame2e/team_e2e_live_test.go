@@ -481,7 +481,9 @@ func TestF04_TextClashKeepsBothAndBlocksLanding(t *testing.T) {
 	rt.c1.With(autopushOff).MustLore("task", "edit", id, "--title", "title from dev1")
 	rt.c2.With(autopushOff).MustLore("task", "edit", id, "--title", "title from dev2")
 	rt.c1.MustLore("sync")
-	rt.c2.MustLore("sync")
+	// The second sync merges both titles with markers, names the row and
+	// exits E_STALE (23) until it is settled (docs/sync/conflicts-and-duplicates.md).
+	rt.c2.Lore("sync").Fails(t, 23, "E_STALE", id, "lore sync resolve")
 	row := mustRow(t, rt.app, refLive, liveRowPath(rootFolder, tblTasks, id))
 	if !strings.Contains(row.Title, "title from dev1") || !strings.Contains(row.Title, "title from dev2") {
 		t.Fatalf("both text edits must be kept: %q", row.Title)

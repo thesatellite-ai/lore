@@ -77,6 +77,9 @@ type config struct {
 	// whether the caller asked for JSON comes from the raw words
 	// (JSONRequested). Nil: a usage error is always text.
 	args []string
+	// actorNamer names actor ids in human output (WithActorNamer; nil =
+	// ids as stored).
+	actorNamer func(context.Context) func(string) string
 }
 
 // WithArgs injects the raw arguments the binary runs the tree with (the
@@ -312,6 +315,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		if f.Type == op.TypeBool {
 			fl.NoOptDefVal = boolNoValue
 		}
+		fl.Hidden = f.Legacy() // parsed for old scripts, never offered in --help
 		// FB-FLAG-STORE: an alias parses into the same value, so a repeat
 		// across spellings is still "takes one value"; it is hidden, the
 		// flag's own help line names it.
@@ -354,7 +358,10 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		if *asJSON {
 			err = printJSON(out, res)
 		} else {
-			err = printHuman(out, res, cfg.color(StreamOut), cmd.CommandPath())
+			var hb strings.Builder
+			if err = printHuman(&hb, res, cfg.color(StreamOut), cmd.CommandPath()); err == nil {
+				_, err = io.WriteString(out, cfg.nameActors(cmd.Context(), hb.String()))
+			}
 		}
 		if err != nil {
 			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr), cmd.CommandPath()), cause: err}

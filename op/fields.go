@@ -110,6 +110,14 @@ func (f FieldInfo) Spellings() []string {
 	return append([]string{f.Flag}, f.Aliases...)
 }
 
+// LegacyFlagDesc starts the desc of a flag kept only so a v0.1.17 script
+// still parses (it does nothing now). The CLI hides such a flag from
+// --help: a newcomer must not read flags that exist only for old scripts.
+const LegacyFlagDesc = "accepted for v0.1.17 scripts"
+
+// Legacy reports a flag kept only for v0.1.17 scripts (LegacyFlagDesc).
+func (f FieldInfo) Legacy() bool { return strings.HasPrefix(f.Desc, LegacyFlagDesc) }
+
 // NoArg marks a field that is not a positional argument.
 const NoArg = -1
 

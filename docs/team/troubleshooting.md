@@ -105,6 +105,7 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
 (exit 17)
 $ lore memory add --body 'the site deploys from the release branch'
 lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: the command was refused, so the git set-up it made first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
@@ -128,6 +129,7 @@ A **link** tells lore that a store folder holds the agency's private notes for t
 # bob, in website
 $ lore memory add --body 'the client wants weekly demos'
 lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: the command was refused, so the git set-up it made first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: cannot read agency: github.com/agency/notes (never fetched)
   hint: retry when the store is reachable, or pass --to repo|<org>|me to choose the target yourself
 (exit 18)
@@ -228,6 +230,7 @@ $ lore task add 'set up the portal CI'
 lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
 lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
+  created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
 local     86dbae476bd6
@@ -344,7 +347,7 @@ The repo has no org, so its roster is the repo's own committed `.lore/data`, and
 
 [Stores as plain folders](../sync/store-clones.md) walks through a clone step by step; this section is the short version.
 
-Each git store has one clone on your machine, a normal git clone you can open and browse: `~/.lore/stores/<owner>/<repo>/` (the host is not in the path). Its files are the store's files; `.git/` inside is git's own, and `.git/lore/` holds what lore keeps for itself: the store lock (`lock`), the pending audit journal (`state/`), and the fetch and push stamps. Nothing of lore's sits among the store's files. A store pinned to a branch is its own clone at `<repo>@<branch>/`. Two stores whose paths agree on different hosts get `<repo>/` and `<repo>~2/`; `~/.lore/state/store-clones.json` records the second one. To use a clone you made yourself (`git clone <url> ~/work/notes`), run `lore store use ~/work/notes`; `lore store use --default <store>` goes back to lore's own clone and leaves yours alone.
+Each git store has one clone on your machine, a normal git clone you can open and browse: `~/.lore/stores/<owner>/<repo>/` (the host is not in the path; a git repository on this machine, such as `/srv/git/notes.git`, is cloned at `~/.lore/stores/_local/notes/`, and a second one named `notes` at `notes~2`; a clone an earlier build made at the repository's whole path moves there on the next command). Its files are the store's files; `.git/` inside is git's own, and `.git/lore/` holds what lore keeps for itself: the store lock (`lock`), the pending audit journal (`state/`), and the fetch and push stamps. Nothing of lore's sits among the store's files. A store pinned to a branch is its own clone at `<repo>@<branch>/`. Two stores whose paths agree on different hosts get `<repo>/` and `<repo>~2/`; `~/.lore/state/store-clones.json` records the second one. To use a clone you made yourself (`git clone <url> ~/work/notes`), run `lore store use ~/work/notes`; `lore store use --default <store>` goes back to lore's own clone and leaves yours alone.
 
 Inside the clone a folder's rows sit right under it: `client/tasks/tsk_….json`, `client/_meta.json` (the folder's id and repo links), `org/lore-org.yaml` (the org's suggested settings), and the store's own rows (its root folder) in `_store/` (`_store/tasks/`, `_store/memories/`, …, `_store/_meta.json`), so every other top-level folder is a project or the org folder. There is no `.lore/data` inside a store; a code repo keeps its own rows in `.lore/data`, apart from its code. A store folder may not be named like a kind of row, nor start with `_` or `.` (`_store` is lore's): `lore store folder add <store> tasks` is refused with the list of reserved names. Lore writes a `README.md` into each store once, with its next commit there, explaining the folders and how to edit a row by hand (`lore edit <id>`, `lore path <id>`); it never writes it again, and `lore doctor` notes a store without one (`store_readme`). You may edit, add, delete or move row files there by hand, or use plain git: the next lore command checks each change, commits the valid ones as you and refuses a broken file with its line and reason ([Editing by hand](../sync/editing-by-hand.md)); `lore doctor` names files there that are not rows and row files still waiting to be committed (`store_files`). A store that is a plain folder (`file://…`) keeps lore's lock and pending journal in `.lore-state/` at its top.
 

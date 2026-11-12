@@ -109,7 +109,7 @@ func Ops(env Env) []op.Entry {
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
 				{Title: "add a memory", CLI: `lore memory add "Retry the gateway twice on 502"`, Want: "id: mem_"},
-				{Title: "v0.1.17 spelling, to another store", CLI: `lore memory add --body="We use UTC for all timestamps" --to team_kb`, Want: "store: team_kb"},
+				{Title: "to another store", CLI: `lore memory add --body="We use UTC for all timestamps" --to team_kb`, Want: "store: team_kb"},
 			},
 		}, o.add),
 		op.Define(op.Spec{
@@ -487,6 +487,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	var kept []row.Row
 	var keptSrc []store.Source
 	var hid metalist.Hidden
+	dirs := metalist.NewDirs(o.env)
 	for _, src := range sources {
 		rows, lerr := o.env.List(ctx, src, table)
 		if lerr != nil {
@@ -499,7 +500,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			// what the scope and the archive filter leave out is counted
 			// for the footer (metalist.Hidden)
 			if !sc.keeps(repoOf(r), repo) {
-				hid.Repo++
+				hid.OutOfScope(dirs.Of(ctx, src, r))
 				continue
 			}
 			if field(r, fieldArchivedAt) != "" && !in.Archived {

@@ -1,6 +1,6 @@
 
 ### init
-alice (work/website)$ lore init --non-interactive --name=website
+alice (work/website)$ lore init --name=website
 lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; lore's merge rules in ~/work/website/.gitattributes; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 lore initialized
@@ -86,7 +86,7 @@ alice (work/website)$ git add -A && git commit -qm 'lore: test rule' && git push
 ### teammate clone
 bob (work)$ git clone -q https://github.com/client/website
 bob (work/website)$ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 
 ### sync by hand
@@ -209,7 +209,7 @@ CONFLICT (content): Merge conflict in .lore/data/rules/rul_b4f4765e593d51fd13529
 Automatic merge failed; fix conflicts and then commit the result.
 (exit 1)
 alice (work/website)$ grep body .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
-  "body": "<<<<<<< 2026-11-02T10:04:00.000Z/0000/act_28f8d32584b2db54ffb146bede5b03df\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:55.000Z/0000/act_54fe984c9b495744c0217776765a28f2",
+  "body": "<<<<<<< yours (this branch) 2026-11-02T10:03:55.000Z/0000/act_54fe984c9b495744c0217776765a28f2\nButtons are dark blue.\n=======\nButtons are light blue.\n>>>>>>> theirs (merged in) 2026-11-02T10:04:00.000Z/0000/act_28f8d32584b2db54ffb146bede5b03df",
 alice (work/website)$ lore sync status
 lore: invalid-file store repo: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
 meta quarantined: 0
@@ -248,7 +248,7 @@ bob (work/website)$ lore memory list
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The client replies faster on WhatsApp than email.
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 bob (work/website)$ lore trash list
-mem_3b6283bc4392c556bbae5f094246e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by act_28f8d32584b2db54ffb146bede5b03df  reason "merged into mem_4c590afb2a0cc7ae1b97b7e4e62d6c38"  bat_f147dd95f1aaf742dd4f5214843a5139
+mem_3b6283bc4392c556bbae5f094246e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by bob  reason "merged into mem_4c590afb2a0cc7ae1b97b7e4e62d6c38"  bat_f147dd95f1aaf742dd4f5214843a5139
 1 row in the trash
 bob (work/website)$ git add -A && git commit -qm 'lore: fold duplicate memory' && git push -q origin main
 
@@ -321,12 +321,12 @@ alice (work/website)$ lore memory delete mem_2537f9b2f7de77bfe5ca958860216bbb --
 lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json
 ✓ mem_2537f9b2f7de77bfe5ca958860216bbb moved to the trash (restore: lore trash restore mem_2537f9b2f7de77bfe5ca958860216bbb)
 alice (work/website)$ lore trash list
-mem_2537f9b2f7de77bfe5ca958860216bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by act_54fe984c9b495744c0217776765a28f2  reason "the demo moved"  bat_b69e8368dd4986838455061d5d9e5ed7
-mem_3b6283bc4392c556bbae5f094246e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by act_28f8d32584b2db54ffb146bede5b03df  reason "merged into mem_4c590afb2a0cc7ae1b97b7e4e62d6c38"  bat_f147dd95f1aaf742dd4f5214843a5139
+mem_2537f9b2f7de77bfe5ca958860216bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by alice  reason "the demo moved"  bat_b69e8368dd4986838455061d5d9e5ed7
+mem_3b6283bc4392c556bbae5f094246e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by bob  reason "merged into mem_4c590afb2a0cc7ae1b97b7e4e62d6c38"  bat_f147dd95f1aaf742dd4f5214843a5139
 2 rows in the trash
 alice (work/website)$ lore trash show mem_2537f9b2f7de77bfe5ca958860216bbb
 memories mem_2537f9b2f7de77bfe5ca958860216bbb  "The demo is on Friday at 10."  in the trash
-  deleted   2026-11-02 10:07 by act_54fe984c9b495744c0217776765a28f2 (store repo)
+  deleted   2026-11-02 10:07 by alice (store repo)
   reason    the demo moved
   batch     bat_b69e8368dd4986838455061d5d9e5ed7
   body: The demo is on Friday at 10.
@@ -370,10 +370,10 @@ by deleter
 tombstones (kept forever)
   repo  1
 alice (work/website)$ lore batch list
-batch bat_4f89f5fcb1d81152bdf3f52979ebb64b  delete  memory delete  by act_54fe984c9b495744c0217776765a28f2  2026-11-02 10:07  2 rows (repo 2)
-batch bat_b69e8368dd4986838455061d5d9e5ed7  delete  memory delete  by act_54fe984c9b495744c0217776765a28f2  2026-11-02 10:07  1 row (repo 1); restore 1, trash 1
+batch bat_4f89f5fcb1d81152bdf3f52979ebb64b  delete  memory delete  by alice  2026-11-02 10:07  2 rows (repo 2)
+batch bat_b69e8368dd4986838455061d5d9e5ed7  delete  memory delete  by alice  2026-11-02 10:07  1 row (repo 1); restore 1, trash 1
 alice (work/website)$ lore batch show bat_4f89f5fcb1d81152bdf3f52979ebb64b
-batch bat_4f89f5fcb1d81152bdf3f52979ebb64b  delete  memory delete  by act_54fe984c9b495744c0217776765a28f2  2026-11-02 10:07  2 rows (repo 2)
+batch bat_4f89f5fcb1d81152bdf3f52979ebb64b  delete  memory delete  by alice  2026-11-02 10:07  2 rows (repo 2)
   kind: delete; trash 2
   trash mem_0aaebe6aca5bb46cc521869f5ba2a61f (memories, repo)
   trash mem_6a866bb99ce08addfe04ea845052ed8c (memories, repo)
@@ -497,10 +497,10 @@ bob (work/website)$ lore sync ci-merge --base origin/main
 ✓ origin/main is already merged into this branch
 
 ### fix projects
-alice (work/app)$ git checkout -q -b alice-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (alice)'
+alice (work/app)$ git checkout -q -b alice-setup && lore init --name=app >/dev/null && git add -A && git commit -qm 'lore: init (alice)'
 lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/app/.git/config; lore's merge rules in ~/work/app/.gitattributes; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 4 row file(s) in ~/work/app/.lore/data
-bob (work)$ git clone -q https://github.com/client2/app && cd app && git checkout -q -b bob-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (bob)' && git push -q -u origin bob-setup
+bob (work)$ git clone -q https://github.com/client2/app && cd app && git checkout -q -b bob-setup && lore init --name=app >/dev/null && git add -A && git commit -qm 'lore: init (bob)' && git push -q -u origin bob-setup
 lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/app/.git/config; lore's merge rules in ~/work/app/.gitattributes; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 4 row file(s) in ~/work/app/.lore/data
 alice (work/app)$ git checkout -q main && git merge -q alice-setup

@@ -9,7 +9,7 @@ person bob bob@agency.example
 
 # --- docs/sync/how-notes-travel-with-git.md ------------------------------------------
 note "init"
-on alice work/website "lore init --non-interactive --name=website"
+on alice work/website "lore init --name=website"
 on alice work/website "git status --short"
 on alice work/website "ls .lore .lore/data"
 on alice work/website "cat .gitattributes"
@@ -210,8 +210,8 @@ on bob work/website "lore sync ci-merge --base origin/main"
 # --- docs/sync/conflicts-and-duplicates.md: two set-ups met --------------------------
 note "fix projects"
 solo_repo alice client2/app
-on alice work/app "git checkout -q -b alice-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (alice)'"
-on bob work "git clone -q https://github.com/client2/app && cd app && git checkout -q -b bob-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (bob)' && git push -q -u origin bob-setup"
+on alice work/app "git checkout -q -b alice-setup && lore init --name=app >/dev/null && git add -A && git commit -qm 'lore: init (alice)'"
+on bob work "git clone -q https://github.com/client2/app && cd app && git checkout -q -b bob-setup && lore init --name=app >/dev/null && git add -A && git commit -qm 'lore: init (bob)' && git push -q -u origin bob-setup"
 on alice work/app "git checkout -q main && git merge -q alice-setup"
 on! alice work/app "git fetch -q origin && git merge --no-edit origin/bob-setup"
 on alice work/app "lore project list"
