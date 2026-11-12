@@ -109,7 +109,7 @@ Or let lore pick one side for you. `lore sync conflicts` lists every row that st
 
 ## Step 3 — The file and your database both changed
 
-For shared notes (rules, memories, tasks and the other core notes) the file is the only truth: lore reads them straight from `.lore/data`, and `lore-cache.db` is just a local copy. So an edit of the file, by hand or by git, simply wins, and there is no second version to conflict with it:
+For shared notes (rules, memories, tasks and the other core notes) the file is the only truth: lore reads them straight from `.lore/data`, and the cache under `~/.lore/cache/` is just a local copy. So an edit of the file, by hand or by git, simply wins, and there is no second version to conflict with it:
 
 <!-- example: sync#file-and-database-conflict only=2,3,4,5 -->
 ```console
@@ -126,7 +126,7 @@ $ lore sync conflicts
 ```
 <!-- /example -->
 
-Lore 0.1.18 keeps no second copy in `lore-cache.db` that could disagree with the file, so this kind of conflict cannot happen any more. The only conflicts left are conflict markers inside a row, from Step 2 or from a live row two people edited at once; `lore sync conflicts` and `lore sync resolve` settle those.
+Lore 0.1.18 keeps no second copy in its cache that could disagree with the file, so this kind of conflict cannot happen any more. The only conflicts left are conflict markers inside a row, from Step 2 or from a live row two people edited at once; `lore sync conflicts` and `lore sync resolve` settle those.
 
 ## Step 4 — The same fact written twice
 

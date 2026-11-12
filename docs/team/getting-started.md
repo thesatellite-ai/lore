@@ -149,9 +149,10 @@ Upgraded 1 row
   actor_copies: refreshed 1 actor copy from their source: Alice Doe (act_162d…9666)
 team lock: taken on refs/lore/signals until 2026-11-02T10:11:20Z (renewed every 2m0s)
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
-branch (.lore/data): 1 files upgraded; commit them: git add .lore/data && git commit -m "lore: migrate format"
+branch (.lore/data): 1 files upgraded, not committed (lore never commits a code repo)
 undo: lore migrate rollback
 team lock released
+1 upgraded file in .lore/data waits for your commit: git add .lore/data && git commit -m "lore: migrate rows to format 2"
 
 # alice, in ~
 $ ls ~/.lore; cat ~/.lore/config.yaml

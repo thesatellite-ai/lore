@@ -62,7 +62,10 @@ SHA256 = re.compile(r"\b[0-9a-f]{64}\b")
 AUDIT_TIME = re.compile(r"(?m)^2\d{3}-\d\d-\d\dT\d\d:\d\d:\d\dZ(?=  [a-z_]+\.)")
 BROKEN_DB = re.compile(r"lore\.db\.broken\.\d{8}-\d{6}")
 # The wall-clock stamp in the name a damaged cache is moved aside under (lore-cache.db.corrupt-<UTC>).
-CORRUPT_CACHE = re.compile(r"lore-cache\.db\.corrupt-\d{8}T\d{6}Z")
+CORRUPT_CACHE = re.compile(r"(lore-cache|-[0-9a-f]{12})\.db\.corrupt-\d{8}T\d{6}Z")
+# A code repo's cache under the lore home is named <repo folder>-<12 hex of the repo path>.db; the
+# path is under a random temp folder, so the hex differs every run.
+REPO_CACHE = re.compile(r"(cache/repo/[A-Za-z0-9._-]+?)-[0-9a-f]{12}(?=\.db)")
 # Digits right before " bytes" are a size (`lore backup` prints "(1441792 bytes)").
 SIZE_AFTER = re.compile(r" bytes\b")
 # `lore search` hits with the same score: lore orders ties by row id, which is random,
@@ -211,7 +214,8 @@ def main(path: str) -> None:
     text = AUDIT_TIME.sub("2026-11-02T10:00:00Z", text)
     broken: dict[str, str] = {}
     text = BROKEN_DB.sub(lambda m: broken.setdefault(m.group(0), f"lore.db.broken.20261102-1000{len(broken):02d}"), text)
-    text = CORRUPT_CACHE.sub("lore-cache.db.corrupt-20261102T100000Z", text)
+    text = CORRUPT_CACHE.sub(lambda m: m.group(1) + ".db.corrupt-20261102T100000Z", text)
+    text = REPO_CACHE.sub(lambda m: m.group(1) + "-<hash>", text)
     text = BACKUP.sub("20261102-100000.000000000-pre-sync", text)
     text = TRACE_TIME.sub(lambda m: m.group(1) + "<time>" + m.group(2), text)
     text = HOME_PATH.sub("~", text)

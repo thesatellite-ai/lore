@@ -9,7 +9,7 @@ Every command takes `--color auto|always|never` and `--trace`; most take `--json
 ## Bootstrap
 
 ### `lore init [path]`
-Initializes a project at cwd: writes the project and repo rows to `.lore/data/` (commit it), adds the local cache (`.lore/lore-cache.db`) and machine files to `.gitignore`, and writes `.lore/LORE.md` and the tool pointer file. In a clone that already has `.lore/data/` it adopts the shared project instead of minting a new one.
+Initializes a project at cwd: writes the project and repo rows to `.lore/data/` (commit it), adds lore's machine files (lock, state) to `.gitignore` (the local cache lives in `~/.lore/cache/repo/`, never in the repo), and writes `.lore/LORE.md` and the tool pointer file. In a clone that already has `.lore/data/` it adopts the shared project instead of minting a new one.
 
 ```bash
 lore init --non-interactive --name=my-app
@@ -610,7 +610,7 @@ lore doctor --fix                 # repair what doctor can fix safely (reversed 
 lore sql "SELECT count(*) FROM rules"
 
 # a damaged or lost cache: the files in .lore/data are the truth
-rm -f .lore/lore-cache.db*   # the next command rebuilds the cache from .lore/data
+rm -f ~/.lore/cache/repo/<repo folder>-*   # the next command rebuilds the cache from .lore/data
 lore search rebuild                               # rebuilds the search index from the row files
 git checkout HEAD -- .lore/data                   # a deleted .lore/data comes back from git
 

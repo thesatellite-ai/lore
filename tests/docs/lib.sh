@@ -76,7 +76,8 @@ FAILURES=0
 # clean: replace machine-specific paths so transcripts read like a real user's terminal.
 # The machine's real hostname becomes the fictional "devbox".
 clean() {
-  sed -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e "s#$HOMES/[a-z0-9-]*#~#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
+  # The lore binary under test (lore where names the program itself) reads as an installed lore.
+  sed -e "s#$LORE_BIN#/usr/local/bin/lore#g" -e "s#$SHIM/lore#/usr/local/bin/lore#g" -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e "s#$HOMES/[a-z0-9-]*#~#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
 }
 
 # _answer feeds a prompt its answer (ANSWER) after a pause, so the terminal shows the

@@ -344,7 +344,6 @@ lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_2537…6bbb.json
 
 # tomas, in northwind-app
 $ lore project member add northwind-app @mira --role lead
-lore project member add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/northwind-app/.git/config; hook blocks in ~/work/northwind-app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store agency/org: commit 9ea0ca8 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_b69e…5ed7.json (store agency/org)
 ✓ @mira added to northwind-app as lead from 2026-03-01 (pmb_b69e…5ed7)

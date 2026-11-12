@@ -83,14 +83,14 @@ rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the co
 
 ### damaged database
 alice (work/website)$ lore rule list
-lore: the cache ~/work/website/.lore/lore-cache.db was damaged; moved it to ~/work/website/.lore/backups/lore-cache.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
+lore: the cache ~/.lore/cache/repo/website-<hash>.db was damaged; moved it to ~/.lore/cache/repo/website-<hash>.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
 alice (work/website)$ lore doctor | grep '^Status'
 Status: HEALTHY
 
 ### rebuild from data
-alice (work/website)$ rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm
+alice (work/website)$ rm -f ~/.lore/cache/repo/website-*
 alice (work/website)$ lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Never put passwords in the code
@@ -122,7 +122,7 @@ alice (work/website)$ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 invoice-number	on	repo	this repo	our invoice numbers
 alice (work/website)$ lore memory add --body 'Invoice INV-123456 is still open'
-ERROR: [E_NEEDS_CONFIRM] body looks like a secret (invoice-number) at line 1: IN…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+ERROR: [E_NEEDS_CONFIRM] body looks like a secret (invoice-number) at line 1: sha256:0f8bf3d8b84d: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 
@@ -217,7 +217,7 @@ alice (work/ci-clone)$ lore context --internal
 
 ### secret refused
 alice (work/website)$ lore memory add --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
-ERROR: [E_NEEDS_CONFIRM] body looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+ERROR: [E_NEEDS_CONFIRM] body looks like a secret (aws_access_key) at line 1: sha256:1a5d44a2dca1: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 
@@ -300,17 +300,12 @@ alice (work/website)$ cp ~/meta.copy .lore/data/_meta.json && lore doctor | grep
 Status: HEALTHY
 
 ### try cache
-alice (work/website)$ rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm && ls .lore
-data
-lock
-state
+alice (work/website)$ rm -f ~/.lore/cache/repo/website-* && (ls ~/.lore/cache/repo | grep website || echo 'no cache file for website')
+no cache file for website
 alice (work/website)$ lore doctor | grep '^Status'
 Status: HEALTHY
-alice (work/website)$ ls .lore
-data
-lock
-lore-cache.db
-state
+alice (work/website)$ ls ~/.lore/cache/repo | grep website | sed 's/-[0-9a-f]\{12\}\./-<hash>./'
+website-<hash>.db
 
 ### config refusals
 alice (work/website)$ lore config set live.autopush maybe

@@ -169,7 +169,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | JSON health snapshot | `lore doctor --json` |
 | Repair what doctor can fix safely (`--supersedes` links written by older versions) | `lore doctor --fix` (safe to re-run) |
 | Keep a safe copy of the notes | commit `.lore/data` (the files are the truth) |
-| Rebuild a damaged cache | `rm -f .lore/lore-cache.db*`: the next command rebuilds it from `.lore/data` |
+| Rebuild a damaged cache | `rm -f ~/.lore/cache/repo/<repo folder>-*`: the next command rebuilds it from `.lore/data` |
 | Rebuild the search index | `lore search rebuild` |
 | Capture bug bundle | `lore support-bundle --out=<path>` |
 

@@ -12,7 +12,7 @@ CI runs your checks on a fresh machine with a fresh clone of the repo. A lore co
 
 ## Before you start
 
-- The repo has lore set up and `.lore/data` committed. On a fresh clone the first lore command builds the local cache `.lore/lore-cache.db` from those files by itself.
+- The repo has lore set up and `.lore/data` committed. On a fresh clone the first lore command builds the local cache (`~/.lore/cache/repo/<repo folder>-<hash>.db`) from those files by itself.
 - The CI machine has the `lore` binary on its `PATH` (install it the same way as on your laptop).
 
 ## Step 1 — Make every write fail
@@ -40,7 +40,7 @@ Set the variable once for the whole job (in most CI systems: an `env:` entry at 
 
 ## Step 2 — Nothing to set up after an upgrade
 
-Older lore versions printed "search index is out of date, run `lore setup`" after an upgrade, and CI scripts set `LORE_NO_STALE_WARN=1` to hide it. In 0.1.18 the local cache `.lore/lore-cache.db` is built from `.lore/data` and the table definitions of the lore binary you run, and rebuilt when either changes, so there is no such hint and no setup step in CI. Leaving `LORE_NO_STALE_WARN=1` in a script does no harm.
+Older lore versions printed "search index is out of date, run `lore setup`" after an upgrade, and CI scripts set `LORE_NO_STALE_WARN=1` to hide it. In 0.1.18 the local cache (under `~/.lore/cache/repo/`) is built from `.lore/data` and the table definitions of the lore binary you run, and rebuilt when either changes, so there is no such hint and no setup step in CI. Leaving `LORE_NO_STALE_WARN=1` in a script does no harm.
 
 ## Step 3 — Look at the fresh clone
 
@@ -134,7 +134,7 @@ Then run `LORE_READ_ONLY=1 lore doctor; echo $?` in the same clone and check tha
 ## Pitfalls
 
 - **Only `1` turns a switch on.** `LORE_READ_ONLY=true` or `yes` is ignored and lore writes as usual. The same holds for the `LORE_ALLOW_*` switches.
-- **Read-only still builds the local cache.** On a fresh clone the first command builds `.lore/lore-cache.db` from `.lore/data` even with `LORE_READ_ONLY=1`. That is a local copy, not a change to your notes; nothing is written to `.lore/data` or git.
+- **Read-only still builds the local cache.** On a fresh clone the first command builds the repo cache under `~/.lore/cache/repo/` from `.lore/data` even with `LORE_READ_ONLY=1`. That is a local copy in lore's home, not a change to your notes; nothing is written to the repo or git.
 - **There is no `lore sync install-git` in 0.1.18.** Older CI scripts ran it before anything else; drop that line. Any lore command, read-only ones included, wires git in the clone (Step 3). If doctor still says DEGRADED, decide on purpose whether exit 1 fails your job.
 
 ## Related

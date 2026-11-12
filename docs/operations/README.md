@@ -24,7 +24,7 @@
 | `lore doctor`, `lore support-bundle` | [doctor](doctor.md) |
 | `lore where`, `lore files` | [where-lore-keeps-things](where-lore-keeps-things.md) |
 | `lore doctor --all`, `lore setup repair` | [doctor-all](doctor-all.md) |
-| `lore search rebuild`, rebuilding `.lore/lore-cache.db` | [backup-restore-repair](backup-restore-repair.md) |
+| `lore search rebuild`, rebuilding the repo cache | [backup-restore-repair](backup-restore-repair.md) |
 | `lore audit log`, `lore audit verify` | [audit-log](audit-log.md) |
 | `lore secrets list/show/check/link/move/relabel/rename-entry`, `lore secrets allow` (list, rm), `lore secrets rule add/edit/off/on`, `lore secrets rules`, `lore pii-pattern add/list/enable/disable`, `--secret-ref` / `--secret-unstored` / `--not-a-secret` on a secret warning, `LORE_ALLOW_ROOT`, `LORE_ALLOW_NETWORK_FS`, `LORE_ALLOW_DB_PATH_OUTSIDE` | [secrets-and-pii](secrets-and-pii.md) |
 | `--read-only`, `LORE_READ_ONLY`, `lore context --internal` | [ci](ci.md) |

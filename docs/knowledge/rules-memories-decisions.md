@@ -232,7 +232,7 @@ lore stops on text that looks like a password, a key or a token, because rows en
 ```console
 # alice, in website
 $ lore memory add --body 'The staging password is pass''word=example-only'
-ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: passw…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: sha256:aa7e3f9a7867: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 $ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes

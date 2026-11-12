@@ -145,7 +145,7 @@ User: "everything's broken."
 lore doctor --json | jq '.db_ok, .errors'
 
 # 2. The cache is built from .lore/data: delete it, the next command rebuilds it
-rm -f .lore/lore-cache.db*
+rm -f ~/.lore/cache/repo/<repo folder>-*
 lore doctor
 
 # 3. If .lore/data itself was deleted, git has it
@@ -258,7 +258,7 @@ lore memory list
 # 4. Alice opens her coding tool of choice — CLAUDE.md @imports the same .lore/LORE.md
 ```
 
-Shared knowledge lives in `.lore/data/` — one committed JSON file per row — and travels with the code: it follows branches, merges with PRs, and arrives on `git pull` (the post-merge hook imports it immediately). `.lore/lore-cache.db` is a gitignored per-developer cache rebuilt from those files. Alice's captures are exported to `.lore/data/` as she makes them and reach the team when she commits and pushes them.
+Shared knowledge lives in `.lore/data/` — one committed JSON file per row — and travels with the code: it follows branches, merges with PRs, and arrives on `git pull` (the post-merge hook imports it immediately). `~/.lore/cache/repo/<repo folder>-<hash>.db` is a gitignored per-developer cache rebuilt from those files. Alice's captures are exported to `.lore/data/` as she makes them and reach the team when she commits and pushes them.
 
 ### P13b — Roll sync out to a team that already uses lore
 

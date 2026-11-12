@@ -87,7 +87,6 @@ Personal notes follow the same split. A note written in an agency repo is filed 
 ```console
 # alice, in website
 $ lore memory add --body 'ask the client PM before touching the payment flow' --to me
-lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
 lore: wrote ~/.lore/personal/agency/memories/mem_76bd…3f10.json (store me)
 lore: wrote ~/.lore/personal/agency/machines/mch_d431…313a.json (store me)

@@ -71,10 +71,10 @@ Free-form learned fact. The lightest-weight capture shape. No rationale, no seve
 A container for tasks. Used to group related work items under one initiative with a target date.
 
 ## Mode A
-The v0.1.17 name for the default: one project per repo, its rows under `.lore/data/` (see Row file), shared through git. In 0.1.18 every repo works this way; the local cache is `.lore/lore-cache.db`.
+The v0.1.17 name for the default: one project per repo, its rows under `.lore/data/` (see Row file), shared through git. In 0.1.18 every repo works this way; the local cache is `~/.lore/cache/repo/<repo folder>-<hash>.db`.
 
 ## Row file
-`.lore/data/<table>/<id>.json` — one canonical JSON file per shared row (sorted keys, UTC timestamps, `_v` format version, `_table`). The committed source of truth; `.lore/lore-cache.db` is a cache of these files (machine-local state lives in `~/.lore/state/machine.db`).
+`.lore/data/<table>/<id>.json` — one canonical JSON file per shared row (sorted keys, UTC timestamps, `_v` format version, `_table`). The committed source of truth; `~/.lore/cache/repo/<repo folder>-<hash>.db` is a cache of these files (machine-local state lives in `~/.lore/state/machine.db`).
 
 ## Bootstrap / Adopt
 The v0.1.17 first sync pass (0.1.18 writes the row files directly; v0.1.17 data converts with `lore migrate run`). **Bootstrap** (no `.lore/data` yet): back up `lore.db`, export every shared row, write `_meta.json`. **Adopt** (`.lore/data` exists but this DB never synced — a teammate's pull, a fresh clone, a restore): switch to the shared project id, import files, export private rows, keep losing versions of clashing rows as conflicts.
@@ -158,4 +158,4 @@ Timestamp-prefixed UUID variant. lore uses UUIDv7 for all IDs so insert order �
 Introspection command. Shows what the most recent render included/excluded and why. Use when "the agent seems to be missing X."
 
 ## WAL
-SQLite's Write-Ahead Log mode. lore uses it via PRAGMA for crash safety + concurrent readers. Sidecar files: `lore-cache.db-wal`, `lore-cache.db-shm`.
+SQLite's Write-Ahead Log mode. lore uses it via PRAGMA for crash safety + concurrent readers. Sidecar files: `<cache>.db-wal`, `<cache>.db-shm`.

@@ -62,7 +62,7 @@ In CI, the runner has no business mutating the project DB. Read-only mode:
 ```bash
 #!/usr/bin/env bash
 # Auto-render before commit if the DB changed.
-# Note: the cache .lore/lore-cache.db is gitignored, so re-render unconditionally and let the
+# Note: the cache lives outside the repo (~/.lore/cache/repo/), so re-render unconditionally and let the
 # diff check below decide whether anything actually changed.
 lore render
 git add .lore/LORE.md CLAUDE.md

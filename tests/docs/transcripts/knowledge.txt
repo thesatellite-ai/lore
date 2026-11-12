@@ -142,7 +142,7 @@ ERROR: [E_IN_TRASH] mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 is in the trash (delete
 
 ### secrets
 alice (work/website)$ lore memory add --body 'The staging password is pass''word=example-only'
-ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: passw…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: sha256:aa7e3f9a7867: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 alice (work/website)$ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes

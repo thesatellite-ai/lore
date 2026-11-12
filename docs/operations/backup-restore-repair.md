@@ -1,10 +1,10 @@
 # A damaged cache: rebuilt from your files
 
-**In short:** your notes are the files in `.lore/data`, committed with your code. The cache `.lore/lore-cache.db` is only a local copy that lore builds from them, so when it is damaged lore moves it aside and builds a new one by itself, and when it is lost the next command builds it again. `lore search rebuild` rebuilds the search index from the same files. There is nothing to back up by hand.
+**In short:** your notes are the files in `.lore/data`, committed with your code. The cache (one file under `~/.lore/cache/repo/`) is only a local copy that lore builds from them, so when it is damaged lore moves it aside and builds a new one by itself, and when it is lost the next command builds it again. `lore search rebuild` rebuilds the search index from the same files. There is nothing to back up by hand.
 
 ## What it is and when you want it
 
-The cache file is `.lore/lore-cache.db` in your repo. It is not committed to git (it is listed in `.gitignore`), so it only exists on your machine. Think of it as an index card box built from the notebook: the notebook is `.lore/data`, which git keeps for you and your team.
+The cache file is `~/.lore/cache/repo/<repo folder>-<hash>.db` in lore's home folder, named after the repo folder and a short hash of its path (`lore where` names it). It is never in the repo, so it only exists on your machine, and each clone or worktree has its own. A cache file left in `.lore/lore-cache.db` by an earlier build is noted by `lore doctor` (`old_repo_cache`) and removed by `lore fix`. Think of it as an index card box built from the notebook: the notebook is `.lore/data`, which git keeps for you and your team.
 
 You want this page when lore says it moved a damaged cache aside, when the cache file was deleted, or when search answers look out of date.
 
@@ -15,13 +15,13 @@ You want this page when lore says it moved a damaged cache aside, when the cache
 
 ## Step 1 — A damaged cache fixes itself
 
-Alice (an agency developer) finds her cache damaged (here its first bytes were overwritten). The next lore command notices, moves the broken file into `.lore/backups/`, rebuilds the cache from `.lore/data` and carries on; `lore doctor` says HEALTHY:
+Alice (an agency developer) finds her cache damaged (here its first bytes were overwritten). The next lore command notices, moves the broken file aside (`<file>.corrupt-<time>`, beside it under `~/.lore/cache/repo/`), rebuilds the cache from `.lore/data` and carries on; `lore doctor` says HEALTHY:
 
 <!-- example: ops#damaged-database -->
 ```console
 # alice, in website
 $ lore rule list
-lore: the cache ~/work/website/.lore/lore-cache.db was damaged; moved it to ~/work/website/.lore/backups/lore-cache.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
+lore: the cache ~/.lore/cache/repo/website-<hash>.db was damaged; moved it to ~/.lore/cache/repo/website-<hash>.db.corrupt-20261102T100000Z and rebuilt it from the row files (nothing lost)
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore doctor | grep '^Status'
@@ -29,7 +29,7 @@ Status: HEALTHY
 ```
 <!-- /example -->
 
-Nothing is lost: every note is in `.lore/data`. Delete the copy in `.lore/backups/` once you are happy; it is only kept so you can look at it.
+Nothing is lost: every note is in `.lore/data`. Delete the `.corrupt-…` copy once you are happy; it is only kept so you can look at it.
 
 ## Step 2 — Rebuild from the files in git
 
@@ -38,7 +38,7 @@ You can also delete the cache yourself, for example to free space or to rule it 
 <!-- example: ops#rebuild-from-data -->
 ```console
 # alice, in website
-$ rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm
+$ rm -f ~/.lore/cache/repo/website-*
 $ lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
@@ -65,22 +65,17 @@ $ lore sync conflicts | head -3
 
 ## Try it
 
-Delete the cache on purpose and let the next command build it again. `ls .lore` shows `lore-cache.db` gone, then back after one `lore doctor`:
+Delete the cache on purpose and let the next command build it again. `ls ~/.lore/cache/repo` shows the repo's cache file gone, then back after one `lore doctor`:
 
 <!-- example: ops#try-cache -->
 ```console
 # alice, in website
-$ rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm && ls .lore
-data
-lock
-state
+$ rm -f ~/.lore/cache/repo/website-* && (ls ~/.lore/cache/repo | grep website || echo 'no cache file for website')
+no cache file for website
 $ lore doctor | grep '^Status'
 Status: HEALTHY
-$ ls .lore
-data
-lock
-lore-cache.db
-state
+$ ls ~/.lore/cache/repo | grep website | sed 's/-[0-9a-f]\{12\}\./-<hash>./'
+website-<hash>.db
 ```
 <!-- /example -->
 
@@ -88,7 +83,7 @@ Nothing was lost: every note is in `.lore/data`, and the cache is only a faster 
 
 ## Pitfalls
 
-- **`.lore/backups/` stays on your machine.** It is in `.gitignore`, and a moved-aside cache is a whole database, so delete it once you are happy with the result rather than copying it anywhere.
+- **A moved-aside cache stays on your machine.** It sits in lore's home, never in the repo, and it is a whole database, so delete it once you are happy with the result rather than copying it anywhere.
 - **Uncommitted notes still come back.** The rebuild reads the files in your working tree, committed or not. Only a file you deleted, or never wrote, is gone; get a deleted one back from git (see [Trash, restore from git and purge](../sync/trash-and-purge.md)).
 - **The cache is per machine.** It is not in git, so a teammate never needs your copy. Shared notes reach them through `.lore/data`.
 - **There is no backup, restore or repair command.** Older lore versions had them for `.lore/lore.db`; in 0.1.18 the cache is rebuilt from the row files, so nothing else is needed. A v0.1.17 `.lore/lore.db` left in a repo is read only by `lore migrate run`.

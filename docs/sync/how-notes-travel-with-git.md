@@ -4,7 +4,7 @@
 
 ## What it is and when you want it
 
-Think of `.lore/data` as a card box that lives inside the repo: one card (file) per note. The cache `.lore/lore-cache.db` is a fast index of that box that stays on your machine and is never committed. Because the cards are ordinary files:
+Think of `.lore/data` as a card box that lives inside the repo: one card (file) per note. The cache (a file under `~/.lore/cache/repo/`) is a fast index of that box that stays on your machine, outside the repo. Because the cards are ordinary files:
 
 - a note written on a branch stays on that branch until the branch merges, like the code it belongs to;
 - a pull request shows new and changed notes in its diff;
@@ -46,7 +46,6 @@ $ ls .lore .lore/data
 .lore:
 data
 lock
-lore-cache.db
 state
 .lore/data:
 _meta.json
@@ -65,7 +64,7 @@ $ git add -A && git commit -qm 'lore: init' && git push -q origin main
 <!-- /example -->
 
 <!-- ds:block id=sync-datanames-dgnn2vn8 -->
-`.lore/data` has one folder per kind of row (`rules`, `memories`, `projects`, ...) and one file per row, named after the row's id. `_meta.json` says which project the data belongs to. Commit everything `lore init` wrote; the local cache (`.lore/lore-cache.db`), the lock file, `.lore/state`, and a v0.1.17 `.lore/lore.db` are already in `.gitignore`.
+`.lore/data` has one folder per kind of row (`rules`, `memories`, `projects`, ...) and one file per row, named after the row's id. `_meta.json` says which project the data belongs to. Commit everything `lore init` wrote; the lock file, `.lore/state`, and a v0.1.17 `.lore/lore.db` are already in `.gitignore`.
 
 ## Step 2 — Write a note and commit it with your change
 
@@ -125,7 +124,7 @@ The file is plain JSON with sorted keys, one per line, so a diff shows exactly w
 
 ## Step 3 — A teammate clones the repo
 
-Bob (another agency developer) clones the repo. There is no `lore-cache.db` in a fresh clone, so his first lore command builds it from `.lore/data`, and the rule is there:
+Bob (another agency developer) clones the repo. There is no cache for a fresh clone yet, so his first lore command builds one (under `~/.lore/cache/repo/`) from `.lore/data`, and the rule is there:
 
 <!-- example: sync#teammate-clone -->
 ```console
@@ -255,7 +254,7 @@ $ ls .lore/data/memories | grep -c mem_b4f4…a5b0 || true
 ```
 <!-- /example -->
 
-The database remembers which rows still need a file, so a row written with sync off, or by another tool that changed `lore-cache.db` directly, is never lost: the next pass writes it out.
+The database remembers which rows still need a file, so a row written with sync off, or by another tool that changed the cache directly, is never lost: the next pass writes it out.
 
 ## Pitfalls
 
@@ -264,7 +263,7 @@ The database remembers which rows still need a file, so a row written with sync 
 - **Editing a row file by hand.** It works (the next pass reads it in), but a broken file (bad JSON, conflict markers) is skipped and reported on every command until you fix it, and the pre-commit hook refuses to commit it.
 - <!-- ds:block id=sync-maxfilesize-8up39v74 --> **Very large rows.** A row file larger than 4 MiB is refused on read and reported, never imported. Keep long logs out of notes.
 - <!-- ds:block id=sync-locktimeout-yztbqwrs --> **Two lore commands at once** (for example two agents in one repo) take turns. A write takes the store lock (`.lore/lock`), like a "busy" sign on a door. It waits up to 10 seconds for the other one's lock (`store.lock_timeout` in `~/.lore/config.yaml`), then gives up with `E_STORE_LOCKED`. Run the command again.
-- **One database per working folder.** Each clone and each git worktree (a second working folder of the same repo) has its own `lore-cache.db`; they share notes only through the committed files.
+- **One database per working folder.** Each clone and each git worktree (a second working folder of the same repo) has its own cache file (named by its folder and a hash of its path); they share notes only through the committed files.
 
 ## Related
 

@@ -26,7 +26,6 @@ and the leak guards turn on for everyone in agency-stag.
 ✓ github.com/client/website (prj_2ad3618e878ebbf527d34d446ef4f891) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 alice (work/website)$ lore task add 'seed staging with demo data' --to agency-stag
-lore task add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store agency-stag: commit 86dbae4 to branch staging
 lore: wrote 2 row file(s) in ~/.lore/personal/agency-stag (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes@staging/client (store agency-stag)

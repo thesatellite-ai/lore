@@ -120,11 +120,12 @@ ERROR: [E_NO_WORK] nothing ready:
 alice (work/api)$ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 alice (work/api)$ lore task list
-lore: pushed store agency: commit 59e9d31 to branch main
-✓ tsk_162df51b7f78b785c97c26b41ea89666 merged 10:23 (found by: ancestry, 7540e63)
+lore: store agency: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+✓ tsk_162df51b7f78b785c97c26b41ea89666 merged 10:23 (found by: ancestry, 59e9d31)
 ○ tsk_54fe984c9b495744c0217776765a28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 agent-frontend (work/agents/app)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
+lore: pushed store agency: commit 7540e63 to branch main
 lore: pushed store agency: commit ef62c83 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d4314eba822f1bf5908b2b8ded5f313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe984c9b495744c0217776765a28f2.json (store agency)
@@ -176,18 +177,18 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe984c9b495744c02177
 ✓ tsk_54fe984c9b495744c0217776765a28f2 done (commit 2297d41); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 alice (work/app)$ git pull -q && git merge -q --no-ff --no-edit origin/agent-frontend-2/invite-route && git push -q origin main && lore task list >/dev/null
-lore task list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/app/.git/config; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-lore: pushed store agency: commit c929695 to branch main
-✓ tsk_54fe984c9b495744c0217776765a28f2 merged 11:02 (found by: ancestry, 40bd5f4)
+lore: set lore.clientrepo=true in ~/work/app/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
+lore: store agency: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+✓ tsk_54fe984c9b495744c0217776765a28f2 merged 11:02 (found by: ancestry, c929695)
 
 ### merged by hand
 agent-coord (work/api)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator
+lore: pushed store agency: commit 40bd5f4 to branch main
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging: waits for tsk_05e99e22e9e86e96fe4daa7777994603 to be merged (done, merge unknown)
   hint: lore task board shows what each task waits on
 (exit 10)
 alice (work/infra)$ lore task merged tsk_05e99e22e9e86e96fe4daa7777994603
-lore task merged: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store agency: commit 1c99293 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json (store agency)
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 merged (marked by hand, 11:04)

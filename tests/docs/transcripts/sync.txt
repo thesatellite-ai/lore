@@ -21,7 +21,6 @@ alice (work/website)$ ls .lore .lore/data
 .lore:
 data
 lock
-lore-cache.db
 state
 
 .lore/data:

@@ -54,7 +54,6 @@ org resolution (first rule that answers wins):
 
 ### personal notes split
 alice (work/website)$ lore memory add --body 'ask the client PM before touching the payment flow' --to me
-lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote ~/.lore/personal/agency/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store me)
 lore: wrote ~/.lore/personal/agency/memories/mem_76bd560aff0771fab8457dbfa9823f10.json (store me)
 lore: wrote ~/.lore/personal/agency/machines/mch_d4314eba822f1bf5908b2b8ded5f313a.json (store me)

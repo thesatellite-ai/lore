@@ -18,6 +18,7 @@ Link each repo to the same folder. Anyone at the agency can do it, once per repo
 ```console
 # alice, in api
 $ lore org link agency --project client2 --yes
+lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/api/.git/config; hook blocks in ~/work/api/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store github.com/agency/notes: commit 601d285 to branch main
 This marks github.com/client2/api as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
@@ -27,6 +28,7 @@ and the leak guards turn on for everyone in agency.
 
 # alice, in app
 $ lore org link agency --project client2 --yes
+lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/app/.git/config; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store github.com/agency/notes: commit 86dbae4 to branch main
 This marks github.com/client2/app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
@@ -36,6 +38,7 @@ and the leak guards turn on for everyone in agency.
 
 # alice, in infra
 $ lore org link agency --project client2 --yes
+lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store github.com/agency/notes: commit 9b40ce7 to branch main
 This marks github.com/client2/infra as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
@@ -80,13 +83,11 @@ Any of the three repos shows the group's tasks. `lore mission status` shows the 
 ```console
 # alice, in app
 $ lore task list
-lore task list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/app/.git/config; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 ○ tsk_b4f4…a5b0 send the invite email from the API [medium]  [agency/client2]
 ○ tsk_4c59…6c38 build the invite page [medium]  [agency/client2]
 
 # alice, in infra
 $ lore mission status msn_c0f3…b5b8
-lore mission status: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 msn_c0f3…b5b8 Invite landing page   2 tasks · 0 done · 0 claimed · 1 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_b4f4…a5b0  send the invite email from the API              
   waiting   tsk_4c59…6c38  build the invite page                     waits for tsk_b4f4…a5b0 to be merged (todo)

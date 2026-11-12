@@ -98,7 +98,8 @@ FAILURES=0
 # An invite line (lore-invite:v1:<base64 JSON>) is cut after 24 characters: its JSON holds the
 # random invite id, so the full line would differ on every run.
 clean() {
-  sed -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e 's#\(lore-invite:v1:[A-Za-z0-9_-]\{24\}\)[A-Za-z0-9_=-]*#\1…#g' -e "s#$HOMES/[a-z0-9-]*#~#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
+  # The lore binary under test (lore where names the program itself) reads as an installed lore.
+  sed -e "s#$LORE_BIN#/usr/local/bin/lore#g" -e "s#$SHIM/lore#/usr/local/bin/lore#g" -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e 's#\(lore-invite:v1:[A-Za-z0-9_-]\{24\}\)[A-Za-z0-9_=-]*#\1…#g' -e "s#$HOMES/[a-z0-9-]*#~#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
 }
 
 # _answer feeds a prompt its answer (ANSWER) after a pause, so the terminal shows the

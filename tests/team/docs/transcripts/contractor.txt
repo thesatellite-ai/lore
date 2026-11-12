@@ -10,6 +10,7 @@ lore store init: set user.name and user.email in the store clone ~/.lore/stores/
 lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes-client2 (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
 ✓ created store client2 (sto_162df51b7f78b785c97c26b41ea89666) at git@github.com:agency/notes-client2; recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ lore org link agency --project client --store git@github.com:agency/notes-client --yes
+lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store github.com/agency/notes-client: commit 601d285 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
 and the leak guards turn on for everyone in agency.
@@ -17,7 +18,6 @@ and the leak guards turn on for everyone in agency.
 ✓ github.com/client/website (prj_54fe984c9b495744c0217776765a28f2) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 alice (work/website)$ lore actor register
-lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store agency/.: commit 86dbae4 to branch main
 lore: pushed store agency/.: commit 9b40ce7 to branch main
 lore: wrote ~/.lore/stores/agency/notes/_store/projects/prj_05e99e22e9e86e96fe4daa7777994603.json (store agency/.)

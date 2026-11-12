@@ -16,6 +16,7 @@ The examples follow Alice and Bob (two agency developers) in the client's repo `
 | [Branches: peek and promote](branches-peek-promote.md) | You want to see a teammate's notes on their branch without switching to it, or move one urgent rule onto main now. |
 | [Conflicts and duplicates](conflicts-and-duplicates.md) | Two people changed the same note, the same fact was written twice, or two people set up lore on separate branches. |
 | [Trash, restore from git and purge](trash-and-purge.md) | A note disappeared, `.lore/data` was deleted, or you want old archived notes gone for good. |
+| [Stores as plain folders](store-clones.md) | You opened `~/.lore/stores/` and want to know what each folder and file is, want lore to use a clone you made yourself (`lore store use`), or had stores from an earlier 0.1.18 build. |
 | [Editing by hand](editing-by-hand.md) | You opened a store's row files in a text editor, deleted or moved one, or used plain `git pull` / `git commit` in a store clone, and want to know what lore does with it. |
 | [Hooks and the merge driver](hooks-and-merge-driver.md) | You want to know what lore adds to `.git/hooks` and `.gitattributes`, and why a commit was refused. |
 | [The GitHub workflow](github-workflow.md) | Pull requests on GitHub show a conflict in `.lore/data` that lore could have merged. |
@@ -26,7 +27,7 @@ The examples follow Alice and Bob (two agency developers) in the client's repo `
 ## Two words you will see everywhere
 
 - A **row** is one note: one rule, one memory, one task. Think of one card in a card box.
-- **`.lore/data`** is the folder in your repo that holds one small text file (JSON) per row. git tracks it like any other code. The database `.lore/lore.db` is a fast copy of those files that stays on your machine; if you delete it, lore builds it again from the files.
+- **`.lore/data`** is the folder in your repo that holds one small text file (JSON) per row. git tracks it like any other code. lore's fast copy of those files, the cache, stays on your machine under `~/.lore/cache/` (never in the repo); if you delete it, lore builds it again from the files.
 
 ## What these pages do not cover
 
@@ -37,7 +38,7 @@ Some notes do not wait for a commit. Tasks, for example, are *live* by default: 
 
 ## Where the examples come from
 
-The examples are run by `tests/docs/run-examples.sh sync`, `tests/docs/run-examples.sh projects` and `tests/docs/run-examples.sh stores`, in throwaway folders with a fake GitHub made of plain git repos on disk. Nothing touches a real account or the network. The script writes what each command printed to `tests/docs/transcripts/`, and the pages paste from there, so the output you see is the output lore really prints.
+The examples are run by `tests/docs/run-examples.sh sync`, `tests/docs/run-examples.sh projects`, `tests/docs/run-examples.sh stores` and `tests/docs/run-examples.sh files`, in throwaway folders with a fake GitHub made of plain git repos on disk. Nothing touches a real account or the network. The script writes what each command printed to `tests/docs/transcripts/`, and the pages paste from there, so the output you see is the output lore really prints.
 
 ## Related
 

@@ -45,10 +45,10 @@ Agent:  Done. Your notes are lore rows now, and lore writes .lore/LORE.md
 
 ## What just happened
 
-- `.lore/` was created; each row is one JSON file under `.lore/data/` (the truth), and `.lore/lore-cache.db` is a local cache built from them
+- `.lore/` was created; each row is one JSON file under `.lore/data/` (the truth), and `~/.lore/cache/repo/<repo folder>-<hash>.db` is a local cache built from them
 - three items from the old CLAUDE.md became two rules and one memory
 - `.lore/LORE.md` is written from the rows, and CLAUDE.md points at it
-- `.gitignore` keeps the cache `.lore/lore-cache.db` out of git (it is per machine)
+- the cache lives in lore's home, `~/.lore/cache/repo/<repo folder>-<hash>.db` (per machine, never in the repo)
 
 ## What to commit
 

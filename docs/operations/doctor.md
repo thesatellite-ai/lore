@@ -4,7 +4,7 @@
 
 ## What it is and when you want it
 
-lore keeps your shared notes as plain files under `.lore/data`, so they travel with your git commits, and builds a local cache from them, `.lore/lore-cache.db` (a database here is just one file that makes reads and search fast). What lore keeps for your machine only (the audit log, sessions) is in `~/.lore/state/machine.db`.
+lore keeps your shared notes as plain files under `.lore/data`, so they travel with your git commits, and builds a local cache from them, `~/.lore/cache/repo/<repo folder>-<hash>.db` in lore's home (a database here is just one file that makes reads and search fast). What lore keeps for your machine only (the audit log, sessions) is in `~/.lore/state/machine.db`.
 
 `lore doctor` looks at all of that and gives one answer: **HEALTHY**, **DEGRADED** (it works, but something needs your attention) or **BROKEN** (lore cannot read its notes or stores). Run it:
 
@@ -151,7 +151,7 @@ Without `--out` the bundle is printed to the screen. Read it before you send it;
 
 - **DEGRADED is not an error message.** Many things only degrade the status: a sync conflict kept aside, an uncommitted secret warning, a large journal. Read the `Warnings` block; each line names the command that clears it.
 - **`uncommitted` does not count against you.** Files in `.lore/data` that you have not committed yet are listed, not counted as a problem. Commit them with your change.
-- **A damaged cache is not reported, it is fixed.** Any lore command that finds `.lore/lore-cache.db` damaged moves it into `.lore/backups/` and rebuilds it, printing one line that says so; doctor then reports HEALTHY. A damaged row file under `.lore/data` is different: that is your notes, so doctor reports it and nothing is rebuilt over it.
+- **A damaged cache is not reported, it is fixed.** Any lore command that finds the repo cache damaged moves it aside (`<file>.corrupt-<time>`, beside it under `~/.lore/cache/repo/`) and rebuilds it, printing one line that says so; doctor then reports HEALTHY. A damaged row file under `.lore/data` is different: that is your notes, so doctor reports it and nothing is rebuilt over it.
 - **`--include-content` on the support bundle adds nothing today.** The flag only switches `sanitized` to `false`; no note text is added. Do not rely on it to share note text.
 - **The support bundle's `generated_at` is the real time,** even when you run lore with a test clock.
 - **Doctor checks one repo.** Run it in each repo you care about. Team checks (stores, live rows) show up in the same report when you use them; see [Troubleshooting for teams](../team/troubleshooting.md).

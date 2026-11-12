@@ -60,6 +60,7 @@ stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore org link agency --project client
+lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 Continue? [y/N] y
 lore: pushed store github.com/agency/notes: commit 601d285 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
@@ -69,7 +70,6 @@ and the leak guards turn on for everyone in agency.
   nothing was written to this repo
 $ git status --short
 $ lore actor register
-lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store agency/org: commit 86dbae4 to branch main
 lore: pushed store agency/org: commit 9b40ce7 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_54fe…28f2.json (store agency/org)

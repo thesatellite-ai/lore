@@ -14,7 +14,7 @@ This page lists every file and every key, with its default and a plain one-line 
 | `lore-store.yaml` | at the top of a store repo | yes, everyone who can open the store | `lore store init` | the marker that makes a repo a store |
 | `<org_folder>/lore-org.yaml` | inside a store | yes, everyone who can open the store | a team member, by hand | the org entry the team suggests; `lore org import` copies it into your config |
 | `.lore/lore.yaml` | in a project folder | it is committed if you commit it | v0.1.17 `lore project shared-init` (retired) | an old pointer to a shared database; `lore migrate run` converts it |
-| database settings | inside `.lore/lore.db` | no | lore itself | internal values such as the schema version; no command reads or sets them |
+| database settings | inside the cache files under `~/.lore/cache/` | no | lore itself | internal values such as the schema version; no command reads or sets them |
 
 A **store** is a separate repo that holds only lore notes, so private notes never sit in a repo the client can read. An **org** is one company you work for, set up as one entry under `orgs:`.
 
@@ -457,12 +457,12 @@ A committed file in a repo the org owns. It names the org so everyone who clones
 
 ## `lore-store.yaml`
 
-<!-- ds:block id=team-store-allowed-a7qb5uuj -->
-The marker at the top of a store repo. Its presence is what makes a repo a store; `lore store init` writes it. Besides this marker, a store may hold only `README*`, `LICENSE*`, `.gitattributes`, `.github/workflows/lore-*.yml` and `.lore/` folders (at the top or one folder down). lore refuses a store that holds anything else, with `E_NOT_A_STORE`.
+<!-- ds:block id=team-store-allowed-a7qb5uuj lines=1-30 -->
+The marker at the top of a store repo. Its presence is what makes a repo a store; `lore store init` writes it. Besides this marker, a store may hold only `README*`, `LICENSE*`, `.gitattributes`, `.github/workflows/lore-*.yml`, row files (`<folder>/<table>/<id>.json`, the store's own in `_store/<table>/<id>.json`), each folder's `_meta.json` and `_purged.json`, `lore-org.yaml` (at the top or in a folder), and the `.lore/` folders of the layout before 0.1.18's plain folders (at the top or in any folder). lore refuses a store that holds anything else, with `E_NOT_A_STORE`; a file you add by hand to your clone and do not commit is only reported by `lore doctor` (`store_files`).
 
 | Key | Default | What it means |
 |---|---|---|
-| `lore_store` | required | the marker format version, a whole number of at least 1 (lore writes `1`) |
+| `lore_store` | required | the layout version, a whole number of at least 1 (lore writes `4`: rows at `<folder>/<table>/`, the store's own rows in `_store/`); an older lore refuses a newer layout with `E_OLD_LORE` |
 | `created` | written by `lore store init` | the day the store was made, `YYYY-MM-DD` |
 | `org_folder` | none | the folder suggested for the roster and company rules; only a hint, the org entry's `org_folder` decides |
 | `push` | `now` | how every member's writes to this store reach the remote: `now`, `batch` or `manual`, as `personal.push` above. Only an org admin sets it, with `lore store set <store> push=…`; a member cannot override it |
@@ -511,7 +511,7 @@ v0.1.17 could point a project at a database somewhere else, shared by several pr
 
 ## Your settings (`lore config`)
 
-`lore config get`, `set` and `list` read and write the keys of this file, `~/.lore/config.yaml`, as dotted paths (`default_branch`, `live.autopush`). A key lore does not read is refused and nothing is written. lore's own bookkeeping inside `lore.db` is no longer read or set with `lore config`; team rules are set with `lore policy set`.
+`lore config get`, `set` and `list` read and write the keys of this file, `~/.lore/config.yaml`, as dotted paths (`default_branch`, `live.autopush`). A key lore does not read is refused and nothing is written. lore's own bookkeeping inside its cache is no longer read or set with `lore config`; team rules are set with `lore policy set`.
 
 <!-- example: reference#db-config -->
 ```console

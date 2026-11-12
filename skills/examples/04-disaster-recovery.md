@@ -1,6 +1,6 @@
 # Example: My cache is broken
 
-**In short:** lore's local cache `.lore/lore-cache.db` is only a copy built from the files in `.lore/data`. If it breaks (for example after a power cut), lore moves it aside and builds a new one by itself; if you delete it, the next command builds it again. Keep `.lore/data` committed and nothing shared can be lost.
+**In short:** lore's local cache `~/.lore/cache/repo/<repo folder>-<hash>.db` is only a copy built from the files in `.lore/data`. If it breaks (for example after a power cut), lore moves it aside and builds a new one by itself; if you delete it, the next command builds it again. Keep `.lore/data` committed and nothing shared can be lost.
 
 **Scenario:** Bob (an agency developer) opens his project and a command reports `E_DB_CORRUPT`. The power went out while lore was writing.
 
@@ -11,12 +11,12 @@ lore doctor
 lore rule list    # shared notes still list: they are read from .lore/data
 ```
 
-A cache file that cannot be opened at all is moved to `.lore/backups/lore-cache.db.corrupt-<time>` and rebuilt without any action. `E_DB_CORRUPT` means the file opens but holds a record lore cannot read.
+A cache file that cannot be opened at all is moved aside beside itself (`~/.lore/cache/repo/<repo folder>-<hash>.db.corrupt-<time>`) and rebuilt without any action. `E_DB_CORRUPT` means the file opens but holds a record lore cannot read.
 
 ## Rebuild the cache from the files
 
 ```bash
-rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm
+rm -f ~/.lore/cache/repo/<repo folder>-*
 lore doctor | head -1    # the first command rebuilds the cache
 ```
 
