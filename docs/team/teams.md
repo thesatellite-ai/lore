@@ -49,7 +49,7 @@ A team's name is internal to the org, so a task written into a client's own repo
 
 ## Step 3 — Change who is on it
 
-`team member add` and `team member remove` change the members and say who was already in (or not in); `team add` on an existing team renames it and keeps its members unless `--members` is given, which replaces them:
+`team member add` and `team member remove` change the members and say who was already in (or not in); `team add` on an existing team renames it and keeps its members unless `--members` is given, which replaces them. Someone invited who has not joined yet is named by email: `lore team member add @web mira@agency.example` records the team on her pending invite and says so, and she joins it when she accepts (`lore team invite <email> --team @web` does the same up front). `team list` counts them as pending, and `team show` lists them apart from the members, with their invite and its last day:
 
 <!-- example: teams#members -->
 ```console

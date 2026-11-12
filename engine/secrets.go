@@ -78,9 +78,12 @@ func (e *Engine) screen(ctx context.Context, cl call, target store.Source, rowID
 // honoured first (D2/D9, secret_allows). A secret split across fields is
 // refused here, in every mode (19.2).
 func (e *Engine) detect(ctx context.Context, cl call, target store.Source, rowID ids.AnyID, fields map[string]value.Value, names []string) (screened, error) {
-	if rs, ok := e.scanner.(RefreshingScanner); ok {
+	if rs, ok := e.scanner.(RefreshingScanner); ok && !stageScanned(ctx) {
 		// rules are settings rows: a rule added since the last write
-		// (a long-lived `lore api`) applies to this one
+		// (a long-lived `lore api`) applies to this one. Within one stage
+		// once: its own rows are not read back, so the rules cannot change
+		// before it lands (a 1,000-row merge re-read every store's rules
+		// for each row).
 		if err := rs.Refresh(ctx); err != nil {
 			return screened{}, err
 		}

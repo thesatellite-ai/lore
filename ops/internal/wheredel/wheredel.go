@@ -62,6 +62,12 @@ type Previewer interface {
 	PreviewDelete(ctx context.Context, refs ...engine.Ref) (engine.DeletePreview, error)
 }
 
+// ManyDeleter is the optional Env upgrade that moves many rows to the
+// trash as one delete (wire.App: engine.TrashMany).
+type ManyDeleter interface {
+	DeleteMany(ctx context.Context, refs []engine.Ref) error
+}
+
 // Located is one row with the store that holds it (the same shape as
 // work.Sourced, so a caller converts with work.Sourced(l)).
 type Located struct {
@@ -182,6 +188,14 @@ func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Re
 		if fenced, err = sp.Fence(bctx, tasks); err != nil {
 			return Result{}, err
 		}
+	}
+	if md, ok := upgrade.As[ManyDeleter](env); ok {
+		// one delete for every row: one store write per store (owner
+		// report 2026-11-12: a write and a push per row)
+		if derr := md.DeleteMany(bctx, refs); derr != nil {
+			return Result{}, errs.Prefix(sp.Noun+" delete --where: the "+strconv.Itoa(len(refs))+" rows could not go to the trash (batch "+out.Batch+"; `lore trash restore "+out.Batch+"` brings back any that did)", derr)
+		}
+		refs = nil
 	}
 	for i, ref := range refs {
 		if _, derr := env.Delete(bctx, ref); derr != nil {

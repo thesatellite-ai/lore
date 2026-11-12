@@ -396,11 +396,16 @@ func unchangedUpdate(ctx context.Context, def schema.TableDef, cur, ours row.Row
 // would fail the whole-row check of an Update that does not patch it. A
 // field that does not parse as its kind is kept as read: validation then
 // reports it, as before. Fields the definition does not declare are kept.
+// An empty-string ref (v0.1.17's "no ref", emptyref.go) becomes null.
 func retype(def schema.TableDef, fields map[string]value.Value) map[string]value.Value {
 	out := make(map[string]value.Value, len(fields))
 	for name, v := range fields {
 		out[name] = v
 		f, ok := def.Field(name)
+		if ok && emptyRef(f, v) {
+			out[name] = value.Null{} // v0.1.17's "" for "no ref" (emptyref.go)
+			continue
+		}
 		if !ok || v.Kind() == f.Kind || v.Kind() == value.KindNull {
 			continue
 		}
@@ -555,10 +560,62 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 // every store the plan tombstones in must be a Purger, and each tombstoned
 // id is also added to that folder's _purged.json in the same batch.
 func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purge bool) (Written, error) {
-	cl := e.callOf(ctx)
 	plan, err := e.planDelete(ctx, src, cur, purge)
 	if err != nil {
 		return Written{}, err
+	}
+	return e.writeRemove(ctx, []ids.AnyID{cur.ID}, plan, purge)
+}
+
+// removeMany is remove for several live rows as ONE write per store (a
+// trash purge of many rows, owner report 2026-11-12: a plan over every
+// store and a commit per row). The plans share one read of the stores
+// (depindex.go) and are merged: a row two plans reach is written once (a
+// tombstone wins over a cleared field). Roots are not reported in Also.
+func (e *Engine) removeMany(ctx context.Context, items []trashItem, purge bool) (Written, error) {
+	ctx = withDepIndex(ctx)
+	merged := deletePlan{byStore: map[store.Source][]step{}}
+	at := map[ids.AnyID][2]int{} // row id → index of its step: store order slot, position
+	storeSlot := map[store.Source]int{}
+	var slots []store.Source
+	for _, it := range items {
+		plan, err := e.planDelete(ctx, it.src, it.row, purge)
+		if err != nil {
+			return Written{}, err
+		}
+		for name, steps := range plan.byStore {
+			if _, ok := storeSlot[name]; !ok {
+				storeSlot[name] = len(slots)
+				slots = append(slots, name)
+			}
+			for _, st := range steps {
+				if pos, seen := at[st.row.ID]; seen {
+					if st.clear == "" { // a tombstone wins over a cleared field
+						merged.byStore[slots[pos[0]]][pos[1]] = st
+					}
+					continue
+				}
+				at[st.row.ID] = [2]int{storeSlot[name], len(merged.byStore[name])}
+				merged.byStore[name] = append(merged.byStore[name], st)
+			}
+		}
+	}
+	roots := make([]ids.AnyID, 0, len(items))
+	for _, it := range items {
+		roots = append(roots, it.row.ID)
+	}
+	return e.writeRemove(ctx, roots, merged, purge)
+}
+
+// writeRemove writes a delete plan: one backend write per store. The
+// first root's row is w.Row; every row that is no root is in Also and
+// records the first root as the delete it cascaded from.
+func (e *Engine) writeRemove(ctx context.Context, roots []ids.AnyID, plan deletePlan, purge bool) (Written, error) {
+	cl := e.callOf(ctx)
+	root := roots[0]
+	isRoot := make(map[ids.AnyID]bool, len(roots))
+	for _, r := range roots {
+		isRoot[r] = true
 	}
 	for name := range plan.byStore {
 		st, err := e.writable(name) // check every store before writing any
@@ -607,11 +664,13 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 			changes = append(changes, store.Change{Row: sr, Expect: s.row.HLC})
 			rows = append(rows, sr)
 			ev := Event{Op: cl.op, Action: action, Store: name, Table: next.Table, ID: next.ID, HLC: next.HLC, Actor: actor}
-			if next.ID != cur.ID {
-				ev.Cascade = cur.ID
-				w.Also = append(w.Also, Changed{Store: name, Row: next})
-			} else {
+			switch {
+			case next.ID == root:
 				w.Row = next
+			case isRoot[next.ID]:
+			default:
+				ev.Cascade = root
+				w.Also = append(w.Also, Changed{Store: name, Row: next})
 			}
 			events = append(events, ev)
 		}
@@ -625,7 +684,7 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 		}
 		if werr != nil {
 			if errors.Is(werr, store.ErrStale) {
-				return Written{}, errs.Wrap(errs.Stale, "a row changed while "+cur.ID.String()+" was deleted", werr).WithHint("rerun the command")
+				return Written{}, errs.Wrap(errs.Stale, "a row changed while "+root.String()+" was deleted", werr).WithHint("rerun the command")
 			}
 			return Written{}, werr
 		}
@@ -869,7 +928,7 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 		if err != nil {
 			return "", row.Row{}, false, err
 		}
-		found = append(found, copyHit{src: name, row: got, hidden: res})
+		found = append(found, copyHit{src: name, row: e.readRow(ctx, got), hidden: res})
 	}
 	if len(found) == 0 {
 		return "", row.Row{}, false, errs.Wrap(errs.NotFound, "no row "+ref.ID.String(), store.ErrNotFound)
@@ -1064,6 +1123,9 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 		s.addFinish(e, source, rows, evs)
 		return nil, nil
 	}
+	e.openMu.Lock()
+	e.settingsMemo = nil // a write reached a store: a settings row may have changed
+	e.openMu.Unlock()
 	cur, err := e.cache.Cursor(ctx, source)
 	if err != nil {
 		return nil, err

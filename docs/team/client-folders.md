@@ -171,9 +171,16 @@ $ git status --short
 - A v0.1.17 repo needs no `lore migrate run` first: its rows are read as migrate would write them (format steps, tags folded into `tag_ids`, an agent's live stamp `…/agent` read as a stable actor).
 - Moving a single row is still `lore move <id> --to <store>/<folder>`.
 
+### After an adopt: one person, two actor ids, and empty refs
+
+An older lore adopted a v0.1.17 repo's rows as they were. Two things can be left behind, and both are repaired in place, from the client repo linked to the folder (or any repo that attaches it):
+
+- **The repo's own actor id for someone already on the roster.** `lore doctor` names the pair; `lore actor merge <old id> <roster id>` rewrites every row naming the old id, all of a store's rows as one store commit and one push (1,000 rows take seconds), lists each store or folder it edits with its count (`git@host:org/notes-two.git/client_a: 66 edited`), and marks the old id `merged_into` the kept one, also on the org roster. A row it cannot edit does not stop it: the others are written, each row left is listed with its reason and fix, the command exits non-zero, and running it again writes only what is left. History stamps (`created_by`, `updated_by`) keep the old id as they were written; reads show the kept id for it: `lore task list --created-by <roster id>` lists the rows made under the old one.
+- **`tasklist_id: ""` (or another ref holding an empty string).** lore 0.1.17 wrote `""` for "none". Reads and edits treat it as none, so every edit works; `lore doctor` names the rows (`empty_ref`) and `lore doctor --fix` writes null in them, one store commit per store. `lore store adopt` and `lore migrate run` write null from the start. To take a task off its list on purpose: `lore task edit <id> --clear-tasklist`.
+
 ## An org with several stores
 
-An org entry lists every store (`lore org refresh <org>` takes them from the store's `lore-org.yaml`). `lore store list` and `lore store folder list` show each of them once; the org's other stores are named by their url. Every store command that takes a store takes that url: `lore store folder add|list|remove <url>`, `lore store show|set|visibility|compact <url>`, and `lore org link <org> --project <folder> --store <url>`. A brand-new empty repo becomes a lore store with the first write to it: the `lore-store.yaml` marker goes into that same commit. A repo that an older lore left with a folder's `_meta.json` and no marker is adopted the same way on its next write.
+An org entry lists every store (`lore org refresh <org>` takes them from the store's `lore-org.yaml`). `lore store list` and `lore store folder list` show each of them once; the org's other stores are named by their url, and each `store … folders:` block is headed by the store that holds those folders (the org's name only for the store holding the org folder), from any repo. Every store command that takes a store takes that url: `lore store folder add|list|remove <url>`, `lore store show|set|visibility|compact <url>`, and `lore org link <org> --project <folder> --store <url>`. A brand-new empty repo becomes a lore store with the first write to it: the `lore-store.yaml` marker goes into that same commit. A repo that an older lore left with a folder's `_meta.json` and no marker is adopted the same way on its next write.
 
 ## Which store commands work outside a repo
 

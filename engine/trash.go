@@ -213,6 +213,27 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 		b = Batch{ID: bid, Kind: BatchKindDelete}
 		ctx = WithBatch(ctx, b)
 	}
+	w, err := e.writeTrash(ctx, b, reason, []ids.AnyID{cur.ID}, plan, purge)
+	if err != nil {
+		return w, err
+	}
+	if purge {
+		return e.purgeDeleted(ctx, cur, reason, w, pr)
+	}
+	return w, nil
+}
+
+// writeTrash marks every row of plan trashed in batch b (one backend write
+// per store, the audit records in it) and returns the first root's row
+// with every other row in Also. A row that is not a root records the
+// first root as the delete it cascaded from.
+func (e *Engine) writeTrash(ctx context.Context, b Batch, reason string, roots []ids.AnyID, plan []trashItem, purge bool) (Written, error) {
+	var err error
+	root := roots[0]
+	isRoot := make(map[ids.AnyID]bool, len(roots))
+	for _, r := range roots {
+		isRoot[r] = true
+	}
 	ctx = store.WithCommitTrailers(ctx, DeleteBatchTrailer+": "+b.ID.String()) // 2.1, 3.4
 	cl := e.callOf(ctx)
 	actor := e.actorOf(cl)
@@ -269,11 +290,14 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 			changes = append(changes, store.Change{Row: sr, Expect: r.HLC})
 			docs = append(docs, hidden) // the cache drops a trashed row (3.2)
 			ev := Event{Op: cl.op, Action: ActionTrash, Store: name, Table: next.Table, ID: next.ID, HLC: next.HLC, Actor: actor}
-			if next.ID != cur.ID {
-				ev.Cascade = cur.ID
-				w.Also = append(w.Also, Changed{Store: name, Row: next})
-			} else {
+			switch {
+			case next.ID == root:
 				w.Row = next
+			case isRoot[next.ID]:
+				w.Also = append(w.Also, Changed{Store: name, Row: next})
+			default:
+				ev.Cascade = root
+				w.Also = append(w.Also, Changed{Store: name, Row: next})
 			}
 			events = append(events, ev)
 		}
@@ -285,7 +309,7 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 		bc, bev := pre.withDirect(changes, events)
 		if werr := e.writeChanges(ctx, st, bc, bev); werr != nil {
 			if errors.Is(werr, store.ErrStale) {
-				return Written{}, errs.Wrap(errs.Stale, "a row changed while "+cur.ID.String()+" was deleted", werr).WithHint("rerun the command")
+				return Written{}, errs.Wrap(errs.Stale, "a row changed while "+root.String()+" was deleted", werr).WithHint("rerun the command")
 			}
 			return Written{}, werr
 		}
@@ -296,10 +320,72 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 			return w, ferr
 		}
 	}
-	if purge {
-		return e.purgeDeleted(ctx, cur, reason, w, pr)
-	}
 	return w, nil
+}
+
+// TrashMany moves every row of refs (and what cascades from them) to the
+// trash as ONE delete: one plan (a root never blocks another root), one
+// batch, one backend write per store (owner report 2026-11-12: `lore
+// store folder remove --purge` deleted a 1,000-row folder row by row, a
+// plan over every store and a commit each, for over five minutes). The
+// caller has asked the person (the cascade's group question is not asked
+// again: WithConfirmed). A --purge request is not taken here: purge the
+// batch afterwards (`lore trash purge <bat_>`).
+func (e *Engine) TrashMany(ctx context.Context, refs []Ref) (Written, error) {
+	if len(refs) == 0 {
+		return Written{}, nil
+	}
+	if pr := purgeOf(ctx); pr != nil && pr.Asked {
+		return Written{}, errs.New(errs.Unsupported, "a many-row delete goes to the trash; purge its batch afterwards").
+			WithHint("lore trash purge <bat_ id>")
+	}
+	reason, err := trash.Reason(reasonOf(ctx))
+	if err != nil {
+		return Written{}, err
+	}
+	roots := make([]trashItem, 0, len(refs))
+	rootIDs := make([]ids.AnyID, 0, len(refs))
+	for _, ref := range refs {
+		src, cur, lerr := e.locate(ctx, ref)
+		if lerr != nil {
+			return Written{}, lerr
+		}
+		if lerr = refuseActorDelete(cur); lerr != nil {
+			return Written{}, lerr
+		}
+		if _, werr := e.writable(src); werr != nil {
+			return Written{}, werr
+		}
+		if cur.Deleted {
+			continue // already gone or in the trash: nothing to do for it
+		}
+		if reason == "" && e.requireReason(src) {
+			return Written{}, errs.New(errs.ReasonRequired, "delete "+cur.ID.String()+": policy delete.require_reason needs a --reason").WithHint("rerun with --reason \"<why>\"")
+		}
+		roots = append(roots, trashItem{src, cur})
+		rootIDs = append(rootIDs, cur.ID)
+	}
+	if len(roots) == 0 {
+		return Written{}, nil
+	}
+	plan, err := e.planTrashMany(ctx, roots)
+	if err != nil {
+		return Written{}, err
+	}
+	b, ok := BatchOf(ctx)
+	if !ok {
+		id, nerr := e.ids.NewID(ids.PrefixBatch)
+		if nerr != nil {
+			return Written{}, nerr
+		}
+		bid, perr := ids.Parse[ids.Batch](id.String())
+		if perr != nil {
+			return Written{}, perr
+		}
+		b = Batch{ID: bid, Kind: BatchKindDelete}
+		ctx = WithBatch(ctx, b)
+	}
+	return e.writeTrash(ctx, b, reason, rootIDs, plan, false)
 }
 
 // purgeDeleted purges the group a --purge delete just put in the trash
@@ -345,6 +431,7 @@ func (e *Engine) planTrash(ctx context.Context, src store.Source, root row.Row) 
 // blocks another root through a restrict relation, because it is already
 // in the group.
 func (e *Engine) planTrashMany(ctx context.Context, roots []trashItem) ([]trashItem, error) {
+	ctx = withDepIndex(ctx) // one read of the stores for the whole plan (depindex.go)
 	plan := slices.Clone(roots)
 	seen := make(map[ids.AnyID]bool, len(roots))
 	for _, r := range roots {
@@ -937,6 +1024,21 @@ func (e *Engine) purgeRows(ctx context.Context, res TrashResult) (TrashResult, e
 		return out, nil
 	}
 	ctx = withPurgeTrailer(ctx, e.clock.Now(hlc.HLC{}).Wall, res.Batch) // 2.6
+	if len(res.Rows) > 1 {
+		// every row in ONE write per store (owner report 2026-11-12)
+		items := make([]trashItem, 0, len(res.Rows))
+		for _, t := range res.Rows {
+			items = append(items, trashItem{t.Store, t.Row})
+		}
+		w, err := e.removeMany(ctx, items, true)
+		out.Warnings = append(out.Warnings, w.Warnings...)
+		out.Taken = append(out.Taken, e.purgedTaken(w)...)
+		if err != nil {
+			return out, err
+		}
+		out.Rows = append(out.Rows, res.Rows...)
+		return out, nil
+	}
 	for _, t := range res.Rows {
 		w, err := e.remove(ctx, t.Store, t.Row, true)
 		out.Warnings = append(out.Warnings, w.Warnings...) // W_AUDIT_DEFERRED reaches the person (later 542)

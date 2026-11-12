@@ -179,7 +179,7 @@ func Select(ctx context.Context, env Lister, f Flags, rows []row.Row) (Result, e
 		if !f.Archived && text(r, fArchivedAt) != "" {
 			continue // 3.19 / OV30-2: archived rows only with --archived
 		}
-		if !who.keep(r) {
+		if !who.keep(ctx, r) {
 			continue // INTEG-AUDIT-1 --created-by / --updated-by
 		}
 		all = append(all, i)

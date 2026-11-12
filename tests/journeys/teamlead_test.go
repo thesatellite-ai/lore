@@ -162,10 +162,23 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 
 	lines := map[string]string{}
 	w.Step("day1/invite-three", func() {
+		// an invite can carry team membership: Ann's names @web, Bob is
+		// added to @web while his invite is pending (owner report 2026-11-12:
+		// every invitee needed a team add by hand after joining)
+		tt.lore(tlLee, "team", "add", "@web", "--members", "@lee").OK(t)
+		tt.lore(tlLee, "team", "invite", tlCat.Email, "--team", "@nope", "--yes").Refused(t).Says(t, "@nope")
 		for _, p := range []tlPerson{tlAnn, tlBob, tlCat} {
-			_, lines[p.Email] = tlInvite(t, lee, tt.repo[tlLee.Email].Dir, p.Email)
+			var extra []string
+			if p == tlAnn {
+				extra = []string{"--team", "@web"}
+			}
+			_, lines[p.Email] = tlInvite(t, lee, tt.repo[tlLee.Email].Dir, p.Email, extra...)
 		}
 		tt.invites(t, tlLee, map[string]string{tlAnn.Email: "pending", tlBob.Email: "pending", tlCat.Email: "pending"})
+		tt.lore(tlLee, "team", "member", "add", "@web", tlBob.Email).OK(t).
+			Says(t, tlBob.Email, "recorded on the pending invite", "joins @web on accept")
+		tt.lore(tlLee, "team", "list").OK(t).Says(t, "@web", "1 member(s), 2 pending (invited)")
+		tt.lore(tlLee, "team", "show", "@web").OK(t).Says(t, "pending, joins on accepting the invite (2)", tlAnn.Email, tlBob.Email).Never(t, tlCat.Email)
 	})
 
 	for _, p := range []tlPerson{tlAnn, tlBob, tlCat} {
@@ -182,6 +195,13 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 			tt.invites(t, tlLee, map[string]string{p.Email: "accepted"})
 		})
 	}
+
+	w.Step("day1/teams-from-the-invites", func() {
+		// joining applied the invites' team: Ann and Bob are in @web, Cat is not
+		tt.lore(tlLee, "sync", "run").OK(t)
+		tt.lore(tlLee, "team", "show", "@web").OK(t).Says(t, "members (3)", tlAnn.Name, tlBob.Name).Never(t, tlCat.Name, "pending")
+		tt.lore(tlLee, "team", "list").OK(t).Says(t, "3 member(s)").Never(t, "pending")
+	})
 
 	w.Step("week1/bob-on-leave", func() {
 		w.AdvanceDays(3)

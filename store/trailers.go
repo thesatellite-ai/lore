@@ -38,3 +38,21 @@ func CommitTrailers(ctx context.Context) []string {
 	}
 	return slices.Clone(v)
 }
+
+// commitTitleKey is the context key of a bulk write's commit title.
+type commitTitleKey struct{}
+
+// WithCommitTitle returns ctx carrying the title of the commit a bulk
+// write makes (one store commit for every row of `lore actor merge`,
+// `lore doctor --fix`, …: "actor merge act_… into act_…"). A backend that
+// commits uses it as the subject instead of naming the first row; a line
+// break or an empty title is ignored. A backend without commits ignores it.
+func WithCommitTitle(ctx context.Context, title string) context.Context {
+	return context.WithValue(ctx, commitTitleKey{}, title)
+}
+
+// CommitTitle is the bulk write title ctx carries ("" if none).
+func CommitTitle(ctx context.Context) string {
+	t, _ := ctx.Value(commitTitleKey{}).(string)
+	return t
+}

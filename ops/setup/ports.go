@@ -553,6 +553,7 @@ type TeamInviteIn struct {
 	GitHub   string   `json:"github,omitempty" flag:"github" desc:"the GitHub user expected to accept"`
 	Roles    []string `json:"roles,omitempty" flag:"role" desc:"role names (repeat)"`
 	Projects []string `json:"projects,omitempty" flag:"project" desc:"projects to join (repeat)"`
+	Teams    []string `json:"teams,omitempty" flag:"team" desc:"a team to join on accept: @handle (repeat)"`
 	Type     string   `json:"type,omitempty" flag:"type" desc:"employee, contractor, intern or client_contact (default employee)"`
 	Expires  string   `json:"expires,omitempty" flag:"expires" desc:"lifetime, e.g. 14d (default 14d)"`
 	Grant    bool     `json:"grant,omitempty" flag:"grant" desc:"also grant push access on GitHub with gh (asks first)"`
@@ -567,6 +568,8 @@ type TeamInviteOut struct {
 	// Email and Org are who is invited and to which org (for Text).
 	Email string `json:"email"`
 	Org   string `json:"org"`
+	// Teams are the team handles the person joins on accept.
+	Teams []string `json:"teams,omitempty"`
 	// GitHub is the expected GitHub user, Repo the store's owner/repo on
 	// GitHub ("" when the store is not on github.com).
 	GitHub string `json:"github,omitempty"`
@@ -634,6 +637,7 @@ type InviteRow struct {
 	GitHub     string   `json:"github,omitempty"`
 	Roles      []string `json:"roles,omitempty"`
 	Projects   []string `json:"projects,omitempty"`
+	Teams      []string `json:"teams,omitempty"`
 	PeriodType string   `json:"period_type"`
 	Status     string   `json:"status"`
 	ExpiresOn  string   `json:"expires_on"`

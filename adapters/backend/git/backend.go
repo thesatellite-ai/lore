@@ -369,6 +369,27 @@ func releaseKeep(err error, lock *rowfs.Lock) error {
 	return err
 }
 
+// maxTitleLen bounds a bulk write's title in a subject (store.CommitTitle).
+const maxTitleLen = 120
+
+// subjectOf is the commit subject of a batch: a bulk write's title when
+// ctx carries one (store.WithCommitTitle: `lore: actor merge act_… into
+// act_… (66 rows)`), else subject.
+func subjectOf(ctx context.Context, op string, changes []store.Change) string {
+	t := strings.TrimSpace(store.CommitTitle(ctx))
+	if t == "" || strings.ContainsAny(t, "\n\r") {
+		return subject(op, changes)
+	}
+	if len(t) > maxTitleLen {
+		t = strings.ToValidUTF8(t[:maxTitleLen], "")
+	}
+	n := "1 row"
+	if len(changes) != 1 {
+		n = strconv.Itoa(len(changes)) + " rows"
+	}
+	return "lore: " + t + " (" + n + ")"
+}
+
 // subject is the commit subject of a batch: `lore: <op> <first id>`, plus
 // how many more rows it holds.
 func subject(op string, changes []store.Change) string {

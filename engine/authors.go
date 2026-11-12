@@ -15,6 +15,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -42,7 +43,42 @@ type authorsScope struct {
 // bindInputAuthors puts a list input's writer filter on ctx. Inputs of
 // other verbs (an add's --created-by) are never read here.
 func (e *Engine) bindInputAuthors(ctx context.Context, in op.Input) (context.Context, error) {
-	return BindListAuthors(ctx, e.reg, in)
+	ctx, err := BindListAuthors(ctx, e.reg, in)
+	if err != nil {
+		return ctx, err
+	}
+	if _, ok := ctx.Value(authorsKey{}).(authorsScope); ok {
+		ctx = context.WithValue(ctx, sameActorKey{}, &mergedResolver{e: e})
+	}
+	return ctx, nil
+}
+
+// sameActorKey is the context key of the run's merged-actor resolver.
+type sameActorKey struct{}
+
+// mergedResolver reads the merged actors once per run, on first use.
+type mergedResolver struct {
+	e    *Engine
+	once sync.Once
+	m    map[ids.ID[ids.Actor]]ids.ID[ids.Actor]
+}
+
+// SameActor reports whether a and b name one actor once `lore actor
+// merge` marks are followed (merged_into): a list's --created-by and
+// --updated-by filters (here and ops/internal/metalist) match the rows a
+// person made under an id merged into the one given, whose history
+// stamps keep the old id. Outside a list run with a writer filter it is
+// a == b.
+func SameActor(ctx context.Context, a, b ids.ID[ids.Actor]) bool {
+	if a == b {
+		return true
+	}
+	r, ok := ctx.Value(sameActorKey{}).(*mergedResolver)
+	if !ok || r == nil {
+		return false
+	}
+	r.once.Do(func() { r.m = r.e.mergedActors(ctx) })
+	return mergedEnd(r.m, a) == mergedEnd(r.m, b)
 }
 
 // BindListAuthors is bindInputAuthors for a host that runs an operation
@@ -99,6 +135,10 @@ func nounTable(reg *schema.Registry, noun string) row.Table {
 
 // keepAuthor reports whether List keeps r under ctx's writer filter. An
 // old row without audit keys answers as `unknown` (auditfill.Defaults).
+// A merged actor (`lore actor merge`: its row carries merged_into) is the
+// actor it was merged into, on the row's stamps and in the filter alike:
+// history stamps keep the old id, and `--created-by <kept id>` still
+// finds the rows the person made under it (owner report 2026-11-12).
 func keepAuthor(ctx context.Context, r row.Row) bool {
 	s, ok := ctx.Value(authorsKey{}).(authorsScope)
 	if !ok || s.table != r.Table {
@@ -107,8 +147,51 @@ func keepAuthor(ctx context.Context, r row.Row) bool {
 	if !r.Deleted {
 		r, _ = auditfill.Defaults(r)
 	}
-	if !s.created.IsZero() && r.CreatedBy != s.created {
+	if !s.created.IsZero() && !SameActor(ctx, r.CreatedBy, s.created) {
 		return false
 	}
-	return s.updated.IsZero() || r.UpdatedBy == s.updated
+	return s.updated.IsZero() || SameActor(ctx, r.UpdatedBy, s.updated)
+}
+
+// mergedEnd follows a's merged_into chain to the actor that stays (a
+// itself when it was never merged; a cycle stops where it closes).
+func mergedEnd(m map[ids.ID[ids.Actor]]ids.ID[ids.Actor], a ids.ID[ids.Actor]) ids.ID[ids.Actor] {
+	seen := map[ids.ID[ids.Actor]]bool{}
+	for !seen[a] {
+		seen[a] = true
+		next, ok := m[a]
+		if !ok {
+			return a
+		}
+		a = next
+	}
+	return a
+}
+
+// mergedActors maps every actor row that carries merged_into, in any
+// attached store, to the actor it was merged into.
+func (e *Engine) mergedActors(ctx context.Context) map[ids.ID[ids.Actor]]ids.ID[ids.Actor] {
+	out := map[ids.ID[ids.Actor]]ids.ID[ids.Actor]{}
+	for _, name := range e.order {
+		rows, err := e.readTable(ctx, name, schema.TableActors)
+		if err != nil {
+			continue // an unreadable store merges nothing here
+		}
+		for _, sr := range rows {
+			r, err := sr.Decode()
+			if err != nil || r.Deleted {
+				continue
+			}
+			v, ok := r.Fields[schema.FieldActorMergedInto]
+			if !ok || v == nil || v.String() == "" {
+				continue
+			}
+			from, ferr := ids.Parse[ids.Actor](r.ID.String())
+			to, terr := ids.Parse[ids.Actor](v.String())
+			if ferr == nil && terr == nil {
+				out[from] = to
+			}
+		}
+	}
+	return out
 }

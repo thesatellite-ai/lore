@@ -1300,7 +1300,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		field string
 	}{
 		{in.ClearDefer, fieldDeferred}, {in.ClearDue, fieldDue}, {in.ClearMission, work.FieldMission},
-		{in.ClearPlan, work.FieldPlan}, {in.ClearEstimate, fieldEstimate},
+		{in.ClearPlan, work.FieldPlan}, {in.ClearEstimate, fieldEstimate}, {in.ClearTasklist, work.FieldTasklist},
 	}
 	for _, c := range clears {
 		if c.on {
@@ -1346,7 +1346,7 @@ func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	}
 	if len(patch) == 0 && !engine.MetaBound(ctx) { // OV56: --meta alone is a change
 		return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: nothing to change").
-			WithHint("give at least one flag, e.g. --title, --status, --priority, --due")
+			WithHint("give at least one flag, e.g. --title, --status, --priority, --due; an empty value changes nothing: --clear-tasklist, --clear-mission, --clear-plan, --clear-assignee, --clear-due remove one")
 	}
 	out, err := work.Patch(ctx, o.hist(), Noun, table, id, patch, work.Success+" "+id.String()+" updated\n"+noteLines(dateNotes)+timeHint)
 	if err != nil || in.Status != schema.TaskStatusInProgress {

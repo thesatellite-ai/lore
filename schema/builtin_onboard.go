@@ -34,8 +34,12 @@ const (
 	// FieldInviteGitHub is the GitHub user the admin expects (access check).
 	FieldInviteGitHub = "github"
 	// FieldInviteRoles are role names, applied per project in projects.
-	FieldInviteRoles      = "roles"
-	FieldInviteProjects   = "projects"
+	FieldInviteRoles    = "roles"
+	FieldInviteProjects = "projects"
+	// FieldInviteTeams are team handles (no @) the person joins on accept
+	// (`lore team invite --team @web`, or `lore team member add @web
+	// <email>` while the invite is pending).
+	FieldInviteTeams      = "teams"
 	FieldInvitePeriodType = "period_type"
 	FieldInviteStatus     = "status"
 	// FieldInviteExpiresOn defaults to 14 days after creation (Q8; set by
@@ -108,6 +112,7 @@ func onboardDefs() []TableDef {
 			// ids never refuse a write when the project rows are not attached
 			// (store-only roster App), which is what AllowDangling buys.
 			List(FieldInviteProjects, value.KindText, Describe("prj_ ids of the projects the person joins on accept")),
+			List(FieldInviteTeams, value.KindText, Describe("team handles (without @) the person joins on accept")),
 			Text(FieldInvitePeriodType, Required(), OneOf(PeriodTypes()...)),
 			Text(FieldInviteStatus, Required(), OneOf(InviteStatuses()...)),
 			Date(FieldInviteExpiresOn, Required(), Describe("last day the invite can be accepted")),

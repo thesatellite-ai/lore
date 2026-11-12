@@ -406,6 +406,7 @@ type EditIn struct {
 	Due           string        `json:"due,omitempty" flag:"due" desc:"due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"`
 	ClearDue      bool          `json:"clear_due,omitempty" flag:"clear-due" desc:"remove due date"`
 	Tasklist      string        `json:"tasklist,omitempty" flag:"tasklist" desc:"move to tasklist_id (tlt_*)"`
+	ClearTasklist bool          `json:"clear_tasklist,omitempty" flag:"clear-tasklist" desc:"take the task off its task list (clear tasklist_id)"`
 	Mission       string        `json:"mission,omitempty" flag:"mission" desc:"attach to mission_id (msn_*)"`
 	ClearMission  bool          `json:"clear_mission,omitempty" flag:"clear-mission" desc:"detach from mission"`
 	Plan          string        `json:"plan,omitempty" flag:"plan" desc:"attach to plan_id (pln_*)"`

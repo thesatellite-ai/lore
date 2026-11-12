@@ -143,6 +143,12 @@ type Engine struct {
 	// staged (G-ENGINE-6).
 	openMu sync.Mutex
 	open   map[*stage]bool
+	// settingsMemo holds the settings rows (policies, secret rules) read
+	// while a stage is open (settings.go settingsRowsMemo): every staged
+	// edit of a bulk write checks the policy, and reading every row of
+	// every store for each one made a 1,000-row merge quadratic. Guarded
+	// by openMu; dropped when no stage is open and on every direct write.
+	settingsMemo map[row.Table][]policy.Leveled[row.Row]
 
 	stores    map[store.Source]Attached
 	order     []store.Source // stores.yaml order: precedence for lookups

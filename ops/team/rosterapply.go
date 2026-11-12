@@ -12,6 +12,8 @@ package team
 //	           ──▶ email + github identity contacts ──▶ open period of the row's type
 //	           ──▶ left/archived? status active (rejoin, TEAM_PROFILES 5.2)
 //	           ──▶ memberships per row project with the row's roles
+//	           ──▶ the row's teams (team invite --team, team member add
+//	               <email> while pending): added to each active one
 //	           ──▶ invite accepted + accepted_by ──▶ Push
 //	ApplyAdmin ──▶ orgs[] entry? no ──▶ store.init ──▶ org.create
 //	           ──▶ roster (write) ──▶ identity contacts ──▶ open employee period ──▶ Push
@@ -80,6 +82,11 @@ type RosterResult struct {
 	Already bool
 	// Wrote lists the row ids written or changed, in order.
 	Wrote []string
+	// Teams are the team handles the invite named that the person is now
+	// a member of; SkippedTeams those removed (or gone) since the invite,
+	// which nobody joins.
+	Teams        []string
+	SkippedTeams []string
 }
 
 // ApplyJoin is the member join write (4.5 Apply 1–5).
@@ -160,6 +167,9 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 		if err = w.membership(ctx, p, x.Roles); err != nil {
 			return RosterResult{}, err
 		}
+	}
+	if res.Teams, res.SkippedTeams, err = w.joinTeams(ctx, x.Teams); err != nil {
+		return RosterResult{}, err
 	}
 	if err = w.accept(ctx, x.ID); err != nil {
 		return RosterResult{}, err
@@ -640,6 +650,37 @@ func (w *writer) membership(ctx context.Context, project string, roles []string)
 
 // accept marks the invite used by this actor (4.5 step 5), last, so a
 // failed run leaves it pending for the re-run.
+// joinTeams adds the joining person to each team handle of the invite
+// (a re-run finds them in it and writes nothing). A team removed or gone
+// since the invite is skipped and returned in skipped: nobody joins it.
+func (w *writer) joinTeams(ctx context.Context, handles []string) (joined, skipped []string, err error) {
+	me := w.actor.ID.String()
+	for _, h := range handles {
+		cur, ok, ferr := findTeam(ctx, w.r, h)
+		if ferr != nil {
+			return nil, nil, ferr
+		}
+		if !ok || fieldText(cur, teamFieldActive) == boolFalse {
+			skipped = append(skipped, h)
+			continue
+		}
+		joined = append(joined, h)
+		list := value.ItemStrings(cur.Fields[schema.FieldTeamMembers])
+		if slices.Contains(list, me) {
+			continue
+		}
+		ml, merr := membersValue(append(list, me))
+		if merr != nil {
+			return nil, nil, merr
+		}
+		if _, uerr := w.r.Update(ctx, schema.TableTeams, cur.ID, map[string]value.Value{schema.FieldTeamMembers: ml}); uerr != nil {
+			return nil, nil, errs.Prefix("join team @"+h+" from the invite", uerr)
+		}
+		w.note(cur.ID)
+	}
+	return joined, skipped, nil
+}
+
 func (w *writer) accept(ctx context.Context, id ids.AnyID) error {
 	st, err := textValue("status", schema.InviteStatusAccepted)
 	if err != nil {

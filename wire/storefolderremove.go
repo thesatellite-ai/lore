@@ -344,25 +344,15 @@ func (a *App) trashFolderRows(ctx context.Context, src attach.Store, name, folde
 	if err != nil {
 		return "", err
 	}
-	// Passes until nothing is left: a row a restrict relation still points
-	// at waits for its dependents; a row a cascade already took is done.
-	for len(pending) > 0 {
-		var later []store.Row
-		var last error
-		for _, r := range pending {
-			_, derr := st.eng.Delete(dctx, engine.Ref{Store: folderRemoveSource, Table: r.Table, ID: r.ID})
-			switch {
-			case derr == nil, errs.Has(derr, errs.InTrash):
-			case errs.Has(derr, errs.HasDependents):
-				later, last = append(later, r), derr
-			default:
-				return "", errs.Prefix(folderRemoveVerb+": move "+r.ID.String()+" to the trash", derr)
-			}
-		}
-		if len(later) == len(pending) {
-			return "", errs.Prefix(folderRemoveVerb+": the folder's rows could not all go to the trash", last)
-		}
-		pending = later
+	// every row as ONE delete: one plan (a row of the folder never blocks
+	// another: they all go), one store commit (owner report 2026-11-12: a
+	// delete per row took over five minutes for 1,000 rows)
+	refs := make([]engine.Ref, 0, len(pending))
+	for _, r := range pending {
+		refs = append(refs, engine.Ref{Store: folderRemoveSource, Table: r.Table, ID: r.ID})
+	}
+	if _, err := st.eng.TrashMany(store.WithCommitTitle(dctx, folderRemoveVerb+" --purge: the folder's rows to the trash"), refs); err != nil {
+		return "", errs.Prefix(folderRemoveVerb+": the folder's rows could not go to the trash (nothing was moved)", err)
 	}
 	return bid.String(), nil
 }

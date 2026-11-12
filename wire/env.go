@@ -137,6 +137,36 @@ func (a *App) Update(ctx context.Context, ref engine.Ref, patch map[string]value
 	return w, err
 }
 
+// DeleteMany implements wheredel.ManyDeleter: every ref to the trash as
+// ONE delete (engine.TrashMany: one plan, one batch, one store write per
+// store; owner report 2026-11-12), the caller's actor row in the same
+// write, as Delete.
+func (a *App) DeleteMany(ctx context.Context, refs []engine.Ref) error {
+	if len(refs) == 0 {
+		return nil
+	}
+	st, err := a.writeStateFor(ctx, refs[0].Store)
+	if err != nil {
+		return err
+	}
+	for _, ref := range refs {
+		if ferr := a.checkTarget(refStore(ctx, st, ref)); ferr != nil {
+			return ferr
+		}
+	}
+	_, err = a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+		if aerr := a.ensureActorFor(ctx, st, refs[0]); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		w, err := st.eng.TrashMany(ctx, refs)
+		for _, ref := range refs {
+			a.wroteTo(refStore(ctx, st, ref), err)
+		}
+		return w, err
+	})
+	return err
+}
+
 // Delete implements opsmemory.Env.
 func (a *App) Delete(ctx context.Context, ref engine.Ref) (engine.Written, error) {
 	st, err := a.writeStateFor(ctx, ref.Store)

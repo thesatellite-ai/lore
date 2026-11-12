@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
@@ -193,6 +194,7 @@ func modeBChanges(exp ModeBExport) ([]store.Change, error) {
 		if step, ok := formatSteps[r.Table]; ok {
 			r.Fields = step(r.Fields)
 		}
+		r, _ = engine.NullEmptyRefs(reg, r) // v0.1.17's "" for "no ref" is written as null (engine/emptyref.go)
 		k := taggedRow{table: r.Table, id: r.ID}
 		if _, dup := rows[k]; !dup {
 			order = append(order, k)

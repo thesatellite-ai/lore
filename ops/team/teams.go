@@ -31,6 +31,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -168,6 +170,13 @@ func (m TeamMember) shown() string {
 	return m.ID
 }
 
+// PendingMember is an invited person a team waits for.
+type PendingMember struct {
+	Email  string `json:"email"`
+	Invite string `json:"invite"`
+	Until  string `json:"expires_on"`
+}
+
 // Team is one team as shown.
 type Team struct {
 	ID      string       `json:"id"`
@@ -176,6 +185,10 @@ type Team struct {
 	Active  bool         `json:"active"`
 	LeftAt  string       `json:"left_at,omitempty"`
 	Members []TeamMember `json:"members"`
+	// Pending are people invited into the team who have not joined yet:
+	// their pending invite names it (team invite --team, or team member
+	// add <email>); they become members when they join.
+	Pending []PendingMember `json:"pending,omitempty"`
 	// CreatedBy / UpdatedBy are the row envelope's writers (INTEG-AUDIT-1,
 	// auditrec), last so the older keys keep their order.
 	CreatedBy string `json:"created_by,omitempty"`
@@ -191,8 +204,11 @@ type TeamWriteOut struct {
 	// Unchanged those already in (add) or not in (remove) the team.
 	Changed   []string `json:"changed,omitempty"`
 	Unchanged []string `json:"unchanged,omitempty"`
-	Warnings  []string `json:"warnings,omitempty"`
-	Where     string   `json:"where"`
+	// Pending are invitees (by email) the team was recorded on: their
+	// pending invite now names it and they join it on accept.
+	Pending  []string `json:"pending,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
+	Where    string   `json:"where"`
 }
 
 // Text is one success line (v0.1.17's for add: "✓ <id> @h (n member(s))
@@ -212,6 +228,9 @@ func (o TeamWriteOut) Text() string {
 		line = work.Success + " @" + t.Handle + ": " + memberWord(len(t.Members)) + " now"
 		if len(o.Changed) > 0 {
 			line += "; " + strings.Join(o.Changed, ", ") + " " + did + " the team"
+		}
+		if len(o.Pending) > 0 {
+			line += "; " + strings.Join(o.Pending, ", ") + " not on the roster yet: recorded on the pending invite, joins @" + t.Handle + " on accept"
 		}
 		if len(o.Unchanged) > 0 {
 			was := "already a member"
@@ -244,6 +263,9 @@ func (o TeamListOut) Text() string {
 	var b strings.Builder
 	for _, t := range o.Teams {
 		line := fmt.Sprintf("@%-16s %-24s %s", t.Handle, t.Name, memberWord(len(t.Members)))
+		if len(t.Pending) > 0 {
+			line += fmt.Sprintf(", %d pending (invited)", len(t.Pending))
+		}
 		if !t.Active {
 			line += removedMark
 		}
@@ -284,6 +306,12 @@ func (o TeamShowOut) Text() string {
 			line += "  [" + m.Status + "]"
 		}
 		b.WriteString(line + "\n")
+	}
+	if len(t.Pending) > 0 {
+		b.WriteString("pending, joins on accepting the invite (" + fmt.Sprint(len(t.Pending)) + "):\n")
+		for _, p := range t.Pending {
+			b.WriteString("  " + p.Email + "  " + p.Invite + "  until " + p.Until + "\n")
+		}
 	}
 	return b.String()
 }
@@ -548,9 +576,14 @@ func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamL
 	if err != nil {
 		return TeamListOut{}, err
 	}
+	pending, err := pendingByTeam(ctx, r)
+	if err != nil {
+		return TeamListOut{}, err
+	}
 	out := TeamListOut{Teams: []Team{}, Where: r.Where()}
 	for _, x := range rows {
 		t := teamOf(x, actors)
+		t.Pending = pending[t.Handle]
 		if t.Active || in.All {
 			out.Teams = append(out.Teams, t)
 		}
@@ -580,7 +613,13 @@ func teamShow(ctx context.Context, env profilestore.Store, in TeamRefIn) (TeamSh
 	if err != nil {
 		return TeamShowOut{}, err
 	}
-	return TeamShowOut{Team: teamOf(cur, actors), Where: r.Where()}, nil
+	pending, err := pendingByTeam(ctx, r)
+	if err != nil {
+		return TeamShowOut{}, err
+	}
+	t := teamOf(cur, actors)
+	t.Pending = pending[t.Handle]
+	return TeamShowOut{Team: t, Where: r.Where()}, nil
 }
 
 func teamRemove(ctx context.Context, env profilestore.Store, in TeamRefIn) (TeamWriteOut, error) {
@@ -645,7 +684,14 @@ func teamMembers(ctx context.Context, env profilestore.Store, in TeamMembersIn, 
 		return TeamWriteOut{}, err
 	}
 	refs := in.Members
-	if !add {
+	var pendingInv []inviteRow
+	if add {
+		// someone invited but not joined yet is not on the roster: the
+		// team goes on their pending invite and they join it on accept
+		if refs, pendingInv, err = splitInvitees(ctx, r, refs); err != nil {
+			return TeamWriteOut{}, err
+		}
+	} else {
 		// taking someone off: a left person resolves too (no status check)
 		refs = nil
 	}
@@ -687,18 +733,96 @@ func teamMembers(ctx context.Context, env profilestore.Store, in TeamMembersIn, 
 			out.Unchanged = append(out.Unchanged, shown)
 		}
 	}
+	for _, x := range pendingInv {
+		if !slices.Contains(x.Teams, h) {
+			tl, terr := textList("teams", append(slices.Clone(x.Teams), h))
+			if terr != nil {
+				return TeamWriteOut{}, terr
+			}
+			if _, uerr := r.Update(ctx, schema.TableInvites, x.ID, map[string]value.Value{schema.FieldInviteTeams: tl}); uerr != nil {
+				return TeamWriteOut{}, errs.Prefix("record @"+h+" on invite "+x.ID.String(), uerr)
+			}
+		}
+		out.Pending = append(out.Pending, x.Email+" (invite "+x.ID.String()+")")
+	}
 	w := cur
-	if len(out.Changed) > 0 {
+	if len(out.Changed) > 0 || len(pendingInv) > 0 {
 		ml, merr := membersValue(list)
 		if merr != nil {
 			return TeamWriteOut{}, merr
 		}
-		if w, err = r.Update(ctx, schema.TableTeams, cur.ID, map[string]value.Value{schema.FieldTeamMembers: ml}); err != nil {
-			return TeamWriteOut{}, err
+		if len(out.Changed) > 0 {
+			if w, err = r.Update(ctx, schema.TableTeams, cur.ID, map[string]value.Value{schema.FieldTeamMembers: ml}); err != nil {
+				return TeamWriteOut{}, err
+			}
 		}
 		r.Push(ctx)
 	}
 	out.Team = teamOf(w, actors)
 	out.Warnings = r.Warnings()
+	return out, nil
+}
+
+// splitInvitees takes out of refs each email that names no one on the
+// roster but has a pending invite, and returns those invites; the other
+// refs are resolved as members. An email with no roster person and no
+// pending invite stays in refs (the member lookup names the fix).
+func splitInvitees(ctx context.Context, r profilestore.Roster, refs []string) ([]string, []inviteRow, error) {
+	var keep []string
+	var invs []inviteRow
+	var all []inviteRow
+	read := false
+	for _, ref := range splitList(refs) {
+		if !strings.Contains(ref, "@") || strings.HasPrefix(ref, handleMark) {
+			keep = append(keep, ref)
+			continue
+		}
+		if _, err := r.ResolveActor(ctx, ref); err == nil || !errs.Has(err, errs.NotFound) {
+			keep = append(keep, ref)
+			continue
+		}
+		email, nerr := teamprofile.Normalize(schema.ContactKindEmail, ref)
+		if nerr != nil {
+			keep = append(keep, ref)
+			continue
+		}
+		if !read {
+			var err error
+			if all, err = readInvites(ctx, r); err != nil {
+				return nil, nil, err
+			}
+			read = true
+		}
+		found := false
+		for _, x := range all {
+			if x.Email == email && onboard.EffectiveInviteStatus(x.record(), r.Today()) == schema.InviteStatusPending {
+				invs = append(invs, x)
+				found = true
+				break
+			}
+		}
+		if !found {
+			keep = append(keep, ref)
+		}
+	}
+	return keep, invs, nil
+}
+
+// pendingByTeam maps each team handle to the people whose pending invite
+// names it.
+func pendingByTeam(ctx context.Context, r profilestore.Roster) (map[string][]PendingMember, error) {
+	all, err := readInvites(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]PendingMember{}
+	for _, x := range all {
+		if len(x.Teams) == 0 || onboard.EffectiveInviteStatus(x.record(), r.Today()) != schema.InviteStatusPending {
+			continue
+		}
+		for _, h := range x.Teams {
+			out[h] = append(out[h], PendingMember{Email: x.Email, Invite: x.ID.String(), Until: x.day()})
+		}
+	}
 	return out, nil
 }

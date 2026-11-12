@@ -249,16 +249,19 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 		stores = append(stores, one{storeLabel(name, src), src})
 	} else {
 		seen := map[string]bool{}
+		used := map[string]bool{}
+		orgOf, orgOfAny := a.orgFolderStores(), a.storeOrgs()
 		for _, e := range a.storesHere(ctx) {
 			k := placeKey(e.URL, e.Branch)
 			if k == "" || seen[k] {
 				continue
 			}
 			seen[k] = true
-			label, _, _ := strings.Cut(e.Name, targetSep)
-			if opsstores.IsStoreURL(e.Name) {
-				label = a.urlLabel(e.Name) // an org's other store, named by its url
+			label := a.placeLabel(e.Name, e.URL, orgOf, orgOfAny)
+			if used[label] {
+				label = a.urlLabel(e.URL) // two places, one name: the url tells them apart
 			}
+			used[label] = true
 			stores = append(stores, one{label, attach.Store{Name: store.Source(label), URL: e.URL, Branch: e.Branch}})
 		}
 	}
@@ -282,6 +285,29 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 		out.Folders = append(out.Folders, rows...)
 	}
 	return out, nil
+}
+
+// placeLabel is the name store folder list heads a store's block with:
+// the store that really holds the folders (owner report 2026-11-12: a
+// repo linked to a folder of the org's second store printed "store <org>
+// folders:" for that store, because its entry is named after the org, and
+// so printed the org's block twice). The org's name for the store holding
+// the org folder, the url for the org's other stores, else the entry's
+// own name (a stores.yaml store, me).
+func (a *App) placeLabel(name, url string, orgOf, orgOfAny map[string]string) string {
+	if sk, ok := storeKey(url); ok {
+		if org := orgOf[sk]; org != "" {
+			return org
+		}
+		if orgOfAny[sk] != "" {
+			return a.urlLabel(url)
+		}
+	}
+	if opsstores.IsStoreURL(name) {
+		return a.urlLabel(name)
+	}
+	label, _, _ := strings.Cut(name, targetSep)
+	return label
 }
 
 // urlLabel is how store folder list names an org store known only by its
