@@ -172,7 +172,16 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 		}
 		return st
 	}
-	lines := strings.Split(strings.TrimRight(out.Text(), "\n"), "\n")
+	// owner item C2: the commit line is the step's Next (lore fix prints it
+	// last), the full row list its Rows (--json); the text names a count
+	// and a few ids per table
+	if out.Uncommitted > 0 && !dry {
+		st.Next = opsmigrate.CommitLine(out.Uncommitted)
+	}
+	st.Rows = out.Rows
+	text := out
+	text.Uncommitted = 0
+	lines := strings.Split(strings.TrimRight(text.Text(), "\n"), "\n")
 	st.Changed, st.Result = true, strings.TrimSpace(lines[0])
 	for _, l := range lines[1:] {
 		if l = strings.TrimSpace(l); l != "" {

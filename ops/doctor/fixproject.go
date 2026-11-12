@@ -46,6 +46,26 @@ type FixStep struct {
 	// Failed is true when the step could not run; Result names why and the
 	// later steps still run.
 	Failed bool `json:"failed,omitempty"`
+	// Rows are every row the step wrote ("table/id"), where Detail names
+	// only a count and a few ids per table (owner item C2: the migrate
+	// step printed 5,000 lines).
+	Rows []string `json:"rows,omitempty"`
+	// Next is what the person does after the run ("" when nothing): the
+	// migrate step's files waiting for their commit. lore fix prints it
+	// once, as its last line before the status, and it does not lower
+	// the status (the files on disk are already migrated).
+	Next string `json:"next,omitempty"`
+}
+
+// NextLines are the steps' Next lines, in step order.
+func NextLines(steps []FixStep) []string {
+	var out []string
+	for _, s := range steps {
+		if s.Next != "" {
+			out = append(out, s.Next)
+		}
+	}
+	return out
 }
 
 // Step names.

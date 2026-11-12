@@ -63,10 +63,6 @@ const backupDateLayout = "2006-01-02"
 // repoEntry is the backup tree folder of the repo's .lore/data.
 const repoEntry = "branch"
 
-// migrateCommitHint is what a person runs after the branch phase (lore
-// never commits the code repo).
-const migrateCommitHint = `commit them: git add .lore/data && git commit -m "lore: migrate format"`
-
 // rollbackSubject is the store commit of a rollback after push.
 const rollbackSubject = "lore: roll back format migration"
 
@@ -287,33 +283,35 @@ func (a *App) RewriteRepoV1(ctx context.Context, table row.Table, dryRun bool) (
 }
 
 // Finish implements opsmigrate.Journal (rule 4 step 7).
-func (a *App) Finish(ctx context.Context, push bool, count int) ([]string, error) {
+func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Finished, error) {
+	var none opsmigrate.Finished
 	top, path, err := a.journalPath(ctx)
 	if err != nil {
-		return nil, err
+		return none, err
 	}
 	j, ok, err := readJournal(path)
 	if err != nil || !ok {
-		return nil, err
+		return none, err
 	}
 	snaps, err := git.NewSnapshots()
 	if err != nil {
-		return nil, err
+		return none, err
 	}
 	var lines []string
+	uncommitted := 0
 	changed := false
 	pushed := map[string]bool{}
 	for i := range j.Places {
 		p := &j.Places[i]
 		if p.TreeAfter, err = snaps.Snapshot(ctx, top, p.Dir, p.Data); err != nil {
-			return nil, err
+			return none, err
 		}
 		if p.Clone {
 			p.TipAfter = snaps.Head(ctx, p.Dir)
 		}
 		diff, err := snaps.DiffTrees(ctx, top, p.TreeBefore, p.TreeAfter)
 		if err != nil {
-			return nil, err
+			return none, err
 		}
 		if len(diff) == 0 && p.TipAfter == p.TipBefore {
 			continue
@@ -322,7 +320,10 @@ func (a *App) Finish(ctx context.Context, push bool, count int) ([]string, error
 		line := placeLabel(*p) + ": " + strconv.Itoa(len(diff)) + " files upgraded"
 		switch {
 		case p.Entry == repoEntry && !p.Clone:
-			line += "; " + migrateCommitHint
+			// owner item C2: the commit hint is the run's last line
+			// (opsmigrate.CommitLine), not buried in this one
+			line += ", not committed (lore never commits a code repo)"
+			uncommitted += len(diff)
 		case p.Clone && p.TipAfter != p.TipBefore && push:
 			if !pushed[p.Dir] {
 				if serr := a.syncPlace(ctx, p.Name); serr != nil {
@@ -342,16 +343,16 @@ func (a *App) Finish(ctx context.Context, push bool, count int) ([]string, error
 		lines = append(lines, "~/.lore/"+ConfigFile+": "+strconv.Itoa(len(j.ConfigKeys))+" personal settings set")
 	}
 	if !changed && count == 0 && len(j.ConfigKeys) == 0 {
-		return nil, a.dropBackup(ctx, snaps, top, path, j)
+		return none, a.dropBackup(ctx, snaps, top, path, j)
 	}
 	j.Phase = phaseDone
 	if err := writeJournal(path, j); err != nil {
-		return nil, err
+		return none, err
 	}
 	if j.ModeBPointer != "" {
-		return append(lines, modeBNoUndoLine), nil
+		return opsmigrate.Finished{Lines: append(lines, modeBNoUndoLine), Uncommitted: uncommitted}, nil
 	}
-	return append(lines, "undo: lore migrate rollback"), nil
+	return opsmigrate.Finished{Lines: append(lines, "undo: lore migrate rollback"), Uncommitted: uncommitted}, nil
 }
 
 // modeBNoUndoLine ends a run that converted Mode B, in place of the undo
@@ -668,6 +669,7 @@ func (a *App) Status(ctx context.Context) (opsmigrate.StatusOut, error) {
 	if j, ok, jerr := readJournal(path); jerr != nil {
 		out.Notes = append(out.Notes, jerr.Error())
 	} else if ok {
+		out.Unfinished = j.Phase != phaseDone
 		switch {
 		case j.Phase == phaseRunning && j.ModeBPointer != "":
 			out.Journal = "interrupted shared-database conversion (" + j.ModeBPointer + "; backup " + j.BackupRef + "): run `lore migrate run` to finish it (it cannot be rolled back)"

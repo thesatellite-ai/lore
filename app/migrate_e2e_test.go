@@ -62,7 +62,8 @@ func TestMigrateRunRollbackOnRelease(t *testing.T) {
 		t.Fatalf("dry run: exit %d\n%s\n%s", code, out, errOut)
 	}
 	for _, r := range migrateV1Rows {
-		if !strings.Contains(out, "\n  "+r.table+"/"+r.id+"\n") {
+		// C2: one summary line per table naming its rows' ids
+		if !strings.Contains(out, "\n  "+r.table+": 1 row ("+r.id+")\n") {
 			t.Fatalf("dry run does not list %s/%s:\n%s", r.table, r.id, out)
 		}
 	}

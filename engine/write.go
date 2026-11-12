@@ -1169,6 +1169,13 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 	var acks []store.AuditRecord
 	var warns []Warning
 	var pending map[store.Key]bool // lazily read on the first failure
+	// owner item C2: several events flush each audit file once, after the
+	// last line and before the journal ack (auditsync.go)
+	var group *AuditSync
+	if len(evs) > 1 {
+		ctx, group = withAuditSync(ctx)
+		defer func() { _ = group.flush() }() // an early return still flushes what was written
+	}
 	for _, ev := range evs {
 		ev = e.auditView(ctx, source, ev)
 		key := store.Key{Table: ev.Table, ID: ev.ID}
@@ -1202,6 +1209,17 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 			continue
 		}
 		return warns, auditFailed(ev.ID, rerr)
+	}
+	if group != nil {
+		if ferr := group.flush(); ferr != nil {
+			if j == nil || len(acks) == 0 {
+				return warns, auditFailed(evs[0].ID, ferr)
+			}
+			// the lines are written but not known durable: the journal keeps
+			// the records (no ack), and a later write replays them
+			warns = append(warns, Warning{Code: WarnAuditDeferred, Message: "the audit records of this write are kept with the rows and will be added to the audit log by a later write: " + ferr.Error()})
+			acks = nil
+		}
 	}
 	if j != nil {
 		if aerr := j.AckAudit(ctx, acks); aerr != nil {

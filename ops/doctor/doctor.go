@@ -491,7 +491,11 @@ func (r Report) Text() string {
 	fmt.Fprintf(&b, "Status: %s\nBinary: %s\n\n", strings.ToUpper(string(r.Status)), r.BinaryVersion)
 	if len(r.Steps) > 0 {
 		// the status stays the first line (scripts read it); the steps follow
-		b.WriteString(lineFixIsFix + "\n" + StepsText(r.Steps) + "\n")
+		b.WriteString(lineFixIsFix + "\n" + StepsText(r.Steps))
+		for _, n := range NextLines(r.Steps) {
+			b.WriteString(n + "\n")
+		}
+		b.WriteString("\n")
 	}
 	if len(r.Fixed) > 0 {
 		list(&b, fmt.Sprintf("Fixed (%d, checked again after fixing; the status above is now):", len(r.Fixed)), r.Fixed)

@@ -301,6 +301,11 @@ func (o Out) Text() string {
 	for _, w := range o.Warnings {
 		b.WriteString("warning: " + w + "\n")
 	}
+	// owner item C2: what the person does next (the migrated files to
+	// commit) is one line, last before the status
+	for _, n := range doctor.NextLines(o.Steps) {
+		b.WriteString(n + "\n")
+	}
 	fmt.Fprintf(&b, "Status: %s\n", strings.ToUpper(string(o.Status)))
 	return b.String()
 }

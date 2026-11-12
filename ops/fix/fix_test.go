@@ -41,6 +41,14 @@ func TestTextOneRepo(t *testing.T) {
 	if !strings.Contains(dry.Text(), LineDryRun) {
 		t.Fatalf("dry run text:\n%s", dry.Text())
 	}
+	// owner item C2: the files a migration left for the person's commit are
+	// one line, after the warnings, right before the status (still HEALTHY)
+	next := changed
+	next.Warnings = []string{"something to know"}
+	next.Steps[0].Next = "3 upgraded files in .lore/data wait for your commit: git add .lore/data && git commit -m x"
+	if txt := next.Text(); !strings.HasSuffix(txt, "warning: something to know\n"+next.Steps[0].Next+"\nStatus: HEALTHY\n") || strings.Count(txt, "git add") != 1 {
+		t.Fatalf("commit line not last before the status:\n%s", txt)
+	}
 }
 
 // TestAllNamesFailures pins --all: one block per repo, the failed repos

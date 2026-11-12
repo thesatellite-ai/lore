@@ -284,5 +284,6 @@ func TestMigrateRunGated(t *testing.T) {
 	if st := strings.TrimSpace(c.Status()); st != "M "+migMetaPath {
 		t.Fatalf("the gated run changed the work tree:\n%s", st)
 	}
-	c.Lore("migrate", "run", "--dry-run").OK(t).Says(t, k.table+"/"+id)
+	// C2: the dry run summarises per table, naming the row ids
+	c.Lore("migrate", "run", "--dry-run").OK(t).Says(t, k.table+": 1 row ("+id+")")
 }

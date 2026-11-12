@@ -62,7 +62,7 @@ func batchDirOf(storeAuditDir string) string {
 
 // recordBatch appends ev to its batch's file when ev carries a batch; an
 // event outside a batch is not written.
-func recordBatch(dir string, ev engine.Event) error {
+func recordBatch(ctx context.Context, dir string, ev engine.Event) error {
 	if ev.Batch.IsZero() {
 		return nil
 	}
@@ -74,7 +74,7 @@ func recordBatch(dir string, ev engine.Event) error {
 		return errs.Wrap(errs.Internal, "wire: encode a batch event", err)
 	}
 	// The file name is the parsed bat_ id (prefix + hex), never row data.
-	return appendAuditLine(filepath.Join(dir, ev.Batch.ID.String()+batchExt), batchDirMode, line)
+	return appendAuditLineCtx(ctx, filepath.Join(dir, ev.Batch.ID.String()+batchExt), batchDirMode, line)
 }
 
 // BatchEvents implements opsbatch.Env: every event of every batch file
