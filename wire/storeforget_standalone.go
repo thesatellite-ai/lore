@@ -74,21 +74,14 @@ func (c *standaloneClones) ForgetClone(ctx context.Context, in opsstores.ForgetI
 		// folder) keeps its rows in that folder; this machine holds no
 		// clone of it, so there is nothing to forget. It answered
 		// "not a store url" for a url `store add` had just accepted.
-		shown := in.URL
-		if quietOutput() {
-			shown = redactedText
-		}
-		return opsstores.ForgetOut{URL: in.URL, Shown: shown}, nil
+		return opsstores.ForgetOut{URL: in.URL, Shown: repourl.Mask(in.URL)}, nil
 	}
 	norm, err := repourl.Normalize(in.URL)
 	if err != nil {
 		return opsstores.ForgetOut{}, errs.Wrap(errs.InvalidInput, "store forget: not a store url: "+in.URL, err).
 			WithHint("give the store's name from `lore store list`, or its git url (https://host/org/repo or git@host:org/repo)")
 	}
-	shown := norm
-	if quietOutput() {
-		shown = redactedText
-	}
+	shown := repourl.Mask(norm)
 	clones, err := c.clonesOf(in.URL, norm)
 	if err != nil {
 		return opsstores.ForgetOut{}, err

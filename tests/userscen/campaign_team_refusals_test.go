@@ -69,8 +69,8 @@ func TestCampaignTeam_BadInputMatrix(t *testing.T) {
 	cases := []teamBad{
 		// contacts
 		{"contact add unknown type", []string{"actor", "contact", "add", "@mira", "nosuchtype", "x"}, orgExitBadInput, "E_CONTACT_TYPE", []string{"nosuchtype is not in the list", "lore contact-type list"}},
-		// No terminal in this harness, so the org folder is "<redacted>" in refusals too (§6.5).
-		{"contact add unknown person", []string{"actor", "contact", "add", "@nobody", "github", "x"}, th.ExitNotFound, "E_NOT_FOUND", []string{"no actor @nobody on the roster in <redacted>", "lore actor register"}},
+		// No terminal in this harness: the refusal still names the org roster (an org folder is no secret).
+		{"contact add unknown person", []string{"actor", "contact", "add", "@nobody", "github", "x"}, th.ExitNotFound, "E_NOT_FOUND", []string{"no actor @nobody on the roster in " + orgName + " ", "lore actor register"}},
 		{"contact add bad email", []string{"actor", "contact", "add", "@mira", "email", "not-an-email"}, orgExitBadInput, "E_CONTACT_TYPE", []string{"exactly one @", "lore contact-type list"}},
 		{"contact add missing value", []string{"actor", "contact", "add", "@mira", "github"}, orgExitBadInput, "E_INVALID_INPUT", []string{"value"}},
 		{"contact edit wrong-kind id", []string{"actor", "contact", "edit", teamUnknownWsp, "--label", "x"}, orgExitBadInput, "E_INVALID_ID", []string{"not a contact id (acn_…)", "lore actor contact list"}},
@@ -89,7 +89,7 @@ func TestCampaignTeam_BadInputMatrix(t *testing.T) {
 		{"offboard unconfirmed", []string{"actor", "offboard", "@mira"}, th.ExitNeedsConfirm, "E_NEEDS_CONFIRM", []string{"rerun with --yes"}},
 		{"rejoin an active person", []string{"actor", "rejoin", "@mira", "--type", "employee", "--yes"}, th.ExitRefused, "E_STATUS_CHANGE", nil},
 		{"rejoin without type", []string{"actor", "rejoin", "@mira", "--yes"}, orgExitBadInput, "E_INVALID_INPUT", []string{"--type"}},
-		{"deactivate unknown", []string{"actor", "deactivate", "@nobody"}, orgExitBadInput, "E_INVALID_INPUT", []string{"no one is @nobody on the roster in <redacted>", "lore actor register"}},
+		{"deactivate unknown", []string{"actor", "deactivate", "@nobody"}, orgExitBadInput, "E_INVALID_INPUT", []string{"no one is @nobody on the roster in " + orgName + " ", "lore actor register"}},
 		{"delete is refused", []string{"actor", "delete", "@mira"}, th.ExitRefused, "E_REFUSED", []string{"lore actor deactivate"}},
 		{"edit bad timezone", []string{"actor", "edit", "@mira", "--timezone", "Not/AZone"}, orgExitBadInput, "E_INVALID_INPUT", nil},
 		// agents

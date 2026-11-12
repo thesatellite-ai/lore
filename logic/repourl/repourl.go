@@ -147,11 +147,8 @@ const (
 
 // TokenShaped reports whether a URL user name looks like a token (14.6).
 func TokenShaped(user string) bool {
-	low := strings.ToLower(user)
-	for _, p := range tokenUserPrefixes {
-		if strings.HasPrefix(low, p) {
-			return true
-		}
+	if knownTokenUser(user) {
+		return true
 	}
 	return len(user) >= tokenUserMinLen && entropy(user) >= tokenUserEntropy
 }

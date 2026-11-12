@@ -292,7 +292,7 @@ Status: HEALTHY
 <!-- /example -->
 
 <!-- ds:block id=team-ci-markers-ec4tqnjs -->
-**CI variables.** When any of `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD` or `BITBUCKET_BUILD_NUMBER` is set, lore treats its output as something other people may read: messages about stores and leak checks then show `<redacted>` instead of repo, store and org names. The same happens when the output does not go to a terminal (for example into a file or a pipe).
+**CI variables.** When any of `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD` or `BITBUCKET_BUILD_NUMBER` is set, lore treats its output as something other people may read: `lore check leaks --as-client` then hides the details of what it found. Store URLs, org folders and local paths are printed as they are in every mode (a store's address is not a secret); only a credential inside a URL is shown as `<redacted>`. A tool session id is masked when the output does not go to a terminal or a CI variable is set.
 
 ## Upgrades
 

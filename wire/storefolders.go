@@ -22,8 +22,6 @@ package wire
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"io/fs"
 	"os"
@@ -35,6 +33,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -286,22 +285,9 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 }
 
 // urlLabel is how store folder list names an org store known only by its
-// url: the url, or in quiet output (no terminal, CI), which must name no
-// store url, "<redacted>" and a short digest of the url, so two such
-// stores stay apart in one listing.
-func (a *App) urlLabel(raw string) string {
-	if !a.QuietOutput() {
-		return raw
-	}
-	sum := sha256.Sum256([]byte(raw))
-	return redactedLabel + "-" + hex.EncodeToString(sum[:])[:urlDigestLen]
-}
-
-// redactedLabel and urlDigestLen shape urlLabel's quiet form.
-const (
-	redactedLabel = "<redacted>"
-	urlDigestLen  = 6
-)
+// url: the url itself, in a pipe and in CI too (a store's address is no
+// secret), with only a credential in it masked (repourl.Mask).
+func (a *App) urlLabel(raw string) string { return repourl.Mask(raw) }
 
 // storesHere are the stores this command sees: the repo's (stores.yaml
 // and its org's, when there is a repo) and the setup's (its org's stores,

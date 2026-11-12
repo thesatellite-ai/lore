@@ -20,7 +20,7 @@ and the leak guards turn on for everyone in agency.
   nothing was written to this repo
 alice (work/api)$ lore actor register
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/api/.git/hooks)
-✓ act_54fe984c9b495744c0217776765a28f2 Alice Doe (@alice) registered in <redacted>
+✓ act_54fe984c9b495744c0217776765a28f2 Alice Doe (@alice) registered in agency org/
 
 ### mission across repos
 alice (work/api)$ lore mission add 'Invite landing page' --to agency/client2 --key invite

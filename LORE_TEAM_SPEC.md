@@ -231,7 +231,7 @@ One name per thing. Real row ids are long (`tsk_01a1985b…`, UUIDv7, `saas/pkg/
 | `--store <url>` | on `lore org link`: which store to create the folder in |
 | `--strict`, `--yes` | refuse instead of warn (file ownership); confirm without a prompt |
 | `--all`, `--ci`, `--explain`, `--merge`, `--refs`, `--signals` | on `land`; on `check leaks`; on `explain` (field decisions, pointers, the claim as seen now) |
-| `--json`, `--trace`, `--dry-run`, `--share`, `--force-org` | machine output (`--json` exists, `saas/pkg/constants/flags.go:11`), tracing, plan only, unredacted output, override an org disagreement |
+| `--json`, `--trace`, `--dry-run`, `--share`, `--force-org` | machine output (`--json` exists, `saas/pkg/constants/flags.go:11`), tracing, plan only, `--share` kept with no effect (store urls and folders are always printed; only a credential inside a url is masked), override an org disagreement |
 
 ### Config keys (`~/.lore/config.yaml`; org defaults may also come from the store's `lore-org.yaml`)
 

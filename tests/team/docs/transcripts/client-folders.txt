@@ -2,9 +2,9 @@
 ### from the parent folder
 tomas (work/clients)$ lore store list
 stores:
-  NAME        URL         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH       ADDRESS
-  agency      <redacted>          false      main    false     org     internal    local_copy  
-  agency/org  <redacted>  org     false      main    false     org     internal    local_copy  
+  NAME        URL                          FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH       ADDRESS
+  agency      git@github.com:agency/notes          false      main    false     org     internal    local_copy  
+  agency/org  git@github.com:agency/notes  org     false      main    false     org     internal    local_copy  
 count: 2
 tomas (work/clients)$ lore store folder add team client_north
 ✓ created folder client_north in agency (prj_7a670ae8548ed05bf57ad29ad0759504; shown only in repos that attach it)

@@ -196,7 +196,7 @@ A project that still has rows cannot be deleted; the message names every row tha
 $ lore project list
 prj_76bd…3f10  website  https://github.com/client/website
 $ lore project delete $(lore project list | cut -d' ' -f1) --yes
-ERROR: [E_HAS_DEPENDENTS] project delete: mem_d431…313a (memories.project_id), rul_162d…9666 (rules.project_id), tsk_7a67…9504 (tasks.project_id), tsk_2ad3…f891 (tasks.project_id), tsk_54fe…28f2 (tasks.project_id), tlt_b4f4…a5b0 (task_lists.project_id) still point at prj_76bd…3f10
+ERROR: [E_HAS_DEPENDENTS] project delete: mem_d431…313a (memories.project_id), rul_162d…9666 (rules.project_id), tsk_7a67…9504 (tasks.project_id), tsk_2ad3…f891 (tasks.project_id), tsk_54fe…28f2 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_76bd…3f10
   hint: delete or move the pointing rows first
 (exit 23)
 ```
@@ -256,11 +256,11 @@ Removing a key the row does not have is `E_META_UNKNOWN`; the message says which
 ```console
 # alice, in website
 $ lore rule add --body 'Keep the footer links in one list'
-✓ rul_28f8…03df
+✓ rul_b4f4…a5b0
   scope: [master] severity: must
-$ lore meta unset rul_28f8…03df client_tier
-ERROR: [E_META_UNKNOWN] rul_28f8…03df has no metadata key "client_tier"; it has no metadata
-  hint: lore meta show rul_28f8…03df lists its keys
+$ lore meta unset rul_b4f4…a5b0 client_tier
+ERROR: [E_META_UNKNOWN] rul_b4f4…a5b0 has no metadata key "client_tier"; it has no metadata
+  hint: lore meta show rul_b4f4…a5b0 lists its keys
 (exit 20)
 ```
 <!-- /example -->

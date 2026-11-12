@@ -15,7 +15,7 @@ import (
 // returns the code's class exit. Colour is off: the host prints before
 // --color is parsed.
 func PrintError(stdout, stderr io.Writer, err error, asJSON bool) int {
-	return printError(stdout, stderr, err, asJSON, Palette{})
+	return printError(stdout, stderr, err, asJSON, Palette{}, "")
 }
 
 // JSONRequested reports whether args (the process arguments without the

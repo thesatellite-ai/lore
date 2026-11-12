@@ -47,7 +47,7 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
-stores     <redacted> on branch staging  (org folder <redacted>)
+stores     git@github.com:agency/notes on branch staging  (org folder org)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
 personal   me -> ~/.lore/personal
 $ lore org link agency-stag --project client --yes

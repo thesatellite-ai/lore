@@ -346,15 +346,15 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags, FlagPos: pos}, *yes, sf.choice(cmd))
 		out := cmd.OutOrStdout()
 		if err != nil {
-			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr)), cause: err}
+			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr), cmd.CommandPath()), cause: err}
 		}
 		if *asJSON {
 			err = printJSON(out, res)
 		} else {
-			err = printHuman(out, res, cfg.color(StreamOut))
+			err = printHuman(out, res, cfg.color(StreamOut), cmd.CommandPath())
 		}
 		if err != nil {
-			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr)), cause: err}
+			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr), cmd.CommandPath()), cause: err}
 		}
 		// P3-ORG-G-3: an output printed in full may still fail
 		// (op.Failer, whoami's org refusal): the error line goes to
@@ -363,7 +363,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 			if *asJSON {
 				return &exitError{code: errs.EnvelopeOf(ferr).Error.Exit, cause: ferr}
 			}
-			return &exitError{code: printError(out, cmd.ErrOrStderr(), ferr, false, cfg.color(StreamErr)), cause: ferr}
+			return &exitError{code: printError(out, cmd.ErrOrStderr(), ferr, false, cfg.color(StreamErr), cmd.CommandPath()), cause: ferr}
 		}
 		// P3-MISC-8: a successful result may carry its own exit status
 		// (op.ExitStatuser, lore doctor's 1 degraded / 2 broken); it is
@@ -632,6 +632,6 @@ func isIDArg(f op.FieldInfo) bool { return f.Arg != op.NoArg && f.Name == "id" }
 // the envelope on stdout when the raw arguments ask for --json) and
 // returns it as ExitUsage. Colour stays off: --color may not have parsed.
 func printUsage(cmd *cobra.Command, cfg config, e *errs.Error) error {
-	_ = printError(cmd.OutOrStdout(), cmd.ErrOrStderr(), e, JSONRequested(cfg.args), Palette{})
+	_ = printError(cmd.OutOrStdout(), cmd.ErrOrStderr(), e, JSONRequested(cfg.args), Palette{}, cmd.CommandPath())
 	return &exitError{code: ExitUsage, cause: e}
 }

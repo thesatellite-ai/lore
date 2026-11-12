@@ -634,9 +634,6 @@ func (a *App) otherOrgStores(got []opsstores.Entry) []opsstores.Entry {
 	return out
 }
 
-// QuietOutput implements opsstores.OrgLister (quietOutput: no terminal, CI).
-func (a *App) QuietOutput() bool { return quietOutput() }
-
 // checkUnused refuses a name another store of this repo already uses (CFG2).
 // place is the store the name is about to stand for: an org store of the
 // same name at the same place (url, branch and folder) is not a clash, it is

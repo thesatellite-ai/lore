@@ -70,13 +70,13 @@ A **store** is a separate private repo that holds only lore notes, like a locked
 ```console
 # alice, in website
 $ lore whoami
-ERROR: [E_NOT_A_STORE] <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
+ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
   hint: point stores: at a repo made with `lore store init <name> <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 
 # alice, in ~
 $ lore store doctor
-ERROR: [E_INVALID_INPUT] 1 store(s) need attention: <redacted>: [E_NOT_A_STORE] <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
   hint: fix each problem, then run `lore store doctor` again
 (exit 20)
 ```
@@ -248,30 +248,30 @@ lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: 
 
 Fix: allow `refs/lore/*` on the host (or in its pre-receive hook). Until then, live rows only reach teammates when they land on `main`. `lore land --all` lands them now. Setting `live.autopush: false` stops the retries.
 
-## `whoami` prints `<redacted>`
+## A URL shows `<redacted>`
 
 <!-- ds:block id=team-ci-markers-ec4tqnjs -->
-Without a terminal (a script, CI, an agent's tool call) and whenever a CI variable is set (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD`, `BITBUCKET_BUILD_NUMBER`), `whoami`, `doctor` and `explain` hide store URLs and internal folder names, so they never end up in a log the client can read:
+lore prints store URLs, org folders and local paths as they are, on a terminal, in a script, in CI (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD`, `BITBUCKET_BUILD_NUMBER`) and in an agent's tool call alike: a store's address is not a secret. Only a credential inside a URL is replaced, and only that part: `https://user:<redacted>@host/org/x.git` for a password, `https://<redacted>@host/org/x.git` for a token used as the user name, `?access_token=<redacted>` for a token in the query. If you see `<redacted>` in a URL, the URL in your config holds a credential: remove it and use your git credential helper. The same `whoami` output, run without a terminal:
 
 <!-- example: agency#link only=7 -->
 ```console
 # alice, in website
 $ lore whoami
-org        agency  (matched by: link in <redacted>, project id + remote)
+org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
 identity   Alice Doe <human:alice@agency.example>   act_2ad3…f891  @alice  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_162d…9666
 remotes    github.com/client/website
-stores     <redacted> on branch main  (org folder <redacted>)
-internal   <redacted> <redacted>/
+stores     git@github.com:agency/notes on branch main  (org folder org)
+internal   github.com/agency/notes client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 ```
 <!-- /example -->
 
-On your own terminal they are printed. `--share` prints them on a terminal on purpose.
+`--share` is kept for older scripts and changes nothing.
 
 ## `E_INVALID_ID`
 

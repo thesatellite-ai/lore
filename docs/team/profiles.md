@@ -9,7 +9,6 @@ You want this page when your org's roster is more than a list of handles: when y
 - An org with a store, and you on its roster (`lore actor register`, see [Identity and stores](identity-and-stores.md)). With no org yet, create one: see [Step 9](#step-9--create-or-rename-an-org).
 - The people here are fictional: Tomas Weber (`@tomas`, the team lead, who runs the commands) and Mira Patel (`@mira`, a backend engineer with two emails and two GitHub accounts). The org is `agency`, its roster lives in the store's `org/` folder (`git@github.com:agency/notes`), and its projects are the client repos `acme-hub` and `northwind-app`. Mira registered herself with `lore actor register` on her first day, 2026-01-12.
 - Every command that writes on this page is for people; see [Who may change profiles](#who-may-change-profiles).
-- In the examples, `in <redacted>` stands for the store a row was written to: lore prints a store location as `<redacted>` when it runs without a terminal, as these examples do.
 
 ## Where profiles live
 
@@ -61,11 +60,11 @@ A profile is a handful of optional fields on the person's actor. Fill them in on
 ```console
 # tomas, in acme-hub
 $ lore actor edit @mira --title 'Backend engineer' --timezone Europe/Istanbul --location 'Ankara, TR'
-✓ act_7a67…9504 Mira Patel edited (title, timezone, location) in <redacted>
+✓ act_7a67…9504 Mira Patel edited (title, timezone, location) in agency org/
 $ lore actor edit @mira --bio 'Payments and billing.' --photo-url https://example.com/mira.png
-✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in <redacted>
+✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in agency org/
 $ lore actor edit @mira --clear photo_url,bio
-✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in <redacted>
+✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in agency org/
 $ lore actor edit @mira --timezone 'Istanbul time'
 ERROR: [E_INVALID_INPUT] actor edit --timezone: "Istanbul time" is not an IANA zone name
   hint: give an IANA zone name such as Europe/Istanbul or America/New_York
@@ -92,17 +91,17 @@ Tomas adds Mira's two emails and two GitHub accounts as identity contacts, and h
 ```console
 # tomas, in acme-hub
 $ lore actor contact add @mira email mira@agency.example --label work --primary --identity
-✓ acn_2ad3…f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in <redacted>
+✓ acn_2ad3…f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in agency org/
 $ lore actor contact add @mira email mira.patel@example.com --label personal --identity
-✓ acn_162d…9666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in <redacted>
+✓ acn_162d…9666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in agency org/
 $ lore actor contact add @mira github mira-agency --label work --primary --identity
-✓ acn_54fe…28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in <redacted>
+✓ acn_54fe…28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in agency org/
 $ lore actor contact add @mira github mirap --label personal --identity
-✓ acn_05e9…4603 github mirap added for Mira Patel (@mira) [identity] in <redacted>
+✓ acn_05e9…4603 github mirap added for Mira Patel (@mira) [identity] in agency org/
 $ lore actor contact add @mira phone '+90 532 000 0000' --label work --primary
-✓ acn_c0f3…b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in <redacted>
+✓ acn_c0f3…b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in agency org/
 $ lore actor contact add @mira github mirap --label personal --identity
-· acn_05e9…4603 github mirap already there [identity] in <redacted>
+· acn_05e9…4603 github mirap already there [identity] in agency org/
 $ lore actor contact list --type phone
 acn_c0f3…b5b8 Mira Patel (@mira)       phone     +90 532 000 0000             work       primary           tel:+905320000000
 ```
@@ -153,11 +152,11 @@ A contact is changed or removed by its `acn_` id. A removed contact goes to the 
 ```console
 # tomas, in acme-hub
 $ lore actor contact add @mira linkedin mira-patel --label work
-✓ acn_d431…313a linkedin mira-patel added for Mira Patel (@mira) [primary] in <redacted>
+✓ acn_d431…313a linkedin mira-patel added for Mira Patel (@mira) [primary] in agency org/
 $ lore actor contact edit acn_d431…313a --note 'old profile, not updated'
-✓ acn_d431…313a linkedin mira-patel edited for Mira Patel (@mira) [primary] in <redacted>
+✓ acn_d431…313a linkedin mira-patel edited for Mira Patel (@mira) [primary] in agency org/
 $ lore actor contact remove acn_d431…313a --reason 'account closed'
-✓ acn_d431…313a linkedin mira-patel removed from Mira Patel (@mira) in <redacted> (restorable from the trash)
+✓ acn_d431…313a linkedin mira-patel removed from Mira Patel (@mira) in agency org/ (restorable from the trash)
 $ lore actor contact list @mira --identity
 acn_2ad3…f891 Mira Patel (@mira)       email     mira@agency.example          work       primary, identity mailto:mira@agency.example
 acn_162d…9666 Mira Patel (@mira)       email     mira.patel@example.com       personal   identity          mailto:mira.patel@example.com
@@ -196,9 +195,9 @@ Tomas adds Bitbucket as an identity type and relabels GitHub; the list marks eac
 ```console
 # tomas, in acme-hub
 $ lore contact-type add bitbucket --kind handle --identity --url-template 'https://bitbucket.org/{value}'
-✓ contact type bitbucket added in <redacted>
+✓ contact type bitbucket added in agency org/
 $ lore contact-type edit github --label GitHub
-✓ contact type github edited in <redacted>
+✓ contact type github edited in agency org/
 $ lore contact-type list
 github       handle  identity  changed   GitHub       https://github.com/{value}
 gitlab       handle  identity  built-in  GitLab       https://gitlab.com/{value}
@@ -267,7 +266,7 @@ Tomas adds a `tech_writer` role, gives it a description, and retires `qa`, which
 ```console
 # tomas, in acme-hub
 $ lore role add tech_writer --label 'Technical writer'
-✓ role tech_writer added in <redacted>
+✓ role tech_writer added in agency org/
 $ lore role list
 lead  Lead — leads the project
 dev  Developer — writes the code
@@ -282,9 +281,9 @@ ERROR: [E_ROLE_UNKNOWN] not a live role: wizard (unknown)
   hint: lore role list; lore role add <name>
 (exit 20)
 $ lore role edit tech_writer --description 'writes the user docs'
-✓ role tech_writer updated in <redacted>
+✓ role tech_writer updated in agency org/
 $ lore role edit qa --retire
-✓ role qa updated in <redacted>
+✓ role qa updated in agency org/
 ```
 <!-- /example -->
 
@@ -538,7 +537,7 @@ This writes org/.lore/lore-org.yaml into the store (no identity) and adds to ~/.
         - github.com/acme/*
 ✓ wrote org/.lore/lore-org.yaml (pushed)
 ✓ added org entry acme
-✓ act_d191…45c2 Ana Lima (@ana) registered in <redacted>
+✓ act_d191…45c2 Ana Lima (@ana) registered in acme org/
   teammates join with: lore org import git@github.com:acme/lore-notes --key human:<their email> --name "Their Name"
   tie a client repo to it (written only into the store): lore org link acme --project <folder>
 $ lore org rename acme acme-studio
@@ -554,7 +553,7 @@ machine    mch_017941fe
 agent      none  (no coding agent detected)
 project    (no .lore/data/_meta.json here)
 remotes    github.com/acme/handbook
-stores     <redacted> on branch main  (org folder <redacted>)
+stores     git@github.com:acme/lore-notes on branch main  (org folder org)
 links      known  no project id here yet, so no store link can name this repo
 personal   not set
 ```

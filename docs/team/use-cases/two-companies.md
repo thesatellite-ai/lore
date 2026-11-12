@@ -38,15 +38,15 @@ orgs:
 ```console
 # alice, in website
 $ lore whoami
-org        agency  (matched by: link in <redacted>, project id + remote)
+org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
 identity   Alice Doe <human:alice@agency.example>   act_7a67…9504  @alice  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
-stores     <redacted> on branch main  (org folder <redacted>)
-internal   <redacted> <redacted>/
+stores     git@github.com:agency/notes on branch main  (org folder org)
+internal   github.com/agency/notes client/
 links      known  1 link(s) for this repo (stores of 2 entries scanned)
 personal   me -> ~/.lore/personal
 
@@ -59,7 +59,7 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_54fe…28f2
 remotes    github.com/client3/api
-stores     <redacted> on branch main  (org folder <redacted>)
+stores     git@github.com:client3/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   me -> ~/.lore/personal
 
@@ -79,7 +79,7 @@ personal   me -> ~/.lore/personal
 
 Each repo resolves to one org, with that org's identity and actor id. The unrelated repo resolves to none and uses the top-level identity, never a company one. `lore whoami --explain` prints every org rule with hit or miss. Its output for `forked-tool` is shown in [Concepts](../concepts.md#orgs-identity-and-whoami).
 
-Without a terminal (in a script, a CI job, or an agent's tool call), `whoami` hides store URLs and internal folder names as `<redacted>`. That is why the output above shows them that way. On your own terminal they are printed. `--share` prints them on a terminal on purpose.
+`whoami` names the store URLs and folders the same way on a terminal, in a script, in a CI job or in an agent's tool call; only a credential inside a URL is shown as `<redacted>`.
 
 Personal notes follow the same split. A note written in an agency repo is filed under `agency/` and loads only in agency repos:
 

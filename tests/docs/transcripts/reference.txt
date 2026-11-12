@@ -330,7 +330,7 @@ ERROR: [E_SQL_REFUSED] only one SELECT, WITH or VALUES statement (optionally aft
 alice (work/website)$ lore project list
 prj_76bd560aff0771fab8457dbfa9823f10  website  https://github.com/client/website
 alice (work/website)$ lore project delete $(lore project list | cut -d' ' -f1) --yes
-ERROR: [E_HAS_DEPENDENTS] project delete: mem_d4314eba822f1bf5908b2b8ded5f313a (memories.project_id), rul_162df51b7f78b785c97c26b41ea89666 (rules.project_id), tsk_7a670ae8548ed05bf57ad29ad0759504 (tasks.project_id), tsk_2ad3618e878ebbf527d34d446ef4f891 (tasks.project_id), tsk_54fe984c9b495744c0217776765a28f2 (tasks.project_id), tlt_b4f4765e593d51fd1352985e8af3a5b0 (task_lists.project_id) still point at prj_76bd560aff0771fab8457dbfa9823f10
+ERROR: [E_HAS_DEPENDENTS] project delete: mem_d4314eba822f1bf5908b2b8ded5f313a (memories.project_id), rul_162df51b7f78b785c97c26b41ea89666 (rules.project_id), tsk_7a670ae8548ed05bf57ad29ad0759504 (tasks.project_id), tsk_2ad3618e878ebbf527d34d446ef4f891 (tasks.project_id), tsk_54fe984c9b495744c0217776765a28f2 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_76bd560aff0771fab8457dbfa9823f10
   hint: delete or move the pointing rows first
 (exit 23)
 
@@ -343,22 +343,22 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 
 ### meta unknown
 alice (work/website)$ lore rule add --body 'Keep the footer links in one list'
-✓ rul_28f8d32584b2db54ffb146bede5b03df
+✓ rul_b4f4765e593d51fd1352985e8af3a5b0
   scope: [master] severity: must
-alice (work/website)$ lore meta unset rul_28f8d32584b2db54ffb146bede5b03df client_tier
-ERROR: [E_META_UNKNOWN] rul_28f8d32584b2db54ffb146bede5b03df has no metadata key "client_tier"; it has no metadata
-  hint: lore meta show rul_28f8d32584b2db54ffb146bede5b03df lists its keys
+alice (work/website)$ lore meta unset rul_b4f4765e593d51fd1352985e8af3a5b0 client_tier
+ERROR: [E_META_UNKNOWN] rul_b4f4765e593d51fd1352985e8af3a5b0 has no metadata key "client_tier"; it has no metadata
+  hint: lore meta show rul_b4f4765e593d51fd1352985e8af3a5b0 lists its keys
 (exit 20)
 
 ### personal everywhere
 alice (work/website)$ lore store init me
-✓ created store me (sto_4c590afb2a0cc7ae1b97b7e4e62d6c38) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+✓ created store me (sto_28f8d32584b2db54ffb146bede5b03df) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 alice (work/website)$ lore memory add --to me --everywhere --body 'I write short commit messages'
 ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 alice (work/website)$ lore memory add --to me --body 'I write short commit messages'
-✓ mem_3b6283bc4392c556bbae5f094246e913 [me]
+✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [me]
   scope: [master]
 alice (work/landing)$ lore memory list
-mem_3b6283bc4392c556bbae5f094246e913  I write short commit messages  [me]
+mem_4c590afb2a0cc7ae1b97b7e4e62d6c38  I write short commit messages  [me]

@@ -111,7 +111,7 @@ This adds to ~/.lore/config.yaml:
     repos:
         - github.com/client/*
 ✓ added org entry agency
-✓ act_7a67…9504 Bob Roe (@bob) registered in <redacted>
+✓ act_7a67…9504 Bob Roe (@bob) registered in agency org/
 $ cat ~/.lore/config.yaml
 orgs:
   - name: agency
@@ -132,15 +132,15 @@ orgs:
 
 # bob, in website
 $ lore whoami
-org        agency  (matched by: link in <redacted>, project id + remote)
+org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_7a67…9504  @bob  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_162d…9666
 remotes    github.com/client/website
-stores     <redacted> on branch main  (org folder <redacted>)
-internal   <redacted> <redacted>/
+stores     git@github.com:agency/notes on branch main  (org folder org)
+internal   github.com/agency/notes client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   not set
 ```
@@ -202,7 +202,7 @@ org
 
 # bob, in ~
 $ lore store forget git@github.com:agency/notes
-✓ forgot <redacted> (removed ~/.lore/clones/github.com/agency/notes; the next command that needs it clones it again)
+✓ forgot github.com/agency/notes (removed ~/.lore/clones/github.com/agency/notes; the next command that needs it clones it again)
 ```
 <!-- /example -->
 
@@ -452,7 +452,7 @@ Run `lore identity show` in a repo of no org afterwards: it still shows your top
 - **`lore store forget` refuses while the copy holds work that is not pushed yet.** Run `lore sync` first.
 - **A batched note is not on the remote yet.** In `batch` or `manual` mode your teammates and your other machines see a note only after the batch is pushed. Run `lore sync` before you switch machines.
 - **Never edit the folder `lore store open` made.** Lore writes the store branch itself; your edits there are not picked up.
-- **`lore store list` shows where each store comes from.** The SOURCE column says `stores.yaml` (attached by this repo), `org` (brought by the repo's org) or `personal`. A store url from the org is printed as `<redacted>` where output must name nothing (no terminal, CI); its visibility is still worked out from the real url. A name the org already uses cannot be taken again by `lore store init` or `lore store add` (`E_INVALID_INPUT`).
+- **`lore store list` shows where each store comes from.** The SOURCE column says `stores.yaml` (attached by this repo), `org` (brought by the repo's org) or `personal`. Every store url is printed as it is, in a pipe and in CI too (NAME and URL alike); only a credential inside a url is shown as `<redacted>`, and the visibility is worked out from the real url. A name the org already uses cannot be taken again by `lore store init` or `lore store add` (`E_INVALID_INPUT`).
 - **Writing an org store's url into `.lore/stores.yaml` asks first.** The org link keeps the org's store urls out of the repo. `lore store add <name> <url> --folder <folder>` (also `store init` and `store set-url`) with a url that is one of your org's stores (any org in `~/.lore/config.yaml`, with or without an identity, and any spelling of its url: ssh or https, with or without `.git` or a trailing slash) would commit that url, visible to everyone who can read the repo, so lore asks at a terminal and, without one, stops with `E_NEEDS_CONFIRM` (exit 26) before writing anything; rerun with `--yes` to write it. In a client repo the same commands ask for any store url, because the client reads the file. A write to an org store folder this repo does not attach names this command with `--yes` on stderr.
 - **A store url never keeps a login in `.lore/stores.yaml`.** `lore store init`, `add` and `set-url` drop the user part of an `https://user@host/…` url before writing it, because git hosts treat that user as a token, and refuse a url with a password or token in it (`E_URL_CREDENTIALS`). An ssh login such as `git@github.com:…` is kept.
 - **0.1.18 stores are git repos or folders.** A url with another scheme (`s3://`, `postgres://`, `lore://`) is refused with `E_STORE_SCHEME` before anything is written: use a git url or `file:///<absolute path>`.

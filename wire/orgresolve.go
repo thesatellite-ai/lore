@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
@@ -115,44 +116,30 @@ func (r *OrgResolution) FetchLinksAlways() {
 func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error) {
 	r.once.Do(func() {
 		r.sit, r.err = r.gatherWithSetup(ctx)
-		r.err = redactQuietErr(r.home, r.sit, r.err)
+		r.err = maskOrgErr(r.err)
 	})
 	return r.sit, r.err
 }
 
-// redactQuietErr hides every configured org store url in err when output
-// must name nothing (no terminal, CI; quietOutput): a gather error such as
-// E_NOT_A_STORE names the store url, and every command of a client repo
-// prints it, so a client's CI log or an agent's transcript would carry the
-// agency's internal store url (v0.1.17 redactIfQuiet in stores_wiring.go,
-// B-FLOW4-4). The code, hint and the rest of the text stay; a non-lore
-// error or an unreadable config is returned as it is.
-func redactQuietErr(home string, sit *orgcfg.Situation, err error) error {
-	return redactOrgErr(home, sit, err, quietOutput())
-}
-
-// redactOrgErr is redactQuietErr with the quiet decision passed in (a
-// terminal shows the url: quiet false returns err as it is).
-func redactOrgErr(home string, sit *orgcfg.Situation, err error, quiet bool) error {
-	if err == nil || !quiet {
-		return err
-	}
+// maskOrgErr masks only the credentials in a lore error's message, hint
+// and cause (repourl.MaskText). A gather error such as E_NOT_A_STORE names
+// the store url, and that url is printed as it is, in a pipe and in CI
+// too: a store's plain address is no secret, and the person needs it to
+// act on the error. A non-lore error is returned as it is.
+func maskOrgErr(err error) error {
 	var e *errs.Error
-	if !errors.As(err, &e) {
+	if err == nil || !errors.As(err, &e) {
 		return err
 	}
-	if sit == nil {
-		cfg, _, cerr := orgcfg.LoadConfig(home)
-		if cerr != nil || cfg == nil {
-			return err
-		}
-		sit = &orgcfg.Situation{Config: cfg}
-	}
-	red := newWhoamiRedactor(sit, false)
 	c := *e
-	c.Message, c.Hint = red.str(c.Message), red.str(c.Hint)
+	c.Message, c.Hint = repourl.MaskText(c.Message), repourl.MaskText(c.Hint)
 	if c.Cause != nil {
-		c.Cause = errors.New(red.str(c.Cause.Error()))
+		if m := repourl.MaskText(c.Cause.Error()); m != c.Cause.Error() {
+			c.Cause = errors.New(m)
+		}
+	}
+	if c.Message == e.Message && c.Hint == e.Hint && c.Cause == e.Cause {
+		return err
 	}
 	return &c
 }

@@ -25,10 +25,10 @@ and the leak guards turn on for everyone in agency.
 alice (work/website)$ git status --short
 alice (work/website)$ lore actor register
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
-✓ act_2ad3618e878ebbf527d34d446ef4f891 Alice Doe (@alice) registered in <redacted>
+✓ act_2ad3618e878ebbf527d34d446ef4f891 Alice Doe (@alice) registered in agency org/
 bob (work/website)$ lore actor register
 lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
-✓ act_54fe984c9b495744c0217776765a28f2 Bob Roe (@bob) registered in <redacted>
+✓ act_54fe984c9b495744c0217776765a28f2 Bob Roe (@bob) registered in agency org/
 alice (work/website)$ lore whoami
 org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
 identity   Alice Doe <human:alice@agency.example>   act_2ad3618e878ebbf527d34d446ef4f891  @alice  (from: org entry (config.yaml orgs[agency].identity))
@@ -42,15 +42,15 @@ internal   github.com/agency/notes client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 alice (work/website)$ lore whoami
-org        agency  (matched by: link in <redacted>, project id + remote)
+org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
 identity   Alice Doe <human:alice@agency.example>   act_2ad3618e878ebbf527d34d446ef4f891  @alice  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_162df51b7f78b785c97c26b41ea89666
 remotes    github.com/client/website
-stores     <redacted> on branch main  (org folder <redacted>)
-internal   <redacted> <redacted>/
+stores     git@github.com:agency/notes on branch main  (org folder org)
+internal   github.com/agency/notes client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 
@@ -115,7 +115,7 @@ alice (work/website)$ rm pr.md && lore check leaks --ci
 
 ### agent rule refused
 alice (work/website)$ lore agent start --label agent-backend --owner @alice
-✓ act_28f8d32584b2db54ffb146bede5b03df agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_28f8d32584b2db54ffb146bede5b03df agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 alice (work/website)$ lore rule add --body 'require prepayment from this client'
 ERROR: [E_INVALID_INPUT] stores: this write needs an explicit --to: a rule written by an agent in a client repo must pass --to (repo or agency); nothing written

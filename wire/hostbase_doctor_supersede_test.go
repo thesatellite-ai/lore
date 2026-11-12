@@ -2,12 +2,14 @@ package wire
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/listcap"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -269,5 +271,30 @@ func TestMigrateConvertsOldSupersedes(t *testing.T) {
 		if next, _ := successor(t, a, schema.TableRules, id); next != shared {
 			t.Errorf("%s link = %q; the two-into-one rows must be left as they are", id, next)
 		}
+	}
+}
+
+// TestSupersedeWarningOf50Links: doctor's finding for 50 reversed links
+// keeps all 50 in the line (--json's warnings[] and findings[]), and the
+// text a person reads names 5, then "… and 45 more (`lore doctor --json`
+// lists all)", then the rest of the sentence with the fix command (the
+// owner saw 84 links on one line several thousand characters long).
+func TestSupersedeWarningOf50Links(t *testing.T) {
+	t.Parallel()
+	fixes := make([]supersedeFix, 50)
+	for i := range fixes {
+		fixes[i] = supersedeFix{kind: "rule", oldID: fmt.Sprintf("rul_%032x", 2*i), newID: fmt.Sprintf("rul_%032x", 2*i+1)}
+	}
+	line := supersedeWarning(fixes)
+	if !strings.Contains(line, fixes[49].oldID) || !strings.HasPrefix(line, "50 --supersedes link(s)") {
+		t.Fatalf("the finding lost links: %s", line)
+	}
+	shown := listcap.Text(line, "`lore doctor --json` lists all")
+	if strings.Contains(shown, fixes[5].oldID) || !strings.Contains(shown, fixes[4].newID+" … and 45 more (`lore doctor --json` lists all); each read as old → new") ||
+		!strings.HasSuffix(shown, "run `lore doctor --fix` to move each link onto the old row (lore migrate run and lore store adopt convert them too)") {
+		t.Fatalf("text not capped as expected:\n%s", shown)
+	}
+	if len(shown) > 1000 {
+		t.Fatalf("text still %d bytes", len(shown))
 	}
 }
