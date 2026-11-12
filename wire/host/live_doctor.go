@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // liveDoctorPrefix starts every live doctor line.
@@ -143,7 +144,7 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		_, tree, _ := s.ref.LocalTree(ctx) // display only: an unreadable tree shows epoch 0
 		note(fmt.Sprintf("live ref: %d commit(s) since the last compaction (epoch %d; automatic past %d)", n, tree.Epoch(), s.cfg.CompactAfter))
 	}
-	s.doctorHooks(ctx, branch, warn, note)
+	s.doctorHooks(ctx, branch, fix, warn, note)
 	if out, serr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--is-shallow-repository"}}); serr == nil && strings.TrimSpace(string(out)) == "true" {
 		warn("shallow clone: landing and merged checks need the default branch's history")
 	}
@@ -151,13 +152,45 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 }
 
 // doctorHooks checks that the ride-along blocks are in the hook folder git
-// uses (lore installs them on its next write, lore sync or lore fix in the
-// project; a read never does).
-func (s *liveSession) doctorHooks(ctx context.Context, branch string, warn, note func(string)) {
+// uses. A read only looks (owner bug 6). `lore fix` / `lore doctor --fix`
+// install the missing ones (owner item 37: the fix of this check is a set-up
+// step, announced as a fixed line), unless the hook folder is in the work
+// tree of a client repo, whose tracked files lore never changes: then the
+// warning says so and never points at lore fix. A failed install names its
+// error, so the cause is not lost on stderr.
+func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, warn, note func(string)) {
 	dir, err := s.hooksDir(ctx)
 	if err != nil {
 		return
 	}
+	missing := missingRideHooks(dir)
+	if len(missing) == 0 {
+		note("post-commit and pre-push hook blocks installed")
+		return
+	}
+	what := "git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + ")"
+	if s.clientHooksInWorkTree(ctx, dir) {
+		warn(what + "; not installed: " + dir + " is in the work tree of a client repo, whose tracked files lore never changes; add the blocks by hand if this repo should carry rows on its pushes")
+		return
+	}
+	if !fix {
+		warn(what + "; run `lore fix` (or `lore sync`) to install it; a read never does")
+		return
+	}
+	for _, h := range missing {
+		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideHookLines[h]); ierr != nil {
+			warn(what + "; installing it failed: " + ierr.Error())
+			return
+		}
+	}
+	// the fixing run's line, which the re-check no longer gives: the
+	// doctor lists it as fixed
+	warn(what + "; installed now in " + dir)
+}
+
+// missingRideHooks are the ride-along hooks (post-commit, pre-push) in
+// dir that do not hold lore's block.
+func missingRideHooks(dir string) []string {
 	var missing []string
 	for _, h := range []string{hookPostCommit, hookPrePush} {
 		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, h)))
@@ -165,9 +198,22 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, warn, note
 			missing = append(missing, h)
 		}
 	}
-	if len(missing) > 0 {
-		warn("git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + "); run `lore fix` (or `lore sync`) to install it; a read never does")
-		return
+	return missing
+}
+
+// clientHooksInWorkTree reports whether the repo is marked a client repo
+// (git config lore.clientrepo, wire/clientmark.go) and its hook folder is
+// inside the work tree (a core.hooksPath into a tracked folder), where
+// installing a block would change a file of theirs.
+func (s *liveSession) clientHooksInWorkTree(ctx context.Context, dir string) bool {
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", wire.ClientRepoGitKey}})
+	if err != nil || strings.TrimSpace(string(out)) != "true" {
+		return false
 	}
-	note("post-commit and pre-push hook blocks installed")
+	rel, rerr := filepath.Rel(s.top, dir)
+	if rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false // outside the work tree (a folder of the person's own)
+	}
+	first := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
+	return first != ".git"
 }

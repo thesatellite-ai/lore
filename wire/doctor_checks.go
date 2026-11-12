@@ -250,6 +250,17 @@ type lockHolder interface {
 // DoctorStoreLocks names the holder of every store lock held right now
 // (the pid and time the holder wrote), once per lock file: the folders of
 // one store share it. E_STORE_LOCKED's hint points here.
+//
+// The lock is an OS lock (flock / LockFileEx) the kernel drops when its
+// holder exits, so a held lock whose holder line names a live process (or
+// names none: the holder had not written it yet) is a lore command at
+// work, never a problem (owner item 40: the parallel `lore fix --all`
+// children each saw a sibling holding the shared store clone's lock, and
+// 25 repos came back DEGRADED). It is a note: named, not counted. Only a
+// held lock whose holder line names a process that has exited is a
+// finding (a warning): the lock is then kept by a descriptor that outlived
+// its lore process (a child it forked), and writes wait on it until that
+// process is stopped.
 func (a *App) DoctorStoreLocks(ctx context.Context) ([]DoctorFinding, error) {
 	st, err := a.state(ctx)
 	if err != nil {
@@ -267,11 +278,25 @@ func (a *App) DoctorStoreLocks(ctx context.Context) ([]DoctorFinding, error) {
 			continue // a probe that fails says nothing about a holder
 		}
 		seen[ls.Path] = true
-		out = append(out, DoctorFinding{Check: DoctorCheckStoreLock, Level: DoctorWarning, Store: src,
-			Message: "store " + string(src) + ": the lock " + ls.Path + " is held by " + holderText(ls),
-			Fix:     "wait for that lore command to finish; the lock is freed when its process exits"})
+		out = append(out, storeLockFinding(src, ls, processAlive))
 	}
 	return out, nil
+}
+
+// storeLockFinding is the doctor line of one held store lock: a note while
+// the holder is a live process (or unnamed), a warning when the holder
+// line names a process that has exited (alive is processAlive; a test
+// passes its own).
+func storeLockFinding(src store.Source, ls rowfs.LockState, alive func(int) bool) DoctorFinding {
+	msg := "store " + string(src) + ": the lock " + ls.Path + " is held by " + holderText(ls)
+	if ls.PID != 0 && !alive(ls.PID) {
+		return DoctorFinding{Check: DoctorCheckStoreLock, Level: DoctorWarning, Store: src,
+			Message: msg + ", which has exited; another process still holds the lock (one it started kept the lock open)",
+			Fix:     "find the process holding " + ls.Path + " (lsof " + ls.Path + ") and stop it; the lock is freed when it exits"}
+	}
+	return DoctorFinding{Check: DoctorCheckStoreLock, Level: DoctorNote, Store: src,
+		Message: msg + " (a lore command at work; writes wait for it)",
+		Fix:     "wait for that lore command to finish; the lock is freed when its process exits"}
 }
 
 // holderText is "pid N since <time> (<age> ago)", shorter when the holder

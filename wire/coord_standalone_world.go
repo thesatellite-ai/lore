@@ -291,11 +291,38 @@ func (w *coordWorld) forHolds(ctx context.Context) error {
 	if w.sit.Role != orgresolve.RoleClient {
 		return nil
 	}
-	if len(w.sit.Links) == 0 {
+	if w.unlinkedClient() {
 		return errs.New(errs.Unsupported, "this is a client repo with no store link: its holds belong on a linked store's signals ref, and none is linked").
-			WithHint("never written into the client repo (D8); link it with `lore org link <org> --project <folder>`")
+			WithHint("never written into the client repo (D8); link it with `" + w.linkCommand(ctx) + "`")
 	}
 	return w.useStore(ctx)
+}
+
+// unlinkedClient reports a client repo no store link names: its holds
+// have no signals ref to go on (forHolds).
+func (w *coordWorld) unlinkedClient() bool {
+	return w.sit.Role == orgresolve.RoleClient && len(w.sit.Links) == 0
+}
+
+// linkFolderPlaceholder stands for the store folder in linkCommand when
+// the repo has no name to offer.
+const linkFolderPlaceholder = "<folder>"
+
+// linkCommand is the command that links this client repo to its org's
+// store: the org resolved for it (the only org entry is the default, so
+// it is left out when none resolved) and the repo's folder name as the
+// store folder (any internal project folder will do; the person may pick
+// another).
+func (w *coordWorld) linkCommand(ctx context.Context) string {
+	cmd := "lore org link"
+	if w.sit.Org != nil && w.sit.Org.Name != "" {
+		cmd += " " + w.sit.Org.Name
+	}
+	folder := linkFolderPlaceholder
+	if top, err := w.a.repoTop(ctx); err == nil && top != "" {
+		folder = filepath.Base(top)
+	}
+	return cmd + " --project " + folder
 }
 
 // useStore points the world at the linked store's signals ref: the store

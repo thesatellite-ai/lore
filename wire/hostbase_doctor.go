@@ -38,6 +38,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/selfupdate"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -88,6 +89,11 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 		return b, nil // not a lore project: the project rows have nothing to read
 	}
 	note := func(msg string) { b.Notes = append(b.Notes, msg) }
+	// The base checks below share one read of each store
+	// (engine.WithReadSnapshot, item 41); the fixing one after them gets
+	// its own.
+	fixCtx := ctx
+	ctx = engine.WithReadSnapshot(ctx)
 	b.Sync = a.doctorSync(ctx, warn, note) // hostbase_doctor_sync.go (E-GAPS-1 G4)
 	a.doctorPushModes(ctx, warn, note)     // storepushops.go: each store's push mode
 	b.RepoAddresses = a.doctorRepoAddresses(ctx, warn, note)
@@ -109,6 +115,9 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 		if b.Status == opsdoctor.StatusHealthy {
 			b.Status = opsdoctor.StatusDegraded
 		}
+	}
+	if fix {
+		ctx = engine.WithReadSnapshot(fixCtx)
 	}
 	if err := a.doctorSupersedes(ctx, fix, warn, note, fail); err != nil { // hostbase_doctor_supersede.go
 		return opsdoctor.Base{}, err

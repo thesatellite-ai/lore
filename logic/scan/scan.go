@@ -3,12 +3,15 @@
 // write; adapters (gitleaks, phase 1) implement it. This package also holds
 // a small stdlib-regexp Scanner used for store-defined rules and tests.
 //
-// Invariant: no Finding ever carries the secret. Preview shows at most
-// min(PreviewMax, len/PreviewDivisor) leading characters followed by "…"
-// (D5 / BATCH 14), never the length of the match.
+// Invariant: no Finding ever carries the secret or any part of it. Preview
+// is a match hash ("sha256:" + the first 12 hex of the SHA-256 of the
+// value), never a prefix, suffix or length of the match: a person can tell
+// two findings apart, nobody can read any character of the value.
 package scan
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"hash/fnv"
 	"math"
 	"regexp"
@@ -60,7 +63,7 @@ type Finding struct {
 	Line   int
 	Offset int
 	Length int
-	// Preview is the masked match (see package doc).
+	// Preview is the match hash (see package doc), never any part of it.
 	Preview string
 	// MatchHash is HashMatch of the matched text, the key an Allow entry
 	// stores instead of the secret.
@@ -97,18 +100,18 @@ type Allow struct {
 	MatchHash uint32
 }
 
-// Preview limits (D5 / BATCH 14).
-const (
-	PreviewMax     = 8
-	PreviewDivisor = 4
-	previewMark    = "…"
-)
+// PreviewHexLen is how many hex characters of the SHA-256 the preview keeps.
+const PreviewHexLen = 12
 
-// Mask returns the safe preview of a match.
+// previewPrefix marks the preview as a hash, not text.
+const previewPrefix = "sha256:"
+
+// Mask returns the safe preview of a match: "sha256:" + the first
+// PreviewHexLen hex characters of its SHA-256. No character of the match
+// is ever printed (no prefix, no suffix, no length).
 func Mask(match string) string {
-	r := []rune(match)
-	n := min(PreviewMax, len(r)/PreviewDivisor)
-	return string(r[:n]) + previewMark
+	sum := sha256.Sum256([]byte(match))
+	return previewPrefix + hex.EncodeToString(sum[:])[:PreviewHexLen]
 }
 
 // HashMatch is the 32-bit FNV-1a hash of a match (secret_allows.match_hash).

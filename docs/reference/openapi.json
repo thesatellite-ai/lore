@@ -16266,6 +16266,9 @@
                           "repo": {
                             "type": "string"
                           },
+                          "retried": {
+                            "type": "boolean"
+                          },
                           "status": {
                             "type": "string",
                             "enum": [
@@ -16315,6 +16318,24 @@
                           "repo",
                           "exit_status",
                           "wall_ms"
+                        ]
+                      }
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "why"
                         ]
                       }
                     },

@@ -8,7 +8,6 @@ package orgcfg
 import (
 	"context"
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 
@@ -16,59 +15,25 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
-// Files a lore store may hold (v0.1.17 stores.Allowed).
 const (
-	allowedGitattributes = ".gitattributes"
-	allowedReadmePrefix  = "README"
-	allowedLicensePrefix = "LICENSE"
-	allowedWorkflowDir   = ".github/workflows/"
-	allowedWorkflowName  = "lore-"
-	allowedWorkflowExt   = ".yml"
-	storeLoreDir         = ".lore"
-	// maxListedOffenders caps the files the refusal names.
+	// storeLoreDir is the old layout's lore folder (<folder>/.lore/).
+	storeLoreDir = rowfs.LoreDir
+	// maxListedOffenders caps the files the refusal names; the rest are
+	// counted ("and 3 more").
 	maxListedOffenders = 5
 	// hintStoreInit is the refusal's hint (v0.1.17 storeHintInit).
 	hintStoreInit = "point stores: at a repo made with `lore store init <name> <url>`, or remove the entry from ~/.lore/config.yaml"
 )
 
-// storeAllowed reports whether one path may exist in a store: the marker,
-// README*, LICENSE*, .gitattributes, .github/workflows/lore-*.yml, a
-// folder's row files (<folder>/<table>/<id>.json), its _meta.json and
-// _purged.json, an org folder's lore-org.yaml, and anything under a
-// project's .lore/ folder (one path segment deep: the old layout).
-// ds:def id=team-store-allowed-a7qb5uuj owner=@khanakia stability=stable desc="files a lore store may hold"
-func storeAllowed(p string) bool {
-	if p == "" || strings.HasPrefix(p, "/") || path.Clean(p) != p {
-		return false
-	}
-	if p == storeMarkerFile || p == allowedGitattributes {
-		return true
-	}
-	if !strings.Contains(p, "/") {
-		return strings.HasPrefix(p, allowedReadmePrefix) || strings.HasPrefix(p, allowedLicensePrefix) || p == OrgFile || p == rowfs.MetaFileName || p == rowfs.PurgedFileName
-	}
-	if rest, ok := strings.CutPrefix(p, allowedWorkflowDir); ok {
-		return !strings.Contains(rest, "/") && strings.HasPrefix(rest, allowedWorkflowName) && strings.HasSuffix(rest, allowedWorkflowExt)
-	}
-	if strings.HasPrefix(p, storeLoreDir+"/") {
-		return true
-	}
-	if _, _, ok := rowfs.LayoutStore.SplitRowPath(p); ok {
-		return true
-	}
-	if _, _, ok := rowfs.ParseRowPath(p); ok {
-		return true // the root folder's row at the store's top: the first plain layout (lore_store: 3), moved into _store/ by the next lore
-	}
-	if _, _, ok := rowfs.LayoutStore.SplitFolderFile(p); ok {
-		return true
-	}
-	if dir, name := path.Split(p); name == OrgFile {
-		if _, err := rowfs.CleanFolder(strings.TrimSuffix(dir, "/")); err == nil {
-			return true
-		}
-	}
-	first, rest, _ := strings.Cut(p, "/")
-	return first != "" && first != storeLoreDir && strings.HasPrefix(rest, storeLoreDir+"/")
+// storeAllowed reports whether one path may exist in a store: the one
+// definition, rowfs.StoreFileAllowed.
+func storeAllowed(p string) bool { return rowfs.StoreFileAllowed(p) }
+
+// CheckStoreTree is checkStoreTree for callers outside orgcfg (the store
+// writers' property test): nil when every file at rev of the clone at dir
+// may be in a store, else E_NOT_A_STORE naming the files.
+func CheckStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
+	return checkStoreTree(ctx, dir, rev, norm, branch)
 }
 
 // checkStoreTree refuses a branch tip that holds files a store may not
@@ -103,34 +68,18 @@ func checkStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
 	}
 	if len(bad) > 0 {
 		sort.Strings(bad)
-		shown := summariseOffenders(bad)
-		more := ""
-		if len(bad) > len(shown) {
-			more = fmt.Sprintf(" and %d more", len(bad)-len(shown))
-		}
-		parts = append(parts, "it holds non-lore files such as "+strings.Join(shown, ", ")+more)
+		parts = append(parts, "it holds non-lore files: "+listOffenders(bad))
 	}
 	return errs.New(errs.NotAStore, fmt.Sprintf("%s (branch %s) is listed under stores: but is not a lore store (%s)", norm, branch, strings.Join(parts, "; "))).
 		WithHint(hintStoreInit)
 }
 
-// summariseOffenders shows a top-level folder once ("src/").
-func summariseOffenders(bad []string) []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, p := range bad {
-		show := p
-		if i := strings.IndexByte(p, '/'); i >= 0 {
-			show = p[:i+1]
-		}
-		if seen[show] {
-			continue
-		}
-		seen[show] = true
-		out = append(out, show)
-		if len(out) == maxListedOffenders {
-			break
-		}
+// listOffenders names the first maxListedOffenders paths in full (never
+// only their folder: "org/" hid which file lore refused, item 32b) and
+// counts the rest.
+func listOffenders(bad []string) string {
+	if len(bad) <= maxListedOffenders {
+		return strings.Join(bad, ", ")
 	}
-	return out
+	return strings.Join(bad[:maxListedOffenders], ", ") + fmt.Sprintf(" and %d more", len(bad)-maxListedOffenders)
 }

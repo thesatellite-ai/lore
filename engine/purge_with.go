@@ -86,7 +86,7 @@ func (e *Engine) purgedWith(ctx context.Context, table row.Table, id ids.AnyID) 
 		if err != nil {
 			return nil, err
 		}
-		rows, _, err := st.Backend.Read(ctx, "")
+		rows, _, err := readAll(ctx, st)
 		if err != nil {
 			return nil, err
 		}

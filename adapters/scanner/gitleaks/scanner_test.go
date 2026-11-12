@@ -58,8 +58,8 @@ func assertNoLeak(t *testing.T, name, secret string, fs []scan.Finding) {
 		if strings.Contains(f.Preview, secret) || strings.Contains(f.RuleID, secret) || strings.Contains(f.Field, secret) {
 			t.Errorf("%s: finding of %s carries the fixture", name, f.RuleID)
 		}
-		if n := len([]rune(strings.TrimSuffix(f.Preview, "…"))); n > scan.PreviewMax || n > f.Length/scan.PreviewDivisor {
-			t.Errorf("%s: preview of %s shows %d chars of %d", name, f.RuleID, n, f.Length)
+		if !strings.HasPrefix(f.Preview, "sha256:") || len(f.Preview) != len("sha256:")+scan.PreviewHexLen {
+			t.Errorf("%s: preview of %s is not a match hash: %d chars", name, f.RuleID, len(f.Preview))
 		}
 	}
 }

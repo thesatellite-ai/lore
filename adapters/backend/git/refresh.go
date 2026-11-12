@@ -2,7 +2,7 @@ package git
 
 // refresh.go — one fetch of a store clone for a run over many repos (owner
 // bug 14): `lore fix --all` fetches every store clone once here, then runs
-// each repo's lore fix with LORE_NO_FETCH=1 (logic/gitenv), so a store that
+// each repo's lore fix with LORE_NO_STORE_FETCH=1 (logic/gitenv), so a store that
 // forty repos share is fetched once instead of forty times or more.
 
 import (

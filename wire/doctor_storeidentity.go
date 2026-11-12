@@ -4,7 +4,9 @@ package wire
 // (D-af, storeidentity.go): a store clone whose effective git identity
 // (`git config user.email` there: its own .git/config, else the global
 // one) is not the identity lore signs that store's commits with (your
-// identity in the store's org, else your lore identity) is a warning: a
+// identity in the store's org; for a personal store the identity of the
+// setup that owns it, whatever setup the folder uses, item 39; else your
+// lore identity) is a warning: a
 // hand commit there would carry the wrong email. The fix is the exact
 // `git -C <clone> config …` line; `lore doctor --fix` writes it into the
 // clone's .git/config (never the global git config).
@@ -42,14 +44,14 @@ func (a *App) DoctorStoreIdentities(ctx context.Context, fix bool) ([]DoctorFind
 		dir := gb.Dir()
 		seen[dir] = true
 		origin := gitbackend.OriginAt(dir)
-		want := who.cloneIdentity(ctx, origin)
+		want, accept, org := who.expectedClone(ctx, origin, mine)
 		if strings.TrimSpace(want.Email) == "" || strings.TrimSpace(want.Name) == "" {
 			continue // no identity to compare with: git's own rules stay
 		}
 		got := effectiveGitConfig(ctx, dir, gitbackend.ConfigUserEmail)
 		gotName := effectiveGitConfig(ctx, dir, gitbackend.ConfigUserName)
 		agent := agentSignature(gotName, got)
-		if !agent && cloneIdentityAccepted(got, want.Email, mine, who.ownedByOrg(ctx, origin)) {
+		if !agent && cloneIdentityAccepted(got, want.Email, accept, org) {
 			continue
 		}
 		shown := got
@@ -74,6 +76,19 @@ func (a *App) DoctorStoreIdentities(ctx context.Context, fix bool) ([]DoctorFind
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+// expectedClone is what doctor expects of the clone of the store at
+// origin: the identity it should commit as, the emails also accepted
+// there (a person who set one of their own by hand: for a personal store
+// the owning setup's identity's emails, item 39, else mine, the lore
+// identity's) and whether an org identity signs it (then only want).
+func (s storeSigner) expectedClone(ctx context.Context, origin string, mine []string) (want gitbackend.CloneIdentity, accept []string, org bool) {
+	want, org, accept = s.cloneIdentity(ctx, origin), s.ownedByOrg(ctx, origin), mine
+	if p, ok := s.personal(ctx, origin); ok && !org {
+		accept = p.Emails
+	}
+	return want, accept, org
 }
 
 // cloneIdentityAccepted reports whether a clone committing as email got

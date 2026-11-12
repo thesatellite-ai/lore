@@ -584,7 +584,7 @@ func (e *Engine) Trashed(ctx context.Context) ([]Trashed, error) {
 		if err != nil {
 			return nil, err
 		}
-		rows, _, err := st.Backend.Read(ctx, "")
+		rows, _, err := readAll(ctx, st)
 		if err != nil {
 			return nil, err
 		}

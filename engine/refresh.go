@@ -39,7 +39,9 @@ func (e *Engine) Sync(ctx context.Context, source store.Source) (store.SyncRepor
 	if err != nil {
 		return store.SyncReport{}, err
 	}
+	dropSnapshot(ctx, a)
 	rep, err := a.Backend.Sync(ctx)
+	dropSnapshot(ctx, a) // readsnap.go: the next read sees what arrived
 	if err != nil {
 		return rep, err
 	}

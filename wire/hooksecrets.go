@@ -19,9 +19,14 @@ package wire
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/logic/scan"
@@ -29,6 +34,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // secret_allows row fields and folder (schema.Builtin).
@@ -50,25 +56,28 @@ func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[stri
 	}
 	sc, err := a.HookScanner(ctx)
 	if err != nil {
-		return errs.Wrap(errs.LeakBlocked, "cannot check for secrets: the scanner could not be built", err)
+		return errs.Wrap(errs.LeakBlocked, "cannot check for secrets: the scanner could not be built: "+err.Error(), err)
 	}
 	allows, err := committedAllows(ctx, root)
 	if err != nil {
 		return err
 	}
+	_, isGit, inStore := rowfs.StoreTop(root)
+	inStore = inStore && isGit
 	paths := make([]string, 0, len(docs))
 	for p := range docs {
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
+	hits := scanDocs(sc, allows, paths, docs, inStore)
 	var lines, refused []string
-	for _, p := range paths {
-		for _, h := range scanDoc(sc, allows, p, docs[p]) {
+	for i, p := range paths {
+		for _, h := range hits[i] {
 			at := fmt.Sprintf("%s:%d", p, h.Line)
 			if h.Field != "" {
 				at += " (field " + h.Field + ")"
 			}
-			lines = append(lines, fmt.Sprintf("  %-40s secret: rule %s matched %s", at, h.Rule, h.Preview))
+			lines = append(lines, fmt.Sprintf("  %-40s secret: rule %s match %s", at, h.Rule, h.Preview))
 			refused = append(refused, "path="+p+" rule="+h.Rule)
 		}
 	}
@@ -77,8 +86,48 @@ func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[stri
 	}
 	a.auditHookRefused(ctx, where, refused)
 	return errs.New(errs.LeakBlocked, "blocked, this "+where+" carries a secret:\n"+strings.Join(lines, "\n")).
-		WithHint("store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <hash> --reason \"<why>\", add the new .lore/data/secret_allows file, then commit again")
+		WithHint(leakHint(inStore))
 }
+
+// leakHint is the next step of a refused commit or push. A code repo keeps
+// its allow entries in .lore/data/secret_allows, to be committed with the
+// change; a store clone has no .lore/data: `lore secrets allow` there
+// writes and commits the entry itself, as <folder>/secret_allows/<id>.json
+// in the store, so the person only commits again.
+func leakHint(inStore bool) string {
+	const vault = "store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <hash> --reason \"<why>\""
+	if inStore {
+		return vault + " (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again"
+	}
+	return vault + ", add the new .lore/data/secret_allows file, then commit again"
+}
+
+// hookIndexEnv passes on the index git gave the hook. `git commit -a`,
+// `git commit <paths>` and some `--amend` forms run the hooks with
+// GIT_INDEX_FILE naming a temporary index that holds what is being
+// committed; gitEnv drops inherited repo-locating variables, so without
+// this every check read the default .git/index and a secret added by
+// `git commit -a` was never seen (docs bug B1). A relative value is
+// relative to the directory git ran the hook in, the worktree top.
+func hookIndexEnv(top string) []string {
+	idx := os.Getenv("GIT_INDEX_FILE")
+	if idx == "" {
+		return nil
+	}
+	if !filepath.IsAbs(idx) {
+		if top != "" {
+			idx = filepath.Join(top, idx)
+		} else if abs, err := filepath.Abs(idx); err == nil {
+			idx = abs
+		}
+	}
+	return []string{"GIT_INDEX_FILE=" + idx}
+}
+
+// storeAllowsPathspec matches every secret_allows row file of a store
+// clone: <folder>/secret_allows/<id>.json at any folder depth (and the old
+// <folder>/.lore/data/secret_allows/ layout, D-w).
+const storeAllowsPathspec = ":(glob)**/" + schema.TableSecretAllows + "/*.json"
 
 // committedAllows reads every secret_allows row file in the git index under
 // root's .lore/data (19.4: only the tree being committed counts). Not a git
@@ -88,17 +137,24 @@ func committedAllows(ctx context.Context, root string) ([]scan.Allow, error) {
 	if top == "" {
 		return nil, nil
 	}
-	out, err := gitRun{dir: root, args: []string{"ls-files", "-z", "--full-name", "--", allowsDirRel}}.output(ctx)
+	env := hookIndexEnv(top)
+	list := gitRun{dir: root, env: env, args: []string{"ls-files", "-z", "--full-name", "--", allowsDirRel}}
+	if _, isGit, inStore := rowfs.StoreTop(root); inStore && isGit {
+		list = gitRun{dir: top, env: env, args: []string{"ls-files", "-z", "--full-name", "--", storeAllowsPathspec}}
+	}
+	out, err := list.output(ctx)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "list committed secret allow entries", err)
 	}
+	paths := strings.Split(string(out), "\x00")
+	blobs, err := indexBlobs(ctx, top, env, paths) // one git process, not one per entry
+	if err != nil {
+		return nil, err
+	}
 	var allows []scan.Allow
-	for _, p := range strings.Split(string(out), "\x00") {
-		if p == "" {
-			continue
-		}
-		b, serr := gitRun{dir: top, args: []string{"show", ":" + p}}.output(ctx)
-		if serr != nil {
+	for _, p := range paths {
+		b, ok := blobs[p]
+		if !ok {
 			continue
 		}
 		if al, ok := allowOfFile(b); ok {
@@ -130,10 +186,42 @@ func allowOfFile(b []byte) (scan.Allow, bool) {
 	return scan.Allow{RowID: target, Field: fieldText(r, allowFieldField), RuleID: fieldText(r, allowFieldRule), MatchHash: uint32(h)}, true
 }
 
+// scanDocs scans every document on GOMAXPROCS goroutines (the scanner is
+// safe for concurrent use; item 30: a 5,000-row commit scanned one file
+// after another). hits[i] are the findings of paths[i], so the refusal
+// lists them in path order whatever finished first.
+func scanDocs(sc scan.Scanner, allows []scan.Allow, paths []string, docs map[string][]byte, inStore bool) [][]leakcheck.SecretHit {
+	hits := make([][]leakcheck.SecretHit, len(paths))
+	if len(paths) == 0 {
+		return hits
+	}
+	_ = sc.Scan("", "") // build a lazy scanner once, before the workers share it
+	workers := min(runtime.GOMAXPROCS(0), len(paths))
+	next := make(chan int)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range next {
+				hits[i] = scanDoc(sc, allows, paths[i], docs[paths[i]], inStore)
+			}
+		}()
+	}
+	for i := range paths {
+		next <- i
+	}
+	close(next)
+	wg.Wait()
+	return hits
+}
+
 // scanDoc scans one document (see the file comment).
-func scanDoc(sc scan.Scanner, allows []scan.Allow, p string, b []byte) []leakcheck.SecretHit {
+// inStore: p is a path in a store clone, whose row files sit at
+// <folder>/<table>/<id>.json rather than under .lore/data.
+func scanDoc(sc scan.Scanner, allows []scan.Allow, p string, b []byte, inStore bool) []leakcheck.SecretHit {
 	content := string(b)
-	if strings.Contains("/"+p, "/"+loreDataMark) {
+	if strings.Contains("/"+p, "/"+loreDataMark) || (inStore && isStoreRowPath(p)) {
 		if r, err := row.Decode(b); err == nil && !r.ID.IsZero() {
 			return scanRowDoc(sc, allows, r, content)
 		}
@@ -141,6 +229,12 @@ func scanDoc(sc scan.Scanner, allows []scan.Allow, p string, b []byte) []leakche
 	// The path is the field of a plain document, so path-scoped filters
 	// (a go.sum module hash) can tell the file; hits keep no field.
 	return hitsOf(content, "", sc.Scan(p, content))
+}
+
+// isStoreRowPath reports whether p is a row file of a store clone.
+func isStoreRowPath(p string) bool {
+	_, _, ok := rowfs.LayoutStore.SplitRowPath(p)
+	return ok
 }
 
 // secretKey identifies one secret value under one rule.

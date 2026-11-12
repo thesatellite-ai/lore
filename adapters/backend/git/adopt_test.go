@@ -147,3 +147,21 @@ func TestMarkReadOnly(t *testing.T) {
 		t.Fatalf("a refused write left files: %v", serr)
 	}
 }
+
+// TestAdoptAcceptsOnlyStoreFiles (item 32b): what adopt counts as an
+// empty store's files (host starter files, folders' _meta.json) is a
+// subset of rowfs.StoreFileAllowed, so a repo adopted here is never
+// refused by the store check afterwards.
+func TestAdoptAcceptsOnlyStoreFiles(t *testing.T) {
+	t.Parallel()
+	for _, p := range []string{"README.md", "readme", "LICENSE.txt", "Licence", "COPYING", ".gitignore", ".gitattributes",
+		"acme/_meta.json", "team/web/_meta.json", "acme/.lore/data/_meta.json"} {
+		if !isStarterFile(p) && !isFolderMeta(p) {
+			t.Errorf("adopt refuses %q, want accepted", p)
+			continue
+		}
+		if !rowfs.StoreFileAllowed(p) {
+			t.Errorf("adopt accepts %q but the store check refuses it", p)
+		}
+	}
+}

@@ -58,7 +58,7 @@ func (c *Cache) ReexpandIDs(ctx context.Context, refIDs []string) (int, error) {
 				continue // not a text field of the current definition
 			}
 			var text sql.NullString
-			err := tx.QueryRowContext(ctx, sel, t.id).Scan(&text)
+			err := txQueryRow(ctx, tx, sel, t.id).Scan(&text)
 			if errors.Is(err, sql.ErrNoRows) {
 				continue
 			}
@@ -89,7 +89,7 @@ type refTarget struct {
 // back from the database, so callers validate them against the current
 // plans before using them in SQL.
 func referrers(ctx context.Context, tx *sql.Tx, refID string) ([]refTarget, error) {
-	rs, err := tx.QueryContext(ctx,
+	rs, err := txQuery(ctx, tx,
 		`SELECT DISTINCT entity_table, entity_id, field FROM "`+tblRefs+`" WHERE ref_id = ? ORDER BY 1, 2, 3`, refID)
 	if err != nil {
 		return nil, dbErr("find referencing rows", err)
@@ -159,7 +159,7 @@ func (c *Cache) ReexpandMatching(ctx context.Context, needles []string) (int, er
 // reexpandWhere re-expands field f of the rows query (taking arg) returns
 // as (id, text).
 func (c *Cache) reexpandWhere(ctx context.Context, tx *sql.Tx, p plan, f, query, arg string) (int, error) {
-	rs, err := tx.QueryContext(ctx, query, arg)
+	rs, err := txQuery(ctx, tx, query, arg)
 	if err != nil {
 		return 0, dbErr("find referencing text", err)
 	}

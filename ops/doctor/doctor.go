@@ -275,6 +275,9 @@ type Report struct {
 	Steps []FixStep `json:"steps,omitempty"`
 	// fixedNow are the findings a check marked fixed in this run.
 	fixedNow []string
+	// fixNotes are the fixing run's notes the re-check did not give
+	// (repairRepo): what a repair said about why it could not fix.
+	fixNotes []string
 	// meta is what each warning or error line's source knew beyond its
 	// text (check, fix, error level), for finalize.
 	meta map[string]findingMeta
@@ -318,6 +321,9 @@ func Ops(env Env) []op.Entry {
 
 // Run is doctor.run over env.
 func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
+	if in.All {
+		ctx = WithMachineSweep(ctx) // --all checks the whole machine: every cache file
+	}
 	var r Report
 	var err error
 	if in.Fix {
@@ -546,11 +552,11 @@ func list(b *strings.Builder, title string, items []string) {
 func withFixNotes(after, fixing []string) []string {
 	have := map[string]bool{}
 	for _, l := range after {
-		have[l] = true
+		have[noteKey(l)] = true
 	}
 	for _, l := range fixing {
-		if !have[l] {
-			have[l] = true
+		if k := noteKey(l); !have[k] {
+			have[k] = true
 			after = append(after, l)
 		}
 	}
@@ -572,4 +578,21 @@ func fixedBetween(fixing, after Report) []string {
 		out = append(out, l)
 	}
 	return out
+}
+
+// machineSweepKey marks a context whose doctor run checks machine-wide
+// state (every cache file under the lore home), not only the repo's own.
+type machineSweepKey struct{}
+
+// WithMachineSweep marks ctx for the machine-wide checks: `lore doctor
+// --all` sets it; a repo's own doctor (and each `lore fix --all` child)
+// checks only that repo's caches (owner item 35 follow-up).
+func WithMachineSweep(ctx context.Context) context.Context {
+	return context.WithValue(ctx, machineSweepKey{}, true)
+}
+
+// MachineSweep reports whether ctx asks for the machine-wide checks.
+func MachineSweep(ctx context.Context) bool {
+	v, _ := ctx.Value(machineSweepKey{}).(bool)
+	return v
 }

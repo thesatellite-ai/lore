@@ -35,8 +35,8 @@ func (g gitRun) output(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "wire: git is not installed", err)
 	}
-	if why, refused := gitenv.RepoNetRefused(os.Environ(), g.args); refused {
-		return nil, errs.New(errs.Offline, why) // LORE_OFFLINE: not run (LORE_NO_FETCH covers store clones only)
+	if why, refused := gitenv.NetRefused(os.Environ(), g.args); refused {
+		return nil, errs.New(errs.Offline, why) // LORE_OFFLINE / LORE_NO_FETCH: not run
 	}
 	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, g.args...), Dir: g.dir, Env: gitEnv(g.env)}
 	var stdout, stderr bytes.Buffer

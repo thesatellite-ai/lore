@@ -54,8 +54,15 @@ func (a *App) pushNotes() io.Writer { return os.Stderr }
 
 // readRun reports whether ctx belongs to a command that only reads: the
 // operation's access (inside Run), or the host's read-run mark that also
-// covers the store opens before the operation runs (WithNoCreate).
+// covers the store opens before the operation runs (WithNoCreate). A
+// fixing or set-up run (gitbackend.GitSetUp) is never one.
 func readRun(ctx context.Context) bool {
+	if gitbackend.GitSetUp(ctx) {
+		// doctor --fix, lore fix and the explicit setup commands
+		// (host setUpRun) repair or set up: their commits push as the
+		// store's mode says, though doctor's operation is a read
+		return false
+	}
 	if access, known := engine.AccessOf(ctx); known {
 		return access == op.AccessRead
 	}
@@ -106,11 +113,21 @@ func (b *storePush) readRefresh(ctx context.Context, in live.FetchInputs, autopu
 			return
 		}
 	}
+	b.sayWaiting(ctx)
+}
+
+// sayWaiting names the clone's unpushed commits and `lore sync`, once per
+// read command (readRefresh, or a read's own commit: pushAfterWrite).
+func (b *storePush) sayWaiting(ctx context.Context) {
+	if b.waitSaid {
+		return
+	}
 	gb := gitOf(b.inner)
 	if gb == nil {
 		return
 	}
 	if n, err := gb.Unpushed(ctx); err == nil && n > 0 {
+		b.waitSaid = true
 		_, _ = fmt.Fprintln(b.notes, WaitingLine(string(b.name), n))
 	}
 }

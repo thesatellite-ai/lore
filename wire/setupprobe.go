@@ -1470,16 +1470,15 @@ func (sp setupProber) pointerFile(ctx context.Context, r opssetup.ProbeRequest) 
 			continue
 		}
 		path := filepath.Join(root, filepath.FromSlash(p.PointerFile))
-		// A pointer file that is a link out of the repo (a shared team
-		// file, a dotfiles checkout that is gone) is one lore refuses to
-		// write through: name it as that, not "no CLAUDE.md" or "does not
-		// import", whose render fix would only be refused again.
-		if _, lerr := WriteThroughLink(root, path); errs.Has(lerr, errs.Refused) {
-			end, _, _ := LinkEnd(path)
+		// A pointer file that is a link render does not write through
+		// (dangling, a folder, another kind of file out of the repo:
+		// PointerLinkEnd) is named as that, not "no CLAUDE.md" or "does
+		// not import", whose render fix would only skip it again.
+		if _, _, skip := PointerLinkEnd(root, path); skip != "" {
 			lv := maps.Clone(v)
 			lv[onboard.VarFixVariant] = string(onboard.FixLinked)
 			all = append(all, toolOne{tool: t, status: onboard.StatusFail, vars: lv,
-				detail: p.PointerFile + " is a symbolic link to " + end + ", outside the repository; lore does not write through it"})
+				detail: p.PointerFile + ": " + skip})
 			continue
 		}
 		b, err := os.ReadFile(filepath.Clean(path))

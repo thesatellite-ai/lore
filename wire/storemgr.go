@@ -418,14 +418,17 @@ func (s storeSigner) owner(ctx context.Context, raw string) (git.Signature, bool
 // an org store the org identity, unless dir's git identity uses the same
 // email (git signs, as for a hand edit); else git.IdentityEnv's FLAG4.
 func (s storeSigner) envFor(ctx context.Context, dir string) ([]string, error) {
-	if origin, err := (gitRun{dir: dir, args: []string{"config", "--get", "remote.origin.url"}}).output(ctx); err == nil {
-		if sig, ok := s.owner(ctx, strings.TrimSpace(string(origin))); ok {
+	origin := ""
+	if out, err := (gitRun{dir: dir, args: []string{"config", "--get", "remote.origin.url"}}).output(ctx); err == nil {
+		origin = strings.TrimSpace(string(out))
+		if sig, ok := s.owner(ctx, origin); ok {
 			if env, ok := git.SignerEnvFor(ctx, dir, sig); ok {
 				return env, nil
 			}
 		}
 	}
-	return git.IdentityEnv(ctx, dir, s.fallback)
+	// a personal store falls back to its owning setup's identity (item 39)
+	return git.IdentityEnv(ctx, dir, func(ctx context.Context) git.Signature { return s.identityFor(ctx, origin) })
 }
 
 // storeKey is the key every spelling of one store remote shares, its
@@ -482,7 +485,7 @@ func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options)
 	if opts.Wall != nil {
 		clock = git.WithClock(opts.Wall)
 	}
-	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), git.WithCloneIdentity(who.cloneIdentity), cloneIdentitySay(opts.Notice), trailers, git.WithTrailerFunc(who.agentTrailers()), route, clock, handGitOption(opts.Notice)), who.owner, opts.Notice)
+	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), git.WithCloneIdentity(who.cloneIdentity), cloneIdentitySay(opts.Notice), trailers, git.WithTrailerFunc(who.agentTrailers()), route, clock, handGitOption(opts.Notice)), who.owner, who.identityFor, opts.Notice)
 }
 
 // openStore opens the store at a canonical url with this App's backends.

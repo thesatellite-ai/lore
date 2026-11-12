@@ -611,6 +611,32 @@ func runWireMode(run *Run) wireMode {
 // fixDryRunFlag is lore fix's --dry-run.
 const fixDryRunFlag = "dry-run"
 
+// dryRun reports whether run is a dry run of any command (`--dry-run` on
+// the command line, "dry_run": true in a REST body; lore fix as
+// fixDryRun): it changes nothing, not even the clone's .git/info/exclude
+// (docs bug B5: `lore migrate run --dry-run` wrote it).
+func dryRun(run *Run) bool {
+	if run.Entry == nil {
+		return false
+	}
+	if fixDryRun(run) {
+		return true
+	}
+	if run.Cmd != nil {
+		if f, err := run.Cmd.Flags().GetBool(fixDryRunFlag); err == nil {
+			return f
+		}
+		return slices.Contains(run.Args, "--"+fixDryRunFlag)
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in struct {
+			DryRun bool `json:"dry_run"`
+		}
+		return json.Unmarshal(d.Body, &in) == nil && in.DryRun
+	}
+	return false
+}
+
 // fixDryRun reports whether run is `lore fix --dry-run` (CLI flag or REST
 // body); an input it cannot read is a dry run, the side that changes less.
 func fixDryRun(run *Run) bool {
@@ -661,8 +687,39 @@ func setUpRun(run *Run) bool {
 	if run.Entry == nil {
 		return false
 	}
+	if useDefaultRun(run) {
+		return false
+	}
 	return setUpOps[run.Entry.Spec().Name] || runWireMode(run) == wireInstall
 }
+
+// useDefaultRun reports whether run is `lore store use --default <store>`:
+// it goes back to lore's own clone and only drops a record, so it sets no
+// clone up. Every store it opens on the way (the caller lookup opens them
+// all) still includes the person's own clone it is leaving, which must be
+// left as it is (docs bug B4: identity, merge driver, hook and attributes
+// were written into it).
+func useDefaultRun(run *Run) bool {
+	if run.Entry.Spec().Name != opsstores.OpUse {
+		return false
+	}
+	if run.Cmd != nil {
+		if f, err := run.Cmd.Flags().GetString(useDefaultFlag); err == nil {
+			return strings.TrimSpace(f) != ""
+		}
+		return slices.ContainsFunc(run.Args, func(a string) bool {
+			return a == "--"+useDefaultFlag || strings.HasPrefix(a, "--"+useDefaultFlag+"=")
+		})
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in opsstores.UseIn
+		return json.Unmarshal(d.Body, &in) == nil && strings.TrimSpace(in.Default) != ""
+	}
+	return false
+}
+
+// useDefaultFlag is store use's --default flag (opsstores.UseIn.Default).
+const useDefaultFlag = "default"
 
 // runCommandName is the name of the command run is, as the person typed
 // it ("lore member list"): the CLI command's path, else the operation's

@@ -23,7 +23,9 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -120,6 +122,7 @@ func (b *Backend) HandChanges(ctx context.Context) (HandReport, error) {
 		return HandReport{}, err
 	}
 	var rep HandReport
+	var changed []HandChange
 	layout := b.root.Layout()
 	for _, f := range splitZ(out) {
 		if len(f) < len("XY ")+1 {
@@ -146,12 +149,12 @@ func (b *Backend) HandChanges(ctx context.Context) (HandReport, error) {
 			continue
 		}
 		table, id, _ := rowfs.ParseRowPath(rel)
-		c := HandChange{Path: p, Abs: filepath.Join(b.work, filepath.FromSlash(p)), Folder: folder, Table: table, ID: id}
-		if head != "" {
-			if blob, berr := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "blob", "HEAD:" + p}}); berr == nil {
-				c.Base = blob
-			}
-		}
+		changed = append(changed, HandChange{Path: p, Abs: filepath.Join(b.work, filepath.FromSlash(p)), Folder: folder, Table: table, ID: id})
+	}
+	if err := b.headBases(ctx, head, changed); err != nil {
+		return HandReport{}, err
+	}
+	for _, c := range changed {
 		_, statErr := os.Lstat(c.Abs)
 		switch {
 		case errors.Is(statErr, fs.ErrNotExist):
@@ -172,6 +175,56 @@ func (b *Backend) HandChanges(ctx context.Context) (HandReport, error) {
 	sort.Strings(rep.Strays)
 	return rep, nil
 }
+
+// headBases fills each change's Base with the file as commit head holds
+// it: one `git ls-tree` of the changed files' folders for their blob ids,
+// then one `git cat-file --batch` of those ids (owner item 27: after a
+// migration of 5,000 rows every command read each changed row with its own
+// git process until the files were committed; a batch of "HEAD:<path>"
+// names is no cure either, git walks the 5,000-entry tree once per name).
+func (b *Backend) headBases(ctx context.Context, head string, changed []HandChange) error {
+	if head == "" || len(changed) == 0 {
+		return nil
+	}
+	var dirs []string
+	for _, c := range changed {
+		if d := path.Dir(c.Path); !slices.Contains(dirs, d) {
+			dirs = append(dirs, d)
+		}
+	}
+	args := append([]string{"--literal-pathspecs", "ls-tree", "-r", "-z", "--full-tree", head, "--"}, dirs...)
+	out, err := b.git.run(ctx, call{dir: b.work, args: args})
+	if err != nil {
+		return errs.Wrap(errs.Internal, "git: list the committed row files of "+b.work, err)
+	}
+	oids := map[string]string{} // path -> blob id
+	for _, e := range splitZ(out) {
+		meta, p, ok := strings.Cut(e, "\t")
+		if f := strings.Fields(meta); ok && len(f) == lsTreeFields && f[1] == "blob" {
+			oids[p] = f[2]
+		}
+	}
+	var names []string
+	for _, c := range changed {
+		if oid, ok := oids[c.Path]; ok {
+			names = append(names, oid)
+		}
+	}
+	blobs, err := b.readBlobs(ctx, names)
+	if err != nil {
+		return err
+	}
+	for i := range changed {
+		if blob, ok := blobs[oids[changed[i].Path]]; ok {
+			changed[i].Base = append([]byte{}, blob...) // an empty committed file is still committed (non-nil)
+		}
+	}
+	return nil
+}
+
+// lsTreeFields is the field count before the tab of a `git ls-tree` line:
+// "<mode> <type> <oid>".
+const lsTreeFields = 3
 
 // lorePath reports whether a checkout path is one lore keeps for itself
 // (its marker and README are store files, never strays; a folder store's

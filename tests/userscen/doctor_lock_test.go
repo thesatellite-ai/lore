@@ -6,7 +6,8 @@ package userscen
 //
 //   - another process holds .lore/lock: a write fails with E_STORE_LOCKED
 //     whose hint says "`lore doctor` names the holder", and doctor does
-//     name it (store_lock warning, pid and fix, DEGRADED exit 1)
+//     name it (store_lock note, pid and fix): a live holder is a lore
+//     command at work, so doctor stays HEALTHY (owner item 40)
 //   - the holder exits: doctor is HEALTHY again, the write goes through
 //   - a stale lock file left by a crashed process (a dead pid in the
 //     holder line, no OS lock): nothing to report, writes work, and the
@@ -64,7 +65,7 @@ func TestDoctorLock_HeldLockIsNamedThenClears(t *testing.T) {
 	w.Fails(t, w.Code, "E_STORE_LOCKED", "`lore doctor` names the holder")
 
 	rep, res := p.doctor(t)
-	if rep.Status != "degraded" || !hasLine(rep.Warnings, "store_lock: store repo: the lock ", "is held by pid "+strconv.Itoa(os.Getpid()),
+	if rep.Status != "healthy" || hasLine(rep.Warnings, "store_lock") || !hasLine(rep.Notes, "store_lock: store repo: the lock ", "is held by pid "+strconv.Itoa(os.Getpid()),
 		"; fix: wait for that lore command to finish; the lock is freed when its process exits") {
 		t.Fatalf("doctor names the holder of the held lock (E_STORE_LOCKED's hint): %s", res)
 	}

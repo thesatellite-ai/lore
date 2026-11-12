@@ -43,7 +43,7 @@ func TestNetworkSwitchesReachNoRemote(t *testing.T) {
 	clone := filepath.Join(dir, "clone")
 	ctx := context.Background()
 
-	for _, sw := range []string{gitenv.EnvOffline, gitenv.EnvNoFetch} {
+	for _, sw := range []string{gitenv.EnvOffline, gitenv.EnvNoFetch, gitenv.EnvNoStoreFetch} {
 		t.Run(sw, func(t *testing.T) {
 			t.Setenv(sw, gitenv.On)
 			if err := RefreshClone(ctx, clone); err == nil {

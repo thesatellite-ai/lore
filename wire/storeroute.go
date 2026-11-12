@@ -112,14 +112,7 @@ func storeOwners(home, storeURL string) []onboard.SetupEntry {
 			continue
 		}
 		alias := strings.TrimSpace(s.GitHub.HostAlias)
-		owned := false
-		switch p := strings.TrimSpace(s.PersonalStore); p {
-		case onboard.PersonalStoreNone:
-		case "", onboard.PersonalStoreInherit:
-			owned = shared != "" && sameStore(storeURL, shared, alias)
-		default:
-			owned = sameStore(storeURL, p, alias)
-		}
+		owned, _ := ownsPersonalStore(s, storeURL, shared)
 		if !owned && s.Org != "" && oc != nil {
 			if o := oc.FindOrg(s.Org); o != nil {
 				for _, st := range o.Stores {
@@ -135,6 +128,21 @@ func storeOwners(home, storeURL string) []onboard.SetupEntry {
 		}
 	}
 	return out
+}
+
+// ownsPersonalStore reports whether storeURL is setup s's personal store:
+// its own personal_store url, or (inherited, when personal_store is unset
+// or inherit) the shared personal.store; inherited says which.
+func ownsPersonalStore(s onboard.SetupEntry, storeURL, shared string) (owned, inherited bool) {
+	alias := strings.TrimSpace(s.GitHub.HostAlias)
+	switch p := strings.TrimSpace(s.PersonalStore); p {
+	case onboard.PersonalStoreNone:
+		return false, false
+	case "", onboard.PersonalStoreInherit:
+		return shared != "" && sameStore(storeURL, shared, alias), true
+	default:
+		return sameStore(storeURL, p, alias), false
+	}
 }
 
 // sameStore reports whether a and b name one store for a setup whose host

@@ -428,16 +428,21 @@ func TestLinksSkillDangling(t *testing.T) {
 	r := c.run("install --tool", "", nil, "skill", "install", "--tool", "claude_code", "--json")
 	c.wantErr("install --tool", r, "E_SKILL_LINKED", c.abs(LinkSkillClaude), "--link replace")
 	c.setupCycle("cycle")
-	// plain-git's CLAUDE.md is a dangling link out of the repo: init and
-	// render refuse to write through it, by name, and leave it a link.
+	// plain-git's CLAUDE.md is a dangling link out of the repo: render
+	// skips it with the reason and goes on (owner item 23: a pointer file
+	// is never a repo failure), creating nothing at the missing end and
+	// leaving the link.
 	dir := filepath.Join("code", RepoPlain)
 	r = c.run("init plain-git", dir, nil, "init")
 	if r.Code != 0 && !alreadyInit(r) {
 		t.Errorf("[init plain-git] %s", r)
 	}
 	r = c.run("render plain-git", dir, nil, "render", "--target", "claude_code", "--json")
-	c.wantErr("render plain-git", r, "E_REFUSED", plainClaude)
-	c.doctor("dangling pointer", "not installed: "+c.abs(LinkSkillClaude)+" is a symbolic link", "CLAUDE.md is a symbolic link")
+	c.ok("render plain-git", r)
+	if !strings.Contains(r.Stdout+r.Stderr, "pointer skipped") {
+		t.Errorf("[render plain-git] the dangling CLAUDE.md link was not named as skipped: %s", r)
+	}
+	c.doctor("dangling pointer", "not installed: "+c.abs(LinkSkillClaude)+" is a symbolic link", "CLAUDE.md: it is a symbolic link to")
 	// The person picks --link replace: lore's own folder replaces the
 	// link (the one link the person asked to change).
 	delete(c.links, c.abs(LinkSkillClaude))
@@ -445,13 +450,15 @@ func TestLinksSkillDangling(t *testing.T) {
 	if row := c.skillRow("status after replace"); !row.Installed {
 		t.Errorf("after --link replace the skill reads as %+v", row)
 	}
-	c.doctor("after replace", "CLAUDE.md is a symbolic link")
+	c.doctor("after replace", "CLAUDE.md: it is a symbolic link to")
 }
 
 // TestLinksFiles: config.yaml, ~/.claude/CLAUDE.md and two repos' pointer
 // files are links. Config writes land in the dotfiles file and the link
-// stays; the shared rules files outside the repos are never written, and
-// every refusal names the file and the way out.
+// stays. The repos' pointer files link to files of the same name in a
+// shared rules folder: render writes lore's pointer block through them
+// (owner item 23) and the links stay; every other write through them (the
+// directive) is refused naming the file and the way out.
 func TestLinksFiles(t *testing.T) {
 	t.Parallel()
 	c := newLinkCase(t, ShapeLinksFiles)
@@ -473,18 +480,25 @@ func TestLinksFiles(t *testing.T) {
 		if repo == RepoAgents {
 			link = filepath.Join(c.m.Repos[repo], "AGENTS.md")
 		}
-		if r := c.run(repo+"/init", dir, nil, "init"); r.Code != 0 && !alreadyInit(r) {
+		end, err := filepath.EvalSymlinks(link)
+		if err != nil {
+			t.Fatalf("fixture: %s does not resolve: %v", link, err)
+		}
+		if r := c.run(repo+"/init", dir, []string{end}, "init"); r.Code != 0 && !alreadyInit(r) {
 			t.Errorf("[%s/init] %s", repo, r)
 		}
 		target := "claude_code"
 		if repo == RepoAgents {
 			target = "codex"
 		}
-		c.wantErr(repo+"/render", c.run(repo+"/render", dir, nil, "render", "--target", target, "--json"), "E_REFUSED", link)
+		c.ok(repo+"/render", c.run(repo+"/render", dir, []string{end}, "render", "--target", target, "--json"))
+		if b, err := os.ReadFile(end); err != nil || !strings.Contains(string(b), ".lore/LORE.md") {
+			t.Errorf("[%s/render] the shared %s does not hold lore's pointer block (%v):\n%s", repo, end, err, b)
+		}
 		c.wantErr(repo+"/directive", c.run(repo+"/directive", dir, nil, "directive", "install", "--target", target, "--json"), "E_REFUSED", link)
 	}
 	c.repoSession("plain-git", RepoPlain)
-	c.doctor("after the session", "CLAUDE.md is a symbolic link")
+	c.doctor("after the session")
 }
 
 // TestLinksDirHome: ~/code is a link to another disk. A setup for ~/code/**

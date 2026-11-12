@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -165,6 +166,50 @@ func ShortCause(err error) string {
 		return "git " + te.Op + ": " + line
 	}
 	return firstLine(err.Error())
+}
+
+// remoteMissingText is git's answer for a remote repository that does not
+// exist (lower case, matched in the stderr of a failed fetch or push): a
+// hosting service's "Repository not found", https's "repository '<url>'
+// not found", and a path or ssh url with no repository behind it.
+var remoteMissingText = []string{"repository not found", "does not appear to be a git repository"}
+
+// remoteMissingHTTPS matches https's "fatal: repository '<url>' not found".
+var remoteMissingHTTPS = regexp.MustCompile(`repository '[^']*' not found`)
+
+// remoteRefusedText is an answer that means the remote exists but refused
+// these credentials or could not be reached at all; it wins over a
+// "not found" in the same stderr (git prints both for some failures).
+var remoteRefusedText = []string{"permission denied", "authentication failed", "could not read username", "returned error: 401", "returned error: 403",
+	"could not resolve host", "could not resolve hostname", "connection refused", "connection timed out", "operation timed out", "network is unreachable", "no route to host", "host key verification failed"}
+
+// RemoteMissing reports whether err (any wrap of a signals write or a git
+// transport error) failed because the remote repository does not exist
+// (owner Mac run 2, item 34: a repo whose origin was deleted, or never
+// ours, answers "ERROR: Repository not found."), as opposed to a remote
+// that could not be reached or refused this machine's credentials. Only
+// git's own message decides: a remote that never answered is not missing.
+func RemoteMissing(err error) bool {
+	var off *OfflineError
+	if errors.As(err, &off) && off.Err != nil {
+		err = off.Err // OfflineError unwraps to ErrOffline only; its cause is Err
+	}
+	var te *gitremote.TransportError
+	if !errors.As(err, &te) {
+		return false
+	}
+	low := strings.ToLower(te.Stderr)
+	for _, w := range remoteRefusedText {
+		if strings.Contains(low, w) {
+			return false
+		}
+	}
+	for _, w := range remoteMissingText {
+		if strings.Contains(low, w) {
+			return true
+		}
+	}
+	return remoteMissingHTTPS.MatchString(low)
 }
 
 // firstLine is the first non-empty line of s, without git's "fatal: " or

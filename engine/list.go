@@ -104,7 +104,7 @@ func (e *Engine) List(ctx context.Context, source store.Source, table row.Table)
 // tombstones (DQ4), trashed rows keep their body and delete fields.
 func (e *Engine) rawRows(ctx context.Context, name store.Source) ([]store.Row, error) {
 	st := e.stores[name]
-	rows, _, err := st.Backend.Read(ctx, "")
+	rows, _, err := readAll(ctx, st)
 	if err != nil {
 		return nil, err
 	}

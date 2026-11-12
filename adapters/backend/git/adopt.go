@@ -3,7 +3,6 @@ package git
 import (
 	"context"
 	"path"
-	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -24,32 +23,19 @@ import (
 //	       no  → E_NOT_A_STORE naming the other files (a lore store needs a
 //	             repository of its own; init never mixes rows into code)
 
-// starterFiles are the files a git host (GitHub, GitLab, Gitea) offers to
-// create with a new repository. A repo holding only these is "empty" for
-// lore (OV59 safest reading: adopt what a host's "new repository" button
-// makes, refuse anything else). Compared case-insensitively, by base name
-// before the first dot (README.md, LICENSE.txt, ...).
-var starterFiles = []string{"readme", "license", "licence", "copying"}
-
-// starterDotFiles are starter files matched by their full name.
-var starterDotFiles = []string{".gitignore", ".gitattributes"}
-
 // maxNamedFiles caps how many foreign files the refusal names.
 const maxNamedFiles = 5
 
 // isStarterFile reports whether p (slash path from the repo root) is a
-// hosting starter file at the top level.
-func isStarterFile(p string) bool {
-	if strings.Contains(p, "/") {
-		return false
-	}
-	low := strings.ToLower(p)
-	if slices.Contains(starterDotFiles, low) {
-		return true
-	}
-	stem, _, _ := strings.Cut(low, ".")
-	return slices.Contains(starterFiles, stem)
-}
+// git host's starter file at the top level (README, LICENSE, .gitignore
+// …): the shared definition, rowfs.IsStarterFile. A repo holding only
+// these is "empty" for lore (OV59 safest reading: adopt what a host's
+// "new repository" button makes, refuse anything else). What adopt
+// accepts (starter files, folders' _meta.json) is a subset of the files
+// a store may hold (rowfs.StoreFileAllowed), pinned by
+// TestAdoptAcceptsOnlyStoreFiles: a repo adopted here is never refused
+// by the store check afterwards.
+func isStarterFile(p string) bool { return rowfs.IsStarterFile(p) }
 
 // isFolderMeta reports whether p is a store folder's _meta.json
 // (<folder>/_meta.json, or <folder>/.lore/data/_meta.json from before the

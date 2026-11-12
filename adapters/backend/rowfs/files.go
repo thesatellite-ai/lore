@@ -89,22 +89,38 @@ func tooLarge(rel string, size int64) error {
 // new file, never half of one, and a crash leaves at most a tmp file that a
 // later scan removes. Unlike v0.1.17 (lsync/files.go writeFileAtomic) it
 // fsyncs: row files are the truth now, not a projection of a database.
-func writeAtomic(full string, b []byte, m fileModes) (err error) {
-	if info, lerr := os.Lstat(full); lerr == nil && info.Mode()&fs.ModeSymlink != 0 {
-		return refuseSymlink(filepath.Base(full))
+func writeAtomic(full string, b []byte, m fileModes) error {
+	dir, err := writeRenamed(full, b, m)
+	if err != nil {
+		return err
 	}
-	dir := filepath.Dir(full)
+	if err := syncDir(dir); err != nil {
+		return errs.Wrap(errs.Internal, "rowfs: fsync a table folder", err)
+	}
+	return nil
+}
+
+// writeRenamed is writeAtomic without the folder fsync: the file's bytes
+// are on disk (syncFile) before the rename, so a crash never leaves a
+// renamed empty file; the caller fsyncs the returned folder, once per
+// folder for a batch (Apply), which is what makes the rename itself
+// durable. It returns the folder of full.
+func writeRenamed(full string, b []byte, m fileModes) (dir string, err error) {
+	if info, lerr := os.Lstat(full); lerr == nil && info.Mode()&fs.ModeSymlink != 0 {
+		return "", refuseSymlink(filepath.Base(full))
+	}
+	dir = filepath.Dir(full)
 	if err = os.MkdirAll(dir, m.dir); err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: create a table folder", err)
+		return "", errs.Wrap(errs.Internal, "rowfs: create a table folder", err)
 	}
 	suffix := make([]byte, tmpSuffixBytes)
 	if _, err = rand.Read(suffix); err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: tmp name", err)
+		return "", errs.Wrap(errs.Internal, "rowfs: tmp name", err)
 	}
 	tmp := filepath.Join(dir, tmpPrefix+hex.EncodeToString(suffix))
 	f, err := os.OpenFile(filepath.Clean(tmp), os.O_WRONLY|os.O_CREATE|os.O_EXCL, m.file)
 	if err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: create a tmp file", err)
+		return "", errs.Wrap(errs.Internal, "rowfs: create a tmp file", err)
 	}
 	defer func() {
 		if err != nil {
@@ -112,21 +128,18 @@ func writeAtomic(full string, b []byte, m fileModes) (err error) {
 		}
 	}()
 	if _, err = f.Write(b); err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: write a tmp file", errors.Join(err, f.Close()))
+		return "", errs.Wrap(errs.Internal, "rowfs: write a tmp file", errors.Join(err, f.Close()))
 	}
-	if err = f.Sync(); err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: fsync a tmp file", errors.Join(err, f.Close()))
+	if err = syncFile(f); err != nil {
+		return "", errs.Wrap(errs.Internal, "rowfs: fsync a tmp file", errors.Join(err, f.Close()))
 	}
 	if err = f.Close(); err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: close a tmp file", err)
+		return "", errs.Wrap(errs.Internal, "rowfs: close a tmp file", err)
 	}
 	if err = osrename.Rename(tmp, full); err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: rename a row file into place", err)
+		return "", errs.Wrap(errs.Internal, "rowfs: rename a row file into place", err)
 	}
-	if err = syncDir(dir); err != nil {
-		return errs.Wrap(errs.Internal, "rowfs: fsync a table folder", err)
-	}
-	return nil
+	return dir, nil
 }
 
 // removeIfExists removes path; a path already gone is not an error.

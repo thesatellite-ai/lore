@@ -11,7 +11,9 @@ package wire
 //	              │   repo, whose tracked files lore never changes)
 //	              ─▶ old clones (only the ones doctor old_clones proved
 //	                  everything is in the new clone)
-//	              (then ops/doctor runs the checks' repairs and re-checks)
+//	              (then ops/doctor runs the checks' repairs and re-checks;
+//	              when a repair changed rows after render, FixRenderAgain
+//	              renders once more and the check runs again: owner item 43)
 //
 //	command in a project with v0.1.17 rows (oldRowsGate):
 //	  read  ─▶ one stderr line "… run lore fix"; nothing changes
@@ -42,7 +44,6 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
-	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -50,6 +51,7 @@ import (
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
+	clibuild "github.com/thesatellite-ai/lore/surface/cli"
 )
 
 // Lines of the v0.1.17 gate (owner item 11: exactly "run lore fix").
@@ -77,9 +79,48 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 		return []opsdoctor.FixStep{{Step: opsdoctor.StepMigrate, Result: "skipped: not inside a git repo"}}
 	}
 	mig := a.fixMigrate(ctx, top, dry, true)
-	steps := []opsdoctor.FixStep{mig, a.fixRender(ctx, top, dry, mig.Changed && !mig.Failed), a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)}
+	rend := a.fixRender(ctx, top, dry, mig.Changed && !mig.Failed)
+	if mig.Failed {
+		rend = renderAfterFailedMigrate(top)
+	}
+	steps := []opsdoctor.FixStep{mig, rend, a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)}
 	return steps
 }
+
+// FixRenderAgain renders once more after the doctor fixes, when their
+// re-check found a stale rendered copy (opsdoctor.FixRenderAgainEnv, owner
+// item 43): a repair that changed rows (an actor merge, a --supersedes
+// repair, a hand edit picked up) ran after the render step.
+func (a *App) FixRenderAgain(ctx context.Context) opsdoctor.FixStep {
+	top := gitTopLevel(ctx, a.projectDir())
+	if top == "" {
+		return opsdoctor.FixStep{Step: opsdoctor.StepRender, Result: "skipped: not inside a git repo"}
+	}
+	st := a.fixRender(ctx, top, false, false)
+	if st.Changed && !st.Failed {
+		st.Result = renderAgainPrefix + st.Result
+	}
+	return st
+}
+
+// renderAgainPrefix starts the result of the render step run again after
+// the doctor fixes.
+const renderAgainPrefix = "again, after the doctor fixes changed rows: "
+
+// renderAfterFailedMigrate is the render step when the migrate step
+// failed (owner item 22): the rows are still in the format lore 0.1.17
+// wrote, which this lore does not read, so render would find no project
+// (E_NOT_FOUND "this repository has no lore project") or render part of
+// it. It is skipped, naming that cause; the next lore fix renders once
+// migrate ran.
+func renderAfterFailedMigrate(top string) opsdoctor.FixStep {
+	return opsdoctor.FixStep{Step: opsdoctor.StepRender, Where: filepath.Join(top, filepath.FromSlash(opsrender.DefaultOut)),
+		Result: renderSkippedMigrateFailed}
+}
+
+// renderSkippedMigrateFailed is the render step's result after a failed
+// migrate step.
+const renderSkippedMigrateFailed = "skipped: the migrate step failed, so this project's rows are still in the lore 0.1.17 format render cannot read; run lore fix again once migrate succeeds"
 
 // fixMigrate is the migrate step: run when the repo has v1 rows, an
 // interrupted migration or a v0.1.17 shared-database pointer.
@@ -99,9 +140,17 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 		// run` does; the first write's safe steps run without it, as any
 		// write does (the lock needs a coordination identity a plain write
 		// does not ask for)
-		ctx = opsmigrate.WithTeamLock(ctx, a.MigrateTeamLock())
+		ctx = opsmigrate.WithTeamLock(ctx, a.fixTeamLock())
 	}
 	out, err := opsmigrate.Run(ctx, a, opsmigrate.RunIn{DryRun: dry})
+	if modeB && !dry {
+		// owner item 36: the conversion attached the "shared" store in
+		// stores.yaml, which this App's open state does not have; the steps
+		// after it (render, the doctor) must see the project there
+		if rerr := a.reopenState(); rerr != nil && err == nil {
+			err = rerr
+		}
+	}
 	if err != nil {
 		st.Failed, st.Result = true, err.Error()
 		return st
@@ -116,6 +165,29 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 	return st
 }
 
+// renderSkippedNoProject starts the render step's result when the repo
+// has no project to render (owner item 36): skipped with the reason, never
+// a failed repo.
+const renderSkippedNoProject = "skipped: nothing to render: "
+
+// noProjectToRender reports whether err is Project's "no lore project".
+func noProjectToRender(err error) bool {
+	return errs.Has(err, errs.NotFound) && strings.Contains(err.Error(), noLoreProject)
+}
+
+// reopenState closes the App's open state so the next call opens it
+// again from what is on disk now (a store a step attached in stores.yaml).
+func (a *App) reopenState() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var cerr error
+	if a.st != nil {
+		cerr = a.st.close()
+	}
+	a.st, a.opened, a.err = nil, false, nil
+	return cerr
+}
+
 // fixRender is the render step: run when a rendered copy is stale, or the
 // migrate step just rewrote rows (the copies follow the rows).
 func (a *App) fixRender(ctx context.Context, top string, dry, migrated bool) opsdoctor.FixStep {
@@ -126,6 +198,10 @@ func (a *App) fixRender(ctx context.Context, top string, dry, migrated bool) ops
 		return st
 	}
 	stale, err := a.DoctorRenderedCopies(ctx)
+	if noProjectToRender(err) {
+		st.Result = renderSkippedNoProject + err.Error()
+		return st
+	}
 	if err != nil {
 		st.Failed, st.Result = true, err.Error()
 		return st
@@ -144,6 +220,10 @@ func (a *App) fixRender(ctx context.Context, top string, dry, migrated bool) ops
 		return st
 	}
 	ans, err := h.Render(ctx, opsrender.RunIn{})
+	if noProjectToRender(err) {
+		st.Changed, st.Result = false, renderSkippedNoProject+err.Error()
+		return st
+	}
 	if err != nil {
 		st.Failed, st.Result = true, err.Error()
 		return st
@@ -151,6 +231,14 @@ func (a *App) fixRender(ctx context.Context, top string, dry, migrated bool) ops
 	st.Result = "rendered"
 	if first := strings.TrimSpace(strings.SplitN(ans.Text, "\n", 2)[0]); first != "" {
 		st.Result += ": " + first
+	}
+	// A pointer file render left as it is (a symbolic link it does not
+	// write through) is named in the step: "skipped: <file>: <why>".
+	for _, l := range strings.Split(ans.Text, "\n") {
+		if i := strings.Index(l, PointerSkippedMark); i >= 0 {
+			file := strings.TrimSpace(strings.TrimLeft(l[:i], "⚠ "))
+			st.Detail = append(st.Detail, "skipped: "+file+": "+l[i+len(PointerSkippedMark):])
+		}
 	}
 	return st
 }
@@ -237,9 +325,6 @@ func (a *App) fixOldClones(ctx context.Context, dry bool) opsdoctor.FixStep {
 	return st
 }
 
-// FixRepos are the repo roots of --all (opsfix.Env).
-func (a *App) FixRepos(ctx context.Context) ([]string, error) { return a.fixRepos(ctx) }
-
 // FixProgress is where --all prints each repo's block as it finishes:
 // stderr, so stdout stays the one result (opsfix.Env).
 func (a *App) FixProgress() io.Writer { return fixProgress }
@@ -250,12 +335,13 @@ var fixProgress io.Writer = os.Stderr
 // FixPrepare fetches every whole store clone under ~/.lore/stores once,
 // jobs at a time, before --all's repos run (opsfix.Env, owner bug 14):
 // forty repos sharing one store then fetch it once, not forty times. When
-// every fetch answered, the children run with LORE_NO_FETCH=1; when one
+// every fetch answered, the children run with LORE_NO_STORE_FETCH=1 (their
+// own repo's remote stays reachable); when one
 // failed, they fetch for themselves as before. A dry run fetches nothing
 // (LORE_OFFLINE is on for the whole process tree).
 func (a *App) FixPrepare(ctx context.Context, dry bool, jobs int) opsfix.Prep {
 	var p opsfix.Prep
-	if dry || gitenv.NoFetch(os.Environ()) {
+	if dry || gitenv.NoStoreFetch(os.Environ()) {
 		return p
 	}
 	found, err := git.ScanClones(a.opts.Home)
@@ -289,55 +375,50 @@ func (a *App) FixPrepare(ctx context.Context, dry bool, jobs int) opsfix.Prep {
 
 // FixIn runs lore fix in root in its own process (opsfix.Env).
 func (a *App) FixIn(ctx context.Context, root string, dry bool, p opsfix.Prep) opsfix.RepoResult {
-	return runFixIn(ctx, root, dry, p.NoFetch)
+	return runFixIn(ctx, root, fixChild{dry: dry, noStoreFetch: p.NoFetch, yes: p.Yes})
 }
 
-// fixScanDepth is how deep --all looks for lore repos in a setup folder.
-const fixScanDepth = 3
+// fixChild is how one repo's lore fix process of --all runs.
+type fixChild struct {
+	// dry: --dry-run, and LORE_OFFLINE for the whole child.
+	dry bool
+	// noStoreFetch: the parent fetched every store clone, so the child
+	// skips store clone fetches (LORE_NO_STORE_FETCH); the repo's own
+	// remote stays reachable (owner item 21: the migrate team lock
+	// fetches the repo's signals ref).
+	noStoreFetch bool
+	// yes: the caller confirmed (lore fix --all --yes), so the child's
+	// repairs that ask first run (owner item 24).
+	yes bool
+}
 
-// fixRepos are the repo roots of --all, sorted, each once, existing only.
-func (a *App) fixRepos(ctx context.Context) ([]string, error) {
-	seen := map[string]bool{}
-	var roots []string
-	add := func(p string) {
-		if p == "" || seen[p] {
-			return
-		}
-		if fi, err := os.Stat(filepath.Join(p, rowfs.LoreDir)); err != nil || !fi.IsDir() {
-			return
-		}
-		seen[p] = true
-		roots = append(roots, p)
+// args are the child's lore arguments.
+func (c fixChild) args() []string {
+	args := []string{opsfix.Noun, "--json"}
+	if c.dry {
+		args = append(args, "--dry-run")
 	}
-	known, err := a.KnownRepos(ctx)
-	if err != nil {
-		return nil, err
+	if c.yes {
+		args = append(args, "--"+clibuild.FlagYes)
 	}
-	for _, k := range known {
-		add(k.Root)
+	return args
+}
+
+// env is the child's environment over the parent's environ.
+func (c fixChild) env(environ []string) []string {
+	env := gitenv.Clean(environ)
+	switch {
+	case c.dry:
+		env = append(env, gitenv.EnvOffline+"="+gitenv.On) // (already on under the CLI; a REST run too)
+	case c.noStoreFetch:
+		env = append(env, gitenv.EnvNoStoreFetch+"="+gitenv.On)
 	}
-	if cfg, cerr := ReadSetupsConfig(a.opts.Home); cerr == nil {
-		var bases []string
-		for _, e := range cfg.Enabled() {
-			for _, g := range e.Folders {
-				bases = append(bases, GlobBase(onboard.ExpandHome(g, userHome(SetupQuery{}))))
-			}
-		}
-		found, serr := ScanLoreRepos(ctx, bases, fixScanDepth)
-		if serr != nil {
-			return nil, serr
-		}
-		for _, f := range found {
-			add(f.Root)
-		}
-	}
-	slices.Sort(roots)
-	return roots, nil
+	return env
 }
 
 // runFixIn runs `lore fix --json` (this binary) in root and reads its
 // result; a run that cannot start or answer is the repo's Error.
-func runFixIn(ctx context.Context, root string, dry, noFetch bool) opsfix.RepoResult {
+func runFixIn(ctx context.Context, root string, c fixChild) opsfix.RepoResult {
 	res := opsfix.RepoResult{Repo: root}
 	start := time.Now()
 	defer func() { res.WallMS = max(time.Since(start).Milliseconds(), 1) }()
@@ -348,17 +429,8 @@ func runFixIn(ctx context.Context, root string, dry, noFetch bool) opsfix.RepoRe
 		res.Error, res.Exit = "cannot find this lore binary: "+err.Error(), 2
 		return res
 	}
-	args := []string{opsfix.Noun, "--json"}
-	if dry {
-		args = append(args, "--dry-run")
-	}
-	cmd := exec.CommandContext(ctx, exe, args...) // #nosec G204 -- this binary, fixed arguments
-	cmd.Dir, cmd.Env = root, gitenv.Clean(os.Environ())
-	if dry {
-		cmd.Env = append(cmd.Env, gitenv.EnvOffline+"="+gitenv.On) // (already on under the CLI; a REST run too)
-	} else if noFetch {
-		cmd.Env = append(cmd.Env, gitenv.EnvNoFetch+"="+gitenv.On)
-	}
+	cmd := exec.CommandContext(ctx, exe, c.args()...) // #nosec G204 -- this binary, fixed arguments
+	cmd.Dir, cmd.Env = root, c.env(os.Environ())
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	raw, runErr := cmd.Output()
@@ -447,7 +519,7 @@ func (a *App) FixAfterUpgrade(ctx context.Context) ([]string, error) {
 	if fi, err := os.Stat(filepath.Join(top, rowfs.LoreDir)); err != nil || !fi.IsDir() {
 		return []string{"lore fix: skipped, " + top + " is not a lore project"}, nil
 	}
-	r := runFixIn(ctx, top, false, false)
+	r := runFixIn(ctx, top, fixChild{})
 	if r.Error != "" {
 		return nil, errs.New(errs.Internal, r.Error)
 	}

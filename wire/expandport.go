@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/model/errs"
 
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/logic/scan"
@@ -55,7 +56,18 @@ func (a *App) OutputScanner(ctx context.Context) (scan.Scanner, error) {
 func (a *App) HookScanner(ctx context.Context) (scan.Scanner, error) {
 	st, err := a.state(ctx)
 	if err != nil {
-		return nil, err
+		// Item 45: a repo lore is not set up in (no .lore, often a brand-new
+		// repo with no commit yet) still gets the commit hook's secret check:
+		// the built-in rules plus the repo's own .gitleaks.toml, with no lore
+		// rows to add rules or allows from. Any other open failure is real.
+		if errs.CodeOf(err) != errs.NotAStore {
+			return nil, err
+		}
+		top := gitTop(ctx, a.opts.RepoDir)
+		if top == "" {
+			top = a.opts.RepoDir
+		}
+		return newScanner(ctx, nil, withRepoGitleaks(top))
 	}
 	s, err := newScanner(ctx, st.byName, withRepoGitleaks(st.repoTop), withFolders(st.folders))
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
+	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -112,7 +113,7 @@ func TestActorMergeSharedKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	a = newTestApp(t, repo)
-	finds, err := a.DoctorSharedKeys(ctx)
+	finds, err := a.DoctorSharedKeys(ctx, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +150,7 @@ func TestActorMergeSharedKey(t *testing.T) {
 		(fieldText(fr, schema.FieldActorMergedInto) != mergeInto && fieldText(fr, actorFieldKey) != "") {
 		t.Fatalf("the merged actor = %+v, %v; want its row kept, inactive, marked merged_into %s or without the shared key", fr.Fields, err, mergeInto)
 	}
-	if finds, err = a.DoctorSharedKeys(ctx); err != nil || len(finds) != 0 {
+	if finds, err = a.DoctorSharedKeys(ctx, false); err != nil || len(finds) != 0 {
 		t.Fatalf("doctor after the merge = %+v, %v; want nothing", finds, err)
 	}
 	if raw, err = run(t, a, opsinfra.OpActorMerge, in, true); err != nil {
@@ -233,3 +234,147 @@ func TestLikelyHandleDuplicate(t *testing.T) {
 
 // taskAssigneeField is the task column that names its assignee.
 const taskAssigneeField = "assigned_to_actor_id"
+
+// sharedKeyRepo is a repo with two actors (ids from, into; keys fromKey,
+// intoKey written into their row files as adopt writes them) and a task
+// assigned to from; it returns the app reopened and the task id.
+func sharedKeyRepo(t *testing.T, from, fromKey, into, intoKey string) (*App, ids.AnyID) {
+	t.Helper()
+	repo := gitRepo(t)
+	a := newTestApp(t, repo)
+	withProject(t, a)
+	ctx := background()
+	eng, err := a.Engine(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedActor(t, eng, into, "Una Tester", intoKey, "una")
+	seedActor(t, eng, from, "Una Tester", fromKey, "")
+	fid, err := ids.ParseAny(from)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := value.RefOf(fid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]value.Value{taskAssigneeField: ref}
+	for k, v := range map[string]string{"title": "ship it", "status": "todo", "priority": "medium", "commitment": "accepted"} {
+		tv, terr := value.TextOf(v)
+		if terr != nil {
+			t.Fatal(terr)
+		}
+		fields[k] = tv
+	}
+	pid, err := ids.ParseAny(projectID(t, a))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fields["project_id"], err = value.RefOf(pid); err != nil {
+		t.Fatal(err)
+	}
+	task, err := eng.Create(ctx, store.SourceRepo, schema.TableTasks, fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addKeyToFile(t, repo, into, intoKey)
+	addKeyToFile(t, repo, from, fromKey)
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return newTestApp(t, repo), task.Row.ID
+}
+
+// mergedState is the merged actor's row as the test checks it: kept,
+// inactive, marked merged_into (or, in a repo store that keeps no
+// merged_into, without the shared key).
+func mergedState(t *testing.T, a *App, from string) (active string, marked bool) {
+	t.Helper()
+	fid, err := ids.ParseAny(from)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, r, err := a.Get(background(), engine.Ref{Store: store.SourceRepo, Table: schema.TableActors, ID: fid})
+	if err != nil || r.Deleted {
+		t.Fatalf("the actor %s = %+v, %v; want its row kept", from, r, err)
+	}
+	return fieldText(r, schema.FieldActorActive), fieldText(r, schema.FieldActorMergedInto) == mergeInto || fieldText(r, actorFieldKey) == ""
+}
+
+// TestFixMergesSharedKey (owner item 28): `lore doctor --fix --yes` runs
+// the merge actor_stable_key suggests (into: the actor keepOf picks, the
+// one the key derives here), prints it as fixed and re-points the rows;
+// a second run finds nothing. Without --yes the warning stays, saying it
+// needs --yes, and nothing is written.
+func TestFixMergesSharedKey(t *testing.T) {
+	t.Parallel()
+	a, task := sharedKeyRepo(t, mergeFrom, mergeKey, mergeInto, mergeKey)
+	fix := `{"fix":true}`
+
+	raw, err := run(t, a, opsdoctor.OpRun, fix, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(raw, "needs --yes") || !strings.Contains(raw, "lore actor merge "+mergeFrom+" "+mergeInto) {
+		t.Fatalf("fix without --yes = %s; want the warning saying it needs --yes and naming the merge", raw)
+	}
+	if got := assignee(t, a, task); got != mergeFrom {
+		t.Fatalf("fix without --yes wrote: assignee %s", got)
+	}
+	if active, marked := mergedState(t, a, mergeFrom); active == "false" || marked {
+		t.Fatalf("fix without --yes marked %s merged", mergeFrom)
+	}
+
+	if raw, err = run(t, a, opsdoctor.OpRun, fix, true); err != nil {
+		t.Fatal(err)
+	}
+	var r struct {
+		Fixed    []string `json:"fixed"`
+		Warnings []string `json:"warnings"`
+	}
+	if err := json.Unmarshal([]byte(raw), &r); err != nil {
+		t.Fatal(err)
+	}
+	want := "merged " + mergeFrom + " into " + mergeInto
+	if n := len(slices.DeleteFunc(slices.Clone(r.Fixed), func(l string) bool { return !strings.Contains(l, want) })); n != 1 {
+		t.Fatalf("fix --yes fixed = %q; want one line %q", r.Fixed, want)
+	}
+	for _, w := range r.Warnings {
+		if strings.Contains(w, string(DoctorCheckSharedKeys)) {
+			t.Errorf("after fix --yes a shared key is still reported: %s", w)
+		}
+	}
+	if got := assignee(t, a, task); got != mergeInto {
+		t.Errorf("the task's assignee is %s, want %s", got, mergeInto)
+	}
+	if active, marked := mergedState(t, a, mergeFrom); active != "false" || !marked {
+		t.Errorf("%s after fix --yes: active %q, marked %v; want inactive and marked", mergeFrom, active, marked)
+	}
+
+	if raw, err = run(t, a, opsdoctor.OpRun, fix, true); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(raw, "merged "+mergeFrom) || strings.Contains(raw, string(DoctorCheckSharedKeys)) {
+		t.Errorf("second fix --yes = %s; want nothing merged or reported", raw)
+	}
+}
+
+// TestFixLeavesDifferentKeys: two actors with different stable keys are
+// two identities; fix --yes reports and merges nothing.
+func TestFixLeavesDifferentKeys(t *testing.T) {
+	t.Parallel()
+	a, task := sharedKeyRepo(t, mergeFrom, "human:other@example.test", mergeInto, mergeKey)
+	raw, err := run(t, a, opsdoctor.OpRun, `{"fix":true}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(raw, string(DoctorCheckSharedKeys)) || strings.Contains(raw, "merged ") {
+		t.Errorf("fix --yes over two keys = %s; want no actor_stable_key line", raw)
+	}
+	if got := assignee(t, a, task); got != mergeFrom {
+		t.Errorf("the task's assignee is %s, want %s untouched", got, mergeFrom)
+	}
+	if active, marked := mergedState(t, a, mergeFrom); active == "false" || marked {
+		t.Errorf("%s was marked merged", mergeFrom)
+	}
+}

@@ -9,7 +9,9 @@
 // (ops/doctor/fixproject.go), so the two never drift.
 //
 //	fix.run          ─▶ doctor.FixProject(dry) ─▶ Out{Repo, Steps, Status}
-//	fix.run --all    ─▶ Env.FixRepos: every repo the setups know
+//	fix.run --all    ─▶ Env.FixRepos: every git repo the setups know (known
+//	                    repos, the setup folders walked for repos with .lore/
+//	                    or a store link); non-repos noted, not failed
 //	                 ─▶ Env.FixPrepare: (not dry) fetch each store clone once
 //	                 ─▶ RunAll: Jobs repos at once (default 8), each in its
 //	                    own lore process (Env.FixIn); each repo's block is
@@ -69,8 +71,9 @@ type Env interface {
 	// RepoTop is the top folder of the repo the command runs in ("" or an
 	// error outside one).
 	RepoTop(ctx context.Context) (string, error)
-	// FixRepos are the repo roots of --all, sorted, each once.
-	FixRepos(ctx context.Context) ([]string, error)
+	// FixRepos are the repo roots of --all, sorted, each once, and the
+	// folders it passed over (not git repos), each with why.
+	FixRepos(ctx context.Context) (Found, error)
 	// FixPrepare runs once before the repos of --all: not dry, it fetches
 	// every store clone once (jobs at a time) so the children need not.
 	FixPrepare(ctx context.Context, dry bool, jobs int) Prep
@@ -79,13 +82,40 @@ type Env interface {
 	// FixProgress is where --all prints each repo's block as it finishes
 	// (nil: the blocks go in the final text instead).
 	FixProgress() io.Writer
+	// FixCacheSweep integrity-checks every cache file on the machine once,
+	// after the repos of --all (each repo's own run checks only its own
+	// caches), and returns a line per damaged or unreadable file.
+	FixCacheSweep(ctx context.Context) []string
 }
+
+// Found is what --all found to fix.
+type Found struct {
+	// Roots are the repo roots, sorted, each once.
+	Roots []string
+	// Skipped are folders that looked like a project but are no git repo
+	// (a setup folder, the home holding ~/.lore): a note each, never a
+	// failure (owner item 26).
+	Skipped []Skip
+}
+
+// Skip is one folder --all passed over, and why.
+type Skip struct {
+	Path string `json:"path"`
+	Why  string `json:"why"`
+}
+
+// Line is the skip's printed line.
+func (s Skip) Line() string { return "skipped " + s.Path + ": " + s.Why }
 
 // Prep is what FixPrepare did.
 type Prep struct {
 	// NoFetch: every store clone was fetched just now, so the children run
-	// with fetches off (LORE_NO_FETCH=1).
+	// with store clone fetches off (LORE_NO_STORE_FETCH=1); each repo's own
+	// remote stays reachable to its child.
 	NoFetch bool `json:"no_fetch,omitempty"`
+	// Yes: the caller confirmed (lore fix --all --yes), so every child
+	// runs with --yes (owner item 24); set by runAll, not by FixPrepare.
+	Yes bool `json:"-"`
 	// Fetched counts the store clones fetched.
 	Fetched int `json:"stores_fetched,omitempty"`
 	// Failed names the store clones whose fetch failed (the children then
@@ -117,13 +147,67 @@ type RepoResult struct {
 	WallMS int64 `json:"wall_ms"`
 	// Result is the repo's whole output (one-repo runs through FixIn).
 	Result *Out `json:"-"`
+	// Retried: this is the second run, alone, of a repo whose first run
+	// left a repair that could not fix beside the others (retryAlone).
+	Retried bool `json:"retried,omitempty"`
+}
+
+// retriedHeader ends the block header of a second run (owner item 44:
+// the old " (run again alone: …)" read as an instruction still to do,
+// when lore had done it; this says it ran and that the block replaces
+// the first).
+const retriedHeader = " (second run, done alone after the other repos: the first run, beside them, left a repair unfinished; this block replaces it)"
+
+// retriedStillHeader ends the header of a second run that still left a
+// repair unfinished: running alone did not help, so the other repos were
+// not the cause (the not fixed lines say what is).
+const retriedStillHeader = " (second run, done alone after the other repos: a repair is still unfinished alone, so the other repos were not the cause; this block replaces the first)"
+
+// lockCodes are the error codes of a write that lost a race with another
+// lore process (a store, database or migration lock held, a busy wait
+// that timed out): a step or run failing with one is run again alone.
+var lockCodes = []errs.Code{errs.StoreLocked, errs.DBLocked, errs.BusyTimeout, errs.MigrateLocked}
+
+// lostRace reports whether text names one of lockCodes.
+func lostRace(text string) bool {
+	for _, c := range lockCodes {
+		if strings.Contains(text, string(c)) {
+			return true
+		}
+	}
+	return false
+}
+
+// NeedsAloneRun reports whether --all runs the repo again, alone, after
+// the others: its doctor fixes step names a repair that could not fix,
+// or a step or the whole run failed on a lock another repo's run held.
+// A run that did not finish in time is not run again (it would take as
+// long once more).
+func (r RepoResult) NeedsAloneRun() bool {
+	if doctor.RepairFailed(r.Steps) || lostRace(r.Error) {
+		return true
+	}
+	for _, st := range r.Steps {
+		if st.Failed && lostRace(st.Result) {
+			return true
+		}
+	}
+	return false
 }
 
 // Block is the repo's text block of --all: the repo, its own output (or
 // the exact error of a run that failed), how long it took.
 func (r RepoResult) Block() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "== %s\n", r.Repo)
+	head := r.Repo
+	if r.Retried {
+		if r.NeedsAloneRun() {
+			head += retriedStillHeader
+		} else {
+			head += retriedHeader
+		}
+	}
+	fmt.Fprintf(&b, "== %s\n", head)
 	switch {
 	case r.Text != "":
 		b.WriteString(r.Text)
@@ -158,11 +242,14 @@ type Out struct {
 	Steps []doctor.FixStep `json:"steps,omitempty"`
 	// Status is the doctor status after the steps (re-checked).
 	Status doctor.Health `json:"status,omitempty"`
-	// Warnings and Errors are what the re-check still finds.
+	// Warnings and Errors are what the re-check still finds (one repo);
+	// with --all, Errors are the machine-wide cache sweep's lines.
 	Warnings []string `json:"warnings,omitempty"`
 	Errors   []string `json:"errors,omitempty"`
 	// Repos are --all's blocks, one per repo.
 	Repos []RepoResult `json:"repos,omitempty"`
+	// Skipped are the folders --all passed over (not git repos), noted.
+	Skipped []Skip `json:"skipped,omitempty"`
 	// Failed names the repos (--all) or steps that failed.
 	Failed []string `json:"failed,omitempty"`
 	// OK counts the repos that did not fail (--all).
@@ -191,6 +278,12 @@ func (o Out) Text() string {
 			for _, r := range o.Repos {
 				b.WriteString(r.Block() + "\n")
 			}
+		}
+		for _, sk := range o.Skipped {
+			b.WriteString(sk.Line() + "\n")
+		}
+		for _, e := range o.Errors {
+			b.WriteString("error: " + e + "\n")
 		}
 		b.WriteString(o.Summary() + "\n")
 		return b.String()
@@ -221,6 +314,12 @@ func (o Out) Summary() string {
 		fmt.Fprintf(&b, ": %s", strings.Join(o.Failed, ", "))
 	} else {
 		b.WriteString(" (none failed)")
+	}
+	if len(o.Skipped) > 0 {
+		fmt.Fprintf(&b, "; %d folder(s) skipped, not git repos", len(o.Skipped))
+	}
+	if len(o.Errors) > 0 {
+		fmt.Fprintf(&b, "; %d cache error(s)", len(o.Errors))
 	}
 	fmt.Fprintf(&b, "; %s wall, %d at a time", seconds(o.WallMS), max(o.Jobs, 1))
 	if o.DryRun {
@@ -318,12 +417,14 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 	if jobs <= 0 {
 		jobs = DefaultJobs
 	}
-	roots, err := env.FixRepos(ctx)
+	found, err := env.FixRepos(ctx)
 	if err != nil {
 		return Out{}, err
 	}
+	roots := found.Roots
 	prep := env.FixPrepare(ctx, in.DryRun, jobs)
-	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep}
+	prep.Yes = op.Confirmed(ctx) // --yes reaches each repo's own run
+	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep, Skipped: found.Skipped}
 	var emit func(RepoResult)
 	if w := env.FixProgress(); w != nil {
 		out.Streamed = true
@@ -332,6 +433,9 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 	out.Repos = RunAll(ctx, roots, jobs, func(ctx context.Context, root string) RepoResult {
 		return env.FixIn(ctx, root, in.DryRun, prep)
 	}, emit)
+	if !in.DryRun && jobs > 1 {
+		retryAlone(ctx, env, out.Repos, prep, emit)
+	}
 	for _, r := range out.Repos {
 		if r.Failed() {
 			out.Failed = append(out.Failed, r.Repo)
@@ -339,9 +443,44 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 			out.OK++
 		}
 	}
-	if len(out.Failed) > 0 {
+	// The machine-wide cache sweep runs once here, not in every child
+	// (owner item 35 follow-up): read-only, so a dry run does it too.
+	out.Errors = env.FixCacheSweep(ctx)
+	if len(out.Failed) > 0 || len(out.Errors) > 0 {
 		out.Exit = 1
 	}
 	out.WallMS = max(time.Since(start).Milliseconds(), 1)
 	return out, nil
+}
+
+// retryAlone runs lore fix once more, one repo at a time, in every repo
+// whose doctor fixes step names a repair that tried and could not fix, or
+// whose step or run failed on a lock another repo held (NeedsAloneRun;
+// owner items 38, 44: the actor_stable_key merges of repos sharing one org or
+// personal store ran at the same time, each writing that store, and the
+// ones that lost the store lock left the duplicate as it was). Alone, the
+// repair has the stores to itself; the child fetches its store clones
+// itself (they changed under the others' writes). The new block replaces
+// the first and is printed too, marked as the second run.
+func retryAlone(ctx context.Context, env Env, repos []RepoResult, prep Prep, emit func(RepoResult)) {
+	again := prep
+	again.NoFetch = false
+	for i, r := range repos {
+		if !r.NeedsAloneRun() {
+			continue
+		}
+		start := time.Now()
+		rr := env.FixIn(ctx, r.Repo, false, again)
+		if rr.Repo == "" {
+			rr.Repo = r.Repo
+		}
+		if rr.WallMS == 0 {
+			rr.WallMS = max(time.Since(start).Milliseconds(), 1)
+		}
+		rr.Retried = true
+		repos[i] = rr
+		if emit != nil {
+			emit(rr)
+		}
+	}
 }

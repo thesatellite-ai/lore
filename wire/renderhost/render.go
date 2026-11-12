@@ -655,15 +655,21 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 	link := toolprofile.Link{FromPointer: relSlash(filepath.Dir(absAgent), absOut, outFile), FromRoot: relSlash(root, absOut, outFile)}
 
 	// A pointer file that is a link (or a chain of them) is read and
-	// written at the chain's end, so the link stays; one inside the repo
-	// that ends outside it is refused by name (wire.WriteThroughLink).
-	writeAt, err := wire.WriteThroughLink(root, absAgent)
-	if err != nil {
-		return err
+	// written at the chain's end, so the link stays. One that cannot be
+	// written through (dangling out of the repo, a folder, unreadable, a
+	// file of another kind outside the repo: wire.PointerLinkEnd) is left
+	// as it is with a note naming it and why; the render goes on.
+	writeAt, isLink, skip := wire.PointerLinkEnd(root, absAgent)
+	if skip != "" {
+		h.pointerSkipped(w, absAgent, skip)
+		return nil
 	}
 	existing := ""
 	if data, err := os.ReadFile(filepath.Clean(writeAt)); err == nil {
 		existing = string(data)
+	} else if isLink && !os.IsNotExist(err) {
+		h.pointerSkipped(w, absAgent, "it is a symbolic link to "+writeAt+", which cannot be read ("+fsreason.Of(writeAt, err)+")")
+		return nil
 	} else if !os.IsNotExist(err) {
 		// The pointer file is the person's --target (or a tool's file):
 		// a folder, a name the file system refuses or a file they may not
@@ -681,6 +687,17 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 		fmt.Fprintf(w, "%s %s (pointer present)\n", h.decor.muted("="), absAgent)
 		return nil
 	}
+	if isLink {
+		// Through a link: an atomic write at the end's real path (the
+		// links of the chain stay links), keeping the end's mode; a write
+		// that fails there is a skip with the reason, not a failed render.
+		if err := atomicWriteFile(writeAt, []byte(out), wire.PointerFileMode(writeAt, fileMode)); err != nil {
+			h.pointerSkipped(w, absAgent, "it is a symbolic link to "+writeAt+", which cannot be written ("+err.Error()+")")
+			return nil
+		}
+		fmt.Fprintf(w, "%s %s (pointer → %s, written through the link to %s)\n", h.decor.check(), absAgent, link.FromPointer, writeAt)
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(writeAt), dirMode); err != nil {
 		return wire.WriteError("create the folder of", absAgent, err, renderWriteHint)
 	}
@@ -689,6 +706,11 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 	}
 	fmt.Fprintf(w, "%s %s (pointer → %s)\n", h.decor.check(), absAgent, link.FromPointer)
 	return nil
+}
+
+// pointerSkipped prints the note for a pointer file left as it is.
+func (h *Host) pointerSkipped(w *strings.Builder, file, why string) {
+	fmt.Fprintf(w, "%s %s%s%s\n", h.decor.warn("⚠"), file, wire.PointerSkippedMark, why)
 }
 
 // renderWriteHint is the hint of a render write that failed for a reason

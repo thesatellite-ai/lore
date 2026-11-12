@@ -428,7 +428,14 @@ const orgDefaultsFile = OrgFile
 // the store's top when org_folder is "."; D-e), exported so the onboarding
 // probes (store marker, org.free; ONBOARDING_DESIGN 4.6) name it without
 // another copy.
-const OrgFile = "lore-org.yaml"
+const OrgFile = rowfs.OrgFileName
+
+// OrgFileKept is the untouched copy of lore-org.yaml that `lore migrate`
+// keeps beside the rewritten file when it moves defaults.client_repos into
+// a policy row (wire step org_defaults_to_policy, owner rule Q-MODEB: never
+// delete user config). Lore commits it into the org store, so the store
+// check (storeAllowed) must count it as a lore file.
+const OrgFileKept = rowfs.OrgFileKeptName
 
 // orgDefaultsDoc is the part of lore-org.yaml read here.
 type orgDefaultsDoc struct {
@@ -477,4 +484,31 @@ func (g *GitLinks) ClientRepoDefaults(ctx context.Context, o *orgconf.Org) (map[
 		return nil, fmt.Errorf("orgcfg: %s of %s: %w", orgDefaultsFile, o.Name, err)
 	}
 	return doc.Defaults.ClientRepos, nil
+}
+
+// CloneLinkRemotes are the remotes every link in the store clone at dir
+// names (normalised, sorted, once each), read at the tip of the store's
+// default branch (the local branch when it is ahead) with no network:
+// `lore fix --all` finds the local checkouts of linked repos by them
+// (owner item 26). A clone with no such branch has none.
+func CloneLinkRemotes(ctx context.Context, dir string) ([]string, error) {
+	branch := orgconf.DefaultStoreBranch
+	if b, err := os.ReadFile(filepath.Join(gitbackend.StateDirOf(dir), defaultBranchFile)); err == nil && strings.TrimSpace(string(b)) != "" {
+		branch = strings.TrimSpace(string(b))
+	}
+	tip, ok := branchTip(ctx, dir, branch)
+	if !ok {
+		return nil, nil
+	}
+	links, err := readLinks(ctx, dir, tip)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, l := range links {
+		if n, nerr := repourl.Normalize(l.Remote); nerr == nil {
+			out = append(out, n)
+		}
+	}
+	return sortedUnique(out), nil
 }

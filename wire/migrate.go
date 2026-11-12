@@ -506,7 +506,7 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 		items = append(items, policy.ClientRouteItem(k, p.Defaults.ClientRepos[k]))
 	}
 	step := StepOrgDefaultsToPolicy + ": org store " + string(s.Name) + ": " + orgDefaultsFile + " defaults.client_repos → policy " +
-		string(policy.KeyClientRoutes) + " = " + strings.Join(items, ",") + " (file kept as " + orgDefaultsFile + migratedSuffix + ")"
+		string(policy.KeyClientRoutes) + " = " + strings.Join(items, ",") + " (file kept as " + orgcfg.OrgFileKept + ")"
 	has := false
 	if _, attached := st.byName[s.Name]; attached {
 		rows, lerr := st.eng.List(ctx, s.Name, schema.TablePolicies)
@@ -551,8 +551,10 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 	if err != nil {
 		return nil, 0, errs.Wrap(errs.Internal, "migrate: encode "+orgDefaultsFile, err)
 	}
-	if err = root.WriteFile(rel+migratedSuffix, b, orgFileMode); err != nil {
-		return nil, 0, errs.Wrap(errs.Internal, "migrate: keep "+orgDefaultsFile+migratedSuffix, err)
+	// the kept copy's name is orgcfg's, so the store check knows it
+	kept := strings.TrimSuffix(rel, orgDefaultsFile) + orgcfg.OrgFileKept
+	if err = root.WriteFile(kept, b, orgFileMode); err != nil {
+		return nil, 0, errs.Wrap(errs.Internal, "migrate: keep "+orgcfg.OrgFileKept, err)
 	}
 	if err = root.WriteFile(rel, out, orgFileMode); err != nil {
 		return nil, 0, errs.Wrap(errs.Internal, "migrate: rewrite "+orgDefaultsFile, err)
@@ -561,7 +563,7 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 		slash := filepath.ToSlash(rel)
 		// FLAG4: the migration commit is signed by the lore identity only when
 		// git has none for this clone; an existing git identity wins.
-		if err = gitCommitFilesAs(ctx, dir, a.opts.Wall(), storeIdentityFunc(a.opts), migrateOrgSubject, slash, slash+migratedSuffix); err != nil {
+		if err = gitCommitFilesAs(ctx, dir, a.opts.Wall(), storeIdentityFunc(a.opts), migrateOrgSubject, slash, filepath.ToSlash(kept)); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -903,6 +905,15 @@ const planStatusField = "status"
 
 // rewriteStore rewrites table's v1 rows in one backend.
 func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun bool) ([]ids.AnyID, error) {
+	got, err := rewriteStoreTables(ctx, b, []row.Table{table}, dryRun)
+	return got[table], err
+}
+
+// rewriteStoreTables rewrites the v1 rows of every table of tables in one
+// backend: one Read and one Write (one commit for a store clone) for all
+// of them. The ids are per table in the backend's read order, as a
+// rewriteStore per table returns them.
+func rewriteStoreTables(ctx context.Context, b store.Backend, tables []row.Table, dryRun bool) (map[row.Table][]ids.AnyID, error) {
 	rows, _, err := b.Read(ctx, "")
 	if err != nil {
 		return nil, err
@@ -911,10 +922,10 @@ func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun 
 	if err != nil {
 		return nil, err
 	}
-	var found []ids.AnyID
-	var changes []store.Change
+	found := map[row.Table][]ids.AnyID{}
+	byTable := map[row.Table][]store.Change{}
 	for _, sr := range rows {
-		if sr.Table != table {
+		if !slices.Contains(tables, sr.Table) {
 			continue
 		}
 		r, err := sr.Decode()
@@ -924,8 +935,8 @@ func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun 
 		if r.SourceVersion == row.FormatVersion {
 			continue
 		}
-		found = append(found, r.ID)
-		if step, ok := formatSteps[table]; ok {
+		found[sr.Table] = append(found[sr.Table], r.ID)
+		if step, ok := formatSteps[sr.Table]; ok {
 			r.Fields = step(r.Fields)
 		}
 		r, _ = engine.NullEmptyRefs(reg, r) // v0.1.17's "" for "no ref" is written as null (engine/emptyref.go)
@@ -934,12 +945,61 @@ func rewriteStore(ctx context.Context, b store.Backend, table row.Table, dryRun 
 		if err != nil {
 			return nil, err
 		}
-		changes = append(changes, store.Change{Row: up, Expect: sr.HLC})
+		byTable[sr.Table] = append(byTable[sr.Table], store.Change{Row: up, Expect: sr.HLC})
+	}
+	var changes []store.Change
+	for _, t := range tables { // the batch in table order, as the per-table writes were
+		changes = append(changes, byTable[t]...)
 	}
 	if dryRun || len(changes) == 0 {
 		return found, nil
 	}
 	return found, b.Write(ctx, changes)
+}
+
+// RewriteAllV1 implements opsmigrate.AllTablesRewriter: RewriteV1 (or
+// RewriteRepoV1 when repoOnly) for every table, reading and writing each
+// store once and refreshing its cache once.
+func (a *App) RewriteAllV1(ctx context.Context, tables []row.Table, repoOnly, dryRun bool) (map[row.Table][]ids.AnyID, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := st.eng.Stores()
+	skip := map[store.Source]bool{}
+	if !repoOnly {
+		if skip, err = a.flattenedUnderDryRun(dryRun); err != nil {
+			return nil, err
+		}
+	}
+	found := map[row.Table][]ids.AnyID{}
+	for i, b := range st.backends {
+		if skip[names[i]] || (repoOnly && i > 0) {
+			continue
+		}
+		got, err := rewriteStoreTables(ctx, b, tables, dryRun)
+		if err != nil {
+			if repoOnly {
+				return nil, err
+			}
+			return nil, errs.Prefix("migrate: store "+string(names[i]), err)
+		}
+		n := 0
+		for t, list := range got {
+			found[t] = append(found[t], list...)
+			n += len(list)
+		}
+		if dryRun || n == 0 {
+			continue
+		}
+		if i == 0 {
+			a.wrote(nil)
+		}
+		if _, err := st.eng.Refresh(ctx, names[i]); err != nil {
+			return nil, err
+		}
+	}
+	return found, nil
 }
 
 // migrateStoreMarker converts one stores.yaml entry's v1 marker to v2 and

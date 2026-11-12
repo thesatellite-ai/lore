@@ -689,3 +689,27 @@ func v017ActorRefs(doc []byte) []string {
 	}
 	return out
 }
+
+// convertedModeBProjectID is the project_id of the pointer a converted
+// Mode B repo kept (.lore/lore.yaml.migrated or lore.toml.migrated),
+// ok=false when the repo has none (owner item 36: the converted project's
+// row lives in the "shared" folder store, never in the repo store, so the
+// repo's project is found through this id).
+func convertedModeBProjectID(top string) (string, bool) {
+	for _, n := range modeBPointerNames {
+		b, err := os.ReadFile(filepath.Clean(filepath.Join(top, modeBDir, n+ModeBMigratedSuffix)))
+		if err != nil {
+			continue
+		}
+		var p modeBPointer
+		if strings.HasSuffix(n, modeBTOMLExt) {
+			p, err = parseModeBTOML(b)
+		} else {
+			err = yamlerr.Decode(b, &p, yamlerr.Lenient)
+		}
+		if err == nil && p.ProjectID != "" {
+			return p.ProjectID, true
+		}
+	}
+	return "", false
+}

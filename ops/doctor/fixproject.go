@@ -12,6 +12,9 @@ package doctor
 //	            ─▶ step "doctor fixes": the checks' own repairs (git info/
 //	            │   exclude in client repos, store clone identity, merge
 //	            │   driver, config style, actor roster, …), then the re-check
+//	            ─▶ (re-check finds a stale rendered copy: a repair changed
+//	            │   rows after render) FixRenderAgainEnv renders once more,
+//	            │   step "render" after "doctor fixes", and checks again
 //	            ─▶ Report (finalized) with Steps; Status is after the fixes
 //
 // doctor.run --fix calls the same function, so the two can never drift:
@@ -22,6 +25,7 @@ package doctor
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -122,21 +126,145 @@ func fixProject(ctx context.Context, env Env, dry bool) (Report, error) {
 		r.Steps = append(steps, st)
 		return r, nil
 	}
-	r, err := repairRepo(ctx, env)
+	// owner item 43: render ran before the doctor fixes, and a repair that
+	// changes rows (an actor merge, a --supersedes repair, a hand edit
+	// picked up, a live hook) leaves LORE.md stale; when the re-check finds
+	// a stale rendered copy, render runs again and the re-check after it
+	// is the status printed
+	var again *FixStep
+	afterFix := func(after Report) bool {
+		re, ok := env.(FixRenderAgainEnv)
+		if !ok || !renderStale(after) || renderStepFailed(steps) {
+			return false
+		}
+		st := re.FixRenderAgain(ctx)
+		again = &st
+		return st.Changed && !st.Failed
+	}
+	r, err := repairRepo(ctx, env, afterFix)
 	if err != nil {
 		return Report{}, err
 	}
 	st := FixStep{Step: StepDoctorFix, Result: ResultCurrent}
 	if len(r.Fixed) > 0 {
-		st.Result, st.Detail, st.Changed = fmt.Sprintf("fixed %d", len(r.Fixed)), r.Fixed, true
+		st.Result, st.Detail, st.Changed = fmt.Sprintf("fixed %d", len(r.Fixed)), slices.Clone(r.Fixed), true
+	}
+	// owner item 38: a repair that tried and could not (a merge a store
+	// refused) says why in the step, not only in the notes a fix's text
+	// leaves out; the warning it left stays below
+	for _, n := range r.fixNotes {
+		st.Detail = append(st.Detail, NotFixedPrefix+n)
 	}
 	r.Steps = append(steps, st)
+	if again != nil {
+		r.Steps = append(r.Steps, *again)
+	}
 	return r, nil
 }
 
+// FixRenderAgainEnv is the optional upgrade of Env that renders again
+// after the doctor fixes changed rows (*wire.App implements it): the
+// returned step is the render step's, Changed when it rendered.
+type FixRenderAgainEnv interface {
+	FixRenderAgain(ctx context.Context) FixStep
+}
+
+// checkRenderedCopy is the rendered-copy check's name (wire
+// DoctorCheckRenderedCopy).
+const checkRenderedCopy = "rendered_copy"
+
+// renderStale reports whether r warns of a rendered copy lore render
+// refreshes (not a rendered_copy check that could not run).
+func renderStale(r Report) bool {
+	for _, l := range r.Warnings {
+		if m, ok := r.meta[l]; ok && string(m.check) == checkRenderedCopy && m.fix != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// renderStepFailed reports whether the first render step failed or was
+// skipped (rendering again would fail or skip the same way).
+func renderStepFailed(steps []FixStep) bool {
+	for _, s := range steps {
+		if s.Step == StepRender {
+			return s.Failed || strings.HasPrefix(s.Result, "skipped")
+		}
+	}
+	return false
+}
+
+// NotFixedPrefix starts a doctor fixes step detail naming a repair that
+// tried and could not fix (lore fix --all runs such a repo once more,
+// alone).
+const NotFixedPrefix = "not fixed: "
+
+// RepairFailed reports whether steps hold a doctor fixes step with a
+// repair that tried and could not fix.
+func RepairFailed(steps []FixStep) bool {
+	for _, st := range steps {
+		if st.Step == StepDoctorFix && slices.ContainsFunc(st.Detail, func(d string) bool { return strings.HasPrefix(d, NotFixedPrefix) }) {
+			return true
+		}
+	}
+	return false
+}
+
+// fixOnlyNotes are the notes of the fixing run that say why a repair
+// could not fix: a note the re-check does not give, of a check that still
+// warns (or errs) after the fix, which is not a fixed line itself.
+func fixOnlyNotes(fixing []string, after Report) []string {
+	still := map[string]bool{}
+	for _, l := range append(slices.Clone(after.Warnings), after.Errors...) {
+		if c, _, ok := strings.Cut(l, ":"); ok {
+			still[c] = true
+		}
+	}
+	var out []string
+	for _, n := range fixing {
+		c, _, ok := strings.Cut(n, ":")
+		if !ok || !still[c] || hasNote(after.Notes, n) || slices.Contains(after.Fixed, n) || slices.Contains(out, n) {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+// hasNote reports whether notes hold n, numbers aside: a note that counts
+// time or rows ("live: last fetch 38s ago") reads differently in the
+// re-check a second later and is the same note, never a repair that
+// could not fix (owner item 44: such a note sent a repo to --all's second
+// run, alone, for nothing).
+func hasNote(notes []string, n string) bool {
+	key := noteKey(n)
+	return slices.ContainsFunc(notes, func(o string) bool { return noteKey(o) == key })
+}
+
+// noteKey is a note with every run of digits replaced by "#".
+func noteKey(n string) string {
+	var b strings.Builder
+	digit := false
+	for _, c := range n {
+		if c >= '0' && c <= '9' {
+			if !digit {
+				b.WriteByte('#')
+			}
+			digit = true
+			continue
+		}
+		digit = false
+		b.WriteRune(c)
+	}
+	return b.String()
+}
+
 // repairRepo is the checks' fixing run and the re-check after it: the
-// report shows the state now, and what the fixes changed.
-func repairRepo(ctx context.Context, env Env) (Report, error) {
+// report shows the state now, and what the fixes changed. afterFix (nil:
+// none) sees the re-check; when it changed something (render again), the
+// check runs once more and that is the state now.
+func repairRepo(ctx context.Context, env Env, afterFix func(Report) bool) (Report, error) {
 	r, err := runRepo(ctx, env, true)
 	if err != nil {
 		return Report{}, err
@@ -145,7 +273,13 @@ func repairRepo(ctx context.Context, env Env) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
+	if afterFix != nil && afterFix(after) {
+		if after, err = runRepo(ctx, env, false); err != nil {
+			return Report{}, err
+		}
+	}
 	after.Fixed = fixedBetween(r, after)
+	after.fixNotes = fixOnlyNotes(r.Notes, after)
 	after.Notes = withFixNotes(after.Notes, r.Notes)
 	return after, nil
 }

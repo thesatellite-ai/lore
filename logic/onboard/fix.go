@@ -539,7 +539,7 @@ var fixes = map[fixKey]Fix{
 		Command: argv(cmdLore, "render", "--add-target", "{tool}"), Runnable: true},
 	// The pointer file is a link out of the repo: render refuses to write
 	// through it, so the fix names the two ways out and runs neither.
-	{check: CheckToolsPointerFile, variant: FixLinked}: {Text: "{tool}'s pointer file in {repo_root} is a symbolic link to a file outside the repository, and lore does not write through it. Pick one: remove the link and run lore render --add-target {tool} (lore writes a plain file), or point the link at a file inside the repository"},
+	{check: CheckToolsPointerFile, variant: FixLinked}: {Text: "{tool}'s pointer file in {repo_root} is a symbolic link lore does not write through (the check says why). Pick one: point the link at an existing regular file of the same name (lore then writes its pointer block through the link), or remove the link and run lore render --add-target {tool} (lore writes a plain file)"},
 	{check: CheckToolsHooks}: {Text: "Install the session hooks: lore setup --agent-hooks --yes",
 		Command: argv(cmdLore, "setup", "--agent-hooks", "--yes"), Runnable: true},
 

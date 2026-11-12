@@ -63,7 +63,7 @@ func (e *Engine) TrashStats(ctx context.Context) (TrashStats, error) {
 		}
 	}
 	err = e.eachStoreOnce(func(name store.Source, st Attached) error {
-		rows, _, rerr := st.Backend.Read(ctx, "")
+		rows, _, rerr := readAll(ctx, st)
 		if rerr != nil {
 			return rerr
 		}
@@ -95,7 +95,7 @@ func (e *Engine) Overruled(ctx context.Context) ([]Overruled, error) {
 		if err != nil {
 			return err
 		}
-		rows, _, err := st.Backend.Read(ctx, "")
+		rows, _, err := readAll(ctx, st)
 		if err != nil {
 			return err
 		}

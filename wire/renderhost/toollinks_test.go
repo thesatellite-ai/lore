@@ -1,6 +1,7 @@
 package renderhost
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // linkCase lays out the tool file rel under root: a real file, a link, a
@@ -133,9 +135,10 @@ func TestWriteIfChangedThroughLinks(t *testing.T) {
 }
 
 // TestStitchPointerThroughLinks: a pointer file (CLAUDE.md) that is a link
-// gets lore's pointer at its chain's end; one leaving the repository is
-// refused by name (before: an internal "path escapes from parent" error,
-// and a link to another folder of the repo was refused too).
+// gets lore's pointer at its chain's end; one leaving the repository to a
+// file of another kind is left as it is with a note naming it (never a
+// failed render; before: E_REFUSED, and earlier an internal "path escapes
+// from parent" error).
 func TestStitchPointerThroughLinks(t *testing.T) {
 	claude := builtin(t, toolprofile.NameClaudeCode)
 	for _, c := range linkCases() {
@@ -145,6 +148,15 @@ func TestStitchPointerThroughLinks(t *testing.T) {
 			end := c.setup(t, root, rel, outside)
 			var w strings.Builder
 			err := New(Options{}).stitchPointer(&w, root, contextTarget{profile: claude, file: filepath.ToSlash(rel)}, filepath.Join(root, ".lore", "LORE.md"))
+			if c.refuse {
+				if err != nil || !strings.Contains(w.String(), wire.PointerSkippedMark) || !namesEnd(errors.New(w.String()), end) {
+					t.Fatalf("want a skip note naming %s, got %v %q", end, err, w.String())
+				}
+				if b, _ := os.ReadFile(end); string(b) != "x" {
+					t.Fatalf("the file outside the repo changed: %q", b)
+				}
+				return
+			}
 			checkLinkWrite(t, c, root, rel, end, "LORE.md", err)
 		})
 	}
