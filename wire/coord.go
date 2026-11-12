@@ -23,8 +23,8 @@ func (a *App) Coordinator(_ context.Context) (opscoord.Host, bool) {
 // --from` writes its rows through the host's signals path, not the engine,
 // so it appends each event to the same batch log the engine's writes feed
 // (<home>/BatchDir, XQ1), where `lore batch list|show` read it (P3-COORD-2).
-func (a *App) RecordBatchEvent(_ context.Context, ev engine.Event) error {
-	return recordBatch(filepath.Join(a.opts.Home, filepath.FromSlash(BatchDir)), ev)
+func (a *App) RecordBatchEvent(ctx context.Context, ev engine.Event) error {
+	return recordBatch(ctx, filepath.Join(a.opts.Home, filepath.FromSlash(BatchDir)), ev)
 }
 
 var (

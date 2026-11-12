@@ -20,6 +20,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -46,7 +47,7 @@ type Journal interface {
 	// commits unless push is false, and marks the journal done. A run
 	// that changed no data folder and reported count 0 rows removes its
 	// backup ref and journal and returns no lines.
-	Finish(ctx context.Context, push bool, count int) ([]string, error)
+	Finish(ctx context.Context, push bool, count int) (Finished, error)
 	// Status reports the format of every place, the journal and the lock.
 	Status(ctx context.Context) (StatusOut, error)
 	// Rollback undoes the last migration (FQ5): before push a local undo,
@@ -57,6 +58,30 @@ type Journal interface {
 	// holds it is gone (E_MIGRATE_LOCKED while it runs).
 	Unlock(ctx context.Context) (UnlockOut, error)
 }
+
+// Finished is what Journal.Finish recorded.
+type Finished struct {
+	// Lines are the journal's lines (one per changed place, undo).
+	Lines []string
+	// Uncommitted counts the files of the code repo's .lore/data the run
+	// changed: lore never commits a code repo, so they wait for the
+	// person's commit (0 when the repo store is a store clone lore commits).
+	Uncommitted int
+}
+
+// CommitLine is a run's last line when it left files in the code repo's
+// .lore/data for the person to commit (owner item C2: lore fix ended with
+// that hint buried among 5,000 lines, then DEGRADED).
+func CommitLine(n int) string {
+	verb := " wait"
+	if n == 1 {
+		verb = " waits"
+	}
+	return plural.Count(n, "upgraded file") + " in .lore/data" + verb + " for your commit: " + CommitCommand
+}
+
+// CommitCommand is the command CommitLine names.
+const CommitCommand = `git add .lore/data && git commit -m "lore: migrate rows to format 2"`
 
 // Begun is what Journal.Begin did.
 type Begun struct {
@@ -87,9 +112,15 @@ type StatusOut struct {
 	// Pending lists the v1 rows per core table a run would rewrite.
 	Pending []string `json:"pending"`
 	// Journal describes the last migration ("" when none).
-	Journal string   `json:"journal,omitempty"`
-	Lock    string   `json:"lock"`
-	Notes   []string `json:"notes"`
+	Journal string `json:"journal,omitempty"`
+	// Unfinished is true when this checkout's journal holds a migration
+	// that did not run to its end (interrupted, or rolled back): its v1
+	// row files are the migration's, not an older lore's writing after
+	// it (wire doctor row_format). The journal is machine-local, so a
+	// teammate's checkout of a migrated repo has none (false).
+	Unfinished bool     `json:"unfinished,omitempty"`
+	Lock       string   `json:"lock"`
+	Notes      []string `json:"notes"`
 }
 
 var _ op.Texter = StatusOut{}

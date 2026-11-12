@@ -15100,8 +15100,17 @@
                           "failed": {
                             "type": "boolean"
                           },
+                          "next": {
+                            "type": "string"
+                          },
                           "result": {
                             "type": "string"
+                          },
+                          "rows": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "step": {
                             "type": "string"
@@ -16294,8 +16303,17 @@
                                 "failed": {
                                   "type": "boolean"
                                 },
+                                "next": {
+                                  "type": "string"
+                                },
                                 "result": {
                                   "type": "string"
+                                },
+                                "rows": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 },
                                 "step": {
                                   "type": "string"
@@ -16364,8 +16382,17 @@
                           "failed": {
                             "type": "boolean"
                           },
+                          "next": {
+                            "type": "string"
+                          },
                           "result": {
                             "type": "string"
+                          },
+                          "rows": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           },
                           "step": {
                             "type": "string"
@@ -33140,6 +33167,10 @@
                   "offline": {
                     "type": "boolean",
                     "description": "branch files only: skip the settings, live rows and stores (they need the network)"
+                  },
+                  "verbose": {
+                    "type": "boolean",
+                    "description": "list every upgraded row, one per line (default: a count per table and its first ids; --json always lists all)"
                   }
                 },
                 "additionalProperties": false
@@ -33181,6 +33212,9 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "uncommitted": {
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -33327,6 +33361,9 @@
                           "total"
                         ]
                       }
+                    },
+                    "unfinished": {
+                      "type": "boolean"
                     },
                     "writes": {
                       "type": "integer"

@@ -111,8 +111,9 @@ type fileAudit struct {
 
 var _ engine.AuditSink = (*fileAudit)(nil)
 
-// Record implements engine.AuditSink: one fsynced line per event.
-func (f *fileAudit) Record(_ context.Context, ev engine.Event) error {
+// Record implements engine.AuditSink: one fsynced line per event (one
+// fsync per write of several events, engine.AuditSyncOf).
+func (f *fileAudit) Record(ctx context.Context, ev engine.Event) error {
 	// The file lives inside the checkout, so it records only the repo
 	// store's own writes: an event for an attached store would leave that
 	// store's row id in the checkout (CONFIG_GUIDE: a checkout never holds
@@ -126,7 +127,7 @@ func (f *fileAudit) Record(_ context.Context, ev engine.Event) error {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return appendAuditLine(f.path, auditDirMode, line)
+	return appendAuditLineCtx(ctx, f.path, auditDirMode, line)
 }
 
 // encodeAuditLine is the one JSON shape both audit files share.
@@ -148,6 +149,44 @@ func encodeAuditLine(ev engine.Event) ([]byte, error) {
 // appendAuditLine appends one fsynced line to path (mode auditFileMode),
 // creating its folder with dirMode.
 func appendAuditLine(path string, dirMode os.FileMode, line []byte) error {
+	return appendLine(path, dirMode, line, true)
+}
+
+// appendAuditLineCtx is appendAuditLine, except that under a write of
+// several events (engine.AuditSyncOf, owner item C2) the line is written
+// without its own fsync and the file's one flush is handed to the group,
+// which runs it after the write's last line (on macOS File.Sync is a full
+// device flush: one per row made a bulk copy of 1,300 rows 1,300 flushes).
+func appendAuditLineCtx(ctx context.Context, path string, dirMode os.FileMode, line []byte) error {
+	g, ok := engine.AuditSyncOf(ctx)
+	if !ok {
+		return appendAuditLine(path, dirMode, line)
+	}
+	if err := appendLine(path, dirMode, line, false); err != nil {
+		return err
+	}
+	g.Defer(path, func() error { return syncAuditFile(path) })
+	return nil
+}
+
+// syncAuditFile flushes path's written lines to disk (fsync reaches the
+// file through any descriptor, so a fresh one flushes what the earlier
+// appends wrote).
+func syncAuditFile(path string) error {
+	fh, err := os.OpenFile(filepath.Clean(path), os.O_WRONLY|os.O_APPEND, auditFileMode)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "wire: open the audit file to flush it", err)
+	}
+	serr := fh.Sync()
+	cerr := fh.Close()
+	if serr != nil || cerr != nil {
+		return errs.Wrap(errs.Internal, "wire: flush the audit file", firstErr(serr, cerr))
+	}
+	return nil
+}
+
+// appendLine appends line to path, fsynced when durable.
+func appendLine(path string, dirMode os.FileMode, line []byte, durable bool) error {
 	if mkErr := os.MkdirAll(filepath.Dir(path), dirMode); mkErr != nil {
 		return errs.Wrap(errs.Internal, "wire: create the audit folder", mkErr)
 	}
@@ -166,7 +205,10 @@ func appendAuditLine(path string, dirMode os.FileMode, line []byte) error {
 		return errs.Wrap(errs.Internal, "wire: open the audit file", err)
 	}
 	_, werr := fh.Write(append(line, '\n'))
-	serr := fh.Sync()
+	var serr error
+	if durable {
+		serr = fh.Sync()
+	}
 	cerr := fh.Close()
 	if werr != nil || serr != nil || cerr != nil {
 		return errs.Wrap(errs.Internal, "wire: write the audit file", firstErr(werr, serr, cerr))
@@ -237,7 +279,7 @@ func (r *routedAudit) Record(ctx context.Context, ev engine.Event) error {
 	// one machine-local batch log `lore batch list|show` read (Q-R3-8:
 	// batches are visible on the machine that ran them in 0.1.18).
 	r.mu.Lock()
-	berr := recordBatch(batchDirOf(r.dir), ev)
+	berr := recordBatch(ctx, batchDirOf(r.dir), ev)
 	r.mu.Unlock()
 	if berr != nil {
 		return berr
@@ -248,7 +290,7 @@ func (r *routedAudit) Record(ctx context.Context, ev engine.Event) error {
 			return err
 		}
 		r.mu.Lock()
-		err = appendAuditLine(filepath.Join(r.dir, r.stem(ev.Store)+storeAuditExt), storeAuditDirMode, line)
+		err = appendAuditLineCtx(ctx, filepath.Join(r.dir, r.stem(ev.Store)+storeAuditExt), storeAuditDirMode, line)
 		r.mu.Unlock()
 		if err != nil {
 			return err

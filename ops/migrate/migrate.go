@@ -27,6 +27,7 @@ package migrate
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/plural"
@@ -118,6 +119,10 @@ type RunIn struct {
 	// machine's store even from a checkout that is not this machine's own
 	// (wire machinecopy.go says when it is).
 	MachineLocal bool `json:"machine_local,omitempty" flag:"machine-local" desc:"also copy the repo's v0.1.17 machine-local rows (runs, render histories, sessions) into this machine's store when this checkout is a copy, not this machine's checkout of the repo"`
+	// Verbose prints every upgraded row, one per line; without it the
+	// text names each table with its count and a few ids (--json always
+	// carries every row).
+	Verbose bool `json:"verbose,omitempty" flag:"verbose" desc:"list every upgraded row, one per line (default: a count per table and its first ids; --json always lists all)"`
 }
 
 // RunOut is the output of migrate.run.
@@ -136,6 +141,52 @@ type RunOut struct {
 	// BackupRef is the local backup of this run ("" for a dry run or a
 	// Rewriter without Journal).
 	BackupRef string `json:"backup_ref,omitempty"`
+	// Uncommitted counts the files of the code repo's .lore/data the run
+	// changed, waiting for the person's commit (Text ends with
+	// CommitLine; lore never commits a code repo).
+	Uncommitted int `json:"uncommitted,omitempty"`
+	// Verbose is RunIn.Verbose: Text lists every row.
+	Verbose bool `json:"-"`
+}
+
+// rowsShown is how many ids Text names per table before "… N more"
+// (owner item C2: a 5,000-row repo printed 5,000 lines).
+const rowsShown = 5
+
+// RowLines is the human form of rows ("table/id" each): one line per
+// table, in the order the tables first appear, with its count and its
+// first rowsShown ids ("memories: 4832 rows (mem_1, mem_2, … 4827
+// more)"); verbose keeps one line per row. A line that names no table
+// (no "/") stays as it is.
+func RowLines(rows []string, verbose bool) []string {
+	if verbose {
+		return slices.Clone(rows)
+	}
+	var order []string
+	byTable := map[string][]string{}
+	var out []string
+	for _, r := range rows {
+		t, id, ok := strings.Cut(r, "/")
+		if !ok || t == "" || id == "" {
+			out = append(out, r)
+			continue
+		}
+		if _, seen := byTable[t]; !seen {
+			order = append(order, t)
+		}
+		byTable[t] = append(byTable[t], id)
+	}
+	lines := make([]string, 0, len(order)+len(out))
+	for _, t := range order {
+		got := byTable[t]
+		shown := got[:min(len(got), rowsShown)]
+		line := t + ": " + plural.Count(len(got), "row") + " (" + strings.Join(shown, ", ")
+		if more := len(got) - len(shown); more > 0 {
+			line += " … " + strconv.Itoa(more) + " more"
+		}
+		lines = append(lines, line+")")
+	}
+	return append(lines, out...)
 }
 
 var _ op.Texter = RunOut{}
@@ -143,8 +194,9 @@ var _ op.Texter = RunOut{}
 // Text implements op.Texter: the human form of a run, one line per item
 // (FORMAT_EVOLUTION 4 example), never an empty "rows:" line. The count
 // line comes first ("Upgraded N rows", "Would upgrade N rows", or
-// "Nothing to migrate" when the run found nothing), then each row and
-// settings step indented, then the run's own journal lines.
+// "Nothing to migrate" when the run found nothing), then the rows (a line
+// per table, RowLines; one per row with --verbose) and each settings step
+// indented, then the run's own journal lines.
 func (o RunOut) Text() string {
 	var b strings.Builder
 	verb := "Upgraded"
@@ -157,7 +209,7 @@ func (o RunOut) Text() string {
 	default:
 		b.WriteString(verb + " " + plural.Count(o.Count, "row") + "\n")
 	}
-	for _, r := range o.Rows {
+	for _, r := range RowLines(o.Rows, o.Verbose) {
 		b.WriteString("  " + r + "\n")
 	}
 	for _, s := range o.Steps {
@@ -165,6 +217,9 @@ func (o RunOut) Text() string {
 	}
 	for _, j := range o.Journal {
 		b.WriteString(j + "\n")
+	}
+	if o.Uncommitted > 0 && !o.DryRun {
+		b.WriteString(CommitLine(o.Uncommitted) + "\n")
 	}
 	if o.DryRun {
 		b.WriteString("Nothing written (dry run).\n")
@@ -208,7 +263,7 @@ func Ops(rw Rewriter) []op.Entry {
 // --offline). Lock order M then T (7.5); T only for a run that pushes
 // (not --dry-run, --no-push or --offline: nothing reaches a teammate).
 func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
-	out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}}
+	out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}, Verbose: in.Verbose}
 	if !in.DryRun { // a dry run only reads, and reading works on a gated project
 		if err := rw.WriteGate(ctx); err != nil {
 			return RunOut{}, err
@@ -318,11 +373,13 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 	}
 	if journaled && !in.DryRun {
-		lines, err := j.Finish(ctx, !in.NoPush && !in.Offline, out.Count)
+		fin, err := j.Finish(ctx, !in.NoPush && !in.Offline, out.Count)
 		if err != nil {
 			return RunOut{}, err
 		}
+		lines := fin.Lines
 		out.Journal = append(out.Journal, lines...)
+		out.Uncommitted = fin.Uncommitted
 		if len(lines) == 0 { // nothing changed: the backup was dropped; the team-lock lines stay
 			out.BackupRef, out.Journal = "", teamLines
 		}

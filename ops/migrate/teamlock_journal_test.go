@@ -25,12 +25,14 @@ func (j journaled) RewriteRepoV1(ctx context.Context, t row.Table, dry bool) ([]
 	return j.RewriteV1(ctx, t, dry)
 }
 
-func (j journaled) Finish(_ context.Context, _ bool, count int) ([]string, error) {
+func (j journaled) Finish(_ context.Context, _ bool, count int) (Finished, error) {
 	if count == 0 {
-		return nil, nil
+		return Finished{}, nil
 	}
-	return []string{"pushed"}, nil
+	return Finished{Lines: []string{"pushed"}}, nil
 }
+
+var _ Journal = journaled{} // a signature change fails the build, not the run
 
 func (j journaled) Status(context.Context) (StatusOut, error)     { return StatusOut{}, nil }
 func (j journaled) Rollback(context.Context) (RollbackOut, error) { return RollbackOut{}, nil }
