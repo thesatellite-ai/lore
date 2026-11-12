@@ -560,14 +560,15 @@ func TestF16_PRBodyCheck(t *testing.T) {
 	a.aliceApp.Lore("check", "pr-body", ".git/pr-bad.md").Fails(t, th.ExitGuard, "E_LEAK_BLOCKED")
 }
 
-// §6.5 redacted output: without a TTY or with CI set, whoami and guard errors
-// name no store URL, internal folder or org.
-func TestLeak_RedactedOutputWithoutATTY(t *testing.T) {
+// Store addresses in output: without a TTY or with any CI marker set,
+// whoami names the org's store url and the link's folder as a terminal
+// does (a store's plain address is no secret; it printed "<redacted>",
+// which told the person nothing). Only a credential in a url is masked
+// (logic/repourl TestMask).
+func TestLeak_StoreAddressShownWithoutATTY(t *testing.T) {
 	a := newAgency(t)
-	// Q-stores-3 (coordinator 15:05): ANY common CI marker hides internal
-	// store names and folders, not only CI.
 	for _, marker := range th.CIMarkers {
-		a.aliceApp.With(marker+"=1").MustLore("whoami").Never(t, slugStore, "northwind/lore", "acme/ on branch")
+		a.aliceApp.With(marker+"=1").MustLore("whoami").Says(t, "northwind/lore").Never(t, "<redacted>")
 	}
 }
 

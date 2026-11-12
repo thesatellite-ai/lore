@@ -44,7 +44,7 @@ created 2026-11-02T10:09:20Z by act_2ad3618e878ebbf527d34d446ef4f891 · updated 
 
 ### revoke
 alice (work/website)$ lore agent start --label agent-backend --owner @alice
-✓ act_05e99e22e9e86e96fe4daa7777994603 agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_05e99e22e9e86e96fe4daa7777994603 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 agent-backend (work/website)$ lore task claim tsk_54fe984c9b495744c0217776765a28f2
 ✓ claimed tsk_54fe984c9b495744c0217776765a28f2 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main

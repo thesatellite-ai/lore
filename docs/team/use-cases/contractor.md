@@ -55,7 +55,7 @@ and the leak guards turn on for everyone in agency.
 ✓ github.com/client/website (prj_54fe…28f2) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
-✓ act_05e9…4603 Alice Doe (@alice) registered in <redacted>
+✓ act_05e9…4603 Alice Doe (@alice) registered in agency ./
 $ lore memory add --body 'the client staging database is restored every Sunday night'
 ✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
@@ -85,16 +85,16 @@ internal   github.com/agency/notes-client client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore actor register
-✓ act_d431…313a Bob Roe (@bob) registered in <redacted>
+✓ act_d431…313a Bob Roe (@bob) registered in agency ./
 $ lore memory list
 mem_c0f3…b5b8  the client staging database is restored every Sunday night  [agency/client]
 
 # bob, in ~
 $ lore store show
-<redacted>
+git@github.com:agency/notes
   entries   agency   branches main
   clone     ~/.lore/clones-v017/github.com/agency/notes.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
-<redacted>
+git@github.com:agency/notes-client
   entries   agency   branches main
   clone     ~/.lore/clones-v017/github.com/agency/notes-client.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
 $ ls ~/.lore/clones/github.com/agency

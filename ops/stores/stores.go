@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -434,19 +435,12 @@ func Ops(m Manager) []op.Entry {
 					}
 				}
 			}
-			// after the status reads, which need the real url
-			if hasOrg && ol.QuietOutput() {
-				for i := range got {
-					if got[i].Source == SourceOrg {
-						if got[i].Name == got[i].URL {
-							got[i].Name = redactedURL // an org store named by its url
-						}
-						got[i].URL = redactedURL
-					}
-					if strings.HasPrefix(got[i].Address, addressSecond) {
-						got[i].Address = addressRedacted // its note names the other url
-					}
-				}
+			// after the status reads, which need the real url: a store's
+			// address is printed as it is (it is no secret, in a pipe or CI
+			// too); only a credential in it is masked (repourl.Mask)
+			for i := range got {
+				got[i].Name, got[i].URL = repourl.Mask(got[i].Name), repourl.Mask(got[i].URL)
+				got[i].Address = repourl.MaskText(got[i].Address)
 			}
 			return ListOut{Stores: got, Count: len(got)}, nil
 		}),
@@ -528,13 +522,7 @@ type OrgLister interface {
 	// OrgStoreEntries lists the stores the repo's org brings, with their
 	// real urls and Source SourceOrg.
 	OrgStoreEntries(ctx context.Context) ([]Entry, error)
-	// QuietOutput reports output that must name nothing (no terminal,
-	// CI): store.list then prints an org store's url as redactedURL.
-	QuietOutput() bool
 }
-
-// redactedURL replaces an org store's url in quiet output.
-const redactedURL = "<redacted>"
 
 // withOrgStores appends the org's stores to got, skipping a name got
 // already holds (stores.yaml wins a name), before the personal store so

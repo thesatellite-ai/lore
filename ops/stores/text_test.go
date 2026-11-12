@@ -92,66 +92,73 @@ func TestCheckScheme(t *testing.T) {
 // read saw (G-CORE-8: the status must be read from the real url).
 type statusFake struct {
 	fakeEnv
-	org   []Entry
-	quiet bool
-	seen  map[string]string
+	org  []Entry
+	seen map[string]string
 }
 
 func (s *statusFake) OrgStoreEntries(context.Context) ([]Entry, error) { return s.org, nil }
-func (s *statusFake) QuietOutput() bool                                { return s.quiet }
 func (s *statusFake) StoreStatus(_ context.Context, e Entry) Status {
 	s.seen[e.Name] = e.URL
-	if e.URL == redactedURL {
-		return Status{Reach: ReachMissing}
-	}
 	return Status{Visibility: VisibilityInternal, Reach: ReachLocalCopy}
 }
 
+// orgPass is a placeholder password, built at run time.
+func orgPass() string { return "pass" + "word1" }
+
 // TestListOrgRows (G-CORE-8): store.list adds the org's stores after
-// stores.yaml (which wins a name) and before `me`, each with its source;
-// in quiet output an org url is redacted only after its status was read
-// from the real url, and stores.yaml / personal urls are never redacted.
+// stores.yaml (which wins a name) and before `me`, each with its source.
+// A store's plain address is no secret: every url is printed as it is
+// (no terminal or CI changes that); a credential in one is masked after
+// its status was read from the real url, in both NAME and URL.
 func TestListOrgRows(t *testing.T) {
-	for _, quiet := range []bool{false, true} {
-		f := &statusFake{quiet: quiet, seen: map[string]string{},
-			fakeEnv: fakeEnv{stores: []Entry{
-				{Name: "kit", URL: "file:///s/kit", Source: SourceStoresFile},
-				{Name: "agency", URL: "file:///s/mine", Source: SourceStoresFile},
-				{Name: "me", URL: "file:///s/me", Personal: true, Source: SourcePersonal},
-			}},
-			org: []Entry{
-				{Name: "agency", URL: "https://h/agency/notes.git", Source: SourceOrg}, // shadowed by stores.yaml
-				{Name: "agency/org", URL: "https://h/agency/notes.git", Folder: "org", Source: SourceOrg},
-			}}
-		raw, _, err := invoke(t, f, OpList, `{}`)
-		if err != nil {
-			t.Fatal(err)
+	secretURL := "https://mira:" + orgPass() + "@h/agency/vault.git"
+	jsonMasked := "https://mira:" + `\u003credacted\u003e` + "@h/agency/vault.git"
+	f := &statusFake{seen: map[string]string{},
+		fakeEnv: fakeEnv{stores: []Entry{
+			{Name: "kit", URL: "file:///s/kit", Source: SourceStoresFile},
+			{Name: "agency", URL: "file:///s/mine", Source: SourceStoresFile},
+			{Name: "me", URL: "file:///s/me", Personal: true, Source: SourcePersonal},
+		}},
+		org: []Entry{
+			{Name: "agency", URL: "https://h/agency/notes.git", Source: SourceOrg}, // shadowed by stores.yaml
+			{Name: "agency/org", URL: "https://h/agency/notes.git", Folder: "org", Source: SourceOrg},
+			{Name: "git@h:agency/lore-x.git", URL: "git@h:agency/lore-x.git", Source: SourceOrg}, // named by its url
+			{Name: secretURL, URL: secretURL, Source: SourceOrg},
+		}}
+	raw, _, err := invoke(t, f, OpList, `{}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	order := []string{`"name":"kit"`, `"name":"agency","url":"file:///s/mine"`, `"name":"agency/org"`, `"name":"me"`}
+	at := -1
+	for _, k := range order {
+		i := strings.Index(raw, k)
+		if i <= at {
+			t.Fatalf("%s missing or out of order in %s", k, raw)
 		}
-		order := []string{`"name":"kit"`, `"name":"agency","url":"file:///s/mine"`, `"name":"agency/org"`, `"name":"me"`}
-		at := -1
-		for _, k := range order {
-			i := strings.Index(raw, k)
-			if i <= at {
-				t.Fatalf("quiet=%v: %s missing or out of order in %s", quiet, k, raw)
-			}
-			at = i
+		at = i
+	}
+	if strings.Count(raw, `"name":"agency"`) != 1 {
+		t.Fatalf("the stores.yaml name did not shadow the org one: %s", raw)
+	}
+	if f.seen["agency/org"] != "https://h/agency/notes.git" || f.seen[secretURL] != secretURL {
+		t.Fatalf("status read from %v, want the real urls", f.seen)
+	}
+	if !strings.Contains(raw, `"folder":"org","source":"org","visibility":"internal","reach":"local_copy"`) {
+		t.Fatalf("org row status lost: %s", raw)
+	}
+	for _, want := range []string{
+		`"name":"agency/org","url":"https://h/agency/notes.git"`,
+		`"name":"git@h:agency/lore-x.git","url":"git@h:agency/lore-x.git"`,
+		`"name":"` + jsonMasked + `","url":"` + jsonMasked + `"`, // JSON escapes < and >
+		`"url":"file:///s/kit"`, `"url":"file:///s/me"`,
+	} {
+		if !strings.Contains(raw, want) {
+			t.Errorf("missing %s in %s", want, raw)
 		}
-		if strings.Count(raw, `"name":"agency"`) != 1 {
-			t.Fatalf("quiet=%v: the stores.yaml name did not shadow the org one: %s", quiet, raw)
-		}
-		if f.seen["agency/org"] != "https://h/agency/notes.git" {
-			t.Fatalf("quiet=%v: status read from %q, want the real url", quiet, f.seen["agency/org"])
-		}
-		if !strings.Contains(raw, `"folder":"org","source":"org","visibility":"internal","reach":"local_copy"`) {
-			t.Fatalf("quiet=%v: org row status lost: %s", quiet, raw)
-		}
-		hidden := strings.Contains(raw, `"name":"agency/org","url":"\u003credacted\u003e"`) // JSON escapes < and >
-		if hidden != quiet || quiet == strings.Contains(raw, "https://h/agency/notes.git") {
-			t.Fatalf("quiet=%v: org url redaction wrong: %s", quiet, raw)
-		}
-		if !strings.Contains(raw, `"url":"file:///s/kit"`) || !strings.Contains(raw, `"url":"file:///s/me"`) {
-			t.Fatalf("quiet=%v: a non-org url was redacted: %s", quiet, raw)
-		}
+	}
+	if strings.Contains(raw, orgPass()) {
+		t.Fatalf("the password was printed: %s", raw)
 	}
 }
 

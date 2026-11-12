@@ -329,8 +329,8 @@ func TestDoctorSecretRulesOff(t *testing.T) {
 }
 
 // TestDoctorUnpushedStores: a configured store whose clone holds a local
-// branch commit its tracking ref lacks is one warning, with the url
-// redacted (tests run without a TTY: quiet output) and never named; once
+// branch commit its tracking ref lacks is one warning naming the store's
+// url (tests run without a TTY: a pipe names it too, it is no secret); once
 // the tracking ref holds it, nothing; a store not cloned here, nothing.
 func TestDoctorUnpushedStores(t *testing.T) {
 	t.Parallel()
@@ -356,8 +356,8 @@ func TestDoctorUnpushedStores(t *testing.T) {
 	if len(warns) != 1 || !strings.Contains(warns[0], "unpushed store work (refs/heads/main)") {
 		t.Fatalf("warns = %v, want one naming refs/heads/main", warns)
 	}
-	if strings.Contains(warns[0], "example.com") || !strings.HasPrefix(warns[0], redactedText) {
-		t.Errorf("quiet warning names the store: %q", warns[0])
+	if !strings.HasPrefix(warns[0], "example.com/agency/notes: ") {
+		t.Errorf("warning does not name the store: %q", warns[0])
 	}
 	head := gitIn(t, clone, nil, "rev-parse", "refs/heads/main")
 	gitIn(t, clone, nil, "update-ref", "refs/remotes/origin/main", head)

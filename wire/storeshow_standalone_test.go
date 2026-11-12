@@ -3,8 +3,8 @@ package wire
 // cmd/lore's store show|open|doctor host (storeshow_standalone.go) over a
 // real store clone: entries on two spellings of one url share one view,
 // show names the clone without the network, doctor passes a healthy store
-// and lists a missing branch, open makes the worktree, and quiet output
-// names no store url.
+// and lists a missing branch, open makes the worktree, and output names
+// the store url as it is (no terminal here: a pipe names it too).
 
 import (
 	"os"
@@ -60,8 +60,8 @@ func TestStandaloneStoreShowOpenDoctor(t *testing.T) {
 	if !slices.Equal(v.Entries, []string{"agency", "northwind"}) || !slices.Equal(v.Branches, []string{"main", "staging"}) || v.Cloned || len(v.Problems) != 0 {
 		t.Fatalf("never cloned view: %+v", v)
 	}
-	if v.Shown != redactedText || v.URL != "https://example.com/agency/notes" {
-		t.Fatalf("quiet output must not name the url: shown %q url %q", v.Shown, v.URL)
+	if v.Shown != "https://example.com/agency/notes" || v.URL != "https://example.com/agency/notes" {
+		t.Fatalf("output must name the plain url: shown %q url %q", v.Shown, v.URL)
 	}
 
 	// The clone the org layer made, pointed at the local origin.
@@ -82,11 +82,6 @@ func TestStandaloneStoreShowOpenDoctor(t *testing.T) {
 	p := doc.Stores[0].Problems
 	if len(p) != 1 || !strings.HasPrefix(p[0], "branch staging does not exist") {
 		t.Fatalf("doctor: want only the missing staging branch, got %v", p)
-	}
-	for _, s := range p {
-		if strings.Contains(s, "example.com") {
-			t.Fatalf("quiet problem names the store: %q", s)
-		}
 	}
 	show, err = c.showClones(ctx, opsstores.ShowIn{Links: true})
 	if err != nil || !show.Stores[0].Cloned || show.Stores[0].LastFetch == "" || show.Stores[0].DefaultBranch != "main" {

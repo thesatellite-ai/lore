@@ -136,7 +136,7 @@ stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 alice (work/tools)$ lore actor register
-✓ act_b4f4765e593d51fd1352985e8af3a5b0 Alice Doe (@alice) registered in <redacted>
+✓ act_b4f4765e593d51fd1352985e8af3a5b0 Alice Doe (@alice) registered in agency org/
 alice (work/notes-app)$ lore whoami
 org        none  (matched by: nothing matched)   hint: lore org use agency
 identity   Alice Doe <human:alice@example.com>   act_162df51b7f78b785c97c26b41ea89666  (from: top-level identity (config.yaml))

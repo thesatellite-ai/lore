@@ -66,11 +66,11 @@ and the leak guards turn on for everyone in agency.
   nothing was written to this repo
 $ git status --short
 $ lore actor register
-✓ act_2ad3…f891 Alice Doe (@alice) registered in <redacted>
+✓ act_2ad3…f891 Alice Doe (@alice) registered in agency org/
 
 # bob, in website
 $ lore actor register
-✓ act_54fe…28f2 Bob Roe (@bob) registered in <redacted>
+✓ act_54fe…28f2 Bob Roe (@bob) registered in agency org/
 
 # alice, in website
 $ lore whoami
@@ -90,15 +90,7 @@ personal   me -> ~/.lore/personal
 
 `whoami` now says the org was matched by the link, and names the internal project.
 
-Without a terminal (a script, an agent's tool call) or with a CI variable set, `whoami` hides the store URL, the internal folder and the org folder, so those internal names never end up in a log the client can read. It decides by where the output goes, not by the repo. The same lines then read:
-
-```text
-org        agency  (matched by: link in <redacted>, project id + remote)
-stores     <redacted> on branch main  (org folder <redacted>)
-internal   <redacted> <redacted>/
-```
-
-On your own terminal it prints them. `lore whoami --share` prints them on purpose, but only on a terminal. See [Troubleshooting](../troubleshooting.md#whoami-prints-redacted).
+`whoami` prints the same lines without a terminal (a script, an agent's tool call) or with a CI variable set: a store's address is not a secret. Only a credential inside a URL (a password, a token used as the user name) is printed as `<redacted>`, and only that part. See [Troubleshooting](../troubleshooting.md#a-url-shows-redacted).
 
 Notes go to the internal project by default. A project rule goes into the repo with `--to repo`:
 
@@ -205,7 +197,7 @@ Agents must say where a rule goes in a client repo. Lore refuses to guess for th
 ```console
 # alice, in website
 $ lore agent start --label agent-backend --owner @alice
-✓ act_28f8…03df agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_28f8…03df agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 $ lore rule add --body 'require prepayment from this client'
 ERROR: [E_INVALID_INPUT] stores: this write needs an explicit --to: a rule written by an agent in a client repo must pass --to (repo or agency); nothing written

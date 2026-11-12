@@ -28,7 +28,7 @@ func TestJSONErrorIndented(t *testing.T) {
 		t.Fatalf("host error:\n%s\nwant:\n%s", out.String(), want)
 	}
 	out.Reset()
-	if code := printError(&out, &eout, err, true, Palette{}); code != 20 || !bytes.Equal(out.Bytes(), want) {
+	if code := printError(&out, &eout, err, true, Palette{}, "lore row move"); code != 20 || !bytes.Equal(out.Bytes(), want) {
 		t.Fatalf("generated error: exit %d\n%s\nwant:\n%s", code, out.String(), want)
 	}
 }

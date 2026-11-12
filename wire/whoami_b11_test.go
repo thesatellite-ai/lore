@@ -5,62 +5,40 @@ package wire
 // none" hint now live in wire/whoami_standalone.go.
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
-	"github.com/thesatellite-ai/lore/logic/orgresolve"
 )
 
-// TestWhoamiRedactor (§6.5): with redaction on (a CI marker set), no store
-// URL in any form and no internal folder survives; the repo's own remotes
-// and own:/repos: patterns are kept; with it off every string passes
-// through unchanged.
+// TestWhoamiRedactor: store urls in every form, links and folders are
+// printed as they are, with a CI marker set too (a store's plain address
+// is no secret: whoami showed "matched by: link in <redacted>"); only a
+// credential inside a url is masked.
 func TestWhoamiRedactor(t *testing.T) {
-	cfg := &orgconf.Config{Orgs: []orgconf.Org{
-		{Name: "northwind", Stores: []orgconf.Store{{URL: "https://github.com/northwind/lore.git"}}},
-		{Name: "acme-nda", Stores: []orgconf.Store{{URL: "ssh://git@gitlab.example.com/northwind/lore"}}},
-	}}
-	s := &orgcfg.Situation{Config: cfg, Result: orgresolve.Result{Links: []orgresolve.Link{{StoreURL: "github.com/northwind/lore", Folder: "acme"}}}}
-	t.Setenv(ciMarkers[0], "1") // quietOutput → redaction on
-	on := newWhoamiRedactor(s, false)
-	if !on.on {
-		t.Fatal("CI set must turn redaction on")
-	}
-	for _, keep := range []string{"own pattern github.com/betalabs/* of betalabs", "origin github.com/acme/app"} {
-		if got := on.str(keep); got != keep {
-			t.Errorf("str(%q) = %q; only internal names may be masked", keep, got)
-		}
-	}
-	leaks := []string{"northwind/lore", "acme/"}
-	inputs := []string{
+	t.Setenv(ciMarkers[0], "1") // CI used to turn redaction on
+	red := whoamiRedactor{}
+	for _, keep := range []string{
+		"own pattern github.com/betalabs/* of betalabs",
+		"origin github.com/acme/app",
 		"link in github.com/northwind/lore acme/, project id + remote",
 		"https://github.com/northwind/lore.git on branch main",
 		"git@github.com:northwind/lore.git",
 		"clone at ~/.lore/clones/github.com/northwind/lore.git failed",
 		"store ssh://git@gitlab.example.com/northwind/lore unreachable",
 		"linked in northwind (github.com/northwind/lore acme/)", // a rule trace reason
-	}
-	for _, in := range inputs {
-		got := on.str(in)
-		for _, l := range leaks {
-			if strings.Contains(got, l) {
-				t.Errorf("str(%q) = %q still has %q", in, got, l)
-			}
+	} {
+		if got := red.str(keep); got != keep {
+			t.Errorf("str(%q) = %q; a plain address must be printed as it is", keep, got)
 		}
 	}
-	if got := on.folder("secret-org-folder"); got != redactedText {
-		t.Errorf("folder = %q, want %q", got, redactedText)
+	if got := red.folder("client-folder"); got != "client-folder" {
+		t.Errorf("folder = %q, want it as it is", got)
 	}
-	if got := on.folder(""); got != "" {
-		t.Errorf("empty folder = %q, want empty", got)
-	}
-	off := whoamiRedactor{}
-	for _, in := range inputs {
-		if off.str(in) != in || off.folder(in) != in {
-			t.Errorf("redaction off changed %q", in)
-		}
+	pw := "pass" + "word1"
+	in := "store https://mira:" + pw + "@gitlab.example.com/northwind/lore.git unreachable"
+	want := "store https://mira:" + redactedText + "@gitlab.example.com/northwind/lore.git unreachable"
+	if got := red.str(in); got != want {
+		t.Errorf("str(%q) = %q, want %q", in, got, want)
 	}
 }
 

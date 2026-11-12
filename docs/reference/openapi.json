@@ -105050,10 +105050,10 @@
             "name": "share",
             "in": "query",
             "required": false,
-            "description": "on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)",
+            "description": "kept for older scripts: whoami always prints store URLs and folders (only a credential inside a URL is masked)",
             "schema": {
               "type": "boolean",
-              "description": "on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)"
+              "description": "kept for older scripts: whoami always prints store URLs and folders (only a credential inside a URL is masked)"
             }
           },
           {

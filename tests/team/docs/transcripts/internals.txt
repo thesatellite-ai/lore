@@ -108,7 +108,7 @@ alice$ git -C ~/.lore/clones/github.com/agency/notes.git cat-file -p main:client
 
 ### signals
 alice (work/website)$ lore agent start --label agent-backend --owner @alice
-✓ act_f147dd95f1aaf742dd4f5214843a5139 agent agent-backend (owner @alice) registered in <redacted>; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_f147dd95f1aaf742dd4f5214843a5139 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 agent-backend (work/website)$ lore task claim tsk_76bd560aff0771fab8457dbfa9823f10
 ✓ claimed tsk_76bd560aff0771fab8457dbfa9823f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main

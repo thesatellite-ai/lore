@@ -12,27 +12,24 @@ package wire
 import (
 	"context"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/repourl"
 )
 
 // doctorUnpushedStores warns once per store clone holding work its remote
-// has not confirmed; the url is redacted when output is quiet (no TTY or
-// CI, §6.5).
+// has not confirmed, named by its url (only a credential in it masked).
 func (a *App) doctorUnpushedStores(ctx context.Context, warn func(string)) {
 	c := &standaloneClones{home: a.opts.Home, now: a.opts.Wall}
 	list, err := c.configuredStores()
 	if err != nil {
 		return
 	}
-	cl, quiet := c.clonesFor(), quietOutput()
+	cl := c.clonesFor()
 	for _, cs := range list {
 		info := cl.Inspect(ctx, cs.norm)
 		if !info.Cloned || len(info.Unpushed) == 0 {
 			continue
 		}
-		name := cs.norm
-		if quiet {
-			name = redactedText
-		}
-		warn(name + ": unpushed store work (" + strings.Join(info.Unpushed, ", ") + "); `lore sync` pushes it")
+		warn(repourl.Mask(cs.norm) + ": unpushed store work (" + strings.Join(info.Unpushed, ", ") + "); `lore sync` pushes it")
 	}
 }

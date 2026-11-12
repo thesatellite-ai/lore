@@ -11,11 +11,11 @@ ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: orgs[0] "agency": st
 
 ### not a store
 alice (work/website)$ lore whoami
-ERROR: [E_NOT_A_STORE] <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
+ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
   hint: point stores: at a repo made with `lore store init <name> <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 alice$ lore store doctor
-ERROR: [E_INVALID_INPUT] 1 store(s) need attention: <redacted>: [E_NOT_A_STORE] <redacted> (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
   hint: fix each problem, then run `lore store doctor` again
 (exit 20)
 

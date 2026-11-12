@@ -18,9 +18,9 @@ Tomas keeps his clients under `~/work/clients`, a plain folder. `team` is the or
 # tomas, in clients
 $ lore store list
 stores:
-  NAME        URL         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH       ADDRESS
-  agency      <redacted>          false      main    false     org     internal    local_copy  
-  agency/org  <redacted>  org     false      main    false     org     internal    local_copy  
+  NAME        URL                          FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH       ADDRESS
+  agency      git@github.com:agency/notes          false      main    false     org     internal    local_copy  
+  agency/org  git@github.com:agency/notes  org     false      main    false     org     internal    local_copy  
 count: 2
 $ lore store folder add team client_north
 ✓ created folder client_north in agency (prj_7a67…9504; shown only in repos that attach it)
@@ -173,7 +173,7 @@ $ git status --short
 
 ## An org with several stores
 
-An org entry lists every store (`lore org refresh <org>` takes them from the store's `lore-org.yaml`). `lore store list` and `lore store folder list` show each of them once; the org's other stores are named by their url (in output that must name no url, the folder list shows `<redacted>-<6 hex>` for each). Every store command that takes a store takes that url: `lore store folder add|list|remove <url>`, `lore store show|set|visibility|compact <url>`, and `lore org link <org> --project <folder> --store <url>`. A brand-new empty repo becomes a lore store with the first write to it: the `lore-store.yaml` marker goes into that same commit. A repo that an older lore left with a folder's `_meta.json` and no marker is adopted the same way on its next write.
+An org entry lists every store (`lore org refresh <org>` takes them from the store's `lore-org.yaml`). `lore store list` and `lore store folder list` show each of them once; the org's other stores are named by their url. Every store command that takes a store takes that url: `lore store folder add|list|remove <url>`, `lore store show|set|visibility|compact <url>`, and `lore org link <org> --project <folder> --store <url>`. A brand-new empty repo becomes a lore store with the first write to it: the `lore-store.yaml` marker goes into that same commit. A repo that an older lore left with a folder's `_meta.json` and no marker is adopted the same way on its next write.
 
 ## Which store commands work outside a repo
 

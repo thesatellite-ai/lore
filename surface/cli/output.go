@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/listcap"
 	"github.com/thesatellite-ai/lore/logic/sessionmask"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -36,6 +37,20 @@ const (
 	// floatBits is the precision human output prints floats at.
 	floatBits = 64
 )
+
+// shownText is text as a person reads it: session tokens masked, and every
+// list of ids capped to listcap.Shown items, the rest named with where the
+// full list is (listcap.Text; jsonHint). --json output never comes here.
+func shownText(text, where string) string { return listcap.Text(masked(text), where) }
+
+// jsonHint is where a capped list is printed whole: "`<cmd> --json` lists
+// all" (cmd is the command path, e.g. "lore doctor"; "" names --json).
+func jsonHint(cmd string) string {
+	if cmd == "" {
+		return "--json lists all"
+	}
+	return "`" + cmd + " --" + FlagJSON + "` lists all"
+}
 
 // masked is text with every session-shaped token masked (PASS3-A-7,
 // supersedes FB-SESS-2): every byte the surface prints goes through it, so
@@ -70,7 +85,7 @@ func printJSON(w io.Writer, r op.Result) error {
 // a table under its name, an object field an indented block. Optional
 // (omitempty) fields holding their zero value are skipped, as in the JSON.
 // pal colours the success and warning lines (colour.go; off = plain).
-func printHuman(w io.Writer, r op.Result, pal Palette) error {
+func printHuman(w io.Writer, r op.Result, pal Palette, cmd string) error {
 	v := r.Value()
 	if !v.IsValid() {
 		return nil
@@ -78,14 +93,14 @@ func printHuman(w io.Writer, r op.Result, pal Palette) error {
 	// An output with its own human form (op.Texter) prints exactly that,
 	// with the Runner's edits (a purged delete's line, P3-DEL-1).
 	if t, ok := r.Text(); ok {
-		_, err := io.WriteString(w, pal.Lines(masked(t)))
+		_, err := io.WriteString(w, pal.Lines(shownText(t, jsonHint(cmd))))
 		return err
 	}
 	var b strings.Builder
 	if err := writeObject(&b, v, r.Fields(), ""); err != nil {
 		return err
 	}
-	_, err := io.WriteString(w, pal.Lines(masked(b.String())))
+	_, err := io.WriteString(w, pal.Lines(shownText(b.String(), jsonHint(cmd))))
 	return err
 }
 
@@ -226,7 +241,7 @@ func jsonField(v reflect.Value, name string) (reflect.Value, bool) {
 // printError writes err in the chosen format and returns its exit status:
 // with --json the spec 9.4 object on stdout, else the human line on stderr,
 // its "ERROR:" and hint coloured by pal (the stderr palette; off = plain).
-func printError(stdout, stderr io.Writer, err error, asJSON bool, pal Palette) int {
+func printError(stdout, stderr io.Writer, err error, asJSON bool, pal Palette, cmd string) int {
 	env := errs.EnvelopeOf(err)
 	if asJSON {
 		// Envelope is a fixed struct of strings and ints: Marshal cannot
@@ -240,9 +255,10 @@ func printError(stdout, stderr io.Writer, err error, asJSON bool, pal Palette) i
 		}
 		return env.Error.Exit
 	}
-	line := pal.Error(strings.TrimSuffix(errorPrefix, " ")) + " [" + string(env.Error.Code) + "] " + masked(env.Error.Message) + "\n"
+	where := jsonHint(cmd)
+	line := pal.Error(strings.TrimSuffix(errorPrefix, " ")) + " [" + string(env.Error.Code) + "] " + shownText(env.Error.Message, where) + "\n"
 	if env.Error.Hint != "" {
-		line += hintPrefix + pal.Hint(masked(env.Error.Hint)) + "\n"
+		line += hintPrefix + pal.Hint(shownText(env.Error.Hint, where)) + "\n"
 	}
 	_, _ = io.WriteString(stderr, line)
 	return env.Error.Exit

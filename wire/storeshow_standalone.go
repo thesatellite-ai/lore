@@ -15,8 +15,8 @@ package wire
 //	doctor ─▶ Clones.Doctor per store (always asks the remote); stores with
 //	          problems first (the op turns any problem into E_INVALID_INPUT)
 //
-// Output names no store url when it must be quiet (CI, no terminal):
-// Shown and every problem text carry redactedText instead (Q-stores-3).
+// A store's url is printed as it is (no secret, in a pipe or CI too);
+// Shown and every problem text mask only a credential in it (repourl.Mask).
 
 import (
 	"context"
@@ -86,29 +86,16 @@ func appendOnce(xs []string, x string) []string {
 }
 
 // cloneView is the op's view of one store's clone info.
-func cloneView(cs *configuredStore, info orgcfg.CloneInfo, quiet bool) opsstores.CloneView {
-	v := opsstores.CloneView{URL: cs.url, Shown: cs.url, Entries: cs.entries, Branches: cs.branches, Clone: info.Dir,
+func cloneView(cs *configuredStore, info orgcfg.CloneInfo) opsstores.CloneView {
+	v := opsstores.CloneView{URL: cs.url, Shown: repourl.Mask(cs.url), Entries: cs.entries, Branches: cs.branches, Clone: info.Dir,
 		Cloned: info.Cloned, DefaultBranch: info.DefaultBranch, Unpushed: info.Unpushed, Problems: info.Problems}
 	if !info.LastFetch.IsZero() {
 		v.LastFetch = info.LastFetch.Local().Format(time.RFC3339)
 	}
-	if quiet {
-		v.Shown = redactedText
-		for i, p := range v.Problems {
-			v.Problems[i] = redactStoreText(p, cs)
-		}
+	for i, p := range v.Problems {
+		v.Problems[i] = repourl.MaskText(p)
 	}
 	return v
-}
-
-// redactStoreText replaces every spelling of cs's url in s.
-func redactStoreText(s string, cs *configuredStore) string {
-	for _, u := range []string{cs.url, cs.norm} {
-		if u != "" {
-			s = strings.ReplaceAll(s, u, redactedText)
-		}
-	}
-	return s
 }
 
 // showClones implements store.show.
@@ -117,17 +104,17 @@ func (c *standaloneClones) showClones(ctx context.Context, in opsstores.ShowIn) 
 	if err != nil {
 		return opsstores.ClonesOut{}, err
 	}
-	cl, quiet := c.clonesFor(), quietOutput()
+	cl := c.clonesFor()
 	out := opsstores.ClonesOut{Stores: []opsstores.CloneView{}}
 	for _, cs := range list {
-		v := cloneView(cs, cl.Inspect(ctx, cs.norm), quiet)
+		v := cloneView(cs, cl.Inspect(ctx, cs.norm))
 		if in.Links {
 			v.Links = c.linksOf(ctx, cl, cs, &v)
 		}
 		out.Stores = append(out.Stores, v)
 	}
 	if in.Links {
-		out.Here = c.hereLinks(ctx, quiet)
+		out.Here = c.hereLinks(ctx)
 	}
 	return out, nil
 }
@@ -154,7 +141,7 @@ func (c *standaloneClones) linksOf(ctx context.Context, cl orgcfg.Clones, cs *co
 // hereLinks is what org resolution answers for the repo in the working
 // directory (the F11 debug view); every failure is the answer, never
 // skipped (a silent gap reads as "this repo has no links").
-func (c *standaloneClones) hereLinks(ctx context.Context, quiet bool) []string {
+func (c *standaloneClones) hereLinks(ctx context.Context) []string {
 	dir, err := os.Getwd()
 	if err != nil {
 		return []string{"this repo: " + err.Error()}
@@ -171,12 +158,9 @@ func (c *standaloneClones) hereLinks(ctx context.Context, quiet bool) []string {
 	r := s.Result
 	out := []string{fmt.Sprintf("this repo (%s): links %s — %s", s.ProjectID, r.LinkStatus, r.LinkDetail)}
 	for _, l := range r.Links {
-		d, storeURL := "", l.StoreURL
+		d, storeURL := "", repourl.Mask(l.StoreURL)
 		if l.Default {
 			d = " (default)"
-		}
-		if quiet {
-			storeURL = redactedText
 		}
 		out = append(out, fmt.Sprintf("  %s → %s %s/%s", l.Entry, storeURL, l.Folder, d))
 	}
@@ -249,10 +233,10 @@ func (c *standaloneClones) doctorClones(ctx context.Context) (opsstores.ClonesOu
 	if err != nil {
 		return opsstores.ClonesOut{}, err
 	}
-	cl, quiet := c.clonesFor(), quietOutput()
+	cl := c.clonesFor()
 	out := opsstores.ClonesOut{Stores: []opsstores.CloneView{}}
 	for _, cs := range list {
-		out.Stores = append(out.Stores, cloneView(cs, cl.Doctor(ctx, cs.norm, cs.url, cs.branches), quiet))
+		out.Stores = append(out.Stores, cloneView(cs, cl.Doctor(ctx, cs.norm, cs.url, cs.branches)))
 	}
 	// Stores with problems first, as v0.1.17 printed them.
 	sort.SliceStable(out.Stores, func(i, j int) bool { return len(out.Stores[i].Problems) > len(out.Stores[j].Problems) })

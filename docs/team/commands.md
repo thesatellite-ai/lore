@@ -35,7 +35,7 @@ Flags:
       --explain                print every org rule with hit or miss and why
       --json                   print the result (or the error) as JSON
       --machine-label string   set this machine's label, synced with its profile to our own stores ("" clears)
-      --share                  on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)
+      --share                  kept for older scripts: whoami always prints store URLs and folders (only a credential inside a URL is masked)
 ```
 <!-- /help -->
 

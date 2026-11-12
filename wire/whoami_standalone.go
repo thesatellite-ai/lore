@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -84,7 +83,7 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 		// is the one this machine writes as
 		id = w.movedIdentity(ctx, id)
 	}
-	red := newWhoamiRedactor(s, in.Share)
+	red := whoamiRedactor{}
 	det, derr := DetectAgent()
 	var agent *agentdetect.Result
 	if derr == nil {
@@ -232,70 +231,14 @@ func quietOutput() bool {
 	return !isTerminal(os.Stdout)
 }
 
-// whoamiRedactor masks every configured store url (each form) and each
-// link's "store folder/" when on; the repo's own remotes and patterns stay.
-type whoamiRedactor struct {
-	on      bool
-	secrets []string
-}
+// whoamiRedactor masks only credentials (repourl.MaskText): store urls,
+// org folders and link folders are printed as they are, on a terminal, in
+// a pipe and in CI alike (a store's plain address is no secret).
+type whoamiRedactor struct{}
 
-// newWhoamiRedactor decides redaction: quietOutput unless --share on a
-// terminal. Stores of every entry are secrets (fail closed).
-func newWhoamiRedactor(s *orgcfg.Situation, share bool) whoamiRedactor {
-	on := quietOutput()
-	if share && isTerminal(os.Stdout) {
-		on = false
-	}
-	r := whoamiRedactor{on: on}
-	if !on {
-		return r
-	}
-	add := func(v string) {
-		if v = strings.TrimSpace(v); v != "" {
-			r.secrets = append(r.secrets, v)
-		}
-	}
-	addStore := func(raw string) {
-		add(raw)
-		add(strings.TrimSuffix(raw, ".git"))
-		if n, err := repourl.Normalize(raw); err == nil {
-			add(n)
-			if host, rest, ok := strings.Cut(n, "/"); ok {
-				add(host + ":" + rest) // scp-like form, as git prints it
-			}
-		}
-	}
-	if s.Config != nil {
-		for i := range s.Config.Orgs {
-			for _, st := range s.Config.Orgs[i].Stores {
-				addStore(st.URL)
-			}
-		}
-	}
-	for _, l := range s.Result.Links {
-		add(l.StoreURL + " " + l.Folder + "/")
-		addStore(l.StoreURL)
-	}
-	sort.SliceStable(r.secrets, func(i, j int) bool { return len(r.secrets[i]) > len(r.secrets[j]) })
-	return r
-}
+func (whoamiRedactor) str(v string) string { return repourl.MaskText(v) }
 
-func (r whoamiRedactor) str(v string) string {
-	if !r.on {
-		return v
-	}
-	for _, sec := range r.secrets {
-		v = strings.ReplaceAll(v, sec, redactedText)
-	}
-	return v
-}
-
-func (r whoamiRedactor) folder(f string) string {
-	if !r.on || f == "" {
-		return f
-	}
-	return redactedText
-}
+func (whoamiRedactor) folder(f string) string { return f }
 
 // whoamiPersonal is the personal store `me` as one place (G-DECIDE-7) as
 // the setup in effect for dir sees it (ONBOARDING 3.4, the same answer
@@ -358,10 +301,7 @@ func whoamiData(s *orgcfg.Situation, id identity.Resolved, red whoamiRedactor, a
 	}
 	if r.Org != nil {
 		for _, st := range r.Org.Stores {
-			u, f := st.URL, st.OrgFolder
-			if red.on {
-				u, f = redactedText, red.folder(f)
-			}
+			u, f := repourl.Mask(st.URL), red.folder(st.OrgFolder)
 			d.Stores = append(d.Stores, opswhoami.Store{URL: u, Branch: st.Branch, OrgFolder: f})
 		}
 	}

@@ -2,7 +2,7 @@
 
 **In short:** a team is an `@handle` on the org's roster that names a group of people. `lore team add @web --members @tomas,@mira` makes one; from then on `@web` works wherever a person's handle does, such as `lore task add … --assign @web`. The team commands run inside a repo of the org or outside any repo (the active setup's org store).
 
-You want this page when you assign work to a group rather than a person, or keep track of who is on which team. Every output below is a real run (`tests/team/docs/run-examples.sh teams`); outside a terminal lore hides the org folder's name as `<redacted>`.
+You want this page when you assign work to a group rather than a person, or keep track of who is on which team. Every output below is a real run (`tests/team/docs/run-examples.sh teams`).
 
 ## Before you start
 
@@ -17,14 +17,14 @@ Tomas makes `@web` from his plain `work` folder (no repo there), lists the teams
 ```console
 # tomas, in ~
 $ lore team add @web --name 'Web' --members @tomas,@mira
-✓ tem_7a67…9504 @web (2 member(s)) added in <redacted>
+✓ tem_7a67…9504 @web (2 member(s)) added in agency org/
 $ lore team list
 @web              Web                      2 member(s)
 
 # tomas, in acme-hub
 $ lore team show @web
 tem_7a67…9504  @web  Web
-roster: <redacted>
+roster: agency org/
 members (2):
   act_2ad3…f891  @tomas  Tomas Weber
   act_162d…9666  @mira  Mira Patel
@@ -59,7 +59,7 @@ $ lore team member remove @web @mira
 $ lore team member add @web @mira,@tomas
 ✓ @web: 2 member(s) now; @mira added to the team; @tomas already a member
 $ lore team add @web --name 'Web platform'
-✓ tem_7a67…9504 @web (2 member(s)) updated in <redacted>
+✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
 $ lore team list --json
 {
   "teams": [
@@ -84,7 +84,7 @@ $ lore team list --json
       "updated_by": "act_2ad3…f891"
     }
   ],
-  "where": "\u003credacted\u003e"
+  "where": "agency org/"
 }
 ```
 <!-- /example -->
@@ -97,15 +97,15 @@ A team cannot take a person's handle (an `@mention` would mean two things), only
 ```console
 # tomas, in ~
 $ lore team add @mira
-ERROR: [E_INVALID_INPUT] handle @mira is taken by Mira Patel on the roster in <redacted>; a team and a person cannot share one
+ERROR: [E_INVALID_INPUT] handle @mira is taken by Mira Patel on the roster in agency org/; a team and a person cannot share one
   hint: choose another team handle (lore team add @mira-team …)
 (exit 20)
 $ lore team add @ops --members @nobody
-ERROR: [E_NOT_FOUND] no one is @nobody on the roster in <redacted>
+ERROR: [E_NOT_FOUND] no one is @nobody on the roster in agency org/
   hint: check the handle with lore actor list; a new person runs lore actor register (or joins from an invite) first
 (exit 27)
 $ lore team show @ops
-ERROR: [E_NOT_FOUND] no team @ops on the roster in <redacted>
+ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
   hint: lore team list shows the teams; lore team add @ops --members <people> makes it
 (exit 27)
 ```
@@ -119,11 +119,11 @@ ERROR: [E_NOT_FOUND] no team @ops on the roster in <redacted>
 ```console
 # tomas, in ~
 $ lore team remove @web
-✓ tem_7a67…9504 @web removed from the roster in <redacted> (kept for history: tasks that named it still read; lore team add @web brings it back)
+✓ tem_7a67…9504 @web removed from the roster in agency org/ (kept for history: tasks that named it still read; lore team add @web brings it back)
 $ lore team list --all
 @web              Web platform             2 member(s)  [removed]
 $ lore team add @web
-✓ tem_7a67…9504 @web (2 member(s)) updated in <redacted>
+✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
 ```
 <!-- /example -->
 

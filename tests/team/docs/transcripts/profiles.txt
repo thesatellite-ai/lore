@@ -1,11 +1,11 @@
 
 ### profile fields
 tomas (work/acme-hub)$ lore actor edit @mira --title 'Backend engineer' --timezone Europe/Istanbul --location 'Ankara, TR'
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (title, timezone, location) in <redacted>
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (title, timezone, location) in agency org/
 tomas (work/acme-hub)$ lore actor edit @mira --bio 'Payments and billing.' --photo-url https://example.com/mira.png
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in <redacted>
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in agency org/
 tomas (work/acme-hub)$ lore actor edit @mira --clear photo_url,bio
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in <redacted>
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in agency org/
 tomas (work/acme-hub)$ lore actor edit @mira --timezone 'Istanbul time'
 ERROR: [E_INVALID_INPUT] actor edit --timezone: "Istanbul time" is not an IANA zone name
   hint: give an IANA zone name such as Europe/Istanbul or America/New_York
@@ -13,17 +13,17 @@ ERROR: [E_INVALID_INPUT] actor edit --timezone: "Istanbul time" is not an IANA z
 
 ### contacts
 tomas (work/acme-hub)$ lore actor contact add @mira email mira@agency.example --label work --primary --identity
-✓ acn_2ad3618e878ebbf527d34d446ef4f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in <redacted>
+✓ acn_2ad3618e878ebbf527d34d446ef4f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in agency org/
 tomas (work/acme-hub)$ lore actor contact add @mira email mira.patel@example.com --label personal --identity
-✓ acn_162df51b7f78b785c97c26b41ea89666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in <redacted>
+✓ acn_162df51b7f78b785c97c26b41ea89666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in agency org/
 tomas (work/acme-hub)$ lore actor contact add @mira github mira-agency --label work --primary --identity
-✓ acn_54fe984c9b495744c0217776765a28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in <redacted>
+✓ acn_54fe984c9b495744c0217776765a28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in agency org/
 tomas (work/acme-hub)$ lore actor contact add @mira github mirap --label personal --identity
-✓ acn_05e99e22e9e86e96fe4daa7777994603 github mirap added for Mira Patel (@mira) [identity] in <redacted>
+✓ acn_05e99e22e9e86e96fe4daa7777994603 github mirap added for Mira Patel (@mira) [identity] in agency org/
 tomas (work/acme-hub)$ lore actor contact add @mira phone '+90 532 000 0000' --label work --primary
-✓ acn_c0f3c11a5724b0cfd74b256190d9b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in <redacted>
+✓ acn_c0f3c11a5724b0cfd74b256190d9b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in agency org/
 tomas (work/acme-hub)$ lore actor contact add @mira github mirap --label personal --identity
-· acn_05e99e22e9e86e96fe4daa7777994603 github mirap already there [identity] in <redacted>
+· acn_05e99e22e9e86e96fe4daa7777994603 github mirap already there [identity] in agency org/
 tomas (work/acme-hub)$ lore actor contact list --type phone
 acn_c0f3c11a5724b0cfd74b256190d9b5b8 Mira Patel (@mira)       phone     +90 532 000 0000             work       primary           tel:+905320000000
 tomas (work/acme-hub)$ lore actor contact add @mira phone 12 --label work
@@ -53,11 +53,11 @@ created 2026-11-02T10:00:00Z by act_7a670ae8548ed05bf57ad29ad0759504 · updated 
 
 ### contact edit and remove
 tomas (work/acme-hub)$ lore actor contact add @mira linkedin mira-patel --label work
-✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel added for Mira Patel (@mira) [primary] in <redacted>
+✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel added for Mira Patel (@mira) [primary] in agency org/
 tomas (work/acme-hub)$ lore actor contact edit acn_d4314eba822f1bf5908b2b8ded5f313a --note 'old profile, not updated'
-✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel edited for Mira Patel (@mira) [primary] in <redacted>
+✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel edited for Mira Patel (@mira) [primary] in agency org/
 tomas (work/acme-hub)$ lore actor contact remove acn_d4314eba822f1bf5908b2b8ded5f313a --reason 'account closed'
-✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel removed from Mira Patel (@mira) in <redacted> (restorable from the trash)
+✓ acn_d4314eba822f1bf5908b2b8ded5f313a linkedin mira-patel removed from Mira Patel (@mira) in agency org/ (restorable from the trash)
 tomas (work/acme-hub)$ lore actor contact list @mira --identity
 acn_2ad3618e878ebbf527d34d446ef4f891 Mira Patel (@mira)       email     mira@agency.example          work       primary, identity mailto:mira@agency.example
 acn_162df51b7f78b785c97c26b41ea89666 Mira Patel (@mira)       email     mira.patel@example.com       personal   identity          mailto:mira.patel@example.com
@@ -66,9 +66,9 @@ acn_05e99e22e9e86e96fe4daa7777994603 Mira Patel (@mira)       github    mirap   
 
 ### contact types
 tomas (work/acme-hub)$ lore contact-type add bitbucket --kind handle --identity --url-template 'https://bitbucket.org/{value}'
-✓ contact type bitbucket added in <redacted>
+✓ contact type bitbucket added in agency org/
 tomas (work/acme-hub)$ lore contact-type edit github --label GitHub
-✓ contact type github edited in <redacted>
+✓ contact type github edited in agency org/
 tomas (work/acme-hub)$ lore contact-type list
 github       handle  identity  changed   GitHub       https://github.com/{value}
 gitlab       handle  identity  built-in  GitLab       https://gitlab.com/{value}
@@ -99,7 +99,7 @@ ERROR: [E_PERIOD_OVERLAP] period 2026-01-12 → now is still open while 2026-02-
 
 ### roles
 tomas (work/acme-hub)$ lore role add tech_writer --label 'Technical writer'
-✓ role tech_writer added in <redacted>
+✓ role tech_writer added in agency org/
 tomas (work/acme-hub)$ lore role list
 lead  Lead — leads the project
 dev  Developer — writes the code
@@ -114,9 +114,9 @@ ERROR: [E_ROLE_UNKNOWN] not a live role: wizard (unknown)
   hint: lore role list; lore role add <name>
 (exit 20)
 tomas (work/acme-hub)$ lore role edit tech_writer --description 'writes the user docs'
-✓ role tech_writer updated in <redacted>
+✓ role tech_writer updated in agency org/
 tomas (work/acme-hub)$ lore role edit qa --retire
-✓ role qa updated in <redacted>
+✓ role qa updated in agency org/
 
 ### members
 tomas (work/acme-hub)$ lore project member add acme-hub @mira --role dev,reviewer
@@ -285,7 +285,7 @@ This writes org/.lore/lore-org.yaml into the store (no identity) and adds to ~/.
 
 ✓ wrote org/.lore/lore-org.yaml (pushed)
 ✓ added org entry acme
-✓ act_d191616cfa49f94ede5d5148b8b045c2 Ana Lima (@ana) registered in <redacted>
+✓ act_d191616cfa49f94ede5d5148b8b045c2 Ana Lima (@ana) registered in acme org/
   teammates join with: lore org import git@github.com:acme/lore-notes --key human:<their email> --name "Their Name"
   tie a client repo to it (written only into the store): lore org link acme --project <folder>
 ana (work/handbook)$ lore org rename acme acme-studio
@@ -301,7 +301,7 @@ machine    mch_017941fe
 agent      none  (no coding agent detected)
 project    (no .lore/data/_meta.json here)
 remotes    github.com/acme/handbook
-stores     <redacted> on branch main  (org folder <redacted>)
+stores     git@github.com:acme/lore-notes on branch main  (org folder org)
 links      known  no project id here yet, so no store link can name this repo
 personal   not set
 

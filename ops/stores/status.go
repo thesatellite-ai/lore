@@ -57,11 +57,3 @@ type RepoUser interface {
 type AddressNoter interface {
 	AddressNote(ctx context.Context, url, branch string) string
 }
-
-// ADDRESS notes: addressSecond starts the note of a second address
-// (wire: "second address; writes go to <url>"); addressRedacted replaces
-// it when org urls are redacted (no terminal, CI).
-const (
-	addressSecond   = "second address"
-	addressRedacted = addressSecond + "; lore doctor names the address writes go to"
-)

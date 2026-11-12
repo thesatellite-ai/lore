@@ -62,7 +62,7 @@ func (l Label) MarshalText() ([]byte, error) { return []byte(l.Value), nil }
 // ShowIn is the input of whoami.show.
 type ShowIn struct {
 	Explain      bool  `json:"explain,omitempty" flag:"explain" desc:"print every org rule with hit or miss and why"`
-	Share        bool  `json:"share,omitempty" flag:"share" desc:"on a terminal, also print store URLs and internal folders (hidden without a TTY or with CI set)"`
+	Share        bool  `json:"share,omitempty" flag:"share" desc:"kept for older scripts: whoami always prints store URLs and folders (only a credential inside a URL is masked)"`
 	MachineLabel Label `json:"machine_label,omitempty,omitzero" flag:"machine-label" desc:"set this machine's label, synced with its profile to our own stores (\"\" clears)"`
 }
 

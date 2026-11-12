@@ -82,18 +82,18 @@ A note for yourself that should follow you into every repo is a plain `--to me` 
 ```console
 # alice, in website
 $ lore store init me
-✓ created store me (sto_4c59…6c38) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+✓ created store me (sto_28f8…03df) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 $ lore memory add --to me --everywhere --body 'I write short commit messages'
 ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 $ lore memory add --to me --body 'I write short commit messages'
-✓ mem_3b62…e913 [me]
+✓ mem_4c59…6c38 [me]
   scope: [master]
 
 # alice, in landing
 $ lore memory list
-mem_3b62…e913  I write short commit messages  [me]
+mem_4c59…6c38  I write short commit messages  [me]
 ```
 <!-- /example -->
 

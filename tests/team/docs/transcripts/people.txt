@@ -57,7 +57,7 @@ This adds to ~/.lore/config.yaml:
         - github.com/client/*
 
 ✓ added org entry agency
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Bob Roe (@bob) registered in <redacted>
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Bob Roe (@bob) registered in agency org/
 bob$ cat ~/.lore/config.yaml
 orgs:
   - name: agency
@@ -76,15 +76,15 @@ orgs:
       store: sto_2ad3618e878ebbf527d34d446ef4f891
       version: 601d2850ffd047c2890d2472633cc4dbdabe12fd
 bob (work/website)$ lore whoami
-org        agency  (matched by: link in <redacted>, project id + remote)
+org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_7a670ae8548ed05bf57ad29ad0759504  @bob  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_162df51b7f78b785c97c26b41ea89666
 remotes    github.com/client/website
-stores     <redacted> on branch main  (org folder <redacted>)
-internal   <redacted> <redacted>/
+stores     git@github.com:agency/notes on branch main  (org folder org)
+internal   github.com/agency/notes client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   not set
 
@@ -116,7 +116,7 @@ client
 lore-store.yaml
 org
 bob$ lore store forget git@github.com:agency/notes
-✓ forgot <redacted> (removed ~/.lore/clones/github.com/agency/notes; the next command that needs it clones it again)
+✓ forgot github.com/agency/notes (removed ~/.lore/clones/github.com/agency/notes; the next command that needs it clones it again)
 
 ### cache prune
 alice$ lore cache prune --dry-run

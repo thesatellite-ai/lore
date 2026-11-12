@@ -22,6 +22,7 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
@@ -45,7 +46,7 @@ func (a *App) CheckStores(ctx context.Context) []opsstores.StoreCheck {
 		}
 		own, _ = splitHeldRecords(list)
 	}
-	now, quiet := a.Now(), quietOutput()
+	now := a.Now()
 	var out []opsstores.StoreCheck
 	for _, s := range a.storeStandings(ctx) {
 		c := a.checkStore(ctx, s, now)
@@ -59,10 +60,7 @@ func (a *App) CheckStores(ctx context.Context) []opsstores.StoreCheck {
 			c.Refused = opsstores.PushRefusal{Code: r.Code, Reason: r.Reason, At: r.At, Rows: len(r.Rows)}
 			c.Problems = append(c.Problems, fmt.Sprintf("its last push was refused at %s (%s: %s); the commits wait in the local clone: fix what the store's push rule names, then run `lore sync`", r.At, r.Code, r.Reason))
 		}
-		c.Shown = c.URL
-		if quiet {
-			c.Shown = redactedText
-		}
+		c.Shown = repourl.Mask(c.URL)
 		out = append(out, c)
 	}
 	return out

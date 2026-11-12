@@ -10,13 +10,13 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// TestRosterRefusalsHideOrgFolder (§6.5): every refusal naming an org
-// roster hides the org folder ("agency org/") without a terminal, exactly
-// as the success lines do, and names it on a terminal; the repo's own
-// roster ("this repo") is never hidden. Each refusal keeps its code and
-// its hint either way.
-func TestRosterRefusalsHideOrgFolder(t *testing.T) {
-	t.Parallel()
+// TestRosterRefusalsNameOrgFolder: every refusal naming an org roster
+// names its org folder ("agency org/") as the success lines do, in a pipe
+// and in CI too (an org folder is no secret; refusals said "<redacted>"),
+// and the repo's own roster as "this repo". Each refusal keeps its code
+// and its hint.
+func TestRosterRefusalsNameOrgFolder(t *testing.T) {
+	t.Setenv(ciMarkers[0], "1")
 	id, err := ids.ParseAny("act_0190f0f0f0f07000800000000000dead")
 	if err != nil {
 		t.Fatal(err)
@@ -34,42 +34,25 @@ func TestRosterRefusalsHideOrgFolder(t *testing.T) {
 		{"deleted row", errs.NotFound, false, func(r rosterAt) error { return r.deletedRowErr(schema.TableActors, id) }},
 		{"actor missing", errs.NotFound, true, func(r rosterAt) error { return r.actorMissErr("@nobody") }},
 	}
-	org := store.Source("agency-notes")
 	for _, c := range refusals {
 		for _, m := range []struct {
-			mode     string
-			at       rosterAt
-			want     string
-			forbid   string
-			redacted bool
+			mode string
+			at   rosterAt
+			want string
 		}{
-			{"org, no terminal", newRosterAtFor(org, "agency org/", false), redactedText, "org/", true},
-			{"org, zero value", rosterAt{src: org, where: "agency org/"}, redactedText, "org/", true},
-			{"org, terminal", newRosterAtFor(org, "agency org/", true), "agency org/", redactedText, false},
-			{"repo, no terminal", newRosterAtFor(store.SourceRepo, repoRosterWhere, false), repoRosterWhere, redactedText, false},
+			{"org", newRosterAt(store.Source("agency-notes"), "agency org/"), "agency org/"},
+			{"repo", newRosterAt(store.SourceRepo, repoRosterWhere), repoRosterWhere},
 		} {
 			e := errs.EnvelopeOf(c.err(m.at)).Error
-			all := e.Message + "\n" + e.Hint
 			if e.Code != c.code {
 				t.Errorf("%s / %s: code %s, want %s", c.name, m.mode, e.Code, c.code)
 			}
-			if !strings.Contains(e.Message, "on the roster in "+m.want) {
+			if !strings.Contains(e.Message, "on the roster in "+m.want) || strings.Contains(e.Message+e.Hint, redactedText) {
 				t.Errorf("%s / %s: message %q does not name the roster as %q", c.name, m.mode, e.Message, m.want)
-			}
-			if strings.Contains(all, m.forbid) {
-				t.Errorf("%s / %s: %q shows %q", c.name, m.mode, all, m.forbid)
 			}
 			if c.hint && e.Hint == "" {
 				t.Errorf("%s / %s: hint lost", c.name, m.mode)
 			}
 		}
 	}
-}
-
-// newRosterAtFor is newRosterAt with the terminal decision given, so both
-// sides of §6.5 are tested without a real terminal.
-func newRosterAtFor(src store.Source, where string, terminal bool) rosterAt {
-	r := newRosterAt(src, where)
-	r.reveal = terminal
-	return r
 }

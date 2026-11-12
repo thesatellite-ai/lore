@@ -216,30 +216,18 @@ func (a *App) rosterInactive(ctx context.Context, r rosterAt, handle string) err
 // P3-CMDLORE-5).
 type rosterAt struct {
 	src store.Source
-	// where names it in messages: "this repo", "northwind org/".
+	// where names it in messages: "this repo", "northwind org/". An org
+	// folder is no secret: it is printed as it is, in a pipe and in CI too.
 	where string
-	// reveal is whether output may name an org folder: true only on a
-	// terminal with CI unset (§6.5, set by newRosterAt from quietOutput).
-	// The zero value hides it, so a rosterAt built without the check
-	// never leaks the folder.
-	reveal bool
 }
 
-// newRosterAt is the roster at src named where, revealing an org folder
-// only when output is not quiet (§6.5).
+// newRosterAt is the roster at src named where.
 func newRosterAt(src store.Source, where string) rosterAt {
-	return rosterAt{src: src, where: where, reveal: !quietOutput()}
+	return rosterAt{src: src, where: where}
 }
 
-// shown is where for output, success lines and refusals alike: an org
-// folder is internal, so it is hidden without a terminal or in CI (§6.5).
-// Every message naming the roster goes through it, never through where.
-func (r rosterAt) shown() string {
-	if r.src != store.SourceRepo && !r.reveal {
-		return redactedText
-	}
-	return r.where
-}
+// shown is where for output, success lines and refusals alike.
+func (r rosterAt) shown() string { return r.where }
 
 // handleTakenErr refuses a handle another actor or team holds on r.
 func (r rosterAt) handleTakenErr(handle, holder string) error {
