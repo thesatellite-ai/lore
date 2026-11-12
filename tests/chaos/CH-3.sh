@@ -19,14 +19,14 @@ OUT=$($LORE migrate unlock 2>&1) && fail "unlock released a lock whose process i
 [ -f "$LOCK" ] || fail "unlock removed a live process's lock"
 kill "$LIVE" 2>/dev/null; wait "$LIVE" 2>/dev/null
 
-# The killed run: its pid is gone. status says so, run refuses until unlock.
+# The killed run: its pid is gone. status says so, and the next run takes
+# the lock over and says so (owner item 46: a dead holder's lock is no
+# reason to stop).
 DEAD=$(sh -c 'echo $$')
 printf '%s' "$DEAD" > "$LOCK"
 $LORE migrate status 2>&1 | grep -q "stale: pid $DEAD is gone" || fail "status does not name the stale lock"
-OUT=$($LORE migrate run --offline 2>&1) && fail "migrate run went past a stale lock: $OUT"
-echo "$OUT" | grep -q "E_MIGRATE_LOCKED" || fail "a stale lock is not refused as E_MIGRATE_LOCKED: $OUT"
-$LORE migrate unlock >/dev/null || fail "unlock of a stale lock"
+OUT=$($LORE migrate run --offline 2>&1) || fail "migrate run did not take over a stale lock: $OUT"
+echo "$OUT" | grep -q "took over .lore/state/migrate.lock from pid $DEAD, which is no longer running" || fail "the take-over is not said: $OUT"
 [ -f "$LOCK" ] && fail "the stale lock is still there"
-$LORE migrate run --offline >/dev/null || fail "migrate run after unlock"
 $LORE doctor >/dev/null || fail "doctor not healthy afterwards"
 pass CH-3

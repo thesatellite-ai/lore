@@ -16,8 +16,12 @@ import (
 // takes no team lock under `lore migrate run` or lore fix; the line says
 // the remote does not exist and the run goes on locally. A remote that
 // exists but cannot be reached is still E_OFFLINE.
+//
+// The fake ssh goes in GIT_SSH_COMMAND, not core.sshCommand: git lets
+// that variable override the config, and the gate exports one
+// (tests/lib/after-land.sh), so a config-only fake ran the real ssh there.
+// t.Setenv needs the test and its subtests to run serially.
 func TestMigrateTeamLockRemoteGone(t *testing.T) {
-	t.Parallel()
 	bin := t.TempDir()
 	fakeSSH := func(name, stderr string) string {
 		p := filepath.Join(bin, name)
@@ -40,11 +44,10 @@ func TestMigrateTeamLockRemoteGone(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			repo := gitRepo(t)
 			gitIn(t, repo, nil, "remote", "add", "origin", tc.url)
 			if tc.sshCmd != "" {
-				gitIn(t, repo, nil, "config", "core.sshCommand", tc.sshCmd)
+				t.Setenv("GIT_SSH_COMMAND", tc.sshCmd)
 			}
 			// a person (or a coding agent acting for them): coordination needs one
 			a, err := New(Options{RepoDir: repo, Home: srcHome(t, "identity:\n  key: human:pat@example.com\n  name: Pat\n")})

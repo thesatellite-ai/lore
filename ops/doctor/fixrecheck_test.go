@@ -71,3 +71,46 @@ func TestFixKeepsWhatTheFixSaid(t *testing.T) {
 		t.Fatalf("notes = %q, want %q", got, want)
 	}
 }
+
+// fixingHost is a Host whose fixing run (fix) repaired something itself
+// and says so in Base.Fixed (the --supersedes repair); the re-check after
+// it finds nothing.
+type fixingHost struct{ line string }
+
+func (h fixingHost) Base(_ context.Context, fix bool) (Base, error) {
+	b := healthy()
+	if fix {
+		b.Fixed, b.Notes = []string{h.line}, []string{h.line}
+	}
+	return b, nil
+}
+
+// TestFixStepNamesBaseRepair (item 46): a repair this binary's own base
+// made in the fixing run (84 --supersedes links written and pushed) is a
+// fixed line of the doctor fixes step, so lore fix never prints that step
+// as "current" after it wrote.
+func TestFixStepNamesBaseRepair(t *testing.T) {
+	t.Parallel()
+	const line = "2 --supersedes links repaired, commit abc1234 in store shared: rule a → b, rule c → d"
+	r, err := FixProject(context.Background(), baseEnv{recheckEnv: &recheckEnv{}, host: fixingHost{line: line}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st FixStep
+	for _, s := range r.Steps {
+		if s.Step == StepDoctorFix {
+			st = s
+		}
+	}
+	if !st.Changed || st.Result != "fixed 1" || !slices.Equal(st.Detail, []string{line}) {
+		t.Fatalf("doctor fixes step = %+v, want fixed 1 naming the repair", st)
+	}
+}
+
+// baseEnv is recheckEnv with another Host.
+type baseEnv struct {
+	*recheckEnv
+	host Host
+}
+
+func (e baseEnv) DoctorHost(context.Context) (Host, bool) { return e.host, true }

@@ -54,7 +54,7 @@ func TestDoctorFix_ReversedSupersedesLink(t *testing.T) {
 	}
 
 	rep, res = p.doctor(t, "--fix", "--yes")
-	if rep.Status != "healthy" || !hasLine(rep.Notes, "repaired 1 --supersedes link(s): "+link) {
+	if rep.Status != "healthy" || !hasLine(rep.Notes, "1 --supersedes link repaired: "+link) {
 		t.Fatalf("--fix --yes repairs the link: %s", res)
 	}
 	oldBody, _ := p.c.ReadFile(oldFile)

@@ -769,47 +769,45 @@ func (a *App) statusPlaces(ctx context.Context, out *opsmigrate.StatusOut) error
 	return nil
 }
 
-// lockPID reads the pid in the migration lock (ok=false: no lock file).
-func lockPID(top string) (int, bool) {
-	b, err := os.ReadFile(filepath.Clean(filepath.Join(top, filepath.FromSlash(MigrateLockFile))))
-	if err != nil {
-		return 0, false
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil {
-		return 0, true
-	}
-	return pid, true
-}
-
 // lockState is the status line of the migration lock.
 func (a *App) lockState(top string) string {
-	pid, ok := lockPID(top)
-	switch {
-	case !ok:
+	path := filepath.Join(top, filepath.FromSlash(MigrateLockFile))
+	h, ok := readMigrateHolder(path)
+	if !ok {
 		return "free"
-	case processAlive(pid):
-		return "held by a lore migrate running on this machine (pid " + strconv.Itoa(pid) + ")"
+	}
+	switch decideMigrateLock(path, h) {
+	case lockHeldElsewhere:
+		return "held by a lore migrate on " + h.Host + " (pid " + strconv.Itoa(h.PID) + "); never taken over automatically: if no lore runs there, clear it with `rm " + path + "`"
+	case lockHeldHere, lockBeingWritten:
+		return "held by a lore migrate running on this machine (pid " + strconv.Itoa(h.PID) + ")"
 	default:
-		return "stale: pid " + strconv.Itoa(pid) + " is gone; release it with `lore migrate unlock`"
+		return "stale: pid " + strconv.Itoa(h.PID) + " is gone; the next run takes it over (or release it with `lore migrate unlock`)"
 	}
 }
 
 // Unlock implements opsmigrate.Journal (7.2: only a lock whose process is
-// gone; the team lock on the signals ref is not built yet).
+// gone; another machine's lock is never released here, its pid means
+// nothing on this machine; the team lock on the signals ref is not built
+// yet).
 func (a *App) Unlock(ctx context.Context) (opsmigrate.UnlockOut, error) {
 	top, path, err := a.journalPath(ctx)
 	if err != nil {
 		return opsmigrate.UnlockOut{}, err
 	}
-	pid, ok := lockPID(top)
+	lock := filepath.Join(top, filepath.FromSlash(MigrateLockFile))
+	h, ok := readMigrateHolder(lock)
 	if !ok {
 		return opsmigrate.UnlockOut{Line: "no migration lock on this machine"}, nil
 	}
-	if processAlive(pid) {
+	pid := h.PID
+	switch decideMigrateLock(lock, h) {
+	case lockHeldElsewhere:
+		return opsmigrate.UnlockOut{}, migrateLockedErr(lock, h)
+	case lockHeldHere, lockBeingWritten:
 		return opsmigrate.UnlockOut{}, errs.New(errs.MigrateLocked, "migrate: the lock is held by a lore migrate that is still running on this machine (pid "+strconv.Itoa(pid)+"); nothing changed")
 	}
-	if err := os.Remove(filepath.Join(top, filepath.FromSlash(MigrateLockFile))); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := os.Remove(lock); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return opsmigrate.UnlockOut{}, errs.Wrap(errs.Internal, "migrate: remove "+MigrateLockFile, err)
 	}
 	line := "released the migration lock (pid " + strconv.Itoa(pid) + " is gone)"

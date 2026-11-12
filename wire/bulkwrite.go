@@ -23,6 +23,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -57,10 +58,17 @@ type bulkWrite struct {
 	ctx    context.Context
 	stages map[store.Source]context.Context
 	order  []store.Source
+	// touched is every store a stage was opened for, in first-use order
+	// (order is emptied by commit; this is kept for the output).
+	touched []store.Source
 	// pending counts the rows staged per store and not yet committed.
 	pending map[store.Source]int
 	// written counts the rows committed per store.
 	written map[store.Source]int
+	// commits is the commit each store's last write made (a store clone;
+	// a store without commits has none), for the output (item 46: a step
+	// that wrote says what it wrote).
+	commits map[store.Source]string
 	// staged lists the rows staged per store (to fail them all when the
 	// store's commit fails).
 	staged map[store.Source][]bulkFailure
@@ -72,7 +80,7 @@ type bulkWrite struct {
 // bulk starts a multi-row write whose store commits carry title.
 func (a *App) bulk(ctx context.Context, title string, fixOf func(engine.Ref) string) *bulkWrite {
 	return &bulkWrite{a: a, ctx: store.WithCommitTitle(ctx, title), stages: map[store.Source]context.Context{},
-		pending: map[store.Source]int{}, written: map[store.Source]int{}, staged: map[store.Source][]bulkFailure{}, fixOf: fixOf}
+		pending: map[store.Source]int{}, written: map[store.Source]int{}, commits: map[store.Source]string{}, staged: map[store.Source][]bulkFailure{}, fixOf: fixOf}
 }
 
 // stage is src's open stage (made on first use).
@@ -83,6 +91,9 @@ func (b *bulkWrite) stage(src store.Source) context.Context {
 	s := engine.Staging(b.ctx)
 	b.stages[src] = s
 	b.order = append(b.order, src)
+	if !slices.Contains(b.touched, src) {
+		b.touched = append(b.touched, src)
+	}
 	return s
 }
 
@@ -173,6 +184,11 @@ func (b *bulkWrite) commitStore(src store.Source) error {
 		}
 	} else {
 		b.written[src] += b.pending[src]
+		if st, serr := b.a.state(b.ctx); serr == nil {
+			if gb := gitOf(st.byName[src]); gb != nil && gb.CloneMode() { // repo mode writes files only: HEAD is not lore's
+				b.commits[src] = gb.HeadCommit(b.ctx)
+			}
+		}
 	}
 	b.pending[src], b.staged[src] = 0, nil
 	return err
@@ -189,6 +205,20 @@ func (b *bulkWrite) commit() error {
 	}
 	b.order = nil
 	return first
+}
+
+// commitText names the commits the write made, in the order the stores
+// were first touched: "commit abc1234 in store shared" (joined with ", "
+// for more than one store; "" when no store made a commit: a folder
+// store, or nothing written).
+func (b *bulkWrite) commitText() string {
+	var parts []string
+	for _, src := range b.touched {
+		if c := b.commits[src]; c != "" {
+			parts = append(parts, "commit "+shortCommit(c)+" in store "+string(src))
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 // total is the rows written in every store.

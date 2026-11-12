@@ -27,6 +27,7 @@ package wire
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -126,6 +127,14 @@ const renderSkippedMigrateFailed = "skipped: the migrate step failed, so this pr
 // interrupted migration or a v0.1.17 shared-database pointer.
 func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) opsdoctor.FixStep {
 	st := opsdoctor.FixStep{Step: opsdoctor.StepMigrate, Where: filepath.Join(top, rowfs.LoreDir, rowfs.DataDir), Result: opsdoctor.ResultCurrent}
+	// owner item 46: a migration lock a running (or another machine's)
+	// lore holds fails the step now, not after Status opened and synced
+	// the stores and read every row (minutes on a big repo); a lock whose
+	// holder is gone is taken over by the run below
+	if err := migrateLockBlocked(top); err != nil {
+		st.Failed, st.Result = true, withHint(err)
+		return st
+	}
 	status, err := a.Status(ctx)
 	if err != nil {
 		st.Failed, st.Result = true, err.Error()
@@ -135,6 +144,11 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 	if len(status.Pending) == 0 && !modeB && !strings.HasPrefix(status.Journal, "interrupted") {
 		return st
 	}
+	via := migrateViaFirstSave
+	if teamLock {
+		via = migrateViaFix
+	}
+	ctx = withMigrateVia(ctx, via)
 	if teamLock {
 		// lore fix takes the team lock on the signals ref, as `lore migrate
 		// run` does; the first write's safe steps run without it, as any
@@ -153,6 +167,9 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 	}
 	if err != nil {
 		st.Failed, st.Result = true, err.Error()
+		if errs.Has(err, errs.MigrateLocked) {
+			st.Result = withHint(err) // what it waits for, or how to clear it
+		}
 		return st
 	}
 	lines := strings.Split(strings.TrimRight(out.Text(), "\n"), "\n")
@@ -163,6 +180,17 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 		}
 	}
 	return st
+}
+
+// withHint is err's text and, for a typed error with one, "; " and its
+// hint (a fix step's result is one line a person reads, with no separate
+// hint line).
+func withHint(err error) string {
+	var e *errs.Error
+	if errors.As(err, &e) && e.Hint != "" {
+		return err.Error() + "; " + e.Hint
+	}
+	return err.Error()
 }
 
 // renderSkippedNoProject starts the render step's result when the repo
@@ -390,6 +418,10 @@ type fixChild struct {
 	// yes: the caller confirmed (lore fix --all --yes), so the child's
 	// repairs that ask first run (owner item 24).
 	yes bool
+	// exe, timeout and grace replace this binary, fixRepoTimeout and
+	// fixChildGrace (tests: a fake child, a short limit).
+	exe            string
+	timeout, grace time.Duration
 }
 
 // args are the child's lore arguments.
@@ -418,27 +450,49 @@ func (c fixChild) env(environ []string) []string {
 
 // runFixIn runs `lore fix --json` (this binary) in root and reads its
 // result; a run that cannot start or answer is the repo's Error.
+//
+// A child that does not finish in time (or whose run is cancelled) is
+// stopped gracefully, its whole process group: SIGTERM (lore cancels its
+// run and releases its locks), fixChildGrace, then SIGKILL. A migration
+// lock still naming the child's pid after that is removed, so the next
+// run finds it free (owner item 46: a child killed at the limit left
+// .lore/state/migrate.lock behind and every later lore fix failed).
 func runFixIn(ctx context.Context, root string, c fixChild) opsfix.RepoResult {
 	res := opsfix.RepoResult{Repo: root}
 	start := time.Now()
 	defer func() { res.WallMS = max(time.Since(start).Milliseconds(), 1) }()
-	ctx, cancel := context.WithTimeout(ctx, fixRepoTimeout)
+	limit := cmp.Or(c.timeout, fixRepoTimeout)
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
-	exe, err := os.Executable()
-	if err != nil {
-		res.Error, res.Exit = "cannot find this lore binary: "+err.Error(), 2
-		return res
+	exe := c.exe
+	if exe == "" {
+		var err error
+		if exe, err = os.Executable(); err != nil {
+			res.Error, res.Exit = "cannot find this lore binary: "+err.Error(), 2
+			return res
+		}
 	}
 	cmd := exec.CommandContext(ctx, exe, c.args()...) // #nosec G204 -- this binary, fixed arguments
 	cmd.Dir, cmd.Env = root, c.env(os.Environ())
+	fixChildGroup(cmd)
+	cmd.Cancel = func() error { return fixChildTerm(cmd) }
+	cmd.WaitDelay = cmp.Or(c.grace, fixChildGrace) // then Go kills the child and closes its pipes
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	raw, runErr := cmd.Output()
 	var exitErr *exec.ExitError
+	if ctx.Err() != nil && cmd.Process != nil {
+		fixChildKill(cmd) // whatever of its group outlived the grace (git, ssh)
+		released := ""
+		if releaseChildMigrateLock(root, cmd.Process.Pid) {
+			released = "; removed the " + MigrateLockFile + " it held"
+		}
+		if ctx.Err() == context.DeadlineExceeded {
+			res.Error, res.Exit = fmt.Sprintf("lore fix did not finish in %s and was stopped%s%s", limit, released, stderrTail(stderr.String())), 2
+			return res
+		}
+	}
 	switch {
-	case ctx.Err() == context.DeadlineExceeded:
-		res.Error, res.Exit = fmt.Sprintf("lore fix did not finish in %s and was stopped%s", fixRepoTimeout, stderrTail(stderr.String())), 2
-		return res
 	case runErr == nil:
 	case errors.As(runErr, &exitErr):
 		res.Exit = exitErr.ExitCode()
@@ -468,6 +522,10 @@ func runFixIn(ctx context.Context, root string, c fixChild) opsfix.RepoResult {
 // fixRepoTimeout bounds one repo's lore fix under --all, so a child that
 // hangs is named with this error and the others still run.
 const fixRepoTimeout = 10 * time.Minute
+
+// fixChildGrace is how long a stopped child gets after SIGTERM to release
+// its locks and exit before SIGKILL.
+const fixChildGrace = 5 * time.Second
 
 // stderrTailLines is how much of a failed child's stderr its block keeps.
 const stderrTailLines = 20

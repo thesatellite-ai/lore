@@ -247,6 +247,23 @@ func supersedeWarning(fixes []supersedeFix) string {
 		"run `lore doctor --fix` to move each link onto the old row (lore migrate run and lore store adopt convert them too)", len(fixes), describeSupersedeFixes(fixes))
 }
 
+// Commands a --supersedes repair names in its commit title.
+const (
+	supersedeByDoctor  = "doctor --fix"
+	supersedeByMigrate = "migrate"
+)
+
+// supersedeRepairedLine is the fixed line of a repair that wrote: how
+// many links, the commit that holds them ("" for a store without
+// commits), and each link.
+func supersedeRepairedLine(done int, commit, list string) string {
+	s := plural(done, "--supersedes link") + " repaired"
+	if commit != "" {
+		s += ", " + commit
+	}
+	return s + ": " + list
+}
+
 // supersedeKindPlan is one kind's plan with its rows by id.
 type supersedeKindPlan struct {
 	k     supersedeKind
@@ -278,7 +295,10 @@ func (a *App) planSupersedes(ctx context.Context) ([]supersedeKindPlan, []supers
 // the caller's confirmation, repairs them in one batch. Without the
 // confirmation it answers E_NEEDS_CONFIRM naming every fix (the terminal
 // asks; --yes answers). A read failure is an error line, never a crash.
-func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail func(string)) error {
+// A repair that wrote is a fixed line (fixed) naming the links and the
+// commit, so lore fix's doctor fixes step says what it wrote (item 46: it
+// said "current" after writing and pushing 84 links).
+func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail, fixed func(string)) error {
 	plans, fixes, err := a.planSupersedes(ctx)
 	if err != nil {
 		fail(err.Error())
@@ -304,12 +324,12 @@ func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail f
 		q := fmt.Sprintf(supersedeQuestion, len(fixes), list)
 		return errs.New(errs.NeedsConfirm, q).WithQuestion(q).WithHint("run `lore doctor` to list them; `lore doctor --fix --yes` repairs them")
 	}
-	done, err := a.applySupersedes(ctx, plans)
+	done, commit, err := a.applySupersedes(ctx, plans, supersedeByDoctor)
 	if err != nil {
 		fail(err.Error() + "; run `lore doctor --fix` again")
 		return nil
 	}
-	note(fmt.Sprintf("repaired %d --supersedes link(s): %s", done, list))
+	fixed(supersedeRepairedLine(done, commit, list))
 	return nil
 }
 
@@ -317,9 +337,11 @@ func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail f
 // of a store's rows in ONE store commit (owner report 2026-11-12: one
 // commit and push per link took 24 minutes for 85 links). A row that
 // cannot be written is listed with its reason; the others are written.
-// It returns the links repaired.
-func (a *App) applySupersedes(ctx context.Context, plans []supersedeKindPlan) (int, error) {
-	b := a.bulk(ctx, "doctor --fix: --supersedes links onto the rows they replace", nil)
+// by names the command in the commit title (item 46: the repair migrate
+// makes was titled "doctor --fix"). It returns the links repaired and the commits that hold them ("commit
+// abc1234 in store shared"; "" when no store made a commit).
+func (a *App) applySupersedes(ctx context.Context, plans []supersedeKindPlan, by string) (int, string, error) {
+	b := a.bulk(ctx, by+": --supersedes links onto the rows they replace", nil)
 	stage := func(t row.Table, id, next, status string) {
 		ref, patch, err := successorEdit(t, id, next, status)
 		if err != nil {
@@ -355,12 +377,12 @@ func (a *App) applySupersedes(ctx context.Context, plans []supersedeKindPlan) (i
 	}
 	cerr := b.commit()
 	if ferr := b.failedErr("supersede links", "lore doctor --fix"); ferr != nil {
-		return 0, ferr
+		return 0, "", ferr
 	}
 	if cerr != nil {
-		return 0, cerr
+		return 0, "", cerr
 	}
-	return fixes, nil
+	return fixes, b.commitText(), nil
 }
 
 // StepSupersedes is the migrate step that converts the old links.
@@ -375,12 +397,15 @@ func (a *App) migrateSupersedes(ctx context.Context, dryRun bool) ([]string, int
 	if err != nil || len(fixes) == 0 {
 		return nil, 0, err
 	}
-	verb := "would move"
+	verb, commit := "would move", ""
 	if !dryRun {
-		if _, err = a.applySupersedes(ctx, plans); err != nil {
+		if _, commit, err = a.applySupersedes(ctx, plans, supersedeByMigrate); err != nil {
 			return nil, 0, err
 		}
 		verb = "moved"
+		if commit != "" {
+			commit = ", " + commit
+		}
 	}
-	return []string{StepSupersedes + ": " + verb + " " + plural(len(fixes), "--supersedes link") + " written by lore 0.1.16 or older onto the row each replaces (" + describeSupersedeFixes(fixes) + ")"}, len(fixes), nil
+	return []string{StepSupersedes + ": " + verb + " " + plural(len(fixes), "--supersedes link") + " written by lore 0.1.16 or older onto the row each replaces" + commit + " (" + describeSupersedeFixes(fixes) + ")"}, len(fixes), nil
 }
