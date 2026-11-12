@@ -5,8 +5,10 @@ package wire
 // .gitignore lacks (wire/host GitignoreHook → EnsureGitignore); a read
 // never edits that tracked file (owner report 2026-11-11: `lore task list`
 // in a v0.1.17 repo rewrote .gitignore): it keeps the files out of git
-// status through the clone's own .git/info/exclude (EnsureLocalExclude)
-// and `lore doctor` names what is missing and the command that adds it.
+// status through the clone's own .git/info/exclude (EnsureLocalExclude;
+// a read adds only lines for files that exist, EnsureLocalExcludeExisting,
+// and creates none itself: the repo cache lives under the lore home) and
+// `lore doctor` names what is missing and the command that adds it.
 //
 //	MissingGitignoreLines: a line counts as listed when .gitignore holds
 //	   it or a rule git shares with the team ignores it; this clone's
@@ -19,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 )
 
 // GitignoreLines are the lore paths every project's .gitignore lists: the
@@ -98,8 +102,39 @@ func sharedIgnores(ctx context.Context, root, path string) bool {
 // keeps lore's cache and lock out of git status without editing the
 // tracked .gitignore. Nothing missing: the file is not touched.
 func EnsureLocalExclude(ctx context.Context, root string) ([]string, error) {
+	return ensureLocalExclude(ctx, root, false)
+}
+
+// EnsureLocalExcludeExisting is EnsureLocalExclude for a read: only the
+// lines naming a path that exists in root's work tree now (an older
+// build's .lore/lore-cache.db, a lock or state/ a write left) are added.
+// A read creates no file in the repo (the repo cache lives under the lore
+// home, owner item 16), so a read in a repo whose .gitignore lacks lore's
+// lines leaves .git/info/exclude as it was when nothing is there to hide.
+func EnsureLocalExcludeExisting(ctx context.Context, root string) ([]string, error) {
+	return ensureLocalExclude(ctx, root, true)
+}
+
+// localPathExists reports whether a GitignoreLines entry names something
+// on disk under root (a glob entry: any match; a folder entry: the folder).
+func localPathExists(root, line string) bool {
+	p := filepath.Join(root, filepath.FromSlash(strings.TrimSuffix(line, "/")))
+	if strings.ContainsAny(line, "*?[") {
+		m, err := filepath.Glob(p)
+		return err == nil && len(m) > 0
+	}
+	_, err := os.Lstat(p)
+	return err == nil
+}
+
+// ensureLocalExclude is EnsureLocalExclude; onlyExisting skips the lines
+// naming nothing on disk.
+func ensureLocalExclude(ctx context.Context, root string, onlyExisting bool) ([]string, error) {
 	var add []string
 	for _, line := range MissingGitignoreLines(ctx, root) {
+		if onlyExisting && !localPathExists(root, line) {
+			continue
+		}
 		probe := strings.TrimSuffix(line, "/")
 		if strings.HasSuffix(line, "/") {
 			probe += "/x"
@@ -138,4 +173,15 @@ func EnsureLocalExclude(ctx context.Context, root string) ([]string, error) {
 	}
 	_, werr := f.WriteString(b.String())
 	return add, errors.Join(werr, f.Close())
+}
+
+// HoldsLoreData reports whether the project at root keeps rows of its own
+// (its .lore/data folder, rowfs's layout). A repo without it (a client
+// repo whose notes live in a store folder) gets no tracked file of its
+// changed by lore: no .gitignore lines, no .gitattributes block (plain
+// files sweep 3.8); lore's local files stay out of git status through
+// .git/info/exclude.
+func HoldsLoreData(root string) bool {
+	fi, err := os.Stat(filepath.Join(root, filepath.FromSlash(rowfs.LayoutRepo.DataPath(rowfs.FolderRoot))))
+	return err == nil && fi.IsDir()
 }

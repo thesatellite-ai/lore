@@ -76,6 +76,7 @@ Each step builds on the one before, from your first rule in one repo to a team w
 - [Render and agent files](knowledge/render-and-agent-files.md): `lore render`, other agent files, the directive block, what the tool read, and skill files.
 - [Keep the lore skill current](knowledge/skill-install.md): `lore skill install` and `lore skill status`, the `lore_version` line.
 - [Browse your notes in the terminal](knowledge/tui.md): `lore tui`.
+- [Edit a row in your editor](knowledge/editing-rows.md): `lore edit <id>` and `lore path <id>`.
 
 ### Tasks, missions and plans
 

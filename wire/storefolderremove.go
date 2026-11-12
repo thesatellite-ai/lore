@@ -26,7 +26,6 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -95,7 +94,7 @@ func (a *App) FolderContents(ctx context.Context, name, folderName string) (opss
 		c.Push = string(a.storeSettings(gb, place).Push)
 		done()
 	}
-	root, err := rowfs.Open(dir, a.opts.rowfsOptions()...)
+	root, err := rowfs.Open(dir, a.opts.storeRowfsOptions(dir)...)
 	if err != nil {
 		return opsstores.FolderContents{}, err
 	}
@@ -103,7 +102,7 @@ func (a *App) FolderContents(ctx context.Context, name, folderName string) (opss
 	if err != nil {
 		return opsstores.FolderContents{}, err
 	}
-	meta := filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(folderName)), rowfs.MetaFileName)
+	meta := filepath.Join(dir, filepath.FromSlash(f.Layout().StorePath(folderName, rowfs.MetaFileName)))
 	raw, err := os.ReadFile(meta)
 	if errors.Is(err, fs.ErrNotExist) {
 		return opsstores.FolderContents{}, errs.New(errs.NotFound, folderRemoveVerb+": "+label+" has no folder "+folderName+a.folderMissDetail(ctx)).
@@ -249,7 +248,10 @@ func (a *App) RemoveFolder(ctx context.Context, in opsstores.FolderRemoveIn, c o
 // come back with `lore trash restore` once the folder is made again).
 func removeFolderFiles(dir, folderName string, keepRows bool) ([]string, error) {
 	if keepRows {
-		rel := path.Join(rowfs.FolderDataPath(folderName), rowfs.MetaFileName)
+		rel := rowfs.LayoutStore.StorePath(folderName, rowfs.MetaFileName)
+		if !regularFile(filepath.Join(dir, filepath.FromSlash(rel))) {
+			rel = rowfs.LayoutRepo.StorePath(folderName, rowfs.MetaFileName) // a folder not moved yet
+		}
 		if err := os.Remove(filepath.Join(dir, filepath.FromSlash(rel))); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, errs.Wrap(errs.Internal, folderRemoveVerb+": remove "+rel, err)
 		}
@@ -313,7 +315,7 @@ func (a *App) pushStoreClone(ctx context.Context, gb *git.Backend, subject strin
 	if rep.Offline {
 		return false, "committed in this machine's copy of the store; the remote is unreachable, so the next command or `lore sync` pushes it", nil
 	}
-	writeStamp(filepath.Dir(gb.Dir()), pushStampFile, a.opts.Wall())
+	writeStamp(git.StateDirOf(gb.Dir()), pushStampFile, a.opts.Wall())
 	return true, "", nil
 }
 

@@ -10,8 +10,11 @@ package wire
 // store when its last fetch is older than live.fetch_ttl.
 //
 //	WrapBackend ─▶ a remote store clone (not the repo) ─▶ storePush
-//	Read/Get ─▶ once per command: live.ShouldFetch? ─▶ Sync, stamp
+//	Read/Get ─▶ once per command: live.ShouldFetch? ─▶ fetch + merge, stamp
+//	          (a read command never pushes: commits that wait are named,
+//	          with `lore sync`; pushreport.go)
 //	Write ─▶ inner Write ─▶ autopush? ─▶ Sync (a failure is one note)
+//	every push ─▶ "lore: pushed store <s>: commit <sha> to branch <b>"
 //
 // The store's push mode (owner decision 2026-11-09; storepushmode.go,
 // logic/storepush) changes when the push happens:
@@ -34,7 +37,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
@@ -46,7 +48,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
-	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -64,7 +65,7 @@ func storePushWrap(res *OrgResolution) func(context.Context, store.Source, strin
 		}
 		sp := &storePush{inner: b, name: name, res: res, notes: os.Stderr}
 		if d, ok := b.(interface{ Dir() string }); ok {
-			sp.stateDir = filepath.Dir(d.Dir()) // beside the worktree, never inside it
+			sp.stateDir = gitbackend.StateDirOf(d.Dir()) // the clone's .git/lore, never in its files
 		}
 		return sp
 	}
@@ -195,6 +196,9 @@ func (b *storePush) begin(ctx context.Context) {
 // A store whose writes are held fetches without pushing, unless a batch
 // is due or the command needs the remote current (batch mode).
 func (b *storePush) refresh(ctx context.Context) {
+	if fetchDeferred(ctx) {
+		return // open before the pick-up of hand edits (handedit.go): no merge yet
+	}
 	b.begin(ctx)
 	if b.fetched {
 		return
@@ -209,13 +213,30 @@ func (b *storePush) refresh(ctx context.Context) {
 		in.LastFetch = live.FetchStamp(b.stateDir)
 	}
 	held := b.held()
-	// A due batch goes out at a reading command's first read; a writing
-	// command (or one whose access is unknown here) leaves it to the push
-	// after its write, so the batch also carries that write.
-	access, known := engine.AccessOf(ctx)
-	readRun := known && access == op.AccessRead
-	push := !held || (autopush && b.pushSettings().Push == storepush.ModeBatch && (in.Kind == live.FetchAlways || (readRun && b.batchDue(ctx))))
-	if !live.ShouldFetch(in) {
+	// No hidden magic (2026-11-12): a read never pushes. It fetches when
+	// the fetch is due and says when local commits wait (readRefresh); the
+	// push is a write's, `lore sync`'s or a hook's. A writing command (or
+	// one whose access is unknown here) pushes as its store's mode says.
+	if readRun(ctx) {
+		b.readRefresh(ctx, in, autopush)
+		return
+	}
+	push := !held || (autopush && b.pushSettings().Push == storepush.ModeBatch && in.Kind == live.FetchAlways)
+	// A push that failed earlier (offline) leaves its commits waiting: the
+	// next command tries again whatever the fetch stamp says. The stamp is
+	// the clone's one "last fetched" (.git/lore/fetch-stamp, read by the
+	// org link index's max-age rule too), so a failed push never clears it.
+	//
+	// A fresh stamp says the remote was fetched lately, not that the branch
+	// holds what was fetched: a fetch that only moved the tracking ref (a
+	// plain `git fetch` in the clone, the org link index fetching the same
+	// clone and stamping it) leaves teammates' rows unmerged, so such a
+	// clone syncs whatever the stamp says.
+	//
+	// With autopush off (live.autopush, LORE_LIVE_AUTOPUSH=0) lore neither
+	// fetches nor pushes by itself (live.ShouldFetch), so neither does
+	// either retry: the commits wait for `lore sync`.
+	if !live.ShouldFetch(in) && !(autopush && b.hasUnpulled(ctx)) && !(autopush && push && !held && b.hasUnpushed(ctx)) {
 		if held && push && b.hasUnpushed(ctx) {
 			b.pushNow(ctx) // a batch whose interval passed
 		}
@@ -236,8 +257,11 @@ func (b *storePush) refresh(ctx context.Context) {
 	}
 	waiting := push && b.hasUnpushed(ctx)
 	rep, err := b.syncInner(ctx, !push)
+	b.reportPushes()
 	b.carry(rep, err)
-	b.observeSync(ctx, rep, err)
+	if push || len(rep.Refused) > 0 {
+		b.observeSync(ctx, rep, err) // a fetch-only sync cannot clear a refusal
+	}
 	if err != nil || rep.Offline || b.stateDir == "" {
 		return
 	}
@@ -254,6 +278,17 @@ func (b *storePush) hasUnpushed(ctx context.Context) bool {
 		return false
 	}
 	n, err := gb.Unpushed(ctx)
+	return err == nil && n > 0
+}
+
+// hasUnpulled reports whether the clone's tracking ref holds commits its
+// branch has not merged.
+func (b *storePush) hasUnpulled(ctx context.Context) bool {
+	gb := gitOf(b.inner)
+	if gb == nil {
+		return false
+	}
+	n, err := gb.Unpulled(ctx)
 	return err == nil && n > 0
 }
 
@@ -281,6 +316,7 @@ func (b *storePush) pushNow(ctx context.Context) {
 	}
 	waiting := b.hasUnpushed(ctx)
 	rep, err := b.syncInner(ctx, false)
+	b.reportPushes()
 	b.carry(rep, err)
 	b.observeSync(ctx, rep, err)
 	switch {
@@ -306,9 +342,8 @@ func (b *storePush) pushNow(ctx context.Context) {
 		writeStamp(b.stateDir, pushFailStampFile, b.res.now())
 		return
 	}
-	if b.stateDir != "" {
-		_ = live.ClearFetchStamp(b.stateDir) // a stamp left behind only delays the push to the ttl or `lore sync`
-	}
+	// The waiting commits make the next command push again (refresh):
+	// the fetch stamp stays, it records the last fetch that worked.
 }
 
 // pushed records a push that landed and runs the daily compaction. A
@@ -328,6 +363,9 @@ func (b *storePush) pushed(ctx context.Context, sent bool) {
 // now; batch only when push_every has passed); a failed push is a note
 // and the commit waits for `lore sync`.
 func (b *storePush) pushAfterWrite(ctx context.Context) {
+	if fetchDeferred(ctx) {
+		return // the sync after the pick-up pushes it (handedit.go)
+	}
 	b.begin(ctx)
 	if b.pushFailed {
 		return
@@ -347,9 +385,10 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 }
 
 // pendingPush is what happens to a commit whose push failed: the next
-// command that reads the store syncs it (pushAfterWrite cleared the fetch
-// stamp), and `lore sync` pushes it at once.
-const pendingPush = "the next lore command that reaches the store pushes it, or run `lore sync`"
+// write to the store that reaches its remote pushes it (refresh retries
+// while commits wait), `lore sync` pushes it at once; a read never pushes,
+// it only says the commit waits (readRefresh).
+const pendingPush = "run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)"
 
 // note says the write waits in the local store clone and when it is
 // pushed.
@@ -386,6 +425,7 @@ func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
 	b.begin(ctx)
 	waiting := b.hasUnpushed(ctx)
 	rep, err := b.syncInner(ctx, false)
+	b.reportPushes()
 	b.observeSync(ctx, rep, err)
 	if err != nil {
 		return rep, err

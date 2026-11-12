@@ -370,7 +370,9 @@ func spCompactionLife(t *testing.T, shape string) {
 	lsRun(t, member, mRepo, "sync")
 	spEnv(member, "LORE_LIVE_AUTOPUSH", "0")
 	unpushed := spMemAdd(t, member, mRepo, lsOrg, "member's unpushed fact")
-	spEnv(member, "LORE_LIVE_AUTOPUSH", "")
+	// autopush stays off until the member's sync after the compaction: with
+	// it on, every write-access command retries the waiting push (D-o),
+	// even one refused afterwards (the member's compact and set below)
 	for _, id := range ids {
 		if !strings.Contains(spRowIDs(t, member, mRepo), id) {
 			t.Fatalf("the member does not see %s before compaction", id)
@@ -442,6 +444,7 @@ func spCompactionLife(t *testing.T, shape string) {
 	admin.CheckMachine(t, "admin/after compaction", Gone{})
 
 	// The member syncs: it moves onto the new history and replays its row.
+	spEnv(member, "LORE_LIVE_AUTOPUSH", "")
 	lsRun(t, member, mRepo, "sync")
 	after := spLog(t, bare)
 	if after[0].Subject != "lore: replay local work onto epoch 1" || len(after) != len(compacted)+1 || after[1].SHA != compacted[0].SHA {

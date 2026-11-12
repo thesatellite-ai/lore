@@ -129,7 +129,7 @@ func newTestAppHome(t *testing.T, dir, home string) *App {
 // writeRepoID gives the checkout at dir the repo id copyRepoID (a cp -r
 // copy carries its original's _meta.json).
 func writeRepoID(dir string) error {
-	data := filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(rowfs.FolderRoot)))
+	data := filepath.Join(dir, filepath.FromSlash(rowfs.LayoutRepo.DataPath(rowfs.FolderRoot)))
 	if err := os.MkdirAll(data, 0o750); err != nil {
 		return err
 	}

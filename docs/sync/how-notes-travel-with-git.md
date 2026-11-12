@@ -27,6 +27,8 @@ You want this page when you set up lore in a repo that other people also use, or
 ```console
 # alice, in website
 $ lore init --non-interactive --name=website
+lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; lore's merge rules in ~/work/website/.gitattributes; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
 lore initialized
     project_id: prj_7a67…9504
     name:       website
@@ -73,6 +75,7 @@ Add a rule. lore writes the row file at once and reminds you that it is not comm
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
+lore: wrote ~/work/website/.lore/data/rules/rul_162d…9666.json
 ✓ rul_162d…9666
   scope: [master] severity: must
 $ git status --short
@@ -131,6 +134,7 @@ $ git clone -q https://github.com/client/website
 
 # bob, in website
 $ lore rule list
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 rul_162d…9666 [must/always] Run the tests before you push.
 ```
 <!-- /example -->
@@ -173,6 +177,7 @@ Here Alice adds a memory with sync off. A memory is something worth remembering,
 ```console
 # alice, in website
 $ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
+lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ mem_05e9…4603
   scope: [master]
 $ git status --short
@@ -191,6 +196,7 @@ $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin mai
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
+lore: wrote ~/work/website/.lore/data/rules/rul_05e9…4603.json
 ✓ rul_05e9…4603
   scope: [master] severity: must
 $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
@@ -205,6 +211,7 @@ $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsAp
 ```console
 # alice, in shop
 $ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
+lore: wrote 4 row file(s) in ~/work/shop/.lore/data
 lore initialized
     project_id: prj_76bd…3f10
     name:       shop
@@ -239,6 +246,8 @@ Text that looks like a password stops `lore memory add` with a question; a bare 
 ```console
 # alice, in website
 $ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
+lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_28f8…03df.json
 ✓ mem_b4f4…a5b0
   scope: [master]
 $ ls .lore/data/memories | grep -c mem_b4f4…a5b0 || true

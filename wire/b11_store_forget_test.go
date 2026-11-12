@@ -46,8 +46,8 @@ func coreCloneBase(t *testing.T, home, raw string) string {
 }
 
 // coreCloneFixture lays out the core's clone of forgetURL the way the git
-// backend does (<base>.git bare with tracking refs, <base>/work on main),
-// fetched from a pushed origin; it returns the base.
+// backend does (a plain clone at <home>/stores/northwind/lore on main with
+// its tracking refs), fetched from a pushed origin; it returns the clone.
 func coreCloneFixture(t *testing.T, home string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -65,9 +65,7 @@ func coreCloneFixture(t *testing.T, home string) string {
 	if err := os.MkdirAll(filepath.Dir(base), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	showGit(t, root, "clone", "-q", "--bare", origin, base+".git")
-	showGit(t, base+".git", "fetch", "-q", "origin", "+refs/heads/*:refs/remotes/origin/*")
-	showGit(t, base+".git", "worktree", "add", "-q", filepath.Join(base, "work"), "main")
+	showGit(t, root, "clone", "-q", origin, base)
 	return base
 }
 
@@ -80,32 +78,30 @@ func TestStoreForgetRefusesUnpushedWork(t *testing.T) {
 	}{
 		{"clean clone", func(*testing.T, string) {}, ""},
 		{"local commit not pushed", func(t *testing.T, base string) {
-			w := filepath.Join(base, "work")
-			if err := os.WriteFile(filepath.Join(w, "row.json"), []byte("{}"), 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(base, "row.json"), []byte("{}"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			showGit(t, w, "add", "-A")
-			showGit(t, w, "commit", "-q", "-m", "written while offline")
+			showGit(t, base, "add", "-A")
+			showGit(t, base, "commit", "-q", "-m", "written while offline")
 		}, "1 unpushed commit(s)"},
 		{"uncommitted change", func(t *testing.T, base string) {
-			if err := os.WriteFile(filepath.Join(base, "work", "ünï.json"), []byte("{}"), 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(base, "ünï.json"), []byte("{}"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 		}, "uncommitted change(s)"},
-		{"bare clone unreadable", func(t *testing.T, base string) {
-			if err := os.RemoveAll(filepath.Join(base+".git", "objects")); err != nil {
+		{"clone unreadable", func(t *testing.T, base string) {
+			if err := os.RemoveAll(filepath.Join(base, ".git", "objects")); err != nil {
 				t.Fatal(err)
 			}
 		}, "unreadable"},
 		{"pushed after the commit", func(t *testing.T, base string) {
-			w := filepath.Join(base, "work")
-			if err := os.WriteFile(filepath.Join(w, "row.json"), []byte("{}"), 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(base, "row.json"), []byte("{}"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			showGit(t, w, "add", "-A")
-			showGit(t, w, "commit", "-q", "-m", "w")
-			showGit(t, base+".git", "push", "-q", "origin", "main")
-			showGit(t, base+".git", "fetch", "-q", "origin", "+refs/heads/*:refs/remotes/origin/*")
+			showGit(t, base, "add", "-A")
+			showGit(t, base, "commit", "-q", "-m", "w")
+			showGit(t, base, "push", "-q", "origin", "main")
+			showGit(t, base, "fetch", "-q", "origin")
 		}, ""},
 	}
 	for _, tc := range cases {
@@ -116,7 +112,7 @@ func TestStoreForgetRefusesUnpushedWork(t *testing.T) {
 			c := &standaloneClones{home: home}
 			out, err := c.ForgetClone(background(), opsstores.ForgetIn{URL: forgetURL})
 			if tc.want == "" {
-				if err != nil || out.Removed == "" || exists(base) || exists(base+".git") {
+				if err != nil || out.Removed == "" || exists(base) {
 					t.Fatalf("forget = %+v %v; base left: %v", out, err, exists(base))
 				}
 				return
@@ -124,7 +120,7 @@ func TestStoreForgetRefusesUnpushedWork(t *testing.T) {
 			if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want a refusal naming %q, got %v", tc.want, err)
 			}
-			if !exists(base + ".git") {
+			if !exists(filepath.Join(base, ".git")) {
 				t.Fatal("a refused forget deleted the clone")
 			}
 		})
@@ -139,7 +135,21 @@ func TestStoreForgetCoversEverySpelling(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 	base := coreCloneFixture(t, home)
-	if err := os.MkdirAll(filepath.Join(base+"@staging", "work"), 0o700); err != nil {
+	// a branch clone git cannot read (no HEAD, no objects) whose origin is
+	// the store: it is found by its origin and blocks the forget
+	staging := filepath.Join(base+"@staging", ".git")
+	if err := os.MkdirAll(staging, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "config"), []byte("[remote \"origin\"]\n\turl = "+forgetURL+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// another store's clone whose path collides is never this store's
+	other := filepath.Join(base+"@other", ".git")
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, "config"), []byte("[remote \"origin\"]\n\turl = https://gitlab.example/northwind/lore\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	c := &standaloneClones{home: home}
@@ -171,7 +181,7 @@ func TestStoreForgetCoversEverySpelling(t *testing.T) {
 			t.Errorf("%q: a url lore cannot place must fail, got %+v", bad, out)
 		}
 	}
-	// The bare-folder branch clone git cannot read blocks the forget (fail
+	// The branch clone git cannot read blocks the forget (fail
 	// closed); once it is gone the forget removes the rest.
 	if _, err := c.ForgetClone(background(), opsstores.ForgetIn{URL: forgetURL}); !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "unreadable") {
 		t.Fatalf("an unreadable branch clone must block the forget: %v", err)
@@ -182,7 +192,10 @@ func TestStoreForgetCoversEverySpelling(t *testing.T) {
 	if _, err := c.ForgetClone(background(), opsstores.ForgetIn{URL: forgetURL}); err != nil {
 		t.Fatal(err)
 	}
-	if exists(base) || exists(base+".git") || exists(base+"@staging") {
+	if exists(base) || exists(base+"@staging") {
 		t.Fatal("forget left a clone folder")
+	}
+	if !exists(base + "@other") {
+		t.Fatal("forget removed another store's clone")
 	}
 }

@@ -1,7 +1,8 @@
 
 ### init
 alice (work/website)$ lore init --non-interactive --name=website
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; lore's merge rules in ~/work/website/.gitattributes; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
 lore initialized
     project_id: prj_7a670ae8548ed05bf57ad29ad0759504
     name:       website
@@ -39,6 +40,7 @@ alice (work/website)$ git add -A && git commit -qm 'lore: init' && git push -q o
 
 ### first rule
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
+lore: wrote ~/work/website/.lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.json
 ✓ rul_162df51b7f78b785c97c26b41ea89666
   scope: [master] severity: must
 alice (work/website)$ git status --short
@@ -85,11 +87,12 @@ alice (work/website)$ git add -A && git commit -qm 'lore: test rule' && git push
 ### teammate clone
 bob (work)$ git clone -q https://github.com/client/website
 bob (work/website)$ lore rule list
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website/.git/hooks)
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 
 ### sync by hand
 bob (work/website)$ lore sync
+lore sync: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 · already in sync
 bob (work/website)$ lore sync status
 meta quarantined: 0
@@ -99,6 +102,7 @@ refused pushes:   0
 
 ### sync off
 alice (work/website)$ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
+lore: wrote ~/work/website/.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 ✓ mem_05e99e22e9e86e96fe4daa7777994603
   scope: [master]
 alice (work/website)$ git status --short
@@ -112,9 +116,11 @@ alice (work/website)$ git add -A && git commit -qm 'lore: whatsapp memory' && gi
 ### branch notes
 alice (work/website)$ git checkout -q -b feature/payments
 alice (work/website)$ lore memory add --body 'We use Stripe for payments.'
+lore: wrote ~/work/website/.lore/data/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json
 ✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8
   scope: [master]
 alice (work/website)$ lore rule add --body 'Never put passwords in the code.'
+lore: wrote ~/work/website/.lore/data/rules/rul_76bd560aff0771fab8457dbfa9823f10.json
 ✓ rul_76bd560aff0771fab8457dbfa9823f10
   scope: [master] severity: must
 alice (work/website)$ git add -A && git commit -qm 'lore: payment notes' && git push -q -u origin feature/payments
@@ -166,13 +172,17 @@ ERROR: [E_INVALID_INPUT] refusing to commit onto the checked-out branch feature/
 ### merge by field
 alice (work/website)$ git checkout -q main && git pull -q --no-rebase origin main
 alice (work/website)$ lore rule add --body 'Buttons are blue.' --severity should
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0
   scope: [master] severity: should
 alice (work/website)$ git add -A && git commit -qm 'lore: button rule' && git push -q origin main
 bob (work/website)$ git pull -q
 alice (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 bob (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
+lore: wrote ~/work/website/.lore/data/actors/act_28f8d32584b2db54ffb146bede5b03df.json
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 bob (work/website)$ git pull --no-rebase origin main
 From /srv/git/github.com/client/website
@@ -188,8 +198,10 @@ bob (work/website)$ git push -q origin main
 ### same text conflict
 alice (work/website)$ git pull -q --no-rebase origin main
 alice (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 bob (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 alice (work/website)$ git pull -q --no-rebase origin main
 lore merge-driver: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json needs a manual merge (markers are inside the JSON values)
@@ -212,15 +224,18 @@ ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/
 (exit 1)
 alice (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are blue.'
 lore: invalid-file store repo: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 alice (work/website)$ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main
 
 ### duplicates
 bob (work/website)$ git pull -q --no-rebase origin main
 alice (work/website)$ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
+lore: wrote ~/work/website/.lore/data/memories/mem_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
 ✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38
   scope: [master]
 bob (work/website)$ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
+lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
 ✓ mem_3b6283bc4392c556bbae5f094246e913
   scope: [master]
 bob (work/website)$ git pull -q --no-rebase origin main
@@ -228,6 +243,7 @@ bob (work/website)$ lore memory list | grep -i invoice
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 mem_3b6283bc4392c556bbae5f094246e913 [retrieved] send the invoice reminder before the demo on friday.
 bob (work/website)$ lore sync merge-rows memories --keep mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 --drop mem_3b6283bc4392c556bbae5f094246e913
+lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
 ✓ merged mem_3b6283bc4392c556bbae5f094246e913 into mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 (0 row(s) re-pointed; mem_3b6283bc4392c556bbae5f094246e913 is in the trash, batch bat_f147dd95f1aaf742dd4f5214843a5139)
 bob (work/website)$ lore memory list
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The client replies faster on WhatsApp than email.
@@ -241,6 +257,7 @@ bob (work/website)$ git add -A && git commit -qm 'lore: fold duplicate memory' &
 alice (work/website)$ git pull -q --no-rebase origin main
 alice (work/website)$ sed -i 's/than email/than email or phone/' .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 alice (work/website)$ lore memory list
+lore: picked up a hand edit of memories mem_05e99e22e9e86e96fe4daa7777994603 (body): checked and stamped with your name and the time in ~/work/website/.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json; commit it with your code
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The client replies faster on WhatsApp than email or phone.
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 alice (work/website)$ lore sync
@@ -269,6 +286,7 @@ alice (work/website)$ git checkout -q HEAD -- .lore/data && git status --short
 
 ### purge
 alice (work/website)$ lore memory archive mem_05e99e22e9e86e96fe4daa7777994603 && git commit -qam 'lore: archive whatsapp memory'
+lore: wrote ~/work/website/.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 ✓ mem_05e99e22e9e86e96fe4daa7777994603 archived
 alice (work/website)$ lore trash purge --archived-before 0d --dry-run
 would purge 1 row
@@ -279,10 +297,11 @@ ERROR: [E_NEEDS_CONFIRM] trash: purge removes every row archived before 0d for g
   hint: ask the person, then re-run with --confirm
 (exit 26)
 alice (work/website)$ lore trash purge --archived-before 0d --confirm
+lore: wrote ~/work/website/.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 purged 1 row
   mem_05e99e22e9e86e96fe4daa7777994603 (memories, repo)
 tombstones are kept forever; the old content is still in git history (rotate any leaked secret)
-lore live: (live, pushed)
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 alice (work/website)$ cat .lore/data/_purged.json
 {
   "_v": 1,
@@ -296,9 +315,11 @@ M  .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 
 ### delete and restore
 alice (work/website)$ lore memory add --body 'The demo is on Friday at 10.'
+lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json
 ✓ mem_2537f9b2f7de77bfe5ca958860216bbb
   scope: [master]
 alice (work/website)$ lore memory delete mem_2537f9b2f7de77bfe5ca958860216bbb --reason 'the demo moved' --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json
 ✓ mem_2537f9b2f7de77bfe5ca958860216bbb moved to the trash (restore: lore trash restore mem_2537f9b2f7de77bfe5ca958860216bbb)
 alice (work/website)$ lore trash list
 mem_2537f9b2f7de77bfe5ca958860216bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by act_54fe984c9b495744c0217776765a28f2  reason "the demo moved"  bat_b69e8368dd4986838455061d5d9e5ed7
@@ -321,6 +342,7 @@ memories mem_2537f9b2f7de77bfe5ca958860216bbb  "The demo is on Friday at 10."  i
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000003Z
 alice (work/website)$ lore trash restore mem_2537f9b2f7de77bfe5ca958860216bbb
+lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json
 restored 1 row (batch bat_b69e8368dd4986838455061d5d9e5ed7)
   mem_2537f9b2f7de77bfe5ca958860216bbb (memories, repo)
 alice (work/website)$ lore memory list | grep demo
@@ -329,9 +351,13 @@ mem_2537f9b2f7de77bfe5ca958860216bbb [retrieved] The demo is on Friday at 10.
 
 ### bulk delete and undo
 alice (work/website)$ lore memory add --body 'Staging deploys at 9.' >/dev/null && lore memory add --body 'Production deploys on Tuesday.' >/dev/null
+lore: wrote ~/work/website/.lore/data/memories/mem_0aaebe6aca5bb46cc521869f5ba2a61f.json
+lore: wrote ~/work/website/.lore/data/memories/mem_6a866bb99ce08addfe04ea845052ed8c.json
 alice (work/website)$ lore memory delete --where 'body~=deploys' --dry-run
 would delete 2 memory(s): mem_0aaebe6aca5bb46cc521869f5ba2a61f Staging deploys at 9.; mem_6a866bb99ce08addfe04ea845052ed8c Production deploys on Tuesday.; (nothing written, --dry-run)
 alice (work/website)$ lore memory delete --where 'body~=deploys' --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_0aaebe6aca5bb46cc521869f5ba2a61f.json
+lore: wrote ~/work/website/.lore/data/memories/mem_6a866bb99ce08addfe04ea845052ed8c.json
 ✓ 2 memory(s) (--where) moved to the trash (batch bat_4f89f5fcb1d81152bdf3f52979ebb64b; restore: lore trash restore bat_4f89f5fcb1d81152bdf3f52979ebb64b)
 alice (work/website)$ lore trash stats
 3 rows in the trash (0 dependents), 0 past trash.retention_days
@@ -353,6 +379,8 @@ batch bat_4f89f5fcb1d81152bdf3f52979ebb64b  delete  memory delete  by act_54fe98
   trash mem_0aaebe6aca5bb46cc521869f5ba2a61f (memories, repo)
   trash mem_6a866bb99ce08addfe04ea845052ed8c (memories, repo)
 alice (work/website)$ lore batch undo bat_4f89f5fcb1d81152bdf3f52979ebb64b --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_0aaebe6aca5bb46cc521869f5ba2a61f.json
+lore: wrote ~/work/website/.lore/data/memories/mem_6a866bb99ce08addfe04ea845052ed8c.json
 ✓ restored 2 rows of batch bat_4f89f5fcb1d81152bdf3f52979ebb64b
 alice (work/website)$ lore memory list | grep deploys
 mem_0aaebe6aca5bb46cc521869f5ba2a61f [retrieved] Staging deploys at 9.
@@ -450,8 +478,10 @@ alice (work/website)$ rm .github/workflows/lore-sync-merge.yml
 ### ci merge
 bob (work/website)$ git pull -q --no-rebase origin main
 bob (work/website)$ git checkout -q -b feature/footer && lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour' && git push -q -u origin feature/footer
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 alice (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --severity should && git commit -qam 'lore: buttons are a should' && git push -q origin main
+lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 bob (work/website)$ git fetch -q origin && lore sync ci-merge --base origin/main --dry-run
 ~ would try to merge origin/main field by field: 1 lore file(s) conflict; a real run may still need a person
@@ -459,7 +489,7 @@ bob (work/website)$ git fetch -q origin && lore sync ci-merge --base origin/main
 bob (work/website)$ lore sync ci-merge --base origin/main
 ✓ merged and committed origin/main: 1 lore file(s) settled field by field
   .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
-  commit 05513aa29b7881f12bc94eb06be8acf0d03eaed2 — push it to update the pull request
+  commit dfd8dc87ab36569644249d3a03cd835408aea9b7 — push it to update the pull request
 bob (work/website)$ lore rule list
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Never put passwords in the code.
@@ -469,9 +499,11 @@ bob (work/website)$ lore sync ci-merge --base origin/main
 
 ### fix projects
 alice (work/app)$ git checkout -q -b alice-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (alice)'
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
+lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/app/.git/config; lore's merge rules in ~/work/app/.gitattributes; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 4 row file(s) in ~/work/app/.lore/data
 bob (work)$ git clone -q https://github.com/client2/app && cd app && git checkout -q -b bob-setup && lore init --non-interactive --name=app >/dev/null && git add -A && git commit -qm 'lore: init (bob)' && git push -q -u origin bob-setup
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/app/.git/hooks)
+lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/app/.git/config; lore's merge rules in ~/work/app/.gitattributes; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 4 row file(s) in ~/work/app/.lore/data
 alice (work/app)$ git checkout -q main && git merge -q alice-setup
 alice (work/app)$ git fetch -q origin && git merge --no-edit origin/bob-setup
 Auto-merging .lore/data/_meta.json
@@ -487,6 +519,8 @@ prj_b4d3d8fc9a019dca1371ad55c6a611aa  app  https://github.com/client2/app
 alice (work/app)$ lore sync fix-projects --dry-run
 2 project row(s): would keep prj_d191616cfa49f94ede5d5148b8b045c2 and merge prj_b4d3d8fc9a019dca1371ad55c6a611aa (1 row(s) to re-point)
 alice (work/app)$ lore sync fix-projects
+lore: wrote ~/work/app/.lore/data/repos/rep_77cb2df809cef85479f6587c4a7d76c4.json
+lore: wrote ~/work/app/.lore/data/projects/prj_b4d3d8fc9a019dca1371ad55c6a611aa.json
 ✓ kept prj_d191616cfa49f94ede5d5148b8b045c2, merged prj_b4d3d8fc9a019dca1371ad55c6a611aa (1 row(s) re-pointed)
 alice (work/app)$ lore project list
 prj_d191616cfa49f94ede5d5148b8b045c2  app  https://github.com/client2/app
@@ -495,17 +529,21 @@ alice (work/app)$ git add -A && git commit -qm 'lore: one project' && git push -
 ### lint
 alice (work/website)$ git pull -q --no-rebase origin main
 alice (work/website)$ lore memory add --body 'The client signs off every release on Fridays.'
+lore: wrote ~/work/website/.lore/data/memories/mem_9a34c925c88945140e68f54b1ba3b418.json
 ✓ mem_9a34c925c88945140e68f54b1ba3b418
   scope: [master]
 alice (work/website)$ lore rule add --body 'Ship only after the client sign-off, see ${row:mem_9a34c925c88945140e68f54b1ba3b418}.'
+lore: wrote ~/work/website/.lore/data/rules/rul_bfed655e145f36ce2ef425180e72eeea.json
 ✓ rul_bfed655e145f36ce2ef425180e72eeea
   scope: [master] severity: must
 alice (work/website)$ lore memory delete mem_9a34c925c88945140e68f54b1ba3b418 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_9a34c925c88945140e68f54b1ba3b418.json
 ✓ mem_9a34c925c88945140e68f54b1ba3b418 moved to the trash (restore: lore trash restore mem_9a34c925c88945140e68f54b1ba3b418)
 alice (work/website)$ lore lint
 dangling_ref rul_bfed655e145f36ce2ef425180e72eeea (repo): body: ${row:mem_9a34c925c88945140e68f54b1ba3b418} points at no live row
   fix: lore edit the row, or restore mem_9a34c925c88945140e68f54b1ba3b418 (lore trash restore mem_9a34c925c88945140e68f54b1ba3b418)
 1 finding(s)
 alice (work/website)$ lore trash restore mem_9a34c925c88945140e68f54b1ba3b418 >/dev/null && lore lint --code dangling_ref
+lore: wrote ~/work/website/.lore/data/memories/mem_9a34c925c88945140e68f54b1ba3b418.json
 lint: no findings
 alice (work/website)$ git add -A && git commit -qm 'lore: sign-off rule' && git push -q origin main

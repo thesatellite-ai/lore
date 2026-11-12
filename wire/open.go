@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 
 	"gopkg.in/yaml.v3"
 
@@ -33,9 +35,20 @@ import (
 
 // On-disk names wire chooses (spec 7.4 cache layout).
 const (
-	// RepoCacheFile is the repo store's cache, relative to the repo top.
-	// It is not .lore/lore.db: the v0.1.17 code still owns that file.
+	// RepoCacheFile is where the repo store's cache lived before it moved
+	// under the lore home (RepoCachePath), relative to the repo top. lore
+	// no longer creates it; a copy left in a checkout is untracked and
+	// rebuildable: `lore doctor` names it as safe to delete and `lore fix`
+	// removes it. The .gitignore block keeps its lines (teammates on
+	// v0.1.17 expect the same block). It is not .lore/lore.db: the v0.1.17
+	// code still owns that file.
 	RepoCacheFile = ".lore/lore-cache.db"
+	// repoCacheDir holds the repo stores' caches under cacheDir, one file
+	// per checkout: <repo folder name>-<short hash of its path>.db.
+	repoCacheDir = "repo"
+	// repoCacheHashLen is how many hex digits of the path's sha256 the
+	// file name keeps: two checkouts of one repo name get two files.
+	repoCacheHashLen = 12
 	// cacheDir holds the other stores' caches under the lore home.
 	cacheDir = "cache"
 	// cacheStoresDir is the folder of per-store caches under cacheDir.
@@ -64,6 +77,29 @@ const (
 // repoOnly opens just the repo store (the store operations' engine). On
 // any failure everything opened so far is closed.
 func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool) (*state, error) {
+	// Hand edits are picked up before any store fetches or pushes
+	// (handedit.go, App.state runs the pick-up once the open is done):
+	// until then the stores read their last commits only.
+	if !repoOnly {
+		ctx = withDeferredFetch(ctx)
+	}
+	// STORE layout 1.5: inside a store's checkout there is no code repo;
+	// the store folder the command runs in is the one store (storehere.go).
+	if sc, ok := storeHere(opts.RepoDir); ok {
+		if repoOnly {
+			return nil, errInStore(sc)
+		}
+		one, err := storeHereEntry(opts.Home, sc)
+		if err != nil {
+			return nil, err
+		}
+		st, err := openDetachedHere(ctx, opts, &one, one.Name)
+		if err != nil {
+			return nil, err
+		}
+		st.here = one.Name
+		return st, nil
+	}
 	st := &state{actorDone: map[store.Source]bool{}}
 	if err := st.resolveActor(ctx, opts, !repoOnly); err != nil {
 		return nil, err
@@ -135,7 +171,10 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	// files (wire/resolver.go); st.eng is read lazily, set below.
 	rv := newResolver(st)
 	exp := refs.Expander{Resolver: rv}
-	repoCache := filepath.Join(st.repoTop, filepath.FromSlash(RepoCacheFile))
+	// The repo store's cache lives under the lore home, never in the work
+	// tree (owner item 16): a read then creates nothing in the repo, so it
+	// has nothing to hide through .git/info/exclude.
+	var repoCache string
 	switch {
 	case remote != "":
 		if repoCache, err = remoteRepoCachePath(opts.Home, st.repoTop); err != nil {
@@ -144,8 +183,14 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	case NoCreate(ctx) && !loreFolderAt(st.repoTop): // doctor_nocreate.go: a read never creates .lore/
 		return fail(noProjectErr(st.repoTop))
 	default:
-		if mkErr := os.MkdirAll(filepath.Dir(repoCache), cacheDirMode); mkErr != nil {
+		// A write's implicit setup still makes .lore/ (a read reaches here
+		// only when it exists: MkdirAll then changes nothing).
+		if mkErr := os.MkdirAll(filepath.Join(st.repoTop, loreFolderName), cacheDirMode); mkErr != nil {
 			return fail(errs.Wrap(errs.Internal, "wire: create the .lore folder", mkErr))
+		}
+		repoCache = RepoCachePath(opts.Home, st.repoTop)
+		if mkErr := mkCacheDir(filepath.Dir(repoCache)); mkErr != nil {
+			return fail(mkErr)
 		}
 	}
 	if err = st.caches.open(ctx, store.SourceRepo, repoCache, reg, exp); err != nil {
@@ -227,7 +272,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if repoAudit == nil {
 		repoAudit = &fileAudit{path: filepath.Join(st.repoTop, filepath.FromSlash(AuditFile))}
 	}
-	st.audit = newRoutedAudit(repoAudit, opts.Home, attached)
+	ra := newRoutedAudit(repoAudit, opts.Home, attached)
+	ra.rowFile = st.rowFileOf
+	st.audit = ra
 
 	repoClient, note := repoIsClient(ctx, opts)
 	st.repoClassNote = note
@@ -654,7 +701,11 @@ func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option,
 				opts = append(opts, git.WithSigner(sig))
 			}
 		}
-		return git.NewOpener(opts...)(ctx, u, oo)
+		b, err := git.NewOpener(opts...)(ctx, u, oo)
+		if err == nil {
+			sayCloneIdentity(ctx, b, notice) // the clone got its git identity (storeidentity.go)
+		}
+		return b, err
 	}
 	for _, s := range git.Schemes {
 		if err := o.Register(s, gitOpen); err != nil {
@@ -729,10 +780,26 @@ func cachePath(home string, o attach.Opened) (string, error) {
 	}
 	dir := filepath.Join(home, cacheDir, cacheStoresDir, id, filepath.FromSlash(branch))
 	path := filepath.Join(dir, filepath.FromSlash(name)+cacheExt)
-	if err := os.MkdirAll(filepath.Dir(path), cacheDirMode); err != nil {
-		return "", errs.Wrap(errs.Internal, "wire: create the cache folder", err)
+	if err := mkCacheDir(filepath.Dir(path)); err != nil {
+		return "", err
 	}
 	return path, nil
+}
+
+// mkCacheDir creates a cache folder under the lore home. A home lore may
+// not write (permissions, a read-only file system) is refused naming the
+// folder and the fix: the caches of code repos live there too, so even a
+// read needs it (the repo cache left the work tree).
+func mkCacheDir(dir string) error {
+	err := os.MkdirAll(dir, cacheDirMode)
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, fs.ErrPermission) || errors.Is(err, syscall.EROFS) {
+		return errs.Wrap(errs.ReadOnlyFS, "lore cannot create its cache folder "+dir+": the lore home (~/.lore) is not writable", err).
+			WithHint("make the lore home writable (chmod u+w on it and on its cache folder), then run the command again")
+	}
+	return errs.Wrap(errs.Internal, "wire: create the cache folder "+dir, err)
 }
 
 // cacheOpen is the sqlite cache constructor with the expander it needs.
@@ -745,10 +812,54 @@ func cacheOpen(ctx context.Context, path string, reg *schema.Registry, exp sqlit
 func combinedCachePath(home, repoTop string) (string, error) {
 	sum := sha256.Sum256([]byte(repoTop))
 	dir := filepath.Join(home, cacheDir, combinedDir)
-	if err := os.MkdirAll(dir, cacheDirMode); err != nil {
-		return "", errs.Wrap(errs.Internal, "wire: create the cache folder", err)
+	if err := mkCacheDir(dir); err != nil {
+		return "", err
 	}
 	return filepath.Join(dir, hex.EncodeToString(sum[:])+cacheExt), nil
+}
+
+// RepoCachePath is the repo store's cache of the checkout at repoTop:
+// <home>/cache/repo/<folder name>-<12 hex of sha256(path)>.db. The folder
+// name makes the file readable (`lore where` and ~/.lore/README.md list
+// it); the hash of the (symlink-resolved) path gives two checkouts of one
+// name two files. Nothing is created.
+func RepoCachePath(home, repoTop string) string {
+	top := filepath.Clean(repoTop)
+	if real, err := filepath.EvalSymlinks(top); err == nil {
+		top = real
+	}
+	sum := sha256.Sum256([]byte(top))
+	name := repoCacheName(filepath.Base(top))
+	return filepath.Join(home, cacheDir, repoCacheDir, name+"-"+hex.EncodeToString(sum[:])[:repoCacheHashLen]+cacheExt)
+}
+
+// repoCacheName keeps a folder name to letters, digits, '.', '_' and '-'
+// (anything else becomes '_'), so the file name is plain on every system.
+func repoCacheName(base string) string {
+	var b strings.Builder
+	for _, r := range base {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	if n := strings.Trim(b.String(), "."); n != "" {
+		return n
+	}
+	return "repo"
+}
+
+// repoCacheOf is the cache file st's repo store was opened at ("" before
+// the caches opened).
+func (st *state) repoCacheOf() string {
+	if st.caches == nil {
+		return ""
+	}
+	st.caches.mu.Lock()
+	defer st.caches.mu.Unlock()
+	return st.caches.paths[store.SourceRepo]
 }
 
 // remoteRepoDir holds the repo caches of repos that hold no lore data
@@ -761,8 +872,8 @@ const remoteRepoDir = "remote"
 func remoteRepoCachePath(home, repoTop string) (string, error) {
 	sum := sha256.Sum256([]byte(repoTop))
 	dir := filepath.Join(home, cacheDir, remoteRepoDir)
-	if err := os.MkdirAll(dir, cacheDirMode); err != nil {
-		return "", errs.Wrap(errs.Internal, "wire: create the cache folder", err)
+	if err := mkCacheDir(dir); err != nil {
+		return "", err
 	}
 	return filepath.Join(dir, hex.EncodeToString(sum[:])+cacheExt), nil
 }
@@ -980,6 +1091,12 @@ func openStoreOnly(ctx context.Context, opts Options, target store.Source) (*sta
 // store alone, the default target. Every answer listed on openStoreOnly
 // holds for both.
 func openDetached(ctx context.Context, opts Options, one *attach.Store) (*state, error) {
+	return openDetachedHere(ctx, opts, one, "")
+}
+
+// openDetachedHere is openDetached; a non-empty here names the attached
+// store that answers for the repo store (engine.WithRepoAlias, storehere.go).
+func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here store.Source) (*state, error) {
 	st := &state{actorDone: map[store.Source]bool{}}
 	if err := st.resolveActor(ctx, opts, true); err != nil {
 		return nil, err
@@ -1043,7 +1160,9 @@ func openDetached(ctx context.Context, opts Options, one *attach.Store) (*state,
 	if err != nil {
 		return fail(err)
 	}
-	st.audit = newRoutedAudit(storeOnlyAudit{}, opts.Home, attached)
+	ra := newRoutedAudit(storeOnlyAudit{}, opts.Home, attached)
+	ra.rowFile = st.rowFileOf
+	st.audit = ra
 	machinePol, polNotes, err := machinePolicy(opts.Home)
 	if err != nil {
 		return fail(err)
@@ -1069,6 +1188,9 @@ func openDetached(ctx context.Context, opts Options, one *attach.Store) (*state,
 		return fail(err)
 	}
 	st.defaultTarget = target
+	if here != "" {
+		engOpts = append(engOpts, engine.WithRepoAlias(here))
+	}
 	if one == nil {
 		// The machine store is never one of Stores(), so the engine's
 		// own default (the first store) has nothing to pick.

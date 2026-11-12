@@ -51,6 +51,9 @@ var loreDataPathspec = filepath.ToSlash(filepath.Join(rowfs.LoreDir, rowfs.DataD
 
 // preCommit is `lore sync hook pre-commit` (see the file comment).
 func (h *liveHost) preCommit(ctx context.Context) error {
+	if top, isGit, inStore := rowfs.StoreTop(h.cfg.WorkDir); inStore && isGit {
+		return h.storePreCommit(ctx, top) // a hand commit in a store clone (precommit_store.go)
+	}
 	root := liveProjectRoot(h.cfg.WorkDir)
 	if root == "" {
 		return nil // not a lore project: never block git over it

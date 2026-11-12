@@ -42,7 +42,7 @@ $ git cat-file -p refs/lore/live:$(git ls-tree -r --name-only refs/lore/live | g
     "hlc": "2026-11-02T10:00:10.000Z/0001/act_54fe…28f2",
     "live_since": "2026-11-02T10:00:10Z"
   …
-  "id": "tsk_7a67…9504",
+  "id": "tsk_2ad3…f891",
   …
   "project_id": "prj_05e9…4603",
   "status": "todo",
@@ -86,8 +86,8 @@ A monorepo (one repo that holds several projects) has one live ref. Each lore pr
 $ git ls-tree -r --name-only refs/lore/live
 _live/epoch
 _live/meta.json
-_root/task_lists/tlt_162d…9666.json
-_root/tasks/tsk_7a67…9504.json
+_root/task_lists/tlt_7a67…9504.json
+_root/tasks/tsk_2ad3…f891.json
 $ git log --oneline refs/lore/live
 601d285 lore: live 2 rows (_root)
 ```
@@ -115,21 +115,26 @@ Landing needs no person and no CI. Lore builds the commit on a fresh copy of `or
 
 ## Stores and links
 
-A **store** is a separate private repo that only your company can open, like a locked filing cabinet next to the client's repo. It holds only lore projects, one folder per project, plus a `lore-store.yaml` marker at its root. It is a notebook, never a code repo: lore refuses to use a repo that holds code as a store.
+A **store** is a separate private repo that only your company can open, like a locked filing cabinet next to the client's repo. It holds only lore projects, one folder per project, plus a `lore-store.yaml` marker and a `README.md` at its root. Inside a store a folder's rows sit right under it (`client/tasks/tsk_….json`); there is no `.lore/data` in a store, and no folder may be named like a kind of row (`tasks`, `rules`, …). It is a notebook, never a code repo: lore refuses to use a repo that holds code as a store.
 
 ```text
  github.com/agency/notes            (only the agency can read it)
    lore-store.yaml                    marker
-   org/.lore/data/                    company rules, roster (the org folder)
-   client/.lore/data/                 internal project for the client
-   client2/.lore/data/                internal project for client 2
+   README.md                          what the folders are, how to edit by hand
+   org/                               company rules, roster (the org folder)
+     lore-org.yaml                      the org's suggested settings
+     actors/  rules/ …                  one folder per kind of row
+   client/                            internal project for the client
+     _meta.json                         the folder's id and repo links
+     tasks/tsk_….json  memories/ …      its rows
+   client2/                           internal project for client 2
    refs/lore/live/main                live rows of every folder
    refs/lore/signals/main             claims and leases
 ```
 
-Each folder in a store is a full lore project. It has branch data (on the store's `main`), live rows and signals, and the same landing rules. Lore keeps one clone of each store in `~/.lore/clones/`, in two sibling folders: `<repo>.git/` holds the git data and `<repo>/` holds the worktree lore reads and writes (`work/`) and its lock. They are one clone, not two copies; see [Troubleshooting](troubleshooting.md#two-clone-folders-for-one-store).
+Each folder in a store is a full lore project. It has branch data (on the store's `main`), live rows and signals, and the same landing rules. Lore keeps one clone of each store, a normal git clone at `~/.lore/stores/<owner>/<repo>/` that you can open and browse; lore's own lock and stamps sit in its `.git/lore/`. See [Troubleshooting](troubleshooting.md#where-a-stores-clone-lives).
 
-A **link** ties a client repo to its internal project: "project `prj_…` at `github.com/client/website` belongs to `client/`". Someone at the agency makes it once with `lore org link agency --project client`. The link is saved **only in the store** (in `client/.lore/data/_meta.json`). So nothing is written to the client's repo, and everyone at the agency finds the link on their next command. Several repos can link to one project. That is a **group**: three client 2 repos, one `client2/` project.
+A **link** ties a client repo to its internal project: "project `prj_…` at `github.com/client/website` belongs to `client/`". Someone at the agency makes it once with `lore org link agency --project client`. The link is saved **only in the store** (in `client/_meta.json`). So nothing is written to the client's repo, and everyone at the agency finds the link on their next command. Several repos can link to one project. That is a **group**: three client 2 repos, one `client2/` project.
 
 ## Orgs, identity and `whoami`
 

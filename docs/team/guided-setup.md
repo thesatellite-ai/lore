@@ -77,7 +77,7 @@ progress:
 | `kind` | What kind of setup is this? | all | the setup's kind and name; for `solo`, whether it is the default |
 | `identity` | Who are you? | all | your name, email, other addresses and handle (a `member` setup is prefilled with the invite's email) |
 | `github` | Which GitHub account? | all | the GitHub user you pick, and the route lore found for it: `route: ssh` with the host alias (`github.com` or a `Host` block of yours) and the key's fingerprint (plus the key path when a `.pub` sits beside it or you gave one), or `route: https` (the account's gh login) |
-| `personal_store` | Where do your own notes go? | all | your personal store (`--to me`): create a new private repo, use an existing one, a local folder (`file://~/.lore/stores/me`), the same as your other setups, or none |
+| `personal_store` | Where do your own notes go? | all | your personal store (`--to me`): create a new private repo, use an existing one, a local folder (`file://~/.lore/stores/_me`), the same as your other setups, or none |
 | `join` | Join your team | member | the invite you were sent; joins the org and its roster |
 | `team` | Start your team | admin | the team name, a new or empty private repo for its store, the team's own repo patterns and client repo patterns |
 | `tools` | Which coding tools do you use? | all, optional | the tool profiles (`claude_code`, `codex`, …); lore installs its skill for each ([skill install](../knowledge/skill-install.md)) |
@@ -233,6 +233,8 @@ If an admin added you ([Adding your staff](members.md)), run `lore setup join <o
 ```console
 # tomas, in agency/site
 $ lore team invite mira@agency.example
+lore: pushed store agency/org: commit 601d285 to branch main
+lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
 Send this to mira@agency.example (it holds no secret):
   lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…

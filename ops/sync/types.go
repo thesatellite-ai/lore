@@ -130,7 +130,32 @@ type StoreReport struct {
 	// the folder's push was its own.
 	HeldBy string `json:"held_by,omitempty"`
 	Held   string `json:"held,omitempty"`
+	// URL, Status, Error and Next are set by `lore sync` run outside a
+	// code repo (every store of the setup, or the store checkout it runs
+	// in): the store's url, what happened (StoreStatus*), and for a store
+	// that failed the cause and the next step. Empty inside a repo.
+	URL    string `json:"url,omitempty"`
+	Status string `json:"status,omitempty"`
+	Error  string `json:"error,omitempty"`
+	Next   string `json:"next,omitempty"`
 }
+
+// The status of one store in `lore sync` run outside a code repo.
+const (
+	StoreStatusUpToDate = "up to date"
+	StoreStatusPulled   = "pulled"
+	StoreStatusPushed   = "pushed"
+	StoreStatusBoth     = "pulled and pushed"
+	StoreStatusOffline  = "offline"
+	StoreStatusFailed   = "failed"
+)
+
+// PassSetup and PassStore name the pass of `lore sync` run outside a code
+// repo: every store of the setup, or the one store checkout it runs in.
+const (
+	PassSetup = "setup"
+	PassStore = "store"
+)
 
 // RunData is the data of `lore sync --json`: the repo pass plus the stores.
 type RunData struct {

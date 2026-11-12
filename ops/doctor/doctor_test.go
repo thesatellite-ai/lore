@@ -16,7 +16,7 @@ type fakeHost struct {
 }
 
 func (h *fakeHost) Base(_ context.Context, fix bool) (Base, error) {
-	h.gotFix = fix
+	h.gotFix = h.gotFix || fix // any run with --fix (the re-check after it runs without)
 	return h.base, nil
 }
 
@@ -34,7 +34,7 @@ func (e *fakeEnv) DoctorHost(context.Context) (Host, bool) {
 }
 
 func (e *fakeEnv) DoctorChecks(_ context.Context, fix bool) []CheckRun {
-	e.gotFix = fix
+	e.gotFix = e.gotFix || fix
 	return e.runs
 }
 func (*fakeEnv) BinaryVersion() string { return "v9.9.9" }

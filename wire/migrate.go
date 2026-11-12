@@ -450,7 +450,7 @@ func (a *App) migrateURLCredentials(ctx context.Context, dryRun bool) ([]string,
 // roster once the store is 0.1.18 (wire roster.go).
 var rosterTables = []row.Table{schema.TableActors, schema.TableTeams}
 
-// orgDefaultsFile is <org folder>/.lore/lore-org.yaml (v0.1.17 stores
+// orgDefaultsFile is <org folder>/lore-org.yaml (<org folder>/.lore/ in v0.1.17 stores,
 // package OrgDefaultsFile), whose `defaults` the org_defaults_to_policy
 // step moves into policies rows (CFG8).
 const orgDefaultsFile = orgcfg.OrgFile
@@ -478,7 +478,7 @@ const orgDefaultsKey = "defaults"
 // (policy.Set.ClientRoutes). The int is the policy rows written (would be,
 // under dryRun): 1, or 0 when the folder already holds the row.
 func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store, dir string, dryRun bool) ([]string, int, error) {
-	rel := filepath.Join(filepath.FromSlash(s.Folder), rowfs.LoreDir, orgDefaultsFile)
+	rel := ""
 	// The folder comes from the org's link, so every file access goes
 	// through an os.Root on the store clone: a folder such as ../x can
 	// never read or write outside it.
@@ -487,8 +487,14 @@ func (a *App) orgDefaultsToPolicy(ctx context.Context, st *state, s attach.Store
 		return nil, 0, errs.Wrap(errs.Internal, "migrate: open org store clone "+string(s.Name), err)
 	}
 	defer func() { _ = root.Close() }() // read-only handle on a directory: nothing to flush
-	b, err := root.ReadFile(rel)
-	if err != nil {
+	var b []byte
+	for _, c := range orgcfg.OrgFilePaths(s.Folder) {
+		if b, err = root.ReadFile(filepath.FromSlash(c)); err == nil {
+			rel = filepath.FromSlash(c)
+			break
+		}
+	}
+	if rel == "" {
 		return nil, 0, nil // no lore-org.yaml in this folder (or a folder outside the clone): nothing to move
 	}
 	var p orgDefaultsProbe
@@ -946,7 +952,7 @@ func (a *App) migrateStoreMarker(ctx context.Context, e opsstores.Entry, seen ma
 		return "", errs.Prefix("migrate: store "+e.Name, err)
 	}
 	m, err := rowfs.ReadMarker(dir)
-	if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {
+	if err != nil || m.Version >= rowfs.MarkerFirstStores || seen[dir] {
 		return "", nil // no marker (an empty git store) or already v2: nothing to convert
 	}
 	seen[dir] = true
@@ -976,7 +982,7 @@ func (a *App) upgradeMarker(ctx context.Context, dir, rawURL string, m rowfs.Mar
 		return nil
 	}
 	// FLAG4: same signing rule as every store commit (git identity wins).
-	return gitCommitMarkerAs(ctx, dir, a.opts.Wall(), storeIdentityFunc(a.opts))
+	return gitCommitFilesAs(ctx, dir, a.opts.Wall(), storeIdentityFunc(a.opts), initSubject, rowfs.MarkerFile)
 }
 
 // migrateOrgStore runs the per-store steps of migrateOrg for one org store:
@@ -996,7 +1002,7 @@ func (a *App) migrateOrgStore(ctx context.Context, st *state, s attach.Store, se
 		}
 	}
 	m, err := rowfs.ReadMarker(dir)
-	if err != nil || m.Version >= rowfs.MarkerVersion || seen[dir] {
+	if err != nil || m.Version >= rowfs.MarkerFirstStores || seen[dir] {
 		return steps, rows, nil
 	}
 	seen[dir] = true

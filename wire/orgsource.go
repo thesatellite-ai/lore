@@ -207,11 +207,11 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 
 // orgFileShown names lore-org.yaml in its store.
 func orgFileShown(sg orgcfg.Suggestion) string {
-	f := sg.Folder
-	if f == "" || f == orgconf.OrgFolderRoot {
-		return ".lore/lore-org.yaml in " + sg.StoreURL
+	p := sg.Path
+	if p == "" {
+		p = orgcfg.OrgFilePath(sg.Folder)
 	}
-	return f + "/.lore/lore-org.yaml in " + sg.StoreURL
+	return p + " in " + sg.StoreURL
 }
 
 // short is a blob id's first 7 characters.

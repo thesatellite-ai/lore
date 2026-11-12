@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -112,6 +114,15 @@ type fakeOrgs struct {
 func (o *fakeOrgs) Import(_ context.Context, in orgcmd.ImportIn, _ bool) (orgcmd.Report, error) {
 	o.imports = append(o.imports, in)
 	o.e.origins[in.As] = Origin{Store: in.URL, OrgFolder: orgcmd.DefaultOrgFolder}
+	if in.Admit != nil { // as the wire Import: check, take the entry out on a refusal
+		if err := in.Admit(context.Background(), in.As); err != nil {
+			delete(o.e.origins, in.As)
+			return orgcmd.Report{}, err
+		}
+	}
+	if in.SkipRegister {
+		return orgcmd.Report{}, nil
+	}
 	o.e.ensureActor(in.Key, in.Handle)
 	return orgcmd.Report{}, nil
 }
@@ -772,5 +783,130 @@ func TestJoinStintBoundary(t *testing.T) {
 				t.Errorf("memberships = %d, want %d", n, c.wantRows)
 			}
 		})
+	}
+}
+
+// TestJoinMemberRefusedFirst (owner item 19, break-verify target): a
+// person not on the roster joining by the store url is refused before
+// anything is written (no actor row, no push, the org entry taken out
+// again); a person member add added joins on their own actor.
+func TestJoinMemberRefusedFirst(t *testing.T) {
+	x := newFixture(t)
+	delete(x.e.origins, "agency") // a fresh machine: no orgs[] entry yet
+	if _, err := x.ops().staffAdd(op.WithConfirmed(x.ctx, true), StaffAddIn{Email: "ann@agency.example", Name: "Ann"}); err != nil {
+		t.Fatal(err)
+	}
+	count := func() int {
+		n := 0
+		for _, tb := range []string{schema.TableActors, schema.TableActorContacts, schema.TableActorPeriods, schema.TableProjectMembers} {
+			n += len(x.e.All(row.Table(tb)))
+		}
+		return n
+	}
+	rows, pushes := count(), x.e.Pushes
+	x.joiner()
+	_, err := ApplyJoinMember(context.Background(), x.joinDeps(), MemberJoinRequest{Org: "agency", Store: storeURL, Emails: []string{"dan@agency.example"}, Name: "Dan", Handle: "dan"})
+	wantCode(t, "non-member join by url", err, errs.NotFound)
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "is not a member of agency") || !strings.Contains(e.Hint, "lore member add dan@agency.example") {
+		t.Errorf("refusal = %v, want the cause and the admin's command", err)
+	}
+	if got := count(); got != rows || x.e.Pushes != pushes {
+		t.Errorf("a refused join wrote: rows %d -> %d, pushes %d -> %d", rows, got, pushes, x.e.Pushes)
+	}
+	if _, ok := x.e.origins["agency"]; ok || len(x.orgs.imports) != 1 {
+		t.Errorf("the refused join left its org entry (imports %d)", len(x.orgs.imports))
+	}
+	// the member joins: their own actor, the entry kept, no new actor row
+	actors := len(x.e.All(schema.TableActors))
+	x.joiner()
+	res, err := ApplyJoinMember(context.Background(), x.joinDeps(), MemberJoinRequest{Org: "agency", Store: storeURL, Emails: []string{"Ann@agency.example"}, Name: "Ann", Handle: "ann"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ann, aerr := func() (row.Row, error) {
+		r, done, err := x.e.Roster(context.Background(), false)
+		defer done()
+		if err != nil {
+			return row.Row{}, err
+		}
+		return r.ResolveActor(context.Background(), "human:ann@agency.example")
+	}()
+	if aerr != nil || res.Actor != ann.ID.String() || !res.Imported || len(x.e.All(schema.TableActors)) != actors {
+		t.Errorf("member join = %+v (ann %v %v, actors %d -> %d)", res, ann.ID, aerr, actors, len(x.e.All(schema.TableActors)))
+	}
+	if _, ok := x.e.origins["agency"]; !ok {
+		t.Error("the member join kept no org entry")
+	}
+}
+
+// TestJoinInviteRefusedFirst (owner item 19, break-verify target): on a
+// fresh machine a bad invite (unknown, expired, wrong email, used by
+// someone else, revoked) is refused before anyone is registered: no
+// actor row, no push, the org entry taken out again; a good one joins.
+func TestJoinInviteRefusedFirst(t *testing.T) {
+	x := newFixture(t)
+	out := x.invite(setup.TeamInviteIn{Email: "tomas@agency.example", Roles: []string{"dev"}, Projects: []string{"acme-hub"}})
+	delete(x.e.origins, "agency") // a fresh machine: no orgs[] entry yet
+	count := func() int {
+		n := 0
+		for _, tb := range []string{schema.TableActors, schema.TableActorContacts, schema.TableActorPeriods, schema.TableProjectMembers} {
+			n += len(x.e.All(row.Table(tb)))
+		}
+		return n
+	}
+	rows, pushes := count(), x.e.Pushes
+	refused := func(name, line string, code errs.Code, emails ...string) {
+		t.Helper()
+		x.joiner()
+		_, err := x.join(line, emails...)
+		wantCode(t, name, err, code)
+		if got := count(); got != rows || x.e.Pushes != pushes {
+			t.Errorf("%s wrote: rows %d -> %d, pushes %d -> %d", name, rows, got, pushes, x.e.Pushes)
+		}
+		if _, ok := x.e.origins["agency"]; ok {
+			t.Errorf("%s left its org entry", name)
+		}
+	}
+	inv, _ := onboard.DecodeInvite(out.Line)
+	inv.ID = "inv_01890a5d8a2b7000a000000000000fff"
+	unknown, err := onboard.EncodeInvite(inv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused("unknown id", unknown, errs.InviteNotFound, "tomas@agency.example")
+	x.e.Now = time.Date(2026, 11, 21, 9, 0, 0, 0, time.UTC) // expires_on 2026-11-20 was yesterday
+	refused("expired", out.Line, errs.InviteExpired, "tomas@agency.example")
+	x.e.Now = time.Date(2026, 11, 20, 23, 0, 0, 0, time.UTC)
+	// the row says another address than the (edited) line
+	inv, _ = onboard.DecodeInvite(out.Line)
+	inv.Email = "tomas.alt@agency.example"
+	edited, err := onboard.EncodeInvite(inv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused("wrong email", edited, errs.InviteEmail, "tomas.alt@agency.example")
+	// used by an actor that is not this person
+	invRow := x.e.All(schema.TableInvites)[0]
+	used := invRow
+	used.Fields = maps.Clone(invRow.Fields)
+	used.Fields[schema.FieldInviteStatus] = txt(t, schema.InviteStatusAccepted)
+	used.Fields[schema.FieldInviteAcceptedBy] = txt(t, testID[ids.Actor](t, ids.PrefixActor).String())
+	x.e.Put(used)
+	refused("used", out.Line, errs.InviteUsed, "tomas@agency.example")
+	x.e.Put(invRow)
+	x.e.CallerID = x.admin
+	if _, err := x.ops().revoke(op.WithConfirmed(x.ctx, true), setup.TeamInviteRefIn{Ref: out.ID}); err != nil {
+		t.Fatal(err)
+	}
+	rows, pushes = count(), x.e.Pushes
+	refused("revoked", out.Line, errs.InviteRevoked, "tomas@agency.example")
+	// a good invite still joins on the fresh machine
+	x.e.CallerID, x.e.origins["agency"] = x.admin, Origin{Store: storeURL, OrgFolder: "org"}
+	good := x.invite(setup.TeamInviteIn{Email: "ana@agency.example", Roles: []string{"dev"}, Projects: []string{"acme-hub"}})
+	delete(x.e.origins, "agency")
+	ana := x.joiner()
+	if res, err := x.join(good.Line, "ana@agency.example"); err != nil || res.Actor != ana.String() || !res.Imported {
+		t.Errorf("good invite = %+v %v", res, err)
 	}
 }

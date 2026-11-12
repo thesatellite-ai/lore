@@ -104,8 +104,10 @@ A project can have several repos (see [Multi-repo projects](../sync/multi-repo-p
 ```console
 # alice, in website
 $ lore repo add web --origin https://github.com/client/website
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
 ✓ repo web registered (rep_54fe…28f2)
 $ lore memory add --repo web --body 'The web repo deploys on every merge to main'
+lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ mem_05e9…4603
   scope: [repo:web]
 $ lore memory list --repo web

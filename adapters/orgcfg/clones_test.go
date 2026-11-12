@@ -76,11 +76,11 @@ func TestInspectReportsUnopenableClone(t *testing.T) {
 	c := Clones{Home: t.TempDir()}
 	dir := c.Dir(testNorm)
 	for _, d := range []string{"objects", "refs"} {
-		if err := os.MkdirAll(filepath.Join(dir, d), 0o700); err != nil {
+		if err := os.MkdirAll(filepath.Join(dir, ".git", d), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(dir, "HEAD"), []byte("garbage\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("garbage\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	info := c.Inspect(context.Background(), testNorm)
@@ -146,25 +146,44 @@ func TestDoctorAndUnpushed(t *testing.T) {
 	}
 }
 
-// TestOpenWorktree: open checks the branch out detached under worktrees and
-// refreshes it on the next open; a missing branch is refused.
-func TestOpenWorktree(t *testing.T) {
+// TestOpenClone: open returns the store's own clone (stores/<owner>/<repo>,
+// files checked out, no worktree folder anywhere) for its default branch,
+// and the pinned clone <repo>@<branch> for another branch; a missing
+// branch is refused and makes nothing.
+func TestOpenClone(t *testing.T) {
 	ctx := context.Background()
 	origin := storeOrigin(t)
+	seed := filepath.Join(t.TempDir(), "seed")
+	testGit(t, filepath.Dir(seed), "clone", "-q", origin, seed)
+	testGit(t, seed, "push", "-q", "origin", "main:staging")
 	c := Clones{Home: t.TempDir()}
+	want := filepath.Join(c.Home, "stores", "agency", "notes")
 	for range 2 {
 		dir, commit, err := c.Open(ctx, testNorm, origin, "main")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if dir != c.WorktreeDir(testNorm, "main") || testGit(t, dir, "rev-parse", "HEAD") != commit {
-			t.Fatalf("worktree %s at %s", dir, commit)
+		if dir != want || testGit(t, dir, "rev-parse", "HEAD") != commit {
+			t.Fatalf("clone %s at %s, want %s", dir, commit, want)
 		}
 		if _, err = os.Stat(filepath.Join(dir, storeMarkerFile)); err != nil {
 			t.Fatal(err)
 		}
 	}
+	dir, commit, err := c.Open(ctx, testNorm, origin, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir != want+"@staging" || testGit(t, dir, "symbolic-ref", "--short", "HEAD") != "staging" || testGit(t, dir, "rev-parse", "HEAD") != commit {
+		t.Fatalf("staging clone %s at %s", dir, commit)
+	}
 	if _, _, err := c.Open(ctx, testNorm, origin, "nope"); err == nil {
 		t.Fatal("a missing branch must be refused")
+	}
+	if _, err := os.Stat(want + "@nope"); err == nil {
+		t.Fatal("a refused open made a clone")
+	}
+	if _, err := os.Stat(filepath.Join(c.Home, "worktrees")); err == nil {
+		t.Fatal("store open made a worktrees folder")
 	}
 }

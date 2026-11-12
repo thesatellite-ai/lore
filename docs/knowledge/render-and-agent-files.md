@@ -56,6 +56,8 @@ Here the repo already had a `CLAUDE.md` with hand-written notes before lore arri
 ```console
 # alice, in website
 $ lore init --non-interactive --name=website
+lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; lore's merge rules in ~/work/website/.gitattributes; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
 lore initialized
     project_id: prj_7a67…9504
     name:       website
@@ -229,13 +231,16 @@ Render decides on its own whether a `must` rule (or a `critical`/`high` hotfix) 
 ```console
 # alice, in website
 $ lore rule add --body 'Every price change needs the client written OK' --severity must
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2
   scope: [master] severity: must
 $ lore pin set rul_54fe…28f2 --context line
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context line (lore render to apply)
 $ lore render >/dev/null && grep -n 'price change' .lore/LORE.md
 42:- `rul_54fe…28f2` Every price change needs the client written OK Full: `lore show rul_54fe…28f2`
 $ lore pin set rul_54fe…28f2 --context full
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context full (lore render to apply)
 $ lore render >/dev/null && grep -n -B1 -A2 'price change' .lore/LORE.md
 38-<rule id="rul_54fe…28f2" severity="must" trust="0.50">
@@ -243,6 +248,7 @@ $ lore render >/dev/null && grep -n -B1 -A2 'price change' .lore/LORE.md
 40-</rule>
 41-
 $ lore pin unset rul_54fe…28f2
+lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 unpinned (render ranks it again)
 ```
 <!-- /example -->
@@ -257,7 +263,9 @@ A rule added with `--scope dir:<path>` applies only to files under that folder. 
 ```console
 # alice, in website
 $ lore rule add --body 'Checkout code never calls the payment API directly' --severity must --scope dir:src/checkout
-✓ rul_05e9…4603
+lore: wrote ~/work/website/.lore/data/scopes/scp_05e9…4603.json
+lore: wrote ~/work/website/.lore/data/rules/rul_c0f3…b5b8.json
+✓ rul_c0f3…b5b8
   scope: [dir:src/checkout] severity: must
 $ lore scope list
 scope                            rules hotfixes notes  file                                  bytes
@@ -282,7 +290,8 @@ When you rename the folder, tell lore with `lore scope move <old> <new>`. Only t
 ```console
 # alice, in website
 $ lore scope move src/checkout src/payments
-✓ scp_c0f3…b5b8 path src/checkout -> src/payments (ids unchanged)
+lore: wrote ~/work/website/.lore/data/scopes/scp_05e9…4603.json
+✓ scp_05e9…4603 path src/checkout -> src/payments (ids unchanged)
 next: lore render
 $ lore scope list
 scope                            rules hotfixes notes  file                                  bytes

@@ -3,7 +3,8 @@
 # Catches: R14-1, R21-61, R22-41, ship-gate Tier-2 #1, #2, #4
 #
 # 0.1.18 layout: rows are files under .lore/data (committed), the search
-# cache is .lore/lore-cache.db (gitignored, rebuilt from the row files);
+# cache is under the lore home, ~/.lore/cache/repo/<folder>-<hash>.db
+# (never in the work tree, rebuilt from the row files);
 # v0.1.17's .lore/lore.db is gone. With no tool file wired, render writes
 # the AGENTS.md pointer; --target claude_code writes CLAUDE.md's @import.
 #
@@ -18,10 +19,9 @@ git remote add origin https://github.com/test/myproject.git
 $LORE init --non-interactive --name=myproject >/dev/null || fail "init failed"
 [ -f .lore/data/_meta.json ] || fail ".lore/data/_meta.json not created"
 ls .lore/data/projects/prj_*.json >/dev/null 2>&1 || fail "project row file not created"
-[ -f .lore/lore-cache.db ] || fail ".lore/lore-cache.db not created"
+[ -f "$(repo_cache)" ] || fail "the repo cache $(repo_cache) not created"
+[ ! -e .lore/lore-cache.db ] || fail "init created a cache in the work tree"
 [ ! -e .lore/lore.db ] || fail "init created the retired .lore/lore.db"
-grep -qx "\.lore/lore-cache\.db" .gitignore || fail ".gitignore missing .lore/lore-cache.db"
-git check-ignore -q .lore/lore-cache.db || fail "git does not ignore the cache"
 git check-ignore -q .lore/data/_meta.json && fail "git ignores .lore/data (rows must be committed)"
 
 # 2. memory add succeeds and writes a row file

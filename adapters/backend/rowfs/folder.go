@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -20,13 +21,15 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// Folder is one data folder of a store (<root>/<name>/.lore/data). It reads
-// and writes row files; locking and the read-only rule belong to the
-// backend that owns it.
+// Folder is one data folder of a store (<root>/<name>, its rows at
+// <name>/<table>/<id>.json; a code repo's <top>/.lore/data). It reads and
+// writes row files; locking and the read-only rule belong to the backend
+// that owns it.
 type Folder struct {
 	root    *Root
 	name    string // clean folder name, FolderRoot for the root
-	rel     string // data dir relative to the root, slash-separated
+	layout  Layout // where its rows sit (the root's, or LayoutRepo for an old-layout store folder)
+	rel     string // data dir relative to the root, slash-separated ("." a store's root)
 	dataDir string // absolute data dir
 	// metaSource, when set, is asked for the shared copy of the folder's
 	// _meta.json before a first write creates one (SetMetaSource).
@@ -66,9 +69,37 @@ func (f *Folder) SetMetaSource(src MetaSource) { f.metaSource = src }
 // Name is the clean folder name (FolderRoot for the root folder).
 func (f *Folder) Name() string { return f.name }
 
-// DataPath is the data dir relative to the store root, slash-separated
-// (".lore/data", "org/.lore/data"); git pathspecs use it.
+// DataPath is the data dir relative to the store root, slash-separated:
+// "." (a store's root folder), "org", "team/web"; ".lore/data" in a code
+// repo. In a store it also holds the folders below it: join with path.Join
+// and give git Pathspecs, never DataPath itself.
 func (f *Folder) DataPath() string { return f.rel }
+
+// Pathspecs are the git pathspecs holding exactly this folder's row files
+// (Layout.Pathspecs).
+func (f *Folder) Pathspecs() []string { return f.layout.Pathspecs(f.name) }
+
+// Layout is where this folder's rows sit.
+func (f *Folder) Layout() Layout { return f.layout }
+
+// OldLayout reports whether this folder of a store is still in the layout
+// stores had before the plain-files round (<folder>/.lore/data): it is
+// read and written there until it is moved (brief 1.6). Always false for
+// a code repo, whose rows belong in .lore/data.
+func (f *Folder) OldLayout() bool { return f.root.layout == LayoutStore && f.layout == LayoutRepo }
+
+// FileRel is a row file's path relative to this folder's data dir when the
+// root-relative slash path p is one of this folder's row files.
+func (f *Folder) FileRel(p string) (string, bool) {
+	folder, rel, ok := f.layout.SplitRowPath(p)
+	if !ok || folder != f.name {
+		return "", false
+	}
+	return rel, true
+}
+
+// storePath is the root-relative slash path of rel under the data dir.
+func (f *Folder) storePath(rel string) string { return path.Join(f.rel, rel) }
 
 // Root is the store this folder belongs to.
 func (f *Folder) Root() *Root { return f.root }
@@ -76,7 +107,7 @@ func (f *Folder) Root() *Root { return f.root }
 // StorePath is a row file's path relative to the store root,
 // slash-separated (what git sees).
 func (f *Folder) StorePath(table row.Table, id ids.AnyID) string {
-	return f.rel + "/" + RowPath(table, id)
+	return f.storePath(RowPath(table, id))
 }
 
 // Problem is one entry of a data folder that is not a usable row file,
@@ -131,7 +162,7 @@ func (f *Folder) Get(table row.Table, id ids.AnyID) (store.Row, error) {
 
 // current reads the row at rel; ok is false when the file does not exist.
 func (f *Folder) current(rel string) (store.Row, bool, error) {
-	if err := checkChain(f.root.dir, f.rel+"/"+rel); err != nil {
+	if err := checkChain(f.root.dir, f.storePath(rel)); err != nil {
 		return store.Row{}, false, err
 	}
 	b, err := readCapped(filepath.Join(f.dataDir, filepath.FromSlash(rel)), rel)
@@ -170,9 +201,15 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 		return nil, nil, errs.Wrap(errs.Internal, "rowfs: list the data folder", err)
 	}
 	now := f.root.now()
+	flat := f.layout == LayoutStore
 	for _, t := range tables {
 		name := t.Name()
 		switch {
+		case flat && !strings.HasPrefix(name, tmpPrefix) && !IsTableDir(name):
+			// a store folder holds its table folders beside the folders
+			// below it, its own files and a person's files: only a table
+			// folder is lore's to read here (D-d)
+			continue
 		case IsOSJunk(name), name == MetaFileName, name == PurgedFileName:
 			continue
 		case strings.HasPrefix(name, tmpPrefix):
@@ -430,6 +467,14 @@ func (a *Applied) AddCreated(full, rel string) {
 	a.Paths = append(a.Paths, rel)
 }
 
+// AddReplaced records a file this batch rewrote beside its row files (an
+// earlier lore's README.md, rowfs.EnsureReadme): it is committed with the
+// batch, and Undo writes prev back.
+func (a *Applied) AddReplaced(full, rel string, prev []byte) {
+	a.undo = append(a.undo, undoStep{full: full, prev: prev, m: fileModes{file: readmeMode, dir: sharedDirMode}})
+	a.Paths = append(a.Paths, rel)
+}
+
 // undoStep restores one file: prev nil means the file did not exist.
 type undoStep struct {
 	full string
@@ -497,7 +542,7 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 		}
 		rel := RowPath(c.Row.Table, c.Row.ID)
 		full := filepath.Join(f.dataDir, filepath.FromSlash(rel))
-		if err := checkChain(f.root.dir, f.rel+"/"+rel); err != nil {
+		if err := checkChain(f.root.dir, f.storePath(rel)); err != nil {
 			return nil, errors.Join(err, a.Undo())
 		}
 		if err := writeAtomic(full, c.Row.Doc, f.root.modes); err != nil {
@@ -524,7 +569,7 @@ func (f *Folder) ensureMeta(ctx context.Context, a *Applied) error {
 		return nil
 	}
 	full := filepath.Join(f.dataDir, MetaFileName)
-	rel := f.rel + "/" + MetaFileName
+	rel := f.storePath(MetaFileName)
 	if err := checkChain(f.root.dir, rel); err != nil {
 		return err
 	}

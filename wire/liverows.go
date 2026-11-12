@@ -407,7 +407,7 @@ func liveSources(ctx context.Context, st *state) ([]liveSource, error) {
 		}
 		v017 := false
 		if m, ok := concrete(st.byName[name]).(markerOf); ok {
-			v017 = m.Marker().Version < rowfs.MarkerVersion
+			v017 = m.Marker().Version < rowfs.MarkerFirstStores
 		}
 		b := gb.Branch()
 		out = append(out, liveSource{name: name, dir: gb.Dir(), folder: f, branch: b, v017: v017,

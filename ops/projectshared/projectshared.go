@@ -29,7 +29,7 @@ const (
 // database (v0.1.17 saas/cmd/cli/project_shared.go modeBReplacement).
 const Hint = "the shared-database mode is retired; use a store instead: " +
 	"`lore store init <name> file:///abs/path` once, then `lore store add <name> <url>` in each repo " +
-	"(write to it with `--to <name>`); an existing shared project converts with `lore migrate run`"
+	"(write to it with `--to <name>`); an existing shared project converts with lore fix"
 
 // In is the input of both: the v0.1.17 flags and arguments are still
 // accepted so an old invocation gets the refusal, not "unknown flag".

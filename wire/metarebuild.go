@@ -23,6 +23,7 @@ package wire
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -87,7 +88,7 @@ func (a *App) ProbeRows(ctx context.Context, src store.Source, refs []engine.Ref
 	if sh, serr := liveGit(ctx, dir, "rev-parse", "--is-shallow-repository"); serr == nil && strings.TrimSpace(string(sh)) == "true" {
 		out.Shallow = true
 	}
-	ls, lerr := liveGit(ctx, dir, "ls-files", "-t", "--", "./"+data+"/"+string(schema.TableMetaKeys), "./"+data+"/"+string(schema.TableMetaValues))
+	ls, lerr := liveGit(ctx, dir, "ls-files", "-t", "--", "./"+path.Join(data, string(schema.TableMetaKeys)), "./"+path.Join(data, string(schema.TableMetaValues)))
 	if lerr == nil {
 		for line := range strings.SplitSeq(string(ls), "\n") {
 			if strings.HasPrefix(line, skipWorktreeTag) {
@@ -107,10 +108,10 @@ func (a *App) ProbeRows(ctx context.Context, src store.Source, refs []engine.Ref
 	out.Refs = branches
 	for _, ref := range refs {
 		rel := rowfs.RowPath(ref.Table, ref.ID)
-		path := data + "/" + rel
+		file := path.Join(data, rel) // data is "." for a store's root folder
 		id := ref.ID.String()
 		damaged := "" // first place a copy exists but does not decode
-		if doc, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, filepath.FromSlash(path)))); rerr == nil {
+		if doc, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, filepath.FromSlash(file)))); rerr == nil {
 			if _, derr := rowfs.DecodeRowFile(rel, doc); derr == nil {
 				out.Found[id] = probeWorkTree
 				continue
@@ -118,7 +119,7 @@ func (a *App) ProbeRows(ctx context.Context, src store.Source, refs []engine.Ref
 			damaged = probeWorkTree
 		}
 		for _, br := range branches {
-			doc, gerr := liveGit(ctx, dir, "cat-file", "blob", br+":./"+path)
+			doc, gerr := liveGit(ctx, dir, "cat-file", "blob", br+":./"+file)
 			if gerr != nil {
 				out.AbsentOn[br]++ // OV64-SPLIT: per-ref count of absent rows
 				continue

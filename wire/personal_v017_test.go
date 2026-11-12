@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
@@ -118,7 +119,7 @@ func TestV017LocalPersonalStore(t *testing.T) {
 		t.Fatalf("run count %d, want %d (what the dry run listed): %s", done.Count, movedRows, out)
 	}
 	for _, id := range []string{v017PersonalMem, newID} {
-		raw := string(mustRead(t, filepath.Join(home, personalDirV017, ".lore", "data", schema.TableMemories, id+".json")))
+		raw := string(mustRead(t, filepath.Join(home, personalDirV017, rowfs.StoreDataDir, schema.TableMemories, id+".json")))
 		if !strings.Contains(raw, originOldFolder) || !strings.Contains(raw, personalEverywhereV017) {
 			t.Fatalf("%s at the root without its old folder: %s", id, raw)
 		}

@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/tmpdir"
 )
@@ -61,12 +62,22 @@ func (s Snapshots) Snapshot(ctx context.Context, repo, work, rel string) (string
 	}
 	defer func() { _ = os.RemoveAll(tmp) }() // a temp folder only this call uses
 	env := []string{"GIT_DIR=" + trimmed(gd), "GIT_WORK_TREE=" + work, "GIT_INDEX_FILE=" + filepath.Join(tmp, "index")}
-	if _, err = s.g.run(ctx, call{dir: work, env: env, args: []string{"add", "-A", "-f", "--", rel}}); err != nil {
+	specs := []string{rel}
+	whole := strings.Trim(rel, "/") == "." || rel == ""
+	if whole {
+		// a store's root folder: its rows sit at the top beside the other
+		// folders; lore's own state folder is never part of a backup
+		specs = []string{".", ":(exclude)" + rowfs.StoreStateDir}
+	}
+	if _, err = s.g.run(ctx, call{dir: work, env: env, args: append([]string{"add", "-A", "-f", "--"}, specs...)}); err != nil {
 		return "", errs.Wrap(errs.Internal, "git: stage "+rel+" into the backup index", err)
 	}
 	out, err := s.g.run(ctx, call{dir: work, env: env, args: []string{"write-tree"}})
 	if err != nil {
 		return "", errs.Wrap(errs.Internal, "git: write the backup tree", err)
+	}
+	if whole {
+		return trimmed(out), nil
 	}
 	sub := s.Resolve(ctx, repo, trimmed(out)+":"+strings.Trim(rel, "/"))
 	if sub == "" {
@@ -138,6 +149,7 @@ func (s Snapshots) BackupAt(ctx context.Context, dir, date, commit string) (stri
 		}
 		// The zero old value makes update-ref refuse an existing ref.
 		if _, err := s.g.run(ctx, call{dir: dir, args: []string{"update-ref", ref, commit, zeroOID}}); err == nil {
+			pruneRefs(ctx, s.g, dir, BackupRefPrefix, MigrateBackupsKept) // bounded (backupprune.go)
 			return ref, nil
 		}
 	}

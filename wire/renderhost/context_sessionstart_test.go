@@ -22,7 +22,7 @@ func TestContextSessionStart(t *testing.T) {
 	ctx := context.Background()
 	a, project := repoApp(t)
 	clock := time.Now().UTC().Add(-time.Hour)
-	h := New(Options{App: a, Now: func() time.Time { return clock }})
+	h := New(Options{App: a, Home: t.TempDir(), Now: func() time.Time { return clock }})
 
 	changed := func(res contextResult) []string {
 		var ids []string

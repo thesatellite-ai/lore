@@ -84,11 +84,7 @@ func TestInitCore(t *testing.T) {
 	}
 
 	// A fresh clone: .lore/data only, no cache or lore.db on this machine.
-	for _, f := range localStateFiles {
-		if err := os.RemoveAll(filepath.Join(root, ".lore", f)); err != nil {
-			t.Fatal(err)
-		}
-	}
+	forgetLocalState(t, w, root)
 	code, out, errOut = w.lore(t, root, "init")
 	if code != 0 || !strings.Contains(out, "adopted the shared lore project") || !strings.Contains(out, pid) {
 		t.Fatalf("init of a clone carrying .lore/data: exit %d\nstdout: %s\nstderr: %s", code, out, errOut)

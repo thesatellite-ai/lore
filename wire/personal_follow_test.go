@@ -16,7 +16,7 @@ import (
 // is the local folder itself changes no setup.
 func TestSetPersonalStoreFollowed(t *testing.T) {
 	home := t.TempDir()
-	local := fileuri.URL(filepath.Join(home, personalStoresDir, "me"), "")
+	local := fileuri.URL(personalFolderDir(home), "")
 	body := "setups:\n" +
 		"  - name: boss\n    kind: solo\n    personal_store: " + local + "\n" +
 		"  - name: own\n    kind: solo\n    personal_store: git@github.com:pat/own.git\n" +

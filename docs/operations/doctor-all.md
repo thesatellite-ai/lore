@@ -66,7 +66,8 @@ setup personal (solo) ─ ~/work/personal/**
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
-2 setups · 22 ok · 5 warnings · 0 errors · 1 could not run → degraded (exit 1)
+  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit act_7a67…9504 --role admin)
+2 setups · 22 ok · 6 warnings · 0 errors · 1 could not run → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
@@ -104,7 +105,8 @@ setup personal (solo) ─ ~/work/personal/**
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
-1 setup · 7 ok · 3 warnings · 0 errors → degraded (exit 1)
+  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit act_7a67…9504 --role admin)
+1 setup · 7 ok · 4 warnings · 0 errors → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
@@ -139,7 +141,8 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
       repair: lore setup repair agency
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
-1 setup · 14 ok · 3 warnings · 2 errors · 1 could not run → broken (exit 2)
+  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit act_7a67…9504 --role admin)
+1 setup · 14 ok · 4 warnings · 2 errors · 1 could not run → broken (exit 2)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
@@ -164,7 +167,7 @@ A check that could not run makes the result degraded, never broken, because the 
 ```console
 # tomas, in agency/site
 $ lore doctor --all --setup agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["status"], r["exit_status"], r["counts"]); [print(c["check"], c["status"], c["level"], c.get("target","-"), "|", c.get("detail","")) for s in r["setups"] for c in s["checks"] if c["status"] not in ("ok", "skip")]'
-broken 2 {'ok': 14, 'warn': 3, 'fail': 2, 'skip': 12, 'error': 1}
+broken 2 {'ok': 14, 'warn': 4, 'fail': 2, 'skip': 12, 'error': 1}
 identity.actor_copies warn warn - | Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
 github.ssh_user fail error - | github.com logs in as mira-dev
 github.key_matches fail error - | github.com logs in as mira-dev, but this setup's account is tomas-dev

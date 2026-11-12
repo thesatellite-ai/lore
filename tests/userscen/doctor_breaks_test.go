@@ -62,7 +62,7 @@ func damageMiddle(t *testing.T, path string) {
 
 func TestDoctorBreak_CacheDamagedInsideIsBrokenUntilDeleted(t *testing.T) {
 	p := newDoctorPerson(t)
-	cache := p.file(".lore/lore-cache.db")
+	cache := p.repoCache()
 	damageMiddle(t, cache)
 
 	rep, res := p.doctor(t)
@@ -92,17 +92,17 @@ func TestDoctorBreak_CacheDamagedInsideIsBrokenUntilDeleted(t *testing.T) {
 
 func TestDoctorBreak_CacheHeaderDamagedIsMovedAsideAndRebuilt(t *testing.T) {
 	p := newDoctorPerson(t)
-	cache := p.file(".lore/lore-cache.db")
+	cache := p.repoCache()
 	if err := os.WriteFile(cache, []byte(strings.Repeat("garbage!", 64)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	res := p.c.MustLore("rule", "list")
-	if !strings.Contains(res.Stderr, "the cache "+cache+" was damaged; moved it to "+p.file(".lore/backups/lore-cache.db.corrupt-")) ||
+	if !strings.Contains(res.Stderr, "the cache "+cache+" was damaged; moved it to "+cache+".corrupt-") ||
 		!strings.Contains(res.Stderr, "rebuilt it from the row files (nothing lost)") || !strings.Contains(res.Stdout, "Run the tests before you push") {
 		t.Fatalf("a damaged cache is moved aside, rebuilt, and said once: %s", res)
 	}
 	// One moved-aside copy (with its -wal/-shm journal files, if any).
-	backups, err := filepath.Glob(p.file(".lore/backups/lore-cache.db.corrupt-*"))
+	backups, err := filepath.Glob(cache + ".corrupt-*")
 	dbs := 0
 	for _, b := range backups {
 		if !strings.HasSuffix(b, "-wal") && !strings.HasSuffix(b, "-shm") {
@@ -110,7 +110,7 @@ func TestDoctorBreak_CacheHeaderDamagedIsMovedAsideAndRebuilt(t *testing.T) {
 		}
 	}
 	if err != nil || dbs != 1 {
-		t.Fatalf("one moved-aside copy in .lore/backups: %v %v", backups, err)
+		t.Fatalf("one moved-aside copy beside the cache: %v %v", backups, err)
 	}
 	rep, out := p.doctor(t)
 	if rep.Status != "healthy" {
@@ -128,7 +128,7 @@ func TestDoctorBreak_CacheHeaderDamagedIsMovedAsideAndRebuilt(t *testing.T) {
 
 func TestDoctorBreak_CacheDeletedIsRebuiltTwice(t *testing.T) {
 	p := newDoctorPerson(t)
-	cache := p.file(".lore/lore-cache.db")
+	cache := p.repoCache()
 	for round := 1; round <= 2; round++ {
 		for _, s := range []string{"", "-wal", "-shm"} {
 			if err := os.Remove(cache + s); err != nil && !os.IsNotExist(err) {
@@ -215,7 +215,7 @@ func TestDoctorBreak_GitHooksRemovedThenReinstalled(t *testing.T) {
 	off := p.c.With("LORE_SYNC_GIT=0")
 	res := off.Lore("doctor", "--json")
 	rep := doctorDecode(t, res)
-	if rep.Status != "degraded" || !hasLine(rep.Warnings, "live: git hook block missing in post-commit, pre-push", "run any lore command (such as `lore sync`) to install it") {
+	if rep.Status != "degraded" || !hasLine(rep.Warnings, "live: git hook block missing in post-commit, pre-push", "run `lore fix` (or `lore sync`) to install it; a read never does") {
 		t.Fatalf("missing hook blocks: %s", res)
 	}
 	p.c.MustLore("sync")
@@ -236,12 +236,16 @@ func TestDoctorBreak_MergeDriverUnsetIsANote(t *testing.T) {
 	res := p.c.With("LORE_SYNC_GIT=0").Lore("doctor", "--json")
 	rep := doctorDecode(t, res)
 	if rep.Status != "healthy" || rep.Sync == nil || rep.Sync.MergeDriverOK ||
-		!hasLine(rep.Notes, "lore merge driver not configured in this clone (the next lore command installs it, unless LORE_SYNC_GIT=0)") {
+		!hasLine(rep.Notes, "lore merge driver not configured in this clone (a read leaves git as it is: `lore sync`, `lore doctor --fix` or the next lore write here installs it, unless LORE_SYNC_GIT=0)") {
 		t.Fatalf("an unset merge driver is a note: %s", res)
 	}
-	p.c.MustLore("rule", "list")
+	p.c.MustLore("rule", "list") // a read leaves it unset (owner bug 6)
+	if r := p.c.TryGit("config", "--get", "merge.lore.driver"); r.Code == 0 {
+		t.Fatalf("a read reinstalled the driver: %q", r.Stdout)
+	}
+	p.c.MustLore("sync")
 	if got := p.c.Git("config", "--get", "merge.lore.driver"); !strings.Contains(got, "merge-driver") {
-		t.Fatalf("the next command reinstalls the driver: %q", got)
+		t.Fatalf("lore sync reinstalls the driver: %q", got)
 	}
 	if rep, res = p.doctor(t); rep.Status != "healthy" || !rep.Sync.MergeDriverOK {
 		t.Fatalf("after the fix: %s", res)

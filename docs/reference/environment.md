@@ -28,7 +28,7 @@ ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
   hint: cd into a git checkout, or run git init here first
 (exit 19)
 $ cd work/website && lore rule list
-rul_162d…9666 [must/always] Run the tests before you push
+rul_54fe…28f2 [must/always] Run the tests before you push
 ```
 <!-- /example -->
 
@@ -42,9 +42,9 @@ ERROR: [E_UNSUPPORTED] LORE_DB is not supported by this command: its rows are ro
   hint: unset LORE_DB and run the command inside the repository (or name a store with --store / --to)
 (exit 23)
 $ lore project list
-prj_76bd…3f10  website  https://github.com/client/website
+prj_d431…313a  website  https://github.com/client/website
 $ LORE_PROJECT_ID=$(lore project list | cut -d' ' -f1) lore rule list
-rul_162d…9666 [must/always] Run the tests before you push
+rul_54fe…28f2 [must/always] Run the tests before you push
 $ LORE_PROJECT_ID=prj_website lore rule list
 ERROR: [E_NOT_FOUND] rule: no project "prj_website"
   hint: run `lore project list` to see the projects
@@ -59,20 +59,22 @@ Older lore could point a repo at a shared database file with a pointer, `.lore/l
 # alice, in docs
 $ cat .lore/lore.yaml
 db_path: ${LORE_HOME}/client-docs.db
-project_id: prj_28f8…03df
+project_id: prj_4c59…6c38
 $ lore migrate run --dry-run
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
 (exit 27)
 $ LORE_HOME=~/shared-dbs lore migrate run
 Upgraded 1 row
-  mode-b: rules/rul_4c59…6c38 → store shared (~/shared-dbs/stores/blog)
+  mode-b: rules/rul_3b62…e913 → store shared (~/shared-dbs/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: this repo has no remote origin; nobody to race, none taken
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
-rul_4c59…6c38  Posts go out on Tuesdays  [shared]
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/docs/.git/config; hook blocks in ~/work/docs/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+rul_3b62…e913  Posts go out on Tuesdays  [shared]
 
 # alice, in ~
 $ ls ~/shared-dbs ~/shared-dbs/stores
@@ -91,21 +93,23 @@ A `..` in `db_path` is refused until `LORE_ALLOW_DB_PATH_OUTSIDE=1` is set for t
 # alice, in blog
 $ cat .lore/lore.yaml
 db_path: ../client.db
-project_id: prj_28f8…03df
+project_id: prj_4c59…6c38
 $ lore migrate run --dry-run
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
   hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
 (exit 20)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 Upgraded 1 row
-  mode-b: rules/rul_4c59…6c38 → store shared (~/work/stores/blog)
+  mode-b: rules/rul_3b62…e913 → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: this repo has no remote origin; nobody to race, none taken
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
-rul_4c59…6c38  Posts go out on Tuesdays  [shared]
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+rul_3b62…e913  Posts go out on Tuesdays  [shared]
 ```
 <!-- /example -->
 
@@ -134,6 +138,7 @@ A repo inside a folder a sync app owns (here `Dropbox`) is refused with `E_NETWO
 ```console
 # alice, in Dropbox/website
 $ lore rule list
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/Dropbox/website/.git/config; hook blocks in ~/work/Dropbox/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
   hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
@@ -172,17 +177,20 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 ```console
 # alice, in website
 $ LORE_LIVE=0 lore task add 'Update the privacy page'
-✓ tsk_7a67…9504 — Update the privacy page [medium]
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+✓ tsk_2ad3…f891 — Update the privacy page [medium]
 $ git status --short
  M .lore/data/_meta.json
 ?? .lore/data/task_lists/
 ?? .lore/data/tasks/
 $ lore task add 'Check the contact form on a phone'
-✓ tsk_2ad3…f891 — Check the contact form on a phone [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+✓ tsk_162d…9666 — Check the contact form on a phone [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore live show
-task_lists tlt_162d…9666     live      since 2026-11-02 10:00
-tasks      tsk_2ad3…f891     live      since 2026-11-02 10:00
+task_lists tlt_7a67…9504     live      since 2026-11-02 10:00
+tasks      tsk_162d…9666     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 ```
 <!-- /example -->
@@ -193,18 +201,19 @@ tasks      tsk_2ad3…f891     live      since 2026-11-02 10:00
 ```console
 # alice, in website
 $ LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Renew the SSL certificate [medium]
 lore live: (live, not pushed yet: 1 waiting; autopush is off, `lore sync` pushes)
 $ lore live diff
-local     601d2850ffd0
-tracking  86dbae476bd6
-seen      86dbae476bd6
+local     86dbae476bd6
+tracking  601d2850ffd0
+seen      601d2850ffd0
 pending   1 write(s) not confirmed by the remote
   _root/tasks/tsk_54fe…28f2.json
-lore live: pushed waiting live writes
+lore live: pushed waiting live writes commit 86dbae4 to origin refs/lore/live
 $ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_54fe…28f2
 ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
-  hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
+  hint: coordination writes (claims, releases, holds) are never queued; turn live.autopush on (or unset LORE_LIVE_AUTOPUSH=0) and run the command again
 (exit 15)
 $ lore sync
 · already in sync
@@ -221,9 +230,10 @@ upstream
 
 # alice, in website-fork
 $ lore task list
+lore task list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 (no tasks)
 $ LORE_LIVE_REMOTE=upstream lore task list
-○ tsk_2ad3…f891 Check the contact form on a phone [medium]
+○ tsk_162d…9666 Check the contact form on a phone [medium]
 ○ tsk_54fe…28f2 Renew the SSL certificate [medium]
 ```
 <!-- /example -->
@@ -239,7 +249,7 @@ trace: git rev-parse --path-format=absolute --git-common-dir (<time>, ok)
 trace: git config --get remote.origin.url (<time>, ok)
 trace: git config --get user.name (<time>, ok)
 trace: git config --get user.email (<time>, ok)
-trace: git config --get-all remote.origin.fetch (<time>, ok)
+trace: git check-ref-format refs/lore/live (<time>, ok)
 ```
 <!-- /example -->
 
@@ -261,10 +271,10 @@ lore looks for a coding agent behind every command (its environment variables, t
 ```console
 # alice, in website
 $ unset LORE_NO_DETECT LORE_HUMAN; export CODEX_CI=1; lore whoami | grep -E '^(identity|agent) '
-identity   alice via codex <agent:auto/codex/10380a>   act_3b62…e913  (from: agent detection)
+identity   alice via codex <agent:auto/codex/10380a>   act_f147…5139  (from: agent detection)
 agent      codex  (from: CODEX_CI)
 $ unset LORE_NO_DETECT; export CODEX_CI=1 LORE_HUMAN=1; lore whoami | grep -E '^(identity|agent) '
-identity   alice <human:alice@agency.example>   act_f147…5139  (from: git config user.email)
+identity   alice <human:alice@agency.example>   act_2537…6bbb  (from: git config user.email)
 agent      codex  (from: CODEX_CI)  LORE_HUMAN=1: writes stay yours
 ```
 <!-- /example -->

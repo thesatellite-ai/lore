@@ -517,8 +517,9 @@ func (h *H) Reopen(mut ...func(*wire.Options)) *H {
 	return &H{T: h.T, App: a, Repo: h.Repo, Home: h.Home, Project: h.Project, apps: h.apps}
 }
 
-// ReopenCold is Reopen with every cache gone: the repo cache files are
-// removed and the new App gets a fresh home, so each row is decoded from
+// ReopenCold is Reopen with every cache gone: the new App gets a fresh
+// home (every cache, the repo's included, lives under it) and h's repo
+// cache files are removed, so each row is decoded from
 // its row file (what a teammate's fresh clone, or a deleted cache, sees).
 // Every App opened over the repo so far (h's, and those of earlier
 // Reopens) is closed first, as the processes that held the cache would
@@ -536,12 +537,12 @@ func (h *H) ReopenCold(mut ...func(*wire.Options)) *H {
 			h.T.Fatal(err)
 		}
 	}
-	files, err := filepath.Glob(filepath.Join(h.Repo, filepath.FromSlash(wire.RepoCacheFile)) + "*")
+	// The repo cache lives under the lore home (wire.RepoCachePath), so the
+	// fresh home below already starts it empty; h's own copy is removed
+	// too, so a later Reopen of h starts cold as well.
+	files, err := filepath.Glob(wire.RepoCachePath(h.Home, h.Repo) + "*")
 	if err != nil {
 		h.T.Fatal(err)
-	}
-	if len(files) == 0 {
-		h.T.Fatal("ReopenCold: no repo cache file to remove (did the App write anything?)")
 	}
 	for _, f := range files {
 		if err := os.Remove(f); err != nil {

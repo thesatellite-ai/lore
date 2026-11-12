@@ -217,6 +217,9 @@ func ResolveSetup(ctx context.Context, q SetupQuery) (SetupResolution, error) {
 		trace(opssetup.WhyFolder, SetupStepNotReached, "")
 	} else {
 		fr := onboard.MatchFolder(enabled, res.Folder, userHome(q), setupResolver(q))
+		if res.Folder != "" && inStore(res.Folder) {
+			fr = onboard.FolderResult{} // a lore store's checkout is never matched by a folder rule (STORE layout 1.5)
+		}
 		switch {
 		case fr.Ambiguous():
 			names := make([]string, len(fr.Tie))
@@ -520,8 +523,12 @@ func setupMismatchErr(ctx context.Context, home, dir string, hint orgresolve.Set
 // setupPersonal is the 3.4 `me` override of the active setup: url replaces
 // personal.store; none reports personal_store: none (name is the setup).
 // inherit, no setup, or a resolution error leave personal.store as is.
+// The setup is the one ActiveSetup names, org step included (plainOrgOf):
+// with the org step skipped, a folder no setup's globs cover but whose org
+// is known (LORE_ORG, lore org use, a repo pattern) listed and synced the
+// org's stores and left out that setup's personal store (owner bug 9).
 func setupPersonal(ctx context.Context, home, dir string) (url string, isNone bool, name string) {
-	res, err := ResolveSetup(ctx, setupQueryFor(ctx, home, dir, nil))
+	res, err := ResolveSetup(ctx, setupQueryFor(ctx, home, dir, plainOrgOf(home, dir)))
 	if err != nil || res.Active.Name == "" {
 		return "", false, ""
 	}

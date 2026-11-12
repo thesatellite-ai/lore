@@ -30,6 +30,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -138,7 +139,15 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
 		ctx = wire.WithNoCreate(ctx) // a read never sets a repo up (wire/doctor_nocreate.go), hooks included
 	}
+	run0 := &Run{Entry: e, Decoder: d, Cmd: r.State.Cmd, Args: r.State.Args}
+	if fixDryRun(run0) {
+		ctx = wire.WithNoCreate(ctx) // lore fix --dry-run changes nothing
+	}
 	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: r.State.ReadOnly || os.Getenv(EnvReadOnly) == envOn, Cmd: r.State.Cmd, Args: r.State.Args}
+	ctx = wire.WithCommandName(ctx, runCommandName(run)) // the prefix of what lore prints it set up (wire/cmdname.go)
+	if setUpRun(run) {
+		ctx = gitbackend.WithGitSetUp(ctx) // an explicit setup or sync may set store clones up for plain git (handgit.go)
+	}
 	for _, h := range r.hooks {
 		if h.Before == nil {
 			continue
@@ -198,7 +207,7 @@ const (
 // workDir is the folder the command runs in (the project's .gitignore is
 // found from it).
 func Default(workDir string) []Hook {
-	return []Hook{NoticeHook(), GitignoreHook(workDir), CompatFlagsHook(CompatOptions{})}
+	return []Hook{NoticeHook(), GitignoreHook(workDir), CompatFlagsHook(CompatOptions{}), PushReportHook(), WriteLocationHook()}
 }
 
 // Replace returns hooks with every hook named h.Name replaced by h, or h

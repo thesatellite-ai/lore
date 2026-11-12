@@ -33,19 +33,19 @@ func TestTeD_OrgNameClashWithCommittedStoresYAML(t *testing.T) {
 		return mustID(t, c.MustLore("memory", "add", "--body", body, "--to", to), "mem")
 	}
 	where := map[string]string{
-		memIn(tc, "alice to team", "team"):                "tools/" + dataDir + "/memories/",
-		memIn(tc, "alice to the folder", clash):           "tools/" + dataDir + "/memories/",
-		memIn(tc, "alice to the bare org", orgNorthwind):  "tools/" + dataDir + "/memories/",
-		memIn(tc, "alice to the root", orgNorthwind+"/."): dataDir + "/memories/",
+		memIn(tc, "alice to team", "team"):                "tools/memories/",
+		memIn(tc, "alice to the folder", clash):           "tools/memories/",
+		memIn(tc, "alice to the bare org", orgNorthwind):  "tools/memories/",
+		memIn(tc, "alice to the root", orgNorthwind+"/."): "memories/",
 	}
 
 	// dev1 clones the repo with the committed stores.yaml: same names, same
 	// places.
 	dc := a.dev1.Clone(a.tools, "tools")
 	dc.MustLore("store", "list").Says(t, clash)
-	where[memIn(dc, "dev1 to team", "team")] = "tools/" + dataDir + "/memories/"
-	where[memIn(dc, "dev1 to the bare org", orgNorthwind)] = "tools/" + dataDir + "/memories/"
-	where[memIn(dc, "dev1 to the root", orgNorthwind+"/.")] = dataDir + "/memories/"
+	where[memIn(dc, "dev1 to team", "team")] = "tools/memories/"
+	where[memIn(dc, "dev1 to the bare org", orgNorthwind)] = "tools/memories/"
+	where[memIn(dc, "dev1 to the root", orgNorthwind+"/.")] = "memories/"
 	tc.MustLore("sync")
 	dc.MustLore("sync")
 
@@ -53,7 +53,7 @@ func TestTeD_OrgNameClashWithCommittedStoresYAML(t *testing.T) {
 	for id, dir := range where {
 		found := ""
 		for _, f := range files {
-			if strings.HasSuffix(f, "/"+id+".json") || f == dataDir+"/memories/"+id+".json" {
+			if strings.HasSuffix(f, "/"+id+".json") || f == "memories/"+id+".json" {
 				found = f
 			}
 		}

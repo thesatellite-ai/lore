@@ -160,11 +160,18 @@ func ProbeRemote(ctx context.Context, work, remote string, opts ...Option) error
 	if cfg.route != nil {
 		g.routeArgs, g.routeEnv = cfg.route(ctx, remote)
 	}
+	if cfg.accessNote != nil {
+		g.accessNote = cfg.accessNote(remote)
+	}
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	if _, err = g.run(ctx, call{dir: work, args: []string{"ls-remote", "--heads", "--", RemoteName}}); err != nil {
 		if msg := strings.TrimSpace(stderrOf(err)); msg != "" {
-			return errs.New(errs.StoreUnreachable, lastLine(msg))
+			line := lastLine(msg)
+			if g.accessNote != "" {
+				line += " — " + g.accessNote
+			}
+			return errs.New(errs.StoreUnreachable, line)
 		}
 		return errs.Wrap(errs.StoreUnreachable, "the store's remote did not answer", err)
 	}

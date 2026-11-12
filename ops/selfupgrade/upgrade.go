@@ -1,6 +1,8 @@
 // Package selfupgrade defines `lore upgrade` (layer L5, CLI_REFERENCE 3.5,
 // FORMAT_EVOLUTION 8): install the newest lore release, the project's
-// pinned one, or exactly --version, however lore was installed.
+// pinned one, or exactly --version, however lore was installed; then run
+// `lore fix` for the project it runs in (decision D-al; --no-fix skips it,
+// --check changes nothing).
 //
 //	upgrade.run ─▶ Env.Upgrader ─▶ Upgrader.Upgrade(flags, confirmed)
 //	            ─▶ lines (what was found, downloaded, swapped)
@@ -68,6 +70,15 @@ type RunIn struct {
 	Check     bool   `json:"check,omitempty" flag:"check" desc:"report whether a newer release exists; change nothing"`
 	Version   string `json:"version,omitempty" flag:"version" desc:"install exactly this release (vX.Y.Z); also downgrades; refused for Homebrew installs"`
 	IgnorePin bool   `json:"ignore_pin,omitempty" flag:"ignore-pin" desc:"install past this project's lore_version_pin"`
+	NoFix     bool   `json:"no_fix,omitempty" flag:"no-fix" desc:"do not run lore fix for this project after the binary step"`
+}
+
+// ProjectFixer is the optional upgrade of Env that runs `lore fix` for
+// the project the command runs in, after the binary step (decision D-al),
+// with the binary now in place, and returns its lines. Outside a project
+// it returns the one line saying the fix was skipped.
+type ProjectFixer interface {
+	FixAfterUpgrade(ctx context.Context) ([]string, error)
 }
 
 // RunOut is the output of upgrade.run.
@@ -88,7 +99,7 @@ func (o RunOut) Text() string {
 func Ops(env Env) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpRun, Summary: "Install the newest lore release (or this project's pinned version, or exactly --version)",
+			Name: OpRun, Summary: "Install the newest lore release (or this project's pinned version, or exactly --version), then run lore fix for this project",
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
 			Errors: []errs.Code{
 				errs.UpgradePermission, errs.UpgradeChecksum, errs.UpgradePinned, errs.Offline,
@@ -104,7 +115,18 @@ func Ops(env Env) []op.Entry {
 			if err != nil {
 				return RunOut{}, err
 			}
-			return Run(ctx, u, in, op.Confirmed(ctx))
+			out, err := Run(ctx, u, in, op.Confirmed(ctx))
+			if err != nil || in.Check || in.NoFix {
+				return out, err // --check changes nothing; --no-fix skips the fix
+			}
+			if pf, ok := env.(ProjectFixer); ok {
+				lines, ferr := pf.FixAfterUpgrade(ctx)
+				out.Lines = append(out.Lines, lines...)
+				if ferr != nil {
+					out.Lines = append(out.Lines, "lore fix did not run: "+ferr.Error()+" (run lore fix)")
+				}
+			}
+			return out, nil
 		}),
 	}
 }

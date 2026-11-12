@@ -45,10 +45,11 @@ A note such as "ask Bob before changing the build" is a rule: add it with `lore 
 ```console
 # alice, in website
 $ lore policy set trash.retention_days 365 --yes
-✓ trash.retention_days = 365 (this repo, pol_…c1c9)
+lore: wrote ~/work/website/.lore/data/policies/pol_28f8…03df.json
+✓ trash.retention_days = 365 (this repo, pol_…03df)
 $ lore policy show trash
 trash.purge_on_delete	false	default
-trash.retention_days	365	repo this repo (pol_…c1c9)
+trash.retention_days	365	repo this repo (pol_…03df)
 ```
 <!-- /example -->
 
@@ -94,7 +95,8 @@ ERROR: [E_INVALID_INPUT] policy set trash.retention_days: "soon" is not a valid 
   hint: trash.retention_days takes a whole number, 0 or more
 (exit 20)
 $ lore policy unset trash.retention_days --yes
-✓ trash.retention_days unset in this repo (pol_…c1c9); the next level up or the default applies
+lore: wrote ~/work/website/.lore/data/policies/pol_28f8…03df.json
+✓ trash.retention_days unset in this repo (pol_…03df); the next level up or the default applies
 $ lore policy show trash.retention_days
 trash.retention_days	(unset)	default
 ```

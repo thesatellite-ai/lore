@@ -31,12 +31,19 @@ func TestMigrateOrgV1RosterRows(t *testing.T) {
 	hook := func(context.Context) ([]attach.Store, error) {
 		return []attach.Store{{Name: "agency", URL: fileuri.URL(dir, "")}}, nil
 	}
-	opts := Options{OrgStores: hook, RepoIsClient: func(context.Context) (bool, error) { return false, nil }}
-	a := openWith(t, gitRepo(t), opts)
-	withProject(t, a)
-	prj := projectID(t, a)
+	opts := Options{OrgStores: hook, RepoIsClient: func(context.Context) (bool, error) { return false, nil }, Home: t.TempDir()}
+	repo := gitRepo(t)
+	pre := openWith(t, repo, opts)
+	withProject(t, pre)
+	prj := projectID(t, pre)
+	if err := pre.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// the v0.1.17 store's rows exist before the new lore opens it (its
+	// folders are read where their rows are: the old layout's .lore/data)
 	v1Row(t, dir, schema.TableActors, v1RosterActor, `"kind":"human","display_name":"Alice Rivera","handle":"alice"`)
 	v1Row(t, dir, schema.TableTeams, v1RosterTeam, `"project_id":"`+prj+`","handle":"backend","`+schema.FieldTeamMembers+`":["`+v1RosterActor+`"]`)
+	a := openWith(t, repo, opts)
 	files := map[string]string{
 		schema.TableActors: filepath.Join(dir, ".lore", "data", schema.TableActors, v1RosterActor+".json"),
 		schema.TableTeams:  filepath.Join(dir, ".lore", "data", schema.TableTeams, v1RosterTeam+".json"),

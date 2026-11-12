@@ -159,7 +159,7 @@ func (a *App) pushView(ctx context.Context, name string, gb *git.Backend, place 
 		}
 		v.Stale = storepush.Stale(oldest, now)
 	}
-	if t := readStamp(filepath.Dir(gb.Dir()), pushStampFile); !t.IsZero() {
+	if t := readStamp(git.StateDirOf(gb.Dir()), pushStampFile); !t.IsZero() {
 		v.LastPush = t.Local().Format(time.RFC3339)
 	}
 	return v
@@ -266,7 +266,7 @@ func (a *App) setOrgStorePushAt(ctx context.Context, src attach.Store, name stri
 		}
 		if m.ID.IsZero() {
 			return nil, errs.New(errs.OldLore, "store set: "+name+" still has a v0.1.17 "+rowfs.MarkerFile+" (no store id)").
-				WithHint("run `lore migrate run` first")
+				WithHint("run lore fix first")
 		}
 		next, nerr := normalized(m.Push, set)
 		if nerr != nil {
@@ -343,11 +343,16 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 		in.DryRun = false // nothing to do is an answer, not a plan
 	}
 	if !in.DryRun && !res.Nothing {
-		writeStamp(filepath.Dir(gb.Dir()), compactStampFile, a.opts.Wall())
-		writeStamp(filepath.Dir(gb.Dir()), pushStampFile, a.opts.Wall())
+		writeStamp(git.StateDirOf(gb.Dir()), compactStampFile, a.opts.Wall())
+		writeStamp(git.StateDirOf(gb.Dir()), pushStampFile, a.opts.Wall())
 	}
-	return opsstores.CompactOut{Store: in.Store, DryRun: in.DryRun, Before: cutoff.UTC().Format(time.DateOnly), Nothing: res.Nothing,
-		Squashed: res.Squashed, Kept: res.Kept, Rows: res.Rows, FromEpoch: res.FromEpoch, ToEpoch: res.ToEpoch, Backup: res.Backup}, nil
+	out := opsstores.CompactOut{Store: in.Store, DryRun: in.DryRun, Before: cutoff.UTC().Format(time.DateOnly), Nothing: res.Nothing,
+		Squashed: res.Squashed, Kept: res.Kept, Rows: res.Rows, FromEpoch: res.FromEpoch, ToEpoch: res.ToEpoch, Backup: res.Backup}
+	if pushes := gb.TakePushes(); len(pushes) > 0 { // the rewrite's push, named in the output
+		last := pushes[len(pushes)-1]
+		out.Commit, out.Branch = last.Short(), last.Branch
+	}
+	return out, nil
 }
 
 // rawSettings is a store's settings as written: the personal: block for
@@ -392,14 +397,11 @@ func (a *App) PushViews(ctx context.Context) ([]opsstores.PushView, error) {
 
 // cloned reports whether this machine already holds a clone of src.
 func cloned(home string, src attach.Store) bool {
-	base := cloneBaseOf(home, src.URL)
-	if base == "" {
+	dir, _, err := git.CloneDirOf(home, src.URL, src.Branch)
+	if err != nil {
 		return false
 	}
-	if src.Branch != "" {
-		base += branchCloneSep + src.Branch
-	}
-	return exists(base + bareCloneExt)
+	return exists(filepath.Join(dir, ".git"))
 }
 
 // pushStoreNames lists the stores that may have a push mode, once each:
@@ -460,6 +462,7 @@ func (b *storePush) autoCompact(ctx context.Context) {
 	cctx, cancel := context.WithTimeout(ctx, 2*piggybackTimeout)
 	defer cancel()
 	res, err := gb.Compact(cctx, git.CompactRequest{Cutoff: s.Cutoff(now), Squash: s.Push != storepush.ModeNow})
+	b.reportPushes()
 	if err != nil || res.Nothing {
 		return
 	}
@@ -502,8 +505,9 @@ func (a *App) FlushBatches(ctx context.Context) {
 		pctx, cancel := context.WithTimeout(ctx, piggybackTimeout) // never hold the hook up
 		rep, serr := gb.SyncWith(pctx, git.SyncOptions{Squash: true})
 		cancel()
+		printPushes(a.pushNotes(), name, gb.TakePushes())
 		if serr == nil && !rep.Offline && len(rep.Refused) == 0 {
-			writeStamp(filepath.Dir(gb.Dir()), pushStampFile, a.opts.Wall())
+			writeStamp(git.StateDirOf(gb.Dir()), pushStampFile, a.opts.Wall())
 		}
 		done()
 	}

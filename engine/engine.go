@@ -150,9 +150,12 @@ type Engine struct {
 	// by openMu; dropped when no stage is open and on every direct write.
 	settingsMemo map[row.Table][]policy.Leveled[row.Row]
 
-	stores    map[store.Source]Attached
-	order     []store.Source // stores.yaml order: precedence for lookups
-	target    store.Source   // default write target
+	stores map[store.Source]Attached
+	order  []store.Source // stores.yaml order: precedence for lookups
+	target store.Source   // default write target
+	// repoAlias answers for the repo store when none is attached
+	// (WithRepoAlias): a command run inside a store's folder.
+	repoAlias store.Source
 	cache     store.Cache
 	reg       *schema.Registry
 	scanner   scan.Scanner
@@ -256,6 +259,15 @@ func validOrgName(n string) bool {
 // default is store.SourceRepo when attached, else the first store.
 func WithDefaultTarget(name store.Source) Option {
 	return func(e *Engine) error { e.target = name; return nil }
+}
+
+// WithRepoAlias makes an operation that names the repo store work on
+// name instead, for an engine with no repo store: a command run inside a
+// lore store's checkout (wire storehere.go), where the store folder it
+// runs in takes the repo's place (its default list, its project, its
+// default write target).
+func WithRepoAlias(name store.Source) Option {
+	return func(e *Engine) error { e.repoAlias = name; return nil }
 }
 
 // WithCache sets the cache port (required).
@@ -385,6 +397,9 @@ func (uuidIDs) NewID(p ids.Prefix) (ids.AnyID, error) {
 // attached returns the named store.
 func (e *Engine) attached(name store.Source) (Attached, error) {
 	a, ok := e.stores[name]
+	if !ok && name == store.SourceRepo && e.repoAlias != "" {
+		a, ok = e.stores[e.repoAlias]
+	}
 	if !ok {
 		return Attached{}, errs.New(errs.NotFound, "no store named "+string(name)+" is attached").
 			WithHint("run `lore store list` to see the stores this repo attaches")

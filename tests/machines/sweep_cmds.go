@@ -136,8 +136,11 @@ var reads = []sweepStep{
 	// finding has is refused the documented way (E_NOT_FOUND) and runs nothing.
 	{Cmd: "doctor last", In: inBoth},
 	{Cmd: "doctor fix", Args: []string{"0000000000000000"}, In: inBoth},
+	// lore fix --dry-run changes nothing (outside a repo: E_NOT_A_STORE)
+	{Cmd: "fix run", Args: []string{"--dry-run"}, In: inBoth, Exits: doctorExits},
 	{Cmd: "version", In: inHome},
 	{Cmd: "whoami show", In: inBoth},
+	{Cmd: "where show", In: inBoth}, {Cmd: "where show", Args: []string{"--json"}, In: inBoth},
 	{Cmd: "identity show", In: inBoth},
 	{Cmd: "config check", In: inHome},
 	{Cmd: "config list", In: inHome},
@@ -337,6 +340,7 @@ var rowChains = []sweepChain{
 		r("tag attach", "--on-table", "rules", "--on-id", varID, "--tag", "sweep_tag"),
 		r("tag detach", "--on-table", "rules", "--on-id", varID, "--tag", "sweep_tag"), r("tag list"),
 		r("explain run", varID), r("row show", varID), r("show", varID),
+		r("row path", varID), r("path", varID), r("row markdown", varID),
 		r("meta add", "sweep_key", "--type", "text"), r("meta describe", "sweep_key", "what the sweep keeps"),
 		r("meta set", varID, "sweep_key=v"), r("meta get", varID, "sweep_key"), r("meta show", varID),
 		r("meta history", varID), r("meta unset", varID, "sweep_key"), r("meta keys"),
@@ -442,6 +446,7 @@ const (
 	whyHook        = "run by git hooks, CI or an agent harness (claims, leases, runs, gates), not by a person at a prompt"
 	whyMigration   = "a one-time migration of a v0.1.17 install; the migration tests run it"
 	whyTeam        = "needs an org, a second person or an own store; the team and profile tests run it"
+	whyEdit        = "opens the person's editor ($EDITOR) or reads an edited Markdown view file; TestJourneyFoldersEditRows runs both with a script as EDITOR"
 	whyFixtureFile = "reads a fixture file (import, apply, template); the area's scenario tests run it"
 	whyResource    = "needs resource fields and links; the resource scenario tests run it"
 	whyMeta        = "rewrites metadata keys across rows; the meta scenario tests run it"
@@ -457,6 +462,7 @@ const (
 	whyIdentity    = "replaces who the person is on this machine; the identity lifecycle tests run it"
 	whyStoreAdmin  = "makes or changes a store (a git repo of its own); the store lifecycle tests run it"
 	whyStoreAdopt  = "copies a whole repo into a store folder made first (a store of its own, a folder, a repo with rows); the journey TestJourneyFoldersAdopt and wire TestStoreAdopt run it"
+	whyStoreUse    = "points lore at a person's own git clone of a store, made with git clone first; wire TestStoreUse runs it"
 	whySyncFixture = "needs a conflict, a second branch or a live remote; the sync tests run it"
 	whySupport     = "writes a support bundle to send; the support-bundle tests run it"
 	whySourceCopy  = "rewrites copies from their one source of truth (SOURCE_OF_TRUTH), which needs a stale copy, a leftover or an org store; the sot_* tests and the doctor fixes in the env, repos and foreign tests run it"
@@ -464,7 +470,7 @@ const (
 
 // notUserRun are the leaf commands the sweep does not run, each with why.
 var notUserRun = map[string]string{
-	"tui": whyInteractive, "onboard": whyInteractive, "setup web": whyInteractive, "setup run": whyInteractive, "machine reveal": whyInteractive,
+	"tui": whyInteractive, "edit": whyEdit, "onboard": whyInteractive, "setup web": whyInteractive, "setup run": whyInteractive, "machine reveal": whyInteractive,
 	"context fetch": whyOutward, "org import": whyOutward, "setup join": whyOutward, "store add": whyOutward, "store open": whyOutward,
 	"store forget": whyOutward, "store set-url": whyOutward, "sync run": whyOutward, "skill compile": whyOutward, "upgrade run": whyOutward,
 	"repo fork": whyOutward, "repo set-url": whyOutward, "sync install-action": whyOutward, "live restore": whyOutward,
@@ -487,7 +493,7 @@ var notUserRun = map[string]string{
 	"member add": whyTeam, "member list": whyTeam, "member show": whyTeam, "member edit": whyTeam, "member remove": whyTeam, // journey TestJourneyStaff runs them
 	"handoff add": whyTeam, "handoff ack": whyTeam, "handoff show": whyTeam, "handoff delete": whyTeam, "machine label": whyTeam,
 	"setup suggest-again": whyTeam,
-	"mission apply":       whyFixtureFile, "task import": whyFixtureFile, "meta import": whyFixtureFile, "resource import": whyFixtureFile,
+	"mission apply":       whyFixtureFile, "row edit": whyEdit, "task import": whyFixtureFile, "meta import": whyFixtureFile, "resource import": whyFixtureFile,
 	"task checklist import": whyFixtureFile, "task template add": whyFixtureFile, "task template delete": whyFixtureFile,
 	"task template edit": whyFixtureFile, "task template rename": whyFixtureFile, "task template show": whyFixtureFile,
 	"resource adopt": whyResource, "resource archive": whyResource, "resource clone": whyResource, "resource edit": whyResource,
@@ -513,7 +519,7 @@ var notUserRun = map[string]string{
 	"batch show":     whyBatch, "batch undo": whyBatch,
 	"link add": whyNoCommit, "link remove": whyNoCommit, "land run": whyNoCommit,
 	"identity set": whyIdentity, "identity unset": whyIdentity,
-	"store init": whyStoreAdmin, "store folder add": whyStoreAdmin, "store folder remove": whyStoreAdmin, "store adopt": whyStoreAdopt, "store visibility": whyStoreAdmin,
+	"store init": whyStoreAdmin, "store folder add": whyStoreAdmin, "store folder remove": whyStoreAdmin, "store adopt": whyStoreAdopt, "store visibility": whyStoreAdmin, "store use": whyStoreUse,
 	"sync fix-projects": whySyncFixture, "sync merge-rows": whySyncFixture, "sync promote": whySyncFixture, "sync resolve": whySyncFixture,
 	"sync trash restore": whySyncFixture, "sync peek": whySyncFixture,
 

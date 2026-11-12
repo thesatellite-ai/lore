@@ -328,13 +328,22 @@ func TestF02_Race_FourWritersSameSecond(t *testing.T) {
 
 // ---------------------------------------------------------------- F3 fetch
 
-// F3 example + C7: the first lore command in a clone installs the tracking
+// F3 example + C7: a read in a fresh clone shows the live rows and wires
+// nothing (owner item 6); the first sync installs the tracking
 // refspec, never a refspec that force-writes into refs/lore/*.
-func TestF03_FirstCommandInstallsTrackingRefspec(t *testing.T) {
+func TestF03_FirstSyncInstallsTrackingRefspec(t *testing.T) {
 	rt := newRepoTeam(t)
 	rt.addTask(t, rt.c1, "seen through tracking")
 	fresh := rt.dev2.Clone(rt.app, "app-fresh")
-	fresh.MustLore("task", "list")
+	// a read never wires git (owner item 6): no refspec after it, and it
+	// still shows the live rows
+	if !hasItem(listedTitles(t, fresh), "seen through tracking") {
+		t.Fatal("a fresh clone must show live rows on its first command")
+	}
+	if specs := fresh.Git("config", "--get-all", "remote.origin.fetch"); strings.Contains(specs, loreRefspec) {
+		t.Fatalf("a read installed the tracking refspec: %q", specs)
+	}
+	fresh.MustLore("sync") // the first sync (or write) wires the clone
 	specs := fresh.Git("config", "--get-all", "remote.origin.fetch")
 	if !strings.Contains(specs, loreRefspec) {
 		t.Fatalf("tracking refspec missing: %q", specs)
@@ -345,10 +354,7 @@ func TestF03_FirstCommandInstallsTrackingRefspec(t *testing.T) {
 		}
 	}
 	if fresh.LocalRef(trackingPrefix+"live") == "" {
-		t.Fatal("the first command must fetch the live ref into its tracking ref")
-	}
-	if !hasItem(listedTitles(t, fresh), "seen through tracking") {
-		t.Fatal("a fresh clone must show live rows on its first command")
+		t.Fatal("the first sync must fetch the live ref into its tracking ref")
 	}
 }
 

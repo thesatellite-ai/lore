@@ -202,8 +202,12 @@ func (a *App) Get(ctx context.Context, ref engine.Ref) (store.Source, row.Row, e
 		return "", row.Row{}, err
 	}
 	src, r, err := eng.Get(ctx, ref)
-	if errs.Has(err, errs.AmbiguousID) && ref.Store == "" && ref.ID.Prefix() == ids.PrefixActor {
-		return a.actorSourceGet(ctx, ref, err) // one actor in several stores (actor_source.go)
+	if err == nil && ref.Store == "" && ref.ID.Prefix() == ids.PrefixActor && len(eng.Stores()) > 1 {
+		// one actor in several stores (actor_source.go): the engine answers
+		// the newest copy; the source's row and name are what readers see
+		if s2, r2, aerr := a.actorSourceGet(ctx, ref); aerr == nil && s2 != "" {
+			return s2, r2, nil
+		}
 	}
 	return src, r, err
 }
@@ -294,6 +298,9 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	eng, err := a.Engine(ctx)
 	if err != nil {
 		return ids.ID[ids.Project]{}, err
+	}
+	if st, serr := a.state(ctx); serr == nil && st.here != "" {
+		return a.folderProject(ctx, st, st.here) // inside a store folder: its project (storehere.go)
 	}
 	rows, err := eng.List(ctx, store.SourceRepo, schema.TableProjects)
 	if err != nil {
@@ -696,6 +703,13 @@ func (a *App) linkedFolderProject(ctx context.Context, st *state) (ids.ID[ids.Pr
 		return ids.ID[ids.Project]{}, errs.New(errs.StoreUnreachable, "wire: this repo is linked to a store folder by its remote ("+st.linkedByRemote+"), and that folder is not attached").
 			WithHint("run `lore whoami` to see the link, or `lore sync` to fetch the store")
 	}
+	return a.folderProject(ctx, st, src)
+}
+
+// folderProject is the project of the attached store folder src: on a
+// read its marker's project id when it has one, else (and on a write) its
+// roster project row, made when missing.
+func (a *App) folderProject(ctx context.Context, st *state, src store.Source) (ids.ID[ids.Project], error) {
 	if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
 		pid, err := folderProjectIDOf(ctx, st, src)
 		if err != nil || !pid.IsZero() {

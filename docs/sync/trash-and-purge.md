@@ -65,6 +65,7 @@ Alice archives a memory and commits that. Later the team decides archived notes 
 ```console
 # alice, in website
 $ lore memory archive mem_05e9…4603 && git commit -qam 'lore: archive whatsapp memory'
+lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ mem_05e9…4603 archived
 $ lore trash purge --archived-before 0d --dry-run
 would purge 1 row
@@ -75,10 +76,11 @@ ERROR: [E_NEEDS_CONFIRM] trash: purge removes every row archived before 0d for g
   hint: ask the person, then re-run with --confirm
 (exit 26)
 $ lore trash purge --archived-before 0d --confirm
+lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 purged 1 row
   mem_05e9…4603 (memories, repo)
 tombstones are kept forever; the old content is still in git history (rotate any leaked secret)
-lore live: (live, pushed)
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ cat .lore/data/_purged.json
 {
   "_v": 1,
@@ -102,9 +104,11 @@ A note deleted with a lore command (`lore memory delete`, `lore rule delete`, �
 ```console
 # alice, in website
 $ lore memory add --body 'The demo is on Friday at 10.'
+lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
 ✓ mem_2537…6bbb
   scope: [master]
 $ lore memory delete mem_2537…6bbb --reason 'the demo moved' --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
 ✓ mem_2537…6bbb moved to the trash (restore: lore trash restore mem_2537…6bbb)
 $ lore trash list
 mem_2537…6bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by act_54fe…28f2  reason "the demo moved"  bat_b69e…5ed7
@@ -127,6 +131,7 @@ memories mem_2537…6bbb  "The demo is on Friday at 10."  in the trash
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000003Z
 $ lore trash restore mem_2537…6bbb
+lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
 restored 1 row (batch bat_b69e…5ed7)
   mem_2537…6bbb (memories, repo)
 $ lore memory list | grep demo
@@ -145,9 +150,13 @@ Every command that changes many rows at once (`delete --where`, task bulk edits,
 ```console
 # alice, in website
 $ lore memory add --body 'Staging deploys at 9.' >/dev/null && lore memory add --body 'Production deploys on Tuesday.' >/dev/null
+lore: wrote ~/work/website/.lore/data/memories/mem_0aae…a61f.json
+lore: wrote ~/work/website/.lore/data/memories/mem_6a86…ed8c.json
 $ lore memory delete --where 'body~=deploys' --dry-run
 would delete 2 memory(s): mem_0aae…a61f Staging deploys at 9.; mem_6a86…ed8c Production deploys on Tuesday.; (nothing written, --dry-run)
 $ lore memory delete --where 'body~=deploys' --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_0aae…a61f.json
+lore: wrote ~/work/website/.lore/data/memories/mem_6a86…ed8c.json
 ✓ 2 memory(s) (--where) moved to the trash (batch bat_4f89…b64b; restore: lore trash restore bat_4f89…b64b)
 $ lore trash stats
 3 rows in the trash (0 dependents), 0 past trash.retention_days
@@ -169,6 +178,8 @@ batch bat_4f89…b64b  delete  memory delete  by act_54fe…28f2  2026-11-02 10:
   trash mem_0aae…a61f (memories, repo)
   trash mem_6a86…ed8c (memories, repo)
 $ lore batch undo bat_4f89…b64b --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_0aae…a61f.json
+lore: wrote ~/work/website/.lore/data/memories/mem_6a86…ed8c.json
 ✓ restored 2 rows of batch bat_4f89…b64b
 $ lore memory list | grep deploys
 mem_0aae…a61f [retrieved] Staging deploys at 9.

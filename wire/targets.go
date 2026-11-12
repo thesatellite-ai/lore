@@ -220,8 +220,9 @@ func attachLocation(s attach.Store, f string) (string, error) {
 }
 
 // baseStore finds the stores.yaml entry (or `me`, or a store the repo's
-// org brings: Options.OrgStores) a folder target names; fromOrg marks the
-// last kind, whose url must never be written into the repo.
+// org brings: Options.OrgStores, or an org store by its short name) a
+// folder target names; fromOrg marks the org kinds, whose url must never
+// be written into the repo.
 func (a *App) baseStore(ctx context.Context, name string) (src attach.Store, found, fromOrg bool, err error) {
 	if name == attach.ReservedMe {
 		mc, cerr := readMachineConfig(a.opts.Home)
@@ -250,6 +251,10 @@ func (a *App) baseStore(ctx context.Context, name string) (src attach.Store, fou
 		if string(s.Name) == name {
 			return s, true, true, nil
 		}
+	}
+	// an org store by its short name (lore-x; storeshortname.go)
+	if s, ok, serr := a.orgStoreByShortName(ctx, "store "+name, name); serr != nil || ok {
+		return s, ok, ok, serr
 	}
 	return attach.Store{}, false, false, nil
 }

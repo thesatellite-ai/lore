@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 )
@@ -40,7 +41,7 @@ func TestWithStoreDirWritesPushStamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stampDir := filepath.Dir(dir)
+	stampDir := gitbackend.StateDirOf(dir)
 	// whatever init recorded is gone: only withStoreDir may write it now
 	if err = os.Remove(filepath.Join(stampDir, pushStampFile)); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)

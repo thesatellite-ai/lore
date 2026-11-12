@@ -42,8 +42,9 @@ func TestStoreSignerOwnerMatchesOrgStores(t *testing.T) {
 }
 
 // Q-R2-1: a commit lore makes itself (store marker, migration) in an org
-// store's worktree is signed by the org identity even when git has one; in
-// any other store the git identity wins (FLAG4).
+// store's worktree is signed by the org identity when git's identity there
+// uses another email, and by git when it uses the org's (one author, owner
+// report 2026-11-12); in any other store the git identity wins (FLAG4).
 func TestStoreSignerEnvForOrgStoreWorktree(t *testing.T) {
 	t.Parallel()
 	org := OrgSigner{Name: "Northwind", Email: "lore@northwind.invalid", StoreURLs: []string{"git@github.com:northwind/lore.git"}}
@@ -64,6 +65,13 @@ func TestStoreSignerEnvForOrgStoreWorktree(t *testing.T) {
 	env, err := s.envFor(ctx, mk("ssh://git@github.com/northwind/lore.git"))
 	if err != nil || !strings.Contains(strings.Join(env, " "), "GIT_AUTHOR_EMAIL=lore@northwind.invalid") {
 		t.Fatalf("org store env = %v, %v; want the org identity", env, err)
+	}
+	same := mk("ssh://git@github.com/northwind/lore.git")
+	if _, err := (gitRun{dir: same, args: []string{"config", "user.email", "lore@northwind.invalid"}}).output(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if env, err = s.envFor(ctx, same); err != nil || len(env) != 0 {
+		t.Fatalf("org store whose git identity uses the org email: env = %v, %v; want none (git signs)", env, err)
 	}
 	env, err = s.envFor(ctx, mk("git@github.com:someone/personal.git"))
 	if err != nil || len(env) != 0 {

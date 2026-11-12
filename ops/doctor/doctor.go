@@ -77,6 +77,9 @@ const (
 	LevelNote    = "note"
 )
 
+// lineFixIsFix heads the steps of doctor --fix (D-ak).
+const lineFixIsFix = "lore doctor --fix runs the same steps as lore fix:"
+
 // noLoreDBNote is the note of a binary without the lore.db checks.
 const noLoreDBNote = "this build checks the stores only (no lore.db checks)"
 
@@ -216,7 +219,7 @@ func (r *RawJSON) UnmarshalText(b []byte) error { return r.UnmarshalJSON(b) }
 
 // RunIn is the input of doctor.run.
 type RunIn struct {
-	Fix bool `json:"fix,omitempty" flag:"fix" desc:"repair what doctor can fix safely (reversed --supersedes links, a task lead missing from assignees, a git merge driver that is not lore's, a config.yaml list on one line, your actor row missing from a store you saved rows to)"`
+	Fix bool `json:"fix,omitempty" flag:"fix" desc:"run lore fix's steps: migrate v0.1.17 rows, render, agent hooks, old store clones proved safe, then every safe doctor repair (git info/exclude, store clone identity, merge driver, config style, actor roster, reversed --supersedes links, …); prints each step and the status after them"`
 	// All checks every setup on this machine (ONB 6), not only the active
 	// one.
 	All bool `json:"all,omitempty" flag:"all" desc:"check every setup on this machine: identity, GitHub, stores, repos, tools (exit 0 healthy, 1 degraded, 2 broken)"`
@@ -261,6 +264,17 @@ type Report struct {
 	// machine checks with --all, the active setup's checks in plain doctor,
 	// and Findings in both.
 	Counts Counts `json:"counts,omitzero"`
+	// Fixed is what --fix fixed: every warning or error of the fixing run
+	// that the check after it no longer finds, and every finding a check
+	// fixed itself. With --fix, Status and the rest of the report are the
+	// check after the fixes (owner report 2026-11-12: doctor --fix ended
+	// with the status from before its fixes).
+	Fixed []string `json:"fixed,omitempty"`
+	// Steps are the lore fix steps --fix ran (fixproject.go): the same steps
+	// as lore fix, each with where and its result.
+	Steps []FixStep `json:"steps,omitempty"`
+	// fixedNow are the findings a check marked fixed in this run.
+	fixedNow []string
 	// meta is what each warning or error line's source knew beyond its
 	// text (check, fix, error level), for finalize.
 	meta map[string]findingMeta
@@ -304,7 +318,15 @@ func Ops(env Env) []op.Entry {
 
 // Run is doctor.run over env.
 func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
-	r, err := runRepo(ctx, env, in.Fix)
+	var r Report
+	var err error
+	if in.Fix {
+		// D-ak: --fix is lore fix's steps (fixproject.go), then the
+		// re-check; the report shows the state now
+		r, err = fixProject(ctx, env, false)
+	} else {
+		r, err = runRepo(ctx, env, false)
+	}
 	if err != nil {
 		return Report{}, err
 	}
@@ -415,6 +437,9 @@ func addChecks(r *Report, runs []CheckRun, outside bool) {
 				continue
 			}
 			if f.Level != LevelWarning || f.Fixed {
+				if f.Fixed {
+					r.fixedNow = append(r.fixedNow, f.Line)
+				}
 				r.Notes = append(r.Notes, f.Line)
 				continue
 			}
@@ -453,6 +478,13 @@ func (r Report) Text() string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Status: %s\nBinary: %s\n\n", strings.ToUpper(string(r.Status)), r.BinaryVersion)
+	if len(r.Steps) > 0 {
+		// the status stays the first line (scripts read it); the steps follow
+		b.WriteString(lineFixIsFix + "\n" + StepsText(r.Steps) + "\n")
+	}
+	if len(r.Fixed) > 0 {
+		list(&b, fmt.Sprintf("Fixed (%d, checked again after fixing; the status above is now):", len(r.Fixed)), r.Fixed)
+	}
 	if r.local {
 		fmt.Fprintf(&b, "[db]\n  ok:       %v\n  wal_size: %d bytes\n\n", r.DBOK, r.WALSizeBytes)
 	}
@@ -503,4 +535,41 @@ func list(b *strings.Builder, title string, items []string) {
 	for _, s := range items {
 		b.WriteString("  - " + s + "\n")
 	}
+}
+
+// fixedBetween is what a fixing run fixed: its findings (warnings and
+// errors) that the check after it no longer reports, and the findings a
+// check fixed itself, each once, in report order.
+// withFixNotes is the re-check's notes plus the fixing run's notes it
+// does not repeat: what a fix did ("repaired 1 --supersedes link(s): …")
+// is said by the fixing run only, and must not vanish with the re-check.
+func withFixNotes(after, fixing []string) []string {
+	have := map[string]bool{}
+	for _, l := range after {
+		have[l] = true
+	}
+	for _, l := range fixing {
+		if !have[l] {
+			have[l] = true
+			after = append(after, l)
+		}
+	}
+	return after
+}
+
+func fixedBetween(fixing, after Report) []string {
+	still := map[string]bool{}
+	for _, l := range append(append([]string(nil), after.Warnings...), after.Errors...) {
+		still[l] = true
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, l := range append(append(append([]string(nil), fixing.Errors...), fixing.Warnings...), fixing.fixedNow...) {
+		if still[l] || seen[l] {
+			continue
+		}
+		seen[l] = true
+		out = append(out, l)
+	}
+	return out
 }

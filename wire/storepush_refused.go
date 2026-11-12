@@ -28,13 +28,11 @@ package wire
 
 import (
 	"context"
-	"os"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/store/localstate"
 )
@@ -160,7 +158,7 @@ func (b *storePush) recordRefusal(ctx context.Context, refused []store.Refusal, 
 	if heldBy != "" {
 		rec.HeldOn = heldFolders(refused)
 	}
-	st, err := sqlite.OpenLocalState(ctx, LocalStatePath(b.res.home))
+	st, err := openLocalState(ctx, b.res.home)
 	if err != nil {
 		return // the status line is lost, the commits are not
 	}
@@ -173,7 +171,7 @@ func (b *storePush) clearRefusal(ctx context.Context) {
 	if !localStateExists(b.res.home) {
 		return // nothing was ever recorded: never create local.db for a clear
 	}
-	st, err := sqlite.OpenLocalState(ctx, LocalStatePath(b.res.home))
+	st, err := openLocalState(ctx, b.res.home)
 	if err != nil {
 		return
 	}
@@ -209,10 +207,4 @@ func (a *App) StorePushRefusals(ctx context.Context) ([]StorePushRefusal, error)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Store < out[j].Store })
 	return out, nil
-}
-
-// localStateExists reports whether this machine's local.db exists.
-func localStateExists(home string) bool {
-	_, err := os.Stat(LocalStatePath(home))
-	return err == nil
 }

@@ -14,7 +14,6 @@ package orgcmd
 
 import (
 	"context"
-	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -26,7 +25,7 @@ const OpRefresh = "org.refresh"
 
 // RefreshIn is the input of org.refresh.
 type RefreshIn struct {
-	Org string `json:"org" arg:"0" desc:"the org entry to refresh from its store's lore-org.yaml"`
+	Org string `json:"org,omitempty" arg:"0" desc:"the org entry to refresh from its store's lore-org.yaml (default: the only org entry on this machine, else the active setup's org)"`
 }
 
 // Refresher is the optional Host upgrade behind org.refresh.
@@ -37,11 +36,9 @@ type Refresher interface {
 // refreshOp is org.refresh bound to o.
 func refreshOp(o ops, spec func(name, summary string, errCodes []errs.Code, mayAsk bool, ex ...op.Example) op.Spec, codes []errs.Code) op.Entry {
 	return op.Define(spec(OpRefresh, "Copy an org entry's stores, own, repos and defaults from the store's lore-org.yaml (the team's source) and record its version", codes, false,
-		op.Example{Title: "the store's suggestion changed", CLI: "lore org refresh agency", Want: "agency"}),
+		op.Example{Title: "the store's suggestion changed", CLI: "lore org refresh agency", Want: "agency"},
+		op.Example{Title: "the only org on this machine (or the active setup's)", CLI: "lore org refresh", Want: "agency"}),
 		func(ctx context.Context, in RefreshIn) (Report, error) {
-			if strings.TrimSpace(in.Org) == "" {
-				return Report{}, errs.New(errs.InvalidInput, "name the org entry: lore org refresh <org>")
-			}
 			h, err := o.host(ctx, OpRefresh)
 			if err != nil {
 				return Report{}, err
@@ -51,6 +48,6 @@ func refreshOp(o ops, spec func(name, summary string, errCodes []errs.Code, mayA
 				return Report{}, errs.New(errs.Unsupported, "lore org refresh needs the org store machinery, which this binary does not have yet").
 					WithHint("run it with the release binary")
 			}
-			return r.Refresh(ctx, in)
+			return withDefaultOrg(ctx, h, OpRefresh, &in.Org, func() (Report, error) { return r.Refresh(ctx, in) })
 		})
 }

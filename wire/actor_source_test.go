@@ -145,8 +145,9 @@ func TestActorSourceGetOneActor(t *testing.T) {
 		"kind": schema.ActorKindHuman, "display_name": "Mira Old"})); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = eng.Get(ctx, engine.Ref{ID: mira}); !errs.Has(err, errs.AmbiguousID) {
-		t.Fatalf("the engine alone: %v, want E_AMBIGUOUS_ID (the case this fixes)", err)
+	// the engine alone answers the newest copy (the repo's, written last)
+	if src, _, gerr := eng.Get(ctx, engine.Ref{ID: mira}); gerr != nil || src != store.SourceRepo {
+		t.Fatalf("the engine alone: %s %v, want the newest copy (repo), never E_AMBIGUOUS_ID", src, gerr)
 	}
 	src, r, err := a.Get(ctx, engine.Ref{ID: mira})
 	if err != nil {

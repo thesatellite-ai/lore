@@ -130,7 +130,10 @@ func unlinkChange(ctx context.Context, repo *gitref.Repo, tip, store, projectID 
 			continue
 		}
 		seen[l.Folder] = true
-		path := metaPathOf(l.Folder)
+		path, err := metaPathAt(ctx, repo, tip, l.Folder)
+		if err != nil {
+			return nil, 0, err
+		}
 		raw, found, err := repo.ReadFile(ctx, tip, path)
 		if err != nil {
 			return nil, 0, err

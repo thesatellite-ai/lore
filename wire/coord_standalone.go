@@ -27,6 +27,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"os"
 	"path/filepath"
 	"strings"
@@ -218,9 +219,14 @@ func (w *coordWorld) heldNote(ctx context.Context, env coord.Env, tid ids.AnyID,
 		return opscoord.Report{}, coordErr(err) // fenced out or offline: nothing written
 	}
 	lines := []string{"✓ note " + cid.String() + " on " + tid.String()}
+	if branch != "" {
+		if commit, ok := w.pushWorkBranch(ctx, branch); ok {
+			// no hidden network writes: the remote, the branch and the commit
+			lines = append(lines, "  pushed work branch "+branch+" (commit "+gitbackend.Pushed{Commit: commit}.Short()+") to remote "+w.remoteName+" so a replacement can fetch it")
+			return opscoord.Report{Lines: lines}, nil
+		}
+	}
 	switch {
-	case branch != "" && w.pushWorkBranch(ctx, branch):
-		lines = append(lines, "  work branch "+branch+" pushed")
 	case branch != "":
 		lines = append(lines, "  ! work branch "+branch+" NOT pushed (offline or no remote); a replacement cannot fetch it yet")
 	}
@@ -230,13 +236,20 @@ func (w *coordWorld) heldNote(ctx context.Context, env coord.Env, tid ids.AnyID,
 // pushWorkBranch pushes the work branch so a replacement agent can fetch
 // it (§7.4 "Work branch"). Best effort: a failed push is reported, never
 // fatal.
-func (w *coordWorld) pushWorkBranch(ctx context.Context, branch string) bool {
+func (w *coordWorld) pushWorkBranch(ctx context.Context, branch string) (commit string, ok bool) {
 	if w.remote == nil || !w.autopush {
-		return false
+		return "", false
 	}
 	_, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"push", "--quiet", w.remoteName, "refs/heads/" + branch + ":refs/heads/" + branch},
 		Env: []string{envRideActive + "=1"}})
-	return err == nil
+	if err != nil {
+		return "", false
+	}
+	out, rerr := w.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--verify", "-q", "refs/heads/" + branch}})
+	if rerr != nil {
+		return "", true
+	}
+	return strings.TrimSpace(string(out)), true
 }
 
 // noteFields is the comment row of a note: on the task, with the body.

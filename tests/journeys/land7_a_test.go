@@ -76,7 +76,7 @@ func l7aHooks(t testing.TB, repoDir string) map[string][]string {
 // l7aRemoteHas reports whether kb's main holds a memory containing body.
 func l7aRemoteHas(w *World, body string) bool {
 	r := w.Remote(l7aKB)
-	for _, f := range r.FilesMatching("main", ".lore/data/memories/") {
+	for _, f := range r.FilesMatching("main", "memories/") {
 		if s, ok := r.Read("main", f); ok && strings.Contains(s, body) {
 			return true
 		}

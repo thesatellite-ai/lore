@@ -36,6 +36,9 @@ type runner struct {
 	// routeArgs / routeEnv are the store clone's ssh route (WithRoute, Q5).
 	routeArgs []string
 	routeEnv  []string
+	// accessNote is added to the error of a failed network call: the access
+	// rule the remote is reached through (WithAccessNote); "" = none.
+	accessNote string
 	// remote is the store url origin points at (OpenClone), named in the
 	// --trace line of a network call; "" when unknown.
 	remote string
@@ -46,16 +49,27 @@ type runner struct {
 // used (the setup's ssh alias) is visible. Local commands are not traced.
 var tracedSubcommands = map[string]bool{"fetch": true, "push": true, "ls-remote": true, "clone": true, "pull": true}
 
+// netRefusedExit is the exit status of a call the network switches refused
+// (git's own status for a remote it could not reach).
+const netRefusedExit = 128
+
 // gitError is a git run that exited non-zero.
 type gitError struct {
 	cmd    string // the subcommand, never the arguments (they may hold a url)
 	code   int
 	stderr string
+	// access names the access rule a network call went through ("" none).
+	access string
 }
 
-// Error renders the subcommand, exit status and git's message.
+// Error renders the subcommand, exit status and git's message, then the
+// access rule the call went through.
 func (e *gitError) Error() string {
-	return "git " + e.cmd + " exited " + strconv.Itoa(e.code) + ": " + strings.TrimSpace(e.stderr)
+	s := "git " + e.cmd + " exited " + strconv.Itoa(e.code) + ": " + strings.TrimSpace(e.stderr)
+	if e.access != "" {
+		s += " — " + e.access
+	}
+	return s
 }
 
 // exitCode returns the exit status of a failed git run; ok is false when
@@ -93,10 +107,15 @@ func (r runner) run(ctx context.Context, c call) ([]byte, error) {
 		// compares, never text to convert. Git for Windows defaults to
 		// autocrlf=true, which checked rows out with CRLF, so a second
 		// clone read other bytes than the first wrote.
-		args = append([]string{"-c", "commit.gpgsign=false", "-c", "core.hooksPath=" + r.noHooks, "-c", "core.autocrlf=false"}, args...)
+		args = append([]string{"-c", "commit.gpgsign=false", "-c", "core.hooksPath=" + r.noHooks, "-c", "core.autocrlf=false", "-c", ownDriverOff}, args...)
 	}
 	if len(r.routeArgs) > 0 {
 		args = append(append([]string(nil), r.routeArgs...), args...)
+	}
+	// LORE_OFFLINE / LORE_NO_FETCH (gitenv.NetRefused): the call is not
+	// run, and answers as git does when the remote is not there
+	if why, refused := gitenv.NetRefused(os.Environ(), c.args); refused {
+		return nil, &gitError{cmd: gitenv.Subcommand(c.args), code: netRefusedExit, stderr: why}
 	}
 	// The Cmd is built directly rather than through exec.CommandContext:
 	// r.bin is an absolute path resolved once by exec.LookPath (lookGit),
@@ -119,7 +138,11 @@ func (r runner) run(ctx context.Context, c call) ([]byte, error) {
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && ctx.Err() == nil {
-			return stdout.Bytes(), &gitError{cmd: subcommand(c.args), code: ee.ExitCode(), stderr: stderr.String()}
+			ge := &gitError{cmd: subcommand(c.args), code: ee.ExitCode(), stderr: stderr.String()}
+			if tracedSubcommands[ge.cmd] {
+				ge.access = r.accessNote
+			}
+			return stdout.Bytes(), ge
 		}
 		return nil, err
 	}

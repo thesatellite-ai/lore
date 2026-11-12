@@ -18,6 +18,7 @@ Link each repo to the same folder. Anyone at the agency can do it, once per repo
 ```console
 # alice, in api
 $ lore org link agency --project client2 --yes
+lore: pushed store github.com/agency/notes: commit 601d285 to branch main
 This marks github.com/client2/api as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_7a67…9504 at github.com/client2/api → github.com/agency/notes@main:client2/ (default=false)
@@ -26,6 +27,7 @@ and the leak guards turn on for everyone in agency.
 
 # alice, in app
 $ lore org link agency --project client2 --yes
+lore: pushed store github.com/agency/notes: commit 86dbae4 to branch main
 This marks github.com/client2/app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_2ad3…f891 at github.com/client2/app → github.com/agency/notes@main:client2/ (default=false)
@@ -34,6 +36,7 @@ and the leak guards turn on for everyone in agency.
 
 # alice, in infra
 $ lore org link agency --project client2 --yes
+lore: pushed store github.com/agency/notes: commit 9b40ce7 to branch main
 This marks github.com/client2/infra as a CLIENT repo of agency: internal notes default to github.com/agency/notes client2/,
 and the leak guards turn on for everyone in agency.
   link: project prj_162d…9666 at github.com/client2/infra → github.com/agency/notes@main:client2/ (default=false)
@@ -48,13 +51,26 @@ The first link created `client2/` in the store. The others joined it. Now add a 
 ```console
 # alice, in api
 $ lore mission add 'Invite landing page' --to agency/client2 --key invite
-✓ msn_05e9…4603 — Invite landing page → [agency/client2]
-$ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e9…4603 --repo api --key invite/backend
-✓ tsk_c0f3…b5b8 — send the invite email from the API [medium] → [agency/client2]
-$ lore task add 'build the invite page' --to agency/client2 --mission msn_05e9…4603 --repo app --after tsk_c0f3…b5b8 --key invite/frontend
-✓ tsk_76bd…3f10 — build the invite page [medium] → [agency/client2]
-$ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_05e9…4603 --repo api --key invite/backend
-✓ tsk_c0f3…b5b8 — send the invite email from the API (already added with --key invite/backend)
+lore: pushed store agency: commit cf563f3 to branch main
+lore: pushed store agency: commit df3a55c to branch main
+lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
+lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/client2 (store agency)
+✓ msn_c0f3…b5b8 — Invite landing page → [agency/client2]
+$ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_c0f3…b5b8 --repo api --key invite/backend
+lore: pushed store agency: commit 6d00426 to branch main
+lore: pushed store agency: commit 34ee210 to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/repos/rep_76bd…3f10.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/task_lists/tlt_d431…313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_b4f4…a5b0.json (store agency)
+✓ tsk_b4f4…a5b0 — send the invite email from the API [medium] → [agency/client2]
+$ lore task add 'build the invite page' --to agency/client2 --mission msn_c0f3…b5b8 --repo app --after tsk_b4f4…a5b0 --key invite/frontend
+lore: pushed store agency: commit 7898daa to branch main
+lore: pushed store agency: commit ccfb0bb to branch main
+lore: wrote ~/.lore/stores/agency/notes/client2/repos/rep_28f8…03df.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_4c59…6c38.json (store agency)
+✓ tsk_4c59…6c38 — build the invite page [medium] → [agency/client2]
+$ lore task add 'send the invite email from the API' --to agency/client2 --mission msn_c0f3…b5b8 --repo api --key invite/backend
+✓ tsk_b4f4…a5b0 — send the invite email from the API (already added with --key invite/backend)
 ```
 <!-- /example -->
 
@@ -64,14 +80,16 @@ Any of the three repos shows the group's tasks. `lore mission status` shows the 
 ```console
 # alice, in app
 $ lore task list
-○ tsk_c0f3…b5b8 send the invite email from the API [medium]  [agency/client2]
-○ tsk_76bd…3f10 build the invite page [medium]  [agency/client2]
+lore task list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/app/.git/config; hook blocks in ~/work/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+○ tsk_b4f4…a5b0 send the invite email from the API [medium]  [agency/client2]
+○ tsk_4c59…6c38 build the invite page [medium]  [agency/client2]
 
 # alice, in infra
-$ lore mission status msn_05e9…4603
-msn_05e9…4603 Invite landing page   2 tasks · 0 done · 0 claimed · 1 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
-  ready     tsk_c0f3…b5b8  send the invite email from the API              
-  waiting   tsk_76bd…3f10  build the invite page                     waits for tsk_c0f3…b5b8 to be merged (todo)
+$ lore mission status msn_c0f3…b5b8
+lore mission status: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+msn_c0f3…b5b8 Invite landing page   2 tasks · 0 done · 0 claimed · 1 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
+  ready     tsk_b4f4…a5b0  send the invite email from the API              
+  waiting   tsk_4c59…6c38  build the invite page                     waits for tsk_b4f4…a5b0 to be merged (todo)
 ```
 <!-- /example -->
 

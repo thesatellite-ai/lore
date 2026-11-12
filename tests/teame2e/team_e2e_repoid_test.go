@@ -19,7 +19,7 @@ func TestE2ERepoSetURLFollowsStoreLinks(t *testing.T) {
 	if !strings.Contains(res.Stdout, "mirror address added: "+mirror) {
 		t.Fatalf("set-url output: %s", res.Stdout)
 	}
-	meta, _ := a.store.Read(refMain, folderAcme+"/"+dataDir+"/"+metaFile)
+	meta, _ := a.store.Read(refMain, folderAcme+"/"+metaFile)
 	for _, slug := range []string{slugApp, mirror} {
 		if !strings.Contains(meta, `"remote": "`+slug+`"`) && !strings.Contains(meta, `"remote":"`+slug+`"`) {
 			t.Fatalf("store folder link for %s missing: %s", slug, meta)

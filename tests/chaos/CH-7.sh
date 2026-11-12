@@ -64,7 +64,7 @@ echo "$OUT" | grep -q "hint:" || fail "disk-full error names no way out: $OUT"
 
 # Nothing half-written: the row files are exactly the ones from before.
 [ "$(find .lore/data -type f | sort)" = "$before" ] || fail "the refused write left files in .lore/data"
-sqlite3 .lore/lore-cache.db "PRAGMA integrity_check" | grep -qx ok || fail "cache corrupted by the disk-full write"
+sqlite3 "$(repo_cache)" "PRAGMA integrity_check" | grep -qx ok || fail "cache corrupted by the disk-full write"
 [ "$(lore_count memories)" -eq 5 ] || fail "lost rows written before the disk filled: $(lore_count memories)/5"
 $LORE memory add --body "after-free" >/dev/null 2>&1 || fail "lore did not recover after space was freed"
 [ "$(lore_count memories)" -eq 6 ] || fail "the write after freeing space is missing"

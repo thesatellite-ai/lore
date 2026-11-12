@@ -1,33 +1,37 @@
 
 ### live off
 alice (work/website)$ LORE_LIVE=0 lore task add 'Update the privacy page'
-✓ tsk_7a670ae8548ed05bf57ad29ad0759504 — Update the privacy page [medium]
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Update the privacy page [medium]
 alice (work/website)$ git status --short
  M .lore/data/_meta.json
 ?? .lore/data/task_lists/
 ?? .lore/data/tasks/
 alice (work/website)$ lore task add 'Check the contact form on a phone'
-✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Check the contact form on a phone [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — Check the contact form on a phone [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 alice (work/website)$ lore live show
-task_lists tlt_162df51b7f78b785c97c26b41ea89666     live      since 2026-11-02 10:00
-tasks      tsk_2ad3618e878ebbf527d34d446ef4f891     live      since 2026-11-02 10:00
+task_lists tlt_7a670ae8548ed05bf57ad29ad0759504     live      since 2026-11-02 10:00
+tasks      tsk_162df51b7f78b785c97c26b41ea89666     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 
 ### autopush off
 alice (work/website)$ LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — Renew the SSL certificate [medium]
 lore live: (live, not pushed yet: 1 waiting; autopush is off, `lore sync` pushes)
 alice (work/website)$ lore live diff
-local     601d2850ffd047c2890d2472633cc4dbdabe12fd
-tracking  86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
-seen      86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
+local     86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
+tracking  601d2850ffd047c2890d2472633cc4dbdabe12fd
+seen      601d2850ffd047c2890d2472633cc4dbdabe12fd
 pending   1 write(s) not confirmed by the remote
   _root/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
-lore live: pushed waiting live writes
+lore live: pushed waiting live writes commit 86dbae4 to origin refs/lore/live
 alice (work/website)$ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_54fe984c9b495744c0217776765a28f2
 ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
-  hint: coordination writes are never queued; reconnect (or turn live.autopush on) and run the command again
+  hint: coordination writes (claims, releases, holds) are never queued; turn live.autopush on (or unset LORE_LIVE_AUTOPUSH=0) and run the command again
 (exit 15)
 alice (work/website)$ lore sync
 · already in sync
@@ -36,10 +40,10 @@ alice (work/website)$ lore sync
 alice (work)$ git clone -q -o upstream https://github.com/client/website website-fork && cd website-fork && git remote
 upstream
 alice (work/website-fork)$ lore task list
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/website-fork/.git/hooks)
+lore task list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 (no tasks)
 alice (work/website-fork)$ LORE_LIVE_REMOTE=upstream lore task list
-○ tsk_2ad3618e878ebbf527d34d446ef4f891 Check the contact form on a phone [medium]
+○ tsk_162df51b7f78b785c97c26b41ea89666 Check the contact form on a phone [medium]
 ○ tsk_54fe984c9b495744c0217776765a28f2 Renew the SSL certificate [medium]
 
 ### trace
@@ -49,10 +53,11 @@ trace: git rev-parse --path-format=absolute --git-common-dir (<time>, ok)
 trace: git config --get remote.origin.url (<time>, ok)
 trace: git config --get user.name (<time>, ok)
 trace: git config --get user.email (<time>, ok)
-trace: git config --get-all remote.origin.fetch (<time>, ok)
+trace: git check-ref-format refs/lore/live (<time>, ok)
 
 ### sync quiet
 alice (work/website)$ lore rule add --body 'Run the tests before you push'
+lore: wrote ~/work/website/.lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json
 ✓ rul_05e99e22e9e86e96fe4daa7777994603
   scope: [master] severity: must
 alice (work/website)$ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
@@ -61,6 +66,7 @@ alice (work/website)$ LORE_SYNC_QUIET=1 lore memory add --body 'The client repli
 
 ### sync git off
 alice (work/shop)$ LORE_SYNC_GIT=0 lore init --non-interactive --name=shop
+lore: wrote 4 row file(s) in ~/work/shop/.lore/data
 lore initialized
     project_id: prj_76bd560aff0771fab8457dbfa9823f10
     name:       shop
@@ -73,7 +79,7 @@ lore initialized
 alice (work/shop)$ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)
 alice (work/shop)$ lore sync
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/shop/.git/hooks)
+lore sync: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/shop/.git/config; lore's merge rules in ~/work/shop/.gitattributes; hook blocks in ~/work/shop/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 · already in sync
 alice (work/shop)$ ls .git/hooks | grep -v sample; cat .gitattributes
 commit-msg
@@ -91,6 +97,8 @@ pre-push
 
 ### not a secret
 alice (work/website)$ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
+lore: wrote ~/work/website/.lore/data/memories/mem_b4f4765e593d51fd1352985e8af3a5b0.json
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_28f8d32584b2db54ffb146bede5b03df.json
 ✓ mem_b4f4765e593d51fd1352985e8af3a5b0
   scope: [master]
 alice (work/website)$ ls .lore/data/memories | grep -c mem_b4f4765e593d51fd1352985e8af3a5b0 || true
@@ -98,7 +106,7 @@ alice (work/website)$ ls .lore/data/memories | grep -c mem_b4f4765e593d51fd13529
 
 ### network drive
 alice (work/Dropbox/website)$ lore rule list
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/Dropbox/website/.git/hooks)
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/Dropbox/website/.git/config; hook blocks in ~/work/Dropbox/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
   hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
@@ -108,41 +116,43 @@ alice (work/Dropbox/website)$ LORE_ALLOW_NETWORK_FS=1 lore rule list
 ### db path outside
 alice (work/blog)$ cat .lore/lore.yaml
 db_path: ../client.db
-project_id: prj_28f8d32584b2db54ffb146bede5b03df
+project_id: prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 alice (work/blog)$ lore migrate run --dry-run
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
   hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
 (exit 20)
 alice (work/blog)$ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 Upgraded 1 row
-  mode-b: rules/rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 → store shared (~/work/stores/blog)
+  mode-b: rules/rul_3b6283bc4392c556bbae5f094246e913 → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: this repo has no remote origin; nobody to race, none taken
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 alice (work/blog)$ lore rule list
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/blog/.git/hooks)
-rul_4c590afb2a0cc7ae1b97b7e4e62d6c38  Posts go out on Tuesdays  [shared]
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+rul_3b6283bc4392c556bbae5f094246e913  Posts go out on Tuesdays  [shared]
 
 ### lore home
 alice (work/docs)$ cat .lore/lore.yaml
 db_path: ${LORE_HOME}/client-docs.db
-project_id: prj_28f8d32584b2db54ffb146bede5b03df
+project_id: prj_4c590afb2a0cc7ae1b97b7e4e62d6c38
 alice (work/docs)$ lore migrate run --dry-run
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
 (exit 27)
 alice (work/docs)$ LORE_HOME=~/shared-dbs lore migrate run
 Upgraded 1 row
-  mode-b: rules/rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 → store shared (~/shared-dbs/stores/blog)
+  mode-b: rules/rul_3b6283bc4392c556bbae5f094246e913 → store shared (~/shared-dbs/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: this repo has no remote origin; nobody to race, none taken
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 alice (work/docs)$ lore rule list
-lore sync: configured git for lore data (merge driver, .gitattributes, hooks in ~/work/docs/.git/hooks)
-rul_4c590afb2a0cc7ae1b97b7e4e62d6c38  Posts go out on Tuesdays  [shared]
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/docs/.git/config; hook blocks in ~/work/docs/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+rul_3b6283bc4392c556bbae5f094246e913  Posts go out on Tuesdays  [shared]
 alice$ ls ~/shared-dbs ~/shared-dbs/stores
 ~/shared-dbs:
 client-docs.db
@@ -161,8 +171,8 @@ Status: HEALTHY
 
 ### lore human
 alice (work/website)$ unset LORE_NO_DETECT LORE_HUMAN; export CODEX_CI=1; lore whoami | grep -E '^(identity|agent) '
-identity   alice via codex <agent:auto/codex/10380a>   act_3b6283bc4392c556bbae5f094246e913  (from: agent detection)
+identity   alice via codex <agent:auto/codex/10380a>   act_f147dd95f1aaf742dd4f5214843a5139  (from: agent detection)
 agent      codex  (from: CODEX_CI)
 alice (work/website)$ unset LORE_NO_DETECT; export CODEX_CI=1 LORE_HUMAN=1; lore whoami | grep -E '^(identity|agent) '
-identity   alice <human:alice@agency.example>   act_f147dd95f1aaf742dd4f5214843a5139  (from: git config user.email)
+identity   alice <human:alice@agency.example>   act_2537f9b2f7de77bfe5ca958860216bbb  (from: git config user.email)
 agent      codex  (from: CODEX_CI)  LORE_HUMAN=1: writes stay yours

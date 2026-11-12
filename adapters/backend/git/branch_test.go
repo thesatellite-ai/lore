@@ -2,7 +2,6 @@ package git
 
 import (
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -90,7 +89,7 @@ func TestFolderURLRefusesBranch(t *testing.T) {
 
 // TestOpenerPinnedBranch drives NewOpener over a real https-shaped url
 // (rewritten to a local bare repo with git's url.<x>.insteadOf): a pinned
-// branch gets its own clone at <home>/clones/<host>/<path>@<branch>, writes
+// branch gets its own clone at <home>/stores/<path>@<branch>, writes
 // and syncs land on that branch only, and the default clone is separate.
 // Not parallel: it sets the process's git config environment.
 func TestOpenerPinnedBranch(t *testing.T) {
@@ -129,12 +128,12 @@ func TestOpenerPinnedBranch(t *testing.T) {
 	if staging.Branch() != "staging" {
 		t.Fatalf("branch %q", staging.Branch())
 	}
-	wantBase := filepath.Join(home, ClonesDir, "example.invalid", "acme", "notes@staging")
-	if staging.Dir() != filepath.Join(wantBase, workDir) {
-		t.Fatalf("clone dir %s, want under %s", staging.Dir(), wantBase)
+	wantDir := filepath.Join(home, StoresDir, "acme", "notes@staging")
+	if staging.Dir() != wantDir {
+		t.Fatalf("clone dir %s, want %s", staging.Dir(), wantDir)
 	}
-	if _, err := os.Stat(wantBase + bareSuffix); err != nil {
-		t.Fatalf("bare clone: %v", err)
+	if !isDir(filepath.Join(wantDir, ".git")) {
+		t.Fatalf("the pinned clone has no .git folder in %s", wantDir)
 	}
 	def := openURL(fake)
 	if def.Branch() != testBranch || def.Dir() == staging.Dir() {
@@ -199,7 +198,7 @@ func TestOpenerOriginSpelling(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := strings.TrimSpace(gitT(t, base+bareSuffix, "config", "--get", "remote."+RemoteName+".url"))
+		got := strings.TrimSpace(gitT(t, base, "config", "--get", "remote."+RemoteName+".url"))
 		if got != raw {
 			t.Fatalf("%s: clone origin %q, want the spelling itself", raw, got)
 		}

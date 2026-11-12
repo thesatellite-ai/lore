@@ -3,7 +3,6 @@ package wire
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -40,7 +39,7 @@ func (a *App) missingFolder(ctx context.Context, src attach.Store, base, folderN
 }
 
 // dataFolders lists the top-level folders of a store's local folder dir that
-// hold a data folder (<f>/.lore/data), sorted. An unreadable dir lists
+// are folders of the store (rowfs.HasStoreFolder), sorted. An unreadable dir lists
 // nothing: the list only decorates a refusal.
 func dataFolders(dir string) []string {
 	entries, err := os.ReadDir(dir)
@@ -56,7 +55,7 @@ func dataFolders(dir string) []string {
 		if ferr != nil || f == rowfs.FolderRoot {
 			continue // .lore, .git and other tool folders
 		}
-		if fi, serr := os.Stat(filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(f)))); serr == nil && fi.IsDir() {
+		if rowfs.HasStoreFolder(dir, f) {
 			out = append(out, f)
 		}
 	}

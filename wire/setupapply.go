@@ -23,7 +23,6 @@ import (
 	"context"
 	"maps"
 	neturl "net/url"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,7 +44,6 @@ import (
 	"github.com/thesatellite-ai/lore/ops/orgcmd"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
-	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/ops/team"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -421,7 +419,7 @@ func (ap setupApplier) personalStoreValue(choice, raw string) (value, initURL st
 		return choice, "", nil
 	case onboard.PersonalStoreLocal:
 		// onboard.LocalStoreURL: the default `me` folder under the lore home.
-		raw = fileuri.URL(filepath.Join(ap.a.opts.Home, personalStoresDir, opsstores.PersonalName), "")
+		raw = fileuri.URL(personalFolderDir(ap.a.opts.Home), "")
 	case onboard.PersonalStoreCreate, onboard.PersonalStoreExisting:
 		if raw == "" {
 			return "", "", errs.New(errs.InvalidInput, "setup apply personal_store: "+choice+" needs a store url").
@@ -930,7 +928,13 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 	if len(emails) == 0 {
 		return "", "", errs.New(errs.InvalidInput, "setup join: no email to join with").WithHint("answer the identity step first")
 	}
-	rep, err := host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: "human:" + emails[0], Name: name, Handle: handle}, true)
+	// Admit (owner item 19): the member check reads the store's roster
+	// before anything is written there; someone not on it gets the
+	// refusal with no actor row, no commit and no push.
+	admit := func(ctx context.Context, entry string) error {
+		return team.CheckMember(ctx, orgRosterStore{a: ap.a, org: entry}, entry, emails)
+	}
+	rep, err := host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: "human:" + emails[0], Name: name, Handle: handle, Admit: admit, SkipRegister: true}, true)
 	if err != nil {
 		return "", "", errs.Prefix("setup join "+answer, err)
 	}

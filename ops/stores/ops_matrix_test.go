@@ -26,7 +26,7 @@ func (f *fakeEnv) InitStore(_ context.Context, in InitIn) (InitOut, error) {
 	f.calls = append(f.calls, "init "+in.Name)
 	url := in.URL
 	if url == "" {
-		url = "file:///home/u/.lore/stores/me"
+		url = "file:///home/u/.lore/stores/_me"
 	}
 	return InitOut{Name: in.Name, URL: url, Personal: in.Name == PersonalName, ID: "sto_01a1a59b891c70b789144cd3e711fb92"}, nil
 }
@@ -148,7 +148,7 @@ func TestOpsMatrix(t *testing.T) {
 		{"set-url", OpSetURL, `{"name":"kit","url":"file:///new"}`, "set-url kit", []string{`"previous":"file:///old"`, `"changed":true`}, "", ""},
 		{"set-url no url", OpSetURL, `{"name":"kit"}`, "", nil, "", errs.InvalidInput},
 		{"open", OpOpen, `{"url":"git@h:a/n"}`, "", []string{`"commit":"0123456789abcdef0123"`},
-			"✓ /w/git@h:a/n at main (0123456789ab, detached; read-only by convention — lore writes the branch itself)\n", ""},
+			"✓ /w/git@h:a/n on main (0123456789ab): the store's own clone, a plain git checkout to browse; lore commits and pulls here too\n", ""},
 		{"forget", OpForget, `{"url":"git@h:u"}`, "", []string{`"removed":"/c/git@h:u"`}, "✓ forgot git@h:u (removed /c/git@h:u; the next command that needs it clones it again)\n", ""},
 		{"forget none", OpForget, `{"url":"git@h:none"}`, "", nil, "no clone of git@h:none on this machine; nothing to forget\n", ""},
 		// a store name resolves to its stores.yaml url (G-CORE-5); an unknown name is refused
@@ -186,7 +186,7 @@ func TestOpsMatrix(t *testing.T) {
 	// show text: one block per clone; doctor: problems make E_INVALID_INPUT.
 	f := &fakeEnv{clones: ClonesOut{Stores: []CloneView{{URL: "git@h:a/n", Entries: []string{"agency", "kit"}, Branches: []string{"main"}, Cloned: true, Clone: "/c/x", DefaultBranch: "main", Unpushed: []string{"main"}}}}}
 	_, txt, err := invoke(t, f, OpShow, `{}`)
-	want := "git@h:a/n\n  entries   agency, kit   branches main\n  clone     /c/x (bare)   default branch main   last fetch never\n  unpushed  main\n"
+	want := "git@h:a/n\n  entries   agency, kit   branches main\n  clone     /c/x   default branch main   last fetch never\n  unpushed  main\n"
 	if err != nil || txt != want {
 		t.Fatalf("show text %q %v\nwant %q", txt, err, want)
 	}

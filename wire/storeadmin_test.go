@@ -80,8 +80,8 @@ func TestSetVisibility(t *testing.T) {
 	b := openWith(t, repo2, Options{})
 	_, err = run(t, b, opsstores.OpVisibility, `{"name":"old","visibility":"shareable"}`, true)
 	var e *errs.Error
-	if !errors.As(err, &e) || e.Code != errs.OldLore || !strings.Contains(e.Hint, "migrate run") {
-		t.Fatalf("v0.1.17 marker: %v, want E_OLD_LORE naming migrate run", err)
+	if !errors.As(err, &e) || e.Code != errs.OldLore || !strings.Contains(e.Hint, "lore fix") {
+		t.Fatalf("v0.1.17 marker: %v, want E_OLD_LORE naming lore fix", err)
 	}
 	if after := mustRead(t, filepath.Join(oldDir, rowfs.MarkerFile)); string(after) != string(before) {
 		t.Fatalf("a refused visibility change rewrote the v0.1.17 marker:\n%s", after)
@@ -112,7 +112,7 @@ func TestAddFolder(t *testing.T) {
 	if out.Already || out.Folder != "acme" || folderStore+"/"+out.ProjectID != minted {
 		t.Fatalf("folder add: %+v, minted place %s", out, minted)
 	}
-	meta := rowFile(t, filepath.Join(storeDir(url), "acme", rowfs.LoreDir, rowfs.DataDir, rowfs.MetaFileName))
+	meta := rowFile(t, filepath.Join(storeDir(url), "acme", rowfs.MetaFileName))
 	if string(meta["project_id"]) != `"`+out.ProjectID+`"` {
 		t.Fatalf("_meta.json = %v, want project_id %s", meta, out.ProjectID)
 	}

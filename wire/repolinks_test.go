@@ -16,7 +16,7 @@ import (
 // storeLinks reads the links of folder's _meta.json on the store's main.
 func storeLinks(t *testing.T, w *orgWorld, folder string) []linkRow {
 	t.Helper()
-	raw := orgGit(t, filepath.Join(w.hosts, "agency/notes.git"), "show", "main:"+folder+"/.lore/data/_meta.json")
+	raw := orgGit(t, filepath.Join(w.hosts, "agency/notes.git"), "show", "main:"+folder+"/_meta.json")
 	var doc struct {
 		Links []linkRow `json:"links"`
 	}

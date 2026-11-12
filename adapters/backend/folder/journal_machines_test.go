@@ -22,7 +22,7 @@ const (
 
 // TestJournalKeepsAnotherMachinesRecords (G-DECIDE-1, later 544): two
 // machines on one shared folder store write pending audit records into
-// the store's one journal (<store>/.lore/state, beside the lock), each
+// the store's one journal (<store>/.lore-state, beside the lock), each
 // record carrying its writer's machine id (the key lives in the record:
 // engine journalRecord, replayJournal skips other machines' records). The
 // backend half pinned here: a write by one machine keeps the other's
@@ -81,7 +81,7 @@ func TestJournalKeepsAnotherMachinesRecords(t *testing.T) {
 	if got := pending(machB); len(got) != 1 || got[0] != journalMachineB {
 		t.Fatalf("machine A's ack touched machine B's records: %q", got)
 	}
-	journal := filepath.Join(dir, rowfs.LoreDir, rowfs.JournalDir, rowfs.JournalFileName)
+	journal := filepath.Join(dir, rowfs.StoreStateDir, rowfs.JournalFileName)
 	if _, err := os.Stat(journal); err != nil {
 		t.Fatalf("journal with B's record pending: %v", err)
 	}

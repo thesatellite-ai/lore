@@ -345,7 +345,7 @@ func (b *builder) lore(cwd string, args ...string) {
 
 // loreHome makes ~/.lore with the folders a real install has.
 func (b *builder) loreHome() {
-	for _, d := range []string{".lore", ".lore/cache", ".lore/clones", ".lore/render", ".lore/tmp", ".lore/state"} {
+	for _, d := range []string{".lore", ".lore/cache", ".lore/stores", ".lore/render", ".lore/tmp", ".lore/state"} {
 		b.dir(filepath.Join(b.m.Home, d), 0o700)
 	}
 }

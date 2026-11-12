@@ -2,7 +2,7 @@ package orgcfg
 
 // A store whose first lore write predates lore writing the marker with it
 // (owner report 2026-11-11: `store folder add` on a brand-new repo pushed
-// only <folder>/.lore/data/_meta.json): its links are read like any
+// only <folder>/_meta.json): its links are read like any
 // store's, and a link written into it adds the marker in the same commit;
 // a tree with other files stays refused.
 
@@ -69,7 +69,7 @@ func (w *linkWorld) linkWith(t *testing.T, folder string, newMarker bool) (LinkW
 }
 
 func TestLinkAdoptsAStoreWithoutMarker(t *testing.T) {
-	meta := map[string]string{"client_z/.lore/data/_meta.json": `{"_v":1,"project_id":"` + lwFolderID + `"}` + "\n"}
+	meta := map[string]string{"client_z/_meta.json": `{"_v":1,"project_id":"` + lwFolderID + `"}` + "\n"}
 
 	t.Run("links are read", func(t *testing.T) {
 		w := newNoMarkerWorld(t, meta)
@@ -97,7 +97,7 @@ func TestLinkAdoptsAStoreWithoutMarker(t *testing.T) {
 		}
 	})
 	t.Run("a tree with code stays refused", func(t *testing.T) {
-		w := newNoMarkerWorld(t, map[string]string{"main.go": "package main\n", "client_z/.lore/data/_meta.json": "{}\n"})
+		w := newNoMarkerWorld(t, map[string]string{"main.go": "package main\n", "client_z/_meta.json": "{}\n"})
 		if _, err := w.linkWith(t, "client_z", true); !errors.Is(err, ErrNotAStore) {
 			t.Fatalf("link into a code repo: %v, want ErrNotAStore", err)
 		}

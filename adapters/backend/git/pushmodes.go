@@ -93,6 +93,28 @@ func (b *Backend) Unpushed(ctx context.Context) (int, error) {
 	return b.countCommits(ctx, remote, h)
 }
 
+// Unpulled counts the commits the clone's tracking ref holds that its
+// branch does not: fetched but not merged yet (a plain `git fetch` in the
+// clone, or a fetch that updates only the tracking refs). 0 when the
+// remote branch is not known yet, and in repo mode.
+func (b *Backend) Unpulled(ctx context.Context) (int, error) {
+	if err := b.usable(ctx); err != nil {
+		return 0, err
+	}
+	if b.mode == modeRepo {
+		return 0, nil
+	}
+	remote, err := b.resolve(ctx, b.work, trackingRefNS+b.branch)
+	if err != nil || remote == "" {
+		return 0, err
+	}
+	h, err := b.head(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return b.countCommits(ctx, h, remote)
+}
+
 // OldestUnpushed is the commit date of the oldest local commit the remote
 // tip does not hold (zero when nothing waits). Store commits are dated by
 // the app clock, so this is when the oldest waiting write was made.
@@ -143,30 +165,125 @@ func (b *Backend) countCommits(ctx context.Context, from, to string) (int, error
 	return strconv.Atoi(trimmed(out))
 }
 
+// Hand-edit commits in a batch (brief 2.1: committed as that person). The
+// pick-up's commits carry handEditTrailer (clone.go commitBatch, from
+// store.PersonAuthored); the batch squash keeps each as a commit of its
+// own with its author, committer, dates and message, and squashes only
+// lore's own commits between them:
+//
+//	remote ─ w1 ─ w2 ─ H ─ w3 ─ w4      (H: hand edit by the person)
+//	remote ─ batch(w1,w2) ─ H' ─ batch(w3,w4)
+//
+// Each new commit takes its original's tree, so the result's tree is h's.
+// A local history with a merge in it is pushed as it is when it holds a
+// hand edit (a tree of a commit before the merge would undo the merge).
+
+// handEditKey is the trailer key that marks a person's own change.
+const handEditKey = "Lore-Hand-Edit"
+
+// handEditTrailer is the trailer line of a hand-edit commit.
+const handEditTrailer = handEditKey + ": true"
+
+// localCommit is one commit of remote..h for the squash.
+type localCommit struct {
+	id   string
+	hand bool // a hand-edit commit (handEditTrailer)
+}
+
 // squashOnto makes the commits of remote..h one commit on remote with h's
 // tree and a batch message, and moves the branch there (compare-and-swap
-// on h). One commit or none is left as it is.
+// on h). One commit or none is left as it is. Hand-edit commits stay
+// commits of their own (see above).
 func (b *Backend) squashOnto(ctx context.Context, remote, h string) (string, error) {
 	n, err := b.countCommits(ctx, remote, h)
 	if err != nil || n <= 1 {
 		return h, err
 	}
-	msg, err := b.batchMessage(ctx, remote, h)
+	local, linear, err := b.localCommits(ctx, remote, h)
 	if err != nil {
 		return h, err
+	}
+	hands := 0
+	for _, c := range local {
+		if c.hand {
+			hands++
+		}
+	}
+	if hands > 0 && (!linear || hands == len(local)) {
+		return h, nil // nothing lore may fold without losing a person's commit
 	}
 	env, err := b.commitEnv(ctx, Signature{})
 	if err != nil {
 		return h, err
 	}
-	next, err := b.commitTree(ctx, h+"^{tree}", []string{remote}, b.cfg.withTrailers(msg), env)
-	if err != nil {
+	next, from := remote, remote // from: the parent of the run of lore commits
+	var run string               // the last lore commit of the current run
+	flush := func() error {
+		if run == "" {
+			return nil
+		}
+		msg, err := b.batchMessage(ctx, from, run)
+		if err != nil {
+			return err
+		}
+		if next, err = b.commitTree(ctx, run+"^{tree}", []string{next}, b.cfg.withTrailers(msg), env); err != nil {
+			return err
+		}
+		run = ""
+		return nil
+	}
+	for _, c := range local {
+		if !c.hand {
+			if run == "" {
+				from = c.id + "^"
+			}
+			run = c.id
+			continue
+		}
+		if err := flush(); err != nil {
+			return h, err
+		}
+		if next, err = b.recommit(ctx, chainCommit{id: c.id, tree: c.id + "^{tree}"}, next); err != nil {
+			return h, err
+		}
+	}
+	if err := flush(); err != nil {
 		return h, err
 	}
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"update-ref", "-m", "lore: batch", "HEAD", next, h}}); err != nil {
 		return h, errs.Wrap(errs.Internal, "git: move the branch to the batch commit", err)
 	}
 	return next, nil
+}
+
+// localCommits lists remote..h oldest first, each marked when it is a
+// hand-edit commit; linear is false when one of them is a merge or the
+// first one does not sit on remote.
+func (b *Backend) localCommits(ctx context.Context, remote, h string) ([]localCommit, bool, error) {
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"log", "--reverse", "--topo-order",
+		"--format=%H%x00%P%x00%(trailers:key=" + handEditKey + ",valueonly,separator=%x2C)%x1e", h, "^" + remote}})
+	if err != nil {
+		return nil, false, errs.Wrap(errs.Internal, "git: list the commits of the batch", err)
+	}
+	base, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-parse", "--verify", remote + "^{commit}"}})
+	if err != nil {
+		return nil, false, errs.Wrap(errs.Internal, "git: read the remote tip of the batch", err)
+	}
+	var list []localCommit
+	linear, prev := true, trimmed(base)
+	for rec := range strings.SplitSeq(string(out), "\x1e") {
+		f := strings.SplitN(strings.TrimLeft(rec, "\n"), "\x00", 3)
+		if len(f) != 3 || f[0] == "" {
+			continue
+		}
+		parents := strings.Fields(f[1])
+		if len(parents) != 1 || parents[0] != prev {
+			linear = false
+		}
+		prev = f[0]
+		list = append(list, localCommit{id: f[0], hand: strings.TrimSpace(f[2]) != ""})
+	}
+	return list, linear, nil
 }
 
 // batchMessage names the rows a batch carries: the subject counts them
@@ -525,6 +642,11 @@ func (b *Backend) Compact(ctx context.Context, req CompactRequest) (CompactResul
 		if err := b.compactSync(ctx, req.Squash); err != nil {
 			return CompactResult{}, err
 		}
+	} else {
+		// the plan counts what the real run would see: the remote's commits
+		// merged into lore's own clone (a fetch, never a push; offline, the
+		// plan is the local clone's)
+		_, _ = b.syncClone(ctx, SyncOptions{NoPush: true})
 	}
 	lock, err := b.root.Lock(ctx)
 	if err != nil {
@@ -600,10 +722,11 @@ func (b *Backend) compactLocked(ctx context.Context, req CompactRequest) (Compac
 	if err != nil {
 		return CompactResult{}, err
 	}
-	res.Backup = backupRefNS + "compact-" + strconv.Itoa(res.FromEpoch) + "-" + h[:12]
+	res.Backup = compactBackupPrefix + strconv.Itoa(res.FromEpoch) + "-" + h[:12]
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"update-ref", res.Backup, h}}); err != nil {
 		return CompactResult{}, errs.Wrap(errs.Internal, "git: keep a backup of the old history", err)
 	}
+	pruneRefs(ctx, b.git, b.work, compactBackupPrefix, CompactBackupsKept) // bounded (backupprune.go)
 	if err := b.forcePush(ctx, tip, remote); err != nil {
 		return CompactResult{}, err
 	}
@@ -747,7 +870,10 @@ func (b *Backend) forcePush(ctx context.Context, tip, expect string) error {
 	case !found:
 		return errs.New(errs.Offline, "the store became unreachable before the compacted history was pushed; nothing was changed").
 			WithHint("run the compaction again when the store is reachable")
-	case flag == flagForced || flag == flagFastForward || flag == flagUpToDate:
+	case flag == flagUpToDate:
+		return nil
+	case flag == flagForced || flag == flagFastForward:
+		b.recordPush(tip, true)
 		return nil
 	case strings.Contains(summary, leaseLost) || slices.ContainsFunc(lostRaceReasons, func(r string) bool { return strings.Contains(summary, r) }):
 		return errs.New(errs.Contended, "another clone pushed while the compaction ran; nothing was changed").

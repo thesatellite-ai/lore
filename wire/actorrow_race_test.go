@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 
@@ -140,11 +141,11 @@ func TestConcurrentFirstWriteOneActorRow(t *testing.T) {
 			}
 		}
 		dir := filepath.FromSlash(fileuri.LocalPath(kb))
-		actors, rerr := os.ReadDir(filepath.Join(dir, ".lore", "data", schema.TableActors))
+		actors, rerr := os.ReadDir(filepath.Join(dir, rowfs.StoreDataDir, schema.TableActors))
 		if rerr != nil || len(actors) != 1 || actors[0].Name() != who.String()+".json" {
 			t.Fatalf("round %d: actor rows = %v, %v; want exactly %s.json", round, actors, rerr, who)
 		}
-		mems, merr := os.ReadDir(filepath.Join(dir, ".lore", "data", schema.TableMemories))
+		mems, merr := os.ReadDir(filepath.Join(dir, rowfs.StoreDataDir, schema.TableMemories))
 		if merr != nil || len(mems) != len(apps) {
 			t.Fatalf("round %d: memories = %v, %v; want %d", round, mems, merr, len(apps))
 		}

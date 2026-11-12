@@ -78,6 +78,7 @@ Flags:
       --key string      human:<your email> (with --org: your email in that org, TEAM-029)
       --name string     with --org: display name
       --org string      set your identity inside this org entry of ~/.lore/config.yaml
+      --yes             answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -88,7 +89,7 @@ Link this repo to an internal project in the org's store
 
 ```text
 Usage:
-  lore org link <org>
+  lore org link [org]
 
 Examples:
   # link to an internal project
@@ -128,6 +129,7 @@ Examples:
 Flags:
       --clear   forget the choice for this project
       --json    print the result (or the error) as JSON
+      --yes     answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -150,6 +152,7 @@ Flags:
       --commit           confirm writing the committed .lore/org.yaml
       --json             print the result (or the error) as JSON
       --project string   the internal project folder (optional)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -195,6 +198,7 @@ Examples:
   lore actor register --kind agent --label agent-frontend --owner @alice
 
 Flags:
+      --confirm          v0.1.17 spelling: refused, use --yes
       --db string        v0.1.17 lore.db path: not used by this command (refused)
       --json             print the result (or the error) as JSON
       --kind string      human (default) or agent
@@ -202,6 +206,7 @@ Flags:
       --owner string     with --kind agent: the owning human as @handle (default: you)
       --project string   accepted for v0.1.17 scripts; a row id already names its project
       --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -219,10 +224,12 @@ Examples:
   lore actor deactivate @carol
 
 Flags:
+      --confirm          v0.1.17 spelling: refused, use --yes
       --db string        v0.1.17 lore.db path: not used by this command (refused)
       --json             print the result (or the error) as JSON
       --project string   accepted for v0.1.17 scripts; a row id already names its project
       --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -359,7 +366,7 @@ Flags:
 ### `lore store open`
 
 <!-- help: store open -->
-Check out a store branch for browsing (detached, under ~/.lore/worktrees)
+Print the store's own clone of a branch to browse (~/.lore/stores/<owner>/<repo>, or <repo>@<branch>), fetched first
 
 ```text
 Usage:
@@ -488,6 +495,7 @@ Examples:
 Flags:
       --dry-run   print what would happen, change nothing
       --json      print the result (or the error) as JSON
+      --yes       answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -508,6 +516,7 @@ Examples:
 
 Flags:
       --json   print the result (or the error) as JSON
+      --yes    answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -517,8 +526,8 @@ Someone deleted `refs/lore/live` on the server. From then on every live write, `
 ```console
 # alice, in billing
 $ git push -q origin :refs/lore/live && git ls-remote origin
-601d2850ffd0	HEAD
-601d2850ffd0	refs/heads/main
+9b40ce71af28	HEAD
+9b40ce71af28	refs/heads/main
 $ lore task add 'close the books for Q1'
 ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it (your local copy is kept as refs/lore-backup/live/20261102T100020)
   hint: run `lore live restore` to put your live rows back on the remote
@@ -534,14 +543,15 @@ $ lore doctor | grep 'remote live ref'
 $ lore live restore
 ✓ restored refs/lore/live: 3 rows (left out 0 already landed or purged)
 $ git ls-remote origin refs/lore/live
-86dbae476bd6	refs/lore/live
+05513aa29b78	refs/lore/live
 $ lore task add 'close the books for Q1'
-✓ tsk_162d…9666 — close the books for Q1 [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
+✓ tsk_54fe…28f2 — close the books for Q1 [medium]
+lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 $ lore task list
-○ tsk_7a67…9504 send the March invoices [medium]
-○ tsk_2ad3…f891 chase the unpaid February invoice [medium]
-○ tsk_162d…9666 close the books for Q1 [medium]
+○ tsk_2ad3…f891 send the March invoices [medium]
+○ tsk_162d…9666 chase the unpaid February invoice [medium]
+○ tsk_54fe…28f2 close the books for Q1 [medium]
 ```
 <!-- /example -->
 
@@ -564,6 +574,7 @@ Flags:
       --confirm   required: purge removes rows from live for good
       --dry-run   show what would be purged; write nothing
       --json      print the result (or the error) as JSON
+      --yes       answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -592,6 +603,7 @@ Flags:
       --json             print the result (or the error) as JSON
       --kind string      only rows of this kind (tasks, rules, …)
       --mission string   only the mission and its tasks
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -786,6 +798,7 @@ Flags:
       --scopes                   with --report: one row per generated file per tool, plus the Codex and Claude Code chain sums
       --target stringArray       tool profile name or pointer file to wire (repeatable, comma-separated; default: the repo's tool files, else AGENTS.md)
       --trend                    bytes per render over the last 14 days, growth per day and when LORE.md reaches its budget; writes nothing
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1057,12 +1070,14 @@ Examples:
   lore task merged tsk_<id>
 
 Flags:
+      --confirm          v0.1.17 spelling: refused, use --yes
       --db string        v0.1.17 lore.db path: not used by this command (refused)
       --from string      the source of the id: repo | <org> | <org>/<folder> (also --store)
       --json             print the result (or the error) as JSON
       --project string   accepted for v0.1.17 scripts; a row id already names its project
       --read-only        refuse writes (also LORE_READ_ONLY=1)
       --repo string      scope to a specific repo (mount_name or rep_id)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1206,6 +1221,7 @@ Flags:
       --owner string     the owning person (@handle); default: you
       --session string   session hook: the tool's own session id
       --tool string      session hook: the tool's slug (claude_code, codex, …); records details only
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1223,6 +1239,7 @@ Examples:
   lore task claim tsk_<id> --owns src/routes/invite/
 
 Flags:
+      --confirm            v0.1.17 spelling: refused, use --yes
       --coordinate         take a coordinator lease on a parent with open sub-tasks (TASK 6.9)
       --db string          v0.1.17 lore.db path: not used by this command (refused)
       --from string        the source of the id: repo | <org> | <org>/<folder> (also --store)
@@ -1231,6 +1248,7 @@ Flags:
       --project string     accepted for v0.1.17 scripts; a row id already names its project
       --read-only          refuse writes (also LORE_READ_ONLY=1)
       --strict             refuse instead of warning when --owns overlaps another claim
+      --yes                answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1248,6 +1266,7 @@ Examples:
   lore task next --mission msn_<id> --why --dry-run
 
 Flags:
+      --confirm            v0.1.17 spelling: refused, use --yes
       --db string          v0.1.17 lore.db path: not used by this command (refused)
       --dry-run            rank and explain without claiming (nothing written)
       --json               print the result (or the error) as JSON
@@ -1258,6 +1277,7 @@ Flags:
       --repo string        only tasks of this repo (a repo name of the group)
       --role string        plan role (e.g. coordinator)
       --why                explain the urgency score term by term
+      --yes                answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1275,11 +1295,13 @@ Examples:
   lore task heartbeat tsk_<id>
 
 Flags:
+      --confirm          v0.1.17 spelling: refused, use --yes
       --daemon           keep renewing until the claim ends or the parent exits
       --db string        v0.1.17 lore.db path: not used by this command (refused)
       --json             print the result (or the error) as JSON
       --project string   accepted for v0.1.17 scripts; a row id already names its project
       --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1297,11 +1319,13 @@ Examples:
   lore task release tsk_<id>
 
 Flags:
+      --confirm          v0.1.17 spelling: refused, use --yes
       --db string        v0.1.17 lore.db path: not used by this command (refused)
       --from string      the source of the id: repo | <org> | <org>/<folder> (also --store)
       --json             print the result (or the error) as JSON
       --project string   accepted for v0.1.17 scripts; a row id already names its project
       --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1319,6 +1343,7 @@ Examples:
   lore task note tsk_<id> "route + loader done, form next"
 
 Flags:
+      --confirm          v0.1.17 spelling: refused, use --yes
       --db string        v0.1.17 lore.db path: not used by this command (refused)
       --everywhere       with --to me: file the note under everywhere/ (loads in every repo)
       --force-org        write even though LORE_ORG or lore org use disagrees with a store link
@@ -1327,6 +1352,7 @@ Flags:
       --project string   accepted for v0.1.17 scripts; a row id already names its project
       --read-only        refuse writes (also LORE_READ_ONLY=1)
       --to string        where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1344,11 +1370,13 @@ Examples:
   lore task revoke tsk_<id>
 
 Flags:
+      --confirm          v0.1.17 spelling: refused, use --yes
       --db string        v0.1.17 lore.db path: not used by this command (refused)
       --from string      the source of the id: repo | <org> | <org>/<folder> (also --store)
       --json             print the result (or the error) as JSON
       --project string   accepted for v0.1.17 scripts; a row id already names its project
       --read-only        refuse writes (also LORE_READ_ONLY=1)
+      --yes              answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1397,6 +1425,7 @@ Examples:
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
       --json          print the result (or the error) as JSON
+      --yes           answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1416,6 +1445,7 @@ Examples:
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
       --json          print the result (or the error) as JSON
+      --yes           answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1438,6 +1468,7 @@ Flags:
       --json           print the result (or the error) as JSON
       --on string      project (the project's signals ref, the default) or machine
       --ttl duration   how long the hold lasts (default: lease.ttl)
+      --yes            answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1456,6 +1487,7 @@ Examples:
 
 Flags:
       --json   print the result (or the error) as JSON
+      --yes    answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1547,7 +1579,7 @@ Whether a row is live (seen by everyone at once, whatever branch they are on) de
 
 ## Config keys
 
-All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates it and names every problem). Keys under `live`, `lease`, `agents` and `merge_check` may also be set inside one `orgs[]` entry to override the top level for that org. A team can suggest org defaults in its store's `<org_folder>/.lore/lore-org.yaml`; for `defaults.client_repos` the store's value wins over a looser personal one.
+All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates it and names every problem). Keys under `live`, `lease`, `agents` and `merge_check` may also be set inside one `orgs[]` entry to override the top level for that org. A team can suggest org defaults in its store's `<org_folder>/lore-org.yaml`; for `defaults.client_repos` the store's value wins over a looser personal one.
 
 <!-- ds:block id=team-config-defaults-amp24fsn -->
 <!-- ds:block id=team-live-kinds-88j26q7s -->
@@ -1560,6 +1592,7 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `orgs[].stores[].url` | — | a store repo (must hold `lore-store.yaml`) |
 | `orgs[].stores[].branch` | `main` | the store branch this entry uses; no `/`. Not the store's default branch = a staging entry |
 | `orgs[].stores[].org_folder` | — | on exactly one store: the folder with the roster, teams and company rules (`.` = the store root) |
+| `orgs[].stores[].name` | the url's repo name without `.git` | the store's short name in store list, output, store arguments and `<store>/<folder>` targets; two stores of one org may not share one |
 | `orgs[].own` | — | URL patterns of the org's own repos (`*` one path segment, `**` any depth) |
 | `orgs[].repos` | — | URL patterns of client repos |
 | `orgs[].defaults.client_repos.<kind>` | tasks, memories and other kinds: the linked project | where a row goes in a client repo without `--to`: `repo`, `<org>` or `<org>/<folder>`; rules and decisions by an agent or without a terminal always need `--to` |
@@ -1581,6 +1614,7 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `repo_orgs.<project-id>` | — | written by `lore org use`: this machine's org choice for one project |
 | `link_index.max_age` | `1h` | how old a cached link index may be when the store cannot be read |
 | `untrusted_hosts` | — | hostname patterns of client-owned machines; `lore doctor` warns when stores are configured there |
+| `access` | — | this machine's way to canonical store urls: items of `url` (the prefix shared config uses) and `via` (yours, such as an ssh alias), applied per git call as `-c url.<via>.insteadOf=<url>` |
 
 ## Error codes and exit statuses
 

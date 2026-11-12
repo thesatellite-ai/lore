@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -101,6 +102,50 @@ func TestCleanFolder(t *testing.T) {
 	}
 }
 
+// TestStoreDirReserved (D-ad): _store, where a store keeps its root
+// folder's rows, can never be a folder (no segment may start with _), and
+// the refusal says so with the reserved names.
+func TestStoreDirReserved(t *testing.T) {
+	t.Parallel()
+	for _, bad := range []string{StoreDataDir, "_drafts", "team/_store"} {
+		_, err := CleanFolder(bad)
+		var e *errs.Error
+		if !errors.As(err, &e) || e.Code != errs.BadPath {
+			t.Fatalf("CleanFolder(%q): err = %v, want E_BAD_PATH", bad, err)
+		}
+		if !strings.Contains(e.Hint, StoreDataDir+"/ holds the store's own rows") || !strings.Contains(e.Hint, "tasks") {
+			t.Errorf("CleanFolder(%q): hint %q does not name _store/ and the reserved names", bad, e.Hint)
+		}
+	}
+}
+
+// TestFolderNamesNotTables (D-d): no folder segment may be a table name —
+// inside a store a folder's rows sit at <folder>/<table>/<id>.json, so a
+// folder called "tasks" could not be told from a table folder. The refusal
+// is E_BAD_PATH naming the segment, the reserved names and a next step.
+func TestFolderNamesNotTables(t *testing.T) {
+	t.Parallel()
+	for _, bad := range []string{"tasks", "memories", "team/tasks", "rules/web", "a/b/teams"} {
+		_, err := CleanFolder(bad)
+		if !errs.Has(err, errs.BadPath) {
+			t.Fatalf("CleanFolder(%q): err = %v, want E_BAD_PATH", bad, err)
+		}
+		env := errs.EnvelopeOf(err).Error
+		if !strings.Contains(env.Message, "the name of a table") || !strings.Contains(env.Hint, "pick another name") || !strings.Contains(env.Hint, "memories, ") {
+			t.Errorf("CleanFolder(%q) = %q / %q: want the cause, the reserved list and the next step", bad, env.Message, env.Hint)
+		}
+	}
+	names := ReservedFolderNames()
+	if !slices.IsSorted(names) || !slices.Contains(names, "tasks") || !slices.Contains(names, "rules") || slices.Contains(names, "org") {
+		t.Fatalf("reserved names %v: want every table name, sorted, and no plain folder name", names)
+	}
+	for _, ok := range []string{"tasks-notes", "my_tasks", "org", "team/web"} {
+		if _, err := CleanFolder(ok); err != nil {
+			t.Errorf("CleanFolder(%q): %v", ok, err)
+		}
+	}
+}
+
 func TestParseRowPath(t *testing.T) {
 	t.Parallel()
 	id := newID(t)
@@ -125,15 +170,18 @@ func TestBytesOnDisk(t *testing.T) {
 	b := g.row(newID(t), "org row", hlc.HLC{})
 	applied := apply(t, root, store.Change{Row: a})
 	apply(t, org, store.Change{Row: b})
-	if want := ".lore/data/" + RowPath(memories, a.ID); applied.Paths[0] != want {
+	if want := StoreDataDir + "/" + RowPath(memories, a.ID); applied.Paths[0] != want {
 		t.Fatalf("path %q, want %q", applied.Paths[0], want)
 	}
-	disk, err := os.ReadFile(filepath.Join(r.Dir(), ".lore", "data", "memories", a.ID.String()+".json"))
+	disk, err := os.ReadFile(filepath.Join(r.Dir(), StoreDataDir, "memories", a.ID.String()+".json"))
 	if err != nil || !bytes.Equal(disk, a.Doc) {
 		t.Fatalf("file on disk differs from the document: %v", err)
 	}
-	if _, err = os.Stat(filepath.Join(r.Dir(), "org", ".lore", "data", "memories", b.ID.String()+".json")); err != nil {
+	if _, err = os.Stat(filepath.Join(r.Dir(), "org", "memories", b.ID.String()+".json")); err != nil {
 		t.Fatalf("org row not under org/: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(r.Dir(), LoreDir)); err == nil {
+		t.Fatal("a store write made a .lore folder")
 	}
 	if _, err = root.Get(memories, b.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("org row visible in the root folder: %v", err)
@@ -237,13 +285,10 @@ func TestSymlinksRefused(t *testing.T) {
 
 	t.Run("data folder", func(t *testing.T) {
 		r := openRoot(t)
-		if err := os.MkdirAll(filepath.Join(r.Dir(), LoreDir), 0o750); err != nil {
+		if err := os.Symlink(outside, filepath.Join(r.Dir(), FolderOrg)); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Symlink(outside, filepath.Join(r.Dir(), LoreDir, DataDir)); err != nil {
-			t.Fatal(err)
-		}
-		f := folder(t, r, FolderRoot)
+		f := folder(t, r, FolderOrg)
 		if _, err := f.Apply(context.Background(), []store.Change{{Row: g.row(newID(t), "x", hlc.HLC{})}}); !ErrSymlink(err) {
 			t.Fatalf("write through a linked data folder: %v", err)
 		}
@@ -381,9 +426,21 @@ func TestMissingIsNotADelete(t *testing.T) {
 	}
 }
 
+// TestControlAndStrayFiles: a data folder's control files, OS clutter and
+// in-flight tmp files are never rows nor problems; a bad row file is a
+// problem in both layouts. A code repo's .lore/data is lore's alone, so a
+// stray file or folder there is a problem too; a store folder also holds
+// the folders below it and a person's own files, so only its table
+// folders are read and the rest is left alone.
 func TestControlAndStrayFiles(t *testing.T) {
 	t.Parallel()
-	r, g, ctx := openRoot(t), newGen(t), context.Background()
+	for _, l := range []Layout{LayoutStore, LayoutRepo} {
+		t.Run(l.String(), func(t *testing.T) { testControlAndStrayFiles(t, l) })
+	}
+}
+
+func testControlAndStrayFiles(t *testing.T, l Layout) {
+	r, g, ctx := openRoot(t, WithLayout(l)), newGen(t), context.Background()
 	f := folder(t, r, FolderRoot)
 	a := g.row(newID(t), "a", hlc.HLC{})
 	apply(t, f, store.Change{Row: a})
@@ -420,13 +477,17 @@ func TestControlAndStrayFiles(t *testing.T) {
 	for _, p := range problems {
 		got[p.Path] = true
 	}
-	for _, want := range []string{"stray.txt", "memories/notes.json", RowPath(memories, other), "Bad-Table"} {
-		if !got[want] {
-			t.Errorf("problem %q not reported (got %v)", want, problems)
+	want := []string{"memories/notes.json", RowPath(memories, other)}
+	if l == LayoutRepo {
+		want = append(want, "stray.txt", "Bad-Table")
+	}
+	for _, w := range want {
+		if !got[w] {
+			t.Errorf("problem %q not reported (got %v)", w, problems)
 		}
 	}
-	if len(problems) != 4 {
-		t.Errorf("problems = %v, want exactly 4", problems)
+	if len(problems) != len(want) {
+		t.Errorf("problems = %v, want exactly %v", problems, want)
 	}
 }
 
@@ -470,8 +531,26 @@ func TestLock(t *testing.T) {
 	if err := again.Release(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, LoreDir, LockFileName)); err != nil {
-		t.Fatalf("lock file not at .lore/lock: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, StoreStateDir, LockFileName)); err != nil {
+		t.Fatalf("a store's lock file not at .lore-state/lock: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, LoreDir)); err == nil {
+		t.Fatal("a store's lock made a .lore folder")
+	}
+	repo := t.TempDir()
+	rr, err := Open(repo, WithLayout(LayoutRepo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := rr.Lock(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, LoreDir, LockFileName)); err != nil {
+		t.Fatalf("a code repo's lock file not at .lore/lock: %v", err)
 	}
 }
 
@@ -493,6 +572,15 @@ func TestMarker(t *testing.T) {
 	want.Version = MarkerVersion
 	if err != nil || got != want {
 		t.Fatalf("round trip: %+v %v, want %+v", got, err, want)
+	}
+	// D-e: a new store names no org folder; only the store that holds the
+	// org folder does (written with its lore-org.yaml).
+	nm, err := NewMarker(time.Now())
+	if err != nil || nm.OrgFolder != "" {
+		t.Fatalf("NewMarker org folder %q %v, want none", nm.OrgFolder, err)
+	}
+	if enc, eerr := nm.Encode(); eerr != nil || strings.Contains(string(enc), "org_folder") {
+		t.Fatalf("new marker:\n%s %v", enc, eerr)
 	}
 	old, err := ParseMarker([]byte("lore_store: 1\ncreated: 2026-01-02\n"))
 	if err != nil || old.Visibility != VisibilityInternal || !old.ID.IsZero() {

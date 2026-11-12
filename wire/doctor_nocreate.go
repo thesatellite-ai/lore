@@ -90,8 +90,8 @@ func noCreateOf(ctx context.Context) *noCreateRun {
 	return v
 }
 
-// loreFolderName is the project folder a repo open creates (RepoCacheFile
-// lives in it).
+// loreFolderName is the project folder a repo open creates (rows, lock
+// and local state live in it; the cache is under the lore home).
 const loreFolderName = ".lore"
 
 // loreFolderAt reports whether top already holds a .lore/ folder. Any

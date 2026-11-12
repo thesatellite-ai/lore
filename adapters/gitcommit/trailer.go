@@ -55,6 +55,25 @@ func LoreVersionTrailer(v string) string {
 	return TrailerLoreVersion + ": " + v
 }
 
+// TrailerAgent names the agent a commit lore made was made through. A
+// clone's git identity (author and committer) is always the person the
+// agent acts for, never "<person> via <tool> <…@lore.invalid>" (owner bug
+// 12): the agent is only in this trailer.
+const TrailerAgent = "Lore-Agent"
+
+// AgentTrailer is "Lore-Agent: <label> (<stable key>)", "" when key is
+// empty (a person writing, not an agent).
+func AgentTrailer(label, key string) string {
+	label, key = strings.TrimSpace(label), strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+	if label == "" {
+		return TrailerAgent + ": " + key
+	}
+	return TrailerAgent + ": " + label + " (" + key + ")"
+}
+
 // OwnCommitTrailers are the trailers of one commit lore makes itself:
 // Lore-Version always, Lore-CI-Run in CI.
 func OwnCommitTrailers(version string, getenv func(string) string) []string {

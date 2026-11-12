@@ -158,6 +158,8 @@ type SSHAlias struct {
 	HostName       string   `json:"host_name"`
 	IdentityFiles  []string `json:"identity_files,omitempty"`
 	IdentitiesOnly bool     `json:"identities_only"`
+	// User is the first User a matching block sets ("" when none does).
+	User string `json:"user,omitempty"`
 }
 
 // ReadSSHConfig parses <home>/.ssh/config. A missing file is an empty
@@ -295,6 +297,9 @@ func (c SSHConfig) Effective(name string) SSHAlias {
 		}
 		if out.HostName == "" {
 			out.HostName = h.HostName
+		}
+		if out.User == "" {
+			out.User = h.User
 		}
 		if only == "" {
 			only = h.IdentitiesOnly

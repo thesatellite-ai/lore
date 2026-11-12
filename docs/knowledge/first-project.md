@@ -48,6 +48,8 @@ Run `lore init` once in the top folder of the repo. It creates a `.lore/data` fo
 ```console
 # alice, in website
 $ lore init --non-interactive --name=website
+lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; lore's merge rules in ~/work/website/.gitattributes; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
 lore initialized
     project_id: prj_7a67…9504
     name:       website
@@ -87,6 +89,7 @@ A *rule* is a hard "always" or "never", like a sign on the office wall. Give the
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push'
+lore: wrote ~/work/website/.lore/data/rules/rul_162d…9666.json
 ✓ rul_162d…9666
   scope: [master] severity: must
 $ lore rule list

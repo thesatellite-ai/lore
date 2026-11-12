@@ -21,7 +21,7 @@ func (a *App) RepoPurged(ctx context.Context) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := rowfs.Open(top, a.opts.rowfsOptions()...)
+	root, err := rowfs.Open(top, a.opts.repoRowfsOptions()...)
 	if err != nil {
 		return nil, err
 	}

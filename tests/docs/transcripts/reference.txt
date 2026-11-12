@@ -36,13 +36,16 @@ ERROR: [E_READ_ONLY] command requires write access but read-only mode is active
 
 ### exit status
 alice (work/website)$ lore task add 'Write the release notes'
-✓ tsk_7a670ae8548ed05bf57ad29ad0759504 — Write the release notes [medium]
-lore live: (live, pushed)
-alice (work/website)$ lore task add 'Send the release notes to the client' --after tsk_7a670ae8548ed05bf57ad29ad0759504
-✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Send the release notes to the client [medium]
-lore live: (live, pushed)
-alice (work/website)$ lore task edit tsk_7a670ae8548ed05bf57ad29ad0759504 --after tsk_2ad3618e878ebbf527d34d446ef4f891; echo "exit status: $?"
-ERROR: [E_CYCLE] dependency cycle: tsk_7a670ae8548ed05bf57ad29ad0759504 → tsk_2ad3618e878ebbf527d34d446ef4f891 → tsk_7a670ae8548ed05bf57ad29ad0759504
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Write the release notes [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+alice (work/website)$ lore task add 'Send the release notes to the client' --after tsk_2ad3618e878ebbf527d34d446ef4f891
+lore: wrote ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — Send the release notes to the client [medium]
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
+alice (work/website)$ lore task edit tsk_2ad3618e878ebbf527d34d446ef4f891 --after tsk_162df51b7f78b785c97c26b41ea89666; echo "exit status: $?"
+ERROR: [E_CYCLE] dependency cycle: tsk_2ad3618e878ebbf527d34d446ef4f891 → tsk_162df51b7f78b785c97c26b41ea89666 → tsk_2ad3618e878ebbf527d34d446ef4f891
   hint: drop one --after edge; a task may not wait on itself, even through others
 exit status: 19
 
@@ -153,7 +156,7 @@ ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
   hint: cd into a git checkout, or run git init here first
 (exit 19)
 alice$ cd work/website && lore rule list
-rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 
 ### db config
 alice (work/website)$ lore config list
@@ -167,18 +170,20 @@ not set
 alice$ cat .lore/config.yaml
 default_branch: develop
 alice (work/website)$ lore task add 'Fix the footer links'
-✓ tsk_54fe984c9b495744c0217776765a28f2 — Fix the footer links [medium]
-lore live: (live, pushed)
-alice (work/website)$ lore task done tsk_54fe984c9b495744c0217776765a28f2
-✓ tsk_54fe984c9b495744c0217776765a28f2 done
+lore: wrote ~/work/website/.lore/data/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 — Fix the footer links [medium]
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+alice (work/website)$ lore task done tsk_05e99e22e9e86e96fe4daa7777994603
+lore: wrote ~/work/website/.lore/data/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed)
-lore live: landed on develop (601d285); leaves live once develop is fetched
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
+lore live: landed on develop (dfd8dc8); leaves live once develop is fetched
 lore live: landed on develop; this checkout is on main, so those rows show here after you merge develop
 alice (work/website)$ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
-601d285 lore: land 2 rows (_root)
-86dbae4 lore: init
-86dbae4 lore: init
+dfd8dc8 lore: land 2 rows (_root)
+cf563f3 lore: init
+cf563f3 lore: init
 
 ### no work
 alice (work/landing)$ lore task next
@@ -200,9 +205,13 @@ orgs:
       - {url: "git@github.com:other/notes", org_folder: org}
     repos: [github.com/client/*]
 alice (work/website)$ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
-✓ created store agency (sto_05e99e22e9e86e96fe4daa7777994603) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Alice <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+✓ created store agency (sto_c0f3c11a5724b0cfd74b256190d9b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes
-✓ created store freelance (sto_c0f3c11a5724b0cfd74b256190d9b5b8) at git@github.com:other/notes; recorded in .lore/stores.yaml; commit it to share
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/other/notes (.git/config) to Alice <alice@example.com>: your identity in org freelance (orgs.freelance.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: set up the store clone ~/.lore/stores/other/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+✓ created store freelance (sto_76bd560aff0771fab8457dbfa9823f10) at git@github.com:other/notes; recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ cat .lore/stores.yaml
 stores:
     - name: agency
@@ -216,7 +225,7 @@ org        refused  (the patterns of 2 org entries match this repo (agency, free
 identity   (not resolved: the org is refused above)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
-project    prj_76bd560aff0771fab8457dbfa9823f10
+project    prj_d4314eba822f1bf5908b2b8ded5f313a
 remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   not set
@@ -224,19 +233,20 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 alice (work/website)$ lore org use agency
-✓ prj_76bd560aff0771fab8457dbfa9823f10 uses org agency on this machine
+✓ prj_d4314eba822f1bf5908b2b8ded5f313a uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 alice$ grep -A4 repo_orgs ~/.lore/config.yaml
 repo_orgs:
-  prj_76bd560aff0771fab8457dbfa9823f10:
+  prj_d4314eba822f1bf5908b2b8ded5f313a:
     org: agency
     remotes:
       - github.com/client/website
 alice (work/website)$ lore org link agency --project client --yes
+lore: pushed store github.com/agency/notes: commit df3a55c to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
-  link: project prj_76bd560aff0771fab8457dbfa9823f10 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
-✓ github.com/client/website (prj_76bd560aff0771fab8457dbfa9823f10) linked to github.com/agency/notes client/ (created; pushed)
+  link: project prj_d4314eba822f1bf5908b2b8ded5f313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
+✓ github.com/client/website (prj_d4314eba822f1bf5908b2b8ded5f313a) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 
 ### force org
@@ -249,7 +259,11 @@ ERROR: [E_INVALID_INPUT] unknown flag: --force-org
   hint: lore memory add --help lists its flags
 (exit 20)
 alice (work/website)$ lore memory add --to freelance --body 'The client pays invoices in 30 days'
-✓ mem_d4314eba822f1bf5908b2b8ded5f313a [freelance]
+lore: pushed store freelance: commit 6d00426 to branch main
+lore: pushed store agency: commit 34ee210 to branch main
+lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes/_store (store agency)
+lore: wrote 2 row file(s) in ~/.lore/stores/other/notes/_store (store freelance)
+✓ mem_b4f4765e593d51fd1352985e8af3a5b0 [freelance]
   scope: [master]
 
 ### project id
@@ -258,9 +272,9 @@ ERROR: [E_UNSUPPORTED] LORE_DB is not supported by this command: its rows are ro
   hint: unset LORE_DB and run the command inside the repository (or name a store with --store / --to)
 (exit 23)
 alice (work/website)$ lore project list
-prj_76bd560aff0771fab8457dbfa9823f10  website  https://github.com/client/website
+prj_d4314eba822f1bf5908b2b8ded5f313a  website  https://github.com/client/website
 alice (work/website)$ LORE_PROJECT_ID=$(lore project list | cut -d' ' -f1) lore rule list
-rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push
+rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
 alice (work/website)$ LORE_PROJECT_ID=prj_website lore rule list
 ERROR: [E_NOT_FOUND] rule: no project "prj_website"
   hint: run `lore project list` to see the projects
@@ -328,37 +342,43 @@ ERROR: [E_SQL_REFUSED] only one SELECT, WITH or VALUES statement (optionally aft
 
 ### has dependents
 alice (work/website)$ lore project list
-prj_76bd560aff0771fab8457dbfa9823f10  website  https://github.com/client/website
+prj_d4314eba822f1bf5908b2b8ded5f313a  website  https://github.com/client/website
 alice (work/website)$ lore project delete $(lore project list | cut -d' ' -f1) --yes
-ERROR: [E_HAS_DEPENDENTS] project delete: mem_d4314eba822f1bf5908b2b8ded5f313a (memories.project_id), rul_162df51b7f78b785c97c26b41ea89666 (rules.project_id), tsk_7a670ae8548ed05bf57ad29ad0759504 (tasks.project_id), tsk_2ad3618e878ebbf527d34d446ef4f891 (tasks.project_id), tsk_54fe984c9b495744c0217776765a28f2 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_76bd560aff0771fab8457dbfa9823f10
+ERROR: [E_HAS_DEPENDENTS] project delete: mem_b4f4765e593d51fd1352985e8af3a5b0 (memories.project_id), rul_54fe984c9b495744c0217776765a28f2 (rules.project_id), tsk_2ad3618e878ebbf527d34d446ef4f891 (tasks.project_id), tsk_162df51b7f78b785c97c26b41ea89666 (tasks.project_id), tsk_05e99e22e9e86e96fe4daa7777994603 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_d4314eba822f1bf5908b2b8ded5f313a
   hint: delete or move the pointing rows first
 (exit 23)
 
 ### ref syntax
 alice (work/website)$ lore vars set host staging.client.example
-Added var_…c1c9 host = staging.client.example (text) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_28f8d32584b2db54ffb146bede5b03df.json
+Added var_…03df host = staging.client.example (text) in repo (not shareable: clients see ${var:<name>}).
 alice (work/website)$ lore vars set base_url 'https://${var:host?port=8080}/'
 ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for ${var:…}
 (exit 20)
 
 ### meta unknown
 alice (work/website)$ lore rule add --body 'Keep the footer links in one list'
-✓ rul_b4f4765e593d51fd1352985e8af3a5b0
+lore: wrote ~/work/website/.lore/data/rules/rul_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
+✓ rul_4c590afb2a0cc7ae1b97b7e4e62d6c38
   scope: [master] severity: must
-alice (work/website)$ lore meta unset rul_b4f4765e593d51fd1352985e8af3a5b0 client_tier
-ERROR: [E_META_UNKNOWN] rul_b4f4765e593d51fd1352985e8af3a5b0 has no metadata key "client_tier"; it has no metadata
-  hint: lore meta show rul_b4f4765e593d51fd1352985e8af3a5b0 lists its keys
+alice (work/website)$ lore meta unset rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 client_tier
+ERROR: [E_META_UNKNOWN] rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 has no metadata key "client_tier"; it has no metadata
+  hint: lore meta show rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 lists its keys
 (exit 20)
 
 ### personal everywhere
 alice (work/website)$ lore store init me
-✓ created store me (sto_28f8d32584b2db54ffb146bede5b03df) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to alice <alice@agency.example> (it was alice@agency.example, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/other/notes (.git/config) to alice <alice@agency.example> (it was alice@example.com, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+✓ created store me (sto_3b6283bc4392c556bbae5f094246e913) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 alice (work/website)$ lore memory add --to me --everywhere --body 'I write short commit messages'
 ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 alice (work/website)$ lore memory add --to me --body 'I write short commit messages'
-✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [me]
+lore: wrote ~/.lore/stores/me/_store/actors/act_f147dd95f1aaf742dd4f5214843a5139.json (store me)
+lore: wrote ~/.lore/stores/me/_store/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json (store me)
+✓ mem_2537f9b2f7de77bfe5ca958860216bbb [me]
   scope: [master]
 alice (work/landing)$ lore memory list
-mem_4c590afb2a0cc7ae1b97b7e4e62d6c38  I write short commit messages  [me]
+mem_2537f9b2f7de77bfe5ca958860216bbb  I write short commit messages  [me]

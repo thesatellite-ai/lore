@@ -43,9 +43,9 @@ func storeFetchedBefore(home, raw string) bool {
 	if err != nil {
 		return false
 	}
-	base, err := gitbackend.CloneBase(home, rem)
+	dir, _, err := gitbackend.CloneDirFor(home, rem, "")
 	if err != nil {
 		return false
 	}
-	return gitbackend.FetchedOnce(base + bareCloneExt)
+	return gitbackend.FetchedOnce(dir)
 }

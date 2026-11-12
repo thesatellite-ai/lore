@@ -13,7 +13,7 @@ import (
 
 // TestFetchStamp (RES 3.6, P2-RES-7, later 548): a repo-mode backend and a
 // missing or unreadable stamp report Known false; a successful fetch
-// writes lore-fetched-at in the clone's git common dir with the clock's
+// writes .git/lore/fetch-stamp in the clone with the clock's
 // time (UTC, second precision) and Fresh reports it with the worktree's
 // HEAD; a failed fetch (remote gone) keeps the older stamp.
 func TestFetchStamp(t *testing.T) {
@@ -38,13 +38,12 @@ func TestFetchStamp(t *testing.T) {
 	if head := gitT(t, b.work, "rev-parse", "HEAD"); f.Commit != head {
 		t.Fatalf("commit %q, want HEAD %q", f.Commit, head)
 	}
-	common := gitT(t, b.work, "rev-parse", "--git-common-dir")
-	if !filepath.IsAbs(common) {
-		common = filepath.Join(b.work, common)
-	}
-	stamp := filepath.Join(common, fetchStampFile)
+	stamp := filepath.Join(b.work, ".git", StateDirName, FetchStampFile)
 	if _, err = os.Stat(stamp); err != nil {
-		t.Fatalf("stamp not in the git common dir: %v", err)
+		t.Fatalf("stamp not in the clone's .git/lore: %v", err)
+	}
+	if !FetchedOnce(b.work) {
+		t.Fatal("FetchedOnce is false after a fetch")
 	}
 
 	// a failed fetch keeps the older stamp

@@ -1,7 +1,7 @@
 package onboard
 
 // localstore.go — the personal store step's "A local folder" choice is the
-// person's one personal store `me` (~/.lore/stores/me), shared by all
+// person's one personal store `me` (~/.lore/stores/_me), shared by all
 // their setups: the personal: block of config.yaml is global, not per
 // setup (decided 2026-11-09, journey joiner). Keeping one job's notes from
 // another is what that job's org stores are for. The page names the setups
@@ -14,8 +14,8 @@ import (
 )
 
 // IsDefaultLocalStore reports whether url is the default local personal
-// store folder (a file url ending in /stores/me; "local" is the page's
-// choice for it).
+// store folder (a file url ending in /stores/_me, or /stores/me where
+// lore kept it before 2026-11-12; "local" is the page's choice for it).
 func IsDefaultLocalStore(url string) bool {
 	url = strings.TrimSpace(url)
 	if url == PersonalStoreLocal {
@@ -26,7 +26,8 @@ func IsDefaultLocalStore(url string) bool {
 		return false
 	}
 	p := path.Clean(u.Path)
-	return path.Base(p) == "me" && path.Base(path.Dir(p)) == "stores"
+	b := path.Base(p)
+	return (b == LocalStoreFolder || b == LegacyLocalStoreFolder) && path.Base(path.Dir(p)) == "stores"
 }
 
 // SetupsOnLocalStore names the live setups other than except whose

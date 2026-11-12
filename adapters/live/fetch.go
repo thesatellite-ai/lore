@@ -3,9 +3,6 @@ package live
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"time"
 )
@@ -66,17 +63,6 @@ func FetchStamp(stateDir string) time.Time {
 		return time.Time{}
 	}
 	return t
-}
-
-// ClearFetchStamp removes the fetch stamp, so the next FetchCached
-// command fetches (and so pushes) whatever its age; a missing stamp is no
-// error.
-func ClearFetchStamp(stateDir string) error {
-	err := os.Remove(filepath.Join(stateDir, fetchStampFile))
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	return nil
 }
 
 // WriteFetchStamp records a fetch at now.

@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,16 +65,33 @@ func GitignoreHook(workDir string) Hook {
 			if root == "" {
 				return
 			}
-			if readRun(run) {
+			if readRun(run) || !wire.HoldsLoreData(root) {
+				// A repo that holds no lore data (a client repo linked to
+				// a store folder; plain files sweep 3.8) never gets a
+				// tracked file changed, by any command, doctor --fix
+				// included: lore's local files go to .git/info/exclude.
 				// A read never edits the tracked .gitignore: the cache and
 				// lock it creates stay out of git status through the
 				// clone's own exclude file, and `lore doctor` names the
 				// missing lines and `lore doctor --fix` (best effort: a
-				// read never fails for it).
-				_, _ = wire.EnsureLocalExclude(ctx, root)
+				// read never fails for it). The first time, it says so.
+				// A read creates no file in the repo (its cache is under
+				// the lore home, owner item 16): it hides only what is
+				// already there, so with nothing there it writes nothing.
+				ensure := wire.EnsureLocalExclude
+				if readRun(run) {
+					ensure = wire.EnsureLocalExcludeExisting
+				}
+				if added, _ := ensure(ctx, root); len(added) > 0 {
+					announceExclude(os.Stderr, root, added)
+				}
 				return
 			}
-			if e := EnsureGitignore(ctx, root); e != nil {
+			added, e := ensureGitignore(ctx, root)
+			if len(added) > 0 {
+				announceGitignore(os.Stderr, root, added)
+			}
+			if e != nil {
 				err = errs.Wrap(errs.Internal, "update "+gitignoreName, e)
 				var refused *errs.Error
 				if errors.As(e, &refused) && refused.Code == errs.Refused {
@@ -105,7 +124,13 @@ func NeedsGitignore(run *Run) bool {
 // EnsureGitignore appends to root/.gitignore every GitignoreLines entry it
 // does not list and git does not already ignore. Nothing missing: the file
 // is not touched.
-func EnsureGitignore(ctx context.Context, root string) (err error) {
+func EnsureGitignore(ctx context.Context, root string) error {
+	_, err := ensureGitignore(ctx, root)
+	return err
+}
+
+// ensureGitignore is EnsureGitignore that also returns the lines it added.
+func ensureGitignore(ctx context.Context, root string) (added []string, err error) {
 	// Read and append through an os.Root on the repository: a cloned
 	// repository can commit .gitignore as a symlink, and a link leading
 	// out of the repository is refused instead of appended to (the
@@ -113,7 +138,7 @@ func EnsureGitignore(ctx context.Context, root string) (err error) {
 	// repository still works.
 	dir, err := os.OpenRoot(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { err = errors.Join(err, dir.Close()) }()
 	existing := ""
@@ -125,15 +150,15 @@ func EnsureGitignore(ctx context.Context, root string) (err error) {
 	// what teammates get.
 	add := wire.MissingGitignoreLines(ctx, root)
 	if len(add) == 0 {
-		return nil
+		return nil, nil
 	}
 	f, err := dir.OpenFile(gitignoreName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, gitignoreMode)
 	if err != nil {
 		if fi, lerr := os.Lstat(filepath.Join(root, gitignoreName)); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
-			return errs.Wrap(errs.Refused, "refusing to append to "+gitignoreName+": it is a symbolic link out of the repository", err).
+			return nil, errs.Wrap(errs.Refused, "refusing to append to "+gitignoreName+": it is a symbolic link out of the repository", err).
 				WithHint("replace " + filepath.Join(root, gitignoreName) + " with a regular file (or a link inside the repository)")
 		}
-		return err
+		return nil, err
 	}
 	defer func() { err = errors.Join(err, f.Close()) }()
 	var b strings.Builder
@@ -144,8 +169,10 @@ func EnsureGitignore(ctx context.Context, root string) (err error) {
 	for _, line := range add {
 		b.WriteString(line + "\n")
 	}
-	_, err = f.WriteString(b.String())
-	return err
+	if _, err = f.WriteString(b.String()); err != nil {
+		return nil, err
+	}
+	return add, nil
 }
 
 // gitProgram is the git executable looked up on PATH.
@@ -177,8 +204,12 @@ func gitOutput(ctx context.Context, args ...string) ([]byte, error) {
 
 // projectRoot is the lore project dir works in: the nearest folder at or
 // above dir that holds .lore/, never above the git top; "" when there is
-// none (not a git checkout, or no lore project on the way up).
+// none (not a git checkout, a lore store's checkout, or no lore project on
+// the way up).
 func projectRoot(ctx context.Context, dir string) string {
+	if _, _, inStore := rowfs.StoreTop(dir); inStore {
+		return "" // a lore store's checkout is never a code repo (STORE layout 1.5)
+	}
 	out, err := gitOutput(ctx, "-C", dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return ""
@@ -203,4 +234,23 @@ func projectRoot(ctx context.Context, dir string) string {
 		}
 		d = filepath.Dir(d)
 	}
+}
+
+// announceGitignore says which lines a write added to the repo's
+// .gitignore (no hidden magic, plain files sweep 3.2): the first write
+// in a repo names the file, the lines and that it is to be committed.
+func announceGitignore(w io.Writer, root string, added []string) {
+	_, _ = fmt.Fprintf(w, "lore: added %s to %s so lore's local files stay out of git; commit it (`lore where` lists everything lore keeps here)\n",
+		strings.Join(added, ", "), filepath.Join(root, gitignoreName))
+}
+
+// announceExclude says which lines a read added to the clone's own
+// exclude file (never committed; the tracked .gitignore is a write's).
+func announceExclude(w io.Writer, root string, added []string) {
+	why := "a read never edits " + filepath.Join(root, gitignoreName) + ": `lore doctor --fix` adds them there"
+	if !wire.HoldsLoreData(root) {
+		why = "this repo holds no lore data, so lore changes none of its tracked files"
+	}
+	_, _ = fmt.Fprintf(w, "lore: added %s to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; %s (`lore where` lists everything lore keeps here)\n",
+		strings.Join(added, ", "), why)
 }

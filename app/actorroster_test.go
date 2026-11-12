@@ -80,7 +80,7 @@ func rowWriters(t *testing.T, data string) (writers, roster map[string]bool) {
 func TestEveryWriterInTheStoreRoster(t *testing.T) {
 	t.Parallel()
 	w, dir, meDir := rosterWorld(t)
-	for name, data := range map[string]string{"repo": filepath.Join(dir, ".lore", "data"), "me": filepath.Join(meDir, ".lore", "data")} {
+	for name, data := range map[string]string{"repo": filepath.Join(dir, ".lore", "data"), "me": meDir} {
 		writers, roster := rowWriters(t, data)
 		if len(writers) < 2 {
 			t.Fatalf("%s: want the person and the agent among the writers, got %v", name, writers)
@@ -115,7 +115,7 @@ func TestEveryWriterInTheStoreRoster(t *testing.T) {
 	if person == "" {
 		t.Fatalf("no person in %s", out)
 	}
-	if err := os.Remove(filepath.Join(meDir, ".lore", "data", "actors", person+".json")); err != nil {
+	if err := os.Remove(filepath.Join(meDir, "_store", "actors", person+".json")); err != nil {
 		t.Fatal(err)
 	}
 	_, out = w.loreOut(t, dir, "doctor")
@@ -124,7 +124,7 @@ func TestEveryWriterInTheStoreRoster(t *testing.T) {
 		t.Fatalf("doctor must name the writer me's roster lacks:\n%s", out)
 	}
 	_, out = w.loreOut(t, dir, "doctor", "--fix")
-	if _, err := os.Stat(filepath.Join(meDir, ".lore", "data", "actors", person+".json")); err != nil {
+	if _, err := os.Stat(filepath.Join(meDir, "_store", "actors", person+".json")); err != nil {
 		t.Fatalf("doctor --fix did not write the actor row back: %v\n%s", err, out)
 	}
 	if _, out = w.loreOut(t, dir, "doctor"); strings.Contains(out, "an actor its roster does not hold") {
@@ -190,7 +190,7 @@ func TestActorListStores(t *testing.T) {
 func TestActorKeyBackfill(t *testing.T) {
 	t.Parallel()
 	w, dir, meDir := rosterWorld(t)
-	actors := filepath.Join(meDir, ".lore", "data", "actors")
+	actors := filepath.Join(meDir, "_store", "actors")
 	ents, err := os.ReadDir(actors)
 	if err != nil {
 		t.Fatal(err)

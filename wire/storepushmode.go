@@ -23,7 +23,6 @@ package wire
 
 import (
 	"context"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +40,8 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// Stamp files beside a store clone's worktree (never inside it).
+// Stamp files in a store clone's .git/lore folder (git.StateDirOf: never
+// in the files a person browses, never committed).
 const (
 	pushStampFile    = "push_stamp"
 	compactStampFile = "compact_stamp"
@@ -71,17 +71,29 @@ func personalPushRaw(home string) (storepush.Raw, error) {
 }
 
 // orgOfClone names the configured org one of whose stores the clone at
-// dir (a git backend's worktree) belongs to; "" when none.
+// dir (a git backend's clone folder) belongs to; "" when none. The clone
+// belongs to a store when it is that store's clone folder on this machine
+// (git.CloneDirOf, pinned branch included) or its origin names the store.
 func orgOfClone(home, dir string) string {
 	cfg, _, err := orgcfg.LoadConfig(home)
 	if err != nil || cfg == nil || dir == "" {
 		return ""
 	}
-	parent := filepath.Dir(dir) // <base> or <base>@<branch>
+	dir = filepath.Clean(dir)
+	origin, oerr := gitbackend.RemoteOfRaw(gitbackend.OriginAt(dir))
 	for _, o := range cfg.Orgs {
 		for _, s := range o.Stores {
-			if base := cloneBaseOf(home, s.URL); base != "" && (parent == base || strings.HasPrefix(parent, base+branchCloneSep)) {
+			r, rerr := gitbackend.RemoteOfRaw(s.URL)
+			if rerr != nil {
+				continue
+			}
+			if oerr == nil && origin.Norm == r.Norm {
 				return o.Name
+			}
+			for _, b := range []string{"", s.Branch} {
+				if d, _, derr := gitbackend.CloneDirFor(home, r, b); derr == nil && filepath.Clean(d) == dir {
+					return o.Name
+				}
 			}
 		}
 	}
@@ -106,28 +118,6 @@ func orgOfURL(home, raw string) string {
 		}
 	}
 	return ""
-}
-
-// cloneBaseOf is the clone base lore keeps for a store url ("" when the
-// url is not a git store); a pinned branch adds "@<branch>" to it.
-func cloneBaseOf(home, raw string) string {
-	canon, err := gitbackend.CanonicalURL(raw)
-	if err != nil {
-		return ""
-	}
-	u, err := url.Parse(canon)
-	if err != nil {
-		return ""
-	}
-	r, err := gitbackend.RemoteOf(u)
-	if err != nil {
-		return ""
-	}
-	base, err := gitbackend.CloneBase(home, r)
-	if err != nil {
-		return ""
-	}
-	return base
 }
 
 // isOrgAdmin reports whether this machine holds an admin setup of org.
@@ -183,17 +173,18 @@ func gitOf(b store.Backend) *gitbackend.Backend {
 }
 
 // otherClonesUnpushed lists unpushed work in this machine's other clones
-// of the store whose worktree is work (its branch clones and the v0.1.17
-// link clone; the clone at work itself is brought level by its own sync).
-// A clone that cannot be listed counts as holding work (fail closed).
+// of the store whose clone folder is work (its branch clones; the clone at
+// work itself is brought level by its own sync). The store is the one the
+// clone's origin names. A clone that cannot be listed counts as holding
+// work (fail closed).
 func otherClonesUnpushed(ctx context.Context, home, work string) []string {
-	rel, err := filepath.Rel(filepath.Join(home, gitbackend.ClonesDir), filepath.Dir(work))
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return []string{"the clone " + work + " is not under " + filepath.Join(home, gitbackend.ClonesDir)}
+	origin := gitbackend.OriginAt(work)
+	r, err := gitbackend.RemoteOfRaw(origin)
+	if err != nil {
+		return []string{"the clone " + work + " has no store url as its origin, so its other clones cannot be found"}
 	}
-	norm, _, _ := strings.Cut(filepath.ToSlash(rel), branchCloneSep)
 	c := &standaloneClones{home: home}
-	clones, err := c.clonesOf("https://"+norm, norm)
+	clones, err := c.clonesOf(origin, r.Norm)
 	if err != nil {
 		return []string{"the clones of the store cannot be listed: " + err.Error()}
 	}
@@ -274,7 +265,13 @@ func orgFileOrg(dir string) string {
 		folders = append([]string{m.OrgFolder}, folders...)
 	}
 	for _, f := range folders {
-		b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(f), rowfs.LoreDir, orgcfg.OrgFile))
+		var b []byte
+		var err error
+		for _, p := range orgcfg.OrgFilePaths(f) {
+			if b, err = os.ReadFile(filepath.Join(dir, filepath.FromSlash(p))); err == nil {
+				break
+			}
+		}
 		if err != nil {
 			continue
 		}

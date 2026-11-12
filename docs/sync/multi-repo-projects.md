@@ -45,8 +45,10 @@ Give each part a short mount name. `--origin` records where its code lives and `
 $ lore repo list
 rep_2ad3…f891  website  https://github.com/client/website
 $ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
 ✓ repo shop registered (rep_54fe…28f2)
 $ lore repo add help --display-name 'Help pages'
+lore: wrote ~/work/website/.lore/data/repos/rep_05e9…4603.json
 ✓ repo help registered (rep_05e9…4603)
 $ lore repo list
 rep_2ad3…f891  website  https://github.com/client/website
@@ -65,9 +67,11 @@ Without `--repo`, a rule applies to the whole project. With `--repo shop` it app
 ```console
 # alice, in website
 $ lore rule add --body 'Run the tests before you push.'
+lore: wrote ~/work/website/.lore/data/rules/rul_c0f3…b5b8.json
 ✓ rul_c0f3…b5b8
   scope: [master] severity: must
 $ lore rule add --repo shop --body 'Buttons are blue.'
+lore: wrote ~/work/website/.lore/data/rules/rul_76bd…3f10.json
 ✓ rul_76bd…3f10
   scope: [repo:shop] severity: must
 $ lore rule list
@@ -97,12 +101,14 @@ ERROR: [E_INVALID_ID] repo: "help" is not a repo id (rep_…)
   hint: copy the whole id (its prefix, an underscore and 32 hex characters) from the list or show output of that kind
 (exit 20)
 $ lore repo archive rep_05e9…4603
+lore: wrote ~/work/website/.lore/data/repos/rep_05e9…4603.json
 ✓ help archived
 $ lore repo list
 rep_2ad3…f891  website  https://github.com/client/website
 rep_54fe…28f2  shop  https://github.com/client/website
 rep_05e9…4603  help [archived]
 $ lore repo unarchive rep_05e9…4603
+lore: wrote ~/work/website/.lore/data/repos/rep_05e9…4603.json
 ✓ help unarchived
 $ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 ```
@@ -119,9 +125,12 @@ Every repo row keeps the address it was confirmed at, and lore uses it to recogn
 # alice, in website
 $ git remote set-url origin https://github.com/client/website-v2 && git push -q origin main
 $ lore repo set-url git@github.com:client/website-v2.git
+lore: wrote ~/work/website/.lore/data/repos/rep_2ad3…f891.json
+lore: wrote ~/work/website/.lore/data/projects/prj_7a67…9504.json
 ✓ rep_2ad3…f891 primary address is now github.com/client/website-v2 (was github.com/client/website until today)
   .lore/data/_meta.json updated; commit it with your next push
 $ lore repo set-url https://gitlab.com/client/website-v2 --mirror
+lore: wrote ~/work/website/.lore/data/repos/rep_2ad3…f891.json
 ✓ rep_2ad3…f891 mirror address added: gitlab.com/client/website-v2
   .lore/data/_meta.json updated; commit it with your next push
 $ lore repo list
@@ -147,11 +156,13 @@ $ git clone -q https://github.com/alice/website website-fork
 
 # alice, in website-fork
 $ git remote add upstream https://github.com/client/website-v2 && git remote set-url origin https://github.com/client/website-v2 && lore repo fork
+lore repo fork: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ERROR: [E_INVALID_INPUT] this clone's remote github.com/client/website-v2 is a confirmed address of rep_2ad3…f891, so it is that repo, not a fork
   hint: change the remote to the fork's address first (git remote set-url origin <fork url>)
 (exit 20)
 $ git remote set-url origin https://github.com/alice/website
 $ lore repo fork
+lore: wrote ~/work/website-fork/.lore/data/repos/rep_b4f4…a5b0.json
 ✓ new repo rep_b4f4…a5b0 (website-fork), forked_from rep_2ad3…f891
 ✓ .lore/data/_meta.json updated; commit it with your next push
 $ lore repo list

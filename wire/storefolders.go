@@ -22,10 +22,7 @@ package wire
 
 import (
 	"context"
-	"errors"
-	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -61,7 +58,7 @@ func (a *App) setupOnlyHere(ctx context.Context, name string) bool {
 	if !opsstores.RunsWithoutRepo(name) {
 		return false
 	}
-	return !insideWorkTree(ctx, a.opts.RepoDir) || !opssetup.LoreRepoAt(a.opts.RepoDir)
+	return !insideWorkTree(ctx, a.opts.RepoDir) || inStore(a.opts.RepoDir) || !opssetup.LoreRepoAt(a.opts.RepoDir)
 }
 
 // refuseStoresFileOutsideRepo answers a store command that edits a repo's
@@ -70,7 +67,15 @@ func (a *App) setupOnlyHere(ctx context.Context, name string) bool {
 // asks: it used to be the CFG7 question "this is a client repo" (no repo
 // counts as a client, fail closed), which named a repo that is not there.
 func (a *App) refuseStoresFileOutsideRepo(ctx context.Context, name string) error {
-	if (!opsstores.WritesStoresFile(name) && name != opsstores.OpRemove) || insideWorkTree(ctx, a.opts.RepoDir) {
+	if !opsstores.WritesStoresFile(name) && name != opsstores.OpRemove {
+		return nil
+	}
+	if sc, in := storeHere(a.opts.RepoDir); in {
+		verb := "store " + strings.ReplaceAll(strings.TrimPrefix(name, storeOpPrefix), "_", "-")
+		return errs.New(errs.NotAStore, verb+": it edits a repo's .lore/stores.yaml, and "+sc.top+" is a lore store, not a code repo").
+			WithHint("cd into the code repo that should attach the store")
+	}
+	if insideWorkTree(ctx, a.opts.RepoDir) {
 		return nil
 	}
 	verb := "store " + strings.ReplaceAll(strings.TrimPrefix(name, storeOpPrefix), "_", "-")
@@ -219,16 +224,20 @@ func (a *App) orgStoreAt(ctx context.Context, verb, raw string) (attach.Store, e
 }
 
 // storeLabel is the name a store command's output gives the store name
-// resolved to: the org's name for team (the org's team store), else name
-// as given. An org store named by its url keeps the url: an org may have
-// several stores, and the output must name the one written to, not the
-// org (owner report 2026-11-11: "created folder x in <org>" for the
-// org's second store).
-func storeLabel(name string, src attach.Store) string {
+// resolved to: the org's name for team (the org's team store), an org
+// store named by its url gets its short name (storeshortname.go), else
+// name as given. An org store is never labelled by its org's name alone:
+// an org may have several stores, and the output must name the one
+// written to, not the org (owner report 2026-11-11: "created folder x in
+// <org>" for the org's second store).
+func (a *App) storeLabel(name string, src attach.Store) string {
 	if name == attach.ReservedTeam {
 		if org, _, _ := strings.Cut(string(src.Name), targetSep); org != "" {
 			return org
 		}
+	}
+	if opsstores.IsStoreURL(name) {
+		return a.shortLabel(name)
 	}
 	return name
 }
@@ -246,7 +255,7 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 		if err != nil {
 			return opsstores.FolderListOut{}, err
 		}
-		stores = append(stores, one{storeLabel(name, src), src})
+		stores = append(stores, one{a.storeLabel(name, src), src})
 	} else {
 		seen := map[string]bool{}
 		used := map[string]bool{}
@@ -292,7 +301,8 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 // repo linked to a folder of the org's second store printed "store <org>
 // folders:" for that store, because its entry is named after the org, and
 // so printed the org's block twice). The org's name for the store holding
-// the org folder, the url for the org's other stores, else the entry's
+// the org folder, the short name for the org's other stores (brief 3.6;
+// the url when no configured org lists it), else the entry's
 // own name (a stores.yaml store, me).
 func (a *App) placeLabel(name, url string, orgOf, orgOfAny map[string]string) string {
 	if sk, ok := storeKey(url); ok {
@@ -300,11 +310,11 @@ func (a *App) placeLabel(name, url string, orgOf, orgOfAny map[string]string) st
 			return org
 		}
 		if orgOfAny[sk] != "" {
-			return a.urlLabel(url)
+			return a.shortLabel(url)
 		}
 	}
 	if opsstores.IsStoreURL(name) {
-		return a.urlLabel(name)
+		return a.shortLabel(name)
 	}
 	label, _, _ := strings.Cut(name, targetSep)
 	return label
@@ -360,62 +370,39 @@ func placeKey(raw, branch string) string {
 	return k + "#" + branch
 }
 
-// storeFolders lists the folders of the store at dir: every folder holding
-// .lore/data/_meta.json, the root excepted, sorted by name.
+// storeFolders lists the folders of the store at dir (rowfs.StoreFolders:
+// every folder holding a _meta.json, the root excepted), sorted by name.
 func storeFolders(ctx context.Context, dir string) ([]opsstores.FolderRow, error) {
 	isGit := false
 	if fi, err := os.Stat(filepath.Join(dir, gitDirName)); err == nil {
 		isGit = fi.IsDir() || fi.Mode().IsRegular() // a worktree's .git is a file
 	}
-	var out []opsstores.FolderRow
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, werr error) error {
-		if werr != nil {
-			return werr
-		}
-		if !d.IsDir() {
-			return nil
-		}
-		switch d.Name() {
-		case gitDirName:
-			return filepath.SkipDir
-		case rowfs.LoreDir:
-			rel, rerr := filepath.Rel(dir, filepath.Dir(p))
-			if rerr != nil || rel == "." {
-				return filepath.SkipDir
-			}
-			row, ok, rerr := folderRow(ctx, dir, filepath.ToSlash(rel), isGit)
-			if rerr != nil {
-				return rerr
-			}
-			if ok {
-				out = append(out, row)
-			}
-			return filepath.SkipDir
-		}
-		return nil
-	})
+	names, err := rowfs.StoreFolders(dir)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "read the store's folders", err)
 	}
-	slices.SortFunc(out, func(x, y opsstores.FolderRow) int { return strings.Compare(x.Folder, y.Folder) })
+	out := make([]opsstores.FolderRow, 0, len(names))
+	for _, name := range names {
+		row, ok, rerr := folderRow(ctx, dir, name, isGit)
+		if rerr != nil {
+			return nil, errs.Wrap(errs.Internal, "read the store's folders", rerr)
+		}
+		if ok {
+			out = append(out, row)
+		}
+	}
 	return out, nil
 }
 
 // folderRow reads one folder rel of the store at dir; ok is false when it
-// has no _meta.json (a .lore folder that is not a store folder's).
+// is no folder of the store (no _meta.json).
 func folderRow(ctx context.Context, dir, rel string, isGit bool) (opsstores.FolderRow, bool, error) {
 	clean, err := rowfs.CleanFolder(rel)
 	if err != nil {
 		return opsstores.FolderRow{}, false, nil // not a name lore makes: not listed
 	}
-	data := filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(clean)))
-	meta := filepath.Join(data, rowfs.MetaFileName)
-	_, err = os.Stat(meta)
-	if errors.Is(err, fs.ErrNotExist) {
+	if clean == rowfs.FolderRoot || !rowfs.HasStoreFolder(dir, clean) {
 		return opsstores.FolderRow{}, false, nil
-	}
-	if err != nil {
-		return opsstores.FolderRow{}, false, err
 	}
 	r, err := rowfs.Open(dir)
 	if err != nil {
@@ -429,9 +416,10 @@ func folderRow(ctx context.Context, dir, rel string, isGit bool) (opsstores.Fold
 	if err != nil {
 		return opsstores.FolderRow{}, false, err
 	}
-	row := opsstores.FolderRow{Folder: clean, ID: id.String(), Rows: countRowFiles(data)}
+	n, _ := f.RowFileCount() // display only: an unreadable folder counts nothing
+	row := opsstores.FolderRow{Folder: clean, ID: id.String(), Rows: n}
 	if isGit {
-		row.CreatedBy, row.CreatedAt = firstCommit(ctx, dir, path.Join(rowfs.FolderDataPath(clean), rowfs.MetaFileName))
+		row.CreatedBy, row.CreatedAt = firstCommit(ctx, dir, f.Layout().StorePath(clean, rowfs.MetaFileName))
 	}
 	return row, true, nil
 }
@@ -449,22 +437,4 @@ func firstCommit(ctx context.Context, dir, rel string) (by, at string) {
 		at = t.UTC().Format(time.RFC3339)
 	}
 	return by, at
-}
-
-// countRowFiles counts the row files under a folder's data folder: .json
-// files that are not _meta.json, _purged.json or an in-flight write.
-func countRowFiles(data string) int {
-	n := 0
-	_ = filepath.WalkDir(data, func(_ string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // display only: an unreadable part counts nothing
-		}
-		name := d.Name()
-		if d.IsDir() || filepath.Ext(name) != rowfs.RowFileExt || name == rowfs.MetaFileName || name == rowfs.PurgedFileName || strings.HasPrefix(name, ".") {
-			return nil
-		}
-		n++
-		return nil
-	})
-	return n
 }

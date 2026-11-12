@@ -4,8 +4,9 @@ package wire
 //
 //	StoreStatus(entry) → canonical url
 //	  file://  → marker in the folder? ok + its visibility : missing
-//	  git      → clone worktree (<home>/clones/<host>/<repo>[@branch]/work)
-//	             holds the marker? local_copy + visibility : no_local_copy
+//	  git      → the store's clone (<home>/stores/<owner>/<repo>[@branch],
+//	             or an own clone: git.CloneDirFor) holds the marker?
+//	             local_copy + visibility : no_local_copy
 //	No network and no backend open: store list never waits on a remote.
 
 import (
@@ -25,11 +26,10 @@ import (
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
-// cloneWorkDir is the worktree lore owns inside a clone base (spec 6.1).
-const cloneWorkDir = "work"
-
 // localStoreDir is the folder holding e's marker on this machine: the
-// file:// folder, or the git clone's worktree; git=true for a git store.
+// file:// folder, or the git store's clone (its default path, a "~N"
+// collision folder or a person's own clone: git.CloneDirFor); git=true
+// for a git store.
 func (a *App) localStoreDir(e opsstores.Entry) (dir string, isGit bool, err error) {
 	canon, err := canonical(attach.Store{URL: e.URL})
 	if err != nil {
@@ -46,14 +46,11 @@ func (a *App) localStoreDir(e opsstores.Entry) (dir string, isGit bool, err erro
 	if err != nil {
 		return "", true, err
 	}
-	base, err := git.CloneBase(a.opts.Home, r)
+	dir, _, err = git.CloneDirFor(a.opts.Home, r, e.Branch)
 	if err != nil {
 		return "", true, err
 	}
-	if e.Branch != "" {
-		base += "@" + filepath.FromSlash(e.Branch) // git's branchCloneSep (clone.go)
-	}
-	return filepath.Join(base, cloneWorkDir), true, nil
+	return dir, true, nil
 }
 
 // StoreStatus implements opsstores.StatusReader from local reads only.

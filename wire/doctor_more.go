@@ -35,9 +35,20 @@ const (
 // them, so doctor warns while it is set.
 const EnvRemovedSyncAllow = "LORE_SYNC_ALLOW_SECRETS"
 
-// doctorDataDir is a store's row folder relative to the store folder
-// (rowfs: <folder>/.lore/data, the root folder at .lore/data).
-const doctorDataDir = ".lore/data"
+// rowFileRel is the path of a file of src's data folder (rel: "tasks/x.json"),
+// relative to the store's top: the backend's own data path when it has one
+// (a store folder: "<folder>/tasks/x.json"; a folder not moved yet keeps
+// its .lore/data), else by the layout of src (a code repo's .lore/data, a
+// store's folder).
+func rowFileRel(b store.Backend, src store.Source, folder, rel string) string {
+	if dp, ok := concrete(b).(interface{ DataPath() string }); ok {
+		return path.Join(dp.DataPath(), rel)
+	}
+	if src == store.SourceRepo {
+		return rowfs.LayoutRepo.StorePath(rowfs.FolderRoot, rel)
+	}
+	return rowfs.LayoutStore.StorePath(folder, rel)
+}
 
 // DoctorResurrected names every live row file of a purged row an old clone
 // brought back. The engine already hides such a file from every read;
@@ -57,27 +68,27 @@ func (a *App) DoctorResurrected(ctx context.Context) ([]DoctorFinding, error) {
 			folders[si.Name] = si.Folder
 		}
 	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]DoctorFinding, 0, len(res))
 	for _, x := range res {
-		p := path.Join(folders[x.Store], doctorDataDir, rowfs.RowPath(x.Table, x.ID))
+		p := rowFileRel(st.byName[x.Store], x.Store, folders[x.Store], rowfs.RowPath(x.Table, x.ID))
 		out = append(out, DoctorFinding{Check: DoctorCheckResurrected, Level: DoctorWarning, Store: x.Store, Plain: true,
 			Message: "store " + string(x.Store) + ": " + p + " is a live copy of a purged row (an old clone brought it back); lore hides it from every read; remove the file (git rm it and commit)"})
 	}
 	return out, nil
 }
 
-// DoctorCaches integrity-checks every cache file lore keeps: the repo's
-// .lore/lore-cache.db (when a repo resolved) and every *.db under
-// <home>/cache. A damaged file is an error (doctor broken) whose fix is to
+// DoctorCaches integrity-checks every cache file lore keeps: every *.db
+// under <home>/cache (the repo caches included, cache/repo). A damaged file is an error (doctor broken) whose fix is to
 // delete it: a cache is rebuilt from the row files (spec 3). The core also
 // moves a file aside by itself when it cannot open it (cache.go), but one
 // damaged past its first pages opens fine and only quick_check sees it.
 // It never opens the App's state, so it runs even when the open fails.
 func (a *App) DoctorCaches(ctx context.Context) ([]DoctorFinding, error) {
-	var files []string
-	if top, err := a.repoTop(ctx); err == nil && top != "" { // no repo: only the home caches
-		files = append(files, filepath.Join(top, filepath.FromSlash(RepoCacheFile)))
-	}
+	var files []string // the repo's own cache is under <home>/cache/repo (RepoCachePath)
 	if a.opts.Home != "" {
 		_ = filepath.WalkDir(filepath.Join(a.opts.Home, cacheDir), func(p string, d fs.DirEntry, err error) error {
 			if err == nil && !d.IsDir() && strings.HasSuffix(p, cacheExt) {

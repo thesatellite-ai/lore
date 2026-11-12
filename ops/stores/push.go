@@ -177,6 +177,10 @@ type CompactOut struct {
 	FromEpoch int    `json:"from_epoch"`
 	ToEpoch   int    `json:"to_epoch"`
 	Backup    string `json:"backup,omitempty"`
+	// Commit and Branch are where the compacted history was pushed (the
+	// new tip's short id, the store branch); "" for a dry run or nothing.
+	Commit string `json:"commit,omitempty"`
+	Branch string `json:"branch,omitempty"`
 }
 
 // Text prints the compaction.
@@ -188,8 +192,12 @@ func (o CompactOut) Text() string {
 		return fmt.Sprintf("would squash %d commit(s) of %s before %s into one snapshot, keep %d later commit(s) and every one of its %d row file(s); epoch %d → %d\n",
 			o.Squashed, o.Store, o.Before, o.Kept, o.Rows, o.FromEpoch, o.ToEpoch)
 	}
+	pushed := ""
+	if o.Commit != "" {
+		pushed = fmt.Sprintf("  pushed store %s: commit %s to branch %s\n", o.Store, o.Commit, o.Branch)
+	}
 	return fmt.Sprintf("✓ compacted %s: %d commit(s) before %s are one snapshot, %d later commit(s) kept, all %d row file(s) kept; epoch %d → %d (old history kept locally in %s)\n",
-		o.Store, o.Squashed, o.Before, o.Kept, o.Rows, o.FromEpoch, o.ToEpoch, o.Backup)
+		o.Store, o.Squashed, o.Before, o.Kept, o.Rows, o.FromEpoch, o.ToEpoch, o.Backup) + pushed
 }
 
 // DefaultCompactBefore is store.compact's cutoff when neither --before

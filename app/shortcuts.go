@@ -15,6 +15,7 @@ package app
 //	lore commit-show <sha>    ─► commit show (hidden, v0.1.17 spelling)
 //	lore upgrade [--check …]  ─► upgrade run
 //	lore plan apply …         ─► refused, hint: lore mission apply (2.15)
+//	lore where / lore files   ─► where show
 
 import (
 	"errors"
@@ -26,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
+	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opslint "github.com/thesatellite-ai/lore/ops/lint"
@@ -36,6 +38,7 @@ import (
 	opsql "github.com/thesatellite-ai/lore/ops/sql"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
+	opswhere "github.com/thesatellite-ai/lore/ops/where"
 	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 )
 
@@ -79,8 +82,12 @@ func mountShortcuts(root *cobra.Command) {
 	defaultVerb(root, opstrash.Noun, trashListVerb)
 	defaultVerbAt(root, []string{opssync.Noun, opssync.NounTrash}, trashListVerb) // bare `lore sync trash` lists (DELETION_DESIGN 3.10)
 	defaultVerb(root, opsql.Noun, sqlRunVerb)
+	if g := defaultVerb(root, opswhere.Noun, opswhere.ShowVerb); g != nil { // lore where, lore files (plain files sweep 3.2)
+		g.Aliases = append(g.Aliases, opswhere.Alias)
+	}
 	defaultVerb(root, opswhoami.Noun, opswhoami.ShowVerb)          // CLI_REFERENCE 3.8 (P3-ORG-G-3)
 	defaultVerb(root, opsselfupgrade.Noun, opsselfupgrade.RunVerb) // CLI_REFERENCE 3.5 (P3-UPG-1)
+	defaultVerb(root, opsfix.Noun, opsfix.RunVerb)                 // lore fix (D-ak, D-al)
 	defaultVerb(root, opssearch.Noun, searchRunVerb)               // CLI_REFERENCE 2.5 (P3-MISC-1)
 	defaultVerb(root, "why-context", "show")                       // CLI_REFERENCE 2.14 (P3-MISC-3)
 	defaultVerb(root, "setup", "run")                              // CLI_REFERENCE 2.14, 3.18 (P3-MISC-4)

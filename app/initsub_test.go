@@ -351,9 +351,7 @@ func TestMonorepoProjectPerSubfolder(t *testing.T) {
 	t.Run("fresh checkout adopts the sub-project", func(t *testing.T) {
 		billing := filepath.Join(root, "services", "billing")
 		_, pid := metaOf(t, billing)
-		for _, f := range localStateFiles { // what a clone does not carry (all gitignored)
-			_ = os.Remove(filepath.Join(billing, ".lore", f))
-		}
+		forgetLocalState(t, w, billing) // what a clone does not carry
 		out := w.mustRun(t, billing, "init")
 		if !strings.Contains(out, "adopted") || !strings.Contains(out, pid) {
 			t.Fatalf("init in a fresh checkout of a sub-project adopts it (%s):\n%s", pid, out)

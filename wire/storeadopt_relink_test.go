@@ -74,7 +74,7 @@ func TestStoreAdoptRelinksOldSupersedes(t *testing.T) {
 		t.Errorf("the output does not say what it relinked:\n%s", out.Text())
 	}
 	read := func(id string) string {
-		b, rerr := os.ReadFile(filepath.Join(storeDir, "client_r", ".lore", "data", "rules", id+".json"))
+		b, rerr := os.ReadFile(filepath.Join(storeDir, "client_r", "rules", id+".json"))
 		if rerr != nil {
 			t.Fatal(rerr)
 		}
@@ -159,7 +159,7 @@ func TestStoreAdoptMapsActorByKey(t *testing.T) {
 	if !strings.Contains(out.Text(), "actor "+want) {
 		t.Errorf("the output does not name the mapping:\n%s", out.Text())
 	}
-	data := filepath.Join(storeDir, "client_m", ".lore", "data")
+	data := filepath.Join(storeDir, "client_m")
 	if _, err := os.Stat(filepath.Join(data, "actors", mapSecond+".json")); err == nil {
 		t.Error("the second id's actor row was written into the folder")
 	}

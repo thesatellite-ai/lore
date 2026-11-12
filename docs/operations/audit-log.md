@@ -26,6 +26,7 @@ Alice (an agency developer) adds a rule, then reads the log. Each line is: time,
 ```console
 # alice, in website
 $ lore rule add --body 'Never put passwords in the code'
+lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
   scope: [master] severity: must
 $ lore audit log
@@ -78,13 +79,14 @@ A row file under `.lore/data` is the note itself, so changing it by hand is an o
 ```console
 # alice, in website
 $ sed -i 's/Run the tests before you push/Pushing without tests is fine/' .lore/data/rules/*.json && lore rule list
+lore: picked up a hand edit of rules rul_54fe…28f2 (body): checked and stamped with your name and the time in ~/work/website/.lore/data/rules/rul_54fe…28f2.json; commit it with your code
 rul_54fe…28f2 [must/always] Pushing without tests is fine
 rul_7a67…9504 [must/always] Never put passwords in the code
 $ git status --short .lore/data
  M .lore/data/rules/rul_54fe…28f2.json
 ?? .lore/data/rules/rul_7a67…9504.json
 $ lore audit verify
-✓ audit chain intact (7 entries)
+✓ audit chain intact (8 entries)
 $ git restore .lore/data && lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code

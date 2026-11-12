@@ -19,6 +19,9 @@ package wire
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -50,8 +53,14 @@ func markClientRepo(ctx context.Context, root string, res *OrgResolution) {
 	on := strings.TrimSpace(string(cur)) == clientRepoMarkOn
 	switch {
 	case client && !on:
-		_, _ = gitRun{dir: top, args: []string{"config", "--local", ClientRepoGitKey, clientRepoMarkOn}}.output(ctx)
+		if _, err := (gitRun{dir: top, args: []string{"config", "--local", ClientRepoGitKey, clientRepoMarkOn}}).output(ctx); err == nil {
+			// no hidden magic: a key lore sets in a person's git config is
+			// named the first time (plain files sweep 3.2)
+			_, _ = fmt.Fprintln(os.Stderr, "lore: set "+ClientRepoGitKey+"="+clientRepoMarkOn+" in "+filepath.Join(top, ".git", "config")+": this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset "+ClientRepoGitKey+"` removes it)")
+		}
 	case !client && len(strings.TrimSpace(string(cur))) > 0:
-		_, _ = gitRun{dir: top, args: []string{"config", "--local", "--unset-all", ClientRepoGitKey}}.output(ctx)
+		if _, err := (gitRun{dir: top, args: []string{"config", "--local", "--unset-all", ClientRepoGitKey}}).output(ctx); err == nil {
+			_, _ = fmt.Fprintln(os.Stderr, "lore: removed "+ClientRepoGitKey+" from "+filepath.Join(top, ".git", "config")+": this repo is no longer a client repo")
+		}
 	}
 }

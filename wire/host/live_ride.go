@@ -466,33 +466,8 @@ func ensureHookBlock(dir, hook, marker string, lines []string) error {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	start, end := "# >>> "+marker+" >>>", "# <<< "+marker+" <<<"
-	block := start + "\n" + strings.Join(lines, "\n") + "\n" + end + "\n"
 	content := string(cur)
-	next := content
-	if i := strings.Index(content, start); i >= 0 {
-		if j := strings.Index(content[i:], end); j >= 0 {
-			k := i + j + len(end)
-			if k < len(content) && content[k] == '\n' {
-				k++
-			}
-			next = content[:i] + block + content[k:]
-		}
-	}
-	if next == content && !strings.Contains(content, start) {
-		switch {
-		case content == "":
-			next = rideHookShebang + "\n" + block
-		case strings.HasPrefix(content, "#!"):
-			if nl := strings.IndexByte(content, '\n'); nl >= 0 {
-				next = content[:nl+1] + block + content[nl+1:]
-			} else {
-				next = content + "\n" + block
-			}
-		default:
-			next = block + content
-		}
-	}
+	next := hookBlockNext(content, marker, lines)
 	// Under execfile.Do: git may run this hook while another goroutine of
 	// this process forks, and a child holding the write descriptor would
 	// make that run fail with "text file busy".
@@ -560,4 +535,37 @@ func replaceHookFile(root *os.Root, hook string, body []byte) error {
 	}
 	_ = root.Remove(tmp) // best effort: the error that matters is werr
 	return werr
+}
+
+// hookBlockNext is a hook file's content with lore's block for marker
+// holding exactly lines: replaced in place, else put after the shebang
+// (a new file gets one). Equal to content when nothing changes.
+func hookBlockNext(content, marker string, lines []string) string {
+	start, end := "# >>> "+marker+" >>>", "# <<< "+marker+" <<<"
+	block := start + "\n" + strings.Join(lines, "\n") + "\n" + end + "\n"
+	next := content
+	if i := strings.Index(content, start); i >= 0 {
+		if j := strings.Index(content[i:], end); j >= 0 {
+			k := i + j + len(end)
+			if k < len(content) && content[k] == '\n' {
+				k++
+			}
+			next = content[:i] + block + content[k:]
+		}
+	}
+	if next == content && !strings.Contains(content, start) {
+		switch {
+		case content == "":
+			next = rideHookShebang + "\n" + block
+		case strings.HasPrefix(content, "#!"):
+			if nl := strings.IndexByte(content, '\n'); nl >= 0 {
+				next = content[:nl+1] + block + content[nl+1:]
+			} else {
+				next = content + "\n" + block
+			}
+		default:
+			next = block + content
+		}
+	}
+	return next
 }

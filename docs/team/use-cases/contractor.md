@@ -43,25 +43,41 @@ Alice creates the three stores (from a plain folder of hers, `stores`, which att
 ```console
 # alice, in stores
 $ lore store init agency git@github.com:agency/notes --yes && lore store init client git@github.com:agency/notes-client --yes && lore store init client2 git@github.com:agency/notes-client2 --yes
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes-client (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
 ✓ created store client (sto_2ad3…f891) at git@github.com:agency/notes-client; recorded in .lore/stores.yaml; commit it to share
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes-client2 (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
 ✓ created store client2 (sto_162d…9666) at git@github.com:agency/notes-client2; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
 $ lore org link agency --project client --store git@github.com:agency/notes-client --yes
+lore: pushed store github.com/agency/notes-client: commit 601d285 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe…28f2 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
 ✓ github.com/client/website (prj_54fe…28f2) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
-✓ act_05e9…4603 Alice Doe (@alice) registered in agency ./
+lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: pushed store agency/.: commit 86dbae4 to branch main
+lore: pushed store agency/.: commit 9b40ce7 to branch main
+lore: wrote ~/.lore/stores/agency/notes/_store/projects/prj_05e9…4603.json (store agency/.)
+lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_c0f3…b5b8.json (store agency/.)
+✓ act_c0f3…b5b8 Alice Doe (@alice) registered in agency ./
 $ lore memory add --body 'the client staging database is restored every Sunday night'
-✓ mem_c0f3…b5b8 [agency/client]
+lore: pushed store agency: commit 05513aa to branch main
+lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
+lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes-client/client (store agency)
+✓ mem_76bd…3f10 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
   scope: [master]
 $ lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'
-✓ rul_76bd…3f10 [agency/.]
+lore: pushed store agency/.: commit dfd8dc8 to branch main
+lore: wrote ~/.lore/stores/agency/notes/_store/rules/rul_d431…313a.json (store agency/.)
+✓ rul_d431…313a [agency/.]
   scope: [master] severity: must
 ```
 <!-- /example -->
@@ -73,7 +89,7 @@ Bob, in the same client repo, sees the link, the client's note and the company s
 # bob, in website
 $ lore whoami
 org        agency  (matched by: link in github.com/agency/notes-client client/, project id + remote)
-identity   Bob Roe <human:bob@agency.example>   act_d431…313a  @bob  (from: org entry (config.yaml orgs[agency].identity))
+identity   Bob Roe <human:bob@agency.example>   act_b4f4…a5b0  @bob  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
@@ -85,23 +101,26 @@ internal   github.com/agency/notes-client client/
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore actor register
-✓ act_d431…313a Bob Roe (@bob) registered in agency ./
+lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore actor register: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Bob Roe <bob@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore actor register: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+lore: pushed store agency/.: commit cf563f3 to branch main
+lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_b4f4…a5b0.json (store agency/.)
+✓ act_b4f4…a5b0 Bob Roe (@bob) registered in agency ./
 $ lore memory list
-mem_c0f3…b5b8  the client staging database is restored every Sunday night  [agency/client]
+mem_76bd…3f10  the client staging database is restored every Sunday night  [agency/client]
 
 # bob, in ~
 $ lore store show
 git@github.com:agency/notes
   entries   agency   branches main
-  clone     ~/.lore/clones-v017/github.com/agency/notes.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
+  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:00:35Z
 git@github.com:agency/notes-client
   entries   agency   branches main
-  clone     ~/.lore/clones-v017/github.com/agency/notes-client.git (bare)   default branch main   last fetch 2026-11-02T10:00:30Z
-$ ls ~/.lore/clones/github.com/agency
+  clone     ~/.lore/stores/agency/notes-client   default branch main   last fetch 2026-11-02T10:00:30Z
+$ ls ~/.lore/stores/agency
 notes
 notes-client
-notes-client.git
-notes.git
 ```
 <!-- /example -->
 

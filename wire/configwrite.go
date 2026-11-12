@@ -46,6 +46,7 @@ func writeMachineConfigFile(path string, b []byte, mode os.FileMode) error {
 	}
 	if filepath.Base(path) == ConfigFile {
 		b = migrateTopIdentityOnWrite(b)
+		defer writeHomeReadme(filepath.Dir(path)) // the home's map beside its config
 	}
 	return writeFileAtomic(end, b, mode)
 }

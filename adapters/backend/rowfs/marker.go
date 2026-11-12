@@ -20,10 +20,22 @@ import (
 // presence is what makes a folder or repo a lore store.
 const MarkerFile = "lore-store.yaml"
 
-// MarkerVersion is the marker format written by this binary (v0.1.17 wrote
-// 1 without an id; a marker without an id is read with a zero ID and the
-// migration assigns one).
-const MarkerVersion = 2
+// MarkerVersion is the marker format written by this binary. v0.1.17 wrote
+// 1 without an id (a marker without an id is read with a zero ID and the
+// migration assigns one); 0.1.18 stores before the plain-files round wrote
+// 2, their rows under <folder>/.lore/data; 3 declares the plain store
+// layout (rows right under each folder, org/lore-org.yaml), the root
+// folder's tables at the store's top; 4 moves those into _store/ (D-ad,
+// StoreDataDir). A lore that knows only an earlier version refuses a newer
+// store with E_OLD_LORE ("written by a newer lore") instead of writing
+// rows into the old place (brief 1.6); this lore moves an earlier store's
+// files itself (git.Backend.FlattenLayout).
+const MarkerVersion = 4
+
+// MarkerFirstStores is the first marker version of a 0.1.18 store: below
+// it the store is a v0.1.17 one (its own roster code, the O6 format
+// question, live rows of v0.1.17).
+const MarkerFirstStores = 2
 
 // maxMarkerSize caps lore-store.yaml: a few lines; anything bigger is not
 // a marker.
@@ -73,15 +85,17 @@ type Marker struct {
 const MarkerDateLayout = "2006-01-02"
 
 // NewMarker is the marker `lore store init` writes: a new sto_ id,
-// visibility internal, created now (UTC date), the org folder suggestion
-// FolderOrg. Every first write to a store with no marker writes this one,
-// so a store is never left holding lore files without its marker.
+// visibility internal, created now (UTC date), and no org_folder: only the
+// store that really holds the org folder names it (D-e; written with that
+// folder's lore-org.yaml, orgcfg WriteOrgFile). Every first write to a
+// store with no marker writes this one, so a store is never left holding
+// lore files without its marker.
 func NewMarker(now time.Time) (Marker, error) {
 	id, err := ids.New[ids.Store]()
 	if err != nil {
 		return Marker{}, errs.Wrap(errs.Internal, "rowfs: new store id", err)
 	}
-	return Marker{Version: MarkerVersion, ID: id, Visibility: VisibilityInternal, Created: now.UTC().Format(MarkerDateLayout), OrgFolder: FolderOrg}, nil
+	return Marker{Version: MarkerVersion, ID: id, Visibility: VisibilityInternal, Created: now.UTC().Format(MarkerDateLayout)}, nil
 }
 
 // markerWire is the YAML shape; field names are a file format.

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -36,7 +37,7 @@ var _ opsstores.Manager = (*App)(nil)
 // Names wire picks for stores it creates.
 const (
 	// personalStoresDir holds the default personal store
-	// (<home>/stores/me, owner note O7).
+	// (<home>/stores/_me, owner note O7 and item 17: personalFolderDir).
 	personalStoresDir = "stores"
 	// markerDateLayout is the `created:` date of a new marker.
 	markerDateLayout = "2006-01-02"
@@ -63,12 +64,16 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 		return opsstores.InitOut{}, opsstores.MissingInitURL(in.Name) // BATCH2 #9, also for callers past the op
 	}
 	if raw == "" {
-		dir := filepath.Join(a.opts.Home, personalStoresDir, opsstores.PersonalName)
-		raw = fileuri.URL(dir, "")
+		raw = fileuri.URL(personalFolderDir(a.opts.Home), "")
 	}
 	raw, err := cleanFileURL(raw)
 	if err != nil {
 		return opsstores.InitOut{}, err
+	}
+	if in.Name != opsstores.PersonalName { // brief 3.7: stores.yaml and the org entry are shared
+		if raw, err = a.canonicalShared(ctx, raw); err != nil {
+			return opsstores.InitOut{}, err
+		}
 	}
 	if u, perr := url.Parse(raw); perr == nil && u.Scheme == folder.Scheme {
 		if err = refuseBareRepoFolder(in.Name, fileuri.OSPath(u.Path)); err != nil {
@@ -128,7 +133,7 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 	if err != nil {
 		return opsstores.InitOut{}, errs.Wrap(errs.Internal, "store init: new store id", err)
 	}
-	m := rowfs.Marker{ID: id, Visibility: vis, Created: a.opts.Wall().UTC().Format(markerDateLayout), OrgFolder: defaultOrgFolder}
+	m := rowfs.Marker{ID: id, Visibility: vis, Created: a.opts.Wall().UTC().Format(markerDateLayout)}
 	got, already, err := a.makeStore(ctx, canon, raw, m)
 	if err != nil {
 		return opsstores.InitOut{}, err
@@ -185,7 +190,7 @@ func (a *App) InitStoreMarker(ctx context.Context, raw string) (bool, error) {
 	if err != nil {
 		return false, errs.Wrap(errs.Internal, "store init: new store id", err)
 	}
-	m := rowfs.Marker{ID: id, Visibility: rowfs.VisibilityInternal, Created: a.opts.Wall().UTC().Format(markerDateLayout), OrgFolder: defaultOrgFolder}
+	m := rowfs.Marker{ID: id, Visibility: rowfs.VisibilityInternal, Created: a.opts.Wall().UTC().Format(markerDateLayout)}
 	_, already, err := a.makeStore(ctx, canon, raw, m)
 	return already, err
 }
@@ -231,7 +236,13 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 	if err = rowfs.WriteMarker(gb.Dir(), m); err != nil {
 		return rowfs.Marker{}, false, err
 	}
-	if err = gitCommitMarkerAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts)); err != nil {
+	files := []string{rowfs.MarkerFile}
+	if readme, rerr := readmeForCommit(ctx, gb.Dir()); rerr != nil {
+		return rowfs.Marker{}, false, rerr
+	} else if readme != "" {
+		files = append(files, readme)
+	}
+	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), initSubject, files...); err != nil {
 		return rowfs.Marker{}, false, err
 	}
 	rep, err := gb.Sync(ctx)
@@ -244,12 +255,31 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 	return m, false, nil
 }
 
-// gitCommitMarkerAs commits lore-store.yaml in a lore-owned store worktree
-// (the git adapter has no "commit a control file" call; this is the one
-// non-row commit lore makes, so it lives here beside the marker logic),
-// signed as gitCommitFilesAs says.
-func gitCommitMarkerAs(ctx context.Context, dir string, now time.Time, who storeSigner) error {
-	return gitCommitFilesAs(ctx, dir, now, who, initSubject, rowfs.MarkerFile)
+// readmeForCommit writes lore's README.md into the git store clone dir
+// when the store has none (not in its files, not in its last commit: a
+// person who removed it from the files only keeps that change) and
+// returns its path for the commit lore is about to make there; "" when
+// nothing was written (D-f: once, with lore's next commit, never on a read).
+// A README that is an earlier lore's text, byte for byte, is replaced
+// (rowfs.ReadmeOutdated).
+func readmeForCommit(ctx context.Context, dir string) (string, error) {
+	if rowfs.HasReadme(dir) && !rowfs.ReadmeOutdated(dir) {
+		return "", nil
+	}
+	if rowfs.ReadmeOutdated(dir) {
+		if _, err := rowfs.EnsureReadme(dir); err != nil {
+			return "", err
+		}
+		return rowfs.ReadmeFile, nil
+	}
+	if _, err := (gitRun{dir: dir, args: []string{"cat-file", "-e", "HEAD:" + rowfs.ReadmeFile}}).output(ctx); err == nil {
+		return "", nil
+	}
+	wrote, err := rowfs.EnsureReadme(dir)
+	if err != nil || !wrote {
+		return "", err
+	}
+	return rowfs.ReadmeFile, nil
 }
 
 // gitCommitFilesAs commits paths (slash-separated, relative to dir) of a
@@ -306,7 +336,11 @@ type storeSigner struct{ opts Options }
 func storeIdentityFunc(opts Options) storeSigner { return storeSigner{opts: opts} }
 
 // fallback answers the lore identity (`lore whoami`: display name + the
-// identity key's e-mail) as a commit signature. FLAG4: it is used only
+// identity key's e-mail) as a commit signature: always the PERSON's, the
+// owner of a detected agent rather than "<person> via <tool>
+// <agent.auto/…@lore.invalid>" (owner bug 12: that went into a store
+// clone's .git/config and doctor then demanded it); the agent goes into
+// the Lore-Agent trailer (agentTrailers). FLAG4: it is used only
 // when git has no user.name/user.email for the clone, an existing git
 // identity always wins, and git config is never changed (it is passed as
 // GIT_AUTHOR_*/GIT_COMMITTER_* on that one call). It resolves lazily, so a
@@ -317,8 +351,26 @@ func (s storeSigner) fallback(ctx context.Context) git.Signature {
 	if err != nil {
 		return git.Signature{}
 	}
-	name, email := who.CommitSignature()
+	name, email := who.Person().CommitSignature()
 	return git.Signature{Name: name, Email: email}
+}
+
+// agentTrailers is the Lore-Agent trailer of lore's own commits when an
+// agent writes for its person (none for the person, the CI actor, or an
+// unresolvable identity). Resolved once, at the first commit.
+func (s storeSigner) agentTrailers() func() []string {
+	var once sync.Once
+	var out []string
+	return func() []string {
+		once.Do(func() {
+			who, err := resolveIdentity(context.Background(), s.opts)
+			if err != nil || who.Agent == "" {
+				return
+			}
+			out = []string{gitcommit.AgentTrailer(who.Label, who.Agent)}
+		})
+		return out
+	}
 }
 
 // LoreSignature is the lore identity as a commit signature, the same
@@ -362,12 +414,13 @@ func (s storeSigner) owner(ctx context.Context, raw string) (git.Signature, bool
 }
 
 // envFor is the identity environment of a commit lore makes in the store
-// worktree dir: the org identity when dir's origin is an org store
-// (Q-R2-1), else git.IdentityEnv's FLAG4 rule.
+// worktree dir, the backend's rule (adapters/backend/git identity.go): in
+// an org store the org identity, unless dir's git identity uses the same
+// email (git signs, as for a hand edit); else git.IdentityEnv's FLAG4.
 func (s storeSigner) envFor(ctx context.Context, dir string) ([]string, error) {
 	if origin, err := (gitRun{dir: dir, args: []string{"config", "--get", "remote.origin.url"}}).output(ctx); err == nil {
 		if sig, ok := s.owner(ctx, strings.TrimSpace(string(origin))); ok {
-			if env, ok := git.SignerEnv(sig); ok {
+			if env, ok := git.SignerEnvFor(ctx, dir, sig); ok {
 				return env, nil
 			}
 		}
@@ -420,6 +473,8 @@ func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options)
 	route := git.WithRoute(func(ctx context.Context, remote string) ([]string, []string) {
 		return cloneRoute(ctx, opts.Home, optsProjectDir(opts), remote)
 	})
+	// a failed clone/fetch/push names the access rule it went through
+	route = git.Join(route, git.WithAccessNote(accessNoteFor(opts.Home)))
 	// Store commits are dated by the app clock (the wall clock; LORE_NOW in
 	// a test build), so the age a compaction cuts at follows the same time
 	// as every row stamp (store push modes, 2026-11-09).
@@ -427,7 +482,7 @@ func storeOpeners(reg *schema.Registry, origins map[string]string, opts Options)
 	if opts.Wall != nil {
 		clock = git.WithClock(opts.Wall)
 	}
-	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), trailers, route, clock), who.owner, opts.Notice)
+	return newOpeners(reg, origins, git.Join(git.WithIdentity(who.fallback), git.WithCloneIdentity(who.cloneIdentity), cloneIdentitySay(opts.Notice), trailers, git.WithTrailerFunc(who.agentTrailers()), route, clock, handGitOption(opts.Notice)), who.owner, opts.Notice)
 }
 
 // openStore opens the store at a canonical url with this App's backends.
@@ -459,6 +514,9 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 	}
 	raw, err := cleanFileURL(in.URL)
 	if err != nil {
+		return opsstores.Entry{}, err
+	}
+	if raw, err = a.canonicalShared(ctx, raw); err != nil { // brief 3.7: stores.yaml is shared
 		return opsstores.Entry{}, err
 	}
 	in.URL = raw
@@ -590,17 +648,29 @@ func (a *App) OrgStoreEntries(ctx context.Context) ([]opsstores.Entry, error) {
 	for _, s := range orgStores(ctx, a.opts, top) {
 		out = append(out, opsstores.Entry{Name: string(s.Name), URL: s.URL, Folder: s.Folder, ReadOnly: s.ReadOnly, Branch: s.Branch, Source: opsstores.SourceOrg})
 	}
-	return append(out, a.otherOrgStores(out)...), nil
+	taken := map[string]bool{}
+	for _, e := range out {
+		taken[e.Name] = true
+	}
+	if top != "" {
+		if c, rerr := readStoresFile(top); rerr == nil {
+			for _, s := range c.Stores {
+				taken[string(s.Name)] = true
+			}
+		}
+	}
+	return append(out, a.otherOrgStores(out, taken)...), nil
 }
 
 // otherOrgStores are the stores of the org entries behind got (the org
 // folder's store and the linked folder's) that got does not already hold:
 // an org entry lists every store (`lore org refresh` takes them from
 // lore-org.yaml), and store list and store folder list show each once.
-// They attach no folder here, so each is named by its url, the name every
-// store command takes for an org store (owner report 2026-11-11: only the
-// org's first store was listed).
-func (a *App) otherOrgStores(got []opsstores.Entry) []opsstores.Entry {
+// They attach no folder here, so each is named by its short name
+// (storeshortname.go; owner report 2026-11-11: only the org's first store
+// was listed), or by its url when the short name is a name taken here
+// (a stores.yaml entry, an attached org name, or another store's).
+func (a *App) otherOrgStores(got []opsstores.Entry, taken map[string]bool) []opsstores.Entry {
 	orgs := map[string]bool{}
 	seen := map[string]bool{}
 	for _, e := range got {
@@ -628,7 +698,12 @@ func (a *App) otherOrgStores(got []opsstores.Entry) []opsstores.Entry {
 				continue
 			}
 			seen[k] = true
-			out = append(out, opsstores.Entry{Name: sc.URL, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg})
+			name := sc.ShortName()
+			if name == "" || taken[name] || slices.Contains(attach.Reserved(), name) {
+				name = sc.URL
+			}
+			taken[name] = true
+			out = append(out, opsstores.Entry{Name: name, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg})
 		}
 	}
 	return out
@@ -704,8 +779,7 @@ func (a *App) folderExists(ctx context.Context, src attach.Store, f string) (boo
 	if err != nil {
 		return false, err
 	}
-	_, err = os.Stat(filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(clean))))
-	return err == nil, nil
+	return rowfs.HasStoreFolder(dir, clean), nil
 }
 
 // storeDir is the local folder holding a store's files: the path of a
@@ -939,6 +1013,11 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 	if newMarker && !slices.Contains(paths, rowfs.MarkerFile) {
 		paths = append([]string{rowfs.MarkerFile}, paths...)
 	}
+	if readme, rerr := readmeForCommit(ctx, gb.Dir()); rerr != nil {
+		return rerr
+	} else if readme != "" && !slices.Contains(paths, readme) {
+		paths = append(paths, readme)
+	}
 	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), subject, paths...); err != nil {
 		return err
 	}
@@ -952,7 +1031,7 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 	if !rep.Offline {
 		// the commit went out: it is this clone's last push (`lore store
 		// show` pushed), as a row batch's or a compaction's is
-		writeStamp(filepath.Dir(gb.Dir()), pushStampFile, a.opts.Wall())
+		writeStamp(git.StateDirOf(gb.Dir()), pushStampFile, a.opts.Wall())
 	}
 	return nil
 }
@@ -1001,7 +1080,7 @@ func (a *App) SetVisibility(ctx context.Context, in opsstores.VisibilityIn) (ops
 		}
 		if m.ID.IsZero() {
 			return nil, errs.New(errs.OldLore, "store visibility: "+in.Name+" still has a v0.1.17 "+rowfs.MarkerFile+" (no store id)").
-				WithHint("run `lore migrate run` first")
+				WithHint("run lore fix first")
 		}
 		m.Visibility = rowfs.Visibility(in.Visibility)
 		if werr := rowfs.WriteMarker(dir, m); werr != nil {
@@ -1026,9 +1105,9 @@ func (a *App) AddFolder(ctx context.Context, in opsstores.FolderAddIn) (opsstore
 		return opsstores.FolderAddOut{}, err
 	}
 	// team and an org store's url are shown as the store they resolved to
-	out := opsstores.FolderAddOut{Store: storeLabel(in.Store, src), Folder: in.Folder}
+	out := opsstores.FolderAddOut{Store: a.storeLabel(in.Store, src), Folder: in.Folder}
 	err = a.withStoreDir(ctx, src, folderAddSubject+in.Folder, func(dir string) (paths []string, ferr error) {
-		root, oerr := rowfs.Open(dir, a.opts.rowfsOptions()...)
+		root, oerr := rowfs.Open(dir, a.opts.storeRowfsOptions(dir)...)
 		if oerr != nil {
 			return nil, oerr
 		}

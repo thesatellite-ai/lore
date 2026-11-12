@@ -455,6 +455,10 @@ type PushOutcome struct {
 	Notes []MergeNote
 	// Attempts counts push calls.
 	Attempts int
+	// Commit is the commit the remote's live ref holds after a push that
+	// sent one (PushDone with Attempts > 0); Ref and Remote name where it
+	// went, so the command's output can say (no hidden network writes).
+	Commit, Ref, Remote string
 }
 
 // Pushed reports a confirmed push (or nothing to push).
@@ -500,6 +504,7 @@ func (r *Ref) Push(ctx context.Context) (PushOutcome, error) {
 				return out, err
 			}
 			out.Status = PushDone
+			out.Commit, out.Ref, out.Remote = s.Local, r.Name, r.remoteName()
 			return out, r.confirmed(ctx, s.Local)
 		case rr.Status == gitremote.StatusNonFastForward || rr.Status == gitremote.StatusStale:
 			if err := r.Fetch(ctx); err != nil {

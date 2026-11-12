@@ -57,7 +57,7 @@ func TestCloneBase(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 	got, err := CloneBase(home, Remote{Norm: "github.com/agency/lore-company"})
-	if err != nil || got != filepath.Join(home, ClonesDir, "github.com", "agency", "lore-company") {
+	if err != nil || got != filepath.Join(home, StoresDir, "agency", "lore-company") {
 		t.Fatalf("CloneBase = %q %v", got, err)
 	}
 	if _, err := CloneBase("relative", Remote{Norm: "h/a/b"}); !errs.Has(err, errs.BadPath) {
@@ -105,16 +105,16 @@ func TestRowRel(t *testing.T) {
 	t.Parallel()
 	id := "mem_01936f2a7c4b7e1d8a3f5b6c7d8e9f00"
 	good := map[string]string{
-		".lore/data/memories/" + id + ".json":          "memories/" + id + ".json",
-		"org/.lore/data/memories/" + id + ".json":      "memories/" + id + ".json",
-		"team/web/.lore/data/memories/" + id + ".json": "memories/" + id + ".json",
+		"_store/memories/" + id + ".json":   "memories/" + id + ".json",
+		"org/memories/" + id + ".json":      "memories/" + id + ".json",
+		"team/web/memories/" + id + ".json": "memories/" + id + ".json",
 	}
 	for p, want := range good {
 		if got, ok := rowRel(p); !ok || got != want {
 			t.Errorf("rowRel(%q) = %q %v", p, got, ok)
 		}
 	}
-	for _, p := range []string{"lore-store.yaml", ".lore/data/_meta.json", "../.lore/data/memories/" + id + ".json", ".x/.lore/data/memories/" + id + ".json", "memories/" + id + ".json"} {
+	for _, p := range []string{"memories/" + id + ".json", "lore-store.yaml", "README.md", "org/_meta.json", "../memories/" + id + ".json", ".x/memories/" + id + ".json", "tasks/memories/" + id + ".json", "notes/" + id + ".json"} {
 		if _, ok := rowRel(p); ok {
 			t.Errorf("rowRel(%q) accepted", p)
 		}

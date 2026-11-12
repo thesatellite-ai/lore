@@ -3,24 +3,29 @@
 alice (work/website)$ lore store init notes file://$HOME/stores/notes
 ✓ created store notes (sto_7a670ae8548ed05bf57ad29ad0759504) at file://~/stores/notes; recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ lore memory add --to notes --body 'The client pays invoices on the 15th.'
-✓ mem_2ad3618e878ebbf527d34d446ef4f891 [notes]
+lore: wrote ~/stores/notes/_store/actors/act_2ad3618e878ebbf527d34d446ef4f891.json (store notes)
+lore: wrote ~/stores/notes/_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store notes)
+lore: wrote ~/stores/notes/_store/machines/mch_54fe984c9b495744c0217776765a28f2.json (store notes)
+✓ mem_162df51b7f78b785c97c26b41ea89666 [notes]
   scope: [master]
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
-✓ rul_162df51b7f78b785c97c26b41ea89666
+lore: wrote ~/work/website/.lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json
+✓ rul_05e99e22e9e86e96fe4daa7777994603
   scope: [master] severity: must
 alice (work/website)$ find ~/stores/notes -type f | sort
-~/stores/notes/.lore/data/actors/act_54fe984c9b495744c0217776765a28f2.json
-~/stores/notes/.lore/data/machines/mch_05e99e22e9e86e96fe4daa7777994603.json
-~/stores/notes/.lore/data/memories/mem_2ad3618e878ebbf527d34d446ef4f891.json
-~/stores/notes/.lore/lock
+~/stores/notes/.lore-state/lock
+~/stores/notes/README.md
+~/stores/notes/_store/actors/act_2ad3618e878ebbf527d34d446ef4f891.json
+~/stores/notes/_store/machines/mch_54fe984c9b495744c0217776765a28f2.json
+~/stores/notes/_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
 ~/stores/notes/lore-store.yaml
 alice (work/website)$ ls .lore/data/rules
-rul_162df51b7f78b785c97c26b41ea89666.json
+rul_05e99e22e9e86e96fe4daa7777994603.json
 alice (work/website)$ git check-ignore -v .lore/lore-cache.db
 .gitignore:9:.lore/lore-cache.db	.lore/lore-cache.db
 alice (work/website)$ find ~/.lore/cache -name '*.db' | sed 's#/sto_[0-9a-z]*/#/<store id>/#'
 ~/.lore/cache/stores/<store id>/local/root.db
-~/.lore/cache/machine.db
+~/.lore/cache/machine-store.db
 
 ### cloud sync folder
 alice (work/website)$ lore store init synced file://$HOME/Dropbox/notes

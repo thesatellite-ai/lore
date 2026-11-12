@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -230,7 +231,7 @@ func TestFolderStoreSharedWithoutSync(t *testing.T) {
 func removeCaches(t *testing.T, repo, home string) {
 	t.Helper()
 	var files []string
-	for _, pattern := range []string{filepath.Join(repo, filepath.FromSlash(RepoCacheFile)) + "*", filepath.Join(home, cacheDir, cacheStoresDir, "*", "*", "*")} {
+	for _, pattern := range []string{RepoCachePath(home, repo) + "*", filepath.Join(home, cacheDir, cacheStoresDir, "*", "*", "*")} {
 		got, err := filepath.Glob(pattern)
 		if err != nil {
 			t.Fatal(err)
@@ -281,9 +282,10 @@ func projectID(t *testing.T, a *App) string {
 	return p.String()
 }
 
-// TestFormatQuestion (DOCS O6): v1 rows by another writer make the first
-// 0.1.18 write ask (E_NEEDS_CONFIRM naming lore migrate run); after the
-// migration, writes go through. Rows by the caller alone never ask.
+// TestFormatQuestion (DOCS O6, then owner item 11): in a repo still holding
+// v0.1.17 rows, the first write runs lore fix's safe steps itself (the
+// migration), says so in one notice line, and goes through; it no longer
+// asks, whoever wrote the v1 rows. Afterwards no v1 row is left.
 func TestFormatQuestion(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
@@ -305,22 +307,21 @@ func TestFormatQuestion(t *testing.T) {
 			removeV2Projects(t, repo, project)
 			writeV1(t, repo, v1Memory(project, c.by))
 
-			a := newTestApp(t, repo)
-			_, err := run(t, a, opsmemory.OpAdd, `{"body":"new note"}`, false)
-			if c.ask != errs.Has(err, errs.NeedsConfirm) {
-				t.Fatalf("ask = %v, err = %v", c.ask, err)
-			}
-			if !c.ask {
-				return
-			}
-			if !strings.Contains(errs.EnvelopeOf(err).Error.Hint, MigrateCommand) {
-				t.Fatalf("hint does not name %s: %+v", MigrateCommand, errs.EnvelopeOf(err))
-			}
-			if _, err := run(t, a, opsmigrate.OpRun, `{}`, false); err != nil {
-				t.Fatal(err)
+			var notices []string
+			a := newTestAppWith(t, repo, func(o *Options) { o.Notice = func(m string) { notices = append(notices, m) } })
+			if !hasV017Rows(repo) {
+				t.Fatal("the fixture holds no v0.1.17 row")
 			}
 			if _, err := run(t, a, opsmemory.OpAdd, `{"body":"new note"}`, false); err != nil {
-				t.Fatalf("after migrate: %v", err)
+				t.Fatalf("the first write in a v0.1.17 repo: %v", err)
+			}
+			if hasV017Rows(repo) {
+				meta, _ := os.ReadFile(filepath.Join(repo, ".lore", "data", "_meta.json"))
+				t.Fatalf("v0.1.17 rows left after the first write: notices %q meta %s", notices, meta)
+			}
+			_ = c.ask
+			if !slices.ContainsFunc(notices, func(n string) bool { return strings.Contains(n, "this write first ran lore fix's safe steps") }) {
+				t.Fatalf("no one-line notice of the fix: %q", notices)
 			}
 		})
 	}

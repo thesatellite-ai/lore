@@ -121,22 +121,25 @@ func TestTeD_RepoRoleMatrix(t *testing.T) {
 }
 
 // Fail closed when the org store cannot be read (no local copy, offline):
-// an own repo still refuses a write with no --to (E_LINK_UNKNOWN, it cannot
-// tell where the write belongs) but takes an explicit --to repo; a client
-// repo refuses even an explicit --to repo with plain text, because it
-// cannot check the write for internal content (E_LEAK_BLOCKED).
+// an own repo refuses a write with no --to (E_LINK_UNKNOWN, it cannot tell
+// where the write belongs); a client repo refuses even an explicit --to
+// repo with plain text, because it cannot check the write for internal
+// content (E_LEAK_BLOCKED). Since the store's clone is also where the
+// link index is read (STORE layout 1.4: one clone per store), "no local
+// copy" leaves the link status unknown too, so the own repo's explicit
+// --to repo is refused the same way (before, a second clone kept the link
+// index while the rows' clone was gone, and the own repo took it).
 func TestTeD_RepoRoleUnreachableStoreFailsClosed(t *testing.T) {
 	o := newOrgWorld(t, th.Flag("to", "rule", "add"), th.Flag("to", "memory", "add"))
 	o.tools.MustLore("memory", "add", "--body", teDInternalNote, "--to", orgNorthwind+"/"+folderOrg)
-	for _, dir := range []string{"clones", "cache"} {
-		if err := os.RemoveAll(o.alice.LorePath(dir)); err != nil {
-			t.Fatal(err)
-		}
+	o.alice.RemoveStoreClones(t)
+	if err := os.RemoveAll(o.alice.LorePath("cache")); err != nil {
+		t.Fatal(err)
 	}
 	o.alice.Offline()
 
 	o.tools.Lore("rule", "add", "--body", "plain words with no target").Fails(t, th.ExitLinkUnknown, "E_LINK_UNKNOWN", "--to")
-	o.tools.MustLore("rule", "add", "--body", "plain words for the repo", "--to", "repo")
+	o.tools.Lore("rule", "add", "--body", "plain words for the repo", "--to", "repo").Fails(t, th.ExitGuard, "E_LEAK_BLOCKED", "cannot check")
 
 	before := teDRepoRules(t, o.acme)
 	for _, body := range []string{"plain words for the client repo", teDInternalNote} {
@@ -152,4 +155,5 @@ func TestTeD_RepoRoleUnreachableStoreFailsClosed(t *testing.T) {
 	o.alice.Online()
 	o.acme.MustLore("rule", "add", "--body", "plain words for the client repo", "--to", "repo")
 	o.acme.Lore("rule", "add", "--body", teDInternalNote, "--to", "repo").Fails(t, th.ExitGuard, "E_LEAK_BLOCKED")
+	o.tools.MustLore("rule", "add", "--body", "plain words for the repo", "--to", "repo")
 }

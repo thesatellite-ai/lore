@@ -51,25 +51,30 @@ The attachment is recorded in the repo's `.lore/stores.yaml`.
 ```console
 # alice, in app
 $ lore rule add --to client2 --body 'Every screen works on a phone.'
+lore: wrote ~/stores/client2/_store/actors/act_162d…9666.json (store client2)
+lore: wrote ~/stores/client2/_store/rules/rul_4c59…6c38.json (store client2)
+lore: wrote ~/stores/client2/_store/machines/mch_3b62…e913.json (store client2)
 ✓ rul_4c59…6c38 [client2]
   scope: [master] severity: must
 
 # alice, in api
 $ lore rule add --to client2 --body 'Every change comes with a test.'
-✓ rul_3b62…e913 [client2]
+lore: wrote ~/stores/client2/_store/rules/rul_f147…5139.json (store client2)
+✓ rul_f147…5139 [client2]
   scope: [master] severity: must
 $ lore rule add --body 'The API answers in JSON only.'
-✓ rul_f147…5139
+lore: wrote ~/work/api/.lore/data/rules/rul_2537…6bbb.json
+✓ rul_2537…6bbb
   scope: [master] severity: must
 $ lore rule list
-rul_f147…5139 [must/always] The API answers in JSON only.
+rul_2537…6bbb [must/always] The API answers in JSON only.
 rul_4c59…6c38  Every screen works on a phone.  [client2]
-rul_3b62…e913  Every change comes with a test.  [client2]
+rul_f147…5139  Every change comes with a test.  [client2]
 
 # alice, in app
 $ lore rule list
 rul_4c59…6c38  Every screen works on a phone.  [client2]
-rul_3b62…e913  Every change comes with a test.  [client2]
+rul_f147…5139  Every change comes with a test.  [client2]
 $ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -88,19 +93,23 @@ $ git status --short
 ```console
 # alice, in scratch
 $ lore project list
-prj_2537…6bbb  scratch  https://github.com/client2/scratch
-$ lore project archive prj_2537…6bbb
+prj_b69e…5ed7  scratch  https://github.com/client2/scratch
+$ lore project archive prj_b69e…5ed7
+lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e…5ed7.json
 ✓ scratch archived
 $ lore project list
-prj_2537…6bbb  scratch  https://github.com/client2/scratch [archived]
-$ lore project unarchive prj_2537…6bbb
+prj_b69e…5ed7  scratch  https://github.com/client2/scratch [archived]
+$ lore project unarchive prj_b69e…5ed7
+lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e…5ed7.json
 ✓ scratch unarchived
-$ lore project delete prj_2537…6bbb
-ERROR: [E_NEEDS_CONFIRM] project delete prj_2537…6bbb?
+$ lore project delete prj_b69e…5ed7
+ERROR: [E_NEEDS_CONFIRM] project delete prj_b69e…5ed7?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore project delete prj_2537…6bbb --yes
-✓ scratch (and this repo's row) moved to the trash (batch bat_b69e…5ed7; restore: lore trash restore bat_b69e…5ed7)
+$ lore project delete prj_b69e…5ed7 --yes
+lore: wrote ~/work/scratch/.lore/data/repos/rep_0aae…a61f.json
+lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e…5ed7.json
+✓ scratch (and this repo's row) moved to the trash (batch bat_6a86…ed8c; restore: lore trash restore bat_6a86…ed8c)
 $ lore project list
 (no projects)
 ```
@@ -115,22 +124,24 @@ A repo set up with an older lore may still hold a two-line pointer file, `.lore/
 # alice, in infra
 $ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
-project_id: prj_0aae…a61f
+project_id: prj_4f89…b64b
 $ lore rule list
-ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run `lore migrate run`
-  hint: `lore migrate run --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
+lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run lore fix
+  hint: `lore fix --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)
 $ lore migrate run --dry-run
 Would upgrade 2 rows
-  mode-b: memories/mem_6a86…ed8c → store shared (~/.lore/stores/infra)
-  mode-b: rules/rul_4f89…b64b → store shared (~/.lore/stores/infra)
+  mode-b: memories/mem_77cb…76c4 → store shared (~/.lore/stores/infra)
+  mode-b: rules/rul_d191…45c2 → store shared (~/.lore/stores/infra)
   mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 Nothing written (dry run).
 $ lore migrate run
 Upgraded 2 rows
-  mode-b: memories/mem_6a86…ed8c → store shared (~/.lore/stores/infra)
-  mode-b: rules/rul_4f89…b64b → store shared (~/.lore/stores/infra)
+  mode-b: memories/mem_77cb…76c4 → store shared (~/.lore/stores/infra)
+  mode-b: rules/rul_d191…45c2 → store shared (~/.lore/stores/infra)
   mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: taken on refs/lore/signals until 2026-11-02T10:14:20Z (renewed every 2m0s)
@@ -146,8 +157,8 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 $ lore rule list; lore memory list
-rul_4f89…b64b  Terraform changes need a plan in the pull request.  [shared]
-mem_6a86…ed8c  The staging cluster sleeps at night.  [shared]
+rul_d191…45c2  Terraform changes need a plan in the pull request.  [shared]
+mem_77cb…76c4  The staging cluster sleeps at night.  [shared]
 ```
 <!-- /example -->
 

@@ -65,12 +65,14 @@ func TestRowPlace(t *testing.T) {
 		path, folder string
 		ok           bool
 	}{
-		{".lore/data/memories/" + id + ".json", rowfs.FolderRoot, true},
-		{"platform/.lore/data/memories/" + id + ".json", "platform", true},
-		{"org/.lore/data/memories/" + id + ".json", "org", true},
-		{"a/b/.lore/data/memories/" + id + ".json", "a/b", true},
+		{"_store/memories/" + id + ".json", rowfs.FolderRoot, true},
+		{"memories/" + id + ".json", "", false}, // the first plain layout's place: moved by the layout commit
+		{"platform/memories/" + id + ".json", "platform", true},
+		{"org/memories/" + id + ".json", "org", true},
+		{"a/b/memories/" + id + ".json", "a/b", true},
 		{"lore-store.yaml", "", false},
-		{"platform/.lore/data/_meta.json", "", false},
+		{"platform/_meta.json", "", false},
+		{"platform/.lore/data/memories/" + id + ".json", "platform", true}, // a folder not moved yet
 	}
 	for _, c := range cases {
 		folder, rel, ok := rowPlace(c.path)

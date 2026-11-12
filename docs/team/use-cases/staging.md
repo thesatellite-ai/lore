@@ -33,6 +33,8 @@ Alice (an agency developer) creates the staging branch once (from her `stores` f
 ```console
 # alice, in stores
 $ lore store init agency_stag 'git@github.com:agency/notes?branch=staging' --yes
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes@staging (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
 ✓ created store agency_stag (sto_7a67…9504) at git@github.com:agency/notes?branch=staging; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
@@ -51,12 +53,17 @@ stores     git@github.com:agency/notes on branch staging  (org folder org)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
 personal   me -> ~/.lore/personal
 $ lore org link agency-stag --project client --yes
+lore: pushed store github.com/agency/notes: commit 601d285 to branch staging
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency-stag.
   link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
 ✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 $ lore task add 'seed staging with demo data' --to agency-stag
+lore task add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: pushed store agency-stag: commit 86dbae4 to branch staging
+lore: wrote 2 row file(s) in ~/.lore/personal/agency-stag (store me)
+lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes@staging/client (store agency-stag)
 ✓ tsk_54fe…28f2 — seed staging with demo data [medium] → [agency-stag/client]
 $ lore task list
 ○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
@@ -68,9 +75,9 @@ $ lore task list
 $ LORE_ORG=agency-stag lore task list
 ○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
 $ git ls-remote https://github.com/agency/notes
-601d2850ffd0	HEAD
-601d2850ffd0	refs/heads/main
-86dbae476bd6	refs/heads/staging
+9b40ce71af28	HEAD
+9b40ce71af28	refs/heads/main
+05513aa29b78	refs/heads/staging
 ```
 <!-- /example -->
 
@@ -82,7 +89,8 @@ With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=ag
  github.com/agency/notes
    refs/heads/main          ◀── agency       (normal work; matched by link or pattern)
    refs/heads/staging       ◀── agency-stag  (only by lore org use / LORE_ORG)
- ~/.lore/clones/github.com/agency/notes.git   one bare clone serves both entries
+ ~/.lore/stores/agency/notes           main's clone (agency)
+ ~/.lore/stores/agency/notes@staging   staging's own clone (agency-stag)
 ```
 
 ## Pitfalls

@@ -49,14 +49,15 @@ func TestStoreReadReachedBefore(t *testing.T) {
 		t.Fatalf("no clone: variant %q, want the default", got)
 	}
 	// A clone that never fetched: still the default.
-	if err := os.MkdirAll(base+bareCloneExt, 0o700); err != nil {
+	stateDir := gitbackend.StateDirOf(base)
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if got := sp.reachedBefore(fail(""), raw, existing).Vars[onboard.VarFixVariant]; got != "" {
 		t.Fatalf("clone never fetched: variant %q, want the default", got)
 	}
 	// It fetched once: the repo existed.
-	if err := os.WriteFile(filepath.Join(base+bareCloneExt, "lore-fetched-at"), []byte("2026-01-05T09:00:00Z\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(stateDir, gitbackend.FetchStampFile), []byte("2026-01-05T09:00:00Z\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got := sp.reachedBefore(fail(""), raw, existing).Vars[onboard.VarFixVariant]; got != string(onboard.FixReachedBefore) {

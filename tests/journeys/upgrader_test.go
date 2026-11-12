@@ -233,7 +233,7 @@ func TestJourneyUpgraderTwoMachines(t *testing.T) {
 		desk.LoreIn(dsk, "migrate", "status").OK(t).Says(t, "pending: memories: 1 row at v1")
 		// After the migration a _v: 1 file means a lore older than 0.1.18
 		// still writes here: doctor names it and the way out.
-		desk.LoreIn(dsk, "doctor").Says(t, "row_format", "_v: 1", "lore migrate run")
+		desk.LoreIn(dsk, "doctor").Says(t, "row_format", "_v: 1", "lore fix")
 	})
 
 	var idNewNew string
@@ -258,7 +258,7 @@ func TestJourneyUpgraderTwoMachines(t *testing.T) {
 		// without a word.
 		// The new lore keeps 0.1.17's identity on this machine.
 		up.LoreIn(lap, "whoami").OK(t).Says(t, "human:"+upWorkEmail)
-		up.LoreIn(lap, "doctor").Says(t, "old_db_edits", "memories/"+idBranch, "lore migrate run")
+		up.LoreIn(lap, "doctor").Says(t, "old_db_edits", "memories/"+idBranch, "lore fix")
 		// Nothing was written for her yet: the edit still waits in lore.db.
 		up.LoreIn(lap, "memory", "show", idBranch).OK(t).Never(t, upNoteEdited)
 	})

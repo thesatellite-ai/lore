@@ -14616,7 +14616,7 @@
                   },
                   "fix": {
                     "type": "boolean",
-                    "description": "repair what doctor can fix safely (reversed --supersedes links, a task lead missing from assignees, a git merge driver that is not lore's, a config.yaml list on one line, your actor row missing from a store you saved rows to)"
+                    "description": "run lore fix's steps: migrate v0.1.17 rows, render, agent hooks, old store clones proved safe, then every safe doctor repair (git info/exclude, store clone identity, merge driver, config style, actor roster, reversed --supersedes links, …); prints each step and the status after them"
                   },
                   "fresh": {
                     "type": "boolean",
@@ -14782,6 +14782,12 @@
                           "status",
                           "level"
                         ]
+                      }
+                    },
+                    "fixed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "identity": {
@@ -15076,6 +15082,39 @@
                         "degraded",
                         "broken"
                       ]
+                    },
+                    "steps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "changed": {
+                            "type": "boolean"
+                          },
+                          "detail": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "failed": {
+                            "type": "boolean"
+                          },
+                          "result": {
+                            "type": "string"
+                          },
+                          "step": {
+                            "type": "string"
+                          },
+                          "where": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "result"
+                        ]
+                      }
                     },
                     "sync": {},
                     "wal_size_bytes": {
@@ -16114,6 +16153,271 @@
           },
           "503": {
             "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/fix/run": {
+      "post": {
+        "operationId": "fix.run",
+        "summary": "Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them",
+        "tags": [
+          "fix"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "all": {
+                    "type": "boolean",
+                    "description": "fix every repo the setups know (their folders and the known repos), one block each; keeps going past a failure and exits 1 naming the failed repos"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "show what each step would do; change nothing and reach no remote (no fetch, push or clone)"
+                  },
+                  "jobs": {
+                    "type": "integer",
+                    "description": "with --all: how many repos run at once (default 8; 1 runs them one after another)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "exit_status": {
+                      "type": "integer"
+                    },
+                    "failed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "jobs": {
+                      "type": "integer"
+                    },
+                    "ok": {
+                      "type": "integer"
+                    },
+                    "prep": {
+                      "type": "object",
+                      "properties": {
+                        "no_fetch": {
+                          "type": "boolean"
+                        },
+                        "stores_fetch_failed": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "stores_fetched": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "repo": {
+                      "type": "string"
+                    },
+                    "repos": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "error": {
+                            "type": "string"
+                          },
+                          "exit_status": {
+                            "type": "integer"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "healthy",
+                              "degraded",
+                              "broken"
+                            ]
+                          },
+                          "steps": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "changed": {
+                                  "type": "boolean"
+                                },
+                                "detail": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "failed": {
+                                  "type": "boolean"
+                                },
+                                "result": {
+                                  "type": "string"
+                                },
+                                "step": {
+                                  "type": "string"
+                                },
+                                "where": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "step",
+                                "result"
+                              ]
+                            }
+                          },
+                          "wall_ms": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "repo",
+                          "exit_status",
+                          "wall_ms"
+                        ]
+                      }
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "healthy",
+                        "degraded",
+                        "broken"
+                      ]
+                    },
+                    "steps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "changed": {
+                            "type": "boolean"
+                          },
+                          "detail": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "failed": {
+                            "type": "boolean"
+                          },
+                          "result": {
+                            "type": "string"
+                          },
+                          "step": {
+                            "type": "string"
+                          },
+                          "where": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "step",
+                          "result"
+                        ]
+                      }
+                    },
+                    "wall_ms": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "exit_status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
             "content": {
               "application/json": {
                 "schema": {
@@ -24994,6 +25298,12 @@
                     "dry_run": {
                       "type": "boolean"
                     },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "rows": {
                       "type": "integer"
                     },
@@ -25179,6 +25489,9 @@
                         "id",
                         "display_name"
                       ]
+                    },
+                    "note": {
+                      "type": "string"
                     },
                     "verb": {
                       "type": "string"
@@ -25518,6 +25831,9 @@
                         "id",
                         "display_name"
                       ]
+                    },
+                    "note": {
+                      "type": "string"
                     },
                     "verb": {
                       "type": "string"
@@ -36944,7 +37260,7 @@
           "org"
         ],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
@@ -36960,7 +37276,7 @@
                   },
                   "org": {
                     "type": "string",
-                    "description": "the org entry"
+                    "description": "the org entry (default: the only org entry on this machine, else the active setup's org)"
                   },
                   "own": {
                     "type": "boolean",
@@ -36983,9 +37299,6 @@
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
-                "required": [
-                  "org"
-                ],
                 "additionalProperties": false
               }
             }
@@ -37104,7 +37417,7 @@
           "org"
         ],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
@@ -37112,12 +37425,9 @@
                 "properties": {
                   "org": {
                     "type": "string",
-                    "description": "the org entry to refresh from its store's lore-org.yaml"
+                    "description": "the org entry to refresh from its store's lore-org.yaml (default: the only org entry on this machine, else the active setup's org)"
                   }
                 },
-                "required": [
-                  "org"
-                ],
                 "additionalProperties": false
               }
             }
@@ -37502,7 +37812,7 @@
           "org"
         ],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
@@ -37514,7 +37824,7 @@
                   },
                   "org": {
                     "type": "string",
-                    "description": "the org entry"
+                    "description": "the org entry (default: the only org entry on this machine, else the active setup's org)"
                   },
                   "project": {
                     "type": "string",
@@ -37525,9 +37835,6 @@
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
-                "required": [
-                  "org"
-                ],
                 "additionalProperties": false
               }
             }
@@ -59177,6 +59484,316 @@
             }
           }
         }
+      },
+      "patch": {
+        "operationId": "row.edit",
+        "summary": "Write back an edited Markdown view of a row (lore edit \u003cid\u003e opens your editor for it)",
+        "tags": [
+          "row"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the row the view is of",
+            "schema": {
+              "type": "string",
+              "description": "the row the view is of"
+            },
+            "x-lore-field": "id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "description": "the edited Markdown view to write back (lore row markdown \u003cid\u003e prints one; lore edit \u003cid\u003e opens it in your editor)"
+                  },
+                  "markdown": {
+                    "type": "string",
+                    "description": "the edited Markdown view itself, instead of --file"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "no_change": {
+                      "type": "boolean"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "table": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "table",
+                    "store",
+                    "changed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT, E_REF_DANGLING, E_RESOURCE_INVALID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_IN_TRASH, E_NAME_TAKEN, E_POLICY_DENIED, E_PURGED, E_READ_ONLY, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rows/{id}/markdown": {
+      "post": {
+        "operationId": "row.markdown",
+        "summary": "Print any row as the Markdown view lore edit opens (fields as frontmatter, long text as body)",
+        "tags": [
+          "row"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "any row id",
+            "schema": {
+              "type": "string",
+              "description": "any row id"
+            },
+            "x-lore-field": "id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "body_field": {
+                      "type": "string"
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "live": {
+                      "type": "string"
+                    },
+                    "markdown": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "table": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "table",
+                    "store",
+                    "folder",
+                    "markdown"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_IN_TRASH, E_PURGED, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/rows/{id}/move": {
@@ -59342,6 +59959,138 @@
           },
           "500": {
             "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rows/{id}/path": {
+      "post": {
+        "operationId": "row.path",
+        "summary": "Print the file path of any row by id (also lore path, lore open)",
+        "tags": [
+          "row"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "any row id (tsk_…, mem_…, rul_…)",
+            "schema": {
+              "type": "string",
+              "description": "any row id (tsk_…, mem_…, rul_…)"
+            },
+            "x-lore-field": "id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "table": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "table",
+                    "path",
+                    "store",
+                    "folder"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
             "content": {
               "application/json": {
                 "schema": {
@@ -75183,6 +75932,12 @@
                     "before": {
                       "type": "string"
                     },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "commit": {
+                      "type": "string"
+                    },
                     "dry_run": {
                       "type": "boolean"
                     },
@@ -75703,6 +76458,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "kept": {
+                      "type": "string"
+                    },
                     "removed": {
                       "type": "string"
                     },
@@ -75810,7 +76568,7 @@
                   },
                   "url": {
                     "type": "string",
-                    "description": "git url or file:// path (optional for me: default file://~/.lore/stores/me)"
+                    "description": "git url or file:// path (optional for me: default file://~/.lore/stores/_me)"
                   },
                   "visibility": {
                     "type": "string",
@@ -75944,7 +76702,7 @@
     "/v1/stores/open": {
       "post": {
         "operationId": "store.open",
-        "summary": "Check out a store branch for browsing (detached, under ~/.lore/worktrees)",
+        "summary": "Print the store's own clone of a branch to browse (~/.lore/stores/\u003cowner\u003e/\u003crepo\u003e, or \u003crepo\u003e@\u003cbranch\u003e), fetched first",
         "tags": [
           "store"
         ],
@@ -76571,6 +77329,143 @@
           },
           "503": {
             "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stores/use": {
+      "post": {
+        "operationId": "store.use",
+        "summary": "Use your own git clone of a store (cloned anywhere) instead of lore's clone under ~/.lore/stores; --default goes back",
+        "tags": [
+          "store"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "default": {
+                    "type": "string",
+                    "description": "go back to lore's own clone of this store (a store name or url); your clone is left as it is"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "your own git clone of the store (its top folder, or any folder inside it)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "the store it is a clone of (a store name or url); needed only when its origin matches several configured stores"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "branch": {
+                      "type": "string"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    },
+                    "own": {
+                      "type": "boolean"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "previous": {
+                      "type": "string"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "unused": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "store",
+                    "url",
+                    "path"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BAD_PATH, E_BODY_TOO_LARGE, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_REFUSED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
             "content": {
               "application/json": {
                 "schema": {
@@ -80075,6 +80970,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "error": {
+                                "type": "string"
+                              },
                               "held": {
                                 "type": "string"
                               },
@@ -80083,6 +80981,9 @@
                               },
                               "merged": {
                                 "type": "integer"
+                              },
+                              "next": {
+                                "type": "string"
                               },
                               "offline": {
                                 "type": "boolean"
@@ -80102,7 +81003,13 @@
                               "sent": {
                                 "type": "integer"
                               },
+                              "status": {
+                                "type": "string"
+                              },
                               "store": {
+                                "type": "string"
+                              },
+                              "url": {
                                 "type": "string"
                               }
                             },
@@ -104978,7 +105885,7 @@
     "/v1/upgrade/run": {
       "post": {
         "operationId": "upgrade.run",
-        "summary": "Install the newest lore release (or this project's pinned version, or exactly --version)",
+        "summary": "Install the newest lore release (or this project's pinned version, or exactly --version), then run lore fix for this project",
         "tags": [
           "upgrade"
         ],
@@ -104996,6 +105903,10 @@
                   "ignore_pin": {
                     "type": "boolean",
                     "description": "install past this project's lore_version_pin"
+                  },
+                  "no_fix": {
+                    "type": "boolean",
+                    "description": "do not run lore fix for this project after the binary step"
                   },
                   "version": {
                     "type": "string",
@@ -106177,6 +107088,131 @@
           },
           "503": {
             "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/where/show": {
+      "get": {
+        "operationId": "where.show",
+        "summary": "List every file, folder, git config entry and ref lore keeps on this machine and in this repo, with what each one is (alias: lore files)",
+        "tags": [
+          "where"
+        ],
+        "parameters": [
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "also list the places lore uses that do not exist on this machine yet",
+            "schema": {
+              "type": "boolean",
+              "description": "also list the places lore uses that do not exist on this machine yet"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "area": {
+                            "type": "string"
+                          },
+                          "by_hand": {
+                            "type": "string"
+                          },
+                          "collapsed": {
+                            "type": "boolean"
+                          },
+                          "exists": {
+                            "type": "boolean"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          },
+                          "what": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "area",
+                          "path",
+                          "kind",
+                          "what"
+                        ]
+                      }
+                    },
+                    "home": {
+                      "type": "string"
+                    },
+                    "readme": {
+                      "type": "string"
+                    },
+                    "repo": {
+                      "type": "string"
+                    },
+                    "unknown": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "home",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
             "content": {
               "application/json": {
                 "schema": {

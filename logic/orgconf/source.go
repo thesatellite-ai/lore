@@ -1,7 +1,7 @@
 package orgconf
 
 // source.go — the org entry as a copy (SOURCE_OF_TRUTH row 9): the
-// store's <org folder>/.lore/lore-org.yaml is the source of the shared
+// store's <org folder>/lore-org.yaml is the source of the shared
 // fields (stores, own, repos, defaults); the entry in ~/.lore/config.yaml
 // copies them and keeps its machine-local fields (the name label,
 // identity, live and the rest). defaults is copied too (owner report,

@@ -53,7 +53,7 @@ func (a *App) folderStore(ctx context.Context, verb, name, folderName string) (f
 	if err != nil {
 		return folderPlace{}, err
 	}
-	here := folderPlace{Name: name, Label: storeLabel(name, src)}
+	here := folderPlace{Name: name, Label: a.storeLabel(name, src)}
 	if folderName == rowfs.FolderRoot {
 		return here, nil
 	}

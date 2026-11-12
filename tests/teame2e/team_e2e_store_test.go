@@ -146,82 +146,48 @@ func TestF12_StoreAllowedFiles(t *testing.T) {
 	}
 }
 
-// §5.3: org entries on one URL share one bare clone. Ported to STORE_SERVER_SPEC
-// 6.1 "Store clones": a store is ONE bare clone <repo>.git plus the folder
-// <repo>/ lore owns beside it, holding only `work` (a linked worktree of
-// that same bare clone) and `lock`; a pinned branch uses <repo>@<branch> in
-// all three paths, so two branches never share a worktree. v0.1.17 had no
-// worktree folder, so the old assertion "only lore.git" changed with 6.1.
-// storeCloneFolderFiles are the files lore keeps in a store's <repo>/ folder
-// beside the bare clone: the worktree and the lock (spec 6.1), and the
-// fetch stamp of the push-at-once wrapper (store_push_core.go: its state
-// folder is the clone's base folder, live.fetch_ttl), and the state folder
-// beside the lock that holds the pending audit journal (P2-AUDIT-1, CLEANUP
-// Qs: rowfs.JournalDir, machine-local, never committed or synced; the
-// folder stays after the journal is acknowledged and removed), and the
-// store push modes' stamps (wire/storepushmode.go, 2026-11-09): push_stamp
-// after a push that sent commits, push_fail_stamp after a batch push that
-// failed, compact_stamp after the daily compaction.
-var storeCloneFolderFiles = map[string]bool{"work": true, "lock": true, "fetch-stamp": true, "state": true,
-	"push_stamp": true, "push_fail_stamp": true, "compact_stamp": true}
-
-func TestF12_EntriesOnOneURLShareOneBareClone(t *testing.T) {
+// §5.3: org entries on one URL share one clone. STORE layout (2026-11-12,
+// STORE_SERVER_SPEC 6.1 "Store clones"): a store is ONE plain git clone at
+// ~/.lore/stores/<owner>/<repo> (the host never in the path), its files
+// checked out, lore's own files (the lock, the audit journal, the fetch
+// and push stamps) inside its .git/lore and nowhere else; a pinned branch
+// is its own clone <repo>@<branch>, so two branches never share a
+// checkout. No bare twin, no work/ folder, no second (v0.1.17) clone.
+func TestF12_EntriesOnOneURLShareOneClone(t *testing.T) {
 	a := newAgency(t)
 	a.aliceApp.With(th.EnvLoreOrg + "=" + orgStaging).Lore("whoami")
-	base := a.alice.LorePath("clones", "github.com", "northwind")
+	base := a.alice.LorePath("stores", "northwind")
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		t.Fatalf("store clone dir: %v", err)
 	}
-	// stems are the clone names found: "lore", and "lore@staging" if the
-	// staging entry opened its pinned branch.
-	bare, folders := map[string]bool{}, map[string]bool{}
+	if !slices.ContainsFunc(entries, func(e os.DirEntry) bool { return e.Name() == "lore" }) {
+		t.Fatalf("one clone per URL expected at %s/lore, got %v", base, entries)
+	}
 	for _, e := range entries {
 		name := e.Name()
-		stem := strings.TrimSuffix(name, ".git")
-		if stem != "lore" && stem != "lore@"+stagingBranch {
+		if name != "lore" && name != "lore@"+stagingBranch {
 			t.Fatalf("only the northwind/lore store may be cloned here, found %s in %v", name, entries)
 		}
-		if strings.HasSuffix(name, ".git") {
-			bare[stem] = true
-		} else {
-			folders[stem] = true
+		clone := filepath.Join(base, name)
+		if out := a.w.Git(clone, "rev-parse", "--is-bare-repository"); out != "false" {
+			t.Fatalf("a store clone is a plain clone, not bare: %s", clone)
 		}
-	}
-	if !bare["lore"] {
-		t.Fatalf("one bare clone per URL expected, got %v", entries)
-	}
-	for stem := range folders {
-		if !bare[stem] {
-			t.Fatalf("worktree folder %s without its bare clone %s.git", stem, stem)
+		if fi, serr := os.Stat(filepath.Join(clone, ".git")); serr != nil || !fi.IsDir() {
+			t.Fatalf("%s has no .git folder (a pointer file means a worktree): %v", clone, serr)
 		}
-	}
-	for stem := range bare {
-		clone := filepath.Join(base, stem+".git")
-		if out := a.w.Git(clone, "rev-parse", "--is-bare-repository"); out != "true" {
-			t.Fatalf("store clones are bare: %s", clone)
-		}
-		if !folders[stem] {
-			continue
-		}
-		dir := filepath.Join(base, stem)
-		inner, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, e := range inner {
-			if !storeCloneFolderFiles[e.Name()] {
-				t.Fatalf("%s may hold only lore's own files %v, found %s", dir, storeCloneFolderFiles, e.Name())
+		for _, old := range []string{"work", "lock", "fetch-stamp", "state", "push_stamp", "push_fail_stamp", "compact_stamp"} {
+			if _, serr := os.Lstat(filepath.Join(clone, old)); serr == nil {
+				t.Fatalf("%s holds lore's own %s among the store's files; it belongs in .git/lore", clone, old)
 			}
 		}
-		if _, err := os.Stat(filepath.Join(dir, "work")); err != nil {
-			continue // the worktree is made on first write
+		if _, serr := os.Stat(filepath.Join(clone, ".git", "lore", "lock")); serr != nil {
+			t.Fatalf("the store lock is not in %s/.git/lore: %v", clone, serr)
 		}
-		common := a.w.Git(filepath.Join(dir, "work"), "rev-parse", "--path-format=absolute", "--git-common-dir")
-		want, _ := filepath.EvalSymlinks(clone)
-		got, _ := filepath.EvalSymlinks(common)
-		if got != want {
-			t.Fatalf("the worktree must belong to the same bare clone: %s vs %s", common, clone)
+	}
+	for _, gone := range []string{"clones", "clones-v017"} {
+		if _, serr := os.Stat(a.alice.LorePath(gone)); serr == nil {
+			t.Fatalf("~/.lore/%s exists: a second copy of the store", gone)
 		}
 	}
 }
@@ -271,7 +237,7 @@ func TestF11_Race_ConcurrentLinksMergeAsUnion(t *testing.T) {
 	) {
 		r.OK(t)
 	}
-	meta, _ := a.store.Read(refMain, folderAcme+"/"+dataDir+"/"+metaFile)
+	meta, _ := a.store.Read(refMain, folderAcme+"/"+metaFile)
 	for _, slug := range []string{"github.com/acme/web", "github.com/acme/mobile", slugApp} {
 		if !strings.Contains(meta, slug) {
 			t.Fatalf("link for %s lost: %s", slug, meta)
@@ -368,7 +334,7 @@ func TestRecipe04_ContractorSeesOnlyTheirClient(t *testing.T) {
 	cc := cont.Clone(app, "app")
 	cc.MustLore("search", "internal").Says(t, "staging resets on Sunday").Never(t, "proxy strips headers")
 	cc.MustLore("rule", "list").Says(t, "never deploy on Friday")
-	if _, err := os.Stat(cont.LorePath("clones", "github.com", "northwind", "lore-globex.git")); !os.IsNotExist(err) {
+	if _, err := os.Stat(cont.LorePath("stores", "northwind", "lore-globex")); !os.IsNotExist(err) {
 		t.Fatal("a contractor never clones a store they do not list")
 	}
 }
@@ -416,7 +382,7 @@ func TestF14_ClientRepoWriteTargets(t *testing.T) {
 func TestF14_StoreDefaultBeatsLooserPersonalDefault(t *testing.T) {
 	a := newAgency(t)
 	sc := a.alice.Clone(a.store, "store-plain")
-	sc.WriteFile(folderOrg+"/.lore/lore-org.yaml", "defaults:\n  client_repos: {memory: northwind}\n")
+	sc.WriteFile(folderOrg+"/lore-org.yaml", "defaults:\n  client_repos: {memory: northwind}\n")
 	sc.CommitAll("team defaults")
 	sc.AdminPush("origin", "main")
 	loose := northwindOrg(dev1Key, "Dev One", "dev1")
@@ -525,10 +491,9 @@ func TestF16_CIModeCatchesForeignIdsAndNamesNothingInternal(t *testing.T) {
 func TestF16_UnreadableStoreBlocksTheCommit(t *testing.T) {
 	a := newAgency(t)
 	a.aliceApp.MustLore("memory", "add", "--body", internalNote)
-	for _, dir := range []string{"clones", "cache"} {
-		if err := os.RemoveAll(a.alice.LorePath(dir)); err != nil {
-			t.Fatal(err)
-		}
+	a.alice.RemoveStoreClones(t)
+	if err := os.RemoveAll(a.alice.LorePath("cache")); err != nil {
+		t.Fatal(err)
 	}
 	a.alice.Offline()
 	a.aliceApp.WriteFile("src/a.ts", "export {}\n")
@@ -646,7 +611,14 @@ func TestF20_RenderKeepsInternalContextOutsideTheCheckout(t *testing.T) {
 	// and CLAUDE.local.md is exactly one import line per file (v0.1.17
 	// wrote one ~/.lore/render/<project-id>.md and one line).
 	local, ok := a.aliceApp.ReadFile("CLAUDE.local.md")
-	imports := strings.Split(strings.TrimSpace(local), "\n")
+	// one import per paragraph: a blank line between them (never a
+	// hard-wrapped paragraph)
+	var imports []string
+	for _, l := range strings.Split(strings.TrimSpace(local), "\n") {
+		if strings.TrimSpace(l) != "" {
+			imports = append(imports, l)
+		}
+	}
 	if !ok || len(imports) < 2 {
 		t.Fatalf("CLAUDE.local.md must hold one import line per internal store (org, me): %q", local)
 	}
@@ -754,8 +726,8 @@ func TestRecipe08_ClientDevelopersSeeOnlyClientRows(t *testing.T) {
 		t.Fatalf("client view: %v", titles)
 	}
 	a.acmeApp.MustLore("whoami").Says(t, "none").Never(t, orgNorthwind)
-	if _, err := os.Stat(a.acmedev.LorePath("clones")); !os.IsNotExist(err) {
-		t.Fatal("the client's machine never clones a store")
+	if got := a.acmedev.StoreClones(t); len(got) != 0 {
+		t.Fatalf("the client's machine never clones a store, found %v", got)
 	}
 }
 
@@ -803,7 +775,7 @@ func TestRecipe12_InternalTasksNeverReachClient(t *testing.T) {
 	a.dev1App.MustLore("task", "list").Says(t, "["+orgNorthwind+"/"+folderAcme+"]", "send invoice reminder before demo")
 	a.dev1App.MustLore("task", "done", id)
 	if r, ok := a.storeMainRow(t, folderAcme, tblTasks, id); !ok || r.Status != statusDone {
-		t.Fatal("done lands on the store branch in acme/.lore/data")
+		t.Fatal("done lands on the store branch in acme")
 	}
 	if now := strings.Join(a.app.Refs(""), ",") + a.app.Rev(refMain) + a.app.Rev(refLive); now != appRefs {
 		t.Fatal("the client repo must gain nothing")
@@ -837,7 +809,7 @@ func TestRecipe13_StagingLoreIsSeparate(t *testing.T) {
 	// Ported to STORE_SERVER_SPEC 6.1 (LORE_TEAM_SPEC 3.2): a store clone
 	// has no live ref in 0.1.18, so the open row is committed on the staging
 	// store branch (was refs/lore/live/staging).
-	if _, ok := readRow(t, a.store, stagingHead, mainRowPath(folderAcme, tblTasks, id)); !ok {
+	if _, ok := readRow(t, a.store, stagingHead, storeRowPath(folderAcme, tblTasks, id)); !ok {
 		t.Fatalf("the row lives on the staging store branch: %v", a.store.Files(stagingHead))
 	}
 	if a.storeHas(t, folderAcme, "seed staging with demo data") {

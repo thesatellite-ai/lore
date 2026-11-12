@@ -115,8 +115,9 @@ func run(ctx context.Context, args []string) int {
 	if err := refuseRelativeHome(); err != nil { // home.go: E_INVALID_INPUT for a relative HOME (E-GAPS-1 S2)
 		return printHostError(err)
 	}
-	capDoctorProcs(args) // doctorprocs.go: doctor runs on at most min(4, CPUs) cores
-	cleanOldBinary()     // winold.go: an upgrade's lore.exe.old, on Windows (8.3)
+	offlineFixDryRun(args) // fixoffline.go: lore fix --dry-run reaches no remote (owner bug 14)
+	capDoctorProcs(args)   // doctorprocs.go: doctor runs on at most min(4, CPUs) cores
+	cleanOldBinary()       // winold.go: an upgrade's lore.exe.old, on Windows (8.3)
 	// `lore init <path>` runs the whole command in that folder (initpath.go).
 	if p, rest, ok := initPathArg(args); ok {
 		if err := enterInitDir(p); err != nil {
@@ -205,6 +206,12 @@ func run(ctx context.Context, args []string) int {
 		return printHostError(err)
 	}
 	doc.app = app
+	// Plain files round, brief 1.6: the first run after an earlier 0.1.18
+	// build moves its store clones and store trees into the plain layout,
+	// saying what it moved; afterwards a scan of two folders and silent.
+	if runsOldLayoutMove(args) {
+		app.MoveOldLayout(ctx, os.Stderr)
+	}
 	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now, External: renderhost.CoreExternal(app), Decor: renderDecor(flags)})
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
@@ -215,9 +222,10 @@ func run(ctx context.Context, args []string) int {
 	hosthooks.Install(root, runner)
 	withMigrateContext(root, app) // migratehooks.go: team lock; crash/pause points in test builds only
 	h := &host{app: app, home: home, live: liveRows, render: rend.h, runner: runner}
-	repoInit.ih = h.initHost(wd, hasLocalState(wd))
+	repoInit.ih = h.initHost(wd, hasLocalState(home, wd))
 	h.markPrinted(root)
 	mountShortcuts(root)
+	h.mountEdit(root)     // edit.go: lore path / lore open, lore edit (plain files D2, D3)
 	h.mountTaskHook(root) // taskhook.go: the commit-msg hook's Lore-Task trailer (F9)
 	mountSQLHelp(root)    // sqlhelp.go: bare `lore sql` prints help (after mountShortcuts)
 	mountSetupWeb(root)   // setupweb.go: lore setup web, lore onboard (ONB 5.1, Q1)
@@ -315,6 +323,22 @@ func commandName(args []string) string {
 		}
 	}
 	return ""
+}
+
+// runsOldLayoutMove reports whether the command runs the first-run move
+// of an earlier build's store layout (wire.MoveOldLayout): never inside
+// git (merge driver, the repo hooks) or the agent's session hooks, nor
+// for help and version.
+func runsOldLayoutMove(args []string) bool {
+	if wire.OldLayoutSkips(commandName(args)) || isSessionEndHook(args) || isSessionStartHook(args) {
+		return false
+	}
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == opssync.Noun && args[i+1] == "hook" {
+			return false
+		}
+	}
+	return true
 }
 
 // isGitPushHook reports whether args run one of the repo git hooks that

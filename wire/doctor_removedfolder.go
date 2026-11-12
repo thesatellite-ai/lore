@@ -11,7 +11,6 @@ package wire
 import (
 	"context"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -62,7 +61,7 @@ func (a *App) removedFolderFinding(ctx context.Context, s attach.Store, f string
 	if err != nil {
 		return DoctorFinding{}, false
 	}
-	meta := path.Join(rowfs.FolderDataPath(f), rowfs.MetaFileName)
+	meta := rowfs.LayoutStore.StorePath(f, rowfs.MetaFileName)
 	if folderMetaAt(dir, f) {
 		return DoctorFinding{}, false
 	}
@@ -81,6 +80,6 @@ func (a *App) removedFolderFinding(ctx context.Context, s attach.Store, f string
 // folderMetaAt reports whether the store worktree dir has folder f's
 // _meta.json (the file that makes it a folder).
 func folderMetaAt(dir, f string) bool {
-	_, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rowfs.FolderDataPath(f)), rowfs.MetaFileName))
+	_, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rowfs.LayoutStore.StorePath(f, rowfs.MetaFileName))))
 	return err == nil
 }

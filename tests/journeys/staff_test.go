@@ -53,8 +53,26 @@ func TestJourneyStaff(t *testing.T) {
 		tt.lore(tlLee, "member", "add", "--from-invites", "--yes").OK(t).Says(t, "added eve@example.test", "now accepted", "teams @web")
 		tt.lore(tlLee, "team", "invite", "list").OK(t).Says(t, "eve@example.test", "accepted")
 		tt.lore(tlLee, "team", "show", "@web").OK(t).Says(t, "members (4)").Never(t, "pending")
+		// whoever started the org is its admin; an org from before gets it
+		// from doctor --fix (org_admin_missing)
+		tt.lore(tlLee, "member", "show", tlLee.Email).OK(t).Says(t, "role:", "admin")
+		tt.lore(tlLee, "actor", "period", "edit", "@lee", "--clear", "org_role", "--yes").OK(t)
+		tt.lore(tlLee, "doctor", "--fresh").Says(t, "org_admin_missing", tlLee.Name, "lore doctor --fix")
+		tt.lore(tlLee, "doctor", "--fix", "--yes").Says(t, "org_admin_missing")
+		tt.lore(tlLee, "doctor", "--fresh").Never(t, "org_admin_missing")
+		tt.lore(tlLee, "member", "show", tlLee.Email).OK(t).Says(t, "admin")
+		// a handle with capitals is lowercased and said so; the GitHub login
+		// is kept as given; a handle is derived when none is given
+		tt.lore(tlLee, "member", "add", "onur@example.test", "--name", "Onur", "--handle", "@OnurFromAgency", "--github", "OnurFromAgency", "--yes").OK(t).
+			Says(t, "handle @OnurFromAgency is stored as @onurfromagency")
+		tt.lore(tlLee, "member", "show", "onur@example.test").OK(t).Says(t, "@onurfromagency", "OnurFromAgency")
+		tt.lore(tlLee, "member", "add", "Zed.Ops@example.test", "--github", "ZedOps", "--yes").OK(t).Says(t, "handle @zedops (from the GitHub login")
+		tt.lore(tlLee, "member", "edit", "onur@example.test", "--handle", "!!!", "--yes").Refused(t).Says(t, "person handle")
+		tt.lore(tlLee, "member", "edit", "onur@example.test", "--handle", "Onur Dev", "--yes").OK(t).Says(t, "stored as @onur-dev")
+		// every write takes --yes
+		tt.lore(tlLee, "team", "member", "add", "@ops", "@onur-dev", "--yes").OK(t)
 		// roles change without a project
-		tt.lore(tlLee, "member", "edit", tlCat.Email, "--role", "pm").OK(t).Says(t, "updated")
+		tt.lore(tlLee, "member", "edit", tlCat.Email, "--role", "pm", "--yes").OK(t).Says(t, "updated")
 		tt.lore(tlLee, "member", "show", tlCat.Email).OK(t).Says(t, "pm")
 	})
 

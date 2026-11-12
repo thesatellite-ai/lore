@@ -16,16 +16,19 @@ import (
 // a format decision (spec 6.1 layout).
 // ds:def id=sync-datanames-dgnn2vn8 owner=@khanakia stability=stable desc="on-disk names: .lore, data, _meta.json, _purged.json, lock, .json row files"
 const (
-	// LoreDir is the lore folder inside the store root and every folder.
+	// LoreDir is the lore folder of a code repo (LayoutRepo): it keeps
+	// lore's files apart from the code. A store has none (LayoutStore).
 	LoreDir = ".lore"
-	// DataDir is the folder under LoreDir that holds the row files.
+	// DataDir is the folder under LoreDir that holds a code repo's rows.
 	DataDir = "data"
 	// MetaFileName holds a folder's identity and format version; it lives
 	// in the data folder but is never a row.
 	MetaFileName = "_meta.json"
 	// PurgedFileName lists ids purged on purpose; never a row.
 	PurgedFileName = "_purged.json"
-	// LockFileName is the store lock file inside the root's LoreDir.
+	// LockFileName is the lock file inside the root's state folder
+	// (.lore/ in a code repo, StoreStateDir in a folder store, .git/lore/
+	// in a git store clone).
 	LockFileName = "lock"
 	// RowFileExt is the extension of every row file.
 	RowFileExt = ".json"
@@ -33,8 +36,9 @@ const (
 	tmpPrefix = ".tmp-"
 )
 
-// FolderRoot names the store's root folder (<root>/.lore/data). The empty
-// string means the same.
+// FolderRoot names the store's root folder (a store's _store/<table>/
+// folders, StoreDataDir; a code repo's <top>/.lore/data). The empty string
+// means the same.
 const FolderRoot = "."
 
 // FolderOrg is the conventional company-wide folder (`org_folder: org`,
@@ -83,7 +87,9 @@ var (
 
 // folderSegment is one segment of a folder name: it cannot be empty, "."
 // or "..", and cannot start with a dot (which keeps .lore, .git and other
-// tool folders out of reach).
+// tool folders out of reach) or "_" (which keeps _store, the root
+// folder's rows, StoreDataDir, and the folder files _meta.json and
+// _purged.json apart from folders).
 var folderSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
 // OSJunkPatterns are the files operating systems drop into browsed
@@ -110,13 +116,22 @@ func IsOSJunk(name string) bool {
 // FolderRoot for the root, else slash-separated segments ("acme-hub",
 // "org", "team/web"). Anything that could escape the root (absolute,
 // "..", a dot segment, a backslash) is E_BAD_PATH.
+//
+// No segment may be a table name (IsTableDir): inside a store a folder's
+// rows sit at <folder>/<table>/<id>.json, so a folder called "tasks" could
+// not be told from the tasks of the folder above it (D-d).
 func CleanFolder(name string) (string, error) {
 	if name == "" || name == FolderRoot {
 		return FolderRoot, nil
 	}
 	for seg := range strings.SplitSeq(name, "/") {
 		if !folderSegment.MatchString(seg) {
-			return "", errs.New(errs.BadPath, "rowfs: folder name "+quote(name)+" must be slash-separated plain segments")
+			return "", errs.New(errs.BadPath, "rowfs: folder name "+quote(name)+" must be slash-separated plain segments").
+				WithHint("use letters, digits, - and _ in each segment, starting with a letter or digit, e.g. acme-hub or team/web; names starting with _ or . are lore's (" + StoreDataDir + "/ holds the store's own rows), and table names are reserved: " + strings.Join(ReservedFolderNames(), ", "))
+		}
+		if IsTableDir(seg) {
+			return "", errs.New(errs.BadPath, "rowfs: folder name "+quote(name)+" uses "+quote(seg)+", the name of a table: inside a store a folder's rows sit at <folder>/<table>/<id>.json, so a folder may not be called like a table").
+				WithHint("pick another name (e.g. " + seg + "-notes); reserved: " + strings.Join(ReservedFolderNames(), ", ") + ", and any name starting with _ or . (" + StoreDataDir + "/ holds the store's own rows)")
 		}
 	}
 	return name, nil
@@ -126,15 +141,6 @@ func CleanFolder(name string) (string, error) {
 // slash-separated so bookkeeping is the same on every OS.
 func RowPath(table row.Table, id ids.AnyID) string {
 	return table.String() + "/" + id.String() + RowFileExt
-}
-
-// FolderDataPath is the data dir of folder, relative to the store root and
-// slash-separated (".lore/data" or "org/.lore/data"). folder must be clean.
-func FolderDataPath(folder string) string {
-	if folder == FolderRoot {
-		return LoreDir + "/" + DataDir
-	}
-	return folder + "/" + LoreDir + "/" + DataDir
 }
 
 // ParseRowPath splits "table/id.json"; ok is false for anything that is not

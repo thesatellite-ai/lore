@@ -92,7 +92,7 @@ func TestPurgedFileMatrix(t *testing.T) {
 				if tc.keepKey != "" && !strings.Contains(raw, tc.keepKey) {
 					t.Fatalf("lost key %s: %s", tc.keepKey, raw)
 				}
-				if want := f.rel + "/" + PurgedFileName; !slices.Contains(applied.Paths, want) {
+				if want := f.storePath(PurgedFileName); !slices.Contains(applied.Paths, want) {
 					t.Fatalf("paths %v do not name %s (a git store would not commit it)", applied.Paths, want)
 				}
 			})

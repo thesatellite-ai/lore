@@ -11,8 +11,9 @@
 //     opened through a store.Openers set holding the folder backend (file)
 //     and the git backend (ssh, https, http) with logic/merge as its row
 //     merger;
-//  3. one SQLite cache file per attached store: <repo>/.lore/lore-cache.db
-//     for `repo` (NOT .lore/lore.db, which the v0.1.17 code still owns) and
+//  3. one SQLite cache file per attached store, all under the lore home:
+//     <home>/cache/repo/<repo folder>-<hash>.db for `repo` (RepoCachePath;
+//     never in the work tree, so a read creates no file in the repo) and
 //     <home>/cache/stores/<store id>/<branch>/<folder>.db for the others;
 //  4. the gitleaks scanner built from its defaults plus the secret_rules
 //     rows the stores hold; logic/refs as the cache's reference expander;
@@ -65,6 +66,7 @@ import (
 	opsdirective "github.com/thesatellite-ai/lore/ops/directive"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsexternalsource "github.com/thesatellite-ai/lore/ops/externalsource"
+	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opshandoff "github.com/thesatellite-ai/lore/ops/handoff"
 	opshotfix "github.com/thesatellite-ai/lore/ops/hotfix"
 	opsidentity "github.com/thesatellite-ai/lore/ops/identity"
@@ -115,6 +117,7 @@ import (
 	opsteam "github.com/thesatellite-ai/lore/ops/team"
 	opstechdoc "github.com/thesatellite-ai/lore/ops/techdoc"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
+	opswhere "github.com/thesatellite-ai/lore/ops/where"
 	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
 	opswhycontext "github.com/thesatellite-ai/lore/ops/whycontext"
 	opsworkflow "github.com/thesatellite-ai/lore/ops/workflow"
@@ -320,6 +323,24 @@ func (o Options) rowfsOptions() []rowfs.Option {
 	return []rowfs.Option{rowfs.WithAllowNetworkFS(o.AllowNetworkFS), rowfs.WithLockTimeout(o.LockTimeout)}
 }
 
+// repoRowfsOptions is rowfsOptions for a code repo's checkout: rows in its
+// .lore/data (rowfs.LayoutRepo), lock and state in its .lore.
+func (o Options) repoRowfsOptions() []rowfs.Option {
+	return append(o.rowfsOptions(), rowfs.WithLayout(rowfs.LayoutRepo))
+}
+
+// storeRowfsOptions is rowfsOptions for the local folder of a store at dir
+// (storeDir, withStoreDir): in a git store's clone the lock is the one the
+// git backend takes, <clone>/.git/lore/lock (git.LockPathOf), never a
+// second lock file in the clone's files; a folder store keeps rowfs's own.
+func (o Options) storeRowfsOptions(dir string) []rowfs.Option {
+	opts := o.rowfsOptions()
+	if st, err := os.Stat(git.StateDirOf(dir)); err == nil && st.IsDir() {
+		opts = append(opts, rowfs.WithLockPath(git.LockPathOf(dir)))
+	}
+	return opts
+}
+
 // WriteQuery is what the write hooks (Options.GuardRepoWrite,
 // Options.DefaultTarget) learn about one create.
 type WriteQuery struct {
@@ -416,6 +437,9 @@ type state struct {
 	who identity.Resolved
 	// defaultTarget is the engine's default write target.
 	defaultTarget store.Source
+	// here is the store folder a command run inside a store's checkout
+	// works on (storehere.go); "" in a code repo.
+	here store.Source
 	// actorMu / actorDone: the actor row is written once per store.
 	actorMu   sync.Mutex
 	actorDone map[store.Source]bool
@@ -443,7 +467,8 @@ func New(opts Options) (*App, error) {
 	if opts.Wall == nil {
 		opts.Wall = time.Now
 	}
-	closeLoreHome(opts.Home) // homemode.go: an older lore left it open
+	closeLoreHome(opts.Home)                 // homemode.go: an older lore left it open
+	movePersonalFolder(opts.Home, os.Stderr) // personalfolder.go: stores/me → stores/_me, once
 	a := &App{opts: opts, probeLimiter: probe.NewLimiter(probe.DefaultConcurrency), doctorCache: opsdoctor.NewMemCache(0, opts.Wall), prefillCache: newPrefillCache(opts.Wall), aliasCache: newAliasCache(opts.Wall)}
 	if b, ok := opts.Audit.(appBinder); ok {
 		b.bindApp(a) // a sink that links sessions and stamps with the App's clock (wire/auditchain.go)
@@ -525,6 +550,8 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opssql.Ops(a)...)
 	// CLI 2.7 / 2.13, PROV 9.1: lore show|move <any id> (lore row show|move).
 	entries = append(entries, opsrow.Ops(a)...)
+	// D2/D3 plain files: lore row path|markdown|edit (lore path, lore open, lore edit).
+	entries = append(entries, opsrow.EditOps(a)...)
 	// lore lint: one host for the findings the design sends to lint (PROV9, SQ20/22, TQ2/TQ4, DOCS O2).
 	entries = append(entries, opslint.Ops(a)...)
 	// P3-CFG-1: lore config get|set|list|check and lore check leaks|pr-body (Local).
@@ -570,12 +597,15 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opssync.Ops(a.syncEnv())...)
 	entries = append(entries, opsrender.Ops(a)...)
 	entries = append(entries, opsdoctor.Ops(a)...)
+	entries = append(entries, opsfix.Ops(a)...) // lore fix (D-ak, D-al; fixproject.go)
 	// CLI 3.8 / 2.11: lore session list, lore agent start (P3-RUNS-4, P3-RUNS-6).
 	entries = append(entries, opssession.Ops(a)...)
 	entries = append(entries, opsagent.Ops(a)...)
 	// PASS3 ONE-PATH (p3-g-org): lore org, lore whoami, the retired lore project shared-init|shared-list.
 	entries = append(entries, opsorgcmd.Ops(a)...)
 	entries = append(entries, opswhoami.Ops(a)...)
+	// plain files sweep 3.2: lore where (alias lore files), every path lore keeps.
+	entries = append(entries, opswhere.Ops(a)...)
 	entries = append(entries, opsprojectshared.Ops()...)
 	return op.NewRegistry(entries...)
 }
@@ -619,14 +649,31 @@ func (a *App) ServeAsPerson() {
 // state opens the App once. A failed open is remembered: every later call
 // returns the same error rather than half-opening again.
 func (a *App) state(ctx context.Context) (*state, error) {
+	st, opened, err := a.openState(ctx)
+	if opened && err == nil {
+		// outside a.mu: the pick-up writes through the engine, whose
+		// scanner and hooks ask the App again (handedit.go)
+		if err = st.pickUpThenSync(ctx, a.opts); err != nil {
+			a.mu.Lock()
+			a.err = err
+			a.mu.Unlock()
+			return nil, err
+		}
+	}
+	return st, err
+}
+
+// openState is state's open under a.mu; opened reports that this call
+// opened it (the pick-up of hand edits then runs once, in state).
+func (a *App) openState(ctx context.Context) (st *state, opened bool, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run := noCreateOf(ctx)
 	if !a.opened && run != nil && run.stateErr != nil {
-		return nil, run.stateErr // refused earlier in this read run (doctor_nocreate.go)
+		return nil, false, run.stateErr // refused earlier in this read run (doctor_nocreate.go)
 	}
 	if !a.opened {
-		a.opened = true
+		a.opened, opened = true, true
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
 		if a.err == nil {
 			a.st.eng.SetRedactHook(a.redactTask) // D21: write-time store-then-rotate task (wire/secretmgrs.go)
@@ -646,7 +693,7 @@ func (a *App) state(ctx context.Context) (*state, error) {
 			run.stateErr = a.err
 		}
 	}
-	return a.st, a.err
+	return a.st, opened, a.err
 }
 
 // configState opens the repo-only state once (see App.cfg).
@@ -714,6 +761,9 @@ func (a *App) repoTop(ctx context.Context) (string, error) {
 		return "", err
 	}
 	top, err := git.RepoRoot(ctx, a.opts.RepoDir, a.opts.Home)
+	if sc, in := storeHere(a.opts.RepoDir); in && err == nil {
+		top, err = "", errInStore(sc) // a store's checkout is never a code repo (storehere.go)
+	}
 	a.mu.Lock()
 	switch {
 	case err == nil:
@@ -732,7 +782,7 @@ func (a *App) repoTop(ctx context.Context) (string, error) {
 // still its error.
 func (a *App) storeRepoTop(ctx context.Context) (string, error) {
 	top, err := a.repoTop(ctx)
-	if err != nil && errs.Has(err, errs.NotAStore) && !insideWorkTree(ctx, a.opts.RepoDir) {
+	if err != nil && errs.Has(err, errs.NotAStore) && (!insideWorkTree(ctx, a.opts.RepoDir) || inStore(a.opts.RepoDir)) {
 		return "", nil
 	}
 	return top, err
@@ -773,6 +823,11 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if a.setupOnlyHere(ctx, e.Spec().Name) {
 		return a.runSetupOnly(ctx, e, d, c)
 	}
+	// `lore sync` with no code repo here syncs every store of the setup,
+	// or the store checkout it runs in, each on its own App (syncsetup.go)
+	if e.Spec().Name == opssync.OpRun && a.opts.Sync != nil && a.setupSyncHere(ctx) {
+		return runDirect(ctx, e, d)
+	}
 	// AGENT_IDENTITY 8.2 (#7): the CLI caller carries the detected agent, so
 	// agents.person_only fires on the CLI too, not only for REST callers
 	// that send X-Lore-Agent. A surface that already set an agent or an
@@ -791,6 +846,11 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		if err := a.RefuseRetiredModeB(ctx); err != nil {
 			return op.Result{}, err
 		}
+	}
+	// owner item 11: a read in a project with v0.1.17 rows says "run lore
+	// fix"; the first write runs its safe steps first (fixproject.go)
+	if err := a.oldRowsGate(ctx, e); err != nil {
+		return op.Result{}, err
 	}
 	if opsstores.IsStoreOp(e.Spec().Name) {
 		if a.personalInitOutsideRepo(ctx, e, d) { // G-CORE-7: no repo needed

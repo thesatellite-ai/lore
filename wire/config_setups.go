@@ -34,7 +34,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/logic/yamlfmt"
 	"github.com/thesatellite-ai/lore/model/errs"
-	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
 // Config keys of the onboarding blocks.
@@ -544,16 +543,21 @@ func globHome() string {
 
 // setPersonalStoreFollowed records url as personal.store and, in the same
 // write, makes every setup whose own personal_store is the default local
-// folder <home>/stores/me follow it ("inherit"): a person has one personal
-// store `me` (decided 2026-11-09), so `lore store init me <git url>` moves
-// it for the setups that were on the local one instead of leaving them
-// there, where their own url would win over personal.store. It returns
-// those setups' names. A url that is that folder itself changes no setup.
+// folder <home>/stores/_me (or the legacy stores/me) follow it
+// ("inherit"): a person has one personal store `me` (decided
+// 2026-11-09), so `lore store init me <git url>` moves it for the setups
+// that were on the local one instead of leaving them there, where their
+// own url would win over personal.store. It returns those setups' names.
+// A url that is that folder itself changes no setup.
 func setPersonalStoreFollowed(home, url string) ([]string, error) {
-	local := filepath.Join(home, personalStoresDir, opsstores.PersonalName)
+	local, legacy := personalFolderDir(home), legacyPersonalFolderDir(home)
 	isLocal := func(u string) bool {
 		pu, err := neturl.Parse(strings.TrimSpace(u))
-		return err == nil && pu.Scheme == fileuri.Scheme && filepath.Clean(fileuri.OSPath(pu.Path)) == local
+		if err != nil || pu.Scheme != fileuri.Scheme {
+			return false
+		}
+		p := filepath.Clean(fileuri.OSPath(pu.Path))
+		return p == local || p == legacy
 	}
 	if isLocal(url) {
 		return nil, setPersonalStore(home, url)

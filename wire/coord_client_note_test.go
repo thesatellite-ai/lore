@@ -15,7 +15,7 @@ import (
 // TestClientTaskUnheldNoteGoesToTheStore (later 65, v0.1.17 fix-r15note on
 // cmd/lore): in a client repo linked to a 0.1.18 org store, a note on the
 // client repo's own task that nobody holds is a comment row in the store's
-// linked folder (<project>/.lore/data), written through the core and
+// linked folder (<project>/<table>/), written through the core and
 // pushed to the store's main branch. Nothing lands in the client repo (no
 // file, no commit) and nothing on a live ref of either side. The
 // multi-clone half (a second clone reads the note) is a team e2e
@@ -77,8 +77,8 @@ func TestClientTaskUnheldNoteGoesToTheStore(t *testing.T) {
 			path = f
 		}
 	}
-	if !strings.HasPrefix(path, "acme/.lore/data/") || strings.Contains(storeBefore, cid) {
-		t.Fatalf("comment %s not in the linked folder acme/.lore/data on the store's main:\n%s", cid, w.storeFiles(t))
+	if !strings.HasPrefix(path, "acme/comments/") || strings.Contains(storeBefore, cid) {
+		t.Fatalf("comment %s not in the linked folder acme on the store's main:\n%s", cid, w.storeFiles(t))
 	}
 	body := orgGit(t, store, "show", "main:"+path)
 	if !strings.Contains(body, tid) || !strings.Contains(body, "a second review") {
@@ -100,7 +100,7 @@ func TestClientTaskUnheldNoteGoesToTheStore(t *testing.T) {
 
 	// the claimed half: a claim of a second client task keeps the claim on
 	// the store's signals ref under the linked folder and its linked row
-	// (clientRows) in acme/.lore/data, never at the store root
+	// (clientRows) in acme, never at the store root
 	out2 := mustRun(t, app, opstask.OpAdd, `{"title":"fix the footer","to":"repo"}`)
 	var t2 struct {
 		Data struct {
@@ -118,12 +118,12 @@ func TestClientTaskUnheldNoteGoesToTheStore(t *testing.T) {
 	}
 	linkedRow := false
 	for _, f := range strings.Split(w.storeFiles(t), "\n") {
-		linkedRow = linkedRow || strings.HasPrefix(f, "acme/.lore/data/tasks/")
-		if strings.HasPrefix(f, ".lore/data/tasks/") || strings.HasPrefix(f, ".lore/data/comments/") {
+		linkedRow = linkedRow || strings.HasPrefix(f, "acme/tasks/")
+		if strings.HasPrefix(f, "tasks/") || strings.HasPrefix(f, "comments/") {
 			t.Fatalf("a client task's coordination row reached the store root: %s", f)
 		}
 	}
 	if !linkedRow {
-		t.Fatalf("no linked task row under acme/.lore/data/tasks:\n%s", w.storeFiles(t))
+		t.Fatalf("no linked task row under acme/tasks:\n%s", w.storeFiles(t))
 	}
 }

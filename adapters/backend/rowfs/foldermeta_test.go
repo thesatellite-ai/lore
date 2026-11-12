@@ -24,10 +24,10 @@ const (
 )
 
 // metaPath is an org folder's _meta.json path in a store.
-const metaPath = "org/.lore/data/" + MetaFileName
+const metaPath = "org/" + MetaFileName
 
 // purgedPath is an org folder's _purged.json path in a store.
-const purgedPath = "org/.lore/data/" + PurgedFileName
+const purgedPath = "org/" + PurgedFileName
 
 // mergeBoth merges in both orders and fails when the bytes differ: the
 // folder-file merge must never depend on which side is ours.

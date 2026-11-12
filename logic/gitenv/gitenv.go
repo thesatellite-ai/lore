@@ -78,5 +78,103 @@ func Clean(env []string) []string {
 			out = append(out, kv)
 		}
 	}
+	if Offline(env) {
+		// the belt under every runner's own check (NetRefused): git itself
+		// refuses every transport, so no git lore starts reaches a remote
+		out = append(out, noTransport)
+	}
 	return out
+}
+
+// Network switches of a lore process (owner bug 14: `lore fix --all
+// --dry-run` fetched every store once per repo, minutes with no output).
+// Both are read from the environment a process starts with, so a parent
+// sets them for its children and every git lore starts sees the same value:
+//
+//	LORE_OFFLINE=1   no fetch, push, clone, ls-remote or pull at all: a
+//	                 dry run of lore fix reads what is on disk only. The
+//	                 runners refuse those calls (NetRefused) and Clean adds
+//	                 GIT_ALLOW_PROTOCOL naming no transport, so a git started
+//	                 anywhere else refuses too.
+//	LORE_NO_FETCH=1  no fetch, ls-remote or pull: the parent of lore fix
+//	                 --all fetched every store clone once just before, so a
+//	                 child reads those refs instead of fetching the same
+//	                 store again; pushes and clones still run.
+const (
+	EnvOffline = "LORE_OFFLINE"
+	EnvNoFetch = "LORE_NO_FETCH"
+	// On is the one value that turns a switch on (like every lore switch).
+	On = "1"
+)
+
+// noTransport is GIT_ALLOW_PROTOCOL naming a protocol no git transport
+// has: git refuses ssh, https, file and local paths alike, before
+// connecting.
+const noTransport = "GIT_ALLOW_PROTOCOL=lore-offline"
+
+// Offline reports LORE_OFFLINE=1 in env.
+func Offline(env []string) bool { return lookup(env, EnvOffline) == On }
+
+// NoFetch reports LORE_NO_FETCH=1 (or LORE_OFFLINE=1, which refuses more).
+func NoFetch(env []string) bool { return Offline(env) || lookup(env, EnvNoFetch) == On }
+
+// lookup is the last value of name in env ("" when unset).
+func lookup(env []string, name string) string {
+	v := ""
+	for _, kv := range env {
+		if k, val, ok := strings.Cut(kv, "="); ok && k == name {
+			v = val
+		}
+	}
+	return v
+}
+
+// fetchSubcommands read from a remote; pushSubcommands write to one or
+// make a new clone of one.
+var (
+	fetchSubcommands = map[string]bool{"fetch": true, "ls-remote": true, "pull": true}
+	pushSubcommands  = map[string]bool{"push": true, "clone": true}
+)
+
+// Subcommand is the git subcommand of args (git's arguments without the
+// binary): the first argument after the global options, skipping the
+// value of -C and -c. "" when there is none.
+func Subcommand(args []string) string {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-C" || a == "-c":
+			i++
+		case strings.HasPrefix(a, "-"):
+		default:
+			return a
+		}
+	}
+	return ""
+}
+
+// RepoNetRefused is NetRefused for a git call on a code repo (its live
+// ref, its team lock on refs/lore/signals): only LORE_OFFLINE refuses it.
+// LORE_NO_FETCH covers the store clones the parent of lore fix --all
+// fetched; a repo's own refs were not fetched by it, and migrate's team
+// lock must confirm its write on the remote.
+func RepoNetRefused(env, args []string) (string, bool) {
+	if !Offline(env) {
+		return "", false
+	}
+	return NetRefused(env, args)
+}
+
+// NetRefused reports whether the git call args must not run under env's
+// network switches, with the line saying why (a runner returns it as the
+// call's error without starting git).
+func NetRefused(env, args []string) (string, bool) {
+	sub := Subcommand(args)
+	switch {
+	case Offline(env) && (fetchSubcommands[sub] || pushSubcommands[sub]):
+		return "lore: git " + sub + " not run: " + EnvOffline + "=1 (this run reads what is on disk, it reaches no remote)", true
+	case NoFetch(env) && fetchSubcommands[sub]:
+		return "lore: git " + sub + " not run: " + EnvNoFetch + "=1 (the store clones were fetched once for this whole run)", true
+	}
+	return "", false
 }

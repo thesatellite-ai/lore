@@ -230,7 +230,7 @@ func TestContextHookPlanner(t *testing.T) {
 	home := t.TempDir()
 	testenv.SetHome(t, home)
 	fx := newPlannerFixture(t)
-	h := New(Options{App: fx.a})
+	h := New(Options{App: fx.a, Home: filepath.Join(home, ".lore")})
 	cc := contextFlags{hook: toolprofile.NameClaudeCode, hookStdin: true}
 
 	cwd := t.TempDir()

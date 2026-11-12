@@ -94,16 +94,19 @@ func TestUnusableIdentityFallsBackToAuthor(t *testing.T) {
 	}
 }
 
-// Q-R2-1: a store with an owner signature (an org store) is signed by it
-// even when git has an identity, merges included; a store without one keeps
-// the FLAG4 rule (the git identity wins), and an unusable owner signature
-// is ignored.
-func TestOwnerSignerBeatsGitIdentity(t *testing.T) {
+// Q-R2-1 with one author (owner report 2026-11-12): an org store's
+// commits and merges are signed by the org identity when the clone's git
+// identity uses another (personal) email; when the clone's git identity
+// uses the org identity's email, git signs, as a hand edit there would. A
+// store without an owner keeps FLAG4 (the git identity wins), and an
+// unusable owner signature is ignored.
+func TestOwnerSignerAndGitIdentity(t *testing.T) {
 	noGitIdentity(t)
 	org := Signature{Name: "Northwind", Email: "lore@northwind.invalid"}
 	remote := newRemote(t, true)
 	a := clone(t, remote, WithSigner(org))
 	b := clone(t, remote, WithSigner(org))
+	same := clone(t, remote, WithSigner(org))
 	plain := clone(t, remote)
 	unusable := clone(t, remote, WithSigner(Signature{Name: "No Email"}))
 	g := newGen(t)
@@ -111,6 +114,8 @@ func TestOwnerSignerBeatsGitIdentity(t *testing.T) {
 		gitT(t, c.Dir(), "config", "user.name", "Git Person")
 		gitT(t, c.Dir(), "config", "user.email", "person@gmail.invalid")
 	}
+	gitT(t, same.Dir(), "config", "user.name", "git-handle")
+	gitT(t, same.Dir(), "config", "user.email", "LORE@northwind.invalid")
 	write(t, a, store.Change{Row: g.row(newID(t), "a", hlc.HLC{})})
 	syncOK(t, a)
 	write(t, b, store.Change{Row: g.row(newID(t), "b", hlc.HLC{})})
@@ -118,8 +123,12 @@ func TestOwnerSignerBeatsGitIdentity(t *testing.T) {
 	want := "Northwind|lore@northwind.invalid|Northwind|lore@northwind.invalid"
 	for _, rev := range []string{"HEAD", "HEAD^2"} {
 		if got := gitT(t, b.Dir(), "log", "-1", "--format=%an|%ae|%cn|%ce", rev); got != want {
-			t.Fatalf("org store %s signed %q, want %q", rev, got, want)
+			t.Fatalf("org store %s signed %q, want %q (a personal email never signs)", rev, got, want)
 		}
+	}
+	write(t, same, store.Change{Row: g.row(newID(t), "same", hlc.HLC{})})
+	if got := gitT(t, same.Dir(), "log", "-1", "--format=%an|%ae"); got != "git-handle|LORE@northwind.invalid" {
+		t.Fatalf("org store whose git identity uses the org email signed %q, want the git identity", got)
 	}
 	person := "Git Person|person@gmail.invalid"
 	for name, c := range map[string]*Backend{"plain": plain, "unusable signer": unusable} {
@@ -133,5 +142,54 @@ func TestOwnerSignerBeatsGitIdentity(t *testing.T) {
 	}
 	if _, ok := SignerEnv(Signature{Name: "x", Email: "a<b"}); ok {
 		t.Fatal("SignerEnv must refuse a signature that breaks an ident line")
+	}
+}
+
+// brief 2.1: a hand edit (store.PersonAuthored) in an org store is
+// authored by the person, the org identity stays the committer: the lore
+// identity when it is usable (no personal git e-mail in an org store),
+// else the git author of the clone. A plain lore write there keeps the
+// org identity on both sides, and a store without an owner signature keeps
+// the FLAG4 rule for hand edits too.
+func TestHandEditAuthoredByPerson(t *testing.T) {
+	noGitIdentity(t)
+	org := Signature{Name: "Northwind", Email: "lore@northwind.invalid"}
+	lore := Signature{Name: "Mira Lore", Email: "mira@northwind.invalid"}
+	remote := newRemote(t, true)
+	withLore := clone(t, remote, WithSigner(org), WithIdentity(func(context.Context) Signature { return lore }))
+	gitOnly := clone(t, remote, WithSigner(org))
+	plain := clone(t, remote)
+	for _, c := range []*Backend{withLore, gitOnly, plain} {
+		gitT(t, c.Dir(), "config", "user.name", "Git Person")
+		gitT(t, c.Dir(), "config", "user.email", "person@example.invalid")
+	}
+	g := newGen(t)
+	hand := store.WithPersonAuthor(store.WithCommitMessage(context.Background(), "hand edit: tasks x"))
+	cases := []struct {
+		name string
+		b    *Backend
+		ctx  context.Context
+		want string
+	}{
+		{"org store, hand edit, lore identity", withLore, hand, "Mira Lore|mira@northwind.invalid|Northwind|lore@northwind.invalid"},
+		{"org store, hand edit, git author", gitOnly, hand, "Git Person|person@example.invalid|Northwind|lore@northwind.invalid"},
+		{"org store, lore write", withLore, context.Background(), "Northwind|lore@northwind.invalid|Northwind|lore@northwind.invalid"},
+		{"plain store, hand edit", plain, hand, "Git Person|person@example.invalid|Git Person|person@example.invalid"},
+	}
+	for _, c := range cases {
+		if err := c.b.Write(c.ctx, []store.Change{{Row: g.row(newID(t), c.name, hlc.HLC{})}}); err != nil {
+			t.Fatalf("%s: write: %v", c.name, err)
+		}
+		if got := gitT(t, c.b.Dir(), "log", "-1", "--format=%an|%ae|%cn|%ce"); got != c.want {
+			t.Errorf("%s: commit by %q, want %q", c.name, got, c.want)
+		}
+	}
+	// author.* beats user.* for the git author, as in git itself.
+	gitT(t, gitOnly.Dir(), "config", "author.email", "author@example.invalid")
+	if err := gitOnly.Write(hand, []store.Change{{Row: g.row(newID(t), "author", hlc.HLC{})}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := gitT(t, gitOnly.Dir(), "log", "-1", "--format=%an|%ae"), "Git Person|author@example.invalid"; got != want {
+		t.Errorf("author.email: commit by %q, want %q", got, want)
 	}
 }

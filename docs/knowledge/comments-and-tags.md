@@ -21,9 +21,10 @@ Both point at a row by its *table* (the kind of row, in the plural: `rules`, `me
 ```console
 # alice, in website
 $ lore comment add --on-table decisions --on-id dec_d431…313a --body 'The client confirmed this on the call.'
-✓ comment cmt_78c8…5b6c on decisions/dec_d431…313a 
-lore live: (live, pushed)
-lore live: landed on main (86dbae4); leaves live once main is fetched
+lore: wrote ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json
+✓ comment cmt_06b1…3d1c on decisions/dec_d431…313a 
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
+lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -37,13 +38,16 @@ Create the tag with `lore tag add --name`, then attach it. Tag names are lowerca
 ```console
 # alice, in website
 $ lore tag add --name payments
-✓ tag payments tag_d7c7…7fe6
+lore: wrote ~/work/website/.lore/data/tags/tag_7289…c813.json
+✓ tag payments tag_7289…c813
 $ lore tag attach --tag payments --on-table decisions --on-id dec_d431…313a
+lore: wrote ~/work/website/.lore/data/decisions/dec_d431…313a.json
 ✓ tag "payments" attached to decisions/dec_d431…313a
 $ lore tag list
-payments             tag_d7c7…7fe6  (1 uses)
+payments             tag_7289…c813  (1 uses)
 staging              tag_c0f3…b5b8  (1 uses)
 $ lore tag detach --tag payments --on-table decisions --on-id dec_d431…313a
+lore: wrote ~/work/website/.lore/data/decisions/dec_d431…313a.json
 ✓ detached 1 tag binding(s)
 ```
 <!-- /example -->
@@ -58,11 +62,12 @@ $ lore tag detach --tag payments --on-table decisions --on-id dec_d431…313a
 ```console
 # alice, in website
 $ lore comment search confirmed
-cmt_78c8…5b6c [decisions/dec_d431…313a] The client confirmed this on the call.
-$ lore comment delete cmt_78c8…5b6c --yes
-✓ cmt_78c8…5b6c moved to the trash (restore: lore trash restore cmt_78c8…5b6c)
-lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
+cmt_06b1…3d1c [decisions/dec_d431…313a] The client confirmed this on the call.
+$ lore comment delete cmt_06b1…3d1c --yes
+lore: wrote ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json
+✓ cmt_06b1…3d1c moved to the trash (restore: lore trash restore cmt_06b1…3d1c)
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
+lore live: landed on main (dfd8dc8); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -74,9 +79,10 @@ lore live: landed on main (9b40ce7); leaves live once main is fetched
 ```console
 # alice, in website
 $ lore tag edit payments --name billing --color '#1f6feb' --globs 'src/checkout/**'
-✓ tag billing tag_d7c7…7fe6 (globs src/checkout/**)
+lore: wrote ~/work/website/.lore/data/tags/tag_7289…c813.json
+✓ tag billing tag_7289…c813 (globs src/checkout/**)
 $ lore tag list
-billing              tag_d7c7…7fe6  (0 uses)
+billing              tag_7289…c813  (0 uses)
 staging              tag_c0f3…b5b8  (1 uses)
 ```
 <!-- /example -->
@@ -89,7 +95,7 @@ staging              tag_c0f3…b5b8  (1 uses)
 ```console
 # alice, in website
 $ lore comment list --on-table decisions --on-id dec_d431…313a
-cmt_78c8…5b6c on decisions/dec_d431…313a  The client confirmed this on the call.
+cmt_06b1…3d1c on decisions/dec_d431…313a  The client confirmed this on the call.
 ```
 <!-- /example -->
 

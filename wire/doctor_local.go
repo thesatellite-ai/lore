@@ -16,10 +16,7 @@ package wire
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -44,7 +41,7 @@ func (a *App) DoctorTimeOutbox(ctx context.Context) ([]DoctorFinding, error) {
 	if !a.coreOwnsMachineRows() {
 		return nil, nil
 	}
-	if _, err := os.Stat(LocalStatePath(a.opts.Home)); errors.Is(err, fs.ErrNotExist) {
+	if !localStateExists(a.opts.Home) {
 		return nil, nil
 	}
 	warn := func(msg string) []DoctorFinding {

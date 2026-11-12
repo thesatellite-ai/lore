@@ -78,7 +78,7 @@ func TestModeBRetiredOnRelease(t *testing.T) {
 	}
 	for _, cmd := range []string{"shared-init", "shared-list"} {
 		code, _, errOut := w.lore(t, repo, "project", cmd)
-		if code != 23 || !strings.Contains(errOut, "E_UNSUPPORTED") || !strings.Contains(errOut, "lore store init") || !strings.Contains(errOut, "lore migrate run") {
+		if code != 23 || !strings.Contains(errOut, "E_UNSUPPORTED") || !strings.Contains(errOut, "lore store init") || !strings.Contains(errOut, "lore fix") {
 			t.Fatalf("project %s: exit %d\n%s", cmd, code, errOut)
 		}
 	}
@@ -116,11 +116,11 @@ func TestModeBRetiredOnRelease(t *testing.T) {
 	if got := decode(out); code != 0 || got.Count != dry.Count || len(got.Steps) != len(dry.Steps) {
 		t.Fatalf("run: exit %d\n%s\n%s", code, out, errOut)
 	}
-	raw, err := os.ReadFile(filepath.Clean(filepath.Join(storeDir, ".lore", "data", "memories", mbMemA+".json")))
+	raw, err := os.ReadFile(filepath.Clean(filepath.Join(storeDir, "_store", "memories", mbMemA+".json")))
 	if err != nil || !strings.Contains(string(raw), `"_v": 2`) {
 		t.Fatalf("memory row file: %v\n%s", err, raw)
 	}
-	if _, serr := os.Stat(filepath.Join(storeDir, ".lore", "data", "memories", mbMemB+".json")); !os.IsNotExist(serr) {
+	if _, serr := os.Stat(filepath.Join(storeDir, "memories", mbMemB+".json")); !os.IsNotExist(serr) {
 		t.Fatalf("project B's memory reached the store: %v", serr)
 	}
 	if cfg, err := os.ReadFile(filepath.Clean(filepath.Join(repo, ".lore", "stores.yaml"))); err != nil || !strings.Contains(string(cfg), "name: "+wire.ModeBStoreName) {

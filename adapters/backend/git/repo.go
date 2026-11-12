@@ -29,7 +29,7 @@ func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts
 	if err != nil {
 		return nil, err
 	}
-	root, err := rowfs.Open(dirRoot, rowfs.WithSharedModes(), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
+	root, err := rowfs.Open(dirRoot, rowfs.WithLayout(rowfs.LayoutRepo), rowfs.WithSharedModes(), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithClock(cfg.now), rowfs.WithAllowNetworkFS(o.AllowNetworkFS))
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +118,9 @@ func (b *Backend) Sync(ctx context.Context) (store.SyncReport, error) {
 	}
 	if b.mode == modeRepo {
 		return store.SyncReport{}, nil
+	}
+	if GitSetUp(ctx) {
+		b.setUpHandGitOnce(ctx) // an explicit sync sets an unwired clone up (handgit.go)
 	}
 	return b.syncClone(ctx, SyncOptions{})
 }

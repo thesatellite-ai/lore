@@ -10,7 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
-// TestLockRefusesSymlinkedLockFile: a .lore/lock that is a symbolic link
+// TestLockRefusesSymlinkedLockFile: a store lock file (.lore-state/lock) that is a symbolic link
 // (a cloned repository can commit one) is refused with E_SYMLINK_DB, and
 // the file it points at keeps its content: taking the lock truncates the
 // lock file and writes the holder line, so following the link would
@@ -23,7 +23,7 @@ func TestLockRefusesSymlinkedLockFile(t *testing.T) {
 	if err := os.WriteFile(victim, []byte(keep), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	p := filepath.Join(dir, LoreDir, LockFileName)
+	p := filepath.Join(dir, StoreStateDir, LockFileName)
 	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestLockRefusesSymlinkedLockFile(t *testing.T) {
 		if lerr == nil {
 			_ = l.Release()
 		}
-		t.Fatalf("lock through a symlinked .lore/lock: got %v, want E_SYMLINK_DB", lerr)
+		t.Fatalf("lock through a symlinked .lore-state/lock: got %v, want E_SYMLINK_DB", lerr)
 	}
 	if got, rerr := os.ReadFile(filepath.Clean(victim)); rerr != nil || string(got) != keep {
 		t.Fatalf("the linked file was written: %q (%v)", got, rerr)

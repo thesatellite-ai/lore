@@ -51,13 +51,15 @@ func TestAdoptStarterRepo(t *testing.T) {
 		{"license txt", []string{"LICENSE.txt", "readme"}, ""},
 		{"code file", []string{"README.md", "main.go"}, "main.go"},
 		{"nested readme", []string{"docs/README.md"}, "docs/README.md"},
-		{"row data", []string{".lore/data/memories/m.json"}, ".lore/data/memories/m.json"},
+		{"row data", []string{"memories/m.json"}, "memories/m.json"},
 		// a folder pushed without the marker (owner report 2026-11-11)
-		{"folder meta", []string{"client_z/.lore/data/_meta.json"}, ""},
-		{"folder metas and readme", []string{"README.md", "client_z/.lore/data/_meta.json", "client_y/.lore/data/_meta.json"}, ""},
-		{"folder rows", []string{"client_z/.lore/data/_meta.json", "client_z/.lore/data/memories/m.json"}, "client_z/.lore/data/memories/m.json"},
-		{"root meta", []string{".lore/data/_meta.json"}, ".lore/data/_meta.json"},
-		{"meta of a bad folder name", []string{"Client Z/.lore/data/_meta.json"}, "Client Z/.lore/data/_meta.json"},
+		{"folder meta", []string{"client_z/_meta.json"}, ""},
+		{"folder meta, old layout", []string{"client_z/.lore/data/_meta.json"}, ""},
+		{"folder metas and readme", []string{"README.md", "client_z/_meta.json", "client_y/_meta.json"}, ""},
+		{"folder rows", []string{"client_z/_meta.json", "client_z/memories/m.json"}, "client_z/memories/m.json"},
+		{"root meta", []string{"_meta.json"}, "_meta.json"},
+		{"meta of a bad folder name", []string{"Client Z/_meta.json"}, "Client Z/_meta.json"},
+		{"meta of a table folder", []string{"tasks/_meta.json"}, "tasks/_meta.json"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -90,7 +92,7 @@ func TestFirstWriteAddsMarker(t *testing.T) {
 		name  string
 		files []string
 	}{
-		{"adopted folder meta", []string{"client_z/.lore/data/_meta.json"}},
+		{"adopted folder meta", []string{"client_z/_meta.json"}},
 		{"starter files", []string{"README.md"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

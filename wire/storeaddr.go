@@ -94,8 +94,8 @@ func recordStoreAddress(home, id, raw string, now time.Time) error {
 }
 
 // storeIDOnDisk is the sto_ id in the marker of the store raw names, read
-// from this machine's copy (the file:// folder, or the git clone's
-// worktree for branch, else its default-branch clone); "" when there is
+// from this machine's copy (the file:// folder, or the git clone for
+// branch, else its default-branch clone); "" when there is
 // no local copy or no 0.1.18 marker. Never the network.
 func storeIDOnDisk(home, raw, branch string) string {
 	canon, err := canonical(attach.Store{URL: raw})
@@ -114,14 +114,14 @@ func storeIDOnDisk(home, raw, branch string) string {
 		if rerr != nil {
 			return ""
 		}
-		base, berr := git.CloneBase(home, r)
-		if berr != nil {
-			return ""
-		}
 		if branch != "" {
-			dirs = append(dirs, filepath.Join(base+"@"+filepath.FromSlash(branch), cloneWorkDir))
+			if d, _, derr := git.CloneDirFor(home, r, branch); derr == nil {
+				dirs = append(dirs, d)
+			}
 		}
-		dirs = append(dirs, filepath.Join(base, cloneWorkDir))
+		if d, _, derr := git.CloneDirFor(home, r, ""); derr == nil {
+			dirs = append(dirs, d)
+		}
 	}
 	for _, d := range dirs {
 		if m, merr := rowfs.ReadMarker(d); merr == nil && !m.ID.IsZero() {

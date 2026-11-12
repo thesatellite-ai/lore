@@ -41,15 +41,21 @@ const (
 )
 
 // localStateFiles are the files under .lore/ that mark a checkout as
-// already set up on this machine: the core's repo cache, and v0.1.17's
-// lore.db and its Mode-B pointers (lore.yaml, the legacy lore.toml). All are
-// gitignored, so a fresh clone carries none of them.
+// already set up on this machine: an earlier build's repo cache, and
+// v0.1.17's lore.db and its Mode-B pointers (lore.yaml, the legacy
+// lore.toml). All are gitignored, so a fresh clone carries none of them.
 var localStateFiles = []string{filepath.Base(wire.RepoCacheFile), "lore.db", "lore.yaml", "lore.toml"}
 
-// hasLocalState reports whether any localStateFiles entry exists in
-// wd/.lore. It must be read before the app opens the repo store, which
-// creates the cache.
-func hasLocalState(wd string) bool {
+// hasLocalState reports whether the checkout at wd has a repo cache under
+// home (wire.RepoCachePath) or any localStateFiles entry in wd/.lore. It
+// must be read before the app opens the repo store, which creates the
+// cache.
+func hasLocalState(home, wd string) bool {
+	if home != "" {
+		if _, err := os.Lstat(wire.RepoCachePath(home, wd)); err == nil {
+			return true
+		}
+	}
 	for _, f := range localStateFiles {
 		if _, err := os.Lstat(filepath.Join(wd, rowfs.LoreDir, f)); err == nil {
 			return true
@@ -83,7 +89,7 @@ func initScope(o *wire.Options) {
 func (h *host) initCommand(wd string) *cobra.Command {
 	var in repoinit.InitIn
 	// Read now, before any command opens the store (and creates the cache).
-	ih := h.initHost(wd, hasLocalState(wd))
+	ih := h.initHost(wd, hasLocalState(h.home, wd))
 	cmd := &cobra.Command{
 		Use:   "init [path]",
 		Short: "Initialize a lore project in this repository (project row and repo id)",
@@ -96,9 +102,17 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			if len(args) > 0 { // run takes the path off first; reaching here means it could not
 				return errs.New(errs.InvalidInput, "init: run lore init "+args[0]+" as the whole command")
 			}
-			out, err := repoinit.Run(cmd.Context(), ih, in)
+			// the rows init writes are named like any write's (wire/host
+			// writeloc.go: lore repo init runs through that hook)
+			ctx, written := wire.WithWriteLog(cmd.Context())
+			out, err := repoinit.Run(ctx, ih, in)
 			if err != nil {
 				return err
+			}
+			if os.Getenv(hosthooks.EnvSyncQuiet) != "1" {
+				for _, l := range wire.WrittenLines(written.Files()) {
+					_, _ = io.WriteString(cmd.ErrOrStderr(), l+"\n") // stderr gone: nothing left to report to
+				}
 			}
 			_, _ = io.WriteString(cmd.ErrOrStderr(), out.WarningLines()) // stderr gone: nothing left to report to
 			_, err = io.WriteString(cmd.OutOrStdout(), out.Body())
@@ -193,9 +207,17 @@ func (i *initHost) EnsureGitignore(ctx context.Context) error {
 	return hosthooks.EnsureGitignore(ctx, i.wd)
 }
 
+// initCommandName is the name `lore init`'s lines carry.
+const initCommandName = "lore init"
+
 // Prime implements repoinit.Host.
 func (i *initHost) Prime(ctx context.Context) {
 	if i.h.live != nil {
+		if wire.CommandName(ctx) == wire.CommandName(context.Background()) {
+			// `lore init` runs outside the registry: its set-up lines say
+			// "lore init:" (wire/cmdname.go), as `lore repo init`'s say theirs
+			ctx = wire.WithCommandName(ctx, initCommandName)
+		}
 		i.h.live.Prime(ctx)
 	}
 }

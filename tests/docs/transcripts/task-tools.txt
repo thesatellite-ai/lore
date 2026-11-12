@@ -1,112 +1,129 @@
 
 ### board
 alice (work/website)$ lore task add 'Write the launch email' --priority high
-✓ tsk_7a670ae8548ed05bf57ad29ad0759504 — Write the launch email [high]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Write the launch email [high]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 alice (work/website)$ lore task add 'Pick the product photos' --priority low
-✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Pick the product photos [low]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
+✓ tsk_162df51b7f78b785c97c26b41ea89666 — Pick the product photos [low]
+lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 alice (work/website)$ lore task add 'Set up the payment provider' --priority urgent
-✓ tsk_162df51b7f78b785c97c26b41ea89666 — Set up the payment provider [urgent]
-lore live: (live, pushed)
-alice (work/website)$ lore task start tsk_162df51b7f78b785c97c26b41ea89666
-✓ tsk_162df51b7f78b785c97c26b41ea89666 started
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+✓ tsk_54fe984c9b495744c0217776765a28f2 — Set up the payment provider [urgent]
+lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+alice (work/website)$ lore task start tsk_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+✓ tsk_54fe984c9b495744c0217776765a28f2 started
+lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 alice (work/website)$ lore task board
 todo (2)
-  tsk_7a670ae8548ed05bf57ad29ad0759504  Write the launch email
-  tsk_2ad3618e878ebbf527d34d446ef4f891  Pick the product photos
+  tsk_2ad3618e878ebbf527d34d446ef4f891  Write the launch email
+  tsk_162df51b7f78b785c97c26b41ea89666  Pick the product photos
 in_progress (1)
-  tsk_162df51b7f78b785c97c26b41ea89666  Set up the payment provider
+  tsk_54fe984c9b495744c0217776765a28f2  Set up the payment provider
 done (0)
 cancelled (0)
 blocked (0)
 alice (work/website)$ lore task board --group-by priority
 urgent (1)
-  tsk_162df51b7f78b785c97c26b41ea89666  Set up the payment provider
+  tsk_54fe984c9b495744c0217776765a28f2  Set up the payment provider
 high (1)
-  tsk_7a670ae8548ed05bf57ad29ad0759504  Write the launch email
+  tsk_2ad3618e878ebbf527d34d446ef4f891  Write the launch email
 medium (0)
 low (1)
-  tsk_2ad3618e878ebbf527d34d446ef4f891  Pick the product photos
+  tsk_162df51b7f78b785c97c26b41ea89666  Pick the product photos
 
 ### checklist
-alice (work/website)$ lore task checklist add tsk_7a670ae8548ed05bf57ad29ad0759504 'Subject line' --item 'Product links' --item 'Discount code' --item 'Send a test to the client'
-✓ 4 checklist items on tsk_7a670ae8548ed05bf57ad29ad0759504 (chk_54fe984c9b495744c0217776765a28f2, chk_05e99e22e9e86e96fe4daa7777994603, chk_c0f3c11a5724b0cfd74b256190d9b5b8, chk_76bd560aff0771fab8457dbfa9823f10)
-lore live: (live, pushed)
-alice (work/website)$ lore task checklist tick tsk_7a670ae8548ed05bf57ad29ad0759504 1
+alice (work/website)$ lore task checklist add tsk_2ad3618e878ebbf527d34d446ef4f891 'Subject line' --item 'Product links' --item 'Discount code' --item 'Send a test to the client'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+✓ 4 checklist items on tsk_2ad3618e878ebbf527d34d446ef4f891 (chk_05e99e22e9e86e96fe4daa7777994603, chk_c0f3c11a5724b0cfd74b256190d9b5b8, chk_76bd560aff0771fab8457dbfa9823f10, chk_d4314eba822f1bf5908b2b8ded5f313a)
+lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
+alice (work/website)$ lore task checklist tick tsk_2ad3618e878ebbf527d34d446ef4f891 1
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
 ✓ [x] Subject line (1/4)
-lore live: (live, pushed)
-alice (work/website)$ lore task checklist edit tsk_7a670ae8548ed05bf57ad29ad0759504 3 'Discount code LAUNCH10'
-✓ chk_c0f3c11a5724b0cfd74b256190d9b5b8 Discount code LAUNCH10
-lore live: (live, pushed)
-alice (work/website)$ lore task checklist list tsk_7a670ae8548ed05bf57ad29ad0759504
-1. [x] Subject line  chk_54fe984c9b495744c0217776765a28f2
-2. [ ] Product links  chk_05e99e22e9e86e96fe4daa7777994603
-3. [ ] Discount code LAUNCH10  chk_c0f3c11a5724b0cfd74b256190d9b5b8
-4. [ ] Send a test to the client  chk_76bd560aff0771fab8457dbfa9823f10
+lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
+alice (work/website)$ lore task checklist edit tsk_2ad3618e878ebbf527d34d446ef4f891 3 'Discount code LAUNCH10'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+✓ chk_76bd560aff0771fab8457dbfa9823f10 Discount code LAUNCH10
+lore live: (live, pushed) commit df3a55c to origin refs/lore/live
+alice (work/website)$ lore task checklist list tsk_2ad3618e878ebbf527d34d446ef4f891
+1. [x] Subject line  chk_05e99e22e9e86e96fe4daa7777994603
+2. [ ] Product links  chk_c0f3c11a5724b0cfd74b256190d9b5b8
+3. [ ] Discount code LAUNCH10  chk_76bd560aff0771fab8457dbfa9823f10
+4. [ ] Send a test to the client  chk_d4314eba822f1bf5908b2b8ded5f313a
 1/4 done
 
 ### checklist untick and rm
-alice (work/website)$ lore task checklist untick tsk_7a670ae8548ed05bf57ad29ad0759504 1
+alice (work/website)$ lore task checklist untick tsk_2ad3618e878ebbf527d34d446ef4f891 1
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
 ✓ [ ] Subject line (0/4)
-lore live: (live, pushed)
-alice (work/website)$ lore task checklist rm tsk_7a670ae8548ed05bf57ad29ad0759504 2
-✓ removed chk_05e99e22e9e86e96fe4daa7777994603 Product links
-lore live: (live, pushed)
-alice (work/website)$ lore task checklist list tsk_7a670ae8548ed05bf57ad29ad0759504
-1. [ ] Subject line  chk_54fe984c9b495744c0217776765a28f2
-2. [ ] Discount code LAUNCH10  chk_c0f3c11a5724b0cfd74b256190d9b5b8
-3. [ ] Send a test to the client  chk_76bd560aff0771fab8457dbfa9823f10
+lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
+alice (work/website)$ lore task checklist rm tsk_2ad3618e878ebbf527d34d446ef4f891 2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+✓ removed chk_c0f3c11a5724b0cfd74b256190d9b5b8 Product links
+lore live: (live, pushed) commit 34ee210 to origin refs/lore/live
+alice (work/website)$ lore task checklist list tsk_2ad3618e878ebbf527d34d446ef4f891
+1. [ ] Subject line  chk_05e99e22e9e86e96fe4daa7777994603
+2. [ ] Discount code LAUNCH10  chk_76bd560aff0771fab8457dbfa9823f10
+3. [ ] Send a test to the client  chk_d4314eba822f1bf5908b2b8ded5f313a
 0/3 done
 
 ### checklist promote
-alice (work/website)$ lore task checklist promote tsk_7a670ae8548ed05bf57ad29ad0759504 3
-✓ chk_76bd560aff0771fab8457dbfa9823f10 became tsk_d4314eba822f1bf5908b2b8ded5f313a "Send a test to the client" under tsk_7a670ae8548ed05bf57ad29ad0759504
-lore live: (live, pushed)
-alice (work/website)$ lore task list --parent tsk_7a670ae8548ed05bf57ad29ad0759504
-○ tsk_d4314eba822f1bf5908b2b8ded5f313a Send a test to the client [high]
+alice (work/website)$ lore task checklist promote tsk_2ad3618e878ebbf527d34d446ef4f891 3
+lore: wrote ~/work/website/.lore/data/tasks/tsk_b4f4765e593d51fd1352985e8af3a5b0.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+✓ chk_d4314eba822f1bf5908b2b8ded5f313a became tsk_b4f4765e593d51fd1352985e8af3a5b0 "Send a test to the client" under tsk_2ad3618e878ebbf527d34d446ef4f891
+lore live: (live, pushed) commit 7898daa to origin refs/lore/live
+alice (work/website)$ lore task list --parent tsk_2ad3618e878ebbf527d34d446ef4f891
+○ tsk_b4f4765e593d51fd1352985e8af3a5b0 Send a test to the client [high]
 
 ### checklist import
 alice (work/website)$ lore task add 'Check the shop on a phone' --body $'- [ ] iPhone\n- [ ] Android\n- [x] Tablet'
-✓ tsk_b4f4765e593d51fd1352985e8af3a5b0 — Check the shop on a phone [medium]
-lore live: (live, pushed)
-alice (work/website)$ lore task checklist import tsk_b4f4765e593d51fd1352985e8af3a5b0 --from body
-ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_b4f4765e593d51fd1352985e8af3a5b0?
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json
+✓ tsk_28f8d32584b2db54ffb146bede5b03df — Check the shop on a phone [medium]
+lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
+alice (work/website)$ lore task checklist import tsk_28f8d32584b2db54ffb146bede5b03df --from body
+ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_28f8d32584b2db54ffb146bede5b03df?
   [ ] iPhone
   [ ] Android
   [x] Tablet
 
   hint: ask the person, then rerun with --yes
 (exit 26)
-alice (work/website)$ lore task checklist import tsk_b4f4765e593d51fd1352985e8af3a5b0 --from body --yes
-✓ 3 checklist items from the body of tsk_b4f4765e593d51fd1352985e8af3a5b0
-lore live: (live, pushed)
-alice (work/website)$ lore task checklist list tsk_b4f4765e593d51fd1352985e8af3a5b0
-1. [ ] iPhone  chk_28f8d32584b2db54ffb146bede5b03df
-2. [ ] Android  chk_4c590afb2a0cc7ae1b97b7e4e62d6c38
-3. [x] Tablet  chk_3b6283bc4392c556bbae5f094246e913
+alice (work/website)$ lore task checklist import tsk_28f8d32584b2db54ffb146bede5b03df --from body --yes
+lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json
+✓ 3 checklist items from the body of tsk_28f8d32584b2db54ffb146bede5b03df
+lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
+alice (work/website)$ lore task checklist list tsk_28f8d32584b2db54ffb146bede5b03df
+1. [ ] iPhone  chk_4c590afb2a0cc7ae1b97b7e4e62d6c38
+2. [ ] Android  chk_3b6283bc4392c556bbae5f094246e913
+3. [x] Tablet  chk_f147dd95f1aaf742dd4f5214843a5139
 1/3 done
 
 ### split
-alice (work/website)$ lore task split tsk_2ad3618e878ebbf527d34d446ef4f891 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos' --dry-run
-would add 3 sub-tasks under tsk_2ad3618e878ebbf527d34d446ef4f891 Pick the product photos:
+alice (work/website)$ lore task split tsk_162df51b7f78b785c97c26b41ea89666 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos' --dry-run
+would add 3 sub-tasks under tsk_162df51b7f78b785c97c26b41ea89666 Pick the product photos:
   1  Shoot the shirts
   2  Shoot the mugs  (priority high)
   3  Edit the photos
-  inherited: tasklist tlt_f147dd95f1aaf742dd4f5214843a5139, priority low, commitment accepted
+  inherited: tasklist tlt_7a670ae8548ed05bf57ad29ad0759504, priority low, commitment accepted
 nothing written (--dry-run)
-alice (work/website)$ lore task split tsk_2ad3618e878ebbf527d34d446ef4f891 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos'
-✓ 3 sub-tasks under tsk_2ad3618e878ebbf527d34d446ef4f891 Pick the product photos (batch bat_2537f9b2f7de77bfe5ca958860216bbb):
-  1  tsk_b69e8368dd4986838455061d5d9e5ed7 Shoot the shirts
-  2  tsk_0aaebe6aca5bb46cc521869f5ba2a61f Shoot the mugs  (priority high)
-  3  tsk_6a866bb99ce08addfe04ea845052ed8c Edit the photos
-  inherited: tasklist tlt_f147dd95f1aaf742dd4f5214843a5139, priority low, commitment accepted
-lore live: (live, pushed)
-alice (work/website)$ lore task list --parent tsk_2ad3618e878ebbf527d34d446ef4f891
-○ tsk_b69e8368dd4986838455061d5d9e5ed7 Shoot the shirts [low]
-○ tsk_0aaebe6aca5bb46cc521869f5ba2a61f Shoot the mugs [high]
-○ tsk_6a866bb99ce08addfe04ea845052ed8c Edit the photos [low]
+alice (work/website)$ lore task split tsk_162df51b7f78b785c97c26b41ea89666 'Shoot the shirts' 'Shoot the mugs' --priority high 'Edit the photos'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_b69e8368dd4986838455061d5d9e5ed7.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_0aaebe6aca5bb46cc521869f5ba2a61f.json
+✓ 3 sub-tasks under tsk_162df51b7f78b785c97c26b41ea89666 Pick the product photos (batch bat_6a866bb99ce08addfe04ea845052ed8c):
+  1  tsk_2537f9b2f7de77bfe5ca958860216bbb Shoot the shirts
+  2  tsk_b69e8368dd4986838455061d5d9e5ed7 Shoot the mugs  (priority high)
+  3  tsk_0aaebe6aca5bb46cc521869f5ba2a61f Edit the photos
+  inherited: tasklist tlt_7a670ae8548ed05bf57ad29ad0759504, priority low, commitment accepted
+lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
+alice (work/website)$ lore task list --parent tsk_162df51b7f78b785c97c26b41ea89666
+○ tsk_2537f9b2f7de77bfe5ca958860216bbb Shoot the shirts [low]
+○ tsk_b69e8368dd4986838455061d5d9e5ed7 Shoot the mugs [high]
+○ tsk_0aaebe6aca5bb46cc521869f5ba2a61f Edit the photos [low]
 
 ### tree check
 alice (work/website)$ lore task tree check
@@ -114,45 +131,56 @@ alice (work/website)$ lore task tree check
 
 ### relate
 alice (work/website)$ lore task add 'Write the launch mail'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b.json
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b — Write the launch mail [medium]
-lore live: (live, pushed)
-alice (work/website)$ lore task relate tsk_4f89f5fcb1d81152bdf3f52979ebb64b --duplicates tsk_7a670ae8548ed05bf57ad29ad0759504
-✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b duplicates tsk_7a670ae8548ed05bf57ad29ad0759504; tsk_4f89f5fcb1d81152bdf3f52979ebb64b cancelled (close_reason duplicate)
-lore live: (live, pushed)
-lore live: landed on main (601d285); leaves live once main is fetched
+lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
+alice (work/website)$ lore task relate tsk_4f89f5fcb1d81152bdf3f52979ebb64b --duplicates tsk_2ad3618e878ebbf527d34d446ef4f891
+lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_77cb2df809cef85479f6587c4a7d76c4.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b.json
+✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b duplicates tsk_2ad3618e878ebbf527d34d446ef4f891; tsk_4f89f5fcb1d81152bdf3f52979ebb64b cancelled (close_reason duplicate)
+lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
+lore live: landed on main (8c373dc); leaves live once main is fetched
 alice (work/website)$ lore task add 'Thank-you email after the first order'
-✓ tsk_77cb2df809cef85479f6587c4a7d76c4 — Thank-you email after the first order [medium]
-lore live: (live, pushed)
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json
+✓ tsk_d191616cfa49f94ede5d5148b8b045c2 — Thank-you email after the first order [medium]
+lore live: (live, pushed) commit 6f11034 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
-alice (work/website)$ lore task relate tsk_77cb2df809cef85479f6587c4a7d76c4 --follows-up tsk_7a670ae8548ed05bf57ad29ad0759504 --blocked-by tsk_162df51b7f78b785c97c26b41ea89666
-✓ tsk_77cb2df809cef85479f6587c4a7d76c4 waits for tsk_162df51b7f78b785c97c26b41ea89666
-✓ tsk_77cb2df809cef85479f6587c4a7d76c4 follows up tsk_7a670ae8548ed05bf57ad29ad0759504
-lore live: (live, pushed)
+alice (work/website)$ lore task relate tsk_d191616cfa49f94ede5d5148b8b045c2 --follows-up tsk_2ad3618e878ebbf527d34d446ef4f891 --blocked-by tsk_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json
+lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_b4d3d8fc9a019dca1371ad55c6a611aa.json
+✓ tsk_d191616cfa49f94ede5d5148b8b045c2 waits for tsk_54fe984c9b495744c0217776765a28f2
+✓ tsk_d191616cfa49f94ede5d5148b8b045c2 follows up tsk_2ad3618e878ebbf527d34d446ef4f891
+lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 
 ### unrelate
-alice (work/website)$ lore task unrelate tsk_77cb2df809cef85479f6587c4a7d76c4 --blocked-by tsk_162df51b7f78b785c97c26b41ea89666
-✓ tsk_77cb2df809cef85479f6587c4a7d76c4 no longer waits for tsk_162df51b7f78b785c97c26b41ea89666
-lore live: (live, pushed)
+alice (work/website)$ lore task unrelate tsk_d191616cfa49f94ede5d5148b8b045c2 --blocked-by tsk_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json
+✓ tsk_d191616cfa49f94ede5d5148b8b045c2 no longer waits for tsk_54fe984c9b495744c0217776765a28f2
+lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
 
 ### watch
-alice (work/website)$ lore task watch tsk_162df51b7f78b785c97c26b41ea89666
-already watching tsk_162df51b7f78b785c97c26b41ea89666
-alice (work/website)$ lore task unwatch tsk_162df51b7f78b785c97c26b41ea89666
-✓ stopped watching tsk_162df51b7f78b785c97c26b41ea89666
-lore live: (live, pushed)
-alice (work/website)$ lore task watch tsk_162df51b7f78b785c97c26b41ea89666
-✓ watching tsk_162df51b7f78b785c97c26b41ea89666
-lore live: (live, pushed)
+alice (work/website)$ lore task watch tsk_54fe984c9b495744c0217776765a28f2
+already watching tsk_54fe984c9b495744c0217776765a28f2
+alice (work/website)$ lore task unwatch tsk_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+✓ stopped watching tsk_54fe984c9b495744c0217776765a28f2
+lore live: (live, pushed) commit aba91f6 to origin refs/lore/live
+alice (work/website)$ lore task watch tsk_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+✓ watching tsk_54fe984c9b495744c0217776765a28f2
+lore live: (live, pushed) commit a8de760 to origin refs/lore/live
 
 ### history
-alice (work/website)$ lore task edit tsk_162df51b7f78b785c97c26b41ea89666 --priority high
-✓ tsk_162df51b7f78b785c97c26b41ea89666 updated
-lore live: (live, pushed)
-alice (work/website)$ lore task done tsk_162df51b7f78b785c97c26b41ea89666 --no-lesson
-✓ tsk_162df51b7f78b785c97c26b41ea89666 done
-lore live: (live, pushed)
-lore live: landed on main (86dbae4); leaves live once main is fetched
-alice (work/website)$ lore task history tsk_162df51b7f78b785c97c26b41ea89666
+alice (work/website)$ lore task edit tsk_54fe984c9b495744c0217776765a28f2 --priority high
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+✓ tsk_54fe984c9b495744c0217776765a28f2 updated
+lore live: (live, pushed) commit 9169078 to origin refs/lore/live
+alice (work/website)$ lore task done tsk_54fe984c9b495744c0217776765a28f2 --no-lesson
+lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+✓ tsk_54fe984c9b495744c0217776765a28f2 done
+lore live: (live, pushed) commit b733d8a to origin refs/lore/live
+lore live: landed on main (1833373); leaves live once main is fetched
+alice (work/website)$ lore task history tsk_54fe984c9b495744c0217776765a28f2
 2026-11-02 10:00  alice               created
 2026-11-02 10:00  alice               status todo → in_progress
 2026-11-02 10:02  alice               priority urgent → high
@@ -176,11 +204,12 @@ task:
     - {title: "Run the tests", after: [0]}
     - {title: "Deploy to the shop", after: [1]}
 alice (work/website)$ lore task template add release --from-file ~/release.yaml
-✓ ttp_d191616cfa49f94ede5d5148b8b045c2 — template release: 1 task, 3 sub-tasks, 2 checklist items
+lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34c925c88945140e68f54b1ba3b418.json
+✓ ttp_9a34c925c88945140e68f54b1ba3b418 — template release: 1 task, 3 sub-tasks, 2 checklist items
 alice (work/website)$ lore task template list
 release  repo  1 task, 3 sub-tasks, 2 checklist items
 alice (work/website)$ lore task template show release
-# ttp_d191616cfa49f94ede5d5148b8b045c2 (repo)
+# ttp_9a34c925c88945140e68f54b1ba3b418 (repo)
 name: release
 description: Ship one release of the shop
 args:
@@ -245,105 +274,116 @@ would add 4 tasks (template release):
     Run the tests
     Deploy to the shop
 alice (work/website)$ lore task add --template release --arg version=1.4
-✓ tsk_b4d3d8fc9a019dca1371ad55c6a611aa — Release 1.4 [high]
+lore: wrote 4 row file(s) in ~/work/website/.lore/data
+✓ tsk_bfed655e145f36ce2ef425180e72eeea — Release 1.4 [high]
   template release: added 1 task and 3 sub-tasks
-lore live: (live, pushed)
+lore live: (live, pushed) commit 59e9d31 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 
 ### template rename and delete
 alice (work/website)$ lore task template rename release shop_release
-✓ ttp_d191616cfa49f94ede5d5148b8b045c2 — template release renamed to shop_release
+lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34c925c88945140e68f54b1ba3b418.json
+✓ ttp_9a34c925c88945140e68f54b1ba3b418 — template release renamed to shop_release
 alice (work/website)$ lore task template list
 shop_release  repo  1 task, 3 sub-tasks, 2 checklist items
 alice (work/website)$ lore task template delete shop_release --yes
-✓ ttp_d191616cfa49f94ede5d5148b8b045c2 — template shop_release moved to the trash (restore: lore trash restore ttp_d191616cfa49f94ede5d5148b8b045c2)
+lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34c925c88945140e68f54b1ba3b418.json
+✓ ttp_9a34c925c88945140e68f54b1ba3b418 — template shop_release moved to the trash (restore: lore trash restore ttp_9a34c925c88945140e68f54b1ba3b418)
 
 ### recur
 alice (work/website)$ lore task add 'Back up the shop database' --recur 'every week'
-✓ tsk_9a34c925c88945140e68f54b1ba3b418 — Back up the shop database [medium]
-  recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_bfed655e145f36ce2ef425180e72eeea, #1)
-lore live: (live, pushed)
-alice (work/website)$ lore task recur show tsk_9a34c925c88945140e68f54b1ba3b418
-tsk_9a34c925c88945140e68f54b1ba3b418 Back up the shop database
+lore: wrote ~/work/website/.lore/data/tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a.json
+✓ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a — Back up the shop database [medium]
+  recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #1)
+lore live: (live, pushed) commit 7540e63 to origin refs/lore/live
+alice (work/website)$ lore task recur show tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a
+tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a Back up the shop database
   rule: every week
-  series: rcs_bfed655e145f36ce2ef425180e72eeea #1 (active)
+  series: rcs_67e20cdd829de837b50a73f9dc3c291e #1 (active)
   next: 2026-11-02, 2026-11-09, 2026-11-16
 
 ### recur done
-alice (work/website)$ lore task done tsk_9a34c925c88945140e68f54b1ba3b418 --no-lesson
-✓ tsk_9a34c925c88945140e68f54b1ba3b418 done
+alice (work/website)$ lore task done tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a --no-lesson
+lore: wrote ~/work/website/.lore/data/tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f.json
+✓ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a done
   every week due 2026-11-02
-  next instance: tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a due 2026-11-09 (series rcs_bfed655e145f36ce2ef425180e72eeea, #2)
-lore live: (live, pushed)
-lore live: landed on main (9b40ce7); leaves live once main is fetched
-alice (work/website)$ lore task list --series rcs_bfed655e145f36ce2ef425180e72eeea --all
-✓ tsk_9a34c925c88945140e68f54b1ba3b418 Back up the shop database [medium] due:2026-11-02
-○ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a Back up the shop database [medium] due:2026-11-09
+  next instance: tsk_8567cf97b52ccbe51c3bd8cd91d6366f due 2026-11-09 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #2)
+lore live: (live, pushed) commit ef62c83 to origin refs/lore/live
+lore live: landed on main (dd85e7d); leaves live once main is fetched
+alice (work/website)$ lore task list --series rcs_67e20cdd829de837b50a73f9dc3c291e --all
+✓ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a Back up the shop database [medium] due:2026-11-02
+○ tsk_8567cf97b52ccbe51c3bd8cd91d6366f Back up the shop database [medium] due:2026-11-09
 
 ### recur skip
-alice (work/website)$ lore task recur skip tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a
-✓ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a skipped
+alice (work/website)$ lore task recur skip tsk_8567cf97b52ccbe51c3bd8cd91d6366f
+lore: wrote ~/work/website/.lore/data/tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json
+✓ tsk_8567cf97b52ccbe51c3bd8cd91d6366f skipped
   every week due 2026-11-09
-  next instance: tsk_67e20cdd829de837b50a73f9dc3c291e due 2026-11-16 (series rcs_bfed655e145f36ce2ef425180e72eeea, #3)
-lore live: (live, pushed)
-lore live: landed on main (05513aa); leaves live once main is fetched
+  next instance: tsk_71f07e3f4ec7ebaeff7d0686d814c07d due 2026-11-16 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #3)
+lore live: (live, pushed) commit d18179e to origin refs/lore/live
+lore live: landed on main (f4b8da2); leaves live once main is fetched
 lore live: 1 row(s) left live (main holds them)
 
 ### recur edit
-alice (work/website)$ lore task recur edit tsk_67e20cdd829de837b50a73f9dc3c291e 'every! 14 days'
-✓ tsk_67e20cdd829de837b50a73f9dc3c291e updated
-  recurs: every! 14 days → next: 2026-11-16, 2026-11-30, 2026-12-14 (series rcs_bfed655e145f36ce2ef425180e72eeea, #3)
-lore live: (live, pushed)
+alice (work/website)$ lore task recur edit tsk_71f07e3f4ec7ebaeff7d0686d814c07d 'every! 14 days'
+lore: wrote ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json
+✓ tsk_71f07e3f4ec7ebaeff7d0686d814c07d updated
+  recurs: every! 14 days → next: 2026-11-16, 2026-11-30, 2026-12-14 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #3)
+lore live: (live, pushed) commit 70f4f88 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-alice (work/website)$ lore task recur show tsk_67e20cdd829de837b50a73f9dc3c291e
-tsk_67e20cdd829de837b50a73f9dc3c291e Back up the shop database
+alice (work/website)$ lore task recur show tsk_71f07e3f4ec7ebaeff7d0686d814c07d
+tsk_71f07e3f4ec7ebaeff7d0686d814c07d Back up the shop database
   rule: every! 14 days
-  series: rcs_bfed655e145f36ce2ef425180e72eeea #3 (active)
+  series: rcs_67e20cdd829de837b50a73f9dc3c291e #3 (active)
   next: 2026-11-16, 2026-11-30, 2026-12-14
 
 ### recur stop
-alice (work/website)$ lore task recur stop tsk_67e20cdd829de837b50a73f9dc3c291e
-ERROR: [E_NEEDS_CONFIRM] task recur stop tsk_67e20cdd829de837b50a73f9dc3c291e?
+alice (work/website)$ lore task recur stop tsk_71f07e3f4ec7ebaeff7d0686d814c07d
+ERROR: [E_NEEDS_CONFIRM] task recur stop tsk_71f07e3f4ec7ebaeff7d0686d814c07d?
   hint: ask the person, then rerun with --yes
 (exit 26)
-alice (work/website)$ lore task recur stop tsk_67e20cdd829de837b50a73f9dc3c291e --yes
-✓ tsk_67e20cdd829de837b50a73f9dc3c291e series rcs_bfed655e145f36ce2ef425180e72eeea stopped (no further instances; this one stays)
-lore live: (live, pushed)
-alice (work/website)$ lore task recur show tsk_67e20cdd829de837b50a73f9dc3c291e
-tsk_67e20cdd829de837b50a73f9dc3c291e Back up the shop database
+alice (work/website)$ lore task recur stop tsk_71f07e3f4ec7ebaeff7d0686d814c07d --yes
+lore: wrote ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json
+✓ tsk_71f07e3f4ec7ebaeff7d0686d814c07d series rcs_67e20cdd829de837b50a73f9dc3c291e stopped (no further instances; this one stays)
+lore live: (live, pushed) commit d33587e to origin refs/lore/live
+alice (work/website)$ lore task recur show tsk_71f07e3f4ec7ebaeff7d0686d814c07d
+tsk_71f07e3f4ec7ebaeff7d0686d814c07d Back up the shop database
   rule: every! 14 days
-  series: rcs_bfed655e145f36ce2ef425180e72eeea #3 (stopped)
+  series: rcs_67e20cdd829de837b50a73f9dc3c291e #3 (stopped)
 
 ### stale
 alice (work/website)$ lore task stale
 9 tasks with no change for 60 days (excluded: claimed, in an active mission, future due, open sub-tasks, recurring)
-  tsk_d4314eba822f1bf5908b2b8ded5f313a  Send a test to the client
-  tsk_b4f4765e593d51fd1352985e8af3a5b0  Check the shop on a phone
-  tsk_b69e8368dd4986838455061d5d9e5ed7  Shoot the shirts
-  tsk_0aaebe6aca5bb46cc521869f5ba2a61f  Shoot the mugs
-  tsk_6a866bb99ce08addfe04ea845052ed8c  Edit the photos
-  tsk_77cb2df809cef85479f6587c4a7d76c4  Thank-you email after the first order
-  tsk_8567cf97b52ccbe51c3bd8cd91d6366f  Bump the version to 1.4
-  tsk_71f07e3f4ec7ebaeff7d0686d814c07d  Run the tests
-  tsk_ada321d27469d49114b952fdeed0c018  Deploy to the shop
+  tsk_b4f4765e593d51fd1352985e8af3a5b0  Send a test to the client
+  tsk_28f8d32584b2db54ffb146bede5b03df  Check the shop on a phone
+  tsk_2537f9b2f7de77bfe5ca958860216bbb  Shoot the shirts
+  tsk_b69e8368dd4986838455061d5d9e5ed7  Shoot the mugs
+  tsk_0aaebe6aca5bb46cc521869f5ba2a61f  Edit the photos
+  tsk_d191616cfa49f94ede5d5148b8b045c2  Thank-you email after the first order
+  tsk_ada321d27469d49114b952fdeed0c018  Bump the version to 1.4
+  tsk_78c802586e1d1bcbd68d3bc11b965b6c  Run the tests
+  tsk_d7c7956f4acfc4409bcde8bcf2627fe6  Deploy to the shop
 alice (work/website)$ lore task stale --close --dry-run
 9 tasks with no change for 60 days (excluded: claimed, in an active mission, future due, open sub-tasks, recurring)
-  tsk_d4314eba822f1bf5908b2b8ded5f313a  Send a test to the client
-  tsk_b4f4765e593d51fd1352985e8af3a5b0  Check the shop on a phone
-  tsk_b69e8368dd4986838455061d5d9e5ed7  Shoot the shirts
-  tsk_0aaebe6aca5bb46cc521869f5ba2a61f  Shoot the mugs
-  tsk_6a866bb99ce08addfe04ea845052ed8c  Edit the photos
-  tsk_77cb2df809cef85479f6587c4a7d76c4  Thank-you email after the first order
-  tsk_8567cf97b52ccbe51c3bd8cd91d6366f  Bump the version to 1.4
-  tsk_71f07e3f4ec7ebaeff7d0686d814c07d  Run the tests
-  tsk_ada321d27469d49114b952fdeed0c018  Deploy to the shop
+  tsk_b4f4765e593d51fd1352985e8af3a5b0  Send a test to the client
+  tsk_28f8d32584b2db54ffb146bede5b03df  Check the shop on a phone
+  tsk_2537f9b2f7de77bfe5ca958860216bbb  Shoot the shirts
+  tsk_b69e8368dd4986838455061d5d9e5ed7  Shoot the mugs
+  tsk_0aaebe6aca5bb46cc521869f5ba2a61f  Edit the photos
+  tsk_d191616cfa49f94ede5d5148b8b045c2  Thank-you email after the first order
+  tsk_ada321d27469d49114b952fdeed0c018  Bump the version to 1.4
+  tsk_78c802586e1d1bcbd68d3bc11b965b6c  Run the tests
+  tsk_d7c7956f4acfc4409bcde8bcf2627fe6  Deploy to the shop
 would cancel them with close_reason stale (nothing written, --dry-run)
 alice (work/website)$ lore task stale --close --yes
-✓ 9 tasks cancelled (close_reason stale, batch bat_78c802586e1d1bcbd68d3bc11b965b6c); lore batch show bat_78c802586e1d1bcbd68d3bc11b965b6c
-lore live: (live, pushed)
-lore live: landed on main (dfd8dc8); 4 open row(s) copied, they stay live; leaves live once main is fetched
+lore: wrote 9 row file(s) in ~/work/website/.lore/data
+✓ 9 tasks cancelled (close_reason stale, batch bat_06b12747c0fad05aadf714f05f1d3d1c); lore batch show bat_06b12747c0fad05aadf714f05f1d3d1c
+lore live: (live, pushed) commit 34010c1 to origin refs/lore/live
+lore live: landed on main (070bbeb); 4 open row(s) copied, they stay live; leaves live once main is fetched
 alice (work/website)$ lore task list
-○ tsk_7a670ae8548ed05bf57ad29ad0759504 Write the launch email [high] 0/0
-○ tsk_2ad3618e878ebbf527d34d446ef4f891 Pick the product photos [low] 0/0
-○ tsk_b4d3d8fc9a019dca1371ad55c6a611aa Release 1.4 [high] 0/0
-○ tsk_67e20cdd829de837b50a73f9dc3c291e Back up the shop database [medium] due:2026-11-16
+○ tsk_2ad3618e878ebbf527d34d446ef4f891 Write the launch email [high] 0/0
+○ tsk_162df51b7f78b785c97c26b41ea89666 Pick the product photos [low] 0/0
+○ tsk_bfed655e145f36ce2ef425180e72eeea Release 1.4 [high] 0/0
+○ tsk_71f07e3f4ec7ebaeff7d0686d814c07d Back up the shop database [medium] due:2026-11-16

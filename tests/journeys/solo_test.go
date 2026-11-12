@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -115,7 +116,7 @@ func soloBodies(t testing.TB, m *Machine, dir string) map[string]bool {
 // whose text contains body.
 func soloRemoteHas(w *World, body string) bool {
 	r := w.Remote(soloStore)
-	for _, f := range r.FilesMatching("main", ".lore/data/memories/") {
+	for _, f := range r.FilesMatching("main", "memories/") {
 		if s, ok := r.Read("main", f); ok && strings.Contains(s, body) {
 			return true
 		}
@@ -554,7 +555,7 @@ func TestJourneySolo(t *testing.T) {
 		}
 		lap.LoreIn(appRepo, "sync").OK(t)
 		r := w.Remote(soloStore)
-		if s, ok := r.Read("main", ".lore/data/memories/"+id+".json"); !ok || !strings.Contains(s, "I like short commit subjects") {
+		if s, ok := r.Read("main", "_store/memories/"+id+".json"); !ok || !strings.Contains(s, "I like short commit subjects") {
 			t.Errorf("GitHub's copy is not the edited-back text: %s", s)
 		}
 	})
@@ -749,7 +750,7 @@ func soloBulk(t testing.TB, w *World, m *Machine, n int) {
 	t.Helper()
 	r := w.Remote(soloStore)
 	var tmpl, tmplPath string
-	for _, f := range r.FilesMatching("main", ".lore/data/memories/") {
+	for _, f := range r.FilesMatching("main", "memories/") {
 		if s, ok := r.Read("main", f); ok && strings.Contains(s, "desk: first note") {
 			tmpl, tmplPath = s, f
 		}
@@ -769,7 +770,7 @@ func soloBulk(t testing.TB, w *World, m *Machine, n int) {
 		if i == 0 {
 			fmt.Fprintf(&fi, "from %s\n", head)
 		}
-		fmt.Fprintf(&fi, "M 100644 inline .lore/data/memories/%s.json\ndata %d\n%s\n", id, len(body), body)
+		fmt.Fprintf(&fi, "M 100644 inline %s\ndata %d\n%s\n", path.Join(path.Dir(tmplPath), id+".json"), len(body), body)
 	}
 	c := exec.Command("git", "fast-import", "--quiet", "--force")
 	c.Dir = r.Dir

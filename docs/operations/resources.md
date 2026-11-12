@@ -62,21 +62,29 @@ Add a kind, then one field at a time. `--values` makes a closed set, `--required
 ```console
 # alice, in infra
 $ lore resource kind add host --description 'a server we run'
+lore: wrote ~/work/infra/.lore/data/kinds/knd_7a67…9504.json
 added kind knd_…9504 host in this repo
 $ lore resource field add host provider --type text --required --values hetzner,aws
-added field fld_…7ab0 host.provider (text)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_2ad3…f891.json
+added field fld_…f891 host.provider (text)
 $ lore resource field add host ip --type ip
-added field fld_…c1c9 host.ip (ip)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_162d…9666.json
+added field fld_…9666 host.ip (ip)
 $ lore resource field add host os --type text --default ubuntu-24.04
-added field fld_…a6bb host.os (text)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_54fe…28f2.json
+added field fld_…28f2 host.os (text)
 $ lore resource kind add service --description 'an app we deploy'
-added kind knd_…f891 service in this repo
+lore: wrote ~/work/infra/.lore/data/kinds/knd_05e9…4603.json
+added kind knd_…4603 service in this repo
 $ lore resource field add service runs_on --type ref --ref-kind host --required
-added field fld_…8272 service.runs_on (ref)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_c0f3…b5b8.json
+added field fld_…b5b8 service.runs_on (ref)
 $ lore resource field add service url --type url
-added field fld_…dbee service.url (url)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_76bd…3f10.json
+added field fld_…3f10 service.url (url)
 $ lore resource field add service db_password --type secret_ref
-added field fld_…7441 service.db_password (secret_ref), internal by default: an entry NAME in a secret manager, never the key
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_d431…313a.json
+added field fld_…313a service.db_password (secret_ref), internal by default: an entry NAME in a secret manager, never the key
 ```
 <!-- /example -->
 
@@ -94,7 +102,7 @@ knd_7a67…9504  host  (repo)
 $ lore resource kinds
 ID	KIND	STORE	ROWS	FIELDS
 knd_7a67…9504	host	repo	0	ip, os, provider
-knd_2ad3…f891	service	repo	0	db_password, runs_on, url
+knd_05e9…4603	service	repo	0	db_password, runs_on, url
 ```
 <!-- /example -->
 
@@ -108,11 +116,13 @@ Other `field add` options: `--pattern` (an RE2 expression a text value must matc
 ```console
 # alice, in infra
 $ lore resource add host hub_prod --set provider=hetzner --set ip=203.0.113.10
-created res_…d716  host  repo:host/hub_prod
+lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
+created res_…a5b0  host  repo:host/hub_prod
   ip = 203.0.113.10; os = ubuntu-24.04; provider = hetzner
   default: os
 $ lore resource add host hub_stage --set provider=aws --set ip=203.0.113.11
-created res_…342c  host  repo:host/hub_stage
+lore: wrote ~/work/infra/.lore/data/resources/res_28f8…03df.json
+created res_…03df  host  repo:host/hub_stage
   ip = 203.0.113.11; os = ubuntu-24.04; provider = aws
   default: os
 ```
@@ -148,10 +158,12 @@ A `ref` field takes the name of another resource. Alice records two services tha
 ```console
 # alice, in infra
 $ lore resource add service hub_api --set runs_on=hub_prod --set url=https://api.example.com --set db_password=gopass://acme/hub/db
-created res_…9666  service  repo:service/hub_api
+lore: wrote ~/work/infra/.lore/data/resources/res_4c59…6c38.json
+created res_…6c38  service  repo:service/hub_api
   db_password = gopass://acme/hub/db; runs_on = hub_prod; url = https://api.example.com
 $ lore resource add service hub_web --set runs_on=hub_prod --set url=https://www.example.com
-created res_…38ea  service  repo:service/hub_web
+lore: wrote ~/work/infra/.lore/data/resources/res_3b62…e913.json
+created res_…e913  service  repo:service/hub_web
   runs_on = hub_prod; url = https://www.example.com
 ```
 <!-- /example -->
@@ -172,11 +184,11 @@ KIND	NAME	DB_PASSWORD	RUNS_ON	URL	CHECKED
 service	hub_web		hub_prod	https://www.example.com	
 service	hub_api	gopass://acme/hub/db	hub_prod	https://api.example.com	
 $ lore resource show hub_api
-res_162d…9666  service  repo:service/hub_api
+res_4c59…6c38  service  repo:service/hub_api
   db_password = gopass://acme/hub/db
   runs_on = hub_prod
   url = https://api.example.com
-created 2026-11-02T10:01:20Z by act_54fe…28f2 · updated 2026-11-02T10:01:20Z by act_54fe…28f2
+created 2026-11-02T10:01:20Z by act_f147…5139 · updated 2026-11-02T10:01:20Z by act_f147…5139
 ```
 <!-- /example -->
 
@@ -204,14 +216,17 @@ host hub_prod
 <!-- example: resources#impact only=2,3 -->
 ```console
 # alice, in infra
-$ lore task add 'Rotate the hub_api database password' --ref res_162d…9666
-✓ tsk_05e9…4603 — Rotate the hub_api database password [medium]
-lore live: (live, pushed)
+$ lore task add 'Rotate the hub_api database password' --ref res_4c59…6c38
+lore: wrote ~/work/infra/.lore/data/task_lists/tlt_2537…6bbb.json
+lore: wrote ~/work/infra/.lore/data/tasks/tsk_b69e…5ed7.json
+lore: wrote ~/work/infra/.lore/data/knowledge_refs/kfr_0aae…a61f.json
+✓ tsk_b69e…5ed7 — Rotate the hub_api database password [medium]
+lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore resource impact hub_prod
 what breaks if host hub_prod goes down
   1  service    hub_api              runs_on → hub_prod
   1  service    hub_web              runs_on → hub_prod
-  open  task tsk_05e9…4603 (mentions hub_api)
+  open  task tsk_b69e…5ed7 (mentions hub_api)
 ```
 <!-- /example -->
 
@@ -231,7 +246,8 @@ host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
 $ lore resource check hub_prod --note 'looked in the provider console'
-✓ checked hub_prod now (res_…d716)
+lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
+✓ checked hub_prod now (res_…a5b0)
 $ lore resource stale
 KIND	NAME	LAST_CHECKED	AGE
 host	hub_stage		never
@@ -250,17 +266,19 @@ service	hub_web		never
 ```console
 # alice, in infra
 $ lore resource edit hub_prod --set os=debian-12
-✓ edited host hub_prod (res_…d716)
+lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
+✓ edited host hub_prod (res_…a5b0)
 $ lore resource edit hub_stage --unset ip
-✓ edited host hub_stage (res_…342c)
+lore: wrote ~/work/infra/.lore/data/resources/res_28f8…03df.json
+✓ edited host hub_stage (res_…03df)
 $ lore resource history hub_prod
-2026-11-02  os  ubuntu-24.04 → debian-12  act_54fe…28f2
-2026-11-02  ip  set 203.0.113.10  act_54fe…28f2
-2026-11-02  provider  set hetzner  act_54fe…28f2
-2026-11-02  os  set ubuntu-24.04  act_54fe…28f2
+2026-11-02  os  ubuntu-24.04 → debian-12  act_f147…5139
+2026-11-02  ip  set 203.0.113.10  act_f147…5139
+2026-11-02  provider  set hetzner  act_f147…5139
+2026-11-02  os  set ubuntu-24.04  act_f147…5139
 $ lore resource history hub_prod --field os
-2026-11-02  os  ubuntu-24.04 → debian-12  act_54fe…28f2
-2026-11-02  os  set ubuntu-24.04  act_54fe…28f2
+2026-11-02  os  ubuntu-24.04 → debian-12  act_f147…5139
+2026-11-02  os  set ubuntu-24.04  act_f147…5139
 ```
 <!-- /example -->
 
@@ -272,10 +290,12 @@ $ lore resource history hub_prod --field os
 ```console
 # alice, in infra
 $ lore resource clone hub_prod hub_prod_2 --set ip=203.0.113.12
-created res_…5139  host  repo:host/hub_prod_2
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+created res_…ed8c  host  repo:host/hub_prod_2
   ip = 203.0.113.12; os = debian-12; provider = hetzner
 $ lore resource rename hub_prod_2 hub_prod_new
-✓ renamed host hub_prod_2 → hub_prod_new; ids and refs unchanged (res_…5139)
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+✓ renamed host hub_prod_2 → hub_prod_new; ids and refs unchanged (res_…ed8c)
 ```
 <!-- /example -->
 
@@ -291,9 +311,13 @@ would edit 2 host resources (dry run, nothing written):
   repo:host/hub_prod  os debian-12 → debian-13
   repo:host/hub_prod_new  os debian-12 → debian-13
 $ lore resource edit --kind host --where provider=hetzner --set os=debian-13 --yes
-edit 2 host resources; batch bat_c0f3…b5b8 (undo: lore batch undo bat_c0f3…b5b8)
+lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+edit 2 host resources; batch bat_4f89…b64b (undo: lore batch undo bat_4f89…b64b)
 $ lore resource check --kind host --where provider=hetzner --yes
-check 2 host resources; batch bat_76bd…3f10 (undo: lore batch undo bat_76bd…3f10)
+lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+check 2 host resources; batch bat_77cb…76c4 (undo: lore batch undo bat_77cb…76c4)
 ```
 <!-- /example -->
 
@@ -315,9 +339,11 @@ $ lore resource import ~/hosts.csv --kind host --dry-run
   create  host hub_cache
 nothing written (dry run)
 $ lore resource import ~/hosts.csv --kind host --yes
+lore: wrote ~/work/infra/.lore/data/resources/res_d191…45c2.json
+lore: wrote ~/work/infra/.lore/data/resources/res_b4d3…11aa.json
   create  host hub_db
   create  host hub_cache
-imported 2 rows (2 created, 0 updated) from csv; batch bat_d431…313a
+imported 2 rows (2 created, 0 updated) from csv; batch bat_9a34…b418
 ```
 <!-- /example -->
 
@@ -336,9 +362,10 @@ $ lore resource import ~/hosts2.csv --kind host --upsert-by name --dry-run
 nothing written (dry run)
 1 error (skipped)
 $ lore resource import ~/hosts2.csv --kind host --upsert-by name --skip-errors --yes
+lore: wrote ~/work/infra/.lore/data/resources/res_d191…45c2.json
   update  host hub_db
   error  host hub_mail  [E_RESOURCE_INVALID] host hub_mail: provider "linode" is not one of hetzner, aws
-imported 1 row (0 created, 1 updated) from csv; batch bat_b4f4…a5b0
+imported 1 row (0 created, 1 updated) from csv; batch bat_bfed…eeea
 1 error (skipped)
 ```
 <!-- /example -->
@@ -386,10 +413,13 @@ would repoint 2 rows from hub_prod to hub_prod_new:
   service/hub_web runs_on
 then archive hub_prod; nothing written (dry run)
 $ lore resource repoint hub_prod hub_prod_new --yes
+lore: wrote ~/work/infra/.lore/data/resources/res_4c59…6c38.json
+lore: wrote ~/work/infra/.lore/data/resources/res_3b62…e913.json
+lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
 repointed 2 rows from hub_prod to hub_prod_new:
   service/hub_api runs_on
   service/hub_web runs_on
-archived hub_prod (replaced_by hub_prod_new); batch bat_28f8…03df
+archived hub_prod (replaced_by hub_prod_new); batch bat_376c…8e1a
 $ lore resource add service hub_admin --set runs_on=hub_prod
 ERROR: [E_RESOURCE_ARCHIVED] service hub_admin: runs_on: hub_prod is archived
   hint: ref its replacement host hub_prod_new
@@ -410,17 +440,20 @@ host	hub_stage		ubuntu-24.04	aws	2026-11-02
 ```console
 # alice, in infra
 $ lore resource edit hub_db --unset ip
-✓ edited host hub_db (res_…e913)
+lore: wrote ~/work/infra/.lore/data/resources/res_d191…45c2.json
+✓ edited host hub_db (res_…45c2)
 $ lore resource merge hub_cache --into hub_db --dry-run
 would merge hub_cache into hub_db
 would repoint 0 rows from hub_cache to hub_db:
 then archive hub_cache; nothing written (dry run)
 values filled from hub_cache: ip
 $ lore resource merge hub_cache --into hub_db --yes
+lore: wrote ~/work/infra/.lore/data/resources/res_d191…45c2.json
+lore: wrote ~/work/infra/.lore/data/resources/res_b4d3…11aa.json
 merged host hub_cache into hub_db
 values filled from hub_cache: ip
 repointed 0 rows from hub_cache to hub_db:
-archived hub_cache (replaced_by hub_db); batch bat_4c59…6c38
+archived hub_cache (replaced_by hub_db); batch bat_67e2…291e
 ```
 <!-- /example -->
 
@@ -432,7 +465,8 @@ archived hub_cache (replaced_by hub_db); batch bat_4c59…6c38
 ```console
 # alice, in infra
 $ lore resource archive hub_stage
-✓ archived hub_stage (res_…342c)
+lore: wrote ~/work/infra/.lore/data/resources/res_28f8…03df.json
+✓ archived hub_stage (res_…03df)
 $ lore resource delete hub_db
 ERROR: [E_NEEDS_CONFIRM] run resource delete?
   hint: ask the person, then rerun with --yes
@@ -440,7 +474,8 @@ ERROR: [E_NEEDS_CONFIRM] run resource delete?
 $ lore resource delete hub_prod_new --with-dependents --dry-run
 would delete 3 resources: host hub_prod_new, service hub_api, service hub_web (dry run, nothing written)
 $ lore resource delete hub_db --yes
-✓ res_…e913 (hub_db) moved to the trash (restore: lore trash restore res_3b62…e913)
+lore: wrote ~/work/infra/.lore/data/resources/res_d191…45c2.json
+✓ res_…45c2 (hub_db) moved to the trash (restore: lore trash restore res_d191…45c2)
 ```
 <!-- /example -->
 
@@ -454,25 +489,32 @@ Fields are keyed by their `fld_` id inside each row, so renaming a field touches
 ```console
 # alice, in infra
 $ lore resource field edit host provider --add-value linode
-✓ edited field host.provider (fld_…7ab0)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_2ad3…f891.json
+✓ edited field host.provider (fld_…f891)
 $ lore resource field add host region --type text
-added field fld_…d91b host.region (text)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_8567…366f.json
+added field fld_…366f host.region (text)
 $ lore resource edit hub_prod_new --set region=eu-1
-✓ edited host hub_prod_new (res_…5139)
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+✓ edited host hub_prod_new (res_…ed8c)
 $ lore resource field retype host region number --dry-run
-ERROR: [E_RESOURCE_TYPE] 1 value does not fit number: res_f147…5139 hub_prod_new
+ERROR: [E_RESOURCE_TYPE] 1 value does not fit number: res_6a86…ed8c hub_prod_new
   hint: fix them, or pass --keep-as-text to keep values that do not fit as text and quarantine them; nothing written
 (exit 20)
 $ lore resource field rename host os os_image
-✓ renamed field host.os → os_image; no values changed (fld_…a6bb)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_54fe…28f2.json
+✓ renamed field host.os → os_image; no values changed (fld_…28f2)
 $ lore resource field remove host region
 ERROR: [E_RESOURCE_IN_USE] host.region has values on 1 row
   hint: pass --drop to remove the values in the same commit
 (exit 23)
 $ lore resource field remove host region --drop --yes
-✓ removed field host.region (fld_…d91b); values dropped from 1 row
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_8567…366f.json
+✓ removed field host.region (fld_…366f); values dropped from 1 row
 $ lore resource field add host renews --type date --remind-before 30d
-added field fld_…294c host.renews (date)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_71f0…c07d.json
+added field fld_…c07d host.renews (date)
 ```
 <!-- /example -->
 
@@ -482,13 +524,15 @@ added field fld_…294c host.renews (date)
 ```console
 # alice, in infra
 $ lore resource kind edit host --description 'a server or VM we run'
+lore: wrote ~/work/infra/.lore/data/kinds/knd_7a67…9504.json
 ✓ edited kind host (knd_…9504)
 $ lore resource kind rename host server
+lore: wrote ~/work/infra/.lore/data/kinds/knd_7a67…9504.json
 ✓ renamed kind host → server; ids unchanged (knd_…9504)
 $ lore resource kinds
 ID	KIND	STORE	ROWS	FIELDS
 knd_7a67…9504	server	repo	4	ip, os_image, provider, renews
-knd_2ad3…f891	service	repo	2	db_password, runs_on, url
+knd_05e9…4603	service	repo	2	db_password, runs_on, url
 ```
 <!-- /example -->
 
@@ -502,21 +546,23 @@ Resource values pass the same secret check as every note (see [secrets and perso
 ```console
 # alice, in infra
 $ lore resource field add server access_key --type text
-added field fld_…1968 server.access_key (text)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_ada3…c018.json
+added field fld_…c018 server.access_key (text)
 $ lore resource edit hub_prod_new --set access_key=AKIA''IOSFODNN7EXAMPLE
 ERROR: [E_NEEDS_CONFIRM] fields looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 $ lore resource edit hub_prod_new --set access_key=AKIA''IOSFODNN7EXAMPLE --secret-ref gopass://acme/hub/aws-key --yes
-✓ edited server hub_prod_new (res_…5139)
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+✓ edited server hub_prod_new (res_…ed8c)
 $ lore resource show hub_prod_new
-res_f147…5139  server  repo:server/hub_prod_new
+res_6a86…ed8c  server  repo:server/hub_prod_new
   access_key = ${secret:gopass://acme/hub/aws-key}
   ip = 203.0.113.12
   os_image = debian-13
   provider = hetzner
   checked 2026-11-02T10:00:00.000000001Z (by edit)
-created 2026-11-02T10:02:45Z by act_54fe…28f2 · updated 2026-11-02T10:05:50Z by act_54fe…28f2
+created 2026-11-02T10:02:45Z by act_f147…5139 · updated 2026-11-02T10:05:50Z by act_f147…5139
 ```
 <!-- /example -->
 
@@ -526,7 +572,8 @@ The cleaner shape is a `secret_ref` field: it holds only a vault entry name, and
 ```console
 # alice, in infra
 $ lore resource add service hub_jobs --set runs_on=hub_prod_new --set db_password=acme/hub/jobs-db
-created res_…1163  service  repo:service/hub_jobs
+lore: wrote ~/work/infra/.lore/data/resources/res_78c8…5b6c.json
+created res_…5b6c  service  repo:service/hub_jobs
   db_password = gopass://acme/hub/jobs-db; runs_on = hub_prod_new
 ```
 <!-- /example -->
@@ -537,9 +584,11 @@ A `--sensitive` field is not a secret, just something you do not want on screen.
 ```console
 # alice, in infra
 $ lore resource field add server root_user --type text --sensitive
-added field fld_…8173 server.root_user (text)
+lore: wrote ~/work/infra/.lore/data/kind_fields/fld_d7c7…7fe6.json
+added field fld_…7fe6 server.root_user (text)
 $ lore resource edit hub_prod_new --set root_user=deploy
-✓ edited server hub_prod_new (res_…5139)
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+✓ edited server hub_prod_new (res_…ed8c)
 $ lore resource list server
 KIND	NAME	ACCESS_KEY	IP	OS_IMAGE	PROVIDER	RENEWS	ROOT_USER	CHECKED
 server	hub_prod_new	${secret:gopass://acme/hub/aws-key}	203.0.113.12	debian-13	hetzner		•••	2026-11-02
@@ -548,14 +597,14 @@ ERROR: [E_NEEDS_CONFIRM] resource show?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore resource show hub_prod_new --show-sensitive --yes
-res_f147…5139  server  repo:server/hub_prod_new
+res_6a86…ed8c  server  repo:server/hub_prod_new
   access_key = ${secret:gopass://acme/hub/aws-key}
   ip = 203.0.113.12
   os_image = debian-13
   provider = hetzner
   root_user = deploy
   checked 2026-11-02T10:00:00.000000002Z (by edit)
-created 2026-11-02T10:02:45Z by act_54fe…28f2 · updated 2026-11-02T10:06:10Z by act_54fe…28f2
+created 2026-11-02T10:02:45Z by act_f147…5139 · updated 2026-11-02T10:06:10Z by act_f147…5139
 ```
 <!-- /example -->
 
@@ -567,7 +616,8 @@ created 2026-11-02T10:02:45Z by act_54fe…28f2 · updated 2026-11-02T10:06:10Z 
 ```console
 # alice, in infra
 $ lore resource edit --kind server --where provider=hetzner --set renews=2026-11-20 --yes
-edit 1 server resources; batch bat_b69e…5ed7 (undo: lore batch undo bat_b69e…5ed7)
+lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
+edit 1 server resources; batch bat_7289…c813 (undo: lore batch undo bat_7289…c813)
 $ lore resource lint
 remind           server hub_prod_new.renews     2026-11-20 is within 30d
 1 findings
@@ -578,7 +628,7 @@ unchecked   4: service hub_api, service hub_jobs, service hub_prod_new, service 
 dangling    0
 quarantined 0
   details: lore resource lint
-open links  1: task tsk_05e9…4603
+open links  1: task tsk_b69e…5ed7
 rotate      2: gopass://acme/hub/db, gopass://acme/hub/jobs-db
 ```
 <!-- /example -->
@@ -605,17 +655,19 @@ Kinds defined in one repo are only seen there. To use the same kinds in several 
 ```console
 # alice, in infra
 $ lore store init infra file://$HOME/stores/infra
-✓ created store infra (sto_0aae…a61f) at file://~/stores/infra; recorded in .lore/stores.yaml; commit it to share
+✓ created store infra (sto_4bfb…19ce) at file://~/stores/infra; recorded in .lore/stores.yaml; commit it to share
 $ lore resource adopt --from repo --to infra
 ERROR: [E_NEEDS_CONFIRM] move 2 kinds (server, service) and 9 field rows from repo into infra?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore resource adopt --from repo --to infra --yes
+lore: wrote 13 row file(s) in ~/stores/infra/_store (store infra)
+lore: wrote 11 row file(s) in ~/work/infra/.lore/data
 ✓ adopted 2 kinds (server, service) and 9 field rows from repo into infra; ids unchanged
 $ lore resource kinds
 ID	KIND	STORE	ROWS	FIELDS
 knd_7a67…9504	server	infra	4	access_key, ip, os_image, provider, renews, root_user
-knd_2ad3…f891	service	infra	4	db_password, runs_on, url
+knd_05e9…4603	service	infra	4	db_password, runs_on, url
 $ lore resource rehome
 ✓ every kind and ref of this repo is visible from here
 ```
@@ -631,18 +683,24 @@ Two kinds, two rows and the question "what breaks if this host goes down?", in a
 ```console
 # alice, in shop
 $ lore resource kind add host --description 'a server we run'
+lore: wrote ~/work/shop/.lore/data/kinds/knd_7a67…9504.json
 added kind knd_…9504 host in this repo
 $ lore resource field add host provider --type text --required --values hetzner,aws
-added field fld_…7ab0 host.provider (text)
+lore: wrote ~/work/shop/.lore/data/kind_fields/fld_2ad3…f891.json
+added field fld_…f891 host.provider (text)
 $ lore resource kind add service --description 'an app we deploy'
-added kind knd_…f891 service in this repo
+lore: wrote ~/work/shop/.lore/data/kinds/knd_05e9…4603.json
+added kind knd_…4603 service in this repo
 $ lore resource field add service runs_on --type ref --ref-kind host --required
-added field fld_…8272 service.runs_on (ref)
+lore: wrote ~/work/shop/.lore/data/kind_fields/fld_c0f3…b5b8.json
+added field fld_…b5b8 service.runs_on (ref)
 $ lore resource add host shop_prod --set provider=hetzner
-created res_…7068  host  repo:host/shop_prod
+lore: wrote ~/work/shop/.lore/data/resources/res_2e0c…0b6d.json
+created res_…0b6d  host  repo:host/shop_prod
   provider = hetzner
 $ lore resource add service shop_api --set runs_on=shop_prod
-created res_…1991  service  repo:service/shop_api
+lore: wrote ~/work/shop/.lore/data/resources/res_e9fa…224c.json
+created res_…224c  service  repo:service/shop_api
   runs_on = shop_prod
 $ lore resource impact shop_prod
 what breaks if host shop_prod goes down
@@ -662,9 +720,9 @@ ERROR: [E_RESOURCE_AMBIGUOUS] "hub_prod_new" matches 2 resources: repo:server/hu
   hint: name it by its qualified name (repo:server/hub_prod_new or repo:service/hub_prod_new) or its res_ id
 (exit 21)
 $ lore resource show server/hub_prod_new | head -1
-res_f147…5139  server  repo:server/hub_prod_new
+res_6a86…ed8c  server  repo:server/hub_prod_new
 $ lore resource show repo:service/hub_prod_new | head -1
-res_2537…6bbb  service  repo:service/hub_prod_new
+res_06b1…3d1c  service  repo:service/hub_prod_new
 ```
 <!-- /example -->
 

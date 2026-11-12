@@ -14,13 +14,16 @@ import (
 // Repo is one git repository (normal, linked worktree or bare), addressed by
 // a directory inside it. Every method runs git in Dir through the Git seam.
 //
-// Invariant: a Repo holds no mutable state; its fields are fixed by Open, so
-// one Repo may be used from many goroutines at once.
+// Invariant: a Repo's fields are fixed by Open, so one Repo may be used
+// from many goroutines at once. The one thing it fills in later is idx, a
+// memo of facts that never change (a commit's tree listing, a blob's
+// bytes, both keyed by object id), behind its own lock.
 type Repo struct {
 	dir  string
 	git  Git
 	bare bool
 	zero string
+	idx  *treeIndex
 }
 
 // Sentinels.
@@ -65,7 +68,7 @@ func Open(ctx context.Context, dir string, g Git) (*Repo, error) {
 	if !ok {
 		return nil, fmt.Errorf("gitref: unknown object format %q", lines[1])
 	}
-	return &Repo{dir: dir, git: g, bare: lines[0] == "true", zero: strings.Repeat("0", zeroLen)}, nil
+	return &Repo{dir: dir, git: g, bare: lines[0] == "true", zero: strings.Repeat("0", zeroLen), idx: newTreeIndex()}, nil
 }
 
 // openLines is how many values Open's rev-parse prints.
@@ -289,6 +292,9 @@ const lsTreeFields = 3
 // ReadFile returns one file of revision rev (path root-relative). ok is false
 // when rev has no such file; a missing rev is ErrNotFound.
 func (r *Repo) ReadFile(ctx context.Context, rev, path string) ([]byte, bool, error) {
+	if dir, _, nested := cutLastSlash(path); nested && r.idx != nil {
+		return r.readIndexed(ctx, rev, path, dir)
+	}
 	files, err := r.ReadTree(ctx, rev, path)
 	if err != nil {
 		return nil, false, err

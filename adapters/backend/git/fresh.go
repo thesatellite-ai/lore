@@ -13,14 +13,16 @@ import (
 
 // Fetch stamp (RES 3.6 resources.stale_after, P2-RES-7):
 //
-//	fetch ok ──► stampFetch: <git common dir>/lore-fetched-at = RFC 3339 UTC
-//	Fresh    ──► read the stamp + the worktree's HEAD commit
+//	fetch ok ──► stampFetch: <clone>/.git/lore/fetch-stamp = RFC 3339 UTC
+//	Fresh    ──► read the stamp + the clone's HEAD commit
 //
-// The stamp lives inside the clone's own git directory, beside the data it
-// describes, so it is per clone and per machine and never committed.
+// The stamp lives in lore's folder inside the clone's own git directory
+// (PathsOf StateDir), beside the data it describes, so it is per clone and
+// per machine and never committed. The org link code and the push wrapper
+// read and write the same file (one "last fetched" per clone).
 
-// fetchStampFile is the stamp's name in the git common directory.
-const fetchStampFile = "lore-fetched-at"
+// FetchStampFile is the stamp's name in the clone's .git/lore folder.
+const FetchStampFile = "fetch-stamp"
 
 var _ store.Freshness = (*Backend)(nil)
 
@@ -32,7 +34,8 @@ func (b *Backend) stampFetch(ctx context.Context, dir string) {
 		return
 	}
 	defer func() { _ = root.Close() }()
-	_ = root.WriteFile(fetchStampFile, []byte(b.cfg.now().UTC().Format(time.RFC3339)+"\n"), 0o600) // best effort, see doc
+	_ = root.MkdirAll(StateDirName, cloneDirMode)                                                                               // best effort, see doc
+	_ = root.WriteFile(filepath.Join(StateDirName, FetchStampFile), []byte(b.cfg.now().UTC().Format(time.RFC3339)+"\n"), 0o600) // best effort, see doc
 }
 
 // stampRoot opens the git common directory of the clone dir belongs to;
@@ -60,11 +63,11 @@ func (b *Backend) Fresh(ctx context.Context) (store.Fresh, error) {
 		return store.Fresh{}, errs.Wrap(errs.Internal, "git: find the fetch stamp", err)
 	}
 	defer func() { _ = root.Close() }()
-	raw, err := root.ReadFile(fetchStampFile)
+	raw, err := root.ReadFile(filepath.Join(StateDirName, FetchStampFile))
 	if err != nil {
 		return store.Fresh{}, nil // never fetched here
 	}
-	at, err := time.Parse(time.RFC3339, strings.TrimSpace(string(raw)))
+	at, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(raw)))
 	if err != nil {
 		return store.Fresh{}, nil
 	}
@@ -75,16 +78,10 @@ func (b *Backend) Fresh(ctx context.Context) (store.Fresh, error) {
 	return store.Fresh{Known: true, FetchedAt: at, Commit: commit}, nil
 }
 
-// FetchedOnce reports whether the bare clone gitDir (a store clone's git
-// directory, <clone>.git) has fetched from its remote at least once: its
-// fetch stamp is there. Read without git, for a check that only needs to
-// know the remote existed (a doctor fix must not offer to create it).
-func FetchedOnce(gitDir string) bool {
-	root, err := os.OpenRoot(gitDir)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = root.Close() }()
-	_, err = root.Stat(fetchStampFile)
-	return err == nil
+// FetchedOnce reports whether the store clone at dir has fetched from its
+// remote at least once: its fetch stamp is there. Read without git, for a
+// check that only needs to know the remote existed (a doctor fix must not
+// offer to create it).
+func FetchedOnce(dir string) bool {
+	return isFile(filepath.Join(StateDirOf(dir), FetchStampFile))
 }

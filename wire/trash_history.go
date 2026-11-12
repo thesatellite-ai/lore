@@ -236,11 +236,10 @@ func rowFileOf(rel string) (row.Table, string, bool) {
 	if _, err := ids.ParseAny(id); err != nil {
 		return "", "", false
 	}
-	tb, err := row.ParseTable(table)
-	if err != nil {
+	if !rowfs.IsTableDir(table) { // in a store, any other folder name is a store folder
 		return "", "", false
 	}
-	return tb, id, true
+	return row.Table(table), id, true
 }
 
 // branchRow builds one row of a branch walk, or keep=false when the path

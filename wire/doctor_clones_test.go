@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -24,12 +25,13 @@ func gitRunT(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// makeStoreClone lays out a whole clone at <home>/clones/<norm> the way the
-// git backend does: the bare clone <stem>.git and its worktree <stem>/work.
-func makeStoreClone(t *testing.T, home, norm string) gitbackend.ClonePaths {
+// makeStoreClone lays out a whole store clone at <home>/stores/<rel> the
+// way the git backend does: a plain git clone (files checked out, .git
+// inside), its origin the store url origin.
+func makeStoreClone(t *testing.T, home, rel, origin string) gitbackend.ClonePaths {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not installed")
+		t.Fatal("git not installed")
 	}
 	seed := filepath.Join(t.TempDir(), "seed")
 	gitRunT(t, t.TempDir(), "init", "-q", "--initial-branch=main", seed)
@@ -38,33 +40,38 @@ func makeStoreClone(t *testing.T, home, norm string) gitbackend.ClonePaths {
 	}
 	gitRunT(t, seed, "add", "placeholder.txt")
 	gitRunT(t, seed, "commit", "-q", "-m", "init")
-	p := gitbackend.PathsOf(filepath.Join(home, gitbackend.ClonesDir, filepath.FromSlash(norm)))
-	if err := os.MkdirAll(filepath.Dir(p.Bare), 0o700); err != nil {
+	p := gitbackend.PathsOf(filepath.Join(home, gitbackend.StoresDir, filepath.FromSlash(rel)))
+	if err := os.MkdirAll(filepath.Dir(p.Dir), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	gitRunT(t, seed, "clone", "-q", "--bare", seed, p.Bare)
-	gitRunT(t, p.Bare, "worktree", "add", "-q", p.Work, "main")
+	gitRunT(t, seed, "clone", "-q", seed, p.Dir)
+	gitRunT(t, p.Dir, "remote", "set-url", "origin", origin)
 	return p
 }
 
-// TestDoctorStoreClones: a whole clone (its <repo>/ and <repo>.git/ side by
-// side) is never reported; a clone that lost a half is named with the
-// command that removes it, and the store forget the fix names removes
-// exactly that clone. Doctor itself, --fix included, deletes nothing.
+// TestDoctorStoreClones: a whole clone is never reported; a clone that
+// lost its git data, a first clone cut short and a recorded own clone
+// whose folder is gone are each named with the command that fixes it, and
+// the store forget the note names removes exactly that clone. Doctor
+// itself, --fix included, deletes nothing.
 func TestDoctorStoreClones(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	whole := makeStoreClone(t, home, "host.example/owner/notes")
-	noBare := makeStoreClone(t, home, "host.example/owner/nobare")
-	noWork := makeStoreClone(t, home, "host.example/owner/nowork@feature")
-	orphan := makeStoreClone(t, home, "host.example/owner/orphan")
-	if err := os.RemoveAll(filepath.Join(orphan.Bare, "worktrees")); err != nil {
+	whole := makeStoreClone(t, home, "owner/notes", "https://host.example/owner/notes")
+	broken := makeStoreClone(t, home, "owner/broken", "https://host.example/owner/broken")
+	cut := makeStoreClone(t, home, "owner/cut@feature", "https://host.example/owner/cut")
+	if err := os.Remove(filepath.Join(broken.GitDir, "HEAD")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.RemoveAll(noBare.Bare); err != nil {
+	gitRunT(t, cut.Dir, "commit", "-q", "--allow-empty", "-m", "waits") // a commit the remote lacks
+	// cut short: HEAD still on the pending branch, nothing checked out yet
+	gitRunT(t, cut.Dir, "symbolic-ref", "HEAD", "refs/heads/lore-clone-pending")
+	gitRunT(t, cut.Dir, "read-tree", "--empty")
+	if err := os.Remove(filepath.Join(cut.Dir, "placeholder.txt")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.RemoveAll(noWork.Base); err != nil {
+	mine := filepath.Join(t.TempDir(), "gone")
+	if err := gitbackend.RecordClone(home, "host.example/owner/mine", gitbackend.CloneEntry{Path: mine, Why: gitbackend.WhyOwn}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	a, err := New(Options{Home: home, RepoDir: t.TempDir()})
@@ -79,60 +86,58 @@ func TestDoctorStoreClones(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("findings %d, want 3 (the whole clone is not one): %+v", len(got), got)
 	}
-	byBase := map[string]DoctorFinding{}
+	byDir := map[string]DoctorFinding{}
 	for _, f := range got {
 		if f.Check != DoctorCheckStoreClone {
 			t.Fatalf("check %q", f.Check)
 		}
-		if strings.Contains(f.Line(), whole.Base) {
+		if strings.Contains(f.Line(), whole.Dir+" ") {
 			t.Fatalf("a whole clone was reported: %s", f.Line())
 		}
-		for _, p := range []gitbackend.ClonePaths{noBare, noWork, orphan} {
-			if strings.Contains(f.Message, p.Base) {
-				byBase[p.Base] = f
+		for _, d := range []string{broken.Dir, cut.Dir, mine} {
+			if strings.HasPrefix(f.Message, d+" ") {
+				byDir[d] = f
 			}
 		}
 	}
-	o := byBase[orphan.Base]
-	if o.Level != DoctorWarning || !strings.Contains(o.Message, orphan.Base+" is unused: its worktree names git data that is gone") || o.Fix != "rm -rf '"+orphan.Base+"'" {
-		t.Fatalf("orphan worktree finding: %s", o.Line())
-	}
-	w := byBase[noBare.Base]
-	if w.Level != DoctorWarning || !strings.Contains(w.Message, noBare.Base+" is unused") || !strings.Contains(w.Message, noBare.Bare+" is missing") || w.Fix != "rm -rf '"+noBare.Base+"'" {
+	w := byDir[broken.Dir]
+	if w.Level != DoctorWarning || !strings.Contains(w.Message, broken.Dir+" is unused") || !strings.Contains(w.Message, broken.GitDir+" is broken") || w.Fix != "rm -rf '"+broken.Dir+"'" {
 		t.Fatalf("no-git-data finding: %s", w.Line())
 	}
-	n := byBase[noWork.Base]
-	if n.Level != DoctorNote || !strings.Contains(n.Message, noWork.Bare) || n.Fix != "lore store forget https://host.example/owner/nowork" {
-		t.Fatalf("no-worktree finding: %s", n.Line())
+	n := byDir[cut.Dir]
+	if n.Level != DoctorNote || !strings.Contains(n.Message, "cut short") || n.Fix != "lore store forget https://host.example/owner/cut" {
+		t.Fatalf("not-checked-out finding: %s", n.Line())
+	}
+	m := byDir[mine]
+	if m.Level != DoctorWarning || !strings.Contains(m.Message, "lore store use") || m.Fix != "lore store use --default https://host.example/owner/mine" {
+		t.Fatalf("missing own clone finding: %s", m.Line())
 	}
 	// doctor --fix runs the check and still deletes no clone folder
 	_ = a.DoctorChecks(ctx, true)
-	for _, d := range []string{whole.Base, whole.Bare, noBare.Base, noWork.Bare, orphan.Base, orphan.Bare} {
+	for _, d := range []string{whole.Dir, broken.Dir, cut.Dir} {
 		if _, err := os.Stat(d); err != nil {
 			t.Fatalf("doctor removed %s: %v", d, err)
 		}
 	}
 	// the note's fix is a real command. It is refused while the clone
-	// holds commits its remote lacks (makeStoreClone's bare clone has no
-	// origin branches yet) ...
+	// holds a commit its remote lacks ...
 	url := strings.TrimPrefix(n.Fix, "lore store forget ")
 	c := &standaloneClones{home: home}
 	if _, err := c.ForgetClone(ctx, opsstores.ForgetIn{URL: url}); err == nil || !strings.Contains(err.Error(), "unpushed") {
 		t.Fatalf("forget of a clone with unpushed commits: %v", err)
 	}
-	if _, err := os.Stat(noWork.Bare); err != nil {
-		t.Fatalf("a refused forget removed %s: %v", noWork.Bare, err)
+	if _, err := os.Stat(cut.Dir); err != nil {
+		t.Fatalf("a refused forget removed %s: %v", cut.Dir, err)
 	}
-	// ... and, once the remote has them, removes that clone only.
-	gitRunT(t, noWork.Bare, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
-	gitRunT(t, noWork.Bare, "fetch", "-q", "origin")
+	// ... and, once the remote has it, removes that clone only.
+	gitRunT(t, cut.Dir, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
 	if _, err := c.ForgetClone(ctx, opsstores.ForgetIn{URL: url}); err != nil {
 		t.Fatalf("forget %s: %v", url, err)
 	}
-	if _, err := os.Stat(noWork.Bare); !os.IsNotExist(err) {
-		t.Fatalf("forget kept %s: %v", noWork.Bare, err)
+	if _, err := os.Stat(cut.Dir); !os.IsNotExist(err) {
+		t.Fatalf("forget kept %s: %v", cut.Dir, err)
 	}
-	if _, err := os.Stat(whole.Bare); err != nil {
+	if _, err := os.Stat(whole.Dir); err != nil {
 		t.Fatalf("forget touched another clone: %v", err)
 	}
 }

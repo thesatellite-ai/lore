@@ -2,8 +2,9 @@
 // in a git repository, in the shared rowfs layout. It has two modes.
 //
 //   - Store clone mode (OpenClone, and NewOpener for ssh/https/http urls):
-//     a bare clone under <home>/clones/<host>/<owner>/<repo>.git plus a
-//     worktree lore owns at <home>/clones/<host>/<owner>/<repo>/work. Each
+//     a normal git clone at <home>/stores/<owner>/<repo> (or a person's
+//     own clone, `lore store use`), lore's lock and stamps in its
+//     .git/lore folder (clonelayout.go). Each
 //     Write is one commit; Sync fetches, merges (rows both sides changed go
 //     through the injected Merger) and pushes, retrying a lost push race.
 //   - Repo mode (OpenRepo): the built-in store `repo`, the code repository
@@ -21,6 +22,7 @@ package git
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -67,6 +69,24 @@ type Backend struct {
 
 	mu     sync.Mutex
 	closed bool
+
+	// pushes are the pushes not yet taken by the caller (pushlog.go).
+	pushes pushLog
+
+	// handSetUp lists what this open set up in the clone for plain git
+	// (handgit.go), for wire to say once.
+	handSetUp []string
+	// handPending: the open left the plain-git set-up for later (a read
+	// never writes it, owner bug 6); the first write or an explicit
+	// setup or sync does it (setUpHandGitOnce).
+	handPending bool
+	// identitySet is the identity this open wrote into the clone's
+	// .git/config (cloneidentity.go); zero when it wrote none.
+	identitySet CloneIdentity
+	// identityRemote is the remote of an open that left the clone's
+	// identity for its first write or an explicit sync (a read writes
+	// none, owner bug 6); "" when nothing waits (setUpHandGitOnce).
+	identityRemote string
 
 	// full is the last full read of the folder (clone mode, Read with no
 	// commit cursor) and the HEAD commit it was read at. A full read lists
@@ -260,6 +280,11 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 	if strings.ContainsAny(batch.Author.Name+batch.Author.Email, "\n\r<>") {
 		return errs.New(errs.InvalidInput, "git: the batch author has a forbidden character")
 	}
+	if b.mode == modeClone {
+		// a write to the store clone is the first point that may set it up
+		// for plain git (owner bug 6): said before the commit is made
+		b.setUpHandGitOnce(ctx)
+	}
 	lock, err := b.root.Lock(ctx)
 	if err != nil {
 		return err
@@ -268,7 +293,10 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 	if err == nil && b.mode == modeClone {
 		var undo func()
 		if undo, err = b.addMissingMarker(applied); err == nil {
-			if err = b.commitBatch(ctx, batch, changes, applied); err != nil {
+			if err = b.addMissingReadme(ctx, applied); err == nil {
+				err = b.commitBatch(ctx, batch, changes, applied)
+			}
+			if err != nil {
 				undo()
 			}
 		}
@@ -299,6 +327,44 @@ func (b *Backend) addMissingMarker(applied *rowfs.Applied) (undo func(), err err
 	old := b.marker
 	b.marker = m
 	return func() { b.marker = old }, nil
+}
+
+// addMissingReadme gives a store clone that has no README.md (neither in
+// its last commit nor in its files) lore's README (rowfs.StoreReadme,
+// D-f), in the same commit as this write: written once, with lore's next
+// commit in the store, never by a read and never over a person's own
+// README or their removal of it from the files only. A README that is
+// byte for byte an earlier lore's text (rowfs.ReadmeOutdated) is replaced
+// with the current one the same way. The file joins applied's paths, so a
+// failed commit removes it again, or writes the earlier text back (Undo).
+func (b *Backend) addMissingReadme(ctx context.Context, applied *rowfs.Applied) error {
+	if applied == nil || len(applied.Paths) == 0 {
+		return nil
+	}
+	full := filepath.Join(b.work, rowfs.ReadmeFile)
+	if rowfs.HasReadme(b.work) {
+		if !rowfs.ReadmeOutdated(b.work) {
+			return nil
+		}
+		prev, err := os.ReadFile(full)
+		if err != nil {
+			return errs.FileIO("read", full, err)
+		}
+		if _, err = rowfs.EnsureReadme(b.work); err != nil {
+			return err
+		}
+		applied.AddReplaced(full, rowfs.ReadmeFile, prev)
+		return nil
+	}
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "-e", "HEAD:" + rowfs.ReadmeFile}}); err == nil {
+		return nil // in the last commit, gone from the files: the person's change, kept
+	}
+	wrote, err := rowfs.EnsureReadme(b.work)
+	if err != nil || !wrote {
+		return err
+	}
+	applied.AddCreated(full, rowfs.ReadmeFile)
+	return nil
 }
 
 // WritePurge writes changes like Write and, in the same batch and the same
@@ -335,7 +401,9 @@ func (b *Backend) writePurge(ctx context.Context, changes []store.Change, purged
 	applied, err := b.folder.ApplyPurgeAudited(ctx, changes, purged, recs)
 	undo := func() {}
 	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {
-		undo, err = b.addMissingMarker(applied)
+		if undo, err = b.addMissingMarker(applied); err == nil {
+			err = b.addMissingReadme(ctx, applied)
+		}
 	}
 	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {
 		subj := changes

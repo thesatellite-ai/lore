@@ -14,6 +14,7 @@
 | [Use lore in CI](ci.md) | run lore read-only on a build machine, quiet the setup hint and fail the job when lore is not healthy |
 | [Your settings and team rules](plugins-and-db-config.md) | read and write your settings in `~/.lore/config.yaml`, or set a rule for the whole team |
 | [Resources: servers, domains and the services on them](resources.md) | record your infrastructure as typed rows, see what depends on a server, import and export them, and keep vault references instead of secrets |
+| [Where lore keeps things](where-lore-keeps-things.md) | know what every file in `~/.lore`, in a store clone and in your repo is, which lore wrote into your repo or git config, and what happens if you edit or delete one |
 | [Upgrade lore](upgrade.md) | install a new release, pin one version for the team or CI, or turn off the daily new-release line |
 
 ## Commands on these pages
@@ -21,6 +22,7 @@
 | Command | Page |
 |---|---|
 | `lore doctor`, `lore support-bundle` | [doctor](doctor.md) |
+| `lore where`, `lore files` | [where-lore-keeps-things](where-lore-keeps-things.md) |
 | `lore doctor --all`, `lore setup repair` | [doctor-all](doctor-all.md) |
 | `lore search rebuild`, rebuilding `.lore/lore-cache.db` | [backup-restore-repair](backup-restore-repair.md) |
 | `lore audit log`, `lore audit verify` | [audit-log](audit-log.md) |

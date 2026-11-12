@@ -28,7 +28,7 @@ type storeStanding struct {
 	// dir is the clone worktree (git) or the store folder.
 	dir string
 	git bool
-	// cloned: a git store has a worktree on this machine.
+	// cloned: a git store has a clone on this machine.
 	cloned bool
 	state  gitbackend.PushState
 	// err is why the standing could not be read ("" when it was).
@@ -74,8 +74,8 @@ func (a *App) standingOf(ctx context.Context, e opsstores.Entry) storeStanding {
 	if !isGit {
 		return s
 	}
-	if st, serr := os.Stat(filepath.Join(dir, ".git")); serr != nil || st.IsDir() {
-		return s // not cloned on this machine (or not a linked worktree)
+	if st, serr := os.Stat(filepath.Join(dir, ".git")); serr != nil || !st.IsDir() {
+		return s // not cloned on this machine
 	}
 	s.cloned = true
 	ps, err := gitbackend.ReadPushState(ctx, "", dir)

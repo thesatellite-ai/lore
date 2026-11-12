@@ -131,9 +131,9 @@ func TestDoctorLocalRows(t *testing.T) {
 
 	// time_outbox
 	got, err := a.DoctorTimeOutbox(ctx)
-	mustNone("no local.db", got, err)
-	if _, serr := os.Stat(LocalStatePath(home)); !errors.Is(serr, fs.ErrNotExist) {
-		t.Fatalf("doctor created local.db: %v", serr)
+	mustNone("nothing queued", got, err)
+	if _, serr := os.Stat(oldLocalStatePath(home)); !errors.Is(serr, fs.ErrNotExist) {
+		t.Fatalf("doctor created the old state/local.db: %v", serr)
 	}
 	ls, err := a.LocalState(ctx)
 	if err != nil {

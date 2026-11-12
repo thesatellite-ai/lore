@@ -43,7 +43,7 @@ That works well for one person. For a team it leaves gaps. Lore for teams fills 
  ┌──────────────────────────────────────────────────────────────────────┐
  │ ~/.lore/config.yaml    your orgs, your identity in each, your stores │
  │ ~/.lore/personal/      your personal notes: everywhere/, agency/     │
- │ ~/.lore/clones/        one clone per store (<repo>.git/ + <repo>/)   │
+ │ ~/.lore/stores/        one git clone per store (<owner>/<repo>)      │
  │ ~/.lore/render/…md     internal context for agents, OUTSIDE the repo │
  └──────────────────────────────────────────────────────────────────────┘
 ```

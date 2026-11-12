@@ -71,8 +71,9 @@ const (
 type Host interface {
 	// WorkDir is the folder init runs in (the project root).
 	WorkDir() string
-	// HadLocalState reports whether lore's local files (.lore/lore-cache.db,
-	// v0.1.17's lore.db / lore.yaml / lore.toml) existed when the process
+	// HadLocalState reports whether lore's local files (the repo cache
+	// under the lore home or an older .lore/lore-cache.db, v0.1.17's
+	// lore.db / lore.yaml / lore.toml) existed when the process
 	// started: the line between "already initialised" and "a fresh clone".
 	HadLocalState() bool
 	// SharedRepoMeta is the repo identity the checkout's other projects

@@ -22,7 +22,7 @@ for f in lore.toml lore.yaml; do
         OUT=$($LORE "${argv[@]}" 2>&1); RC=$?
         [ "$RC" -eq 23 ] || fail "$f, lore $args: exit $RC, want 23 ($OUT)"
         echo "$OUT" | grep -q "retired shared-database mode (.lore/$f)" || fail "ambiguous .lore/ ($f) not refused: $OUT"
-        echo "$OUT" | grep -q "lore migrate run" || fail "refusal does not name lore migrate run: $OUT"
+        echo "$OUT" | grep -q "run lore fix" || fail "refusal does not name lore fix (D-al: old-project messages say run lore fix): $OUT"
     done
     [ ! -e "$TMP/other.db" ] || fail "lore opened the pointer's database"
     rm ".lore/$f"

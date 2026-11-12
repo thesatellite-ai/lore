@@ -33,7 +33,7 @@ func removeFolder(t *testing.T, a *App, input string, yes bool) (opsstores.Folde
 
 // folderMetaPath is folder f's _meta.json in the folder store at url.
 func folderMetaPath(url, f string) string {
-	return filepath.Join(storeDir(url), f, rowfs.LoreDir, rowfs.DataDir, rowfs.MetaFileName)
+	return filepath.Join(storeDir(url), f, rowfs.MetaFileName)
 }
 
 // TestFolderRemoveEmpty: an empty folder is removed after --yes (asked
@@ -155,7 +155,7 @@ func TestFolderRemoveWithRows(t *testing.T) {
 	if _, serr := os.Stat(meta); !errors.Is(serr, os.ErrNotExist) {
 		t.Fatalf("_meta.json is still there: %v", serr)
 	}
-	rowFile := filepath.Join(storeDir(url), "client_a", rowfs.LoreDir, rowfs.DataDir, "projects", ref.String()+rowfs.RowFileExt)
+	rowFile := filepath.Join(storeDir(url), "client_a", "projects", ref.String()+rowfs.RowFileExt)
 	body, err := os.ReadFile(rowFile)
 	if err != nil {
 		t.Fatalf("the trashed row file is gone: %v", err)
@@ -176,7 +176,7 @@ func TestFolderRemoveOrgAdmin(t *testing.T) {
 	url := folderStoreAt(t, folderStore, rowfs.VisibilityInternal)
 	// the store is acme's: its org folder holds acme's lore-org.yaml (an
 	// org entry needs a hosted url, so the store is known by its file)
-	orgFile := filepath.Join(storeDir(url), rowfs.FolderOrg, rowfs.LoreDir, "lore-org.yaml")
+	orgFile := filepath.Join(storeDir(url), rowfs.FolderOrg, "lore-org.yaml")
 	if err := os.MkdirAll(filepath.Dir(orgFile), 0o700); err != nil {
 		t.Fatal(err)
 	}

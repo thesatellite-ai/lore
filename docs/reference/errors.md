@@ -21,8 +21,8 @@ To see the exit status yourself, print `$?` right after the command. Here a task
 <!-- example: reference#exit-status only=3 -->
 ```console
 # alice, in website
-$ lore task edit tsk_7a67…9504 --after tsk_2ad3…f891; echo "exit status: $?"
-ERROR: [E_CYCLE] dependency cycle: tsk_7a67…9504 → tsk_2ad3…f891 → tsk_7a67…9504
+$ lore task edit tsk_2ad3…f891 --after tsk_162d…9666; echo "exit status: $?"
+ERROR: [E_CYCLE] dependency cycle: tsk_2ad3…f891 → tsk_162d…9666 → tsk_2ad3…f891
   hint: drop one --after edge; a task may not wait on itself, even through others
 exit status: 19
 ```
@@ -194,9 +194,9 @@ A project that still has rows cannot be deleted; the message names every row tha
 ```console
 # alice, in website
 $ lore project list
-prj_76bd…3f10  website  https://github.com/client/website
+prj_d431…313a  website  https://github.com/client/website
 $ lore project delete $(lore project list | cut -d' ' -f1) --yes
-ERROR: [E_HAS_DEPENDENTS] project delete: mem_d431…313a (memories.project_id), rul_162d…9666 (rules.project_id), tsk_7a67…9504 (tasks.project_id), tsk_2ad3…f891 (tasks.project_id), tsk_54fe…28f2 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_76bd…3f10
+ERROR: [E_HAS_DEPENDENTS] project delete: mem_b4f4…a5b0 (memories.project_id), rul_54fe…28f2 (rules.project_id), tsk_2ad3…f891 (tasks.project_id), tsk_162d…9666 (tasks.project_id), tsk_05e9…4603 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_d431…313a
   hint: delete or move the pointing rows first
 (exit 23)
 ```
@@ -256,11 +256,12 @@ Removing a key the row does not have is `E_META_UNKNOWN`; the message says which
 ```console
 # alice, in website
 $ lore rule add --body 'Keep the footer links in one list'
-✓ rul_b4f4…a5b0
+lore: wrote ~/work/website/.lore/data/rules/rul_4c59…6c38.json
+✓ rul_4c59…6c38
   scope: [master] severity: must
-$ lore meta unset rul_b4f4…a5b0 client_tier
-ERROR: [E_META_UNKNOWN] rul_b4f4…a5b0 has no metadata key "client_tier"; it has no metadata
-  hint: lore meta show rul_b4f4…a5b0 lists its keys
+$ lore meta unset rul_4c59…6c38 client_tier
+ERROR: [E_META_UNKNOWN] rul_4c59…6c38 has no metadata key "client_tier"; it has no metadata
+  hint: lore meta show rul_4c59…6c38 lists its keys
 (exit 20)
 ```
 <!-- /example -->
@@ -306,7 +307,8 @@ A variable whose value holds a reference with an option that scheme does not tak
 ```console
 # alice, in website
 $ lore vars set host staging.client.example
-Added var_…c1c9 host = staging.client.example (text) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_28f8…03df.json
+Added var_…03df host = staging.client.example (text) in repo (not shareable: clients see ${var:<name>}).
 $ lore vars set base_url 'https://${var:host?port=8080}/'
 ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for ${var:…}
 (exit 20)

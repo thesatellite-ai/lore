@@ -528,7 +528,18 @@ var nonSnake = regexp.MustCompile(`[^a-z0-9_]`)
 // storeMainRow reads a row of a store project from the store branch.
 func (a *agency) storeMainRow(t *testing.T, folder, table, id string) (rowDoc, bool) {
 	t.Helper()
-	return readRow(t, a.store, refMain, mainRowPath(folder, table, id))
+	return readRow(t, a.store, refMain, storeRowPath(folder, table, id))
+}
+
+// storeRowPath is a row's path in a store's tree: <folder>/<table>/<id>.json,
+// <table>/<id>.json for the store root ("" or "."); a store keeps no
+// .lore/data (rows sit right under each folder).
+func storeRowPath(folder, table, id string) string {
+	p := table + "/" + id + ".json"
+	if folder == "" || folder == "." {
+		return p
+	}
+	return folder + "/" + p
 }
 
 // clientSees reports which needles a client developer can obtain from the
@@ -544,7 +555,7 @@ func (a *agency) clientSees(t *testing.T, needles ...string) []th.Finding {
 // this id, not by the LORE_ACTOR key, so leak scans must look for both.
 func agentActorID(t *testing.T, store *th.Remote, label string) string {
 	t.Helper()
-	for _, f := range store.FilesMatching(refMain, folderOrg+"/"+dataDir+"/"+tblActors+"/") {
+	for _, f := range store.FilesMatching(refMain, folderOrg+"/"+tblActors+"/") {
 		if body, _ := store.Read(refMain, f); strings.Contains(body, label) && strings.Contains(body, `"agent"`) {
 			return strings.TrimSuffix(filepath.Base(f), ".json")
 		}

@@ -81,6 +81,7 @@ func newDriftRoot(t *testing.T) *cobra.Command {
 	hosthooks.Install(root, runner)
 	h := &host{app: app, home: home, live: liveRows}
 	mountShortcuts(root)
+	h.mountEdit(root)   // lore path / open, lore edit (main.go mounts them too)
 	mountSetupWeb(root) // lore setup web, lore onboard (main.go mounts them too)
 	root.AddCommand(h.apiCommand(), h.specCommand(), h.versionCommand(), h.initCommand(wd), h.tuiCommand())
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))

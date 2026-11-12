@@ -104,7 +104,7 @@ func TestF11_RefusedLinkLeavesNothingAndTheRerunSaysWhatItDid(t *testing.T) {
 	dev1.Clone(app, "app").MustLore("actor", "register") // moves the store branch
 	r := aliceApp.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes")
 	r.Says(t, "created; pushed").Never(t, "already so")
-	if _, ok := store.Read(refMain, folderAcme+"/.lore/data/_meta.json"); !ok {
+	if _, ok := store.Read(refMain, folderAcme+"/_meta.json"); !ok {
 		t.Fatal("the link reached the store")
 	}
 	aliceApp.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes").Says(t, "already so")

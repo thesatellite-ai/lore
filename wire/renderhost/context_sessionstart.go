@@ -51,7 +51,7 @@ const (
 
 // contextSessionStart builds the SessionStart answer and stamps now.
 func (h *Host) contextSessionStart(ctx context.Context) (contextResult, error) {
-	stamp := sessionStartFile()
+	stamp := sessionStartFile(h.loreHome())
 	last := readSessionStart(stamp)
 	now := h.now()
 	var picks []contextPick
@@ -115,18 +115,18 @@ func (h *Host) inFlightTasks(ctx context.Context) ([]opstask.Brief, error) {
 	return out.Data, nil
 }
 
-// sessionStartFile is this repo's stamp path, "" outside a work tree.
-func sessionStartFile() string {
+// sessionStartFile is this repo's stamp path under the lore home, ""
+// outside a work tree or without a home.
+func sessionStartFile(home string) string {
+	if home == "" {
+		return ""
+	}
 	top, err := runGit(context.Background(), false, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return ""
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
 	sum := sha256.Sum256([]byte(strings.TrimSpace(string(top))))
-	return filepath.Join(home, ".lore", filepath.FromSlash(sessionStartDir), hex.EncodeToString(sum[:])[:hookSeenHashLen])
+	return filepath.Join(home, filepath.FromSlash(sessionStartDir), hex.EncodeToString(sum[:])[:hookSeenHashLen])
 }
 
 // readSessionStart is the stamped time, zero when absent or unreadable.

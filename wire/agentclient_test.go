@@ -134,7 +134,7 @@ func TestAgentWritesInClientRepoStampTheOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sf := rowFile(t, filepath.Join(fileuri.LocalPath(orgURL), "acme", ".lore", "data", schema.TableMemories, idOf(t, stOut)+".json"))
+	sf := rowFile(t, filepath.Join(fileuri.LocalPath(orgURL), "acme", schema.TableMemories, idOf(t, stOut)+".json"))
 	if fieldString(t, sf, "created_by") != agent.String() {
 		t.Fatalf("the org store keeps the agent's own id: %v", sf)
 	}

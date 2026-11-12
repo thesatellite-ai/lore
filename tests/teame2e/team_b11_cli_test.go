@@ -436,8 +436,16 @@ func TestB11_SQLShortcut(t *testing.T) {
 	const q = "SELECT COUNT(*) AS n FROM memories_all"
 	short := c.MustLore("sql", q, "--json").Stdout
 	long := c.MustLore("sql", "run", q, "--json").Stdout
-	if short != long || !strings.Contains(short, `"count":1`) {
+	if short != long {
 		t.Fatalf("lore sql <q> must equal lore sql run <q>:\n%s\n%s", short, long)
+	}
+	// --json is indented for people (surface/cli printJSON), so read the
+	// count from the decoded result, not from the bytes.
+	var res struct {
+		Count *int `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(short), &res); err != nil || res.Count == nil || *res.Count != 1 {
+		t.Fatalf("lore sql --json must report count 1 (err %v):\n%s", err, short)
 	}
 	c.MustLore("sql", "--json", "SELECT 1 AS one").Says(t, `"one"`)
 	c.MustLore("sql", "SELECT", "2", "AS", "two").Says(t, "two")

@@ -32,7 +32,11 @@ func folderStoreRepo(t *testing.T) (repo, storeDir, yamlPath, yaml string) {
 	if err = folder.Init(storeDir, rowfs.Marker{Version: rowfs.MarkerVersion, ID: sid, Visibility: rowfs.VisibilityInternal}); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.MkdirAll(filepath.Join(storeDir, "acme", ".lore", "data"), 0o750); err != nil {
+	if err = os.MkdirAll(filepath.Join(storeDir, "acme"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// a folder is one with its _meta.json (rowfs.HasStoreFolder)
+	if err = os.WriteFile(filepath.Join(storeDir, "acme", rowfs.MetaFileName), []byte(`{"_v":1}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	repo = gitRepo(t)
@@ -86,7 +90,7 @@ func TestFolderTargetConfirmThenCreate(t *testing.T) {
 			t.Fatalf("%s: %v", c.folder, rerr)
 		}
 		id := idOf(t, out)
-		if _, serr := os.Stat(filepath.Join(storeDir, c.folder, ".lore", "data", schema.TableMemories, id+".json")); serr != nil {
+		if _, serr := os.Stat(filepath.Join(storeDir, c.folder, schema.TableMemories, id+".json")); serr != nil {
 			t.Fatalf("%s: the row is not in the new folder: %v", c.folder, serr)
 		}
 		if b := string(mustRead(t, yamlPath)); !strings.Contains(b, "name: northwind/"+c.folder) || !strings.Contains(b, "folder: "+c.folder) {

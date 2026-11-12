@@ -87,12 +87,20 @@ Personal notes follow the same split. A note written in an agency repo is filed 
 ```console
 # alice, in website
 $ lore memory add --body 'ask the client PM before touching the payment flow' --to me
+lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
+lore: wrote ~/.lore/personal/agency/memories/mem_76bd…3f10.json (store me)
+lore: wrote ~/.lore/personal/agency/machines/mch_d431…313a.json (store me)
 ✓ mem_76bd…3f10 [me/agency]
   scope: [master]
 
 # alice, in client3-api
 $ lore memory add --body 'client3 deploys only on Tuesdays' --to me
-✓ mem_d431…313a [me/client3]
+lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/client3-api/.git/config; hook blocks in ~/work/client3-api/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote ~/.lore/personal/client3/actors/act_162d…9666.json (store me)
+lore: wrote ~/.lore/personal/client3/memories/mem_b4f4…a5b0.json (store me)
+lore: wrote ~/.lore/personal/client3/machines/mch_d431…313a.json (store me)
+✓ mem_b4f4…a5b0 [me/client3]
   scope: [master]
 
 # alice, in website
@@ -101,10 +109,11 @@ mem_76bd…3f10  ask the client PM before touching the payment flow  [me/agency]
 
 # alice, in client3-api
 $ lore memory list
-mem_d431…313a  client3 deploys only on Tuesdays  [me/client3]
+mem_b4f4…a5b0  client3 deploys only on Tuesdays  [me/client3]
 
 # alice, in forked-tool
 $ lore memory list
+lore memory list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/forked-tool/.git/config; hook blocks in ~/work/forked-tool/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 (no memories)
 ```
 <!-- /example -->
@@ -122,7 +131,7 @@ $ lore memory list
 - **Never two orgs in one repo.** Two entries may match a repo at the same rule (say both list `github.com/client/*`). Then lore refuses org-scoped commands with `E_ORG_AMBIGUOUS` until you choose with `lore org use <entry>`. It never guesses. See [Troubleshooting](../troubleshooting.md#e_org_ambiguous).
 - **Set a top-level `identity`** once you have orgs. Without it, lore falls back to the git email chain, but skips any value equal to an org identity. So a personal repo is never stamped with a company identity. Lore prints a hint to set one.
 - **Two identities, two actors.** The same person in two orgs is two roster rows (two entries on two lists of people and agents), never linked automatically.
-- **Agents for two orgs** should run as different OS users or in different containers. Lore keeps orgs apart in what it loads. But an agent with plain file access could read another org's clone in `~/.lore/clones`.
+- **Agents for two orgs** should run as different OS users or in different containers. Lore keeps orgs apart in what it loads. But an agent with plain file access could read another org's clone in `~/.lore/stores`.
 
 ## Related
 

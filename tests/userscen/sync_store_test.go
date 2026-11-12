@@ -375,7 +375,7 @@ func TestSyncStore_OfflineWriteIsSentByTheNextSync(t *testing.T) {
 
 	st.people[0].Offline()
 	w := a.MustLore("memory", "add", "written on the train", "--to", "notes", "--json")
-	w.Says(t, "committed in the local copy of store notes", "the next lore command that reaches the store pushes it, or run `lore sync`")
+	w.Says(t, "committed in the local copy of store notes", "run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)")
 	mem := th.DecodeJSON[syncAddOut](t, w).ID
 	for _, f := range r.Files(syncStoreRef) {
 		if strings.Contains(f, mem) {
@@ -402,11 +402,12 @@ func TestSyncStore_OfflineWriteIsSentByTheNextSync(t *testing.T) {
 	}
 }
 
-// A store write whose push failed offline is pushed by the next plain
-// command that reads the store and reaches its remote, without `lore
-// sync`, even when that store was fetched moments before (the failed push
-// clears the fetch stamp); the offline note says so.
-func TestSyncStore_OfflineWriteIsPushedByTheNextReadCommand(t *testing.T) {
+// A store write whose push failed offline waits in the local clone: a
+// read that reaches the store again never pushes it (plain files 3.3) but
+// says it waits and that `lore sync` sends it, and the next write to the
+// store pushes it with its own commit, even when that store was fetched
+// moments before (refresh retries while commits wait).
+func TestSyncStore_OfflineWriteIsPushedByTheNextWrite(t *testing.T) {
 	// fetch_ttl 1h: without the cleared stamp no read would sync again
 	st := newSyncTeam(t, 1, th.Config{Live: &th.Live{FetchTTL: "1h"}})
 	a := st.clones[0]
@@ -416,7 +417,7 @@ func TestSyncStore_OfflineWriteIsPushedByTheNextReadCommand(t *testing.T) {
 
 	st.people[0].Offline()
 	w := a.MustLore("memory", "add", "placeholder offline note", "--to", "notes", "--json")
-	w.Says(t, "the next lore command that reaches the store pushes it, or run `lore sync`")
+	w.Says(t, "run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)")
 	mem := th.DecodeJSON[syncAddOut](t, w).ID
 	onRemote := func() bool {
 		for _, f := range r.Files(syncStoreRef) {
@@ -435,8 +436,12 @@ func TestSyncStore_OfflineWriteIsPushedByTheNextReadCommand(t *testing.T) {
 	}
 
 	st.people[0].Online()
-	a.MustLore("memory", "list", "--store", "notes")
+	a.MustLore("memory", "list", "--store", "notes").Says(t, "local commit(s) wait to be pushed; a read never pushes: run `lore sync`")
+	if onRemote() {
+		t.Fatal("a read that reaches the store must not push the waiting write")
+	}
+	a.MustLore("memory", "add", "placeholder second note", "--to", "notes").Says(t, "lore: pushed store notes: commit ")
 	if !onRemote() {
-		t.Fatal("the first read command that reaches the store must push the waiting write")
+		t.Fatal("the next write that reaches the store must push the waiting write")
 	}
 }

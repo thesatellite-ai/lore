@@ -70,7 +70,7 @@ func doctorLinkedByRemoteNote(remote string) string {
 // doctor [sync] lines.
 const (
 	doctorDataIgnoredWarning = ".lore/data is gitignored, so lore knowledge is never shared; `lore doctor --fix` re-includes it in .gitignore (then commit .gitignore), or remove the ignore rule (lore sync refuses with E_SYNC_DATA_IGNORED meanwhile)"
-	doctorNoMergeDriverNote  = "lore merge driver not configured in this clone (the next lore command installs it, unless LORE_SYNC_GIT=0)"
+	doctorNoMergeDriverNote  = "lore merge driver not configured in this clone (a read leaves git as it is: `lore sync`, `lore doctor --fix` or the next lore write here installs it, unless LORE_SYNC_GIT=0)"
 	// doctorBrokenMergeDriverNote: merge.lore.driver is set to something
 	// that is not a lore merge driver (a missing absolute program is
 	// repaired by the next lore command, see wire/host/gitwire.go).
@@ -181,9 +181,12 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	}
 	// A read never adds these lines (wire/gitignorelines.go): the finding
 	// names them and the command that does.
-	if missing := MissingGitignoreLines(ctx, dir); len(missing) > 0 {
+	if missing := MissingGitignoreLines(ctx, dir); len(missing) > 0 && HoldsLoreData(dir) {
 		note(doctorGitignoreLinesNote(missing)) // clutter in a teammate's git status, never lost data: a note
 	}
+	// A repo with no lore data of its own (a client repo) never gets its
+	// .gitignore changed, not even by --fix (plain files sweep 3.8): lore's
+	// local files stay out of git status through .git/info/exclude only.
 	return s
 }
 

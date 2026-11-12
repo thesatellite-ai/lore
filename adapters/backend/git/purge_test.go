@@ -50,7 +50,7 @@ func TestWritePurgeCommitsTheList(t *testing.T) {
 		t.Fatalf("subject %q", subj)
 	}
 	files := gitT(t, a.Dir(), "show", "--name-only", "--format=", "HEAD")
-	if !strings.Contains(files, ".lore/data/"+rowfs.PurgedFileName) || !strings.Contains(files, rowfs.RowPath(memories, x.ID)) {
+	if !strings.Contains(files, rowfs.PurgedFileName) || strings.Contains(files, ".lore/") || !strings.Contains(files, rowfs.RowPath(memories, x.ID)) {
 		t.Fatalf("the purge commit must hold the tombstone and the list:\n%s", files)
 	}
 	if status := gitT(t, a.Dir(), "status", "--porcelain"); status != "" {

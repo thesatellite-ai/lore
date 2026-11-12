@@ -34,7 +34,7 @@ $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
 $ lore sync && lore task list --mine
 · already in sync
-○ tsk_162d…9666 check the checkout page on a phone [medium]
+○ tsk_54fe…28f2 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
 
@@ -104,6 +104,7 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore memory add --body 'the site deploys from the release branch'
+lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
@@ -126,6 +127,7 @@ A **link** tells lore that a store folder holds the agency's private notes for t
 ```console
 # bob, in website
 $ lore memory add --body 'the client wants weekly demos'
+lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: cannot read agency: github.com/agency/notes (never fetched)
   hint: retry when the store is reachable, or pass --to repo|<org>|me to choose the target yourself
 (exit 18)
@@ -143,7 +145,7 @@ A staging entry (or a typo in `branch:`) names a store branch that does not exis
 # alice, in website
 $ LORE_ORG=agency-stag lore org link agency-stag --project client --yes
 ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
-  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: `lore migrate run`)
+  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
 (exit 20)
 ```
 <!-- /example -->
@@ -158,9 +160,9 @@ A **claim** is an agent putting its name on a task, like writing your name on a 
 ```console
 # alice, in website
 $ lore task claim tsk_2ad3…f891
-ERROR: [E_LINK_UNKNOWN] cannot tell whether this repo is a client repo; refusing to write coordination data
-  hint: `lore whoami` shows the link status; fetch the store and retry
-(exit 18)
+ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): git fetch: '/srv/git/github.com/agency/notes' does not appear to be a git repository
+  hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
+(exit 15)
 ```
 <!-- /example -->
 
@@ -196,7 +198,7 @@ A **leak** is internal or personal content reaching something the client can rea
 # alice, in website
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_05e9…4603 (10 words)
+  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
@@ -223,10 +225,12 @@ Lore shares live rows through a hidden list on the remote that is not a branch (
 ```console
 # bob, in portal
 $ lore task add 'set up the portal CI'
+lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
+lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
-local     601d2850ffd0
+local     86dbae476bd6
 tracking  (none)
 seen      (none)
 pending   2 write(s) not confirmed by the remote
@@ -336,11 +340,13 @@ A coding agent acts for its person: what it changes on the roster (the team step
 
 The repo has no org, so its roster is the repo's own committed `.lore/data`, and contacts written there would be published with the code. Profile writes are refused there; reads still work. Create an org with `lore org create <name>` or join one (see [Identity and stores](identity-and-stores.md)), then run the command again.
 
-## Two clone folders for one store
+## Where a store's clone lives
 
-`~/.lore/clones/<host>/<owner>/` holds two folders for each git store, for example `notes.git/` and `notes/`. They are the two halves of one clone, not a duplicate: `notes.git/` is the git data (`objects/`, `refs/`, `worktrees/`), and `notes/` holds the worktree lore reads and writes (`work/`), the clone lock (`lock`) and its journal (`state/`). Deleting either one breaks the store's clone. A `lore/` folder inside `notes.git/` is lore 0.1.17's (it shares the clone while you still run 0.1.17); 0.1.18 does not read it. A store pinned to a branch adds `notes@<branch>.git/` and `notes@<branch>/`.
+Each git store has one clone on your machine, a normal git clone you can open and browse: `~/.lore/stores/<owner>/<repo>/` (the host is not in the path). Its files are the store's files; `.git/` inside is git's own, and `.git/lore/` holds what lore keeps for itself: the store lock (`lock`), the pending audit journal (`state/`), and the fetch and push stamps. Nothing of lore's sits among the store's files. A store pinned to a branch is its own clone at `<repo>@<branch>/`. Two stores whose paths agree on different hosts get `<repo>/` and `<repo>~2/`; `~/.lore/state/store-clones.json` records the second one. To use a clone you made yourself (`git clone <url> ~/work/notes`), run `lore store use ~/work/notes`; `lore store use --default <store>` goes back to lore's own clone and leaves yours alone.
 
-`lore doctor` names a clone only when one half is unusable or left over (check `store_clone`), with the command that removes it: the worktree half without its git data, or a worktree whose git data was replaced (`rm -rf` the `<repo>/` folder after copying out anything you still need; lore makes a fresh worktree on the next open), git data with no worktree beside it (`lore store forget https://<host>/<owner>/<repo>`, refused while it holds commits the remote lacks), or a worktree linked to another clone (`git worktree repair`). Doctor never deletes a clone folder itself, `--fix` included.
+Inside the clone a folder's rows sit right under it: `client/tasks/tsk_….json`, `client/_meta.json` (the folder's id and repo links), `org/lore-org.yaml` (the org's suggested settings), and the store's own rows (its root folder) in `_store/` (`_store/tasks/`, `_store/memories/`, …, `_store/_meta.json`), so every other top-level folder is a project or the org folder. There is no `.lore/data` inside a store; a code repo keeps its own rows in `.lore/data`, apart from its code. A store folder may not be named like a kind of row, nor start with `_` or `.` (`_store` is lore's): `lore store folder add <store> tasks` is refused with the list of reserved names. Lore writes a `README.md` into each store once, with its next commit there, explaining the folders and how to edit a row by hand (`lore edit <id>`, `lore path <id>`); it never writes it again, and `lore doctor` notes a store without one (`store_readme`). You may edit, add, delete or move row files there by hand, or use plain git: the next lore command checks each change, commits the valid ones as you and refuses a broken file with its line and reason ([Editing by hand](../sync/editing-by-hand.md)); `lore doctor` names files there that are not rows and row files still waiting to be committed (`store_files`). A store that is a plain folder (`file://…`) keeps lore's lock and pending journal in `.lore-state/` at its top.
+
+`lore doctor` names a clone only when lore cannot use it as it is (check `store_clone`), with the command that fixes it: a clone whose git data is broken (`rm -rf` the folder after copying out anything you still need; the next command clones again), a first clone that was cut short before its files were checked out (lore finishes it on the next open, or `lore store forget <url>`), or your own clone recorded by `lore store use` whose folder is gone (`lore store use --default <url>`). Doctor never deletes a clone folder itself, `--fix` included.
 
 ## "Database is locked" and slow commands
 

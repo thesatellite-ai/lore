@@ -94,16 +94,19 @@ func FindModeBPointer(repoTop string) (string, bool) {
 // RetiredModeBMessage is the one sentence every command gives in a repo
 // that still uses Mode B; pointer is the file found.
 func RetiredModeBMessage(pointer string) string {
-	return "this repo uses the retired shared-database mode (" + modeBDir + "/" + filepath.Base(pointer) + "); run `lore migrate run`"
+	return "this repo uses the retired shared-database mode (" + modeBDir + "/" + filepath.Base(pointer) + "); run lore fix"
 }
 
 // RetiredModeBHint is the hint beside RetiredModeBMessage.
-const RetiredModeBHint = "`lore migrate run --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>" + ModeBMigratedSuffix
+const RetiredModeBHint = "`lore fix --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>" + ModeBMigratedSuffix
 
 // RefuseRetiredModeB returns E_UNSUPPORTED when the repo still has a Mode B
 // pointer (Run calls it for every operation but migrate.run and the store
 // operations).
 func (a *App) RefuseRetiredModeB(ctx context.Context) error {
+	if inStore(a.opts.RepoDir) {
+		return nil // a store's checkout has no Mode B pointer of a repo (storehere.go)
+	}
 	top, err := a.repoTop(ctx)
 	if err != nil {
 		return err
@@ -269,7 +272,7 @@ func (a *App) writeModeBStore(ctx context.Context, raw string, changes []store.C
 	if err != nil {
 		return 0, errs.Wrap(errs.Internal, "migrate: new store id", err)
 	}
-	m := rowfs.Marker{ID: id, Visibility: rowfs.VisibilityInternal, Created: a.opts.Wall().UTC().Format(markerDateLayout), OrgFolder: defaultOrgFolder}
+	m := rowfs.Marker{ID: id, Visibility: rowfs.VisibilityInternal, Created: a.opts.Wall().UTC().Format(markerDateLayout)}
 	if _, _, err = a.makeStore(ctx, canon, raw, m); err != nil {
 		return 0, err
 	}

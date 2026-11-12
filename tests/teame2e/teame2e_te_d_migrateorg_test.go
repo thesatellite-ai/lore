@@ -28,7 +28,7 @@ const teDV1ActorDoc = `{"_table":"actors","_v":1,"active":true,"created_at":"202
 // clone assigns @dev3, and a second run is a no-op.
 func TestTeD_MigrateOrgV1RosterRowReachesTeammates(t *testing.T) {
 	a := newAgency(t, th.Cmd("migrate", "run"), th.Flag("assign", "task", "add"), th.Flag("to", "task", "add"))
-	rowPath := folderOrg + "/" + dataDir + "/" + tblActors + "/" + teDV1Actor + ".json"
+	rowPath := folderOrg + "/" + tblActors + "/" + teDV1Actor + ".json"
 
 	// The team's store as v0.1.17 left it: dev3 registered with the old
 	// binary, so its row is `_v: 1`.
@@ -37,7 +37,7 @@ func TestTeD_MigrateOrgV1RosterRowReachesTeammates(t *testing.T) {
 	work.CommitAll("lore: v0.1.17 roster row")
 	work.AdminPush("origin", storeBranch)
 	others := map[string]string{}
-	for _, f := range a.store.FilesMatching(refMain, folderOrg+"/"+dataDir+"/"+tblActors+"/") {
+	for _, f := range a.store.FilesMatching(refMain, folderOrg+"/"+tblActors+"/") {
 		if !strings.HasSuffix(f, teDV1Actor+".json") {
 			body, _ := a.store.Read(refMain, f)
 			others[f] = body

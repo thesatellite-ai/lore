@@ -12,10 +12,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -53,8 +55,8 @@ func newLinkWorld(t *testing.T) *linkWorld {
 	testGit(t, origin, "init", "-q", "--bare", "-b", "main")
 	seed := filepath.Join(root, "seed")
 	testGit(t, root, "clone", "-q", lwStoreURL, seed)
-	writeFile(t, filepath.Join(seed, storeMarkerFile), "version: 2\n")
-	writeFile(t, filepath.Join(seed, "rows", ".lore", "data", "memories", "mem_01a1a5aca7f57659be7320c5f4b70033.json"), `{"_v":2,"id":"mem_01a1a5aca7f57659be7320c5f4b70033"}`+"\n")
+	writeFile(t, filepath.Join(seed, storeMarkerFile), "lore_store: 1\nid: sto_01936f0000007a1b8c2d3e4f5a6b7c8d\n")
+	writeFile(t, filepath.Join(seed, "rows", "memories", "mem_01a1a5aca7f57659be7320c5f4b70033.json"), `{"_v":2,"id":"mem_01a1a5aca7f57659be7320c5f4b70033"}`+"\n")
 	testGit(t, seed, "add", ".")
 	testGit(t, seed, "commit", "-q", "-m", "init")
 	testGit(t, seed, "push", "-q", "origin", "main")
@@ -136,7 +138,7 @@ func TestWriteLinkOnlyMetaJSON(t *testing.T) {
 			if strings.Contains(files, "/projects/") {
 				t.Fatalf("a link wrote a projects row:\n%s", files)
 			}
-			if !strings.Contains(files, "rows/.lore/data/memories/mem_01a1a5aca7f57659be7320c5f4b70033.json") {
+			if !strings.Contains(files, "rows/memories/mem_01a1a5aca7f57659be7320c5f4b70033.json") {
 				t.Fatalf("the adopted folder's row is gone:\n%s", files)
 			}
 			head := testGit(t, w.origin, "rev-parse", "main")
@@ -149,12 +151,24 @@ func TestWriteLinkOnlyMetaJSON(t *testing.T) {
 }
 
 // TestWriteLinkKeepsAnExistingMeta: a folder whose _meta.json exists keeps
-// its project_id and every other key; FolderProjectID is not asked.
+// its project_id and every other key; FolderProjectID is not asked. A
+// folder still in the old layout (<folder>/.lore/data/_meta.json) gets the
+// link in that file, never a second _meta.json beside it.
 func TestWriteLinkKeepsAnExistingMeta(t *testing.T) {
+	for _, old := range []bool{false, true} {
+		t.Run(map[bool]string{false: "store layout", true: "old layout"}[old], func(t *testing.T) { testWriteLinkKeepsAnExistingMeta(t, old) })
+	}
+}
+
+func testWriteLinkKeepsAnExistingMeta(t *testing.T, old bool) {
 	w := newLinkWorld(t)
 	seed := filepath.Join(t.TempDir(), "seed")
 	testGit(t, filepath.Dir(seed), "clone", "-q", lwStoreURL, seed)
-	writeFile(t, filepath.Join(seed, "kept", ".lore", "data", "_meta.json"), `{"_v":2,"project_id":"prj_01a1a5aca7f57659be7320c5f4b70044","extra":"x"}`+"\n")
+	metaRel, other := metaPathOf("kept"), oldMetaPathOf("kept")
+	if old {
+		metaRel, other = other, metaRel
+	}
+	writeFile(t, filepath.Join(seed, filepath.FromSlash(metaRel)), `{"_v":2,"project_id":"prj_01a1a5aca7f57659be7320c5f4b70044","extra":"x"}`+"\n")
 	testGit(t, seed, "add", ".")
 	testGit(t, seed, "commit", "-q", "-m", "kept")
 	testGit(t, seed, "push", "-q", "origin", "main")
@@ -168,15 +182,23 @@ func TestWriteLinkKeepsAnExistingMeta(t *testing.T) {
 	if err != nil || res.CreatedFolder || !res.Changed {
 		t.Fatalf("link: %+v %v", res, err)
 	}
-	doc := w.metaOf(t, "kept")
-	if string(doc[metaProjectKey]) != `"prj_01a1a5aca7f57659be7320c5f4b70044"` || string(doc["extra"]) != `"x"` || string(doc[metaVersionKey]) != "2" {
-		t.Fatalf("existing keys not kept: %v", doc)
+	var doc map[string]json.RawMessage
+	if jerr := json.Unmarshal([]byte(testGit(t, w.origin, "show", "main:"+metaRel)), &doc); jerr != nil {
+		t.Fatal(jerr)
+	}
+	if string(doc[metaProjectKey]) != `"prj_01a1a5aca7f57659be7320c5f4b70044"` || string(doc["extra"]) != `"x"` || string(doc[metaVersionKey]) != "2" || len(doc[metaLinksKey]) == 0 {
+		t.Fatalf("existing keys not kept or no link: %v", doc)
+	}
+	if files := testGit(t, w.origin, "ls-tree", "-r", "--name-only", "main"); strings.Contains(files, other) {
+		t.Fatalf("a second _meta.json %s appeared:\n%s", other, files)
 	}
 }
 
 // TestWriteOrgFileSameNameKeptOtherRefused: the first write commits
-// lore-org.yaml; the same org again is Existed with no commit; another
-// org's name is ErrOrgFileExists with no commit.
+// lore-org.yaml in the org folder (org/lore-org.yaml, D-e) and, in the same
+// commit, org_folder: org in the store's marker, which named no org folder
+// before; the same org again is Existed with no commit; another org's name
+// is ErrOrgFileExists with no commit.
 func TestWriteOrgFileSameNameKeptOtherRefused(t *testing.T) {
 	w := newLinkWorld(t)
 	ctx := context.Background()
@@ -189,8 +211,14 @@ func TestWriteOrgFileSameNameKeptOtherRefused(t *testing.T) {
 	if err != nil || res.Existed || !res.Pushed {
 		t.Fatalf("first write: %+v %v", res, err)
 	}
-	if got := w.changed(t); len(got) != 1 || got[0] != orgFilePath("org") {
-		t.Fatalf("org file commit touched %v", got)
+	if before := testGit(t, w.origin, "show", "main~1:"+storeMarkerFile); strings.Contains(before, "org_folder") {
+		t.Fatalf("the store named an org folder before it had one:\n%s", before)
+	}
+	if got := w.changed(t); len(got) != 2 || !slices.Contains(got, orgFilePath("org")) || !slices.Contains(got, storeMarkerFile) {
+		t.Fatalf("org file commit touched %v, want org/lore-org.yaml and the marker", got)
+	}
+	if mk := testGit(t, w.origin, "show", "main:"+storeMarkerFile); !strings.Contains(mk, "org_folder: org") {
+		t.Fatalf("marker after the org file:\n%s", mk)
 	}
 	head := testGit(t, w.origin, "rev-parse", "main")
 	res, err = write("agency")
@@ -222,7 +250,7 @@ func TestWriteLinkAfterAStaleEmptyFetch(t *testing.T) {
 	}
 	g := &GitLinks{Home: w.links.Home, Config: cfg}
 	dir := g.cloneDirOf("github.com/agency/fresh")
-	if err = ensureBare(ctx, dir, freshURL); err != nil {
+	if err = ensureClone(ctx, dir, freshURL, false); err != nil {
 		t.Fatal(err)
 	}
 	if err = fetch(ctx, nil, dir); err != nil {
@@ -245,5 +273,44 @@ func TestWriteLinkAfterAStaleEmptyFetch(t *testing.T) {
 	res, err := write()
 	if err != nil || !res.Pushed || !res.CreatedFolder {
 		t.Fatalf("link after the store's first commit: %+v %v", res, err)
+	}
+}
+
+// TestWriteLinkInTheStoreClone (1.4): the link is written in the store's
+// one clone (~/.lore/stores/<owner>/<repo>, no clones-v017), which ends
+// up checked out on the store branch with the link's _meta.json among its
+// files and nothing left uncommitted; lore's state stays in .git/lore.
+func TestWriteLinkInTheStoreClone(t *testing.T) {
+	w := newLinkWorld(t)
+	if _, err := w.link(t, "acme"); err != nil {
+		t.Fatal(err)
+	}
+	clone := filepath.Join(w.links.Home, gitbackend.StoresDir, "agency", "notes")
+	if got := testGit(t, clone, "symbolic-ref", "--short", "HEAD"); got != "main" {
+		t.Fatalf("the clone has %q checked out, want main", got)
+	}
+	if _, err := os.Stat(filepath.Join(clone, metaPathOf("acme"))); err != nil {
+		t.Fatalf("the link's _meta.json is not among the clone's files: %v", err)
+	}
+	if st := testGit(t, clone, "status", "--porcelain"); st != "" {
+		t.Fatalf("the clone is not clean after a link: %q", st)
+	}
+	if testGit(t, clone, "rev-parse", "HEAD") != testGit(t, w.origin, "rev-parse", "main") {
+		t.Fatal("the clone's HEAD is not the pushed link commit")
+	}
+	for _, gone := range []string{filepath.Join(w.links.Home, "clones-v017"), filepath.Join(w.links.Home, "clones")} {
+		if _, err := os.Stat(gone); err == nil {
+			t.Fatalf("%s exists: a second copy of the store", gone)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(gitbackend.StateDirOf(clone), fetchStampFile)); err != nil {
+		t.Fatalf("no fetch stamp in .git/lore: %v", err)
+	}
+	// a second link on the checked-out branch moves the files with it
+	if _, err := w.link(t, "globex"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(clone, metaPathOf("globex"))); err != nil {
+		t.Fatalf("the second link did not reach the checkout: %v", err)
 	}
 }

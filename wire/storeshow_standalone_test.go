@@ -66,7 +66,8 @@ func TestStandaloneStoreShowOpenDoctor(t *testing.T) {
 
 	// The clone the org layer made, pointed at the local origin.
 	clone := orgcfg.Clones{Home: home}.Dir("example.com/agency/notes")
-	showGit(t, root, "init", "-q", "--bare", clone)
+	showGit(t, root, "init", "-q", clone)
+	showGit(t, clone, "symbolic-ref", "HEAD", "refs/heads/lore-clone-pending") // as lore makes a clone: nothing checked out yet
 	showGit(t, clone, "remote", "add", "origin", origin)
 	// The clone follows the configured url (orgcfg ensureOrigin, f0c765e9),
 	// so the test's example.com spellings must reach the local origin: git
@@ -95,6 +96,6 @@ func TestStandaloneStoreShowOpenDoctor(t *testing.T) {
 		t.Fatalf("open = %+v", out)
 	}
 	if _, err = os.Stat(filepath.Join(out.Dir, "lore-store.yaml")); err != nil {
-		t.Fatalf("worktree: %v", err)
+		t.Fatalf("the opened clone has no store files: %v", err)
 	}
 }

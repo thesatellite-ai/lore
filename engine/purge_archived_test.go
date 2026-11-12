@@ -101,7 +101,7 @@ func TestPurgeArchived(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	purged := string(mustFile(t, filepath.Join(dir, rowfs.LoreDir, rowfs.DataDir, rowfs.PurgedFileName)))
+	purged := string(mustFile(t, filepath.Join(dir, rowfs.StoreDataDir, rowfs.PurgedFileName)))
 	for id := range want {
 		sr, gerr := b.Get(ctx, tableOfID(t, id), id)
 		if gerr != nil || !sr.Deleted {

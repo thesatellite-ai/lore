@@ -33,7 +33,7 @@ const (
 	jManyHubSlug    = "github.com/client-co/hub"
 	jManyPortalSlug = "github.com/client-co/portal"
 	jManyMarker     = "lore-store.yaml"
-	jManyOrgFile    = "org/.lore/lore-org.yaml"
+	jManyOrgFile    = "org/lore-org.yaml"
 	jManyTaskTitle  = "hub: wire the payment webhook"
 	jManyOldSlug    = "github.com/acme-co/old-app"
 	jManyOldProject = "prj_01a1cb5d817172998c6a1880a90a2001"
@@ -87,9 +87,10 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 
 	w.Step("day2/a-folder-in-each-store", func() {
 		w.AdvanceDays(1)
-		// the success line names the store written to, not the org
-		lee.Lore(parent, "store", "folder", "add", two.SSHURL(), "client_a").OK(t).Says(t, "client_a in "+two.SSHURL())
-		lee.Lore(parent, "store", "folder", "add", three.SSHURL(), "client_d").OK(t).Says(t, "client_d in "+three.SSHURL())
+		// the success line names the store written to by its short name
+		// (its repo name), not the org and not its whole url
+		lee.Lore(parent, "store", "folder", "add", two.SSHURL(), "client_a").OK(t).Says(t, "client_a in notes-two")
+		lee.Lore(parent, "store", "folder", "add", "notes-three", "client_d").OK(t).Says(t, "client_d in notes-three")
 		lee.Lore(parent, "store", "folder", "add", "team", "client_c").OK(t).Says(t, "client_c in "+tlOrg)
 		for _, r := range []*teamharness.Remote{two, three} {
 			// the first write made each empty repo a store: marker in the same commit
@@ -122,6 +123,16 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 				org++
 			}
 		}
+		for _, short := range []string{"notes-two", "notes-three", "notes-old"} { // NAME is the short name, the url its own column
+			if !slices.ContainsFunc(sl.Stores, func(e struct {
+				Name   string `json:"name"`
+				Source string `json:"source"`
+			}) bool {
+				return e.Name == short
+			}) {
+				t.Errorf("store list does not name %s by its short name: %+v", short, sl.Stores)
+			}
+		}
 		if org != 5 { // the team store's root and org/ folder, and the three other stores
 			t.Errorf("store list shows %d org stores, want 5 (team root, org folder, three more): %+v", org, sl.Stores)
 		}
@@ -141,6 +152,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 
 		// the store commands that take one store work on a second one
 		lee.Lore(parent, "store", "show", three.SSHURL()).OK(t).Says(t, three.SSHURL())
+		lee.Lore(parent, "store", "show", "notes-three").OK(t).Says(t, "notes-three")
 		lee.Lore(parent, "store", "visibility", three.SSHURL(), "internal").OK(t)
 		lee.Lore(parent, "store", "set", three.SSHURL(), "push=batch").OK(t).Says(t, "push batch")
 		lee.Lore(parent, "store", "compact", three.SSHURL(), "--dry-run").OK(t)
@@ -160,16 +172,16 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		// roster's actor (owner report 2026-11-12)
 		lee.Lore(parent, "store", "adopt", tlOrg+"/client_d", "--from", old.Dir, "--dry-run").OK(t).Says(t, "would adopt 2 rows", "/client_d", "actor "+jManyOldActor+" (human:"+tlLee.Email+") → act_")
 		lee.Lore(parent, "store", "adopt", tlOrg+"/client_d", "--from", old.Dir, "--yes").OK(t).Says(t, "adopted 2 rows", "/client_d")
-		if got := three.FilesMatching(mainRef, "client_d/.lore/data/actors/"+jManyOldActor); len(got) != 0 {
+		if got := three.FilesMatching(mainRef, "client_d/actors/"+jManyOldActor); len(got) != 0 {
 			t.Errorf("Lee's second actor id was adopted: %v", got)
 		}
-		for _, f := range three.FilesMatching(mainRef, "client_d/.lore/data/memories/") {
+		for _, f := range three.FilesMatching(mainRef, "client_d/memories/") {
 			if doc, _ := three.Read(mainRef, f); strings.Contains(doc, jManyOldActor) {
 				t.Errorf("%s still names Lee's second actor id", f)
 			}
 		}
 		lee.Lore(parent, "store", "adopt", "client_d", "--from", old.Dir, "--yes").OK(t).Says(t, "nothing to adopt", "/client_d")
-		if len(three.FilesMatching(mainRef, "client_d/.lore/data/")) < 2 {
+		if len(three.FilesMatching(mainRef, "client_d/")) < 2 {
 			t.Errorf("the adopted rows are not in the third store's client_d: %v", three.Files(mainRef))
 		}
 		if got := tt.store.FilesMatching(mainRef, "client_d/"); len(got) != 0 {
@@ -198,14 +210,14 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.LoreIn(hub, "task", "add", jManyTaskTitle).OK(t).Says(t, "client_a")
 		lee.LoreIn(hub, "task", "list").OK(t).Says(t, jManyTaskTitle)
 		lee.LoreIn(hub, "doctor").OK(t).Says(t, "holds no lore data")
-		if len(two.FilesMatching(mainRef, "client_a/.lore/data/tasks/")) != 1 {
+		if len(two.FilesMatching(mainRef, "client_a/tasks/")) != 1 {
 			t.Errorf("the task did not land in the second store's client_a/: %v", two.Files(mainRef))
 		}
 		// from the client repo linked to the second store, --to <org>/<folder>
 		// and --to <folder> write to the third store (nothing in the repo)
 		lee.LoreIn(hub, "task", "add", "client d: by the org name", "--to", tlOrg+"/client_d").OK(t)
 		lee.LoreIn(hub, "memory", "add", "client d: by the folder alone", "--to", "client_d").OK(t)
-		if n := len(three.FilesMatching(mainRef, "client_d/.lore/data/tasks/")); n < 1 {
+		if n := len(three.FilesMatching(mainRef, "client_d/tasks/")); n < 1 {
 			t.Errorf("--to %s/client_d did not write into the third store: %v", tlOrg, three.Files(mainRef))
 		}
 		if got := tt.store.FilesMatching(mainRef, "client_d/"); len(got) != 0 {
@@ -242,7 +254,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		w.AdvanceDays(1)
 		lee.Lore(parent, "store", "folder", "remove", two.SSHURL(), "client_a", "--yes").Refused(t).
 			Says(t, "3 rows", "1 repo link", "lore move", "lore org unlink", "--purge")
-		if len(two.FilesMatching(mainRef, "client_a/.lore/data/_meta.json")) != 1 {
+		if len(two.FilesMatching(mainRef, "client_a/_meta.json")) != 1 {
 			t.Fatal("a refused remove changed the store")
 		}
 		// --purge never runs on --yes: it asks for the literal --confirm
@@ -256,7 +268,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		if !out.Purged || out.Rows != 3 || !strings.HasPrefix(out.Batch, "bat_") {
 			t.Fatalf("remove --purge = %+v, want purged, 3 rows and a bat_ id", out)
 		}
-		if len(two.FilesMatching(mainRef, "client_a/.lore/data/_meta.json")) != 0 {
+		if len(two.FilesMatching(mainRef, "client_a/_meta.json")) != 0 {
 			t.Error("the purged folder's _meta.json is still in the store")
 		}
 		lee.Lore(parent, "store", "folder", "list", two.SSHURL()).OK(t).Never(t, "client_a")

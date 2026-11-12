@@ -102,7 +102,7 @@ func TestTeD_OrgImportRegisterFailureAndRename(t *testing.T) {
 	rosterFiles := func() int {
 		n := 0
 		for _, f := range notes.Files(refMain) {
-			if strings.HasPrefix(f, folderOrg+"/"+dataDir+"/"+tblActors+"/") {
+			if strings.HasPrefix(f, folderOrg+"/"+tblActors+"/") {
 				n++
 			}
 		}
@@ -208,14 +208,20 @@ func TestTeD_RosterMissOnCachedFetchSyncsOnce(t *testing.T) {
 	}
 }
 
-// teDStoreFetches is actor's logged `git fetch` calls inside a store clone
-// (~/.lore/clones), the code repo's own fetches left out.
+// teDStoreFetches is actor's logged `git fetch` calls that refresh a store
+// clone's rows (~/.lore/stores), the code repo's own fetches left out, and
+// so are the org link index's fetches (its own `+refs/lore/*` refspec on
+// the command line, governed by link_index.max_age, not by a roster read;
+// they ran in a second clone before the clones became one).
 func teDStoreFetches(w *th.World, actor string) []string {
 	var out []string
 	for _, c := range w.GitSubcommandCalls(actor, "fetch") {
-		if strings.Contains(c, "/.lore/clones/") {
+		if strings.Contains(c, "/.lore/stores/") && !strings.Contains(c, teDLinkIndexRefspec) {
 			out = append(out, c)
 		}
 	}
 	return out
 }
+
+// teDLinkIndexRefspec marks the org link index's fetch (adapters/orgcfg).
+const teDLinkIndexRefspec = "+refs/lore/*:refs/lore-remote/origin/*"

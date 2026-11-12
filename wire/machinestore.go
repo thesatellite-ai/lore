@@ -7,7 +7,9 @@ package wire
 //	   └─ openMachine(home, reg)
 //	        no MachineLocal table in reg ──▶ nothing opened (zero cost)
 //	        else <home>/state/machine.db (sqlite.MachineStore, never synced)
-//	             + its cache <home>/cache/machine.db under source "machine"
+//	             + its cache <home>/cache/machine-store.db under source "machine"
+//	             (named apart from state/machine.db since 2026-11-12; an
+//	             older cache/machine.db is removed: a cache rebuilds)
 //	             ──▶ engine.WithMachineStore + the closer the state keeps
 //
 // The machine store is one file per machine holding the machine-local rows
@@ -24,6 +26,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
@@ -36,8 +39,14 @@ import (
 // (Options.Home): state, not cache, because its rows exist nowhere else.
 const MachineStoreFile = "state/machine.db"
 
-// machineCacheFile is the machine store's cache file under <home>/cache.
-const machineCacheFile = "machine.db"
+// machineCacheFile is the machine store's cache file under <home>/cache:
+// a copy of state/machine.db arranged for search, rebuilt when deleted.
+// Its name says it is the machine store's cache (plain files sweep
+// 2026-11-12: two files called machine.db confused people).
+const machineCacheFile = "machine-store.db"
+
+// oldMachineCacheFile is the cache's name before 2026-11-12.
+const oldMachineCacheFile = "machine.db"
 
 // hasMachineLocal reports whether reg defines any machine-local table: only
 // then is the machine store opened, so a registry without one (every
@@ -60,16 +69,28 @@ func openMachine(ctx context.Context, home string, reg *schema.Registry, c *cach
 	if !hasMachineLocal(reg) {
 		return nil, nil, nil
 	}
+	writeHomeReadme(home)            // ~/.lore/README.md, when missing or for another layout
+	tidyHome(home, time.Now().UTC()) // what lore left behind, by age (hometidy.go)
 	b, err := sqlite.OpenMachineStore(ctx, filepath.Join(home, filepath.FromSlash(MachineStoreFile)), false)
 	if err != nil {
 		return nil, nil, errs.Prefix("wire: open the machine store", err)
 	}
 	cachePath := filepath.Join(home, cacheDir, machineCacheFile)
-	if err = os.MkdirAll(filepath.Dir(cachePath), cacheDirMode); err != nil {
-		return nil, nil, errors.Join(errs.Wrap(errs.Internal, "wire: create the cache folder", err), b.Close())
+	if err = mkCacheDir(filepath.Dir(cachePath)); err != nil {
+		return nil, nil, errors.Join(err, b.Close())
 	}
+	removeOldMachineCache(filepath.Dir(cachePath))
 	if err = c.open(ctx, store.SourceMachine, cachePath, reg, exp); err != nil {
 		return nil, nil, errors.Join(err, b.Close())
 	}
 	return engine.WithMachineStore(engine.Attached{Name: store.SourceMachine, Backend: b}), b, nil
+}
+
+// removeOldMachineCache removes the cache under its name before
+// 2026-11-12 (cache/machine.db and its sidecars): a cache rebuilds, and a
+// second machine.db beside state/machine.db only confuses. Best effort.
+func removeOldMachineCache(dir string) {
+	for _, suf := range []string{"", "-wal", "-shm"} {
+		_ = os.Remove(filepath.Join(dir, oldMachineCacheFile+suf)) // gone already, or retried next command
+	}
 }

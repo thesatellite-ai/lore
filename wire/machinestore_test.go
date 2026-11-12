@@ -29,7 +29,7 @@ func (nopAudit) Record(context.Context, engine.Event) error { return nil }
 
 // TestOpenMachineAttachesTheHomeFile: with a machine-local table in the
 // registry openMachine attaches <home>/state/machine.db and its cache
-// <home>/cache/machine.db; a row written through the engine lands in that
+// <home>/cache/machine-store.db; a row written through the engine lands in that
 // file (seen again by a fresh open of it) and never in the repo store.
 // Without a machine-local table nothing is opened (P3-LOCAL-2).
 func TestOpenMachineAttachesTheHomeFile(t *testing.T) {

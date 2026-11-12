@@ -12,10 +12,11 @@ import (
 )
 
 // TestCacheDamagedIsMovedAsideAndRebuilt (B11 port of the old binary's
-// doctor_cache_test.go): a damaged repo cache (garbage in place of
-// .lore/lore-cache.db, no WAL) no longer breaks every command: the next
-// App moves it to .lore/backups/, says so exactly once through
-// Options.Notice, rebuilds from .lore/data and answers with every row.
+// doctor_cache_test.go): a damaged repo cache (garbage in place of the
+// repo's cache under the lore home, no WAL) no longer breaks every
+// command: the next App moves it aside beside itself
+// (<file>.corrupt-<time>), says so exactly once through Options.Notice,
+// rebuilds from .lore/data and answers with every row.
 // With healing off (break-verification of openHealing) the same open fails.
 func TestCacheDamagedIsMovedAsideAndRebuilt(t *testing.T) {
 	if isolate.Run(t) {
@@ -51,7 +52,7 @@ func TestCacheDamagedIsMovedAsideAndRebuilt(t *testing.T) {
 		t.Fatal(cerr)
 	}
 
-	cache := filepath.Join(repo, filepath.FromSlash(RepoCacheFile))
+	cache := RepoCachePath(home, repo)
 	damage := func() {
 		t.Helper()
 		for _, s := range cacheSidecars {
@@ -100,7 +101,7 @@ func TestCacheDamagedIsMovedAsideAndRebuilt(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("want exactly one heal notice, got %d: %q", n, notes)
 	}
-	kept, globErr := filepath.Glob(filepath.Join(repo, ".lore", repoBackupsDir, "lore-cache.db"+corruptSuffix+"*"))
+	kept, globErr := filepath.Glob(cache + corruptSuffix + "*")
 	if globErr != nil {
 		t.Fatal(globErr)
 	}
@@ -111,6 +112,6 @@ func TestCacheDamagedIsMovedAsideAndRebuilt(t *testing.T) {
 		}
 	}
 	if len(mains) != 1 {
-		t.Fatalf("the damaged file is kept once in .lore/backups, got %v", kept)
+		t.Fatalf("the damaged file is kept once beside the cache, got %v", kept)
 	}
 }

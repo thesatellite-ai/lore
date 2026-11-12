@@ -112,7 +112,7 @@ func TestOrgLinkClientLeakSmoke(t *testing.T) {
 	if after := treeFiles(t, w.repo); len(after) != len(before) {
 		t.Fatalf("org link wrote into the client repo: %d files before, %d after", len(before), len(after))
 	}
-	if !strings.Contains(w.storeFiles(t), "acme/.lore/data/_meta.json") {
+	if !strings.Contains(w.storeFiles(t), "acme/_meta.json") {
 		t.Fatalf("the link is not in the store:\n%s", w.storeFiles(t))
 	}
 

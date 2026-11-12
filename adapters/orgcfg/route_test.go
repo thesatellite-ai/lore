@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 )
 
 // fakeSSH is a GIT_SSH_COMMAND that appends "<host> <git command>" to log
@@ -87,13 +88,17 @@ func TestNetworkCallsUseTheStoreRoute(t *testing.T) {
 			r := aliasRouter(c.owned, &asked)
 			home := t.TempDir()
 			cl := Clones{Home: home, Route: r}
-			// fetch + ls-remote (Doctor: ensureBare, fetch, recordFetch)
-			info := cl.Doctor(ctx, testNorm, url, []string{"main"})
+			norm, nerr := repourl.Normalize(url) // the clone is named by the url
+			if nerr != nil {
+				t.Fatal(nerr)
+			}
+			// fetch + ls-remote (Doctor: ensureClone, fetch, recordFetch)
+			info := cl.Doctor(ctx, norm, url, []string{"main"})
 			if len(info.Problems) != 0 {
 				t.Fatalf("doctor problems: %v", info.Problems)
 			}
 			// push (commitStore, the link and org-file write path)
-			sc := putCommit(cl.Dir(testNorm), func(int) {})
+			sc := putCommit(cl.Dir(norm), func(int) {})
 			sc.Route = r
 			res, err := commitStore(ctx, sc)
 			if err != nil || !res.Pushed {

@@ -39,7 +39,7 @@ func (f *Folder) Purged() (map[string]bool, error) {
 
 // readPurged returns the file's members (nil when absent) and its id set.
 func (f *Folder) readPurged() (object, map[string]bool, error) {
-	rel := f.rel + "/" + PurgedFileName
+	rel := f.storePath(PurgedFileName)
 	if err := checkChain(f.root.dir, rel); err != nil {
 		return nil, nil, err
 	}
@@ -141,7 +141,7 @@ func (f *Folder) addPurged(a *Applied, add []ids.AnyID) error {
 		return errs.Wrap(errs.Internal, "rowfs: encode "+PurgedFileName, err)
 	}
 	full := filepath.Join(f.dataDir, PurgedFileName)
-	prev, err := readCapped(full, f.rel+"/"+PurgedFileName)
+	prev, err := readCapped(full, f.storePath(PurgedFileName))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -149,7 +149,7 @@ func (f *Folder) addPurged(a *Applied, add []ids.AnyID) error {
 		return err
 	}
 	a.undo = append(a.undo, undoStep{full: full, prev: prev, m: f.root.modes})
-	a.Paths = append(a.Paths, f.rel+"/"+PurgedFileName)
+	a.Paths = append(a.Paths, f.storePath(PurgedFileName))
 	return nil
 }
 

@@ -89,7 +89,7 @@ func (a *App) rosterState(ctx context.Context, target store.Source, write bool) 
 }
 
 // StoreFormat is the lore-store.yaml version of an attached store (1 =
-// v0.1.17, rowfs.MarkerVersion = 0.1.18); 0 when the backend has no marker
+// v0.1.17, rowfs.MarkerFirstStores and above = 0.1.18); 0 when the backend has no marker
 // (the repo store). The old binary keeps a v0.1.17 org store on its own
 // roster code until `lore migrate run`, so teammates on v0.1.17 never see
 // `_v: 2` rows there.

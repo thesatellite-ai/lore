@@ -1,16 +1,20 @@
 // links.go — the store link source (F11): which org store folders link
-// this repo, read from each store folder's _meta.json `links` list in a
-// bare clone of the store.
+// this repo, read from each store folder's _meta.json `links` list in the
+// store's clone.
 //
-// The clones are v0.1.17's (<home>/clones-v017/<host/path>.git, state in
-// <clone>/lore/: fetch-stamp, default-branch), so both binaries share one
-// copy of each store: a link `lore org link` just wrote into the clone is
-// seen at once, even offline.
+// The clone is the one the git store backend opens for the store's
+// default branch (<home>/stores/<owner>/<repo>, or a person's own clone;
+// adapters/backend/git clonelayout.go), its state in <clone>/.git/lore/
+// (fetch-stamp, default-branch, the one store lock): there is no second
+// copy of a store on the machine, and a link `lore org link` just wrote is
+// seen at once, even offline. Links are read from refs with git plumbing
+// (ls-tree, cat-file at a branch tip), so reading never touches the files
+// a person browses (storeclone.go).
 //
 //	Links ─▶ per non-staging entry, per store:
-//	           open (git init --bare + origin) ─▶ fetch unless younger than
+//	           open (PrepareClone: git init + origin) ─▶ fetch unless younger than
 //	           live.fetch_ttl ─▶ tip of the branch (local ahead of tracking
-//	           wins) ─▶ ls-tree, read every <folder>/.lore/data/_meta.json
+//	           wins) ─▶ ls-tree, read every <folder>/_meta.json
 //	         unreachable and older than link_index.max_age ─▶ unknown (fail
 //	         closed where the entry's patterns match this repo)
 
@@ -19,7 +23,6 @@ package orgcfg
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,45 +32,45 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/thesatellite-ai/lore/adapters/osrename"
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 )
 
-// Clone layout shared with v0.1.17 (saas/pkg/aicoder/stores clone.go).
+// Store clone names (adapters/backend/git clonelayout.go owns the layout).
 const (
-	// ClonesDir holds the bare store clones under the lore home.
-	ClonesDir = "clones-v017"
 	// remoteName is the clone's remote.
-	remoteName = "origin"
-	// bareSuffix ends every clone folder.
-	bareSuffix = ".git"
-	// cloneStateDir holds lore's state inside a clone.
-	cloneStateDir = "lore"
-	// fetchStampFile records the last successful fetch (RFC 3339).
-	fetchStampFile = "fetch-stamp"
-	// defaultBranchFile records the store's HEAD branch.
+	remoteName = gitbackend.RemoteName
+	// fetchStampFile records the last successful fetch (RFC 3339), in the
+	// clone's .git/lore (shared with the backend).
+	fetchStampFile = gitbackend.FetchStampFile
+	// defaultBranchFile records the store's HEAD branch, in .git/lore.
 	defaultBranchFile = "default-branch"
 	// cloneDirMode / cloneFileMode: machine state for the user only.
 	cloneDirMode  = 0o700
 	cloneFileMode = 0o600
-	// metaPathSuffix ends a store folder's project marker path.
-	metaPathSuffix = ".lore/data/_meta.json"
+	// oldMetaPathSuffix ends a store folder's project marker path in the
+	// old layout (<folder>/.lore/data/_meta.json; read until the store is
+	// moved, brief 1.6). The current one is <folder>/_meta.json
+	// (rowfs.LayoutStore).
+	oldMetaPathSuffix = ".lore/data/_meta.json"
 	// headRefPrefix starts the symref line of `ls-remote --symref`.
 	headRefPrefix = "ref: refs/heads/"
 	// forkHint is F11's warning for a project id linked under another remote.
 	forkHint = "run `lore project reid` if it is a different project"
 )
 
-// fetchRefspecs are v0.1.17's refspecs, so `git fetch` in the clone gives
-// the same layout.
+// fetchRefspecs are v0.1.17's refspecs, passed on each fetch (never
+// written to the clone's config: a person's plain `git fetch` keeps git's
+// default).
 var fetchRefspecs = []string{
 	"+refs/heads/*:refs/remotes/" + remoteName + "/*",
 	"+refs/lore/*:refs/lore-remote/" + remoteName + "/*",
 }
 
-// GitLinks reads store links from bare clones under Home. The zero value
+// GitLinks reads store links from the store clones under Home. The zero value
 // is not usable; set Home and Config.
 type GitLinks struct {
 	// Home is the lore home (~/.lore).
@@ -220,7 +223,8 @@ func (g *GitLinks) EntryLinks(ctx context.Context, o *orgconf.Org, projectID str
 // DefaultBranch implements LinkSource: the branch the store's HEAD named
 // at the last fetch, orgconf.DefaultStoreBranch when unknown.
 func (g *GitLinks) DefaultBranch(_ context.Context, storeNorm string) string {
-	b, err := os.ReadFile(filepath.Join(g.cloneDirOf(storeNorm), cloneStateDir, defaultBranchFile))
+	dir, _ := cloneDir(g.Home, storeNorm)
+	b, err := os.ReadFile(filepath.Join(gitbackend.StateDirOf(dir), defaultBranchFile))
 	if err != nil {
 		return orgconf.DefaultStoreBranch
 	}
@@ -232,7 +236,8 @@ func (g *GitLinks) DefaultBranch(_ context.Context, storeNorm string) string {
 
 // cloneDirOf is the clone folder of a normalised store url.
 func (g *GitLinks) cloneDirOf(norm string) string {
-	return filepath.Join(g.Home, ClonesDir, filepath.FromSlash(norm)+bareSuffix)
+	dir, _ := cloneDir(g.Home, norm)
+	return dir
 }
 
 // entryLinks reads every link of one entry's stores.
@@ -247,18 +252,17 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		if err != nil {
 			return nil, entryUnknown, "", fmt.Errorf("orgcfg: store url %q of %s: %w", sc.URL, o.Name, err)
 		}
-		dir := g.cloneDirOf(norm)
-		if berr := ensureBare(ctx, dir, sc.URL); berr != nil {
+		dir, own := cloneDir(g.Home, norm)
+		if berr := ensureClone(ctx, dir, sc.URL, own); berr != nil {
 			return nil, entryUnknown, "", berr
 		}
 		last := lastFetch(dir)
 		offline := false
 		if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
-			if ferr := fetch(ctx, g.Route, dir); ferr != nil {
+			if ferr := fetchLocked(ctx, g.Route, dir, g.now()); ferr != nil {
 				offline = true
 			} else {
 				last = g.now()
-				recordFetch(ctx, g.Route, dir, last)
 			}
 		}
 		branch := sc.EffectiveBranch()
@@ -303,117 +307,6 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		return out[i].ProjectID+out[i].Remote < out[j].ProjectID+out[j].Remote
 	})
 	return out, status, o.Name, nil
-}
-
-// ensureBare makes an empty bare clone with origin and lore's refspecs
-// when dir is not one yet, and points an existing clone's origin at url
-// when the configured address changed (a moved store, or a config whose
-// earlier url git could not fetch): without that the clone kept fetching
-// the old address and the store read as offline forever. The git store
-// backend does the same (adapters/backend/git ensureRemote). Two processes
-// racing here both succeed: a second `remote add` finding origin is fine.
-func ensureBare(ctx context.Context, dir, url string) error {
-	if fi, err := os.Stat(filepath.Join(dir, "HEAD")); err == nil && fi.Mode().IsRegular() {
-		return ensureOrigin(ctx, dir, url)
-	}
-	if err := os.MkdirAll(filepath.Join(dir, cloneStateDir), cloneDirMode); err != nil {
-		return fmt.Errorf("orgcfg: create clone dir: %w", err)
-	}
-	if _, err := gitRun(ctx, "-C", dir, "init", "--quiet", "--bare", "."); err != nil {
-		return err
-	}
-	if _, err := gitRun(ctx, "-C", dir, "remote", "add", remoteName, url); err != nil {
-		if cur, gerr := gitRun(ctx, "-C", dir, "config", "--get", "remote."+remoteName+".url"); gerr != nil || strings.TrimSpace(cur) == "" {
-			return err
-		}
-	}
-	// Replace git's default fetch refspec with lore's two. Exit 5 means
-	// the key was absent, which is fine.
-	_, _ = gitRun(ctx, "-C", dir, "config", "--unset-all", "remote."+remoteName+".fetch") // absent key is the expected case
-	for _, rs := range fetchRefspecs {
-		if _, err := gitRun(ctx, "-C", dir, "config", "--add", "remote."+remoteName+".fetch", rs); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// fetch updates the clone's tracking refs through r; an error means
-// unreachable.
-func fetch(ctx context.Context, r Router, dir string) error {
-	args := append([]string{"fetch", "--quiet", "--prune", remoteName}, fetchRefspecs...)
-	_, err := netGit(ctx, r, dir, args...)
-	return err
-}
-
-// ensureOrigin sets origin's url to url when it differs (an existing
-// clone made from an earlier config). An origin that cannot be read is
-// added again.
-func ensureOrigin(ctx context.Context, dir, url string) error {
-	cur, err := gitRun(ctx, "-C", dir, "config", "--get", "remote."+remoteName+".url")
-	if err == nil && strings.TrimSpace(cur) == url {
-		return nil
-	}
-	if err != nil {
-		if _, aerr := gitRun(ctx, "-C", dir, "remote", "add", remoteName, url); aerr == nil {
-			return nil
-		}
-	}
-	if _, serr := gitRun(ctx, "-C", dir, "remote", "set-url", remoteName, url); serr != nil {
-		return serr
-	}
-	return nil
-}
-
-// recordFetch writes the fetch stamp and the store's HEAD branch (best
-// effort: an empty store has no HEAD).
-func recordFetch(ctx context.Context, r Router, dir string, at time.Time) {
-	writeState(dir, fetchStampFile, at.UTC().Format(time.RFC3339Nano))
-	out, err := netGit(ctx, r, dir, "ls-remote", "--symref", "--", remoteName, "HEAD")
-	if err != nil {
-		return
-	}
-	for _, line := range strings.Split(out, "\n") {
-		if rest, ok := strings.CutPrefix(line, headRefPrefix); ok {
-			if name, _, _ := strings.Cut(rest, "\t"); name != "" {
-				writeState(dir, defaultBranchFile, name)
-			}
-			return
-		}
-	}
-}
-
-// writeState writes one state file atomically (a unique temp file per
-// writer: several processes share a clone). Best effort: a failed stamp
-// only means the next command fetches again.
-func writeState(dir, name, value string) {
-	sdir := filepath.Join(dir, cloneStateDir)
-	if os.MkdirAll(sdir, cloneDirMode) != nil {
-		return
-	}
-	f, err := os.CreateTemp(sdir, name+".*.tmp")
-	if err != nil {
-		return
-	}
-	tmp := f.Name()
-	_, werr := f.WriteString(value)
-	cerr := f.Close()
-	if errors.Join(werr, cerr, os.Chmod(tmp, cloneFileMode)) != nil || osrename.Rename(tmp, filepath.Join(sdir, name)) != nil {
-		_ = os.Remove(tmp) // best effort cleanup of a failed stamp
-	}
-}
-
-// lastFetch reads the fetch stamp (zero when never fetched).
-func lastFetch(dir string) time.Time {
-	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, cloneStateDir, fetchStampFile)))
-	if err != nil {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(string(b)))
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }
 
 // branchTip is the commit to read a store branch at: the local branch when
@@ -475,14 +368,15 @@ func readLinks(ctx context.Context, dir, rev string) ([]indexedLink, error) {
 	return links, nil
 }
 
-// metaFolder reports whether p is a project marker and of which folder
-// ("." for the store root).
+// metaFolder reports whether p is a top-level folder's project marker
+// (<folder>/_meta.json, or <folder>/.lore/data/_meta.json in a store not
+// moved yet) and of which folder ("." for the store root).
 func metaFolder(p string) (string, bool) {
-	if p == metaPathSuffix {
-		return orgconf.OrgFolderRoot, true
+	folder, name, ok := rowfs.LayoutStore.SplitFolderFile(p)
+	if !ok {
+		folder, name, ok = rowfs.LayoutRepo.SplitFolderFile(p)
 	}
-	folder, ok := strings.CutSuffix(p, "/"+metaPathSuffix)
-	if !ok || folder == "" || strings.Contains(folder, "/") {
+	if !ok || name != rowfs.MetaFileName || strings.Contains(folder, "/") {
 		return "", false
 	}
 	return folder, true
@@ -530,9 +424,10 @@ func sortedUnique(xs []string) []string {
 // run` moves it into a routing.client_repos policy row (CFG8).
 const orgDefaultsFile = OrgFile
 
-// OrgFile is the org file's name inside an org folder's .lore/
-// ("lore-org.yaml"), exported so the onboarding probes (store marker,
-// org.free; ONBOARDING_DESIGN 4.6) name it without another copy.
+// OrgFile is the org file's name in an org folder (org/lore-org.yaml; at
+// the store's top when org_folder is "."; D-e), exported so the onboarding
+// probes (store marker, org.free; ONBOARDING_DESIGN 4.6) name it without
+// another copy.
 const OrgFile = "lore-org.yaml"
 
 // orgDefaultsDoc is the part of lore-org.yaml read here.
@@ -555,25 +450,26 @@ func (g *GitLinks) ClientRepoDefaults(ctx context.Context, o *orgconf.Org) (map[
 	if err != nil {
 		return nil, fmt.Errorf("orgcfg: store url %q of %s: %w", sc.URL, o.Name, err)
 	}
-	dir := g.cloneDirOf(norm)
-	if berr := ensureBare(ctx, dir, sc.URL); berr != nil {
+	dir, own := cloneDir(g.Home, norm)
+	if berr := ensureClone(ctx, dir, sc.URL, own); berr != nil {
 		return nil, berr
 	}
 	if last := lastFetch(dir); last.IsZero() || g.now().Sub(last) >= g.Config.FetchTTL(o) {
-		if fetch(ctx, g.Route, dir) == nil {
-			recordFetch(ctx, g.Route, dir, g.now())
-		}
+		_ = fetchLocked(ctx, g.Route, dir, g.now()) // offline reads the local copy
 	}
 	tip, ok := branchTip(ctx, dir, sc.EffectiveBranch())
 	if !ok {
 		return nil, nil
 	}
-	p := ".lore/" + orgDefaultsFile
-	if sc.OrgFolder != orgconf.OrgFolderRoot {
-		p = sc.OrgFolder + "/" + p
+	var raw string
+	found := false
+	for _, p := range orgFilePaths(sc.OrgFolder) {
+		if raw, err = gitRun(ctx, "-C", dir, "cat-file", "blob", tip+":"+p); err == nil {
+			found = true
+			break
+		}
 	}
-	raw, err := gitRun(ctx, "-C", dir, "cat-file", "blob", tip+":"+p)
-	if err != nil {
+	if !found {
 		return nil, nil // no lore-org.yaml (or migrated): no team defaults
 	}
 	var doc orgDefaultsDoc

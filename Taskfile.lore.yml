@@ -677,7 +677,7 @@ tasks:
         vars: {PART: folders, FILTER: "-run '^TestJourneyFolders'"}
 
   test:journeys:upgrader:
-    desc: "Journey: Upgrader from v0.1.17: old lore.db, hooks and config, migrate, old and new binaries on two machines for a week"
+    desc: "Journey: Upgrader from v0.1.17: old lore.db, hooks and config, migrate, old and new binaries on two machines for a week; and from an earlier 0.1.18 build: old store clones and store trees moved to the plain layout on first run (oldlayout_test.go)"
     cmds:
       - task: test:journeys:part
         vars: {PART: upgrader, FILTER: "-run '^TestJourneyUpgrader'"}
