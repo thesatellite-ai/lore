@@ -116,7 +116,7 @@ note "recur done"
 on alice $W "lore task done $rc --no-lesson"
 local rc2; rc2=$(grep -o 'next instance: tsk_[0-9a-f]\{32\}' <<<"$LAST_OUT" | grep -o 'tsk_.*')
 local rcs; rcs=$(id rcs)
-on alice $W "lore task list --series $rcs --all"
+on alice $W "lore task list --series $rcs --all --sort due_at"
 
 note "recur skip"
 on alice $W "lore task recur skip $rc2"

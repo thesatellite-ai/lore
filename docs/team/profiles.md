@@ -449,9 +449,9 @@ lore: pushed store agency/org: commit 1833373 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel (@mira): active → on_leave (2026-06-01 → 2026-06-30)
 $ lore actor list
-act_4f89…b64b [human] carol                                    repo
-act_77cb…76c4 [human] Tomas Weber                              agency/org
+act_4f89…b64b [human] Tomas Weber                              agency/org
 act_7a67…9504 [human] Mira Patel  (on_leave until 2026-06-30)  agency/org
+act_77cb…76c4 [human] carol                                    repo
 3 actors across 2 stores
 $ lore actor status @mira active
 lore: pushed store agency/org: commit 59e9d31 to branch main
@@ -506,9 +506,9 @@ offboard Mira Patel (@mira) (act_7a67…9504) on 2026-09-30:
   status     active → left
 ✓ act_7a67…9504 Mira Patel (@mira) offboarded on 2026-09-30 (2 memberships ended, 0 agents inactive, 1 open tasks listed above)
 $ lore actor list
-act_4f89…b64b [human] carol               repo
-act_77cb…76c4 [human] Tomas Weber         me, agency, agency/org
+act_4f89…b64b [human] Tomas Weber         me, agency, agency/org
 act_7a67…9504 [human] Mira Patel  (left)  agency/org
+act_77cb…76c4 [human] carol               repo
 3 actors across 4 stores
 $ lore task add 'review the refund flow' --to agency --assign @mira
 ERROR: [E_NOT_FOUND] no person or team with handle @mira
@@ -519,9 +519,9 @@ lore: pushed store agency/org: commit 70f4f88 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel (@mira): left → archived
 $ lore actor list --archived
-act_4f89…b64b [human] carol                   repo
-act_77cb…76c4 [human] Tomas Weber             me, agency, agency/org
+act_4f89…b64b [human] Tomas Weber             me, agency, agency/org
 act_7a67…9504 [human] Mira Patel  (archived)  agency/org
+act_77cb…76c4 [human] carol                   repo
 3 actors across 4 stores
 ```
 <!-- /example -->

@@ -455,7 +455,7 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_8567…366f.json
   next instance: tsk_8567…366f due 2026-11-09 (series rcs_67e2…291e, #2)
 lore live: (live, pushed) commit ef62c83 to origin refs/lore/live
 lore live: landed on main (dd85e7d); leaves live once main is fetched
-$ lore task list --series rcs_67e2…291e --all
+$ lore task list --series rcs_67e2…291e --all --sort due_at
 ✓ tsk_376c…8e1a Back up the shop database [medium] due:2026-11-02
 ○ tsk_8567…366f Back up the shop database [medium] due:2026-11-09
 ```

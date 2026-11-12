@@ -312,7 +312,7 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f
   next instance: tsk_8567cf97b52ccbe51c3bd8cd91d6366f due 2026-11-09 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #2)
 lore live: (live, pushed) commit ef62c83 to origin refs/lore/live
 lore live: landed on main (dd85e7d); leaves live once main is fetched
-alice (work/website)$ lore task list --series rcs_67e20cdd829de837b50a73f9dc3c291e --all
+alice (work/website)$ lore task list --series rcs_67e20cdd829de837b50a73f9dc3c291e --all --sort due_at
 ✓ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a Back up the shop database [medium] due:2026-11-02
 ○ tsk_8567cf97b52ccbe51c3bd8cd91d6366f Back up the shop database [medium] due:2026-11-09
 

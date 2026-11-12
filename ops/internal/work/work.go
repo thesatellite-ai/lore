@@ -454,13 +454,18 @@ func ListAll(ctx context.Context, env Env, table row.Table, only string) ([]Sour
 		if err != nil {
 			return nil, err
 		}
-		slices.SortFunc(rows, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
 		for _, r := range rows {
 			if !r.Deleted {
 				out = append(out, Sourced{Source: src, Row: r})
 			}
 		}
 	}
+	// One order whatever store a row is read from: by id across every
+	// store, not store by store. A row can move between stores (a live row
+	// landing on main, a folder link), and a list sorted per store showed
+	// the same rows in another order from one run to the next. The sort is
+	// stable, so one id held by two stores keeps the stores' precedence.
+	slices.SortStableFunc(out, func(a, b Sourced) int { return strings.Compare(a.Row.ID.String(), b.Row.ID.String()) })
 	return out, nil
 }
 

@@ -275,8 +275,8 @@ func TestStateColumn(t *testing.T) {
 	res := mustCtx(h, ctx, opstask.OpList, `{"all":true}`)
 	want := "✓ tsk_ID Second [medium] due:2026-12-01  ✓ done · not merged yet\n" +
 		"○ tsk_ID Working [medium]  ▶ working (Ann, 5m left)\n" +
-		"○ tsk_ID Plain [medium]\n" +
-		"○ tsk_ID Org [medium]  EXPIRED (Bob)  [" + orgStore + "]\n"
+		"○ tsk_ID Org [medium]  EXPIRED (Bob)  [" + orgStore + "]\n" + // one order across stores: by id (Org was added first)
+		"○ tsk_ID Plain [medium]\n"
 	if got := lines(opstest.Text(res)); got != want {
 		t.Errorf("STATE column:\n got %q\nwant %q", got, want)
 	}
