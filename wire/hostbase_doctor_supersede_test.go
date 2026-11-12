@@ -170,10 +170,11 @@ func TestDoctorSupersedesRepair(t *testing.T) {
 	if err = a.setSuccessor(ctx, row.Table(schema.TableDecisions), newDec, oldDec, ""); err != nil {
 		t.Fatal(err)
 	}
-	var warns, notes, fails []string
+	var warns, notes, fails, fixed []string
 	runIt := func(c context.Context, fix bool) error {
-		warns, notes, fails = nil, nil, nil
-		return a.doctorSupersedes(c, fix, func(s string) { warns = append(warns, s) }, func(s string) { notes = append(notes, s) }, func(s string) { fails = append(fails, s) })
+		warns, notes, fails, fixed = nil, nil, nil, nil
+		return a.doctorSupersedes(c, fix, func(s string) { warns = append(warns, s) }, func(s string) { notes = append(notes, s) }, func(s string) { fails = append(fails, s) },
+			func(s string) { fixed = append(fixed, s) })
 	}
 	unchanged := func(stage string) {
 		t.Helper()
@@ -202,8 +203,10 @@ func TestDoctorSupersedesRepair(t *testing.T) {
 	if err = runIt(op.WithConfirmed(ctx, true), true); err != nil {
 		t.Fatal(err)
 	}
-	if len(fails) != 0 || !hasLine(notes, "repaired 2 --supersedes link(s)") {
-		t.Fatalf("--fix --yes: notes %v fails %v", notes, fails)
+	// item 46: the repair that wrote is a fixed line (lore fix's doctor
+	// fixes step lists it), not a note the step leaves out
+	if len(fails) != 0 || len(fixed) != 1 || !strings.HasPrefix(fixed[0], "2 --supersedes links repaired") || !strings.Contains(fixed[0], "rule "+oldRule+" → "+newRule) {
+		t.Fatalf("--fix --yes: fixed %v notes %v fails %v", fixed, notes, fails)
 	}
 	if n, _ := successor(t, a, schema.TableRules, oldRule); n != newRule {
 		t.Errorf("old rule link = %q, want %s", n, newRule)
@@ -214,8 +217,8 @@ func TestDoctorSupersedesRepair(t *testing.T) {
 	if n, st := successor(t, a, schema.TableDecisions, oldDec); n != newDec || st != schema.DecisionStatusSuperseded {
 		t.Errorf("old decision = %q %s, want %s superseded", n, st, newDec)
 	}
-	if err = runIt(op.WithConfirmed(ctx, true), true); err != nil || len(warns)+len(fails) != 0 || hasLine(notes, "repaired") {
-		t.Errorf("second run: err %v warns %v notes %v fails %v, want nothing", err, warns, notes, fails)
+	if err = runIt(op.WithConfirmed(ctx, true), true); err != nil || len(warns)+len(fails)+len(fixed) != 0 || hasLine(notes, "repaired") {
+		t.Errorf("second run: err %v warns %v notes %v fails %v fixed %v, want nothing", err, warns, notes, fails, fixed)
 	}
 }
 
@@ -260,7 +263,7 @@ func TestMigrateConvertsOldSupersedes(t *testing.T) {
 		t.Fatalf("rerun = %q, %d, %v; want nothing", steps, n, err)
 	}
 	var warns []string
-	if err = a.doctorSupersedes(ctx, false, func(s string) { warns = append(warns, s) }, func(string) {}, func(s string) { t.Error(s) }); err != nil {
+	if err = a.doctorSupersedes(ctx, false, func(s string) { warns = append(warns, s) }, func(string) {}, func(s string) { t.Error(s) }, func(s string) { t.Error(s) }); err != nil {
 		t.Fatal(err)
 	}
 	if len(warns) != 1 || !strings.Contains(warns[0], twinA) || !strings.Contains(warns[0], twinB) || !strings.Contains(warns[0], "claim to replace "+shared) ||
@@ -296,5 +299,21 @@ func TestSupersedeWarningOf50Links(t *testing.T) {
 	}
 	if len(shown) > 1000 {
 		t.Fatalf("text still %d bytes", len(shown))
+	}
+}
+
+// TestMigrateCommitSubject (item 46): a store clone's format-upgrade
+// commit is titled as a migration and names the command that ran it, not
+// the generic `lore: write mem_… (+4831 more)`.
+func TestMigrateCommitSubject(t *testing.T) {
+	t.Parallel()
+	ctx := background()
+	want := fmt.Sprintf("lore: migrate 4831 rows to format %d (lore migrate run)", row.FormatVersion)
+	if got := migrateCommitSubject(ctx, 4831); got != want {
+		t.Errorf("migrate run subject = %q, want %q", got, want)
+	}
+	want = fmt.Sprintf("lore: migrate 1 row to format %d (lore fix)", row.FormatVersion)
+	if got := migrateCommitSubject(withMigrateVia(ctx, migrateViaFix), 1); got != want {
+		t.Errorf("lore fix subject = %q, want %q", got, want)
 	}
 }

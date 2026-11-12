@@ -160,6 +160,10 @@ func copyMachineLocal(ctx context.Context, eng *engine.Engine, path string, dryR
 			steps = append(steps, StepMachineLocal+": "+verb+" "+strconv.Itoa(c.n)+" "+string(c.table)+" rows from "+v017LoreDB+" into the machine store")
 		}
 		for _, sk := range c.skipped {
+			if strings.HasPrefix(sk, noteFull) {
+				steps = append(steps, StepMachineLocal+": "+strings.TrimPrefix(sk, noteFull))
+				continue
+			}
 			steps = append(steps, StepMachineLocal+": skipped "+string(c.table)+" row "+sk)
 		}
 		total += c.n
@@ -188,16 +192,35 @@ func readMachineLocal(ctx context.Context, eng *engine.Engine, path string, dryR
 		return nil, errs.Wrap(errs.Internal, "migrate: open "+v017LoreDB, err)
 	}
 	defer func() { _ = db.Close() }() // read-only handle: nothing to flush
+	// item 42: every copied row is held in one stage and lands as ONE
+	// machine-store write. Unstaged, each row's secret scan re-read the
+	// scanner rules and the policy and allow rows of every attached store
+	// (a full read of a 5,000-row repo folder, three times a row: 1,300
+	// old runs and render histories took ~330 s of a 430 s lore fix); a
+	// stage reads them once (stageScanned, settingsMemo). A stage the
+	// caller already opened is used as it is.
+	stage := ctx
+	if !dryRun && !engine.InStage(ctx) {
+		stage = engine.Staging(ctx)
+		defer engine.Discard(stage) // after a Commit: nothing left to drop
+	}
 	var out []machineCount
 	for _, def := range eng.Registry().Tables() {
 		if !def.MachineLocal {
 			continue
 		}
-		n, skipped, err := copyMachineTable(ctx, eng, db, def, dryRun)
+		n, skipped, err := copyMachineTable(stage, eng, db, def, dryRun)
 		if err != nil {
 			return nil, errs.Wrap(errs.CodeOf(err), "migrate: "+StepMachineLocal+" "+string(def.Name)+": "+err.Error(), err)
 		}
 		out = append(out, machineCount{table: def.Name, n: n, skipped: skipped})
+	}
+	if stage != ctx {
+		// a redacted row's event is recorded here: no store-then-rotate
+		// task for it (engine.WithSecretUnstored says why)
+		if _, err := engine.Commit(engine.WithoutRedactTask(stage)); err != nil {
+			return nil, errs.Prefix("migrate: "+StepMachineLocal+": write the copied rows into the machine store", err)
+		}
 	}
 	return out, nil
 }
@@ -279,6 +302,21 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 			continue
 		}
 		_, werr := eng.CreateWithID(ctx, store.SourceMachine, def.Name, id, r.fields)
+		if secretFinding(werr) {
+			// item 47: a secret-looking value in an old machine-local row
+			// (runs.notes free text) is redacted, never a stop: the row
+			// stays on this machine and the rest of the migration lands.
+			found := findingsText(werr)
+			if _, werr = eng.CreateWithID(eng.WithSecretUnstored(ctx), store.SourceMachine, def.Name, id, r.fields); werr == nil {
+				n++
+				skipped = append(skipped, redactedNote(def.Name, r.id, found))
+				continue
+			}
+			if secretFinding(werr) {
+				skipped = append(skipped, secretSkipNote(def.Name, r.id, werr))
+				continue
+			}
+		}
 		switch {
 		case werr == nil:
 			n++
@@ -402,4 +440,54 @@ func v017Time(s string) (value.Value, error) {
 		}
 	}
 	return nil, errs.New(errs.InvalidInput, "not a time: "+s)
+}
+
+// noteFull marks a machineCount.skipped entry that is a whole step line
+// of its own (a redacted or secret-skipped row), not "<id> (<why>)".
+const noteFull = "\x00"
+
+// secretFinding reports whether err is the secret scan's answer to a
+// write (E_NEEDS_CONFIRM of on_detect ask, E_SECRET_DETECTED of refuse or
+// of a value that cannot be redacted), not a confirmation of anything
+// else: the scan's answers carry the masked findings.
+func secretFinding(err error) bool {
+	var e *errs.Error
+	if !errors.As(err, &e) || (e.Code != errs.NeedsConfirm && e.Code != errs.SecretDetected) {
+		return false
+	}
+	return len(e.Findings) > 0 || e.Code == errs.SecretDetected
+}
+
+// findingsText names err's findings: field, rule, line and the match
+// hash (sha256:…), never any part of the value (item 29).
+func findingsText(err error) string {
+	var e *errs.Error
+	if !errors.As(err, &e) || len(e.Findings) == 0 {
+		return "a value that looks like a secret"
+	}
+	parts := make([]string, 0, len(e.Findings))
+	for _, f := range e.Findings {
+		parts = append(parts, "field "+f.Field+" ("+f.Rule+" at line "+strconv.Itoa(f.Line)+", "+f.Masked+")")
+	}
+	return strings.Join(parts, ", ")
+}
+
+// redactedNote is the step line of a row copied with its secret-looking
+// matches replaced by ${secret:unstored} (item 47).
+func redactedNote(table row.Table, id, found string) string {
+	return noteFull + "redacted " + string(table) + " row " + id + ", " + found +
+		": the match is stored as ${secret:unstored} in the machine store (this machine only); if it was a real key, rotate it" +
+		" (to keep a vault reference there instead: lore secrets link " + id + " --at 1 --ref <manager>://<entry>)"
+}
+
+// secretSkipNote is the step line of a row whose finding cannot be
+// redacted (a secret split across fields, a json list item): skipped,
+// left in lore.db, the rest of the migration goes on (item 47).
+func secretSkipNote(table row.Table, id string, err error) string {
+	why := findingsText(err)
+	if e := (*errs.Error)(nil); errors.As(err, &e) && len(e.Findings) == 0 {
+		why = e.Message // e.g. "a secret is split across fields (<rule> across <a> and <b>)": rules and fields only
+	}
+	return noteFull + "skipped " + string(table) + " row " + id + ": " + why + " cannot be redacted (" + string(errs.CodeOf(err)) +
+		"); the row stays in " + v017LoreDB + ". If the value is not a secret, turn its rule off (lore secrets rules lists them) and run lore fix again"
 }

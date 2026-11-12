@@ -304,12 +304,14 @@ func TestMigrateRunAfterCrash(t *testing.T) {
 	if crash.Code == 0 {
 		t.Fatalf("the run did not stop after the first table (is LORE_SCEN_BIN a loretest build?):\n%s", crash)
 	}
-	// The user just runs it again: refused, naming the stale lock and what to do.
-	c.Lore("migrate", "run", "--no-push").Fails(t, migExitMigrateLocked, "E_MIGRATE_LOCKED", "lore migrate unlock")
+	// status names the interrupted run; the user just runs it again: the
+	// dead run's lock is taken over and said (owner item 46), the run
+	// resumes.
 	st := c.Lore("migrate", "status").OK(t)
 	st.Says(t, "interrupted migration", "stale")
-	c.Lore("migrate", "unlock").OK(t).Says(t, "released")
-	out := th.DecodeJSON[migRunOut](t, c.Lore("migrate", "run", "--no-push", "--json"))
+	resumed := c.Lore("migrate", "run", "--no-push", "--json").OK(t)
+	resumed.Says(t, "took over .lore/state/migrate.lock from pid")
+	out := th.DecodeJSON[migRunOut](t, resumed)
 	if !slices.ContainsFunc(out.Journal, func(l string) bool { return strings.Contains(l, "resum") }) {
 		t.Errorf("the run after a crash does not say it resumed: %q", out.Journal)
 	}

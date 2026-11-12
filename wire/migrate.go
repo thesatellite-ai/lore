@@ -75,28 +75,18 @@ const MigrateLockFile = ".lore/state/migrate.lock"
 const lockFileMode = 0o600
 
 // LockMigration implements opsmigrate.Rewriter: create the lock file
-// exclusively; one that exists is E_MIGRATE_LOCKED naming its holder.
+// exclusively, recording this process (migrate_lock.go). A lock whose
+// holder ran on this machine and is gone is taken over with one notice
+// line; a running holder, or another machine's, is E_MIGRATE_LOCKED at
+// once, naming it.
 func (a *App) LockMigration(ctx context.Context) (func() error, error) {
 	top, err := a.repoTop(ctx)
 	if err != nil {
 		return nil, err
 	}
 	path := filepath.Join(top, filepath.FromSlash(MigrateLockFile))
-	if err = os.MkdirAll(filepath.Dir(path), cacheDirMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "wire: create .lore/state", err)
-	}
-	f, err := os.OpenFile(filepath.Clean(path), os.O_CREATE|os.O_EXCL|os.O_WRONLY, lockFileMode)
-	if errors.Is(err, fs.ErrExist) {
-		holder, _ := os.ReadFile(filepath.Clean(path)) // best effort: the holder is only shown
-		return nil, errs.New(errs.MigrateLocked, "migrate: another migration holds "+MigrateLockFile+" (pid "+strings.TrimSpace(string(holder))+")").
-			WithHint("wait for it to finish; if that process is gone, run `lore migrate unlock`")
-	}
-	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "wire: take the migration lock", err)
-	}
-	_, werr := f.WriteString(strconv.Itoa(os.Getpid()))
-	if err := errors.Join(werr, f.Close()); err != nil {
-		return nil, errs.Wrap(errs.Internal, "wire: take the migration lock", errors.Join(err, os.Remove(path)))
+	if err := acquireMigrateLock(ctx, path, a.opts.Notice); err != nil {
+		return nil, err
 	}
 	locktrace.Lock(locktrace.Taken, path)
 	return func() error {
@@ -108,7 +98,16 @@ func (a *App) LockMigration(ctx context.Context) (func() error, error) {
 // WriteGate implements opsmigrate.Rewriter: the engine's format gate on
 // every attached store, so `lore migrate run` refuses E_OLD_LORE where
 // every other write does (INTEG-MIGREST-1).
+//
+// A lock held by a running (or another machine's) migration answers
+// first, before opening the stores, which syncs them (owner item 46: a
+// held lock took minutes to report).
 func (a *App) WriteGate(ctx context.Context) error {
+	if top, err := a.repoTop(ctx); err == nil {
+		if err := migrateLockBlocked(top); err != nil {
+			return err
+		}
+	}
 	st, err := a.state(ctx)
 	if err != nil {
 		return err
@@ -954,7 +953,35 @@ func rewriteStoreTables(ctx context.Context, b store.Backend, tables []row.Table
 	if dryRun || len(changes) == 0 {
 		return found, nil
 	}
-	return found, b.Write(ctx, changes)
+	return found, b.Write(store.WithCommitMessage(ctx, migrateCommitSubject(ctx, len(changes))), changes)
+}
+
+// migrateViaKey is the context key of the command a format rewrite runs
+// under (withMigrateVia).
+type migrateViaKey struct{}
+
+// Commands a format rewrite names in its commit subject.
+const (
+	migrateViaRun       = "lore migrate run"
+	migrateViaFix       = "lore fix"
+	migrateViaFirstSave = "lore fix, before the first write"
+)
+
+// withMigrateVia returns ctx whose format rewrites name via (the command
+// that ran them) in their commit subject.
+func withMigrateVia(ctx context.Context, via string) context.Context {
+	return context.WithValue(ctx, migrateViaKey{}, via)
+}
+
+// migrateCommitSubject is the subject of a store clone's format-upgrade
+// commit (item 46: it was the generic `lore: write mem_… (+4831 more)`):
+// `lore: migrate 4831 rows to format 2 (lore fix)`.
+func migrateCommitSubject(ctx context.Context, n int) string {
+	via, _ := ctx.Value(migrateViaKey{}).(string)
+	if via == "" {
+		via = migrateViaRun
+	}
+	return fmt.Sprintf("lore: migrate %s to format %d (%s)", plural(n, "row"), row.FormatVersion, via)
 }
 
 // RewriteAllV1 implements opsmigrate.AllTablesRewriter: RewriteV1 (or

@@ -170,6 +170,10 @@ type Base struct {
 	Warnings      []string
 	Notes         []string
 	Errors        []string
+	// Fixed are the repairs this run made (each also a note): lore fix's
+	// doctor fixes step lists them, as it lists the core checks' fixed
+	// findings (item 46).
+	Fixed []string
 	// Sync is nil outside a project (and in a repo store that is not row
 	// files).
 	Sync *Sync
@@ -368,6 +372,7 @@ func runRepo(ctx context.Context, env Env, fix bool) (Report, error) {
 		}
 		r.Sync = b
 	}
+	r.fixedNow = append(r.fixedNow, base.Fixed...)
 	unnamedBase(&r, base)
 	for _, e := range r.Errors {
 		// A base error breaks the report only when the base said so (a

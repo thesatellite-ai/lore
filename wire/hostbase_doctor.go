@@ -119,7 +119,11 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	if fix {
 		ctx = engine.WithReadSnapshot(fixCtx)
 	}
-	if err := a.doctorSupersedes(ctx, fix, warn, note, fail); err != nil { // hostbase_doctor_supersede.go
+	fixed := func(msg string) {
+		b.Fixed = append(b.Fixed, msg)
+		note(msg)
+	}
+	if err := a.doctorSupersedes(ctx, fix, warn, note, fail, fixed); err != nil { // hostbase_doctor_supersede.go
 		return opsdoctor.Base{}, err
 	}
 	return b, nil

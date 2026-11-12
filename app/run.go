@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -84,7 +85,16 @@ func Main(opts ...Option) {
 	if isSessionEndHook(os.Args[1:]) {
 		os.Exit(runSessionEnd(os.Args[1:])) // sessionend.go: always 0, silent, time-bounded
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// SIGTERM too (owner item 46): `lore fix --all` stops a child that ran
+	// past its limit with SIGTERM, and a cancelled run releases its locks
+	// (the migration lock is a file only a clean exit removes). The first
+	// signal cancels; stop then restores the default, so a second one ends
+	// a process that does not notice the cancel.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
 	code := Run(ctx, os.Args[1:], opts...)
 	stop()
 	os.Exit(code)

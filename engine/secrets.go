@@ -750,12 +750,18 @@ var askAddArgs = [][]string{
 // (hint, next.add_args_one_of), nothing written (SECRETS 2.5).
 func askErr(fs []scan.Finding) *errs.Error {
 	q := describe(fs) + ": redact it with a reference, mark it unstored, mark it not a secret, or cancel?"
+	return errs.New(errs.NeedsConfirm, ""+q).WithQuestion(q).WithHint(askFlagSets).
+		WithFindings(maskedFindings(fs)).WithAddArgs(askAddArgs...)
+}
+
+// maskedFindings is fs as the error contract carries them: numbered, the
+// rule, field, line and the masked preview (sha256:…, never the value).
+func maskedFindings(fs []scan.Finding) []errs.Finding {
 	masked := make([]errs.Finding, len(fs))
 	for i, f := range fs {
 		masked[i] = errs.Finding{N: i + 1, Rule: f.RuleID, Field: f.Field, Line: f.Line, Masked: f.Preview}
 	}
-	return errs.New(errs.NeedsConfirm, ""+q).WithQuestion(q).WithHint(askFlagSets).
-		WithFindings(masked).WithAddArgs(askAddArgs...)
+	return masked
 }
 
 // describe names findings for a message: field, rule, line, masked preview.
@@ -770,8 +776,30 @@ func describe(fs []scan.Finding) string {
 // secretErr is the refusal (policy refuse, or a value that cannot be
 // redacted).
 func secretErr(fs []scan.Finding) *errs.Error {
-	return errs.New(errs.SecretDetected, ""+describe(fs)).
+	return errs.New(errs.SecretDetected, ""+describe(fs)).WithFindings(maskedFindings(fs)).
 		WithHint("store it in your vault and write ${secret:…} instead, or mark it not a secret: lore secrets allow …")
+}
+
+// WithSecretUnstored is ctx for writes that answer every secret finding
+// as --secret-unstored would (each match replaced by ${secret:unstored},
+// in every secrets.on_detect mode, SECRETS 4) but add no store-then-rotate
+// task (D21's RedactHook is skipped). For migrate's copy of v0.1.17
+// machine-local rows into the machine store (item 47): those rows never
+// leave the machine, one old row must not stop the migration, and the
+// task, a shared-table row, cannot live in the machine store; migrate
+// names each redacted row in a step line instead. Inside or outside Run.
+// A staged write records its events at Commit: commit with
+// WithoutRedactTask too.
+func (e *Engine) WithSecretUnstored(ctx context.Context) context.Context {
+	c := e.callOf(ctx)
+	c.caller.Secret = op.SecretChoice{Unstored: true}
+	return WithoutRedactTask(context.WithValue(ctx, callKey{}, c))
+}
+
+// WithoutRedactTask is ctx whose writes (and a stage's Commit) run no
+// RedactHook: see WithSecretUnstored.
+func WithoutRedactTask(ctx context.Context) context.Context {
+	return context.WithValue(ctx, redactKey{}, true)
 }
 
 // WarnURLUserinfo is W_URL_CREDENTIALS: a URL value lost a credential before it was stored
