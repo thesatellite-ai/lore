@@ -197,6 +197,13 @@ const (
 	OpTeamRemove       = "team.remove"
 	OpTeamMemberAdd    = "team.member.add"
 	OpTeamMemberRemove = "team.member.remove"
+	// ops/team staff.go: the org's own people added straight to the
+	// roster (owner report 2026-11-12: staff are not invited).
+	OpStaffAdd    = "member.add"
+	OpStaffList   = "member.list"
+	OpStaffShow   = "member.show"
+	OpStaffEdit   = "member.edit"
+	OpStaffRemove = "member.remove"
 )
 
 // directOps is the set IsDirect answers from. Read-only after init.
@@ -214,6 +221,8 @@ var directOps = map[string]struct{}{
 	// The teams rows live in the org roster store too (owner report
 	// 2026-11-11: the team commands were missing), so they run direct.
 	OpTeamAdd: {}, OpTeamList: {}, OpTeamShow: {}, OpTeamRemove: {}, OpTeamMemberAdd: {}, OpTeamMemberRemove: {},
+	// The org's members (staff.go) are roster rows too.
+	OpStaffAdd: {}, OpStaffList: {}, OpStaffShow: {}, OpStaffEdit: {}, OpStaffRemove: {},
 }
 
 // IsDirect reports whether op name runs on the roster App (wire hostRunOp):
@@ -235,5 +244,6 @@ func OpNames() []string {
 		OpRoleList, OpRoleAdd, OpRoleEdit,
 		setup.OpTeamInvite, setup.OpTeamInviteList, setup.OpTeamInviteRevoke, setup.OpTeamInviteResend,
 		OpTeamAdd, OpTeamList, OpTeamShow, OpTeamRemove, OpTeamMemberAdd, OpTeamMemberRemove,
+		OpStaffAdd, OpStaffList, OpStaffShow, OpStaffEdit, OpStaffRemove,
 	}
 }

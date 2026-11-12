@@ -1,0 +1,58 @@
+# Adding your staff
+
+**In short:** your own people are added straight to the org's roster with `lore member add <email>` (or many at once with `lore member add --from staff.csv`), with their org role, teams and projects. Nothing is pending and there is no line to send: on their laptop they run `lore setup join <org>` (or the org's store url), and lore finds them on the roster by their email. Use an [invite](invites.md) only for an outsider, such as a contractor joining with a personal email.
+
+## Before you start
+
+- An **admin setup** for the org is active (see [Guided setup](guided-setup.md)); run with `--setup <an admin setup>` from anywhere. The member commands run outside any repo too.
+- The teams you name exist (`lore team add @web`, see [Teams](teams.md)).
+
+## Step 1 — Add people
+
+```sh
+lore member add mira@agency.example --name 'Mira Dev' --handle mira --github mira-dev --role member --team @web --yes
+lore member add --from staff.csv --dry-run   # who would be added
+lore member add --from staff.csv --yes       # all of them, one store commit
+```
+
+| Flag | Meaning |
+|---|---|
+| `--name`, `--handle`, `--github` | their display name (default: the email's name part), roster @handle and GitHub login |
+| `--role <r>` | an **org-level** role (`member`, `pm`, `admin`, …): no project needed; it is the role on their stint (`lore member edit <who> --role pm` changes it) |
+| `--type <t>` | `employee` (default), `contractor`, `intern` or `client_contact` |
+| `--team @t` | a team to put them on (repeat it) |
+| `--project <p>` with `--project-role <r>` | a project membership with its project roles (repeat both) |
+| `--from <file>` | many people from a `.csv` (header `email,name,handle,github,role,type,teams,projects,project_roles`; list cells separated by `;`) or a `.json` list |
+| `--from-invites` | every pending invite becomes a member, keeping its teams, projects and roles; the invite is marked accepted |
+| `--dry-run` | list who would be added; write nothing |
+| `--yes` | answer the confirmation without a terminal |
+
+Every row of one run (the people, their email and GitHub contacts, stints, memberships, and each team once) is written as **one store commit** and one push, so a list of a hundred people takes seconds. One bad line (an address that is not one, a team that does not exist, an email listed twice) refuses the whole file before anything is written, naming the line. A second run adds nobody: someone who is already a member is listed as such.
+
+## Step 2 — They join
+
+On their own machine, each person runs `lore setup join <org>` (the org's name, or its store url when this machine has no entry for it yet). lore takes the email of their identity step (their `git config user.email`), finds them on the roster, links this machine to their roster entry and sets up the org's stores. Their role, teams and projects are already there.
+
+Someone not on the roster is refused with the reason and the command to ask for: `<email> is not a member of <org>; ask an admin to run: lore member add <email>`.
+
+## Step 3 — See and change people
+
+- `lore member list [--all]`: everyone on the roster with email, name, org role, @handle and teams (`--json`).
+- `lore member show <email|@handle|act_…>`: one person.
+- `lore member edit <who> [--name] [--handle] [--role]`.
+- `lore member remove <who> [--reason]`: they leave the org (`lore actor offboard`: their stint and memberships end, the row stays for history).
+- `lore team member add @web <email|@handle>` works for every member at once.
+
+## Pending invites
+
+Invites written before `member add` existed still work. `lore doctor` lists the org's pending invites with one hint: `lore member add --from-invites` turns them into members now (an outsider can keep the invite).
+
+## Who wrote it
+
+Rows are written by the person running the command. When a coding agent runs `lore member add` for its person, the rows are the person's (created_by is the person) and the agent's session is on the audit trail, as for every other roster write; an agent needs the org's `agents.may_manage_people` policy to change people.
+
+## Related
+
+- [Team invites](invites.md): a one-time line for an outsider.
+- [Teams](teams.md): `@web` and its members.
+- [Team profiles](profiles.md): stints, roles and project memberships.

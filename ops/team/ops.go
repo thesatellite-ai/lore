@@ -77,8 +77,8 @@ func Ops(env Env) []op.Entry {
 		s.Confirm.MayAsk = true
 		return s
 	}
-	return []op.Entry{
-		op.Define(asking(op.Spec{Name: setup.OpTeamInvite, Summary: "Invite a person to the org: writes an invite row and prints the line to send them",
+	return append([]op.Entry{
+		op.Define(asking(op.Spec{Name: setup.OpTeamInvite, Summary: "Invite an outsider (a contractor on a personal email) with a one-time line to paste; for your own staff use lore member add",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
 			Examples: []op.Example{{Title: "invite a developer to one project", CLI: "lore team invite tomas@agency.example --github tomas-dev --role dev --project acme-hub", Want: "lore setup join lore-invite:v1:"}}}),
 			func(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInviteOut, error) {
@@ -102,7 +102,7 @@ func Ops(env Env) []op.Entry {
 			func(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamInviteResendOut, error) {
 				return o.resend(ctx, in)
 			}),
-	}
+	}, o.staffOps(base, writeErrs)...)
 }
 
 // ops binds the op bodies to env.

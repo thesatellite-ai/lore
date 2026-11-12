@@ -227,7 +227,7 @@ ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (persona
 
 ## Step 6 — Join a team from an invite
 
-An admin sends you one line ([Team invites](invites.md)). `lore setup join <line>` opens the page on the join flow, with the kind set to "Join a team" and the email prefilled from the invite; `--no-open` prints the address instead, and `--json` prints the decoded invite and the step plan without opening anything. Mira joins with the line Tomas sent (kept in `$INVITE` here):
+If an admin added you ([Adding your staff](members.md)), run `lore setup join <org>` (or the org's store url): lore finds you on the roster by your email and needs no line. Otherwise an admin sends you one line ([Team invites](invites.md)). `lore setup join <line>` opens the page on the join flow, with the kind set to "Join a team" and the email prefilled from the invite; `--no-open` prints the address instead, and `--json` prints the decoded invite and the step plan without opening anything. Mira joins with the line Tomas sent (kept in `$INVITE` here):
 
 <!-- example: guided-setup#invite-and-join -->
 ```console

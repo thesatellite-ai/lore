@@ -500,7 +500,7 @@ type RemoveOut struct {
 
 // JoinIn is setup.join's input.
 type JoinIn struct {
-	Invite string `json:"invite" arg:"0" desc:"the invite line, starting with lore-invite:v1:"`
+	Invite string `json:"invite" arg:"0" desc:"your org's name or store url (a member an admin added with lore member add), or an invite line starting with lore-invite:v1:"`
 	NoOpen bool   `json:"no_open,omitempty" flag:"no-open" desc:"print the page address instead of opening a browser"`
 }
 

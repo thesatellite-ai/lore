@@ -303,6 +303,9 @@ type writer struct {
 	actor row.Row
 	today time.Time
 	wrote []string
+	// orgRole is the org-level role a new open stint gets (member add
+	// --role), and that setOrgRole puts on the open one.
+	orgRole string
 }
 
 func (w *writer) note(id ids.AnyID) { w.wrote = append(w.wrote, id.String()) }
@@ -483,6 +486,26 @@ func (w *writer) openPeriod(ctx context.Context, typ string) error {
 	var kept []teamprofile.Period
 	for _, p := range ps {
 		if p.Open() && (!p.Synthesised() || p.StartedOn.Before(today)) {
+			if w.orgRole != "" && !p.Synthesised() {
+				return w.setOrgRole(ctx)
+			}
+			if !p.Synthesised() || w.orgRole == "" {
+				return nil
+			}
+			// an open stint synthesised from active/left_at: written now,
+			// so the org role has a row to live on
+			f, ferr := p.Fields()
+			if ferr != nil {
+				return ferr
+			}
+			if f[schema.FieldPeriodOrgRole], ferr = textValue("--role", w.orgRole); ferr != nil {
+				return ferr
+			}
+			x, cerr := w.r.Create(ctx, schema.TableActorPeriods, f)
+			if cerr != nil {
+				return cerr
+			}
+			w.note(x.ID)
 			return nil
 		}
 		if p.Synthesised() && p.Open() {
@@ -510,12 +533,45 @@ func (w *writer) openPeriod(ctx context.Context, typ string) error {
 	if err != nil {
 		return err
 	}
+	if w.orgRole != "" {
+		if f[schema.FieldPeriodOrgRole], err = textValue("--role", w.orgRole); err != nil {
+			return err
+		}
+	}
 	x, err := w.r.Create(ctx, schema.TableActorPeriods, f)
 	if err != nil {
 		return err
 	}
 	w.note(x.ID)
 	return nil
+}
+
+// setOrgRole puts w.orgRole on the actor's stored open stint (member edit
+// --role, member add for someone already on the roster); with none it
+// opens an employee stint carrying it.
+func (w *writer) setOrgRole(ctx context.Context) error {
+	rows, err := w.r.List(ctx, schema.TableActorPeriods)
+	if err != nil {
+		return err
+	}
+	for _, p := range rows {
+		if fieldText(p, schema.FieldPeriodActor) != w.actor.ID.String() || fieldText(p, schema.FieldPeriodEndedOn) != "" {
+			continue
+		}
+		if fieldText(p, schema.FieldPeriodOrgRole) == w.orgRole {
+			return nil
+		}
+		v, verr := textValue("--role", w.orgRole)
+		if verr != nil {
+			return verr
+		}
+		if _, err := w.r.Update(ctx, schema.TableActorPeriods, p.ID, map[string]value.Value{schema.FieldPeriodOrgRole: v}); err != nil {
+			return err
+		}
+		w.note(p.ID)
+		return nil
+	}
+	return w.openPeriod(ctx, schema.PeriodTypeEmployee)
 }
 
 // checkStints applies member.add's TP-12 boundary to the memberships
@@ -752,4 +808,71 @@ func IdentityEmails(ctx context.Context, profiles profilestore.Store) ([]string,
 		}
 	}
 	return append(primary, rest...), nil
+}
+
+// MemberJoinRequest is a member's join without an invite (owner report
+// 2026-11-12): the org (its entry name and store url) and the identity
+// answers. lore finds the person on the roster by their email.
+type MemberJoinRequest struct {
+	Org        string
+	Store      string
+	Emails     []string
+	Name       string
+	Handle     string
+	GitHubUser string
+}
+
+// ApplyJoinMember joins a person an admin added with `lore member add`:
+// the org entry (org.import, as an invite join), then the roster actor
+// whose email identity contact is one of the person's emails and who is
+// a member (an open stint). Nothing else is granted here: role, teams and
+// projects were written by member add. Someone not on the roster gets the
+// reason and the admin's command.
+func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (RosterResult, error) {
+	var emails []string
+	for _, e := range req.Emails {
+		if n, err := teamprofile.Normalize(schema.ContactKindEmail, e); err == nil && n != "" && !slices.Contains(emails, n) {
+			emails = append(emails, n)
+		}
+	}
+	if len(emails) == 0 {
+		return RosterResult{}, errs.New(errs.InvalidInput, "join "+req.Org+": no email to find you on the roster by").
+			WithHint("answer the identity step with your work email (git config user.email)")
+	}
+	inv := onboard.Invite{Org: req.Org, Store: req.Store, Email: emails[0]}
+	var res RosterResult
+	var err error
+	if res.Imported, err = ensureImported(ctx, d, JoinRequest{Invite: inv, Emails: emails, Name: req.Name, Handle: req.Handle, GitHubUser: req.GitHubUser}, emails[0]); err != nil {
+		return RosterResult{}, err
+	}
+	r, done, err := d.Profiles.Roster(ctx, true)
+	defer done()
+	if err != nil {
+		return RosterResult{}, err
+	}
+	var actor row.Row
+	matched := ""
+	for _, e := range emails {
+		a, rerr := r.ResolveActor(ctx, "email:"+e)
+		if rerr == nil && isMember(ctx, r, a) {
+			actor, matched = a, e
+			break
+		}
+	}
+	if matched == "" {
+		return RosterResult{}, errs.New(errs.NotFound, strings.Join(emails, ", ")+" is not a member of "+req.Org+" ("+r.Where()+")").
+			WithHint("ask an admin to run: lore member add " + emails[0] + " (an outsider joins with an invite line instead)")
+	}
+	res.Actor = actor.ID.String()
+	w := &writer{r: r, actor: actor, today: r.Today()}
+	if err = w.identity(ctx, emails, matched, req.GitHubUser); err != nil {
+		return RosterResult{}, err
+	}
+	if len(w.wrote) > 0 {
+		r.Push(ctx)
+	} else {
+		res.Already = true
+	}
+	res.Wrote = w.wrote
+	return res, nil
 }

@@ -151,3 +151,9 @@ func (a *App) DoctorCache(ctx context.Context) opsdoctor.Cache {
 	a.machDoctor = c
 	return c
 }
+
+// HasOrg implements setup.OrgFinder: an orgs[] entry named org exists.
+func (a *App) HasOrg(ctx context.Context, org string) bool {
+	_, err := a.TeamOrigin(ctx, org)
+	return err == nil
+}
