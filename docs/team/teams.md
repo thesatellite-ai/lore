@@ -6,7 +6,7 @@ You want this page when you assign work to a group rather than a person, or keep
 
 ## Before you start
 
-- The org's store holds its roster (the `org` folder by default), and the people you add are on it: they ran `lore actor register` in a repo of the org, or joined from an [invite](invites.md). `lore actor list` shows them.
+- The org's store holds its roster (the `org` folder by default), and the people you add are on it: an admin added them with [`lore member add`](members.md) (which can put them on teams at once), they ran `lore actor register` in a repo of the org, or they joined from an [invite](invites.md). `lore actor list` shows them.
 - Anyone on the roster may change the teams. A coding agent runs the team commands as its person, like every other roster command (`agents.may_manage_people`, see [Agents](agents.md)).
 
 ## Step 1 — Make a team

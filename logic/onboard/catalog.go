@@ -182,12 +182,12 @@ func Catalog() []Step {
 		{ // ONB 4.5
 			ID:    StepJoin,
 			Title: "Join your team",
-			Help:  "Paste the invite your admin sent. It holds no secret: GitHub decides who can reach the team's store.",
+			Help:  "If your admin added you (lore member add), give your org's name or its store url: lore finds you on the roster by your email. Otherwise paste the invite line they sent. Neither holds a secret: GitHub decides who can reach the team's store.",
 			Kinds: []Kind{KindMember},
 			Needs: []StepID{StepIdentity, StepGitHub},
 			Questions: []Question{
-				{ID: QIDInvite, Label: "Invite", Type: QInvite, Required: true,
-					Help: "One line starting with lore-invite:v1:", Rules: []Rule{MaxLen(maxURL * 4)}},
+				{ID: QIDInvite, Label: "Org or invite", Type: QInvite, Required: true,
+					Help: "Your org's name or store url, or one line starting with lore-invite:v1:", Rules: []Rule{MaxLen(maxURL * 4)}},
 			},
 			Checks: []CheckID{CheckInviteParse, CheckStoreRead, CheckInviteFound, CheckInviteStatus, CheckInviteEmail, CheckStoreWrite},
 			Apply:  ApplyJoin,

@@ -42,6 +42,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsidentity "github.com/thesatellite-ai/lore/ops/identity"
+	"github.com/thesatellite-ai/lore/ops/orgcmd"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -544,7 +545,21 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 	// after the admin setups[] entry below.
 	var teamOrg, teamURL string
 	var push []storepush.Assignment
-	if req.Apply == onboard.ApplyJoin {
+	if req.Apply == onboard.ApplyJoin && !strings.HasPrefix(strings.TrimSpace(answerText(ans, onboard.QIDInvite)), onboard.InvitePrefix) {
+		// a member an admin added (`lore member add`): the answer names the
+		// org (an entry here, or its store url), no invite line
+		org, url, oerr := ap.memberOrg(ctx, host, answerText(ans, onboard.QIDInvite), emails, name, handle, req.DryRun)
+		if oerr != nil {
+			return opssetup.ApplyResult{}, oerr
+		}
+		e.Kind, e.Org = onboard.KindMember, org
+		e.Identity = onboard.SetupIdentity{}
+		if req.DryRun {
+			return opssetup.ApplyResult{Changed: true, Wrote: []string{url, configPath(ap.a.opts.Home)}, Setup: e}, nil
+		}
+		res, err = team.ApplyJoinMember(ctx, team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
+			team.MemberJoinRequest{Org: org, Store: url, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
+	} else if req.Apply == onboard.ApplyJoin {
 		inv, derr := onboard.DecodeInvite(answerText(ans, onboard.QIDInvite))
 		if derr != nil {
 			return opssetup.ApplyResult{}, derr
@@ -874,4 +889,57 @@ func (s setupStore) OrgStoreURLs(_ context.Context, org string) ([]string, bool,
 		urls = append(urls, sc.URL)
 	}
 	return urls, true, nil
+}
+
+// memberOrg resolves a member join's answer (`lore setup join <org>`):
+// an org entry on this machine, or the org's store url (imported first
+// when no entry names it, the entry named as the store suggests). It
+// returns the entry name and its store url.
+func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer string, emails []string, name, handle string, dryRun bool) (string, string, error) {
+	answer = strings.TrimSpace(answer)
+	if answer == "" {
+		return "", "", errs.New(errs.InvalidInput, "setup join: name the org (or its store url), or paste an invite line").
+			WithHint("lore setup join <org>")
+	}
+	if !strings.ContainsAny(answer, ":/") {
+		o, err := ap.a.TeamOrigin(ctx, answer)
+		if err != nil {
+			return "", "", errs.New(errs.NotFound, "no org named "+answer+" on this machine yet; join with its store url").
+				WithHint("lore setup join <the org's store url> (your admin knows it)")
+		}
+		return answer, o.Store, nil
+	}
+	find := func() string {
+		cfg, _, err := orgcfg.LoadConfig(ap.a.opts.Home)
+		if err != nil || cfg == nil {
+			return ""
+		}
+		want, _ := storeKey(answer)
+		for _, o := range cfg.Orgs {
+			for _, st := range o.Stores {
+				if k, ok := storeKey(st.URL); ok && k == want {
+					return o.Name
+				}
+			}
+		}
+		return ""
+	}
+	if org := find(); org != "" || dryRun {
+		return org, answer, nil
+	}
+	if len(emails) == 0 {
+		return "", "", errs.New(errs.InvalidInput, "setup join: no email to join with").WithHint("answer the identity step first")
+	}
+	rep, err := host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: "human:" + emails[0], Name: name, Handle: handle}, true)
+	if err != nil {
+		return "", "", errs.Prefix("setup join "+answer, err)
+	}
+	if rep.Ask != "" {
+		return "", "", errs.New(errs.Internal, "org.import asked although the join confirmed it: "+rep.Ask)
+	}
+	org := find()
+	if org == "" {
+		return "", "", errs.New(errs.Internal, "setup join: org import of "+answer+" made no org entry")
+	}
+	return org, answer, nil
 }

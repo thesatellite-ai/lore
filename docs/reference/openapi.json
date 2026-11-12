@@ -24649,6 +24649,965 @@
         }
       }
     },
+    "/v1/members": {
+      "get": {
+        "operationId": "member.list",
+        "summary": "List the org's people: email, name, org role, handle, teams",
+        "tags": [
+          "member"
+        ],
+        "parameters": [
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "people who left or are archived too",
+            "schema": {
+              "type": "boolean",
+              "description": "people who left or are archived too"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "github": {
+                            "type": "string"
+                          },
+                          "handle": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "invite": {
+                            "type": "string"
+                          },
+                          "projects": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "display_name"
+                        ]
+                      }
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "members",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND, E_SETUP_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_REFUSED, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "member.add",
+        "summary": "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join \u003corg\u003e",
+        "tags": [
+          "member"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "show who would be added; write nothing"
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "the person's work email (leave out with --from or --from-invites)"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "a .csv or .json file of people (email,name,handle,github,role,type,teams,projects,project_roles); all of them in one store commit"
+                  },
+                  "from_invites": {
+                    "type": "boolean",
+                    "description": "every pending invite becomes a member (its teams and projects kept)"
+                  },
+                  "github": {
+                    "type": "string",
+                    "description": "their GitHub login"
+                  },
+                  "handle": {
+                    "type": "string",
+                    "description": "@handle on the roster"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "display name (default: the email's name part)"
+                  },
+                  "project_roles": {
+                    "type": "array",
+                    "description": "project role(s) on each --project (repeat, or comma-separate)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "projects": {
+                    "type": "array",
+                    "description": "a project to add them to (repeat); needs --project-role",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "role": {
+                    "type": "string",
+                    "description": "org-level role, no project needed (member, pm, admin, …): the stint's org role"
+                  },
+                  "teams": {
+                    "type": "array",
+                    "description": "a team to put them on: @handle (repeat)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "employee, contractor, intern or client_contact (default employee)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "added": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "github": {
+                            "type": "string"
+                          },
+                          "handle": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "invite": {
+                            "type": "string"
+                          },
+                          "projects": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "display_name"
+                        ]
+                      }
+                    },
+                    "already": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "github": {
+                            "type": "string"
+                          },
+                          "handle": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "invite": {
+                            "type": "string"
+                          },
+                          "projects": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "display_name"
+                        ]
+                      }
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "rows": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "added",
+                    "where",
+                    "rows"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT, E_ROLE_UNKNOWN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND, E_SETUP_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTACT_TAKEN, E_POLICY_DENIED, E_PROJECT_NAME_COLLISION, E_REFUSED, E_STATUS_CHANGE, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/members/remove": {
+      "post": {
+        "operationId": "member.remove",
+        "summary": "Take a person off the org (actor offboard: their stint and memberships end; the row stays for history)",
+        "tags": [
+          "member"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "why they left"
+                  },
+                  "who": {
+                    "type": "string",
+                    "description": "the person: email, @handle or act_ id"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "who"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "member": {
+                      "type": "object",
+                      "properties": {
+                        "display_name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "github": {
+                          "type": "string"
+                        },
+                        "handle": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "invite": {
+                          "type": "string"
+                        },
+                        "projects": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "teams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "display_name"
+                      ]
+                    },
+                    "verb": {
+                      "type": "string"
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "member",
+                    "verb",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT, E_ROLE_UNKNOWN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND, E_SETUP_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_POLICY_DENIED, E_PROJECT_NAME_COLLISION, E_REFUSED, E_STATUS_CHANGE, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/members/{id}": {
+      "get": {
+        "operationId": "member.show",
+        "summary": "Show one person on the org roster",
+        "tags": [
+          "member"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the person: email, @handle or act_ id",
+            "schema": {
+              "type": "string",
+              "description": "the person: email, @handle or act_ id"
+            },
+            "x-lore-field": "who"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "member": {
+                      "type": "object",
+                      "properties": {
+                        "display_name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "github": {
+                          "type": "string"
+                        },
+                        "handle": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "invite": {
+                          "type": "string"
+                        },
+                        "projects": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "teams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "display_name"
+                      ]
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "member",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND, E_SETUP_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_REFUSED, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "member.edit",
+        "summary": "Change a person's name, @handle or org-level role",
+        "tags": [
+          "member"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "the person: email, @handle or act_ id",
+            "schema": {
+              "type": "string",
+              "description": "the person: email, @handle or act_ id"
+            },
+            "x-lore-field": "who"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "description": "new @handle"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "new display name"
+                  },
+                  "role": {
+                    "type": "string",
+                    "description": "new org-level role (on their open stint)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "member": {
+                      "type": "object",
+                      "properties": {
+                        "display_name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "github": {
+                          "type": "string"
+                        },
+                        "handle": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "invite": {
+                          "type": "string"
+                        },
+                        "projects": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "teams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "display_name"
+                      ]
+                    },
+                    "verb": {
+                      "type": "string"
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "member",
+                    "verb",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_INPUT, E_ROLE_UNKNOWN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND, E_SETUP_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_POLICY_DENIED, E_PROJECT_NAME_COLLISION, E_REFUSED, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memories": {
       "delete": {
         "operationId": "memory.delete.bulk",
@@ -68250,7 +69209,7 @@
     "/v1/setup/join": {
       "post": {
         "operationId": "setup.join",
-        "summary": "Join a team from an invite line: parse it and open the setup page on the join step",
+        "summary": "Join your org: by its name or store url when an admin added you (lore member add; matched by your email), or from an invite line; opens the setup page on the join step",
         "tags": [
           "setup"
         ],
@@ -68263,7 +69222,7 @@
                 "properties": {
                   "invite": {
                     "type": "string",
-                    "description": "the invite line, starting with lore-invite:v1:"
+                    "description": "your org's name or store url (a member an admin added with lore member add), or an invite line starting with lore-invite:v1:"
                   },
                   "no_open": {
                     "type": "boolean",
@@ -100942,7 +101901,7 @@
     "/v1/teams/invite": {
       "post": {
         "operationId": "team.invite",
-        "summary": "Invite a person to the org: writes an invite row and prints the line to send them",
+        "summary": "Invite an outsider (a contractor on a personal email) with a one-time line to paste; for your own staff use lore member add",
         "tags": [
           "team"
         ],

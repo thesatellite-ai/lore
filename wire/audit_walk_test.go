@@ -46,6 +46,7 @@ var auditNoTable = map[string]string{
 	"batch.list":          "lists delete batches, a view over the trash of every table",
 	"config.list":         "lists ~/.lore/config.yaml settings, not rows",
 	"machine.path.list":   "lists where lore keeps its own files on this machine, not rows",
+	"member.list":         "lists people: actor rows joined with their contacts, stints and teams (actor list takes the writer filters on actor rows)",
 	"secrets.list":        "lists the secret references found in fields of every table, not rows of one",
 	"setup.list":          "lists this machine's setups (local files, not synced rows)",
 	"setup.trash.list":    "lists this machine's removed setups (local files)",

@@ -593,8 +593,16 @@ func TestRealCatalogPlanAndJoin(t *testing.T) {
 	if j.Invite.Org != "acme-hub" || j.Web.Setup != "acme-hub" || j.Web.Invite != line || !j.Web.NoOpen || len(j.Plan.Steps) == 0 {
 		t.Fatalf("join = %+v", j)
 	}
-	if _, err := e.Join(bg, JoinIn{Invite: "hello"}); !errs.Has(err, errs.InviteInvalid) {
+	if _, err := e.Join(bg, JoinIn{Invite: InvitePrefix + "not-base64"}); !errs.Has(err, errs.InviteInvalid) {
 		t.Fatalf("bad invite: %v", err)
+	}
+	// a member an admin added joins by the org's store url (or the name
+	// of an org entry here): no line; a name no entry has is refused
+	if _, err := e.Join(bg, JoinIn{Invite: "acme-hub"}); !errs.Has(err, errs.InviteInvalid) || !strings.Contains(err.Error(), "store url") {
+		t.Fatalf("join by an unknown org name: %v", err)
+	}
+	if u, err := e.Join(bg, JoinIn{Invite: "git@github.com:acme/notes.git"}); err != nil || u.Invite.Store != "git@github.com:acme/notes.git" {
+		t.Fatalf("join by store url = %+v, %v", u, err)
 	}
 }
 
