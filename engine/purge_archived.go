@@ -39,7 +39,7 @@ func (e *Engine) Archived(ctx context.Context, cutoff time.Time) (TrashResult, e
 		if err != nil {
 			return err
 		}
-		rows, _, err := st.Backend.Read(ctx, "")
+		rows, _, err := readAll(ctx, st)
 		if err != nil {
 			return err
 		}

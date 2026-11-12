@@ -14,6 +14,8 @@ package wire
 //	storeOpeners ─▶ git.WithCloneIdentity(storeSigner.cloneIdentity)
 //	   org store   ─▶ the org identity (orgs.<org>.identity: your name and
 //	                  email in that org), the one lore signs its commits with
+//	   personal store ─▶ the identity of the setup that owns it (item 39,
+//	                  storeowner.go), never the setup of the folder lore runs in
 //	   other store ─▶ your lore identity (`lore whoami`, the setup's identity)
 //	newOpeners ─▶ the clone got one ─▶ notice: clone, name <email>, why
 //
@@ -42,11 +44,36 @@ func (s storeSigner) cloneIdentity(ctx context.Context, remote string) git.Clone
 		}
 		return git.CloneIdentity{Signature: sig, Why: why}
 	}
+	if p, ok := s.personal(ctx, remote); ok {
+		return git.CloneIdentity{Signature: p.Sig, Why: p.Why + ", the one lore signs this store's commits with"}
+	}
 	sig := s.fallback(ctx)
 	if agentSignature(sig.Name, sig.Email) {
 		return git.CloneIdentity{} // no person address (a CI or bare agent key): git's own rules stay
 	}
 	return git.CloneIdentity{Signature: sig, Why: "your lore identity (`lore whoami`), the one lore signs this store's commits with"}
+}
+
+// personal is the identity of the setup that owns the personal store at
+// remote (storeowner.go), whatever setup the folder lore runs in uses
+// (owner item 39).
+func (s storeSigner) personal(ctx context.Context, remote string) (personalIdentity, bool) {
+	return personalStoreIdentity(ctx, s.opts.Home, optsProjectDir(s.opts), remote)
+}
+
+// identityFor is the person's signature for the store at remote: the
+// person's identity in its org for an org store, the owning setup's
+// identity for a personal store, else the lore identity (fallback). It
+// is git's fallback author of lore's commits there and the author of a
+// hand edit (adapters/backend/git identity.go personSignature).
+func (s storeSigner) identityFor(ctx context.Context, remote string) git.Signature {
+	if sig, ok := s.owner(ctx, remote); ok {
+		return sig
+	}
+	if p, ok := s.personal(ctx, remote); ok {
+		return p.Sig
+	}
+	return s.fallback(ctx)
 }
 
 // ownedByOrg reports whether an org identity signs the store at remote.

@@ -220,6 +220,37 @@ func isLoreID(secret string) bool {
 	return err == nil
 }
 
+// RuleGenericAPIKey is gitleaks' keyword-and-entropy catch-all rule, the
+// one that fires on lore's own identifiers next to a word such as "key",
+// "auth" or "token" (item 30: 879 false hits on one migration commit).
+const RuleGenericAPIKey = "generic-api-key"
+
+// Shapes of lore's own non-secret values that generic-api-key was shown
+// to match (item 30, fixture in filters_lore_test.go): hex digests and
+// UUIDs. Hex is lower case: lore and git print digests that way. Lore row
+// ids are already dropped by isLoreID; an HLC, a short hex prefix and an
+// algorithm-tagged digest never matched, so they get no exemption.
+var (
+	// hexDigestRe: sha1 (40) and sha256 (64) hex digests.
+	hexDigestRe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+	// uuidHexRe: a UUID's 32 hex digits without dashes, version 1..8 and
+	// RFC 4122 variant (the body of every lore id). A random 32-hex key
+	// fits this by chance 1 time in 64, so most bare hex keys still hit.
+	uuidHexRe = regexp.MustCompile(`^[0-9a-f]{12}[1-8][0-9a-f]{3}[89ab][0-9a-f]{15}$`)
+	// uuidRe: the canonical dashed UUID, version 1..8, RFC 4122 variant.
+	uuidRe = regexp.MustCompile(`^(?i)[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+)
+
+// isLoreShaped reports whether a generic-api-key secret is exactly a hex
+// digest (sha1/sha256) or a UUID (dashed or bare hex), maybe followed by
+// prose punctuation. Only generic-api-key gets this: it has no fixed token
+// format, so it flags these high-entropy digests next to a word such as
+// "key" or "token"; every named-format rule still runs on them (D4).
+func isLoreShaped(secret string) bool {
+	v := strings.TrimRight(secret, loreIDTrail)
+	return hexDigestRe.MatchString(v) || uuidHexRe.MatchString(v) || uuidRe.MatchString(v)
+}
+
 // moduleSumFiles are the Go checksum files (by base name) whose "h1:"
 // lines are module hashes.
 var moduleSumFiles = map[string]bool{"go.sum": true, "go.work.sum": true}
@@ -289,6 +320,9 @@ func (s *Scanner) keep(text string, fs []scan.Finding) []scan.Finding {
 			continue
 		}
 		if in && isLoreID(text[f.Offset:f.Offset+f.Length]) {
+			continue
+		}
+		if in && f.RuleID == RuleGenericAPIKey && isLoreShaped(text[f.Offset:f.Offset+f.Length]) {
 			continue
 		}
 		if in && isModuleSumHash(f.Field, text, f.Offset, f.Length) {

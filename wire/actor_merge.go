@@ -14,7 +14,10 @@ package wire
 //	DoctorSharedKeys (`lore doctor`, check actor_stable_key)
 //	   two live, unmerged actors with one stable key ─▶ warning naming
 //	   both ids and `lore actor merge <from> <into>` (into: the roster's,
-//	   else the id the key derives, else the older)
+//	   else the id the key derives, else the older); `lore fix --yes` /
+//	   `lore doctor --fix --yes` runs that merge itself (MergeActor, the
+//	   same pair) and prints what it merged; without --yes the warning
+//	   stays, saying it needs --yes, and nothing is written
 //	   human:<login> with no email whose login is a roster person's
 //	   handle ─▶ note: likely the same person, never merged on its own
 //	adoptActorMap (store adopt) / migrateActorKeys (migrate run): a
@@ -27,6 +30,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -35,6 +39,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -248,12 +253,23 @@ type actorEdit struct {
 func actorRefEdits(ctx context.Context, st *state, m map[string]ids.AnyID, skip map[ids.AnyID]bool, only ...store.Source) ([]actorEdit, []string, error) {
 	var out []actorEdit
 	var readOnly []string
-	for _, src := range st.eng.Stores() {
-		if len(only) > 0 && !slices.Contains(only, src) {
+	// a machine-local table (runs, sessions, ...) lives in the machine
+	// store whatever store it is listed from: its rows are edited there,
+	// and listed once, not once per store
+	machineDone := map[row.Table]bool{}
+	for _, store0 := range st.eng.Stores() {
+		if len(only) > 0 && !slices.Contains(only, store0) {
 			continue
 		}
-		ro := st.eng.ReadOnly(src)
 		for _, def := range st.eng.Registry().Tables() {
+			src := store0
+			if st.eng.HasMachineStore() && st.eng.IsMachineLocal(def.Name) {
+				if machineDone[def.Name] {
+					continue
+				}
+				machineDone[def.Name], src = true, store.SourceMachine
+			}
+			ro := st.eng.ReadOnly(src)
 			rows, err := st.eng.List(ctx, src, def.Name)
 			if err != nil {
 				return nil, nil, err
@@ -389,14 +405,26 @@ const DoctorCheckSharedKeys DoctorCheck = "actor_stable_key"
 type keyActor struct {
 	id      ids.AnyID
 	name    string
+	kind    string
 	key     string
 	handle  string
 	created string
 	roster  bool
 }
 
-// DoctorSharedKeys is the doctor check (registered in doctor_op.go).
-func (a *App) DoctorSharedKeys(ctx context.Context) ([]DoctorFinding, error) {
+// sharedKeyNeedsYes ends a shared-key warning: the fix runs the merge
+// only with --yes. The same words in every unmerged run, so the fix run's
+// line and the re-check's match (a changed line would count as fixed).
+const sharedKeyNeedsYes = "; needs --yes: `lore fix --yes` runs the merge"
+
+// DoctorSharedKeys is the doctor check (registered in doctor_op.go). With
+// fix and the caller's yes (op.Confirmed: `lore fix --yes`, `lore doctor
+// --fix --yes`) it runs the merge the warning names (MergeActor, from
+// each other id into keepOf's), one fixed line per merge naming what it
+// did; a merge that fails leaves the warning as it was and adds a note
+// with the reason. Only actors sharing one stable key are merged (one
+// key is one person or one agent), never the likely-same-login notes.
+func (a *App) DoctorSharedKeys(ctx context.Context, fix bool) ([]DoctorFinding, error) {
 	st, err := a.state(ctx)
 	if err != nil {
 		return nil, err
@@ -417,7 +445,7 @@ func (a *App) DoctorSharedKeys(ctx context.Context) ([]DoctorFinding, error) {
 				merged[r.ID] = true
 				continue
 			}
-			k := keyActor{id: r.ID, name: fieldText(r, actorFieldDisplay), key: fieldText(r, actorFieldKey), handle: fieldText(r, actorFieldHandle),
+			k := keyActor{id: r.ID, name: fieldText(r, actorFieldDisplay), kind: actorKindOf(fieldText(r, actorFieldKind)), key: fieldText(r, actorFieldKey), handle: fieldText(r, actorFieldHandle),
 				created: fieldText(r, row.KeyCreatedAt), roster: roster != "" && src == roster}
 			have, ok := byID[r.ID]
 			if !ok || (have.key == "" && k.key != "") {
@@ -443,20 +471,69 @@ func (a *App) DoctorSharedKeys(ctx context.Context) ([]DoctorFinding, error) {
 		}
 		into := keepOf(g)
 		var fixes, names []string
+		var froms []keyActor
 		for _, k := range g {
 			names = append(names, k.id.String())
 			if k.id != into.id {
 				fixes = append(fixes, "lore actor merge "+k.id.String()+" "+into.id.String())
+				froms = append(froms, k)
 			}
 		}
 		slices.Sort(names)
-		out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorWarning, Store: roster,
+		warning := DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorWarning, Store: roster,
 			Message: plural(len(g), "actor") + " share the stable key " + key + " (" + strings.Join(names, ", ") + "): one identity with two ids, as an adopt or migrate by an older lore left it; merge into " +
-				into.id.String() + " (asks first; rows naming the other are edited to name it, the other keeps its row marked merged_into)",
-			Fix: strings.Join(fixes, "; ")})
+				into.id.String() + " (asks first; rows naming the other are edited to name it, the other keeps its row marked merged_into)" + sharedKeyNeedsYes,
+			Fix: strings.Join(fixes, "; ")}
+		if !fix || !op.Confirmed(ctx) {
+			out = append(out, warning)
+			continue
+		}
+		out = append(out, a.mergeSharedKey(ctx, roster, key, into, froms, warning)...)
 	}
 	out = append(out, likelyHandleDuplicates(byID, merged)...)
 	return out, nil
+}
+
+// mergeSharedKey runs the merges of one shared key (doctor --fix --yes):
+// each of froms into into, in id order. A merged pair is a fixed line
+// naming both ids and the rows it edited; a pair it cannot merge (two
+// kinds, a refusal, a write that failed) keeps the warning as it was and
+// adds a note with the reason.
+func (a *App) mergeSharedKey(ctx context.Context, roster store.Source, key string, into keyActor, froms []keyActor, warning DoctorFinding) []DoctorFinding {
+	slices.SortFunc(froms, func(x, y keyActor) int { return strings.Compare(x.id.String(), y.id.String()) })
+	var out []DoctorFinding
+	failed := false
+	for _, f := range froms {
+		if f.kind != into.kind {
+			failed = true
+			out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorNote, Store: roster,
+				Message: "not merged " + f.id.String() + " into " + into.id.String() + ": a " + f.kind + " and a " + into.kind + " share " + key + "; lore merges only one person's (or one agent's) ids"})
+			continue
+		}
+		res, err := a.MergeActor(ctx, opsinfra.ActorMergeIn{From: f.id.String(), Into: into.id.String()})
+		if err != nil {
+			failed = true
+			out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorNote, Store: roster,
+				Message: "not merged " + f.id.String() + " into " + into.id.String() + " (" + key + "): " + err.Error(),
+				Fix:     "lore actor merge " + f.id.String() + " " + into.id.String()})
+			continue
+		}
+		out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorWarning, Store: roster, Fixed: true,
+			Message: "merged " + f.id.String() + " into " + into.id.String() + " (stable key " + key + "): " + plural(res.Rows, "row") +
+				" edited to name " + into.id.String() + ", " + copies(res.Marked) + " of " + f.id.String() + " marked merged_into (lore actor merge " + f.id.String() + " " + into.id.String() + ")"})
+	}
+	if failed {
+		out = append(out, warning)
+	}
+	return out
+}
+
+// copies is "1 copy" / "n copies".
+func copies(n int) string {
+	if n == 1 {
+		return "1 copy"
+	}
+	return strconv.Itoa(n) + " copies"
 }
 
 // keepOf is the actor a merge keeps: the roster's, else the one whose id

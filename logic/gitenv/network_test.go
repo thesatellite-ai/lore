@@ -40,21 +40,39 @@ func TestNetRefused(t *testing.T) {
 	}
 }
 
-// TestRepoNetRefused: a code repo's own git calls (its live ref, the team
-// lock migrate takes on refs/lore/signals) still fetch under
-// LORE_NO_FETCH, which covers only the store clones lore fix --all
-// fetched first; LORE_OFFLINE refuses them like any call.
-func TestRepoNetRefused(t *testing.T) {
-	nof := []string{EnvNoFetch + "=1"}
-	off := []string{EnvOffline + "=1"}
-	if why, got := RepoNetRefused(nof, []string{"fetch", "origin", "refs/lore/signals"}); got {
-		t.Errorf("a repo fetch was refused under LORE_NO_FETCH: %q", why)
+// TestStoreNetRefused (owner item 21): LORE_NO_STORE_FETCH, the switch
+// lore fix --all gives its children, refuses a fetch only through
+// StoreNetRefused (the store clone paths); NetRefused, which every other
+// runner (the repo's own remote, the signals ref of the team lock) uses,
+// lets the same fetch run.
+func TestStoreNetRefused(t *testing.T) {
+	nsf := []string{EnvNoStoreFetch + "=1"}
+	if why, refused := NetRefused(nsf, []string{"fetch", "origin"}); refused {
+		t.Fatalf("NetRefused under %s refused the repo's own fetch: %s", EnvNoStoreFetch, why)
 	}
-	if _, got := RepoNetRefused(off, []string{"fetch", "origin"}); !got {
-		t.Error("a repo fetch ran under LORE_OFFLINE")
+	if NoFetch(nsf) {
+		t.Fatalf("NoFetch is on under %s alone", EnvNoStoreFetch)
 	}
-	if _, got := RepoNetRefused(off, []string{"push", "origin"}); !got {
-		t.Error("a repo push ran under LORE_OFFLINE")
+	for _, c := range []struct {
+		env  []string
+		args []string
+		want bool
+	}{
+		{nsf, []string{"fetch", "origin"}, true},
+		{nsf, []string{"-C", "/s", "ls-remote", "origin"}, true},
+		{nsf, []string{"push", "origin"}, false},
+		{nsf, []string{"ls-tree", "HEAD"}, false},
+		{[]string{EnvNoFetch + "=1"}, []string{"fetch"}, true},
+		{[]string{EnvOffline + "=1"}, []string{"push"}, true},
+		{nil, []string{"fetch"}, false},
+	} {
+		why, got := StoreNetRefused(c.env, c.args)
+		if got != c.want || (got && why == "") {
+			t.Errorf("StoreNetRefused(%v, %v) = %q, %v; want %v", c.env, c.args, why, got, c.want)
+		}
+	}
+	if !NoStoreFetch(nsf) || !NoStoreFetch([]string{EnvOffline + "=1"}) || NoStoreFetch(nil) {
+		t.Fatal("NoStoreFetch does not follow its switches")
 	}
 }
 

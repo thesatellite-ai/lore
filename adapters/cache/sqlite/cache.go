@@ -272,12 +272,17 @@ func escapeQuoted(s string) string {
 	return string(out)
 }
 
-// inTx runs fn in one transaction, rolling back on error.
+// inTx runs fn in one transaction, rolling back on error. The write lock is
+// asked for again while busy (beginWrite): SQLite's busy handler is not
+// fair, so with several lore processes opening and writing one cache at
+// once (`lore fix --all` children over a shared store cache) a writer
+// could lose every turn past busy_timeout and fail "database is locked".
 func (c *Cache) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
-	tx, err := c.db.BeginTx(ctx, nil)
+	tx, err := beginWrite(ctx, c.db)
 	if err != nil {
 		return dbErr("begin", err)
 	}
+	defer trackTx(tx)() // stmtcache.go: each statement prepared once
 	if err := fn(tx); err != nil {
 		return c.writes.explain(errors.Join(err, ignoreDone(tx.Rollback())))
 	}
@@ -391,7 +396,7 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 		return false, errs.New(errs.InvalidInput, "sqlite cache: row without table, id, hlc or document")
 	}
 	var held string
-	err := tx.QueryRowContext(ctx, `SELECT hlc FROM "`+tblRows+`" WHERE source = ? AND tbl = ? AND id = ?`,
+	err := txQueryRow(ctx, tx, `SELECT hlc FROM "`+tblRows+`" WHERE source = ? AND tbl = ? AND id = ?`,
 		string(source), r.Table.String(), r.ID.String()).Scan(&held)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -410,7 +415,7 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 	if r.Deleted {
 		deleted = 1
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := txExec(ctx, tx,
 		`INSERT OR REPLACE INTO "`+tblRows+`" (source, tbl, id, hlc, deleted, doc) VALUES (?, ?, ?, ?, ?, ?)`,
 		string(source), r.Table.String(), r.ID.String(), r.HLC.String(), deleted, r.Doc); err != nil {
 		return false, dbErr("store row", err)

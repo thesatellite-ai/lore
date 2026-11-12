@@ -311,7 +311,16 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 		if st, serr := a.state(ctx); serr == nil && st.linkedByRemote != "" {
 			return a.linkedFolderProject(ctx, st)
 		}
-		return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "wire: this repository has no lore project").
+		if pid, ok := a.projectInAStore(ctx, eng); ok {
+			return pid, nil // owner item 36: a converted Mode B repo's project is in its "shared" store
+		}
+		if top, terr := a.knownRepoTop(ctx); terr == nil && hasV017Rows(top) {
+			// owner item 22: the project row is there, in the format lore
+			// 0.1.17 wrote, which is not read until it is migrated
+			return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "wire: this repository's lore project is in rows lore 0.1.17 wrote, which are not migrated yet").
+				WithHint("run lore fix (it migrates them; `lore migrate status` shows what is pending)")
+		}
+		return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "wire: "+noLoreProject).
 			WithHint("run `lore init` in the repository first (or `lore sync`, which writes the project's row file to .lore/data)")
 	case 1:
 		return ids.As[ids.Project](rows[0].ID)
@@ -338,6 +347,39 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	}
 	return ids.ID[ids.Project]{}, errs.New(errs.AmbiguousProject, "wire: the repository holds several projects").
 		WithHint("run `lore project list` and archive the ones you do not use")
+}
+
+// noLoreProject is the words of Project's E_NOT_FOUND for a repository
+// with no project at all (lore fix's render step skips on it, owner item 36).
+const noLoreProject = "this repository has no lore project"
+
+// projectInAStore is the project of a repo whose repo store holds no
+// project row but which names one that an attached store holds: the
+// project_id of a converted Mode B pointer (its rows became the "shared"
+// folder store, migrate_modeb.go), else _meta.json's project_id. A
+// tombstone or an id no attached store holds is not a project.
+func (a *App) projectInAStore(ctx context.Context, eng *engine.Engine) (ids.ID[ids.Project], bool) {
+	top, err := a.knownRepoTop(ctx)
+	if err != nil {
+		return ids.ID[ids.Project]{}, false
+	}
+	var want []string
+	if pid, ok := convertedModeBProjectID(top); ok {
+		want = append(want, pid)
+	}
+	if pid, ok := repoMetaProjectID(top); ok {
+		want = append(want, pid)
+	}
+	for _, s := range want {
+		pid, perr := ids.Parse[ids.Project](s)
+		if perr != nil {
+			continue
+		}
+		if _, r, gerr := eng.Get(ctx, engine.Ref{Table: schema.TableProjects, ID: pid.Any()}); gerr == nil && !r.Deleted {
+			return pid, true
+		}
+	}
+	return ids.ID[ids.Project]{}, false
 }
 
 // guard asks Options.GuardRepoWrite about a create in the repo store.

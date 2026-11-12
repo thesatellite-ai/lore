@@ -282,9 +282,9 @@ func aliasInSharedFinding(t accessTarget, c orgconf.Canonicalized) DoctorFinding
 // unreachableFinding probes a cloned store's remote; bad is false when it
 // answered, or the store has no clone here.
 func (a *App) unreachableFinding(ctx context.Context, t accessTarget) (DoctorFinding, bool) {
-	if gitenv.NoFetch(os.Environ()) {
-		// LORE_OFFLINE (a dry run reaches no remote) or LORE_NO_FETCH (the
-		// --all parent fetched every clone just now): not probed again
+	if gitenv.NoStoreFetch(os.Environ()) {
+		// LORE_OFFLINE (a dry run reaches no remote) or LORE_NO_STORE_FETCH
+		// (the --all parent fetched every clone just now): not probed again
 		return DoctorFinding{}, false
 	}
 	dir, _, err := gitbackend.CloneDirOf(a.opts.Home, t.URL, "")

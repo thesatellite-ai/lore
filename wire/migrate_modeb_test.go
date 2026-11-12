@@ -311,3 +311,26 @@ func TestMigrateRollbackAndUnlockWriteNoMachineRows(t *testing.T) {
 		t.Fatalf("after unlock the store holds %v, want exactly %v (no actor or machine rows)", got, before)
 	}
 }
+
+// TestModeBProjectAfterConversion (owner item 36): a converted Mode B repo
+// keeps no project row in its repo store (the rows became the "shared"
+// folder store), and lore fix's render step after the conversion failed
+// with "this repository has no lore project". The project is the kept
+// pointer's project_id, found in the attached store: in the same process
+// right after lore fix's migrate step (the App reopens with the store the
+// conversion attached), and in a new one.
+func TestModeBProjectAfterConversion(t *testing.T) {
+	t.Parallel()
+	repo, _, _, open, _ := modeBRepo(t)
+	a := open()
+	ctx := background()
+	if st := a.fixMigrate(ctx, repo, false, false); st.Failed || !st.Changed {
+		t.Fatalf("migrate step: %+v", st)
+	}
+	if pid, err := a.Project(ctx); err != nil || pid.String() != modeBProject {
+		t.Fatalf("same process after the conversion: project %q, %v; want %s", pid, err, modeBProject)
+	}
+	if pid, err := open().Project(ctx); err != nil || pid.String() != modeBProject {
+		t.Fatalf("a new process: project %q, %v; want %s", pid, err, modeBProject)
+	}
+}

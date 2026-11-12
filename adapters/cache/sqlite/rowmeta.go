@@ -108,7 +108,7 @@ func sensitiveMetaKeys(ctx context.Context, tx *sql.Tx, r row.Row) (map[string]b
 		return out, nil
 	}
 	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, schema.TableMetaKeys).Scan(&n); err != nil {
+	if err := txQueryRow(ctx, tx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, schema.TableMetaKeys).Scan(&n); err != nil {
 		return nil, dbErr("find meta_keys", err)
 	}
 	if n == 0 {
@@ -116,7 +116,7 @@ func sensitiveMetaKeys(ctx context.Context, tx *sql.Tx, r row.Row) (map[string]b
 	}
 	for id := range r.Meta {
 		var c int
-		if err := tx.QueryRowContext(ctx, metaKeySensitiveQuery, id.String()).Scan(&c); err != nil {
+		if err := txQueryRow(ctx, tx, metaKeySensitiveQuery, id.String()).Scan(&c); err != nil {
 			return nil, dbErr("read sensitive meta keys", err)
 		}
 		out[id.String()] = c > 0
@@ -270,7 +270,7 @@ func valueLabels(ctx context.Context, tx *sql.Tx, source string, r row.Row) (map
 		return nil, nil
 	}
 	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, schema.TableMetaValues).Scan(&n); err != nil {
+	if err := txQueryRow(ctx, tx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, schema.TableMetaValues).Scan(&n); err != nil {
 		return nil, dbErr("find meta_values", err)
 	}
 	if n == 0 {
@@ -282,7 +282,7 @@ func valueLabels(ctx context.Context, tx *sql.Tx, source string, r row.Row) (map
 			continue
 		}
 		var name, label string
-		err := tx.QueryRowContext(ctx, valueLabelQuery, vid, source).Scan(&name, &label)
+		err := txQueryRow(ctx, tx, valueLabelQuery, vid, source).Scan(&name, &label)
 		if errors.Is(err, sql.ErrNoRows) {
 			out[vid] = nil
 			continue
@@ -309,7 +309,7 @@ const metaRowsOfKeyQuery = `SELECT source, doc FROM "` + tblRows + `" WHERE dele
 // org key may describe repo rows) that uses meta key keyID, so a key turning sensitive drops its values from the FTS meta column
 // (3.20) and one turning non-sensitive adds them back.
 func (c *Cache) reindexMetaKey(ctx context.Context, tx *sql.Tx, st state, keyID string) error {
-	rs, err := tx.QueryContext(ctx, metaRowsOfKeyQuery, `$.meta."`+keyID+`"`)
+	rs, err := txQuery(ctx, tx, metaRowsOfKeyQuery, `$.meta."`+keyID+`"`)
 	if err != nil {
 		return dbErr("find rows of meta key", err)
 	}
@@ -354,7 +354,7 @@ func (c *Cache) reindexSensitiveKeys(ctx context.Context, tx *sql.Tx, st state) 
 	if _, ok := st.plans[schema.TableMetaKeys]; !ok {
 		return nil
 	}
-	rs, err := tx.QueryContext(ctx, sensitiveKeysQuery)
+	rs, err := txQuery(ctx, tx, sensitiveKeysQuery)
 	if err != nil {
 		return dbErr("read sensitive meta keys", err)
 	}

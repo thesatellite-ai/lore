@@ -1244,6 +1244,8 @@ func auditFailed(id ids.AnyID, cause error) error {
 // the tombstones and the purged ids (later 542): all land or none does.
 // Other backends get WritePurge and finishW records the audit after it.
 func (e *Engine) writePurge(ctx context.Context, st Attached, p Purger, changes []store.Change, purged []ids.AnyID, evs []Event) error {
+	dropSnapshot(ctx, st)
+	defer dropSnapshot(ctx, st) // readsnap.go: the next read sees this write
 	pj, ok := st.Backend.(store.PurgeAuditJournal)
 	if !ok || len(evs) == 0 {
 		return p.WritePurge(ctx, changes, purged)
@@ -1275,6 +1277,8 @@ func (e *Engine) journalRecords(ctx context.Context, st Attached, evs []Event) (
 // audit after it, as before.
 func (e *Engine) writeChanges(ctx context.Context, st Attached, changes []store.Change, evs []Event) error {
 	ctx = withBatchTrailer(ctx) // XQ1: the commit names its bulk action
+	dropSnapshot(ctx, st)
+	defer dropSnapshot(ctx, st) // readsnap.go: the next read sees this write
 	j, ok := st.Backend.(store.AuditJournal)
 	if !ok || len(evs) == 0 {
 		return st.Backend.Write(ctx, changes)

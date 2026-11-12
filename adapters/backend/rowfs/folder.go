@@ -162,7 +162,12 @@ func (f *Folder) Get(table row.Table, id ids.AnyID) (store.Row, error) {
 
 // current reads the row at rel; ok is false when the file does not exist.
 func (f *Folder) current(rel string) (store.Row, bool, error) {
-	if err := checkChain(f.root.dir, f.storePath(rel)); err != nil {
+	return f.currentIn(rel, chainMemo{})
+}
+
+// currentIn is current with the batch's checked folders (chainMemo).
+func (f *Folder) currentIn(rel string, chains chainMemo) (store.Row, bool, error) {
+	if err := chains.check(f.root.dir, f.storePath(rel)); err != nil {
 		return store.Row{}, false, err
 	}
 	b, err := readCapped(filepath.Join(f.dataDir, filepath.FromSlash(rel)), rel)
@@ -379,6 +384,13 @@ func (f *Folder) Problems(ctx context.Context) ([]Problem, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		// A file this process already decoded and that has not changed
+		// since is a usable row (readmemo.go): doctor asks for problems
+		// several times a run, and reading every file each time was most
+		// of a doctor run on a big store (item 41).
+		if _, ok := f.memo.fresh(rel, files[rel]); ok {
+			continue
+		}
 		b, err := readCapped(filepath.Join(f.dataDir, filepath.FromSlash(rel)), rel)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
@@ -512,9 +524,10 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 	}
 	a := &Applied{Paths: make([]string, 0, len(changes))}
 	prevs := make([][]byte, len(changes))
+	chains := chainMemo{}
 	for i, c := range changes {
 		rel := RowPath(c.Row.Table, c.Row.ID)
-		cur, exists, err := f.current(rel)
+		cur, exists, err := f.currentIn(rel, chains)
 		if err != nil {
 			return nil, err
 		}
@@ -536,22 +549,68 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 	if err := f.declare(a, changes); err != nil {
 		return nil, errors.Join(err, a.Undo())
 	}
+	// Each file is written, fsync'd and renamed into place on its own
+	// goroutine (concurrent fsyncs share the file system's journal commits);
+	// the folders are fsync'd once each afterwards. A batch of 5,000 rows in
+	// one table folder was 10,000 fsyncs one after the other (owner item 27).
+	fulls := make([]string, len(changes))
 	for i, c := range changes {
-		if err := ctx.Err(); err != nil {
-			return nil, errors.Join(err, a.Undo())
-		}
 		rel := RowPath(c.Row.Table, c.Row.ID)
-		full := filepath.Join(f.dataDir, filepath.FromSlash(rel))
-		if err := checkChain(f.root.dir, f.storePath(rel)); err != nil {
+		fulls[i] = filepath.Join(f.dataDir, filepath.FromSlash(rel))
+		if err := chains.check(f.root.dir, f.storePath(rel)); err != nil {
 			return nil, errors.Join(err, a.Undo())
 		}
-		if err := writeAtomic(full, c.Row.Doc, f.root.modes); err != nil {
-			return nil, errors.Join(err, a.Undo())
+	}
+	dirOf := make([]string, len(changes))
+	werrs := make([]error, len(changes))
+	perr := parallel(ctx, len(changes), func(i int) {
+		dirOf[i], werrs[i] = writeRenamed(fulls[i], changes[i].Row.Doc, f.root.modes)
+	})
+	var dirs []string
+	for i, c := range changes {
+		if dirOf[i] == "" { // failed, or skipped by a cancelled ctx
+			continue
 		}
-		a.undo = append(a.undo, undoStep{full: full, prev: prevs[i], m: f.root.modes})
+		if !slices.Contains(dirs, dirOf[i]) {
+			dirs = append(dirs, dirOf[i])
+		}
+		a.undo = append(a.undo, undoStep{full: fulls[i], prev: prevs[i], m: f.root.modes})
 		a.Paths = append(a.Paths, f.StorePath(c.Row.Table, c.Row.ID))
 	}
+	if perr != nil { // the ctx ended: as the sequential loop did, its error
+		return nil, errors.Join(perr, a.Undo())
+	}
+	for _, err := range werrs { // the first failure in batch order, as before
+		if err != nil {
+			return nil, errors.Join(err, a.Undo())
+		}
+	}
+	for _, dir := range dirs {
+		if err := syncDir(dir); err != nil {
+			return nil, errors.Join(errs.Wrap(errs.Internal, "rowfs: fsync a table folder", err), a.Undo())
+		}
+	}
 	return a, nil
+}
+
+// chainMemo remembers the folders checkChain already passed within one
+// batch (the caller holds the store lock, so they stay real folders): a
+// batch of 5,000 rows in one table folder Lstats that folder's chain once,
+// not 10,000 times. The file itself is still Lstat'd per row (readCapped,
+// writeRenamed refuse a link there).
+type chainMemo map[string]bool
+
+// check is checkChain(root, rel) with rel's folder part remembered.
+func (m chainMemo) check(root, rel string) error {
+	dir := path.Dir(rel)
+	if m[dir] {
+		return nil
+	}
+	if err := checkChain(root, rel); err != nil {
+		return err
+	}
+	m[dir] = true
+	return nil
 }
 
 // ensureMeta gives a non-root folder its _meta.json when the batch is the

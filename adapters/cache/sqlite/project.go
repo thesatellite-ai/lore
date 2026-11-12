@@ -142,7 +142,7 @@ func (c *Cache) upsertKind(ctx context.Context, tx *sql.Tx, st state, kind ids.I
 		return nil
 	}
 	var n int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE name = ?`, rp.fts).Scan(&n); err != nil {
+	if err := txQueryRow(ctx, tx, `SELECT COUNT(*) FROM sqlite_master WHERE name = ?`, rp.fts).Scan(&n); err != nil {
 		return dbErr("find resources fts", err)
 	}
 	if n == 0 {
@@ -184,7 +184,7 @@ func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 	if err != nil {
 		return errs.Wrap(errs.Internal, "sqlite cache: encode row", err)
 	}
-	if _, err = tx.ExecContext(ctx, p.sql.insert, string(arr)); err != nil {
+	if _, err = txExec(ctx, tx, p.sql.insert, string(arr)); err != nil {
 		return dbErr("upsert "+p.def.Name.String(), err)
 	}
 	ftsErr := error(nil)
@@ -223,7 +223,7 @@ func (c *Cache) upsertTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 // reports it.
 func fillJoins(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID, vals map[string]value.Value) error {
 	for _, j := range p.joins {
-		if _, err := tx.ExecContext(ctx, j.deleteFrom, source, id.String()); err != nil {
+		if _, err := txExec(ctx, tx, j.deleteFrom, source, id.String()); err != nil {
 			return dbErr("clear pairs of "+j.rel.JoinTable.String(), err)
 		}
 		// ItemStrings: a list of refs (in memory), of text (decoded from
@@ -233,7 +233,7 @@ func fillJoins(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 			if err != nil {
 				continue
 			}
-			if _, err := tx.ExecContext(ctx, j.insert, source, id.String(), to.String()); err != nil {
+			if _, err := txExec(ctx, tx, j.insert, source, id.String(), to.String()); err != nil {
 				return dbErr("record pair in "+j.rel.JoinTable.String(), err)
 			}
 		}
@@ -326,7 +326,7 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 	if p.fts == "" {
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, source, id.String()); err != nil {
+	if _, err := txExec(ctx, tx, p.sql.ftsDeleteID, source, id.String()); err != nil {
 		return dbErr("fts delete", err)
 	}
 	cells := []json.RawMessage{canon.String(id.String()), canon.String(source)}
@@ -341,7 +341,7 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 	if err != nil {
 		return errs.Wrap(errs.Internal, "sqlite cache: encode fts row", err)
 	}
-	if _, err = tx.ExecContext(ctx, p.sql.ftsInsert, string(arr)); err != nil {
+	if _, err = txExec(ctx, tx, p.sql.ftsInsert, string(arr)); err != nil {
 		return dbErr("fts insert", err)
 	}
 	return nil
@@ -355,15 +355,15 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 func (c *Cache) deleteTyped(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.AnyID) error {
 	// FTS first: its entry is found through the typed row (addFTS).
 	if p.fts != "" {
-		if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, source, id.String()); err != nil {
+		if _, err := txExec(ctx, tx, p.sql.ftsDeleteID, source, id.String()); err != nil {
 			return dbErr("fts delete", err)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, p.sql.deleteID, source, id.String()); err != nil {
+	if _, err := txExec(ctx, tx, p.sql.deleteID, source, id.String()); err != nil {
 		return dbErr("delete", err)
 	}
 	for _, j := range p.joins {
-		if _, err := tx.ExecContext(ctx, j.deleteFrom, source, id.String()); err != nil {
+		if _, err := txExec(ctx, tx, j.deleteFrom, source, id.String()); err != nil {
 			return dbErr("delete pairs", err)
 		}
 	}
@@ -371,7 +371,7 @@ func (c *Cache) deleteTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 		`DELETE FROM "` + tblRefs + `" WHERE entity_table = ? AND entity_id = ?`,
 		`DELETE FROM "` + tblExpanded + `" WHERE entity_table = ? AND entity_id = ?`,
 	} {
-		if _, err := tx.ExecContext(ctx, q, p.def.Name.String(), id.String()); err != nil {
+		if _, err := txExec(ctx, tx, q, p.def.Name.String(), id.String()); err != nil {
 			return dbErr("delete references", err)
 		}
 	}
@@ -383,21 +383,21 @@ func (c *Cache) deleteTyped(ctx context.Context, tx *sql.Tx, p plan, source stri
 // through the typed rows).
 func clearSource(ctx context.Context, tx *sql.Tx, p plan, source store.Source) error {
 	for _, q := range []string{p.sql.refsClearSource, p.sql.expandedClearSource} {
-		if _, err := tx.ExecContext(ctx, q, p.def.Name.String(), string(source)); err != nil {
+		if _, err := txExec(ctx, tx, q, p.def.Name.String(), string(source)); err != nil {
 			return dbErr("clear references", err)
 		}
 	}
 	if p.fts != "" {
-		if _, err := tx.ExecContext(ctx, p.sql.ftsClearSource, string(source)); err != nil {
+		if _, err := txExec(ctx, tx, p.sql.ftsClearSource, string(source)); err != nil {
 			return dbErr("clear fts", err)
 		}
 	}
 	for _, j := range p.joins {
-		if _, err := tx.ExecContext(ctx, j.clearSource, string(source)); err != nil {
+		if _, err := txExec(ctx, tx, j.clearSource, string(source)); err != nil {
 			return dbErr("clear pairs", err)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, p.sql.clearSource, string(source)); err != nil {
+	if _, err := txExec(ctx, tx, p.sql.clearSource, string(source)); err != nil {
 		return dbErr("clear rows", err)
 	}
 	return nil
@@ -437,7 +437,7 @@ func (c *Cache) expandField(ctx context.Context, tx *sql.Tx, table row.Table, id
 		`DELETE FROM "` + tblRefs + `" WHERE entity_table = ? AND entity_id = ? AND field = ?`,
 		`DELETE FROM "` + tblExpanded + `" WHERE entity_table = ? AND entity_id = ? AND field = ?`,
 	} {
-		if _, err := tx.ExecContext(ctx, q, table.String(), id, field); err != nil {
+		if _, err := txExec(ctx, tx, q, table.String(), id, field); err != nil {
 			return dbErr("clear references", err)
 		}
 	}
@@ -453,13 +453,13 @@ func (c *Cache) expandField(ctx context.Context, tx *sql.Tx, table row.Table, id
 		return nil
 	}
 	for _, ref := range refs {
-		if _, err := tx.ExecContext(ctx,
+		if _, err := txExec(ctx, tx,
 			`INSERT INTO "`+tblRefs+`" (entity_table, entity_id, field, ref_id) VALUES (?, ?, ?, ?)`,
 			table.String(), id, field, ref); err != nil {
 			return dbErr("record reference", err)
 		}
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := txExec(ctx, tx,
 		`INSERT INTO "`+tblExpanded+`" (entity_table, entity_id, field, text) VALUES (?, ?, ?, ?)`,
 		table.String(), id, field, expanded); err != nil {
 		return dbErr("record expansion", err)
@@ -504,12 +504,12 @@ const (
 func ftsInfoFromTables(ctx context.Context, tx *sql.Tx, kind ids.ID[ids.Kind]) (resFTSInfo, error) {
 	out := resFTSInfo{indexable: map[string]bool{}, quar: map[string]resquar.Field{}}
 	var name sql.NullString
-	err := tx.QueryRowContext(ctx, kindNameQuery, kind.String()).Scan(&name)
+	err := txQueryRow(ctx, tx, kindNameQuery, kind.String()).Scan(&name)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return out, dbErr("read kind name", err)
 	}
 	out.kindName = name.String
-	rs, err := tx.QueryContext(ctx, kindFieldsFTSQuery, kind.String())
+	rs, err := txQuery(ctx, tx, kindFieldsFTSQuery, kind.String())
 	if err != nil {
 		return out, dbErr("read kind fields", err)
 	}
@@ -535,7 +535,7 @@ func ftsInfoFromTables(ctx context.Context, tx *sql.Tx, kind ids.ID[ids.Kind]) (
 func indexResource(ctx context.Context, tx *sql.Tx, p plan, source string, r row.Row, info resFTSInfo) error {
 	if quarantined(r, info.quar) {
 		// RES 3.15: left out of search until fixed.
-		if _, err := tx.ExecContext(ctx, p.sql.ftsDeleteID, source, r.ID.String()); err != nil {
+		if _, err := txExec(ctx, tx, p.sql.ftsDeleteID, source, r.ID.String()); err != nil {
 			return dbErr("fts delete", err)
 		}
 		return nil

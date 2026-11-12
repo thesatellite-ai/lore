@@ -484,8 +484,9 @@ func (b *Backend) fetch(ctx context.Context, dir string) error {
 // its result the way fetch documents: stamp on success or on a missing
 // remote ref, errOffline for any other failure git reported.
 func (b *Backend) runFetch(ctx context.Context, dir string, args ...string) error {
-	if gitenv.NoFetch(os.Environ()) {
-		// LORE_NO_FETCH: the parent fetched this clone moments ago;
+	if gitenv.NoStoreFetch(os.Environ()) {
+		// LORE_NO_STORE_FETCH (or LORE_NO_FETCH): the parent fetched this
+		// clone moments ago;
 		// LORE_OFFLINE: this run reads what is on disk. Either way the
 		// tracking refs there are what the store reads, and no stamp is
 		// written (nothing was fetched by this process).

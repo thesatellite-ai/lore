@@ -112,9 +112,9 @@ func (r runner) run(ctx context.Context, c call) ([]byte, error) {
 	if len(r.routeArgs) > 0 {
 		args = append(append([]string(nil), r.routeArgs...), args...)
 	}
-	// LORE_OFFLINE / LORE_NO_FETCH (gitenv.NetRefused): the call is not
+	// LORE_OFFLINE / LORE_NO_FETCH / LORE_NO_STORE_FETCH (gitenv.StoreNetRefused): the call is not
 	// run, and answers as git does when the remote is not there
-	if why, refused := gitenv.NetRefused(os.Environ(), c.args); refused {
+	if why, refused := gitenv.StoreNetRefused(os.Environ(), c.args); refused {
 		return nil, &gitError{cmd: gitenv.Subcommand(c.args), code: netRefusedExit, stderr: why}
 	}
 	// The Cmd is built directly rather than through exec.CommandContext:

@@ -98,7 +98,9 @@ type Entry struct {
 	ReadOnly bool   `json:"read_only,omitempty"`
 	// Branch is the pinned store branch (empty = the default branch).
 	Branch string `json:"branch,omitempty"`
-	// Personal marks `me` (from ~/.lore/config.yaml, not stores.yaml).
+	// Personal marks a personal store (from ~/.lore/config.yaml, not
+	// stores.yaml): `me`, or another of the person's personal stores
+	// (PersonalLister, store.list only).
 	Personal bool `json:"personal,omitempty"`
 	// Source says where the entry comes from (store.list only, CLI_REFERENCE
 	// 3.21 "each named by its source"): SourceStoresFile, SourceOrg or
@@ -516,10 +518,26 @@ type OrgLister interface {
 	OrgStoreEntries(ctx context.Context) ([]Entry, error)
 }
 
+// PersonalLister is the optional Manager upgrade behind store.list's
+// other personal stores (owner item 9): the person's personal stores are
+// theirs whatever setup covers the folder, so `lore store list` and the
+// setup-wide `lore sync` show each one, also when the active setup's `me`
+// is another store or none (a work setup with personal_store: none, or
+// one that inherits a personal.store that is not set while the person's
+// solo setup names its own store). Kept out of Manager.ListStores, whose
+// other callers (targets, migrate, the private render) mean `me` only.
+type PersonalLister interface {
+	// OtherPersonalEntries lists the person's personal stores that got
+	// does not already hold (by url), with Personal set and Source
+	// SourcePersonal, each named so it clashes with no name in got.
+	OtherPersonalEntries(ctx context.Context, got []Entry) ([]Entry, error)
+}
+
 // ListEntries is the set of stores `lore store list` shows, in its
 // order: m's own list (stores.yaml, me), then the stores the org brings
-// when m lists them (OrgLister), the personal store last. `lore sync`
-// outside a repo syncs exactly this set (wire/syncsetup.go).
+// when m lists them (OrgLister), the personal store last, then the
+// person's other personal stores (PersonalLister). `lore sync` outside a
+// repo syncs exactly this set (wire/syncsetup.go).
 func ListEntries(ctx context.Context, m Manager) ([]Entry, error) {
 	got, err := m.ListStores(ctx)
 	if err != nil {
@@ -529,7 +547,16 @@ func ListEntries(ctx context.Context, m Manager) ([]Entry, error) {
 		got = []Entry{}
 	}
 	if ol, ok := upgrade.As[OrgLister](m); ok {
-		return withOrgStores(ctx, ol, got)
+		if got, err = withOrgStores(ctx, ol, got); err != nil {
+			return nil, err
+		}
+	}
+	if pl, ok := upgrade.As[PersonalLister](m); ok {
+		more, perr := pl.OtherPersonalEntries(ctx, got)
+		if perr != nil {
+			return nil, perr
+		}
+		got = append(got, more...)
 	}
 	return got, nil
 }

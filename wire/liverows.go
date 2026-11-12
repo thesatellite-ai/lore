@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"slices"
 	"sort"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
+	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -424,6 +426,9 @@ const liveTrackingPrefix = "refs/lore-remote/" + git.RemoteName + "/live/"
 // into the store clone (liveTrackingPrefix). Best effort: offline, or a
 // store with no live ref, leaves what is there.
 func fetchStoreLive(ctx context.Context, src liveSource) {
+	if gitenv.NoStoreFetch(os.Environ()) {
+		return // the --all parent fetched every store clone's live refs just now (git.RefreshClone)
+	}
 	ref := liveRefLocal + "/" + src.branch
 	_, _ = liveGit(ctx, src.dir, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--", git.RemoteName, "+"+ref+":"+liveTrackingPrefix+src.branch)
 }

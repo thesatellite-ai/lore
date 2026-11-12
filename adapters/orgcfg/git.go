@@ -33,8 +33,8 @@ func gitRunEnv(ctx context.Context, env []string, args ...string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("orgcfg: git is not installed: %w", err)
 	}
-	if why, refused := gitenv.NetRefused(os.Environ(), args); refused {
-		return "", errors.New(why) // LORE_OFFLINE / LORE_NO_FETCH: not run
+	if why, refused := gitenv.StoreNetRefused(os.Environ(), args); refused {
+		return "", errors.New(why) // LORE_OFFLINE / LORE_NO_FETCH / LORE_NO_STORE_FETCH: not run (orgcfg git reaches store clones only)
 	}
 	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...)}
 	// Never the bare inherited environment: inside a git hook it carries

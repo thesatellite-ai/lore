@@ -56,8 +56,8 @@ const gitignoreMode = 0o644
 func GitignoreHook(workDir string) Hook {
 	var once sync.Once
 	return Hook{Name: HookGitignore, Before: func(ctx context.Context, run *Run) error {
-		if !NeedsGitignore(run) {
-			return nil
+		if !NeedsGitignore(run) || dryRun(run) {
+			return nil // a dry run writes nothing, info/exclude included
 		}
 		var err error
 		once.Do(func() {

@@ -98,6 +98,9 @@ type storePush struct {
 	push *storepush.Settings
 	// compacted: this command already decided the automatic compaction.
 	compacted bool
+	// waitSaid: this read command already said its commits wait for
+	// `lore sync` (one line per store and command).
+	waitSaid bool
 }
 
 var (
@@ -187,7 +190,7 @@ const piggybackTimeout = 15 * time.Second
 func (b *storePush) begin(ctx context.Context) {
 	if r := requestOf(ctx); r != b.req {
 		b.req, b.fetched, b.earlier, b.pushFailed = r, false, store.SyncReport{}, false
-		b.push, b.compacted = nil, false
+		b.push, b.compacted, b.waitSaid = nil, false, false
 	}
 }
 
@@ -380,6 +383,13 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 		if !b.batchDue(ctx) {
 			return
 		}
+	}
+	if readRun(ctx) {
+		// A read never pushes (D-aa, docs bug B3): the commit a read makes
+		// (the pick-up of a hand edit) waits for the next write or `lore
+		// sync`, and the read says so once.
+		b.sayWaiting(ctx)
+		return
 	}
 	b.pushNow(ctx)
 }

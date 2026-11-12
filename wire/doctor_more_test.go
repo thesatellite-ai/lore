@@ -3,10 +3,12 @@ package wire
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -79,12 +81,12 @@ func TestCacheFinding(t *testing.T) {
 	}
 }
 
-// TestDoctorCachesBreaksDoctor: through the doctor operation, a damaged
-// cache under <home>/cache is one error line (v0.1.17 text), status
-// broken, exit 2; a sound one beside it is not named.
+// TestDoctorCachesBreaksDoctor: through the doctor operation's machine-wide
+// sweep (doctor --all), a damaged cache under <home>/cache is one error line
+// (v0.1.17 text), status broken, exit 2; a sound one beside it is not named.
 func TestDoctorCachesBreaksDoctor(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := opsdoctor.WithMachineSweep(context.Background())
 	repo := gitRepo(t)
 	home := t.TempDir()
 	actor, aerr := ids.Parse[ids.Actor](testActor)
@@ -117,6 +119,146 @@ func TestDoctorCachesBreaksDoctor(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(r.Errors, "\n"), good) {
 		t.Fatal("a sound cache was named")
+	}
+}
+
+// TestDoctorCachesHeldCacheIsNotBroken (owner item 35): a cache another
+// lore process holds while the machine-wide sweep runs (a sibling `lore fix --all` child
+// writing its own repo's cache), held past SQLite's busy_timeout, is
+// waited for: no "cannot check: database is locked" error, doctor not
+// broken.
+func TestDoctorCachesHeldCacheIsNotBroken(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo := gitRepo(t)
+	home := t.TempDir()
+	actor, aerr := ids.Parse[ids.Actor](testActor)
+	if aerr != nil {
+		t.Fatal(aerr)
+	}
+	a, nerr := New(Options{RepoDir: repo, Home: home, Actor: actor})
+	if nerr != nil {
+		t.Fatal(nerr)
+	}
+	t.Cleanup(func() { _ = a.Close() }) // test teardown; Close errors are covered elsewhere
+	withProject(t, a)
+	dir := filepath.Join(home, cacheDir, repoCacheDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	held := filepath.Join(dir, "sibling-0123456789ab.db")
+	soundCache(t, held)
+	db, err := sql.Open("sqlite", held)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	if _, err := conn.ExecContext(ctx, "BEGIN EXCLUSIVE"); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(5500 * time.Millisecond) // past the cache's busy_timeout (5 s)
+		_, _ = conn.ExecContext(ctx, "COMMIT")
+	}()
+	if got := cacheFinding(ctx, held); got != "" {
+		t.Fatalf("a held cache: %q", got)
+	}
+	r, err := opsdoctor.Run(opsdoctor.WithMachineSweep(ctx), a, opsdoctor.RunIn{}) // the sweep reaches the held file
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Status == opsdoctor.StatusBroken || strings.Contains(strings.Join(r.Errors, "\n"), held) {
+		t.Fatalf("errors %q status %s", r.Errors, r.Status)
+	}
+}
+
+// TestDoctorCachesOnlyThisRepos (owner item 35 follow-up): doctor in repo
+// A checks A's own caches, never repo B's: B's damaged cache is not named,
+// and B's cache held by another process for the whole run costs no wait.
+// The machine-wide sweep (doctor --all, or a run outside any repo) still
+// names B's damaged file. A's own damaged cache is named.
+func TestDoctorCachesOnlyThisRepos(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo := gitRepo(t)
+	home := t.TempDir()
+	actor, aerr := ids.Parse[ids.Actor](testActor)
+	if aerr != nil {
+		t.Fatal(aerr)
+	}
+	a, nerr := New(Options{RepoDir: repo, Home: home, Actor: actor})
+	if nerr != nil {
+		t.Fatal(nerr)
+	}
+	t.Cleanup(func() { _ = a.Close() }) // test teardown; Close errors are covered elsewhere
+	withProject(t, a)
+	dir := filepath.Join(home, cacheDir, repoCacheDir)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	other := RepoCachePath(home, filepath.Join(t.TempDir(), "other"))
+	soundCache(t, other)
+	damagePastHeader(t, other)
+	held := RepoCachePath(home, filepath.Join(t.TempDir(), "busy"))
+	soundCache(t, held)
+	db, err := sql.Open("sqlite", held)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	if _, err := conn.ExecContext(ctx, "BEGIN EXCLUSIVE"); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	got, err := a.DoctorCaches(ctx)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("repo A named another repo's cache: %+v %v", got, err)
+	}
+	if took := time.Since(start); took > 3*time.Second {
+		t.Fatalf("repo A waited %s on another repo's held cache", took)
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		t.Fatal(err)
+	}
+	sweep, err := a.DoctorCaches(opsdoctor.WithMachineSweep(ctx))
+	if err != nil || !strings.Contains(fmt.Sprint(sweep), other+" is damaged") {
+		t.Fatalf("the machine-wide sweep misses repo B's damaged cache: %+v %v", sweep, err)
+	}
+	// outside any repo: the sweep
+	out, oerr := New(Options{RepoDir: t.TempDir(), Home: home, Actor: actor})
+	if oerr != nil {
+		t.Fatal(oerr)
+	}
+	t.Cleanup(func() { _ = out.Close() })
+	if got, err := out.DoctorCaches(ctx); err != nil || !strings.Contains(fmt.Sprint(got), other+" is damaged") {
+		t.Fatalf("outside a repo the sweep misses a damaged cache: %+v %v", got, err)
+	}
+	// A's own repo cache, damaged, is named
+	own := RepoCachePath(home, a.st.repoTop)
+	if !fileExists(own) {
+		t.Fatalf("repo A has no cache at %s", own)
+	}
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	damagePastHeader(t, own)
+	b, nerr := New(Options{RepoDir: repo, Home: home, Actor: actor})
+	if nerr != nil {
+		t.Fatal(nerr)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	if got, err := b.DoctorCaches(ctx); err != nil || len(got) != 1 || !strings.Contains(got[0].Message, own+" is damaged") {
+		t.Fatalf("repo A's own damaged cache: %+v %v", got, err)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 )
@@ -60,7 +61,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckActorRoster, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorActorRoster(c, fix) }},       // doctor_roster.go
 		{DoctorCheckActorCopies, a.DoctorActorCopies},                                                                       // doctor_actorcopies.go (SOURCE_OF_TRUTH rows 2-3)
 		{DoctorCheckDuplicateActors, a.DoctorDuplicateActors},                                                               // doctor_dupactors.go
-		{DoctorCheckSharedKeys, a.DoctorSharedKeys},                                                                         // actor_merge.go
+		{DoctorCheckSharedKeys, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorSharedKeys(c, fix) }},     // actor_merge.go
 		{DoctorCheckPendingInvites, a.DoctorPendingInvites},                                                                 // doctor_invites.go
 		{DoctorCheckOrgAdmin, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorOrgAdmin(c, fix) }},         // doctor_orgadmin.go
 		{DoctorCheckEmptyRef, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorEmptyRefs(c, fix) }},        // doctor_emptyref.go
@@ -92,8 +93,17 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 	outside := gitTopLevel(ctx, a.projectDir()) == ""
 	skipped := false
 	out := make([]opsdoctor.CheckRun, 0, len(checks)+1)
+	// The checks share one read of each store (engine.WithReadSnapshot):
+	// most list tables, and each List used to read the whole store again
+	// (item 41). The engine's own writes drop what they change; a check
+	// that fixed something (or failed part way) may have changed files
+	// around the engine, so the next check starts a new snapshot.
+	shared := engine.WithReadSnapshot(ctx)
 	for _, c := range checks {
-		found, err := c.run(ctx)
+		found, err := c.run(shared)
+		if fix && (err != nil || anyFixed(found)) {
+			shared = engine.WithReadSnapshot(ctx)
+		}
 		if outside && errs.Has(err, errs.NotAStore) {
 			skipped = true
 			continue
@@ -112,6 +122,16 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		out = append(out, opsdoctor.CheckRun{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: opsdoctor.LevelNote, Line: note}}})
 	}
 	return out
+}
+
+// anyFixed reports whether a check fixed any of its findings.
+func anyFixed(found []DoctorFinding) bool {
+	for _, f := range found {
+		if f.Fixed {
+			return true
+		}
+	}
+	return false
 }
 
 // doctorNoRepoNote is DoctorChecks' one line when the command's folder is

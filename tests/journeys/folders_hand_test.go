@@ -122,6 +122,13 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		write(file(jHandA, t1), `"priority": "medium"`, `"priority": "low"`)
 		r := lee.Lore(web, "task", "list").OK(t)
 		r.Says(t, "picked up 1 row edited by hand in store "+tlOrg, "hand edit: tasks "+t1, "edited tasks "+t1+" (priority, title)", file(jHandA, t1))
+		// a read commits the pick-up but never pushes it (D-aa, B3): it says
+		// the commit waits, and lore sync sends it
+		r.Says(t, "wait to be pushed; a read never pushes")
+		if log := tt.store.Log(mainRef); len(log) > 0 && log[0] == "hand edit: tasks "+t1 {
+			t.Fatalf("a read pushed the hand edit commit")
+		}
+		lee.Lore(web, "sync").OK(t)
 		if log := tt.store.Log(mainRef); len(log) == 0 || log[0] != "hand edit: tasks "+t1 {
 			t.Fatalf("the store's last commit is %q, want \"hand edit: tasks %s\"", log, t1)
 		}
@@ -189,6 +196,7 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		r := lee.Lore(web, "task", "list").OK(t)
 		r.Says(t, "hand edit refused: "+file(jHandA, t1)+":", "status", "not committed or pushed until the file is fixed",
 			"picked up 1 row edited by hand", "edited tasks "+t4)
+		lee.Lore(web, "sync").OK(t) // the read's pick-up commit waits for a sync (B3)
 		if doc := remoteRow(jHandA, t1); strings.Contains(doc, "someday-maybe") {
 			t.Errorf("the refused edit reached the store: %s", doc)
 		}
@@ -201,6 +209,7 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		write(file(jHandA, t1), `"status": "someday-maybe-`, `"status": "`)
 		write(file(jHandA, t1), jHandEdited1, jHandEdited1+" again")
 		lee.Lore(web, "task", "list").OK(t).Says(t, "edited tasks "+t1)
+		lee.Lore(web, "sync").OK(t)
 		if doc := remoteRow(jHandA, t1); !strings.Contains(doc, jHandEdited1+" again") {
 			t.Errorf("the fixed edit did not reach the store: %s", doc)
 		}

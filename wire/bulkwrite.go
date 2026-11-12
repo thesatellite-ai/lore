@@ -90,10 +90,12 @@ func (b *bulkWrite) stage(src store.Source) context.Context {
 // recorded in failed).
 func (b *bulkWrite) update(ref engine.Ref, patch map[string]value.Value) bool {
 	src := ref.Store
-	if src == "" {
-		if st, err := b.a.state(b.ctx); err == nil {
+	if st, err := b.a.state(b.ctx); err == nil {
+		src = b.target(st, ref.Table, src)
+		if src == "" {
 			src = refStore(b.ctx, st, ref)
 		}
+		ref.Store = src
 	}
 	_, err := b.a.Update(b.stage(src), ref, patch)
 	if errors.Is(err, store.ErrBatch) {
@@ -116,6 +118,9 @@ func (b *bulkWrite) update(ref engine.Ref, patch map[string]value.Value) bool {
 // create stages a new row with a pinned id in src; false when it could
 // not be written (recorded in failed).
 func (b *bulkWrite) create(src store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) bool {
+	if st, err := b.a.state(b.ctx); err == nil {
+		src = b.target(st, table, src)
+	}
 	_, err := b.a.Create(engine.WithCreateID(b.stage(src), id), src, table, fields)
 	f := bulkFailure{Store: string(src), Table: string(table), ID: id.String()}
 	if err != nil {
@@ -125,6 +130,22 @@ func (b *bulkWrite) create(src store.Source, table row.Table, id ids.AnyID, fiel
 	b.pending[src]++
 	b.staged[src] = append(b.staged[src], f)
 	return true
+}
+
+// target is the store a row of table named for src really lives in: the
+// machine store for a machine-local table (runs, sessions, ...), whatever
+// store the caller listed it from (engine routes such a row there, and
+// List of any store reads it from there), else src. A bulk write keys its
+// stages by this store, so a machine-local row lands in the machine
+// store's own commit and never makes another store's stage span two
+// stores (owner Mac run 2, item 33: `migrate actors` staged a repo's run
+// rows with its tasks and wrote nothing: "one batch cannot write to two
+// stores (repo, machine)").
+func (b *bulkWrite) target(st *state, table row.Table, src store.Source) store.Source {
+	if st.eng.HasMachineStore() && st.eng.IsMachineLocal(table) {
+		return store.SourceMachine
+	}
+	return src
 }
 
 // fail records f with err's reason and next step.

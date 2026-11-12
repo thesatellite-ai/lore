@@ -48,7 +48,7 @@ const (
 // refreshMetaQuarantine records (or clears) the quarantine of applied rows.
 func refreshMetaQuarantine(ctx context.Context, tx *sql.Tx, source store.Source, applied []store.Row) error {
 	for _, sr := range applied {
-		if _, err := tx.ExecContext(ctx, metaQuarDelete, string(source), sr.Table.String(), sr.ID.String()); err != nil {
+		if _, err := txExec(ctx, tx, metaQuarDelete, string(source), sr.Table.String(), sr.ID.String()); err != nil {
 			return dbErr("clear meta quarantine", err)
 		}
 		if sr.Deleted {
@@ -66,7 +66,7 @@ func refreshMetaQuarantine(ctx context.Context, tx *sql.Tx, source store.Source,
 		for _, p := range probs {
 			texts = append(texts, problemText(p))
 		}
-		if _, err := tx.ExecContext(ctx, metaQuarInsert, string(source), sr.Table.String(), sr.ID.String(), strings.Join(texts, problemSep)); err != nil {
+		if _, err := txExec(ctx, tx, metaQuarInsert, string(source), sr.Table.String(), sr.ID.String(), strings.Join(texts, problemSep)); err != nil {
 			return dbErr("record meta quarantine", err)
 		}
 	}

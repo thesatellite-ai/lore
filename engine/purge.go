@@ -255,7 +255,14 @@ func (e *Engine) getRow(ctx context.Context, name store.Source, table row.Table,
 // through it.
 func (e *Engine) readRows(ctx context.Context, name store.Source, cursor store.Cursor) ([]store.Row, store.Cursor, error) {
 	st := e.stores[name]
-	rows, next, err := st.Backend.Read(ctx, cursor)
+	var rows []store.Row
+	var next store.Cursor
+	var err error
+	if cursor == "" {
+		rows, next, err = readAll(ctx, st)
+	} else {
+		rows, next, err = st.Backend.Read(ctx, cursor)
+	}
 	if err != nil {
 		return nil, "", err
 	}
@@ -281,7 +288,7 @@ func (e *Engine) readRows(ctx context.Context, name store.Source, cursor store.C
 // trash mark (BUG-TIME-BENCH).
 func (e *Engine) readTable(ctx context.Context, name store.Source, table row.Table) ([]store.Row, error) {
 	st := e.stores[name]
-	all, _, err := st.Backend.Read(ctx, "")
+	all, _, err := readAll(ctx, st)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +342,7 @@ func (e *Engine) Resurrected(ctx context.Context) ([]Resurrected, error) {
 		if len(set) == 0 {
 			continue
 		}
-		rows, _, err := st.Backend.Read(ctx, "")
+		rows, _, err := readAll(ctx, st)
 		if err != nil {
 			return nil, err
 		}

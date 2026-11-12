@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -99,6 +100,16 @@ func TestMigrateTeamLockClientRepoOnStore(t *testing.T) {
 			if !linked {
 				if !errs.Has(err, errs.Unsupported) || !strings.Contains(err.Error(), "no store link") {
 					t.Fatalf("unlinked client team lock: %v, want E_UNSUPPORTED naming the missing link", err)
+				}
+				var ee *errs.Error
+				if !errors.As(err, &ee) || !strings.Contains(ee.Hint, "lore org link agency --project "+filepath.Base(w.repo)) {
+					t.Fatalf("unlinked client team lock: %v, want the link command naming the org", err)
+				}
+				// lore fix (owner item 25): no lock, no error, a line with
+				// the exact link command; nothing written anywhere
+				frel, fline, ferr := appM.fixTeamLock().Acquire(ctx)
+				if ferr != nil || frel != nil || !strings.Contains(fline, "team lock: skipped") || !strings.Contains(fline, "lore org link agency --project "+filepath.Base(w.repo)) {
+					t.Fatalf("lore fix's lock in an unlinked client repo: release %v line %q err %v", frel != nil, fline, ferr)
 				}
 				if tree := signalsTree(); tree != "" {
 					t.Fatalf("a refused lock wrote the store signals ref: %s", tree)

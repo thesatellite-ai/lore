@@ -194,14 +194,14 @@ func (a *App) asClientIndex(ctx context.Context) (*leakcheck.Index, error) {
 func (a *App) asClientSecrets(ctx context.Context, root string) (leakcheck.SecretScan, error) {
 	sc, err := a.HookScanner(ctx)
 	if err != nil {
-		return nil, errs.Wrap(errs.LeakBlocked, "cannot check for secrets: the scanner could not be built", err)
+		return nil, errs.Wrap(errs.LeakBlocked, "cannot check for secrets: the scanner could not be built: "+err.Error(), err)
 	}
 	allows, err := committedAllows(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 	return func(it leakcheck.Item) []leakcheck.SecretHit {
-		return scanDoc(sc, allows, it.Path, it.Content)
+		return scanDoc(sc, allows, it.Path, it.Content, false)
 	}, nil
 }
 

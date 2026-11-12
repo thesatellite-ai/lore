@@ -685,7 +685,10 @@ func originsOf(raws ...string) map[string]string {
 // owner, when not nil, names the org identity that signs every commit of
 // a store url it answers for, whatever git knows (Q-R2-1). notice, when not
 // nil, hears the merge report of a store sync (storeMergeReport).
-func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option, owner func(context.Context, string) (git.Signature, bool), notice func(string)) (*store.Openers, error) {
+// identityFor, when set, is the person's signature for one store url
+// (storeSigner.identityFor): it replaces who's fallback identity for that
+// store, so a personal store signs as the setup that owns it (item 39).
+func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option, owner func(context.Context, string) (git.Signature, bool), identityFor func(context.Context, string) git.Signature, notice func(string)) (*store.Openers, error) {
 	o := store.NewOpeners()
 	if err := o.Register(folder.Scheme, folder.NewOpener()); err != nil {
 		return nil, err
@@ -700,6 +703,10 @@ func newOpeners(reg *schema.Registry, origins map[string]string, who git.Option,
 			if sig, ok := owner(ctx, u.String()); ok {
 				opts = append(opts, git.WithSigner(sig))
 			}
+		}
+		if identityFor != nil {
+			remote := u.String()
+			opts = append(opts, git.WithIdentity(func(ctx context.Context) git.Signature { return identityFor(ctx, remote) }))
 		}
 		b, err := git.NewOpener(opts...)(ctx, u, oo)
 		if err == nil {
@@ -810,12 +817,17 @@ func cacheOpen(ctx context.Context, path string, reg *schema.Registry, exp sqlit
 // combinedCachePath is <home>/cache/combined/<sha256 of the repo top>.db:
 // one file per code repo, outside the repo so it never shows in git status.
 func combinedCachePath(home, repoTop string) (string, error) {
-	sum := sha256.Sum256([]byte(repoTop))
-	dir := filepath.Join(home, cacheDir, combinedDir)
-	if err := mkCacheDir(dir); err != nil {
+	if err := mkCacheDir(filepath.Join(home, cacheDir, combinedDir)); err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, hex.EncodeToString(sum[:])+cacheExt), nil
+	return hashedCacheFile(home, combinedDir, repoTop), nil
+}
+
+// hashedCacheFile is <home>/cache/<dir>/<sha256 of repoTop>.db, the name of
+// the combined and the remote-linked repo caches; nothing is created.
+func hashedCacheFile(home, dir, repoTop string) string {
+	sum := sha256.Sum256([]byte(repoTop))
+	return filepath.Join(home, cacheDir, dir, hex.EncodeToString(sum[:])+cacheExt)
 }
 
 // RepoCachePath is the repo store's cache of the checkout at repoTop:
@@ -870,12 +882,10 @@ const remoteRepoDir = "remote"
 // remote with no .lore/ of its own: outside the repo, one file per
 // checkout, so nothing is ever created in the client's repository.
 func remoteRepoCachePath(home, repoTop string) (string, error) {
-	sum := sha256.Sum256([]byte(repoTop))
-	dir := filepath.Join(home, cacheDir, remoteRepoDir)
-	if err := mkCacheDir(dir); err != nil {
+	if err := mkCacheDir(filepath.Join(home, cacheDir, remoteRepoDir)); err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, hex.EncodeToString(sum[:])+cacheExt), nil
+	return hashedCacheFile(home, remoteRepoDir, repoTop), nil
 }
 
 // linkedByRemote is the remote a store link names the repo of opts by

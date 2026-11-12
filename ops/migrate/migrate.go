@@ -43,6 +43,17 @@ const OpRun = "migrate.run"
 // is a verb-like command, its default plural reads wrong.
 const restNoun = "migrate"
 
+// AllTablesRewriter is a Rewriter that rewrites every table in one pass
+// per store: one read of each store, one write batch (one commit for a
+// store clone) and one cache refresh, where calling RewriteV1 per table
+// re-read every store once per table (owner item 27: minutes for a repo
+// of 5,000 rows). run uses it when the Rewriter has it.
+type AllTablesRewriter interface {
+	// RewriteAllV1 is RewriteV1 for each of tables (RewriteRepoV1 when
+	// repoOnly), keyed by table; a table with no v1 row may be absent.
+	RewriteAllV1(ctx context.Context, tables []row.Table, repoOnly, dryRun bool) (map[row.Table][]ids.AnyID, error)
+}
+
 // Rewriter rewrites the v1 rows of one table in the repo store. The
 // composition root implements it with the store backend: a rewrite changes
 // only the format (_v, _hlc), so it must NOT go through the engine's Update,
@@ -245,7 +256,8 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 	}
 	rewrite := rw.RewriteV1
-	if in.Offline && journaled {
+	repoOnly := in.Offline && journaled
+	if repoOnly {
 		rewrite = j.RewriteRepoV1
 		out.Journal = append(out.Journal, "offline: no team lock taken; branch files only (settings, live rows and stores skipped: run `lore migrate run` again when online)")
 	} else {
@@ -267,7 +279,17 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 			return RunOut{}, err
 		}
 	}
-	for _, t := range rw.MigratedTables() {
+	tables := rw.MigratedTables()
+	if all, ok := rw.(AllTablesRewriter); ok {
+		// one pass per store for every table (owner item 27): the same
+		// ids per table as the per-table calls, in the same order
+		got, err := all.RewriteAllV1(ctx, tables, repoOnly, in.DryRun)
+		if err != nil {
+			return RunOut{}, err
+		}
+		rewrite = func(_ context.Context, t row.Table, _ bool) ([]ids.AnyID, error) { return got[t], nil }
+	}
+	for _, t := range tables {
 		got, err := rewrite(ctx, t, in.DryRun)
 		if err != nil {
 			return RunOut{}, err

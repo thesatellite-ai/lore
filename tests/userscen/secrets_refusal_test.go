@@ -54,8 +54,8 @@ func TestSecretsRefusalEveryDefaultRule(t *testing.T) {
 			if fd.Rule != f.rule || fd.Field != "body" || fd.Line != 1 || fd.N != 1 {
 				t.Fatalf("finding: %+v", fd)
 			}
-			if !strings.HasSuffix(fd.Masked, "…") || len(fd.Masked) >= len(f.value) {
-				t.Fatalf("masked preview must be a short prefix ending in …: %q", fd.Masked)
+			if !strings.HasPrefix(fd.Masked, "sha256:") || len(fd.Masked) != len("sha256:")+12 {
+				t.Fatalf("masked preview must be a match hash (sha256:<12 hex>), never part of the value: %q", fd.Masked)
 			}
 			if len(e.Error.Next.AddArgsOneOf) != len(secNextAnswers) {
 				t.Fatalf("next answers: %v", e.Error.Next.AddArgsOneOf)

@@ -11,6 +11,8 @@ package wire
 //	Acquire ─► coord world ─► no remote: nothing to race, none taken
 //	        ─► Store.Write(DecideHold lore-migrate, TTL 10m)
 //	             held by another: E_MIGRATE_LOCKED (holder, host, since, renewed)
+//	             remote does not exist ("Repository not found"): none
+//	               taken, a line saying so; the run migrates locally
 //	             offline / autopush off: E_OFFLINE
 //	        ─► renew every 2m until release ─► release: Store.Write(delete)
 //	Unlock  ─► expired hold: dropped · own hold from this host: dropped
@@ -19,6 +21,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -39,8 +42,32 @@ const (
 // host to put on the context of the migrate commands (opsmigrate.WithTeamLock).
 func (a *App) MigrateTeamLock() opsmigrate.TeamLock { return migrateTeamLock{a: a} }
 
+// fixTeamLock is the team lock lore fix takes around its migrate step: the
+// same lock, except that a client repo no store link names takes none and
+// says how to link it (owner item 25): its rows are not shared through a
+// store, so there is nobody to race, and the repo is fixed instead of
+// failing. `lore migrate run` keeps refusing there (MigrateTeamLock).
+func (a *App) fixTeamLock() opsmigrate.TeamLock {
+	return migrateTeamLock{a: a, skipUnlinkedClient: true}
+}
+
 // migrateTeamLock implements opsmigrate.TeamLock on the repo's signals ref.
-type migrateTeamLock struct{ a *App }
+type migrateTeamLock struct {
+	a *App
+	// skipUnlinkedClient: a client repo with no store link takes no lock
+	// (a note naming the link command) instead of E_UNSUPPORTED.
+	skipUnlinkedClient bool
+}
+
+// unlinkedClientLine is the team lock line of a client repo with no store
+// link under lore fix; %s is the link command.
+const unlinkedClientLine = "team lock: skipped, this is a client repo with no store link, so there is no store signals ref to hold it on (nobody shares its rows through a store to race); to share it, link it: %s"
+
+// remoteMissingLine is the team lock line of a repo whose remote does not
+// exist (git answered "Repository not found" or "does not appear to be a
+// git repository", signals.RemoteMissing); %s is the remote's name, then
+// git's line. An unreachable remote or refused credentials stay E_OFFLINE.
+const remoteMissingLine = "team lock: skipped, the remote %s does not exist (%s), so nobody shares this repo through it and there is nobody to race; migrating locally (fix or remove the remote with `git remote` to share it)"
 
 var _ opsmigrate.TeamLock = migrateTeamLock{}
 
@@ -51,12 +78,12 @@ var _ opsmigrate.TeamLock = migrateTeamLock{}
 // repo with no store link is refused there. ok is false when a non-client
 // repo has no remote (a solo repo: nobody to race, cookbook 1).
 func (l migrateTeamLock) open(ctx context.Context) (*coordWorld, *signals.Store, bool, error) {
-	w, err := standaloneCoord(l).openWorld(ctx)
+	w, err := standaloneCoord{a: l.a}.openWorld(ctx)
 	if err != nil {
 		return nil, nil, false, err
 	}
 	if err = w.forHolds(ctx); err != nil {
-		return nil, nil, false, err
+		return w, nil, false, err // w: the caller may read why (unlinkedClient)
 	}
 	if w.spot.remote == nil {
 		return w, nil, false, nil
@@ -77,6 +104,9 @@ func lockPlace(w *coordWorld) string {
 func (l migrateTeamLock) Acquire(ctx context.Context) (func() error, string, error) {
 	w, st, ok, err := l.open(ctx)
 	if err != nil {
+		if l.skipUnlinkedClient && w != nil && w.unlinkedClient() {
+			return nil, fmt.Sprintf(unlinkedClientLine, w.linkCommand(ctx)), nil
+		}
 		return nil, "", err
 	}
 	if !ok {
@@ -98,6 +128,12 @@ func (l migrateTeamLock) Acquire(ctx context.Context) (func() error, string, err
 	}
 	held, err := hold()
 	if err != nil {
+		if !w.spot.store && signals.RemoteMissing(err) {
+			// the repo's remote does not exist (deleted, or never this
+			// person's): nobody shares the repo through it, so there is
+			// nobody to race; migrate locally and say why (item 34)
+			return nil, fmt.Sprintf(remoteMissingLine, w.spot.remoteName, signals.ShortCause(err)), nil
+		}
 		return nil, "", migrateLockError(err, l.a.opts.Wall())
 	}
 	line := "team lock: taken on " + lockPlace(w) + " until " + held.Expires.UTC().Format(time.RFC3339) + " (renewed every " + migrateLockRenew.String() + ")"

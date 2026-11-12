@@ -184,18 +184,18 @@ func stagedFiles(ctx context.Context, root string, docs map[string][]byte) error
 	if top == "" {
 		return nil // not a git checkout: nothing is staged
 	}
-	out, err := gitRun{dir: top, args: []string{"diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"}}.output(ctx)
+	env := hookIndexEnv(top) // `git commit -a` / `<paths>`: the hook's temporary index
+	out, err := gitRun{dir: top, env: env, args: []string{"diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"}}.output(ctx)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "list staged files", err)
 	}
-	for _, p := range strings.Split(string(out), "\x00") {
-		if p == "" {
-			continue
-		}
-		content, serr := gitRun{dir: top, args: []string{"show", ":" + p}}.output(ctx)
-		if serr != nil {
-			continue // a submodule or an unreadable blob: nothing to read
-		}
+	// One `git cat-file --batch` for every path (indexblobs.go), not one
+	// `git show` each; a submodule or a missing path is left out as before.
+	blobs, err := indexBlobs(ctx, top, env, strings.Split(string(out), "\x00"))
+	if err != nil {
+		return err
+	}
+	for p, content := range blobs {
 		docs[p] = content
 	}
 	return nil

@@ -148,8 +148,9 @@ func TestDoctorTriageOwner(t *testing.T) {
 	}
 }
 
-// TestDoctorStoreLocks (later 586): a held store lock names its holder
-// (pid of the holder line) once; a free lock is silent.
+// TestDoctorStoreLocks (later 586, owner item 40): a held store lock names
+// its holder (pid of the holder line) once, as a note while that process
+// lives (a sibling lore command at work); a free lock is silent.
 func TestDoctorStoreLocks(t *testing.T) {
 	t.Parallel()
 	repo := gitRepo(t)
@@ -172,9 +173,9 @@ func TestDoctorStoreLocks(t *testing.T) {
 	if rerr := lock.Release(); rerr != nil {
 		t.Fatal(rerr)
 	}
-	if err != nil || len(got) != 1 || got[0].Store != "kb" || got[0].Level != DoctorWarning ||
+	if err != nil || len(got) != 1 || got[0].Store != "kb" || got[0].Level != DoctorNote ||
 		!strings.Contains(got[0].Message, "is held by pid "+strconv.Itoa(os.Getpid())) {
-		t.Fatalf("held lock: %+v %v", got, err)
+		t.Fatalf("held lock (live holder: a note, never a finding): %+v %v", got, err)
 	}
 	if got, err = a.DoctorStoreLocks(ctx); err != nil || len(got) != 0 {
 		t.Fatalf("released lock: %+v %v", got, err)
@@ -247,5 +248,28 @@ func TestEditAfterPurge(t *testing.T) {
 	if !found || f.Level != DoctorWarning || !strings.Contains(f.Message, "but commit "+later[:12]+" holds a later edit") ||
 		!strings.HasSuffix(f.Fix, "git show "+later[:12]+":"+rel) {
 		t.Fatalf("later edit: %+v %v", f, found)
+	}
+}
+
+// TestStoreLockFinding (owner item 40): a held lock whose holder is a live
+// process, or unnamed, is a note (counts toward nothing); one whose holder
+// line names a process that has exited is a warning naming how to free it.
+func TestStoreLockFinding(t *testing.T) {
+	t.Parallel()
+	since := time.Now().Add(-time.Minute)
+	live := func(int) bool { return true }
+	dead := func(int) bool { return false }
+	ls := rowfs.LockState{Path: "/s/.git/lore/lock", Held: true, PID: 4242, Since: since}
+	if f := storeLockFinding("kb", ls, live); f.Level != DoctorNote || f.Check != DoctorCheckStoreLock ||
+		!strings.Contains(f.Message, "store kb: the lock /s/.git/lore/lock is held by pid 4242") {
+		t.Fatalf("live holder: %+v", f)
+	}
+	if f := storeLockFinding("kb", rowfs.LockState{Path: ls.Path, Held: true}, dead); f.Level != DoctorNote ||
+		!strings.Contains(f.Message, "a process that left no holder line") {
+		t.Fatalf("unnamed holder: %+v", f)
+	}
+	f := storeLockFinding("kb", ls, dead)
+	if f.Level != DoctorWarning || !strings.Contains(f.Message, "which has exited") || !strings.Contains(f.Fix, "lsof /s/.git/lore/lock") {
+		t.Fatalf("dead holder: %+v", f)
 	}
 }

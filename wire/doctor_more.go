@@ -15,10 +15,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -81,14 +83,36 @@ func (a *App) DoctorResurrected(ctx context.Context) ([]DoctorFinding, error) {
 	return out, nil
 }
 
-// DoctorCaches integrity-checks every cache file lore keeps: every *.db
-// under <home>/cache (the repo caches included, cache/repo). A damaged file is an error (doctor broken) whose fix is to
-// delete it: a cache is rebuilt from the row files (spec 3). The core also
-// moves a file aside by itself when it cannot open it (cache.go), but one
-// damaged past its first pages opens fine and only quick_check sees it.
-// It never opens the App's state, so it runs even when the open fails.
+// DoctorCaches integrity-checks the cache files of this run. A damaged
+// file is an error (doctor broken) whose fix is to delete it: a cache is
+// rebuilt from the row files (spec 3). The core also moves a file aside by
+// itself when it cannot open it (cache.go), but one damaged past its first
+// pages opens fine and only quick_check sees it. It never opens the App's
+// state, so it runs even when the open fails.
+//
+// Which files (owner item 35 follow-up): inside a repo, only this repo's
+// own caches (repoCacheFiles: its repo cache, the caches of the stores it
+// opened, its combined cache), never another repo's: `lore fix --all` runs
+// doctor in every repo, eight at a time, and each child re-checking all
+// 85+ caches waited on every sibling's busy file. The machine-wide sweep
+// of every *.db under <home>/cache (DoctorAllCaches) runs once: outside
+// any repo, in `lore doctor --all` (opsdoctor.MachineSweep), and in the
+// --all parent of lore fix (FixCacheSweep).
 func (a *App) DoctorCaches(ctx context.Context) ([]DoctorFinding, error) {
-	var files []string // the repo's own cache is under <home>/cache/repo (RepoCachePath)
+	if opsdoctor.MachineSweep(ctx) {
+		return a.DoctorAllCaches(ctx)
+	}
+	top := gitTopLevel(ctx, a.projectDir())
+	if top == "" {
+		return a.DoctorAllCaches(ctx)
+	}
+	return cacheFindings(ctx, a.repoCacheFiles(top)), nil
+}
+
+// DoctorAllCaches integrity-checks every cache file lore keeps: every *.db
+// under <home>/cache (the repo caches of every repo included, cache/repo).
+func (a *App) DoctorAllCaches(ctx context.Context) ([]DoctorFinding, error) {
+	var files []string
 	if a.opts.Home != "" {
 		_ = filepath.WalkDir(filepath.Join(a.opts.Home, cacheDir), func(p string, d fs.DirEntry, err error) error {
 			if err == nil && !d.IsDir() && strings.HasSuffix(p, cacheExt) {
@@ -97,20 +121,79 @@ func (a *App) DoctorCaches(ctx context.Context) ([]DoctorFinding, error) {
 			return nil // an unreadable folder is skipped, never fatal
 		})
 	}
+	return cacheFindings(ctx, files), nil
+}
+
+// FixCacheSweep is the machine-wide cache sweep of `lore fix --all`, run
+// once by the parent after every repo's own run (opsfix.Env): the lines of
+// DoctorAllCaches.
+func (a *App) FixCacheSweep(ctx context.Context) []string {
+	found, _ := a.DoctorAllCaches(ctx) // never fails: an unreadable folder is skipped
+	out := make([]string, 0, len(found))
+	for _, f := range found {
+		out = append(out, f.Line())
+	}
+	return out
+}
+
+// repoCacheFiles are the cache files of the repo at top, sorted, each
+// once: the ones its open used (repo store and every attached store, the
+// combined file) when the App is open, and the paths its open would use
+// for the repo store either way (RepoCachePath, the remote-linked and the
+// combined file of the top), so a failed open still has its own checked.
+func (a *App) repoCacheFiles(top string) []string {
+	set := map[string]bool{}
+	a.mu.Lock()
+	if a.opened && a.st != nil {
+		if a.st.repoTop != "" {
+			top = a.st.repoTop
+		}
+		if c := a.st.caches; c != nil {
+			c.mu.Lock()
+			for _, p := range c.paths {
+				set[p] = true
+			}
+			c.mu.Unlock()
+		}
+	}
+	a.mu.Unlock()
+	if a.opts.Home != "" {
+		set[RepoCachePath(a.opts.Home, top)] = true
+		set[hashedCacheFile(a.opts.Home, remoteRepoDir, top)] = true
+		set[hashedCacheFile(a.opts.Home, combinedDir, top)] = true
+	}
+	files := make([]string, 0, len(set))
+	for p := range set {
+		if p != "" {
+			files = append(files, p)
+		}
+	}
+	slices.Sort(files)
+	return files
+}
+
+// cacheFindings is cacheFinding over files, one error per bad file.
+func cacheFindings(ctx context.Context, files []string) []DoctorFinding {
 	var out []DoctorFinding
 	for _, f := range files {
 		if msg := cacheFinding(ctx, f); msg != "" {
 			out = append(out, DoctorFinding{Check: DoctorCheckCache, Level: DoctorError, Plain: true, Message: msg})
 		}
 	}
-	return out, nil
+	return out
 }
 
 // cacheFinding returns the doctor line for one cache file, "" when it is
 // sound or absent. Damage (IsCorrupt, or quick_check not ok) names the
-// fix; a lock or permission problem is reported as it is, without the
+// fix; a permission or read problem is reported as it is, without the
 // delete advice, because the file may be fine. Every line is an error
 // (doctor broken), as v0.1.17 counted it.
+//
+// A file another lore process holds is not a finding (owner item 35):
+// QuickCheck waits for it, and one still busy after that wait is in use
+// by a live command (a sibling `lore fix --all` child writing its own
+// repo's cache), which says nothing about damage; the next doctor checks
+// it. Only a file doctor truly cannot read is reported.
 func cacheFinding(ctx context.Context, p string) string {
 	if _, err := os.Stat(p); err != nil {
 		return "" // absent: the next command creates it
@@ -120,6 +203,8 @@ func cacheFinding(ctx context.Context, p string) string {
 	switch {
 	case err != nil && sqlite.IsCorrupt(err):
 		return fix + " (" + err.Error() + ")"
+	case err != nil && sqlite.IsBusy(err):
+		return "" // in use by a live lore command, not damaged
 	case err != nil:
 		return "cache " + p + ": cannot check: " + err.Error()
 	case res != sqlite.QuickCheckOK:

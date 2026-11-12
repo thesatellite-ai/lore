@@ -8,14 +8,31 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 )
 
+// TestMask (item 29): the preview is "sha256:" + 12 hex of the value's
+// SHA-256, the same for the same value, different for different values,
+// and never holds a character run of the value.
 func TestMask(t *testing.T) {
 	t.Parallel()
-	for in, want := range map[string]string{
-		"": "…", "abc": "…", "abcd": "a…", "abcdefgh": "ab…",
-		strings.Repeat("x", 40): strings.Repeat("x", 8) + "…",
-	} {
-		if got := Mask(in); got != want {
-			t.Errorf("Mask(%d chars) = %q want %q", len(in), got, want)
+	if got := Mask("abc"); got != "sha256:ba7816bf8f01" {
+		t.Errorf("Mask(abc) = %q", got)
+	}
+	seen := map[string]bool{}
+	for _, in := range []string{"", "abcd", "Zk3Qp9Lm2Xv8Rt5W", strings.Repeat("x", 40), "AKIA" + "Q7WE9RT2YU4IO6PA"} {
+		got := Mask(in)
+		if len(got) != len("sha256:")+PreviewHexLen || !strings.HasPrefix(got, "sha256:") {
+			t.Errorf("Mask(%d chars) = %q, not a match hash", len(in), got)
+		}
+		if seen[got] {
+			t.Errorf("Mask(%d chars) repeats another value's hash", len(in))
+		}
+		seen[got] = true
+		for i := 0; i+4 <= len(in); i++ {
+			if strings.Contains(got, in[i:i+4]) {
+				t.Errorf("Mask(%d chars) carries 4 characters of the value", len(in))
+			}
+		}
+		if Mask(in) != got {
+			t.Errorf("Mask(%d chars) is not stable", len(in))
 		}
 	}
 }

@@ -1,0 +1,71 @@
+package engine
+
+import (
+	"context"
+	"sync/atomic"
+	"testing"
+
+	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/store/memstore"
+)
+
+// countingBackend counts full reads (cursor "").
+type countingBackend struct {
+	store.Backend
+	full *atomic.Int64
+}
+
+func (b countingBackend) Read(ctx context.Context, c store.Cursor) ([]store.Row, store.Cursor, error) {
+	if c == "" {
+		b.full.Add(1)
+	}
+	return b.Backend.Read(ctx, c)
+}
+
+// TestReadSnapshot (item 41): under WithReadSnapshot a store is read once
+// however many reads ask for it; a write through the engine drops the
+// snapshot so the next read goes to the backend again; without a snapshot
+// every read goes to the backend; two snapshots never share reads.
+func TestReadSnapshot(t *testing.T) {
+	t.Parallel()
+	var n atomic.Int64
+	st := Attached{Name: "kb", Backend: countingBackend{memstore.NewData().Open(store.OpenOptions{}), &n}}
+	e := &Engine{stores: map[store.Source]Attached{"kb": st}}
+	base := context.Background()
+
+	for range 3 {
+		if _, _, err := readAll(base, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := n.Load(); got != 3 {
+		t.Fatalf("no snapshot: %d full reads, want 3", got)
+	}
+
+	n.Store(0)
+	ctx := WithReadSnapshot(base)
+	for range 5 {
+		if _, _, err := readAll(ctx, st); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := n.Load(); got != 1 {
+		t.Fatalf("snapshot: %d full reads, want 1", got)
+	}
+	if err := e.writeChanges(ctx, st, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := readAll(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	if got := n.Load(); got != 2 {
+		t.Fatalf("after a write: %d full reads, want 2 (the write drops the snapshot)", got)
+	}
+
+	if _, _, err := readAll(WithReadSnapshot(base), st); err != nil {
+		t.Fatal(err)
+	}
+	if got := n.Load(); got != 3 {
+		t.Fatalf("a new snapshot: %d full reads, want 3", got)
+	}
+}
