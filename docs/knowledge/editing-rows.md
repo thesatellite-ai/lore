@@ -161,9 +161,67 @@ Over the local REST API (`lore api`) the same operations are `POST /v1/rows/{id}
 
 ## Editing the JSON file directly
 
-`lore path <id>` gives you the file; any editor works on it. lore reads the file as it is on its next command. Keep it valid JSON, and leave `id`, `_table` and `_hlc` alone: lore checks hand-made changes and `lore doctor` reports a file it cannot read.
+`lore path <id>` gives you the file; any editor works on it. lore reads the file as it is on its next command. Keep it valid JSON, and leave `id`, `_table` and `_hlc` alone: lore checks hand-made changes and `lore doctor` reports a file it cannot read. In a store, the next lore command commits a valid change as you and refuses a broken file with its line and reason: see [Editing by hand](../sync/editing-by-hand.md).
+
+## Try it
+
+A task in a git store: `lore path` prints its file inside the store's clone, `lore row markdown` prints the view `lore edit` opens, and `lore edit` with an editor script (it sets the priority and adds a line to the body, as a person would in `vi`) writes the change back, commits it in the store and pushes it:
+
+<!-- example: files#lore-path -->
+```console
+# alice, in website
+$ lore path tsk_2ad3…f891
+~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json
+$ lore path tsk_2ad3…f891 --json
+{
+  "id": "tsk_2ad3…f891",
+  "table": "tasks",
+  "path": "~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json",
+  "store": "notes",
+  "folder": "."
+}
+```
+<!-- /example -->
+
+<!-- example: files#lore-edit lines=12 -->
+```console
+# alice, in website
+$ lore row markdown tsk_2ad3…f891
+---
+# lore edit: tsk_2ad3…f891 (tasks) as Markdown. Change values, save and close the editor, and lore checks the row and writes it.
+# store notes; file ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json
+# The text below the closing --- is the body field (Markdown).
+# An empty value (key:) clears an optional field. id, table, _hlc, created_* and updated_* are lore's own and cannot change.
+id: tsk_2ad3…f891
+table: tasks
+_hlc: 2026-11-02T10:00:10.000Z/0002/act_54fe…28f2
+created_at: "2026-11-02T10:00:10Z"
+created_by: act_54fe…28f2
+updated_at: "2026-11-02T10:00:10Z"
+updated_by: act_54fe…28f2
+…
+$ EDITOR=$HOME/bin/edit-task lore edit tsk_2ad3…f891
+lore: pushed store notes: commit dfd8dc8 to branch main
+lore: wrote ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json (store notes)
+✓ tsk_2ad3…f891 updated in store notes: body, priority
+  file ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json
+$ lore task show tsk_2ad3…f891
+tsk_2ad3…f891
+  title:    Renew the TLS certificate
+  status:   todo
+  priority: high
+  commit:   accepted
+Ask the hosting provider for the new chain first.
+created 2026-11-02T10:00:10Z by act_54fe…28f2 · updated 2026-11-02T10:01:25Z by act_54fe…28f2
+```
+<!-- /example -->
+
+The whole run is the example section `files`: [`files`](../../tests/docs/sections/files.sh) ([output](../../tests/docs/transcripts/files.txt)).
 
 ## Related
+
+- [Editing by hand](../sync/editing-by-hand.md): change, add, delete or move row files in a store clone with any editor or plain git.
+- [Stores as plain folders](../sync/store-clones.md): what is in a store's clone.
 
 - [Rules, memories and decisions](rules-memories-decisions.md) and [Other kinds of notes](other-row-kinds.md): the `edit` command of each kind, with flags.
 - [Browse your notes in the terminal](tui.md): `lore show <id>` prints any row.

@@ -4,7 +4,7 @@
 
 ## What it is and when you want it
 
-**Settings.** `lore config get/set/list` works on your own `~/.lore/config.yaml` (the file that also holds your orgs and stores; `lore config check` validates it). A key is a dotted path such as `default_branch` or `live.autopush`, and only keys lore actually reads are accepted. lore's own bookkeeping inside `.lore/lore.db` (the schema version, the search index fingerprint) is no longer something you read or set by hand. Rules for the whole team, such as how long the trash keeps deleted rows, are set with `lore policy set` instead: they are stored with the repo or the org, so everyone gets them.
+**Settings.** `lore config get/set/list` works on your own `~/.lore/config.yaml` (the file that also holds your orgs and stores; `lore config check` validates it). A key is a dotted path such as `default_branch` or `live.autopush`, and only keys lore actually reads are accepted. lore's own bookkeeping inside its cache (the schema version, the search index fingerprint) is no longer something you read or set by hand. Rules for the whole team, such as how long the trash keeps deleted rows, are set with `lore policy set` instead: they are stored with the repo or the org, so everyone gets them.
 
 You want these when a guide or a support request asks you to look at a setting, or when the team needs one rule for everyone.
 

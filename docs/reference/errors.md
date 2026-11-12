@@ -67,10 +67,10 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
 | `E_DB_LOCKED` | 23 | another lore process held a store's database for too long | wait for the other command to finish, then run yours again |
-| `E_DB_CORRUPT` | 23 | the local cache holds a record lore cannot read (a cache file that cannot be opened at all is moved aside and rebuilt by itself) | delete `.lore/lore-cache.db`: the next command rebuilds it from `.lore/data` ([how](../operations/backup-restore-repair.md)) |
+| `E_DB_CORRUPT` | 23 | the local cache holds a record lore cannot read (a cache file that cannot be opened at all is moved aside and rebuilt by itself) | delete the repo's cache file (`~/.lore/cache/repo/<repo folder>-<hash>.db`; `lore where` names it): the next command rebuilds it from `.lore/data` ([how](../operations/backup-restore-repair.md)) |
 | `E_DB_NOT_FOUND` | 23 | a store's cache file could not be opened for a search across stores | run the command again (lore rebuilds a cache from the row files); `lore doctor` checks the caches |
 | `E_SCHEMA_VERSION_MISMATCH` | 23 | a newer lore changed this database's layout. Not raised yet | upgrade lore |
-| `E_MIGRATION_INCOMPLETE` | 23 | a `lore migrate run` of v0.1.17 data did not finish; `lore doctor` reports it | run `lore migrate run` again (it resumes where it stopped), or `lore migrate rollback` to undo it; for the repo cache, delete `.lore/lore-cache.db` and the next command rebuilds it |
+| `E_MIGRATION_INCOMPLETE` | 23 | a `lore migrate run` of v0.1.17 data did not finish; `lore doctor` reports it | run `lore migrate run` again (it resumes where it stopped), or `lore migrate rollback` to undo it; for the repo cache, delete its file under `~/.lore/cache/repo/` (`lore where` names it) and the next command rebuilds it |
 | `E_NETWORK_FS` | 23 | the database sits on a network or cloud-synced drive, where it can break silently | move the project to a local folder (git still shares the notes), or set `LORE_ALLOW_NETWORK_FS=1` |
 | `E_INODE_MISMATCH` | 23 | the database file was replaced while lore had it open. Not raised yet | check what else touches the file |
 | `E_DISK_FULL` | 23 | the disk is full; nothing was changed | free some space or files on that disk (`df -h`, `df -i`) and run the command again |
@@ -107,7 +107,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 |---|---|---|---|
 | `E_SECRET_DETECTED` | 23 | the text looks like it holds a password or key, so lore will not store it | remove the secret; in 0.1.18 a write asks first instead (`E_NEEDS_CONFIRM`, [below](#when-a-write-looks-like-it-holds-a-secret)); a bare `--yes` is not enough: say `--not-a-secret --reason "<why>" --yes`, `--secret-ref` or `--secret-unstored` |
 | `E_ROOT_REFUSED` | 23 | lore will not run as the root user | run as your normal user, or set `LORE_ALLOW_ROOT=1` |
-| `E_SYMLINK_DB` | 23 | a file lore writes is a symbolic link (a shortcut to another file): the cache `.lore/lore-cache.db` or its side files, the machine store or local state under `~/.lore`, the store lock `.lore/lock`, or an audit file | delete the link; the next lore command rebuilds the cache from `.lore/data` |
+| `E_SYMLINK_DB` | 23 | a file lore writes is a symbolic link (a shortcut to another file): the repo cache under `~/.lore/cache/repo/` or its side files, the machine store or local state under `~/.lore`, the store lock `.lore/lock`, or an audit file | delete the link; the next lore command rebuilds the cache from `.lore/data` |
 | `E_SYMLINK_LOOP` | 23 | a chain of symbolic links loops, or is longer than 40 links: a tool's skill folder (`lore skill status`, `lore skill install`) or a file render writes | fix or remove the link the message names |
 | `E_UID_MISMATCH` | 23 | lore runs as a different user than the owner of your home folder. Not raised yet | run without `sudo` |
 

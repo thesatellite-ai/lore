@@ -370,14 +370,14 @@ ERROR: [E_META_UNKNOWN] rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 has no metadata key
 alice (work/website)$ lore store init me
 lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to alice <alice@agency.example> (it was alice@agency.example, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
 lore store init: set user.name and user.email in the store clone ~/.lore/stores/other/notes (.git/config) to alice <alice@agency.example> (it was alice@example.com, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
-✓ created store me (sto_3b6283bc4392c556bbae5f094246e913) at file://~/.lore/stores/me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+✓ created store me (sto_3b6283bc4392c556bbae5f094246e913) at file://~/.lore/stores/_me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 alice (work/website)$ lore memory add --to me --everywhere --body 'I write short commit messages'
 ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 alice (work/website)$ lore memory add --to me --body 'I write short commit messages'
-lore: wrote ~/.lore/stores/me/_store/actors/act_f147dd95f1aaf742dd4f5214843a5139.json (store me)
-lore: wrote ~/.lore/stores/me/_store/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json (store me)
+lore: wrote ~/.lore/stores/_me/_store/actors/act_f147dd95f1aaf742dd4f5214843a5139.json (store me)
+lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json (store me)
 ✓ mem_2537f9b2f7de77bfe5ca958860216bbb [me]
   scope: [master]
 alice (work/landing)$ lore memory list

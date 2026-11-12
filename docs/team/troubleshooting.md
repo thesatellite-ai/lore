@@ -70,13 +70,13 @@ A **store** is a separate private repo that holds only lore notes, like a locked
 ```console
 # alice, in website
 $ lore whoami
-ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
+ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
   hint: point stores: at a repo made with `lore store init <name> <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 
 # alice, in ~
 $ lore store doctor
-ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files such as .gitignore, AGENTS.md, package.json, src/)
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
   hint: fix each problem, then run `lore store doctor` again
 (exit 20)
 ```
@@ -283,7 +283,7 @@ The id you typed does not have the shape of a lore id (a prefix, `_`, then 32 he
 
 ## `E_SYMLINK_DB`: a lore file is a symbolic link
 
-Lore never writes its own files through a symbolic link, because a repository can carry a link that points anywhere on your disk. It refuses (exit 23) when any of these is a link: the local cache (`.lore/lore-cache.db` and its side files), the machine store and local state under `~/.lore`, the store lock `.lore/lock`, and the audit files (`.lore/state/audit-v2.jsonl` and the per-store and batch logs). Delete the link; lore rebuilds the cache from `.lore/data` on the next command. Two related files answer `E_REFUSED` instead: `.lore/LORE.md` may be a link only while it stays inside the repository, and `.gitignore` is never written through a link that leads out of it. A folder above these files that is a link (your own layout, such as a repo under a linked `~/work`) is fine.
+Lore never writes its own files through a symbolic link, because a repository can carry a link that points anywhere on your disk. It refuses (exit 23) when any of these is a link: the local cache (under `~/.lore/cache/`, with its side files), the machine store and local state under `~/.lore`, the store lock `.lore/lock`, and the audit files (`.lore/state/audit-v2.jsonl` and the per-store and batch logs). Delete the link; lore rebuilds the cache from `.lore/data` on the next command. Two related files answer `E_REFUSED` instead: `.lore/LORE.md` may be a link only while it stays inside the repository, and `.gitignore` is never written through a link that leads out of it. A folder above these files that is a link (your own layout, such as a repo under a linked `~/work`) is fine.
 
 ## Team profile errors
 
@@ -342,6 +342,8 @@ The repo has no org, so its roster is the repo's own committed `.lore/data`, and
 
 ## Where a store's clone lives
 
+[Stores as plain folders](../sync/store-clones.md) walks through a clone step by step; this section is the short version.
+
 Each git store has one clone on your machine, a normal git clone you can open and browse: `~/.lore/stores/<owner>/<repo>/` (the host is not in the path). Its files are the store's files; `.git/` inside is git's own, and `.git/lore/` holds what lore keeps for itself: the store lock (`lock`), the pending audit journal (`state/`), and the fetch and push stamps. Nothing of lore's sits among the store's files. A store pinned to a branch is its own clone at `<repo>@<branch>/`. Two stores whose paths agree on different hosts get `<repo>/` and `<repo>~2/`; `~/.lore/state/store-clones.json` records the second one. To use a clone you made yourself (`git clone <url> ~/work/notes`), run `lore store use ~/work/notes`; `lore store use --default <store>` goes back to lore's own clone and leaves yours alone.
 
 Inside the clone a folder's rows sit right under it: `client/tasks/tsk_….json`, `client/_meta.json` (the folder's id and repo links), `org/lore-org.yaml` (the org's suggested settings), and the store's own rows (its root folder) in `_store/` (`_store/tasks/`, `_store/memories/`, …, `_store/_meta.json`), so every other top-level folder is a project or the org folder. There is no `.lore/data` inside a store; a code repo keeps its own rows in `.lore/data`, apart from its code. A store folder may not be named like a kind of row, nor start with `_` or `.` (`_store` is lore's): `lore store folder add <store> tasks` is refused with the list of reserved names. Lore writes a `README.md` into each store once, with its next commit there, explaining the folders and how to edit a row by hand (`lore edit <id>`, `lore path <id>`); it never writes it again, and `lore doctor` notes a store without one (`store_readme`). You may edit, add, delete or move row files there by hand, or use plain git: the next lore command checks each change, commits the valid ones as you and refuses a broken file with its line and reason ([Editing by hand](../sync/editing-by-hand.md)); `lore doctor` names files there that are not rows and row files still waiting to be committed (`store_files`). A store that is a plain folder (`file://…`) keeps lore's lock and pending journal in `.lore-state/` at its top.
@@ -350,7 +352,7 @@ Inside the clone a folder's rows sit right under it: `client/tasks/tsk_….json`
 
 ## "Database is locked" and slow commands
 
-Lore keeps a local cache (`.lore/lore.db`) and takes a short lock while it writes. Two lore commands at once in one checkout (a hook and your own command, say) wait for each other. `E_LOCK_HELD` (another lore process holds the project lock), `E_DB_LOCKED` or `E_BUSY_TIMEOUT` means the wait ran out. These three are in the [error reference](../reference/cli-commands.md#errors); unlike the other errors on this page, the example script does not reproduce them. Run the command again; `lore doctor` checks the cache. A claim or a live write is a trip to the remote and back, about one to two seconds. `--trace` shows where the time goes.
+Lore keeps a local cache (under `~/.lore/cache/`) and takes a short lock while it writes. Two lore commands at once in one checkout (a hook and your own command, say) wait for each other. `E_LOCK_HELD` (another lore process holds the project lock), `E_DB_LOCKED` or `E_BUSY_TIMEOUT` means the wait ran out. These three are in the [error reference](../reference/cli-commands.md#errors); unlike the other errors on this page, the example script does not reproduce them. Run the command again; `lore doctor` checks the cache. A claim or a live write is a trip to the remote and back, about one to two seconds. `--trace` shows where the time goes.
 
 ## FAQ
 
@@ -374,7 +376,7 @@ Lore keeps a local cache (`.lore/lore.db`) and takes a short lock while it write
 
 **I work for two companies. Can their notes mix?** No. A repo loads exactly one org; your personal notes are filed per org. See [One person in two companies](use-cases/two-companies.md).
 
-**Is `lore.db` per repo?** Yes, one per checkout, holding this branch's and this repo's live rows only. Store and personal rows are cached outside the checkout in `~/.lore/cache/<project-id>.db`. Both can be rebuilt from the files at any time.
+**Is the cache per repo?** Yes, one file per checkout, `~/.lore/cache/repo/<repo folder>-<hash>.db`, holding this branch's and this repo's live rows only; nothing of it is in the checkout. Store rows are cached per store folder in `~/.lore/cache/stores/<store id>/<branch>/<folder>.db`. Both can be rebuilt from the files at any time.
 
 **What if GitHub's "Download ZIP", a fork or a shallow clone is used?** They do not carry `refs/lore/*`. That is why live rows are temporary and open rows are copied to `main` at their max age (7 days). `lore doctor` warns when rows exist only in live.
 

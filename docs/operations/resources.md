@@ -549,7 +549,7 @@ $ lore resource field add server access_key --type text
 lore: wrote ~/work/infra/.lore/data/kind_fields/fld_ada3…c018.json
 added field fld_…c018 server.access_key (text)
 $ lore resource edit hub_prod_new --set access_key=AKIA''IOSFODNN7EXAMPLE
-ERROR: [E_NEEDS_CONFIRM] fields looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+ERROR: [E_NEEDS_CONFIRM] fields looks like a secret (aws_access_key) at line 1: sha256:1a5d44a2dca1: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 $ lore resource edit hub_prod_new --set access_key=AKIA''IOSFODNN7EXAMPLE --secret-ref gopass://acme/hub/aws-key --yes

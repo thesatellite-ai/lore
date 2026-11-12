@@ -59,6 +59,8 @@ Each step builds on the one before, from your first rule in one repo to a team w
 | run lore in CI | [Use lore in CI](operations/ci.md) | [`ops`](../tests/docs/sections/ops.sh) ([output](../tests/docs/transcripts/ops.txt)) |
 | call lore from another program over HTTP | [Local REST API](reference/rest-api.md) | [`api`](../tests/docs/sections/api.sh) ([output](../tests/docs/transcripts/api.txt)) |
 | find out what an error means | [Error codes and exit statuses](reference/errors.md), [Troubleshooting](team/troubleshooting.md) | [`reference`](../tests/docs/sections/reference.sh) ([output](../tests/docs/transcripts/reference.txt)), [`errors`](../tests/team/docs/transcripts/errors.txt) |
+| know what every file in `~/.lore`, a store clone or my repo is, and what lore wrote there | [Where lore keeps things](operations/where-lore-keeps-things.md), [Stores as plain folders](sync/store-clones.md) | [`files`](../tests/docs/sections/files.sh) ([output](../tests/docs/transcripts/files.txt)) |
+| open a store's notes in my editor, change or delete one by hand, or use plain git in a store | [Editing by hand](sync/editing-by-hand.md), [Edit a row in your editor](knowledge/editing-rows.md) | [`files`](../tests/docs/sections/files.sh) ([output](../tests/docs/transcripts/files.txt)) |
 | look up one command, flag or setting | [Reference](reference/README.md), [Feature index](reference/features.md) | — |
 
 ## Every page
@@ -76,7 +78,7 @@ Each step builds on the one before, from your first rule in one repo to a team w
 - [Render and agent files](knowledge/render-and-agent-files.md): `lore render`, other agent files, the directive block, what the tool read, and skill files.
 - [Keep the lore skill current](knowledge/skill-install.md): `lore skill install` and `lore skill status`, the `lore_version` line.
 - [Browse your notes in the terminal](knowledge/tui.md): `lore tui`.
-- [Edit a row in your editor](knowledge/editing-rows.md): `lore edit <id>` and `lore path <id>`.
+- [Edit a row in your editor](knowledge/editing-rows.md): `lore edit <id>` opens any row as Markdown in your editor; `lore path <id>` prints its file.
 
 ### Tasks, missions and plans
 
@@ -100,6 +102,8 @@ Each step builds on the one before, from your first rule in one repo to a team w
 - [The GitHub workflow](sync/github-workflow.md): let GitHub merge note files with lore.
 - [Projects and repos](sync/multi-repo-projects.md): projects, repos inside a project, and renamed repos.
 - [One store for several repos](sync/shared-database-mode-b.md): one folder store attached in each repo; converting an old shared-database (Mode B) repo with `lore migrate run`.
+- [Stores as plain folders](sync/store-clones.md): a store is a plain git clone at `~/.lore/stores/<owner>/<repo>`: what is in it, its `README.md`, short names, your own clone with `lore store use`, and the move from an earlier build.
+- [Editing by hand](sync/editing-by-hand.md): change, add, delete or move row files in a store clone with any editor, or use plain `git pull` / `git commit` there; what lore checks and commits.
 - [Your stores: list, move, retire](sync/stores.md): `lore store init`, list, visibility, a moved store, folders, moving a note into a store, and detaching one.
 
 ### Keep lore healthy and safe
@@ -113,7 +117,8 @@ Each step builds on the one before, from your first rule in one repo to a team w
 - [Use lore in CI](operations/ci.md): read-only mode, quiet hints, and failing a job on a bad health check.
 - [Your settings and team rules](operations/plugins-and-db-config.md): `lore config` and `lore policy`.
 - [Resources: servers, domains and the services on them](operations/resources.md): `lore resource`, typed rows for your infrastructure, what depends on what, import and export, vault references instead of secrets.
-- [Upgrade lore](operations/upgrade.md): `lore upgrade`, version pins for the team and CI, and the daily new-release line.
+- [Upgrade lore](operations/upgrade.md): `lore upgrade`, `lore fix` (one command that brings a project up to date, `--all` for every repo), version pins for the team and CI, and the daily new-release line.
+- [Where lore keeps things](operations/where-lore-keeps-things.md): `lore where` (also `lore files`) lists every file, folder, git config entry and ref lore keeps on this machine and in this repo; `~/.lore/README.md` and the home layout.
 
 ### Lore for teams
 

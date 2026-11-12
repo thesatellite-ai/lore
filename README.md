@@ -268,7 +268,7 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 |---|---|
 | `lore doctor` | Health checks (the local cache, attached stores, sync state, team versions); `--fix` repairs what it safely can |
 | `lore audit verify` / `lore audit log` | Hash-chained log of every change lore makes on this machine; `verify` flags edited or deleted entries |
-| `lore search rebuild` | Rebuild the search index from `.lore/data`; a damaged cache (`.lore/lore-cache.db`) is rebuilt by the next command after you delete it |
+| `lore search rebuild` | Rebuild the search index from `.lore/data`; a damaged cache (under `~/.lore/cache/repo/`) is rebuilt by the next command after you delete it |
 | `lore support-bundle` | Produce a sanitized incident-report bundle |
 | `lore snapshot` | Point-in-time knowledge captures (logical, not file backup) |
 
@@ -312,11 +312,10 @@ Read on in [docs/team](docs/team/README.md): [overview](docs/team/overview.md), 
 ## Team sync through git
 
 <!-- ds:block id=sync-datanames-dgnn2vn8 -->
-lore keeps a fast local cache in `.lore/lore-cache.db` (gitignored) and writes every shared row as one canonical JSON file under `.lore/data/<table>/<id>.json`, which you commit. Git then does everything else: branches, merges, history, review, access control.
+lore keeps a fast local cache in its home folder (`~/.lore/cache/repo/<repo folder>-<hash>.db`, never in the repo) and writes every shared row as one canonical JSON file under `.lore/data/<table>/<id>.json`, which you commit. Git then does everything else: branches, merges, history, review, access control.
 
 ```
 .lore/
-  lore-cache.db                    gitignored — local cache, rebuilt from data/ any time
   data/                            COMMITTED — the shared knowledge
     _meta.json                     pins the project id for every clone
     rules/rul_0192….json
@@ -336,7 +335,7 @@ lore keeps a fast local cache in `.lore/lore-cache.db` (gitignored) and writes e
 <!-- ds:block id=sync-strategyfor-db9rgsqn -->
 **Merges.** One file per row means two people adding knowledge never conflict. Editing *different fields* of the same row merges cleanly through lore's git merge driver; editing the *same text* on two branches is a real conflict that a person settles. List fields that are sets (labels, approvers, team members, project links) merge both sides' additions and never conflict, and an edit beats a delete. Details, and what happens in pull requests, in [Merges and pull requests](#merges-and-pull-requests).
 
-**The files are the truth.** Every lore command writes the row file and updates the cache in the same step; `.lore/lore-cache.db` is only a cache, rebuilt from `.lore/data` at any time, so never edit it by hand. A row whose file disappears goes to `lore trash list --local` first, and its file is still in git, so a `git clean` or a stash is always recoverable.
+**The files are the truth.** Every lore command writes the row file and updates the cache in the same step; the cache under `~/.lore/cache/` is only a cache, rebuilt from `.lore/data` at any time, so never edit it by hand. A row whose file disappears goes to `lore trash list --local` first, and its file is still in git, so a `git clean` or a stash is always recoverable.
 
 **Existing projects.** A repo with v0.1.17 data is converted once with `lore migrate run`: it keeps a local backup ref, and `lore migrate rollback` undoes it. `--dry-run` lists what it would change first.
 
@@ -426,7 +425,7 @@ Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses 
 
 **Won't a large memory bloat my context window?** No. The hybrid render pins only `must`-severity rules and critical hotfixes into the file; everything else surfaces on demand via `lore search`. Context stays small even as the knowledge base grows.
 
-**Can my team share project memory?** Yes — through git. Every shared row lives as a JSON file under `.lore/data/`; commit it with your code and it follows branches, merges with PRs, and reaches teammates on `git pull`. Each developer's local cache (`.lore/lore-cache.db`) is rebuilt from those files. See [Team sync through git](#team-sync-through-git).
+**Can my team share project memory?** Yes — through git. Every shared row lives as a JSON file under `.lore/data/`; commit it with your code and it follows branches, merges with PRs, and reaches teammates on `git pull`. Each developer's local cache (under `~/.lore/cache/`) is rebuilt from those files. See [Team sync through git](#team-sync-through-git).
 
 **What happens when two people edit the same rule on different branches?** Different fields merge automatically through lore's merge driver. The same text edited twice is a real conflict: git stops, the conflict markers sit inside the JSON value, and lore shows both versions but will not let you commit the file until you pick one with `lore <entity> edit`.
 

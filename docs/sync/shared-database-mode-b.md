@@ -126,7 +126,6 @@ $ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
 project_id: prj_4f89…b64b
 $ lore rule list
-lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run lore fix
   hint: `lore fix --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
@@ -139,6 +138,7 @@ Would upgrade 2 rows
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 Nothing written (dry run).
 $ lore migrate run
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 2 rows
   mode-b: memories/mem_77cb…76c4 → store shared (~/.lore/stores/infra)
   mode-b: rules/rul_d191…45c2 → store shared (~/.lore/stores/infra)
@@ -149,7 +149,6 @@ backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 team lock released
 $ ls .lore; cat .lore/stores.yaml
-lore-cache.db
 lore.yaml.migrated
 state
 stores.yaml

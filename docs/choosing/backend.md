@@ -6,20 +6,20 @@
 
 | Option | How you choose it | What lore does with the files | Who sees the notes | Its cache |
 |---|---|---|---|---|
-| **The repo** (always there) | `lore init`; every write without `--to` | writes `.lore/data/<table>/<id>.json` in your checkout and never commits: you commit the files with your code | everyone who can read the repo | `.lore/lore-cache.db`, listed in `.gitignore` |
-| **Folder store** | `lore store init <name> file:///<absolute path>`, then `--to <name>` | writes the same files under `<folder>/.lore/data`, with no git and no network | only people on this machine | `~/.lore/cache/stores/<store id>/local/<folder>.db` |
+| **The repo** (always there) | `lore init`; every write without `--to` | writes `.lore/data/<table>/<id>.json` in your checkout and never commits: you commit the files with your code | everyone who can read the repo | `~/.lore/cache/repo/<repo folder>-<hash>.db`, in lore's home, never in the repo |
+| **Folder store** | `lore store init <name> file:///<absolute path>`, then `--to <name>` | writes the same files under `<folder>/<table>/` (the store's own rows under `_store/<table>/`), with no git and no network | only people on this machine | `~/.lore/cache/stores/<store id>/local/<folder>.db` |
 | **Git store** | `lore store init <name> git@github.com:acme/notes` (or `ssh://`, `https://`, `http://`), then `--to <name>` or `lore org link` | keeps a plain git clone at `~/.lore/stores/<owner>/<repo>` (or your own clone: `lore store use <path>`), makes one commit per write and pushes it at once; fetches again when the last fetch is older than `live.fetch_ttl` (60 seconds) | everyone GitHub lets open that repo | `~/.lore/cache/stores/<store id>/<branch>/<folder>.db` |
 | **Personal store `me`** | `personal.store` in `~/.lore/config.yaml`; `lore store init me` with no address makes `file://~/.lore/stores/_me` | a folder store or a git store, as its address says; `--to me` writes there | only you | as for its kind |
 | **Live list** of the repo | `--live`, and tasks, missions, handoffs and comments by default | rows on the hidden ref `refs/lore/live` of the repo's own remote, pushed and fetched by lore | everyone who can clone the repo | the repo cache |
 | **Machine store** (automatic) | nothing: runs, sessions and other rows that only mean something on this machine | `~/.lore/state/machine.db`, never synced | only this machine | `~/.lore/cache/machine-store.db` |
 
-Both file backends lay rows out byte for byte the same way (`<store root>/<folder>/.lore/data/<table>/<id>.json`, plus a `lore-store.yaml` marker at the root of a store), so a folder store and a git store differ only in how the files travel. The older shared-database setup (v0.1.17 "Mode B": one database file and a `.lore/lore.yaml` pointer in each repo) is gone; `lore migrate run` turns such a repo into one that uses a store (see [Where your notes live](database-mode.md)).
+Both store backends lay rows out byte for byte the same way (`<store root>/<folder>/<table>/<id>.json`, the store's own rows in `<store root>/_store/<table>/<id>.json`, a `README.md` and a `lore-store.yaml` marker at the root; see [Stores as plain folders](../sync/store-clones.md)), so a folder store and a git store differ only in how the files travel. The older shared-database setup (v0.1.17 "Mode B": one database file and a `.lore/lore.yaml` pointer in each repo) is gone; `lore migrate run` turns such a repo into one that uses a store (see [Where your notes live](database-mode.md)).
 
 ## The cache
 
-The cache is never the truth. Lore keeps every row it read from the files and builds its tables from them, so search, lists, `lore sql` and `lore render` are fast. When a lore upgrade changes a table, or a cache file is damaged, lore drops it and builds it again from the files on the next command, and a damaged repo cache is moved to `.lore/backups/` first. You never commit it and never back it up.
+The cache is never the truth. Lore keeps every row it read from the files and builds its tables from them, so search, lists, `lore sql` and `lore render` are fast. When a lore upgrade changes a table, or a cache file is damaged, lore drops it and builds it again from the files on the next command, and a damaged cache file is first moved aside beside itself (`<file>.corrupt-<time>`). You never commit it and never back it up.
 
-- Each clone and each git worktree has its own repo cache.
+- Each clone and each git worktree has its own repo cache, `~/.lore/cache/repo/<repo folder>-<hash>.db`, in lore's home and never in the repo (a moved or renamed repo folder gets a fresh one).
 - Caches of store folders live under `~/.lore/cache/stores/`, named by the store's permanent id, so every repo on the machine that attaches the same store folder shares one file.
 - A repo that attaches more than nine store folders gets one combined cache, `~/.lore/cache/combined/<hash>.db`, instead of one file per folder.
 - `lore cache prune` lists the cache files of stores no repo on this machine attaches any more, and removes them after asking.
@@ -72,11 +72,17 @@ $ find ~/stores/notes -type f | sort
 ~/stores/notes/lore-store.yaml
 $ ls .lore/data/rules
 rul_05e9…4603.json
-$ git check-ignore -v .lore/lore-cache.db
-.gitignore:9:.lore/lore-cache.db	.lore/lore-cache.db
-$ find ~/.lore/cache -name '*.db' | sed 's#/sto_[0-9a-z]*/#/<store id>/#'
-~/.lore/cache/stores/<store id>/local/root.db
+$ ls -a .lore
+.
+..
+data
+lock
+state
+stores.yaml
+$ find ~/.lore/cache -name '*.db' | sed -e 's#/sto_[0-9a-z]*/#/<store id>/#' -e 's/-[0-9a-f]\{12\}\.db/-<hash>.db/' | sort
 ~/.lore/cache/machine-store.db
+~/.lore/cache/repo/website-<hash>.db
+~/.lore/cache/stores/<store id>/local/root.db
 ```
 <!-- /example -->
 

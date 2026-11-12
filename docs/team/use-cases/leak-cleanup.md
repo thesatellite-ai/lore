@@ -20,7 +20,6 @@ The mistake, and what the client sees:
 ```console
 # alice, in website
 $ lore task add 'chase the client about the unpaid March invoice' --to repo
-lore task add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/work/website/.lore/data
 ✓ tsk_7a67…9504 — chase the client about the unpaid March invoice [medium]

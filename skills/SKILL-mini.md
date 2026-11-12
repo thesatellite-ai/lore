@@ -143,7 +143,7 @@ Examples:
 |---|---|
 | "Delete the .lore dir entirely — wipe everything." | check `git status .lore/data` is clean first, then warn: "This is irreversible. Confirm and I'll proceed." Do NOT emit `rm -rf .lore` without confirmation. |
 | "Drop all rules." | suggest `lore rule list --json` to review, then `lore rule archive` per rule (or `rule delete --yes`, which moves it to the trash). |
-| "Reset the DB." | `lore doctor` first; the DB is a cache of `.lore/data`: `rm -f .lore/lore-cache.db*`: the next command rebuilds it. |
+| "Reset the DB." | `lore doctor` first; the DB is a cache of `.lore/data`: `rm -f ~/.lore/cache/repo/<repo folder>-*`: the next command rebuilds it. |
 | "Start completely fresh." | Same as "delete": commit first, confirm, then proceed. |
 
 Never emit a bare `rm -rf .lore` or `DROP TABLE` or destructive SQL.
@@ -288,7 +288,7 @@ T[what decisions about X?]               → decision list --json | jq '.data[]|
 T[who am I | what identity | whoami in lore]
                                           → lore identity show
 T[DB is broken | rebuild the DB | E_DB_CORRUPT]
-                                          → rm -f .lore/lore-cache.db*   (the next command rebuilds from .lore/data)
+                                          → rm -f ~/.lore/cache/repo/<repo folder>-*   (the next command rebuilds from .lore/data)
 
 T[remove my persisted identity | go back to auto-detected | unset identity | reset identity file]
                                           → lore identity unset
@@ -429,7 +429,7 @@ P6  notes shared by sibling projects (a store; Mode B is retired)
 
 P7  disaster recovery
     lore doctor --json
-    rm -f .lore/lore-cache.db*   # the next command rebuilds the cache from .lore/data
+    rm -f ~/.lore/cache/repo/<repo folder>-*   # the next command rebuilds the cache from .lore/data
     lore search rebuild
     # .lore/data itself deleted: git checkout HEAD -- .lore/data
     lore render
@@ -546,7 +546,7 @@ E_CONTENDED            another writer won every attempt; retry after a short wai
 E_OFFLINE              remote unreachable; nothing queued, retry online
 E_META_STORE_UNREADABLE  metadata write in a client repo, org store unreachable; nothing written, retry online
 E_META_QUARANTINED     lore meta show <id> prints each problem and its fix
-E_DB_CORRUPT           rm -f .lore/lore-cache.db* (the next command rebuilds it from .lore/data)
+E_DB_CORRUPT           rm -f ~/.lore/cache/repo/<repo folder>-* (the next command rebuilds it from .lore/data)
 E_NOT_PROJECT_ROOT     cd to project root (--db is refused on row commands)
 E_AMBIGUOUS_PROJECT    the repo holds several projects; pass --project
 E_SECRET_DETECTED      strip secret, or --secret-ref "<mgr>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes (bare --yes does not store it)

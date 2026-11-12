@@ -25,7 +25,7 @@ Alice (an agency developer) tries to save a deploy key as a memory. lore stops, 
 ```console
 # alice, in website
 $ lore memory add --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
-ERROR: [E_NEEDS_CONFIRM] body looks like a secret (aws_access_key) at line 1: AKIAI…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+ERROR: [E_NEEDS_CONFIRM] body looks like a secret (aws_access_key) at line 1: sha256:1a5d44a2dca1: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 ```
@@ -270,7 +270,7 @@ $ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 invoice-number	on	repo	this repo	our invoice numbers
 $ lore memory add --body 'Invoice INV-123456 is still open'
-ERROR: [E_NEEDS_CONFIRM] body looks like a secret (invoice-number) at line 1: IN…: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
+ERROR: [E_NEEDS_CONFIRM] body looks like a secret (invoice-number) at line 1: sha256:0f8bf3d8b84d: redact it with a reference, mark it unstored, mark it not a secret, or cancel?
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 ```
@@ -359,11 +359,11 @@ $ cat .lore/lore.yaml
 db_path: ../client.db
 project_id: prj_4c59…6c38
 $ lore migrate run --dry-run
-lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
   hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
 (exit 20)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
   mode-b: rules/rul_3b62…e913 → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
@@ -398,7 +398,7 @@ gopass://acme/website/staging-deploy	-	mem_7a67…9504 body	-
 ## Pitfalls
 
 - **The check looks at shapes, not meaning.** A password written as plain words ("the password is blue-horse-42") does not match any pattern. Never rely on lore as your only guard.
-- **Rows confirmed with `--yes` live in your local database too.** `.lore/lore.db` and the copies lore keeps in `.lore/backups/` hold them. Do not put either in a shared folder.
+- **Rows confirmed with `--yes` live in your local database too.** The repo cache under `~/.lore/cache/repo/` and a damaged copy lore moved aside there hold them. Do not put either in a shared folder.
 - **A forced row keeps a warning in `lore doctor` while it exists.** Each refused file shows as a `secret-detected` warning and makes doctor DEGRADED. Edit the text or delete the row; once the row is gone, doctor drops the warning.
 - **`lore pii-pattern list` is not your rule list.** It shows only patterns left over from v0.1.17, which nothing checks; `lore secrets rules` shows the rules lore uses.
 - **`lore secrets list` never opens a password manager.** Its STATE column is this machine's last `lore secrets check`, or `-` when there was none; run the check to refresh it. A manager whose program is not installed shows `not_checked`, not `missing`.

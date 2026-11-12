@@ -33,16 +33,16 @@ on alice work/website "git status --short .lore/data"
 on alice work/website "lore audit verify"
 on alice work/website "git restore .lore/data && lore rule list"
 
-# The local cache file gets damaged (here: its first bytes are overwritten).
-quiet alice work/website "printf 'this is not a db' | dd of=.lore/lore-cache.db bs=1 conv=notrunc 2>/dev/null"
+# The repo's local cache file (under ~/.lore/cache/repo/) gets damaged (here: its first bytes are overwritten).
+quiet alice work/website "printf 'this is not a db' | dd of=\$(ls ~/.lore/cache/repo/website-*.db) bs=1 conv=notrunc 2>/dev/null"
 
 note "damaged database"
 on alice work/website "lore rule list"
 on alice work/website "lore doctor | grep '^Status'"
-quiet alice work/website "rm -rf .lore/backups"
+quiet alice work/website "rm -f ~/.lore/cache/repo/*.corrupt-*"
 
 note "rebuild from data"
-on alice work/website "rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm"
+on alice work/website "rm -f ~/.lore/cache/repo/website-*"
 on alice work/website "lore rule list"
 on alice work/website "lore doctor | grep '^Status'"
 
@@ -113,9 +113,9 @@ on alice work/website "cp .lore/data/_meta.json ~/meta.copy && python3 -c \"impo
 on alice work/website "cp ~/meta.copy .lore/data/_meta.json && lore doctor | grep '^Status'"
 
 note "try cache"
-on alice work/website "rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm && ls .lore"
+on alice work/website "rm -f ~/.lore/cache/repo/website-* && (ls ~/.lore/cache/repo | grep website || echo 'no cache file for website')"
 on alice work/website "lore doctor | grep '^Status'"
-on alice work/website "ls .lore"
+on alice work/website "ls ~/.lore/cache/repo | grep website | sed 's/-[0-9a-f]\{12\}\./-<hash>./'"
 
 note "config refusals"
 on! alice work/website "lore config set live.autopush maybe"

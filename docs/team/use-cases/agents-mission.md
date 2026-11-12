@@ -194,13 +194,14 @@ ERROR: [E_NO_WORK] nothing ready:
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
-lore: pushed store agency: commit 59e9d31 to branch main
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 7540e63)
+lore: store agency: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 59e9d31)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
+lore: pushed store agency: commit 7540e63 to branch main
 lore: pushed store agency: commit ef62c83 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
@@ -286,6 +287,7 @@ The deploy task waits for every task it depends on to be merged. `agent-infra` f
 ```console
 # agent-coord, in api
 $ lore task next --mission msn_2ad3…f891 --role coordinator
+lore: pushed store agency: commit 40bd5f4 to branch main
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: waits for tsk_05e9…4603 to be merged (done, merge unknown)
   hint: lore task board shows what each task waits on
@@ -293,7 +295,6 @@ ERROR: [E_NO_WORK] nothing ready:
 
 # alice, in infra
 $ lore task merged tsk_05e9…4603
-lore task merged: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store agency: commit 1c99293 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
 ✓ tsk_05e9…4603 merged (marked by hand, 11:04)

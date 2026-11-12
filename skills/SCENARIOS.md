@@ -291,7 +291,7 @@ lore doctor --json | jq '.warnings, .errors'
 ### F.3 "DB is corrupt"
 ```bash
 # the cache is built from .lore/data: delete it, the next command rebuilds it
-rm -f .lore/lore-cache.db*
+rm -f ~/.lore/cache/repo/<repo folder>-*
 lore doctor
 ```
 
@@ -529,8 +529,8 @@ LORE_ALLOW_ROOT=1 lore init
 # Refused with E_SYMLINK_DB: lore never writes a database, the store lock
 # (.lore/lock) or an audit file through a symbolic link. The message names
 # the file. Inspect the target, then delete the link; the next command recreates it.
-ls -la .lore/lore-cache.db
-rm .lore/lore-cache.db
+lore where | grep -A1 cache/repo   # the repo cache's file
+rm <the linked file>
 lore doctor
 ```
 
@@ -567,7 +567,7 @@ lore memory add --body "<corrected text>" --supersedes mem_<id>
 ### N.8 User: "rename the project"
 ```bash
 # 0.1.18 has no project rename command; tell the user. Never edit the
-# cache (.lore/lore-cache.db): it is rebuilt from .lore/data.
+# cache (~/.lore/cache/repo/<repo folder>-<hash>.db): it is rebuilt from .lore/data.
 ```
 
 ### N.9 User: "I deleted .lore/ by accident"
@@ -597,7 +597,7 @@ lore audit log --limit 50  # who changed what, newest first
 **Refuse.** Audit log is forensic (it lives in `~/.lore/state/machine.db` and is hash-chained). Suggest `lore audit log` to read it.
 
 ### O.4 User: "edit the lore database directly with sqlite3"
-**Refuse.** The cache `.lore/lore-cache.db` is rebuilt from `.lore/data`, so a direct edit is lost and skips validation and the secret checks. Use the CLI (N.6 / N.7); for read-only questions `lore sql "<SELECT …>"`.
+**Refuse.** The cache `~/.lore/cache/repo/<repo folder>-<hash>.db` is rebuilt from `.lore/data`, so a direct edit is lost and skips validation and the secret checks. Use the CLI (N.6 / N.7); for read-only questions `lore sql "<SELECT …>"`.
 
 ### O.5 User: "skip the migration check"
 **Refuse.** There is no migration check to skip in 0.1.18: the cache rebuilds itself. v0.1.17 data is converted once with `lore migrate run`; `E_OLD_LORE` means `lore upgrade`.

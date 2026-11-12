@@ -367,13 +367,14 @@ ERROR: [E_NO_WORK] nothing ready:
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
-lore: pushed store agency: commit 59e9d31 to branch main
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 7540e63)
+lore: store agency: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 59e9d31)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
+lore: pushed store agency: commit 7540e63 to branch main
 lore: pushed store agency: commit ef62c83 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
@@ -441,8 +442,8 @@ A **link** tells lore that a store folder holds the agency's private notes for o
 
 ## Store checks
 
-<!-- ds:block id=team-store-allowed-a7qb5uuj -->
-A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore folders plus `README*`, `LICENSE*`, `.gitattributes` and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/stores` or committed to by lore. `lore store init <name> <url>` turns a new empty repo into a store and attaches it; `lore store init <name> '<url>?branch=staging'` creates another store branch, and `lore store add <name> <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
+<!-- ds:block id=team-store-allowed-a7qb5uuj lines=1-30 -->
+A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore's files (row files at `<folder>/<table>/<id>.json` and `_store/<table>/<id>.json`, each folder's `_meta.json` and `_purged.json`, `lore-org.yaml`) plus `README*`, `LICENSE*`, `.gitattributes` and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/stores` or committed to by lore. `lore store init <name> <url>` turns a new empty repo into a store and attaches it; `lore store init <name> '<url>?branch=staging'` creates another store branch, and `lore store add <name> <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
 
 ## Leak guards
 
@@ -494,7 +495,7 @@ The guards catch copy-paste mistakes; they are not a wall. See [Cleaning up afte
                                             "private: never quote this content in committed files…"
  ~/.lore/render/<repo-id>/index.md          the list of those files
  ~/.lore/cache/<project-id>.db              store and personal rows for this repo (one org only)
- .lore/lore.db (in the checkout)            this repo's branch and live rows only
+ ~/.lore/cache/repo/<repo>-<hash>.db        this repo's branch and live rows only
 ```
 
 <!-- example: agency#render -->

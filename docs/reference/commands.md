@@ -235,8 +235,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore fix` … | Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them | — |
-| `lore fix run` | Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them | — |
+| `lore fix` … | Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them | [operations/upgrade › Fix a project: lore fix](../../docs/operations/upgrade.md#fix-a-project-lore-fix) |
+| `lore fix run` | Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them | [operations/upgrade › Fix a project: lore fix](../../docs/operations/upgrade.md#fix-a-project-lore-fix) |
 
 ### lore gate
 
@@ -836,7 +836,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore store set` | Set a store's push mode and history compaction (me, an org store as its admin, or a .lore/stores.yaml store) | [team/identity-and-stores › How writes reach the remote](../../docs/team/identity-and-stores.md#how-writes-reach-the-remote) |
 | `lore store set-url` | Record a store's new address (the store repo moved or was renamed); its id and rows stay | [sync/stores › Step 3 — Follow a store that moved](../../docs/sync/stores.md#step-3--follow-a-store-that-moved) |
 | `lore store show` | List the configured org stores, their clones and (with --links) the link index; with a store name, its push mode and compaction | [team/commands › lore store show](../../docs/team/commands.md#lore-store-show) |
-| `lore store use` | Use your own git clone of a store (cloned anywhere) instead of lore's clone under ~/.lore/stores; --default goes back | [team/troubleshooting › Where a store's clone lives](../../docs/team/troubleshooting.md#where-a-stores-clone-lives) |
+| `lore store use` | Use your own git clone of a store (cloned anywhere) instead of lore's clone under ~/.lore/stores; --default goes back | [sync/store-clones › Step 4 — Use a clone of your own](../../docs/sync/store-clones.md#step-4--use-a-clone-of-your-own) |
 | `lore store visibility` | Set whether a store's rows may reach client repos and committed files (internal or shareable) | [sync/stores › Step 2 — Decide whether its notes may reach client repos](../../docs/sync/stores.md#step-2--decide-whether-its-notes-may-reach-client-repos) |
 
 ### lore suggestion

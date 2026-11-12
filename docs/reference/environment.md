@@ -61,10 +61,10 @@ $ cat .lore/lore.yaml
 db_path: ${LORE_HOME}/client-docs.db
 project_id: prj_4c59…6c38
 $ lore migrate run --dry-run
-lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
 (exit 27)
 $ LORE_HOME=~/shared-dbs lore migrate run
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
   mode-b: rules/rul_3b62…e913 → store shared (~/shared-dbs/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
@@ -95,11 +95,11 @@ $ cat .lore/lore.yaml
 db_path: ../client.db
 project_id: prj_4c59…6c38
 $ lore migrate run --dry-run
-lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
   hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
 (exit 20)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
   mode-b: rules/rul_3b62…e913 → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog

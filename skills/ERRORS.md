@@ -109,7 +109,7 @@ Every code of 0.1.18, grouped. "Not raised" marks codes kept for compatibility t
 
 | Code | Exit | Meaning and fix |
 |---|---|---|
-| `E_DB_CORRUPT` | 23 | the local cache holds a record lore cannot read. Delete `.lore/lore-cache.db` (and its `-wal`/`-shm`): the next command rebuilds it from `.lore/data`. A cache file that cannot be opened at all is moved aside to `.lore/backups/` and rebuilt by itself |
+| `E_DB_CORRUPT` | 23 | the local cache holds a record lore cannot read. Delete the repo cache (`~/.lore/cache/repo/<repo folder>-*`, with its `-wal`/`-shm`): the next command rebuilds it from `.lore/data`. A cache file that cannot be opened at all is moved aside beside itself (`<file>.corrupt-<time>`) and rebuilt by itself |
 | `E_DB_NOT_FOUND` | 23 | a store's cache could not be attached; run the command again (it rebuilds) or check the store with `lore store list` |
 | `E_DISK_FULL` | 23 | no space left; nothing was written. Free space and run again |
 | `E_NETWORK_FS` | 23 | the store is in a cloud-sync folder (iCloud, Dropbox, OneDrive, Google Drive) or on NFS/SMB. Move the project to a local disk (git shares the notes); `LORE_ALLOW_NETWORK_FS=1` overrides at your own risk |
@@ -158,7 +158,7 @@ After upgrading lore
       coding tools' hooks).
 
 E_DB_CORRUPT
-    → rm -f .lore/lore-cache.db .lore/lore-cache.db-wal .lore/lore-cache.db-shm
+    → rm -f ~/.lore/cache/repo/<repo folder>-*
       the next command rebuilds it from .lore/data (nothing shared is lost;
       machine-local state lives in ~/.lore/state/machine.db and is untouched)
     → no .lore/data either: git checkout HEAD -- .lore/data first
@@ -193,8 +193,8 @@ E_AUDIT_CHAIN_BROKEN
     → `lore audit log` to inspect; tell the person (someone edited the log)
 
 E_SYNC_DATA_IGNORED
-    → a .gitignore rule hides .lore/data; ignore .lore/lore-cache.db,
-      .lore/state/ and .lore/backups/ instead of the whole .lore/
+    → a .gitignore rule hides .lore/data; ignore .lore/lock and
+      .lore/state/ instead of the whole .lore/
 
 E_NOT_PROJECT_ROOT
     → cd to the repo root, or run `lore init` there

@@ -66,11 +66,11 @@ $ git status --short
 ```
 <!-- /example -->
 
-The new files are plain text. The local cache (`.lore/lore-cache.db`) stays on your machine and is ignored by git. `.lore/data` holds one small file per row, and that is what you commit.
+The new files are plain text. The local cache stays on your machine, in lore's home (`~/.lore/cache/repo/`), never in the repo. `.lore/data` holds one small file per row, and that is what you commit.
 
 ## Step 2 — Nothing else to set up
 
-There is no setup step. lore builds its local cache (`.lore/lore-cache.db`, the search index included) from the files in `.lore/data` whenever it needs to, and keeps it in step after you upgrade lore, so a new version needs no command either. Two optional extras: `lore setup --agent-hooks` installs session and context hooks for the coding tools set up here, and `lore migrate run` is the one step for notes written by lore v0.1.17.
+There is no setup step. lore builds its local cache (under `~/.lore/cache/repo/`, the search index included) from the files in `.lore/data` whenever it needs to, and keeps it in step after you upgrade lore, so a new version needs no command either. Two optional extras: `lore setup --agent-hooks` installs session and context hooks for the coding tools set up here, and `lore migrate run` is the one step for notes written by lore v0.1.17.
 
 Plain `lore setup` opens the guided setup page (your setups, identity, GitHub, stores, tools and folders; see [Guided setup](../team/guided-setup.md)); you do not need it for one repo. `lore setup --schema-only` is the one step `lore upgrade` runs after it swaps the binary: it brings the local cache's schema up to date and prints nothing when there is nothing to do. You can run it yourself after installing a new version by hand:
 

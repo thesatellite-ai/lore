@@ -139,6 +139,10 @@ def main(path: str) -> None:
     times: dict[str, str] = {}
     text = NANOTIME.sub(lambda m: times.setdefault(m.group(0), f"2026-11-02T10:00:00.{len(times) + 1:09d}Z"), text)
     text = BACKUP.sub("20261102-100000.000000000-pre-sync", text)
+    # A code repo's cache under the lore home: <repo folder>-<12 hex of the repo path>.db (the path is
+    # under a random temp folder), and the wall-clock stamp of one moved aside.
+    text = re.sub(r"(cache/repo/[A-Za-z0-9._-]+?)-[0-9a-f]{12}(?=\.db)", lambda m: m.group(1) + "-<hash>", text)
+    text = re.sub(r"\.db\.corrupt-\d{8}T\d{6}Z", ".db.corrupt-20261102T100000Z", text)
     text = TRACE_TIME.sub(lambda m: m.group(1) + "<time>" + m.group(2), text)
     text = HOME_PATH.sub("~", text)
     left = LOCAL_PATH.search(text)

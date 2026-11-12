@@ -1,0 +1,411 @@
+
+### a git store
+alice (work/website)$ lore store init notes git@github.com:acme/notes
+lore store init: set user.name and user.email in the store clone ~/.lore/stores/acme/notes (.git/config) to alice <alice@agency.example>: your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+✓ created store notes (sto_7a670ae8548ed05bf57ad29ad0759504) at git@github.com:acme/notes; recorded in .lore/stores.yaml; commit it to share
+alice (work/website)$ lore task add 'Renew the TLS certificate' --to notes --no-live
+lore: pushed store notes: commit 601d285 to branch main
+lore: pushed store notes: commit 86dbae4 to branch main
+lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Renew the TLS certificate [medium] → [notes]
+alice (work/website)$ lore memory add --to notes --body 'The staging database is reset every Monday.'
+lore: pushed store notes: commit 9b40ce7 to branch main
+lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store notes)
+✓ mem_162df51b7f78b785c97c26b41ea89666 [notes]
+  scope: [master]
+
+### the store clone
+alice$ find ~/.lore/stores -maxdepth 3 -not -path '*/.git/*' | sort
+~/.lore/stores
+~/.lore/stores/acme
+~/.lore/stores/acme/notes
+~/.lore/stores/acme/notes/.git
+~/.lore/stores/acme/notes/README.md
+~/.lore/stores/acme/notes/_store
+~/.lore/stores/acme/notes/lore-store.yaml
+alice (.lore/stores/acme/notes)$ ls -a; cat lore-store.yaml
+.
+..
+.git
+README.md
+_store
+lore-store.yaml
+lore_store: 4
+id: sto_7a670ae8548ed05bf57ad29ad0759504
+visibility: internal
+created: "2026-11-02"
+alice (.lore/stores/acme/notes)$ find _store -type f | sort
+_store/actors/act_54fe984c9b495744c0217776765a28f2.json
+_store/machines/mch_05e99e22e9e86e96fe4daa7777994603.json
+_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+_store/task_lists/tlt_c0f3c11a5724b0cfd74b256190d9b5b8.json
+_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+alice (.lore/stores/acme/notes)$ cat _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+{
+  "_hlc": "2026-11-02T10:00:15.000Z/0000/act_54fe984c9b495744c0217776765a28f2",
+  "_o": {
+    "cmd": "memory add",
+    "git": {
+      "branch": "main",
+      "commit": "05513aa29b7881f12bc94eb06be8acf0d03eaed2",
+      "state": "branch"
+    },
+    "project": "prj_76bd560aff0771fab8457dbfa9823f10",
+    "repo": "rep_d4314eba822f1bf5908b2b8ded5f313a",
+    "store": "sto_7a670ae8548ed05bf57ad29ad0759504"
+  },
+  "_table": "memories",
+  "_v": 2,
+  "_w": {
+    "m": "mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff",
+    "v": "dev"
+  },
+  "body": "The staging database is reset every Monday.",
+  "created_at": "2026-11-02T10:00:00.000000001Z",
+  "created_by": "act_54fe984c9b495744c0217776765a28f2",
+  "created_by_actor_id": "act_54fe984c9b495744c0217776765a28f2",
+  "id": "mem_162df51b7f78b785c97c26b41ea89666",
+  "kind": "retrieved",
+  "project_id": "prj_76bd560aff0771fab8457dbfa9823f10",
+  "source_kind": "manual",
+  "trust_score": 0.5,
+  "tx_at": "2026-11-02T10:00:00.000000001Z",
+  "updated_at": "2026-11-02T10:00:00.000000001Z",
+  "updated_by": "act_54fe984c9b495744c0217776765a28f2"
+}
+alice (.lore/stores/acme/notes)$ ls .git/lore
+fetch-stamp
+identity
+lock
+push_stamp
+state
+alice (.lore/stores/acme/notes)$ head -12 README.md
+# A lore store
+
+This folder is a lore store: notes, rules, decisions, tasks and the other records a team keeps with lore. Every record is one small JSON file, so you can open, read and search the store with any editor, file browser or git tool. lore wrote this file; edit or replace it as you like, and lore leaves your version alone.
+
+## What the folders are
+
+- `lore-store.yaml`: the store's identity (its id, who may see its rows).
+- `_store/` holds the store's own records, the ones that belong to the whole store and to no project (actors, machines, store-wide rules and so on), one folder per kind of record: `_store/actors/act_….json`. Its name starts with `_`, which no project folder may, so it is never mistaken for one.
+- Every other folder is a project folder (a client, a project, a team) or the org folder, each holding one folder per kind of record, one file per record: `acme/tasks/tsk_….json`, `acme/memories/mem_….json`. Folders can nest (`team/web/tasks/`). A folder may not be named like a kind of record (`tasks`, `memories`, `rules`, ...) and may not start with `_` or `.`.
+- `_meta.json` in a folder holds the folder's id; `_purged.json` lists records removed for good. Leave both to lore.
+- `org/` (when the store has one) holds the company's people, teams and rules, and `org/lore-org.yaml`, the company's settings.
+alice (.lore/stores/acme/notes)$ git log --format='%an <%ae>  %s'
+alice <alice@agency.example>  lore: write mem_162df51b7f78b785c97c26b41ea89666
+alice <alice@agency.example>  lore: write mch_05e99e22e9e86e96fe4daa7777994603
+alice <alice@agency.example>  lore: write act_54fe984c9b495744c0217776765a28f2 (+2 more)
+alice <alice@agency.example>  lore: store init
+
+### the home folder
+alice$ ls ~/.lore
+README.md
+cache
+machine.json
+state
+stores
+alice$ head -20 ~/.lore/README.md
+<!-- written by lore, layout 2026-11-12.4; lore rewrites this file when its layout changes -->
+# lore's home on this machine
+
+This folder is where lore keeps what belongs to this machine: its settings, the stores it cloned, caches and small state files. Your notes themselves live in stores (git repositories or folders) and in your code repos' .lore/data folders; nothing here is synced by itself.
+
+`lore where` lists every file lore keeps on this machine and in the repo you run it in, one line each, with the store and repo each cache file belongs to (`lore where --json` for scripts). It also names anything in this folder lore does not recognise; lore never deletes such a file.
+
+Store cache files are named by a store id, not by a store name: two repos that call the same store by different names share one cache. A code repo's own cache is named by its folder name and a short hash of its path (cache/repo/<name>-<hash>.db), so two checkouts get two files and a moved or renamed repo folder gets a fresh one. `lore where` shows which store and repo each one serves.
+
+| path | what it is | if you edit or delete it |
+|---|---|---|
+| `README.md` | this map of lore's home, written by lore and rewritten when the layout changes | safe to delete: lore writes it again |
+| `config.yaml` | this machine's lore settings: setups, orgs, stores (YAML; `lore config check` validates it) | you may edit it; deleting it forgets every setup, org and store on this machine (the stores themselves are not touched) |
+| `config.yaml.lock` | the lock lore takes while it rewrites config.yaml | holds no data; safe to delete while no lore command runs |
+| `identity` | this machine's secret salt for your actor id (never synced) | deleting it makes lore treat you as a new person on this machine |
+| `machine.json` | this machine's id, kept so it stays the same between runs | deleting it makes lore work the id out again; where it was random, this machine then shows up as a new one |
+| `api-token` | the token clients of `lore api` send | deleting it makes `lore api` make a new one; clients then need the new token |
+| `state/` | machine-local state: never synced, and not rebuildable | do not delete the folder; the files below say what each one holds |
+| `state/machine.db` | the machine store: rows that only mean something on this machine (agent sessions, runs), the audit chain, doctor results and small local state (usage counts, secret-check times, unsent time entries) | do not edit it by hand; deleting it loses those rows and the audit chain |
+| `state/store-clones.json` | store clones that are not at their usual place: your own clone (`lore store use`) or a second store with the same name | deleting it makes lore use its own clones under stores/ again (your clone stays where it is) |
+
+### lore where
+alice (work/website)$ lore where
+lore's home: ~/.lore
+  README.md
+      this map of lore's home, written by lore and rewritten when the layout changes
+  cache
+      rebuildable caches: everything here is made again from the row files when deleted
+  cache/machine-store.db
+      the cache of state/machine.db, arranged for search
+  cache/repo
+      one cache per code repo checkout, of the rows in its .lore/data: repo/<repo folder name>-<short hash of the repo path>.db (kept here so a command never creates a file in the repo)
+  cache/repo/website-<hash>.db
+      a code repo's cache
+  cache/repos
+      one record per repo of the cache files it uses: repos/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)
+  cache/repos/6d0042600cc73cca9cdb9f21bd9da5bd391c2f006142fdaa6b35b1750d1c72e5.json
+      a repo's cache use record
+  cache/stores
+      one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each)
+  cache/stores/sto_7a670ae8548ed05bf57ad29ad0759504/main/root.db
+      a store folder's cache; store notes; used by ~/work/website
+  machine.json
+      this machine's id, kept so it stays the same between runs
+  state
+      machine-local state: never synced, and not rebuildable
+  state/audit
+      the audit log of writes, one .jsonl file per store
+  state/machine.db
+      the machine store: rows that only mean something on this machine (agent sessions, runs), the audit chain, doctor results and small local state (usage counts, secret-check times, unsent time entries)
+  stores
+      the stores lore keeps on this machine: stores/<owner>/<repo>/ is a plain git clone of each store (rows are JSON files you may open and edit; its .git/config holds lore's merge driver and your git identity for that store, user.name and user.email, so your own commits there carry it), stores/_me/ the personal store when it is a plain folder (the _ keeps it apart from any owner folder); `lore where` lists each one
+
+store clones:
+  ~/.lore/stores/acme/notes (store git@github.com:acme/notes)
+      a git clone of store git@github.com:acme/notes; rows are JSON files at ~/.lore/stores/acme/notes/<folder>/<table>/<id>.json (the store's own rows: ~/.lore/stores/acme/notes/_store/<table>/<id>.json); README.md at its top says how to browse and edit it
+  ~/.lore/stores/acme/notes/.git/lore (store git@github.com:acme/notes)
+      lore's own files for this clone: never committed, never in the files you browse
+  ~/.lore/stores/acme/notes/.git/lore/fetch-stamp (store git@github.com:acme/notes)
+      when lore last fetched the remote
+  ~/.lore/stores/acme/notes/.git/lore/identity (store git@github.com:acme/notes)
+      the user.email lore wrote into this clone's .git/config, so lore keeps only its own value current and never changes one you set
+  ~/.lore/stores/acme/notes/.git/lore/lock (store git@github.com:acme/notes)
+      the store lock (holds no data)
+  ~/.lore/stores/acme/notes/.git/lore/push_stamp (store git@github.com:acme/notes)
+      when lore last pushed
+  ~/.lore/stores/acme/notes/.git/lore/state (store git@github.com:acme/notes)
+      the store lock's journal of audit records not yet acknowledged
+  ~/.lore/stores/acme/notes/.git/config [user.name] (store git@github.com:acme/notes)
+      who your own git commits in this store clone are by (alice): your identity for this store, set by lore when it cloned or first opened the clone (`lore doctor` checks it)
+  ~/.lore/stores/acme/notes/.git/config [user.email] (store git@github.com:acme/notes)
+      who your own git commits in this store clone are by (alice@agency.example): your identity for this store, set by lore when it cloned or first opened the clone (`lore doctor` checks it)
+
+this repo: ~/work/website
+  .lore
+      lore's folder in this repo
+  .lore/data
+      this repo's rows, one JSON file per row (.lore/data/<table>/<id>.json) and _meta.json (the project id); committed
+  .lore/lock
+      the lock lore takes while it writes rows here; not committed
+  .lore/state
+      local state of this checkout (the lock's audit journal, a migration's journal); not committed
+  .lore/stores.yaml
+      the stores this repo attaches (committed)
+  AGENTS.md
+      lore's marked block pointing codex at .lore/LORE.md; the rest of the file is yours
+  .gitignore
+      lore's lines keeping its cache, lock and state out of git, and the rows in
+  .gitattributes
+      lore's block: row files merge with lore's merge driver and show collapsed in diffs
+  .git/config [remote.origin.fetch]
+      fetches lore's live refs with every git fetch
+  .git/config [merge.lore.name]
+      the merge driver git runs for lore's row files (lore merges them field by field)
+  .git/config [merge.lore.driver]
+      the merge driver git runs for lore's row files (lore merges them field by field)
+  .git/config [merge.lore-keep-ours.name]
+      the merge driver git runs for lore's row files (lore merges them field by field)
+  .git/config [merge.lore-keep-ours.driver]
+      the merge driver git runs for lore's row files (lore merges them field by field)
+  .git/hooks/commit-msg
+      lore's marked block in the commit-msg hook (checks rows and secrets on commit, keeps the live ref in step)
+  .git/hooks/post-checkout
+      lore's marked block in the post-checkout hook (checks rows and secrets on commit, keeps the live ref in step)
+  .git/hooks/post-commit
+      lore's marked block in the post-commit hook (checks rows and secrets on commit, keeps the live ref in step)
+  .git/hooks/post-merge
+      lore's marked block in the post-merge hook (checks rows and secrets on commit, keeps the live ref in step)
+  .git/hooks/post-rewrite
+      lore's marked block in the post-rewrite hook (checks rows and secrets on commit, keeps the live ref in step)
+  .git/hooks/pre-commit
+      lore's marked block in the pre-commit hook (checks rows and secrets on commit, keeps the live ref in step)
+  .git/hooks/pre-push
+      lore's marked block in the pre-push hook (checks rows and secrets on commit, keeps the live ref in step)
+  .git/lore
+      lore's own files for this repo: never committed
+  .git/lore/fetch-stamp
+      when lore last fetched the remote
+  .git/lore/git-wiring
+      a fingerprint of lore's git wiring (merge driver, hooks), so it is checked only when something changed
+  .git/lore/live.lock
+      the lock of the live ref
+  ~/.lore/cache/repo/website-<hash>.db
+      this repo's search cache, kept under the lore home so no command creates a file in the repo; rebuilt from the rows
+
+elsewhere for you:
+  /usr/local/bin/lore
+      the lore program itself
+
+what each one is and what happens if you edit or delete it: ~/.lore/README.md; `lore where --json` lists the same
+
+### lore path
+alice (work/website)$ lore path tsk_2ad3618e878ebbf527d34d446ef4f891
+~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+alice (work/website)$ lore path tsk_2ad3618e878ebbf527d34d446ef4f891 --json
+{
+  "id": "tsk_2ad3618e878ebbf527d34d446ef4f891",
+  "table": "tasks",
+  "path": "~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json",
+  "store": "notes",
+  "folder": "."
+}
+
+### lore edit
+alice (work/website)$ lore row markdown tsk_2ad3618e878ebbf527d34d446ef4f891
+---
+# lore edit: tsk_2ad3618e878ebbf527d34d446ef4f891 (tasks) as Markdown. Change values, save and close the editor, and lore checks the row and writes it.
+# store notes; file ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+# The text below the closing --- is the body field (Markdown).
+# An empty value (key:) clears an optional field. id, table, _hlc, created_* and updated_* are lore's own and cannot change.
+id: tsk_2ad3618e878ebbf527d34d446ef4f891
+table: tasks
+_hlc: 2026-11-02T10:00:10.000Z/0002/act_54fe984c9b495744c0217776765a28f2
+created_at: "2026-11-02T10:00:10Z"
+created_by: act_54fe984c9b495744c0217776765a28f2
+updated_at: "2026-11-02T10:00:10Z"
+updated_by: act_54fe984c9b495744c0217776765a28f2
+project_id: prj_76bd560aff0771fab8457dbfa9823f10
+title: Renew the TLS certificate
+status: todo
+priority: medium
+commitment: accepted
+tasklist_id: tlt_c0f3c11a5724b0cfd74b256190d9b5b8
+created_by_actor_id: act_54fe984c9b495744c0217776765a28f2
+watchers: [act_54fe984c9b495744c0217776765a28f2]
+# Not set (give one a value to set it):
+repo_id:
+deferred_until:
+due_at:
+started_at:
+completed_at:
+mission_id:
+plan_id:
+assigned_to_actor_id:
+assigned_team:
+blocked_by:
+claim_epoch:
+attempts:
+claim_log:
+time_entries:
+time_open:
+time_totals:
+timebox_seconds:
+gate:
+approved_by:
+approved_at:
+approved_hash:
+done_by:
+done_commit:
+done_pr:
+merged_at:
+work_branch:
+idempotency_key:
+role:
+parent_id:
+rank:
+close_reason:
+checklist:
+recur:
+estimate:
+assignees:
+history:
+tag_ids:
+---
+alice (work/website)$ EDITOR=$HOME/bin/edit-task lore edit tsk_2ad3618e878ebbf527d34d446ef4f891
+lore: pushed store notes: commit dfd8dc8 to branch main
+lore: wrote ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json (store notes)
+✓ tsk_2ad3618e878ebbf527d34d446ef4f891 updated in store notes: body, priority
+  file ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+alice (work/website)$ lore task show tsk_2ad3618e878ebbf527d34d446ef4f891
+tsk_2ad3618e878ebbf527d34d446ef4f891
+  title:    Renew the TLS certificate
+  status:   todo
+  priority: high
+  commit:   accepted
+
+Ask the hosting provider for the new chain first.
+created 2026-11-02T10:00:10Z by act_54fe984c9b495744c0217776765a28f2 · updated 2026-11-02T10:01:25Z by act_54fe984c9b495744c0217776765a28f2
+
+### edit a row file by hand
+alice (.lore/stores/acme/notes)$ sed -i 's/reset every Monday/reset every Sunday night/' _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json && git status --short
+ M _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+alice (work/website)$ lore memory list --store notes
+lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+lore: picked up 1 row edited by hand in store notes: committed cf563f3 "hand edit: memories mem_162df51b7f78b785c97c26b41ea89666" in ~/.lore/stores/acme/notes
+  edited memories mem_162df51b7f78b785c97c26b41ea89666 (body): ~/.lore/stores/acme/notes/_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+mem_162df51b7f78b785c97c26b41ea89666  The staging database is reset every Sunday night.  [notes]
+alice (.lore/stores/acme/notes)$ git log -1 --format='%an <%ae>  %s'; git status --short
+alice <alice@agency.example>  hand edit: memories mem_162df51b7f78b785c97c26b41ea89666
+
+### a refused hand edit
+alice (.lore/stores/acme/notes)$ sed -i 's/"status": "todo"/"status": "finished"/' _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+alice (work/website)$ lore task list --store notes
+lore: hand edit refused: ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json:28: tasks: field status: want one of todo, in_progress, done, cancelled, blocked
+  it is not committed or pushed until the file is fixed (or put back: git -C ~/.lore/stores/acme/notes checkout -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json); the other edits went ahead
+lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+○ tsk_2ad3618e878ebbf527d34d446ef4f891 Renew the TLS certificate [high]  [notes]
+alice (.lore/stores/acme/notes)$ git checkout -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git status --short
+
+### delete a row file by hand
+alice (.lore/stores/acme/notes)$ git rm -q _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json && git status --short
+D  _store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+alice (work/website)$ lore memory list --store notes
+lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_162df51b7f78b785c97c26b41ea89666" in ~/.lore/stores/acme/notes
+  deleted memories mem_162df51b7f78b785c97c26b41ea89666 (moved to the trash; lore trash restore mem_162df51b7f78b785c97c26b41ea89666 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_162df51b7f78b785c97c26b41ea89666.json
+(no memories)
+alice (work/website)$ lore trash list
+lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+mem_162df51b7f78b785c97c26b41ea89666  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by act_54fe984c9b495744c0217776765a28f2  bat_b4f4765e593d51fd1352985e8af3a5b0
+1 row in the trash
+
+### plain git in the store
+alice (.lore/stores/acme/notes)$ git config --get merge.lore.driver; cat .git/info/attributes; git config user.email
+lore merge-driver %O %A %B %P
+*.json merge=lore
+alice@agency.example
+alice (.lore/stores/acme/notes)$ sed -i 's/Renew the TLS certificate/Renew the TLS certificate (key AKIA''IOSFODNN7EXAMPLE)/' _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git add _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git commit -qm 'note the key'
+ERROR: [E_LEAK_BLOCKED] blocked, this commit carries a secret:
+  _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json:30 (field title) secret: rule aws_access_key match sha256:1a5d44a2dca1
+  hint: store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <hash> --reason "<why>" (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again
+(exit 1)
+alice (.lore/stores/acme/notes)$ git reset -q -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git checkout -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git status --short
+
+### your own clone
+alice$ git clone -q git@github.com:acme/notes ~/code/notes && ls ~/code/notes
+README.md
+_store
+lore-store.yaml
+alice (work/website)$ lore store use ~/code/notes --yes
+lore: pushed store notes: commit df3a55c to branch main
+✓ store notes now uses your clone ~/code/notes (recorded on this machine only)
+  before: ~/.lore/stores/acme/notes
+  lore's earlier clone ~/.lore/stores/acme/notes is no longer used and stays on disk; remove it when you no longer need it
+alice (work/website)$ lore store list
+stores:
+  NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS
+  notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy  
+count: 1
+alice (work/website)$ lore path tsk_2ad3618e878ebbf527d34d446ef4f891
+~/code/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+alice (work/website)$ lore store use --default notes --yes
+✓ store notes uses lore's own clone again: ~/.lore/stores/acme/notes (the next command that needs it clones it if it is missing)
+  before: ~/code/notes (your clone, left as it is)
+
+### lore fix
+alice (work/website)$ lore fix --dry-run
+lore fix: ~/work/website
+  --     migrate (~/work/website/.lore/data): current
+  --     render (~/work/website/.lore/LORE.md): current
+  --     agent hooks (~/work/website): current
+  --     old clones (~/.lore/clones): current
+  --     doctor fixes: current
+Nothing changed (dry run).
+Status: HEALTHY
+alice (work/website)$ lore fix
+lore fix: ~/work/website
+  --     migrate (~/work/website/.lore/data): current
+  --     render (~/work/website/.lore/LORE.md): current
+  --     agent hooks (~/work/website): current
+  --     old clones (~/.lore/clones): current
+  --     doctor fixes: current
+Everything is current.
+Status: HEALTHY

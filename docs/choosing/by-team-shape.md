@@ -31,7 +31,7 @@
 - **GitHub access is the only wall.** An org entry, a store list or a setup decides what lore loads on one machine; who can open the store repo decides who can read it.
 - **Hidden is not private.** Live rows and claims ride hidden refs of the repo's remote; anyone who can clone the repo can fetch them.
 - **A pin below the project's `min_lore_version` leaves everyone read-only;** `lore doctor` reports it as broken.
-- **Read-only CI still builds a cache.** The first command in a fresh clone builds `.lore/lore-cache.db` from the files; nothing in `.lore/data` changes.
+- **Read-only CI still builds a cache.** The first command in a fresh clone builds the repo cache under `~/.lore/cache/repo/` from the files; nothing in the repo changes.
 
 ## Guides and examples for each team shape
 

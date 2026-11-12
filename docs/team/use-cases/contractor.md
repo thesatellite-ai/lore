@@ -54,6 +54,7 @@ lore store init: set user.name and user.email in the store clone ~/.lore/stores/
 
 # alice, in website
 $ lore org link agency --project client --store git@github.com:agency/notes-client --yes
+lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store github.com/agency/notes-client: commit 601d285 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
 and the leak guards turn on for everyone in agency.
@@ -61,7 +62,6 @@ and the leak guards turn on for everyone in agency.
 ✓ github.com/client/website (prj_54fe…28f2) linked to github.com/agency/notes-client client/ (created; pushed)
   nothing was written to this repo
 $ lore actor register
-lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store agency/.: commit 86dbae4 to branch main
 lore: pushed store agency/.: commit 9b40ce7 to branch main
 lore: wrote ~/.lore/stores/agency/notes/_store/projects/prj_05e9…4603.json (store agency/.)

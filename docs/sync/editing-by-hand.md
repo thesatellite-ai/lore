@@ -4,11 +4,30 @@
 
 ## Where the files are
 
-Each store folder keeps its rows right under it, one folder per kind of row: `<store>/<folder>/tasks/tsk_….json`, `<store>/<folder>/memories/mem_….json`; the store's top folder has its `tasks/`, `rules/` and so on at the top. `lore path <id>` prints the file of one row, and `lore edit <id>` opens a row in your editor as readable Markdown and writes it back for you. A code repo keeps its rows in `.lore/data/` instead.
+Each store folder keeps its rows right under it, one folder per kind of row: `<store>/<folder>/tasks/tsk_….json`, `<store>/<folder>/memories/mem_….json`; the store's own rows (its root folder) sit in `_store/` (`_store/tasks/`, `_store/memories/`, …). [Stores as plain folders](store-clones.md) explains the whole clone. `lore path <id>` prints the file of one row, and `lore edit <id>` opens a row in your editor as readable Markdown and writes it back for you. A code repo keeps its rows in `.lore/data/` instead.
 
 ## What lore does with each change
 
 Run any lore command (a list is enough, for example `lore task list` in a repo linked to the store, or inside the store folder itself). Before it reads anything, lore runs `git status` in the store's clone and takes every changed row file through the same checks a `lore task edit` passes: the fields must be valid for the table, the rows they point at must exist, no secret may be in the text, and the store's policy must allow it.
+
+<!-- example: files#edit-a-row-file-by-hand -->
+```console
+# alice, in .lore/stores/acme/notes
+$ sed -i 's/reset every Monday/reset every Sunday night/' _store/memories/mem_162d…9666.json && git status --short
+ M _store/memories/mem_162d…9666.json
+
+# alice, in website
+$ lore memory list --store notes
+lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+lore: picked up 1 row edited by hand in store notes: committed cf563f3 "hand edit: memories mem_162d…9666" in ~/.lore/stores/acme/notes
+  edited memories mem_162d…9666 (body): ~/.lore/stores/acme/notes/_store/memories/mem_162d…9666.json
+mem_162d…9666  The staging database is reset every Sunday night.  [notes]
+
+# alice, in .lore/stores/acme/notes
+$ git log -1 --format='%an <%ae>  %s'; git status --short
+alice <alice@agency.example>  hand edit: memories mem_162d…9666
+```
+<!-- /example -->
 
 | You did | lore does |
 |---|---|
@@ -18,18 +37,53 @@ Run any lore command (a list is enough, for example `lore task list` in a repo l
 | moved a row file to another folder of the store (same id) | moves the row there, as a move with lore would |
 | changed nothing but spacing, or only fields lore writes itself (`_hlc`, `updated_at`) | puts the file back as lore wrote it |
 
-All valid changes of one folder become one commit authored by you: your git identity for that clone, or, in a store whose commits your org's identity signs, your lore identity (`lore whoami`) as author with the org identity as committer, so no personal git e-mail lands in an org store. The subject is `hand edit: tasks tsk_…` for one row, `hand edit: 3 rows` with each row listed in the body for several. A move is a commit of its own, `hand move: tasks tsk_… from <folder> to <folder>`. lore prints what it committed, the file and the commit, and the store's push mode decides when it is pushed, as for every lore write. In push mode `batch` a hand edit stays a commit of its own (marked `Lore-Hand-Edit: true`): lore squashes only its own commits around it, so the pushed history keeps you as the author.
+All valid changes of one folder become one commit authored by you: your git identity for that clone, or, in a store whose commits your org's identity signs, your lore identity (`lore whoami`) as author with the org identity as committer, so no personal git e-mail lands in an org store. The subject is `hand edit: tasks tsk_…` for one row, `hand edit: 3 rows` with each row listed in the body for several. A move is a commit of its own, `hand move: tasks tsk_… from <folder> to <folder>`. lore prints what it committed, the file and the commit, and the store's push mode decides when it is pushed, as for every lore write; when the command that picked it up only reads, the commit waits for the next write or `lore sync` (a read never pushes). In push mode `batch` a hand edit stays a commit of its own (marked `Lore-Hand-Edit: true`): lore squashes only its own commits around it, so the pushed history keeps you as the author.
+
+The author of a hand-edit commit is always a person, never an agent: when an agent ran the command that picked the edit up, it is named in a `Lore-Agent:` trailer.
 
 lore never changes the envelope fields from your file (`_hlc`, `created_by`, `updated_by`, `updated_at`, `_o`): the write stamps them anew. Metadata (`meta`) changed by hand is refused; change it with lore's metadata commands.
+
+A row file deleted by hand goes to the trash:
+
+<!-- example: files#delete-a-row-file-by-hand -->
+```console
+# alice, in .lore/stores/acme/notes
+$ git rm -q _store/memories/mem_162d…9666.json && git status --short
+D  _store/memories/mem_162d…9666.json
+
+# alice, in website
+$ lore memory list --store notes
+lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_162d…9666" in ~/.lore/stores/acme/notes
+  deleted memories mem_162d…9666 (moved to the trash; lore trash restore mem_162d…9666 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_162d…9666.json
+(no memories)
+$ lore trash list
+lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+mem_162d…9666  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by act_54fe…28f2  bat_b4f4…a5b0
+1 row in the trash
+```
+<!-- /example -->
 
 ## When a file is refused
 
 A file that is not a valid row is named with its line and the exact reason, followed by the next step:
 
-```text
-lore: hand edit refused: /home/you/.lore/stores/acme-co/lore-team/client_a/tasks/tsk_….json:9: tasks: field status: want one of open, in_progress, blocked, done, cancelled
-  it is not committed or pushed until the file is fixed (or put back: git -C /home/you/.lore/stores/acme-co/lore-team checkout -- client_a/tasks/tsk_….json); the other edits went ahead
+<!-- example: files#a-refused-hand-edit -->
+```console
+# alice, in .lore/stores/acme/notes
+$ sed -i 's/"status": "todo"/"status": "finished"/' _store/tasks/tsk_2ad3…f891.json
+
+# alice, in website
+$ lore task list --store notes
+lore: hand edit refused: ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json:28: tasks: field status: want one of todo, in_progress, done, cancelled, blocked
+  it is not committed or pushed until the file is fixed (or put back: git -C ~/.lore/stores/acme/notes checkout -- _store/tasks/tsk_2ad3…f891.json); the other edits went ahead
+lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+○ tsk_2ad3…f891 Renew the TLS certificate [high]  [notes]
+
+# alice, in .lore/stores/acme/notes
+$ git checkout -- _store/tasks/tsk_2ad3…f891.json && git status --short
 ```
+<!-- /example -->
 
 The file stays exactly as you left it. Your other valid edits are committed and pushed in the same command. While the refused file waits, a sync sets it aside for its merge and puts it back afterwards, so a teammate's change never overwrites it and it never stops the sync. `lore doctor` lists every row file still changed by hand and not committed. Fix the file and run any lore command again.
 
@@ -55,10 +109,39 @@ So in the store clone:
 - `git commit` runs lore's check: a broken row or a secret is refused before it is committed;
 - `git push` sends your commits; the next lore command reads them like any other.
 
+In the store clone, `git commit` of a row with a secret in it is refused before anything is committed:
+
+<!-- example: files#plain-git-in-the-store -->
+```console
+# alice, in .lore/stores/acme/notes
+$ git config --get merge.lore.driver; cat .git/info/attributes; git config user.email
+lore merge-driver %O %A %B %P
+*.json merge=lore
+alice@agency.example
+$ sed -i 's/Renew the TLS certificate/Renew the TLS certificate (key AKIA''IOSFODNN7EXAMPLE)/' _store/tasks/tsk_2ad3…f891.json && git add _store/tasks/tsk_2ad3…f891.json && git commit -qm 'note the key'
+ERROR: [E_LEAK_BLOCKED] blocked, this commit carries a secret:
+  _store/tasks/tsk_2ad3…f891.json:30 (field title) secret: rule aws_access_key match sha256:1a5d44a2dca1
+  hint: store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <hash> --reason "<why>" (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again
+(exit 1)
+$ git reset -q -- _store/tasks/tsk_2ad3…f891.json && git checkout -- _store/tasks/tsk_2ad3…f891.json && git status --short
+```
+<!-- /example -->
+
 ## Files that are not rows
 
-A note (`notes.txt`), a folder of your own or any other file that is not a row is left alone: lore never deletes it and never reads it. `lore doctor` names such files in each store clone so you can keep them, move them out, or commit them yourself if the team should have them.
+A note (`notes.txt`), a folder of your own or any other file that is not a row is left alone: lore never deletes it and never reads it. `lore doctor` names such files in each store clone so you can keep them or move them out. Do not commit them: a store may hold only lore's files (plus `README*`, `LICENSE*`, `.gitattributes` and lore's GitHub workflows), and lore refuses an org store whose branch holds anything else (`E_NOT_A_STORE`).
 
 ## Code repos
 
 In a code repo the rows live in `.lore/data/`, and lore never commits there: you commit rows with your code. A hand edit of a committed row (fields changed, its `_hlc` left as committed) is picked up the same way: checked, re-stamped with your name and the time, and written back into the file for your next commit; a refused file is named with its line and reason. New and deleted row files in a code repo keep their usual handling: the repo's pre-commit hook checks a new file when you commit it, and a missing file is reported by `lore doctor` and comes back with git (`git checkout HEAD -- <file>`) ([Hooks and the merge driver](hooks-and-merge-driver.md), [Trash, restore from git and purge](trash-and-purge.md)).
+
+## Try it
+
+The example section `files` makes a git store, edits, refuses and deletes row files by hand, and commits with plain git: [`files`](../../tests/docs/sections/files.sh) ([output](../../tests/docs/transcripts/files.txt)).
+
+## Related
+
+- [Stores as plain folders](store-clones.md)
+- [Edit a row in your editor](../knowledge/editing-rows.md)
+- [Where lore keeps things](../operations/where-lore-keeps-things.md)
+- [Hooks and the merge driver](hooks-and-merge-driver.md)

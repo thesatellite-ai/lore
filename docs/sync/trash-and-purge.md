@@ -43,7 +43,7 @@ When the deleting commit is already older, take the file from the commit before 
 
 ## Step 2 — Get back a deleted `.lore/data`
 
-If `.lore/data` is deleted, the notes are gone from lists until the files are back; lore never rebuilds them from `lore.db`. The files are the truth, so they come back from git; when nothing was lost, git shows no change at all:
+If `.lore/data` is deleted, the notes are gone from lists until the files are back; lore never rebuilds them from its cache. The files are the truth, so they come back from git; when nothing was lost, git shows no change at all:
 
 <!-- example: sync#export -->
 ```console

@@ -128,19 +128,33 @@ With `auto_upgrade: true` lore installs the new release itself and prints one li
 
 `lore fix` brings the project you are in up to date in one go. It runs, in order, everything `lore doctor` can repair for it and prints one line per step (what, where, result), then checks again and prints the status last:
 
-```text
+In a project that is already current every step says `current`:
+
+<!-- example: files#lore-fix -->
+```console
+# alice, in website
+$ lore fix --dry-run
+lore fix: ~/work/website
+  --     migrate (~/work/website/.lore/data): current
+  --     render (~/work/website/.lore/LORE.md): current
+  --     agent hooks (~/work/website): current
+  --     old clones (~/.lore/clones): current
+  --     doctor fixes: current
+Nothing changed (dry run).
+Status: HEALTHY
 $ lore fix
-lore fix: /home/alice/website
-  ok     migrate (/home/alice/website/.lore/data): Upgraded 2 rows
-         memories/mem_01a1cb5743e371b7bab946c6cf489ddf
-         branch (.lore/data): 2 files upgraded; commit them: git add .lore/data && git commit -m "lore: migrate format"
-  ok     render (/home/alice/website/.lore/LORE.md): rendered
-  --     agent hooks (/home/alice/website): current
-  --     old clones (/home/alice/.lore/clones): current
-  ok     doctor fixes: fixed 1
-         store_identity: …
+lore fix: ~/work/website
+  --     migrate (~/work/website/.lore/data): current
+  --     render (~/work/website/.lore/LORE.md): current
+  --     agent hooks (~/work/website): current
+  --     old clones (~/.lore/clones): current
+  --     doctor fixes: current
+Everything is current.
 Status: HEALTHY
 ```
+<!-- /example -->
+
+A step that changed something says `ok` and what it did, with one line per detail under it. Rows migrated in a code repo are never committed by lore (you commit them with your code), so the output ends, just above the status, with the one command to run, for example `1 upgraded file in .lore/data waits for your commit: git add .lore/data && git commit -m "lore: migrate rows to format 2"`.
 
 - **migrate** rewrites the row files lore 0.1.17 wrote (`_v: 1`) and finishes an interrupted migration, exactly as `lore migrate run` does (backup ref, team lock, `lore migrate rollback` undoes it).
 - **render** refreshes `.lore/LORE.md` and the tools' files when they are stale, or when the migration just rewrote rows.
@@ -148,11 +162,11 @@ Status: HEALTHY
 - **old clones** removes the store clones an earlier 0.1.18 build left in `~/.lore/clones`, only those `lore doctor` proved everything is in the new clone; a half clone or an old org link clone stays, and doctor names it.
 - **doctor fixes** are the checks' own repairs: `.git/info/exclude` in a client repo, a store clone's git identity, lore's merge driver, `config.yaml` style, your actor row, reversed `--supersedes` links and the rest.
 
-A step that cannot run says why on its line (`FAILED`) and the others still run. A second `lore fix` changes nothing and says `Everything is current.`. `lore fix --dry-run` changes nothing and says what each step would do. `lore fix --json` gives the steps and the status as JSON. The exit status is doctor's: 0 healthy, 1 degraded, 2 broken.
+A step that cannot run says why on its line (`FAILED`) and the others still run. A second `lore fix` changes nothing and says `Everything is current.`. `lore fix --dry-run` changes nothing and says what each step would do; it reaches no remote (no fetch, push or clone), so it is quick and safe offline. `lore fix --json` gives the steps and the status as JSON. The exit status is doctor's: 0 healthy, 1 degraded, 2 broken.
 
 `lore doctor --fix` runs the same steps (it says so above its report), so the two never differ.
 
-`lore fix --all` runs it in every repo the setups know: the repos in the enabled setups' folders and the known repos. Each repo gets its own block, a repo that fails does not stop the others, and the last line names the repos that failed (exit 1 when one did).
+`lore fix --all` runs it in every repo the setups know: the repos in the enabled setups' folders and the known repos. It fetches every store clone once first, then fixes `--jobs N` repos at once (default 8; `--jobs 1` one after another) and prints each repo's block as soon as that repo is done, whole and never mixed with another's. A repo that fails does not stop the others and is named with its exact error (a repo that hangs is stopped after 10 minutes and named). The last line sums it up: how many repos, how many fixed and failed, which failed, and how long it took (exit 1 when one failed). With `--json` the blocks still stream on stderr and one JSON document (`repos`, `ok`, `jobs`, `wall_ms`) follows on stdout.
 
 **A project with lore 0.1.17 rows.** Every command run there first says what to do. A read prints `lore: this project has rows written by lore 0.1.17; run lore fix` on stderr and changes nothing. The first write fixes the project by itself with the steps that are safe without asking (migrate, render), says so in one line, then writes; `lore fix` does the rest.
 
