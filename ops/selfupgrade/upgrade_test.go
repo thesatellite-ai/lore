@@ -70,3 +70,40 @@ func TestOpsRegister(t *testing.T) {
 		t.Fatalf("permission %v", s.Permission)
 	}
 }
+
+// sourceUpgrader is a fakeUpgrader for a binary built from source.
+type sourceUpgrader struct {
+	fakeUpgrader
+	source bool
+}
+
+func (s *sourceUpgrader) FromSource() bool { return s.source }
+
+// fixEnv hands out one upgrader and counts the fixes run after it.
+type fixEnv struct {
+	u     Upgrader
+	fixes int
+}
+
+func (e *fixEnv) Upgrader(context.Context) (Upgrader, error) { return e.u, nil }
+
+func (e *fixEnv) FixAfterUpgrade(context.Context) ([]string, error) {
+	e.fixes++
+	return []string{"lore fix: ran"}, nil
+}
+
+// TestSourceBuildRunsNoFix pins B4-4: a source build installs nothing, so
+// upgrade prints its one line and runs no lore fix; an installed release
+// still runs it.
+func TestSourceBuildRunsNoFix(t *testing.T) {
+	src := &fixEnv{u: &sourceUpgrader{fakeUpgrader: fakeUpgrader{lines: []string{"built from source"}}, source: true}}
+	out, err := runWithFix(context.Background(), src, RunIn{}, false)
+	if err != nil || src.fixes != 0 || out.Text() != "built from source\n" {
+		t.Fatalf("source build: fixes=%d out=%q err=%v", src.fixes, out.Text(), err)
+	}
+	rel := &fixEnv{u: &sourceUpgrader{fakeUpgrader: fakeUpgrader{lines: []string{"Done."}}}}
+	out, err = runWithFix(context.Background(), rel, RunIn{}, false)
+	if err != nil || rel.fixes != 1 || out.Text() != "Done.\nlore fix: ran\n" {
+		t.Fatalf("release: fixes=%d out=%q err=%v", rel.fixes, out.Text(), err)
+	}
+}

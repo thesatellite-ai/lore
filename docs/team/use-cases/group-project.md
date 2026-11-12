@@ -66,6 +66,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/repos/rep_76bd…3f10.json (stor
 lore: wrote ~/.lore/stores/agency/notes/client2/task_lists/tlt_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_b4f4…a5b0.json (store agency)
 ✓ tsk_b4f4…a5b0 — send the invite email from the API [medium] → [agency/client2]
+  created tasklist tlt_d431…313a "default" for tasks added without --tasklist
 $ lore task add 'build the invite page' --to agency/client2 --mission msn_c0f3…b5b8 --repo app --after tsk_b4f4…a5b0 --key invite/frontend
 lore: pushed store agency: commit 7898daa to branch main
 lore: pushed store agency: commit ccfb0bb to branch main

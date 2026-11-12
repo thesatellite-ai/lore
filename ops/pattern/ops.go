@@ -8,8 +8,10 @@ package pattern
 
 import (
 	"context"
+
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -224,8 +226,9 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		return ListOut{}, err
 	}
 	var hid content.Hidden
+	dirs := metalist.NewDirs(o.c.Env)
 	rows, err := o.c.List(ctx, in.Store, func(r row.Row) bool {
-		return (project == "" || content.Field(r, content.FieldProject) == project) && content.KeepCounted(&hid, sc, repo, in.Archived, r)
+		return (project == "" || content.Field(r, content.FieldProject) == project) && content.KeepCounted(ctx, &hid, dirs, sc, repo, in.Archived, r)
 	})
 	if err != nil {
 		return ListOut{}, err

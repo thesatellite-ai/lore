@@ -67,8 +67,8 @@ note "one store"
 solo_repo alice client2/app
 solo_repo alice client2/api
 solo_repo alice client2/infra
-quiet alice work/app "lore init --non-interactive --name=app"
-quiet alice work/api "lore init --non-interactive --name=api"
+quiet alice work/app "lore init --name=app"
+quiet alice work/api "lore init --name=api"
 on alice work/app "lore store init client2 file://\$HOME/stores/client2"
 on alice work/api "lore store add client2 file://\$HOME/stores/client2"
 on alice work/app "lore store list"
@@ -83,7 +83,7 @@ on alice work/app "git status --short"
 
 note "archive a project"
 solo_repo alice client2/scratch
-quiet alice work/scratch "lore init --non-interactive --name=scratch"
+quiet alice work/scratch "lore init --name=scratch"
 on alice work/scratch "lore project list"
 local prj_scratch; prj_scratch=$(id prj)
 on alice work/scratch "lore project archive $prj_scratch"

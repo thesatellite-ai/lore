@@ -44,7 +44,7 @@ var ltBase = time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
 
 // gitT runs git in dir with a fixed identity (through gitref.Exec, the
 // production runner, so no test-only subprocess call).
-func gitT(t *testing.T, dir string, args ...string) {
+func gitT(t testing.TB, dir string, args ...string) {
 	t.Helper()
 	inv := gitref.Invocation{Dir: dir, Args: args, Env: []string{"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com", "GIT_CONFIG_NOSYSTEM=1"}}
@@ -62,12 +62,12 @@ type ltFixture struct {
 	s     *liveSession
 }
 
-func newLiveFixture(t *testing.T) ltFixture { return newLiveFixtureWith(t, "", nil) }
+func newLiveFixture(t testing.TB) ltFixture { return newLiveFixtureWith(t, "", nil) }
 
 // newLiveFixtureWith is newLiveFixture with a ~/.lore/config.yaml body
 // ("" = none) and a clock (nil = the wall clock); the repo holds a .lore/
 // folder so the cwd project resolves (doctor, sync).
-func newLiveFixtureWith(t *testing.T, configYAML string, clk clock.Clock) ltFixture {
+func newLiveFixtureWith(t testing.TB, configYAML string, clk clock.Clock) ltFixture {
 	t.Helper()
 	home := t.TempDir()
 	testenv.SetHome(t, home)
@@ -106,7 +106,7 @@ func newLiveFixtureWith(t *testing.T, configYAML string, clk clock.Clock) ltFixt
 }
 
 // ltRow builds a row of table with a title (or tombstone) stamped at ltBase + sec.
-func ltRow(t *testing.T, table, id string, sec int, title string, deleted bool) store.Row {
+func ltRow(t testing.TB, table, id string, sec int, title string, deleted bool) store.Row {
 	t.Helper()
 	aid, err := ids.ParseAny(id)
 	if err != nil {

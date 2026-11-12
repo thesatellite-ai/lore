@@ -190,5 +190,5 @@ solo_repo() {
 lore_repo() {
   local who="$1" slug="$2" dir="${3:-${2##*/}}"
   solo_repo "$who" "$slug" "$dir"
-  quiet "$who" "work/$dir" "lore init --non-interactive --name=$dir && git add -A && git commit -qm 'lore: init' && git push -q origin main"
+  quiet "$who" "work/$dir" "lore init --name=$dir && git add -A && git commit -qm 'lore: init' && git push -q origin main"
 }

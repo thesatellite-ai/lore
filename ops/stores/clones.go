@@ -130,6 +130,10 @@ type StoreCheck struct {
 	URL  string `json:"url"`
 	// Reachable is whether the remote (git) or the folder answered.
 	Reachable bool `json:"reachable"`
+	// Fault is why a git remote did not answer the probe (gitfault kind:
+	// unreachable, missing, denied); "" when it answered or was not
+	// probed. doctorVerdict answers E_STORE_UNREACHABLE when one is set.
+	Fault string `json:"fault,omitempty"`
 	// Clone is the git clone's state on this machine (whole, no_worktree,
 	// no_git_data, mislinked, orphan_worktree; not_cloned when there is
 	// none); "" for a folder store.
@@ -445,13 +449,19 @@ func cloneOps(m Manager) []op.Entry {
 	}
 }
 
-// doctorVerdict is nil when no store has a problem, else E_INVALID_INPUT
-// naming each problem (P3-CFG-2: the op error carries what v0.1.17 printed
-// before failing, so --json still shows every problem).
+// doctorVerdict is nil when no store has a problem, else an error naming
+// each problem (P3-CFG-2: the op error carries what v0.1.17 printed
+// before failing, so --json still shows every problem). A store whose
+// remote did not answer makes it E_STORE_UNREACHABLE (the offline exit),
+// not E_INVALID_INPUT: nothing the person typed was wrong (B3-12).
 func doctorVerdict(out ClonesOut) error {
 	var bad []string
 	n := 0
+	code := errs.InvalidInput
 	for _, c := range out.Checked {
+		if c.Fault != "" {
+			code = errs.StoreUnreachable
+		}
 		for _, p := range c.Problems {
 			bad = append(bad, c.Store+": "+p)
 		}
@@ -472,8 +482,11 @@ func doctorVerdict(out ClonesOut) error {
 			n++
 		}
 	}
-	return errs.New(errs.InvalidInput, strconv.Itoa(n)+" store(s) need attention: "+strings.Join(bad, "; ")).
-		WithHint("fix each problem, then run `lore store doctor` again")
+	hint := "fix each problem, then run `lore store doctor` again"
+	if code == errs.StoreUnreachable {
+		hint = "lore keeps working offline: commits wait in the local clone and go out once the store answers; " + hint
+	}
+	return errs.New(code, strconv.Itoa(n)+" store(s) need attention: "+strings.Join(bad, "; ")).WithHint(hint)
 }
 
 // withEmptyLists replaces nil lists with empty ones (stable JSON).

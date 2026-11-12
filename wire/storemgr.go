@@ -75,11 +75,6 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 			return opsstores.InitOut{}, err
 		}
 	}
-	if u, perr := url.Parse(raw); perr == nil && u.Scheme == folder.Scheme {
-		if err = refuseBareRepoFolder(in.Name, fileuri.OSPath(u.Path)); err != nil {
-			return opsstores.InitOut{}, err
-		}
-	}
 	// noRepo: a caller that may run outside a repo (the team step), and no
 	// repo here or the repo attaches this very store under this name
 	// already: the repo-only checks and the .lore/stores.yaml entry are
@@ -210,14 +205,6 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 			if !errors.Is(rerr, fs.ErrNotExist) {
 				return rowfs.Marker{}, false, rerr
 			}
-		}
-		// Every store lore creates goes through here (store init, the setup
-		// page's personal store, a team store), so each refuses a bare git
-		// repository the way store init did: a folder store written into it
-		// lands beside HEAD and objects/, where git never sees it and the
-		// setup checks (which read it as git) report no marker (2026-11-08).
-		if rerr := refuseBareRepoFolder("", dir); rerr != nil {
-			return rowfs.Marker{}, false, rerr
 		}
 		return m, false, folder.Init(dir, m, a.opts.rowfsOptions()...)
 	}
@@ -758,8 +745,8 @@ func samePlace(a, b attach.Store) bool {
 	if sameURL(a, b) {
 		return true
 	}
-	na, ea := repourl.Normalize(a.URL)
-	nb, eb := repourl.Normalize(b.URL)
+	na, ea := repourl.NormalizeStore(a.URL)
+	nb, eb := repourl.NormalizeStore(b.URL)
 	return ea == nil && eb == nil && na == nb && a.Branch == b.Branch
 }
 
@@ -899,6 +886,9 @@ const homeTilde = "~"
 // value would be written into the committed stores.yaml; any other https
 // user part is dropped (G-CORE-6). Other urls pass unchanged.
 func cleanFileURL(raw string) (string, error) {
+	if isPlainLocalPath(raw) {
+		return localPathURL(raw) // a git repository here, or a folder (storelocalpath.go)
+	}
 	if !strings.HasPrefix(raw, folder.Scheme+"://") {
 		if _, err := attach.NormalizeURL(raw); errs.Has(err, errs.URLUserinfo) {
 			return "", err
@@ -941,6 +931,11 @@ func cleanFileURL(raw string) (string, error) {
 		return "", errs.Wrap(errs.BadPath, "store: the file url's path", err)
 	}
 	u.Path = fileuri.URLPath(filepath.Clean(p))
+	// A file:// url of a git repository is that repository as a git
+	// store, as `git clone file:///srv/x.git` reads it (storelocalpath.go).
+	if repo, ok := gitRepoOfFileURL(u.String()); ok {
+		return repo, nil
+	}
 	return u.String(), nil
 }
 

@@ -42,12 +42,12 @@ $ lore version --json
 
 ## Step 1 — Set up lore in the repo
 
-Run `lore init` once in the top folder of the repo. It creates a `.lore/data` folder that git tracks and a local cache built from it. `--name` is the project's name (without it, lore takes the name from the git remote or the folder), and `--non-interactive` skips the questions lore would otherwise ask.
+Run `lore init` once in the top folder of the repo. It creates a `.lore/data` folder that git tracks and a local cache built from it. `--name` is the project's name (without it, lore takes the name from the git remote or the folder). `lore init` never asks a question, so it runs the same in a script.
 
 <!-- example: start#init -->
 ```console
 # alice, in website
-$ lore init --non-interactive --name=website
+$ lore init --name=website
 lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; lore's merge rules in ~/work/website/.gitattributes; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 lore initialized
@@ -107,7 +107,7 @@ rul_162d…9666 [must/always] Run the tests before you push
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2554 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topics)
+✓ .lore/LORE.md (2630 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
 $ cat AGENTS.md
@@ -165,7 +165,7 @@ Notes:
   -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
 Context:
-  - context: .lore/LORE.md 2554 of 16000 bytes (15%, profile codex); warn at 80%
+  - context: .lore/LORE.md 2630 of 16000 bytes (16%, profile codex); warn at 80%
 ```
 <!-- /example -->
 
@@ -211,7 +211,7 @@ To turn completion on for every new shell, add `source <(lore completion bash)` 
 
 ## Pitfalls
 
-- **Run lore in the top folder of the repo.** In a folder without `.lore/lore.db`, every command stops with `E_NOT_PROJECT_ROOT` and the hint "run `lore init` here, or cd into a project root".
+- **Run lore inside the repo.** Any folder of the checkout works. Outside a git checkout a command stops with `E_NOT_A_STORE` ("the folder is not inside a git work tree"); in a git repo lore was never set up in, it stops with "lore isn't set up in … (no .lore folder)" and the hint to run `lore init`.
 - **Render after you change rules.** The coding tool reads `.lore/LORE.md`, not the database. A new rule shows up only after the next `lore render`. Running it twice is safe: the second run says `(unchanged)` and `(pointer present)`.
 - <!-- ds:block id=render-pins-buj9dujv --> **Only the strongest notes are pinned.** `lore render` pins `must` rules and `critical` or `high` hotfixes. Memories, decisions and `should` rules are found with `lore search` when the tool needs them. See [Render](render-and-agent-files.md).
 - **Commit `.lore/data`.** lore tells you after each change how many files are not committed. If you never commit them, your teammates and your next clone never see the notes.

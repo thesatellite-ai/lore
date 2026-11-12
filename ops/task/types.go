@@ -61,10 +61,10 @@ type AddIn struct {
 	// Lead names the one owner of the outcome (TSQ5); joins the assignees.
 	Lead string `json:"lead,omitempty" flag:"lead" desc:"the lead (@handle or actor); added to the assignees if missing"`
 	// Estimate is in the tasks.estimate_unit unit (TSQ4, 9.1).
-	Estimate string   `json:"estimate,omitempty" flag:"estimate" desc:"estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit: points or hours); hours also take 90m; no day unit (OWNERQ-21)"`
+	Estimate string   `json:"estimate,omitempty" flag:"estimate" desc:"estimate: a number >= 0 (2 decimals) in the project's unit (tasks.estimate_unit: points or hours); hours also take 90m; no day unit"`
 	Ref      []string `json:"ref,omitempty" flag:"ref" desc:"a pointer to another row (<id> or <project>:<id>) or a commit (commit:<sha>); repeatable"`
 	Relation string   `json:"relation,omitempty" flag:"relation" desc:"the relation each --ref records (snake_case; default mentions)"`
-	To       string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To       string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Repo     string   `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id)"`
 	Project  string   `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 	// Parent makes the task a sub-task (TASK 6.3); it inherits the

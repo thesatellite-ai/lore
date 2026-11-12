@@ -51,7 +51,7 @@ func homeReadme() string {
 		}
 		b.WriteString("| `" + p + "` | " + e.What + " | " + e.ByHand + " |\n")
 	}
-	b.WriteString("\nIn a store clone (stores/<owner>/<repo>/), the store's own rows (actors, machines, …) sit in _store/<table>/<id>.json, every other folder is a project or the org folder holding its rows as <folder>/<table>/<id>.json, and README.md says how to browse and edit them. Lore's own files sit in .git/lore/ (the store lock, its journal, when the store was last fetched and pushed): never in the files you browse, never committed. A store that is a plain folder keeps the same in .lore-state/ at its top.\n\n")
+	b.WriteString("\nIn a store clone (stores/<owner>/<repo>/, or stores/_local/<repo>/ for a git repository on this machine), the store's own rows (actors, machines, …) sit in _store/<table>/<id>.json, every other folder is a project or the org folder holding its rows as <folder>/<table>/<id>.json, and README.md says how to browse and edit them. Lore's own files sit in .git/lore/ (the store lock, its journal, when the store was last fetched and pushed): never in the files you browse, never committed. A store that is a plain folder keeps the same in .lore-state/ at its top.\n\n")
 	b.WriteString("In a code repo, lore keeps .lore/ (data/ holds the rows, committed; lock and state/ are local and listed in .gitignore; the repo's cache is under cache/repo/ here, never in the repo), a marked block in .gitignore and .gitattributes, LORE.md and a pointer block in the files your coding agents read (CLAUDE.md, AGENTS.md, ...), merge driver entries in .git/config and marked blocks in .git/hooks. Lore says so the first time it writes any of them; `lore where` lists them.\n")
 	return b.String()
 }

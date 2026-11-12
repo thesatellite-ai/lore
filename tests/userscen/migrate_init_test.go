@@ -107,12 +107,22 @@ func TestMigrateInitFresh(t *testing.T) {
 	if m.V != 2 || m.ProjectID != pid || m.RepoID != rid || m.MinLoreVersion != "0.1.18" || len(m.Features) == 0 {
 		t.Fatalf("_meta.json %+v, want _v 2, the printed ids and the 0.1.18 floor", m)
 	}
+	// .gitignore holds lore's local files; the repo cache lives in the lore
+	// home now, so no line names a .lore/lore-cache.db no command creates.
 	ign, _ := c.ReadFile(".gitignore")
-	if !strings.Contains(ign, "lore-cache.db") {
-		t.Fatalf(".gitignore does not ignore lore's cache:\n%s", ign)
+	for _, line := range []string{".lore/lore.db", ".lore/state/", ".lore/lock"} {
+		if !strings.Contains(ign, line) {
+			t.Fatalf(".gitignore does not ignore lore's local file %s:\n%s", line, ign)
+		}
 	}
-	if strings.Contains(c.Status(), "lore-cache.db") {
-		t.Fatalf("lore's cache shows in git status:\n%s", c.Status())
+	if strings.Contains(ign, "lore-cache.db") {
+		t.Fatalf(".gitignore names a repo cache lore no longer makes:\n%s", ign)
+	}
+	if _, there := c.ReadFile(".lore/lore-cache.db"); there {
+		t.Fatalf("init made a repo cache in the checkout")
+	}
+	if strings.Contains(c.Status(), "lore-cache.db") || strings.Contains(c.Status(), ".lore/lock") {
+		t.Fatalf("lore's local files show in git status:\n%s", c.Status())
 	}
 	c.Lore("project", "show", pid).OK(t).Says(t, name)
 

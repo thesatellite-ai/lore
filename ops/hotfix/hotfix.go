@@ -125,7 +125,7 @@ type AddIn struct {
 	Severity   string   `json:"severity,omitempty" flag:"severity" desc:"low | medium | high | critical (default high)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"hotfix_id (hfx_*) this entry replaces"`
-	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata (METADATA 3.19)"`
+	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata"`
 	To         string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Repo       string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`

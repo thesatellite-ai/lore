@@ -63,6 +63,16 @@ func Probes() []string {
 	return out
 }
 
+// Shown is how a report names an ignored probe path: a probe row file
+// (made-up name) as its table's files ("<dir>/*.json"), any other path as
+// it is.
+func Shown(p string) string {
+	if path.Base(p) == probeStem+rowfs.RowFileExt {
+		return path.Dir(p) + "/*" + rowfs.RowFileExt
+	}
+	return p
+}
+
 // Ignored maps each path git ignores in root to the rule responsible
 // ("<source>:<line>:<pattern>"). paths are relative to root; nil asks the
 // Probes. A path matched only by a negation is not ignored.

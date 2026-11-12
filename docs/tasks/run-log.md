@@ -23,6 +23,7 @@ $ lore task add 'Fix the typo on the pricing page'
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 — Fix the typo on the pricing page [medium]
+  created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 ```
 <!-- /example -->

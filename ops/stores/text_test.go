@@ -54,6 +54,10 @@ func TestStoreTextLines(t *testing.T) {
 			"✓ store notes (sto_1) is now at file:///n2 (was file:///n); its rows stay\n  folder entries re-pointed: notes/golang\n"},
 		{"set-url repairs folder entries only", SetURLOut{Name: "notes", URL: "file:///n2", Previous: "file:///n2", ID: "sto_1", Changed: true, Folders: []string{"notes/golang"}}.Text(),
 			"✓ store notes (sto_1) stays at file:///n2; its folder entries now point there too\n  folder entries re-pointed: notes/golang\n"},
+		{"set-url carries a clone", SetURLOut{Name: "me", URL: "git@h:new", Previous: "git@h:old", ID: "sto_1", Changed: true, Clone: "the clone /c (1 unpushed commit(s)) now fetches from and pushes to git@h:new"}.Text(),
+			"✓ store me (sto_1) is now at git@h:new (was git@h:old); its rows stay\n  the clone /c (1 unpushed commit(s)) now fetches from and pushes to git@h:new\n"},
+		{"set-url only carries a clone", SetURLOut{Name: "me", URL: "git@h:new", Previous: "git@h:new", ID: "sto_1", Changed: true, Clone: "the clone /c"}.Text(),
+			"✓ store me (sto_1) stays at git@h:new\n  the clone /c\n"},
 		{"set-url unchanged with note", SetURLOut{Name: "agency", URL: "git@h:new", Note: "old address gone"}.Text(),
 			"store agency is already at git@h:new; nothing changed\n  note: old address gone\n"},
 	}

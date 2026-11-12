@@ -123,7 +123,7 @@ func TestScopeChainPicks(t *testing.T) {
 			scopeChainPicks(fs, rows, func(k knowledgeRow, why string) {
 				got = append(got, k.r.ID.String()+" "+why)
 			}, func(p contextPick) {
-				if !strings.Contains(p.line, "in context already: src/booking/"+dirFileName) || !strings.Contains(p.line, hOuter.r.ID.String()) || !strings.Contains(p.line, "1 entries") {
+				if !strings.Contains(p.line, "in context already: src/booking/"+dirFileName) || !strings.Contains(p.line, hOuter.r.ID.String()) || !strings.Contains(p.line, "1 entry (") {
 					t.Fatalf("line %q", p.line)
 				}
 				got = append(got, "line "+p.ID)

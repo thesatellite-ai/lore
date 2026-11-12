@@ -444,6 +444,9 @@ func writeGH(t *testing.T, home, script string) {
 
 // store.private when gh cannot answer: the visibility is unknown, so the
 // check could not run (error, no fix), never "public" with a Run-it fix.
+// When the reason is gh itself (not logged in, not installed) on the ssh
+// route, where gh is optional, it is a note (warn at info level, the
+// gh_optional fix) in lore's words, not gh's help text (B1-13).
 func TestStorePrivateGHFails(t *testing.T) {
 	t.Parallel()
 	sp, home := aliasWorld(t)
@@ -453,11 +456,12 @@ func TestStorePrivateGHFails(t *testing.T) {
 		name, gh string
 		status   onboard.Status
 		has      string
+		note     bool
 	}{
-		{"404", `echo "gh: Not Found (HTTP 404)" >&2; exit 1`, onboard.StatusError, "could not tell whether octo-personal/notes is private"},
-		{"not logged in", `echo "To get started with GitHub CLI, please run:  gh auth login" >&2; exit 4`, onboard.StatusError, "could not tell"},
-		{"public", `printf 'false\ntrue\n'`, onboard.StatusWarn, "is public"},
-		{"private", `printf 'true\ntrue\n'`, onboard.StatusOK, ""},
+		{"404", `echo "gh: Not Found (HTTP 404)" >&2; exit 1`, onboard.StatusError, "could not tell whether octo-personal/notes is private", false},
+		{"not logged in", `echo "To get started with GitHub CLI, please run:  gh auth login" >&2; exit 4`, onboard.StatusWarn, "gh is not logged in, so lore cannot check whether octo-personal/notes is private", true},
+		{"public", `printf 'false\ntrue\n'`, onboard.StatusWarn, "is public", false},
+		{"private", `printf 'true\ntrue\n'`, onboard.StatusOK, "", false},
 	}
 	for _, c := range cases {
 		writeGH(t, home, c.gh)
@@ -465,6 +469,18 @@ func TestStorePrivateGHFails(t *testing.T) {
 		if r.Status != c.status || !strings.Contains(r.Detail, c.has) {
 			t.Errorf("%s: %+v", c.name, r)
 		}
+		note := r.Vars[onboard.VarLevel] == string(onboard.LevelInfo) && r.Vars[onboard.VarFixVariant] == string(onboard.FixGHOptional)
+		if note != c.note || strings.Contains(r.Detail, "To get started") {
+			t.Errorf("%s: note %v, want %v: %+v", c.name, note, c.note, r)
+		}
+	}
+	// on the https route git itself logs in through gh: no login there is
+	// the setup's problem, not a note
+	writeGH(t, home, `echo "To get started with GitHub CLI, please run:  gh auth login" >&2; exit 4`)
+	https := req
+	https.Answers = onboard.Answers{onboard.QIDStoreURL: ans[onboard.QIDStoreURL], onboard.QIDRoute: {Text: string(onboard.RouteHTTPS)}}
+	if r := sp.Probe(context.Background(), []opssetup.ProbeRequest{https})[0]; r.Status != onboard.StatusError || r.Vars[onboard.VarLevel] != "" {
+		t.Errorf("https route, gh not logged in: %+v, want an error", r)
 	}
 }
 

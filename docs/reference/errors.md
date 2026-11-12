@@ -80,7 +80,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_NOT_PROJECT_ROOT` | 23 | this folder has no `.lore/lore.db` and no `.lore/lore.yaml`; lore never looks in parent folders | `cd` into the project's top folder, or run `lore init` |
+| `E_NOT_PROJECT_ROOT` | 23 | this folder has no lore project (no `.lore/data` and no `.lore/lore.yaml`) | `cd` into the repo, or run `lore init` |
 | `E_AMBIGUOUS_PROJECT` | 23 | `.lore/` holds both a database and a pointer file, so lore cannot tell which to use | delete the one you do not want |
 | `E_PROJECT_NOT_FOUND` | 27 | no project with that id in this database | check `--project` / `LORE_PROJECT_ID`; `lore project list` shows them |
 | `E_PROJECT_NAME_COLLISION` | 23 | several projects share that name | give the project id instead of the name |
@@ -206,7 +206,7 @@ ERROR: [E_HAS_DEPENDENTS] project delete: mem_b4f4…a5b0 (memories.project_id),
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_STORE_SCHEME` | 20 | a store url uses a scheme lore 0.1.18 has no backend for (`s3://`, `postgres://`, `lore://`); nothing was written | use a git url or `file:///<absolute path>` |
+| `E_STORE_SCHEME` | 20 | a store url uses a scheme lore 0.1.18 has no backend for (`s3://`, `postgres://`, `lore://`); nothing was written | use a git url, the path of a bare git repository on this machine (`/srv/git/notes.git`), or `file:///<absolute path>` for a plain folder |
 | `E_STORE_UNREACHABLE` | 15 | a store with no copy on this machine could not be reached | go online once; after that lore keeps a copy |
 | `E_STORE_READ_ONLY` | 23 | a write to a store this repo attaches read-only | write to another place with `--to`, or attach the store without read-only |
 | `E_STORE_LOCKED` | 23 | another lore process kept the store lock past `store.lock_timeout` | wait and run the command again |
@@ -394,6 +394,7 @@ A team profile write in a repo without an org answers `E_REFUSED` (profiles live
 | `E_SETUP_STEP_FAILED` | 23 | a setup step was saved while an error-level check fails | `lore setup check` shows each fix |
 | `E_SETUP_STEP_ORDER` | 23 | a setup step was saved before the steps it needs | save the earlier steps first (`lore setup plan`) |
 | `E_INVITE_INVALID` | 20 | the text is not a whole lore invite | copy the whole `lore-invite:v1:` line; the inviter can `lore team invite resend` |
+| `E_JOIN_ORG_UNKNOWN` | 27 | `lore setup join <name>` names an org this machine has no entry for yet (a new member's fresh machine) | `lore setup join <the org's store url>`, the command `lore member add` printed for the admin ([more](../team/setup-errors.md#e_join_org_unknown-exit-27)) |
 | `E_INVITE_NOT_FOUND` | 27 | no such invite in the org's store | ask the inviter to invite you again |
 | `E_INVITE_EXPIRED` | 23 | the invite is past its last day | ask for a new one |
 | `E_INVITE_REVOKED` | 23 | the invite was revoked | ask the inviter |

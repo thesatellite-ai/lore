@@ -56,3 +56,22 @@ func CommitTitle(ctx context.Context) string {
 	t, _ := ctx.Value(commitTitleKey{}).(string)
 	return t
 }
+
+// commitOpKey is the context key of the running operation's name.
+type commitOpKey struct{}
+
+// WithCommitOp returns ctx naming the operation whose rows a write commits
+// ("task.add"; engine.Run sets it). A backend that commits titles the
+// commit after it and the row the operation is about ("lore: task add:
+// <title>"), so a person reading the store's git log sees what was done,
+// not the actor copy written alongside (B2-4). A bulk title
+// (WithCommitTitle) still wins.
+func WithCommitOp(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, commitOpKey{}, name)
+}
+
+// CommitOp is the operation name ctx carries ("" if none).
+func CommitOp(ctx context.Context) string {
+	n, _ := ctx.Value(commitOpKey{}).(string)
+	return n
+}

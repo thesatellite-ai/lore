@@ -33,7 +33,7 @@ Alice (an agency developer) creates the staging branch once (from her `stores` f
 ```console
 # alice, in stores
 $ lore store init agency_stag 'git@github.com:agency/notes?branch=staging' --yes
-lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes@staging (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
 ✓ created store agency_stag (sto_7a67…9504) at git@github.com:agency/notes?branch=staging; recorded in .lore/stores.yaml; commit it to share
 
@@ -64,6 +64,7 @@ lore: pushed store agency-stag: commit 86dbae4 to branch staging
 lore: wrote 2 row file(s) in ~/.lore/personal/agency-stag (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes@staging/client (store agency-stag)
 ✓ tsk_54fe…28f2 — seed staging with demo data [medium] → [agency-stag/client]
+  created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
 $ lore task list
 ○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
 $ lore org use agency

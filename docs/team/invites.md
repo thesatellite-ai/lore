@@ -1,6 +1,6 @@
 # Team invites
 
-**Your own staff are not invited:** add them with [`lore member add`](members.md) and they join with `lore setup join <org>`. An invite is for an outsider who needs a one-time line, such as a contractor joining with a personal email.
+**Your own staff are not invited:** add them with [`lore member add`](members.md) and they join with `lore setup join <the org's store url>` (the command `member add` prints). An invite is for an outsider who needs a one-time line, such as a contractor joining with a personal email.
 
 **In short:** an admin runs `lore team invite <email>`; lore writes an invite row in the team's store and prints one line to send to the person. They paste it into `lore setup join`, and lore puts them on the roster with the roles and projects the invite names. An invite works once and expires after 14 days.
 

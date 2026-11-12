@@ -184,7 +184,7 @@ func storeBranchOf(org *orgconf.Org, norm string) (string, bool) {
 		return "", false
 	}
 	for _, sc := range org.Stores {
-		if n, err := repourl.Normalize(sc.URL); err == nil && n == norm {
+		if n, err := repourl.NormalizeStore(sc.URL); err == nil && n == norm {
 			return sc.EffectiveBranch(), true
 		}
 	}

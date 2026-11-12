@@ -910,3 +910,91 @@ func TestJoinInviteRefusedFirst(t *testing.T) {
 		t.Errorf("good invite = %+v %v", res, err)
 	}
 }
+
+// TestStaffAddPrintsStoreURLJoin (B2-1): member add tells the admin the
+// command a new member runs on a fresh machine, which has no org entry,
+// so it names the org's store url (credentials stripped), never the org's
+// name alone.
+func TestStaffAddPrintsStoreURLJoin(t *testing.T) {
+	x := newFixture(t)
+	out, err := x.ops().staffAdd(op.WithConfirmed(x.ctx, true), StaffAddIn{Email: "ann@agency.example", Name: "Ann"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "lore setup join " + storeURL
+	if out.JoinWith != want || !strings.Contains(out.Text(), "joins on their machine with: "+want+" ") {
+		t.Fatalf("join line = %q\n%s", out.JoinWith, out.Text())
+	}
+	if strings.Contains(out.Text(), "<org>") {
+		t.Fatalf("member add still prints the org placeholder:\n%s", out.Text())
+	}
+	// a made-up password in the store url never reaches the printed line
+	pw := "not-a-real-pw"
+	x.e.origins["agency"] = Origin{Store: "https://bob:" + pw + "@git.example/agency/lore-team.git"}
+	out, err = x.ops().staffAdd(op.WithConfirmed(x.ctx, true), StaffAddIn{Email: "cat@agency.example", Name: "Cat"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.Text(), pw) || !strings.Contains(out.JoinWith, "git.example/agency/lore-team.git") {
+		t.Fatalf("join line with a credential url = %q", out.JoinWith)
+	}
+	delete(x.e.origins, "agency")
+	out, err = x.ops().staffAdd(op.WithConfirmed(x.ctx, true), StaffAddIn{Email: "dee@agency.example", Name: "Dee"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.JoinWith != joinPlaceholder {
+		t.Fatalf("join line without an org entry = %q", out.JoinWith)
+	}
+}
+
+// TestStaffAddRestoresSameDay (B2-14): a member removed by mistake today
+// comes back with member add the same day: the stint that ended today is
+// reopened (no new stint overlapping it, which was E_PERIOD_OVERLAP), the
+// actor is active again under its roster name, and the output says so.
+func TestStaffAddRestoresSameDay(t *testing.T) {
+	x := newFixture(t)
+	ctx := op.WithConfirmed(x.ctx, true)
+	out, err := x.ops().staffAdd(ctx, StaffAddIn{Email: "ann@agency.example", Name: "Ann Lee"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ann, err := ids.Parse[ids.Actor](out.Added[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// what offboard writes today: the stint ends today, the actor is left
+	ps := x.rowsOf(schema.TableActorPeriods, ann)
+	if len(ps) != 1 {
+		t.Fatalf("periods after add: %v", ps)
+	}
+	end, err := value.DateOf("2026-11-06")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := ps[0]
+	p.Fields[schema.FieldPeriodEndedOn], p.Fields[schema.FieldPeriodEndReason] = end, txt(t, "removed by mistake")
+	x.e.Put(p)
+	for _, a := range x.e.All(schema.TableActors) {
+		if a.ID == ann.Any() {
+			a.Fields[schema.FieldActorStatus], a.Fields[schema.FieldActorActive] = txt(t, schema.ActorStatusLeft), value.BoolOf(false)
+			x.e.Put(a)
+		}
+	}
+	out, err = x.ops().staffAdd(ctx, StaffAddIn{Email: "ann@agency.example"})
+	if err != nil {
+		t.Fatalf("same-day restore: %v", err)
+	}
+	if len(out.Added) != 1 || out.Added[0].Name != "Ann Lee" || !strings.Contains(out.Text(), "was left; back on the roster") {
+		t.Fatalf("restore output:\n%s", out.Text())
+	}
+	ps = x.rowsOf(schema.TableActorPeriods, ann)
+	if len(ps) != 1 || fieldText(ps[0], schema.FieldPeriodEndedOn) != "" || fieldText(ps[0], schema.FieldPeriodEndReason) != "" {
+		t.Fatalf("the stint was not reopened: %v", ps)
+	}
+	for _, a := range x.e.All(schema.TableActors) {
+		if a.ID == ann.Any() && fieldText(a, schema.FieldActorStatus) != schema.ActorStatusActive {
+			t.Errorf("actor after restore: %v", a.Fields)
+		}
+	}
+}

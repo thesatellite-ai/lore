@@ -123,9 +123,10 @@ func TestV017LocalPersonalStore(t *testing.T) {
 		if !strings.Contains(raw, originOldFolder) || !strings.Contains(raw, personalEverywhereV017) {
 			t.Fatalf("%s at the root without its old folder: %s", id, raw)
 		}
-		old := rowFile(t, filepath.Join(home, personalDirV017, personalEverywhereV017, ".lore", "data", schema.TableMemories, id+".json"))
-		if string(old["_deleted"]) != "true" {
-			t.Fatalf("%s not tombstoned in everywhere/: %v", id, old)
+		// B4-12: the tombstone left in everywhere/ once the row is at the
+		// root is removed, so the old folder shows no duplicate
+		if _, serr := os.Stat(filepath.Join(home, personalDirV017, personalEverywhereV017, ".lore", "data", schema.TableMemories, id+".json")); serr == nil {
+			t.Fatalf("%s still has a copy in everywhere/ after the move", id)
 		}
 	}
 	got := string(mustRead(t, filepath.Join(home, ConfigFile)))

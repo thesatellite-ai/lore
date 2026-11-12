@@ -84,8 +84,9 @@ func csToGitHub(t *testing.T, m *Machine, name string) {
 
 // TestCampaignSetup_PersonalStore: the personal store step refuses an
 // unreachable remote with E_SETUP_STEP_FAILED and its fix, writing no
-// store url; a real bare repo is created as a store, and a second
-// machine using the same repo reads the first machine's profile.
+// store url; a bare git repository named by file:// is taken as a git
+// store; an empty folder is created as a store, and a second machine
+// using the same folder reads the first machine's profile.
 func TestCampaignSetup_PersonalStore(t *testing.T) {
 	t.Parallel()
 	m := Build(t, ShapeFresh, loreBin)
@@ -108,19 +109,19 @@ func TestCampaignSetup_PersonalStore(t *testing.T) {
 			t.Errorf("%s: check reports no failure: %s", url, chk)
 		}
 	}
-	// A bare git repository named by file:// is refused (a folder store
-	// would land in git's own folder); an empty folder becomes the store.
+	// A bare git repository named by file:// is a git store, as git clone
+	// reads it (nothing lands in git's own folder); an empty folder becomes
+	// a folder store.
 	gitRepo := filepath.Join(m.Dir, "me.git")
 	if out, err := exec.Command("/usr/bin/git", "init", "-q", "--bare", gitRepo).CombinedOutput(); err != nil {
 		t.Fatalf("git init --bare: %v %s", err, out)
 	}
-	ans, _ := json.Marshal(map[string]string{"personal_store": "create", "store_url": "file://" + gitRepo})
-	csRefused(t, m.Lore(t, "", "setup", "apply", "solo", "--step", "personal_store", "--answers", string(ans), "--json"), "E_INVALID_INPUT")
+	csBareRepoStore(t, m, "solo", gitRepo)
 	bare := filepath.Join(m.Dir, "me")
 	if err := os.Mkdir(bare, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	ans, _ = json.Marshal(map[string]string{"personal_store": "create", "store_url": "file://" + bare})
+	ans, _ := json.Marshal(map[string]string{"personal_store": "create", "store_url": "file://" + bare})
 	r := m.Lore(t, "", "setup", "apply", "solo", "--step", "personal_store", "--answers", string(ans), "--json")
 	csConforms(t, "setup.apply", csOK(t, r))
 	again := m.Lore(t, "", "setup", "apply", "solo", "--step", "personal_store", "--answers", string(ans), "--json")
@@ -231,5 +232,29 @@ func TestCampaignSetup_ConcurrentFirstUse(t *testing.T) {
 		if n := strings.Count(csConfig(t, m), "default: true"); n != 1 {
 			t.Errorf("round %d: %d setups are the default, want 1:\n%s", round+1, n, csConfig(t, m))
 		}
+	}
+}
+
+// csBareRepoStore: the personal store step of setup name, given the
+// file:// url of the bare git repository repo, takes it as a git store
+// (B3-2): config.yaml and setup show name the repository by its plain
+// path, the store's first commit (its lore-store.yaml) is in the
+// repository, and nothing is written beside git's objects.
+func csBareRepoStore(t *testing.T, m *Machine, name, repo string) {
+	t.Helper()
+	ans, _ := json.Marshal(map[string]string{"personal_store": "create", "store_url": "file://" + repo})
+	csOK(t, m.Lore(t, "", "setup", "apply", name, "--step", "personal_store", "--answers", string(ans), "--json"))
+	if c := csConfig(t, m); !strings.Contains(c, repo) || strings.Contains(c, "file://"+repo) {
+		t.Errorf("config.yaml does not name the bare repository %s by its plain path:\n%s", repo, c)
+	}
+	if s := csOK(t, m.Lore(t, "", "setup", "show", name, "--json")); !strings.Contains(s, repo) {
+		t.Errorf("setup show lacks the bare repository %s: %s", repo, s)
+	}
+	out, err := exec.Command("/usr/bin/git", "--git-dir", repo, "ls-tree", "-r", "--name-only", "HEAD").CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "lore-store.yaml") {
+		t.Errorf("the store's first commit is not in the bare repository: %v %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "lore-store.yaml")); err == nil {
+		t.Errorf("lore wrote lore-store.yaml beside git's objects in %s", repo)
 	}
 }

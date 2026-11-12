@@ -89,7 +89,7 @@ type Env interface {
 type AddIn struct {
 	Name  string `json:"name" flag:"name" desc:"tag name (snake_case)"`
 	Color string `json:"color,omitempty" flag:"color" desc:"optional hex color #RRGGBB"`
-	To    string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To    string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // AddOut is the output of tag.add.
@@ -161,9 +161,9 @@ func (o ListOut) Text() string {
 			u = o.Uses[i]
 		}
 		if u.Active == u.Total {
-			fmt.Fprintf(&b, "%-*s %s  (%d uses)\n", listNameWidth, t.Name, t.ID, u.Active)
+			fmt.Fprintf(&b, "%-*s %s  (%d uses)%s\n", listNameWidth, t.Name, t.ID, u.Active, opsmemory.LabelSuffix(t.Label))
 		} else {
-			fmt.Fprintf(&b, "%-*s %s  (%d active / %d total)\n", listNameWidth, t.Name, t.ID, u.Active, u.Total)
+			fmt.Fprintf(&b, "%-*s %s  (%d active / %d total)%s\n", listNameWidth, t.Name, t.ID, u.Active, u.Total, opsmemory.LabelSuffix(t.Label))
 		}
 	}
 	return b.String()

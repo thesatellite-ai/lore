@@ -87,7 +87,7 @@ res_4c590afb2a0cc7ae1b97b7e4e62d6c38  service  repo:service/hub_api
   db_password = gopass://acme/hub/db
   runs_on = hub_prod
   url = https://api.example.com
-created 2026-11-02T10:01:20Z by act_f147dd95f1aaf742dd4f5214843a5139 · updated 2026-11-02T10:01:20Z by act_f147dd95f1aaf742dd4f5214843a5139
+created 2026-11-02T10:01:20Z by alice · updated 2026-11-02T10:01:20Z by alice
 
 ### graph
 alice (work/infra)$ lore resource graph hub_api --down
@@ -102,16 +102,17 @@ host hub_prod
 alice (work/infra)$ lore resource list service --json | grep -o 'res_[0-9a-f]*' | head -1
 res_4c590afb2a0cc7ae1b97b7e4e62d6c38
 alice (work/infra)$ lore task add 'Rotate the hub_api database password' --ref res_4c590afb2a0cc7ae1b97b7e4e62d6c38
-lore: wrote ~/work/infra/.lore/data/task_lists/tlt_2537f9b2f7de77bfe5ca958860216bbb.json
-lore: wrote ~/work/infra/.lore/data/tasks/tsk_b69e8368dd4986838455061d5d9e5ed7.json
-lore: wrote ~/work/infra/.lore/data/knowledge_refs/kfr_0aaebe6aca5bb46cc521869f5ba2a61f.json
-✓ tsk_b69e8368dd4986838455061d5d9e5ed7 — Rotate the hub_api database password [medium]
+lore: wrote ~/work/infra/.lore/data/task_lists/tlt_f147dd95f1aaf742dd4f5214843a5139.json
+lore: wrote ~/work/infra/.lore/data/tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb.json
+lore: wrote ~/work/infra/.lore/data/knowledge_refs/kfr_b69e8368dd4986838455061d5d9e5ed7.json
+✓ tsk_2537f9b2f7de77bfe5ca958860216bbb — Rotate the hub_api database password [medium]
+  created tasklist tlt_f147dd95f1aaf742dd4f5214843a5139 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 alice (work/infra)$ lore resource impact hub_prod
 what breaks if host hub_prod goes down
   1  service    hub_api              runs_on → hub_prod
   1  service    hub_web              runs_on → hub_prod
-  open  task tsk_b69e8368dd4986838455061d5d9e5ed7 (mentions hub_api)
+  open  task tsk_2537f9b2f7de77bfe5ca958860216bbb (mentions hub_api)
 
 ### check and stale
 alice (work/infra)$ lore resource stale
@@ -137,13 +138,13 @@ alice (work/infra)$ lore resource edit hub_stage --unset ip
 lore: wrote ~/work/infra/.lore/data/resources/res_28f8d32584b2db54ffb146bede5b03df.json
 ✓ edited host hub_stage (res_…03df)
 alice (work/infra)$ lore resource history hub_prod
-2026-11-02  os  ubuntu-24.04 → debian-12  act_f147dd95f1aaf742dd4f5214843a5139
-2026-11-02  ip  set 203.0.113.10  act_f147dd95f1aaf742dd4f5214843a5139
-2026-11-02  provider  set hetzner  act_f147dd95f1aaf742dd4f5214843a5139
-2026-11-02  os  set ubuntu-24.04  act_f147dd95f1aaf742dd4f5214843a5139
+2026-11-02  os  ubuntu-24.04 → debian-12  act_0aaebe6aca5bb46cc521869f5ba2a61f
+2026-11-02  ip  set 203.0.113.10  act_0aaebe6aca5bb46cc521869f5ba2a61f
+2026-11-02  provider  set hetzner  act_0aaebe6aca5bb46cc521869f5ba2a61f
+2026-11-02  os  set ubuntu-24.04  act_0aaebe6aca5bb46cc521869f5ba2a61f
 alice (work/infra)$ lore resource history hub_prod --field os
-2026-11-02  os  ubuntu-24.04 → debian-12  act_f147dd95f1aaf742dd4f5214843a5139
-2026-11-02  os  set ubuntu-24.04  act_f147dd95f1aaf742dd4f5214843a5139
+2026-11-02  os  ubuntu-24.04 → debian-12  act_0aaebe6aca5bb46cc521869f5ba2a61f
+2026-11-02  os  set ubuntu-24.04  act_0aaebe6aca5bb46cc521869f5ba2a61f
 
 ### clone and rename
 alice (work/infra)$ lore resource clone hub_prod hub_prod_2 --set ip=203.0.113.12
@@ -339,7 +340,7 @@ res_6a866bb99ce08addfe04ea845052ed8c  server  repo:server/hub_prod_new
   os_image = debian-13
   provider = hetzner
   checked 2026-11-02T10:00:00.000000001Z (by edit)
-created 2026-11-02T10:02:45Z by act_f147dd95f1aaf742dd4f5214843a5139 · updated 2026-11-02T10:05:50Z by act_f147dd95f1aaf742dd4f5214843a5139
+created 2026-11-02T10:02:45Z by alice · updated 2026-11-02T10:05:50Z by alice
 
 ### secret ref field
 alice (work/infra)$ lore resource add service hub_jobs --set runs_on=hub_prod_new --set db_password=acme/hub/jobs-db
@@ -369,7 +370,7 @@ res_6a866bb99ce08addfe04ea845052ed8c  server  repo:server/hub_prod_new
   provider = hetzner
   root_user = deploy
   checked 2026-11-02T10:00:00.000000002Z (by edit)
-created 2026-11-02T10:02:45Z by act_f147dd95f1aaf742dd4f5214843a5139 · updated 2026-11-02T10:06:10Z by act_f147dd95f1aaf742dd4f5214843a5139
+created 2026-11-02T10:02:45Z by alice · updated 2026-11-02T10:06:10Z by alice
 
 ### ambiguous
 alice (work/infra)$ lore resource add service hub_prod_new --set runs_on=hub_prod_new
@@ -399,7 +400,7 @@ unchecked   4: service hub_api, service hub_jobs, service hub_prod_new, service 
 dangling    0
 quarantined 0
   details: lore resource lint
-open links  1: task tsk_b69e8368dd4986838455061d5d9e5ed7
+open links  1: task tsk_2537f9b2f7de77bfe5ca958860216bbb
 rotate      2: gopass://acme/hub/db, gopass://acme/hub/jobs-db
 
 ### files

@@ -4,7 +4,7 @@ alice (work/notes-app)$ lore --version
 lore version dev
 
 ### init
-alice (work/notes-app)$ lore init --non-interactive --name=notes-app
+alice (work/notes-app)$ lore init --name=notes-app
 lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/notes-app/.git/config; lore's merge rules in ~/work/notes-app/.gitattributes; hook blocks in ~/work/notes-app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 4 row file(s) in ~/work/notes-app/.lore/data
 lore initialized
@@ -36,6 +36,7 @@ alice (work/notes-app)$ lore task add 'fix login timeout'
 lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe984c9b495744c0217776765a28f2.json
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 — fix login timeout [medium]
+  created tasklist tlt_54fe984c9b495744c0217776765a28f2 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 alice (work/notes-app)$ lore task list
 ○ tsk_05e99e22e9e86e96fe4daa7777994603 fix login timeout [medium]
@@ -118,7 +119,7 @@ orgs:
     repos: [github.com/client/*]
 alice$ lore config check
 ✓ ~/.lore/config.yaml is valid: 1 org entry (agency)
-alice (work/tools)$ lore init --non-interactive --name=tools
+alice (work/tools)$ lore init --name=tools
 lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/tools/.git/config; lore's merge rules in ~/work/tools/.gitattributes; hook blocks in ~/work/tools/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 4 row file(s) in ~/work/tools/.lore/data
 lore initialized

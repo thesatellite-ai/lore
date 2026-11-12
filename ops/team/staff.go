@@ -4,7 +4,8 @@ package team
 // report 2026-11-12: "those are part of the company already, so why
 // invite"). An invite is a pending row plus a line the person must paste;
 // a member is on the roster at once, and joins from their own machine by
-// their email (`lore setup join <org>`, rosterapply.go ApplyJoinMember).
+// their email (`lore setup join <the org's store url>`, rosterapply.go
+// ApplyJoinMember).
 //
 //	member.add <email> [--name --handle --github --role --type --team --project
 //	                    --project-role] | --from <file.csv|json> | --from-invites
@@ -42,6 +43,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -107,6 +109,29 @@ type StaffAddOut struct {
 	// Notes say what member add chose for someone (a handle lowercased or
 	// derived), one line each.
 	Notes []string `json:"notes,omitempty"`
+	// JoinWith is the command each person runs on their own machine:
+	// `lore setup join <the org's store url>`. The store url, never the org
+	// name: a new member's machine has no org entry yet, so only the url
+	// resolves there (B2-1). Credentials are stripped; empty when the org
+	// entry names no store.
+	JoinWith string `json:"join_with,omitempty"`
+}
+
+// joinPlaceholder stands in for the store url when the org entry has none.
+const joinPlaceholder = "lore setup join <the org's store url>"
+
+// joinCommand is the line a member runs on a fresh machine to join org:
+// its store url (credentials stripped), else the placeholder.
+func joinCommand(ctx context.Context, env Env, org string) string {
+	origin, err := env.TeamOrigin(ctx, org)
+	if err != nil || strings.TrimSpace(origin.Store) == "" {
+		return joinPlaceholder
+	}
+	clean, _, err := repourl.StripCredentials(origin.Store)
+	if err != nil || clean == "" {
+		return joinPlaceholder
+	}
+	return "lore setup join " + clean
 }
 
 // Text is one line per person, then how to join.
@@ -144,7 +169,8 @@ func (o StaffAddOut) Text() string {
 	case o.DryRun:
 		b.WriteString("nothing written (--dry-run)\n")
 	default:
-		b.WriteString(fmt.Sprintf("  %d roster rows in %s, one store commit; each person joins on their machine with: lore setup join <org> (matched by their email, no invite)\n", o.Rows, o.Where))
+		join := cmp.Or(o.JoinWith, joinPlaceholder)
+		b.WriteString(fmt.Sprintf("  %d roster rows in %s, one store commit; each person joins on their machine with: %s (matched by their email, no invite)\n", o.Rows, o.Where, join))
 	}
 	return b.String() + profilestore.WarningText(o.Warnings)
 }
@@ -273,7 +299,7 @@ func (o ops) staffOps(base, writeErrs []errs.Code) []op.Entry {
 		return s
 	}
 	return []op.Entry{
-		op.Define(asking(op.Spec{Name: OpStaffAdd, Summary: "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join <org>",
+		op.Define(asking(op.Spec{Name: OpStaffAdd, Summary: "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join <the org's store url>",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.ContactTaken, errs.StatusChange}, writeErrs...),
 			Examples: []op.Example{
 				{Title: "add a developer to a team", CLI: "lore member add mira@agency.example --name 'Mira Dev' --github mira-dev --role member --team @web --yes", Want: "added"},
@@ -319,7 +345,6 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 	if err != nil {
 		return StaffAddOut{}, errs.Prefix("member add", err)
 	}
-	_ = e
 	given := 0
 	for _, on := range []bool{strings.TrimSpace(in.Email) != "", in.From != "", in.FromInvites} {
 		if on {
@@ -360,7 +385,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		specs = []staffSpec{{Email: in.Email, Name: in.Name, Handle: in.Handle, GitHub: in.GitHub, Role: in.Role, Type: in.Type,
 			Teams: splitList(in.Teams), Projects: splitList(in.Projects), ProjectRoles: splitList(in.ProjectRoles)}}
 	}
-	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), DryRun: in.DryRun}
+	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
 	plans, err := o.planStaff(ctx, r, specs, pending, &out)
 	if err != nil {
 		return StaffAddOut{}, err
@@ -525,6 +550,13 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 				continue
 			}
 			p.existing = &cur
+			// someone who left comes back (B2-14: the same day too, the
+			// stint that ended today reopens): keep their roster name
+			if strings.TrimSpace(specs[i].Name) == "" {
+				s.Name = cmp.Or(fieldText(cur, actorFieldName), s.Name)
+				p.spec.Name = s.Name
+			}
+			notes = append(notes, email+": was "+teamprofile.StatusOf(cur.Fields)+"; back on the roster")
 		}
 		if x, ok := pending[email]; ok {
 			p.spec.invite = &x

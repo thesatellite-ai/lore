@@ -273,11 +273,16 @@ func TestSetupApplierMemberDeferAndStoreTargets(t *testing.T) {
 		}
 	}
 
-	// A bare git repository named by file:// is refused (store init's rule,
-	// wire/storeinit_bare.go); a plain folder is the store.
-	if _, berr := ap.Apply(ctx, opssetup.ApplyRequest{Setup: onboard.SetupEntry{Name: "personal", Kind: onboard.KindSolo, Default: true}, Step: onboard.StepPersonalStore, Apply: onboard.ApplyPersonalStore,
-		Answers: onboard.Answers{"personal_store": {Text: onboard.PersonalStoreExisting}, "store_url": {Text: bareStore(t)}}}); !errs.Has(berr, errs.InvalidInput) {
-		t.Fatalf("a file:// bare repo as the personal store = %v, want E_INVALID_INPUT", berr)
+	// A bare git repository named by file:// is a git store, as `git clone
+	// file:///…` reads it (wire/storelocalpath.go): its plain path is saved.
+	bare := bareStore(t)
+	bsaved, berr := ap.Apply(ctx, opssetup.ApplyRequest{Setup: onboard.SetupEntry{Name: "bare-personal", Kind: onboard.KindSolo}, Step: onboard.StepPersonalStore, Apply: onboard.ApplyPersonalStore,
+		Answers: onboard.Answers{"personal_store": {Text: onboard.PersonalStoreExisting}, "store_url": {Text: bare}}})
+	if berr != nil {
+		t.Fatalf("a file:// bare repo as the personal store = %v, want a git store", berr)
+	}
+	if got := bsaved.Setup.PersonalStore; strings.HasPrefix(got, "file:") || !strings.HasSuffix(got, "/me.git") {
+		t.Fatalf("a file:// bare repo saved as %q, want its plain path", got)
 	}
 	url := fileuri.URL(filepath.Join(t.TempDir(), "me"), "")
 	solo := onboard.SetupEntry{Name: "personal", Kind: onboard.KindSolo, Default: true}

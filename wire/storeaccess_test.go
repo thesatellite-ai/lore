@@ -12,6 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/execfile"
 	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -70,7 +71,7 @@ func newAccessWorld(t *testing.T) *accessWorld {
 		t.Fatal(err)
 	}
 	ssh := filepath.Join(w.root, "fakessh")
-	if err := os.WriteFile(ssh, []byte(accessFakeSSH), 0o700); err != nil {
+	if err := execfile.WriteFile(ssh, []byte(accessFakeSSH), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", gc)
@@ -210,7 +211,7 @@ func TestAliasURLStoredCanonical(t *testing.T) {
 	if err != nil || len(fs) != 1 {
 		t.Fatalf("doctor without the rule: %v %+v", err, fs)
 	}
-	for _, want := range []string{accessCanonURL, "cannot be reached"} {
+	for _, want := range []string{accessCanonURL, "cannot reach"} {
 		if !strings.Contains(fs[0].Message, want) {
 			t.Errorf("finding %q does not name %q", fs[0].Message, want)
 		}

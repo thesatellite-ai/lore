@@ -7,10 +7,13 @@ package wire
 // lives in the lore home, <home>/state/read-notices/, never in the repo.
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
 	"path/filepath"
+
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 )
 
 // ReadNoticeDir is the folder under <home>/state.
@@ -38,7 +41,7 @@ func ReadNoticeSaid(home, key, fingerprint string) bool {
 // MarkReadNotice remembers that a read gave the notice for key with this
 // fingerprint. Best effort: a lost mark only repeats the notice.
 func MarkReadNotice(home, key, fingerprint string) {
-	if home == "" {
+	if home == "" || git.NoClone(context.Background()) { // a dry run writes nothing (B4-14)
 		return
 	}
 	p := readNoticePath(home, key)

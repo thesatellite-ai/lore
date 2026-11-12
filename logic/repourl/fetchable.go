@@ -15,15 +15,15 @@ var ErrNotFetchable = errors.New("repourl: not a url git can fetch; use git@host
 
 // CheckFetchable reports whether raw is a git store address lore can hand
 // to git: a url with a scheme (https://, http://, ssh://, file://, ...) or
-// git's scp form (git@host:owner/repo). It checks only the form; Normalize
+// git's scp form (git@host:owner/repo), or an absolute path to a local repository. It checks only the form; Normalize
 // (or the store opener) still checks the rest. A blank value is ErrEmpty.
 func CheckFetchable(raw string) error {
 	s := strings.TrimSpace(raw)
 	switch {
 	case s == "":
 		return ErrEmpty
-	case strings.Contains(s, schemeSep), isSCPLike(s):
-		return nil
+	case strings.Contains(s, schemeSep), isSCPLike(s), IsLocalStorePath(s):
+		return nil // a plain absolute path is a git repository on this machine (NormalizeStore)
 	default:
 		return ErrNotFetchable
 	}

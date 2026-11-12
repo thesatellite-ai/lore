@@ -32,6 +32,8 @@ type fakeHost struct {
 	gitignore  error
 	toolErr    error
 	pid        ids.ID[ids.Project]
+	linked     ids.ID[ids.Project] // LinkedProject's answer (zero: no link)
+	createdID  ids.ID[ids.Project] // the id CreateProject was asked for
 
 	undone, primed, inherited bool
 	created                   map[string]value.Value
@@ -59,12 +61,18 @@ func (f *fakeHost) Project(context.Context) (ids.ID[ids.Project], error) {
 }
 func (f *fakeHost) DefaultName(context.Context) string { return "acme-hub" }
 func (f *fakeHost) OriginURL(context.Context) string   { return "git@github.com:agency/acme-hub.git" }
-func (f *fakeHost) CreateProject(_ context.Context, fields map[string]value.Value) (string, ids.ID[ids.Project], error) {
+func (f *fakeHost) CreateProject(_ context.Context, id ids.ID[ids.Project], fields map[string]value.Value) (string, ids.ID[ids.Project], error) {
 	if f.createErr != nil {
 		return "", ids.ID[ids.Project]{}, f.createErr
 	}
-	f.created = fields
+	f.created, f.createdID = fields, id
+	if !id.IsZero() {
+		return id.String(), id, nil
+	}
 	return f.pid.String(), f.pid, nil
+}
+func (f *fakeHost) LinkedProject(context.Context) (ids.ID[ids.Project], string, bool) {
+	return f.linked, "github.com/agency/acme-hub", !f.linked.IsZero()
 }
 func (f *fakeHost) SeedRepoMeta(context.Context, ids.ID[ids.Project]) error { return nil }
 func (f *fakeHost) InheritRepoID(context.Context, rowfs.RepoMeta) error {
@@ -280,5 +288,36 @@ func TestRunRefusesControlChars(t *testing.T) {
 		if err != nil || out.Name != strings.ToLower(name) {
 			t.Errorf("name %q: kept, got %+v %v", name, out, err)
 		}
+	}
+}
+
+// TestRunTakesTheLinkedProjectID (B1-18): a repo the org store already
+// links by its remote gets that link's project id, and init says so; with
+// no link a new id is minted and nothing is said.
+func TestRunTakesTheLinkedProjectID(t *testing.T) {
+	ctx := context.Background()
+	f := newFake(t)
+	linked, err := ids.New[ids.Project]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.linked = linked
+	out, err := Run(ctx, f, InitIn{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.createdID != linked || out.ProjectID != linked.String() {
+		t.Fatalf("project %s (asked for %s), want the linked %s", out.ProjectID, f.createdID, linked)
+	}
+	if !strings.Contains(out.Body(), "already links github.com/agency/acme-hub") {
+		t.Fatalf("init does not say it took the link's id:\n%s", out.Body())
+	}
+	f = newFake(t)
+	out, err = Run(ctx, f, InitIn{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.createdID.IsZero() || out.ProjectID != f.pid.String() || strings.Contains(out.Body(), "already links") {
+		t.Fatalf("no link: project %s, asked for %s:\n%s", out.ProjectID, f.createdID, out.Body())
 	}
 }

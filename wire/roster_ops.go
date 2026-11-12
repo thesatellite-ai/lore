@@ -69,7 +69,9 @@ func runDirect(ctx context.Context, e op.Entry, d op.Decoder) (op.Result, error)
 	if ctx, err = engine.BindListAuthors(ctx, reg, in); err != nil {
 		return op.Result{}, err
 	}
-	return e.Invoke(ctx, in)
+	// B2-4 / R-1: a store commit made by a direct operation (actor
+	// register, …) is titled after it too, as engine.Run does.
+	return e.Invoke(store.WithCommitOp(ctx, e.Spec().Name), in)
 }
 
 // ActorRegister implements opsinfra.Roster.

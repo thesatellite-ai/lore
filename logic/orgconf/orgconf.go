@@ -251,7 +251,7 @@ func (o *Org) EffectiveAgentDetails() AgentDetails {
 // StoreFor returns the entry's store whose url normalises to norm, or nil.
 func (o *Org) StoreFor(norm string) *Store {
 	for i := range o.Stores {
-		if n, err := repourl.Normalize(o.Stores[i].URL); err == nil && n == norm {
+		if n, err := repourl.NormalizeStore(o.Stores[i].URL); err == nil && n == norm {
 			return &o.Stores[i]
 		}
 	}
@@ -373,7 +373,7 @@ func (c *Config) Validate() error {
 	var all []error
 	add := func(e error) { all = append(all, e) }
 	if s := c.Personal.Store; s != "" && s != PersonalStoreLocal && !isFolderStoreURL(s) {
-		if _, err := repourl.Normalize(s); err != nil {
+		if _, err := repourl.NormalizeStore(s); err != nil {
 			add(fmt.Errorf("personal.store %q: not %q and not a git URL: %w", s, PersonalStoreLocal, err))
 		} else if ferr := repourl.CheckFetchable(s); ferr != nil {
 			add(fmt.Errorf("personal.store %q: %w", s, ferr)) // the host/path id form is not an address (D-DOCS-1)
@@ -448,7 +448,7 @@ func (o *Org) validate() []error {
 	stores := map[string]int{}
 	for i, s := range o.Stores {
 		w := fmt.Sprintf("stores[%d]", i)
-		n, err := repourl.Normalize(s.URL)
+		n, err := repourl.NormalizeStore(s.URL)
 		if err != nil {
 			add(fmt.Errorf("%s.url %q: %w", w, s.URL, err))
 		} else if ferr := repourl.CheckFetchable(s.URL); ferr != nil {

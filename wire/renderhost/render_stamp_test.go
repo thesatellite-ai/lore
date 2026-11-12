@@ -73,8 +73,15 @@ func TestInputDigestChanges(t *testing.T) {
 }
 
 func TestCanaryIn(t *testing.T) {
-	if got := canaryIn("<!-- AICODER:CANARY=rnd_0123456789abcdef SCHEMA=v2 -->\nbody\n"); got != "rnd_0123456789abcdef" {
+	if got := canaryIn(canaryLine("rnd_0123456789abcdef") + "body\n"); got != "rnd_0123456789abcdef" {
 		t.Errorf("canaryIn = %q", got)
+	}
+	// the spelling of renders before the self-describing line still reads
+	if got := canaryIn("<!-- AICODER:CANARY=rnd_0123456789abcdef SCHEMA=v2 -->\nbody\n"); got != "rnd_0123456789abcdef" {
+		t.Errorf("canaryIn (old line) = %q", got)
+	}
+	if got := canaryLine("rnd_0123456789abcdef"); strings.Contains(got, "AICODER") || !strings.Contains(got, "which render wrote this file") {
+		t.Errorf("canaryLine = %q", got)
 	}
 	if got := canaryIn("no header\n<!-- AICODER:CANARY=rnd_0123456789abcdef SCHEMA=v2 -->\n"); got != "" {
 		t.Errorf("canaryIn reads past the first line: %q", got)
@@ -112,7 +119,7 @@ func TestPrivateStamp(t *testing.T) {
 func TestCopyVerdict(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LORE.md")
-	want := "<!-- AICODER:CANARY=rnd_aaaaaaaaaaaaaaaa SCHEMA=v2 -->\nrules\n"
+	want := canaryLine("rnd_aaaaaaaaaaaaaaaa") + "rules\n"
 	if k, err := copyVerdict(path, want, canaryIn); err != nil || k != opsrender.CopyMissing {
 		t.Errorf("no file: %q %v, want missing", k, err)
 	}
@@ -121,7 +128,7 @@ func TestCopyVerdict(t *testing.T) {
 		want       opsrender.CopyKind
 	}{
 		{"same bytes", want, ""},
-		{"rows changed (other stamp)", "<!-- AICODER:CANARY=rnd_bbbbbbbbbbbbbbbb SCHEMA=v2 -->\nrules\n", opsrender.CopyStale},
+		{"rows changed (other stamp)", canaryLine("rnd_bbbbbbbbbbbbbbbb") + "rules\n", opsrender.CopyStale},
 		{"edited by hand (same stamp)", want + "my note\n", opsrender.CopyEdited},
 		{"no stamp at all (an old render)", "rules\n", opsrender.CopyStale},
 	} {
@@ -195,5 +202,17 @@ func TestPointerCopies(t *testing.T) {
 	// Without a context.targets row nothing is compared.
 	if got := pointerCopies(root, targetPick{sel: toolprofile.Selection{Reason: toolprofile.ReasonWired}}); len(got) != 0 {
 		t.Errorf("no row, findings anyway: %+v", got)
+	}
+}
+
+// TestLocalCopyMessage: a machine-local copy that is missing reads "not
+// rendered yet on this machine" (B3-25); stale keeps the shared sentence.
+func TestLocalCopyMessage(t *testing.T) {
+	t.Parallel()
+	if got := localCopyMessage(opsrender.CopyMissing, "CLAUDE.local.md", "the import lines"); got != "CLAUDE.local.md is not rendered yet on this machine (the import lines)" {
+		t.Errorf("missing: %q", got)
+	}
+	if got := localCopyMessage(opsrender.CopyStale, "x.md", "the index"); got != copyMessage(opsrender.CopyStale, "x.md", "the index") {
+		t.Errorf("stale: %q", got)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -65,11 +66,46 @@ func (l *WriteLog) add(w Written) {
 	l.files = append(l.files, w)
 }
 
-// Files are the row files written, in write order.
+// Files are the row files written, in write order, each where it is now:
+// a row the command wrote into a store's old layout and that the same
+// command then moved (the layout commit after a migration) is named at
+// its new place, never at a path that no longer exists (currentRowFile).
 func (l *WriteLog) Files() []Written {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return append([]Written(nil), l.files...)
+	out := append([]Written(nil), l.files...)
+	for i := range out {
+		out[i].File = currentRowFile(out[i].File)
+	}
+	return out
+}
+
+// oldDataSeg is the folder of the layout before plain files inside a
+// store clone: <clone>/<folder>/.lore/data/<table>/<id>.json, or
+// <clone>/.lore/data/… for the store's own rows.
+const oldDataSeg = string(filepath.Separator) + rowfs.LoreDir + string(filepath.Separator) + rowfs.DataDir + string(filepath.Separator)
+
+// currentRowFile is file, or where a layout move put it when file is gone:
+// <folder>/.lore/data/<t>/<id>.json → <folder>/<t>/<id>.json (the layout
+// commit), → <clone>/_store/<t>/<id>.json (the store's own rows, and
+// 0.1.17's per-org personal notes). A file at neither place is left as
+// it was written.
+func currentRowFile(file string) string {
+	i := strings.LastIndex(file, oldDataSeg)
+	if file == "" || i < 0 || fileExists(file) {
+		return file
+	}
+	before, rest := file[:i], file[i+len(oldDataSeg):]
+	for _, c := range []string{
+		filepath.Join(before, rest),
+		filepath.Join(before, rowfs.StoreDataDir, rest),
+		filepath.Join(filepath.Dir(before), rowfs.StoreDataDir, rest),
+	} {
+		if fileExists(c) {
+			return c
+		}
+	}
+	return file
 }
 
 // WrittenShowAll is how many files are named one by one; past it the

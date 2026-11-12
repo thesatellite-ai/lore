@@ -38,9 +38,13 @@ func TestListLine(t *testing.T) {
 		{long, "PA  pat_1  " + strings.Repeat("é", 38) + "...\n"},
 	}
 	for _, c := range cases {
-		if got := ListLine("PA", "pat_1", c.text); got != c.want {
+		if got := ListLine("PA", "pat_1", c.text, ""); got != c.want {
 			t.Fatalf("ListLine(%q) = %q, want %q", c.text, got, c.want)
 		}
+	}
+	// a row of another store keeps the layout, its label last (B3-7)
+	if got, want := ListLine("PA", "pat_1", "Retry", "[me]"), "PA  pat_1  Retry [me]\n"; got != want {
+		t.Fatalf("ListLine with a label = %q, want %q", got, want)
 	}
 }
 

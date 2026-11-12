@@ -73,3 +73,43 @@ func TestRunMarksItsOwnWrites(t *testing.T) {
 		}
 	}
 }
+
+// pushMarkRewriter records whether each step's context carried WithNoPush.
+type pushMarkRewriter struct {
+	fakeRewriter
+	noPush []bool
+}
+
+func (m *pushMarkRewriter) MigrateSettings(ctx context.Context, dryRun bool) (Settings, error) {
+	m.noPush = append(m.noPush, NoPushAsked(ctx))
+	return m.fakeRewriter.MigrateSettings(ctx, dryRun)
+}
+
+func (m *pushMarkRewriter) RewriteV1(ctx context.Context, table row.Table, dryRun bool) ([]ids.AnyID, error) {
+	m.noPush = append(m.noPush, NoPushAsked(ctx))
+	return m.fakeRewriter.RewriteV1(ctx, table, dryRun)
+}
+
+// TestRunNoPushMarksEveryStep (M-2): `migrate run --no-push` carries
+// WithNoPush into every step, so the store backends push none of the
+// run's row writes (they pushed each write before); a run that pushes
+// carries no mark.
+func TestRunNoPushMarksEveryStep(t *testing.T) {
+	if NoPushAsked(context.Background()) {
+		t.Fatal("a plain context asks for no push")
+	}
+	for input, want := range map[string]bool{`{"no_push":true}`: true, `{}`: false} {
+		m := &pushMarkRewriter{fakeRewriter: fakeRewriter{tables: []row.Table{"memories"}}}
+		e := Ops(m)[0]
+		in, err := e.Decode(op.JSONDecoder{Body: []byte(input)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.Invoke(context.Background(), in); err != nil {
+			t.Fatal(err)
+		}
+		if len(m.noPush) != 2 || m.noPush[0] != want || m.noPush[1] != want {
+			t.Errorf("%s: no-push marks per step = %v, want all %v", input, m.noPush, want)
+		}
+	}
+}

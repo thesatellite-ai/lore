@@ -31,8 +31,8 @@ import (
 
 // FixStep is one step of a fix run: what ran, where, and its result.
 type FixStep struct {
-	// Step names the step (migrate, render, agent hooks, old clones,
-	// doctor fixes).
+	// Step names the step (migrate, folder scopes, render, agent hooks,
+	// old clones, doctor fixes).
 	Step string `json:"step"`
 	// Where is the folder or file the step works on.
 	Where string `json:"where,omitempty"`
@@ -74,7 +74,13 @@ const (
 	StepRender     = "render"
 	StepAgentHooks = "agent hooks"
 	StepOldClones  = "old clones"
-	StepDoctorFix  = "doctor fixes"
+	// StepOldFiles removes lore 0.1.17's database and backups from the
+	// repo once every row they hold is accounted for (B4-7).
+	StepOldFiles = "0.1.17 files"
+	// StepScopes relabels folder scopes whose folder git saw renamed
+	// (B3-5), before render so the rules land in the new folder's file.
+	StepScopes    = "folder scopes"
+	StepDoctorFix = "doctor fixes"
 )
 
 // ResultCurrent is a step's result when nothing was needed.
@@ -146,6 +152,18 @@ func fixProject(ctx context.Context, env Env, dry bool) (Report, error) {
 		r.Steps = append(steps, st)
 		return r, nil
 	}
+	if migrateStepFailed(steps) {
+		// B1-12: the rows are half in the lore 0.1.17 format; a repair
+		// would rewrite rows the next migrate run still has to finish (and
+		// count them as its own changes). Check only; the next lore fix
+		// migrates first, then repairs.
+		r, err := runRepo(ctx, env, false)
+		if err != nil {
+			return Report{}, err
+		}
+		r.Steps = append(steps, FixStep{Step: StepDoctorFix, Result: ResultSkippedMigrateFailed})
+		return r, nil
+	}
 	// owner item 43: render ran before the doctor fixes, and a repair that
 	// changes rows (an actor merge, a --supersedes repair, a hand edit
 	// picked up, a live hook) leaves LORE.md stale; when the re-check finds
@@ -199,6 +217,20 @@ func renderStale(r Report) bool {
 	for _, l := range r.Warnings {
 		if m, ok := r.meta[l]; ok && string(m.check) == checkRenderedCopy && m.fix != "" {
 			return true
+		}
+	}
+	return false
+}
+
+// ResultSkippedMigrateFailed is the doctor fixes step's result when the
+// migrate step failed: no repair runs on a half-migrated repo.
+const ResultSkippedMigrateFailed = "skipped: the migrate step failed, so some rows are still in the lore 0.1.17 format; run lore fix again once migrate succeeds"
+
+// migrateStepFailed reports whether the migrate step ran and failed.
+func migrateStepFailed(steps []FixStep) bool {
+	for _, s := range steps {
+		if s.Step == StepMigrate {
+			return s.Failed
 		}
 	}
 	return false

@@ -168,4 +168,4 @@ func (o *Org) StoreByShortName(name string) *Store {
 }
 
 // normalizeStore is repourl.Normalize (host/path), the one store identity.
-func normalizeStore(raw string) (string, error) { return repourl.Normalize(raw) }
+func normalizeStore(raw string) (string, error) { return repourl.NormalizeStore(raw) }

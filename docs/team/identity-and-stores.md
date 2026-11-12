@@ -189,7 +189,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_54fe…28f2.json (st
 lore: wrote ~/work/website/.lore/data/memories/mem_54fe…28f2.json
 ✓ mem_54fe…28f2 moved to store agency (same id; the old copy is tombstoned)
 $ lore memory list
-mem_54fe…28f2  the client replies faster on WhatsApp than email  [agency/client]
+mem_54fe…28f2 [retrieved] the client replies faster on WhatsApp than email [agency/client]
 ```
 <!-- /example -->
 
@@ -218,13 +218,13 @@ $ lore store forget git@github.com:agency/notes
 
 ## Step 8 — Clean up old caches: `lore cache prune`
 
-Lore keeps a cache file per attached store in `~/.lore/cache`. `lore cache prune` removes the cache files of stores that no repo on this machine attaches any more (a removed checkout, a `lore store remove`). It lists each file with its size and asks before deleting anything: `--dry-run` only lists, `--yes` deletes without asking, and without a terminal it refuses with `E_NEEDS_CONFIRM` unless you pass `--yes`. It never touches row files or anything outside `~/.lore/cache`; a store you attach again rebuilds its cache on the next command.
+Lore keeps a cache file per attached store in `~/.lore/cache`, and one per repo checkout in `~/.lore/cache/repo/` (named after the checkout's folder and path). `lore cache prune` removes the cache files of stores that no repo on this machine attaches any more (a removed checkout, a `lore store remove`) and the cache of a checkout that was moved or deleted (moving a repo folder gives it a new cache; the old one is listed here). When the only thing to clean is lore's own record of a gone checkout, it says `removed N cache use record(s)` and nothing else. It lists each file with its size and asks before deleting anything: `--dry-run` only lists, `--yes` deletes without asking, and without a terminal it refuses with `E_NEEDS_CONFIRM` unless you pass `--yes`. It never touches row files or anything outside `~/.lore/cache`; a store you attach again rebuilds its cache on the next command.
 
 <!-- example: people#cache-prune -->
 ```console
 # alice, in ~
 $ lore cache prune --dry-run
-nothing to prune: every cache file belongs to a store a repo on this machine attaches
+nothing to prune: every cache file belongs to a repo on this machine or a store one attaches
 ```
 <!-- /example -->
 
@@ -253,7 +253,7 @@ Your personal store (`me`), your org's stores and the stores a repo attaches in 
 | `batch` | commits on your machine only | when the oldest waiting write is `push_every` (default `5m`) old and you run any lore command that uses the store, on `lore sync`, on commands that need the remote current (`lore sync status`, `lore land`), when your coding tool starts or ends a session, and from the repo's git hooks lore installs (after a commit, before a push) |
 | `manual` | commits on your machine only | only on `lore sync` (and on the syncs lore runs itself for team coordination, such as the roster) |
 
-In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. When the waiting writes go out, they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
+Each store commit is titled after what you did: the command and, for a kind with a short title (a task, a plan), the title, as in `lore: task add: Ship the beta`; other rows are named by id, as in `lore: memory add mem_01ab…` (with `(N rows)` when the person's actor row or a task list went into the same commit). A note's text never goes into a commit title, so a deleted or purged note is not left readable in `git log`; delete, trash and purge commits name only the command and the id, and a title the secret check flags is replaced by the id. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. When the waiting writes go out, they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
 
 lore has no daemon, timer or background process, and never starts one. A batch goes out only when something runs lore: a command you (or your coding tool) run anyway checks the age of the oldest waiting write and, once it is `push_every` old, pushes the batch inside that command. That push gets a short time limit, so a slow or unreachable remote never holds your command up; what did not go out stays committed for the next command. If nothing runs lore, the batch simply stays on your machine, safe. `lore store show`, `lore sync status` and `lore doctor` show how old the oldest waiting write is, and `lore doctor` warns once it is more than a day old. Run `lore sync` to push it.
 
@@ -440,14 +440,14 @@ lore: pushed store agency: commit 05513aa to branch main
 store agency: sent 2, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 $ lore memory list
-mem_76bd…3f10  the client signs off designs on Thursdays  [agency/client]
-mem_d431…313a  staging resets every Sunday night  [agency/client]
-mem_c0f3…b5b8  the client wants the invoice on the 1st  [agency/client]
+mem_76bd…3f10 [retrieved] the client signs off designs on Thursdays [agency/client]
+mem_d431…313a [retrieved] staging resets every Sunday night [agency/client]
+mem_c0f3…b5b8 [retrieved] the client wants the invoice on the 1st [agency/client]
 $ git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH_HEAD
 lore: replay local work onto epoch 1
 lore: compact store history (epoch 1)
 lore: store set agency
-lore: write act_05e9…4603
+lore: actor register act_05e9…4603
 lore: snapshot of the store history before 2026-10-03
 ```
 <!-- /example -->
@@ -488,7 +488,7 @@ Run `lore identity show` in a repo of no org afterwards: it still shows your top
 - **`lore store list` shows where each store comes from.** The SOURCE column says `stores.yaml` (attached by this repo), `org` (brought by the repo's org) or `personal`. A store url from the org is printed as `<redacted>` where output must name nothing (no terminal, CI); its visibility is still worked out from the real url. A name the org already uses cannot be taken again by `lore store init` or `lore store add` (`E_INVALID_INPUT`).
 - **Writing an org store's url into `.lore/stores.yaml` asks first.** The org link keeps the org's store urls out of the repo. `lore store add <name> <url> --folder <folder>` (also `store init` and `store set-url`) with a url that is one of your org's stores (any org in `~/.lore/config.yaml`, with or without an identity, and any spelling of its url: ssh or https, with or without `.git` or a trailing slash) would commit that url, visible to everyone who can read the repo, so lore asks at a terminal and, without one, stops with `E_NEEDS_CONFIRM` (exit 26) before writing anything; rerun with `--yes` to write it. In a client repo the same commands ask for any store url, because the client reads the file. A write to an org store folder this repo does not attach names this command with `--yes` on stderr.
 - **A store url never keeps a login in `.lore/stores.yaml`.** `lore store init`, `add` and `set-url` drop the user part of an `https://user@host/…` url before writing it, because git hosts treat that user as a token, and refuse a url with a password or token in it (`E_URL_CREDENTIALS`). An ssh login such as `git@github.com:…` is kept.
-- **0.1.18 stores are git repos or folders.** A url with another scheme (`s3://`, `postgres://`, `lore://`) is refused with `E_STORE_SCHEME` before anything is written: use a git url or `file:///<absolute path>`.
+- **0.1.18 stores are git repos or folders.** A url with another scheme (`s3://`, `postgres://`, `lore://`) is refused with `E_STORE_SCHEME` before anything is written: use a git url, the path of a bare git repository on this machine (`/srv/git/notes.git`) or `file:///<absolute path>` for a folder. A path that does not exist is `E_BAD_PATH`, naming both spellings; a `file://` url (or path) of a bare git repository is that repository as a git store, as `git clone` reads it.
 - **`lore store init me` works anywhere.** It makes your personal store and records it in `~/.lore/config.yaml`, so it needs no repo; every other `lore store` command runs inside a repo.
 
 ## Related

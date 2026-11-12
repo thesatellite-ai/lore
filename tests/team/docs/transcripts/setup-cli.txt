@@ -114,18 +114,114 @@ the setup trash is empty
 ### steps
 tomas$ lore setup plan --kind solo | cut -c1-52
 steps:
-  ID              TITLE                             
-  kind            What kind of setup is this?       
-  identity        Who are you?                      
-  github          Which GitHub account?             
-  personal_store  Where do your own notes go?       
-  tools           Which coding tools do you use?    
-  secrets         Where do you keep secrets?        
-  folders         Which folders is this setup for?  
-  this_folder     This folder                       
-  summary         Summary                           
+  - id: kind
+    title: What kind of setup is this?
+    help: A setup is one way you work on this machin
+    kinds: solo, member, admin
+    questions:
+      ID       LABEL                                
+      kind     Kind                                 
+      name     Setup name                           
+      default  Use this setup when no folder matches
+    checks: setup.name_free
+    apply: setup.entry
+    values: {"default":false,"kind":"solo","name":"p
+  - id: identity
+    title: Who are you?
+    help: Your name and the email you use for this w
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID      LABEL                    HELP         
+      name    Your name                             
+      email   Email                                 
+      emails  Other addresses you use  Optional. Eac
+      handle  Handle                   Optional shor
+    checks: identity.email_format, identity.git_emai
+    apply: identity
+    values: {"email":"tomas@agency.example","name":"
+  - id: github
+    title: Which GitHub account?
+    help: Pick the account this setup works as. lore
+    kinds: solo, member, admin
+    needs: identity
+    questions:
+      ID              LABEL             HELP        
+      github_account  GitHub account                
+      host_alias      ssh host alias    Optional: lo
+      ssh_key         ssh key file      Optional: th
+      route           How git connects  Optional: ss
+    checks: github.ssh_key, github.ssh_auth, github.
+    apply: github
+    values: {}
+  - id: personal_store
+    title: Where do your own notes go?
+    help: Your personal store (lore's `me`) is a pri
+    kinds: solo, member, admin
+    needs: github
+    questions:
+      ID              LABEL                      HEL
+      personal_store  Personal store                
+      store_url       Repo url                   An 
+      push            When notes reach the repo  Opt
+    checks: store.url, store.read, store.write, stor
+    apply: personal_store
+    values: {"personal_store":"inherit"}
+  - id: tools
+    title: Which coding tools do you use?
+    help: lore installs its skill for each tool and 
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID     LABEL  HELP  TYPE   REQUIRED  PREFILL  
+      tools  Tools        multi  false     tools.det
+    checks: tools.skill_installed, tools.skill_versi
+    apply: tools
+    optional: true
+    values: {}
+  - id: secrets
+    title: Where do you keep secrets?
+    help: New secret references default to this mana
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID       LABEL           HELP  TYPE    REQUIRE
+      backend  Secret manager        choice  false  
+    checks: secrets.backend_present
+    apply: secrets
+    optional: true
+    values: {}
+  - id: folders
+    title: Which folders is this setup for?
+    help: lore picks this setup inside these folders
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID       LABEL                                
+      folders  Folders                              
+      default  Use this setup when no folder matches
+    checks: folders.exist, folders.overlap, folders.
+    apply: folders
+    optional: true
+    values: {"default":false}
+  - id: this_folder
+    title: This folder
+    help: The folder you started lore setup in: whic
+    kinds: solo, member, admin
+    needs: kind
+    questions:
+      ID  LABEL  HELP  TYPE  REQUIRED  PREFILL  CHOI
+    checks: repo.init, repo.org, repo.stores, identi
+    optional: true
+    values: {}
+  - id: summary
+    title: Summary
+    help: Every step and every warning with its fix.
+    kinds: solo, member, admin
+    questions:
+      ID  LABEL  HELP  TYPE  REQUIRED  PREFILL  CHOI
+    values: {}
 progress:
-  SETUP  STEP  ANSWERS  CHECKS  STATUS  UPDATED_AT
 tomas$ lore setup apply side --step kind --answers '{"kind":"solo","name":"side"}' | head -4
 step: kind
 status: done
@@ -142,19 +238,18 @@ ERROR: [E_SETUP_STEP_ORDER] step github needs identity first
 ### import
 tomas$ lore setup import-scan --folder ~/work
 proposals:
-  SETUP  FIELDS  REPOS
 sources:
-  KIND             PATH                                                                                                STATE    DETAIL
-  config           ~/.lore/config.yaml                         found    1 org, 2 setups, 1 deleted setup
-  identity_legacy  ~/.lore/identity.yaml                       missing  
-  identity_backup  ~/.lore/identity.yaml.migrated              missing  
-  identity_legacy  ~/.lore/identity.toml                       missing  
-  identity_backup  ~/.lore/identity.toml.migrated              missing  
-  machine_db       ~/.lore/state/machine.db                    found    2 known repos
-  scan_folder      ~/work                                      found    3 lore repos (2 already known)
-  repo_stores      ~/work/agency/site/.lore/stores.yaml        missing  
-  repo_stores      ~/work/personal/dotfiles/.lore/stores.yaml  missing  
-  repo_stores      ~/work/stores/.lore/stores.yaml             found    1 store
+  KIND             PATH                                                                              STATE    DETAIL
+  config           ~/.lore/config.yaml       found    1 org, 2 setups, 1 deleted setup
+  identity_legacy  ~/.lore/identity.yaml     missing  
+  identity_backup  ~/.lore/identity.yaml.m…  missing  
+  identity_legacy  ~/.lore/identity.toml     missing  
+  identity_backup  ~/.lore/identity.toml.m…  missing  
+  machine_db       ~/.lore/state/machine.db  found    2 known repos
+  scan_folder      ~/work                    found    3 lore repos (2 already known)
+  repo_stores      ~/work/agency/site/.lor…  missing  
+  repo_stores      ~/work/personal/dotfile…  missing  
+  repo_stores      ~/work/stores/.lore/sto…  found    1 store
 repos:
   ROOT                                                                              FROM        ORG  STORES
   ~/work/agency/site        machine.db       

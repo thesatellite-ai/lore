@@ -239,8 +239,8 @@ func TestEnvUserFlow(t *testing.T) {
 
 // TestEnvSpacedStore: on env_spaces the personal store is a folder in a
 // spaced path (file:// url with spaces, also checked as %20). A bare git
-// repository named by file:// is refused before config.yaml changes (lore
-// would write a folder store into git's own folder). The folder is created
+// repository named by file:// is taken as a git store, nothing written
+// beside git's objects. The folder is created
 // as a store with its marker in the same step, so setup show names it, store
 // list in both spaced repos answers and doctor finds nothing at all.
 func TestEnvSpacedStore(t *testing.T) {
@@ -249,18 +249,8 @@ func TestEnvSpacedStore(t *testing.T) {
 	csToGitHub(t, m, envSetup)
 	ans, _ := json.Marshal(map[string]any{"folders": []string{envFolderGlob(EnvRepo), envFolderGlob(EnvSpacedRepo)}, "default": true})
 	csOK(t, m.Lore(t, "", "setup", "apply", envSetup, "--step", "folders", "--answers", string(ans), "--json"))
-	bareRepo := filepath.Join(m.Home, EnvStoreDir, EnvBareStore)
-	before := csConfig(t, m)
-	ans, _ = json.Marshal(map[string]string{"personal_store": "create", "store_url": "file://" + bareRepo})
-	if e := csRefused(t, m.Lore(t, "", "setup", "apply", envSetup, "--step", "personal_store", "--answers", string(ans), "--json"), "E_INVALID_INPUT"); e != nil && !strings.Contains(e.Message, "is a git repository") {
-		t.Errorf("the bare repo refusal does not say why: %+v", e)
-	}
-	if csConfig(t, m) != before {
-		t.Errorf("a refused bare-repo store wrote config.yaml")
-	}
-	if _, err := os.Stat(filepath.Join(bareRepo, "lore-store.yaml")); err == nil {
-		t.Errorf("lore wrote lore-store.yaml into the bare git repository")
-	}
+	// A bare git repository in the spaced path is a git store (B3-2).
+	csBareRepoStore(t, m, envSetup, filepath.Join(m.Home, EnvStoreDir, EnvBareStore))
 	bare := filepath.Join(m.Home, EnvStoreDir, EnvFolderStore)
 	// The url as a person types it (with the spaces) is taken; the same
 	// folder written with %20 checks the same.

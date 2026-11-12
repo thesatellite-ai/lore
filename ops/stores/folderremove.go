@@ -50,7 +50,7 @@ type FolderRemoveIn struct {
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"with --purge: why the rows go to the trash (stored as their deleted_reason; default: store folder remove --purge)"`
 	// Confirm is the literal --confirm a purge needs (DQ2: --yes never
 	// purges): the folder's links and id go for good.
-	Confirm bool `json:"confirm,omitempty" flag:"confirm" desc:"required with --purge: the folder's repo links and id go for good (DQ2)"`
+	Confirm bool `json:"confirm,omitempty" flag:"confirm" desc:"required with --purge: the folder's repo links and id go for good"`
 }
 
 // FolderContents is what a folder holds, read before anything is removed.

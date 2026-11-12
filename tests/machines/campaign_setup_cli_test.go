@@ -190,7 +190,10 @@ func TestCampaignSetup_BadInput(t *testing.T) {
 		{"fix no check", []string{"setup", "fix", "main"}, "E_INVALID_INPUT"},
 		{"repair unknown", []string{"setup", "repair", "nope"}, "E_SETUP_NOT_FOUND"},
 		{"use unknown", []string{"setup", "use", "nope"}, "E_SETUP_NOT_FOUND"},
-		{"join garbage", []string{"setup", "join", "hello", "--no-open"}, "E_INVITE_INVALID"},
+		{"join garbage", []string{"setup", "join", "hello there!", "--no-open"}, "E_INVITE_INVALID"},
+		// an org-shaped name this machine has no org for: a new member on a
+		// fresh laptop is pointed at the store url, never told the invite is bad
+		{"join unknown org", []string{"setup", "join", "hello", "--no-open"}, "E_JOIN_ORG_UNKNOWN"},
 		{"browse outside home", []string{"setup", "browse", "/etc"}, "E_BAD_PATH"},
 		{"identity set bad", []string{"identity", "set", "not an email"}, "E_INVALID_INPUT"},
 		{"identity set empty", []string{"identity", "set", ""}, "E_INVALID_INPUT"},

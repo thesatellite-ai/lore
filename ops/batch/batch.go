@@ -126,6 +126,9 @@ type Summary struct {
 	// shown is At as the text prints it (local, minutes); "" for a
 	// summary decoded from JSON, which prints At as given.
 	shown string
+	// byLabel is Actor as the text shows it: the @handle or display name
+	// the roster knows ("" = the act_ id; --json keeps the id).
+	byLabel string
 }
 
 // Count is how many rows of a batch one store (or one action) holds.
@@ -201,6 +204,10 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		out.Data = append(out.Data, s.Summary)
 	}
 	out.Count = len(out.Data)
+	names := o.actorNames(ctx)
+	for i := range out.Data {
+		out.Data[i].byLabel = names[out.Data[i].Actor]
+	}
 	return out, nil
 }
 
@@ -239,7 +246,38 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if !in.All && out.Shown > sampleRows {
 		out.Shown = sampleRows
 	}
+	out.Data.byLabel = o.actorNames(ctx)[out.Data.Actor]
 	return out, nil
+}
+
+// actorNames maps each live actor of the attached stores to how a line
+// names it: "@handle", else its display name (bug hunt B3-11: batch and
+// trash lines printed act_ ids while every other list printed the name).
+// An Env without the Actors upgrade, or a roster read that fails, gives
+// no names, so the lines keep the ids.
+func (o ops) actorNames(ctx context.Context) map[string]string {
+	out := map[string]string{}
+	a, ok := upgrade.As[Actors](o.env)
+	if !ok {
+		return out
+	}
+	for _, src := range engine.ReadStoresOf(a) {
+		rows, err := a.List(ctx, src, schema.TableActors)
+		if err != nil {
+			return out
+		}
+		for _, r := range rows {
+			if r.Deleted {
+				continue
+			}
+			if h := text(r, fieldHand); h != "" {
+				out[r.ID.String()] = handleSign + h
+			} else if n := text(r, fieldName); n != "" {
+				out[r.ID.String()] = n
+			}
+		}
+	}
+	return out
 }
 
 // rowKey is one row of a batch (store, table, id).
@@ -367,6 +405,14 @@ func (o ListOut) Text() string {
 	return b.String()
 }
 
+// by is who ran the batch as a line shows it (byLabel, else the act_ id).
+func (s Summary) by() string {
+	if s.byLabel != "" {
+		return s.byLabel
+	}
+	return s.Actor
+}
+
 // line is the CLI_REFERENCE 3.10 header line of a batch.
 // withActions adds the per-action counts when the batch holds more than
 // one action (list; show prints them on its own kind line).
@@ -375,7 +421,7 @@ func (s Summary) line(withActions bool) string {
 	if at == "" {
 		at = s.At
 	}
-	line := "batch " + s.ID + "  " + s.Kind + "  " + strings.ReplaceAll(s.Op, ".", " ") + "  by " + s.Actor + "  " + at + "  " +
+	line := "batch " + s.ID + "  " + s.Kind + "  " + strings.ReplaceAll(s.Op, ".", " ") + "  by " + s.by() + "  " + at + "  " +
 		plural.Count(s.Rows, "row") + " (" + counts(s.Stores) + ")"
 	if withActions && len(s.Actions) > 1 { // a later restore or purge of the batch: say so beside the row count
 		line += "; " + counts(s.Actions)

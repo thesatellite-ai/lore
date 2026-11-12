@@ -77,7 +77,7 @@ func (c *standaloneClones) ForgetClone(ctx context.Context, in opsstores.ForgetI
 		// "not a store url" for a url `store add` had just accepted.
 		return opsstores.ForgetOut{URL: in.URL, Shown: repourl.Mask(in.URL)}, nil
 	}
-	norm, err := repourl.Normalize(in.URL)
+	norm, err := repourl.NormalizeStore(in.URL)
 	if err != nil {
 		return opsstores.ForgetOut{}, errs.Wrap(errs.InvalidInput, "store forget: not a store url: "+in.URL, err).
 			WithHint("give the store's name from `lore store list`, or its git url (https://host/org/repo or git@host:org/repo)")

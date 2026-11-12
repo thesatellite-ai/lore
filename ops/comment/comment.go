@@ -92,7 +92,7 @@ type AddIn struct {
 	OnTable string `json:"on_table" flag:"on-table" desc:"target entity table (memories|rules|decisions|...)"`
 	OnID    string `json:"on_id" flag:"on-id" desc:"target entity id"`
 	Body    string `json:"body" flag:"body" desc:"the comment text" ui:"widget=markdown"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // AddOut is the output of comment.add.
@@ -150,7 +150,7 @@ func (o ListOut) Text() string {
 	var b strings.Builder
 	for _, c := range o.Data {
 		ex := textcut.Cut(c.Body, listBodyMax, listBodyCut)
-		fmt.Fprintf(&b, "%s on %s/%s  %s\n", c.ID, c.EntityTable, c.EntityID, ex)
+		fmt.Fprintf(&b, "%s on %s/%s  %s%s\n", c.ID, c.EntityTable, c.EntityID, ex, opsmemory.LabelSuffix(c.Label))
 	}
 	return b.String()
 }

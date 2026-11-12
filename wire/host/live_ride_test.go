@@ -3,6 +3,7 @@ package host
 import (
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -106,5 +107,56 @@ func TestEnsureHookBlockRunningScript(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Clean(target)); !strings.Contains(string(b), "echo managed") || !strings.Contains(string(b), rideHookMarker) {
 		t.Fatalf("the link's target holds both the managed lines and lore's block:\n%s", b)
+	}
+}
+
+// refreshDeferred (B3-20): the refresh hook leaves LORE.md alone while a
+// rebase, merge, cherry-pick or bisect is under way, so git's next step
+// does not stop on a changed work tree file; the post-rewrite that ends a
+// rebase still renders, and so does an idle checkout.
+func TestRefreshDeferredWhileHistoryInProgress(t *testing.T) {
+	ctx := t.Context()
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	gitDir := filepath.Join(dir, ".git")
+	if refreshDeferred(ctx, nil, dir, []string{hookPostCheckout}) {
+		t.Fatal("an idle checkout must render")
+	}
+	for _, m := range []string{"rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "sequencer"} {
+		p := filepath.Join(gitDir, m)
+		if err := os.WriteFile(p, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{nil, {hookPostCheckout}, {hookPostMerge}, {hookPostRewrite, "amend"}} {
+			if !refreshDeferred(ctx, nil, dir, args) {
+				t.Errorf("%s in progress: refresh %v must wait", m, args)
+			}
+		}
+		if refreshDeferred(ctx, nil, dir, []string{hookPostRewrite, rewriteByRebase}) {
+			t.Errorf("%s: the post-rewrite that ends a rebase must render", m)
+		}
+		if err := os.Remove(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if refreshDeferred(ctx, nil, t.TempDir(), nil) {
+		t.Error("outside git: nothing to wait for")
+	}
+}
+
+// The refresh blocks pass their hook name, and post-rewrite its "$1", so
+// the refresh can tell the end of a rebase from a checkout inside one.
+func TestRefreshBlocksNameTheirHook(t *testing.T) {
+	b := hookBlocks("")
+	for h, want := range map[string]string{
+		hookPostCheckout: "sync hook refresh " + hookPostCheckout + " ",
+		hookPostMerge:    "sync hook refresh " + hookPostMerge + " ",
+		hookPostRewrite:  "sync hook refresh " + hookPostRewrite + ` "$1"`,
+	} {
+		if !strings.Contains(b[h].lines[0], want) {
+			t.Errorf("%s block %q lacks %q", h, b[h].lines[0], want)
+		}
 	}
 }

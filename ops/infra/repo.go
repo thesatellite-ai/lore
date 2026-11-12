@@ -388,11 +388,15 @@ func metaFor(m rowfs.RepoMeta, h repourl.History) rowfs.RepoMeta {
 // yet, and returns it (PROV1, PROVENANCE_DESIGN 10.1): `lore init` and the
 // first 0.1.18 sync call it. minted reports a new id.
 //
-// The id is random and permanent, never derived from a name or a URL. A
-// v0.1.17 repos row that already describes this checkout (its origin_url
-// is this clone's remote, or its mount name is the folder's name) is
-// adopted, so a registered repo keeps its id. A checkout without
-// _meta.json (no `lore init` yet) has no identity and gets none: E_NOT_FOUND.
+// The id is permanent once written: a later address change never changes
+// it. A v0.1.17 repos row that already describes this checkout (its
+// origin_url is this clone's remote, or its mount name is the folder's
+// name) is adopted, so a registered repo keeps its id. Otherwise the id is
+// minted by MintRepoID: derived from the project and the clone's primary
+// address (or its root commit), so two machines that upgrade the same
+// repo before either commits mint the same id and their two repos rows
+// merge into one (B2-7). A checkout without _meta.json (no `lore init`
+// yet) has no identity and gets none: E_NOT_FOUND.
 func EnsureIdentity(ctx context.Context, env Env, files RepoFiles) (id Identity, minted bool, err error) {
 	meta, exists, err := files.ReadRepoMeta(ctx)
 	if err != nil {
@@ -429,7 +433,14 @@ func EnsureIdentity(ctx context.Context, env Env, files RepoFiles) (id Identity,
 		r, cerr := createRepoRow(ctx, files, pid, meta.RepoID, rows, h, meta)
 		return Identity{Meta: meta, Row: r, History: h}, false, cerr
 	}
-	adopted, ok := adoptRow(ctx, files, rows, clean)
+	nid, err := MintRepoID(ctx, files, pid, clean)
+	if err != nil {
+		return Identity{}, false, err
+	}
+	adopted, ok := rowByID(rows, nid.String())
+	if !ok {
+		adopted, ok = adoptRow(ctx, files, rows, clean)
+	}
 	h := repourl.History{}
 	by, day := files.RepoActor(ctx), today(env)
 	if ok {
@@ -463,10 +474,6 @@ func EnsureIdentity(ctx context.Context, env Env, files RepoFiles) (id Identity,
 		}
 		return Identity{Meta: meta, Row: w.Row, History: h}, true, nil
 	}
-	nid, err := ids.New[ids.Repo]()
-	if err != nil {
-		return Identity{}, false, errs.Wrap(errs.Internal, "infra: mint a repo id", err)
-	}
 	meta.RepoID = nid.String()
 	r, err := createRepoRow(ctx, files, pid, meta.RepoID, rows, h, meta)
 	if err != nil {
@@ -476,6 +483,69 @@ func EnsureIdentity(ctx context.Context, env Env, files RepoFiles) (id Identity,
 		return Identity{}, false, werr
 	}
 	return Identity{Meta: meta, Row: r, History: h}, true, nil
+}
+
+// RepoRootReader is the optional RepoFiles upgrade MintRepoID uses for a
+// clone without a network remote: the code repository's root commit, the
+// same on every clone of it.
+type RepoRootReader interface {
+	// RepoRootCommit is the hash of the root commit ("" when the
+	// repository has no commit yet); with several roots, the smallest.
+	RepoRootCommit(ctx context.Context) (string, error)
+}
+
+// Key parts of a derived repo id (ids.Natural): the kind of key comes
+// first, so an address and a commit hash can never give the same id.
+const (
+	repoIDKeyAddress = "repo-address"
+	repoIDKeyRoot    = "repo-root"
+)
+
+// MintRepoID is the id a checkout of project pid gets when it has none
+// (B2-7). Why derived, not random: a v0.1.17 repo upgraded on two machines
+// before either pushes would otherwise get two ids and, after a normal
+// pull, two repos rows for one repo. The key is the project plus the
+// clone's primary address (normalised, so ssh and https forms agree), else
+// the root commit; a clone with neither gets a random id. The id is
+// written once into _meta.json and never re-derived, so a later address
+// change keeps it; a fork with its own address gets its own id, and `lore
+// repo fork` always mints a random one.
+func MintRepoID(ctx context.Context, files RepoFiles, pid ids.ID[ids.Project], clean []Remote) (ids.ID[ids.Repo], error) {
+	var parts []string
+	if len(clean) > 0 {
+		if k, err := repourl.Normalize(clean[0].URL); err == nil {
+			parts = []string{repoIDKeyAddress, pid.String(), k}
+		}
+	}
+	if parts == nil {
+		if rr, ok := files.(RepoRootReader); ok {
+			if root, err := rr.RepoRootCommit(ctx); err == nil && root != "" {
+				parts = []string{repoIDKeyRoot, pid.String(), root}
+			}
+		}
+	}
+	if parts == nil {
+		id, err := ids.New[ids.Repo]()
+		if err != nil {
+			return ids.ID[ids.Repo]{}, errs.Wrap(errs.Internal, "infra: mint a repo id", err)
+		}
+		return id, nil
+	}
+	nat, err := ids.Natural(ids.PrefixRepo, parts...)
+	if err != nil {
+		return ids.ID[ids.Repo]{}, errs.Wrap(errs.Internal, "infra: derive a repo id", err)
+	}
+	return ids.As[ids.Repo](nat)
+}
+
+// rowByID is the row of rows with id s.
+func rowByID(rows []row.Row, s string) (row.Row, bool) {
+	for _, r := range rows {
+		if r.ID.String() == s {
+			return r, true
+		}
+	}
+	return row.Row{}, false
 }
 
 // o is the ops value of env (the helpers hang off it).
@@ -604,6 +674,13 @@ func CheckAddresses(ctx context.Context, env Env, files RepoFiles) (AddressRepor
 	clean, warns := cleanRemotes(remotes)
 	rep := AddressReport{RepoID: id.Meta.RepoID, Minted: minted, Warnings: warns}
 	h, fresh := id.History, map[string]bool{}
+	first, err := firstAddress(ctx, env, files, id, clean)
+	if err != nil {
+		return AddressReport{}, err
+	}
+	if first != nil {
+		h = first
+	}
 	for _, r := range clean {
 		next, added, serr := h.Seen(r.URL, today(env), files.RepoActor(ctx))
 		if serr != nil {
@@ -626,6 +703,58 @@ func CheckAddresses(ctx context.Context, env Env, files RepoFiles) (AddressRepor
 	}
 	rep.Notices = notices(h, clean, fresh)
 	return rep, nil
+}
+
+// firstAddress records this clone's remote as the repo's primary address
+// when the repo record has no confirmed address at all (B3-16): the repo
+// was set up with a remote no address can be made of (a local path), or
+// none, and this is the first clone with a real one, typically a fresh
+// clone on a new laptop. Nothing changed, so there is nothing to ask:
+// the rule `lore init` applies (its first remote is the primary, how
+// "init") applies here too. It returns the new history (nil when the
+// record already has a confirmed address or no remote is an address) and
+// writes the repos row and _meta.json's confirmed list, which the person
+// commits with their code like the repo id.
+func firstAddress(ctx context.Context, env Env, files RepoFiles, id Identity, clean []Remote) (repourl.History, error) {
+	if len(id.History.Confirmed()) > 0 {
+		return nil, nil
+	}
+	pick := -1
+	for i, r := range clean {
+		if _, err := repourl.Normalize(r.URL); err != nil {
+			continue
+		}
+		if pick < 0 || r.Name == originRemote {
+			pick = i
+		}
+		if r.Name == originRemote {
+			break
+		}
+	}
+	if pick < 0 {
+		return nil, nil
+	}
+	day, by := today(env), files.RepoActor(ctx)
+	h, _, err := id.History.Set(clean[pick].URL, repourl.SetPrimary, day, day, by)
+	if err != nil {
+		return nil, err
+	}
+	for i := range h {
+		if h[i].Kind == repourl.KindPrimary && h[i].Open() {
+			h[i].How = repourl.HowInit
+		}
+	}
+	hv, err := historyValue(h)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := env.Update(ctx, engine.Ref{Store: repoStore, Table: schema.TableRepos, ID: id.Row.ID}, map[string]value.Value{fieldURLs: hv}); err != nil {
+		return nil, err
+	}
+	if err := files.WriteRepoMeta(ctx, metaFor(id.Meta, h)); err != nil {
+		return nil, err
+	}
+	return h, nil
 }
 
 // notices is one AddressNotice per open unconfirmed address of h that this

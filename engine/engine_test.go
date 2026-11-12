@@ -750,3 +750,25 @@ func TestHasOtherWriter(t *testing.T) {
 		t.Fatal("another writer must ask")
 	}
 }
+
+// TestAmbiguousIDHintNamesACommandThatTakesIt pins B1-5: the hint of
+// E_AMBIGUOUS_ID names `lore row move <id> --to <store>` (which takes
+// --to and settles the duplicate), never a bare "--to" that show, edit or
+// migrate run refuse.
+func TestAmbiguousIDHintNamesACommandThatTakesIt(t *testing.T) {
+	t.Parallel()
+	f := setup(t)
+	ctx := context.Background()
+	sr, err := f.repo.Open(store.OpenOptions{}).Get(ctx, schema.TableProjects, f.project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.agency.Open(store.OpenOptions{}).Write(ctx, []store.Change{{Row: sr}}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = f.eng.Get(ctx, Ref{ID: f.project})
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Hint, "lore row move "+f.project.String()+" --to ") {
+		t.Fatalf("hint of %v", err)
+	}
+}

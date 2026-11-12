@@ -115,7 +115,7 @@ type AddIn struct {
 	RepoPath    string `json:"repo_path,omitempty" flag:"repo-path" desc:"path to git repo on disk (default: cwd; distinct from --repo scope flag)"`
 	Author      string `json:"author,omitempty" flag:"author" desc:"commit author (auto-filled from git)"`
 	CommittedAt string `json:"committed_at,omitempty" flag:"committed-at" desc:"commit timestamp (auto-filled from git)"`
-	To          string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To          string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // AddOut is the output of link.add.
@@ -165,7 +165,7 @@ func (o ListOut) Text() string {
 		if r.Message != "" {
 			msg = " — " + excerpt(r.Message)
 		}
-		fmt.Fprintf(&b, "%s  %s → %s/%s%s\n", r.ID, short(r.SHA), r.EntityTable, r.EntityID, msg)
+		fmt.Fprintf(&b, "%s  %s → %s/%s%s%s\n", r.ID, short(r.SHA), r.EntityTable, r.EntityID, msg, opsmemory.LabelSuffix(r.Label))
 	}
 	return b.String()
 }

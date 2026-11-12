@@ -561,17 +561,34 @@ func TestLeak_LoreCommitsAreAuthoredByTheOrgIdentity(t *testing.T) {
 	c.MustLore("actor", "register")
 	id := mustID(t, c.MustLore("task", "add", "internal chore", "--to", orgNorthwind), "tsk")
 	c.MustLore("task", "done", id)
+	const noteText = "the vendor's rate card is under review"
+	memID := mustID(t, c.MustLore("memory", "add", "--body", noteText, "--to", orgNorthwind), "mem")
+	c.MustLore("sync")
+	sawNote := false
 	for _, ref := range []string{refMain, storeLiveRef} {
 		for _, au := range a.store.Authors(ref) {
 			if strings.Contains(au, "gmail.example") {
 				t.Fatalf("%s carries a personal email: %s", ref, au)
 			}
 		}
-		for _, s := range a.store.Log(ref) {
-			if strings.Contains(s, "internal chore") {
-				t.Fatalf("lore commit messages carry counts and ids only: %q", s)
-			}
+		if !a.store.Has(ref) {
+			continue
 		}
+		// A commit title names the command and, for a kind with a short
+		// title (a task), that title; a note's text never goes into any
+		// commit message (docs/team/identity-and-stores.md, store commits).
+		for _, s := range strings.Split(a.w.Git(a.store.Dir, "log", "--format=%B", ref), "\n") {
+			if strings.Contains(s, noteText) {
+				t.Fatalf("a note's text is in a lore commit message on %s: %q", ref, s)
+			}
+			if strings.Contains(s, "internal chore") && !strings.HasPrefix(s, "lore: task ") {
+				t.Fatalf("a task title appears outside its own commit title on %s: %q", ref, s)
+			}
+			sawNote = sawNote || strings.Contains(s, memID)
+		}
+	}
+	if !sawNote {
+		t.Fatalf("the note's commit (%s) is not on the store: the text check above read nothing", memID)
 	}
 }
 

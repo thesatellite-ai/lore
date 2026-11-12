@@ -100,6 +100,19 @@ func (l *lateSetup) WriteAgentHooks(ctx context.Context, plans []opssetup.HookPl
 // already renders (the file exists; tool pointer files are `lore render`'s
 // explicit job, so none is touched), and it never fails git: a problem is
 // one stderr line.
+// commitScopeHook is the post-commit hook's folder scope notice (B3-5):
+// a commit that moved or deleted a scoped folder prints one line per scope
+// with the `lore scope move` that keeps its rules on the folder. nil-safe
+// on h; it never fails the commit.
+func commitScopeHook(h *renderhost.Host, wd string) func(context.Context) {
+	return func(ctx context.Context) {
+		if h == nil {
+			return
+		}
+		h.CommitScopeNotice(ctx, wd, os.Stderr)
+	}
+}
+
 func refreshHook(h *renderhost.Host, wd string) func(context.Context) {
 	return func(ctx context.Context) {
 		out := filepath.Join(wd, filepath.FromSlash(renderhost.LoreMDRel))

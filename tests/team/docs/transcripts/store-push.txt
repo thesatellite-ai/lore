@@ -100,14 +100,14 @@ lore: pushed store agency: commit 05513aa to branch main
 store agency: sent 2, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 bob (work/website)$ lore memory list
-mem_76bd560aff0771fab8457dbfa9823f10  the client signs off designs on Thursdays  [agency/client]
-mem_d4314eba822f1bf5908b2b8ded5f313a  staging resets every Sunday night  [agency/client]
-mem_c0f3c11a5724b0cfd74b256190d9b5b8  the client wants the invoice on the 1st  [agency/client]
+mem_76bd560aff0771fab8457dbfa9823f10 [retrieved] the client signs off designs on Thursdays [agency/client]
+mem_d4314eba822f1bf5908b2b8ded5f313a [retrieved] staging resets every Sunday night [agency/client]
+mem_c0f3c11a5724b0cfd74b256190d9b5b8 [retrieved] the client wants the invoice on the 1st [agency/client]
 bob (work/website)$ git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH_HEAD
 lore: replay local work onto epoch 1
 lore: compact store history (epoch 1)
 lore: store set agency
-lore: write act_05e99e22e9e86e96fe4daa7777994603
+lore: actor register act_05e99e22e9e86e96fe4daa7777994603
 lore: snapshot of the store history before 2026-10-03
 
 ### auto compact

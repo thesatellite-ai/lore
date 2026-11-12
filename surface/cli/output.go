@@ -32,6 +32,19 @@ const (
 	indentStep = "  "
 	// listSep joins the items of a []string or map value on one line.
 	listSep = ", "
+	// pairSep joins the "name: value" pairs of an object in a table cell
+	// (objectCell); unlike listSep it cannot be read as one list's items.
+	pairSep = "; "
+	// maxCell is the widest a table cell prints (cutCell); wide enough for
+	// an id, a path or a url, narrow enough that a row of prose fits a
+	// wide terminal.
+	maxCell = 80
+	// itemSep joins the objects of a list in a table cell.
+	itemSep = " | "
+	// humanTime is how a time value prints for people: to the second, the
+	// zone kept (RFC 3339 without the nanoseconds MarshalText gives); --json
+	// keeps the full value.
+	humanTime = time.RFC3339
 	// tabPadding is the gap between table columns.
 	tabPadding = 2
 	// floatBits is the precision human output prints floats at.
@@ -108,7 +121,7 @@ func printHuman(w io.Writer, r op.Result, pal Palette, cmd string) error {
 func writeObject(b *strings.Builder, v reflect.Value, fields []op.FieldInfo, indent string) error {
 	for _, f := range fields {
 		fv, ok := jsonField(v, f.Name)
-		if !ok || (!f.Required && fv.IsZero()) {
+		if !ok || (!f.Required && fv.IsZero()) || emptyList(fv, f.Type) {
 			continue
 		}
 		switch f.Type {
@@ -131,8 +144,14 @@ func writeObject(b *strings.Builder, v reflect.Value, fields []op.FieldInfo, ind
 }
 
 // writeTable writes a list of structs as an aligned table, one column per
-// scalar child field; a nested object or list cell prints as compact JSON.
+// child field; a nested object cell prints as readable text (cellText). A
+// list whose items hold a list of objects prints one block per item
+// instead (writeBlocks): such a cell is a table of its own, and on one
+// table line it ran to hundreds of characters (B1-3, import-scan FIELDS).
 func writeTable(b *strings.Builder, list reflect.Value, fields []op.FieldInfo, indent string) error {
+	if slices.ContainsFunc(fields, func(f op.FieldInfo) bool { return f.Type == op.TypeList }) {
+		return writeBlocks(b, list, fields, indent)
+	}
 	tw := tabwriter.NewWriter(b, 0, 0, tabPadding, ' ', 0)
 	head := make([]string, len(fields))
 	for i, f := range fields {
@@ -149,7 +168,7 @@ func writeTable(b *strings.Builder, list reflect.Value, fields []op.FieldInfo, i
 			if !ok {
 				continue
 			}
-			cells[j] = cellText(fv, f)
+			cells[j] = cutCell(cellText(fv, f))
 		}
 		if _, err := fmt.Fprintln(tw, indent+strings.Join(cells, "\t")); err != nil {
 			return err
@@ -158,21 +177,90 @@ func writeTable(b *strings.Builder, list reflect.Value, fields []op.FieldInfo, i
 	return tw.Flush()
 }
 
+// emptyList reports whether fv is a list or map field with no items. Why:
+// a required one printed "wrote: " with nothing after it (B2-17); --json
+// keeps the empty list.
+func emptyList(fv reflect.Value, t op.FieldType) bool {
+	return (t == op.TypeStrings || t == op.TypeStringMap) && fv.Len() == 0
+}
+
+// cutCell is a table cell cut to maxCell characters, the cut marked with
+// an ellipsis. Why: one long cell (a question's help text, its choices)
+// made every line of `lore setup plan` hundreds of characters wide
+// (B2-17); --json keeps the whole value.
+func cutCell(text string) string {
+	r := []rune(text)
+	if len(r) <= maxCell {
+		return text
+	}
+	return string(r[:maxCell-1]) + "…"
+}
+
+// writeBlocks writes a list of structs as one "- " block per item, each
+// item's fields as writeObject prints them (a nested list becomes a table
+// under its name), for a list too deep for one table line.
+func writeBlocks(b *strings.Builder, list reflect.Value, fields []op.FieldInfo, indent string) error {
+	for i := range list.Len() {
+		var item strings.Builder
+		if err := writeObject(&item, list.Index(i), fields, indent+indentStep); err != nil {
+			return err
+		}
+		text := item.String()
+		if text == "" {
+			fmt.Fprintf(b, "%s-\n", indent)
+			continue
+		}
+		// the first line's indent becomes the item marker
+		b.WriteString(indent + "- " + strings.TrimPrefix(text, indent+indentStep))
+	}
+	return nil
+}
+
 // cellText is one table cell.
 func cellText(fv reflect.Value, f op.FieldInfo) string {
 	switch f.Type {
-	case op.TypeObject, op.TypeList:
-		// json.Marshal takes `any` (stdlib signature); the concrete value
-		// goes straight in and only bytes come back.
-		b, err := json.Marshal(fv.Interface())
-		if err != nil {
-			return "?"
+	case op.TypeObject:
+		return objectCell(fv, f.Fields)
+	case op.TypeList:
+		items := make([]string, 0, fv.Len())
+		for i := range fv.Len() {
+			if t := objectCell(fv.Index(i), f.Fields); t != "" {
+				items = append(items, t)
+			}
 		}
-		return string(b)
+		return strings.Join(items, itemSep)
 	case op.TypeString, op.TypeBool, op.TypeInt, op.TypeUint, op.TypeFloat, op.TypeDuration,
 		op.TypeStrings, op.TypeStringMap, op.TypeText:
 	}
 	return scalarText(fv, f.Type)
+}
+
+// objectCell is a nested object on one table line, as a person reads it:
+// its set fields as "name: value", joined by pairSep; a zero field is left
+// out, so an object with nothing set is a blank cell. A lone set field is
+// its bare value.
+//
+// Why: the cell was the object's compact JSON, so every check of `lore
+// setup apply` showed {"text":"","command":null,"runnable":false,
+// "outward":false} in its FIX column (B1-3). --json keeps the JSON.
+func objectCell(v reflect.Value, fields []op.FieldInfo) string {
+	var pairs, vals []string
+	for _, f := range fields {
+		fv, ok := jsonField(v, f.Name)
+		if !ok || fv.IsZero() {
+			continue
+		}
+		t := cellText(fv, f)
+		if t == "" {
+			continue
+		}
+		pairs = append(pairs, f.Name+": "+t)
+		vals = append(vals, t)
+	}
+	if len(vals) == 1 {
+		return vals[0]
+	}
+	return strings.Join(pairs, pairSep)
 }
 
 // scalarText formats one non-nested value for people.
@@ -205,6 +293,11 @@ func scalarText(fv reflect.Value, t op.FieldType) string {
 		slices.Sort(kv)
 		return strings.Join(kv, listSep)
 	case op.TypeText:
+		// A time to the nanosecond (2026-11-12T19:39:43.342161897Z, the
+		// CHECKED_AT column of B1-3) reads as noise: print it to the second.
+		if t, ok := fv.Interface().(time.Time); ok {
+			return t.Format(humanTime)
+		}
 		// Interface returns `any` (stdlib signature); op classifies a field
 		// as TypeText only when the type implements encoding.TextMarshaler,
 		// so the assertion holds and nothing untyped escapes this line.

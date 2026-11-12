@@ -29,7 +29,8 @@ func TestTextMatchesV017(t *testing.T) {
 		}
 	}
 	res := h.Must(opstask.OpAdd, `{"title":"Fix the login redirect","priority":"high"}`)
-	check("add", opstest.Text(res), "✓ tsk_ID — Fix the login redirect [high]\n")
+	// delta: the first add names the default tasklist it created (B3-8)
+	check("add", opstest.Text(res), "✓ tsk_ID — Fix the login redirect [high]\n  created tasklist tlt_ID \"default\" for tasks added without --tasklist\n")
 	second := addID(h, h.Must(opstask.OpAdd, `{"title":"Second","body":"the body text","due":"2026-12-01"}`))
 	add(h, "Prop one", `"commitment":"proposed"`)
 	add(h, "Some one", `"commitment":"someday"`)

@@ -440,11 +440,17 @@ func (b *Backend) blobAt(ctx context.Context, commit, path string) string {
 	return trimmed(out)
 }
 
-// recoverMerge aborts a merge a crashed run left in the worktree (lore
-// owns the worktree, so a MERGE_HEAD can only be its own debris); the
-// branch is then where it was before that merge.
+// recoverMerge aborts a merge a crashed run of lore left in the worktree
+// (its ownMergeFile mark is there); the branch is then where it was
+// before that merge. A merge, rebase or other git operation the person
+// has in progress there (the clone is set up for plain git) is refused,
+// never aborted (B2-9, gitop.go).
 func (b *Backend) recoverMerge(ctx context.Context) error {
+	if err := b.refusePersonGitOp(ctx, b.work); err != nil {
+		return err
+	}
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-parse", "-q", "--verify", "MERGE_HEAD"}}); err != nil {
+		b.clearOwnMerge(ctx)
 		return nil // no merge in progress
 	}
 	return b.abortMerge(ctx)
@@ -637,6 +643,9 @@ func (b *Backend) Compact(ctx context.Context, req CompactRequest) (CompactResul
 	}
 	if b.mode == modeRepo {
 		return CompactResult{}, errs.New(errs.Refused, "git: lore never rewrites a code repository's history")
+	}
+	if err := b.refusePersonGitOp(ctx, b.work); err != nil {
+		return CompactResult{}, err // B2-9
 	}
 	if !req.DryRun {
 		if err := b.compactSync(ctx, req.Squash); err != nil {

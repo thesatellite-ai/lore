@@ -47,10 +47,15 @@ func TestEnsureGitignoreAppendsOnlyMissingLines(t *testing.T) {
 	if strings.Count(got, ".lore/state/") != 1 || strings.Contains(got, ".lore/backups/\n") {
 		t.Fatalf("listed or ignored line repeated: %q", got)
 	}
-	for _, l := range []string{".lore/lore-cache.db\n", ".lore/lock\n", ".lore/lore.db\n"} {
+	for _, l := range []string{".lore/lock\n", ".lore/lore.db\n"} {
 		if !strings.Contains(got, l) {
 			t.Fatalf("missing %q in %q", l, got)
 		}
+	}
+	// B4-7: the repo cache lives under the lore home; its lines are added
+	// only while an older build's file is there
+	if strings.Contains(got, ".lore/lore-cache.db") {
+		t.Fatalf("a line for a file no command creates: %q", got)
 	}
 	if err := EnsureGitignore(ctx, root); err != nil {
 		t.Fatal(err)

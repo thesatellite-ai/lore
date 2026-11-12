@@ -352,7 +352,7 @@ func TestJourneySolo(t *testing.T) {
 		// No duplicate commits of one row: a retry sends it once.
 		n := 0
 		for _, l := range w.Remote(soloStore).Log("main") {
-			if strings.Contains(l, "lore: write mem_") {
+			if strings.Contains(l, "lore: memory add mem_") {
 				n++
 			}
 		}

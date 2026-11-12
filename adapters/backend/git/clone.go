@@ -107,6 +107,12 @@ func NewOpener(opts ...Option) store.Opener {
 		if own {
 			callOpts = append(callOpts, withOwnClone())
 		}
+		if !own && r.isLocal() {
+			// a clone made before B3-21 sits at the whole path: move it once
+			if err = moveLegacyLocalClone(ctx, o.Home, r, branch, dir); err != nil {
+				return nil, err
+			}
+		}
 		remote := r.URL
 		if spelled, ok := build(opts).origins[r.URL]; ok && spelled != "" {
 			remote = spelled
@@ -137,6 +143,10 @@ func OpenClone(ctx context.Context, remote, dir, folder string, o store.OpenOpti
 	paths := PathsOf(dir)
 	if err = checkCloneFolder(paths, cfg.own); err != nil {
 		return nil, err
+	}
+	if NoClone(ctx) && !isDir(filepath.Join(dir, gitDirName)) {
+		return nil, errs.New(errs.StoreUnreachable, "git: the store "+remote+" has no clone on this machine yet, and this run makes none (dry run)").
+			WithHint("a run that is not a dry run clones it to " + dir)
 	}
 	if err = os.MkdirAll(paths.StateDir, cloneDirMode); err != nil {
 		return nil, errs.Wrap(errs.Internal, "git: create the clone folder", err)

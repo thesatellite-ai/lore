@@ -2,10 +2,12 @@ package wire
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/ids"
+	opscheck "github.com/thesatellite-ai/lore/ops/check"
 )
 
 // TestHasV017Rows pins the v0.1.17 detection the gate of every command
@@ -62,4 +64,41 @@ func newTestAppWith(t *testing.T, dir string, edit func(*Options)) *App {
 		}
 	})
 	return a
+}
+
+// TestCommitHookSaysRunLoreFix (B4-11): `lore check leaks`, which the
+// commit-msg hook runs, is a Local operation the registry's v0.1.17 gate
+// never sees; in a repo with v0.1.17 rows it still says "run lore fix"
+// once, so someone who only commits learns the upgrade is pending.
+func TestCommitHookSaysRunLoreFix(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	data := filepath.Join(dir, ".lore", "data", "memories")
+	if err := os.MkdirAll(data, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".lore", "data", "_meta.json"), []byte(`{"_v": 1, "project_id": "p"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "mem_1.json"), []byte(`{"_table": "memories", "_v": 1, "body": "x", "id": "mem_1"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	actor, err := ids.Parse[ids.Actor](testActor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var notes []string
+	l := &standaloneLeaks{opts: Options{RepoDir: dir, Home: t.TempDir(), Actor: actor, Notice: func(m string) { notes = append(notes, m) }}}
+	if _, err := l.CheckLeaks(t.Context(), opscheck.LeaksIn{Staged: true}); err != nil {
+		t.Fatalf("check leaks: %v", err)
+	}
+	if l.app != nil {
+		t.Cleanup(func() { _ = l.app.Close() })
+	}
+	if len(notes) != 1 || notes[0] != OldRowsReadLine {
+		t.Fatalf("notes = %q, want exactly %q", notes, OldRowsReadLine)
+	}
 }

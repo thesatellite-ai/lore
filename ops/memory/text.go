@@ -37,29 +37,22 @@ func (o WriteOut) Text() string {
 	return b.String()
 }
 
-// ExternalLine is v0.1.17's human line of a row from outside the checkout
-// (stores_reads.go printExternalRows): "<id>  <text><status>  <label>",
-// where text is the title, the title + " — " + body when both differ, or
-// the body alone, folded onto one line (whitespace runs become one space,
-// never cut), status is "  <status>" when the row has one, and label is
-// its `_label` ("[northwind/acme]", "[me]").
-func ExternalLine(id, title, body, status, label string) string {
-	t := title
-	if t == "" {
-		t = body
-	} else if body != "" && body != title {
-		t += " — " + body
+// LabelSuffix is the " [<label>]" end of a human list line, from a
+// record's `_label` ("" for a repo row). Every noun's list ends a row of
+// another store with it, so a list keeps one layout per row whatever
+// store the row comes from and the label is the only extra column
+// (v0.1.17 printed rows of other stores in a second layout).
+func LabelSuffix(label string) string {
+	if label == "" {
+		return ""
 	}
-	if status != "" {
-		status = "  " + status
-	}
-	return id + "  " + strings.Join(strings.Fields(t), " ") + status + "  " + label + "\n"
+	return " " + label
 }
 
-// Text prints one "<id> [<kind>] <body>" line per repo memory, the body
-// cut at 80 bytes and " [archived]" after an archived one, then each
-// memory of another store as v0.1.17 printed it after the repo's own
-// (ExternalLine, with its label); "(no memories)" when there is none.
+// Text prints one "<id> [<kind>] <body>" line per memory, the body
+// folded onto one line and cut at 80 bytes, " [archived]" after an archived one and the store label after
+// a memory of another store (LabelSuffix); "(no memories)" when there is
+// none.
 func (o ListOut) Text() string {
 	notes := ""
 	if len(o.Notes) > 0 {
@@ -68,24 +61,23 @@ func (o ListOut) Text() string {
 	return o.rowsText() + notes
 }
 
-// rowsText is the v0.1.17 lines.
+// rowsText is the list lines: the repo's memories first, then those of
+// the other stores (v0.1.17's order), every one in the same layout.
 func (o ListOut) rowsText() string {
 	if len(o.Data) == 0 {
 		return "(no memories)\n"
 	}
 	var b, ext strings.Builder
 	for _, m := range o.Data {
+		w := &b
 		if m.Label != "" {
-			ext.WriteString(ExternalLine(m.ID, "", m.Body, "", m.Label))
-			continue
+			w = &ext
 		}
-		body := m.Body
-		body = cutBody(body)
 		badge := ""
 		if !m.ArchivedAt.IsZero() {
 			badge = " [archived]"
 		}
-		fmt.Fprintf(&b, "%s [%s] %s%s\n", m.ID, m.Kind, body, badge)
+		fmt.Fprintf(w, "%s [%s] %s%s%s\n", m.ID, m.Kind, cutBody(textcut.OneLine(m.Body)), badge, LabelSuffix(m.Label))
 	}
 	return b.String() + ext.String()
 }

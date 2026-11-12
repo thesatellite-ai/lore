@@ -543,7 +543,7 @@ func IsStaging(o *orgconf.Org, defaultBranch func(storeURL string) string) bool 
 	for _, s := range o.Stores {
 		def := orgconf.DefaultStoreBranch
 		if defaultBranch != nil {
-			if n, err := repourl.Normalize(s.URL); err == nil {
+			if n, err := repourl.NormalizeStore(s.URL); err == nil {
 				if b := defaultBranch(n); b != "" {
 					def = b
 				}
@@ -576,12 +576,12 @@ func sameOrg(a, b *orgconf.Org) bool {
 	}
 	urls := map[string]bool{}
 	for _, s := range a.Stores {
-		if n, err := repourl.Normalize(s.URL); err == nil {
+		if n, err := repourl.NormalizeStore(s.URL); err == nil {
 			urls[n] = true
 		}
 	}
 	for _, s := range b.Stores {
-		if n, err := repourl.Normalize(s.URL); err == nil && urls[n] {
+		if n, err := repourl.NormalizeStore(s.URL); err == nil && urls[n] {
 			return true
 		}
 	}

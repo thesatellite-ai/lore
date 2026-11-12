@@ -98,6 +98,8 @@ count: 1
 ```
 <!-- /example -->
 
+A git store's clone folder follows its address, so a renamed store repo would get a new clone. Notes written while the old address was gone are commits in the old clone only, so `lore store set-url` carries that clone to the new address instead (it prints `the clone ~/.lore/stores/lore-me (1 unpushed commit(s)) now fetches from and pushes to …`) and the next `lore sync` pushes them. When the new address already has a clone with work of its own, set-url refuses (`E_REFUSED`) naming both clones and changes nothing. `lore doctor` warns (`store_clone`) about a clone an older lore left at an old address with unpushed commits; its fix, `lore store set-url <sto_id> <url>`, carries it the same way.
+
 The `note:` line says the old address could not be read (the folder is gone), so the two ids were not compared. Do this once in every repo that attaches the store, then commit `.lore/stores.yaml`.
 
 ## Step 4 — Split a store into folders
@@ -122,7 +124,7 @@ stores:
       url: file://~/stores/agency-notes
       folder: golang
 $ lore memory list
-mem_162d…9666  Close every channel from the sender side.  [notes/golang]
+mem_162d…9666 [retrieved] Close every channel from the sender side. [notes/golang]
 $ lore store folder list notes
 store notes folders:
   FOLDER  ID                                    CREATED BY  CREATED  ATTACHED HERE  ROWS
@@ -152,7 +154,7 @@ lore: wrote ~/stores/agency-notes/_store/rules/rul_54fe…28f2.json (store notes
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 moved to store notes (same id; the old copy is tombstoned)
 $ lore rule list
-rul_54fe…28f2  Keep the agency hourly rate out of the client repo.  [notes]
+rul_54fe…28f2 [must/always] Keep the agency hourly rate out of the client repo. [notes]
 $ cat .lore/data/rules/rul_54fe…28f2.json
 {
   "_deleted": true,
@@ -211,7 +213,7 @@ ERROR: [E_UNSUPPORTED] rul_54fe…28f2 was in store repo before and left it; a r
   hint: keep it in notes
 (exit 23)
 $ lore rule list
-rul_54fe…28f2  Keep the agency hourly rate out of the client repo.  [notes]
+rul_54fe…28f2 [must/always] Keep the agency hourly rate out of the client repo. [notes]
 ```
 <!-- /example -->
 

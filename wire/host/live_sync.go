@@ -68,7 +68,12 @@ func (l liveSync) here(ctx context.Context) (*liveSession, string, error) {
 // pushed (offline, or the remote refused refs/lore/*): they stay in this
 // clone and the next sync sends them, so sync must never say
 // "· already in sync" then.
-const syncLiveWaiting = "live: %d write(s) not pushed (offline, or the remote refused refs/lore/*): kept here, sent on the next sync"
+// The %s is why (liveSession.waitWhy): offline, no repository at the
+// remote, refused credentials, refused refs/lore/*.
+const syncLiveWaiting = "live: %d write(s) not pushed (%s): kept here, sent on the next sync"
+
+// syncWaitWhyDefault is syncLiveWaiting's reason when the push named none.
+const syncWaitWhyDefault = "offline, or the remote refused refs/lore/*"
 
 // pushAndLand pushes the waiting live writes, then lands what is due.
 // waiting is the number of live writes still not on the remote after the
@@ -84,7 +89,9 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 		// (never "· already in sync"), naming the backup and the restore.
 		return nil, 0, rewrittenError(errs.ReadOnly, s.blocked)
 	}
+	s.syncReport = true // this report's own line says what waits (syncLiveWaiting)
 	pushed := s.push(ctx)
+	s.syncReport = false
 	if !pushed || s.ref.Remote == nil {
 		if s.blocked != nil { // the push found it rewritten
 			return nil, 0, rewrittenError(errs.ReadOnly, s.blocked)
@@ -93,7 +100,11 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 			// The push could not deliver (offline, refused): the writes
 			// wait here; say so rather than "already in sync".
 			n := s.waiting()
-			return []string{fmt.Sprintf(syncLiveWaiting, n)}, n, nil
+			why := s.waitWhy
+			if why == "" {
+				why = syncWaitWhyDefault
+			}
+			return []string{fmt.Sprintf(syncLiveWaiting, n, why)}, n, nil
 		}
 		return nil, 0, nil
 	}

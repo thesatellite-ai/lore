@@ -56,7 +56,7 @@ rul_b4f4…a5b0 [must/always] Buttons are blue, links are green.
 
 ## Step 2 — The same text changed on both sides
 
-Now Alice writes "dark blue" and Bob writes "light blue". Alice pulls and gets a conflict. lore puts both versions inside the `body` value, in git's usual `<<<<<<< ours / ======= / >>>>>>> theirs` form, so the file is still valid JSON:
+Now Alice writes "dark blue" and Bob writes "light blue". Alice pulls and gets a conflict. lore puts both versions inside the `body` value, in git's usual order, so the file is still valid JSON: first `<<<<<<< yours (this branch)` with your text, then `=======`, then the incoming text and `>>>>>>> theirs (merged in)`. The labels say whose text is whose, whichever edit is newer:
 
 <!-- example: sync#same-text-conflict only=2,3,4,5 -->
 ```console
@@ -78,7 +78,7 @@ CONFLICT (content): Merge conflict in .lore/data/rules/rul_b4f4…a5b0.json
 Automatic merge failed; fix conflicts and then commit the result.
 (exit 1)
 $ grep body .lore/data/rules/rul_b4f4…a5b0.json
-  "body": "<<<<<<< 2026-11-02T10:04:00.000Z/0000/act_28f8…03df\nButtons are light blue.\n=======\nButtons are dark blue.\n>>>>>>> 2026-11-02T10:03:55.000Z/0000/act_54fe…28f2",
+  "body": "<<<<<<< yours (this branch) 2026-11-02T10:03:55.000Z/0000/act_54fe…28f2\nButtons are dark blue.\n=======\nButtons are light blue.\n>>>>>>> theirs (merged in) 2026-11-02T10:04:00.000Z/0000/act_28f8…03df",
 ```
 <!-- /example -->
 
@@ -106,6 +106,19 @@ Or let lore pick one side for you. `lore sync conflicts` lists every row that st
 - A row file is written back in place and the local cache refreshed; you still `git add` and commit the merge yourself, lore never commits it for you.
 - A live row gets a new live version, pushed like any other live edit.
 - If the result would still hold markers (nested or hand-made blocks), or a file would not be a valid row afterwards, resolve refuses with `E_INVALID_INPUT` and writes nothing: edit that row by hand. An unknown number is `E_NOT_FOUND`.
+
+`lore sync` itself names every row that waits on you this way (a live row it merged with markers, or a marked row file), with its number, and exits with `E_STALE` (exit 23) until each is settled, so a script or a person never misses one.
+
+## Step 2b — The same row of a team store changed on two machines
+
+Rows of a team or personal store do not travel with your code commits: `lore sync` sends them to the store's own repo. When Alice and Bob both retitle the same shared task and Bob syncs first, Alice's `lore sync` cannot merge the two titles. It keeps both edits (hers waits in her local copy of the store, unsent) and stops with `E_STALE`, naming the row. Then, in her repo (or inside the store's folder):
+
+- `lore sync conflicts` lists the row with its store, the fields both sides changed, and both values of each (`mine (kept)` and `theirs (other)`); `--json` carries both row files (`kept_doc`, `other_doc`).
+- `lore explain <id>` says which store holds the row and that it waits on a conflict.
+- `lore sync resolve <n> --take kept` keeps her version, `--take other` takes Bob's; either way lore merges the store, sends the result and both machines end with the same row. The rest of the row still merges field by field.
+- Or she edits the row to any value (hers, Bob's, or a third one) and runs `lore sync`: an edit made after the conflict was reported settles it with the row as she saved it.
+
+If Bob changes the row again before she settles it, her choice no longer applies and the next sync reports the new conflict.
 
 ## Step 3 — The file and your database both changed
 
@@ -156,7 +169,7 @@ $ lore memory list
 mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email.
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ lore trash list
-mem_3b62…e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by act_28f8…03df  reason "merged into mem_4c59…6c38"  bat_f147…5139
+mem_3b62…e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by bob  reason "merged into mem_4c59…6c38"  bat_f147…5139
 1 row in the trash
 ```
 <!-- /example -->
@@ -228,7 +241,7 @@ The other findings lint reports are unknown `${…}` schemes (`unknown_scheme`),
 - **Conflict markers in a value are imported, not hidden.** Until you settle them, `lore rule list` shows the markers in the text, and every command repeats the warning. That is deliberate, so the conflict is not forgotten.
 - **lore does not look for duplicates in memories for you.** (`lore lint --context` flags near duplicates among pinned entries only.) Find them with `lore search` or `lore memory list`; "We use Stripe" and "Payments go through Stripe" are the same fact to you, not to lore. Then fold them with `lore sync merge-rows`.
 - **Resolve numbers are per machine.** `#1` in `lore sync conflicts` is a local number, not a row id; it means nothing on a teammate's machine. Run `lore sync conflicts` again before each `resolve`: the numbers shift once a conflict is settled.
-- **Resolve works on this repo only.** Files of an attached store's clone are settled by `lore sync`'s own merge, not by `lore sync resolve`.
+- **A store row both sides rewrote is listed too.** See [Step 2b](#step-2b--the-same-row-of-a-team-store-changed-on-two-machines).
 
 ## Related
 

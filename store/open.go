@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,16 +70,33 @@ func (o *Openers) Schemes() []string {
 	return out
 }
 
+// PathScheme is the key an Opener registers under to open a store url
+// that is a plain absolute path (/srv/git/notes.git): a git repository on
+// this machine, reached the way `git clone /srv/git/notes.git` reaches it.
+// Such a url has no scheme, so it is looked up under this name; a folder
+// store is always spelled file:// and never lands here.
+const PathScheme = "path"
+
+// IsLocalPath reports whether u is a plain absolute path with no scheme,
+// host, user or opaque part (the PathScheme form).
+func IsLocalPath(u *url.URL) bool {
+	return u.Scheme == "" && u.Host == "" && u.User == nil && u.Opaque == "" && strings.HasPrefix(u.Path, "/")
+}
+
 // Open parses rawURL and opens it with the Opener of its scheme; an unknown
 // scheme is ErrScheme (E_STORE_SCHEME). The url never appears in the error:
 // it may carry a token.
 func (o *Openers) Open(ctx context.Context, rawURL string, opts OpenOptions) (Backend, error) {
 	u, err := url.Parse(rawURL)
-	if err != nil || u.Scheme == "" {
+	if err != nil || (u.Scheme == "" && !IsLocalPath(u)) {
 		return nil, errs.New(errs.StoreScheme, "store: the url has no scheme")
 	}
+	scheme := u.Scheme
+	if scheme == "" {
+		scheme = PathScheme
+	}
 	o.mu.RLock()
-	open, ok := o.schemes[u.Scheme]
+	open, ok := o.schemes[scheme]
 	o.mu.RUnlock()
 	if !ok {
 		return nil, errs.Wrap(errs.StoreScheme, "store: no backend for scheme "+u.Scheme, ErrScheme)

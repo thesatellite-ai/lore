@@ -177,7 +177,7 @@ func TestDoctorCachePrune_OrphanProjectCache(t *testing.T) {
 	p := newDoctorPerson(t)
 	nowhere := filepath.Join(p.w.Root, "nowhere")
 	none := p.a.Lore(nowhere, "cache", "prune", "--dry-run").OK(t)
-	if none.Stdout != "nothing to prune: every cache file belongs to a store a repo on this machine attaches\n" {
+	if none.Stdout != "nothing to prune: every cache file belongs to a repo on this machine or a store one attaches\n" {
 		t.Fatalf("nothing to prune: %q", none.Stdout)
 	}
 	// A v0.1.17 per-project cache of a project no repo here has.

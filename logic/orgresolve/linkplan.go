@@ -134,13 +134,13 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 	}
 	st := o.Stores[0]
 	if req.StoreURL != "" {
-		want, nerr := repourl.Normalize(req.StoreURL)
+		want, nerr := repourl.NormalizeStore(req.StoreURL)
 		if nerr != nil {
 			return LinkPlan{}, refuse(fmt.Sprintf("--store %q is not a store url: %v", req.StoreURL, nerr), "pass one of "+o.Name+"'s stores: "+storeURLs(o))
 		}
 		found := false
 		for _, s := range o.Stores {
-			if n, serr := repourl.Normalize(s.URL); serr == nil && n == want {
+			if n, serr := repourl.NormalizeStore(s.URL); serr == nil && n == want {
 				st, found = s, true
 				break
 			}
@@ -154,7 +154,7 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 			Msg:  fmt.Sprintf("%v: %s does not match %s's own: patterns (%s)", ErrLinkOwnPattern, remote, o.Name, listOrNone(o.Own)),
 			Next: "link it without --own (as a client repo), or add a matching pattern to own: in " + o.Name + "'s lore-org.yaml and run lore org refresh " + o.Name}
 	}
-	storeURL, err := repourl.Normalize(st.URL)
+	storeURL, err := repourl.NormalizeStore(st.URL)
 	if err != nil {
 		return LinkPlan{}, refuse(fmt.Sprintf("store url %q of org entry %s is not valid: %v", st.URL, o.Name, err),
 			"fix it in "+configFile+" (lore config check lists every problem)")

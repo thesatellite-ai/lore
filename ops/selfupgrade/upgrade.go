@@ -81,6 +81,14 @@ type ProjectFixer interface {
 	FixAfterUpgrade(ctx context.Context) ([]string, error)
 }
 
+// SourceBuild is the optional upgrade of Upgrader that tells a binary
+// built from source, which the binary step never replaces: no lore fix
+// runs after it (B4-4: the docs promise one line, and the fix took 30 s
+// for a step that installed nothing).
+type SourceBuild interface {
+	FromSource() bool
+}
+
 // RunOut is the output of upgrade.run.
 type RunOut struct {
 	// Lines are what the upgrade reported, in order (CLI_REFERENCE 3.5).
@@ -111,24 +119,33 @@ func Ops(env Env) []op.Entry {
 			Confirm:  op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "check for a newer release", CLI: "lore upgrade --check", Want: ""}},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) {
-			u, err := env.Upgrader(ctx)
-			if err != nil {
-				return RunOut{}, err
-			}
-			out, err := Run(ctx, u, in, op.Confirmed(ctx))
-			if err != nil || in.Check || in.NoFix {
-				return out, err // --check changes nothing; --no-fix skips the fix
-			}
-			if pf, ok := env.(ProjectFixer); ok {
-				lines, ferr := pf.FixAfterUpgrade(ctx)
-				out.Lines = append(out.Lines, lines...)
-				if ferr != nil {
-					out.Lines = append(out.Lines, "lore fix did not run: "+ferr.Error()+" (run lore fix)")
-				}
-			}
-			return out, nil
+			return runWithFix(ctx, env, in, op.Confirmed(ctx))
 		}),
 	}
+}
+
+// runWithFix is upgrade.run: the binary step, then lore fix for this
+// project unless --check, --no-fix or a source build (nothing installed).
+func runWithFix(ctx context.Context, env Env, in RunIn, confirmed bool) (RunOut, error) {
+	u, err := env.Upgrader(ctx)
+	if err != nil {
+		return RunOut{}, err
+	}
+	out, err := Run(ctx, u, in, confirmed)
+	if err != nil || in.Check || in.NoFix {
+		return out, err // --check changes nothing; --no-fix skips the fix
+	}
+	if sb, ok := u.(SourceBuild); ok && sb.FromSource() {
+		return out, nil // nothing was installed: the fix would run this same binary
+	}
+	if pf, ok := env.(ProjectFixer); ok {
+		lines, ferr := pf.FixAfterUpgrade(ctx)
+		out.Lines = append(out.Lines, lines...)
+		if ferr != nil {
+			out.Lines = append(out.Lines, "lore fix did not run: "+ferr.Error()+" (run lore fix)")
+		}
+	}
+	return out, nil
 }
 
 // Run is upgrade.run over an Upgrader.

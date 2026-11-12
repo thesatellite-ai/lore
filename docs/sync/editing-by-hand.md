@@ -13,19 +13,19 @@ Run any lore command (a list is enough, for example `lore task list` in a repo l
 <!-- example: files#edit-a-row-file-by-hand -->
 ```console
 # alice, in .lore/stores/acme/notes
-$ sed -i 's/reset every Monday/reset every Sunday night/' _store/memories/mem_162d…9666.json && git status --short
- M _store/memories/mem_162d…9666.json
+$ sed -i 's/reset every Monday/reset every Sunday night/' _store/memories/mem_54fe…28f2.json && git status --short
+ M _store/memories/mem_54fe…28f2.json
 
 # alice, in website
 $ lore memory list --store notes
 lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-lore: picked up 1 row edited by hand in store notes: committed cf563f3 "hand edit: memories mem_162d…9666" in ~/.lore/stores/acme/notes
-  edited memories mem_162d…9666 (body): ~/.lore/stores/acme/notes/_store/memories/mem_162d…9666.json
-mem_162d…9666  The staging database is reset every Sunday night.  [notes]
+lore: picked up 1 row edited by hand in store notes: committed cf563f3 "hand edit: memories mem_54fe…28f2" in ~/.lore/stores/acme/notes
+  edited memories mem_54fe…28f2 (body): ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json
+mem_54fe…28f2 [retrieved] The staging database is reset every Sunday night. [notes]
 
 # alice, in .lore/stores/acme/notes
 $ git log -1 --format='%an <%ae>  %s'; git status --short
-alice <alice@agency.example>  hand edit: memories mem_162d…9666
+alice <alice@agency.example>  hand edit: memories mem_54fe…28f2
 ```
 <!-- /example -->
 
@@ -48,18 +48,17 @@ A row file deleted by hand goes to the trash:
 <!-- example: files#delete-a-row-file-by-hand -->
 ```console
 # alice, in .lore/stores/acme/notes
-$ git rm -q _store/memories/mem_162d…9666.json && git status --short
-D  _store/memories/mem_162d…9666.json
+$ git rm -q _store/memories/mem_54fe…28f2.json && git status --short
+D  _store/memories/mem_54fe…28f2.json
 
 # alice, in website
 $ lore memory list --store notes
-lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_162d…9666" in ~/.lore/stores/acme/notes
-  deleted memories mem_162d…9666 (moved to the trash; lore trash restore mem_162d…9666 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_162d…9666.json
+lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
+lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_54fe…28f2" in ~/.lore/stores/acme/notes
+  deleted memories mem_54fe…28f2 (moved to the trash; lore trash restore mem_54fe…28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json
 (no memories)
 $ lore trash list
-lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-mem_162d…9666  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by act_54fe…28f2  bat_b4f4…a5b0
+mem_54fe…28f2  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by alice  bat_b4f4…a5b0
 1 row in the trash
 ```
 <!-- /example -->
@@ -77,7 +76,6 @@ $ sed -i 's/"status": "todo"/"status": "finished"/' _store/tasks/tsk_2ad3…f891
 $ lore task list --store notes
 lore: hand edit refused: ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json:28: tasks: field status: want one of todo, in_progress, done, cancelled, blocked
   it is not committed or pushed until the file is fixed (or put back: git -C ~/.lore/stores/acme/notes checkout -- _store/tasks/tsk_2ad3…f891.json); the other edits went ahead
-lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
 ○ tsk_2ad3…f891 Renew the TLS certificate [high]  [notes]
 
 # alice, in .lore/stores/acme/notes
@@ -121,11 +119,13 @@ alice@agency.example
 $ sed -i 's/Renew the TLS certificate/Renew the TLS certificate (key AKIA''IOSFODNN7EXAMPLE)/' _store/tasks/tsk_2ad3…f891.json && git add _store/tasks/tsk_2ad3…f891.json && git commit -qm 'note the key'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit carries a secret:
   _store/tasks/tsk_2ad3…f891.json:30 (field title) secret: rule aws_access_key match sha256:1a5d44a2dca1
-  hint: store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <hash> --reason "<why>" (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again
+  hint: store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <the sha256:… match shown> --reason "<why>" (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again
 (exit 1)
 $ git reset -q -- _store/tasks/tsk_2ad3…f891.json && git checkout -- _store/tasks/tsk_2ad3…f891.json && git status --short
 ```
 <!-- /example -->
+
+While a `git pull` (merge), rebase, cherry-pick, revert or bisect of yours is unfinished in a store clone, lore leaves that clone alone: it never aborts or resets it, a read does not pick up hand edits there and says so in one line, and a write or `lore sync` that would touch the clone is refused with `store clone <path> is in the middle of a git merge` and the commands that end it (`git add` the files and `git commit`, or `git merge --abort`). Finish it, then run the lore command again.
 
 ## Files that are not rows
 

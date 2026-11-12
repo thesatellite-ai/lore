@@ -117,7 +117,7 @@ Offline, reads use the last fetched state. A **hook** is a small script git runs
 
 Step 2 uses a **private index**: a scratch staging area of lore's own, so your `git add` work is not touched. Step 5 is a **compare-and-swap**: lore moves the list only if it still points where lore last saw it, like saving a document only if nobody saved over it meanwhile.
 
-Your branch, your staged files and your working folder are never touched. Lore builds commits with git's low-level commands, outside any checkout. Sometimes the push cannot happen: you are offline, `live.autopush: false` or `LORE_LIVE_AUTOPUSH=0` is set, or the host refuses `refs/lore/*`. Then the write stays on your local live list and lore says `(live, not pushed yet: N waiting)`. The next command pushes it. `lore live diff` shows what is waiting:
+Your branch, your staged files and your working folder are never touched. Lore builds commits with git's low-level commands, outside any checkout. Sometimes the push cannot happen: you are offline, `live.autopush: false` or `LORE_LIVE_AUTOPUSH=0` is set, or the host refuses `refs/lore/*`. Then the write stays on your local live list and lore says `(live, not pushed yet: N waiting; …)` with why and what happens next, once: not again on every read or git hook until the count or the reason changes. The next command pushes it. When the remote is not there at all (a mistyped or deleted `origin`, a path with no repository) or refuses your credentials, or is a local folder you may not read (it then says `cannot read <path> (permission denied)` and that the address is right), the line says so and names the remote instead of "offline", `lore sync` gives the same reason, and `lore doctor` warns until a push goes through. `lore live diff` shows what is waiting:
 
 <!-- example: errors#refs-refused-by-the-host only=1,2 -->
 ```console
@@ -126,6 +126,7 @@ $ lore task add 'set up the portal CI'
 lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
 lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
+  created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
 lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore live diff
 local     86dbae476bd6
@@ -443,7 +444,7 @@ A **link** tells lore that a store folder holds the agency's private notes for o
 ## Store checks
 
 <!-- ds:block id=team-store-allowed-a7qb5uuj lines=1-30 -->
-A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore's files (row files at `<folder>/<table>/<id>.json` and `_store/<table>/<id>.json`, each folder's `_meta.json` and `_purged.json`, `lore-org.yaml`) plus `README*`, `LICENSE*`, `.gitattributes` and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/stores` or committed to by lore. `lore store init <name> <url>` turns a new empty repo into a store and attaches it; `lore store init <name> '<url>?branch=staging'` creates another store branch, and `lore store add <name> <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
+A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore's files (row files at `<folder>/<table>/<id>.json` and `_store/<table>/<id>.json`, each folder's `_meta.json` and `_purged.json`, `lore-org.yaml`, and the files of the older layouts: `.lore/` folders and `<table>/<id>.json` at the top) plus the starter files a git host offers (`README*`, `LICENSE*`, `LICENCE*`, `COPYING*`, `.gitignore`, `.gitattributes`) and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/stores` or committed to by lore. `lore store init <name> <url>` turns a new empty repo into a store and attaches it; `lore store init <name> '<url>?branch=staging'` creates another store branch, and `lore store add <name> <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
 
 ## Leak guards
 
@@ -502,13 +503,13 @@ The guards catch copy-paste mistakes; they are not a wall. See [Cleaning up afte
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2554 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topics)
+✓ .lore/LORE.md (2630 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
 ✓ private context → ~/.lore/render/rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
 $ cat ~/.lore/render/*/index.md
 <!-- generated by lore; private: never quote this content in committed files, client files, commits, PRs or chat -->
-repo website (rep_28f8…03df)
+repo app (rep_28f8…03df)
 sto_4c59…6c38.md  store me, me/everywhere  -  internal
 sto_7a67…9504.md  store agency, agency/org  -  internal
 $ git status --short

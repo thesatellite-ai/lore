@@ -28,7 +28,10 @@ func (a *App) OffboardPerson(ctx context.Context, who, reason string) error {
 		return errs.Wrap(errs.Internal, "member remove: encode the offboard input", err)
 	}
 	c, _ := engine.CallerOf(ctx)
-	c.Yes = c.Yes || engine.Confirmed(ctx)
+	// member remove is a Local op: its --yes reaches it as op.Confirmed,
+	// never as the engine's call (B2-11: without it the inner offboard
+	// asked again on every --yes run)
+	c.Yes = c.Yes || engine.Confirmed(ctx) || op.Confirmed(ctx)
 	_, err = a.Run(ctx, e, op.JSONDecoder{Body: body}, c)
 	return err
 }

@@ -186,7 +186,7 @@ $ lore pattern show pat_b69e…5ed7
 PA  pat_b69e…5ed7
   title: Load data in one place
 Each page loads its data in its loader, never inside a button handler.
-created 2026-11-02T10:03:10Z by act_54fe…28f2 · updated 2026-11-02T10:03:10Z by act_54fe…28f2
+created 2026-11-02T10:03:10Z by alice · updated 2026-11-02T10:03:10Z by alice
 $ lore pattern edit pat_b69e…5ed7 --body 'Each page loads its data in its loader, never inside a button handler or an effect.'
 lore: wrote ~/work/website/.lore/data/patterns/pat_b69e…5ed7.json
 ✓ pattern pat_b69e…5ed7 updated
@@ -209,7 +209,7 @@ IN  inc_77cb…76c4
   title: Site down for 20 minutes
   fixed_by patterns/pat_b69e…5ed7
 The disk filled up with logs. We now rotate logs daily.
-created 2026-11-02T10:03:35Z by act_54fe…28f2 · updated 2026-11-02T10:04:40Z by act_54fe…28f2
+created 2026-11-02T10:03:35Z by alice · updated 2026-11-02T10:04:40Z by alice
 ```
 <!-- /example -->
 
@@ -221,11 +221,11 @@ To read the whole incident, use `lore show`, which works for any id:
 $ lore show inc_77cb…76c4
 inc_77cb…76c4  incidents  repo  "Site down for 20 minutes"
   body: The disk filled up with logs. We now rotate logs daily.
-  created_by_actor_id: act_54fe…28f2
+  created_by_actor_id: act_4c59…6c38
   project_id: prj_78c8…5b6c
   severity_str: high
   title: Site down for 20 minutes
-created 2026-11-02T10:03:35Z by act_54fe…28f2 · updated 2026-11-02T10:04:40Z by act_54fe…28f2
+created 2026-11-02T10:03:35Z by alice · updated 2026-11-02T10:04:40Z by alice
 ```
 <!-- /example -->
 

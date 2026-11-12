@@ -397,7 +397,7 @@ func (o ListOut) rowsText() string {
 	}
 	var b strings.Builder
 	for _, m := range o.Data {
-		b.WriteString(m.ID + " [" + m.Status + "] " + m.Title + "   (" + strconv.Itoa(len(m.Tasks)) + " tasks)\n")
+		b.WriteString(m.ID + " [" + m.Status + "] " + m.Title + "   (" + strconv.Itoa(len(m.Tasks)) + " tasks)" + work.LabelSuffix(m.Label) + "\n")
 	}
 	return b.String()
 }

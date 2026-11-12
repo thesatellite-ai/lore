@@ -47,20 +47,20 @@ Open the TUI on your decisions and open the first one to read it in full. The sc
 # alice, in website
 $ printf '1\nq\n' | lore tui --kind decision
 decisions — 1–2 of 2 (page 1/1)
-  1  dec_d431…313a  repo     We use Stripe for payments
-  2  dec_b4f4…a5b0  repo     We use Stripe and bank transfer for payments
+  1  dec_76bd…3f10  repo     We use Stripe for payments
+  2  dec_d431…313a  repo     We use Stripe and bank transfer for payments
 <n> show · n/p page · /text filter · b back · q quit
 > 
-dec_d431…313a  decisions  store repo
+dec_76bd…3f10  decisions  store repo
   body: Stripe already works in the client shop app, so we keep one payment provider.
-  created_by_actor_id: act_54fe…28f2
+  created_by_actor_id: act_4c59…6c38
   project_id: prj_78c8…5b6c
   source_kind: manual
   status: superseded
-  superseded_by_id: dec_b4f4…a5b0
+  superseded_by_id: dec_d431…313a
   title: We use Stripe for payments
   trust_score: 0.5
-  updated: 2026-11-02 10:01 by act_54fe…28f2
+  updated: 2026-11-02 10:01 by act_4c59…6c38
 b back · q quit
 > 
 ```
@@ -75,17 +75,17 @@ When you already have an id, `lore show <id>` (also spelled `lore row show <id>`
 <!-- example: knowledge#show-any-row only=2 -->
 ```console
 # alice, in website
-$ lore row show dec_d431…313a --origin
-dec_d431…313a  decisions  repo  "We use Stripe for payments"
+$ lore row show dec_76bd…3f10 --origin
+dec_76bd…3f10  decisions  repo  "We use Stripe for payments"
   body: Stripe already works in the client shop app, so we keep one payment provider.
-  created_by_actor_id: act_54fe…28f2
+  created_by_actor_id: act_4c59…6c38
   project_id: prj_78c8…5b6c
   source_kind: manual
   status: superseded
-  superseded_by_id: dec_b4f4…a5b0
+  superseded_by_id: dec_d431…313a
   title: We use Stripe for payments
   trust_score: 0.5
-created 2026-11-02T10:00:50Z by act_54fe…28f2 · updated 2026-11-02T10:01:15Z by act_54fe…28f2
+created 2026-11-02T10:00:50Z by alice · updated 2026-11-02T10:01:15Z by alice
 origin (written once)
   store      repo
   project    website  prj_78c8…5b6c  (https://github.com/client/website)
@@ -93,8 +93,8 @@ origin (written once)
   git        branch main at 601d2850ffd0
   command    lore decision add
 who and when
-  created    2026-11-02T10:00:50Z   alice (act_54fe…28f2)
-  updated    2026-11-02T10:01:15Z   alice (act_54fe…28f2)
+  created    2026-11-02T10:00:50Z   alice (act_4c59…6c38)
+  updated    2026-11-02T10:01:15Z   alice (act_4c59…6c38)
 last write
   lore       dev
 lineage

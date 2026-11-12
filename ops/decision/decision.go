@@ -130,7 +130,7 @@ type AddIn struct {
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"decision_id (dec_*) this entry replaces"`
-	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata (METADATA 3.19)"`
+	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata"`
 	To         string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Repo       string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`

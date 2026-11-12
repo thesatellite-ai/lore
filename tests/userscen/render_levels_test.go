@@ -156,7 +156,7 @@ func TestRenderFolderFileOwnRepo(t *testing.T) {
 	if strings.Contains(root, "billing: amounts in minor units") {
 		t.Error("the folder's rule bodies live in the folder file, not the root")
 	}
-	if !strings.Contains(root, "## Folder files") || !strings.Contains(root, "- src/billing: 2 must rules, 1 hotfixes;") {
+	if !strings.Contains(root, "## Folder files") || !strings.Contains(root, "- src/billing: 2 must rules, 1 hotfix;") {
 		t.Errorf("the root indexes the folder file: %s", renderSection(root, "## Folder files"))
 	}
 	full := renderRead(t, c, renderFullMD)

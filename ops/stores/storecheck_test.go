@@ -38,6 +38,14 @@ func TestStoreDoctorChecksUsedStores(t *testing.T) {
 		t.Fatalf("an unpushed personal store must fail the doctor: %v", err)
 	}
 
+	// B3-12: a remote that did not answer is the offline code with a hint
+	// that says lore keeps working, never E_INVALID_INPUT
+	me.Fault, me.Problems = "unreachable", append(me.Problems, "cannot reach https://example.test/acme/me.git (Could not resolve host: example.test)")
+	f.checked = []StoreCheck{ok, me}
+	if _, _, err = invoke(t, f, OpDoctor, `{}`); !errs.Has(err, errs.StoreUnreachable) || !strings.Contains(err.Error(), "me: cannot reach https://example.test/acme/me.git") {
+		t.Fatalf("an unreachable store must answer E_STORE_UNREACHABLE: %v", err)
+	}
+
 	f.checked = nil
 	if _, txt, err = invoke(t, f, OpDoctor, `{}`); err != nil || !strings.HasPrefix(txt, "stores this repo and machine use:\n  none") {
 		t.Fatalf("no store: %q %v", txt, err)

@@ -33,6 +33,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -77,7 +78,13 @@ func (a *App) v017Edits(ctx context.Context) ([]v017Edit, error) {
 	} else if err != nil {
 		return nil, errs.Wrap(errs.Internal, "stat "+v017LoreDB, err)
 	}
-	db, err := sql.Open(sqliteDriver, fileuri.URL(path, "mode=ro"))
+	query := "mode=ro"
+	if git.NoClone(ctx) {
+		// a dry run writes nothing (B4-14): read the old db as it is on
+		// disk, without the -shm/-wal files even a read-only WAL open makes
+		query += "&immutable=1"
+	}
+	db, err := sql.Open(sqliteDriver, fileuri.URL(path, query))
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "open "+v017LoreDB, err)
 	}
@@ -99,7 +106,8 @@ func (a *App) v017Edits(ctx context.Context) ([]v017Edit, error) {
 			return nil, err
 		}
 		q = strings.Replace(q, "SELECT json_object(", `SELECT json_object('`+v017UpdatedAt+`', "`+v017UpdatedAt+`", `, 1)
-		edits, err := v017TableEdits(ctx, st.eng, db, q, def.Name, fields)
+		moved := func(err error, t row.Table, id ids.AnyID) bool { return isAmbiguousMoved(ctx, st, err, t, id) }
+		edits, err := v017TableEdits(ctx, st.eng, db, q, def.Name, fields, moved)
 		if err != nil {
 			return nil, err
 		}
@@ -111,7 +119,12 @@ func (a *App) v017Edits(ctx context.Context) ([]v017Edit, error) {
 
 // v017TableEdits reads one table of lore.db (q from v017SelectRows plus
 // updated_at) and keeps the rows newer than their stored copy.
-func v017TableEdits(ctx context.Context, eng *engine.Engine, db *sql.DB, q string, table row.Table, fields []schema.FieldDef) ([]v017Edit, error) {
+//
+// moved reports a lookup that failed because a newer lore moved the row
+// to another store and this repo still holds the old copy: the moved-rows
+// step settles it (a dry run still sees both copies), so lore.db's edit of
+// the old copy is left out instead of failing the run (B1-5).
+func v017TableEdits(ctx context.Context, eng *engine.Engine, db *sql.DB, q string, table row.Table, fields []schema.FieldDef, moved func(error, row.Table, ids.AnyID) bool) ([]v017Edit, error) {
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
@@ -140,6 +153,8 @@ func v017TableEdits(ctx context.Context, eng *engine.Engine, db *sql.DB, q strin
 		_, cur, gerr := eng.Get(ctx, ref)
 		if errs.Has(gerr, errs.NotFound) || errs.Has(gerr, errs.Purged) {
 			continue // see the file comment: a delete looks the same
+		} else if gerr != nil && moved != nil && moved(gerr, table, id) {
+			continue
 		} else if gerr != nil {
 			return nil, gerr
 		}

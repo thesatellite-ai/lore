@@ -68,7 +68,7 @@ func TestClientRepoFixLeavesTrackedFiles(t *testing.T) {
 		}
 	}
 	ex, err := os.ReadFile(filepath.Join(dir, ".git", "info", "exclude"))
-	if err != nil || !strings.Contains(string(ex), ".lore/lore-cache.db") || !strings.Contains(string(ex), ".lore/lock") {
+	if err != nil || !strings.Contains(string(ex), ".lore/lore.db") || !strings.Contains(string(ex), ".lore/lock") {
 		t.Fatalf(".git/info/exclude does not keep lore's local files out of git status: %q %v", ex, err)
 	}
 }

@@ -10,13 +10,19 @@ package host
 import (
 	"slices"
 
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
 // storeOnlyOps are the operations outside the store noun that write only
 // an org store (the invite rows) and read this machine's setup.
-var storeOnlyOps = []string{opssetup.OpTeamInvite, opssetup.OpTeamInviteList, opssetup.OpTeamInviteRevoke, opssetup.OpTeamInviteResend}
+// The org's members (member add|edit|remove …) and teams are roster rows of
+// the org store too (B1-1: `lore member add` in a repo installed hooks and
+// edited its .gitignore before being refused).
+var storeOnlyOps = []string{opssetup.OpTeamInvite, opssetup.OpTeamInviteList, opssetup.OpTeamInviteRevoke, opssetup.OpTeamInviteResend,
+	profilestore.OpStaffAdd, profilestore.OpStaffList, profilestore.OpStaffShow, profilestore.OpStaffEdit, profilestore.OpStaffRemove,
+	profilestore.OpTeamAdd, profilestore.OpTeamList, profilestore.OpTeamShow, profilestore.OpTeamRemove, profilestore.OpTeamMemberAdd, profilestore.OpTeamMemberRemove}
 
 // leavesWorkRepo reports whether the operation name changes only a store
 // or this machine's files, never the repo it runs in: every store

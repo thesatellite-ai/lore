@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -840,5 +841,41 @@ func TestRejoinListsTrashedUnstarted(t *testing.T) {
 	plain, err := ops{env: w2.f}.rejoin(yes(), RejoinIn{Actor: "@mira", Type: schema.PeriodTypeContractor, On: "2026-09-30"})
 	if err != nil || plain.TrashedMemberships == nil || len(plain.TrashedMemberships) != 0 || strings.Contains(plain.Text(), "trashed") {
 		t.Errorf("no TrashLister: %+v %v", plain.TrashedMemberships, err)
+	}
+}
+
+// TestOffboardTakesThemOffTeams (B2-12): offboard (and member remove,
+// which runs it) takes the person off every team that lists them, says so
+// in the preview, and leaves the other members and other teams as they
+// were; before, member show still listed their teams.
+func TestOffboardTakesThemOffTeams(t *testing.T) {
+	w := newWorld(t)
+	web, ops := testID(t, ids.PrefixTeam, 1), testID(t, ids.PrefixTeam, 2)
+	list := func(members ...ids.AnyID) value.Value {
+		vs := make([]value.Value, 0, len(members))
+		for _, m := range members {
+			vs = append(vs, ref(t, m))
+		}
+		l, err := value.ListOf(value.KindRef, vs...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l
+	}
+	w.f.Put(row.Row{Table: schema.TableTeams, ID: web, Fields: map[string]value.Value{"handle": txt(t, "web"), "project_id": ref(t, w.hub), schema.FieldTeamMembers: list(w.mira, w.sam)}})
+	w.f.Put(row.Row{Table: schema.TableTeams, ID: ops, Fields: map[string]value.Value{"handle": txt(t, "ops"), "project_id": ref(t, w.hub), schema.FieldTeamMembers: list(w.sam)}})
+	_, err := w.ops().offboard(context.Background(), OffboardIn{Actor: "@mira", On: "2026-09-30"})
+	if err == nil || !strings.Contains(err.(*errs.Error).Question, "teams      @web: taken off") {
+		t.Fatalf("preview does not name the team: %v", err)
+	}
+	out, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-09-30"})
+	if err != nil || !slices.Equal(out.Teams, []string{"web"}) {
+		t.Fatalf("offboard: %+v %v", out, err)
+	}
+	if got := value.ItemStrings(w.get(t, schema.TableTeams, web).Fields[schema.FieldTeamMembers]); !slices.Equal(got, []string{w.sam.String()}) {
+		t.Errorf("@web members after offboard: %v", got)
+	}
+	if got := value.ItemStrings(w.get(t, schema.TableTeams, ops).Fields[schema.FieldTeamMembers]); !slices.Equal(got, []string{w.sam.String()}) {
+		t.Errorf("@ops changed: %v", got)
 	}
 }

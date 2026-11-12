@@ -34,6 +34,7 @@ $ lore task add 'Take the product photos' --mission msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_2ad3…f891.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Take the product photos [medium]
+  created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add 'Write the product pages' --mission msn_7a67…9504 --after tsk_162d…9666
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
@@ -69,7 +70,7 @@ Tasks:
   tsk_162d…9666 [todo] Take the product photos
   tsk_54fe…28f2 [todo] Write the product pages
   tsk_05e9…4603 [todo] Send the invoice reminder
-created 2026-11-02T10:00:05Z by act_c0f3…b5b8 · updated 2026-11-02T10:00:05Z by act_c0f3…b5b8
+created 2026-11-02T10:00:05Z by alice · updated 2026-11-02T10:00:05Z by alice
 ```
 <!-- /example -->
 
@@ -167,17 +168,17 @@ Delete is for mistakes only. lore asks first; without a terminal it stops with `
 ```console
 # alice, in website
 $ lore mission add 'Test mission, please ignore'
-lore: wrote ~/work/website/.lore/data/missions/msn_76bd…3f10.json
-✓ msn_76bd…3f10 — Test mission, please ignore
+lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
+✓ msn_c0f3…b5b8 — Test mission, please ignore
 lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore mission delete msn_76bd…3f10
+$ lore mission delete msn_c0f3…b5b8
 ERROR: [E_NEEDS_CONFIRM] run mission delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore mission delete msn_76bd…3f10 --yes
-lore: wrote ~/work/website/.lore/data/missions/msn_76bd…3f10.json
-✓ msn_76bd…3f10 moved to the trash (restore: lore trash restore msn_76bd…3f10)
+$ lore mission delete msn_c0f3…b5b8 --yes
+lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
+✓ msn_c0f3…b5b8 moved to the trash (restore: lore trash restore msn_c0f3…b5b8)
 lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 ```
 <!-- /example -->
@@ -190,15 +191,15 @@ lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 ```console
 # alice, in website
 $ lore plan add --title 'Newsletter plan' --body 'Collect emails on the home page first, then send one newsletter a month.'
-lore: wrote ~/work/website/.lore/data/plans/pln_d431…313a.json
-✓ pln_d431…313a
+lore: wrote ~/work/website/.lore/data/plans/pln_76bd…3f10.json
+✓ pln_76bd…3f10
 $ lore plan list
-PL  pln_d431…313a
+PL  pln_76bd…3f10  Newsletter plan [draft]  (0 tasks)
 $ lore plan search newsletter
-pln_d431…313a Newsletter plan
-$ lore plan edit pln_d431…313a --status approved
-lore: wrote ~/work/website/.lore/data/plans/pln_d431…313a.json
-✓ plan pln_d431…313a updated
+pln_76bd…3f10 Newsletter plan
+$ lore plan edit pln_76bd…3f10 --status approved
+lore: wrote ~/work/website/.lore/data/plans/pln_76bd…3f10.json
+✓ plan pln_76bd…3f10 updated
 ```
 <!-- /example -->
 
@@ -227,16 +228,16 @@ tasks:
 # alice, in website
 $ lore mission apply newsletter.yaml
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
-✓ msn_b4f4…a5b0 Start the monthly newsletter (created)
-  tsk_28f8…03df Add the sign-up form to the home page  timebox 1h30m
-  tsk_4c59…6c38 Write the first newsletter    after form
-  tsk_3b62…e913 Send the first newsletter     after first
+✓ msn_d431…313a Start the monthly newsletter (created)
+  tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
+  tsk_28f8…03df Write the first newsletter    after form
+  tsk_4c59…6c38 Send the first newsletter     after first
 lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
-$ lore mission status msn_b4f4…a5b0
-msn_b4f4…a5b0 Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
-  ready     tsk_28f8…03df  Add the sign-up form to the home page              0s (timebox 1h30m)
-  waiting   tsk_3b62…e913  Send the first newsletter                 waits for tsk_4c59…6c38 to be done (todo)
-  waiting   tsk_4c59…6c38  Write the first newsletter                waits for tsk_28f8…03df to be done (todo)
+$ lore mission status msn_d431…313a
+msn_d431…313a Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
+  ready     tsk_b4f4…a5b0  Add the sign-up form to the home page              0s (timebox 1h30m)
+  waiting   tsk_4c59…6c38  Send the first newsletter                 waits for tsk_28f8…03df to be done (todo)
+  waiting   tsk_28f8…03df  Write the first newsletter                waits for tsk_b4f4…a5b0 to be done (todo)
 ```
 <!-- /example -->
 
@@ -246,10 +247,10 @@ Run it again and nothing new is made: lore finds each row again by its key and s
 ```console
 # alice, in website
 $ lore mission apply newsletter.yaml
-✓ msn_b4f4…a5b0 Start the monthly newsletter (found)
-  tsk_28f8…03df Add the sign-up form to the home page  timebox 1h30m
-  tsk_4c59…6c38 Write the first newsletter    after form
-  tsk_3b62…e913 Send the first newsletter     after first
+✓ msn_d431…313a Start the monthly newsletter (found)
+  tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
+  tsk_28f8…03df Write the first newsletter    after form
+  tsk_4c59…6c38 Send the first newsletter     after first
 ```
 <!-- /example -->
 
@@ -279,8 +280,8 @@ A handoff is for someone on the repo's *roster* (the list of people and agents l
 ```console
 # alice, in website
 $ lore actor register
-lore: wrote ~/work/website/.lore/data/actors/act_c0f3…b5b8.json
-✓ act_c0f3…b5b8 alice (@alice) already registered (refreshed) in this repo
+lore: wrote ~/work/website/.lore/data/actors/act_3b62…e913.json
+✓ act_3b62…e913 alice (@alice) already registered (refreshed) in this repo
 lore live: (live, pushed) commit 8c373dc to origin refs/lore/live
 lore live: landed on main (6f11034); leaves live once main is fetched
 ```
@@ -330,16 +331,16 @@ The plan file from Step 6 is all you need. Save it as `newsletter.yaml` in your 
 # alice, in website
 $ lore mission apply newsletter.yaml
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
-✓ msn_b4f4…a5b0 Start the monthly newsletter (created)
-  tsk_28f8…03df Add the sign-up form to the home page  timebox 1h30m
-  tsk_4c59…6c38 Write the first newsletter    after form
-  tsk_3b62…e913 Send the first newsletter     after first
+✓ msn_d431…313a Start the monthly newsletter (created)
+  tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
+  tsk_28f8…03df Write the first newsletter    after form
+  tsk_4c59…6c38 Send the first newsletter     after first
 lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
-$ lore mission status msn_b4f4…a5b0
-msn_b4f4…a5b0 Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
-  ready     tsk_28f8…03df  Add the sign-up form to the home page              0s (timebox 1h30m)
-  waiting   tsk_3b62…e913  Send the first newsletter                 waits for tsk_4c59…6c38 to be done (todo)
-  waiting   tsk_4c59…6c38  Write the first newsletter                waits for tsk_28f8…03df to be done (todo)
+$ lore mission status msn_d431…313a
+msn_d431…313a Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
+  ready     tsk_b4f4…a5b0  Add the sign-up form to the home page              0s (timebox 1h30m)
+  waiting   tsk_4c59…6c38  Send the first newsletter                 waits for tsk_28f8…03df to be done (todo)
+  waiting   tsk_28f8…03df  Write the first newsletter                waits for tsk_b4f4…a5b0 to be done (todo)
 ```
 <!-- /example -->
 
@@ -378,7 +379,6 @@ Other traps:
 
 - **Changing a title in the plan file does not change the task.** A re-run finds each task by its key and leaves it as it is. Use `lore task edit` to rename it.
 - **Misspelled fields are ignored.** A field lore does not know, such as `afer:`, is skipped without a warning. Check the `after` part of the `mission apply` output.
-- **`lore plan list` prints only `PL` and the id**, not the title. `lore plan show <id>` prints the title, status, task count and body; `lore plan search <word>` finds a plan by its title.
 - **`lore mission done` does not check the tasks.** You can close a mission that still has open tasks; they stay open.
 
 ## Related

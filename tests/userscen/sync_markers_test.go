@@ -3,9 +3,10 @@
 package userscen
 
 // sync_markers_test.go — a git merge (without the lore merge driver) leaves
-// conflict markers in a row file. lore sync --json must name the file in
-// its conflicts, and reads must keep the promise of the warning: the file
-// is left out of lists until it is settled; the warning says what reads do.
+// conflict markers in a row file. lore sync --json must name the file and
+// refuse with E_STALE until it is settled, and reads must keep the promise
+// of the warning: the file is left out of lists until it is settled; the
+// warning says what reads do.
 
 import (
 	"os"
@@ -15,18 +16,6 @@ import (
 
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
-
-// syncRunOut is the --json envelope of `lore sync`.
-type syncRunOut struct {
-	Data struct {
-		Pass      string `json:"pass"`
-		Conflicts []struct {
-			Path string `json:"path"`
-			Kept string `json:"kept"`
-			Why  string `json:"why"`
-		} `json:"conflicts"`
-	} `json:"data"`
-}
 
 // Both shapes a merge leaves: marker lines around the whole file (git
 // without the lore driver), and a marker block inside the row's body.
@@ -75,14 +64,9 @@ func syncMarkersCase(t *testing.T, mark func(string) string, wholeFile bool) {
 	}
 	place := ".lore/data/memories/" + id + ".json"
 
-	rep := th.DecodeJSON[syncRunOut](t, c.MustLore("sync", "--json"))
-	found := false
-	for _, cf := range rep.Data.Conflicts {
-		found = found || cf.Path == place
-	}
-	if !found {
-		t.Fatalf("lore sync --json must list %s in conflicts; got %+v", place, rep.Data.Conflicts)
-	}
+	// The sync runs, but a marked row waits on a person: it exits E_STALE
+	// (exit 23) naming the file and the way to settle it, until settled.
+	c.Lore("sync", "--json").Fails(t, 23, `"E_STALE"`, "conflict "+place+": git conflict markers", "lore sync resolve")
 	c.MustLore("sync", "status").Says(t, place)
 	c.MustLore("sync", "conflicts").Says(t, id)
 	// What the warning says must match what reads do: a whole file of

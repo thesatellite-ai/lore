@@ -734,6 +734,6 @@ func WriterLine(t testing.TB, doc string, path ...string) string {
 func TitleLine(badge, key string) func(t testing.TB, rec string) string {
 	return func(t testing.TB, rec string) string {
 		t.Helper()
-		return content.ListLine(badge, Str(t, rec, "id"), Str(t, rec, key))
+		return content.ListLine(badge, Str(t, rec, "id"), Str(t, rec, key), Str(t, rec, "_label"))
 	}
 }

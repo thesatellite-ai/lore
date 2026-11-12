@@ -3,7 +3,10 @@ package fsreason
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 )
 
 // TestOfWordsAlikeOnEveryOS: a missing file, a path through a file, a
@@ -37,5 +40,31 @@ func TestOfWordsAlikeOnEveryOS(t *testing.T) {
 				t.Fatalf("Of from the PathError = %q, want %q", got, c.want)
 			}
 		})
+	}
+}
+
+// B3-22: a folder this user may not list is unreadable, a missing one is
+// absent, a normal one readable.
+func TestGitPathState(t *testing.T) {
+	dir := t.TempDir()
+	locked := filepath.Join(dir, "locked.git")
+	if err := os.Mkdir(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got := GitPathState(locked); got != gitfault.PathReadable {
+		t.Fatalf("readable folder: %d", got)
+	}
+	if got := GitPathState(filepath.Join(dir, "none.git")); got != gitfault.PathAbsent {
+		t.Fatalf("missing folder: %d", got)
+	}
+	if os.Geteuid() == 0 || runtime.GOOS == "windows" {
+		return // root reads everything; Windows has no mode 000
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	if got := GitPathState(locked); got != gitfault.PathUnreadable {
+		t.Fatalf("mode 000 folder: %d", got)
 	}
 }

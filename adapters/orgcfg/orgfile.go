@@ -132,7 +132,7 @@ type OrgFileResult struct {
 // openClone makes sure the store's clone exists and fetches it; refuseOffline turns an unreachable remote into ErrStoreOffline even
 // when a copy exists (import must read the team's current suggestion).
 func (g *GitLinks) openClone(ctx context.Context, url string, refuseOffline bool) (norm, dir string, err error) {
-	norm, err = repourl.Normalize(url)
+	norm, err = repourl.NormalizeStore(url)
 	if err != nil {
 		return "", "", fmt.Errorf("orgcfg: store url %q: %w", url, err)
 	}

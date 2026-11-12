@@ -188,7 +188,7 @@ res_4c59…6c38  service  repo:service/hub_api
   db_password = gopass://acme/hub/db
   runs_on = hub_prod
   url = https://api.example.com
-created 2026-11-02T10:01:20Z by act_f147…5139 · updated 2026-11-02T10:01:20Z by act_f147…5139
+created 2026-11-02T10:01:20Z by alice · updated 2026-11-02T10:01:20Z by alice
 ```
 <!-- /example -->
 
@@ -217,16 +217,17 @@ host hub_prod
 ```console
 # alice, in infra
 $ lore task add 'Rotate the hub_api database password' --ref res_4c59…6c38
-lore: wrote ~/work/infra/.lore/data/task_lists/tlt_2537…6bbb.json
-lore: wrote ~/work/infra/.lore/data/tasks/tsk_b69e…5ed7.json
-lore: wrote ~/work/infra/.lore/data/knowledge_refs/kfr_0aae…a61f.json
-✓ tsk_b69e…5ed7 — Rotate the hub_api database password [medium]
+lore: wrote ~/work/infra/.lore/data/task_lists/tlt_f147…5139.json
+lore: wrote ~/work/infra/.lore/data/tasks/tsk_2537…6bbb.json
+lore: wrote ~/work/infra/.lore/data/knowledge_refs/kfr_b69e…5ed7.json
+✓ tsk_2537…6bbb — Rotate the hub_api database password [medium]
+  created tasklist tlt_f147…5139 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore resource impact hub_prod
 what breaks if host hub_prod goes down
   1  service    hub_api              runs_on → hub_prod
   1  service    hub_web              runs_on → hub_prod
-  open  task tsk_b69e…5ed7 (mentions hub_api)
+  open  task tsk_2537…6bbb (mentions hub_api)
 ```
 <!-- /example -->
 
@@ -272,13 +273,13 @@ $ lore resource edit hub_stage --unset ip
 lore: wrote ~/work/infra/.lore/data/resources/res_28f8…03df.json
 ✓ edited host hub_stage (res_…03df)
 $ lore resource history hub_prod
-2026-11-02  os  ubuntu-24.04 → debian-12  act_f147…5139
-2026-11-02  ip  set 203.0.113.10  act_f147…5139
-2026-11-02  provider  set hetzner  act_f147…5139
-2026-11-02  os  set ubuntu-24.04  act_f147…5139
+2026-11-02  os  ubuntu-24.04 → debian-12  act_0aae…a61f
+2026-11-02  ip  set 203.0.113.10  act_0aae…a61f
+2026-11-02  provider  set hetzner  act_0aae…a61f
+2026-11-02  os  set ubuntu-24.04  act_0aae…a61f
 $ lore resource history hub_prod --field os
-2026-11-02  os  ubuntu-24.04 → debian-12  act_f147…5139
-2026-11-02  os  set ubuntu-24.04  act_f147…5139
+2026-11-02  os  ubuntu-24.04 → debian-12  act_0aae…a61f
+2026-11-02  os  set ubuntu-24.04  act_0aae…a61f
 ```
 <!-- /example -->
 
@@ -562,7 +563,7 @@ res_6a86…ed8c  server  repo:server/hub_prod_new
   os_image = debian-13
   provider = hetzner
   checked 2026-11-02T10:00:00.000000001Z (by edit)
-created 2026-11-02T10:02:45Z by act_f147…5139 · updated 2026-11-02T10:05:50Z by act_f147…5139
+created 2026-11-02T10:02:45Z by alice · updated 2026-11-02T10:05:50Z by alice
 ```
 <!-- /example -->
 
@@ -604,7 +605,7 @@ res_6a86…ed8c  server  repo:server/hub_prod_new
   provider = hetzner
   root_user = deploy
   checked 2026-11-02T10:00:00.000000002Z (by edit)
-created 2026-11-02T10:02:45Z by act_f147…5139 · updated 2026-11-02T10:06:10Z by act_f147…5139
+created 2026-11-02T10:02:45Z by alice · updated 2026-11-02T10:06:10Z by alice
 ```
 <!-- /example -->
 
@@ -628,7 +629,7 @@ unchecked   4: service hub_api, service hub_jobs, service hub_prod_new, service 
 dangling    0
 quarantined 0
   details: lore resource lint
-open links  1: task tsk_b69e…5ed7
+open links  1: task tsk_2537…6bbb
 rotate      2: gopass://acme/hub/db, gopass://acme/hub/jobs-db
 ```
 <!-- /example -->

@@ -101,7 +101,7 @@ func TestDoctorSyncSection(t *testing.T) {
 		t.Fatal(err)
 	}
 	b = doctorBase(t, a)
-	if b.Sync == nil || !b.Sync.DataIgnored || b.Sync.Uncommitted != 0 || b.Status == opsdoctor.StatusHealthy || !hasLine(b.Warnings, ".lore/data is gitignored") {
+	if b.Sync == nil || !b.Sync.DataIgnored || b.Sync.Uncommitted != 0 || b.Status == opsdoctor.StatusHealthy || !hasLine(b.Warnings, doctorDataIgnoredPrefix) {
 		t.Errorf("ignored data: sync %+v status %s warnings %v", b.Sync, b.Status, b.Warnings)
 	}
 
@@ -143,7 +143,7 @@ func TestDoctorSyncOSJunkNotDataIgnored(t *testing.T) {
 		t.Fatalf("setup: the global excludesFile does not ignore .DS_Store: %q", st)
 	}
 	b := doctorBase(t, a)
-	if b.Sync == nil || b.Sync.DataIgnored || b.Sync.Uncommitted != 0 || hasLine(b.Warnings, ".lore/data is gitignored") {
+	if b.Sync == nil || b.Sync.DataIgnored || b.Sync.Uncommitted != 0 || hasLine(b.Warnings, doctorDataIgnoredPrefix) {
 		t.Errorf("OS clutter under .lore/data: sync %+v warnings %v", b.Sync, b.Warnings)
 	}
 
@@ -152,7 +152,7 @@ func TestDoctorSyncOSJunkNotDataIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 	b = doctorBase(t, a)
-	if b.Sync == nil || !b.Sync.DataIgnored || !hasLine(b.Warnings, ".lore/data is gitignored") {
+	if b.Sync == nil || !b.Sync.DataIgnored || !hasLine(b.Warnings, doctorDataIgnoredPrefix) {
 		t.Errorf("memories/ ignored: sync %+v warnings %v", b.Sync, b.Warnings)
 	}
 

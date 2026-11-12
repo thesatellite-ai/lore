@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/estimate"
 	"github.com/thesatellite-ai/lore/logic/origin"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/checklist"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -117,7 +118,7 @@ type ImportIn struct {
 	// MapStatus renames the file's status values (TASK 19.1, G-TASK-3).
 	MapStatus []string `json:"map_status,omitempty" flag:"map-status" desc:"rename status values: <file value>=<status>[,…], e.g. 'In Review=in_progress' (statuses: todo in_progress done cancelled blocked)"`
 	DryRun    bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be created; write nothing"`
-	To        string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To        string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // ImportRow is one task an import created (or would create).
@@ -159,7 +160,9 @@ const WarnImportDroppedRef = "W_IMPORT_DROPPED_REF"
 func (o ImportOut) Text() string {
 	if o.DryRun {
 		var b strings.Builder
-		b.WriteString("would import " + strconv.Itoa(o.Count-o.existing()) + " tasks from " + o.Source + " (dry run, nothing written)\n")
+		// B3-24: the ids listed are the file's; the import writes each task
+		// under a new id (the file id is kept as its import origin)
+		b.WriteString("would import " + plural.Count(o.Count-o.existing(), "task") + " from " + o.Source + " as new tasks with new ids (dry run, nothing written); the ids below are the file's\n")
 		for _, r := range o.Rows {
 			b.WriteString("  " + r.ExtID + "  " + r.Title + r.existingNote() + "\n")
 		}
@@ -168,7 +171,7 @@ func (o ImportOut) Text() string {
 	}
 	var b strings.Builder
 	if n := o.Count - o.existing(); n > 0 || o.existing() == 0 {
-		b.WriteString(work.Success + " " + strconv.Itoa(n) + " tasks imported from " + o.Source + " (batch " + o.Batch + ")\n")
+		b.WriteString(work.Success + " " + plural.Count(n, "task") + " imported from " + o.Source + " (batch " + o.Batch + "; `lore task list` shows their new ids)\n")
 	}
 	if e := o.existing(); e > 0 {
 		b.WriteString("  " + strconv.Itoa(e) + " already imported, nothing added for them:\n")
@@ -378,7 +381,7 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	}
 	// The default list is created (if needed) outside the import slot: it
 	// is not an imported row and must not carry _o.import.
-	defList, err := o.defaultTasklist(bctx, in.To, project)
+	defList, _, err := o.defaultTasklist(bctx, in.To, project)
 	if err != nil {
 		return ImportOut{}, err
 	}

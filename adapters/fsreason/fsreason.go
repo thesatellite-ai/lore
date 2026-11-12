@@ -13,6 +13,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 )
 
 // The reasons Of words alike on every operating system.
@@ -63,4 +65,31 @@ func throughFile(p string) bool {
 		}
 	}
 	return false
+}
+
+// GitPathState is gitfault's PathCheck: whether a local path a git remote
+// names is absent, there but unreadable for this user (a folder that
+// cannot be listed, a file that cannot be opened), or readable. git says
+// "does not appear to be a git repository" for both of the first two;
+// only the second keeps a correct address (B3-22).
+func GitPathState(path string) gitfault.PathState {
+	p := filepath.Clean(path)
+	if _, err := os.Stat(p); err != nil {
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			return gitfault.PathAbsent
+		case errors.Is(err, fs.ErrPermission):
+			return gitfault.PathUnreadable
+		}
+		return gitfault.PathUnknown
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		if errors.Is(err, fs.ErrPermission) {
+			return gitfault.PathUnreadable
+		}
+		return gitfault.PathUnknown
+	}
+	_ = f.Close() // opened only to learn whether it can be read
+	return gitfault.PathReadable
 }

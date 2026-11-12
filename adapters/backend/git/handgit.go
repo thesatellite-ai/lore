@@ -37,6 +37,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -284,3 +285,30 @@ func (b *Backend) ensureHooksPath(ctx context.Context) error {
 	b.handSetUp = appendNewLine(b.handSetUp, ".git/config: core.hooksPath="+filepath.ToSlash(own)+" (your global core.hooksPath "+outside+" would skip the clone's hooks)")
 	return nil
 }
+
+// noCloneKey marks a run that must not make a store clone.
+type noCloneKey struct{}
+
+// WithNoClone returns ctx for a run that writes nothing at all (`lore fix
+// --dry-run`, B4-14): OpenClone of a store with no clone on this machine
+// answers E_STORE_UNREACHABLE instead of cloning it, so the run reads what
+// is here and says what a real run would fetch.
+func WithNoClone(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noCloneKey{}, true)
+}
+
+// NoClone reports whether ctx forbids making a store clone (WithNoClone),
+// or the whole process does (ForbidClones).
+func NoClone(ctx context.Context) bool {
+	v, _ := ctx.Value(noCloneKey{}).(bool)
+	return v || clonesForbidden.Load()
+}
+
+// clonesForbidden is ForbidClones' process-wide switch.
+var clonesForbidden atomic.Bool
+
+// ForbidClones makes every OpenClone of this process refuse to make a clone
+// (the CLI entry point of `lore fix --dry-run`, one command per process):
+// the org link lookups and doctor checks open stores on contexts of their
+// own, which WithNoClone cannot reach.
+func ForbidClones() { clonesForbidden.Store(true) }

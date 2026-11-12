@@ -22,14 +22,12 @@ package wire
 import (
 	"context"
 	"maps"
-	neturl "net/url"
 	"slices"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
@@ -434,14 +432,6 @@ func (ap setupApplier) personalStoreValue(choice, raw string) (value, initURL st
 	url, err := cleanFileURL(raw)
 	if err != nil {
 		return "", "", err
-	}
-	// A file:// url naming a bare git repository is refused before
-	// config.yaml is touched (makeStore refuses it too, but only after
-	// putEntry would have saved the url).
-	if u, perr := neturl.Parse(url); perr == nil && u.Scheme == folder.Scheme {
-		if rerr := refuseBareRepoFolder("", fileuri.OSPath(u.Path)); rerr != nil {
-			return "", "", rerr
-		}
 	}
 	return url, url, nil
 }
@@ -889,7 +879,7 @@ func (s setupStore) OrgStoreURLs(_ context.Context, org string) ([]string, bool,
 	return urls, true, nil
 }
 
-// memberOrg resolves a member join's answer (`lore setup join <org>`):
+// memberOrg resolves a member join's answer (`lore setup join <org or store url>`):
 // an org entry on this machine, or the org's store url (imported first
 // when no entry names it, the entry named as the store suggests). It
 // returns the entry name and its store url.
@@ -897,31 +887,16 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 	answer = strings.TrimSpace(answer)
 	if answer == "" {
 		return "", "", errs.New(errs.InvalidInput, "setup join: name the org (or its store url), or paste an invite line").
-			WithHint("lore setup join <org>")
+			WithHint("lore setup join <the org's store url>")
 	}
 	if !strings.ContainsAny(answer, ":/") {
 		o, err := ap.a.TeamOrigin(ctx, answer)
 		if err != nil {
-			return "", "", errs.New(errs.NotFound, "no org named "+answer+" on this machine yet; join with its store url").
-				WithHint("lore setup join <the org's store url> (your admin knows it)")
+			return "", "", opssetup.UnknownOrgErr(answer)
 		}
 		return answer, o.Store, nil
 	}
-	find := func() string {
-		cfg, _, err := orgcfg.LoadConfig(ap.a.opts.Home)
-		if err != nil || cfg == nil {
-			return ""
-		}
-		want, _ := storeKey(answer)
-		for _, o := range cfg.Orgs {
-			for _, st := range o.Stores {
-				if k, ok := storeKey(st.URL); ok && k == want {
-					return o.Name
-				}
-			}
-		}
-		return ""
-	}
+	find := func() string { return orgForStoreURL(ap.a.opts.Home, answer) }
 	if org := find(); org != "" || dryRun {
 		return org, answer, nil
 	}

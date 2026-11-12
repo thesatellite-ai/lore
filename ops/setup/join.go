@@ -48,6 +48,16 @@ func quoteShort(s string) string {
 	return "\"" + s + "\""
 }
 
+// UnknownOrgErr is the refusal of `lore setup join <org>` when this machine
+// has no org entry of that name (E_JOIN_ORG_UNKNOWN). A member an admin
+// added joins from a fresh machine, where only the org's store url can be
+// resolved; setup.join and the join step's apply both answer with it, so
+// the page and the command say the same thing.
+func UnknownOrgErr(org string) error {
+	return errs.New(errs.JoinOrgUnknown, "setup join: no org named "+quoteShort(org)+" on this machine yet; join with the org's store url the admin gave you").
+		WithHint("lore setup join <the org's store url> (lore member add printed it for your admin); an outsider: paste the whole line starting with " + InvitePrefix)
+}
+
 // Join is setup.join. The setup name is the global --setup, else the
 // invite's org when it is a valid setup name (1.5: setup acme-hub for org
 // acme-hub), else "" (the page asks for it in the kind step).
@@ -58,6 +68,11 @@ func (e engine) Join(ctx context.Context, in JoinIn) (JoinOut, error) {
 		// name or store url, no invite line: the join step finds them on
 		// the roster by their email (team.ApplyJoinMember)
 		if !storeURLish(text) && !e.knownOrg(ctx, text) {
+			if onboard.ValidSetupName(text) {
+				// an org name this machine has no entry for: the common case
+				// of a new member on a fresh laptop, never an invite problem
+				return JoinOut{}, UnknownOrgErr(text)
+			}
 			return JoinOut{}, errs.New(errs.InviteInvalid, "setup join: "+quoteShort(text)+" is not an invite line, an org on this machine, or a store url").
 				WithHint("an admin added you (lore member add): lore setup join <the org's store url>; an outsider: paste the whole line starting with " + InvitePrefix)
 		}

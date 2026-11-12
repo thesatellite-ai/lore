@@ -31,7 +31,7 @@ In a repo that has a remote (here `github.com/alice/notes-app`), run `lore init`
 <!-- example: getting-started#init -->
 ```console
 # alice, in notes-app
-$ lore init --non-interactive --name=notes-app
+$ lore init --name=notes-app
 lore init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/notes-app/.git/config; lore's merge rules in ~/work/notes-app/.gitattributes; hook blocks in ~/work/notes-app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote 4 row file(s) in ~/work/notes-app/.lore/data
 lore initialized
@@ -80,6 +80,7 @@ $ lore task add 'fix login timeout'
 lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — fix login timeout [medium]
+  created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task list
 ○ tsk_05e9…4603 fix login timeout [medium]
@@ -202,7 +203,7 @@ orgs:
 | Key | What it says |
 |---|---|
 | `identity` | who you are in repos that match no org |
-| `personal.store` | where your personal notes live: `local` (`~/.lore/personal`) or a git URL of your own private repo |
+| `personal.store` | where your personal notes live (`--to me`): a git URL of your own private repo, which every machine you use attaches with `lore store init me <url>`; a folder `file://~/.lore/stores/_me` (what `lore store init me` with no URL makes); or the lore 0.1.17 value `local` (`~/.lore/personal`, used in these examples). See [Personal notes](use-cases/personal-notes.md) |
 | `orgs[].name` | the org's name, also used in `--to agency` |
 | `orgs[].identity` | who you are inside this org: `key` (`human:<your email there>`), `name`, `handle` (your `@name` on the roster) |
 | `orgs[].stores` | the org's store repos; `org_folder` marks the folder that holds the roster and company rules |
@@ -273,6 +274,7 @@ $ lore task add 'fix login timeout'
 lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — fix login timeout [medium]
+  created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task list
 ○ tsk_05e9…4603 fix login timeout [medium]

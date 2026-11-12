@@ -87,6 +87,11 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 	if why := s.noteText(liveNoteRefused); why != "" {
 		warn("the remote refused a push to refs/lore/live, so live rows stay on this machine (the host may allow only branches and tags): " + why)
 	}
+	if why := s.noteText(liveNoteFault); why != "" {
+		// B3-14: waiting never fixes a wrong address or refused
+		// credentials, so doctor names the remote rather than "offline"
+		warn("live writes cannot be pushed: " + why + " (fix the remote's address with `git remote set-url " + s.ref.RemoteName + " <url>`, its folder's permissions or its credentials, as the reason says; the writes wait here)")
+	}
 	if s.blocked != nil {
 		warn("the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`")
 	}

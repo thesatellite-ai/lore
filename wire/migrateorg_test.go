@@ -54,6 +54,13 @@ func TestMigrateOrgMarker(t *testing.T) {
 	if !orgStep(migrateOut(t, out).Steps) {
 		t.Fatalf("run does not report the org marker step: %s", out)
 	}
+	// the run's own last lines say whether each store commit was pushed; a
+	// step asking for `lore sync` contradicted a run that pushed (B4-10)
+	for _, s := range migrateOut(t, out).Steps {
+		if strings.Contains(s, "lore sync") {
+			t.Errorf("a step asks for lore sync after a run that pushes: %q", s)
+		}
+	}
 	m, err := rowfs.ReadMarker(dir)
 	if err != nil || m.Version != rowfs.MarkerVersion || m.ID.IsZero() || m.Visibility != rowfs.VisibilityInternal {
 		t.Fatalf("marker after run: %+v %v", m, err)

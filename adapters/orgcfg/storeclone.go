@@ -33,6 +33,7 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // cloneDir is the store clone of a normalised store url (host/path) on
@@ -60,6 +61,10 @@ func ensureClone(ctx context.Context, dir, url string, own bool) error {
 	}
 	if cur := gitbackend.OriginAt(dir); cur != "" && (cur == origin || sameStoreURL(cur, origin)) {
 		return nil // already this store's clone: nothing to write, no lock to wait for
+	}
+	if gitbackend.NoClone(ctx) {
+		// a dry run makes no clone, not even its lock (B4-14)
+		return errs.New(errs.StoreUnreachable, "orgcfg: the store "+url+" has no clone on this machine yet, and this run makes none (dry run)")
 	}
 	lctx, unlock, err := gitbackend.LockClone(ctx, dir)
 	if err != nil {

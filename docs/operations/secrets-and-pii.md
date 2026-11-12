@@ -226,7 +226,7 @@ $ lore task list
 
 ## Step 7 — Review what was marked not a secret
 
-Every `--not-a-secret` answer is recorded as an allow entry: one row, one field, one rule, with your reason and only a hash of the matched text. `lore secrets allow list` shows them, `lore secrets allow rm <sal_…>` removes one (the finding is reported again on the next scan), and `lore secrets allow <row> --rule <rule> --match <text> --reason <why>` adds one by hand for a finding on a row that is already saved:
+Every `--not-a-secret` answer is recorded as an allow entry: one row, one field, one rule, with your reason and only a hash of the matched text. `lore secrets allow list` shows them, `lore secrets allow rm <sal_…>` removes one (the finding is reported again on the next scan), and `lore secrets allow <row> --rule <rule> --match <text> --reason <why>` (or `--match-hash` with the `sha256:…` fingerprint a refused commit printed, or the number `lore check leaks --rows` prints) adds one by hand for a finding on a row that is already saved:
 
 <!-- example: secrets#allow -->
 ```console
@@ -239,8 +239,8 @@ lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
   scope: [master]
 $ lore secrets allow list
 ID	ROW	FIELD	RULE	REASON
-sal_28f8…03df	mem_b4f4…a5b0	body	github_token	fixture in tests (confirmed not a secret by act_3b62…e913 (memory add))
-sal_4c59…6c38	mem_b4f4…a5b0	body	github-pat	fixture in tests (confirmed not a secret by act_3b62…e913 (memory add))
+sal_28f8…03df	mem_b4f4…a5b0	body	github_token	fixture in tests (confirmed not a secret by alice (memory add))
+sal_4c59…6c38	mem_b4f4…a5b0	body	github-pat	fixture in tests (confirmed not a secret by alice (memory add))
 $ lore secrets allow rm sal_4c59…6c38 --yes
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
 lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
@@ -248,9 +248,9 @@ lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
 $ lore secrets allow list | grep -c sal_
 1
 $ lore secrets allow mem_b4f4…a5b0 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_f147…5139.json
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_3b62…e913.json
 lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
-✓ github-pat: mem_…a5b0.body marked not a secret (sal_…5139)
+✓ github-pat: mem_…a5b0.body marked not a secret (sal_…e913)
 ```
 <!-- /example -->
 
@@ -284,18 +284,18 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (invoice-number) at line 1: sh
 $ lore secrets rules
 (no rule rows: gitleaks defaults and lore's own pack apply)
 $ lore secrets rule off generic-password --reason 'our tests use fake passwords' --yes
-lore: wrote ~/work/website/.lore/data/secret_rules/srl_2537…6bbb.json
-✓ generic-password off in this repo (srl_…6bbb)
+lore: wrote ~/work/website/.lore/data/secret_rules/srl_f147…5139.json
+✓ generic-password off in this repo (srl_…5139)
 $ lore secrets rule edit aws_access_key --description 'cloud keys, any account' --yes
-lore: wrote ~/work/website/.lore/data/secret_rules/srl_b69e…5ed7.json
-✓ aws_access_key changed in this repo (srl_…5ed7)
+lore: wrote ~/work/website/.lore/data/secret_rules/srl_2537…6bbb.json
+✓ aws_access_key changed in this repo (srl_…6bbb)
 $ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 aws_access_key	changed	repo	this repo	cloud keys, any account
 generic-password	off	repo	this repo	our tests use fake passwords
 $ lore secrets rule on generic-password --yes
-lore: wrote ~/work/website/.lore/data/secret_rules/srl_2537…6bbb.json
-✓ generic-password on in this repo (srl_…6bbb removed)
+lore: wrote ~/work/website/.lore/data/secret_rules/srl_f147…5139.json
+✓ generic-password on in this repo (srl_…5139 removed)
 $ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 aws_access_key	changed	repo	this repo	cloud keys, any account
@@ -341,7 +341,7 @@ A repo in a `Dropbox` folder, refused and then let through for one command:
 ```console
 # alice, in Dropbox/website
 $ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/Dropbox/website/.git/config; hook blocks in ~/work/Dropbox/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/Dropbox/website/.git/config; hook blocks in ~/work/Dropbox/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
   hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
@@ -363,7 +363,7 @@ ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
   hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
 (exit 20)
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
-lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
   mode-b: rules/rul_3b62…e913 → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
@@ -372,8 +372,8 @@ team lock: this repo has no remote origin; nobody to race, none taken
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-rul_3b62…e913  Posts go out on Tuesdays  [shared]
+lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+rul_3b62…e913 [must/always] Posts go out on Tuesdays [shared]
 ```
 <!-- /example -->
 

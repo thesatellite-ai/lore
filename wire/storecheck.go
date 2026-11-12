@@ -21,6 +21,7 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -30,9 +31,8 @@ var _ opsstores.StoreChecker = (*App)(nil)
 
 // Store doctor problem texts.
 const (
-	checkNoMarker    = "the store folder holds no lore store marker (moved or deleted?); fix the url with `lore store set-url`, or remove the entry"
-	checkUnreachable = "unreachable: "
-	checkNotCloned   = "not cloned on this machine yet (the next command that reads it clones it)"
+	checkNoMarker  = "the store folder holds no lore store marker (moved or deleted?); fix the url with `lore store set-url`, or remove the entry"
+	checkNotCloned = "not cloned on this machine yet (the next command that reads it clones it)"
 )
 
 // CheckStores implements opsstores.StoreChecker.
@@ -101,7 +101,16 @@ func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time) op
 	if err := gitbackend.ProbeRemote(ctx, s.dir, s.entry.URL, gitbackend.WithRoute(func(ctx context.Context, remote string) ([]string, []string) {
 		return cloneRoute(ctx, a.opts.Home, a.projectDir(), remote)
 	}), gitbackend.WithAccessNote(accessNoteFor(a.opts.Home))); err != nil {
-		c.Problems = append(c.Problems, checkUnreachable+reasonOf(err))
+		// the probe's whole sentence (what failed, at which masked url,
+		// git's telling line); a fault waiting cannot fix (no repository
+		// there, refused credentials) also gets its next step: for no
+		// answer the unpushed-commits problem below already says it
+		c.Fault = string(gitbackend.ProbeFault(err))
+		p := reasonOf(err)
+		if c.Fault != string(gitfault.Unreachable) {
+			p += "; " + probeHintOf(err)
+		}
+		c.Problems = append(c.Problems, p)
 	} else {
 		c.Reachable = true
 	}
@@ -135,6 +144,15 @@ const cloneNotCloned = "not_cloned"
 func isDirPath(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.IsDir()
+}
+
+// probeHintOf is err's hint ("" when it has none).
+func probeHintOf(err error) string {
+	var e *errs.Error
+	if errors.As(err, &e) {
+		return e.Hint
+	}
+	return ""
 }
 
 // reasonOf is err's message without its [E_CODE] prefix (a doctor line

@@ -58,7 +58,7 @@ type ClaimIn struct {
 	ID         string   `json:"id" arg:"0" desc:"the task or mission id (tsk_…, msn_…)"`
 	Owns       []string `json:"owns,omitempty" flag:"owns" desc:"paths this claim owns (directory prefixes ending in / or exact files)"`
 	Strict     bool     `json:"strict,omitempty" flag:"strict" desc:"refuse instead of warning when --owns overlaps another claim"`
-	Coordinate bool     `json:"coordinate,omitempty" flag:"coordinate" desc:"take a coordinator lease on a parent with open sub-tasks (TASK 6.9)"`
+	Coordinate bool     `json:"coordinate,omitempty" flag:"coordinate" desc:"take a coordinator lease on a parent with open sub-tasks"`
 	From       string   `json:"from,omitempty" flag:"from" alias:"store" desc:"the source of the id: repo | <org> | <org>/<folder>"`
 }
 

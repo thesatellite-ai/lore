@@ -113,7 +113,7 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 		return errs.Wrap(errs.Internal, "merge driver: core registry", err)
 	}
 	var res merge.Result
-	out, conflict, err := merge.Driver{Registry: reg, Report: func(r merge.Result) { res = r }}.Merge(base, ours, theirs)
+	out, conflict, err := merge.Driver{Registry: reg, Report: func(r merge.Result) { res = r }, OursFirst: true}.Merge(base, ours, theirs)
 	if err != nil {
 		// Not a core row on some side (a hand edit, a file of another
 		// tool): git's line merge, which writes no format of its own.

@@ -1,6 +1,6 @@
 # Personal notes
 
-**In short:** some notes are for you alone, like "I prefer tabs over spaces". `--to me` keeps them on your machine, or in your own private repo. Lore shows notes about one company only in that company's repos.
+**In short:** some notes are for you alone, like "I prefer tabs over spaces". `--to me` keeps them in your personal store: a folder on your machine, or your own private repo that every machine you use attaches with `lore store init me <url>`.
 
 ## The situation
 
@@ -8,18 +8,22 @@ Alice (an agency developer) keeps notes only she should see: "I always forget th
 
 ## The config
 
-`personal.store` in `~/.lore/config.yaml`. `local` keeps the notes in `~/.lore/personal` on this machine. A git URL of your own private repo syncs them between machines.
+`personal.store` in `~/.lore/config.yaml` names your personal store, the target of `--to me`. `lore store init me` writes it for you. It holds one of three things:
+
+- **a git URL of your own private repo** (`lore store init me git@github.com:alice/lore-me`): lore keeps a clone at `~/.lore/stores/alice/lore-me`, and every machine that attaches the same URL gets the same notes. A note is one file, `_store/<kind>/<id>.json` in that repo, labelled `[me]`, and it loads in every repo you open.
+- **a folder** (`lore store init me` with no URL makes `file://~/.lore/stores/_me`): the same layout (`_store/<kind>/<id>.json`, `[me]`), on this machine only.
+- **the lore 0.1.17 value `local`**: the notes stay in `~/.lore/personal` on this machine, filed by company (`<org>/<kind>/<id>.json` or `everywhere/<kind>/<id>.json`, labelled `[me/<org>]`); a note filed under a company loads only in that company's repos. An upgrade from 0.1.17 turns `local` into the folder address `file://~/.lore/personal` (the old file is kept as `config.yaml.migrated`) and copies the notes into its `_store/`.
 
 ```yaml
 personal:
-  store: local                                  # or: git@github.com:alice/lore-me
+  store: git@github.com:alice/lore-me          # or file:///home/alice/.lore/stores/_me, or the 0.1.17 value local
 ```
 
 With a git URL, each note is pushed to your repo at once. To push them in batches instead, or only when you run `lore sync`, see [How writes reach the remote](../identity-and-stores.md#how-writes-reach-the-remote).
 
 ## The commands
 
-`--to me` files a note by where you are when you write it. In a repo of an org (one company's setup), it goes under that org's folder. Anywhere else, it goes under `everywhere/`:
+With the 0.1.17 value `personal.store: local` (the first example), `--to me` files a note by where you are when you write it. In a repo of an org (one company's setup), it goes under that org's folder. Anywhere else, it goes under `everywhere/`:
 
 <!-- example: personal#local-personal-store -->
 ```console
@@ -41,12 +45,12 @@ lore: wrote ~/.lore/personal/everywhere/machines/mch_162d…9666.json (store me)
 
 # alice, in website
 $ lore memory list
-mem_2ad3…f891  I always forget the staging VPN profile  [me/agency]
-mem_05e9…4603  I prefer tabs over spaces  [me/everywhere]
+mem_2ad3…f891 [retrieved] I always forget the staging VPN profile [me/agency]
+mem_05e9…4603 [retrieved] I prefer tabs over spaces [me/everywhere]
 
 # alice, in scratch
 $ lore memory list
-mem_05e9…4603  I prefer tabs over spaces  [me/everywhere]
+mem_05e9…4603 [retrieved] I prefer tabs over spaces [me/everywhere]
 
 # alice, in ~
 $ find ~/.lore/personal -name '*.json' -path '*memories*' | sed 's#.*/personal/##'
@@ -57,7 +61,7 @@ agency/memories/mem_2ad3…f891.json
 
 The `[me]` label marks personal rows (your own notes). In the agency repo Alice sees both notes. In her scratch repo she sees only the `everywhere/` one.
 
-To sync between machines, make a private repo of your own into a store (a lore-only notes repo). Point `personal.store` at it on every machine. A note written on the laptop shows up on the server on its next command:
+To sync between machines, make a new, empty private repo of your own into your personal store with `lore store init me <url>` (it becomes a lore-only notes repo and is recorded as `personal.store`). From then on a `--to me` note lands in that repo's `_store/` folder with the label `[me]`, not under a company folder, and loads in every repo. Below, a second machine (`alice-devbox`) that already has `personal.store` set to the same URL sees the laptop's note on its first command:
 
 <!-- example: personal#git-personal-store -->
 ```console
@@ -80,27 +84,46 @@ lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (s
 
 # alice-devbox, in website
 $ lore memory list
-lore memory list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore memory list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 lore memory list: set user.name and user.email in the store clone ~/.lore/stores/alice/lore-me (.git/config) to Alice Doe <alice@agency.example>: your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
-mem_76bd…3f10  my invoice template lives in the shared drive  [me]
+mem_76bd…3f10 [retrieved] my invoice template lives in the shared drive [me]
 ```
 <!-- /example -->
+
+## On your next machine
+
+Install lore, then attach the personal store you already have. `lore store init me <url>` on an existing store attaches it (it never empties it) and records it as `personal.store`; your notes are there on the next command (lore also prints a line or two about the git settings it made in the store clone and in this repo, left out here):
+
+```console
+# alice, on a new laptop, in a clone of website
+$ lore store init me git@github.com:alice/lore-me --yes
+✓ git@github.com:alice/lore-me is already a lore store (sto_…); recorded as me in ~/.lore/config.yaml (personal.store, the target of --to me)
+$ lore memory list
+mem_…  my invoice template lives in the shared drive  [me]
+```
+
+`lore config set personal.store git@github.com:alice/lore-me` does the same: the next command that needs the store clones it. After that, a note written on one machine reaches the other one at its next `lore sync` there.
 
 ## What happened
 
 ```text
- personal store (~/.lore/personal, or github.com/alice/lore-me)
-   everywhere/.lore/data/memories/…      loads in every repo
-   agency/.lore/data/memories/…          loads only where the org is agency
-   client3/.lore/data/memories/…         loads only where the org is client3
+ personal store at a git URL or a folder (~/.lore/stores/alice/lore-me, ~/.lore/stores/_me)
+   _store/memories/<id>.json             [me]: loads in every repo
+
+ personal.store: local (lore 0.1.17 value; ~/.lore/personal)
+   everywhere/memories/<id>.json         [me/everywhere]: loads in every repo
+   agency/memories/<id>.json             [me/agency]: loads only where the org is agency
+   client3/memories/<id>.json            [me/client3]: loads only where the org is client3
 ```
+
+**Upgrading from lore 0.1.17.** 0.1.17 filed `--to me` notes per org in a git personal store too (`acme/.lore/data/…`, `everywhere/.lore/data/…`). The first command of this lore moves every one of them to `_store/` in one commit, `lore: personal store — lore 0.1.17's per-org notes move from <folder>/ to _store/`, pushed like any commit (a row found in two folders becomes one), and says so in one line, `lore: personal store lore-me: 3 row(s) lore 0.1.17 filed under acme/, everywhere/ moved to _store/: commit …, pushed; …`, after the block that says another machine of yours still on lore 0.1.17 must upgrade (0.1.17 refuses the moved store with `E_NOT_A_STORE`). From then on each of those notes loads in every repo, as every personal note in a git personal store does. A `local` personal store is moved to its root the same way by `lore fix` (or by the first write in a project with 0.1.17 rows, which runs it); a row left in an old folder after that is named by `lore doctor` (`old_clones`) and moved by `lore fix`.
 
 ## Pitfalls
 
-- **Filing is by place, not by text.** Lore never guesses the company from what you wrote. It files the note under the org of the repo you are in. To file a note for every repo, write it from a repo that belongs to no org.
-- **Never in the checkout.** Personal notes are rendered into `~/.lore/render/…`, outside the repo, like internal notes. Nothing personal is written to a committed file.
+- **With `local`, filing is by place, not by text.** Lore never guesses the company from what you wrote. It files the note under the org of the repo you are in. To file a note for every repo, write it from a repo that belongs to no org. A personal store at a git URL or a folder has no company folders: every note loads everywhere.
+- **Never in the checkout.** Personal notes are rendered into `~/.lore/render/…`, outside the repo, like internal notes. Nothing personal is written to a committed file. On another machine a fresh clone has no such render yet: `lore doctor` lists it as a note (`… is not rendered yet on this machine`), not a warning, and the next `lore render`, `lore fix` or `lore doctor --fix` writes it.
 - **A note that names a company asks first.** When your personal store is a synced repo, every repo you open reads it. So a `--to me` note whose text names a known org or repo owner (for example `client`) stops with `E_NEEDS_CONFIRM` (exit 26): answer `--yes` to keep it personal, or send it `--to` the org's store instead.
-- **A personal store repo is a lore store**: create it with `lore store init` on a new, empty, private repo.
+- **A personal store repo is a lore store**: `lore store init me <url>` makes a new, empty, private repo into one. Run on a repo that is already a lore store, it attaches it instead (`… is already a lore store …; recorded as me`), which is how every further machine gets it.
 - Personal notes are for you. To give one to your team, use `lore move <id> --to agency` (it keeps the id); see [Sharing an internal note with the client](sharing-a-note.md) for how moving works.
 
 ## Related

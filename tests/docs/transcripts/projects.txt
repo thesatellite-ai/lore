@@ -10,37 +10,37 @@ Project: prj_7a670ae8548ed05bf57ad29ad0759504
 
 Repos:
   rep_2ad3618e878ebbf527d34d446ef4f891  website
-created 2026-11-02T10:00:00Z by act_162df51b7f78b785c97c26b41ea89666 · updated 2026-11-02T10:00:00Z by act_162df51b7f78b785c97c26b41ea89666
+created 2026-11-02T10:00:00Z by alice · updated 2026-11-02T10:00:00Z by alice
 
 ### add repos
 alice (work/website)$ lore repo list
 rep_2ad3618e878ebbf527d34d446ef4f891  website  https://github.com/client/website
 alice (work/website)$ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
-lore: wrote ~/work/website/.lore/data/repos/rep_54fe984c9b495744c0217776765a28f2.json
-✓ repo shop registered (rep_54fe984c9b495744c0217776765a28f2)
+lore: wrote ~/work/website/.lore/data/repos/rep_162df51b7f78b785c97c26b41ea89666.json
+✓ repo shop registered (rep_162df51b7f78b785c97c26b41ea89666)
 alice (work/website)$ lore repo add help --display-name 'Help pages'
-lore: wrote ~/work/website/.lore/data/repos/rep_05e99e22e9e86e96fe4daa7777994603.json
-✓ repo help registered (rep_05e99e22e9e86e96fe4daa7777994603)
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe984c9b495744c0217776765a28f2.json
+✓ repo help registered (rep_54fe984c9b495744c0217776765a28f2)
 alice (work/website)$ lore repo list
 rep_2ad3618e878ebbf527d34d446ef4f891  website  https://github.com/client/website
-rep_54fe984c9b495744c0217776765a28f2  shop  https://github.com/client/website
-rep_05e99e22e9e86e96fe4daa7777994603  help
+rep_162df51b7f78b785c97c26b41ea89666  shop  https://github.com/client/website
+rep_54fe984c9b495744c0217776765a28f2  help
 
 ### notes per repo
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
-lore: wrote ~/work/website/.lore/data/rules/rul_c0f3c11a5724b0cfd74b256190d9b5b8.json
-✓ rul_c0f3c11a5724b0cfd74b256190d9b5b8
+lore: wrote ~/work/website/.lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json
+✓ rul_05e99e22e9e86e96fe4daa7777994603
   scope: [master] severity: must
 alice (work/website)$ lore rule add --repo shop --body 'Buttons are blue.'
-lore: wrote ~/work/website/.lore/data/rules/rul_76bd560aff0771fab8457dbfa9823f10.json
-✓ rul_76bd560aff0771fab8457dbfa9823f10
+lore: wrote ~/work/website/.lore/data/rules/rul_c0f3c11a5724b0cfd74b256190d9b5b8.json
+✓ rul_c0f3c11a5724b0cfd74b256190d9b5b8
   scope: [repo:shop] severity: must
 alice (work/website)$ lore rule list
-rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
+rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
 1 hidden (1 scoped to a repo); --all shows them
 alice (work/website)$ lore rule list --repo shop
-rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
-rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Buttons are blue.
+rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
+rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Buttons are blue.
 alice (work/website)$ lore rule list --repo blog
 ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
   hint: run `lore repo list` to see the mount names
@@ -48,16 +48,16 @@ ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
 
 ### repo from the environment
 alice (work/website)$ LORE_REPO=shop lore rule list
-rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
-rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Buttons are blue.
+rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
+rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Buttons are blue.
 alice (work/website)$ LORE_REPO=shop lore rule list --repo website
-rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
+rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
 1 hidden (1 scoped to a repo); --all shows them
 alice (work/website)$ LORE_PROJECT_ID=prj_7a670ae8548ed05bf57ad29ad0759504 LORE_REPO=shop lore rule list
-rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Run the tests before you push.
-rul_76bd560aff0771fab8457dbfa9823f10 [must/always] Buttons are blue.
-alice (work/website)$ LORE_PROJECT_ID=prj_d4314eba822f1bf5908b2b8ded5f313a lore rule list
-ERROR: [E_NOT_FOUND] rule: no project "prj_d4314eba822f1bf5908b2b8ded5f313a"
+rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
+rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Buttons are blue.
+alice (work/website)$ LORE_PROJECT_ID=prj_76bd560aff0771fab8457dbfa9823f10 lore rule list
+ERROR: [E_NOT_FOUND] rule: no project "prj_76bd560aff0771fab8457dbfa9823f10"
   hint: run `lore project list` to see the projects
 (exit 27)
 
@@ -66,15 +66,15 @@ alice (work/website)$ lore repo archive help
 ERROR: [E_INVALID_ID] repo: "help" is not a repo id (rep_…)
   hint: copy the whole id (its prefix, an underscore and 32 hex characters) from the list or show output of that kind
 (exit 20)
-alice (work/website)$ lore repo archive rep_05e99e22e9e86e96fe4daa7777994603
-lore: wrote ~/work/website/.lore/data/repos/rep_05e99e22e9e86e96fe4daa7777994603.json
+alice (work/website)$ lore repo archive rep_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe984c9b495744c0217776765a28f2.json
 ✓ help archived
 alice (work/website)$ lore repo list
 rep_2ad3618e878ebbf527d34d446ef4f891  website  https://github.com/client/website
-rep_54fe984c9b495744c0217776765a28f2  shop  https://github.com/client/website
-rep_05e99e22e9e86e96fe4daa7777994603  help [archived]
-alice (work/website)$ lore repo unarchive rep_05e99e22e9e86e96fe4daa7777994603
-lore: wrote ~/work/website/.lore/data/repos/rep_05e99e22e9e86e96fe4daa7777994603.json
+rep_162df51b7f78b785c97c26b41ea89666  shop  https://github.com/client/website
+rep_54fe984c9b495744c0217776765a28f2  help [archived]
+alice (work/website)$ lore repo unarchive rep_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/repos/rep_54fe984c9b495744c0217776765a28f2.json
 ✓ help unarchived
 alice (work/website)$ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 
@@ -91,8 +91,8 @@ lore: wrote ~/work/website/.lore/data/repos/rep_2ad3618e878ebbf527d34d446ef4f891
   .lore/data/_meta.json updated; commit it with your next push
 alice (work/website)$ lore repo list
 rep_2ad3618e878ebbf527d34d446ef4f891  website  git@github.com:client/website-v2.git
-rep_54fe984c9b495744c0217776765a28f2  shop  https://github.com/client/website
-rep_05e99e22e9e86e96fe4daa7777994603  help
+rep_162df51b7f78b785c97c26b41ea89666  shop  https://github.com/client/website
+rep_54fe984c9b495744c0217776765a28f2  help
 alice (work/website)$ lore repo merge-ids --dry-run
 ✓ rep_2ad3618e878ebbf527d34d446ef4f891 has no alias ids; nothing to merge
 alice (work/website)$ git add -A && git commit -qm 'lore: repo address' && git push -q origin main
@@ -101,26 +101,28 @@ alice (work/website)$ git add -A && git commit -qm 'lore: repo address' && git p
 alice (work)$ git clone -q https://github.com/alice/website website-fork
 alice (work/website-fork)$ git remote add upstream https://github.com/client/website-v2 && git remote set-url origin https://github.com/client/website-v2 && lore repo fork
 lore repo fork: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: the command was refused, so the git set-up it made first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_INVALID_INPUT] this clone's remote github.com/client/website-v2 is a confirmed address of rep_2ad3618e878ebbf527d34d446ef4f891, so it is that repo, not a fork
   hint: change the remote to the fork's address first (git remote set-url origin <fork url>)
 (exit 20)
 alice (work/website-fork)$ git remote set-url origin https://github.com/alice/website
 alice (work/website-fork)$ lore repo fork
-lore: wrote ~/work/website-fork/.lore/data/repos/rep_b4f4765e593d51fd1352985e8af3a5b0.json
-✓ new repo rep_b4f4765e593d51fd1352985e8af3a5b0 (website-fork), forked_from rep_2ad3618e878ebbf527d34d446ef4f891
+lore repo fork: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: wrote ~/work/website-fork/.lore/data/repos/rep_d4314eba822f1bf5908b2b8ded5f313a.json
+✓ new repo rep_d4314eba822f1bf5908b2b8ded5f313a (website-fork), forked_from rep_2ad3618e878ebbf527d34d446ef4f891
 ✓ .lore/data/_meta.json updated; commit it with your next push
 alice (work/website-fork)$ lore repo list
 rep_2ad3618e878ebbf527d34d446ef4f891  website  git@github.com:client/website-v2.git
-rep_54fe984c9b495744c0217776765a28f2  shop  https://github.com/client/website
-rep_05e99e22e9e86e96fe4daa7777994603  help
-rep_b4f4765e593d51fd1352985e8af3a5b0  website-fork  https://github.com/alice/website
+rep_162df51b7f78b785c97c26b41ea89666  shop  https://github.com/client/website
+rep_54fe984c9b495744c0217776765a28f2  help
+rep_d4314eba822f1bf5908b2b8ded5f313a  website-fork  https://github.com/alice/website
 alice (work/website-fork)$ git status --short
  M .lore/data/_meta.json
-?? .lore/data/repos/rep_b4f4765e593d51fd1352985e8af3a5b0.json
+?? .lore/data/repos/rep_d4314eba822f1bf5908b2b8ded5f313a.json
 
 ### one store
 alice (work/app)$ lore store init client2 file://$HOME/stores/client2
-✓ created store client2 (sto_28f8d32584b2db54ffb146bede5b03df) at file://~/stores/client2; recorded in .lore/stores.yaml; commit it to share
+✓ created store client2 (sto_b4f4765e593d51fd1352985e8af3a5b0) at file://~/stores/client2; recorded in .lore/stores.yaml; commit it to share
 alice (work/api)$ lore store add client2 file://$HOME/stores/client2
 ✓ attached store client2 (whole store, folder backend, internal) in .lore/stores.yaml; commit it to share
 alice (work/app)$ lore store list
@@ -131,7 +133,7 @@ count: 1
 
 ### shared notes
 alice (work/app)$ lore rule add --to client2 --body 'Every screen works on a phone.'
-lore: wrote ~/stores/client2/_store/actors/act_162df51b7f78b785c97c26b41ea89666.json (store client2)
+lore: wrote ~/stores/client2/_store/actors/act_28f8d32584b2db54ffb146bede5b03df.json (store client2)
 lore: wrote ~/stores/client2/_store/rules/rul_4c590afb2a0cc7ae1b97b7e4e62d6c38.json (store client2)
 lore: wrote ~/stores/client2/_store/machines/mch_3b6283bc4392c556bbae5f094246e913.json (store client2)
 ✓ rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 [client2]
@@ -146,11 +148,11 @@ lore: wrote ~/work/api/.lore/data/rules/rul_2537f9b2f7de77bfe5ca958860216bbb.jso
   scope: [master] severity: must
 alice (work/api)$ lore rule list
 rul_2537f9b2f7de77bfe5ca958860216bbb [must/always] The API answers in JSON only.
-rul_4c590afb2a0cc7ae1b97b7e4e62d6c38  Every screen works on a phone.  [client2]
-rul_f147dd95f1aaf742dd4f5214843a5139  Every change comes with a test.  [client2]
+rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 [must/always] Every screen works on a phone. [client2]
+rul_f147dd95f1aaf742dd4f5214843a5139 [must/always] Every change comes with a test. [client2]
 alice (work/app)$ lore rule list
-rul_4c590afb2a0cc7ae1b97b7e4e62d6c38  Every screen works on a phone.  [client2]
-rul_f147dd95f1aaf742dd4f5214843a5139  Every change comes with a test.  [client2]
+rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 [must/always] Every screen works on a phone. [client2]
+rul_f147dd95f1aaf742dd4f5214843a5139 [must/always] Every change comes with a test. [client2]
 alice (work/app)$ git status --short
 ?? .gitattributes
 ?? .gitignore
@@ -184,7 +186,7 @@ alice (work/infra)$ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
 project_id: prj_4f89f5fcb1d81152bdf3f52979ebb64b
 alice (work/infra)$ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; a read changes nothing: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run lore fix
   hint: `lore fix --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)
@@ -196,7 +198,7 @@ Would upgrade 2 rows
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 Nothing written (dry run).
 alice (work/infra)$ lore migrate run
-lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lore-cache.db, .lore/lore-cache.db-shm, .lore/lore-cache.db-wal, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
+lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 2 rows
   mode-b: memories/mem_77cb2df809cef85479f6587c4a7d76c4 → store shared (~/.lore/stores/infra)
   mode-b: rules/rul_d191616cfa49f94ede5d5148b8b045c2 → store shared (~/.lore/stores/infra)
@@ -214,8 +216,8 @@ stores:
     - name: shared
       url: file://~/.lore/stores/infra
 alice (work/infra)$ lore rule list; lore memory list
-rul_d191616cfa49f94ede5d5148b8b045c2  Terraform changes need a plan in the pull request.  [shared]
-mem_77cb2df809cef85479f6587c4a7d76c4  The staging cluster sleeps at night.  [shared]
+rul_d191616cfa49f94ede5d5148b8b045c2 [must/always] Terraform changes need a plan in the pull request. [shared]
+mem_77cb2df809cef85479f6587c4a7d76c4 [retrieved] The staging cluster sleeps at night. [shared]
 
 ### migration status
 alice (work/infra)$ lore migrate status

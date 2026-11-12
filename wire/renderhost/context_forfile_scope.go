@@ -25,6 +25,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/dirscope"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -159,7 +160,7 @@ func scopeChainPicks(fs fileScope, rows []knowledgeRow, add func(knowledgeRow, s
 			for _, k := range here {
 				ids = append(ids, k.r.ID.String())
 			}
-			line := fmt.Sprintf("- in context already: %s/%s, %d entries (%s)\n", dir, dirFileName, len(here), strings.Join(ids, ", "))
+			line := fmt.Sprintf("- in context already: %s/%s, %s (%s)\n", dir, dirFileName, plural.Of(len(here), "entry", "entries"), strings.Join(ids, ", "))
 			addLine(contextPick{ID: "dir:" + dir, Kind: "scope", Why: "loaded dir:" + dir, Bytes: len(line), full: line, line: line, group: groupRules})
 			continue
 		}

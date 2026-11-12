@@ -64,7 +64,7 @@ mem_162d…9666  memories  repo
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
+created 2026-11-02T10:00:25Z by alice · updated 2026-11-02T10:00:25Z by alice
 $ lore show mem_162d…9666 --expand
 mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for 5 minutes
@@ -74,7 +74,7 @@ mem_162d…9666  memories  repo
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
+created 2026-11-02T10:00:25Z by alice · updated 2026-11-02T10:00:25Z by alice
 references:
   ${var:api_host}  api.example.com  (var_7a67…9504)
   ${var:cache_minutes}  5  (var_2ad3…f891)
@@ -108,7 +108,7 @@ mem_162d…9666  memories  repo
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
+created 2026-11-02T10:00:25Z by alice · updated 2026-11-02T10:00:25Z by alice
 references:
   ${var:api_host}  api.example.com  (var_7a67…9504)
   ${var:cache_minutes}  10  (var_2ad3…f891)
@@ -140,7 +140,7 @@ mem_162d…9666  memories  repo
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
+created 2026-11-02T10:00:25Z by alice · updated 2026-11-02T10:00:25Z by alice
 references:
   ${var:api_host}  api.example.com  (var_7a67…9504)
   ${var:cache_minutes}  dangling  no such target; left as written
@@ -158,6 +158,7 @@ $ lore task add 'Fix the Safari checkout button'
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_c0f3…b5b8.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 — Fix the Safari checkout button [medium]
+  created tasklist tlt_c0f3…b5b8 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore meta set tsk_76bd…3f10 client=acme
 lore: wrote ~/work/website/.lore/data/meta_keys/mky_d431…313a.json
@@ -331,7 +332,7 @@ lore: wrote ~/work/website/.lore/data/vars/var_2ad3…f891.json
 Changed var_…f891 cache_minutes = 10 (number) in repo (not shareable: clients see ${var:<name>}).
 $ lore vars show cache_minutes
 var_2ad3…f891 cache_minutes = 10 (number) in repo
-created 2026-11-02T10:00:10Z by act_54fe…28f2 · updated 2026-11-02T10:00:40Z by act_54fe…28f2
+created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:00:40Z by alice
 $ lore show mem_162d…9666 --expand
 mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for 10 minutes
@@ -341,7 +342,7 @@ mem_162d…9666  memories  repo
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
-created 2026-11-02T10:00:25Z by act_54fe…28f2 · updated 2026-11-02T10:00:25Z by act_54fe…28f2
+created 2026-11-02T10:00:25Z by alice · updated 2026-11-02T10:00:25Z by alice
 references:
   ${var:api_host}  api.example.com  (var_7a67…9504)
   ${var:cache_minutes}  10  (var_2ad3…f891)

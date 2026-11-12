@@ -16,13 +16,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // PushLine is the line a push prints (also matched by tests).
@@ -99,6 +103,10 @@ func (b *storePush) readRefresh(ctx context.Context, in live.FetchInputs, autopu
 		if err == nil && !rep.Offline && b.stateDir != "" {
 			_ = live.WriteFetchStamp(b.stateDir, in.Now) // a lost stamp only means the next command fetches again
 		}
+		b.reach = reachOnline
+		if err != nil || rep.Offline {
+			b.reach = reachOffline
+		}
 	}
 	// `lore sync` (FetchAlways) reads first and pushes next: telling it to
 	// run `lore sync` would be noise; its push names itself (PushLine).
@@ -117,7 +125,14 @@ func (b *storePush) readRefresh(ctx context.Context, in live.FetchInputs, autopu
 }
 
 // sayWaiting names the clone's unpushed commits and `lore sync`, once per
-// read command (readRefresh, or a read's own commit: pushAfterWrite).
+// read command (readRefresh, or a read's own commit: pushAfterWrite), and
+// only when the count changed since it was last said (waitSaidFile): an
+// offline person is not told the same thing on every read (B3-13).
+//
+// Only a line said settles the command (waitSaid): a read can look at the
+// clone before it makes its own commit (the pick-up of a hand edit, whose
+// secret scan reads the store first), and that commit changes the count,
+// so a look that said nothing must not silence the look after it.
 func (b *storePush) sayWaiting(ctx context.Context) {
 	if b.waitSaid {
 		return
@@ -126,10 +141,96 @@ func (b *storePush) sayWaiting(ctx context.Context) {
 	if gb == nil {
 		return
 	}
-	if n, err := gb.Unpushed(ctx); err == nil && n > 0 {
-		b.waitSaid = true
-		_, _ = fmt.Fprintln(b.notes, WaitingLine(string(b.name), n))
+	n, err := gb.Unpushed(ctx)
+	if err != nil {
+		return
 	}
+	said := strconv.Itoa(n) + " " + b.reach
+	if n == 0 || b.stateDir == "" {
+		b.forgetWaitSaid()
+		if n == 0 {
+			return
+		}
+	} else if waitAlreadySaid(readNote(b.stateDir, waitSaidFile), n, b.reach) {
+		return
+	}
+	if b.res != nil && !b.res.waited.first(gb.Dir(), b.req) {
+		return // another folder of this clone already named its commits
+	}
+	b.waitSaid = true
+	_, _ = fmt.Fprintln(b.notes, WaitingLine(cloneStoreName(b.name), n))
+	if b.stateDir != "" {
+		_ = os.WriteFile(filepath.Join(b.stateDir, waitSaidFile), []byte(said+"\n"), stampFileMode) // best effort: a lost note only repeats the line once
+	}
+}
+
+// Reachability a read learned from its fetch (storePush.reach).
+const (
+	reachUnknown = ""        // no fetch this command
+	reachOnline  = "online"  // the fetch reached the remote
+	reachOffline = "offline" // the fetch did not
+)
+
+// waitAlreadySaid reports whether the note last said ("<n> <reach>")
+// already told the person that n commits wait: the same count, and the
+// same reachability unless this command did not learn it. Coming back
+// online is a change worth one more line.
+func waitAlreadySaid(note string, n int, reach string) bool {
+	cnt, was, _ := strings.Cut(note, " ")
+	if cnt != strconv.Itoa(n) {
+		return false
+	}
+	return reach == reachUnknown || reach == was
+}
+
+// waitSaidFile (in the clone's .git/lore) holds the unpushed count the
+// last read said (sayWaiting); a push that sends removes it.
+const waitSaidFile = "waiting_said"
+
+// forgetWaitSaid removes waitSaidFile, so the next wait is said again.
+func (b *storePush) forgetWaitSaid() {
+	if b.stateDir != "" {
+		_ = os.Remove(filepath.Join(b.stateDir, waitSaidFile)) // best effort: absent is the goal
+	}
+}
+
+// readNote is a one-line note file's text ("" when absent).
+func readNote(dir, name string) string {
+	raw, err := os.ReadFile(filepath.Clean(filepath.Join(dir, name)))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(raw))
+}
+
+// cloneStoreName is the name of the store a clone holds: a folder of a
+// store ("agency/client") shares the clone of "agency", so its waiting
+// commits are named after the store (B2-5).
+func cloneStoreName(s store.Source) string {
+	name, _, _ := strings.Cut(string(s), "/")
+	return name
+}
+
+// waitedClones is the set of store clones (by worktree) whose waiting
+// commits were already reported in one request.
+type waitedClones struct {
+	mu   sync.Mutex
+	seen map[string]requestID
+}
+
+// first reports whether dir's waiting commits are not yet named in
+// request req, and records them as named.
+func (w *waitedClones) first(dir string, req requestID) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if r, ok := w.seen[dir]; ok && r == req {
+		return false
+	}
+	if w.seen == nil {
+		w.seen = map[string]requestID{}
+	}
+	w.seen[dir] = req
+	return true
 }
 
 // WaitingLine is what a read says about commits that wait to be pushed.

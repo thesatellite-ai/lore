@@ -113,3 +113,45 @@ func TestStoreCachesAndRemove(t *testing.T) {
 		t.Fatal("RemoveUseRecord refuses a file that is not a use record")
 	}
 }
+
+// TestOldUsesDirMoves pins B2-6: the use records an older lore kept in
+// cache/repos (beside the repo caches' cache/repo) move to cache/uses on
+// the first read or write, and no repos/ folder is left beside repo/.
+func TestOldUsesDirMoves(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	old := filepath.Join(root, "repos")
+	if err := os.MkdirAll(old, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	top := filepath.Join(root, "work", "app")
+	if err := os.WriteFile(filepath.Join(old, filepath.Base(UseRecordPath(root, top))), []byte(`{"repo":"`+top+`","caches":[]}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	recs, err := ReadUses(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 1 || recs[0].Record.Repo != top {
+		t.Fatalf("records after the move: %+v", recs)
+	}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("cache/repos still there: %v", err)
+	}
+	// both folders (an old lore ran after the move): the old one is merged in
+	if err := os.MkdirAll(old, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "other.json"), []byte(`{"repo":"/x","caches":[]}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RecordUse(root, top, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, UsesDir, "other.json")); err != nil {
+		t.Fatalf("the old record was not moved: %v", err)
+	}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("cache/repos still there after the merge: %v", err)
+	}
+}

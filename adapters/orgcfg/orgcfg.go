@@ -97,6 +97,12 @@ type Situation struct {
 	ConfigPath string
 	HasConfig  bool
 	ProjectID  string
+	// NotGitRepo is true when Dir is in no git work tree (a plain folder,
+	// home). Why: the resolution still gives such a folder a role (fail
+	// closed: client), and whoami must say where the command actually ran
+	// instead of calling a plain folder a "client repo". Zero value (in a
+	// repo) keeps hand-built Situations meaning what they did.
+	NotGitRepo bool
 	// Remotes are the repo's remotes, normalised, sorted, once each.
 	Remotes []string
 	// RemoteNotes are remotes that could not be normalised (local paths).
@@ -181,10 +187,32 @@ func ProjectID(dir string) string {
 // resolved to no org, with no guards and the fallback identity, while its
 // top resolved right.
 func ProjectDir(ctx context.Context, dir, home string) string {
-	if root, ok := ProjectRoot(ctx, dir, home); ok {
-		return root
+	root, _ := projectDir(ctx, dir, home)
+	return root
+}
+
+// projectDir is ProjectDir plus whether dir is inside a git work tree at
+// all, from the one `git rev-parse` ProjectRoot runs (Gather records it,
+// so whoami can say "not a git repo" without a second git call).
+func projectDir(ctx context.Context, dir, home string) (root string, inWorkTree bool) {
+	top, ok := workTreeTop(ctx, dir)
+	if !ok {
+		return dir, false
 	}
-	return dir
+	if root, ok := projectRootUnder(top, dir, home); ok {
+		return root, true
+	}
+	return dir, true
+}
+
+// workTreeTop is the top of the git work tree dir is in; ok is false
+// outside one (a plain folder, a bare repository, no git).
+func workTreeTop(ctx context.Context, dir string) (top string, ok bool) {
+	out, err := gitRun(ctx, "-C", dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", false
+	}
+	return realPath(strings.TrimSpace(out)), true
 }
 
 // ProjectRoot is the nearest folder from dir up to its git work tree top
@@ -195,11 +223,15 @@ func ProjectDir(ctx context.Context, dir, home string) string {
 // walk the repo store opens its root with (adapters/backend/git
 // projectRoot).
 func ProjectRoot(ctx context.Context, dir, home string) (root string, ok bool) {
-	out, err := gitRun(ctx, "-C", dir, "rev-parse", "--show-toplevel")
-	if err != nil {
+	top, ok := workTreeTop(ctx, dir)
+	if !ok {
 		return "", false
 	}
-	top := realPath(strings.TrimSpace(out))
+	return projectRootUnder(top, dir, home)
+}
+
+// projectRootUnder is ProjectRoot's walk from dir up to the work tree top.
+func projectRootUnder(top, dir, home string) (root string, ok bool) {
 	homeLore := ""
 	if home != "" {
 		homeLore = realPath(home)
@@ -281,7 +313,8 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 	// The project's files (_meta.json, the committed org.yaml) live in
 	// the project root, which a command run in a subfolder of the
 	// checkout is below: read them there, as the repo store does.
-	root := ProjectDir(ctx, in.Dir, in.Home)
+	root, inTree := projectDir(ctx, in.Dir, in.Home)
+	s.NotGitRepo = !inTree
 	s.ProjectID = ProjectID(root)
 	s.Remotes, s.RemoteNotes = Remotes(ctx, in.Dir)
 	if committed, cerr := LoadOrgFile(root); cerr != nil {

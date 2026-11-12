@@ -58,7 +58,7 @@ func (c *standaloneClones) configuredStores() ([]*configuredStore, error) {
 	var out []*configuredStore
 	for _, o := range cfg.Orgs {
 		for _, s := range o.Stores {
-			norm, nerr := repourl.Normalize(s.URL)
+			norm, nerr := repourl.NormalizeStore(s.URL)
 			if nerr != nil {
 				return nil, errs.Wrap(errs.ConfigInvalid, "store url of org "+o.Name, nerr)
 			}
@@ -171,7 +171,7 @@ func (c *standaloneClones) hereLinks(ctx context.Context) []string {
 
 // openClone implements store.open.
 func (c *standaloneClones) openClone(ctx context.Context, in opsstores.OpenIn) (opsstores.OpenOut, error) {
-	norm, err := repourl.Normalize(in.URL)
+	norm, err := repourl.NormalizeStore(in.URL)
 	if err != nil {
 		return opsstores.OpenOut{}, errs.Wrap(errs.InvalidInput, "store open: not a store url: "+in.URL, err)
 	}

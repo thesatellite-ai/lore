@@ -156,8 +156,10 @@ func (o SetURLOut) Text() string {
 		b.WriteString("store " + o.Name + " is already at " + o.URL + "; nothing changed\n")
 	} else if o.URL != o.Previous {
 		b.WriteString("✓ store " + o.Name + " (" + o.ID + ") is now at " + o.URL + " (was " + o.Previous + "); its rows stay\n")
-	} else {
+	} else if len(o.Folders) > 0 {
 		b.WriteString("✓ store " + o.Name + " (" + o.ID + ") stays at " + o.URL + "; its folder entries now point there too\n")
+	} else {
+		b.WriteString("✓ store " + o.Name + " (" + o.ID + ") stays at " + o.URL + "\n") // only a clone was carried (o.Clone)
 	}
 	if len(o.Folders) > 0 {
 		b.WriteString("  folder entries re-pointed: " + strings.Join(o.Folders, ", ") + "\n")
@@ -169,6 +171,9 @@ func (o SetURLOut) Text() string {
 		if f != "" {
 			b.WriteString("  " + f + "\n")
 		}
+	}
+	if o.Clone != "" {
+		b.WriteString("  " + o.Clone + "\n")
 	}
 	if o.Note != "" {
 		b.WriteString("  note: " + o.Note + "\n")

@@ -69,7 +69,7 @@ type Mover interface {
 // ShowIn is the input of row.show.
 type ShowIn struct {
 	ID     string `json:"id" arg:"0" desc:"any row id (mem_…, tsk_…, res_…, var_…)"`
-	Origin bool   `json:"origin,omitempty" flag:"origin" desc:"also print where the row came from: _o, the audit fields, the _w stamp and its moves (PROV 9.1)"`
+	Origin bool   `json:"origin,omitempty" flag:"origin" desc:"also print where the row came from: _o, the audit fields, the _w stamp and its moves"`
 	// ShowSensitive: META 3.20 / RQ1 (asks first; --yes without a
 	// terminal, XQ3; agents may run it too, OQ25).
 	ShowSensitive bool `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive field and metadata values (asks first)"`
@@ -81,9 +81,9 @@ type ShowIn struct {
 type MoveIn struct {
 	ID           string `json:"id" arg:"0" desc:"any row id"`
 	To           string `json:"to" flag:"to" desc:"the target store: repo | me | <store>[/<folder>]"`
-	DropInternal bool   `json:"drop_internal,omitempty" flag:"drop-internal" desc:"into a client repo: remove the row's internal metadata values instead of refusing (MQ11, BATCH 7)"`
-	WithTime     string `json:"with_time,omitempty" flag:"with-time" desc:"totals | none: per-worker time totals for a task moved into a client repo (TQ3; default: the time.client_share policy, none)"`
-	WithChildren bool   `json:"with_children,omitempty" flag:"with-children" desc:"a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14, B7)"`
+	DropInternal bool   `json:"drop_internal,omitempty" flag:"drop-internal" desc:"into a client repo: remove the row's internal metadata values instead of refusing"`
+	WithTime     string `json:"with_time,omitempty" flag:"with-time" desc:"totals | none: per-worker time totals for a task moved into a client repo (default: the time.client_share policy, none)"`
+	WithChildren bool   `json:"with_children,omitempty" flag:"with-children" desc:"a task: move its whole subtree too; every sub-task keeps its id and parent"`
 }
 
 // Actor is an actor as show names it.

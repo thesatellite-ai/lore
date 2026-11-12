@@ -45,3 +45,21 @@ func MachineLocalAsked(ctx context.Context) bool {
 	v, _ := ctx.Value(machineLocalKey{}).(bool) // absent: not asked
 	return v
 }
+
+// noPushKey marks a run that must not push (--no-push, --offline).
+type noPushKey struct{}
+
+// WithNoPush marks ctx as a migration run whose store commits stay in the
+// local clones: every write and sync under it fetches at most, never
+// pushes, whatever the store's push mode says. Without it each row write
+// of the run pushed as a normal write does, so --no-push only held back
+// the run's last push.
+func WithNoPush(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noPushKey{}, true)
+}
+
+// NoPushAsked reports WithNoPush's mark.
+func NoPushAsked(ctx context.Context) bool {
+	v, _ := ctx.Value(noPushKey{}).(bool) // absent: pushes as usual
+	return v
+}

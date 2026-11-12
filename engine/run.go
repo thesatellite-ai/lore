@@ -119,7 +119,9 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 	if lerr != nil {
 		return op.Result{}, lerr
 	}
-	res, ierr := entry.Invoke(context.WithValue(ctx, callKey{}, cl), in)
+	// B2-4: a store commit made by this run is titled after the operation
+	// ("lore: task add: <title>"), not after the first row it holds.
+	res, ierr := entry.Invoke(store.WithCommitOp(context.WithValue(ctx, callKey{}, cl), spec.Name), in)
 	if ierr == nil {
 		ierr = metaUsed()
 	}

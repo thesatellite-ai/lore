@@ -29,6 +29,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -60,6 +61,12 @@ func (a *App) FixRepos(ctx context.Context) (opsfix.Found, error) {
 	for _, k := range known {
 		w.known = append(w.known, k.Root)
 	}
+	// B4-8: the repo the command runs in is always one of them (a 0.1.17
+	// user has no setup folders and no known repos yet, and "0 repo(s)"
+	// while inside an unmigrated repo fixed nothing)
+	if top := gitTopLevel(ctx, a.projectDir()); top != "" {
+		w.known = append(w.known, top)
+	}
 	if cfg, cerr := ReadSetupsConfig(a.opts.Home); cerr == nil {
 		for _, e := range cfg.Enabled() {
 			for _, g := range e.Folders {
@@ -67,13 +74,44 @@ func (a *App) FixRepos(ctx context.Context) (opsfix.Found, error) {
 			}
 		}
 	}
+	// B4-8: every repo this machine's lore opened is recorded with the
+	// caches it used (~/.lore/cache/repos); those repos are fixed too, so
+	// a machine with no setup folders yet (upgraded from 0.1.17) gets the
+	// repos lore has run in, and the run says how it chose them
+	if recs, rerr := sqlite.ReadUses(filepath.Join(a.opts.Home, cacheDir)); rerr == nil {
+		for _, r := range recs {
+			if r.Record.Repo != "" {
+				w.known = append(w.known, r.Record.Repo)
+			}
+		}
+	}
+	var note string
+	if len(w.bases) == 0 {
+		// lore 0.1.17 kept no list of its repos on the machine (its
+		// caches and renders are named by project id only), so with no
+		// setup folders the home folder is looked through, a few levels
+		// deep, for repos with .lore/
+		note = fixNoSetupFolders
+		if h := userHome(SetupQuery{}); h != "" {
+			w.bases, w.depth = []string{h}, fixHomeDepth
+		}
+	}
 	w.linked = storeLinkedRemotes(ctx, a.opts.Home)
 	w.remotes = func(ctx context.Context, dir string) []string {
 		norm, _ := orgcfg.Remotes(ctx, dir)
 		return norm
 	}
-	return w.run(ctx)
+	found, err := w.run(ctx)
+	found.Note = note
+	return found, err
 }
+
+// fixNoSetupFolders is --all's note when no setup has folders.
+const fixNoSetupFolders = "no setup has folders yet, so lore fix --all took the repo you run it in, the repos lore has run in on this machine (its known repos and cache records) and the repos with .lore/ up to 4 folders below your home folder; add the folder holding your repos to a setup (`lore setup`) to fix every repo under it"
+
+// fixHomeDepth is how deep --all looks below the home folder when no
+// setup has folders (~/work/client/repo is three levels).
+const fixHomeDepth = 4
 
 // storeLinkedRemotes are the remotes the link rows of every whole store
 // clone under home name (no network: what the clones hold now).

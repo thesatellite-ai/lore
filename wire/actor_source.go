@@ -344,6 +344,19 @@ func (a *App) actorSourceGet(ctx context.Context, ref engine.Ref) (store.Source,
 	return store.Source(pick.Store), r, nil
 }
 
+// ActorNamer is the name function human output uses for actor ids
+// (surface/cli WithActorNamer): the actor's @handle, else its name, from
+// its source store; the id itself when no store names it.
+func (a *App) ActorNamer(ctx context.Context) func(string) string {
+	n := a.sourceActorNamer(ctx)
+	return func(actor string) string {
+		if actor == "" {
+			return ""
+		}
+		return n(actor)
+	}
+}
+
 // sourceActorNamer is the writer-name function of doctor's Team versions
 // notes, from each actor's source (handle, else name) rather than
 // whichever store's copy comes first; an actor no store holds falls back

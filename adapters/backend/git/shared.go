@@ -78,6 +78,10 @@ func PrepareClone(ctx context.Context, dir, remote string, own bool) error {
 	if err := checkCloneFolder(p, own); err != nil {
 		return err
 	}
+	if NoClone(ctx) && !exists(p.GitDir+string(os.PathSeparator)+headFileName) {
+		return errs.New(errs.StoreUnreachable, "git: the store "+remote+" has no clone on this machine yet, and this run makes none (dry run)").
+			WithHint("a run that is not a dry run clones it to " + dir)
+	}
 	if err := os.MkdirAll(p.StateDir, cloneDirMode); err != nil {
 		return errs.FileIO("create", p.StateDir, err)
 	}
@@ -137,6 +141,9 @@ func AdvanceBranch(ctx context.Context, dir, branch, oid, old string) error {
 	b, err := sharedBackend(dir, false)
 	if err != nil {
 		return err
+	}
+	if err := b.refusePersonGitOp(ctx, dir); err != nil {
+		return err // B2-9: reset --keep would end the person's merge
 	}
 	ref := headsPrefix + branch
 	head, herr := b.git.run(ctx, call{dir: dir, args: []string{"symbolic-ref", "--quiet", "HEAD"}})

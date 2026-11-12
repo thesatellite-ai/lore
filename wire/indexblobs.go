@@ -30,6 +30,14 @@ import (
 // env carries the hook's index (hookIndexEnv: GIT_INDEX_FILE for `git commit -a`
 // and friends) so the blobs read are the ones being committed (item 32).
 func indexBlobs(ctx context.Context, top string, env []string, paths []string) (map[string][]byte, error) {
+	return revBlobs(ctx, top, env, "", paths)
+}
+
+// revBlobs is indexBlobs for any tree: rev "" reads the index (":<path>"),
+// a commit-ish such as "HEAD" reads that commit's tree ("HEAD:<path>"),
+// so the commit check can compare a staged row with the committed one in
+// the same single git process.
+func revBlobs(ctx context.Context, top string, env []string, rev string, paths []string) (map[string][]byte, error) {
 	out := make(map[string][]byte, len(paths))
 	batch := make([]string, 0, len(paths))
 	for _, p := range paths {
@@ -37,7 +45,7 @@ func indexBlobs(ctx context.Context, top string, env []string, paths []string) (
 			continue
 		}
 		if strings.ContainsAny(p, "\n\r") {
-			if b, err := (gitRun{dir: top, env: env, args: []string{"show", ":" + p}}).output(ctx); err == nil {
+			if b, err := (gitRun{dir: top, env: env, args: []string{"show", rev + ":" + p}}).output(ctx); err == nil {
 				out[p] = b
 			}
 			continue
@@ -53,7 +61,7 @@ func indexBlobs(ctx context.Context, top string, env []string, paths []string) (
 	}
 	var in bytes.Buffer
 	for _, p := range batch {
-		in.WriteString(":" + p + "\n")
+		in.WriteString(rev + ":" + p + "\n")
 	}
 	// Built directly, as gitRun does: an absolute LookPath'd binary, fixed
 	// argv entries, no shell; runCancellable kills it when ctx ends.

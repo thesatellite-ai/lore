@@ -2508,6 +2508,12 @@
                     "tasks_note": {
                       "type": "string"
                     },
+                    "teams": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "to": {
                       "type": "string"
                     },
@@ -3209,7 +3215,7 @@
     "/v1/actors/status": {
       "post": {
         "operationId": "actor.status",
-        "summary": "Set a person's status: active, on_leave (--from, --until), left or archived (TEAM_PROFILES 5.3)",
+        "summary": "Set a person's status: active, on_leave (--from, --until), left or archived",
         "tags": [
           "actor"
         ],
@@ -4572,7 +4578,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -5157,20 +5163,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -5639,7 +5645,7 @@
                 "properties": {
                   "all": {
                     "type": "boolean",
-                    "description": "show every entry (P3-AUDIT-3: v0.1.17's --limit 0)"
+                    "description": "show every entry (the same as --limit 0)"
                   },
                   "limit": {
                     "type": "integer",
@@ -6793,7 +6799,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -7378,20 +7384,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -7987,7 +7993,7 @@
                   },
                   "rows": {
                     "type": "boolean",
-                    "description": "re-scan every stored row of every attached store with today's secret rules (SQ12)"
+                    "description": "re-scan every stored row of every attached store with today's secret rules"
                   },
                   "staged": {
                     "type": "boolean",
@@ -8460,7 +8466,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -10028,7 +10034,7 @@
                 "properties": {
                   "identity": {
                     "type": "boolean",
-                    "description": "contacts of this type may be flagged for identity (TP-4)"
+                    "description": "contacts of this type may be flagged for identity"
                   },
                   "kind": {
                     "type": "string",
@@ -10955,7 +10961,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -11544,20 +11550,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -12418,7 +12424,7 @@
                   },
                   "no_meta": {
                     "type": "boolean",
-                    "description": "with --supersedes: do not copy the replaced row's metadata (METADATA 3.19)"
+                    "description": "with --supersedes: do not copy the replaced row's metadata"
                   },
                   "project": {
                     "type": "string",
@@ -13096,20 +13102,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -15265,6 +15271,9 @@
                           "state": {
                             "type": "string"
                           },
+                          "store": {
+                            "type": "string"
+                          },
                           "unpushed": {
                             "type": "integer"
                           },
@@ -15711,7 +15720,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -16237,6 +16246,9 @@
                     },
                     "jobs": {
                       "type": "integer"
+                    },
+                    "note": {
+                      "type": "string"
                     },
                     "ok": {
                       "type": "integer"
@@ -17068,7 +17080,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "task": {
                     "type": "string",
@@ -17662,20 +17674,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -18748,7 +18760,7 @@
                   },
                   "no_meta": {
                     "type": "boolean",
-                    "description": "with --supersedes: do not copy the replaced row's metadata (METADATA 3.19)"
+                    "description": "with --supersedes: do not copy the replaced row's metadata"
                   },
                   "overrides": {
                     "type": "string",
@@ -19419,20 +19431,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -20412,7 +20424,7 @@
                   },
                   "key": {
                     "type": "string",
-                    "description": "human:\u003cyour email\u003e (with --org: your email in that org, TEAM-029)"
+                    "description": "human:\u003cyour email\u003e (with --org: your email in that org)"
                   },
                   "name": {
                     "type": "string",
@@ -21289,7 +21301,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -21874,20 +21886,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -22877,7 +22889,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -25155,7 +25167,7 @@
       },
       "post": {
         "operationId": "member.add",
-        "summary": "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join \u003corg\u003e",
+        "summary": "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join \u003cthe org's store url\u003e",
         "tags": [
           "member"
         ],
@@ -25345,6 +25357,9 @@
                     },
                     "dry_run": {
                       "type": "boolean"
+                    },
+                    "join_with": {
+                      "type": "string"
                     },
                     "notes": {
                       "type": "array",
@@ -26719,7 +26734,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "validated_by": {
                     "type": "string",
@@ -27384,20 +27399,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -28728,7 +28743,7 @@
                   },
                   "sensitive": {
                     "type": "boolean",
-                    "description": "hide the values from agents, render and lists (OQ2)"
+                    "description": "hide the values from agents, render and lists"
                   },
                   "strict": {
                     "type": "boolean",
@@ -29218,7 +29233,7 @@
                 "properties": {
                   "confirm": {
                     "type": "boolean",
-                    "description": "required: forget removes the key rows for good (DQ2)"
+                    "description": "required: forget removes the key rows for good"
                   },
                   "keys": {
                     "type": "string",
@@ -30911,7 +30926,7 @@
                   },
                   "sensitive": {
                     "type": "boolean",
-                    "description": "mark it sensitive (values hidden, OQ2)"
+                    "description": "mark it sensitive (values hidden)"
                   },
                   "strict": {
                     "type": "boolean",
@@ -34299,7 +34314,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -35459,20 +35474,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -38564,7 +38579,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -39149,20 +39164,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -41297,7 +41312,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -42082,20 +42097,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -42931,7 +42946,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -43516,20 +43531,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -47274,7 +47289,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -47859,20 +47874,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -48987,7 +49002,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -50480,6 +50495,9 @@
                     "adopted": {
                       "type": "boolean"
                     },
+                    "linked_remote": {
+                      "type": "string"
+                    },
                     "name": {
                       "type": "string"
                     },
@@ -50565,7 +50583,7 @@
     "/v1/repos/merge_ids": {
       "post": {
         "operationId": "repo.merge_ids",
-        "summary": "Rewrite _o.repo of rows stamped with an alias repo id to the winning id, then clear the aliases (PROVENANCE 11.9)",
+        "summary": "Rewrite _o.repo of rows stamped with an alias repo id to the winning id, then clear the aliases",
         "tags": [
           "repo"
         ],
@@ -52375,7 +52393,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "tighten the field for a nearer place only (an extension row there; RES 3.6)"
+                    "description": "tighten the field for a nearer place only (an extension row there)"
                   },
                   "value_labels": {
                     "type": "array",
@@ -56735,10 +56753,10 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
@@ -59097,10 +59115,10 @@
             "name": "origin",
             "in": "query",
             "required": false,
-            "description": "also print where the row came from: _o, the audit fields, the _w stamp and its moves (PROV 9.1)",
+            "description": "also print where the row came from: _o, the audit fields, the _w stamp and its moves",
             "schema": {
               "type": "boolean",
-              "description": "also print where the row came from: _o, the audit fields, the _w stamp and its moves (PROV 9.1)"
+              "description": "also print where the row came from: _o, the audit fields, the _w stamp and its moves"
             }
           },
           {
@@ -59117,20 +59135,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -59883,7 +59901,7 @@
                 "properties": {
                   "drop_internal": {
                     "type": "boolean",
-                    "description": "into a client repo: remove the row's internal metadata values instead of refusing (MQ11, BATCH 7)"
+                    "description": "into a client repo: remove the row's internal metadata values instead of refusing"
                   },
                   "to": {
                     "type": "string",
@@ -59891,11 +59909,11 @@
                   },
                   "with_children": {
                     "type": "boolean",
-                    "description": "a task: move its whole subtree too; every sub-task keeps its id and parent (TASK 6.14, B7)"
+                    "description": "a task: move its whole subtree too; every sub-task keeps its id and parent"
                   },
                   "with_time": {
                     "type": "string",
-                    "description": "totals | none: per-worker time totals for a task moved into a client repo (TQ3; default: the time.client_share policy, none)"
+                    "description": "totals | none: per-worker time totals for a task moved into a client repo (default: the time.client_share policy, none)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -60810,7 +60828,7 @@
                   },
                   "applies_to_description": {
                     "type": "string",
-                    "description": "when activation=semantic: words describing where the rule applies (lore context matches them, CONTEXT_BUDGET 6.8)"
+                    "description": "when activation=semantic: words describing where the rule applies (lore context matches them)"
                   },
                   "body": {
                     "type": "string",
@@ -60848,7 +60866,7 @@
                   },
                   "no_meta": {
                     "type": "boolean",
-                    "description": "with --supersedes: do not copy the replaced row's metadata (METADATA 3.19)"
+                    "description": "with --supersedes: do not copy the replaced row's metadata"
                   },
                   "overrides": {
                     "type": "string",
@@ -61561,20 +61579,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -64490,9 +64508,8 @@
                     "description": "the matched text (only its hash is stored)"
                   },
                   "match_hash": {
-                    "type": "integer",
-                    "description": "the finding's match hash, instead of --match",
-                    "minimum": 0
+                    "type": "string",
+                    "description": "the finding's hash, instead of --match: the sha256:… fingerprint a refused commit prints, or the number lore check leaks --rows prints"
                   },
                   "reason": {
                     "type": "string",
@@ -67706,7 +67723,7 @@
             }
           },
           "404": {
-            "description": "E_SETUP_NOT_FOUND",
+            "description": "E_JOIN_ORG_UNKNOWN, E_SETUP_NOT_FOUND",
             "content": {
               "application/json": {
                 "schema": {
@@ -70428,7 +70445,7 @@
             }
           },
           "404": {
-            "description": "E_SETUP_NOT_FOUND",
+            "description": "E_JOIN_ORG_UNKNOWN, E_SETUP_NOT_FOUND",
             "content": {
               "application/json": {
                 "schema": {
@@ -73550,7 +73567,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -74135,20 +74152,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -75246,7 +75263,7 @@
                 "properties": {
                   "confirm": {
                     "type": "boolean",
-                    "description": "required with --purge: the folder's repo links and id go for good (DQ2)"
+                    "description": "required with --purge: the folder's repo links and id go for good"
                   },
                   "folder": {
                     "type": "string",
@@ -76151,6 +76168,9 @@
                           "clone": {
                             "type": "string"
                           },
+                          "fault": {
+                            "type": "string"
+                          },
                           "kind": {
                             "type": "string"
                           },
@@ -76626,11 +76646,11 @@
                   },
                   "url": {
                     "type": "string",
-                    "description": "git url or file:// path (optional for me: default file://~/.lore/stores/_me)"
+                    "description": "git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)"
                   },
                   "visibility": {
                     "type": "string",
-                    "description": "internal (default) or shareable (CFG4)"
+                    "description": "internal (default) or shareable: whether its rows may reach client repos"
                   },
                   "yes": {
                     "type": "boolean",
@@ -77254,7 +77274,7 @@
                   },
                   "url": {
                     "type": "string",
-                    "description": "the store's new git url or file:// path"
+                    "description": "the store's new git url, local git repository path or file:// folder"
                   },
                   "yes": {
                     "type": "boolean",
@@ -77280,6 +77300,9 @@
                   "properties": {
                     "changed": {
                       "type": "boolean"
+                    },
+                    "clone": {
+                      "type": "string"
                     },
                     "folders": {
                       "type": "array",
@@ -77555,7 +77578,7 @@
                   },
                   "visibility": {
                     "type": "string",
-                    "description": "internal or shareable (CFG4)"
+                    "description": "internal or shareable: whether its rows may reach client repos"
                   },
                   "yes": {
                     "type": "boolean",
@@ -77737,6 +77760,9 @@
                         "type": "object",
                         "properties": {
                           "clone": {
+                            "type": "string"
+                          },
+                          "fault": {
                             "type": "string"
                           },
                           "kind": {
@@ -78414,7 +78440,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -79003,20 +79029,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -80065,10 +80091,19 @@
                           "at": {
                             "type": "string"
                           },
+                          "fields": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "id": {
                             "type": "integer"
                           },
                           "kept": {
+                            "type": "string"
+                          },
+                          "kept_doc": {
                             "type": "string"
                           },
                           "other_doc": {
@@ -80078,6 +80113,9 @@
                             "type": "boolean"
                           },
                           "row_id": {
+                            "type": "string"
+                          },
+                          "store": {
                             "type": "string"
                           },
                           "table": {
@@ -81361,6 +81399,9 @@
                               "push_summary": {
                                 "type": "string"
                               },
+                              "same_clone_as": {
+                                "type": "string"
+                              },
                               "store": {
                                 "type": "string"
                               }
@@ -81788,7 +81829,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -86164,10 +86205,10 @@
             "name": "include_deleted",
             "in": "query",
             "required": false,
-            "description": "the task may be in the trash: show its time anyway (DQ10)",
+            "description": "the task may be in the trash: show its time anyway",
             "schema": {
               "type": "boolean",
-              "description": "the task may be in the trash: show its time anyway (DQ10)"
+              "description": "the task may be in the trash: show its time anyway"
             }
           },
           {
@@ -89210,7 +89251,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -89992,20 +90033,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -91771,7 +91812,7 @@
                   },
                   "estimate": {
                     "type": "string",
-                    "description": "estimate: a number \u003e= 0 (2 decimals) in the project's unit (tasks.estimate_unit: points or hours); hours also take 90m; no day unit (OWNERQ-21)"
+                    "description": "estimate: a number \u003e= 0 (2 decimals) in the project's unit (tasks.estimate_unit: points or hours); hours also take 90m; no day unit"
                   },
                   "key": {
                     "type": "string",
@@ -91873,7 +91914,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -93740,7 +93781,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -95775,10 +95816,10 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           }
         ],
@@ -97407,7 +97448,7 @@
                 "properties": {
                   "coordinate": {
                     "type": "boolean",
-                    "description": "take a coordinator lease on a parent with open sub-tasks (TASK 6.9)"
+                    "description": "take a coordinator lease on a parent with open sub-tasks"
                   },
                   "from": {
                     "type": "string",
@@ -100477,7 +100518,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -101059,20 +101100,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -103831,7 +103872,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -104420,20 +104461,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -105017,7 +105058,7 @@
                   },
                   "confirm": {
                     "type": "boolean",
-                    "description": "required: purge removes content for good (DQ2)"
+                    "description": "required: purge removes content for good"
                   },
                   "dry_run": {
                     "type": "boolean",
@@ -105331,7 +105372,7 @@
                   },
                   "tasklist": {
                     "type": "string",
-                    "description": "new tasklist (tl_…) for a task whose tasklist was purged"
+                    "description": "new tasklist (tlt_…) for a task whose tasklist was purged"
                   },
                   "yes": {
                     "type": "boolean",
@@ -108242,7 +108283,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -108827,20 +108868,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {
@@ -109621,7 +109662,7 @@
                   },
                   "to": {
                     "type": "string",
-                    "description": "store to write to (a name from .lore/stores.yaml; default repo)"
+                    "description": "store to write to (a name from .lore/stores.yaml, me, \u003cstore\u003e/\u003cfolder\u003e; default repo)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -110206,20 +110247,20 @@
             "name": "expand",
             "in": "query",
             "required": false,
-            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)",
+            "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked",
             "schema": {
               "type": "boolean",
-              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked (SECRETS 2.7, 12)"
+              "description": "fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked"
             }
           },
           {
             "name": "reveal",
             "in": "query",
             "required": false,
-            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)",
+            "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)",
             "schema": {
               "type": "boolean",
-              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited; SQ10)"
+              "description": "--expand and also read each ${secret:…} from its manager and print it in clear (asks every time; audited)"
             }
           },
           {

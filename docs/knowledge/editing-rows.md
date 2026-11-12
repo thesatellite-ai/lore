@@ -194,11 +194,11 @@ $ lore row markdown tsk_2ad3…f891
 # An empty value (key:) clears an optional field. id, table, _hlc, created_* and updated_* are lore's own and cannot change.
 id: tsk_2ad3…f891
 table: tasks
-_hlc: 2026-11-02T10:00:10.000Z/0002/act_54fe…28f2
+_hlc: 2026-11-02T10:00:10.000Z/0002/act_05e9…4603
 created_at: "2026-11-02T10:00:10Z"
-created_by: act_54fe…28f2
+created_by: act_05e9…4603
 updated_at: "2026-11-02T10:00:10Z"
-updated_by: act_54fe…28f2
+updated_by: act_05e9…4603
 …
 $ EDITOR=$HOME/bin/edit-task lore edit tsk_2ad3…f891
 lore: pushed store notes: commit dfd8dc8 to branch main
@@ -212,7 +212,7 @@ tsk_2ad3…f891
   priority: high
   commit:   accepted
 Ask the hosting provider for the new chain first.
-created 2026-11-02T10:00:10Z by act_54fe…28f2 · updated 2026-11-02T10:01:25Z by act_54fe…28f2
+created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:01:25Z by alice
 ```
 <!-- /example -->
 

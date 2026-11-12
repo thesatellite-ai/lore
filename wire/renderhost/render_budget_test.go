@@ -73,7 +73,7 @@ func TestBuildBudgetedFileMatrix(t *testing.T) {
 				if rep.After != len(body) || rep.Over != (len(body) > budget) {
 					t.Fatalf("report after=%d over=%v for %d bytes, budget %d", rep.After, rep.Over, len(body), budget)
 				}
-				if !strings.HasPrefix(body, "<!-- AICODER:CANARY=c1 ") {
+				if !strings.HasPrefix(body, "<!-- lore render stamp c1 ") {
 					t.Fatal("canary not on the first line")
 				}
 				if strings.Contains(body, "No pinned knowledge yet") {

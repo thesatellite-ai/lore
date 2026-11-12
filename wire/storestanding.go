@@ -102,7 +102,20 @@ func (a *App) syncStoreStates(ctx context.Context, out *opssync.StatusOut) {
 		}
 	}
 	out.Lines = append(out.Lines, "stores:")
+	cloneOf := map[string]string{} // clone worktree -> the first store listed with it
 	for _, s := range list {
+		if s.git && s.cloned && s.err == "" {
+			if first, ok := cloneOf[s.dir]; ok {
+				// B2-5: a folder of a store shares its clone; its commits
+				// are the store's, counted once on the first line
+				st := stateOf(s)
+				st.Ahead, st.Behind, st.OldestUnpushed, st.SameCloneAs = 0, 0, "", first
+				out.Data.Stores = append(out.Data.Stores, st)
+				out.Lines = append(out.Lines, "  "+s.entry.Name+": "+sameCloneText(first))
+				continue
+			}
+			cloneOf[s.dir] = s.entry.Name
+		}
 		st, line := stateOf(s), "  "+s.entry.Name+": "+standingText(s, now)
 		if v, ok := modes[s.entry.Name]; ok { // store push modes, 2026-11-09
 			st.Push, st.PushSummary, st.Epoch, st.PushProblem = v.Push, v.Summary, v.Epoch, v.Problem
@@ -171,6 +184,12 @@ func standingText(s storeStanding, now time.Time) string {
 		}
 	}
 	return ahead + ", " + behind + "; " + push
+}
+
+// sameCloneText is the sync status line of a store whose clone was
+// already listed under first.
+func sameCloneText(first string) string {
+	return "same clone as " + first + " (its commits are counted there)"
 }
 
 // storeAge is d rounded to its largest unit: 45s, 12m, 3h, 2d.

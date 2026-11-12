@@ -23,10 +23,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/fsreason"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/clock"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -59,9 +62,18 @@ const (
 
 // Live state and log constants (v0.1.17 live_wire.go).
 const (
-	liveStateDirName      = "lore"
-	liveLogPrefix         = "lore live: "
-	liveNoteRefused       = "live-refused"
+	liveStateDirName = "lore"
+	liveLogPrefix    = "lore live: "
+	liveNoteRefused  = "live-refused"
+	// liveNoteSaid holds the last "(live, not pushed yet …)" line printed,
+	// so the same line is said once, not on every command and every git
+	// hook while it stays true (B3-13); a new write changes the count and
+	// so the line, a delivered push removes it.
+	liveNoteSaid = "live-waiting-said"
+	// liveNoteFault holds why the last push did not reach the remote when
+	// waiting cannot fix it (no repository at the address, credentials
+	// refused): `lore live doctor` and `lore doctor` warn with it (B3-14).
+	liveNoteFault         = "live-remote-fault"
 	liveNoteMode          = 0o600
 	updatedAtKey          = "updated_at"
 	defaultBranchFallback = "main"
@@ -98,6 +110,16 @@ type liveSession struct {
 	read bool
 	// fetchErr is the last fetch failure (offline).
 	fetchErr error
+	// remoteURL is remote.<RemoteName>.url as configured ("" without a
+	// remote); shown masked (repourl.Mask) in the not-pushed lines.
+	remoteURL string
+	// syncReport: `lore sync` prints its own line for writes that did not
+	// go out (syncLiveWaiting), so push records the waiting line as said
+	// without printing it.
+	syncReport bool
+	// waitWhy is the reason of the last push that left writes waiting
+	// ("" none): offline, or the remote's fault (gitfault).
+	waitWhy string
 	// fetched: this run fetched the remote successfully (refetch).
 	fetched bool
 	// blocked is set when the remote live ref was rewritten: no writes.
@@ -125,6 +147,10 @@ type liveSession struct {
 	// while that push is not confirmed.
 	atomicMark string
 	atomicOpen bool
+	// decoded holds the live folders' rows decoded from the last live ref
+	// commit read (liveFiles), so a run that Gets thousands of rows decodes
+	// the tree once per commit, not once per Get.
+	decoded liveDecoded
 }
 
 // openLiveSession opens the live session of the repository at top.
@@ -147,8 +173,9 @@ func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top st
 		remoteName = v
 	}
 	var remote gitremote.Remote
-	if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + remoteName + ".url"}}); err == nil {
+	if u, err := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + remoteName + ".url"}}); err == nil {
 		remote = &gitremote.Git{Repo: repo, Name: remoteName}
+		s.remoteURL = strings.TrimSpace(string(u))
 	}
 	sig, ok := repo.GitIdentity(ctx)
 	if !ok {
@@ -378,12 +405,14 @@ func (s *liveSession) push(ctx context.Context) bool {
 	}
 	if !snap.Ahead() {
 		s.printNotes()
+		s.clearWaitNotes()
 		return true
 	}
 	if !s.autopush && s.kind != live.FetchAlways {
 		if s.wrote > 0 {
 			s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; autopush is off, `lore sync` pushes)", s.waiting()))
 		}
+		s.waitWhy = "autopush is off"
 		return false
 	}
 	out, err := s.ref.Push(ctx)
@@ -414,18 +443,95 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 			s.warn("pushed waiting live writes" + where)
 		}
 		_ = s.writeNote(liveNoteRefused, "") // best effort: clears a stale doctor note
+		s.clearWaitNotes()
 	case live.PushNoRemote:
 		if s.wrote > 0 {
 			s.warn("(live, local: no remote)")
 		}
 	case live.PushOffline:
-		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; offline)", s.waiting()))
+		s.reportOffline(out.Detail)
 	case live.PushRefused:
+		s.waitWhy = "the remote refused refs/lore/live"
 		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; the remote refused refs/lore/live: %s)", s.waiting(), out.Detail))
 		_ = s.writeNote(liveNoteRefused, out.Detail) // best effort: feeds `lore live doctor` only
 	case live.PushRetriesOut:
 		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; lost %d races, the next command retries)", s.waiting(), out.Attempts))
 	}
+}
+
+// reportOffline is the line for writes a push could not deliver, by why
+// (gitfault reads git's stderr): no answer says what happens next; no
+// repository at the address, or refused credentials, names the remote
+// and the fix, and is kept for `lore doctor` (liveNoteFault). The line is
+// said once per state (sayOnce), never on every read or git hook.
+func (s *liveSession) reportOffline(stderr string) {
+	where := s.remoteLabel()
+	kind := gitfault.ClassifyAt(stderr, fsreason.GitPathState)
+	var why string
+	switch kind {
+	case gitfault.Unreadable:
+		why = gitfault.Summary(kind, where) + ": the address is right; check the folder's permissions (`ls -ld`); the writes wait here"
+	case gitfault.Missing:
+		why = gitfault.Summary(kind, where) + ": fix the address with `git remote set-url " + s.ref.RemoteName + " <url>`; the writes wait here"
+	case gitfault.Denied:
+		why = gitfault.Summary(kind, where) + ": check the key or token git uses for it; the writes wait here"
+	default:
+		why = "offline: the next lore command sends them once " + where + " answers, or run `lore sync`"
+	}
+	if kind == gitfault.Unreachable {
+		s.waitWhy = "offline"
+		_ = s.writeNote(liveNoteFault, "") // best effort: a no-answer is not a fault to fix
+	} else {
+		s.waitWhy = gitfault.Summary(kind, where)
+		_ = s.writeNote(liveNoteFault, gitfault.Describe(stderr, where, fsreason.GitPathState)) // best effort: feeds `lore doctor`
+	}
+	s.sayOnce(fmt.Sprintf("(live, not pushed yet: %d waiting; %s)", s.waiting(), why))
+}
+
+// fetchFault is why the run's fetch failed, for the "using live rows as
+// fetched" line: "offline" when the remote did not answer, else what is
+// wrong with it, naming it (B3-14: a deleted or mistyped remote is not
+// "offline" forever).
+func (s *liveSession) fetchFault() string {
+	var te *gitremote.TransportError
+	if !errors.As(s.fetchErr, &te) {
+		return "offline"
+	}
+	if k := gitfault.ClassifyAt(te.Stderr, fsreason.GitPathState); k != gitfault.Unreachable {
+		return gitfault.Summary(k, s.remoteLabel())
+	}
+	return "offline"
+}
+
+// remoteLabel names the live remote for a person: "origin (<url>)", the
+// url with its credentials masked.
+func (s *liveSession) remoteLabel() string {
+	if s.remoteURL == "" {
+		return s.ref.RemoteName
+	}
+	return s.ref.RemoteName + " (" + repourl.Mask(s.remoteURL) + ")"
+}
+
+// sayOnce prints line unless it is the line printed last (liveNoteSaid):
+// a run that pushes twice (sync, then finish), the post-commit and
+// pre-push hooks, and every read in between stay quiet while nothing
+// changed. Under syncReport it only records the line.
+func (s *liveSession) sayOnce(line string) {
+	if s.noteText(liveNoteSaid) == line {
+		return
+	}
+	if !s.syncReport {
+		s.warn(line)
+	}
+	_ = s.writeNote(liveNoteSaid, line) // best effort: a lost note only repeats the line once
+}
+
+// clearWaitNotes forgets the said line and the remote fault once nothing
+// waits: the next time writes wait, it is said again.
+func (s *liveSession) clearWaitNotes() {
+	s.waitWhy = ""
+	_ = s.writeNote(liveNoteSaid, "")  // best effort, as sayOnce
+	_ = s.writeNote(liveNoteFault, "") // best effort: clears a stale doctor note
 }
 
 // printNotes prints the merge decisions once.

@@ -47,6 +47,7 @@ lore: pushed store agency: commit 86dbae4 to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/acme-hub (store agency)
 ✓ tsk_54fe…28f2 — ship the checkout page [medium] → [agency/acme-hub]
+  created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
 ```
 <!-- /example -->
 

@@ -43,7 +43,6 @@ func TestInitGitignoreHidesLocalFiles(t *testing.T) {
 	asPerson(t)
 	root := envScopeRepo(t) // runs `lore init`
 	ignored := []string{
-		".lore/lore-cache.db", ".lore/lore-cache.db-shm", ".lore/lore-cache.db-wal",
 		".lore/lore.db", ".lore/lore.db-shm", ".lore/lore.db-wal",
 		".lore/lore.db.broken.20261105T120000Z", ".lore/lore.db.broken.1",
 		".lore/state/held.json", ".lore/backups/cache-1.db", ".lore/lock",

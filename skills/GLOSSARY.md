@@ -26,7 +26,7 @@ The first-time setup: `lore init`, then turning existing notes into rows by hand
 Sanitized tarball produced by `lore support-bundle` for bug reports. Contains DB schema, doctor output, scrubbed audit log. No bodies / no credentials.
 
 ## Canary
-A content-derived sha256 prefix at the top of the generated knowledge file `.lore/LORE.md` (`<!-- AICODER:CANARY=rnd_<hex> -->`). Lets `why-context` look up exactly which render the agent read. Content-derived so renders are deterministic.
+A content-derived sha256 prefix at the top of the generated knowledge file `.lore/LORE.md` (`<!-- lore render stamp rnd_<hex> (schema v2): … -->`). Lets `why-context` look up exactly which render the agent read. Content-derived so renders are deterministic.
 
 ## CLAUDE.md
 The context file that some coding tools read at the start of every session. lore's default **pointer target**: `lore render` writes the compiled knowledge to `.lore/LORE.md` and stitches an idempotent `@import` pointer into CLAUDE.md, leaving any hand-written content intact. The agent reads CLAUDE.md, which imports `.lore/LORE.md`; the user writes to lore; `lore render` bridges the two.

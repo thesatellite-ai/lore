@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -753,6 +754,46 @@ func CountTasks(ctx context.Context, env Env, field, id string) (int, error) {
 	}
 	return n, nil
 }
+
+// TaskCounts is the live task count of every value of field (a tasklist
+// or plan id) in one read of the tasks of every attached store, for a
+// list that prints each row's count (CountTasks is the one-row form).
+func TaskCounts(ctx context.Context, env Env, field string) (map[string]int, error) {
+	all, err := ListAll(ctx, env, schema.TableTasks, "")
+	if err != nil {
+		return nil, err
+	}
+	n := map[string]int{}
+	for _, s := range all {
+		if id := Field(s.Row, field); id != "" {
+			n[id]++
+		}
+	}
+	return n, nil
+}
+
+// ListLine is one row of a plan or tasklist list: "<badge>  <id>  <title>
+// [<status>]  (<n> tasks)" and the store label of a row of another store
+// (opsmemory.LabelSuffix). v0.1.17 printed only "<badge>  <id>", so two
+// lists could not be told apart and the auto-created "Inbox" list looked
+// like nothing a person had made (bug hunt B3-8).
+func ListLine(badge, id, title, status string, tasks int, label string) string {
+	s := badge + "  " + id
+	if t := textcut.Cut(strings.Join(strings.Fields(title), " "), listTitleMax, listTitleMax-len(textcut.Ellipsis)); t != "" {
+		s += "  " + t
+	}
+	if status != "" {
+		s += " [" + status + "]"
+	}
+	return s + "  (" + plural.Count(tasks, "task") + ")" + opsmemory.LabelSuffix(label) + "\n"
+}
+
+// LabelSuffix is the " [<label>]" end of a list line of a row of another
+// store (opsmemory.LabelSuffix; "" for a repo row).
+func LabelSuffix(label string) string { return opsmemory.LabelSuffix(label) }
+
+// listTitleMax is how many bytes of a title a list line keeps.
+const listTitleMax = 80
 
 // ShowText is the human show of a plan or tasklist, laid out like
 // content.ShowText: v0.1.17's "<badge>  <id>" first line (kept, so a

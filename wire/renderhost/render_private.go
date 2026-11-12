@@ -63,6 +63,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/direction"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/refs"
@@ -250,8 +251,8 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 		if p.leftOut > 0 {
 			left = fmt.Sprintf(", %d more left out by %s %d", p.leftOut, policy.KeyContextBudgetInternal, p.budget)
 		}
-		fmt.Fprintf(w, "%s private context → %s (%d stores, %d rows%s, outside the checkout); %s\n",
-			h.decor.check(), h.redact(p.dir), len(p.stores), p.rows, left, where)
+		fmt.Fprintf(w, "%s private context → %s (%s, %s%s, outside the checkout); %s\n",
+			h.decor.check(), h.redact(p.dir), plural.Count(len(p.stores), "store"), plural.Count(p.rows, "row"), left, where)
 	}
 	if p.budget > 0 && p.coreBytes > p.budget {
 		fmt.Fprintln(os.Stderr, h.decor.warn(fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut: unpin some or raise the key",
@@ -309,7 +310,14 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 	p.repoKey = privateRepoKey(root, p.projectID)
 	home := h.opts.Home
 	p.dir = filepath.Join(home, renderDirName, p.repoKey)
-	repoName := filepath.Base(root)
+	// B1-11: the files are keyed by project (every checkout of it on this
+	// machine shares them: a second clone, a copy), so they name the
+	// project, never one checkout's folder; with the folder name two
+	// checkouts rewrote each other's files and each found them stale
+	repoName := p.projectID
+	if name, ok := h.app.ProjectName(ctx, p.projectID); ok {
+		repoName = name // the project's name (lore init names it after the first checkout's folder)
+	}
 
 	var imports []string
 	var ex *privateExpander
@@ -482,7 +490,7 @@ func fitPrivate(bodies []privateBody, budget int) privateFit {
 		}
 		switch {
 		case left > 0:
-			fmt.Fprintf(&t, "\n_%d more notes left out by %s %d bytes: run `lore search`._\n", left, policy.KeyContextBudgetInternal, budget)
+			fmt.Fprintf(&t, "\n_%s left out by %s %d bytes: run `lore search`._\n", plural.Of(left, "more note", "more notes"), policy.KeyContextBudgetInternal, budget)
 		case shown == 0:
 			t.WriteString(privateEmpty)
 		}

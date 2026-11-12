@@ -37,7 +37,7 @@ type AddIn struct {
 	Body    string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
 	Text    string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
-	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml; default repo)"`
+	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 }
 
 // ListIn is the input of workspace.list.
@@ -75,7 +75,7 @@ func (o ListOut) rowsText() string {
 		if r.Name != "" {
 			b.WriteString("  " + r.Name)
 		}
-		b.WriteString("\n")
+		b.WriteString(content.LabelSuffix(r.Label) + "\n")
 	}
 	return b.String()
 }

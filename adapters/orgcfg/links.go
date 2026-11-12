@@ -248,7 +248,7 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 	var out []indexedLink
 	var offlineWhy []string
 	for _, sc := range o.Stores {
-		norm, err := repourl.Normalize(sc.URL)
+		norm, err := repourl.NormalizeStore(sc.URL)
 		if err != nil {
 			return nil, entryUnknown, "", fmt.Errorf("orgcfg: store url %q of %s: %w", sc.URL, o.Name, err)
 		}
@@ -453,7 +453,7 @@ func (g *GitLinks) ClientRepoDefaults(ctx context.Context, o *orgconf.Org) (map[
 	if sc == nil {
 		return nil, nil
 	}
-	norm, err := repourl.Normalize(sc.URL)
+	norm, err := repourl.NormalizeStore(sc.URL)
 	if err != nil {
 		return nil, fmt.Errorf("orgcfg: store url %q of %s: %w", sc.URL, o.Name, err)
 	}

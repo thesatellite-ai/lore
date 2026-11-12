@@ -134,7 +134,7 @@ type Manager interface {
 type SetIn struct {
 	Identity string `json:"identity,omitempty" arg:"0" desc:"your email, or \"Name <email>\", or a name with --key human:<email> (not with --org)"`
 	Org      string `json:"org,omitempty" flag:"org" desc:"set your identity inside this org entry of ~/.lore/config.yaml"`
-	Key      string `json:"key,omitempty" flag:"key" desc:"human:<your email> (with --org: your email in that org, TEAM-029)"`
+	Key      string `json:"key,omitempty" flag:"key" desc:"human:<your email> (with --org: your email in that org)"`
 	Name     string `json:"name,omitempty" flag:"name" desc:"with --org: display name"`
 	Handle   string `json:"handle,omitempty" flag:"handle" desc:"roster handle, without @"`
 }

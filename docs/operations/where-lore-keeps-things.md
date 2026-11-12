@@ -24,15 +24,15 @@ lore's home: ~/.lore
   cache/repo
       one cache per code repo checkout, of the rows in its .lore/data: repo/<repo folder name>-<short hash of the repo path>.db (kept here so a command never creates a file in the repo)
   cache/repo/website-<hash>.db
-      a code repo's cache
-  cache/repos
-      one record per repo of the cache files it uses: repos/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)
-  cache/repos/6d0042600cc73cca9cdb9f21bd9da5bd391c2f006142fdaa6b35b1750d1c72e5.json
-      a repo's cache use record
+      a code repo's cache; used by ~/work/website
   cache/stores
       one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each)
   cache/stores/sto_7a67…9504/main/root.db
       a store folder's cache; store notes; used by ~/work/website
+  cache/uses
+      one record per repo of the cache files it uses: uses/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)
+  cache/uses/6d0042600cc73cca9cdb9f21bd9da5bd391c2f006142fdaa6b35b1750d1c72e5.json
+      a repo's cache use record
   machine.json
       this machine's id, kept so it stays the same between runs
   state
@@ -163,7 +163,7 @@ Store cache files are named by a store id, not by a store name: two repos that c
 | `config.yaml` | this machine's settings: setups, orgs, stores | you may edit it; deleting it forgets every setup, org and store on this machine |
 | `identity`, `machine.json` | your actor salt and this machine's id | deleting them makes you (or this machine) look new |
 | `state/` | machine-local state, never synced, not rebuildable: `machine.db` (agent sessions, runs, the audit chain, small local state), the audit logs, batch records, store clones not at their usual place | do not delete |
-| `cache/` | caches, all rebuilt from the row files: `machine-store.db`, one file per store folder under `stores/<store id>/<branch>/`, `combined/` and `remote/` per repo, `repos/` (which caches each repo uses) | safe to delete |
+| `cache/` | caches, all rebuilt from the row files: `machine-store.db`, one file per store folder under `stores/<store id>/<branch>/`, `combined/` and `remote/` per repo, `repos/` (which caches each repo uses); lore 0.1.17's caches (`prj_….db`, `links-<org>.json` and the `stores/<host>/…` tree) are listed as such, and `lore cache prune` removes them (a project's `prj_….db` once its repo is migrated) | safe to delete |
 | `stores/<owner>/<repo>/` | a plain git clone of each store; rows are JSON files you may open and edit | a clone with no unpushed work is safe to delete; `lore store forget` removes it cleanly |
 | `stores/_me/` | your personal store `me` when it is a plain folder (`file://`), not a git repo; the `_` keeps it apart from any owner folder | it holds your notes: do not delete it unless you mean to lose them |
 | `render/` | private context for repos, imported by their `CLAUDE.local.md` | rewritten by `lore render` |
@@ -182,6 +182,7 @@ Cache files are named by a store id or by a hash of a repo's path, not by a name
 |---|---|---|
 | `.lore/data/` | the repo's rows, one JSON file per row, and `_meta.json` (the project id) | yes |
 | `.lore/lock`, `.lore/state/` | the write lock, local journals (the repo's search cache is in lore's home, `~/.lore/cache/repo/`, never here) | no (`.gitignore`) |
+| `.lore/lore.db`, `.lore/backups/` | lore 0.1.17's database of this checkout and its backups; `lore fix` copies the rows and edits only the database held into `.lore/data`, then removes both once every row they hold is in a store here | no; `lore fix` removes them |
 | `.lore/LORE.md`, `.lore/stores.yaml` | rendered context for agents, the stores the repo attaches | yes |
 | a marked block in `.gitignore`, `.gitattributes`, `CLAUDE.md` / `AGENTS.md` / … | lore's lines; text outside the block is never touched | yes |
 | `.git/config` `merge.lore.*` | the merge driver for row files | no (this clone) |
@@ -197,7 +198,7 @@ A repo that holds no lore data of its own (a client repo whose notes live in a s
 
 ## Reads change nothing; writes say where
 
-A command that only reads (`list`, `show`, `search`, `whoami`, `doctor`, `where`, …) never writes into your repo, its `.git` or a store clone's files, and never pushes. It may fetch a store, and when commits wait in a store clone it says `N local commit(s) wait to be pushed; a read never pushes: run lore sync`.
+A command that only reads (`list`, `show`, `search`, `whoami`, `doctor`, `where`, …) never writes into your repo, its `.git` or a store clone's files, and never pushes. It may fetch a store, and when commits wait in a store clone it says `N local commit(s) wait to be pushed; a read never pushes: run lore sync`, once: the next reads stay quiet until the count changes or the store comes back online.
 
 A command that writes names each row file it wrote (`lore: wrote /home/pat/code/app/.lore/data/memories/mem_….json`, or a count per folder when there are many), and every push names the store, the commit and the branch: `lore: pushed store notes: commit 1a2b3c4 to branch main`.
 

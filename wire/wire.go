@@ -32,7 +32,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -409,6 +411,12 @@ type App struct {
 // state is everything Open built; nil until the first use.
 type state struct {
 	eng *engine.Engine
+	// pendingV017Live counts the lore 0.1.17 live rows (repo or attached
+	// store live refs) the stores do not hold yet, as liveNote found them
+	// at open: the first write's safe steps (oldRowsGate) run migrate for
+	// them, also in a repo with no 0.1.17 row files of its own (a client
+	// repo whose notes live in the org store).
+	pendingV017Live int
 	// linkedByRemote is the remote a store link names this repo by when it
 	// holds no lore data (Options.RepoLinkedByRemote): the repo store is
 	// read-only and the repo cache lives under ~/.lore; "" otherwise.
@@ -792,6 +800,44 @@ func (a *App) storeRepoTop(ctx context.Context) (string, error) {
 // The store operations run on the repo-only engine (configState); a
 // `--to <store>/<folder>` target is attached first (prepareTarget).
 func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+	// B1-17: a refused write leaves the tree as it was. The open makes
+	// .lore/ for a write's implicit setup; when the write is refused in a
+	// repo that had none, the folders it left empty go again.
+	top := ""
+	if e.Spec().Access == op.AccessWrite && !e.Spec().Local {
+		if t := gitTopLevel(ctx, a.projectDir()); t != "" && !loreFolderAt(t) {
+			top = t
+		}
+	}
+	res, err := a.run(ctx, e, d, c)
+	if err != nil && top != "" {
+		removeEmptyDirs(filepath.Join(top, loreFolderName))
+	}
+	return res, err
+}
+
+// removeEmptyDirs removes dir and every folder under it that holds no
+// file, deepest first, and returns how many it removed; a folder holding
+// anything stays.
+func removeEmptyDirs(dir string) int {
+	var dirs []string
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() {
+			dirs = append(dirs, p)
+		}
+		return nil
+	})
+	n := 0
+	for i := len(dirs) - 1; i >= 0; i-- {
+		if os.Remove(dirs[i]) == nil { // only an empty folder goes
+			n++
+		}
+	}
+	return n
+}
+
+// run is Run without the refusal clean-up.
+func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
 	ctx = a.TeamContext(ctx) // P3-COORD-3: --assign @h, --mine, STATE without a host Team (wire/coord_standalone.go)
 	// P3-CFG-1: a Local operation opens nothing, not even the
 	// agent detection's repo state (wire/localops.go).
