@@ -154,8 +154,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		// 2026-11-12, store adopt)
 		old := jPlainRepo(t, lee, w.Remote(jManyOldSlug), filepath.Join(parent, "old-app"))
 		jManyOldNotes(t, old)
-		// quiet output names an org store by a digest of its url, so the
-		// folder (and where its files land) is what is checked
+		// the folder (and where its files land) is what is checked
 		// Lee's v0.1.17 actor id is mapped onto Lee's roster actor (one
 		// identity, one id): its row is not adopted, the memories name the
 		// roster's actor (owner report 2026-11-12)

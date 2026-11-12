@@ -101,7 +101,7 @@ func TestJourneyFoldersTeamFromLinkedRepo(t *testing.T) {
 		lee.Lore(parent, "team", "invite", "nobody@example.test", "--role", "dev", "--project", "client_zz", "--yes").
 			Fails(t, teamharness.ExitNotFound, "E_NOT_FOUND", "client_zz", "lore project list")
 		// project list shows every folder of the org, each with its store
-		// (named, not the url: a run with no terminal redacts urls)
+		// (by its name)
 		var pl struct {
 			Data []jProject `json:"data"`
 		}
