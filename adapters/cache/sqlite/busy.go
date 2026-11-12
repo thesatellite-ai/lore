@@ -39,3 +39,32 @@ func connectBusy(ctx context.Context, db *sql.DB) error {
 		}
 	}
 }
+
+// appendWait bounds how long beginWrite keeps asking for the write lock.
+// SQLite's busy handler (busy_timeout, 5 s) is not fair: under heavy load
+// a writer can lose every turn for longer than that while others commit,
+// and an audit chain append then failed with "database is locked"
+// although every other writer was finishing (race gate at load ~100).
+const appendWait = 60 * time.Second
+
+// beginWrite starts a write transaction (BEGIN IMMEDIATE, the DSN's
+// _txlock), asking again while the lock is busy for up to appendWait, or
+// until ctx ends. Each attempt already waits busy_timeout inside SQLite,
+// so this only covers a writer starved past it; the last error names the
+// cause.
+func beginWrite(ctx context.Context, db *sql.DB) (*sql.Tx, error) {
+	deadline := time.Now().Add(appendWait)
+	for {
+		tx, err := db.BeginTx(ctx, nil)
+		if err == nil || !isBusy(err) || !time.Now().Before(deadline) {
+			return tx, err
+		}
+		t := time.NewTimer(connectPoll)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return nil, errors.Join(err, ctx.Err())
+		case <-t.C:
+		}
+	}
+}

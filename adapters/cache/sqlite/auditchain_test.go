@@ -123,3 +123,35 @@ func mustDSN(t *testing.T, path string) string {
 	}
 	return dsn
 }
+
+// TestAuditChainAppendOutwaitsBusyTimeout: a writer that cannot get the
+// lock within SQLite's busy_timeout (another handle holds it longer, as
+// a loaded machine's other writers can) still appends once the lock is
+// free, instead of failing with "database is locked" (the race gate saw
+// TestAuditChainConcurrentAppendersNeverFork fail so at load ~100).
+func TestAuditChainAppendOutwaitsBusyTimeout(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "machine.db")
+	ch := openChain(t, path)
+	holder := openChain(t, path)
+	tx, err := beginWrite(ctx, holder.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hold := time.Duration(busyTimeoutMS)*time.Millisecond + time.Second
+	go func() {
+		time.Sleep(hold)
+		_ = tx.Rollback() // releases the lock; nothing was written
+	}()
+	start := time.Now()
+	if _, err := ch.Append(ctx, "A", auditchain.Record{ActorID: "act", Action: "late"}, time.Now()); err != nil {
+		t.Fatalf("append after %s: %v", time.Since(start), err)
+	}
+	if time.Since(start) < hold {
+		t.Fatalf("append returned after %s, before the lock was free", time.Since(start))
+	}
+	if broken, n, err := ch.Verify(ctx, "A"); err != nil || broken != "" || n != 1 {
+		t.Fatalf("Verify = %q, %d, %v", broken, n, err)
+	}
+}
