@@ -750,11 +750,12 @@ func (a *App) statusPlaces(ctx context.Context, out *opsmigrate.StatusOut) error
 	if err != nil {
 		return err
 	}
-	core := map[row.Table]bool{}
-	for _, t := range CoreTables() {
+	core := map[row.Table]bool{} // the tables a run rewrites (T-2: not only CoreTables)
+	for _, t := range FormatTables() {
 		core[t] = true
 	}
 	pending := map[row.Table]int{}
+	left := map[row.Table]int{} // v1 rows a run leaves (LeftV1 says why)
 	names := st.eng.Stores()
 	for i, b := range st.backends {
 		rows, _, err := b.Read(ctx, "")
@@ -774,6 +775,8 @@ func (a *App) statusPlaces(ctx context.Context, out *opsmigrate.StatusOut) error
 				ps.V1++
 				if core[r.Table] {
 					pending[r.Table]++
+				} else {
+					left[r.Table]++
 				}
 			default:
 				ps.V2++
@@ -793,6 +796,9 @@ func (a *App) statusPlaces(ctx context.Context, out *opsmigrate.StatusOut) error
 	}
 	for _, t := range slices.Sorted(maps.Keys(pending)) {
 		out.Pending = append(out.Pending, t.String()+": "+plural(pending[t], "row")+" at v1")
+	}
+	for _, t := range slices.Sorted(maps.Keys(left)) {
+		out.Notes = append(out.Notes, t.String()+": "+plural(left[t], "row")+" at v1 that lore migrate run leaves as they are (it says why)")
 	}
 	// rows only the v0.1.17 live ref holds (MigrateLive brings them in):
 	// counted in their store's place and named
