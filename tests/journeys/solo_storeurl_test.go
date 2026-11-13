@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 // Placeholders of this journey.
@@ -157,6 +159,18 @@ func TestJourneySoloStoreRemadeEmpty(t *testing.T) {
 		m.LoreIn(app, "init").OK(t)
 		m.LoreIn(app, "store", "init", "kb", kb.SSHURL(), "--yes").OK(t)
 		m.LoreIn(app, "memory", "add", "--body", "an old note", "--to", "kb").OK(t)
+		app.CommitAll("lore")
+		app.Git("push", "-q", "origin", "HEAD:main")
+	})
+
+	// B2-34: Sam's second laptop holds a clone of the old kb store too
+	var desk *Machine
+	var deskApp *teamharness.Clone
+	w.Step("day1/desk-clones-kb", func() {
+		desk = sam.NewLaptop("desk")
+		deskApp = desk.Clone(w.Remote(jsuRepo), "site")
+		desk.LoreIn(deskApp, "sync").OK(t)
+		desk.LoreIn(deskApp, "memory", "list").OK(t).Says(t, "an old note")
 	})
 
 	w.Step("day1/repo-made-again-empty", func() {
@@ -183,6 +197,20 @@ func TestJourneySoloStoreRemadeEmpty(t *testing.T) {
 		m.LoreIn(app, "memory", "add", "--body", "a new note", "--to", "kb").OK(t)
 		list := m.LoreIn(app, "memory", "list").OK(t)
 		list.Says(t, "a new note").Never(t, "an old note", "written after the reset")
+	})
+
+	w.Step("day1/desk-finds-the-store-started-fresh", func() {
+		// B2-34: the remote holds another store now; the only way out for
+		// the desk is forget + sync, and --restore says the same
+		r := desk.LoreIn(deskApp, "sync")
+		if r.Code == 0 {
+			t.Errorf("the desk's sync must be refused: %s", r)
+		}
+		r.Says(t, "started fresh", "lore store forget "+kb.SSHURL()+" --yes", "lore sync").Never(t, "lore store init")
+		desk.LoreIn(deskApp, "store", "push", kb.SSHURL(), "--restore", "--yes").Says(t, "started fresh", "lore store forget").Never(t, "store push --restore")
+		desk.LoreIn(deskApp, "store", "forget", kb.SSHURL(), "--yes").OK(t)
+		desk.LoreIn(deskApp, "sync").OK(t)
+		desk.LoreIn(deskApp, "memory", "list").OK(t).Says(t, "a new note").Never(t, "an old note")
 	})
 }
 
