@@ -17,7 +17,7 @@ Anything in the client's repo, on any branch or hidden list (a list on GitHub th
 | **A staging branch** | a second branch of the same store, for example `staging` | the same people as the store | you want test notes and staging-only tasks that never mix with the real ones |
 | **Personal store** | `personal: {store: local}` or your own private repo | only you | notes for you alone, like "I prefer tabs over spaces" |
 
-All of these are plain config in `~/.lore/config.yaml`; the commands are the same in every layout. A layout can change later: add a store to the `stores:` list, create it with `lore store init <url>`, and link the client's repo to it with `lore org link agency --project client --store <url>`.
+All of these are plain config in `~/.lore/config.yaml`; the commands are the same in every layout. A layout can change later: add a store to the `stores:` list, create it with `lore store init --name <url>`, and link the client's repo to it with `lore org link --org agency --project client --store <url>`.
 
 ## If this, then that
 
@@ -28,12 +28,12 @@ All of these are plain config in `~/.lore/config.yaml`; the commands are the sam
 - **If one client has several repos that make one product** (client 2's `app`, `api` and `infra`), link all of them to one project folder (`client2/`), so they share one mission and task list.
 - **If you need a place to try things out,** use a staging branch of the same store, chosen with `lore org use` for one repo or `LORE_ORG` for one shell. A staging entry never matches a repo by itself.
 - **If a note is only for you,** write it with `--to me`. With `personal.store` set to a store address, such a note loads in every repo you open. The older value `personal.store: local` (`~/.lore/personal`) files it by company instead: under the company's folder in that company's repos, under `everywhere/` elsewhere ([Personal notes](../team/use-cases/personal-notes.md)).
-- **If a store's notes may appear in committed files** (a render, a client repo), mark it `lore store visibility <name> shareable`; every store starts `internal`.
+- **If a store's notes may appear in committed files** (a render, a client repo), mark it `lore store visibility --name <name> --visibility shareable`; every store starts `internal`.
 
 ## Pitfalls
 
 - **GitHub permissions are the access control.** Leaving a store out of someone's config is a convenience. Removing their access to the store repo is what keeps it out of reach.
-- **Folder names are unique across all of an org's stores,** and exactly one store sets `org_folder`. A folder made in the wrong store is removed with `lore store folder remove <store> <folder>` (an empty one at once; one with rows only with `--purge --confirm`, rows to the trash first), which frees the name for another store.
+- **Folder names are unique across all of an org's stores,** and exactly one store sets `org_folder`. A folder made in the wrong store is removed with `lore store folder remove --store <store> --folder <folder>` (an empty one at once; one with rows only with `--purge --confirm`, rows to the trash first), which frees the name for another store.
 - **A store is never a code repo.** `lore store init` writes a `lore-store.yaml` marker, and lore refuses to use a repo that holds code as a store.
 - **Lore never moves rows between store branches.** Each store branch is a separate lore; staging notes stay on staging.
 - **Copies already fetched stay fetched.** When someone loses access, what they already downloaded stays on their machine, like any git clone. Plan the layout before you write private notes, not after.

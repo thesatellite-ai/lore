@@ -49,7 +49,7 @@ const Mark = "✓"
 
 // DeletedText is a soft delete's line (content.DeletedText; DQ8).
 func DeletedText(id string) string {
-	return Mark + " " + id + " moved to the trash (restore: lore trash restore " + id + ")\n"
+	return Mark + " " + id + " moved to the trash (restore: lore trash restore --target " + id + ")\n"
 }
 
 // Spec is one noun's v0.1.17 facts.

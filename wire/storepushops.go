@@ -313,7 +313,7 @@ func (a *App) CompactStore(ctx context.Context, in opsstores.CompactIn) (opsstor
 	defer done()
 	place, org = refinePlace(gb.Dir(), place, org)
 	if place == placeOrg && !isOrgAdmin(a.opts.Home, org) {
-		return opsstores.CompactOut{}, errNotAdmin("store compact", in.Store, org).WithHint("ask the org admin to run `lore store compact " + in.Store + "`; only an admin rewrites an org store's history")
+		return opsstores.CompactOut{}, errNotAdmin("store compact", in.Store, org).WithHint("ask the org admin to run `lore store compact --store " + in.Store + "`; only an admin rewrites an org store's history")
 	}
 	s := a.storeSettings(gb, place)
 	before := in.Before

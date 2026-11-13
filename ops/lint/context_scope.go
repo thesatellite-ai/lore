@@ -61,7 +61,7 @@ func (o ops) contextScopeFindings(ctx context.Context, all map[row.Table][]sourc
 		if fi, err := os.Stat(filepath.Join(top, filepath.FromSlash(p))); err != nil || !fi.IsDir() {
 			out = append(out, Finding{Code: ScopeMissing, ID: s.r.ID.String(), Store: string(s.src),
 				Message: "folder scope " + p + " no longer exists in this checkout; its rows render into the root file",
-				Fix:     "lore scope move " + p + " <new-path>"})
+				Fix:     "lore scope move --old " + p + " --new <new-path>"})
 		}
 	}
 	return append(out, scopeConflicts(all[schema.TableRules], paths)...)
@@ -99,7 +99,7 @@ func scopeConflicts(rules []sourced, paths map[string]string) []Finding {
 			if jaccard(n.words, w.words) > conflictOverlap {
 				out = append(out, Finding{Code: ScopeConflict, ID: nid, Store: string(n.s.src),
 					Message: "scoped to " + n.dir + " and looks like it contradicts the wider must rule " + wid + "; without --overrides both show",
-					Fix:     "lore rule edit " + nid + " --overrides " + wid})
+					Fix:     "lore rule edit --id " + nid + " --overrides " + wid})
 			}
 		}
 	}

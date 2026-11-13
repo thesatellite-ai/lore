@@ -4,7 +4,7 @@ package journeys
 
 // folders_edit_test.go — Lee edits rows by hand (D2, D3 of the plain-files
 // round): `lore edit <id>` opens a row in the editor as Markdown and writes
-// it back through the normal write path; `lore path <id>` prints the row's
+// it back through the normal write path; `lore path --id <id>` prints the row's
 // file. First in a code repo (a branch row, then a live row), then in the
 // team store's folder; a refused edit keeps the text; editing the JSON file
 // directly keeps working. EDITOR is a script that edits the file, as a
@@ -102,7 +102,7 @@ func TestJourneyFoldersEditRows(t *testing.T) {
 		jFileHas(t, p.Path, jEditTitle, "first line\\n"+jEditBodyLine)
 		// the plain form is the path alone; open is the same command
 		if got := strings.TrimSpace(lee.Lore(web, "path", branchTask).OK(t).Stdout); got != p.Path {
-			t.Errorf("lore path printed %q, want %q", got, p.Path)
+			t.Errorf("lore path --id printed %q, want %q", got, p.Path)
 		}
 		if got := strings.TrimSpace(lee.Lore(web, "open", branchTask).OK(t).Stdout); got != p.Path {
 			t.Errorf("lore open printed %q, want %q", got, p.Path)

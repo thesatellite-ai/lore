@@ -213,24 +213,24 @@ func templateOps(o ops) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.templateList),
 		op.Define(op.Spec{
-			Name: OpTemplateShow, Examples: []op.Example{{Title: "the YAML form", CLI: "lore task template show release_checklist", Want: "name:"}}, Summary: "Show a task template in its YAML form",
+			Name: OpTemplateShow, Examples: []op.Example{{Title: "the YAML form", CLI: "lore task template show --name release_checklist", Want: "name:"}}, Summary: "Show a task template in its YAML form",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: append(slices.Clone(work.ReadErrors), errs.Template, errs.AmbiguousID),
 		}, o.templateShow),
 		op.Define(op.Spec{
 			Name: OpTemplateAdd, Summary: "Add a task template from a YAML file or an existing task tree",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
-			Examples: []op.Example{{Title: "from a file", CLI: "lore task template add release --from-file release.yaml", Want: "ttp_"}},
+			Examples: []op.Example{{Title: "from a file", CLI: "lore task template add --name release --from-file release.yaml", Want: "ttp_"}},
 		}, o.templateAdd),
 		op.Define(op.Spec{
-			Name: OpTemplateEdit, Examples: []op.Example{{Title: "replace from YAML", CLI: "lore task template edit release_checklist --from-file release.yaml", Want: "ttp_"}}, Summary: "Replace a task template's description, args and tree from a YAML file",
+			Name: OpTemplateEdit, Examples: []op.Example{{Title: "replace from YAML", CLI: "lore task template edit --name release_checklist --from-file release.yaml", Want: "ttp_"}}, Summary: "Replace a task template's description, args and tree from a YAML file",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
 		}, o.templateEdit),
 		op.Define(op.Spec{
-			Name: OpTemplateRename, Examples: []op.Example{{Title: "rename", CLI: "lore task template rename release_checklist ship_checklist", Want: "ship_checklist"}}, Summary: "Rename a task template (the id stays)",
+			Name: OpTemplateRename, Examples: []op.Example{{Title: "rename", CLI: "lore task template rename --name release_checklist --new-name ship_checklist", Want: "ship_checklist"}}, Summary: "Rename a task template (the id stays)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
 		}, o.templateRename),
 		op.Define(op.Spec{
-			Name: OpTemplateDelete, Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task template delete release_checklist --yes", Want: "trash"}}, Summary: "Delete a task template (trash, like any row)",
+			Name: OpTemplateDelete, Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task template delete --name release_checklist --yes", Want: "trash"}}, Summary: "Delete a task template (trash, like any row)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(w, errs.HasDependents),
 			Confirm: op.ConfirmRule{Always: true},
 		}, o.templateDelete),
@@ -595,7 +595,7 @@ func (o ops) templateAdd(ctx context.Context, in TemplateAddIn) (TemplateOut, er
 	for _, s := range all {
 		if !s.Row.Deleted && work.Field(s.Row, schema.FieldTemplateName) == f.Name {
 			return TemplateOut{}, tplErr(strconv.Quote(f.Name) + " already exists (" + s.Row.ID.String() + " in " +
-				orDefault(work.SourceName(s.Source), "repo") + ")").WithHint("lore task template edit " + s.Row.ID.String() + " --from-file <file.yaml>")
+				orDefault(work.SourceName(s.Source), "repo") + ")").WithHint("lore task template edit --name " + s.Row.ID.String() + " --from-file <file.yaml>")
 		}
 	}
 	fields, err := templateFields(f)
@@ -664,7 +664,7 @@ func (o ops) templateRename(ctx context.Context, in TemplateRenameIn) (TemplateO
 		return TemplateOut{}, tplErr(strconv.Quote(name) + " is not a snake_case name (MQ10)").WithHint(tplNameHint)
 	}
 	if _, _, ferr := o.findTemplate(ctx, name); ferr == nil || errs.Has(ferr, errs.AmbiguousID) {
-		return TemplateOut{}, tplErr(strconv.Quote(name) + " already exists").WithHint("pick another name, or see it with `lore task template show " + name + "`")
+		return TemplateOut{}, tplErr(strconv.Quote(name) + " already exists").WithHint("pick another name, or see it with `lore task template show --name " + name + "`")
 	}
 	patch, err := work.Texts(Noun, map[string]string{schema.FieldTemplateName: name})
 	if err != nil {

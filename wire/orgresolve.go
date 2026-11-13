@@ -363,7 +363,7 @@ func (r *OrgResolution) OrgEntryStore(ctx context.Context, name, folder string) 
 		if len(entryFolders) > 1 && !entryDefault {
 			// TEAM-032 / side effect 4: several links, none the default:
 			// refuse rather than pick one (P3-CMDLORE-10).
-			return attach.Store{}, false, errs.Wrap(errs.InvalidInput, fmt.Sprintf("%v: candidates %s; pass --to %s/<folder> or mark one with `lore org link %s --project <folder> --default`",
+			return attach.Store{}, false, errs.Wrap(errs.InvalidInput, fmt.Sprintf("%v: candidates %s; pass --to %s/<folder> or mark one with `lore org link --org %s --project <folder> --default`",
 				orgresolve.ErrTwoLinksNoDefault, strings.Join(entryFolders, ", "), name, name), orgresolve.ErrTwoLinksNoDefault)
 		}
 		switch {

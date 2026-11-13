@@ -11,7 +11,7 @@ import (
 // TestCheckUnusedOrgStoreSamePlace (B-FLOW4-1): `lore store init|add
 // <name>` refuses a name an org store answers (G-CORE-8) only when the org
 // store is a different place. The org's own store made or attached by its
-// org name (the team docs' `lore store init agency git@github.com:agency/notes`
+// org name (the team docs' `lore store init --name agency --url git@github.com:agency/notes`
 // in the agency's own repo) is the same place: same canonical url (any
 // spelling git accepts), same branch, same folder (the root spelled "",
 // "." or "/"). A name stores.yaml already uses is refused whatever the

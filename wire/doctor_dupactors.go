@@ -175,7 +175,7 @@ func dupFinding(st *state, g []dupActor, roster store.Source) DoctorFinding {
 		if email == "" {
 			email = "<" + d.id.String() + "'s email>"
 		}
-		fixes = append(fixes, "lore actor contact add "+keep.id.String()+" email "+email+" --identity --merge")
+		fixes = append(fixes, "lore actor contact add --actor "+keep.id.String()+" --type email --value "+email+" --identity --merge")
 	}
 	msg := plural(len(g), "human actor") + " share the name " + quoteName(keep.name) + ": " + keep.shown() + " and " + strings.Join(others, ", ") +
 		"; if they are one person (an email change before 0.1.18 kept one actor), merge the older into " + keep.id.String()

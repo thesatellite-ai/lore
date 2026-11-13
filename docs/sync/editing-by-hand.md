@@ -4,7 +4,7 @@
 
 ## Where the files are
 
-Each store folder keeps its rows right under it, one folder per kind of row: `<store>/<folder>/tasks/tsk_….json`, `<store>/<folder>/memories/mem_….json`; the store's own rows (its root folder) sit in `_store/` (`_store/tasks/`, `_store/memories/`, …). [Stores as plain folders](store-clones.md) explains the whole clone. `lore path <id>` prints the file of one row, and `lore edit <id>` opens a row in your editor as readable Markdown and writes it back for you. A code repo keeps its rows in `.lore/data/` instead.
+Each store folder keeps its rows right under it, one folder per kind of row: `<store>/<folder>/tasks/tsk_….json`, `<store>/<folder>/memories/mem_….json`; the store's own rows (its root folder) sit in `_store/` (`_store/tasks/`, `_store/memories/`, …). [Stores as plain folders](store-clones.md) explains the whole clone. `lore path --id <id>` prints the file of one row, and `lore edit --id <id>` opens a row in your editor as readable Markdown and writes it back for you. A code repo keeps its rows in `.lore/data/` instead.
 
 ## What lore does with each change
 
@@ -33,7 +33,7 @@ alice <alice@agency.example>  hand edit: memories mem_54fe…28f2
 |---|---|
 | changed fields in a row file | writes the changed fields as an edit: a new HLC, `updated_by` = you, `updated_at` = now, so your change wins over older changes when teammates sync |
 | added a new row file (named after its own id) | creates the row with that id |
-| deleted a row file | deletes the row the way `lore task delete` (or the row's own delete) does: it goes to the trash, and `lore trash restore <id>` brings it back |
+| deleted a row file | deletes the row the way `lore task delete` (or the row's own delete) does: it goes to the trash, and `lore trash restore --target <id>` brings it back |
 | moved a row file to another folder of the store (same id) | moves the row there, as a move with lore would |
 | changed nothing but spacing, or only fields lore writes itself (`_hlc`, `updated_at`) | puts the file back as lore wrote it |
 
@@ -119,7 +119,7 @@ alice@agency.example
 $ sed -i 's/Renew the TLS certificate/Renew the TLS certificate (key AKIA''IOSFODNN7EXAMPLE)/' _store/tasks/tsk_2ad3…f891.json && git add _store/tasks/tsk_2ad3…f891.json && git commit -qm 'note the key'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit carries a secret:
   _store/tasks/tsk_2ad3…f891.json:30 (field title) secret: rule aws_access_key match sha256:1a5d44a2dca1
-      not a secret? lore secrets allow tsk_2ad3…f891 --rule aws_access_key --field title --match-hash sha256:1a5d44a2dca1 --reason "<why>"
+      not a secret? lore secrets allow --row-id tsk_2ad3…f891 --rule aws_access_key --field title --match-hash sha256:1a5d44a2dca1 --reason "<why>"
   hint: store the value in your vault and reference it (${secret:…}, or a placeholder such as ${DB_PASSWORD}); if a finding is not a secret, run the `not a secret?` line printed under it with your reason (a .gitleaksignore <path>:<rule>:<line> entry works too) (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again (no --no-verify needed)
 (exit 1)
 $ git reset -q -- _store/tasks/tsk_2ad3…f891.json && git checkout -- _store/tasks/tsk_2ad3…f891.json && git status --short

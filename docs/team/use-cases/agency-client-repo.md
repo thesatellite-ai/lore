@@ -31,12 +31,12 @@ orgs:
 
 ## The commands
 
-Once per company: turn a new, empty repo into the store. Run `lore store init <name> <url>` in one of the agency's own repos (here `tools`); it attaches the store there by name. Never run it in the client's repo, which must not name the store.
+Once per company: turn a new, empty repo into the store. Run `lore store init --name <name> --url <url>` in one of the agency's own repos (here `tools`); it attaches the store there by name. Never run it in the client's repo, which must not name the store.
 
 <!-- example: agency#store-init -->
 ```console
 # alice, in tools
-$ lore store init agency git@github.com:agency/notes --yes
+$ lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 lore store init: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
@@ -59,7 +59,7 @@ remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
-$ lore org link agency --project client
+$ lore org link --org agency --project client
 lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 Continue? [y/N] y
@@ -137,7 +137,7 @@ Alice adds an internal task for Bob, from any branch. Bob sees it in his list an
 <!-- example: agency#internal-task -->
 ```console
 # alice, in website
-$ git switch -q -c feat/checkout && lore task add 'send invoice reminder before demo' --to agency --assign @bob
+$ git switch -q -c feat/checkout && lore task add --title 'send invoice reminder before demo' --to agency --assign @bob
 lore: pushed store agency: commit cf563f3 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
@@ -149,7 +149,7 @@ $ lore sync >/dev/null; git switch -q -c feat/login && lore task list
 ○ tsk_b4f4…a5b0 send invoice reminder before demo [medium]  [agency/client]
 $ lore inbox
 -  assigned              tsk_b4f4…a5b0  send invoice reminder before demo (lead)
-$ lore task done tsk_b4f4…a5b0
+$ lore task done --id tsk_b4f4…a5b0
 lore: pushed store agency: commit df3a55c to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes/client (store agency)
@@ -208,12 +208,12 @@ Agents check a pull request body or comment before posting it. The same text is 
 ```console
 # alice, in website
 $ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on WhatsApp first.\n' > pr.md
-$ lore check pr-body pr.md
+$ lore check pr-body --file pr.md
 ERROR: [E_LEAK_BLOCKED] blocked, this PR body would share internal content with the client repo:
   PR body                                  matches internal note mem_c0f3…b5b8 (11 words)
   hint: Remove the internal text before posting
 (exit 19)
-$ printf 'Fixes checkout totals for INR.\n' | lore check pr-body -
+$ printf 'Fixes checkout totals for INR.\n' | lore check pr-body --file -
 ✓ nothing internal found (a copy-paste check: a paraphrase passes it)
 ```
 <!-- /example -->

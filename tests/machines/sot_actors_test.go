@@ -56,10 +56,10 @@ func TestSotActorsSolo(t *testing.T) {
 	if got := saDoctorLines(t, m, repo); len(got) != 0 {
 		t.Errorf("doctor after the refresh still warns: %q", got)
 	}
-	// lore show <act_id>: one actor in two stores is one actor, never
+	// lore show --id <act_id>: one actor in two stores is one actor, never
 	// E_AMBIGUOUS_ID.
 	if r := m.Lore(t, repo, "show", a.ID); r.Code != 0 || !strings.Contains(r.Stdout, "Pat Renamed") {
-		t.Errorf("lore show %s: %s", a.ID, r)
+		t.Errorf("lore show --id %s: %s", a.ID, r)
 	}
 
 	// REST: the same reads through lore api.

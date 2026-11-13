@@ -173,7 +173,7 @@ func (h *standaloneOrg) createStoreURL(ctx context.Context, arg string) (string,
 		return arg, nil
 	}
 	return "", errs.New(errs.InvalidInput, "no store named "+arg+" in this repo's .lore/stores.yaml").
-		WithHint("make one with `lore store init " + arg + " <url>`, or pass the store url")
+		WithHint("make one with `lore store init --name " + arg + " --url <url>`, or pass the store url")
 }
 
 // Create implements opsorgcmd.Host.
@@ -264,8 +264,8 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	} else if line != "" {
 		lines = append(lines, line)
 	}
-	lines = append(lines, "  teammates join with: lore org import "+url+" --key human:<their email> --name \"Their Name\"",
-		"  tie a client repo to it (written only into the store): lore org link "+in.Org+" --project <folder>")
+	lines = append(lines, "  teammates join with: lore org import --url "+url+" --key human:<their email> --name \"Their Name\"",
+		"  tie a client repo to it (written only into the store): lore org link --org "+in.Org+" --project <folder>")
 	return opsorgcmd.Report{Lines: lines}, nil
 }
 
@@ -579,7 +579,7 @@ func orgFileError(err error, url string) error {
 	switch {
 	case errors.Is(err, orgcfg.ErrOrgFileExists):
 		return errs.New(errs.InvalidInput, err.Error()).
-			WithHint("that store already suggests an org: adopt it with `lore org import " + url + "`")
+			WithHint("that store already suggests an org: adopt it with `lore org import --url " + url + "`")
 	case errors.Is(err, orgcfg.ErrNoOrgFile):
 		return errs.New(errs.InvalidInput, err.Error()).
 			WithHint("ask the team to commit <org_folder>/lore-org.yaml, or add the entry to ~/.lore/config.yaml by hand")

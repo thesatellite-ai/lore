@@ -210,11 +210,11 @@ func MachineOps(env Env) []op.Entry {
 	out := []op.Entry{
 		op.Define(op.Spec{Name: OpMachineList, Summary: "List the machine profiles of the attached stores", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
 			Examples: []op.Example{{Title: "list as JSON", CLI: "lore machine list --json", Want: `"data"`}}}, o.machineList),
-		op.Define(op.Spec{Name: OpMachineShow, Summary: "Show one machine profile in full", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors, Examples: []op.Example{{Title: "one machine profile", CLI: "lore machine show mch_0a1b2c3d"}}}, o.machineShow),
+		op.Define(op.Spec{Name: OpMachineShow, Summary: "Show one machine profile in full", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors, Examples: []op.Example{{Title: "one machine profile", CLI: "lore machine show --id mch_0a1b2c3d"}}}, o.machineShow),
 	}
 	if m, ok := upgrade.As[Machines](env); ok {
 		out = append(out, op.Define(op.Spec{Name: OpMachineLabel, Summary: "Set (or clear with \"\") this machine's synced label and refresh its profile",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.Refused}, writeErrors...), Examples: []op.Example{{Title: "name this machine", CLI: "lore machine label work-laptop"}}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.Refused}, writeErrors...), Examples: []op.Example{{Title: "name this machine", CLI: "lore machine label --label work-laptop"}}},
 			func(ctx context.Context, in MachineLabelIn) (MachineLabelOut, error) {
 				return machineLabel(ctx, env, m, in)
 			}))

@@ -46,7 +46,7 @@ func deleted(t *testing.T, h *opstest.H, table row.Table, raw string) bool {
 func TestProjectDeleteTakesOwnRepoRow(t *testing.T) {
 	h, own := mintedCheckout(t)
 	h.Fails(infra.OpProjectDelete, `{"id":"`+h.Project+`"}`, errs.NeedsConfirm)
-	if got := opstest.IDPattern(opstest.Text(h.MustYes(infra.OpProjectDelete, `{"id":"`+h.Project+`"}`))); got != "✓ demo (and this repo's row) moved to the trash (batch bat_ID; restore: lore trash restore bat_ID)\n" {
+	if got := opstest.IDPattern(opstest.Text(h.MustYes(infra.OpProjectDelete, `{"id":"`+h.Project+`"}`))); got != "✓ demo (and this repo's row) moved to the trash (batch bat_ID; restore: lore trash restore --target bat_ID)\n" {
 		t.Errorf("delete text %q", got)
 	}
 	if !deleted(t, h, schema.TableProjects, h.Project) || !deleted(t, h, schema.TableRepos, own) {

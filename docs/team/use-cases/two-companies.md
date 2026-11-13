@@ -127,7 +127,7 @@ lore memory list: git is not set up for lore's row files in this clone: `lore sy
 
 ## Pitfalls
 
-- **Never two orgs in one repo.** Two entries may match a repo at the same rule (say both list `github.com/client/*`). Then lore refuses org-scoped commands with `E_ORG_AMBIGUOUS` until you choose with `lore org use <entry>`. It never guesses. See [Troubleshooting](../troubleshooting.md#e_org_ambiguous).
+- **Never two orgs in one repo.** Two entries may match a repo at the same rule (say both list `github.com/client/*`). Then lore refuses org-scoped commands with `E_ORG_AMBIGUOUS` until you choose with `lore org use --entry <entry>`. It never guesses. See [Troubleshooting](../troubleshooting.md#e_org_ambiguous).
 - **Set a top-level `identity`** once you have orgs. Without it, lore falls back to the git email chain, but skips any value equal to an org identity. So a personal repo is never stamped with a company identity. Lore prints a hint to set one.
 - **Two identities, two actors.** The same person in two orgs is two roster rows (two entries on two lists of people and agents), never linked automatically.
 - **Agents for two orgs** should run as different OS users or in different containers. Lore keeps orgs apart in what it loads. But an agent with plain file access could read another org's clone in `~/.lore/stores`.

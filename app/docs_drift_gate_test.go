@@ -46,6 +46,9 @@ var driftOptionalDocGlobs = []string{
 var driftAllowed = map[string]string{
 	"lore task block <tsk_id>": "SKILL.md table row documenting that this verb does not exist",
 	"lore add":                 "capture-discipline rules: shorthand for any `lore <entity> add` (\"NO `lore add`\")",
+	"lore sync install-git":    "docs/operations/ci.md: says this v0.1.17 command is gone",
+	"lore sync export":         "LORE_SYNC_SPEC.md: says this v0.1.17 command is dropped",
+	"lore sync dupes":          "LORE_SYNC_SPEC.md: a planned command (E48), not built",
 }
 
 // minDocInvocations guards the extractor itself: the docs hold several

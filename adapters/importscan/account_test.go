@@ -44,7 +44,7 @@ func TestAccountCoverMatrix(t *testing.T) {
 	disabled := "setups:\n  - name: work\n    kind: solo\n    disabled: true\n    github:\n      user: octo-alice\n"
 	trashed := "trash:\n  setups:\n    - name: old\n      kind: solo\n      github:\n        user: octo-alice\n      removed_at: \"2026-11-06T10:00:00Z\"\n"
 	purgedLines := func(s onboard.SetupEntry) string { return "trash:\n" + tombstone(t, s, at) }
-	const wayBack = "; Home does not suggest a setup for it again (Suggest again, or: lore setup suggest-again octo-alice)"
+	const wayBack = "; Home does not suggest a setup for it again (Suggest again, or: lore setup suggest-again --login octo-alice)"
 	cases := []struct {
 		name, config, setupName string
 		state                   AccountState
@@ -52,8 +52,8 @@ func TestAccountCoverMatrix(t *testing.T) {
 	}{
 		{name: "no setup", config: "identity:\n  key: human:alice\n"},
 		{name: "live by github.user", config: live, state: AccountLive, setup: "work", line: "work works as GitHub account octo-alice"},
-		{name: "disabled", config: disabled, state: AccountLive, setup: "work", line: "work (disabled) works as GitHub account octo-alice; enable it with: lore setup enable work"},
-		{name: "trashed", config: trashed, state: AccountTrashed, setup: "old", line: "old (in the trash) works as GitHub account octo-alice; restore it with: lore setup trash restore old"},
+		{name: "disabled", config: disabled, state: AccountLive, setup: "work", line: "work (disabled) works as GitHub account octo-alice; enable it with: lore setup enable --name work"},
+		{name: "trashed", config: trashed, state: AccountTrashed, setup: "old", line: "old (in the trash) works as GitHub account octo-alice; restore it with: lore setup trash restore --name old"},
 		{name: "purged by github.user (case-insensitive)", config: purgedLines(byUser), state: AccountPurged, setup: "personal",
 			line: "personal (deleted for good) used GitHub account octo-alice" + wayBack},
 		{name: "purged solo by handle", config: purgedLines(byHandle), state: AccountPurged, setup: "personal",
@@ -62,11 +62,11 @@ func TestAccountCoverMatrix(t *testing.T) {
 			line: "acme (deleted for good) used GitHub account octo-alice" + wayBack},
 		{name: "purged for another login", config: purgedLines(other), setupName: "work"},
 		{name: "trashed and purged: the trash wins", config: trashed + tombstone(t, byUser, at), state: AccountTrashed, setup: "old",
-			line: "old (in the trash) works as GitHub account octo-alice; restore it with: lore setup trash restore old"},
+			line: "old (in the trash) works as GitHub account octo-alice; restore it with: lore setup trash restore --name old"},
 		{name: "live and purged: live wins", config: live + "trash:\n" + tombstone(t, byUser, at), state: AccountLive, setup: "work", line: "work works as GitHub account octo-alice"},
 		{name: "pre-0.1.18 tombstone, same name", config: "trash:\n  purged:\n    - name: personal\n      kind: solo\n      purged_at: \"" + at + "\"\n", setupName: "personal",
 			state: AccountPurged, setup: "personal",
-			line: "personal (deleted for good) was named like the setup for GitHub account octo-alice; Home does not suggest a setup for it again (Suggest again, or: lore setup suggest-again octo-alice --setup personal)"},
+			line: "personal (deleted for good) was named like the setup for GitHub account octo-alice; Home does not suggest a setup for it again (Suggest again, or: lore setup suggest-again --login octo-alice --setup personal)"},
 		{name: "pre-0.1.18 tombstone, other name", config: "trash:\n  purged:\n    - name: personal\n      kind: solo\n      purged_at: \"" + at + "\"\n", setupName: "work"},
 	}
 	for _, c := range cases {

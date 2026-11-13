@@ -78,22 +78,22 @@ func Ops(env content.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show snapshot details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore snapshot show snp_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore snapshot show --id snp_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a snapshot (soft-delete via archived_at)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore snapshot archive snp_<id>", Want: "archived"}},
+			Examples:   []op.Example{{Title: "archive one", CLI: "lore snapshot archive --id snp_<id>", Want: "archived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Archive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpUnarchive, Summary: "Unarchive a snapshot (clear archived_at)",
-			Examples:   []op.Example{{Title: "bring it back", CLI: "lore snapshot unarchive snp_<id>", Want: "unarchived"}},
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore snapshot unarchive --id snp_<id>", Want: "unarchived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Unarchive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a snapshot (to the trash; archive is usually what you want)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore snapshot delete snp_<id> --yes", Want: "snp_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore snapshot delete --id snp_<id> --yes", Want: "snp_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
@@ -101,7 +101,7 @@ func Ops(env content.Env) []op.Entry {
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across snapshot title + body",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore snapshot search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore snapshot search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}

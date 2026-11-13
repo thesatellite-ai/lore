@@ -417,11 +417,11 @@ func baseOps(rw Rewriter) []op.Entry {
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Errors:  []errs.Code{errs.InvalidInput, errs.NeedsConfirm, errs.OldLore, errs.NotFound, errs.Internal},
 			Examples: []op.Example{
-				{Title: "declare the 0.1.18 row format once the team has upgraded", CLI: "lore migrate enable hlc --yes", Want: "feature:"},
+				{Title: "declare the 0.1.18 row format once the team has upgraded", CLI: "lore migrate enable --feature hlc --yes", Want: "feature:"},
 			},
 		}, func(ctx context.Context, in EnableIn) (EnableOut, error) {
 			if in.Feature == "" {
-				return EnableOut{}, errs.New(errs.InvalidInput, "migrate: name the feature to enable").WithHint("lore migrate enable <feature>")
+				return EnableOut{}, errs.New(errs.InvalidInput, "migrate: name the feature to enable").WithHint("lore migrate enable --feature <feature>")
 			}
 			return rw.EnableFeature(ctx, in.Feature)
 		}),

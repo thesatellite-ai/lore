@@ -168,7 +168,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: errsRead,
 			Examples: []op.Example{{Title: "import batches as JSON", CLI: "lore batch list --kind import --json", Want: `"data"`}}}, o.list),
 		op.Define(op.Spec{Name: OpShow, Summary: "Show one batch: its kind, who ran it and the rows it wrote",
-			Permission: op.PermRead, Access: op.AccessRead, Errors: errsRead, Examples: []op.Example{{Title: "what one bulk action wrote", CLI: "lore batch show bat_9e02"}}}, o.show),
+			Permission: op.PermRead, Access: op.AccessRead, Errors: errsRead, Examples: []op.Example{{Title: "what one bulk action wrote", CLI: "lore batch show --id bat_9e02"}}}, o.show),
 		undoEntry(o),
 	}
 }
@@ -457,7 +457,7 @@ func (o ShowOut) Text() string {
 		b.WriteString("  " + r.Action + " " + r.ID + " (" + r.Table + ", " + r.Store + ")\n")
 	}
 	if rest := len(o.RowList) - o.Shown; rest > 0 {
-		b.WriteString("  … " + strconv.Itoa(rest) + " more (lore batch show " + o.Data.ID + " --all)\n")
+		b.WriteString("  … " + strconv.Itoa(rest) + " more (lore batch show --id " + o.Data.ID + " --all)\n")
 	}
 	return b.String()
 }

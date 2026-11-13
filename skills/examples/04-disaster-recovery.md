@@ -31,7 +31,7 @@ git checkout HEAD -- .lore/data
 lore doctor
 ```
 
-A file deleted in an earlier commit comes back from the commit before it (`git log --diff-filter=D -- .lore/data/<table>/<id>.json`). A row deleted with lore is in the trash: `lore trash list`, `lore trash restore <id>`.
+A file deleted in an earlier commit comes back from the commit before it (`git log --diff-filter=D -- .lore/data/<table>/<id>.json`). A row deleted with lore is in the trash: `lore trash list`, `lore trash restore --target <id>`.
 
 ## Prevention
 

@@ -652,7 +652,7 @@ func (o ops) historyOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpResHistory, Summary: "Field changes of one resource, newest first, with actor, date and batch (sensitive values masked)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors:   append(slices.Clone(readErrors), errs.Unsupported),
-			Examples: []op.Example{{Title: "one field's history", CLI: "lore resource history hub_prod --field os", Want: "os"}}}, o.resHistory),
+			Examples: []op.Example{{Title: "one field's history", CLI: "lore resource history --id hub_prod --field os", Want: "os"}}}, o.resHistory),
 		op.Define(op.Spec{Name: OpResReport, Summary: "Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references to rotate", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown), Examples: []op.Example{{Title: "resources by kind", CLI: "lore resource report"}}}, o.resReport),
 	}

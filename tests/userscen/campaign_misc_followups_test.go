@@ -68,7 +68,7 @@ func TestMiscFollowups_DeleteChecksIDFirst(t *testing.T) {
 	add := c.MustLore("decision", "add", "--title=Use SQLite", "--body=Local first.")
 	id := regexp.MustCompile(`dec_[0-9a-f]{32}`).FindString(add.Stdout)
 	if r := c.Lore("decision", "delete", id); r.Code != cdDocExit(t, "E_NEEDS_CONFIRM") {
-		t.Errorf("lore decision delete %s: want E_NEEDS_CONFIRM for a real row, got exit %d: %s", id, r.Code, r.Out())
+		t.Errorf("lore decision delete --id %s: want E_NEEDS_CONFIRM for a real row, got exit %d: %s", id, r.Code, r.Out())
 	}
 }
 

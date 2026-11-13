@@ -265,12 +265,12 @@ func Ops(env Env, git CommitResolver) []op.Entry {
 			Name: OpRemove, Summary: "Remove a commit link by its ID (to the trash, restorable)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm:  op.ConfirmRule{Always: true},
-			Examples: []op.Example{{Title: "remove without a terminal", CLI: "lore link remove cml_<id> --yes", Want: "removed"}},
+			Examples: []op.Example{{Title: "remove without a terminal", CLI: "lore link remove --id cml_<id> --yes", Want: "removed"}},
 		}, o.remove),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show every entity linked to a given git commit",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
-			Examples: []op.Example{{Title: "everything linked to a commit", CLI: "lore commit show 3f2c9ab"}},
+			Examples: []op.Example{{Title: "everything linked to a commit", CLI: "lore commit show --id 3f2c9ab"}},
 		}, o.show),
 	}
 }

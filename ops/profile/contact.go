@@ -249,7 +249,7 @@ func takenErr(v rosterView, typ, value string, holders []row.Row) error {
 		who = append(who, n+" ("+c.ID.String()+")")
 	}
 	return errs.New(errs.ContactTaken, "identity contact "+typ+typeValueSep+value+" already belongs to "+strings.Join(who, ", ")).
-		WithHint("lore actor show " + typ + typeValueSep + value + " to see who has it; if it is on the wrong person, lore actor contact remove <acn_id> there")
+		WithHint("lore actor show --id " + typ + typeValueSep + value + " to see who has it; if it is on the wrong person, lore actor contact remove <acn_id> there")
 }
 
 // sameContact is the live contact of (actorID, typ, norm) other than skip.
@@ -399,7 +399,7 @@ func contactAdd(ctx context.Context, env Env, in ContactAddIn) (ContactOut, erro
 func mergeGate(ctx context.Context, env Env, in ContactAddIn, target, dup row.Row, norm string) error {
 	if !in.Merge {
 		return errs.New(errs.ContactTaken, "an actor row already exists for "+norm+": "+actorName(dup)+" "+dup.ID.String()).
-			WithHint("lore actor show " + dup.ID.String() + "; if it is " + actorName(target) + ", rerun with --merge")
+			WithHint("lore actor show --id " + dup.ID.String() + "; if it is " + actorName(target) + ", rerun with --merge")
 	}
 	if op.Confirmed(ctx) {
 		return nil

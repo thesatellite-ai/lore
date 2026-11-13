@@ -21,32 +21,32 @@ Alice (an agency developer) plans the client's online shop in `github.com/client
 
 ## Step 1 — Add a mission and its tasks
 
-`lore mission add` takes a title, an optional `--target` date and a `--body`. Attach tasks with `--mission <id>` when you add them, or later with `lore task edit <id> --mission <id>`. `--after` makes a task wait for another (see [Tasks › Step 9](tasks.md#step-9--make-one-task-wait-for-another)).
+`lore mission add` takes a title, an optional `--target` date and a `--body`. Attach tasks with `--mission <id>` when you add them, or later with `lore task edit --id <id> --mission <id>`. `--after` makes a task wait for another (see [Tasks › Step 9](tasks.md#step-9--make-one-task-wait-for-another)).
 
 <!-- example: missions#mission-add -->
 ```console
 # alice, in website
-$ lore mission add 'Open the online shop' --target 2026-11-30 --body 'The shop goes live with ten products and a launch email.'
+$ lore mission add --title 'Open the online shop' --target 2026-11-30 --body 'The shop goes live with ten products and a launch email.'
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 — Open the online shop
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
-$ lore task add 'Take the product photos' --mission msn_7a67…9504
+$ lore task add --title 'Take the product photos' --mission msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_2ad3…f891.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Take the product photos [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
-$ lore task add 'Write the product pages' --mission msn_7a67…9504 --after tsk_162d…9666
+$ lore task add --title 'Write the product pages' --mission msn_7a67…9504 --after tsk_162d…9666
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Write the product pages [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
-$ lore task add 'Send the invoice reminder'
+$ lore task add --title 'Send the invoice reminder'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — Send the invoice reminder [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 05513aa to origin refs/lore/live
-$ lore task edit tsk_05e9…4603 --mission msn_7a67…9504
+$ lore task edit --id tsk_05e9…4603 --mission msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 updated
 lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
@@ -62,7 +62,7 @@ lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 # alice, in website
 $ lore mission list
 msn_7a67…9504 [active] Open the online shop   (3 tasks)
-$ lore mission show msn_7a67…9504
+$ lore mission show --id msn_7a67…9504
 msn_7a67…9504
   title:  Open the online shop
   status: active
@@ -83,17 +83,17 @@ created 2026-11-02T10:00:05Z by alice · updated 2026-11-02T10:00:05Z by alice
 <!-- example: missions#mission-status -->
 ```console
 # alice, in website
-$ lore mission status msn_7a67…9504
+$ lore mission status --id msn_7a67…9504
 msn_7a67…9504 Open the online shop   3 tasks · 0 done · 0 claimed · 2 ready · 1 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_05e9…4603  Send the invoice reminder                 
   ready     tsk_162d…9666  Take the product photos                   
   waiting   tsk_54fe…28f2  Write the product pages                   waits for tsk_162d…9666 to be done (todo)
-$ lore task done tsk_162d…9666 --no-lesson
+$ lore task done --id tsk_162d…9666 --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 done
 lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 lore live: landed on main (df3a55c); leaves live once main is fetched
-$ lore mission status msn_7a67…9504
+$ lore mission status --id msn_7a67…9504
 msn_7a67…9504 Open the online shop   3 tasks · 1 done · 0 claimed · 2 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
   done      tsk_162d…9666  Take the product photos      alice        not merged yet
   ready     tsk_05e9…4603  Send the invoice reminder                 
@@ -119,12 +119,12 @@ $ lore task list --mission msn_7a67…9504
 <!-- example: missions#mission-edit -->
 ```console
 # alice, in website
-$ lore mission edit msn_7a67…9504 --target 2026-12-07 --title 'Open the online shop before Christmas'
+$ lore mission edit --id msn_7a67…9504 --target 2026-12-07 --title 'Open the online shop before Christmas'
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 updated
 lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
-$ lore mission search christmas
+$ lore mission search --query christmas
 msn_7a67…9504 [active] Open the online shop before Christmas
 ```
 <!-- /example -->
@@ -134,13 +134,13 @@ Pause a mission you have put on hold, and resume it when you pick it up again:
 <!-- example: missions#pause -->
 ```console
 # alice, in website
-$ lore mission pause msn_7a67…9504
+$ lore mission pause --id msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 paused
 lore live: (live, pushed) commit 34ee210 to origin refs/lore/live
 $ lore mission list
 msn_7a67…9504 [paused] Open the online shop before Christmas   (3 tasks)
-$ lore mission resume msn_7a67…9504
+$ lore mission resume --id msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 resumed
 lore live: (live, pushed) commit 7898daa to origin refs/lore/live
@@ -152,7 +152,7 @@ lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 <!-- example: missions#mission-done -->
 ```console
 # alice, in website
-$ lore mission done msn_7a67…9504
+$ lore mission done --id msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 completed
 lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
@@ -169,16 +169,16 @@ Delete is for mistakes only. lore asks first; without a terminal it stops with `
 <!-- example: missions#mission-delete -->
 ```console
 # alice, in website
-$ lore mission add 'Test mission, please ignore'
+$ lore mission add --title 'Test mission, please ignore'
 lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
 ✓ msn_c0f3…b5b8 — Test mission, please ignore
 lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore mission delete msn_c0f3…b5b8
+$ lore mission delete --id msn_c0f3…b5b8
 ERROR: [E_NEEDS_CONFIRM] run mission delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore mission delete msn_c0f3…b5b8 --yes
+$ lore mission delete --id msn_c0f3…b5b8 --yes
 lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
 ✓ msn_c0f3…b5b8 moved to the trash (restore: lore trash restore msn_c0f3…b5b8)
 lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
@@ -197,9 +197,9 @@ lore: wrote ~/work/website/.lore/data/plans/pln_76bd…3f10.json
 ✓ pln_76bd…3f10
 $ lore plan list
 pln_76bd…3f10  Newsletter plan [draft]  (0 tasks)
-$ lore plan search newsletter
+$ lore plan search --query newsletter
 pln_76bd…3f10 Newsletter plan
-$ lore plan edit pln_76bd…3f10 --status approved
+$ lore plan edit --id pln_76bd…3f10 --status approved
 lore: wrote ~/work/website/.lore/data/plans/pln_76bd…3f10.json
 ✓ plan pln_76bd…3f10 updated
 ```
@@ -228,14 +228,14 @@ tasks:
 <!-- example: missions#mission-apply -->
 ```console
 # alice, in website
-$ lore mission apply newsletter.yaml
+$ lore mission apply --file newsletter.yaml
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 ✓ msn_d431…313a Start the monthly newsletter (created)
   tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
   tsk_28f8…03df Write the first newsletter    after form
   tsk_4c59…6c38 Send the first newsletter     after first
 lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
-$ lore mission status msn_d431…313a
+$ lore mission status --id msn_d431…313a
 msn_d431…313a Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_b4f4…a5b0  Add the sign-up form to the home page              0s (timebox 1h30m)
   waiting   tsk_4c59…6c38  Send the first newsletter                 waits for tsk_28f8…03df to be done (todo)
@@ -248,7 +248,7 @@ Run it again and nothing new is made: lore finds each row again by its key and s
 <!-- example: missions#mission-apply-again -->
 ```console
 # alice, in website
-$ lore mission apply newsletter.yaml
+$ lore mission apply --file newsletter.yaml
 ✓ msn_d431…313a Start the monthly newsletter (found)
   tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
   tsk_28f8…03df Write the first newsletter    after form
@@ -294,13 +294,13 @@ lore already knew Alice from `lore init`, so it says `already registered (refres
 <!-- example: missions#handoff -->
 ```console
 # alice, in website
-$ lore task add 'Write the about page'
+$ lore task add --title 'Write the about page'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
 ✓ tsk_f147…5139 — Write the about page [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore handoff add --for @alice --task tsk_f147…5139 'Two of the three sections are written; the team photo is still missing'
+$ lore handoff add --for @alice --task tsk_f147…5139 --body 'Two of the three sections are written; the team photo is still missing'
 lore: wrote ~/work/website/.lore/data/handoffs/hnd_2537…6bbb.json
 ✓ handoff hnd_2537…6bbb for @alice
 lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
@@ -314,13 +314,13 @@ $ lore inbox
 <!-- example: missions#handoff-ack -->
 ```console
 # alice, in website
-$ lore handoff ack hnd_2537…6bbb
+$ lore handoff ack --id hnd_2537…6bbb
 lore: wrote ~/work/website/.lore/data/handoffs/hnd_2537…6bbb.json
 ✓ hnd_2537…6bbb acked
 lore live: (live, pushed) commit aba91f6 to origin refs/lore/live
 $ lore inbox
 (inbox empty)
-$ lore handoff search photo
+$ lore handoff search --query photo
 hnd_2537…6bbb [acked] Two of the three sections are written; the team photo is still missing
 ```
 <!-- /example -->
@@ -332,14 +332,14 @@ The plan file from Step 6 is all you need. Save it as `newsletter.yaml` in your 
 <!-- example: missions#mission-apply -->
 ```console
 # alice, in website
-$ lore mission apply newsletter.yaml
+$ lore mission apply --file newsletter.yaml
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 ✓ msn_d431…313a Start the monthly newsletter (created)
   tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
   tsk_28f8…03df Write the first newsletter    after form
   tsk_4c59…6c38 Send the first newsletter     after first
 lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
-$ lore mission status msn_d431…313a
+$ lore mission status --id msn_d431…313a
 msn_d431…313a Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_b4f4…a5b0  Add the sign-up form to the home page              0s (timebox 1h30m)
   waiting   tsk_4c59…6c38  Send the first newsletter                 waits for tsk_28f8…03df to be done (todo)
@@ -359,7 +359,7 @@ mission: {title: "Bad plan"}
 tasks:
   - {key: b, title: "Second", after: [a]}
   - {key: a, title: "First"}
-$ lore mission apply bad.yaml
+$ lore mission apply --file bad.yaml
 ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task of the plan
   hint: after: takes keys of earlier tasks, optionally with :done or :merged (e.g. backend:merged)
 (exit 20)
@@ -371,7 +371,7 @@ ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task o
 <!-- example: missions#handoff-unknown -->
 ```console
 # alice, in website
-$ lore handoff add --for @dave 'The logo files are in the shared drive'
+$ lore handoff add --for @dave --body 'The logo files are in the shared drive'
 ERROR: [E_NOT_FOUND] no actor "@dave"
   hint: people join with `lore actor register` (run by that person in a repo of the team); or pass an act_ id
 (exit 27)

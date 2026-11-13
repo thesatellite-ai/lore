@@ -37,7 +37,7 @@ func (ap setupApplier) renameRosterActor(ctx context.Context, org string, want i
 		return errs.Wrap(errs.Internal, "wire: encode "+profilestore.OpActorEdit+" input", err)
 	}
 	if _, err = runDirect(ctx, edit, op.JSONDecoder{Body: body}); err != nil {
-		return errs.Prefix("setup identity: saved in ~/.lore/"+ConfigFile+", but the "+org+" roster still shows the old name (finish with lore actor edit "+
+		return errs.Prefix("setup identity: saved in ~/.lore/"+ConfigFile+", but the "+org+" roster still shows the old name (finish with lore actor edit --actor "+
 			want.Key+" --display-name "+strconv.Quote(want.Name)+")", err)
 	}
 	return nil

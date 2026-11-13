@@ -40,7 +40,7 @@ func (l liveSync) Explain(ctx context.Context, in opssync.ExplainIn) (opssync.Ex
 	}
 	if _, perr := ids.ParseAny(id); perr != nil { // a typo is not "found nowhere"
 		return opssync.ExplainOut{}, errs.Wrap(errs.InvalidID, "explain: "+strconv.Quote(id)+" is not a row id (like mem_…, rul_…, tsk_…)", perr).
-			WithHint("copy the id from `lore <noun> list` or `lore search <words>`")
+			WithHint("copy the id from `lore <noun> list` or `lore search --query <words>`")
 	}
 	s, folder, err := l.here(ctx)
 	if err != nil {
@@ -73,7 +73,7 @@ func explainWaitsLine(branch string) string {
 
 // explainPeekHint points at `lore sync peek` for an id found nowhere.
 func explainPeekHint(remote, branch string) string {
-	return "it may have landed on " + branch + " while this branch is older: `lore sync peek " + remote + "/" + branch + "`"
+	return "it may have landed on " + branch + " while this branch is older: `lore sync peek --ref " + remote + "/" + branch + "`"
 }
 
 // shortCommit is a commit id cut to shortSHALen for display.

@@ -170,16 +170,16 @@ func (o ops) varOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpVarsList, Summary: "List project variables (nearest definition per name)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors, Examples: []op.Example{{Title: "every variable this repo sees", CLI: "lore vars list"}}}, o.varsList),
-		op.Define(op.Spec{Name: OpVarsShow, Summary: "Show one variable", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors, Examples: []op.Example{{Title: "one variable", CLI: "lore vars show db_host"}}}, o.varsShow),
+		op.Define(op.Spec{Name: OpVarsShow, Summary: "Show one variable", Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors, Examples: []op.Example{{Title: "one variable", CLI: "lore vars show --id db_host"}}}, o.varsShow),
 		op.Define(op.Spec{Name: OpVarsSet, Summary: "Set a variable (adds it, or changes its value in that place)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.RefDangling, errs.RefCycle), Confirm: op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "a dns variable", CLI: "lore vars set db_host db.example.com --type dns", Want: "var_"}}}, o.varsSet),
+			Examples: []op.Example{{Title: "a dns variable", CLI: "lore vars set --name db_host --value db.example.com --type dns", Want: "var_"}}}, o.varsSet),
 		op.Define(op.Spec{Name: OpVarsRename, Summary: "Rename a variable (the old name stays an alias)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Examples: []op.Example{{Title: "rename a variable (the old name stays an alias)", CLI: "lore vars rename db_host database_host"}}}, o.varsRename),
+			Errors: writeErrors, Examples: []op.Example{{Title: "rename a variable (the old name stays an alias)", CLI: "lore vars rename --id db_host --new-name database_host"}}}, o.varsRename),
 		op.Define(op.Spec{Name: OpVarsRm, Summary: "Remove a variable (to the trash, restorable)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "remove a variable", CLI: "lore vars rm db_host"}, {Title: "without a terminal", CLI: "lore vars rm db_host --yes"}}}, o.varsRm),
+			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "remove a variable", CLI: "lore vars rm --id db_host"}, {Title: "without a terminal", CLI: "lore vars rm --id db_host --yes"}}}, o.varsRm),
 		op.Define(op.Spec{Name: OpVarsWhere, Summary: "Every place that defines a variable", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors, Examples: []op.Example{{Title: "the rows that use a variable", CLI: "lore vars where db_host"}}}, o.varsWhere),
+			Errors: readErrors, Examples: []op.Example{{Title: "the rows that use a variable", CLI: "lore vars where --id db_host"}}}, o.varsWhere),
 	}
 }
 
@@ -534,7 +534,7 @@ func (o ops) checkVarRefs(ctx context.Context, self, val string) error {
 		})
 		if !found {
 			return errs.New(errs.RefDangling, self+" refers to ${var:"+n+"}, which is not defined in this repo or any store it sees").
-				WithHint("lore vars set " + n + " <value> first, or pass --allow-dangling")
+				WithHint("lore vars set --name " + n + " --value <value> first, or pass --allow-dangling")
 		}
 	}
 	return nil

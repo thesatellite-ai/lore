@@ -198,7 +198,7 @@ func TestSyncConflictsMarkedFiles(t *testing.T) {
 			if err != nil || list.Count != 2 || list.Data[1].RowID != id || list.Data[1].ID != 2 {
 				t.Fatalf("conflicts = %+v %v", list, err)
 			}
-			if !strings.Contains(list.Lines[1], "lore sync resolve 2 --take kept|other") || !strings.Contains(list.Lines[1], ".lore/data/memories/"+id+".json") {
+			if !strings.Contains(list.Lines[1], "lore sync resolve --id 2 --take kept|other") || !strings.Contains(list.Lines[1], ".lore/data/memories/"+id+".json") {
 				t.Fatalf("line %q", list.Lines[1])
 			}
 			st, err := env.SyncStatus(background(), opssync.StatusIn{})

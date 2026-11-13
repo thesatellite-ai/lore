@@ -82,7 +82,7 @@ func Ops(env content.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
-				{Title: "hand work over", CLI: `lore handoff add --for @agent-frontend --task tsk_31 "form is half done"`, Want: "hnd_"},
+				{Title: "hand work over", CLI: `lore handoff add --for @agent-frontend --task tsk_31 --body "form is half done"`, Want: "hnd_"},
 			},
 		}, o.add),
 		op.Define(op.Spec{
@@ -92,17 +92,17 @@ func Ops(env content.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show handoff details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore handoff show hnd_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore handoff show --id hnd_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpAck, Summary: "Acknowledge a handoff (sets status_str=acked)",
-			Examples:   []op.Example{{Title: "acknowledge a handoff left for you", CLI: "lore handoff ack hnd_<id>", Want: "acked"}},
+			Examples:   []op.Example{{Title: "acknowledge a handoff left for you", CLI: "lore handoff ack --id hnd_<id>", Want: "acked"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 		}, o.ack),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a handoff (it goes to the trash; lore trash restore brings it back)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore handoff delete hnd_<id> --yes", Want: "hnd_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore handoff delete --id hnd_<id> --yes", Want: "hnd_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
@@ -110,7 +110,7 @@ func Ops(env content.Env) []op.Entry {
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across handoff body + status",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore handoff search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore handoff search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}

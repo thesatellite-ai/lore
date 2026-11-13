@@ -203,7 +203,7 @@ func refuseNoPersonalStore(st *state, target store.Source) error {
 		return nil
 	}
 	return errs.New(errs.NotFound, "no personal store is attached on this machine: --scope global and --to me write to your personal store (me)").
-		WithHint("your personal store is not set up: run `lore store init me` (a local folder) or `lore store init me <url>`, then run the command again")
+		WithHint("your personal store is not set up: run `lore store init --name me` (a local folder) or `lore store init --name me --url <url>`, then run the command again")
 }
 
 // ensureOwnerRow writes the agent owner's actor row into target when that

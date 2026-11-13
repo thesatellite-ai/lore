@@ -9,7 +9,7 @@ Git knows what changed. lore knows why: the task, the decision or the memory beh
 There are two ways to connect a task with code:
 
 - `lore link add --entity <id> --commit <sha>` records a link from any row (a task, a decision, a mission) to a commit. `lore link list` and `lore commit-show` read the links back.
-- `lore task done <id> --commit <sha>` finishes the task and remembers the commit. lore then watches for that commit on `main` and marks the task *merged* (the change is in `main`) when it gets there. `lore task merged` marks it by hand when lore cannot see the merge.
+- `lore task done --id <id> --commit <sha>` finishes the task and remembers the commit. lore then watches for that commit on `main` and marks the task *merged* (the change is in `main`) when it gets there. `lore task merged` marks it by hand when lore cannot see the merge.
 
 A *sha* is the id git gives a commit, like `05513aa…`. `git log --oneline` shows the short form; `git rev-parse HEAD` prints the full sha of your last commit.
 
@@ -64,13 +64,13 @@ cml_6a86…ed8c  b733d8a0 → tasks/tsk_162d…9666 — Fix the Pro plan price o
 <!-- example: tasks#commit-show -->
 ```console
 # alice, in website
-$ lore commit-show $(git rev-parse HEAD)
+$ lore commit-show --id $(git rev-parse HEAD)
 Commit b733d8a0360e — 1 linked entities:
   tasks/tsk_162d…9666
-$ lore commit-show HEAD
+$ lore commit-show --id HEAD
 Commit b733d8a0360e — 1 linked entities:
   tasks/tsk_162d…9666
-$ lore commit show $(git rev-parse HEAD)
+$ lore commit show --id $(git rev-parse HEAD)
 Commit b733d8a0360e — 1 linked entities:
   tasks/tsk_162d…9666
 ```
@@ -85,7 +85,7 @@ Commit b733d8a0360e — 1 linked entities:
 <!-- example: tasks#done-with-commit -->
 ```console
 # alice, in website
-$ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --no-lesson
+$ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 done (commit b733d8a); waiting for merge
 lore live: (live, pushed) commit 1833373 to origin refs/lore/live
@@ -108,18 +108,18 @@ Sometimes lore cannot see the merge: the task has no commit, or the change reach
 <!-- example: tasks#merged -->
 ```console
 # alice, in website
-$ lore task add 'Shrink the hero image'
+$ lore task add --title 'Shrink the hero image'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b — Shrink the hero image [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit dd85e7d to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore task done tsk_4f89…b64b --no-lesson
+$ lore task done --id tsk_4f89…b64b --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b done
 lore live: (live, pushed) commit d18179e to origin refs/lore/live
 lore live: landed on main (f4b8da2); leaves live once main is fetched
-$ lore task merged tsk_4f89…b64b
+$ lore task merged --id tsk_4f89…b64b
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b merged (marked by hand, 10:05)
 lore live: landed on main (70f4f88); leaves live once main is fetched
@@ -137,11 +137,11 @@ Merged matters when another task waits for this one with `--after <id>:merged` (
 # alice, in website
 $ lore link list
 cml_6a86…ed8c  b733d8a0 → tasks/tsk_162d…9666 — Fix the Pro plan price on the pricing page
-$ lore link remove cml_6a86…ed8c
+$ lore link remove --id cml_6a86…ed8c
 ERROR: [E_NEEDS_CONFIRM] link remove cml_6a86…ed8c?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore link remove cml_6a86…ed8c --yes
+$ lore link remove --id cml_6a86…ed8c --yes
 lore: wrote ~/work/website/.lore/data/commit_links/cml_6a86…ed8c.json
 ✓ link cml_6a86…ed8c removed
 ```
@@ -163,7 +163,7 @@ lore: wrote ~/work/website/.lore/data/commit_links/cml_6a86…ed8c.json
 
 ## Pitfalls
 
-- **`HEAD` means the commit you are on now.** `lore commit show HEAD` resolves `HEAD` in the folder you run it from; after another commit, the linked one is `HEAD~1`. `lore link list --commit` still matches only the full sha.
+- **`HEAD` means the commit you are on now.** `lore commit show --id HEAD` resolves `HEAD` in the folder you run it from; after another commit, the linked one is `HEAD~1`. `lore link list --commit` still matches only the full sha.
 - **A rebase changes the sha.** `git pull --rebase` gives your commit a new id. Link the commit after you push, as in Step 1 to 2, so the link points at the commit that is really on `main`.
 - **`lore task show` does not print the commit.** Its `commit:` line is the task's commitment (how sure it is), not a git commit. Use `lore link list --entity <id>` or `lore task list --status done`.
 - **A squash merge keeps the link through the `Lore-Task` trailer.** While you hold a claim on a task, lore's `commit-msg` hook adds a `Lore-Task: <id>` line to the end of your commit messages (only when the task row lives in the repo you commit to). A squash or rebase merge that keeps that line lets lore find the merge on `main` even though the commit sha changed; without it, use Step 5. See [How it works](../team/how-it-works.md).

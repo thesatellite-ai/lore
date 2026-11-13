@@ -101,18 +101,18 @@ $ lore config check
 
 | Key | Default | What it means |
 |---|---|---|
-| `identity.key` | none | who you are in repos that match no org entry, written `human:<your email>`; your identity key is your email. `lore identity set <email>` writes it; this is the only place your identity lives |
+| `identity.key` | none | who you are in repos that match no org entry, written `human:<your email>`; your identity key is your email. `lore identity set --identity <email>` writes it; this is the only place your identity lives |
 | `identity.name` | none | your name in those repos |
 | `identity.handle` | none | your short name after `@` (lowercase letters, digits, `_` or `-`) |
-| `personal.store` | none (no personal store) | your personal store, the target of `--to me`, shown in all your repos: a git URL of your own private store, the path of a bare git repository on this machine (`/srv/git/lore-me.git`, a git store), or a local folder `file:///<absolute path>`. `lore store init me` with no URL makes `file://~/.lore/stores/_me` and records it here; with another URL it also moves every setup whose own `personal_store` is that local folder to follow this key (`inherit`): a person has one personal store `me`. The v0.1.17 value `local` (`~/.lore/personal`) is still accepted and attached as `me`, in a folder named after your org when one resolves |
-| `personal.push` | `now` | how your writes to the personal store reach its remote: `now` pushes each write at once; `batch` keeps them on this machine and pushes them as one commit once `personal.push_every` has passed, on `lore sync` and when a coding tool starts a session; `manual` pushes only on `lore sync`. `lore store set me push=…` writes it; see [How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote) |
+| `personal.store` | none (no personal store) | your personal store, the target of `--to me`, shown in all your repos: a git URL of your own private store, the path of a bare git repository on this machine (`/srv/git/lore-me.git`, a git store), or a local folder `file:///<absolute path>`. `lore store init --name me` with no URL makes `file://~/.lore/stores/_me` and records it here; with another URL it also moves every setup whose own `personal_store` is that local folder to follow this key (`inherit`): a person has one personal store `me`. The v0.1.17 value `local` (`~/.lore/personal`) is still accepted and attached as `me`, in a folder named after your org when one resolves |
+| `personal.push` | `now` | how your writes to the personal store reach its remote: `now` pushes each write at once; `batch` keeps them on this machine and pushes them as one commit once `personal.push_every` has passed, on `lore sync` and when a coding tool starts a session; `manual` pushes only on `lore sync`. `lore store set --store me --settings push=…` writes it; see [How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote) |
 | `personal.push_every` | `5m` | how long a batch may wait before it is pushed, at least `1m` |
-| `personal.compact` | `off` | `on`: fold the personal store's history older than `personal.compact_after` into one commit by itself, at most once a day (`lore store compact me` does it by hand) |
+| `personal.compact` | `off` | `on`: fold the personal store's history older than `personal.compact_after` into one commit by itself, at most once a day (`lore store compact --store me` does it by hand) |
 | `personal.compact_after` | none | how old history must be before it is folded, at least `1d` (such as `30d`); `personal.compact: on` needs it |
 | `orgs` | none | one entry per company you work for (see below) |
 | `repo_orgs.<project id>` | none | this machine's org choice for one project; `lore org use` writes it, you do not need to |
 | `setups` | none | your setups on this machine: name, kind (`solo`, `member`, `admin`), org, default, folders, identity (solo), github, personal_store, tools, secrets, live; see [Guided setup](../team/guided-setup.md) |
-| `repo_setups.<repo id>` | none | this machine's setup pin for one repo; `lore setup use <name> --here` writes it |
+| `repo_setups.<repo id>` | none | this machine's setup pin for one repo; `lore setup use --name <name> --here` writes it |
 | `setup.idle_minutes` | 30 | the setup page stops after this many idle minutes (1 to 1440) |
 | `setup.open_browser` | true | `false`: `lore setup` prints the page address only |
 | `doctor.scan_depth` | 3 | how deep `lore doctor --all` scans setup folders for repos while no repo is recorded yet (at most 10) |
@@ -147,7 +147,7 @@ personal   not set
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance)
   hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
-$ lore org use agency
+$ lore org use --entry agency
 ✓ prj_d431…313a uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 
@@ -160,7 +160,7 @@ repo_orgs:
       - github.com/client/website
 
 # alice, in website
-$ lore org link agency --project client --yes
+$ lore org link --org agency --project client --yes
 lore: pushed store github.com/agency/notes: commit df3a55c to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
@@ -179,12 +179,12 @@ $ cat .lore/config.yaml
 default_branch: develop
 
 # alice, in website
-$ lore task add 'Fix the footer links'
+$ lore task add --title 'Fix the footer links'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — Fix the footer links [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
-$ lore task done tsk_05e9…4603
+$ lore task done --id tsk_05e9…4603
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
@@ -466,13 +466,13 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 | `lore_store` | required | the layout version, a whole number of at least 1 (lore writes `4`: rows at `<folder>/<table>/`, the store's own rows in `_store/`); an older lore refuses a newer layout with `E_OLD_LORE` |
 | `created` | written by `lore store init` | the day the store was made, `YYYY-MM-DD` |
 | `org_folder` | none | the folder suggested for the roster and company rules; only a hint, the org entry's `org_folder` decides |
-| `push` | `now` | how every member's writes to this store reach the remote: `now`, `batch` or `manual`, as `personal.push` above. Only an org admin sets it, with `lore store set <store> push=…`; a member cannot override it |
+| `push` | `now` | how every member's writes to this store reach the remote: `now`, `batch` or `manual`, as `personal.push` above. Only an org admin sets it, with `lore store set --store <store> --settings push=…`; a member cannot override it |
 | `push_every` | `5m` | how long a member's batch may wait before it is pushed, at least `1m` |
 | `compact` | `off` | `on`: the admin's machine folds history older than `compact_after` into one commit by itself, at most once a day |
 | `compact_after` | none | how old history must be before it is folded, at least `1d`; `compact: on` needs it |
 | `epoch` | `0` | how many times the history was folded; `lore store compact` raises it, and a copy that sees a higher epoch moves onto the new history and replays its unpushed work. Never edit it by hand |
 
-`lore store init <name> <url>`, run inside a repo, writes the marker as the store's first commit and attaches the store to the repo under that name (in `.lore/stores.yaml`):
+`lore store init --name <name> --url <url>`, run inside a repo, writes the marker as the store's first commit and attaches the store to the repo under that name (in `.lore/stores.yaml`):
 
 <!-- example: reference#store-marker only=2,4 -->
 ```console
@@ -492,7 +492,7 @@ stores:
 
 ## `<org_folder>/lore-org.yaml`
 
-The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; `lore org refresh <org>` copies `stores`, `own`, `repos` and `defaults` again when the team changed the file (a key the file no longer has is removed from your entry). lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file.
+The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; `lore org refresh --org <org>` copies `stores`, `own`, `repos` and `defaults` again when the team changed the file (a key the file no longer has is removed from your entry). lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file.
 
 | Key | What it means |
 |---|---|
@@ -519,7 +519,7 @@ v0.1.17 could point a project at a database somewhere else, shared by several pr
 # alice, in website
 $ lore config list
 (no config keys)
-$ lore config get default_branch || echo 'not set'
+$ lore config get --key default_branch || echo 'not set'
 ERROR: [E_NOT_FOUND] config key "default_branch" not found
   hint: `lore config list` shows the keys set in ~/.lore/config.yaml
 not set

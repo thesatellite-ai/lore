@@ -291,7 +291,7 @@ func ResolveSetup(ctx context.Context, q SetupQuery) (SetupResolution, error) {
 // setupDisabled refuses a --setup / LORE_SETUP naming a disabled setup.
 func setupDisabled(name string) error {
 	return errs.New(errs.SetupNotFound, "setup "+strconv.Quote(name)+" is disabled; it matches nothing until it is enabled").
-		WithHint("lore setup enable " + name)
+		WithHint("lore setup enable --name " + name)
 }
 
 // none is the empty resolution.
@@ -307,7 +307,7 @@ func setupAmbiguousFolder(folder string, tie []onboard.FolderMatch) error {
 		a = append(a, m.Setup)
 	}
 	return errs.New(errs.SetupAmbiguous, folder+" matches setups "+strings.Join(a, ", ")+" and "+b+" equally; make one folder glob more specific (lore setup edit) or run with --setup").
-		WithHint("lore setup edit " + tie[0].Setup + " --folder <a more specific glob>, or --setup " + tie[0].Setup)
+		WithHint("lore setup edit --name " + tie[0].Setup + " --folder <a more specific glob>, or --setup " + tie[0].Setup)
 }
 
 // setupAmbiguousOrg is 7.2's "two setups for one org" text.
@@ -317,7 +317,7 @@ func setupAmbiguousOrg(org string, of []onboard.SetupEntry) error {
 		names[i] = s.Name
 	}
 	return errs.New(errs.SetupAmbiguous, "this repo is org "+org+", which setups "+strings.Join(names[:len(names)-1], ", ")+" and "+names[len(names)-1]+" both use; give one of them a folder glob that matches here (lore setup edit) or run with --setup").
-		WithHint("lore setup use " + of[0].Name + " --here pins this repo")
+		WithHint("lore setup use --name " + of[0].Name + " --here pins this repo")
 }
 
 // setupFolder is the git toplevel of q.Dir, else q.Dir (absolute).
@@ -563,8 +563,8 @@ func checkPersonalTarget(ctx context.Context, home, dir, to string) error {
 		return nil
 	}
 	if _, isNone, name := setupPersonal(ctx, home, dir); isNone {
-		return errs.New(errs.SetupNoPersonalStore, "setup "+name+" has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit "+name+" --personal-store <url>").
-			WithHint("--to repo, --to <org store>, or lore setup edit " + name + " --personal-store <url>")
+		return errs.New(errs.SetupNoPersonalStore, "setup "+name+" has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit --name "+name+" --personal-store <url>").
+			WithHint("--to repo, --to <org store>, or lore setup edit --name " + name + " --personal-store <url>")
 	}
 	return nil
 }

@@ -102,7 +102,7 @@ func (o ops) treeCheck(ctx context.Context, in TreeCheckIn) (TreeCheckOut, error
 		out.Findings = append(out.Findings, TreeFinding{Kind: FindParentCycle, Code: tasktree.WarnParentCycle, ID: c[0],
 			Parent:  work.Field(f.row(c[0]).Row, fieldParent),
 			Message: "parent cycle " + strings.Join(c, " → ") + " → " + c[0] + "; " + c[0] + " is shown at top level",
-			Fix:     "lore task tree check --fix (or lore task edit " + c[0] + " --parent …)"})
+			Fix:     "lore task tree check --fix (or lore task edit --id " + c[0] + " --parent …)"})
 	}
 	order := make([]string, 0, len(f.rows))
 	for id := range f.rows {
@@ -136,11 +136,11 @@ func (o ops) nodeFindings(ctx context.Context, f forest, id string, depthCap map
 	if stored != "" && !f.tree.Has(stored) {
 		fd := TreeFinding{Kind: FindOrphan, ID: id, Parent: stored,
 			Message: "parent " + stored + " is missing; " + id + " is shown at top level",
-			Fix:     "lore task edit " + id + " --no-parent"}
+			Fix:     "lore task edit --id " + id + " --no-parent"}
 		if pid, perr := ids.ParseAny(stored); perr == nil {
 			if lookup.InTrash(ctx, o.env, engine.Ref{Store: s.Source, Table: table, ID: pid}) != nil {
 				fd.Message = "parent " + stored + " is in the trash; " + id + " is shown at top level"
-				fd.Fix = "lore trash restore " + stored + " (or lore task edit " + id + " --no-parent)"
+				fd.Fix = "lore trash restore --target " + stored + " (or lore task edit --id " + id + " --no-parent)"
 			}
 		}
 		out = append(out, fd)
@@ -148,7 +148,7 @@ func (o ops) nodeFindings(ctx context.Context, f forest, id string, depthCap map
 	if p := f.tree.Parent(id); p != "" && stateOf(s.Row) == tasktree.Open && stateOf(f.row(p).Row) != tasktree.Open {
 		out = append(out, TreeFinding{Kind: FindParentClosed, ID: id, Parent: p,
 			Message: "parent " + p + " is " + work.Field(f.row(p).Row, work.FieldStatus) + " but " + id + " is open",
-			Fix:     "lore task edit " + p + " --status in_progress (reopen the parent), or close " + id})
+			Fix:     "lore task edit --id " + p + " --status in_progress (reopen the parent), or close " + id})
 	}
 	src := string(s.Source)
 	maxDepth, ok := depthCap[src]
@@ -162,7 +162,7 @@ func (o ops) nodeFindings(ctx context.Context, f forest, id string, depthCap map
 	if d := f.tree.Depth(id); d > maxDepth {
 		out = append(out, TreeFinding{Kind: FindOverDepth, ID: id, Parent: f.tree.Parent(id),
 			Message: id + " is at depth " + strconv.Itoa(d) + ", over tasks.max_depth " + strconv.Itoa(maxDepth),
-			Fix:     "lore task edit " + id + " --parent … (a shallower parent)"})
+			Fix:     "lore task edit --id " + id + " --parent … (a shallower parent)"})
 	}
 	return out, nil
 }

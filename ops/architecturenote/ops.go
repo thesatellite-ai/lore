@@ -65,18 +65,18 @@ func Ops(env content.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show architecture note details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore architecturenote show anr_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore architecturenote show --id anr_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit architecture-note fields",
-			Examples:   []op.Example{{Title: "change the body", CLI: `lore architecturenote edit anr_<id> --body "the new text"`, Want: "anr_"}},
+			Examples:   []op.Example{{Title: "change the body", CLI: `lore architecturenote edit --id anr_<id> --body "the new text"`, Want: "anr_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a architecture note (it goes to the trash; lore trash restore brings it back)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore architecturenote delete anr_<id> --yes", Want: "anr_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore architecturenote delete --id anr_<id> --yes", Want: "anr_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
@@ -84,7 +84,7 @@ func Ops(env content.Env) []op.Entry {
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across architecture note title + body",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore architecturenote search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore architecturenote search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}

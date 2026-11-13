@@ -22,18 +22,18 @@ Give each task a short title that says what to do. Add `--priority` (`low`, `med
 <!-- example: tasks#add -->
 ```console
 # alice, in website
-$ lore task add "Send the invoice reminder before Friday's demo" --due 2026-11-06 --priority high
+$ lore task add --title "Send the invoice reminder before Friday's demo" --due 2026-11-06 --priority high
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 — Send the invoice reminder before Friday's demo [high]
   created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
-$ lore task add 'Fix the typo on the pricing page' --body 'The Pro plan says 9 a month; it should say 19.'
+$ lore task add --title 'Fix the typo on the pricing page' --body 'The Pro plan says 9 a month; it should say 19.'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Fix the typo on the pricing page [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
-$ lore task add 'Update the footer year'
+$ lore task add --title 'Update the footer year'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Update the footer year [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
@@ -65,7 +65,7 @@ $ lore task list
 <!-- example: tasks#start -->
 ```console
 # alice, in website
-$ lore task start tsk_162d…9666
+$ lore task start --id tsk_162d…9666
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 started
 lore live: (live, pushed) commit 05513aa to origin refs/lore/live
@@ -81,7 +81,7 @@ $ lore task list --status in_progress
 <!-- example: tasks#show -->
 ```console
 # alice, in website
-$ lore task show tsk_162d…9666
+$ lore task show --id tsk_162d…9666
 tsk_162d…9666
   title:    Fix the typo on the pricing page
   status:   in_progress
@@ -99,11 +99,11 @@ created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:00:25Z by alice
 <!-- example: tasks#edit -->
 ```console
 # alice, in website
-$ lore task edit tsk_54fe…28f2 --priority low --due 2026-11-20 --title 'Update the footer year to 2027'
+$ lore task edit --id tsk_54fe…28f2 --priority low --due 2026-11-20 --title 'Update the footer year to 2027'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 updated
 lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
-$ lore task show tsk_54fe…28f2
+$ lore task show --id tsk_54fe…28f2
 tsk_54fe…28f2
   title:    Update the footer year to 2027
   status:   todo
@@ -121,7 +121,7 @@ created 2026-11-02T10:00:15Z by alice · updated 2026-11-02T10:00:40Z by alice
 <!-- example: tasks#done -->
 ```console
 # alice, in website
-$ lore task done tsk_2ad3…f891 --lesson 'The client pays faster when the reminder goes out two days before the demo'
+$ lore task done --id tsk_2ad3…f891 --lesson 'The client pays faster when the reminder goes out two days before the demo'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ tsk_2ad3…f891 done
@@ -149,11 +149,11 @@ When a task is done, lore writes it into `main` on GitHub by itself ("landed on 
 <!-- example: tasks#search -->
 ```console
 # alice, in website
-$ lore task search pricing
+$ lore task search --query pricing
 tsk_162d…9666 [in_progress] Fix the typo on the pricing page
-$ lore task search invoice
+$ lore task search --query invoice
 (no matches)
-$ lore task search invoice --all
+$ lore task search --query invoice --all
 tsk_2ad3…f891 [done] Send the invoice reminder before Friday's demo
 ```
 <!-- /example -->
@@ -165,7 +165,7 @@ Cancel a task you will not do. It stays in the history, so you can still find it
 <!-- example: tasks#cancel -->
 ```console
 # alice, in website
-$ lore task cancel tsk_54fe…28f2
+$ lore task cancel --id tsk_54fe…28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 cancelled
 lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
@@ -181,17 +181,17 @@ Delete only removes a task for good, with no undo. lore asks first (without a te
 <!-- example: tasks#delete -->
 ```console
 # alice, in website
-$ lore task add 'Test task, please ignore'
+$ lore task add --title 'Test task, please ignore'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 — Test task, please ignore [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore task delete tsk_c0f3…b5b8
+$ lore task delete --id tsk_c0f3…b5b8
 ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3…b5b8 Test task, please ignore?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore task delete tsk_c0f3…b5b8 --yes
+$ lore task delete --id tsk_c0f3…b5b8 --yes
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore tsk_c0f3…b5b8)
 lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
@@ -207,17 +207,17 @@ Some work has an order: you cannot send the welcome email before you write it. `
 <!-- example: tasks#after -->
 ```console
 # alice, in website
-$ lore task add 'Write the welcome email'
+$ lore task add --title 'Write the welcome email'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 — Write the welcome email [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
-$ lore task add 'Send the welcome email' --after tsk_76bd…3f10
+$ lore task add --title 'Send the welcome email' --after tsk_76bd…3f10
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
 ✓ tsk_d431…313a — Send the welcome email [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
-$ lore task show tsk_d431…313a
+$ lore task show --id tsk_d431…313a
 tsk_d431…313a
   title:    Send the welcome email
   status:   todo
@@ -232,7 +232,7 @@ A task can never wait on itself, not even through other tasks. lore refuses such
 <!-- example: tasks#cycle -->
 ```console
 # alice, in website
-$ lore task edit tsk_76bd…3f10 --after tsk_d431…313a
+$ lore task edit --id tsk_76bd…3f10 --after tsk_d431…313a
 ERROR: [E_CYCLE] dependency cycle: tsk_76bd…3f10 → tsk_d431…313a → tsk_76bd…3f10
   hint: drop one --after edge; a task may not wait on itself, even through others
 (exit 19)
@@ -243,7 +243,7 @@ To see which tasks are ready and which are waiting, put them in a mission and ru
 
 ## Step 10 — Group tasks in a tasklist
 
-A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from the demo". Every task belongs to one. If you do not pick one, lore uses the project's default list, which it creates the first time you add a task; that add prints one more line, `created tasklist tlt_… "default" for tasks added without --tasklist`, and every later add without `--tasklist` prints `on tasklist tlt_… "default" (the default; --tasklist picks another)`. Use `--tasklist` on `task add` or `task edit` to pick another; an empty `--tasklist=` (likewise `--mission=` and `--plan=`) is refused with `E_INVALID_INPUT`, never read as "use the default". Make a list with `lore tasklist add 'Launch week'`: the title is the first argument (or `--title`), and the body is optional, as a second argument or `--body`.
+A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from the demo". Every task belongs to one. If you do not pick one, lore uses the project's default list, which it creates the first time you add a task; that add prints one more line, `created tasklist tlt_… "default" for tasks added without --tasklist`, and every later add without `--tasklist` prints `on tasklist tlt_… "default" (the default; --tasklist picks another)`. Use `--tasklist` on `task add` or `task edit` to pick another; an empty `--tasklist=` (likewise `--mission=` and `--plan=`) is refused with `E_INVALID_INPUT`, never read as "use the default". Make a list with `lore tasklist add --title 'Launch week'`; the body is optional, with `--body`.
 
 <!-- example: tasks#tasklist -->
 ```console
@@ -251,20 +251,20 @@ A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from
 $ lore tasklist add --title 'Launch week' --body 'Everything that must happen before the shop opens'
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
 ✓ tlt_b4f4…a5b0
-$ lore task add 'Check every link on the home page' --tasklist tlt_b4f4…a5b0
+$ lore task add --title 'Check every link on the home page' --tasklist tlt_b4f4…a5b0
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
 ✓ tsk_28f8…03df — Check every link on the home page [medium]
 lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
-$ lore task edit tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
+$ lore task edit --id tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 updated
 lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
 $ lore tasklist list
 tlt_7a67…9504  default [active]  (4 tasks)
 tlt_b4f4…a5b0  Launch week [active]  (2 tasks)
-$ lore tasklist search launch
+$ lore tasklist search --query launch
 tlt_b4f4…a5b0 Launch week
-$ lore tasklist edit tlt_b4f4…a5b0 --status closed
+$ lore tasklist edit --id tlt_b4f4…a5b0 --status closed
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
 ✓ tasklist tlt_b4f4…a5b0 updated
 lore live: (live, pushed) commit 8c373dc to origin refs/lore/live
@@ -282,7 +282,7 @@ lore live: landed on main (6f11034); leaves live once main is fetched
 <!-- example: tasks#task-view -->
 ```console
 # alice, in website
-$ lore task view add open_todo --where 'status:todo'
+$ lore task view add --name open_todo --where 'status:todo'
 lore: wrote ~/work/website/.lore/data/task_views/tvw_4c59…6c38.json
 tvw_4c59…6c38  open_todo  where "status:todo"
 $ lore task view list
@@ -328,7 +328,7 @@ tsk_77cb…76c4,Add a size guide,,high,accepted,,,tlt_7a67…9504,,,,default,,,t
 ```
 <!-- /example -->
 
-`lore task import <file>` (`--from csv|json`, otherwise read from the extension) adds the file's tasks; `--dry-run` lists what it would create, and it asks before writing (`--yes` in scripts). It reads the columns `status`, `estimate` (in the unit of the store it writes to) and `parent` (another record of the file, before or after it, or a task id the store already has; anything else is dropped with a warning), and `--map-status 'In Review=in_progress,Shipped=done'` renames another tool's status values. A file where a done or cancelled task still has an open sub-task, or where parents form a loop, is refused before anything is written.
+`lore task import --file <file>` (`--from csv|json`, otherwise read from the extension) adds the file's tasks; `--dry-run` lists what it would create, and it asks before writing (`--yes` in scripts). It reads the columns `status`, `estimate` (in the unit of the store it writes to) and `parent` (another record of the file, before or after it, or a task id the store already has; anything else is dropped with a warning), and `--map-status 'In Review=in_progress,Shipped=done'` renames another tool's status values. A file where a done or cancelled task still has an open sub-task, or where parents form a loop, is refused before anything is written.
 
 Importing the same file twice does not duplicate anything. Each record is matched by its source and external id; a record already imported adds nothing and is listed as "already imported as <id>", and fields whose value changed in the file since are listed as "differs, not written". Import never overwrites a task: change it with `lore task edit`.
 
@@ -341,17 +341,17 @@ $ cat ~/backlog.csv
 id,title,priority,status
 T-1,Add a cookie banner,high,To Do
 T-2,Compress the product photos,medium,In Review
-$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --dry-run
+$ lore task import --file ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --dry-run
 would import 2 tasks from csv as new tasks with new ids (dry run, nothing written); the ids below are the file's
   T-1  Add a cookie banner
   T-2  Compress the product photos
-$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
+$ lore task import --file ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
 lore: wrote ~/work/website/.lore/data/tasks/tsk_9a34…b418.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_bfed…eeea.json
 ✓ 2 tasks imported from csv (batch bat_376c…8e1a; `lore task list` shows their new ids)
 lore live: (live, pushed) commit 40bd5f4 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
-$ lore task import ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
+$ lore task import --file ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
   2 already imported, nothing added for them:
     T-1  Add a cookie banner  (already imported as tsk_9a34…b418)
     T-2  Compress the product photos  (already imported as tsk_bfed…eeea)

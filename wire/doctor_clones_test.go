@@ -105,7 +105,7 @@ func TestDoctorStoreClones(t *testing.T) {
 		t.Fatalf("no-git-data finding: %s", w.Line())
 	}
 	n := byDir[cut.Dir]
-	if n.Level != DoctorNote || !strings.Contains(n.Message, "cut short") || n.Fix != "lore store forget https://host.example/owner/cut" {
+	if n.Level != DoctorNote || !strings.Contains(n.Message, "cut short") || n.Fix != "lore store forget --url https://host.example/owner/cut" {
 		t.Fatalf("not-checked-out finding: %s", n.Line())
 	}
 	m := byDir[mine]
@@ -121,7 +121,7 @@ func TestDoctorStoreClones(t *testing.T) {
 	}
 	// the note's fix is a real command. It is refused while the clone
 	// holds a commit its remote lacks ...
-	url := strings.TrimPrefix(n.Fix, "lore store forget ")
+	url := strings.TrimPrefix(n.Fix, "lore store forget --url ")
 	c := &standaloneClones{home: home}
 	if _, err := c.ForgetClone(ctx, opsstores.ForgetIn{URL: url}); err == nil || !strings.Contains(err.Error(), "unpushed") {
 		t.Fatalf("forget of a clone with unpushed commits: %v", err)

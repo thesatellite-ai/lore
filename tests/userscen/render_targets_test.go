@@ -228,7 +228,7 @@ func TestRenderTargetSelection(t *testing.T) {
 		}
 		// A hand-written tool file the row does not name: named, never wired.
 		c.WriteFile("CLAUDE.md", "# mine\n")
-		c.MustLore("render").Says(t, "CLAUDE.md found but not wired to lore; add it with: lore policy set context.targets <profiles incl. claude_code> --yes")
+		c.MustLore("render").Says(t, "CLAUDE.md found but not wired to lore; add it with: lore policy set --key context.targets --value \"<profiles incl. claude_code>\" --yes")
 		if got := renderRead(t, c, "CLAUDE.md"); got != "# mine\n" {
 			t.Errorf("an unlisted tool file is left alone: %q", got)
 		}
@@ -273,7 +273,7 @@ func TestRenderUserProfileFromConfig(t *testing.T) {
 	// row, a cleaned config): render refuses and names the profile.
 	c.A.WriteHomeFile(".lore/config.yaml", renderProfileConfig("    []\n"))
 	before := renderSnapshot(c, renderLoreMD, "AGENTS.md", "docs/MYTOOL.md")
-	c.Lore("render").Fails(t, 20, "[E_INVALID_INPUT]", `the repo's context.targets setting: unknown tool profile "mytool"`, "lore policy set context.targets <profiles> --yes")
+	c.Lore("render").Fails(t, 20, "[E_INVALID_INPUT]", `the repo's context.targets setting: unknown tool profile "mytool"`, "lore policy set --key context.targets --value <profiles> --yes")
 	renderSameFiles(t, "a refused render", before, renderSnapshot(c, renderLoreMD, "AGENTS.md", "docs/MYTOOL.md"))
 	j := c.Lore("render", "--json")
 	if !strings.Contains(j.Stdout, `"code": "E_INVALID_INPUT"`) || !strings.Contains(j.Stdout, `unknown tool profile \"mytool\"`) {

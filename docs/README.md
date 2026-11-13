@@ -78,7 +78,7 @@ Each step builds on the one before, from your first rule in one repo to a team w
 - [Render and agent files](knowledge/render-and-agent-files.md): `lore render`, other agent files, the directive block, what the tool read, and skill files.
 - [Keep the lore skill current](knowledge/skill-install.md): `lore skill install` and `lore skill status`, the `lore_version` line.
 - [Browse your notes in the terminal](knowledge/tui.md): `lore tui`.
-- [Edit a row in your editor](knowledge/editing-rows.md): `lore edit <id>` opens any row as Markdown in your editor; `lore path <id>` prints its file.
+- [Edit a row in your editor](knowledge/editing-rows.md): `lore edit --id <id>` opens any row as Markdown in your editor; `lore path --id <id>` prints its file.
 
 ### Tasks, missions and plans
 
@@ -130,7 +130,7 @@ Each step builds on the one before, from your first rule in one repo to a team w
 - [Your identity, joining an org, and store housekeeping](team/identity-and-stores.md): your email as your identity, `lore org import`, moving a note, tidying caches.
 - [Guided setup](team/guided-setup.md): `lore setup` / `lore onboard`, the local setup page (accounts found on this machine, fields with suggestions, import from an existing lore install, the current-folder line, Repair from Home), several setups on one machine chosen by folder, and `lore setup join`.
 - [Setups from the command line](team/setup-cli.md): every `lore setup` subcommand with real output: list, show, use, edit, disable/enable, remove/trash, plan/check/apply, import-scan/import, join.
-- [Adding your staff](team/members.md): `lore member add` (one person or a CSV, one store commit) with org role, teams and projects; they join with `lore setup join <the org's store url>`.
+- [Adding your staff](team/members.md): `lore member add` (one person or a CSV, one store commit) with org role, teams and projects; they join with `lore setup join --invite "<the org's store url>"`.
 - [Team invites](team/invites.md): `lore team invite` for outsiders, list, resend and revoke; single use, 14 days, `--grant`.
 - [Client folders from the parent folder](team/client-folders.md): `lore store folder add|list` from a folder that is not a repo, and which store commands need one.
 - [Team profiles](team/profiles.md): people, contacts, contact types, company periods, project members and roles, offboarding, orgs and machine labels.

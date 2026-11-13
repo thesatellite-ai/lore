@@ -2,7 +2,7 @@ package app
 
 // later.md 112.2: the live not-found answer for every core noun on the
 // release binary. `lore <noun> show <id>` of a missing row names
-// `lore sync peek <remote>/<branch> <table>` (the row may have landed on
+// `lore sync peek --ref <remote>/<branch> --table <table>` (the row may have landed on
 // the default branch), and that table must be a real table — the one the
 // id's prefix belongs to — never a guessed plural; an id of another kind
 // gets no such hint, since it can never land as this noun.
@@ -18,7 +18,7 @@ import (
 )
 
 // peekHint finds the table a not-found hint names.
-var peekHint = regexp.MustCompile("`lore sync peek [^ ]+ ([a-z_]+)`")
+var peekHint = regexp.MustCompile("`lore sync peek --ref [^ ]+ --table ([a-z_]+)`")
 
 // ownPrefix reads the expected prefix from a malformed-id answer
 // (lookup.BadID: `… is not a memory id (mem_…)`).

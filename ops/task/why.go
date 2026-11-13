@@ -273,7 +273,7 @@ func (w *Who) text() string {
 		b.WriteString("    " + l + "\n")
 	}
 	if len(w.Sessions) == 0 {
-		b.WriteString("  (session detail lives only on the writing machine: lore show <id> --origin)\n")
+		b.WriteString("  (session detail lives only on the writing machine: lore show --id <id> --origin)\n")
 	}
 	return b.String()
 }

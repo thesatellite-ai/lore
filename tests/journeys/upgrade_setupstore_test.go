@@ -7,7 +7,7 @@ package journeys
 // `personal.store: local`, choosing "local" reuses that folder (its note
 // moves to its root) and no command fails "store me attached twice". With
 // a git personal store holding a note, choosing "local" says the old store
-// holds 1 note, keeps it readable as me-before, and `lore move <id> --to me
+// holds 1 note, keeps it readable as me-before, and `lore move --id <id> --to me
 // --yes` brings it over.
 
 import (
@@ -63,7 +63,7 @@ func TestJourneyUpgraderSetupPersonalStore(t *testing.T) {
 		m.LoreIn(work, "migrate", "run").OK(t) // D16: the store's 0.1.17 layout (everywhere/) moves only here
 		ssSetup(t, m, "Pia Git", "pia@example.test")
 		m.Lore(m.Home, "setup", "apply", "side", "--step", "personal_store", "--answers", `{"personal_store":"local"}`).OK(t).
-			Says(t, "holds 1 note(s)", "me-before", "lore move <id> --to me --yes")
+			Says(t, "holds 1 note(s)", "me-before", "lore move --id <id> --to me --yes")
 		r := m.LoreIn(work, "memory", "list").OK(t)
 		upCount(t, "pia", r.Stdout, ssGitNote)
 		r.Says(t, "[me-before]")

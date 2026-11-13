@@ -101,13 +101,13 @@ func statusMove(human bool, from, to string) (move, error) {
 	switch {
 	case gone(from) && !gone(to):
 		return moveNoop, errs.New(errs.StatusChange, "they left: going "+to+" starts a new stint").
-			WithHint("lore actor rejoin <actor> --type employee|contractor|intern|client_contact")
+			WithHint("lore actor rejoin --actor <actor> --type employee|contractor|intern|client_contact")
 	case !gone(from) && to == schema.ActorStatusLeft:
 		return moveNoop, errs.New(errs.StatusChange, "leaving ends their stint and project memberships").
-			WithHint("lore actor offboard <actor>")
+			WithHint("lore actor offboard --actor <actor>")
 	case !gone(from) && to == schema.ActorStatusArchived:
 		return moveNoop, errs.New(errs.StatusChange, "archiving someone still here ends their stint and project memberships").
-			WithHint("lore actor offboard <actor> --archive")
+			WithHint("lore actor offboard --actor <actor> --archive")
 	}
 	return moveWrite, nil
 }

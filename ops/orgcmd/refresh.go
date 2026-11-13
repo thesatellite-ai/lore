@@ -36,7 +36,7 @@ type Refresher interface {
 // refreshOp is org.refresh bound to o.
 func refreshOp(o ops, spec func(name, summary string, errCodes []errs.Code, mayAsk bool, ex ...op.Example) op.Spec, codes []errs.Code) op.Entry {
 	return op.Define(spec(OpRefresh, "Copy an org entry's stores, own, repos and defaults from the store's lore-org.yaml (the team's source) and record its version", codes, false,
-		op.Example{Title: "the store's suggestion changed", CLI: "lore org refresh agency", Want: "agency"},
+		op.Example{Title: "the store's suggestion changed", CLI: "lore org refresh --org agency", Want: "agency"},
 		op.Example{Title: "the only org on this machine (or the active setup's)", CLI: "lore org refresh", Want: "agency"}),
 		func(ctx context.Context, in RefreshIn) (Report, error) {
 			h, err := o.host(ctx, OpRefresh)

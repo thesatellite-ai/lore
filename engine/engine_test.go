@@ -754,7 +754,7 @@ func TestHasOtherWriter(t *testing.T) {
 }
 
 // TestAmbiguousIDHintNamesACommandThatTakesIt pins B1-5: the hint of
-// E_AMBIGUOUS_ID names `lore row move <id> --to <store>` (which takes
+// E_AMBIGUOUS_ID names `lore row move --id <id> --to <store>` (which takes
 // --to and settles the duplicate), never a bare "--to" that show, edit or
 // migrate run refuse.
 func TestAmbiguousIDHintNamesACommandThatTakesIt(t *testing.T) {
@@ -770,7 +770,7 @@ func TestAmbiguousIDHintNamesACommandThatTakesIt(t *testing.T) {
 	}
 	_, _, err = f.eng.Get(ctx, Ref{ID: f.project})
 	var e *errs.Error
-	if !errors.As(err, &e) || !strings.Contains(e.Hint, "lore row move "+f.project.String()+" --to ") {
+	if !errors.As(err, &e) || !strings.Contains(e.Hint, "lore row move --id "+f.project.String()+" --to ") {
 		t.Fatalf("hint of %v", err)
 	}
 }

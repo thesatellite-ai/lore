@@ -80,7 +80,7 @@ func TestCopyMachineLocalSecretRedacted(t *testing.T) {
 			line = s
 		}
 	}
-	for _, w := range []string{StepMachineLocal + ": redacted runs row " + copyRunSecret, "field notes", gitleaks.RuleGenericAPIKey, "sha256:", refs.Unstored, "lore secrets link " + copyRunSecret} {
+	for _, w := range []string{StepMachineLocal + ": redacted runs row " + copyRunSecret, "field notes", gitleaks.RuleGenericAPIKey, "sha256:", refs.Unstored, "lore secrets link --id " + copyRunSecret} {
 		if !strings.Contains(line, w) {
 			t.Fatalf("redacted line %q lacks %q (steps %q)", line, w, steps)
 		}

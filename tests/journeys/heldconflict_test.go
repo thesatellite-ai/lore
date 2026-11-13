@@ -6,7 +6,7 @@ package journeys
 // repo, in an org folder the repo does not attach (B2-27). The edits went
 // through the by-id fallback (B2-21), the second sync was held by the
 // folder's conflict, but `lore sync conflicts` from the repo was empty and
-// `lore sync resolve 1` said "no open conflict". Now the repo's conflicts
+// `lore sync resolve --id 1` said "no open conflict". Now the repo's conflicts
 // list the row and resolve settles it.
 
 import (

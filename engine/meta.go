@@ -463,7 +463,7 @@ func (p *metaPlan) set(ctx context.Context, t meta.Term, isJSON bool) error {
 		name, typ = d.name, d.typ
 		if !t.Type.IsZero() && len(fields) == 0 && t.Type != d.typ {
 			return errs.New(errs.MetaType, fmt.Sprintf("meta: %s is registered as %s, not %s", d.name, d.typ, t.Type)).
-				WithHint("drop the :type; to change the key's type: lore meta edit " + d.name + " --type " + string(t.Type.Kind))
+				WithHint("drop the :type; to change the key's type: lore meta edit --id " + d.name + " --type " + string(t.Type.Kind))
 		}
 	default:
 		name = meta.TopSegment(t.Key)
@@ -794,7 +794,7 @@ func allowed(d keyDef, raw []byte) (v, vname []byte, err error) {
 			names[i] = a.name
 		}
 		return nil, nil, errs.New(errs.MetaValue, fmt.Sprintf("meta: %q is not an allowed value of %s; allowed: %s", s, d.name, strings.Join(names, ", "))).
-			WithHint("lore meta value add " + d.name + " <value>")
+			WithHint("lore meta value add --key " + d.name + " --value <value>")
 	}
 	if canon.KindOf(raw) != canon.KindArray {
 		return one(raw)
@@ -894,7 +894,7 @@ func (p *metaPlan) unset(rowID ids.AnyID, name string) error {
 			list = "it has: " + strings.Join(have, ", ")
 		}
 		return errs.New(errs.MetaUnknown, fmt.Sprintf("%s has no metadata key %q; %s", rowID, name, list)).
-			WithHint("lore meta show " + rowID.String() + " lists its keys")
+			WithHint("lore meta show --id " + rowID.String() + " lists its keys")
 	}
 	return nil
 }
@@ -1049,13 +1049,13 @@ func (p *metaPlan) register(ctx context.Context, cl call) error {
 		p.warn(k.name, "new keys in "+scope+": "+what)
 		if near := meta.Nearest(k.name, p.visibleNames(), nearShown); len(near) > 0 {
 			// 3.5 / P2-META-7: a new key close to an existing one warns
-			p.warn(k.name, "did you mean "+strings.Join(near, ", ")+"? "+k.name+" is a new key; fold it with lore meta edit "+k.name+" --merge-into "+near[0])
+			p.warn(k.name, "did you mean "+strings.Join(near, ", ")+"? "+k.name+" is a new key; fold it with lore meta edit --id "+k.name+" --merge-into "+near[0])
 		}
 		if k.home != store.SourceRepo {
-			p.warn(k.name, "internal: keys first registered in the store start internal; to let one reach client repos: lore meta edit "+k.name+" --no-internal")
+			p.warn(k.name, "internal: keys first registered in the store start internal; to let one reach client repos: lore meta edit --id "+k.name+" --no-internal")
 		}
 		if !reviewed {
-			p.warn(k.name, "unreviewed: a person approves it with lore meta describe "+k.name+" \"…\" (lore meta keys --unreviewed)")
+			p.warn(k.name, "unreviewed: a person approves it with lore meta describe --id "+k.name+" --text \"…\" (lore meta keys --unreviewed)")
 		}
 	}
 	return nil
@@ -1092,7 +1092,7 @@ func (p *metaPlan) checkCaps(ctx context.Context, home store.Source, name string
 	}
 	if int64(held) >= maxKeys {
 		return errs.New(errs.MetaSize, "meta: "+string(home)+" already holds "+strconv.Itoa(held)+" key rows (meta.max_keys_per_registry "+strconv.FormatInt(maxKeys, 10)+")").
-			WithHint("fold or forget unused keys: lore meta keys --unused; lore meta forget <key> --confirm")
+			WithHint("fold or forget unused keys: lore meta keys --unused; lore meta forget --key <key> --confirm")
 	}
 	return nil
 }
@@ -1126,7 +1126,7 @@ func (p *metaPlan) checkForeign() error {
 		}
 		return errs.New(errs.MetaForeignKey, "meta entry "+id.String()+" (label "+en.Name+", scope "+en.Scope+
 			") is not a key of this client repo; values reach a client repo only through lore move").
-			WithHint("lore meta unset <id> " + en.Name + ", or lore move the row in (it maps the keys)")
+			WithHint("lore meta unset --id <id> --key " + en.Name + ", or lore move the row in (it maps the keys)")
 	}
 	return nil
 }
@@ -1282,7 +1282,7 @@ func (e *Engine) bindInputMeta(ctx context.Context, in op.Input) (context.Contex
 	return ctx, func() error {
 		if bound.used != nil && !bound.used.Load() {
 			return errs.New(errs.MetaTable, "meta: "+in.Op()+" wrote no row that takes metadata; the --meta values were not stored").
-				WithHint("lore meta set <id> key=value")
+				WithHint("lore meta set --id <id> --pair key=value")
 		}
 		return nil
 	}, nil

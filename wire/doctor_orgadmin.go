@@ -93,7 +93,7 @@ func (a *App) orgAdminFinding(ctx context.Context, rs orgRosterStore, fix bool) 
 	}
 	f := DoctorFinding{Check: DoctorCheckOrgAdmin, Level: DoctorWarning, Store: p.at.src,
 		Message: fieldText(actor, actorFieldDisplay) + " (" + creator + ") created org " + rs.org + " but has no org role (member list shows \"-\"); the org's creator is its admin",
-		Fix:     "lore doctor --fix (or: lore member edit " + creator + " --role admin)"}
+		Fix:     "lore doctor --fix (or: lore member edit --who " + creator + " --role admin)"}
 	if !fix {
 		return f, true
 	}

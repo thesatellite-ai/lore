@@ -19,8 +19,8 @@
 - [Search](search.md): one search over every kind, word rules, repo scope flags, and keeping the index healthy.
 - [Render and agent files](render-and-agent-files.md): `lore render`, `--target` and `--out`, the directive block (the standing instructions at the top of the file), `lore why-context`, render history, pinning how a rule appears (`lore pin`), rules for one folder (`lore scope`) and `lore skill compile`.
 - [Keep the lore skill current](skill-install.md): `lore skill install`, `lore skill status`.
-- [Browse your notes in the terminal](tui.md): `lore tui`, and `lore show <id>` for any row with `--origin`.
-- [Edit a row in your editor](editing-rows.md): `lore edit <id>` opens any row as Markdown in `$EDITOR`; `lore path <id>` prints its file.
+- [Browse your notes in the terminal](tui.md): `lore tui`, and `lore show --id <id>` for any row with `--origin`.
+- [Edit a row in your editor](editing-rows.md): `lore edit --id <id>` opens any row as Markdown in `$EDITOR`; `lore path --id <id>` prints its file.
 
 ## Every example is a real run
 

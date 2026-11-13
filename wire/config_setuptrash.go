@@ -175,7 +175,7 @@ func RestoreSetup(home, name, as string) (RestoreResult, error) {
 		seq := setupsSeq(root)
 		if setupIndex(seq, as) >= 0 {
 			return errs.New(errs.SetupNameTaken, "a setup named "+strconv.Quote(as)+" exists; restore the trashed one under another name").
-				WithHint("lore setup trash restore " + name + " --as " + name + "-old")
+				WithHint("lore setup trash restore --name " + name + " --as " + name + "-old")
 		}
 		ent := ts.Content[i]
 		ts.Content = append(ts.Content[:i], ts.Content[i+1:]...)

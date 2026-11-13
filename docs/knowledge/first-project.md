@@ -175,7 +175,7 @@ Two more small commands help you look around. `lore sql` runs one read-only quer
 <!-- example: start#sql -->
 ```console
 # alice, in website
-$ lore sql "SELECT 'rules' AS kind, count(*) AS n FROM rules UNION ALL SELECT 'memories', count(*) FROM memories"
+$ lore sql --query "SELECT 'rules' AS kind, count(*) AS n FROM rules UNION ALL SELECT 'memories', count(*) FROM memories"
 kind      n
 rules     1
 memories  0
@@ -188,11 +188,11 @@ memories  0
 <!-- example: start#sql-more -->
 ```console
 # alice, in website
-$ lore sql 'SELECT id, body, severity FROM rules' --format json
+$ lore sql --query 'SELECT id, body, severity FROM rules' --format json
 [
   {"id": "rul_162d…9666", "body": "Run the tests before you push", "severity": "must"}
 ]
-$ lore sql 'DELETE FROM rules'
+$ lore sql --query 'DELETE FROM rules'
 ERROR: [E_SQL_REFUSED] only one SELECT, WITH or VALUES statement (optionally after EXPLAIN [QUERY PLAN]) is allowed
   hint: lore sql is read-only; change data with lore commands so it reaches git
 (exit 20)

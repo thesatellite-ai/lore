@@ -103,7 +103,7 @@ func (t standaloneTeam) CloseHeldDone(ctx context.Context, taskID, commit string
 	case hs.claimed && hs.active:
 		return commit, errs.New(errs.InvalidInput, fmt.Sprintf("%s is held by %s until %s; only the holder can finish it",
 			taskID, holderName(hs.sig), hs.sig.Expires.UTC().Format(time.Kitchen))).
-			WithHint("a person can `lore task revoke " + taskID + "` first")
+			WithHint("a person can `lore task revoke --id " + taskID + "` first")
 	case hs.claimed:
 		if err = w.requireHuman(ctx, "finishing a task someone else claimed"); err != nil {
 			return commit, err

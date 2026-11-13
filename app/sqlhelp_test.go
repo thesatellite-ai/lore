@@ -28,11 +28,11 @@ func TestSQLBareHelp(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("bare lore sql: %v", err)
 	}
-	if !strings.Contains(out.String(), `lore sql "SELECT name, ip FROM res_server"`) || !strings.Contains(out.String(), "lore sql keeps both names") || forwarded != nil {
+	if !strings.Contains(out.String(), `lore sql --query "SELECT name, ip FROM res_server"`) || !strings.Contains(out.String(), "lore sql keeps both names") || forwarded != nil {
 		t.Fatalf("bare lore sql must print the help with the example, not forward:\n%s", out.String())
 	}
 	if run := find(g, sqlRunVerb); !strings.Contains(run.Long, "each row twice") {
-		t.Fatalf("lore sql run help lacks the sources note:\n%s", run.Long)
+		t.Fatalf("lore sql run --query help lacks the sources note:\n%s", run.Long)
 	}
 	root.SetArgs([]string{opsql.Noun, "SELECT 1"})
 	if err := root.Execute(); err != nil || len(forwarded) != 1 || forwarded[0] != "SELECT 1" {

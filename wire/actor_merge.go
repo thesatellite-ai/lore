@@ -141,11 +141,11 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	f, t := fromCopies[0].r, intoCopies[0].r
 	if fk, tk := actorKindOf(fieldText(f, actorFieldKind)), actorKindOf(fieldText(t, actorFieldKind)); fk != tk {
 		return opsinfra.ActorMergeOut{}, errs.New(errs.Refused, actorMergeVerb+": "+in.From+" is a "+fk+" and "+in.Into+" a "+tk+"; only one person's (or one agent's) two ids are merged").
-			WithHint("check the ids with `lore actor show <id>`")
+			WithHint("check the ids with `lore actor show --id <id>`")
 	}
 	if m := fieldText(f, schema.FieldActorMergedInto); m != "" && m != into.String() {
 		return opsinfra.ActorMergeOut{}, errs.New(errs.Refused, actorMergeVerb+": "+in.From+" is already merged into "+m).
-			WithHint("merge into that actor instead: lore actor merge " + in.From + " " + m)
+			WithHint("merge into that actor instead: lore actor merge --from " + in.From + " --into " + m)
 	}
 	labels := a.storeLabels(ctx, st)
 	out := opsinfra.ActorMergeOut{From: from.String(), Into: into.String(), FromName: fieldText(f, actorFieldDisplay), IntoName: fieldText(t, actorFieldDisplay),
@@ -183,7 +183,7 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	// cannot be edited is listed with its reason, the rest are written
 	title := actorMergeVerb + " " + from.String() + " into " + into.String()
 	b := a.bulk(ctx, title, func(r engine.Ref) string {
-		return "`lore show " + r.ID.String() + "` shows the row; edit what the reason names, then rerun"
+		return "`lore show --id " + r.ID.String() + "` shows the row; edit what the reason names, then rerun"
 	})
 	edited := map[store.Source]int{}
 	for _, e := range edits {
@@ -201,7 +201,7 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	}
 	out.Marked = min(marked, b.total()-out.Rows)
 	out.Written = mergeStoreCounts(edited, labels)
-	if ferr := b.failedErr(actorMergeVerb+" "+from.String()+" "+into.String(), "lore actor merge "+from.String()+" "+into.String()+" --yes"); ferr != nil {
+	if ferr := b.failedErr(actorMergeVerb+" "+from.String()+" "+into.String(), "lore actor merge --from "+from.String()+" --into "+into.String()+" --yes"); ferr != nil {
 		return out, ferr
 	}
 	return out, cerr
@@ -479,7 +479,7 @@ func (a *App) DoctorSharedKeys(ctx context.Context, fix bool) ([]DoctorFinding, 
 		for _, k := range g {
 			names = append(names, k.id.String())
 			if k.id != into.id {
-				fixes = append(fixes, "lore actor merge "+k.id.String()+" "+into.id.String())
+				fixes = append(fixes, "lore actor merge --from "+k.id.String()+" --into "+into.id.String())
 				froms = append(froms, k)
 			}
 		}
@@ -519,12 +519,12 @@ func (a *App) mergeSharedKey(ctx context.Context, roster store.Source, key strin
 			failed = true
 			out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorNote, Store: roster,
 				Message: "not merged " + f.id.String() + " into " + into.id.String() + " (" + key + "): " + err.Error(),
-				Fix:     "lore actor merge " + f.id.String() + " " + into.id.String()})
+				Fix:     "lore actor merge --from " + f.id.String() + " --into " + into.id.String()})
 			continue
 		}
 		out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorWarning, Store: roster, Fixed: true,
 			Message: "merged " + f.id.String() + " into " + into.id.String() + " (stable key " + key + "): " + plural(res.Rows, "row") +
-				" edited to name " + into.id.String() + ", " + copies(res.Marked) + " of " + f.id.String() + " marked merged_into (lore actor merge " + f.id.String() + " " + into.id.String() + ")"})
+				" edited to name " + into.id.String() + ", " + copies(res.Marked) + " of " + f.id.String() + " marked merged_into (lore actor merge --from " + f.id.String() + " --into " + into.id.String() + ")"})
 	}
 	if failed {
 		out = append(out, warning)
@@ -583,7 +583,7 @@ func likelyHandleDuplicates(byID map[ids.AnyID]keyActor, merged map[ids.AnyID]bo
 		}
 		out = append(out, DoctorFinding{Check: DoctorCheckSharedKeys, Level: DoctorNote,
 			Message: id.String() + " (" + k.key + ", no email) is likely @" + p.handle + " " + p.id.String() + " (" + p.name + "): the login is that person's roster handle; lore does not merge on a login alone",
-			Fix:     "if it is the same person: lore actor merge " + id.String() + " " + p.id.String()})
+			Fix:     "if it is the same person: lore actor merge --from " + id.String() + " --into " + p.id.String()})
 	}
 	return out
 }

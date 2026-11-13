@@ -60,7 +60,7 @@ func TestRenderTargetWithTeammateProfileInRowRefusesWhole(t *testing.T) {
 	c.MustLore("rule", "add", "--body", "a second rule after the row", "--severity", "must")
 	before := renderSnapshot(c, files...)
 	c.Lore("render", "--target", "gemini_cli").Fails(t, 20, "[E_INVALID_INPUT]",
-		`the repo's context.targets setting: unknown tool profile "mytool"`, "lore policy set context.targets <profiles> --yes")
+		`the repo's context.targets setting: unknown tool profile "mytool"`, "lore policy set --key context.targets --value <profiles> --yes")
 	renderSameFiles(t, "render --target with an unknown profile in the row", before, renderSnapshot(c, files...))
 	if _, ok := c.ReadFile("GEMINI.md"); ok {
 		t.Error("the refused render wrote no GEMINI.md")
@@ -76,7 +76,7 @@ func TestRenderTargetWithTeammateProfileInRowRefusesWhole(t *testing.T) {
 // TestRenderGlobalRuleNeedsPersonalStore: a person (or their agent) with
 // no personal store attached who writes a global rule is told what is
 // missing and how to make it, not "write the actor row to store me"
-// (INTEG-RENDER-3); after `lore store init me` the same command works.
+// (INTEG-RENDER-3); after `lore store init --name me` the same command works.
 // With v0.1.17's personal.store `local` the global rule keeps working.
 func TestRenderGlobalRuleNeedsPersonalStore(t *testing.T) {
 	t.Run("no personal store", func(t *testing.T) {
@@ -91,7 +91,7 @@ func TestRenderGlobalRuleNeedsPersonalStore(t *testing.T) {
 			} {
 				// --to me already named the missing store; --scope global
 				// said "write the actor row to store me" with no hint.
-				cl.Lore(args...).Fails(t, 27, "[E_NOT_FOUND]", "your personal store is not set up: run `lore store init me`").
+				cl.Lore(args...).Fails(t, 27, "[E_NOT_FOUND]", "your personal store is not set up: run `lore store init --name me`").
 					Never(t, "actor row")
 			}
 		}

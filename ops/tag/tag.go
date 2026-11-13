@@ -292,7 +292,7 @@ func checkName(name string) error {
 	sug := SnakeOf(name)
 	if sug == "" {
 		return errs.New(errs.InvalidIdentifier, fmt.Sprintf("tag %q has no letter a-z or digit; a tag name is ASCII snake_case", name)).
-			WithHint("lore tag add --name=<snake_case>, e.g. --name=cert_rotation; nothing written")
+			WithHint("lore tag add --name=<snake_case> (e.g. --name=cert_rotation); nothing written")
 	}
 	if strings.ContainsFunc(name, func(r rune) bool { return r > unicode.MaxASCII && unicode.IsLetter(r) }) {
 		return errs.New(errs.InvalidIdentifier, fmt.Sprintf("tag %q is not snake_case: a tag name is ASCII (a-z, 0-9, _), so its other letters are dropped. Use: %s", name, sug)).

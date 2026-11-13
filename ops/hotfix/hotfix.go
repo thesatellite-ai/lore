@@ -78,28 +78,28 @@ func Ops(env kn.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show hotfix details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore hotfix show hfx_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore hotfix show --id hfx_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(kn.ReadErrors), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit hotfix fields (only the flags given change)",
-			Examples:   []op.Example{{Title: "change the body", CLI: `lore hotfix edit hfx_<id> --body "the new text"`, Want: "hfx_"}},
+			Examples:   []op.Example{{Title: "change the body", CLI: `lore hotfix edit --id hfx_<id> --body "the new text"`, Want: "hfx_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a hotfix (hidden from render and search; kept)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore hotfix archive hfx_<id>", Want: "archived"}},
+			Examples:   []op.Example{{Title: "archive one", CLI: "lore hotfix archive --id hfx_<id>", Want: "archived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 		}, o.archive),
 		op.Define(op.Spec{
 			Name: OpUnarchive, Summary: "Bring an archived hotfix back",
-			Examples:   []op.Example{{Title: "bring it back", CLI: "lore hotfix unarchive hfx_<id>", Want: "unarchived"}},
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore hotfix unarchive --id hfx_<id>", Want: "unarchived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 		}, o.unarchive),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a hotfix (it goes to the trash; lore trash restore brings it back)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore hotfix delete hfx_<id> --yes", Want: "hfx_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore hotfix delete --id hfx_<id> --yes", Want: "hfx_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, o.delete).Asks(func(ctx context.Context, in DeleteIn) (string, error) {
@@ -107,7 +107,7 @@ func Ops(env kn.Env) []op.Entry {
 		}),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search over hotfixes of every attached store",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore hotfix search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore hotfix search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.SearchErrors,
 		}, o.search),
 	}
@@ -119,9 +119,9 @@ type AddIn struct {
 	engine.MetaFlags
 
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
-	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
+	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
 	Summary    string   `json:"summary,omitempty" flag:"summary" desc:"one-line short form used when the full text does not fit LORE.md (up to 200 characters)"`
-	Text       string   `json:"text,omitempty" arg:"0" desc:"the hotfix body, instead of --body"`
+	Text       string   `json:"text,omitempty" arg:"0" argof:"body" desc:"the hotfix body, instead of --body"`
 	Severity   string   `json:"severity,omitempty" flag:"severity" desc:"low | medium | high | critical (default high)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"hotfix_id (hfx_*) this entry replaces"`

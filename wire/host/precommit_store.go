@@ -33,7 +33,7 @@ import (
 )
 
 // storeCommitHint is the next step of a refused hand commit in a store.
-const storeCommitHint = "fix each file (a row file is one JSON object; `lore edit <id>` edits a row safely), or put it back with `git checkout HEAD -- <path>`; then commit again"
+const storeCommitHint = "fix each file (a row file is one JSON object; `lore edit --id <id>` edits a row safely), or put it back with `git checkout HEAD -- <path>`; then commit again"
 
 // storePreCommit checks the staged row files of the store clone at top.
 func (h *liveHost) storePreCommit(ctx context.Context, top string) error {

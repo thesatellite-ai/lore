@@ -247,7 +247,7 @@ func TestSyncStore_NameMatrix(t *testing.T) {
 		say  []string
 	}{
 		{"repo", []string{"`repo` is reserved", "pick another name"}},
-		{"me", []string{"`me` is reserved", "lore store init me"}},
+		{"me", []string{"`me` is reserved", "lore store init --name me"}},
 		{"team", []string{"`team` is reserved"}},
 		{"company", []string{"`company` is reserved"}},
 		{"UPPER", []string{"`UPPER` must be snake_case"}},
@@ -268,7 +268,7 @@ func TestSyncStore_NameMatrix(t *testing.T) {
 	// is attached already never fails); notes for another place is refused
 	// with that entry's url and the command that drops it.
 	a.MustLore("store", "add", "notes", url, "--yes")
-	a.Lore("store", "add", "notes", st.w.Remote("github.com/acme/other-notes").URL(), "--yes").Fails(t, 20, "E_INVALID_INPUT", "already used in .lore/stores.yaml (for "+url+")", "lore store remove notes")
+	a.Lore("store", "add", "notes", st.w.Remote("github.com/acme/other-notes").URL(), "--yes").Fails(t, 20, "E_INVALID_INPUT", "already used in .lore/stores.yaml (for "+url+")", "lore store remove --name notes")
 	if names := syncStoreNames(t, a); len(names) != 1 || names[0] != "notes" {
 		t.Fatalf("refused names must attach nothing: %v", names)
 	}

@@ -22,8 +22,8 @@ func TestJourneyStaffJoinLine(t *testing.T) {
 	w.Step("day1/member-add-prints-the-store-url", func() {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, url, tlLee, []string{tlFolders})
 		tt.lore(tlLee, "member", "add", tlAnn.Email, "--name", tlAnn.Name, "--role", "member", "--yes").OK(t).
-			Says(t, "added "+tlAnn.Email, "joins on their machine with: lore setup join "+url+" ").
-			Never(t, "lore setup join <org>")
+			Says(t, "added "+tlAnn.Email, "joins on their machine with: lore setup join --invite "+url+" ").
+			Never(t, "lore setup join --invite <org>")
 	})
 
 	w.Step("day1/ann-on-a-fresh-laptop", func() {

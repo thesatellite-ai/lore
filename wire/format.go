@@ -225,7 +225,7 @@ func enableConfirm(name, since string, v017 bool, below []string) error {
 		" or later to write; these writers become read-only until they upgrade: "+strings.Join(who, "; ")).
 		WithQuestion("enable " + strconvQuote(name) + " for everyone (has everyone who shares this repository upgraded to lore " + since + ")?").
 		WithHint("ask the person, then rerun with --yes").
-		WithNext("lore migrate enable " + name + " --yes")
+		WithNext("lore migrate enable --feature " + name + " --yes")
 }
 
 // strconvQuote quotes a user-given name for a message.

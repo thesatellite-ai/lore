@@ -221,7 +221,7 @@ func TestJourneyStoreCommands(t *testing.T) {
 		lee.Lore(parent, "org", "refresh").OK(t).Says(t, "org "+tlOrg+" (the org of the active setup "+tlLeadSetup+")")
 		// no setup covers ~: refused, naming both orgs and the command
 		lee.Lore(lee.Home, "org", "refresh").Refused(t).Says(t, "this machine has 2 org entries ("+tlOrg+", "+jCmdsBetaOrg+")",
-			"lore org refresh "+tlOrg)
+			"lore org refresh --org "+tlOrg)
 		lee.Lore(lee.Home, "org", "refresh", jCmdsBetaOrg).OK(t).Never(t, "the only org")
 	})
 }

@@ -116,7 +116,7 @@ func (o MetaRehomeOut) Text() string {
 	case o.DryRun:
 		fmt.Fprintf(&b, "dry run: %d rows would be rewritten; nothing written\n", len(o.Missing))
 	default:
-		fmt.Fprintf(&b, "rehomed %d keys, %d rows rewritten in batch %s (see: lore batch show %s)\n", len(o.Plan), o.Rewritten, o.Batch, o.Batch)
+		fmt.Fprintf(&b, "rehomed %d keys, %d rows rewritten in batch %s (see: lore batch show --id %s)\n", len(o.Plan), o.Rewritten, o.Batch, o.Batch)
 	}
 	return b.String()
 }
@@ -138,7 +138,7 @@ func (o ops) metaMoveOps() []op.Entry {
 			Errors: moveErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "see which keys a place lost after its chain changed", CLI: "lore meta rehome --dry-run"}}}, o.metaRehome),
 		op.Define(op.Spec{Name: OpMetaMove, Summary: "Move a metadata key row outward to another place (id kept, values unchanged)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: moveErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
-			Examples: []op.Example{{Title: "repo key to the project", CLI: "lore meta move retry_count --to agency/acme-hub --yes", Want: "moved"}}}, o.metaMoveKey),
+			Examples: []op.Example{{Title: "repo key to the project", CLI: "lore meta move --id retry_count --to agency/acme-hub --yes", Want: "moved"}}}, o.metaMoveKey),
 	}
 }
 
@@ -274,7 +274,7 @@ func (o ops) metaMoveKey(ctx context.Context, in MetaMoveIn) (MetaMoveOut, error
 	}
 	if c := clashIn(have, k); c != "" {
 		return MetaMoveOut{}, errs.New(errs.MetaTaken, fmt.Sprintf("%s already defines %s (%s)", place(to), name, c)).
-			WithHint("settle it with lore meta rename or lore meta edit " + name + " --merge-into <key> first; nothing written")
+			WithHint("settle it with lore meta rename or lore meta edit --id " + name + " --merge-into <key> first; nothing written")
 	}
 	// OV58-2 / FB-META-5 (after the name clash, which is settled first): a move goes strictly outward in the level order
 	// (repo → folder → org → store root → personal, policy.Levels); a
@@ -297,7 +297,7 @@ func (o ops) metaMoveKey(ctx context.Context, in MetaMoveIn) (MetaMoveOut, error
 	human := fmt.Sprintf("moved %s (%s) %s → %s; id kept, values unchanged\n  %s: key row added (%d allowed values)\n  %s: tombstone left\n",
 		name, short(k.Row.ID), text(k.Row, mScope), scopeOf(to), place(to), len(vs), place(k.Src))
 	if internal {
-		human += "  new to the store, so it starts internal (lore meta edit " + name + " --no-internal clears it)\n"
+		human += "  new to the store, so it starts internal (lore meta edit --id " + name + " --no-internal clears it)\n"
 	}
 	return MetaMoveOut{Keys: []string{name}, Values: len(vs), Store: string(to), Human: human}, nil
 }
@@ -526,7 +526,7 @@ func (o ops) rehomeRefile(ctx context.Context, in MetaRehomeIn, src store.Source
 			continue
 		}
 		if _, err := o.env.Update(engine.WithMeta(bctx, mw), engine.Ref{Store: r.Src, ID: r.Row.ID}, map[string]value.Value{}); err != nil {
-			return MetaRehomeOut{}, errs.Prefix(fmt.Sprintf("meta rehome: stopped after %d rows (batch %s; see: lore batch show %s)", out.Rewritten, bid, bid), err)
+			return MetaRehomeOut{}, errs.Prefix(fmt.Sprintf("meta rehome: stopped after %d rows (batch %s; see: lore batch show --id %s)", out.Rewritten, bid, bid), err)
 		}
 		out.Rewritten++
 	}

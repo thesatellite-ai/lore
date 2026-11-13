@@ -52,7 +52,7 @@ func (g GoneScope) MoveArgs() []string {
 	if to == "" {
 		to = "<new-path>"
 	}
-	return []string{"scope", "move", g.Path, to}
+	return []string{"scope", "move", "--old", g.Path, "--new", to}
 }
 
 // Line is the one-line notice of g: what happened, what it means for the

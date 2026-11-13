@@ -472,7 +472,7 @@ type SplitIn struct {
 	// Children are the positional sub-tasks after the id (OV2-2, FB-TASK-2),
 	// a repeated group (op/group.go, P3-TASK-1): `"a" --priority high "b"`
 	// gives --priority high to a only; added before any --title.
-	Children []SplitChild `json:"children,omitempty" arg:"1" rest:"true" desc:"sub-task titles, one per argument, in order (added before any --title)"`
+	Children []SplitChild `json:"children,omitempty" arg:"1" rest:"true" argof:"title" desc:"sub-task titles, one per argument (the quiet form of --title)"`
 	Titles   []string     `json:"titles,omitempty" flag:"title" desc:"a sub-task title; repeatable, one sub-task each, in order"`
 	// Priority, Commitment, Assign and Due given before the first title are
 	// shared by every sub-task; after a title they are that sub-task's own

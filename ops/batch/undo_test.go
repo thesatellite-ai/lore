@@ -16,9 +16,9 @@ import (
 // memAdd is the memory add operation the tests seed rows with.
 const memAdd = "memory.add"
 
-// undoHint is the "(undo: lore batch undo bat_…)" line a bulk edit prints
+// undoHint is the "(undo: lore batch undo --id bat_…)" line a bulk edit prints
 // (METADATA 3.19); its group is the batch id.
-var undoHint = regexp.MustCompile(`\(undo: lore batch undo (bat_[0-9a-f]{32})\)`)
+var undoHint = regexp.MustCompile(`\(undo: lore batch undo --id (bat_[0-9a-f]{32})\)`)
 
 // batchOf returns the batch id of the undo hint in out.
 func batchOf(t *testing.T, out string) string {
@@ -30,7 +30,7 @@ func batchOf(t *testing.T, out string) string {
 	return m[1]
 }
 
-// metaOf is `lore meta get <id>` as text.
+// metaOf is `lore meta get --id <id>` as text.
 func metaOf(h *opstest.H, id string) string {
 	return opstest.Text(h.Must(settings.OpMetaGet, `{"id":"`+id+`"}`))
 }

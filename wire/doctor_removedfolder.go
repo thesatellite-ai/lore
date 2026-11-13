@@ -74,7 +74,7 @@ func (a *App) removedFolderFinding(ctx context.Context, s attach.Store, f string
 	by, day, _ := strings.Cut(rest, "\t")
 	return DoctorFinding{Check: DoctorCheckRemovedFolder, Level: DoctorWarning, Store: store.Source(s.Name),
 		Message: "store " + string(s.Name) + " attaches folder " + f + ", which the store no longer has (removed in commit " + sha + " by " + by + " on " + day + "): this repo reads nothing from it, and a write here would make the folder again",
-		Fix:     "lore store remove " + string(s.Name)}, true
+		Fix:     "lore store remove --name " + string(s.Name)}, true
 }
 
 // folderMetaAt reports whether the store worktree dir has folder f's

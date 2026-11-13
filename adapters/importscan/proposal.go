@@ -240,9 +240,9 @@ func setupWithOrg(setups []existingSetup, org string) (existingSetup, bool) {
 func (s existingSetup) coveredLine(why string) string {
 	switch {
 	case s.trashed:
-		return s.name + " (in the trash) " + why + "; restore it with: lore setup trash restore " + s.name
+		return s.name + " (in the trash) " + why + "; restore it with: lore setup trash restore --name " + s.name
 	case s.disabled:
-		return s.name + " (disabled) " + why + "; enable it with: lore setup enable " + s.name
+		return s.name + " (disabled) " + why + "; enable it with: lore setup enable --name " + s.name
 	}
 	return s.name + " " + why
 }

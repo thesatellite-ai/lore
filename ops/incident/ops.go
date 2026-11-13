@@ -68,7 +68,7 @@ func Ops(env content.Env) []op.Entry {
 			Name: OpEdit, Summary: "Edit incident fields or add --ref pointers (only the flags given change)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: refErrors(),
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "link an incident to a row", CLI: "lore incident edit inc_… --ref res_… --relation affects", Want: "updated"}},
+			Examples: []op.Example{{Title: "link an incident to a row", CLI: "lore incident edit --id inc_… --ref res_… --relation affects", Want: "updated"}},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List incidents",
@@ -77,12 +77,12 @@ func Ops(env content.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show incident details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore incident show inc_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore incident show --id inc_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a incident (it goes to the trash; lore trash restore brings it back)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore incident delete inc_<id> --yes", Want: "inc_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore incident delete --id inc_<id> --yes", Want: "inc_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
@@ -90,7 +90,7 @@ func Ops(env content.Env) []op.Entry {
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across incident title + body",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore incident search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore incident search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}

@@ -71,7 +71,7 @@ func TestNotFoundHintForEveryCoreNoun(t *testing.T) {
 
 // TestNotFoundHintOnlyForTheRow (t-e2e6): a not-found about the TARGET of
 // a found row is never answered with the row's peek hint: `--to me` with
-// no personal store names `lore store init me`, an unknown store name gets
+// no personal store names `lore store init --name me`, an unknown store name gets
 // no peek hint; a missing row id still gets it.
 func TestNotFoundHintOnlyForTheRow(t *testing.T) {
 	t.Parallel()
@@ -91,7 +91,7 @@ func TestNotFoundHintOnlyForTheRow(t *testing.T) {
 		want    string // substring of stderr
 		notWant string
 	}{
-		{"to me, no personal store", []string{"move", id, "--to", "me"}, "lore store init me", "lore sync peek"},
+		{"to me, no personal store", []string{"move", id, "--to", "me"}, "lore store init --name me", "lore sync peek"},
 		{"to an unknown store", []string{"move", id, "--to", "nosuchstore"}, "no store named nosuchstore", "lore sync peek"},
 		{"missing row", []string{"move", "mem_01a1a5aca7f57659be7320c5f4b7f00d", "--to", "repo"}, "lore sync peek", ""},
 	}

@@ -28,8 +28,8 @@ func TestRegress_CoveredLineNamesStateOnce(t *testing.T) {
 		name, prefix, indent, extra, want string
 	}{
 		{"active", "setups:\n  - name: work\n    kind: solo\n    ", "    ", "", "work {why}"},
-		{"disabled", "setups:\n  - name: work\n    kind: solo\n    disabled: true\n    ", "    ", "", "work (disabled) {why}; enable it with: lore setup enable work"},
-		{"trashed", "trash:\n  setups:\n    - name: work\n      kind: solo\n      ", "      ", "      removed_at: \"2026-11-06T10:00:00Z\"\n", "work (in the trash) {why}; restore it with: lore setup trash restore work"},
+		{"disabled", "setups:\n  - name: work\n    kind: solo\n    disabled: true\n    ", "    ", "", "work (disabled) {why}; enable it with: lore setup enable --name work"},
+		{"trashed", "trash:\n  setups:\n    - name: work\n      kind: solo\n      ", "      ", "      removed_at: \"2026-11-06T10:00:00Z\"\n", "work (in the trash) {why}; restore it with: lore setup trash restore --name work"},
 	}
 	for _, st := range states {
 		for m, body := range match {

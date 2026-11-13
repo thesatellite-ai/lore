@@ -105,7 +105,7 @@ func (o ToggleOut) Text() string {
 		return "setup " + o.Name + " is already " + state + "\n"
 	}
 	if o.Disabled {
-		return "disabled setup " + o.Name + ": it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable " + o.Name + " turns it back on\n"
+		return "disabled setup " + o.Name + ": it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable --name " + o.Name + " turns it back on\n"
 	}
 	return "enabled setup " + o.Name + "\n"
 }
@@ -366,7 +366,7 @@ func purgePreview(cfg onboard.Config, t onboard.TrashedSetup, identity string, i
 			// and caches until the person drops them: say so and how
 			// (journey joiner/month3/leave-job-a: leaving a job left its
 			// notes behind without a word).
-			out.Stays = append(out.Stays, "this machine's copy of the org "+t.Setup.Org+"'s store, with the team's notes: lore store forget "+u+" deletes it")
+			out.Stays = append(out.Stays, "this machine's copy of the org "+t.Setup.Org+"'s store, with the team's notes: lore store forget --url "+u+" deletes it")
 		}
 	} else if t.Setup.Org != "" {
 		out.Stays = append(out.Stays, "the org "+t.Setup.Org+" (orgs[] in ~/.lore/config.yaml): another setup uses it")
@@ -421,11 +421,11 @@ func lifecycleOps(e engine, local func(op.Spec) op.Spec) []op.Entry {
 	return []op.Entry{
 		op.Define(local(op.Spec{Name: OpDisable, Summary: "Disable a setup: it stays in config.yaml but matches no folder, --setup or default, and doctor --all skips it",
 			Permission: op.PermWrite, Errors: with(),
-			Examples: []op.Example{{Title: "disable a setup", CLI: "lore setup disable old-client", Want: ""}}}),
+			Examples: []op.Example{{Title: "disable a setup", CLI: "lore setup disable --name old-client", Want: ""}}}),
 			e.Disable),
 		op.Define(local(op.Spec{Name: OpEnable, Summary: "Enable a disabled setup again",
 			Permission: op.PermWrite, Errors: with(),
-			Examples: []op.Example{{Title: "enable a setup", CLI: "lore setup enable old-client", Want: ""}}}),
+			Examples: []op.Example{{Title: "enable a setup", CLI: "lore setup enable --name old-client", Want: ""}}}),
 			e.Enable),
 		op.Define(trash(op.Spec{Name: OpTrashList, Summary: "List the setups in the trash (lore setup remove moved them there), newest first",
 			Errors:   errsPort,
@@ -433,19 +433,19 @@ func lifecycleOps(e engine, local func(op.Spec) op.Spec) []op.Entry {
 			e.TrashList),
 		op.Define(trash(op.Spec{Name: OpTrashRestore, Summary: "Bring a setup back from the trash, with its repo pins",
 			Permission: op.PermWrite, Errors: with(errs.SetupNameTaken),
-			Examples: []op.Example{{Title: "restore a setup", CLI: "lore setup trash restore old-client", Want: ""}}}),
+			Examples: []op.Example{{Title: "restore a setup", CLI: "lore setup trash restore --name old-client", Want: ""}}}),
 			e.TrashRestore),
 		op.Define(trash(op.Spec{Name: OpTrashPurge, Summary: "Delete a trashed setup for good (never a store or a repo); --dry-run lists what stays",
 			Permission: op.PermWrite, Errors: with(errs.NeedsConfirm),
-			Examples: []op.Example{{Title: "preview a purge", CLI: "lore setup trash purge old-client --dry-run", Want: ""}}}),
+			Examples: []op.Example{{Title: "preview a purge", CLI: "lore setup trash purge --name old-client --dry-run", Want: ""}}}),
 			e.TrashPurge),
 		op.Define(local(op.Spec{Name: OpRename, Summary: "Rename a setup: its entry, repo pins and saved progress take the new name",
 			Permission: op.PermWrite, Errors: with(errs.SetupNameTaken),
-			Examples: []op.Example{{Title: "rename a setup", CLI: "lore setup rename old-client client-archive", Want: ""}}}),
+			Examples: []op.Example{{Title: "rename a setup", CLI: "lore setup rename --name old-client --to client-archive", Want: ""}}}),
 			e.Rename),
 		op.Define(local(op.Spec{Name: OpImportDismiss, Summary: "Hide Home's import banner for the values it names (remembered in ~/.lore/state)",
 			Permission: op.PermWrite, Errors: errsPort,
-			Examples: []op.Example{{Title: "dismiss the import banner", CLI: "lore setup import-dismiss 0123456789abcdef", Want: ""}}}),
+			Examples: []op.Example{{Title: "dismiss the import banner", CLI: "lore setup import-dismiss --key 0123456789abcdef", Want: ""}}}),
 			e.ImportDismiss),
 	}
 }

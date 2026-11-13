@@ -181,7 +181,7 @@ func trashErr(t *testing.T, c *th.Clone, wantCode string, wantExit int, args ...
 	return e
 }
 
-// trashShowOut is `lore show <id> --json`: the row's stored fields.
+// trashShowOut is `lore show --id <id> --json`: the row's stored fields.
 type trashShowOut struct {
 	ID     string            `json:"id"`
 	Table  string            `json:"table"`
@@ -189,7 +189,7 @@ type trashShowOut struct {
 	Fields map[string]string `json:"fields"`
 }
 
-// trashShow is `lore show <id> --json`.
+// trashShow is `lore show --id <id> --json`.
 func trashShow(t *testing.T, c *th.Clone, id string) trashShowOut {
 	t.Helper()
 	return th.DecodeJSON[trashShowOut](t, c.MustLore("show", id, "--json"))
@@ -268,7 +268,7 @@ func trashContains(ids []string, id string) bool {
 	return false
 }
 
-// trashAssertPurgedShow checks `lore show <id>` of a purged row: it
+// trashAssertPurgedShow checks `lore show --id <id>` of a purged row: it
 // refuses with E_PURGED naming the id and prints no content (INTEG-TRASH-4;
 // it used to print the tombstone as an empty row, exit 0).
 func trashAssertPurgedShow(t *testing.T, c *th.Clone, id string) {

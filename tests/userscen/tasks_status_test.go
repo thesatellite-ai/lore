@@ -163,7 +163,7 @@ func TestTasksStatus_CancelReasons(t *testing.T) {
 	// with the cancel hint and the task stays open (INTEG-QUESTIONS-6).
 	acc := tasksAdd(t, s.c, "taken on", "--commitment", "accepted")
 	e := tasksJSONErr(t, s.c, "task", "decline", acc)
-	if e.Error.Code != "E_REFUSED" || !strings.Contains(e.Error.Message, "is accepted, not proposed") || !strings.Contains(e.Error.Hint, "lore task cancel "+acc) {
+	if e.Error.Code != "E_REFUSED" || !strings.Contains(e.Error.Message, "is accepted, not proposed") || !strings.Contains(e.Error.Hint, "lore task cancel --id "+acc) {
 		t.Fatalf("decline of an accepted task: E_REFUSED with the cancel hint: %+v", e)
 	}
 	if got := tasksShow(t, s.c, acc); got.Status == "cancelled" {

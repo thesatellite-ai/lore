@@ -105,7 +105,7 @@ func undoEntry(o ops) op.Entry {
 	return op.Define(op.Spec{Name: OpUndo, Summary: "Undo a bulk action: restore a delete batch, put the rows an edit batch changed back, or move the rows a create batch added to the trash",
 		Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{MayAsk: true},
 		Errors:   []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.Stale, errs.NeedsConfirm, errs.Cancelled, errs.ParentDeleted, errs.Internal},
-		Examples: []op.Example{{Title: "undo a bulk delete", CLI: "lore batch undo bat_<id>", Want: "restored"}}}, o.undo)
+		Examples: []op.Example{{Title: "undo a bulk delete", CLI: "lore batch undo --id bat_<id>", Want: "restored"}}}, o.undo)
 }
 
 func (o ops) undo(ctx context.Context, in UndoIn) (UndoOut, error) {
@@ -145,7 +145,7 @@ func (o ops) undo(ctx context.Context, in UndoIn) (UndoOut, error) {
 		case actPurge:
 			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" purged "+ev.ID.String()+
 				"; purged rows never come back (DQ4)").
-				WithHint("see what it changed: lore batch show " + id.String() + " --all")
+				WithHint("see what it changed: lore batch show --id " + id.String() + " --all")
 		default:
 			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" holds a "+strconv.Quote(ev.Action)+" row ("+ev.ID.String()+"); only delete and create batches can be undone")
 		}
@@ -212,7 +212,7 @@ func (o ops) undoEdits(ctx context.Context, id ids.ID[ids.Batch], evs []Event, o
 		p := priors[rid]
 		if _, werr := rv.Revert(bctx, engine.Ref{Store: p.Store, Table: p.Before.Table, ID: rid}, p.After, p.Before); werr != nil {
 			return errs.Prefix("batch undo: stopped after "+strconv.Itoa(i)+" of "+strconv.Itoa(len(order))+
-				" rows (the rows put back are in batch "+into.String()+"; undo: lore batch undo "+into.String()+")", werr)
+				" rows (the rows put back are in batch "+into.String()+"; undo: lore batch undo --id "+into.String()+")", werr)
 		}
 		out.Reverted = append(out.Reverted, rid.String())
 	}
@@ -234,7 +234,7 @@ func editOrder(id ids.ID[ids.Batch], evs []Event, priors map[ids.AnyID]Prior) ([
 		if _, ok := priors[ev.ID]; !ok {
 			return nil, errs.New(errs.Unsupported, "batch undo: "+id.String()+" updated "+ev.ID.String()+
 				" but the batch log kept no earlier values for it, so the edit cannot be reverted").
-				WithHint("see what it changed: lore batch show " + id.String() + " --all")
+				WithHint("see what it changed: lore batch show --id " + id.String() + " --all")
 		}
 		order = append(order, ev.ID)
 	}
@@ -376,11 +376,11 @@ func (o UndoOut) Text() string {
 	}
 	if len(o.Trashed) > 0 {
 		b.WriteString("✓ moved " + plural.Count(len(o.Trashed), "row") + " batch " + o.Batch + " created to the trash (batch " + o.Into +
-			"; restore: lore trash restore " + o.Into + ")\n")
+			"; restore: lore trash restore --target " + o.Into + ")\n")
 	}
 	if len(o.Reverted) > 0 {
 		b.WriteString("✓ restored " + plural.Count(len(o.Reverted), "row") + " to their values before " + o.Batch +
-			"; batch " + o.Reverts + " (undo: lore batch undo " + o.Reverts + ")\n")
+			"; batch " + o.Reverts + " (undo: lore batch undo --id " + o.Reverts + ")\n")
 	}
 	if len(o.Restored) == 0 && len(o.Trashed) == 0 && len(o.Reverted) == 0 {
 		b.WriteString("nothing to undo in batch " + o.Batch + "\n")

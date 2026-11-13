@@ -476,10 +476,10 @@ func (o ops) afterClose(ctx context.Context, f forest, id string) (ParentNote, N
 		return note, Next{}, "  " + parent + " " + f.title(parent) + " closed too: no open sub-tasks (tasks.parent_autoclose: on)\n", nil
 	}
 	why := "parent has no open sub-tasks (tasks.parent_autoclose: " + mode + ")"
-	human := "  " + parent + " " + f.title(parent) + " has no open sub-tasks now; close it: lore task done " + parent + "\n"
+	human := "  " + parent + " " + f.title(parent) + " has no open sub-tasks now; close it: lore task done --id " + parent + "\n"
 	if mode == autocloseOn {
 		why = "parent kept open: its approval gate is " + gate
-		human = "  " + parent + " " + f.title(parent) + " has no open sub-tasks but its gate is " + gate + "; close it after approval: lore task done " + parent + "\n"
+		human = "  " + parent + " " + f.title(parent) + " has no open sub-tasks but its gate is " + gate + "; close it after approval: lore task done --id " + parent + "\n"
 	}
 	return note, Next{Command: "lore", Args: []string{Noun, "done", parent}, Why: why}, human, nil
 }
@@ -598,7 +598,7 @@ func cycleWarnings(f forest) []Warning {
 	var out []Warning
 	for _, c := range f.tree.Cycles() {
 		out = append(out, Warning{Code: tasktree.WarnParentCycle, Field: fieldParent,
-			Message: "parent cycle " + strings.Join(c, " → ") + " → " + c[0] + "; " + c[0] + " is shown at top level; fix: lore task edit " + c[0] + " --parent … or --no-parent"})
+			Message: "parent cycle " + strings.Join(c, " → ") + " → " + c[0] + "; " + c[0] + " is shown at top level; fix: lore task edit --id " + c[0] + " --parent … or --no-parent"})
 	}
 	return out
 }

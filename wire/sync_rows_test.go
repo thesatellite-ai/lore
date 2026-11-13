@@ -177,7 +177,7 @@ func TestSyncTrashPointsAtTrashLocal(t *testing.T) {
 	if _, err := env.SyncTrashRestore(background(), opssync.TrashRestoreIn{ID: "3"}); !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "#3") {
 		t.Fatalf("sync trash restore = %v, want E_NOT_FOUND for copy #3", err)
 	}
-	if len(notes) == 0 || !strings.Contains(notes[0], "lore trash restore --local 3") {
+	if len(notes) == 0 || !strings.Contains(notes[0], "lore trash restore --local --target 3") {
 		t.Fatalf("restore pointer = %q", notes)
 	}
 }

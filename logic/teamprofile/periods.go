@@ -246,5 +246,5 @@ func label(p Period) string {
 
 // overlapErr is E_PERIOD_OVERLAP with the next step.
 func overlapErr(msg string) error {
-	return errs.New(errs.PeriodOverlap, msg).WithHint("lore actor period list <actor> shows the stints; pick a date after the last end")
+	return errs.New(errs.PeriodOverlap, msg).WithHint("lore actor period list --actor <actor> shows the stints; pick a date after the last end")
 }

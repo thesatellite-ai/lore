@@ -213,7 +213,7 @@ func TestMigrateEnable(t *testing.T) {
 	// No feature (or an empty one): the op's own refusal and hint, not the
 	// decoder's bare "missing required field" (INTEG-MIGREST-2).
 	for _, args := range [][]string{{"migrate", "enable"}, {"migrate", "enable", ""}} {
-		c.Lore(args...).Fails(t, migExitInvalid, "[E_INVALID_INPUT] migrate: name the feature to enable", "hint: lore migrate enable <feature>")
+		c.Lore(args...).Fails(t, migExitInvalid, "[E_INVALID_INPUT] migrate: name the feature to enable", "hint: lore migrate enable --feature <feature>")
 	}
 	c.Lore("migrate", "enable", "nope").Fails(t, migExitInvalid, "E_INVALID_INPUT", `migrate: "nope" is not a feature this lore knows`,
 		"hint: known features: live, signals, hlc, meta, trash, task_tree, time, plan_status, policy, resources, refs, vars, personal_flat")

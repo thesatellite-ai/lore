@@ -195,7 +195,7 @@ func foldHistory(task string, list []HistoryEntry, maxN int) ([]HistoryEntry, er
 		return nil, errs.Wrap(errs.Internal, "history: summary id", err)
 	}
 	sum := HistoryEntry{ID: sid.String(), At: last.At, By: "lore", Field: histSummaryField, From: from, To: last.At, Counts: counts,
-		Note: "folded " + strconv.Itoa(total) + " entries: " + countLine(counts) + "; full detail: lore task history " + task + " --git"}
+		Note: "folded " + strconv.Itoa(total) + " entries: " + countLine(counts) + "; full detail: lore task history --id " + task + " --git"}
 	return append([]HistoryEntry{sum}, keep...), nil
 }
 

@@ -417,9 +417,9 @@ suitable for small-context (32K) and weak-instruction-following models
     T[update what we said about X]            → rule search "X"; rule edit rul_<id> (or archive + add)
     T[reverse the rule about X]               → rule search "X"; archive rul_<id>; add new with opposite content
     These must be emitted as ONE atomic shell script using `+"`$(…)`"+` command substitution to extract the rule code in-line — NOT as multi-step "Step 1 / Step 2" examples (weak models stop after step 1). Example form:
-        RID=$(lore rule search "<keyword>" --json | jq -r '.data[0].code')
-        lore rule archive "$RID"
-        lore rule add --severity=should "<new stance>"
+        RID=$(lore rule search --query "<keyword>" --json | jq -r '.data[0].code')
+        lore rule archive --id "$RID"
+        lore rule add --severity=should --body "<new stance>"
         lore render
 
 17. **FEW-SHOTS section must include:**

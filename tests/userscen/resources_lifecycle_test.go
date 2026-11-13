@@ -48,8 +48,8 @@ func TestResourcesLifecycleAddToPurge(t *testing.T) {
 	}
 	c.Lore("resource", "show", "web1").Fails(t, resExitNotFound, "E_NOT_FOUND")
 	// Delete → trash; the row answers E_IN_TRASH with the restore command.
-	c.MustLore("resource", "delete", "web_one", "--yes").Says(t, "moved to the trash", "lore trash restore "+add.ID, "still pointing at it: api")
-	c.Lore("resource", "show", "web_one").Fails(t, resExitRefused, "E_IN_TRASH", "lore trash restore "+add.ID)
+	c.MustLore("resource", "delete", "web_one", "--yes").Says(t, "moved to the trash", "lore trash restore --target "+add.ID, "still pointing at it: api")
+	c.Lore("resource", "show", "web_one").Fails(t, resExitRefused, "E_IN_TRASH", "lore trash restore --target "+add.ID)
 	if l := resList(t, c, "host"); l.Count != 0 {
 		t.Fatalf("a trashed row leaves list: %+v", l)
 	}
@@ -136,7 +136,7 @@ func TestResourcesResourceNameMatrix(t *testing.T) {
 		{name: "res_abc", label: "id-shaped", ok: true},
 		{name: long, label: "128 chars", ok: true},
 		{name: long + "a", label: "129 chars", exit: resExitInvalid, say: []string{"E_RESOURCE_NAME", "at most 128 characters"}},
-		{name: "Web", label: "upper", exit: resExitInvalid, say: []string{"E_RESOURCE_NAME", "name format", "lore resource kind show host"}},
+		{name: "Web", label: "upper", exit: resExitInvalid, say: []string{"E_RESOURCE_NAME", "name format", "lore resource kind show --id host"}},
 		{name: "wéb", label: "unicode", exit: resExitInvalid, say: []string{"E_RESOURCE_NAME"}},
 		{name: "a b", label: "space", exit: resExitInvalid, say: []string{"E_RESOURCE_NAME"}},
 		{name: "a-b", label: "dash", exit: resExitInvalid, say: []string{"E_RESOURCE_NAME"}},

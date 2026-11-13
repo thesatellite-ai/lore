@@ -21,10 +21,10 @@ Alice (an agency developer) keeps the dates for the client's website, `github.co
 <!-- example: tasks#reminder -->
 ```console
 # alice, in website
-$ lore reminder add 'Renew the domain name' --due 2027-06-01 --recurrence 1y
+$ lore reminder add --message 'Renew the domain name' --due 2027-06-01 --recurrence 1y
 lore: wrote ~/work/website/.lore/data/reminders/rmd_b69e…5ed7.json
 ✓ reminder rmd_b69e…5ed7 due 2027-06-01
-$ lore reminder add 'Call the client about the new logo' --due 2026-11-01
+$ lore reminder add --message 'Call the client about the new logo' --due 2026-11-01
 lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
 ✓ reminder rmd_0aae…a61f due 2026-11-01
 $ lore reminder list
@@ -44,10 +44,10 @@ Reminders are listed by date, soonest first. A `!` at the start of the line mean
 <!-- example: tasks#reminder-done -->
 ```console
 # alice, in website
-$ lore reminder done rmd_b69e…5ed7
+$ lore reminder done --id rmd_b69e…5ed7
 lore: wrote ~/work/website/.lore/data/reminders/rmd_b69e…5ed7.json
 ✓ rescheduled to 2028-06-01
-$ lore reminder done rmd_0aae…a61f
+$ lore reminder done --id rmd_0aae…a61f
 lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
 ✓ reminder rmd_0aae…a61f completed
 $ lore reminder list
@@ -66,11 +66,11 @@ Delete only for mistakes. lore asks first; without a terminal it stops with `E_N
 <!-- example: tasks#reminder-delete -->
 ```console
 # alice, in website
-$ lore reminder delete rmd_0aae…a61f
+$ lore reminder delete --id rmd_0aae…a61f
 ERROR: [E_NEEDS_CONFIRM] reminder delete rmd_0aae…a61f?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore reminder delete rmd_0aae…a61f --yes
+$ lore reminder delete --id rmd_0aae…a61f --yes
 lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
 ✓ rmd_0aae…a61f moved to the trash (restore: lore trash restore rmd_0aae…a61f)
 ```

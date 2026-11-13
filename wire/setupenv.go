@@ -121,10 +121,10 @@ func (a *App) TeamOrigin(_ context.Context, org string) (team.Origin, error) {
 			return team.Origin{Store: o.Stores[0].URL}, nil
 		}
 		return team.Origin{}, errs.New(errs.NotFound, "org "+strconv.Quote(org)+" has no store in ~/.lore/"+ConfigFile).
-			WithHint("lore org import <store url> adds it")
+			WithHint("lore org import --url <store-url> adds it")
 	}
 	return team.Origin{}, errs.New(errs.NotFound, "no org named "+strconv.Quote(org)+" in ~/.lore/"+ConfigFile).
-		WithHint("lore org import <store url> --as " + org)
+		WithHint("lore org import --url <store-url> --as " + org)
 }
 
 // TeamGitHub implements team.Env: gh runs for invite.github_access and

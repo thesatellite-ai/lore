@@ -85,7 +85,7 @@ func TestPlanSupersedeRepairMatrix(t *testing.T) {
 	if len(two.conflicts) != 1 || len(two.fixes) != 0 {
 		t.Fatalf("two into one = %+v", two)
 	}
-	if got := conflictText(two.conflicts[0]); !strings.Contains(got, "rule rows b and c each claim to replace a") || !strings.Contains(got, "lore rule delete <id>") ||
+	if got := conflictText(two.conflicts[0]); !strings.Contains(got, "rule rows b and c each claim to replace a") || !strings.Contains(got, "lore rule delete --id <id>") ||
 		!strings.Contains(got, "lore doctor --fix") {
 		t.Errorf("conflict finding = %q", got)
 	}

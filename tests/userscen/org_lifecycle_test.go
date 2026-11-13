@@ -72,7 +72,7 @@ func TestOrgOffboardThenRejoin(t *testing.T) {
 
 	o.app.MustLore("actor", "offboard", "@bob", "--on", "2026-11-10", "--reason", "moved abroad", "--yes").
 		Says(t, "offboarded on 2026-11-10", "1 memberships ended")
-	o.app.Lore("actor", "offboard", "@bob", "--yes").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "already left", "lore actor rejoin @bob")
+	o.app.Lore("actor", "offboard", "@bob", "--yes").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "already left", "lore actor rejoin --actor @bob")
 
 	left := showActor(t, bc, "@bob")
 	if left.ID != bobID || left.Status != "left" || left.Active || len(left.Periods) != 1 || left.Periods[0].EndedOn != "2026-11-10" || left.Periods[0].EndReason != "moved abroad" {
@@ -83,14 +83,14 @@ func TestOrgOffboardThenRejoin(t *testing.T) {
 	}
 	o.app.MustLore("actor", "list").Says(t, "Bob Roe  (left)")
 	o.app.Lore("task", "add", "after bob left", "--tasklist", tl, "--assign", "@bob").Refused(t, "@bob")
-	o.app.Lore("project", "member", "add", "app", "@bob", "--role", "dev").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "lore actor rejoin @bob")
+	o.app.Lore("project", "member", "add", "app", "@bob", "--role", "dev").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "lore actor rejoin --actor @bob")
 	o.app.MustLore("task", "show", taskID).Says(t, "Bob Roe") // old rows keep the name
 	// INTEG-ORG-1: bob cannot bring himself back. A register on his own
 	// clone and an agent start are both E_STATUS_CHANGE naming his status
 	// and `lore actor rejoin`; nothing is written, he stays left.
 	beforeSelf := o.notes.Rev("refs/heads/main")
-	bc.Lore("actor", "register").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "(@bob) is left", "lore actor rejoin @bob")
-	bc.Lore("agent", "start", "--label", "bob-fe").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "you are left on", "lore actor rejoin @bob")
+	bc.Lore("actor", "register").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "(@bob) is left", "lore actor rejoin --actor @bob")
+	bc.Lore("agent", "start", "--label", "bob-fe").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "you are left on", "lore actor rejoin --actor @bob")
 	if o.notes.Rev("refs/heads/main") != beforeSelf {
 		t.Fatal("a refused self-register or agent start writes nothing")
 	}
@@ -221,7 +221,7 @@ func TestOrgStatusMoves(t *testing.T) {
 	if l := listActors(t, o.app, "--status", "on_leave"); l.Count != 1 || l.Data[0].DisplayName != orgBobName {
 		t.Fatalf("--status on_leave: %v", displayNames(l))
 	}
-	o.app.Lore("actor", "status", "@bob", "left").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "lore actor offboard @bob")
+	o.app.Lore("actor", "status", "@bob", "left").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "lore actor offboard --actor @bob")
 	o.app.Lore("actor", "status", "@bob", "archived").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "offboard")
 	o.app.Lore("actor", "status", "@bob", "sleeping").Fails(t, orgExitBadInput, "E_INVALID_INPUT")
 	o.app.Lore("actor", "status", "@bob", "on_leave", "--from", "2026-11-30", "--until", "2026-11-01").Fails(t, orgExitBadInput, "E_INVALID_INPUT")
@@ -277,7 +277,7 @@ func TestOrgRolesLifecycle(t *testing.T) {
 	}
 
 	o.app.MustLore("role", "add", "tech_writer", "--label", "Technical writer", "--description", "writes the docs").Says(t, "role tech_writer added")
-	o.app.Lore("role", "add", "tech_writer").Fails(t, th.ExitRefused, "E_NAME_TAKEN", "role tech_writer already exists", "lore role edit tech_writer")
+	o.app.Lore("role", "add", "tech_writer").Fails(t, th.ExitRefused, "E_NAME_TAKEN", "role tech_writer already exists", "lore role edit --name tech_writer")
 	o.app.Lore("role", "add", "dev").Fails(t, th.ExitRefused, "E_NAME_TAKEN")
 	for _, name := range []string{"Tech Writer", "tech-writer", "TechWriter", "1st", "rôle", "", " "} {
 		t.Run("bad name "+name, func(t *testing.T) {

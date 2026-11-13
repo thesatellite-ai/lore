@@ -363,7 +363,7 @@ func TestSupersedesRollback(t *testing.T) {
 		t.Fatalf("double failure: %v", err)
 	}
 	var x *errs.Error
-	if !errors.As(err, &x) || !strings.Contains(x.Hint, "lore rule delete "+fakeRuleIDs[2]) {
+	if !errors.As(err, &x) || !strings.Contains(x.Hint, "lore rule delete --id "+fakeRuleIDs[2]) {
 		t.Fatalf("hint does not name the left-over row: %v", err)
 	}
 }

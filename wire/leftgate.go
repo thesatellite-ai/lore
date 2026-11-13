@@ -86,7 +86,7 @@ func leftRefusal(org, status, leftAt string) error {
 		since = " since " + day
 	}
 	return errs.New(errs.Refused, "you are marked as "+status+" in "+org+since+"; writes to its stores and repos are refused (your personal store still works)").
-		WithHint("if you are back, ask an admin of " + org + " to run lore member add <your email>")
+		WithHint("if you are back, ask an admin of " + org + " to run lore member add --email <your-email>")
 }
 
 // orgRosterClone is the folder of org's roster (org folder) inside this

@@ -123,7 +123,7 @@ func (o ops) kindNameClash(ctx context.Context, name string, target store.Source
 		if l.Src != target && text(l.Row, kName) == name {
 			return errs.New(errs.KindConflict, fmt.Sprintf("kind %s (%s) is already defined in %s; %s may extend it, not define it again",
 				name, l.Row.ID, place(l.Src), place(target))).
-				WithHint("add fields with `lore resource field add " + name + " <field> --to " + string(target) + "`")
+				WithHint("add fields with `lore resource field add --kind " + name + " --field <field> --to " + string(target) + "`")
 		}
 	}
 	return nil

@@ -4,8 +4,8 @@ package app
 // 2.7, 2.13, 3.6, 3.8, 3.9), ported from saas/cmd/cli row_shortcut.go and
 // sql_shortcut.go so cmd/lore answers the same spellings:
 //
-//	lore show <id> [--origin] ─► row show
-//	lore move <id> --to t     ─► row move (same id, PROV5; the engine's
+//	lore show --id <id> [--origin] ─► row show
+//	lore move --id <id> --to t     ─► row move (same id, PROV5; the engine's
 //	                             write guards apply; no org here, FA-OLDCODE-1)
 //	lore lint [--code c]      ─► lint run
 //	lore machine(s) [show]    ─► machine list | machine show
@@ -61,16 +61,16 @@ const (
 // mountShortcuts adds the short words; a missing core command adds nothing.
 func mountShortcuts(root *cobra.Command) {
 	if show := find(root, opsrow.Noun, rowShowVerb); show != nil {
-		root.AddCommand(shortcutOf(show, "show <id>", "Show any row by id (--origin: where it came from)"))
+		root.AddCommand(shortcutOf(show, "show", "Show any row by id (--origin: where it came from)"))
 	}
 	if show := find(root, opslink.CommitNoun, commitShowVerb); show != nil {
 		// v0.1.17's spelling of `lore commit show <sha>` (CLI 2.15, D33).
-		alias := shortcutOf(show, commitShowAlias+" <sha>", "v0.1.17 spelling of `lore commit show`")
+		alias := shortcutOf(show, commitShowAlias, "v0.1.17 spelling of `lore commit show`")
 		alias.Hidden = true
 		root.AddCommand(alias)
 	}
 	if mv := find(root, opsrow.Noun, rowMoveVerb); mv != nil {
-		root.AddCommand(shortcutOf(mv, "move <id>", "Move a row to another store (same id; asks first)"))
+		root.AddCommand(shortcutOf(mv, "move", "Move a row to another store (same id; asks first)"))
 	}
 	defaultVerb(root, opslint.Noun, lintRunVerb)
 	defaultVerb(root, opssync.Noun, opssync.VerbRun)        // lore sync ─► sync run
@@ -101,7 +101,7 @@ func mountShortcuts(root *cobra.Command) {
 			Use: planApplyVerb, Hidden: true, Args: cobra.ArbitraryArgs, DisableFlagParsing: true,
 			RunE: func(_ *cobra.Command, args []string) error {
 				return errs.New(errs.InvalidInput, `unknown command "`+planApplyVerb+`" for "lore `+opsplan.Noun+`"`).
-					WithHint(strings.TrimSpace(missionApply + strings.Join(args, " ")))
+					WithHint(strings.TrimSpace(missionApply + strings.Join(namedFile(args), " ")))
 			},
 		})
 	}
@@ -143,11 +143,13 @@ func defaultVerbAt(root *cobra.Command, path []string, verb string) *cobra.Comma
 	return g
 }
 
-// shortcutOf is a top-level command that parses its arguments with target's
-// flags and runs target, so both spellings share one implementation.
-func shortcutOf(target *cobra.Command, use, short string) *cobra.Command {
+// shortcutOf is a top-level command named name that parses its arguments
+// with target's flags and runs target, so both spellings share one
+// implementation. Its usage line is target's after the name (`show --id
+// <id>`: U-4, the named form only).
+func shortcutOf(target *cobra.Command, name, short string) *cobra.Command {
 	c := &cobra.Command{
-		Use: use, Short: short, Long: target.Long, Example: target.Example,
+		Use: name + strings.TrimPrefix(target.Use, target.Name()), Short: short, Long: target.Long, Example: target.Example,
 		DisableFlagParsing: true,
 		RunE:               forward(target),
 	}
@@ -158,7 +160,7 @@ func shortcutOf(target *cobra.Command, use, short string) *cobra.Command {
 // showFlags lists target's flags in c's --help. c never parses them
 // (DisableFlagParsing: forward parses with target's own set), so the shared
 // *pflag.Flag values are only read for the help text. This is what makes
-// `lore move --help` print "lore move <id> [flags]" and bare-noun help
+// `lore move --help` print "lore move --id <id> [flags]" and bare-noun help
 // print "lore whoami [flags]" (CLI_REFERENCE 2.7, 3.8) instead of the
 // registered path of the operation they run (lore row move, lore whoami show).
 //
@@ -216,4 +218,18 @@ func forward(target *cobra.Command) func(*cobra.Command, []string) error {
 		}
 		return target.RunE(target, rest)
 	}
+}
+
+// namedFile puts a plan file typed by position under --file (U-4: the
+// hint shows the named form): `plan apply x.yaml --dry-run` →
+// `--file x.yaml --dry-run`.
+func namedFile(args []string) []string {
+	out := make([]string, 0, len(args)+1)
+	for i, a := range args {
+		if i == 0 && !strings.HasPrefix(a, "-") {
+			out = append(out, "--file")
+		}
+		out = append(out, a)
+	}
+	return out
 }

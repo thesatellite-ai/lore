@@ -42,7 +42,7 @@ func (h *Host) scopeRenameHints(ctx context.Context, root string) []string {
 	var out []string
 	for _, g := range h.goneScopes(ctx, root) {
 		if g.RenamedTo != "" {
-			out = append(out, fmt.Sprintf("folder %s was renamed to %s in git; keep its rows' scope with: lore scope move %s %s", g.Path, g.RenamedTo, g.Path, g.RenamedTo))
+			out = append(out, fmt.Sprintf("folder %s was renamed to %s in git; keep its rows' scope with: lore scope move --old %s --new %s", g.Path, g.RenamedTo, g.Path, g.RenamedTo))
 		}
 	}
 	return out

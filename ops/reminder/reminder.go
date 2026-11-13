@@ -263,7 +263,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "a weekly review",
-				CLI: `lore reminder add --due 2026-12-01 --recurrence 7d "weekly review"`, Want: "✓ reminder rmd_"}},
+				CLI: `lore reminder add --due 2026-12-01 --recurrence 7d --message "weekly review"`, Want: "✓ reminder rmd_"}},
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List pending reminders (or --done to see completed)",
@@ -271,14 +271,14 @@ func Ops(env Env) []op.Entry {
 			Examples: []op.Example{{Title: "pending reminders", CLI: "lore reminder list --json", Want: `"data"`}},
 		}, o.list),
 		op.Define(op.Spec{
-			Name: OpDone, Examples: []op.Example{{Title: "mark done", CLI: "lore reminder done rmd_<id>", Want: "done"}}, Summary: "Mark a reminder done (recurring → reschedules)",
+			Name: OpDone, Examples: []op.Example{{Title: "mark done", CLI: "lore reminder done --id rmd_<id>", Want: "done"}}, Summary: "Mark a reminder done (recurring → reschedules)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.done),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a reminder (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
 			Confirm:  op.ConfirmRule{Always: true},
-			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore reminder delete rmd_<id> --yes", Want: "moved to the trash"}},
+			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore reminder delete --id rmd_<id> --yes", Want: "moved to the trash"}},
 		}, o.delete).Asks(o.deleteQuestion),
 	}
 }
@@ -291,7 +291,7 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 	msg := strings.TrimSpace(in.Message)
 	if msg == "" {
 		return work.WriteOut{}, errs.New(errs.EmptyBody, "reminder add: the message is empty").
-			WithHint(`lore reminder add --due YYYY-MM-DD "<message>"`)
+			WithHint(`lore reminder add --due YYYY-MM-DD --message "<message>"`)
 	}
 	if strings.TrimSpace(in.Due) == "" {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, `required flag(s) "due" not set`)

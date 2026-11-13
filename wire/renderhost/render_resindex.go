@@ -92,7 +92,7 @@ func (h *Host) resourceIndexBlock(ctx context.Context, sources []store.Source) (
 	var b strings.Builder
 	b.WriteString(resIndexHead)
 	for _, k := range list {
-		fmt.Fprintf(&b, "- %s: %d — `lore resource list %s`\n", k.name, len(k.names), k.name)
+		fmt.Fprintf(&b, "- %s: %d — `lore resource list --kind %s`\n", k.name, len(k.names), k.name)
 		if k.summary {
 			sort.Strings(k.names)
 			for _, n := range k.names {

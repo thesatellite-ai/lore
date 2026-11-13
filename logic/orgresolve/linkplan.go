@@ -107,7 +107,7 @@ const configFile = "~/.lore/config.yaml"
 func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 	o := cfg.FindOrg(req.Entry)
 	if o == nil {
-		next := "import the org first: lore org import <store url>"
+		next := "import the org first: lore org import --url <store-url>"
 		if names := cfg.OrgNames(); len(names) > 0 {
 			next = "name one of the org entries: " + strings.Join(names, ", ")
 		}
@@ -130,7 +130,7 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 	}
 	if len(o.Stores) == 0 {
 		return LinkPlan{}, refuse("org entry "+o.Name+" lists no store",
-			"run lore org refresh "+o.Name+" to copy its stores from the team's lore-org.yaml, or add one under stores: in "+configFile)
+			"run lore org refresh --org "+o.Name+" to copy its stores from the team's lore-org.yaml, or add one under stores: in "+configFile)
 	}
 	st := o.Stores[0]
 	if req.StoreURL != "" {
@@ -152,7 +152,7 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 	if req.Own && !matchesAny(o.Own, []string{remote}) {
 		return LinkPlan{}, &LinkRefusal{Is: ErrLinkOwnPattern,
 			Msg:  fmt.Sprintf("%v: %s does not match %s's own: patterns (%s)", ErrLinkOwnPattern, remote, o.Name, listOrNone(o.Own)),
-			Next: "link it without --own (as a client repo), or add a matching pattern to own: in " + o.Name + "'s lore-org.yaml and run lore org refresh " + o.Name}
+			Next: "link it without --own (as a client repo), or add a matching pattern to own: in " + o.Name + "'s lore-org.yaml and run lore org refresh --org " + o.Name}
 	}
 	storeURL, err := repourl.NormalizeStore(st.URL)
 	if err != nil {

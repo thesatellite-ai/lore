@@ -86,7 +86,7 @@ func TestSupersedesRollback(t *testing.T) {
 	env.failDelete = errs.New(errs.StoreLocked, "locked")
 	_, err = call[WriteOut](t, env, OpAdd, `{"body":"v3","supersedes":"`+old+`"}`)
 	var e *errs.Error
-	if !errs.Has(err, errs.Stale) || !errors.As(err, &e) || !strings.Contains(e.Hint, "lore memory delete "+fakeIDs[2]) {
+	if !errs.Has(err, errs.Stale) || !errors.As(err, &e) || !strings.Contains(e.Hint, "lore memory delete --id "+fakeIDs[2]) {
 		t.Fatalf("double failure: %v", err)
 	}
 }

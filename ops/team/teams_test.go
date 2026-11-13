@@ -114,10 +114,10 @@ func TestTeamAddRefusals(t *testing.T) {
 		say  []string
 	}{
 		{"no handle", TeamAddIn{Handle: "@"}, errs.InvalidInput, []string{"name the team as @handle"}},
-		{"not one word", TeamAddIn{Handle: "@Web Team"}, errs.InvalidInput, []string{"not one lowercase word", "lore team add @web-team"}},
+		{"not one word", TeamAddIn{Handle: "@Web Team"}, errs.InvalidInput, []string{"not one lowercase word", "lore team add --handle @web-team"}},
 		{"a person's handle", TeamAddIn{Handle: "@tomas"}, errs.InvalidInput, []string{"taken by Tomas Dev", "cannot share"}},
 		{"nobody", TeamAddIn{Handle: "@web", Members: []string{"@ghost"}}, errs.NotFound, []string{"no one is @ghost", "lore actor list"}},
-		{"left", TeamAddIn{Handle: "@web", Members: []string{"@lena"}}, errs.StatusChange, []string{"@lena is left", "lore actor rejoin @lena"}},
+		{"left", TeamAddIn{Handle: "@web", Members: []string{"@lena"}}, errs.StatusChange, []string{"@lena is left", "lore actor rejoin --actor @lena"}},
 	}
 	for _, c := range cases {
 		_, err := teamAdd(x.ctx, x.e, c.in)
@@ -220,7 +220,7 @@ func TestTeamRemoveAndBack(t *testing.T) {
 	if err != nil || out.Verb != verbTeamRemoved || out.Team.Active || out.Team.LeftAt == "" {
 		t.Fatalf("remove = %+v, %v", out, err)
 	}
-	if !strings.Contains(out.Text(), "lore team add @web brings it back") {
+	if !strings.Contains(out.Text(), "lore team add --handle @web brings it back") {
 		t.Errorf("text = %q", out.Text())
 	}
 	if l, _ := teamList(x.ctx, x.e, TeamListIn{}); len(l.Teams) != 0 || !strings.HasPrefix(l.Text(), "no teams on agency org/") {

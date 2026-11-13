@@ -80,7 +80,7 @@ func TestRemoveMovesToTrash(t *testing.T) {
 	if err != nil || out.Name != "old-client" || out.RemovedAt == "" || len(env.store.cfg.Setups) != 0 || len(env.store.cfg.Trash) != 1 {
 		t.Fatalf("remove = %+v, %v", out, err)
 	}
-	if !strings.Contains(out.Text(), "lore setup trash restore old-client") {
+	if !strings.Contains(out.Text(), "lore setup trash restore --name old-client") {
 		t.Fatalf("text must say how to restore: %q", out.Text())
 	}
 	if _, err := e.Remove(bg, RemoveIn{Name: "old-client"}); !errs.Has(err, errs.SetupNotFound) {

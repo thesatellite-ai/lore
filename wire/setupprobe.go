@@ -575,7 +575,7 @@ func (sp setupProber) orgEntry(r opssetup.ProbeRequest) opssetup.ProbeResult {
 				for _, t := range cfg.Trash {
 					if t.Setup.Org == org {
 						// A setup in the trash still owns the team: say how to get it back or free it.
-						return result(onboard.StatusFail, "team "+org+" belongs to setup "+t.Setup.Name+", which is in the trash: restore it (lore setup trash restore "+t.Setup.Name+"), or purge it (lore setup trash purge "+t.Setup.Name+") to reuse the name", v)
+						return result(onboard.StatusFail, "team "+org+" belongs to setup "+t.Setup.Name+", which is in the trash: restore it (lore setup trash restore --name "+t.Setup.Name+"), or purge it (lore setup trash purge --name "+t.Setup.Name+") to reuse the name", v)
 					}
 				}
 			}

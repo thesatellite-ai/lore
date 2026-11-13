@@ -82,7 +82,7 @@ func contactEdit(ctx context.Context, env Env, in ContactEditIn) (ContactOut, er
 			}
 			if x, dup := v.sameContact(aid, typ, norm, id); dup {
 				return false, errs.New(errs.InvalidInput, "actor contact edit: "+typ+" "+norm+" is already a contact of this person ("+x.ID.String()+")").
-					WithHint("lore actor contact remove " + id.String())
+					WithHint("lore actor contact remove --id " + id.String())
 			}
 			for k, s := range map[string]string{schema.FieldContactValue: strings.TrimSpace(in.Value), schema.FieldContactValueNorm: norm} {
 				tv, err := textValue(k, s)
@@ -107,7 +107,7 @@ func contactEdit(ctx context.Context, env Env, in ContactEditIn) (ContactOut, er
 			case identmatch.AddMergeable:
 				d := v.actors[vd.Holder.String()]
 				return false, errs.New(errs.ContactTaken, "an actor row already exists for "+norm+": "+actorName(d)+" "+d.ID.String()).
-					WithHint("if it is the same person: lore actor contact add " + aid + " " + typ + " " + norm + " --identity --merge")
+					WithHint("if it is the same person: lore actor contact add --actor " + aid + " --type " + typ + " --value " + norm + " --identity --merge")
 			case identmatch.AddFree, identmatch.AddAlready:
 			}
 		}

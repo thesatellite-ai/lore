@@ -21,7 +21,7 @@ var _ opsteam.Remover = (*App)(nil)
 func (a *App) OffboardPerson(ctx context.Context, who, reason string) error {
 	e, ok := a.Registry().Lookup(profilestore.OpActorOffboard)
 	if !ok {
-		return errs.New(errs.Unsupported, "member remove: this lore build has no actor offboard").WithHint("lore actor offboard " + who)
+		return errs.New(errs.Unsupported, "member remove: this lore build has no actor offboard").WithHint("lore actor offboard --actor " + who)
 	}
 	body, err := json.Marshal(map[string]string{"actor": who, "reason": reason})
 	if err != nil {

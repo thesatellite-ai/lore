@@ -43,7 +43,7 @@ func nounDocs() map[string]NounDoc {
 		"team":             {Short: "The org's teams (@handle names a group: add, list, show, remove, member add|remove) and invites (lore team invite)"},
 		"team member":      {Short: "Who is on a team: add or take people off"},
 		"team invite":      {Short: "Org invites for outsiders: send one (a lore-invite line holding no secret), list, revoke, resend; your own staff: lore member add"},
-		"member":           {Short: "The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join <the org's store url>"},
+		"member":           {Short: "The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join --invite <store-url>"},
 		"setup trash":      {Short: "Setups lore setup remove moved aside: list, restore (with their repo pins), purge for good (never a repo)"},
 		"machine path":     {Short: "Where lore keeps its own files on this machine: lore home, config.yaml, this repo's .lore"},
 		"setup leftovers":  {Short: "The identity or personal.store of ~/.lore/config.yaml no setup uses any more: clear one (lore setup list shows them)"},

@@ -65,12 +65,12 @@ func Ops(env content.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpEnable, Summary: "enable an external source",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
-			Examples: []op.Example{{Title: "read an external source again", CLI: "lore external-source enable ext_3c44"}, {Title: "by its name", CLI: "lore external-source enable issues"}},
+			Examples: []op.Example{{Title: "read an external source again", CLI: "lore external-source enable --id ext_3c44"}, {Title: "by its name", CLI: "lore external-source enable --id issues"}},
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.enable(ctx, in.ID, true) }),
 		op.Define(op.Spec{
 			Name: OpDisable, Summary: "disable an external source",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
-			Examples: []op.Example{{Title: "stop reading an external source", CLI: "lore external-source disable ext_3c44"}},
+			Examples: []op.Example{{Title: "stop reading an external source", CLI: "lore external-source disable --id ext_3c44"}},
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.enable(ctx, in.ID, false) }),
 	}
 }

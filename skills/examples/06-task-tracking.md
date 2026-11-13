@@ -8,7 +8,7 @@
 
 ```bash
 M=$(lore mission add \
-    "Launch the new website" \
+    --title "Launch the new website" \
     --target=2026-06-15 \
     --body="Goal: the new website is live before the client's Friday demo." \
     --json | jq -r '.data.id')
@@ -23,14 +23,14 @@ TL=$(lore tasklist add --title="launch" --body="work for the launch" --json | jq
 # Agents MUST pass --commitment (no default). Work the user agreed to = accepted;
 # your own speculative ideas = proposed (they land under `lore task triage`, not the
 # default list); parking-lot ideas = someday.
-lore task add "Make the buttons blue"                 --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-20
-lore task add "Add the contact form"                  --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-25
-lore task add "Run the tests before you push"         --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-05-30
-lore task add "Write the launch checklist"            --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-06-05
-lore task add "Send the invoice reminder before Friday's demo" --tasklist=$TL --mission=$M --commitment=proposed --priority=low  --due=2026-06-10
-lore task add "Add a dark mode"                       --tasklist=$TL --mission=$M --commitment=someday --priority=low
+lore task add --title "Make the buttons blue"                 --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-20
+lore task add --title "Add the contact form"                  --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-25
+lore task add --title "Run the tests before you push"         --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-05-30
+lore task add --title "Write the launch checklist"            --tasklist=$TL --mission=$M --commitment=accepted --priority=medium --due=2026-06-05
+lore task add --title "Send the invoice reminder before Friday's demo" --tasklist=$TL --mission=$M --commitment=proposed --priority=low  --due=2026-06-10
+lore task add --title "Add a dark mode"                       --tasklist=$TL --mission=$M --commitment=someday --priority=low
 
-lore mission show $M --json | jq '.data.tasks | length'
+lore mission show --id $M --json | jq '.data.tasks | length'
 # 6
 ```
 
@@ -59,16 +59,16 @@ lore task list --status=done --json | jq -r '
 ## During work — start / done
 
 ```bash
-lore task start tsk_<id>     # status: todo → in_progress, sets started_at
+lore task start --id tsk_<id>     # status: todo → in_progress, sets started_at
 # ... do the work ...
-lore task done tsk_<id>      # status: in_progress → done, sets completed_at
+lore task done --id tsk_<id>      # status: in_progress → done, sets completed_at
 ```
 
 ## End-of-sprint review
 
 ```bash
 # Mission report
-lore mission show $M --json | jq '{
+lore mission show --id $M --json | jq '{
     mission: .data.title,
     target:  .data.target_date,
     status:  .data.status,
@@ -92,7 +92,7 @@ lore mission show $M --json | jq '{
 ## Mark the mission complete
 
 ```bash
-lore mission done $M
+lore mission done --id $M
 # ✓ msn_<id> completed
 ```
 
@@ -101,7 +101,7 @@ lore mission done $M
 - **Use `--mission`** rather than naming the goal in every task title.
 - **Pretty IDs are persistent** within a project (`tsk_<id>` always means task id 1 in this project).
 - **Use tags for cross-cutting concerns** (`lore tag attach --on-table=tasks --on-id=tsk_<id> --tag=waiting-for-client`).
-- **Reminders attach to tasks**: `lore reminder add "Follow up on tsk_<id>" --due=2026-05-25 --on-table=tasks --on-id=tsk_<id>`.
+- **Reminders attach to tasks**: `lore reminder add --message "Follow up on tsk_<id>" --due=2026-05-25 --on-table=tasks --on-id=tsk_<id>`.
 
 ## Pitfalls
 

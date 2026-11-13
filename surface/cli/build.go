@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -288,7 +289,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		Example:       examples(s.Examples),
 		Hidden:        s.Hidden,
 		Args:          cobra.ArbitraryArgs, // counted by op.ArgsDecoder
-		Annotations:   map[string]string{annotationOwner: annotationValue},
+		Annotations:   map[string]string{annotationOwner: annotationValue, AnnotationArgFlags: argFlags(fields)},
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
@@ -298,11 +299,13 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 	// goes, so at Set time len(Args()) is the number of positionals typed
 	// before the value (the group routing of op.ArgsDecoder.FlagPos).
 	seen := func() int { return len(c.Flags().Args()) }
+	typed := 0
+	next := func() int { typed++; return typed }
 	for _, f := range fields {
 		if f.Flag == "" {
 			continue
 		}
-		rf := &rawFlag{typ: f.Type, at: seen}
+		rf := &rawFlag{typ: f.Type, at: seen, next: next}
 		values[f.Flag] = rf
 		desc := f.Desc
 		if f.Required && !saysRequired(desc) {
@@ -342,15 +345,20 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		return cfg.flagError(cmd, err, fields)
 	})
 	c.RunE = func(cmd *cobra.Command, args []string) error {
+		if err := straySwitchWord(cmd, cfg.args, args); err != nil {
+			return printUsage(cmd, cfg, err)
+		}
 		flags := map[string][]string{}
 		pos := map[string][]int{}
+		seq := map[string][]int{}
 		for name, rf := range values {
 			if changed(cmd, name, aliases[name]) {
 				flags[name] = rf.vals
 				pos[name] = rf.pos
+				seq[name] = rf.seq
 			}
 		}
-		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags, FlagPos: pos}, *yes, sf.choice(cmd))
+		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags, FlagPos: pos, FlagSeq: seq}, *yes, sf.choice(cmd))
 		out := cmd.OutOrStdout()
 		if err != nil {
 			return &exitError{code: cfg.printNamedError(cmd, err, *asJSON), cause: err}
@@ -467,11 +475,14 @@ func readLine(in *bufio.Reader) (string, bool) {
 	return strings.TrimSpace(line), true
 }
 
-// positional returns the arg fields ordered by index.
+// positional returns the arg fields still shown as positionals, ordered
+// by index: none but a repeated group with no flag of its own. U-4: a
+// positional with a flag (Named) is shown as its flag, an argof one
+// nowhere; both stay quiet aliases.
 func positional(fields []op.FieldInfo) []op.FieldInfo {
 	var out []op.FieldInfo
 	for _, f := range fields {
-		if f.Arg != op.NoArg {
+		if f.Arg != op.NoArg && !f.Named && f.ArgOf == "" {
 			out = append(out, f)
 		}
 	}
@@ -479,10 +490,19 @@ func positional(fields []op.FieldInfo) []op.FieldInfo {
 	return out
 }
 
-// usage is the cobra Use line: the verb, then `<arg>` for a required
-// positional and `[arg]` for an optional one.
+// usage is the cobra Use line: the verb, then the named positionals
+// (U-4) as `--flag <name>` when required and `[--flag <name>]` when not,
+// then any positional still shown.
 func usage(verb string, fields []op.FieldInfo) string {
 	parts := []string{verb}
+	for _, f := range op.NamedArgs(fields) {
+		w := "--" + f.Flag + " <" + f.Name + ">"
+		if f.Required {
+			parts = append(parts, w)
+		} else {
+			parts = append(parts, "["+w+"]")
+		}
+	}
 	for _, f := range positional(fields) {
 		name := f.Name
 		if f.Rest {
@@ -497,7 +517,8 @@ func usage(verb string, fields []op.FieldInfo) string {
 	return strings.Join(parts, " ")
 }
 
-// long is the --help body: the summary and the positional arguments.
+// long is the --help body: the summary and the positional arguments still
+// shown (a named one is listed under Flags).
 func long(s op.Spec, fields []op.FieldInfo) string {
 	args := positional(fields)
 	if len(args) == 0 {
@@ -644,4 +665,70 @@ func isIDArg(f op.FieldInfo) bool { return f.Arg != op.NoArg && f.Name == "id" }
 func printUsage(cmd *cobra.Command, cfg config, e *errs.Error) error {
 	_ = printError(cmd.OutOrStdout(), cmd.ErrOrStderr(), e, JSONRequested(cfg.args), Palette{}, cmd.CommandPath())
 	return &exitError{code: ExitUsage, cause: e}
+}
+
+// boolWords are the words a person types after a switch meaning to set it
+// (`--yes false`, `--live no`). pflag reads a switch with no `=value` as
+// on and the word as a positional value; U-4: that is an error naming the
+// right form, never a value.
+var boolWords = []string{"true", "false", "yes", "no", "on", "off", "1", "0", "t", "f"}
+
+// straySwitchWord refuses a bool word typed right after a switch in the raw
+// arguments when the parser kept it as a positional (it is in args). raw is
+// the binary's arguments (WithArgs); without them nothing is checked.
+func straySwitchWord(cmd *cobra.Command, raw, args []string) *errs.Error {
+	for i := 0; i+1 < len(raw); i++ {
+		if raw[i] == "--" {
+			return nil
+		}
+		name, ok := strings.CutPrefix(raw[i], "--")
+		if !ok || strings.Contains(name, "=") {
+			continue
+		}
+		fl := cmd.Flags().Lookup(name)
+		word := raw[i+1]
+		if fl == nil || fl.NoOptDefVal == "" || !slices.Contains(boolWords, strings.ToLower(word)) || !slices.Contains(args, word) {
+			continue
+		}
+		off := "leave it out"
+		if neg := cmd.Flags().Lookup("no-" + name); neg != nil {
+			off = "give --no-" + name
+		}
+		return errs.New(UsageCode, "--"+name+" is a switch and takes no value ("+strconv.Quote(word)+" after it)").
+			WithHint("to turn it on give --" + name + " alone; to turn it off " + off)
+	}
+	return nil
+}
+
+// AnnotationArgFlags is the cobra annotation of a generated command that
+// names, in argument order, the flag each quiet positional stands for
+// (U-4): `id,title...` — "..." marks a rest argument whose words are one
+// value, "+" one whose words are one value each (a repeatable flag). The
+// docs gate reads it to show a positional's named form.
+const AnnotationArgFlags = "lore.surface.cli.argflags"
+
+// argFlags is the AnnotationArgFlags value of fields.
+func argFlags(fields []op.FieldInfo) string {
+	var args []op.FieldInfo
+	for _, f := range fields {
+		if f.Arg != op.NoArg {
+			args = append(args, f)
+		}
+	}
+	slices.SortFunc(args, func(a, b op.FieldInfo) int { return a.Arg - b.Arg })
+	out := make([]string, 0, len(args))
+	for _, f := range args {
+		name := f.Flag
+		if f.ArgOf != "" {
+			name = f.ArgOf
+		}
+		switch {
+		case f.Rest && (f.Type == op.TypeStrings || f.Group):
+			name += "+"
+		case f.Rest:
+			name += "..."
+		}
+		out = append(out, name)
+	}
+	return strings.Join(out, ",")
 }

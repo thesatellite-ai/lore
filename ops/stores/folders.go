@@ -83,8 +83,8 @@ func folderListOp(m Manager) op.Entry {
 		Permission: op.PermRead, Access: op.AccessRead, Errors: visibilityErrors,
 		Examples: []op.Example{
 			{Title: "every store's folders", CLI: "lore store folder list", Want: "folders"},
-			{Title: "the team store's folders", CLI: "lore store folder list team", Want: "folders"},
-			{Title: "as JSON", CLI: "lore store folder list team --json", Want: `"folders"`},
+			{Title: "the team store's folders", CLI: "lore store folder list --store team", Want: "folders"},
+			{Title: "as JSON", CLI: "lore store folder list --store team --json", Want: `"folders"`},
 		},
 	}, func(ctx context.Context, in FolderListIn) (FolderListOut, error) {
 		name := strings.TrimSpace(in.Store)
@@ -193,7 +193,7 @@ func (o FolderListOut) Text() string {
 			rows = append(rows, []string{f.Folder, f.ID, by, at, here, strconv.Itoa(f.Rows)})
 		}
 		if len(rows) == 0 {
-			b.WriteString("store " + s + ": no folders yet (`lore store folder add " + s + " <folder>`)\n")
+			b.WriteString("store " + s + ": no folders yet (`lore store folder add --store " + s + " --folder <folder>`)\n")
 			continue
 		}
 		b.WriteString("store " + s + " folders:\n")

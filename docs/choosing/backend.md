@@ -7,9 +7,9 @@
 | Option | How you choose it | What lore does with the files | Who sees the notes | Its cache |
 |---|---|---|---|---|
 | **The repo** (always there) | `lore init`; every write without `--to` | writes `.lore/data/<table>/<id>.json` in your checkout and never commits: you commit the files with your code | everyone who can read the repo | `~/.lore/cache/repo/<repo folder>-<hash>.db`, in lore's home, never in the repo |
-| **Folder store** | `lore store init <name> file:///<absolute path>`, then `--to <name>` | writes the same files under `<folder>/<table>/` (the store's own rows under `_store/<table>/`), with no git and no network | only people on this machine | `~/.lore/cache/stores/<store id>/local/<folder>.db` |
-| **Git store** | `lore store init <name> git@github.com:acme/notes` (or `ssh://`, `https://`, `http://`, or the path of a bare git repository on this machine, `/srv/git/notes.git`, the way `git clone` takes it; `file:///srv/git/notes.git` is read the same), then `--to <name>` or `lore org link` | keeps a plain git clone at `~/.lore/stores/<owner>/<repo>` (`~/.lore/stores/_local/<repo>` for a repository on this machine; or your own clone: `lore store use <path>`), makes one commit per write and pushes it at once; fetches again when the last fetch is older than `live.fetch_ttl` (60 seconds) | everyone GitHub lets open that repo | `~/.lore/cache/stores/<store id>/<branch>/<folder>.db` |
-| **Personal store `me`** | `personal.store` in `~/.lore/config.yaml`; `lore store init me` with no address makes `file://~/.lore/stores/_me` | a folder store or a git store, as its address says; `--to me` writes there | only you | as for its kind |
+| **Folder store** | `lore store init --name <name> --url "file:///<absolute path>"`, then `--to <name>` | writes the same files under `<folder>/<table>/` (the store's own rows under `_store/<table>/`), with no git and no network | only people on this machine | `~/.lore/cache/stores/<store id>/local/<folder>.db` |
+| **Git store** | `lore store init --name <name> --url git@github.com:acme/notes` (or `ssh://`, `https://`, `http://`, or the path of a bare git repository on this machine, `/srv/git/notes.git`, the way `git clone` takes it; `file:///srv/git/notes.git` is read the same), then `--to <name>` or `lore org link` | keeps a plain git clone at `~/.lore/stores/<owner>/<repo>` (`~/.lore/stores/_local/<repo>` for a repository on this machine; or your own clone: `lore store use --path <path>`), makes one commit per write and pushes it at once; fetches again when the last fetch is older than `live.fetch_ttl` (60 seconds) | everyone GitHub lets open that repo | `~/.lore/cache/stores/<store id>/<branch>/<folder>.db` |
+| **Personal store `me`** | `personal.store` in `~/.lore/config.yaml`; `lore store init --name me` with no address makes `file://~/.lore/stores/_me` | a folder store or a git store, as its address says; `--to me` writes there | only you | as for its kind |
 | **Live list** of the repo | `--live`, and tasks, missions, handoffs and comments by default | rows on the hidden ref `refs/lore/live` of the repo's own remote, pushed and fetched by lore | everyone who can clone the repo | the repo cache |
 | **Machine store** (automatic) | nothing: runs, sessions and other rows that only mean something on this machine | `~/.lore/state/machine.db`, never synced | only this machine | `~/.lore/cache/machine-store.db` |
 
@@ -28,11 +28,11 @@ The cache is never the truth. Lore keeps every row it read from the files and bu
 
 - **If the notes belong with the code,** do nothing: the repo is the default, and the notes travel with commits, branches and pull requests.
 - **If a note must never be committed to this repo** (your rates, notes about a client), write it `--to` a store. Use a folder store when only you need it on this machine, a git store when a teammate or a second machine needs it.
-- **If you want your personal notes on two machines,** make `personal.store` a private git repo of your own (`lore store init me git@github.com:octo-personal/lore-me`), not a folder.
+- **If you want your personal notes on two machines,** make `personal.store` a private git repo of your own (`lore store init --name me --url git@github.com:octo-personal/lore-me`), not a folder.
 - **If your company shares notes across repos and people,** use a git store and link the repos to it with `lore org link` (see [How to lay out your stores](store-layout.md)).
-- **If you started with a folder store and now need to share it,** push the folder to a private git repo (the files are already in the git layout) and point the store at it with `lore store set-url <name> <url>`.
-- **If a repo should only read a store,** attach it with `lore store add <name> <url> --read-only`.
-- **If the store's notes may appear in committed files** (the rendered `.lore/LORE.md`, a client repo), mark it `lore store visibility <name> shareable`; the default `internal` keeps them out.
+- **If you started with a folder store and now need to share it,** push the folder to a private git repo (the files are already in the git layout) and point the store at it with `lore store set-url --name <name> --url <url>`.
+- **If a repo should only read a store,** attach it with `lore store add --name <name> --url <url> --read-only`.
+- **If the store's notes may appear in committed files** (the rendered `.lore/LORE.md`, a client repo), mark it `lore store visibility --name <name> --visibility shareable`; the default `internal` keeps them out.
 - **If lore feels slow or a cache looks wrong,** you never need to delete anything by hand: `lore doctor` checks it, and `lore search rebuild` rebuilds the search index.
 
 ## Pitfalls
@@ -51,7 +51,7 @@ A folder store and the repo side by side: where the note files go, that the repo
 <!-- example: choosing#where-the-files-are -->
 ```console
 # alice, in website
-$ lore store init notes file://$HOME/stores/notes
+$ lore store init --name notes --url file://$HOME/stores/notes
 ✓ created store notes (sto_7a67…9504) at file://~/stores/notes; recorded in .lore/stores.yaml; commit it to share
 $ lore memory add --to notes --body 'The client pays invoices on the 15th.'
 lore: wrote ~/stores/notes/_store/actors/act_2ad3…f891.json (store notes)
@@ -89,7 +89,7 @@ $ find ~/.lore/cache -name '*.db' | sed -e 's#/sto_[0-9a-z]*/#/<store id>/#' -e 
 <!-- example: choosing#cloud-sync-folder -->
 ```console
 # alice, in website
-$ lore store init synced file://$HOME/Dropbox/notes
+$ lore store init --name synced --url file://$HOME/Dropbox/notes
 ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
   hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)

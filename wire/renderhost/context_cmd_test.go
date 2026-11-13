@@ -174,7 +174,7 @@ func TestContextPlanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ans.Text) > 700+contextMoreReserve || !strings.Contains(ans.Text, "\nmore: lore search \"") || strings.Count(ans.Text, "</") >= 6 {
+	if len(ans.Text) > 700+contextMoreReserve || !strings.Contains(ans.Text, "\nmore: lore search --query \"") || strings.Count(ans.Text, "</") >= 6 {
 		t.Fatalf("small budget (%d bytes):\n%s", len(ans.Text), ans.Text)
 	}
 

@@ -69,28 +69,28 @@ func Ops(env content.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show pattern details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore pattern show pat_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore pattern show --id pat_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit pattern fields (use `--supersedes` on add for audited body changes)",
-			Examples:   []op.Example{{Title: "change the body", CLI: `lore pattern edit pat_<id> --body "the new text"`, Want: "pat_"}},
+			Examples:   []op.Example{{Title: "change the body", CLI: `lore pattern edit --id pat_<id> --body "the new text"`, Want: "pat_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a pattern (soft-delete via archived_at)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore pattern archive pat_<id>", Want: "archived"}},
+			Examples:   []op.Example{{Title: "archive one", CLI: "lore pattern archive --id pat_<id>", Want: "archived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Archive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpUnarchive, Summary: "Unarchive a pattern (clear archived_at)",
-			Examples:   []op.Example{{Title: "bring it back", CLI: "lore pattern unarchive pat_<id>", Want: "unarchived"}},
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore pattern unarchive --id pat_<id>", Want: "unarchived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Unarchive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a pattern (to the trash; archive is usually what you want)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore pattern delete pat_<id> --yes", Want: "pat_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore pattern delete --id pat_<id> --yes", Want: "pat_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
@@ -98,7 +98,7 @@ func Ops(env content.Env) []op.Entry {
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across pattern title + body",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore pattern search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore pattern search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}
@@ -206,7 +206,7 @@ func (o ops) finishSupersedes(ctx context.Context, oldSrc store.Source, old ids.
 	// the rolled-back row is purged, not trashed: "nothing was kept" (later 498)
 	if _, derr := o.c.Env.Delete(engine.WithPurge(ctx, &engine.PurgeRequest{Asked: true, Confirmed: true}), engine.Ref{Store: newSrc, Table: table, ID: newID}); derr != nil {
 		return errs.Prefix("pattern add: could not mark "+old.String()+" superseded by "+newRaw, err).
-			WithHint("the new pattern " + newRaw + " was written but could not be removed again; delete it with `lore pattern delete " + newRaw + " --yes`")
+			WithHint("the new pattern " + newRaw + " was written but could not be removed again; delete it with `lore pattern delete --id " + newRaw + " --yes`")
 	}
 	return errs.Prefix("pattern add: could not mark "+old.String()+" superseded by "+newRaw+"; nothing was kept", err)
 }

@@ -42,7 +42,7 @@ func TestResourceBulkDelete(t *testing.T) {
 	if err = json.Unmarshal([]byte(h.JSON(res)), &out); err != nil {
 		t.Fatal(err)
 	}
-	if out.Count != 25 || !strings.HasPrefix(out.Batch, "bat_") || !strings.Contains(opstest.Text(res), "25 host resources moved to the trash (batch "+out.Batch+"; restore: lore trash restore "+out.Batch+")") {
+	if out.Count != 25 || !strings.HasPrefix(out.Batch, "bat_") || !strings.Contains(opstest.Text(res), "25 host resources moved to the trash (batch "+out.Batch+"; restore: lore trash restore --target "+out.Batch+")") {
 		t.Fatalf("out %+v %q", out, opstest.Text(res))
 	}
 	if n := countHosts(t, h); n != 1 {

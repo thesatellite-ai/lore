@@ -1,6 +1,6 @@
 # Stores as plain folders
 
-**In short:** a store is an ordinary git repository, and lore keeps one ordinary clone of it on your machine at `~/.lore/stores/<owner>/<repo>`. Open it in a file browser or an editor and you see what the team wrote: one folder per project, one folder per kind of note inside it, one JSON file per note, and a `README.md` that explains it. Nothing is hidden in a second copy or a nested `.lore` folder; lore's own bookkeeping sits in the clone's `.git/lore/` folder, out of the files you browse. You may also clone the store yourself, anywhere, and tell lore to use that clone with `lore store use <path>`.
+**In short:** a store is an ordinary git repository, and lore keeps one ordinary clone of it on your machine at `~/.lore/stores/<owner>/<repo>`. Open it in a file browser or an editor and you see what the team wrote: one folder per project, one folder per kind of note inside it, one JSON file per note, and a `README.md` that explains it. Nothing is hidden in a second copy or a nested `.lore` folder; lore's own bookkeeping sits in the clone's `.git/lore/` folder, out of the files you browse. You may also clone the store yourself, anywhere, and tell lore to use that clone with `lore store use --path <path>`.
 
 ## What it is and when you want it
 
@@ -8,7 +8,7 @@ You want this page when you open `~/.lore/stores/` and wonder what each folder i
 
 ## Before you start
 
-- lore set up in a repo (`lore init`) and a git store attached to it, here `lore store init notes git@github.com:acme/notes` in Alice's checkout of `github.com/acme/website`. A team gets its stores from its org setup instead ([Lore for teams](../team/README.md)); the clone looks the same.
+- lore set up in a repo (`lore init`) and a git store attached to it, here `lore store init --name notes --url git@github.com:acme/notes` in Alice's checkout of `github.com/acme/website`. A team gets its stores from its org setup instead ([Lore for teams](../team/README.md)); the clone looks the same.
 
 ## Step 1 — Where the clone is
 
@@ -19,10 +19,10 @@ The first time lore clones or writes to the store it prints what it set up, incl
 <!-- example: files#a-git-store -->
 ```console
 # alice, in website
-$ lore store init notes git@github.com:acme/notes
+$ lore store init --name notes --url git@github.com:acme/notes
 lore store init: store clone ~/.lore/stores/acme/notes: git user set to alice <alice@agency.example> (your lore identity)
 ✓ created store notes (sto_7a67…9504) at git@github.com:acme/notes; recorded in .lore/stores.yaml; commit it to share
-$ lore task add 'Renew the TLS certificate' --to notes --no-live
+$ lore task add --title 'Renew the TLS certificate' --to notes --no-live
 lore: pushed store notes: commit 601d285 to branch main
 lore: pushed store notes: commit 86dbae4 to branch main
 lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)
@@ -157,7 +157,7 @@ _store
 lore-store.yaml
 
 # alice, in website
-$ lore store use ~/code/notes --yes
+$ lore store use --path ~/code/notes --yes
 lore: pushed store notes: commit df3a55c to branch main
 ✓ store notes now uses your clone ~/code/notes (recorded on this machine only)
   before: ~/.lore/stores/acme/notes
@@ -167,7 +167,7 @@ stores:
   NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS
   notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy  
 count: 1
-$ lore path tsk_2ad3…f891
+$ lore path --id tsk_2ad3…f891
 ~/code/notes/_store/tasks/tsk_2ad3…f891.json
 $ lore store use --default notes --yes
 ✓ store notes uses lore's own clone again: ~/.lore/stores/acme/notes (the next command that needs it clones it if it is missing)
@@ -200,7 +200,7 @@ The example section `files` runs every step on this page in a throwaway world: [
 
 - **Deleting the clone while commits wait loses them.** A clone with nothing unpushed is safe to delete (lore clones it again when needed); `lore store forget` removes it cleanly and refuses while work waits.
 - **Do not put your own project files in a store.** lore leaves them alone, but your teammates get them too if you commit them; `lore doctor` lists them.
-- **A folder named like a kind of row is refused.** `lore store folder add notes tasks` names the reserved names; pick another name.
+- **A folder named like a kind of row is refused.** `lore store folder add --store notes --folder tasks` names the reserved names; pick another name.
 
 ## Related
 

@@ -58,7 +58,7 @@ const checklistHelp = "; if you would ever claim it, make it a sub-task"
 type ChecklistAddIn struct {
 	ID    string   `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	Text  string   `json:"text,omitempty" arg:"1" desc:"the item text (one line, up to 200 characters)"`
-	Items []string `json:"items,omitempty" flag:"item" desc:"another item; repeatable, added in order after the positional one"`
+	Items []string `json:"items,omitempty" flag:"item" desc:"another item; repeatable, added in order after --text"`
 }
 
 // ChecklistItemIn names one item of a task (tick, untick, rm).
@@ -154,39 +154,39 @@ func checklistOps(o ops) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpChecklistAdd, Summary: "Add checklist items to a task" + checklistHelp,
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
-			Examples: []op.Example{{Title: "add two items", CLI: `lore task checklist add tsk_<id> "stream rows" --item "test 50k rows"`, Want: "checklist items"}},
+			Examples: []op.Example{{Title: "add two items", CLI: `lore task checklist add --id tsk_<id> --text "stream rows" --item "test 50k rows"`, Want: "checklist items"}},
 		}, o.checklistAdd),
 		op.Define(op.Spec{
-			Name: OpChecklistTick, Examples: []op.Example{{Title: "tick item 1", CLI: "lore task checklist tick tsk_<id> 1", Want: "[x]"}}, Summary: "Tick a checklist item (by position or chk_ id); the task status stays",
+			Name: OpChecklistTick, Examples: []op.Example{{Title: "tick item 1", CLI: "lore task checklist tick --id tsk_<id> --item 1", Want: "[x]"}}, Summary: "Tick a checklist item (by position or chk_ id); the task status stays",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
 		}, func(ctx context.Context, in ChecklistItemIn) (ChecklistOut, error) {
 			return o.checklistTick(ctx, in, true)
 		}),
 		op.Define(op.Spec{
-			Name: OpChecklistUntick, Examples: []op.Example{{Title: "untick item 1", CLI: "lore task checklist untick tsk_<id> 1", Want: "[ ]"}}, Summary: "Untick a checklist item",
+			Name: OpChecklistUntick, Examples: []op.Example{{Title: "untick item 1", CLI: "lore task checklist untick --id tsk_<id> --item 1", Want: "[ ]"}}, Summary: "Untick a checklist item",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
 		}, func(ctx context.Context, in ChecklistItemIn) (ChecklistOut, error) {
 			return o.checklistTick(ctx, in, false)
 		}),
 		op.Define(op.Spec{
-			Name: OpChecklistEdit, Examples: []op.Example{{Title: "reword item 2", CLI: `lore task checklist edit tsk_<id> 2 "Write the migration test"`, Want: "chk_"}}, Summary: "Change the text of a checklist item",
+			Name: OpChecklistEdit, Examples: []op.Example{{Title: "reword item 2", CLI: `lore task checklist edit --id tsk_<id> --item 2 --text "Write the migration test"`, Want: "chk_"}}, Summary: "Change the text of a checklist item",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
 		}, o.checklistEdit),
 		op.Define(op.Spec{
-			Name: OpChecklistRm, Examples: []op.Example{{Title: "remove item 3", CLI: "lore task checklist rm tsk_<id> 3", Want: "removed"}}, Summary: "Remove a checklist item (kept as a tombstone so copies merge)",
+			Name: OpChecklistRm, Examples: []op.Example{{Title: "remove item 3", CLI: "lore task checklist rm --id tsk_<id> --item 3", Want: "removed"}}, Summary: "Remove a checklist item (kept as a tombstone so copies merge)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
 		}, o.checklistRm),
 		op.Define(op.Spec{
-			Name: OpChecklistList, Examples: []op.Example{{Title: "list the items", CLI: "lore task checklist list tsk_<id> --json", Want: `"items"`}}, Summary: "List a task's checklist (positions and chk_ ids)",
+			Name: OpChecklistList, Examples: []op.Example{{Title: "list the items", CLI: "lore task checklist list --id tsk_<id> --json", Want: `"items"`}}, Summary: "List a task's checklist (positions and chk_ ids)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.checklistList),
 		op.Define(op.Spec{
-			Name: OpChecklistImport, Examples: []op.Example{{Title: "items from the body", CLI: "lore task checklist import tsk_<id> --from body", Want: "chk_"}}, Summary: "Turn the - [ ] / - [x] lines of a task's body into checklist items",
+			Name: OpChecklistImport, Examples: []op.Example{{Title: "items from the body", CLI: "lore task checklist import --id tsk_<id> --from body", Want: "chk_"}}, Summary: "Turn the - [ ] / - [x] lines of a task's body into checklist items",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(w), errs.NeedsConfirm),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.checklistImport),
 		op.Define(op.Spec{
-			Name: OpChecklistPromote, Examples: []op.Example{{Title: "item 1 becomes a sub-task", CLI: "lore task checklist promote tsk_<id> 1", Want: "tsk_"}}, Summary: "Turn a checklist item into a sub-task (same text, item removed, one batch)",
+			Name: OpChecklistPromote, Examples: []op.Example{{Title: "item 1 becomes a sub-task", CLI: "lore task checklist promote --id tsk_<id> --item 1", Want: "tsk_"}}, Summary: "Turn a checklist item into a sub-task (same text, item removed, one batch)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(w), treeAddErrors...),
 		}, o.checklistPromote),
 	}
@@ -308,7 +308,7 @@ func (o ops) checklistAdd(ctx context.Context, in ChecklistAddIn) (ChecklistOut,
 	texts := slices.DeleteFunc(append([]string{in.Text}, in.Items...), func(s string) bool { return strings.TrimSpace(s) == "" })
 	if len(texts) == 0 {
 		return ChecklistOut{}, errs.New(errs.InvalidInput, "task checklist add: no item text").
-			WithHint(`lore task checklist add <task> "item" [--item "another"]`)
+			WithHint(`lore task checklist add --id <task> --text "item" [--item "another"]`)
 	}
 	h, err := o.getChecklistForWrite(ctx, in.ID)
 	if err != nil {
@@ -524,5 +524,5 @@ func (o ops) openItemsGuard(ctx context.Context, cur row.Row, in DoneIn, patch m
 		b.WriteString("\n    " + it.ID.String() + "  " + it.Text)
 	}
 	return 0, errs.New(errs.OpenItems, b.String()).
-		WithHint("tick them first, or: lore task done " + id + " --tick-all (they were done) | lore task done " + id + " --force (close anyway)")
+		WithHint("tick them first, or: lore task done --id " + id + " --tick-all (they were done) | lore task done --id " + id + " --force (close anyway)")
 }

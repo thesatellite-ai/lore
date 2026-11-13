@@ -87,34 +87,34 @@ func Ops(env kn.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show rule details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore rule show rul_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore rule show --id rul_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(kn.ReadErrors), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit rule fields (only the flags given change)",
-			Examples:   []op.Example{{Title: "change the body", CLI: `lore rule edit rul_<id> --body "the new text"`, Want: "rul_"}},
+			Examples:   []op.Example{{Title: "change the body", CLI: `lore rule edit --id rul_<id> --body "the new text"`, Want: "rul_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a rule (hidden from list, render and search; kept)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore rule archive rul_<id>", Want: "archived"}},
+			Examples:   []op.Example{{Title: "archive one", CLI: "lore rule archive --id rul_<id>", Want: "archived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 		}, o.archive),
 		op.Define(op.Spec{
 			Name: OpUnarchive, Summary: "Bring an archived rule back",
-			Examples:   []op.Example{{Title: "bring it back", CLI: "lore rule unarchive rul_<id>", Want: "unarchived"}},
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore rule unarchive --id rul_<id>", Want: "unarchived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 		}, o.unarchive),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a rule (it goes to the trash; lore trash restore brings it back)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore rule delete rul_<id> --yes", Want: "rul_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore rule delete --id rul_<id> --yes", Want: "rul_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.DeleteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true}, // asked in delete: --where --dry-run never asks, FA-LTASK-2
 		}, o.delete),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search over rules of every attached store",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore rule search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore rule search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.SearchErrors,
 		}, o.search),
 	}
@@ -127,8 +127,8 @@ type AddIn struct {
 	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
 	engine.LiveFlags
 
-	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
-	Text       string   `json:"text,omitempty" arg:"0" desc:"the rule text, instead of --body"`
+	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
+	Text       string   `json:"text,omitempty" arg:"0" argof:"body" desc:"the rule text, instead of --body"`
 	Summary    string   `json:"summary,omitempty" flag:"summary" desc:"one-line short form used when the full text does not fit LORE.md (up to 200 characters)"`
 	Severity   string   `json:"severity,omitempty" flag:"severity" desc:"must | should | may (default must)"`
 	Activation string   `json:"activation,omitempty" flag:"activation" desc:"always | glob | semantic | manual (default always)"`

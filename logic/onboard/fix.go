@@ -446,7 +446,7 @@ var fixes = map[fixKey]Fix{
 		Command: argv(cmdLore, "store", "set-url", "{store_id}", "{url}"), Runnable: true},
 	{check: CheckOrgSource}: {Text: "The {org} entry in ~/.lore/config.yaml is older than, or differs from, the store's lore-org.yaml (the team's source for its stores and repo patterns). Run it to copy them in: lore org refresh {org}",
 		Command: argv(cmdLore, "org", "refresh", "{org}"), Runnable: true},
-	{check: CheckIdentityRoster}: {Text: "Your email is not on the {org} roster yet; finish the join step or run lore actor contact add <your email>"},
+	{check: CheckIdentityRoster}: {Text: "Your email is not on the {org} roster yet; finish the join step or run lore actor contact add --actor <you> --type email --value <your-email>"},
 	{check: CheckIdentityPeriod}: {Text: "You are marked as left in {org}. If you are back, ask an admin of {org} to run lore member add {email} (it reopens a stint that ended today)"},
 	// SOURCE_OF_TRUTH row 1: the setup is the one source of who you are.
 	{check: CheckIdentityTopLevel}: {Text: "The top-level identity: in ~/.lore/config.yaml ({top_identity}) is an old copy of setup {setup}'s identity. Run it to move what the setup lacks into it and remove the top-level block: lore identity migrate --keep setup --setup {setup}",
@@ -503,7 +503,7 @@ var fixes = map[fixKey]Fix{
 	{check: CheckStoreWrite, step: StepJoin, variant: FixNotGitHub}:    {Text: "lore cannot write to {url}. For a git server that is not GitHub, ask {by} for push access"},
 	// {store_name} is the checked store's own name (me in the personal
 	// store step, the org's store name in doctor): never a fixed "me".
-	{check: CheckStoreMarker}: {Text: "This repo is not a lore store yet; Save will run lore store init {store_name} {url}"},
+	{check: CheckStoreMarker}: {Text: "This repo is not a lore store yet; Save will run lore store init --name {store_name} --url {url}"},
 	{check: CheckStorePrivate}: {Text: "This repo is public. Your personal notes would be readable by anyone: gh repo edit {owner}/{repo} --visibility private",
 		Command: argv(cmdGH, "repo", "edit", "{owner}/{repo}", "--visibility", "private"), Runnable: true, Outward: true},
 	{check: CheckStorePrivate, variant: FixGHOptional}:                 {Text: "Optional: install gh and run gh auth login so lore can check that {owner}/{repo} is private"},

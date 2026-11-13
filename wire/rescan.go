@@ -62,7 +62,7 @@ func (a *App) RescanRows(ctx context.Context) (string, error) {
 		return rescanClean, nil
 	}
 	return "", errs.New(errs.LeakBlocked, rescanReport(hits)).
-		WithHint("move each value to your vault and write ${secret:…} (lore edit <id>), or if it is not a secret: lore secrets allow <id> --field <field> --rule <rule> --match-hash <hash> --reason \"<why>\"")
+		WithHint("move each value to your vault and write ${secret:…} (lore edit --id <id>), or if it is not a secret: lore secrets allow <id> --field <field> --rule <rule> --match-hash <hash> --reason \"<why>\"")
 }
 
 // rescanReport is the block report: a count line, then one line per hit
@@ -76,7 +76,7 @@ func rescanReport(hits []rowscan.Hit) string {
 		id := h.ID.String()
 		b.WriteString("\n  " + h.Source + " " + string(h.Table) + " " + id + " " + f.Field + ": " + f.RuleID +
 			" at line " + strconv.Itoa(f.Line) + ": " + f.Preview +
-			"\n    allow: lore secrets allow " + id + " --field " + f.Field + " --rule " + f.RuleID +
+			"\n    allow: lore secrets allow --row-id " + id + " --field " + f.Field + " --rule " + f.RuleID +
 			" --match-hash " + strconv.FormatUint(uint64(f.MatchHash), 10) + ` --reason "<why>"`)
 	}
 	return b.String()

@@ -170,7 +170,7 @@ func cdIDOf(t *testing.T, r th.Result) string { t.Helper(); return secID(t, r) }
 // cdLong is a 10k-character text of one repeated word (no secret shape).
 func cdLong() string { return strings.Repeat("lorem ", 10000/6+1)[:10000] }
 
-// cdMetaShowJSON decodes `lore meta show <id> --json`.
+// cdMetaShowJSON decodes `lore meta show --id <id> --json`.
 func cdMetaShowJSON(t *testing.T, c *th.Clone, id string) cdMetaShow {
 	t.Helper()
 	return th.DecodeJSON[cdMetaShow](t, c.Lore("meta", "show", id, "--json"))

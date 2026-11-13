@@ -4536,7 +4536,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "meta": {
                     "type": "array",
@@ -6765,7 +6765,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "meta": {
                     "type": "array",
@@ -10923,7 +10923,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "language": {
                     "type": "string",
@@ -12402,7 +12402,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (required; or give it as the first argument)"
+                    "description": "body (required)"
                   },
                   "meta": {
                     "type": "array",
@@ -17112,7 +17112,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "the handoff text (instead of the positional text)"
+                    "description": "the handoff text"
                   },
                   "for": {
                     "type": "string",
@@ -17150,7 +17150,7 @@
                   },
                   "text": {
                     "type": "string",
-                    "description": "the handoff text"
+                    "description": "the handoff text, instead of --body"
                   },
                   "to_actor": {
                     "type": "string",
@@ -18800,7 +18800,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (required; or give it as the first argument)"
+                    "description": "body (required)"
                   },
                   "meta": {
                     "type": "array",
@@ -21318,7 +21318,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "meta": {
                     "type": "array",
@@ -25249,7 +25249,7 @@
       },
       "post": {
         "operationId": "member.add",
-        "summary": "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join \u003cthe org's store url\u003e",
+        "summary": "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join --invite \u003cstore-url\u003e",
         "tags": [
           "member"
         ],
@@ -26735,7 +26735,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "the memory text (or give it as the first argument)"
+                    "description": "the memory text"
                   },
                   "create": {
                     "type": "boolean",
@@ -38637,7 +38637,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "language": {
                     "type": "string",
@@ -41386,7 +41386,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (required; or give it as the first argument)"
+                    "description": "body (required)"
                   },
                   "meta": {
                     "type": "array",
@@ -43016,7 +43016,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "description": {
                     "type": "string",
@@ -47359,7 +47359,7 @@
                   },
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "description": {
                     "type": "string",
@@ -59681,7 +59681,7 @@
       },
       "patch": {
         "operationId": "row.edit",
-        "summary": "Write back an edited Markdown view of a row (lore edit \u003cid\u003e opens your editor for it)",
+        "summary": "Write back an edited Markdown view of a row (lore edit --id \u003cid\u003e opens your editor for it)",
         "tags": [
           "row"
         ],
@@ -59707,7 +59707,7 @@
                 "properties": {
                   "file": {
                     "type": "string",
-                    "description": "the edited Markdown view to write back (lore row markdown \u003cid\u003e prints one; lore edit \u003cid\u003e opens it in your editor)"
+                    "description": "the edited Markdown view to write back (lore row markdown --id \u003cid\u003e prints one; lore edit --id \u003cid\u003e opens it in your editor)"
                   },
                   "markdown": {
                     "type": "string",
@@ -60950,7 +60950,7 @@
                   },
                   "body": {
                     "type": "string",
-                    "description": "body (required; or give it as the first argument)"
+                    "description": "body (required)"
                   },
                   "globs": {
                     "type": "string",
@@ -73754,7 +73754,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "meta": {
                     "type": "array",
@@ -78802,7 +78802,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "meta": {
                     "type": "array",
@@ -83073,7 +83073,7 @@
                   },
                   "items": {
                     "type": "array",
-                    "description": "another item; repeatable, added in order after the positional one",
+                    "description": "another item; repeatable, added in order after --text",
                     "items": {
                       "type": "string"
                     }
@@ -89685,7 +89685,7 @@
           "tasklist"
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -89693,7 +89693,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (optional; or give it as the second argument)"
+                    "description": "body (optional)"
                   },
                   "meta": {
                     "type": "array",
@@ -89713,10 +89713,6 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
-                  "name": {
-                    "type": "string",
-                    "description": "the title, instead of --title (with --title: the body)"
-                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -89727,7 +89723,7 @@
                   },
                   "title": {
                     "type": "string",
-                    "description": "title (required; or give it as the first argument)"
+                    "description": "title (required)"
                   },
                   "to": {
                     "type": "string",
@@ -89738,6 +89734,9 @@
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
+                "required": [
+                  "title"
+                ],
                 "additionalProperties": false
               }
             }
@@ -99711,7 +99710,7 @@
                   },
                   "children": {
                     "type": "array",
-                    "description": "sub-task titles, one per argument, in order (added before any --title)",
+                    "description": "sub-task titles, one per argument (the quiet form of --title)",
                     "items": {
                       "type": "object",
                       "properties": {
@@ -100965,7 +100964,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "meta": {
                     "type": "array",
@@ -108726,7 +108725,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "meta": {
                     "type": "array",
@@ -110105,7 +110104,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "description": "body (or give it as the first argument)"
+                    "description": "body"
                   },
                   "meta": {
                     "type": "array",

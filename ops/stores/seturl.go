@@ -68,7 +68,7 @@ func setURLOp(m Manager) op.Entry {
 		Name: OpSetURL, Summary: "Record a store's new address (the store repo moved or was renamed); its id and rows stay",
 		Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
 		Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true}, // CFG7: the url lands in stores.yaml, as for add
-		Examples: []op.Example{{Title: "the store repo was renamed", CLI: "lore store set-url agency git@github.com:agency/lore-notes", Want: "is now at"}},
+		Examples: []op.Example{{Title: "the store repo was renamed", CLI: "lore store set-url --name agency --url git@github.com:agency/lore-notes", Want: "is now at"}},
 	}, func(ctx context.Context, in SetURLIn) (SetURLOut, error) {
 		if err := checkSetURLName(in.Name); err != nil {
 			return SetURLOut{}, err

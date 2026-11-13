@@ -30,7 +30,7 @@ func TestAreaMarksSayWhatWasChecked(t *testing.T) {
 	writeSetupBody(&b, s, "")
 	got := b.String()
 	for _, want := range []string{
-		"– github      no GitHub account in this setup (lore setup apply acme --step github)",
+		"– github      no GitHub account in this setup (lore setup apply --setup acme --step github)",
 		"– store me",
 		"ℹ store acme",
 	} {

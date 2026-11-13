@@ -99,7 +99,7 @@ func TestJourneyStaff(t *testing.T) {
 		dir := tt.repo[tlDan.Email].Dir
 		tlFirstSteps(t, dan, dir, tlTeamSetup, "member", tlDan)
 		r := dan.Lore(dir, "setup", "apply", tlTeamSetup, "--step", "join", "--answers", `{"invite":"`+tt.store.SSHURL()+`"}`, "--json")
-		if r.Code == 0 || !strings.Contains(r.Out(), "is not a member of") || !strings.Contains(r.Out(), "lore member add "+tlDan.Email) {
+		if r.Code == 0 || !strings.Contains(r.Out(), "is not a member of") || !strings.Contains(r.Out(), "lore member add --email "+tlDan.Email) {
 			t.Errorf("a join by someone not on the roster: %s", r)
 		}
 		// an outsider still joins with an invite line

@@ -176,8 +176,8 @@ func Ops(c Checker) []op.Entry {
 			Summary:    "Check a pull request body or comment before posting it (agents: always)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: leakErrors, Local: true,
 			Examples: []op.Example{
-				{Title: "a body file", CLI: "lore check pr-body body.md", Want: "✓"},
-				{Title: "from stdin", CLI: "gh pr view 12 --json body -q .body | lore check pr-body -", Want: "✓"},
+				{Title: "a body file", CLI: "lore check pr-body --file body.md", Want: "✓"},
+				{Title: "from stdin", CLI: "gh pr view 12 --json body -q .body | lore check pr-body --file -", Want: "✓"},
 			},
 		}, func(ctx context.Context, in PRBodyIn) (PRBodyOut, error) {
 			body, err := readBody(in.File)

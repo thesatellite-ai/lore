@@ -87,7 +87,7 @@ func TestCFG7ConfirmMatrix(t *testing.T) {
 	}
 }
 
-// TestCFG7NeverAsksForMe: `lore store init me` never writes stores.yaml
+// TestCFG7NeverAsksForMe: `lore store init --name me` never writes stores.yaml
 // (the personal store lives in ~/.lore/config.yaml), so even a client repo
 // with a failing hook does not ask.
 func TestCFG7NeverAsksForMe(t *testing.T) {

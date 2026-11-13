@@ -58,7 +58,7 @@ func TestSecretsMetaKeysAndValues(t *testing.T) {
 		{"cost_hours=3", 0, nil},
 		{"cost_hours=abc", 20, []string{"E_META_TYPE", `"abc" is not a number`, "plain digits"}},
 		{"client_tier=gold", 0, nil},
-		{"client_tier=bronze", 20, []string{"E_META_VALUE", "allowed: gold, silver", "lore meta value add client_tier <value>"}},
+		{"client_tier=bronze", 20, []string{"E_META_VALUE", "allowed: gold, silver", "lore meta value add --key client_tier --value <value>"}},
 		{"pager_pin=4711", 0, nil},
 		{"note=x", 20, []string{"E_META_RESERVED", "is a column of a lore table", "use another name"}},
 		{"title=x", 20, []string{"E_META_RESERVED"}},
@@ -207,7 +207,7 @@ func TestSecretsMetaMissingIDNeverEchoesValue(t *testing.T) {
 	s := newSecSolo(t)
 	for _, f := range secFixtures()[:4] {
 		r := s.c.Lore("meta", "set", "vendor_key="+f.value)
-		r.Fails(t, 20, "E_INVALID_ID", `"vendor_key=…" is not a row id`, "lore meta set <id> vendor_key=<value>").Never(t, f.value, secTail(f.value))
+		r.Fails(t, 20, "E_INVALID_ID", `"vendor_key=…" is not a row id`, "lore meta set --id <id> --pair vendor_key=<value>").Never(t, f.value, secTail(f.value))
 		s.c.Lore("meta", "set", "vendor_key="+f.value, "--json").Never(t, f.value, secTail(f.value))
 	}
 	// A plain bad id is still named as typed.

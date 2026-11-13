@@ -20,7 +20,7 @@ import (
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
-// tasksTreeShow is `lore task show <id> --tree --json`'s tree part.
+// tasksTreeShow is `lore task show --id <id> --tree --json`'s tree part.
 type tasksTreeShow struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
@@ -149,7 +149,7 @@ func TestTasksTree_MaxDepth(t *testing.T) {
 		chain = append(chain, tasksAdd(t, s.c, "level "+strconv.Itoa(i), "--parent", chain[len(chain)-1]))
 	}
 	e := tasksJSONErr(t, s.c, "task", "add", "level 5", "--parent", chain[3])
-	if e.Error.Code != "E_TREE_DEPTH" || e.Error.Exit != th.ExitRefused || !strings.Contains(e.Error.Message, "max_depth 4") || !strings.Contains(e.Error.Hint, "lore policy set tasks.max_depth") {
+	if e.Error.Code != "E_TREE_DEPTH" || e.Error.Exit != th.ExitRefused || !strings.Contains(e.Error.Message, "max_depth 4") || !strings.Contains(e.Error.Hint, "lore policy set --key tasks.max_depth") {
 		t.Fatalf("a 5th level is refused with the policy hint: %+v", e)
 	}
 	// Moving a two-level subtree under level 3 makes 5 levels: refused.
@@ -232,7 +232,7 @@ func TestTasksTree_BigSplit(t *testing.T) {
 		}
 		return file
 	}
-	s.c.Lore("task", "split", root, "--from", steps("wide.txt", 201)).Fails(t, th.ExitRefused, "E_TREE_WIDTH", "max_children 200", "lore policy set tasks.max_children")
+	s.c.Lore("task", "split", root, "--from", steps("wide.txt", 201)).Fails(t, th.ExitRefused, "E_TREE_WIDTH", "max_children 200", "lore policy set --key tasks.max_children")
 	if got := len(tasksTree(t, s.c, root).Tree); got != 0 {
 		t.Fatalf("a refused split adds nothing: %d sub-tasks", got)
 	}

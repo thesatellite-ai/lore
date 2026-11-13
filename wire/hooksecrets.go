@@ -141,7 +141,7 @@ func allowLineOf(p string, h leakcheck.SecretHit, inStore bool) string {
 		if err != nil || h.Field == "" {
 			return ""
 		}
-		return "lore secrets allow " + id.String() + " --rule " + h.Rule + " --field " + shellWord(h.Field) + " --match-hash " + h.Preview + reason
+		return "lore secrets allow --row-id " + id.String() + " --rule " + h.Rule + " --field " + shellWord(h.Field) + " --match-hash " + h.Preview + reason
 	case inStore:
 		return ""
 	}
@@ -156,7 +156,7 @@ func allowLineOf(p string, h leakcheck.SecretHit, inStore bool) string {
 // named: every finding was printed with its own ready allow line, so the
 // hint points at those lines instead of a template to fill in.
 func leakHint(inStore, named bool) string {
-	vault := "store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <the sha256:… match shown> --reason \"<why>\""
+	vault := "store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow --row-id <row-id> --rule <rule> --field <field> --match-hash <the sha256:… match shown> --reason \"<why>\""
 	if named {
 		vault = "store the value in your vault and reference it (${secret:…}, or a placeholder such as ${DB_PASSWORD}); if a finding is not a secret, run the `not a secret?` line printed under it with your reason (a .gitleaksignore <path>:<rule>:<line> entry works too)"
 	}

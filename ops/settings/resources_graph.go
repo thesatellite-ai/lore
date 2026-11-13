@@ -101,9 +101,9 @@ func (o GraphOut) Text() string {
 func (o ops) graphOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpResGraph, Summary: "Print the ref tree of a resource (--down: what it uses; --up: what uses it)", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors, Examples: []op.Example{{Title: "what a service depends on", CLI: "lore resource graph hub_api --down", Want: "runs_on"}}}, o.resGraph),
+			Errors: readErrors, Examples: []op.Example{{Title: "what a service depends on", CLI: "lore resource graph --id hub_api --down", Want: "runs_on"}}}, o.resGraph),
 		op.Define(op.Spec{Name: OpResImpact, Summary: "What breaks if a resource goes down: every resource that depends on it, with open linked tasks and incidents", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: readErrors, Examples: []op.Example{{Title: "what depends on a resource", CLI: "lore resource impact res_4c71"}}}, o.resImpact),
+			Errors: readErrors, Examples: []op.Example{{Title: "what depends on a resource", CLI: "lore resource impact --id res_4c71"}}}, o.resImpact),
 	}
 }
 

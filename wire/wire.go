@@ -1021,7 +1021,7 @@ func (a *App) confirmClientStoresFile(ctx context.Context, e op.Entry, d op.Deco
 		if client, err := a.opts.RepoIsClient(ctx); err != nil || client {
 			return errs.New(errs.NeedsConfirm, "this is a client repo: the client can read .lore/stores.yaml and will see the store url").
 				WithQuestion("write the store url into this client repo's .lore/stores.yaml?").
-				WithHint("link the repo instead (`lore org link <org> --project <folder>`: the link is kept only in the store), or rerun with --yes")
+				WithHint("link the repo instead (`lore org link --org <org> --project <folder>`: the link is kept only in the store), or rerun with --yes")
 		}
 	}
 	if org, ok := a.orgStoreOf(ctx, rawURL); ok {
@@ -1031,7 +1031,7 @@ func (a *App) confirmClientStoresFile(ctx context.Context, e op.Entry, d op.Deco
 		}
 		return errs.New(errs.NeedsConfirm, "store url "+rawURL+" is "+whose+": writing it into .lore/stores.yaml commits the url, visible to everyone who can read this repo").
 			WithQuestion("write " + whose + " url into .lore/stores.yaml? it is committed and visible to everyone who can read this repo").
-			WithHint("rerun with --yes to write it, or link the repo instead (`lore org link " + link + " --project <folder>`: the link is kept only in the store)")
+			WithHint("rerun with --yes to write it, or link the repo instead (`lore org link --org " + link + " --project <folder>`: the link is kept only in the store)")
 	}
 	return nil
 }

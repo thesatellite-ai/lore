@@ -94,7 +94,7 @@ func (a *App) RowLocation(ctx context.Context, id ids.AnyID) (RowLocation, error
 	if b == nil {
 		if src == store.SourceMachine {
 			return loc, errs.New(errs.NotFound, id.String()+" is a machine-local row ("+string(r.Table)+"): it is kept in this machine's database (~/.lore/state/machine.db), not in a file").
-				WithHint("print it with lore show " + id.String())
+				WithHint("print it with lore show --id " + id.String())
 		}
 		return loc, errs.New(errs.Internal, "path: store "+string(src)+" holds "+id.String()+" but has no backend open")
 	}
@@ -110,7 +110,7 @@ func (a *App) RowLocation(ctx context.Context, id ids.AnyID) (RowLocation, error
 	rf, ok := concrete(b).(RowFiler)
 	if !ok {
 		return loc, errs.New(errs.Unsupported, "store "+string(src)+" keeps "+id.String()+" in a backend without row files").
-			WithHint("print it with lore show " + id.String())
+			WithHint("print it with lore show --id " + id.String())
 	}
 	dir, rel := rf.RowFile(r.Table, id)
 	loc.Path = absPath(dir, rel)
@@ -151,7 +151,7 @@ func (a *App) rowNotFound(st *state, id ids.AnyID, cause error) error {
 	if len(looked) > 0 {
 		msg += "; looked in: " + strings.Join(looked, ", ")
 	}
-	hint := "lore search <words> finds a row by its text; a row of another repo or store folder is found by running the command there; lore store list shows what this folder attaches"
+	hint := "lore search --query <words> finds a row by its text; a row of another repo or store folder is found by running the command there; lore store list shows what this folder attaches"
 	if h := errs.EnvelopeOf(cause).Error.Hint; h != "" {
 		hint = h + "; " + hint
 	}

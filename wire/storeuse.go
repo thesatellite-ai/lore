@@ -88,7 +88,7 @@ func (a *App) UseClone(ctx context.Context, in opsstores.UseIn) (opsstores.UseOu
 	if !prevOwn && isDirPath(filepath.Join(prev, ".git")) {
 		if pending := unpushedIn(ctx, cloneDirs{git: prev, work: prev}); len(pending) > 0 {
 			return opsstores.UseOut{}, errs.New(errs.Refused, useVerb+": lore's clone of store "+e.Name+" holds work its remote does not have ("+strings.Join(pending, ", ")+"); switching clones now would leave it behind").
-				WithHint("run `lore sync` when the store is reachable, then lore store use " + top + " again")
+				WithHint("run `lore sync` when the store is reachable, then lore store use --path " + top + " again")
 		}
 		out.Unused = prev
 	}
@@ -118,14 +118,14 @@ func useCloneTop(p string) (string, error) {
 			WithHint("give the clone of a lore store (`lore store list` names the stores); check out the store's branch if another is checked out")
 	case !ok:
 		return "", errs.New(errs.NotAStore, useVerb+": "+abs+" is not a git clone of a store").
-			WithHint("clone the store first: git clone <store url> " + abs + ", then lore store use " + abs)
+			WithHint("clone the store first: git clone <store url> " + abs + ", then lore store use --path " + abs)
 	case !isGit:
 		return "", errs.New(errs.InvalidInput, useVerb+": "+top+" is a folder store (no git), which lore already reads where it is; store use is for git clones").
 			WithHint("attach a folder store by its file:// url: lore store add <name> file://" + top)
 	}
 	if fi, gerr := os.Lstat(filepath.Join(top, ".git")); gerr != nil || !fi.IsDir() {
 		return "", errs.New(errs.BadPath, useVerb+": "+top+"/.git is a file (a linked worktree or a separate git dir); lore keeps its lock and state in a clone's .git folder").
-			WithHint("make a plain clone: git clone <store url> <folder>, then lore store use <folder>")
+			WithHint("make a plain clone: git clone <store url> <folder>, then lore store use --path <folder>")
 	}
 	return top, nil
 }
@@ -181,11 +181,11 @@ func (a *App) useEntry(ctx context.Context, named string, r gitbackend.Remote, h
 				WithHint("give the clone of " + named + ", or the store this clone belongs to (`lore store list`)")
 		}
 		return opsstores.Entry{}, errs.New(errs.NotFound, useVerb+": no store named "+named+" is configured here").
-			WithHint("`lore store list` names the stores; attach a store first with lore store add <name> <url>")
+			WithHint("`lore store list` names the stores; attach a store first with lore store add --name <name> --url <url>")
 	}
 	if len(cands) == 0 {
 		return opsstores.Entry{}, errs.New(errs.NotFound, useVerb+": "+top+" is a clone of "+repourl.ShownStore(r.Norm)+", which is not one of the stores lore knows here").
-			WithHint("attach it first (lore store add <name> <url>, or the org's setup), then run lore store use " + top + " again; `lore store list` names the stores")
+			WithHint("attach it first (lore store add --name <name> --url <url>, or the org's setup), then run lore store use --path " + top + " again; `lore store list` names the stores")
 	}
 	var branches []string
 	for _, e := range cands {
@@ -206,7 +206,7 @@ func (a *App) useEntry(ctx context.Context, named string, r gitbackend.Remote, h
 		names = append(names, e.Name)
 	}
 	return opsstores.Entry{}, errs.New(errs.InvalidInput, useVerb+": "+repourl.ShownStore(r.Norm)+" is configured on several branches ("+strings.Join(names, ", ")+"), and the branch "+top+" has checked out names none of them").
-		WithHint("name the store: lore store use " + top + " --store <name>")
+		WithHint("name the store: lore store use --path " + top + " --store <name>")
 }
 
 // useDefaultClone drops the own-clone record of store (a name or url).

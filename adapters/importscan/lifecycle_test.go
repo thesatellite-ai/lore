@@ -18,16 +18,16 @@ func TestTrashedAndDisabledCover(t *testing.T) {
 	}{
 		{"trashed solo hides personal",
 			"trash:\n  setups:\n    - name: personal\n      kind: solo\n      removed_at: \"2026-11-06T10:00:00Z\"\n",
-			[]string{"personal", "personal-2"}, "personal (in the trash) already uses the same personal store; restore it with: lore setup trash restore personal"},
+			[]string{"personal", "personal-2"}, "personal (in the trash) already uses the same personal store; restore it with: lore setup trash restore --name personal"},
 		{"disabled solo hides personal",
 			"setups:\n  - name: mine\n    kind: solo\n    disabled: true\n",
-			[]string{"personal"}, "mine (disabled) already uses the same personal store; enable it with: lore setup enable mine"},
+			[]string{"personal"}, "mine (disabled) already uses the same personal store; enable it with: lore setup enable --name mine"},
 		{"trashed member hides its org",
 			"trash:\n  setups:\n    - name: work\n      kind: member\n      org: acme\n      removed_at: \"2026-11-06T10:00:00Z\"\n",
-			[]string{"acme"}, "work (in the trash) already uses org acme; restore it with: lore setup trash restore work"},
+			[]string{"acme"}, "work (in the trash) already uses org acme; restore it with: lore setup trash restore --name work"},
 		{"disabled member hides its org",
 			"setups:\n  - name: work\n    kind: member\n    org: acme\n    disabled: true\n",
-			[]string{"acme"}, "work (disabled) already uses org acme; enable it with: lore setup enable work"},
+			[]string{"acme"}, "work (disabled) already uses org acme; enable it with: lore setup enable --name work"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

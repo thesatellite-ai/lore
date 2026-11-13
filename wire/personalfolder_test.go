@@ -17,7 +17,7 @@ import (
 
 // TestPersonalFolderDefault (owner item 17): the local personal store is
 // <home>/stores/_me, the same folder the scan skips and the setup page
-// names, and `lore store init me` with no url makes it there.
+// names, and `lore store init --name me` with no url makes it there.
 func TestPersonalFolderDefault(t *testing.T) {
 	home := t.TempDir()
 	want := filepath.Join(home, "stores", "_me")

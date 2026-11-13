@@ -92,11 +92,11 @@ func TestTaskTimeFindings(t *testing.T) {
 			tid := s.r.ID.String()
 			switch f.Code {
 			case LongSpan:
-				if f.ID != tid || f.Store != "repo" || !strings.HasPrefix(f.Fix, "lore task time edit "+tid+" ") || !strings.Contains(f.Message, "counted in full") {
+				if f.ID != tid || f.Store != "repo" || !strings.HasPrefix(f.Fix, "lore task time edit --id "+tid+" ") || !strings.Contains(f.Message, "counted in full") {
 					t.Errorf("%s: long_span finding %+v", c.name, f)
 				}
 			case TimeEntriesMany:
-				if f.ID != tid || f.Fix != "split the task: lore task split "+tid || !strings.HasPrefix(f.Message, strconv.Itoa(c.live+boolInt(c.longLive))+" time entries") {
+				if f.ID != tid || f.Fix != "split the task: lore task split --id "+tid || !strings.HasPrefix(f.Message, strconv.Itoa(c.live+boolInt(c.longLive))+" time entries") {
 					t.Errorf("%s: time_entries_many finding %+v", c.name, f)
 				}
 			default:
@@ -149,7 +149,7 @@ func TestMetaUnknownKey(t *testing.T) {
 		}
 		for _, f := range got {
 			if f.Code != MetaUnknownKey || f.Store != "repo" || !strings.Contains(f.Message, unknown.String()) ||
-				f.Fix != "attach the store that defines it, or lore meta unset "+f.ID+" <name>" {
+				f.Fix != "attach the store that defines it, or lore meta unset --id "+f.ID+" --key <name>" {
 				t.Errorf("%s: finding %+v", c.name, f)
 			}
 		}

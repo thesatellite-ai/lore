@@ -179,7 +179,7 @@ const maxFirstSentence = 240
 const MaxSummary = 200
 
 // NoShortForm is the line text when an entry has no usable short form.
-const NoShortForm = "(no short form; run `lore show <id>`)"
+const NoShortForm = "(no short form; run `lore show --id <id>`)"
 
 // FirstSentence returns the body's first sentence (up to the first ". ",
 // "! ", "? " or line break), trimmed, and ok false when it is empty or
@@ -226,5 +226,5 @@ func oneLine(s string) string {
 
 // LineForm is the 6.4 line: - `<id>` <short> Full: `lore show <id>`.
 func LineForm(id, short string) string {
-	return "- `" + id + "` " + short + " Full: `lore show " + id + "`\n"
+	return "- `" + id + "` " + short + " Full: `lore show --id " + id + "`\n"
 }

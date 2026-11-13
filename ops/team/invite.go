@@ -111,7 +111,7 @@ func (o ops) invite(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInvit
 	for _, x := range all {
 		if x.Email == email && onboard.EffectiveInviteStatus(x.record(), today) == schema.InviteStatusPending {
 			return setup.TeamInviteOut{}, errs.New(errs.InvalidInput, "invite "+x.ID.String()+" for "+email+" is still pending (until "+x.day()+"); one invite per person").
-				WithHint("lore team invite resend " + email + " prints it again; lore team invite revoke " + email + " ends it")
+				WithHint("lore team invite resend --ref " + email + " prints it again; lore team invite revoke --ref " + email + " ends it")
 		}
 	}
 
@@ -193,7 +193,7 @@ func inviteTeams(ctx context.Context, r profilestore.Roster, refs []string) ([]s
 		}
 		if fieldText(cur, teamFieldActive) == boolFalse {
 			return nil, errs.New(errs.StatusChange, "--team @"+h+": the team is removed; nobody joins it").
-				WithHint("lore team add @" + h + " brings it back first")
+				WithHint("lore team add --handle @" + h + " brings it back first")
 		}
 		if h = fieldText(cur, teamFieldHandle); !slices.Contains(out, h) {
 			out = append(out, h)
@@ -270,7 +270,7 @@ func inviteOf(r row.Row) (inviteRow, error) {
 	t, err := time.Parse(value.DateLayout, fieldText(r, schema.FieldInviteExpiresOn))
 	if err != nil {
 		return inviteRow{}, errs.Wrap(errs.InvalidInput, "invite "+r.ID.String()+": expires_on is not YYYY-MM-DD", err).
-			WithHint("lore show " + r.ID.String())
+			WithHint("lore show --id " + r.ID.String())
 	}
 	x.ExpiresOn = t
 	return x, nil
@@ -342,7 +342,7 @@ func checkRoles(ctx context.Context, r profilestore.Roster, roles []string) erro
 	for _, n := range roles {
 		if !live[n] {
 			return errs.New(errs.RoleUnknown, "role "+work.Quote(n)+" is not a live role").
-				WithHint("lore role list shows them; lore role add " + n + " adds one")
+				WithHint("lore role list shows them; lore role add --name " + n + " adds one")
 		}
 	}
 	return nil
@@ -443,7 +443,7 @@ func findInvite(ctx context.Context, r profilestore.Roster, ref string) (inviteR
 	}
 	if len(found) == 0 {
 		return inviteRow{}, errs.New(errs.InviteNotFound, "no invite for "+email+" in "+r.Where()).
-			WithHint("lore team invite " + email)
+			WithHint("lore team invite --email " + email)
 	}
 	today := r.Today()
 	if i := slices.IndexFunc(found, func(x inviteRow) bool {
@@ -475,7 +475,7 @@ func (o ops) revoke(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamIn
 		return setup.TeamInviteRevokeOut{ID: x.ID.String(), Status: x.Status}, nil
 	case schema.InviteStatusAccepted:
 		return setup.TeamInviteRevokeOut{}, errs.New(errs.InvalidInput, "invite "+x.ID.String()+" was accepted by "+x.AcceptedBy+"; there is nothing to revoke").
-			WithHint("lore actor offboard " + x.AcceptedBy + " ends their time on the team")
+			WithHint("lore actor offboard --actor " + x.AcceptedBy + " ends their time on the team")
 	}
 	if !op.Confirmed(ctx) {
 		q := "Revoke invite " + x.ID.String() + " for " + x.Email + "?"
@@ -515,13 +515,13 @@ func (o ops) resend(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamIn
 	case schema.InviteStatusPending:
 	case schema.InviteStatusAccepted:
 		return setup.TeamInviteResendOut{}, errs.New(errs.InviteUsed, "invite "+x.ID.String()+" was already used by "+x.AcceptedBy).
-			WithHint("lore team invite " + x.Email + " writes a new one if another person needs it")
+			WithHint("lore team invite --email " + x.Email + " writes a new one if another person needs it")
 	case schema.InviteStatusRevoked:
 		return setup.TeamInviteResendOut{}, errs.New(errs.InviteRevoked, "invite "+x.ID.String()+" was revoked").
-			WithHint("lore team invite " + x.Email)
+			WithHint("lore team invite --email " + x.Email)
 	default:
 		return setup.TeamInviteResendOut{}, errs.New(errs.InviteExpired, "invite "+x.ID.String()+" expired on "+x.day()+"; ask "+by+" for a new one").
-			WithHint("lore team invite " + x.Email)
+			WithHint("lore team invite --email " + x.Email)
 	}
 	origin, err := o.env.TeamOrigin(ctx, e.Org)
 	if err != nil {

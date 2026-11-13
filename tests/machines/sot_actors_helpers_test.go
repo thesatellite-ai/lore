@@ -30,7 +30,7 @@ type saActor struct {
 	} `json:"copies"`
 }
 
-// saShow is `lore actor show <ref> --json` in cwd.
+// saShow is `lore actor show --id <ref> --json` in cwd.
 func saShow(t *testing.T, m *Machine, cwd, ref string) saActor {
 	t.Helper()
 	var env struct {

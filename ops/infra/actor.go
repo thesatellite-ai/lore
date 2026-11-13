@@ -204,7 +204,7 @@ func (o ActorShowOut) mainText() string {
 		fmt.Fprintf(&b, "  leave:       %s → %s\n", a.LeaveFrom, orNow(a.LeaveUntil))
 		// 5.3: a passed leave_until never flips the status on a read.
 		if a.LeaveUntil != "" && o.Today != "" && a.LeaveUntil < o.Today {
-			fmt.Fprintf(&b, "               leave ended %s; still on_leave (lore actor status %s active)\n", a.LeaveUntil, a.ID)
+			fmt.Fprintf(&b, "               leave ended %s; still on_leave (lore actor status --actor %s --to active)\n", a.LeaveUntil, a.ID)
 		}
 	}
 	if a.StatusNote != "" {

@@ -33,11 +33,11 @@ func TestAskAddressOnlyFirstRunInTerminal(t *testing.T) {
 func TestAddressNoticeCaseOnlyOffersNoFork(t *testing.T) {
 	t.Parallel()
 	c := wire.AddressNotice("rep_x", opsinfra.AddressNotice{Key: "github.com/Agency/x", Recorded: "github.com/agency/x", CaseOnly: true})
-	if strings.Contains(c, "fork") || !strings.Contains(c, "lore repo set-url github.com/Agency/x") {
+	if strings.Contains(c, "fork") || !strings.Contains(c, "lore repo set-url --url github.com/Agency/x") {
 		t.Fatalf("case-only notice: %s", c)
 	}
 	n := wire.AddressNotice("rep_x", opsinfra.AddressNotice{Key: "github.com/tomas/x", Recorded: "github.com/agency/x"})
-	for _, want := range []string{"lore repo set-url github.com/tomas/x ", "--mirror", "lore repo fork", "rep_x"} {
+	for _, want := range []string{"lore repo set-url --url github.com/tomas/x ", "--mirror", "lore repo fork", "rep_x"} {
 		if !strings.Contains(n, want) {
 			t.Fatalf("notice lacks %q: %s", want, n)
 		}

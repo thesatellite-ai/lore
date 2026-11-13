@@ -105,13 +105,13 @@ func TestRefusal(t *testing.T) {
 			t.Errorf("message %q does not name %s", le.Message, want)
 		}
 	}
-	if !strings.Contains(le.Hint, "lore store set-url "+idA+" "+oldU) {
+	if !strings.Contains(le.Hint, "lore store set-url --name "+idA+" --url "+oldU) {
 		t.Errorf("hint %q does not give the set-url fix", le.Hint)
 	}
 	if got := sp.Line(); got != "store "+idA+" is reached at two addresses: "+oldU+", "+newU {
 		t.Errorf("Line = %q", got)
 	}
-	if got := sp.Fix(); got != "lore store set-url "+idA+" "+oldU {
+	if got := sp.Fix(); got != "lore store set-url --name "+idA+" --url "+oldU {
 		t.Errorf("Fix = %q", got)
 	}
 }

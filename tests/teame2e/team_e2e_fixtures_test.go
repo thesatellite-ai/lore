@@ -484,8 +484,8 @@ func newAgency(t *testing.T, caps ...th.Cap) *agency {
 }
 
 // initStore makes url a lore store the 0.1.18 way. v0.1.17's
-// `lore store init <url>` (run from anywhere) was removed by O12b: the core
-// command is `lore store init <name> <url>`, and it also attaches the store
+// `lore store init --name <url>` (run from anywhere) was removed by O12b: the core
+// command is `lore store init --name <name> --url <url>`, and it also attaches the store
 // to the repo it runs in (.lore/stores.yaml). So the person runs it from a
 // scratch repo under their HOME, never from one of the world's code repos
 // (whose files the tests inspect); name is only that scratch repo's entry

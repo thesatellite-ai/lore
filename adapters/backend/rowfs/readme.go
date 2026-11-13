@@ -44,12 +44,12 @@ This folder is a lore store: notes, rules, decisions, tasks and the other record
 
 ## Browsing
 
-Open any file: the record's text is in plain JSON fields (` + "`title`" + `, ` + "`body`" + `, ` + "`content`" + `, ...). From a terminal inside the store, ` + "`lore task list`" + ` (or any other lore list) shows the records of the folder you are in, and ` + "`lore path <id>`" + ` prints the file of one record.
+Open any file: the record's text is in plain JSON fields (` + "`title`" + `, ` + "`body`" + `, ` + "`content`" + `, ...). From a terminal inside the store, ` + "`lore task list`" + ` (or any other lore list) shows the records of the folder you are in, and ` + "`lore path --id <id>`" + ` prints the file of one record.
 
 ## Editing by hand
 
-- ` + "`lore edit <id>`" + ` opens a record in your editor as readable Markdown and writes it back as JSON when you save.
-- You may also edit a JSON file directly, add one, delete one, or move one to another folder. On its next command in this store lore checks every file you changed: a valid edit is stamped with your name and the time and committed as you ("hand edit: tasks tsk_…"), so it wins over older changes when teammates sync, and pushed like any lore write; a deleted file goes to lore's trash (` + "`lore trash restore <id>`" + ` brings it back); a file moved to another folder is moved there. A file that is not valid is refused with its line and the reason, and it is not committed or pushed until it is fixed; your other edits still go.
+- ` + "`lore edit --id <id>`" + ` opens a record in your editor as readable Markdown and writes it back as JSON when you save.
+- You may also edit a JSON file directly, add one, delete one, or move one to another folder. On its next command in this store lore checks every file you changed: a valid edit is stamped with your name and the time and committed as you ("hand edit: tasks tsk_…"), so it wins over older changes when teammates sync, and pushed like any lore write; a deleted file goes to lore's trash (` + "`lore trash restore --target <id>`" + ` brings it back); a file moved to another folder is moved there. A file that is not valid is refused with its line and the reason, and it is not committed or pushed until it is fixed; your other edits still go.
 - Plain git works here: ` + "`git pull`" + `, ` + "`git commit`" + ` and ` + "`git push`" + `. lore sets this clone up for it: ` + "`merge.lore.driver`" + ` in ` + "`.git/config`" + ` (records merge field by field), ` + "`*.json merge=lore`" + ` in ` + "`.git/info/attributes`" + `, and a block in ` + "`.git/hooks/pre-commit`" + ` that checks the records and scans for secrets before your commit (lines of your own in that hook are kept). Only when a global ` + "`core.hooksPath`" + ` would skip the clone's hooks does lore set this clone's own ` + "`core.hooksPath`" + ` back to ` + "`.git/hooks`" + `.
 - Files that are not records (notes, a folder of your own) are left alone: lore never deletes or reads them, and ` + "`lore doctor`" + ` names them.
 

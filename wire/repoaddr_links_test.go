@@ -84,7 +84,7 @@ func hasLink(t *testing.T, w *orgWorld, remote string) bool {
 // person answers `lore sync`'s address question with 1 (moved), the org
 // store links of the repo are listed and asked about before they gain the
 // new address; y writes them and names each folder, any other answer
-// changes nothing and names `lore repo set-url <new>`, which then writes
+// changes nothing and names `lore repo set-url --url <new>`, which then writes
 // them. A mirror (2) or fork (3) answer changes no link and asks nothing
 // about links.
 func TestSyncMoveFollowsStoreLinks(t *testing.T) {
@@ -137,12 +137,12 @@ func TestSyncMoveFollowsStoreLinks(t *testing.T) {
 					t.Fatalf("the output must name the folder updated:\n%s", got)
 				}
 			case c.asks:
-				if !strings.Contains(got, "store links not changed; to write them: lore repo set-url "+movedKey+"\n") {
+				if !strings.Contains(got, "store links not changed; to write them: lore repo set-url --url "+movedKey+"\n") {
 					t.Fatalf("a no must name the command that writes them:\n%s", got)
 				}
 				// the named command writes them
 				if _, err := run(t, app, opsinfra.OpRepoSetURL, `{"url":"`+movedKey+`"}`, false); err != nil {
-					t.Fatalf("lore repo set-url %s: %v", movedKey, err)
+					t.Fatalf("lore repo set-url --url %s: %v", movedKey, err)
 				}
 				if !hasLink(t, w, movedKey) {
 					t.Fatal("lore repo set-url did not write the link a no left out")
@@ -216,7 +216,7 @@ func TestFollowMovedLinksYesAndNonInteractive(t *testing.T) {
 			if wrote := hasLink(t, w, movedKey); wrote != c.writes {
 				t.Fatalf("wrote %v, want %v:\n%s", wrote, c.writes, got)
 			}
-			if !c.writes && !strings.Contains(got, "lore repo set-url "+movedKey) {
+			if !c.writes && !strings.Contains(got, "lore repo set-url --url "+movedKey) {
 				t.Fatalf("no command named:\n%s", got)
 			}
 		})

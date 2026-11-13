@@ -55,7 +55,7 @@ func TestSetTargetEmbedded(t *testing.T) {
 	}
 }
 
-// TestPolicySetOrgShortcuts (later 122): `lore policy set … --to team`
+// TestPolicySetOrgShortcuts (later 122): `lore policy set --key … --to team`
 // and `--to company` write the policy row into the org folders the
 // shortcuts name; with no org both are refused E_NOT_FOUND naming
 // `lore org link`, and nothing is written.

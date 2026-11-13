@@ -32,7 +32,7 @@ func (a *App) PushStoreNow(ctx context.Context, in opsstores.PushIn) (opsstores.
 	}
 	if !exists(dir) {
 		return opsstores.PushOut{}, errs.New(errs.NotFound, "store push: this machine has no clone of "+raw).
-			WithHint("lore store add <name> " + raw + " attaches it")
+			WithHint("lore store add --name <name> --url " + raw + " attaches it")
 	}
 	canon, err := canonical(attach.Store{URL: raw, Branch: in.Branch})
 	if err != nil {

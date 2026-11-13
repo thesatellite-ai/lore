@@ -17,11 +17,11 @@ Two agency developers (`dev1`, `dev2`), two agents (`agent-a`, `agent-b`) and th
 | 04 landing, merge-only main | a repo task done with `--commit`, an internal task done in the store, both feature branches merged into `main` with `git merge`; every checkout stays clean |
 | 05 protected main (local sim) | ride-along landing when `main` refuses direct pushes (a local repo whose hook answers like GitHub's GH006, since protecting a real branch needs admin API access) |
 | 06 leak attempts | a commit with internal text (with and without the marker), `git commit --no-verify` followed by `git push`, `lore check pr-body`, `lore task add --to repo` and `lore rule add --to repo` with internal text: every one is refused, and the branch never reaches the client's remote |
-| 07 move one note to the client | `lore move <id> --to repo` refuses without a terminal or `--yes`, then moves one note on purpose (same id); the client sees exactly that note |
+| 07 move one note to the client | `lore move --id <id> --to repo` refuses without a terminal or `--yes`, then moves one note on purpose (same id); the client sees exactly that note |
 | 08a agents: plan, claims, merge | `lore agent start`, `lore mission apply` (twice: created, then found), claims, `E_NO_WORK`, a finding, a note, done → merged after a real merge; `agent-b` is killed while it holds a claim |
 | 08b agents: reclaim, gate, done | after the lease expires, `agent-a` reclaims the task on `agent-b`'s pushed branch, `agent-b` gets `E_LOST_CLAIM`, an agent cannot approve the gate, `dev1` approves, the mission ends with 3 done |
 | 09 leak cleanup, compaction | an internal task written with `--to repo` by mistake, seen by a second client clone, then `lore live purge` and `lore live compact`; a fresh mirror of the client repo holds no marker in any commit |
-| 10 staging store branch | `lore store init <name> '<url>?branch=staging'`, `lore org use agency-stag`, and rows that never mix between the two branches |
+| 10 staging store branch | `lore store init --name <name> --url '<url>?branch=staging'`, `lore org use --entry agency-stag`, and rows that never mix between the two branches |
 
 After every step from 01 on, the client's own clone fetches every ref the client repo serves and is searched for `INTERNAL-MARKER-`: the checkout, the tree of every ref (including `refs/lore/*`), `git log --all -p`, every object in its object store (unreachable ones too) and the client's own `lore task list`, `lore memory list` and `lore rule list`. Step 09's mistake is fetched only by the second clone, as in [Cleaning up after a leak](use-cases/leak-cleanup.md); the main client clone fetches again only after the cleanup.
 

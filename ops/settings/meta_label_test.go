@@ -64,7 +64,7 @@ func TestMetaGetAllowedValueLabel(t *testing.T) {
 	}
 }
 
-// TestRowShowAllowedValueLabel (METADATA 3.17, G-META-10): lore show <id>
+// TestRowShowAllowedValueLabel (METADATA 3.17, G-META-10): lore show --id <id>
 // prints a labelled allowed value by its label, an unlabelled one by its
 // name, no "<key>_label" line; --json meta keeps the name and adds
 // tier_label only for a labelled value; a sensitive allowed value shows

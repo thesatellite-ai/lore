@@ -1,6 +1,6 @@
 # Teams
 
-**In short:** a team is an `@handle` on the org's roster that names a group of people. `lore team add @web --members @tomas,@mira` makes one; from then on `@web` works wherever a person's handle does, such as `lore task add … --assign @web`. The team commands run inside a repo of the org, in a clone with no lore project yet (a read there reads the org store; nothing is created in the clone), or outside any repo (the active setup's org store).
+**In short:** a team is an `@handle` on the org's roster that names a group of people. `lore team add --handle @web --members @tomas,@mira` makes one; from then on `@web` works wherever a person's handle does, such as `lore task add --title … --assign @web`. The team commands run inside a repo of the org, in a clone with no lore project yet (a read there reads the org store; nothing is created in the clone), or outside any repo (the active setup's org store).
 
 You want this page when you assign work to a group rather than a person, or keep track of who is on which team. Every output below is a real run (`tests/team/docs/run-examples.sh teams`).
 
@@ -16,7 +16,7 @@ Tomas makes `@web` from his plain `work` folder (no repo there), lists the teams
 <!-- example: teams#add -->
 ```console
 # tomas, in ~
-$ lore team add @web --name 'Web' --members @tomas,@mira
+$ lore team add --handle @web --name 'Web' --members @tomas,@mira
 lore: pushed store agency/org: commit 601d285 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ tem_7a67…9504 @web (2 member(s)) added in agency org/
@@ -24,7 +24,7 @@ $ lore team list
 @web              Web                      2 member(s)
 
 # tomas, in acme-hub
-$ lore team show @web
+$ lore team show --handle @web
 tem_7a67…9504  @web  Web
 roster: agency org/
 members (2):
@@ -42,7 +42,7 @@ members (2):
 <!-- example: teams#assign -->
 ```console
 # tomas, in acme-hub
-$ lore task add 'ship the checkout page' --to agency --assign @web
+$ lore task add --title 'ship the checkout page' --to agency --assign @web
 lore: pushed store agency: commit 86dbae4 to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/acme-hub (store agency)
@@ -55,20 +55,20 @@ A team's name is internal to the org, so a task written into a client's own repo
 
 ## Step 3 — Change who is on it
 
-`team member add` and `team member remove` change the members and say who was already in (or not in); `team add` on an existing team renames it and keeps its members unless `--members` is given, which replaces them. Someone invited who has not joined yet is named by email: `lore team member add @web mira@agency.example` records the team on her pending invite and says so, and she joins it when she accepts (`lore team invite <email> --team @web` does the same up front). `team list` counts them as pending, and `team show` lists them apart from the members, with their invite and its last day:
+`team member add` and `team member remove` change the members and say who was already in (or not in); `team add` on an existing team renames it and keeps its members unless `--members` is given, which replaces them. Someone invited who has not joined yet is named by email: `lore team member add --handle @web --members mira@agency.example` records the team on her pending invite and says so, and she joins it when she accepts (`lore team invite --email <email> --team @web` does the same up front). `team list` counts them as pending, and `team show` lists them apart from the members, with their invite and its last day:
 
 <!-- example: teams#members -->
 ```console
 # tomas, in ~
-$ lore team member remove @web @mira
+$ lore team member remove --handle @web --members @mira
 lore: pushed store agency/org: commit 9b40ce7 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ @web: 1 member(s) now; @mira taken off the team
-$ lore team member add @web @mira,@tomas
+$ lore team member add --handle @web --members @mira,@tomas
 lore: pushed store agency/org: commit 05513aa to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ @web: 2 member(s) now; @mira added to the team; @tomas already a member
-$ lore team add @web --name 'Web platform'
+$ lore team add --handle @web --name 'Web platform'
 lore: pushed store agency/org: commit dfd8dc8 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
@@ -108,15 +108,15 @@ A team cannot take a person's handle (an `@mention` would mean two things), only
 <!-- example: teams#refusals -->
 ```console
 # tomas, in ~
-$ lore team add @mira
+$ lore team add --handle @mira
 ERROR: [E_INVALID_INPUT] handle @mira is taken by Mira Patel on the roster in agency org/; a team and a person cannot share one
   hint: choose another team handle (lore team add @mira-team …)
 (exit 20)
-$ lore team add @ops --members @nobody
+$ lore team add --handle @ops --members @nobody
 ERROR: [E_NOT_FOUND] no one is @nobody on the roster in agency org/
   hint: check the handle with lore actor list; a new person runs lore actor register (or joins from an invite) first
 (exit 27)
-$ lore team show @ops
+$ lore team show --handle @ops
 ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
   hint: lore team list shows the teams; lore team add @ops --members <people> makes it
 (exit 27)
@@ -130,13 +130,13 @@ ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
 <!-- example: teams#remove -->
 ```console
 # tomas, in ~
-$ lore team remove @web
+$ lore team remove --handle @web
 lore: pushed store agency/org: commit cf563f3 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ tem_7a67…9504 @web removed from the roster in agency org/ (kept for history: tasks that named it still read; lore team add @web brings it back)
 $ lore team list --all
 @web              Web platform             2 member(s)  [removed]
-$ lore team add @web
+$ lore team add --handle @web
 lore: pushed store agency/org: commit df3a55c to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/

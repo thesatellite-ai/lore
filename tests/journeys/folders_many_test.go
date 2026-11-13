@@ -288,7 +288,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.LoreIn(app, "store", "add", "notes_two", two.SSHURL(), "--folder", "client_b", "--yes").OK(t)
 		lee.LoreIn(app, "doctor").OK(t).Never(t, "removed_store_folder")
 		lee.Lore(parent, "store", "folder", "remove", two.SSHURL(), "client_b", "--yes").OK(t)
-		lee.LoreIn(app, "doctor").Says(t, "removed_store_folder", "client_b", "lore store remove notes_two")
+		lee.LoreIn(app, "doctor").Says(t, "removed_store_folder", "client_b", "lore store remove --name notes_two")
 	})
 }
 

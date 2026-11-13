@@ -83,11 +83,11 @@ type AsClientFinding struct {
 func AsClientResources(rows []ResRow, defs map[string]ResField, repoRes map[string]bool) []AsClientFinding {
 	var out []AsClientFinding
 	for _, r := range rows {
-		edit := "lore resource edit " + r.Name + " --unset "
+		edit := "lore resource edit --id " + r.Name + " --unset "
 		if r.KindID != "" && !r.KindInRepo {
 			out = append(out, AsClientFinding{Row: r.ID, Name: r.Name, Field: "kind",
 				Why: "its kind " + r.KindID + " is a store definition; the file would name a store id",
-				Fix: "move it to the store (lore move " + r.ID + " --to <store>), and after the hand-over move it back (lore move " + r.ID + " --to repo writes the repo's own kind)"})
+				Fix: "move it to the store (lore move --id " + r.ID + " --to <store>), and after the hand-over move it back (lore move --id " + r.ID + " --to repo writes the repo's own kind)"})
 		}
 		for _, e := range r.Entries {
 			if emptyRaw(e.Value) {
@@ -132,7 +132,7 @@ func AsClientResources(rows []ResRow, defs map[string]ResField, repoRes map[stri
 			if def.Sensitive {
 				out = append(out, AsClientFinding{Row: r.ID, Name: r.Name, Field: name,
 					Why: "sensitive value; the client could read it",
-					Fix: edit + name + "   (or keep it internal: lore move " + r.ID + " --to <store>)"})
+					Fix: edit + name + "   (or keep it internal: lore move --id " + r.ID + " --to <store>)"})
 			}
 		}
 	}

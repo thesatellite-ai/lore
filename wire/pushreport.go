@@ -287,5 +287,5 @@ func WaitingLine(storeName string, n int) string {
 // reset (deleted and made again): no sync pushes these commits until the
 // person picks a way out (B2-32).
 func ResetWaitingLine(storeName string, n int, url string) string {
-	return "lore: store " + storeName + ": the store at " + url + " was reset (deleted and made again); " + strconv.Itoa(n) + " local commit(s) of the old store stay here and lore will not push them on its own: put it back with `lore store push --restore " + url + "`, or start fresh with `lore store forget " + url + " --yes`"
+	return "lore: store " + storeName + ": the store at " + url + " was reset (deleted and made again); " + strconv.Itoa(n) + " local commit(s) of the old store stay here and lore will not push them on its own: put it back with `lore store push --restore --store " + url + "`, or start fresh with `lore store forget --url " + url + " --yes`"
 }

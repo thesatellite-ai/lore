@@ -164,7 +164,7 @@ func (s Split) Line() string {
 }
 
 // Fix is the command that makes every entry name the primary address.
-func (s Split) Fix() string { return "lore store set-url " + s.StoreID + " " + s.Primary }
+func (s Split) Fix() string { return "lore store set-url --name " + s.StoreID + " --url " + s.Primary }
 
 // Refusal is the write refusal for url: nil when url is the primary
 // address (or not one of the split's addresses), else E_REFUSED naming
@@ -174,7 +174,7 @@ func (s Split) Refusal(name, raw string) error {
 		return nil
 	}
 	return errs.New(errs.Refused, "store "+name+" ("+s.StoreID+") is reached at two addresses on this machine: "+raw+" here and "+s.Primary+" elsewhere; lore writes only to "+s.Primary+" until one address is kept").
-		WithHint("keep one address: `lore store set-url " + s.StoreID + " " + s.Primary + "` (or name " + raw + " to move the store there); `lore doctor` lists every place naming it")
+		WithHint("keep one address: `lore store set-url --name " + s.StoreID + " --url " + s.Primary + "` (or name " + raw + " to move the store there); `lore doctor` lists every place naming it")
 }
 
 // For returns the split of store id, if any.

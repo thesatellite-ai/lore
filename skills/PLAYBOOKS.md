@@ -85,9 +85,9 @@ A monorepo with `web`, `admin`, `api` repos sharing one lore project.
 
 ```bash
 lore init --non-interactive --name=my-platform
-lore repo add web   --origin=git@github.com:org/web.git
-lore repo add admin --origin=git@github.com:org/admin.git
-lore repo add api   --origin=git@github.com:org/api.git
+lore repo add --mount-name web   --origin=git@github.com:org/web.git
+lore repo add --mount-name admin --origin=git@github.com:org/admin.git
+lore repo add --mount-name api   --origin=git@github.com:org/api.git
 
 # Scoped memories
 lore memory add --body="Tailwind v4"          --repo=web
@@ -107,9 +107,9 @@ lore memory add --body="All times in UTC"
 Search defaults to "current repo + master". To search elsewhere:
 
 ```bash
-lore memory search "" --all-repos     # everything
-lore memory search "" --master-only   # cross-cutting only
-lore memory search "" --no-inherit    # strict scope (no master fallback)
+lore memory search --query "" --all-repos     # everything
+lore memory search --query "" --master-only   # cross-cutting only
+lore memory search --query "" --no-inherit    # strict scope (no master fallback)
 ```
 
 ---
@@ -121,11 +121,11 @@ Several repos reading and writing one set of notes. (The v0.1.17 shared-database
 ```bash
 # In repo A
 cd ~/projects/alpha
-lore store init shared "file://$HOME/stores/shared"
+lore store init --name shared --url "file://$HOME/stores/shared"
 
 # In repo B
 cd ~/projects/beta
-lore store add shared "file://$HOME/stores/shared"
+lore store add --name shared --url "file://$HOME/stores/shared"
 lore rule add --to shared --body "Every change comes with a test"
 
 # Inspect
@@ -159,21 +159,21 @@ Machine-local things (the audit log, sessions) live in `~/.lore/state/machine.db
 ## P8 — Add a task tracked under a mission
 
 ```bash
-M=$(lore mission add "Ship v0.1" --target=2026-06-30 --json | jq -r '.data.id')
+M=$(lore mission add --title "Ship v0.1" --target=2026-06-30 --json | jq -r '.data.id')
 TL=$(lore tasklist add --title="v0.1" --body="release backlog" --json | jq -r '.data.id')   # every task belongs to a tasklist
-lore task add "Wire FTS5 backend"      --tasklist=$TL --mission=$M --commitment=accepted --priority=high
-lore task add "Write SC scenarios"     --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-15
-lore task add "macOS code signing"     --tasklist=$TL --mission=$M --commitment=accepted --priority=medium
+lore task add --title "Wire FTS5 backend"      --tasklist=$TL --mission=$M --commitment=accepted --priority=high
+lore task add --title "Write SC scenarios"     --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-15
+lore task add --title "macOS code signing"     --tasklist=$TL --mission=$M --commitment=accepted --priority=medium
 
-lore mission show $M --json | jq '.data.tasks'      # eager-loaded tasks
+lore mission show --id $M --json | jq '.data.tasks'      # eager-loaded tasks
 ```
 
 To start working on a task:
 
 ```bash
-lore task start tsk_019e...           # status: todo → in_progress
+lore task start --id tsk_019e...           # status: todo → in_progress
 # ... do the work ...
-lore task done  tsk_019e...           # status: in_progress → done
+lore task done  --id tsk_019e...           # status: in_progress → done
 ```
 
 ---
@@ -182,13 +182,13 @@ lore task done  tsk_019e...           # status: in_progress → done
 
 ```bash
 # Once-off: 2026-06-01
-lore reminder add "Audit FTS index quality" --due=2026-06-01
+lore reminder add --message "Audit FTS index quality" --due=2026-06-01
 
 # Recurring: every 30 days
-lore reminder add "Weekly review" --due=2026-05-18 --recurrence=7d
+lore reminder add --message "Weekly review" --due=2026-05-18 --recurrence=7d
 
 # Attached to a specific decision
-lore reminder add "Re-evaluate SQLite choice" --due=2026-12-31 \
+lore reminder add --message "Re-evaluate SQLite choice" --due=2026-12-31 \
     --on-table=decisions --on-id=dec_<id>
 ```
 
@@ -269,7 +269,7 @@ Each developer has v0.1.17 data (an old `.lore/lore.db`, or `_v: 1` row files). 
 
 # 1. Then one person, on main:
 lore migrate run --dry-run            # what moves; then:
-lore migrate run                      # converts the v0.1.17 data (keeps a local backup ref; lore migrate rollback undoes it)
+lore migrate run                      # converts the v0.1.17 data (keeps a local backup ref; `lore migrate rollback` undoes it)
 git add .lore/data .gitattributes && git commit -m "lore: shared knowledge" && git push
 
 # 2. Everyone else:
@@ -297,8 +297,8 @@ GitHub's merge button never runs lore's merge driver, so a row edited on the bra
 lore sync ci-merge --base origin/main --dry-run   # can lore settle it unattended? (outcome + files)
 git pull origin main                              # lore's driver merges the rows here
 lore sync status                                  # any row with the same text changed on both sides?
-lore memory show <id>                             # shows both versions inside the value
-lore memory edit <id> --body "<what the user chose>"
+lore memory show --id <id>                             # shows both versions inside the value
+lore memory edit --id <id> --body "<what the user chose>"
 git add .lore/data && git commit && git push      # the PR merges normally now
 ```
 
@@ -312,14 +312,14 @@ Started as a soft fact; turns out the team really enforces it.
 
 ```bash
 # Find the memory
-M=$(lore memory search "stdlib errors" --json | jq -r '.data[0].id')
+M=$(lore memory search --query "stdlib errors" --json | jq -r '.data[0].id')
 
 # Capture the same content as a rule
-BODY=$(lore memory show $M --json | jq -r '.data.body')
+BODY=$(lore memory show --id $M --json | jq -r '.data.body')
 lore rule add --severity=must --body="$BODY"
 
 # Archive the original memory
-lore memory archive "$M"
+lore memory archive --id "$M"
 
 lore render
 ```
@@ -332,10 +332,10 @@ The opposite — turns out it was too strict.
 
 ```bash
 R=$(lore rule list --json | jq -r '.data[] | select(.body | test("stdlib errors")) | .id')
-BODY=$(lore rule show $R --json | jq -r '.data.body')
+BODY=$(lore rule show --id $R --json | jq -r '.data.body')
 
 lore memory add --body="(formerly rule) $BODY"
-lore rule archive "$R"
+lore rule archive --id "$R"
 lore render
 ```
 

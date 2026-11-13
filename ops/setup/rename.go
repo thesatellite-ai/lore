@@ -108,7 +108,7 @@ func (e engine) renameSetup(ctx context.Context, st Store, from, to string) erro
 		// A trashed setup of that name keeps its progress rows until the
 		// purge; taking its name would hand them to this setup.
 		return errs.New(errs.SetupNameTaken, "setup "+quote(to)+" is in the trash with saved progress; renaming onto it would mix the two").
-			WithHint("pick another name, or lore setup trash purge "+to+" --confirm first").
+			WithHint("pick another name, or lore setup trash purge --name "+to+" --confirm first").
 			WithNext("lore", "setup", "trash", "list")
 	}
 	rows, err := st.Progress(ctx, from)

@@ -21,7 +21,7 @@ To see the exit status yourself, print `$?` right after the command. Here a task
 <!-- example: reference#exit-status only=3 -->
 ```console
 # alice, in website
-$ lore task edit tsk_2ad3…f891 --after tsk_162d…9666; echo "exit status: $?"
+$ lore task edit --id tsk_2ad3…f891 --after tsk_162d…9666; echo "exit status: $?"
 ERROR: [E_CYCLE] dependency cycle: tsk_2ad3…f891 → tsk_162d…9666 → tsk_2ad3…f891
   hint: drop one --after edge; a task may not wait on itself, even through others
 exit status: 19
@@ -132,7 +132,7 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_NOT_FOUND` | 27 | no row with that id | check the id; it may have landed on main while your branch is older. A task or gate command whose first argument is the id has already fetched once and retried before answering this ([team troubleshooting](../team/troubleshooting.md#e_not_found-on-a-task-id-a-teammate-just-added)) |
+| `E_NOT_FOUND` | 27 | no row with that id | check the id; it may have landed on main while your branch is older. A task or gate command whose `--id` is the task has already fetched once and retried before answering this ([team troubleshooting](../team/troubleshooting.md#e_not_found-on-a-task-id-a-teammate-just-added)) |
 | `E_INTERNAL` | 1 | something failed inside lore | run `lore support-bundle` and file a bug report with it |
 | `E_NOT_IMPLEMENTED` | 23 | this option exists but this build cannot do it yet | read the message; it says what to use instead |
 | `E_UNSUPPORTED` | 23 | the command does not work here, for example outside a git repo, or `lore migrate rollback` after a shared-database conversion | run it inside a git repo; a shared-database conversion has no rollback (see [the shared-database guide](../sync/shared-database-mode-b.md#pitfalls)) |
@@ -152,7 +152,7 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 <!-- example: reference#sql-refused -->
 ```console
 # alice, in website
-$ lore sql 'DELETE FROM rules'
+$ lore sql --query 'DELETE FROM rules'
 ERROR: [E_SQL_REFUSED] only one SELECT, WITH or VALUES statement (optionally after EXPLAIN [QUERY PLAN]) is allowed
   hint: lore sql is read-only; change data with lore commands so it reaches git
 (exit 20)
@@ -181,7 +181,7 @@ ERROR: [E_SQL_REFUSED] only one SELECT, WITH or VALUES statement (optionally aft
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_IN_TRASH` | 23 | an edit or delete of a row that is already in the trash | `lore trash restore <id>` first |
+| `E_IN_TRASH` | 23 | an edit or delete of a row that is already in the trash | `lore trash restore --target <id>` first |
 | `E_PURGED` | 23 | the row was removed for good; only a deletion marker is left | nothing to restore; write it again if you need it |
 | `E_PARENT_DELETED` | 23 | a restore of a child whose parent is in the trash | restore the parent first |
 | `E_PARENT_PURGED` | 23 | a restore of a child whose parent was removed for good | restore it under another parent, or not at all |
@@ -195,7 +195,7 @@ A project that still has rows cannot be deleted; the message names every row tha
 # alice, in website
 $ lore project list
 prj_d431…313a  website  https://github.com/client/website
-$ lore project delete $(lore project list | cut -d' ' -f1) --yes
+$ lore project delete --id $(lore project list | cut -d' ' -f1) --yes
 ERROR: [E_HAS_DEPENDENTS] project delete: mem_b4f4…a5b0 (memories.project_id), rul_54fe…28f2 (rules.project_id), tsk_2ad3…f891 (tasks.project_id), tsk_162d…9666 (tasks.project_id), tsk_05e9…4603 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_d431…313a
   hint: delete or move the pointing rows first
 (exit 23)
@@ -229,7 +229,7 @@ ERROR: [E_HAS_DEPENDENTS] project delete: mem_b4f4…a5b0 (memories.project_id),
 |---|---|---|---|
 | `E_META_KEY` | 20 | a key or allowed-value name is not snake_case ASCII, or is too long or too deep | rename it, for example `client_tier` |
 | `E_META_RESERVED` | 20 | a key name lore keeps for itself (a column, a type or level word, `id`, `meta`, or one starting with `_`, `mky` or `val`) | pick another name |
-| `E_META_TYPE` | 20 | a value does not read as the key's type | give a value of that type; `lore meta show <key>` says which |
+| `E_META_TYPE` | 20 | a value does not read as the key's type | give a value of that type; `lore meta show --id <key>` says which |
 | `E_META_VALUE` | 20 | an empty value, or a value outside the key's allowed values | give one of the allowed values |
 | `E_META_SHAPE` | 20 | a list of objects, a list of lists, or a mixed list on a structured key | flatten the value |
 | `E_META_SIZE` | 20 | the row's metadata would pass `meta.max_bytes` | keep less metadata on the row |
@@ -237,7 +237,7 @@ ERROR: [E_HAS_DEPENDENTS] project delete: mem_b4f4…a5b0 (memories.project_id),
 | `E_META_OP` | 20 | a mistake in a metadata flag or filter | read the message; it points at the part it could not read |
 | `E_META_TABLE` | 20 | this kind of row takes no metadata from the command line | set it on a row kind that takes metadata |
 | `E_META_REQUIRED` | 20 | a required metadata key is missing on add | add it with `--meta key=value` |
-| `E_META_UNKNOWN` | 20 | an unset of a key the row does not have, or an unknown key id | check the key with `lore meta get <id>` |
+| `E_META_UNKNOWN` | 20 | an unset of a key the row does not have, or an unknown key id | check the key with `lore meta get --id <id>` |
 | `E_META_AMBIGUOUS` | 21 | a bare key name matches definitions at two or more levels | name the level, as the message shows |
 | `E_META_UNREGISTERED` | 22 | a write to a key whose definition is not visible here | register the key here with `lore meta add`, or write where it is defined |
 | `E_META_STALE` | 22 | a new key would be registered while the store's key lists are missing or out of date | run `lore sync`, then write again |
@@ -245,7 +245,7 @@ ERROR: [E_HAS_DEPENDENTS] project delete: mem_b4f4…a5b0 (memories.project_id),
 | `E_META_IN_USE` | 23 | a key or allowed value that some row still uses | move those rows off it first (`--merge-into`) |
 | `E_META_CONFLICT` | 23 | a write by a bare name while that name has an unsettled duplicate | settle the duplicate first, as the message says |
 | `E_META_RETIRED` | 23 | `--merge-into` onto a retired key | merge into a live key |
-| `E_META_QUARANTINED` | 23 | the row's metadata has an entry lore could not read cleanly, so the row is not moved; the row file is kept as it is | `lore meta show <id>` names the entry; fix it, then move again |
+| `E_META_QUARANTINED` | 23 | the row's metadata has an entry lore could not read cleanly, so the row is not moved; the row file is kept as it is | `lore meta show --id <id>` names the entry; fix it, then move again |
 | `E_META_INTERNAL` | 19 | an internal key name or value would reach a client repo | keep the row internal, or drop that metadata |
 | `E_META_FOREIGN_KEY` | 19 | a client-repo row would carry a key id or label from outside the client repo's own keys | place the key with `lore meta rehome`, `adopt` or `move` first |
 | `E_META_STORE_UNREADABLE` | 19 | in a client repo, a write with metadata while an org store has no local copy and cannot be reached, so lore cannot check the keys; nothing written | go online once (or `lore sync`) so the store is kept locally, then write again |
@@ -259,7 +259,7 @@ $ lore rule add --body 'Keep the footer links in one list'
 lore: wrote ~/work/website/.lore/data/rules/rul_4c59…6c38.json
 ✓ rul_4c59…6c38
   scope: [master] severity: must
-$ lore meta unset rul_4c59…6c38 client_tier
+$ lore meta unset --id rul_4c59…6c38 --key client_tier
 ERROR: [E_META_UNKNOWN] rul_4c59…6c38 has no metadata key "client_tier"; it has no metadata
   hint: lore meta show rul_4c59…6c38 lists its keys
 (exit 20)
@@ -306,10 +306,10 @@ A variable whose value holds a reference with an option that scheme does not tak
 <!-- example: reference#ref-syntax -->
 ```console
 # alice, in website
-$ lore vars set host staging.client.example
+$ lore vars set --name host --value staging.client.example
 lore: wrote ~/work/website/.lore/data/vars/var_28f8…03df.json
 Added var_…03df host = staging.client.example (text) in repo (not shareable: clients see ${var:<name>}).
-$ lore vars set base_url 'https://${var:host?port=8080}/'
+$ lore vars set --name base_url --value 'https://${var:host?port=8080}/'
 ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for ${var:…}
 (exit 20)
 ```
@@ -338,7 +338,7 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 | `E_REASSIGNED` | 14 | a person reassigned the task while you held it | stop working on this task |
 | `E_OFFLINE` | 15 | the server could not be reached to confirm a coordination write; nothing was queued | check the network and try again |
 | `E_AMBIGUOUS_ID` | 16 | the id exists in two loaded places | name one with `--from` |
-| `E_ORG_AMBIGUOUS` | 17 | two org entries match this repo equally well | choose one with `lore org use <entry>` |
+| `E_ORG_AMBIGUOUS` | 17 | two org entries match this repo equally well | choose one with `lore org use --entry <entry>` |
 | `E_ORG_DISAGREES` | 17 | `LORE_ORG` or `lore org use` names another org than the store's link for this repo | name the place with `--to <org>`, or fix the choice with `lore org use` (or unset `LORE_ORG`) |
 | `E_LINK_UNKNOWN` | 18 | the store cannot be reached and no saved link list exists, so lore cannot tell whether this is a client repo | pass `--to`, or try again online (`lore store doctor`) |
 | `E_NOT_A_STORE` | 19 | the folder is not inside a git work tree; or the git repo has no lore data (`lore isn't set up in … (no .lore folder)`): every command but `lore init`, `lore setup` and the link commands refuses there and changes nothing, not even `.git/config`, `.git/hooks` or `.git/info`; or a repo under `stores:` has no `lore-store.yaml`, or holds files that are not lore notes | outside git: cd into a git checkout, or run `git init` first; a repo with no lore data: `lore init` (or the This folder step of `lore setup`) when you want lore there; for a store: make one with `lore store init` in a new, empty repo |
@@ -375,13 +375,13 @@ These come from the people commands (`lore actor edit|contact|status|offboard|re
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_CONTACT_TAKEN` | 23 | an identity contact (an email, GitHub or GitLab login marked "use for identity") already belongs to another person, or an actor row already exists for that email | `lore actor show <type>:<value>` shows who has it; if it is the same person, run the add again with `--merge` |
-| `E_CONTACT_TYPE` | 20 | an unknown or retired contact type, a value that fails the type's check (an email without a domain, a phone with too few digits), or `--identity` on a type that is not an identity type | `lore contact-type list`; add your own with `lore contact-type add <name> --kind …` |
-| `E_ROLE_UNKNOWN` | 20 | a `--role` name that is not in the role list, or one that is retired | `lore role list`; `lore role add <name>` |
-| `E_STATUS_CHANGE` | 23 | a status change the rules do not allow: offboarding someone who already left, rejoining someone who is active, adding a left person to a project, a person who left registering or starting an agent themselves, `status left` on an active person | the command that does it: `lore actor offboard`, `lore actor rejoin` or `lore actor status <actor> active` |
-| `E_PERIOD_OVERLAP` | 23 | a stint or membership date that overlaps another stint, ends before it starts, or (offboard) falls before the open stint's start | `lore actor period list <actor>`, then pick a date after the last end |
+| `E_CONTACT_TAKEN` | 23 | an identity contact (an email, GitHub or GitLab login marked "use for identity") already belongs to another person, or an actor row already exists for that email | `lore actor show --id <type>:<value>` shows who has it; if it is the same person, run the add again with `--merge` |
+| `E_CONTACT_TYPE` | 20 | an unknown or retired contact type, a value that fails the type's check (an email without a domain, a phone with too few digits), or `--identity` on a type that is not an identity type | `lore contact-type list`; add your own with `lore contact-type add --name <name> --kind …` |
+| `E_ROLE_UNKNOWN` | 20 | a `--role` name that is not in the role list, or one that is retired | `lore role list`; `lore role add --name <name>` |
+| `E_STATUS_CHANGE` | 23 | a status change the rules do not allow: offboarding someone who already left, rejoining someone who is active, adding a left person to a project, a person who left registering or starting an agent themselves, `status left` on an active person | the command that does it: `lore actor offboard`, `lore actor rejoin` or `lore actor status --actor <actor> --to active` |
+| `E_PERIOD_OVERLAP` | 23 | a stint or membership date that overlaps another stint, ends before it starts, or (offboard) falls before the open stint's start | `lore actor period list --actor <actor>`, then pick a date after the last end |
 
-A team profile write in a repo without an org answers `E_REFUSED` (profiles live in an org store; `lore org create <name>`), an agent running one where a team set `agents.may_manage_people` to false (it is true by default) answers `E_POLICY_DENIED`, and a contact, role, stint or membership row aimed at a client store answers `E_LEAK_BLOCKED`.
+A team profile write in a repo without an org answers `E_REFUSED` (profiles live in an org store; `lore org create --org <name>`), an agent running one where a team set `agents.may_manage_people` to false (it is true by default) answers `E_POLICY_DENIED`, and a contact, role, stint or membership row aimed at a client store answers `E_LEAK_BLOCKED`.
 
 ### Setup and invites
 
@@ -389,13 +389,13 @@ A team profile write in a repo without an org answers `E_REFUSED` (profiles live
 |---|---|---|---|
 | `E_SETUP_NOT_FOUND` | 27 | `--setup`, `LORE_SETUP` or a setup command names no setup on this machine | `lore setup list` ([more](../team/setup-errors.md#e_setup_not_found-exit-27)) |
 | `E_SETUP_AMBIGUOUS` | 21 | two setups match this folder equally, or two setups of the repo's org | make one folder glob more specific (`lore setup edit`) or run with `--setup` |
-| `E_SETUP_NAME_TAKEN` | 20 | a new setup was given an existing setup's name | pick another name, or `lore setup edit <name>` |
+| `E_SETUP_NAME_TAKEN` | 20 | a new setup was given an existing setup's name | pick another name, or `lore setup edit --name <name>` |
 | `E_SETUP_ORG_MISMATCH` | 23 | the active setup's org is not the org this repo resolves to; writes refused | run with `--setup <a setup of that org>` or fix the org source |
-| `E_SETUP_NO_PERSONAL_STORE` | 20 | `--to me` in a setup with `personal_store: none` | write elsewhere, or `lore setup edit <name> --personal-store <url>` |
+| `E_SETUP_NO_PERSONAL_STORE` | 20 | `--to me` in a setup with `personal_store: none` | write elsewhere, or `lore setup edit --name <name> --personal-store <url>` |
 | `E_SETUP_STEP_FAILED` | 23 | a setup step was saved while an error-level check fails | `lore setup check` shows each fix |
 | `E_SETUP_STEP_ORDER` | 23 | a setup step was saved before the steps it needs | save the earlier steps first (`lore setup plan`) |
 | `E_INVITE_INVALID` | 20 | the text is not a whole lore invite | copy the whole `lore-invite:v1:` line; the inviter can `lore team invite resend` |
-| `E_JOIN_ORG_UNKNOWN` | 27 | `lore setup join <name>` names an org this machine has no entry for yet (a new member's fresh machine) | `lore setup join <the org's store url>`, the command `lore member add` printed for the admin ([more](../team/setup-errors.md#e_join_org_unknown-exit-27)) |
+| `E_JOIN_ORG_UNKNOWN` | 27 | `lore setup join --invite <name>` names an org this machine has no entry for yet (a new member's fresh machine) | `lore setup join --invite "<the org's store url>"`, the command `lore member add` printed for the admin ([more](../team/setup-errors.md#e_join_org_unknown-exit-27)) |
 | `E_INVITE_NOT_FOUND` | 27 | no such invite in the org's store | ask the inviter to invite you again |
 | `E_INVITE_EXPIRED` | 23 | the invite is past its last day | ask for a new one |
 | `E_INVITE_REVOKED` | 23 | the invite was revoked | ask the inviter |

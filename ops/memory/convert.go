@@ -33,7 +33,7 @@ func oneBody(flag, arg string) (string, error) {
 	body := flag + arg
 	if strings.TrimSpace(body) == "" {
 		return "", errs.New(errs.EmptyBody, "memory add: the memory text is empty").
-			WithHint(`lore memory add "<text>"`)
+			WithHint(`lore memory add --body "<text>"`)
 	}
 	return body, nil
 }

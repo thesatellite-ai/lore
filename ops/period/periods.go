@@ -318,7 +318,7 @@ func findPeriod(ctx context.Context, r profilestore.Roster, ref string) (row.Row
 	if want.IsZero() {
 		if len(ps) != 1 {
 			return row.Row{}, nil, 0, errs.New(errs.InvalidInput, nameOf(a)+" has "+strconv.Itoa(len(ps))+" stints; name one by its apd_ id").
-				WithHint("lore actor period list " + ref)
+				WithHint("lore actor period list --actor " + ref)
 		}
 		return a, ps, 0, nil
 	}

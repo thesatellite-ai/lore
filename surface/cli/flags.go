@@ -19,6 +19,10 @@ type rawFlag struct {
 	// count; nil records nothing.
 	pos []int
 	at  func() int
+	// seq[i] is the order vals[i] was typed in among every flag value of
+	// the command (op.ArgsDecoder.FlagSeq); next hands out that order.
+	seq  []int
+	next func() int
 }
 
 // String implements pflag.Value; it is what --help prints as the default.
@@ -31,6 +35,9 @@ func (f *rawFlag) Set(s string) error {
 	f.vals = append(f.vals, s)
 	if f.at != nil {
 		f.pos = append(f.pos, f.at())
+	}
+	if f.next != nil {
+		f.seq = append(f.seq, f.next())
 	}
 	return nil
 }

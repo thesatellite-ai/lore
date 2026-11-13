@@ -201,7 +201,7 @@ func sotrPointers(t *testing.T) {
 	sotOK(t, m, a, "policy", "set", "context.targets", "claude_code", "--yes")
 	sotOK(t, m, a, "render")
 	got := sotrDoctor(t, m, a)
-	sotrHas(t, "doctor after the switch", got, "tool_pointer: AGENTS.md carries lore's pointer", "fix: lore policy set context.targets claude_code,codex --yes", "by hand")
+	sotrHas(t, "doctor after the switch", got, "tool_pointer: AGENTS.md carries lore's pointer", "fix: lore policy set --key context.targets --value claude_code,codex --yes", "by hand")
 	if after, _ := os.ReadFile(agents); string(after) != string(before) {
 		t.Errorf("AGENTS.md changed:\n%s\nvs\n%s", before, after)
 	}

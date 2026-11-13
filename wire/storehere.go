@@ -98,7 +98,7 @@ func storeHereEntry(home string, sc storeCheckout) (attach.Store, error) {
 			pinned, _, perr := gitbackend.CloneDirFor(home, r, branch)
 			if perr != nil || branch == "" || !sameFolder(pinned, sc.top) {
 				return attach.Store{}, errs.New(errs.Refused, "wire: "+sc.top+" is a clone of store "+repourl.ShownStore(r.Norm)+" that lore does not use (lore's clone of it is "+used+"), so lore will not read or write it").
-					WithHint("make lore use this clone: lore store use " + sc.top + " (or work in " + used + ")")
+					WithHint("make lore use this clone: lore store use --path " + sc.top + " (or work in " + used + ")")
 			}
 			one.Branch = branch
 		}

@@ -83,5 +83,5 @@ func CheckKeyLoosening(path string, headDoc, stagedDoc []byte) error {
 		use = append(use, "--no-"+f)
 	}
 	return errs.New(errs.LeakBlocked, path+": "+name+" lost "+strings.Join(lost, ": true, ")+": true without a changed_by record").
-		WithHint("use: lore meta edit " + name + " " + strings.Join(use, " "))
+		WithHint("use: lore meta edit --id " + name + " " + strings.Join(use, " "))
 }

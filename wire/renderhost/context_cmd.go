@@ -216,7 +216,7 @@ func (r contextResult) fit(maxBytes int) (string, []string) {
 		pieces = append(pieces, contextfit.Piece{ID: p.ID, Full: p.full, Line: p.line})
 	}
 	if len(pieces) == 0 {
-		return head + "(nothing in the store applies here; try `lore search \"<keywords>\"`)\n", nil
+		return head + "(nothing in the store applies here; try `lore search --query \"<keywords>\"`)\n", nil
 	}
 	got := contextfit.Pick(pieces, maxBytes-len(head), contextMoreReserve)
 	s := head + got.Text
@@ -420,7 +420,7 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 	sortPicks(picks)
 	more := ""
 	if len(cand) > contextNotesMax || len(words) > 0 {
-		more = "lore search \"" + strings.Join(words, " ") + "\""
+		more = "lore search --query \"" + strings.Join(words, " ") + "\""
 	}
 	return contextResult{title: rel, picks: picks, more: more}, nil
 }
@@ -492,7 +492,7 @@ func (h *Host) contextForPrompt(ctx context.Context, text string) (contextResult
 	sortPicks(picks)
 	more := ""
 	if len(words) > 0 {
-		more = "lore search \"" + strings.Join(words, " ") + "\""
+		more = "lore search --query \"" + strings.Join(words, " ") + "\""
 	}
 	return contextResult{title: "the prompt", picks: picks, more: more}, nil
 }

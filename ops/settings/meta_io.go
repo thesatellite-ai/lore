@@ -84,7 +84,7 @@ func (o ops) metaIOOps() []op.Entry {
 		op.Define(op.Spec{Name: OpMetaExport, Summary: "Export metadata values as CSV or JSON lines (id,key,value)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}, RESTNoun: metaREST, Examples: []op.Example{{Title: "every value as CSV", CLI: "lore meta export --format csv"}}}, o.metaExport),
 		op.Define(op.Spec{Name: OpMetaImport, Summary: "Import metadata values from CSV or JSON lines, as one batch", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "preview an import", CLI: "lore meta import values.csv --dry-run"}, {Title: "import values as one batch", CLI: "lore meta import values.csv"}}}, o.metaImport),
+			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "preview an import", CLI: "lore meta import --file values.csv --dry-run"}, {Title: "import values as one batch", CLI: "lore meta import --file values.csv"}}}, o.metaImport),
 	}
 }
 
@@ -369,10 +369,10 @@ func (o ops) metaImport(ctx context.Context, in MetaImportIn) (RowOut, error) {
 	}
 	for i, id := range order {
 		if _, err := o.env.Update(engine.WithMeta(bctx, *writes[id]), engine.Ref{ID: id}, map[string]value.Value{}); err != nil {
-			return RowOut{}, errs.Prefix(fmt.Sprintf("meta import: stopped at row %s after %d of %d rows (batch %s; see: lore batch show %s)", id, i, len(order), bid, bid), err)
+			return RowOut{}, errs.Prefix(fmt.Sprintf("meta import: stopped at row %s after %d of %d rows (batch %s; see: lore batch show --id %s)", id, i, len(order), bid, bid), err)
 		}
 	}
-	return RowOut{ID: bid.String(), Human: fmt.Sprintf("imported %d values on %d rows; batch %s (undo: lore batch undo %s)\n", len(recs), len(order), bid, bid)}, nil
+	return RowOut{ID: bid.String(), Human: fmt.Sprintf("imported %d values on %d rows; batch %s (undo: lore batch undo --id %s)\n", len(recs), len(order), bid, bid)}, nil
 }
 
 // readMetaImport reads an import file, capped.

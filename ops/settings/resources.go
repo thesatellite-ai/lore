@@ -251,10 +251,10 @@ func (o ResOut) mainText() string {
 		fmt.Fprintf(&b, "  %s = %s\n", k, r.shown(k))
 	}
 	for _, c := range r.Conflicts {
-		fmt.Fprintf(&b, "  %s CONFLICT  ours %s | theirs %s | base %s  (settle: lore resource edit %s --set %s=…)\n", c.Field, c.Ours, c.Theirs, c.Base, r.Name, c.Field)
+		fmt.Fprintf(&b, "  %s CONFLICT  ours %s | theirs %s | base %s  (settle: lore resource edit --id %s --set %s=…)\n", c.Field, c.Ours, c.Theirs, c.Base, r.Name, c.Field)
 	}
 	if q := quarantineLine(r.Quarantine); q != "" {
-		fmt.Fprintf(&b, "  %s  (fix: lore resource edit %s --set <field>=<value>)\n", q, r.Name)
+		fmt.Fprintf(&b, "  %s  (fix: lore resource edit --id %s --set <field>=<value>)\n", q, r.Name)
 	}
 	if r.LastChecked != "" {
 		fmt.Fprintf(&b, "  checked %s%s\n", r.LastChecked, byWho(r.CheckedBy))
@@ -347,16 +347,16 @@ func (o ops) resourceOps() []op.Entry {
 	return append([]op.Entry{
 		op.Define(op.Spec{Name: OpResAdd, Summary: "Add a resource of a kind", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourcePlace, errs.ResourceTaken, errs.ResourceArchived, errs.ResourceAmbiguous), Confirm: op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "add a host", CLI: "lore resource add host hub_prod --set provider=hetzner", Want: "res_"}}}, o.resAdd),
+			Examples: []op.Example{{Title: "add a host", CLI: "lore resource add --kind host --name hub_prod --set provider=hetzner", Want: "res_"}}}, o.resAdd),
 		op.Define(op.Spec{Name: OpResEdit, Summary: "Edit a resource's values (stamps last_checked)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourceArchived, errs.ResourceAmbiguous), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "bulk edit", CLI: "lore resource edit --kind service --where runs_on=hub_prod --set runs_on=hub_prod_2 --yes", Want: "batch bat_"}}}, o.resEdit),
 		op.Define(op.Spec{Name: OpResShow, Summary: "Show one resource", Permission: op.PermRead, Access: op.AccessRead,
 			// XQ3: --show-sensitive always confirms; without a terminal it needs --yes.
 			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm, errs.ResourceAmbiguous, errs.Unsupported), Confirm: op.ConfirmRule{When: "show_sensitive"},
-			Examples: []op.Example{{Title: "one resource", CLI: "lore resource show prod_db"}, {Title: "fill in its ${var:…} references", CLI: "lore resource show prod_db --expand"}}}, o.resShow),
+			Examples: []op.Example{{Title: "one resource", CLI: "lore resource show --id prod_db"}, {Title: "fill in its ${var:…} references", CLI: "lore resource show --id prod_db --expand"}}}, o.resShow),
 		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}, Examples: []op.Example{{Title: "every database", CLI: "lore resource list database"}}}, o.resList),
+			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}, Examples: []op.Example{{Title: "every database", CLI: "lore resource list --kind database"}}}, o.resList),
 		// XQ2: MayAsk, not Always: the bulk form must count its rows before
 		// it may ask (a preview above batch.preview_rows); the one-row form
 		// still always asks, in resDelete (bulk.Ask).
@@ -364,7 +364,7 @@ func (o ops) resourceOps() []op.Entry {
 			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "bulk delete without a terminal", CLI: "lore resource delete --kind host --where provider=linode --yes", Want: "batch bat_"}}}, o.resDelete),
 		op.Define(op.Spec{Name: OpResArchive, Summary: "Archive a resource (refs stay; new refs are refused)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Examples: []op.Example{{Title: "archive a resource", CLI: "lore resource archive res_4c71"}}}, o.resArchive),
+			Errors: writeErrors, Examples: []op.Example{{Title: "archive a resource", CLI: "lore resource archive --id res_4c71"}}}, o.resArchive),
 		op.Define(op.Spec{Name: OpResCheck, Summary: "Stamp last_checked: a person or agent looked and the facts are right", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "check every database resource", CLI: "lore resource check --kind database"}}}, o.resCheck),
 		op.Define(op.Spec{Name: OpResStale, Summary: "Resources whose last_checked is older than --days, or never set", Permission: op.PermRead, Access: op.AccessRead,
@@ -621,7 +621,7 @@ func (d kindDef) types() map[string]value.Kind {
 }
 
 func invalid(d kindDef, name, msg string) error {
-	return errs.New(errs.ResourceInvalid, d.name()+" "+name+": "+msg).WithHint("lore resource kind show " + d.name())
+	return errs.New(errs.ResourceInvalid, d.name()+" "+name+": "+msg).WithHint("lore resource kind show --id " + d.name())
 }
 
 // applySets parses --set field=value pairs into vals (keyed by fld_ id).
@@ -739,7 +739,7 @@ func (o ops) resourceByName(ctx context.Context, key, kindID string) (located, e
 			// (`lore sync peek …`, TestNotFoundHintForEveryCoreNoun).
 			return located{}, nf
 		}
-		return located{}, nf.WithHint("name it as <kind>/<name> or by its res_ id; lore resource list <kind> prints them")
+		return located{}, nf.WithHint("name it as <kind>/<name> or by its res_ id; lore resource list --kind <kind> prints them")
 	case len(hits) > 1:
 		cs := make([]resname.Candidate, len(hits))
 		for i, h := range hits {
@@ -773,7 +773,7 @@ func requireFields(d kindDef, name string, vals map[string]json.RawMessage) erro
 // nameRefusal is invalid's twin for a resource name that breaks its
 // format: E_RESOURCE_NAME (RES 3.1, error table), not E_RESOURCE_INVALID.
 func nameRefusal(d kindDef, name, msg string) error {
-	return errs.New(errs.ResourceName, d.name()+" "+name+": "+msg).WithHint("lore resource kind show " + d.name())
+	return errs.New(errs.ResourceName, d.name()+" "+name+": "+msg).WithHint("lore resource kind show --id " + d.name())
 }
 
 func checkResourceName(d kindDef, name string) error {
@@ -828,7 +828,7 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 	}
 	if hit := where(rows, map[string]string{rKind: d.kind.Row.ID.String(), rName: in.Name}); len(hit) > 0 {
 		return RowOut{}, errs.New(errs.ResourceTaken, d.name()+" "+in.Name+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")").
-			WithHint("edit it with lore resource edit " + hit[0].Row.ID.String() + " --set …, or pick another name")
+			WithHint("edit it with lore resource edit --id " + hit[0].Row.ID.String() + " --set …, or pick another name")
 	}
 	vals := map[string]json.RawMessage{}
 	if err = o.applySets(ctx, d, in.Name, sets, vals); err != nil {

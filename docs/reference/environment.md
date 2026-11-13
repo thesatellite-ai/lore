@@ -185,7 +185,7 @@ $ git status --short
  M .lore/data/_meta.json
 ?? .lore/data/task_lists/
 ?? .lore/data/tasks/
-$ lore task add 'Check the contact form on a phone'
+$ lore task add --title 'Check the contact form on a phone'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Check the contact form on a phone [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)

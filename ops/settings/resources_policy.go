@@ -89,7 +89,7 @@ func checkPlace(ctx context.Context, env Env, target store.Source) error {
 		where = "; set at level " + string(eff.Level) + " (" + eff.Source.String() + ")"
 	}
 	return errs.New(errs.ResourcePlace, "resources are not allowed in "+place+" places ("+string(target)+"; resources.allowed_in: "+
-		strings.Join(allowed, ", ")+where+")").WithHint("write in an allowed place (--to); lore policy show resources")
+		strings.Join(allowed, ", ")+where+")").WithHint("write in an allowed place (--to); lore policy show --id resources")
 }
 
 // sizeWarning is the RQ4 warning line for a row whose values pass

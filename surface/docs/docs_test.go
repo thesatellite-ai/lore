@@ -245,8 +245,8 @@ func TestMarkdown(t *testing.T) {
 	t.Parallel()
 	cmds := CommandsMarkdown(registry(t, "Add a memory", false))
 	for _, want := range []string{
-		"| `lore memory add <body>` | Add a memory | `--tag` `--pin` | `POST /v1/memories` | write | `E_EMPTY_BODY` `E_SECRET_DETECTED` `E_STALE` |",
-		"| `lore trash purge <id>` | Purge \\| forever | `--limit` | `POST /v1/trashes/{id}/purge` | admin |  |",
+		"| `lore memory add --body <body>` | Add a memory | `--tag` `--pin` | `POST /v1/memories` | write | `E_EMPTY_BODY` `E_SECRET_DETECTED` `E_STALE` |",
+		"| `lore trash purge --id <id>` | Purge \\| forever | `--limit` | `POST /v1/trashes/{id}/purge` | admin |  |",
 	} {
 		if !strings.Contains(cmds, want) {
 			t.Errorf("commands lack\n%s\nin\n%s", want, cmds)
@@ -301,7 +301,7 @@ func TestCheckStale(t *testing.T) {
 		t.Fatalf("fresh files reported: %v", rec.failures)
 	}
 	got, _ := os.ReadFile(filepath.Clean(md))
-	for _, keep := range []string{"# Reference\n\nhand text\n\n", "\n\nmiddle\n\n", "tail\n", "| `lore memory add <body>` | Add a memory", "| `E_INTERNAL` | 1 | `generic` | 500 |"} {
+	for _, keep := range []string{"# Reference\n\nhand text\n\n", "\n\nmiddle\n\n", "tail\n", "| `lore memory add --body <body>` | Add a memory", "| `E_INTERNAL` | 1 | `generic` | 500 |"} {
 		if !strings.Contains(string(got), keep) {
 			t.Errorf("updated markdown lacks %q", keep)
 		}

@@ -58,8 +58,8 @@ func TestOrgUseHint(t *testing.T) {
 		{"no config", nil, ""},
 		{"no orgs", &orgconf.Config{}, ""},
 		{"only staging", &orgconf.Config{Orgs: []orgconf.Org{stag}}, ""},
-		{"one plus staging", &orgconf.Config{Orgs: []orgconf.Org{prod, stag}}, "lore org use northwind"},
-		{"two", &orgconf.Config{Orgs: []orgconf.Org{prod, stag, beta}}, "lore org use <entry> (northwind, betalabs)"},
+		{"one plus staging", &orgconf.Config{Orgs: []orgconf.Org{prod, stag}}, "lore org use --entry northwind"},
+		{"two", &orgconf.Config{Orgs: []orgconf.Org{prod, stag, beta}}, "lore org use --entry <entry> (northwind, betalabs)"},
 	}
 	for _, c := range cases {
 		if got := orgUseHint(c.cfg); got != c.want {

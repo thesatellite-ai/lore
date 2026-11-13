@@ -44,14 +44,14 @@ func (e *Engine) PickUp(ctx context.Context, src store.Source, base, hand row.Ro
 			n = def.Noun
 		}
 		if n != "" {
-			del = "`lore " + n + " delete " + base.ID.String() + "`" // the row's own noun, never a fixed one (B2-3)
+			del = "`lore " + n + " delete --id " + base.ID.String() + "`" // the row's own noun, never a fixed one (B2-3)
 		}
 		return Written{}, errs.New(errs.InvalidInput, "the file marks "+base.ID.String()+" deleted by hand").
 			WithHint("delete the file instead (lore moves the row to the trash), or run " + del)
 	}
 	if !sameMeta(base.Meta, hand.Meta) {
 		return Written{}, errs.New(errs.InvalidInput, "the metadata (meta) of "+base.ID.String()+" was changed by hand; lore cannot check a raw metadata value").
-			WithHint("put meta back as it was and change it with lore meta set " + base.ID.String() + " <key> <value>")
+			WithHint("put meta back as it was and change it with lore meta set --id " + base.ID.String() + " --pair <key>=<value>")
 	}
 	def, err := e.tableDef(base.Table)
 	if err != nil {

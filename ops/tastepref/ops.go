@@ -63,18 +63,18 @@ func Ops(env content.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show tastepref details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore tastepref show tst_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore tastepref show --id tst_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit tastepref fields",
-			Examples:   []op.Example{{Title: "change the body", CLI: `lore tastepref edit tst_<id> --body "the new text"`, Want: "tst_"}},
+			Examples:   []op.Example{{Title: "change the body", CLI: `lore tastepref edit --id tst_<id> --body "the new text"`, Want: "tst_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a tastepref (it goes to the trash; lore trash restore brings it back)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore tastepref delete tst_<id> --yes", Want: "tst_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore tastepref delete --id tst_<id> --yes", Want: "tst_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
@@ -82,7 +82,7 @@ func Ops(env content.Env) []op.Entry {
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across tastepref body + scope",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore tastepref search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore tastepref search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}

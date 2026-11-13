@@ -139,8 +139,8 @@ func adoptOp(m Manager) op.Entry {
 		Permission: op.PermWrite, Access: op.AccessRead, Errors: adoptErrors,
 		Confirm: op.ConfirmRule{MayAsk: true},
 		Examples: []op.Example{
-			{Title: "see what would move", CLI: "lore store adopt team/client_north --from ~/code/north-app --dry-run", Want: "would adopt"},
-			{Title: "move the repo you are in", CLI: "lore store adopt team/client_north --yes", Want: "adopted"},
+			{Title: "see what would move", CLI: "lore store adopt --target team/client_north --from ~/code/north-app --dry-run", Want: "would adopt"},
+			{Title: "move the repo you are in", CLI: "lore store adopt --target team/client_north --yes", Want: "adopted"},
 		},
 	}, func(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 		in.Target, in.From = strings.TrimSpace(in.Target), strings.TrimSpace(in.From)
@@ -156,7 +156,7 @@ func adoptOp(m Manager) op.Entry {
 		}
 		if folder == rowfs.FolderOrg {
 			return AdoptOut{}, errs.New(errs.Refused, verb+": "+quote(folder)+" is the org folder: it holds the org's roster, teams and lore-org.yaml, not a repo's notes").
-				WithHint("adopt into a client or project folder: lore store folder add " + st + " <folder>")
+				WithHint("adopt into a client or project folder: lore store folder add --store " + st + " --folder <folder>")
 		}
 		ad, ok := upgrade.As[Adopter](m)
 		if !ok {

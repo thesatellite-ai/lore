@@ -451,8 +451,8 @@ func TestMemberTeamWarning(t *testing.T) {
 	}
 	got := x.list(MemberListIn{Project: "acme-hub"}).Warnings
 	want := []string{
-		"W_TEAM_NOT_MEMBER @frontend: @carol is in the org team but not a member of acme-hub (lore project member add acme-hub @carol --role dev)",
-		"W_TEAM_NOT_MEMBER @hubqa: @sam is in the org team but not a member of acme-hub (lore project member add acme-hub @sam --role dev)",
+		"W_TEAM_NOT_MEMBER @frontend: @carol is in the org team but not a member of acme-hub (lore project member add --project acme-hub --actor @carol --role dev)",
+		"W_TEAM_NOT_MEMBER @hubqa: @sam is in the org team but not a member of acme-hub (lore project member add --project acme-hub --actor @sam --role dev)",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("warnings:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -552,15 +552,15 @@ func TestMemberAddOverlapMatrix(t *testing.T) {
 	}{
 		{name: "past-ended", start: "2026-03-01", end: "2026-06-30",
 			before: pos{"2026-02-01", "the stint 2026-03-01 → 2026-06-30 comes later: pick --on 2026-07-01 or later, or --on 2026-03-01 to reopen it"},
-			in:     pos{"2026-04-01", "lore project member list acme-hub --history shows the stint 2026-03-01 → 2026-06-30; pick --on 2026-07-01 or later"},
+			in:     pos{"2026-04-01", "lore project member list --project acme-hub --history shows the stint 2026-03-01 → 2026-06-30; pick --on 2026-07-01 or later"},
 			after:  pos{"2026-07-01", ""}},
 		{name: "ends today", start: "2026-09-01", end: "2026-11-06",
 			before: pos{"2026-08-01", "the stint 2026-09-01 → 2026-11-06 comes later: pick --on 2026-11-07 or later, or --on 2026-09-01 to reopen it"},
-			in:     pos{"2026-10-01", "lore project member list acme-hub --history shows the stint 2026-09-01 → 2026-11-06; pick --on 2026-11-07 or later"},
+			in:     pos{"2026-10-01", "lore project member list --project acme-hub --history shows the stint 2026-09-01 → 2026-11-06; pick --on 2026-11-07 or later"},
 			after:  pos{"2026-11-07", ""}},
 		{name: "ended, starts later", start: "2026-12-01", end: "2027-01-31",
 			before: pos{"2026-11-06", "the stint 2026-12-01 → 2027-01-31 comes later: pick --on 2027-02-01 or later, or --on 2026-12-01 to reopen it"},
-			in:     pos{"2026-12-15", "lore project member list acme-hub --history shows the stint 2026-12-01 → 2027-01-31; pick --on 2027-02-01 or later"},
+			in:     pos{"2026-12-15", "lore project member list --project acme-hub --history shows the stint 2026-12-01 → 2027-01-31; pick --on 2027-02-01 or later"},
 			after:  pos{"2027-02-01", ""}},
 		{name: "open", start: "2026-09-01",
 			before: pos{"2026-08-01", ""}, in: pos{"2026-10-01", ""}, after: pos{"2026-11-07", ""}},

@@ -507,7 +507,7 @@ func findingsText(err error) string {
 func redactedNote(table row.Table, id, found string) string {
 	return noteFull + "redacted " + string(table) + " row " + id + ", " + found +
 		": the match is stored as ${secret:unstored} in the machine store (this machine only); if it was a real key, rotate it" +
-		" (to keep a vault reference there instead: lore secrets link " + id + " --at 1 --ref <manager>://<entry>)"
+		" (to keep a vault reference there instead: lore secrets link --id " + id + " --at 1 --ref <manager>://<entry>)"
 }
 
 // secretSkipNote is the step line of a row whose finding cannot be

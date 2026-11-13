@@ -104,14 +104,14 @@ func (o ops) policyOps() []op.Entry {
 			Access: op.AccessRead, Errors: append(slices.Clone(readErrors), errs.ConfigInvalid), RESTNoun: policyREST,
 			Examples: []op.Example{
 				{Title: "every key, its value and where it comes from", CLI: "lore policy show", Want: "trash.retention_days"},
-				{Title: "the trash keys only (a key prefix)", CLI: "lore policy show trash", Want: "trash.retention_days"},
+				{Title: "the trash keys only (a key prefix)", CLI: "lore policy show --id trash", Want: "trash.retention_days"},
 			}}, o.policyShow),
 		op.Define(op.Spec{Name: OpPolicySet, Summary: "Set a policy rule at a level (may only tighten a higher level)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: writeErrors, Confirm: op.ConfirmRule{Always: true}, RESTNoun: policyREST,
-			Examples: []op.Example{{Title: "keep the trash a year", CLI: "lore policy set trash.retention_days 365 --yes", Want: "pol_"}}}, o.policySet),
+			Examples: []op.Example{{Title: "keep the trash a year", CLI: "lore policy set --key trash.retention_days --value 365 --yes", Want: "pol_"}}}, o.policySet),
 		op.Define(op.Spec{Name: OpPolicyUnset, Summary: "Remove a policy rule's row at a level (the next level up applies again)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.ReasonRequired), Confirm: op.ConfirmRule{Always: true}, RESTNoun: policyREST,
-			Examples: []op.Example{{Title: "back to the level above (or the default)", CLI: "lore policy unset trash.retention_days --yes", Want: ""}}}, o.policyUnset),
+			Examples: []op.Example{{Title: "back to the level above (or the default)", CLI: "lore policy unset --key trash.retention_days --yes", Want: ""}}}, o.policyUnset),
 	}
 }
 
@@ -409,7 +409,7 @@ func (o ops) policyUnset(ctx context.Context, in PolicyUnsetIn) (RowOut, error) 
 	}
 	hit := where2(rows, in.Key)
 	if hit == nil {
-		return RowOut{}, errs.New(errs.NotFound, in.Key+" is not set in "+place(target)).WithHint("lore policy show " + in.Key + " shows where it is set")
+		return RowOut{}, errs.New(errs.NotFound, in.Key+" is not set in "+place(target)).WithHint("lore policy show --id " + in.Key + " shows where it is set")
 	}
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // E_REASON_REQUIRED under delete.require_reason
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: target, Table: schema.TablePolicies, ID: hit.Row.ID}); err != nil {
@@ -429,5 +429,5 @@ func policyDeniedHint(key, strict string, at store.Source) string {
 		to = string(store.SourceRepo)
 	}
 	return "nothing written; keep " + key + " at least as strict as " + strict +
-		" here, or change it where it is set: lore policy set " + key + " <value> --to " + to + " --yes"
+		" here, or change it where it is set: lore policy set --key " + key + " --value <value> --to " + to + " --yes"
 }

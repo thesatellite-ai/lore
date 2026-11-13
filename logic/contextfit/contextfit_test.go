@@ -72,8 +72,8 @@ func TestShortForm(t *testing.T) {
 		{"", "", "Money is ints. More text.", "Money is ints."},
 		{"", "", "# Heading line\nbody", "Heading line"},
 		{"", "", "Why? Because.", "Why?"},
-		{"", "", long, "(no short form; run `lore show x`)"},
-		{"", "", "", "(no short form; run `lore show x`)"},
+		{"", "", long, "(no short form; run `lore show --id x`)"},
+		{"", "", "", "(no short form; run `lore show --id x`)"},
 		{"two\nlines", "", "", "two lines"},
 	}
 	for _, c := range cases {

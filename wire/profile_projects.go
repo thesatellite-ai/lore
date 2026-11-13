@@ -75,7 +75,7 @@ func (a *App) FindProject(ctx context.Context, ref string) (opsmember.Project, e
 			return opsmember.Project{ID: f.ID, Name: f.Folder}, nil
 		}
 		return opsmember.Project{}, errs.New(errs.NotFound, "no project or store folder "+ref+" in the stores this command reads"+scan.missDetail()).
-			WithHint("lore project list shows the projects and folders of the org; name one by its name or prj_ id, or make the folder first: lore store folder add <store> " + ref)
+			WithHint("lore project list shows the projects and folders of the org; name one by its name or prj_ id, or make the folder first: lore store folder add --store <store> --folder " + ref)
 	}
 	switch len(hits) {
 	case 1:

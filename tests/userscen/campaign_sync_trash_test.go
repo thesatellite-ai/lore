@@ -85,7 +85,7 @@ func camSyncTrashWalk(t *testing.T, store string) {
 			}
 			again := c.Lore("trash", "restore", id)
 			again.Fails(t, 27, "[E_NOT_FOUND]", "is not in the trash", "alive in "+store)
-			if h := camSyncHint(again); !strings.Contains(h, "lore row show "+id) {
+			if h := camSyncHint(again); !strings.Contains(h, "lore row show --id "+id) {
 				t.Fatalf("restore of a live row: the hint says how to read it, got %q", h)
 			}
 

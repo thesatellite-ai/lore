@@ -451,7 +451,7 @@ func (st *state) pickUpOne(ctx context.Context, co *handCheckout, src store.Sour
 		if _, err := st.eng.Delete(ctx, ref); err != nil {
 			return refuse(nil, errors.Join(err, gitbackend.PutBack(c, nil)))
 		}
-		return picked{c: c, what: "deleted " + rowName(c) + " (moved to the trash; lore trash restore " + c.ID.String() + " brings it back)", undo: func() error { return gitbackend.PutBack(c, nil) }}, true
+		return picked{c: c, what: "deleted " + rowName(c) + " (moved to the trash; lore trash restore --target " + c.ID.String() + " brings it back)", undo: func() error { return gitbackend.PutBack(c, nil) }}, true
 	case gitbackend.HandAdded:
 		h, err := decodeHand(c, hand)
 		if err != nil {
@@ -495,7 +495,7 @@ func (st *state) pickUpMove(ctx context.Context, co *handCheckout, m handMove, s
 	from, okFrom := co.places[m.from.Folder]
 	to, okTo := co.places[m.to.Folder]
 	if !okFrom || !okTo {
-		say(handLinePrefix + "move of " + rowName(m.to) + " to " + m.to.Abs + " waits: folder " + m.from.Folder + " or " + m.to.Folder + " of this store is not open in this command; run the move with lore: lore move " + m.to.ID.String() + " --to <store>/" + m.to.Folder)
+		say(handLinePrefix + "move of " + rowName(m.to) + " to " + m.to.Abs + " waits: folder " + m.from.Folder + " or " + m.to.Folder + " of this store is not open in this command; run the move with lore: lore move --id " + m.to.ID.String() + " --to <store>/" + m.to.Folder)
 		return
 	}
 	hand, err := os.ReadFile(m.to.Abs)

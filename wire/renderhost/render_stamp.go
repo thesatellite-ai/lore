@@ -302,7 +302,7 @@ func pointerCopies(root string, pick targetPick) []opsrender.CopyFinding {
 		found = append(found, opsrender.CopyFinding{Kind: opsrender.PointerOrphan, File: p.PointerFile,
 			Message: fmt.Sprintf("%s carries lore's pointer, but %s (%s) does not list %s, so render no longer keeps it up to date; keep it with the fix, or delete the lore:pointer block from %s by hand (lore never removes it for you)",
 				p.PointerFile, policy.KeyContextTargets, strings.Join(names, ","), p.Name, p.PointerFile),
-			Fix: "lore policy set " + string(policy.KeyContextTargets) + " " + keep + " --yes"})
+			Fix: "lore policy set --key " + string(policy.KeyContextTargets) + " --value " + keep + " --yes"})
 	}
 	return found
 }

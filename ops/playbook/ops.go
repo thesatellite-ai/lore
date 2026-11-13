@@ -64,28 +64,28 @@ func Ops(env content.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show playbook details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore playbook show pbk_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore playbook show --id pbk_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit playbook fields",
-			Examples:   []op.Example{{Title: "change the body", CLI: `lore playbook edit pbk_<id> --body "the new text"`, Want: "pbk_"}},
+			Examples:   []op.Example{{Title: "change the body", CLI: `lore playbook edit --id pbk_<id> --body "the new text"`, Want: "pbk_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a playbook (soft-delete via archived_at)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore playbook archive pbk_<id>", Want: "archived"}},
+			Examples:   []op.Example{{Title: "archive one", CLI: "lore playbook archive --id pbk_<id>", Want: "archived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Archive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpUnarchive, Summary: "Unarchive a playbook (clear archived_at)",
-			Examples:   []op.Example{{Title: "bring it back", CLI: "lore playbook unarchive pbk_<id>", Want: "unarchived"}},
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore playbook unarchive --id pbk_<id>", Want: "unarchived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Unarchive(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a playbook (to the trash; archive is usually what you want)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore playbook delete pbk_<id> --yes", Want: "pbk_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore playbook delete --id pbk_<id> --yes", Want: "pbk_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
@@ -93,7 +93,7 @@ func Ops(env content.Env) []op.Entry {
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across playbook name + body",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore playbook search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore playbook search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}

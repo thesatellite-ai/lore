@@ -17,14 +17,14 @@ If the client's product is several separate git repositories that should share o
 
 ## Step 1 — See the project
 
-`lore project list` shows every project in the database; `lore project show <name-or-id>` shows one, with its repos (`--json` adds the full list):
+`lore project list` shows every project in the database; `lore project show --id <name-or-id>` shows one, with its repos (`--json` adds the full list):
 
 <!-- example: projects#project-list -->
 ```console
 # alice, in website
 $ lore project list
 prj_7a67…9504  website  https://github.com/client/website
-$ lore project show website
+$ lore project show --id website
 Project: prj_7a67…9504
   name:    website
   origin:  https://github.com/client/website
@@ -44,10 +44,10 @@ Give each part a short mount name. `--origin` records where its code lives and `
 # alice, in website
 $ lore repo list
 rep_2ad3…f891  website  https://github.com/client/website
-$ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
+$ lore repo add --mount-name shop --origin https://github.com/client/website --display-name 'Online shop'
 lore: wrote ~/work/website/.lore/data/repos/rep_162d…9666.json
 ✓ repo shop registered (rep_162d…9666)
-$ lore repo add help --display-name 'Help pages'
+$ lore repo add --mount-name help --display-name 'Help pages'
 lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
 ✓ repo help registered (rep_54fe…28f2)
 $ lore repo list
@@ -96,40 +96,40 @@ Archiving hides a repo or project without losing anything; unarchive brings it b
 <!-- example: projects#archive-a-repo -->
 ```console
 # alice, in website
-$ lore repo archive help
+$ lore repo archive --id help
 ERROR: [E_INVALID_ID] repo: "help" is not a repo id (rep_…)
   hint: copy the whole id (its prefix, an underscore and 32 hex characters) from the list or show output of that kind
 (exit 20)
-$ lore repo archive rep_54fe…28f2
+$ lore repo archive --id rep_54fe…28f2
 lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
 ✓ help archived
 $ lore repo list
 rep_2ad3…f891  website  https://github.com/client/website
 rep_162d…9666  shop  https://github.com/client/website
 rep_54fe…28f2  help [archived]
-$ lore repo unarchive rep_54fe…28f2
+$ lore repo unarchive --id rep_54fe…28f2
 lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
 ✓ help unarchived
 $ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 ```
 <!-- /example -->
 
-`lore repo delete <id>` and `lore project delete <id>` remove a row for good; lore asks first, and without a terminal they stop with `E_NEEDS_CONFIRM` until you add `--yes`. An example with projects is on [One store for several repos](shared-database-mode-b.md#step-3--archive-or-delete-a-project).
+`lore repo delete --id <id>` and `lore project delete --id <id>` remove a row for good; lore asks first, and without a terminal they stop with `E_NEEDS_CONFIRM` until you add `--yes`. An example with projects is on [One store for several repos](shared-database-mode-b.md#step-3--archive-or-delete-a-project).
 
 ## Step 5 — The repo moved: record its new address
 
-Every repo row keeps the address it was confirmed at, and lore uses it to recognise the repo in any clone. When the client renames the repo (or moves it to another host), update your remote as usual and then tell lore with `lore repo set-url <url>`: the new address becomes the primary, the old one is kept as history ("until today"), and the repo keeps its id, so every note stays attached. `--mirror` adds a second address (a copy on another host) without changing the primary; `--remove` drops a mirror again; `--repo <mount>` updates another repo of the project instead of this checkout's. The change is written to `.lore/data/_meta.json`; commit it:
+Every repo row keeps the address it was confirmed at, and lore uses it to recognise the repo in any clone. When the client renames the repo (or moves it to another host), update your remote as usual and then tell lore with `lore repo set-url --url <url>`: the new address becomes the primary, the old one is kept as history ("until today"), and the repo keeps its id, so every note stays attached. `--mirror` adds a second address (a copy on another host) without changing the primary; `--remove` drops a mirror again; `--repo <mount>` updates another repo of the project instead of this checkout's. The change is written to `.lore/data/_meta.json`; commit it:
 
 <!-- example: projects#repo-moved -->
 ```console
 # alice, in website
 $ git remote set-url origin https://github.com/client/website-v2 && git push -q origin main
-$ lore repo set-url git@github.com:client/website-v2.git
+$ lore repo set-url --url git@github.com:client/website-v2.git
 lore: wrote ~/work/website/.lore/data/repos/rep_2ad3…f891.json
 lore: wrote ~/work/website/.lore/data/projects/prj_7a67…9504.json
 ✓ rep_2ad3…f891 primary address is now github.com/client/website-v2 (was github.com/client/website until today)
   .lore/data/_meta.json updated; commit it with your next push
-$ lore repo set-url https://gitlab.com/client/website-v2 --mirror
+$ lore repo set-url --url https://gitlab.com/client/website-v2 --mirror
 lore: wrote ~/work/website/.lore/data/repos/rep_2ad3…f891.json
 ✓ rep_2ad3…f891 mirror address added: gitlab.com/client/website-v2
   .lore/data/_meta.json updated; commit it with your next push
@@ -203,9 +203,9 @@ ERROR: [E_NOT_FOUND] rule: no project "prj_76bd…3f10"
 
 ## Pitfalls
 
-- **`repo archive` wants the id.** `lore repo archive help` fails with "not found" even though `--repo help` works elsewhere; copy the `rep_...` id from `lore repo list`. (The hint printed with that error points at branches and is not the cause here.)
+- **`repo archive` wants the id.** `lore repo archive --id help` fails with "not found" even though `--repo help` works elsewhere; copy the `rep_...` id from `lore repo list`. (The hint printed with that error points at branches and is not the cause here.)
 - **An unknown `--repo` is an error, not an empty list.** A typo in the mount name stops the command, so you never act on the wrong set of notes by mistake.
-- **A note's repo is fixed when you add it.** To move a rule, use `lore rule edit <id> --rebind-repo <mount>` or `--rebind-master` (back to the whole project).
+- **A note's repo is fixed when you add it.** To move a rule, use `lore rule edit --id <id> --rebind-repo <mount>` or `--rebind-master` (back to the whole project).
 - **Two `lore init`s on two branches make two projects.** When those branches merge, run `lore sync fix-projects`; see [Conflicts and duplicates](conflicts-and-duplicates.md#step-5--two-people-set-up-lore-on-separate-branches).
 - **A repo set up with a local-path remote has no address yet.** A path (`/srv/git/website.git`) cannot identify a repo across clones, so lore records none. The first `lore sync` in a clone whose remote is a real address (a fresh clone on a new laptop) records it as the primary, silently, in the repos row and `.lore/data/_meta.json`: there is no "remote changed" notice, because nothing changed. Commit the two files with your next push.
 - **`lore repo set-url` does not change your git remote.** Run `git remote set-url origin <url>` yourself; lore only records the address for its own matching.

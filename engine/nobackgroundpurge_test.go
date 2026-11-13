@@ -26,16 +26,16 @@ var purgeCallers = map[string]bool{
 	// op.Input.Purge() reads a delete's --purge flags (no write); the
 	// delete itself purges only on an explicit --purge --confirm.
 	"engine/purgeflags.go#bindInputPurge": true,
-	// lore live purge (§6.6): the live signals ref, an explicit command.
+	// lore live purge --ids (§6.6): the live signals ref, an explicit command.
 	"ops/live/live.go#purge":      true,
 	"wire/host/live_ref.go#Purge": true,
 	// lore meta forget --confirm (key rows only).
 	"ops/settings/meta_maint.go#metaForget": true,
-	// lore setup trash purge <setup> --confirm: its machine.db step progress
+	// lore setup trash purge --name <setup> --confirm: its machine.db step progress
 	// rows (names, emails, store urls) go for good with the setup
 	// (setupStore.PurgeProgress → purgeRow; setuplifecycle.go).
 	"wire/setupstore.go#purgeRow": true,
-	// lore trash purge <target|--older-than|--expired|--archived-before> --confirm.
+	// lore trash purge --target <target|--older-than|--expired|--archived-before> --confirm.
 	"ops/trash/trash.go#purge":             true,
 	"ops/trash/trash.go#purgeArchived":     true,
 	"wire/trash.go#PurgeOlder":             true,

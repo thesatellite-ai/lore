@@ -159,7 +159,7 @@ func TestResourcesRetypeWithData(t *testing.T) {
 	}
 	c.MustLore("resource", "field", "retype", "host", "cores", "number", "--keep-as-text", "--yes").
 		Says(t, "retyped host.cores text → number", "1 value converted", "1 kept as text and quarantined", "h_bad")
-	c.MustLore("resource", "show", "h_bad").Says(t, "quarantined: cores", "lore resource edit h_bad")
+	c.MustLore("resource", "show", "h_bad").Says(t, "quarantined: cores", "lore resource edit --id h_bad")
 	c.MustLore("resource", "lint").Says(t, "quarantined", "h_bad.cores")
 	c.MustLore("resource", "edit", "h_bad", "--set", "cores=2")
 	c.MustLore("resource", "show", "h_bad").Never(t, "quarantined")

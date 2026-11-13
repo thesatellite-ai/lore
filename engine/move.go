@@ -126,7 +126,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		// there is nothing to move from elsewhere (engine TestMove).
 		if there, _, gerr := e.getRow(ctx, to, cur.Table, cur.ID); gerr == nil && !there.Deleted {
 			return Written{}, errs.Wrap(errs.NotFound, ""+cur.ID.String()+" is already in store "+string(to)+"; nothing to move", store.ErrNotFound).
-				WithHint("lore row show " + cur.ID.String() + " --origin shows where it lives")
+				WithHint("lore row show --id " + cur.ID.String() + " --origin shows where it lives")
 		}
 		return Written{}, deletedErr(ctx, srcSt, cur, "is deleted")
 	}
@@ -134,7 +134,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	// travels; it is fixed first with the commands lore meta show prints
 	if probs := metafilter.Quarantine(cur.Meta); len(probs) > 0 {
 		return Written{}, errs.New(errs.MetaQuarantined, ""+cur.ID.String()+" has quarantined metadata ("+probs[0].Text+"); it is not moved until it is fixed").
-			WithHint("lore meta show " + cur.ID.String() + " prints each problem and its fix")
+			WithHint("lore meta show --id " + cur.ID.String() + " prints each problem and its fix")
 	}
 	def, err := e.tableDef(cur.Table)
 	if err != nil {
@@ -336,7 +336,7 @@ func (e *Engine) internalMeta(ctx context.Context, r row.Row, drop bool) (map[id
 	slices.Sort(names)
 	if !drop {
 		return nil, nil, errs.New(errs.MetaInternal, ""+r.ID.String()+" holds internal metadata ("+strings.Join(names, ", ")+") that must not reach a client repo; nothing written").
-			WithHint("lore move " + r.ID.String() + " --to <target> --drop-internal (removes them), or keep the row in the store")
+			WithHint("lore move --id " + r.ID.String() + " --to <target> --drop-internal (removes them), or keep the row in the store")
 	}
 	ws := make([]Warning, 0, len(names))
 	for _, n := range names {

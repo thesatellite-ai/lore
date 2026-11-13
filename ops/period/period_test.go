@@ -243,7 +243,7 @@ func TestStatusOnLeaveAndBack(t *testing.T) {
 	}
 	_, err = o.status(ctx, ActorStatusIn{Actor: "@mira", To: schema.ActorStatusLeft})
 	wantCode(t, err, errs.StatusChange)
-	if e := err.(*errs.Error); !strings.Contains(e.Hint, "lore actor offboard @mira") {
+	if e := err.(*errs.Error); !strings.Contains(e.Hint, "lore actor offboard --actor @mira") {
 		t.Errorf("hint: %q", e.Hint)
 	}
 	_, err = o.status(ctx, ActorStatusIn{Actor: "@mira", To: schema.ActorStatusActive, From: "2026-06-01"})
@@ -322,7 +322,7 @@ func TestOffboardWithoutYesWritesNothing(t *testing.T) {
 	q := err.(*errs.Error).Question
 	for _, want := range []string{"offboard Mira Patel (@mira)", "2026-01-12 → 2026-09-30  employee", "reason: moved abroad",
 		"acme-hub (dev, reviewer) ends 2026-09-30", "northwind-app (lead) ends 2026-09-30",
-		"tsk_01aa", "reassign: lore task edit tsk_01aa --assign @<someone>", "agent:auto/codex/3f9a1c", "becomes inactive", "active → left"} {
+		"tsk_01aa", "reassign: lore task edit --id tsk_01aa --assign @<someone>", "agent:auto/codex/3f9a1c", "becomes inactive", "active → left"} {
 		if !strings.Contains(q, want) {
 			t.Errorf("preview misses %q:\n%s", want, q)
 		}
@@ -440,7 +440,7 @@ func TestOffboardClaimsUnread(t *testing.T) {
 	text := out.Text()
 	if len(out.OpenTasks) != 1 || out.OpenTasks[0] != read[0] ||
 		!strings.Contains(out.TasksNote, "claim holders could not be read here (no signals ref)") ||
-		!strings.Contains(text, "tsk_01bb  \"Fix login\"  repo  claim  reassign: lore task edit tsk_01bb --assign @<someone>") {
+		!strings.Contains(text, "tsk_01bb  \"Fix login\"  repo  claim  reassign: lore task edit --id tsk_01bb --assign @<someone>") {
 		t.Fatalf("%+v\n%s", out, text)
 	}
 }
@@ -460,7 +460,7 @@ func TestRejoin(t *testing.T) {
 	_, err = o.rejoin(ctx, RejoinIn{Actor: "@mira", Type: schema.PeriodTypeContractor, On: "2026-09-01", OrgRole: "Contract engineer"})
 	wantCode(t, err, errs.NeedsConfirm)
 	q := err.(*errs.Error).Question
-	for _, want := range []string{"lore project member add acme-hub", "--role dev,reviewer", "memberships are not restored", "stays inactive"} {
+	for _, want := range []string{"lore project member add --project acme-hub", "--role dev,reviewer", "memberships are not restored", "stays inactive"} {
 		if !strings.Contains(q, want) {
 			t.Errorf("preview misses %q:\n%s", want, q)
 		}
@@ -640,7 +640,7 @@ func TestPreviewProjectNames(t *testing.T) {
 			}
 			_, err = o.rejoin(context.Background(), RejoinIn{Actor: "@mira", Type: schema.PeriodTypeContractor, On: "2026-09-01"})
 			wantCode(t, err, errs.NeedsConfirm)
-			if q := err.(*errs.Error).Question; !strings.Contains(q, label+" (dev): lore project member add "+label+" ") {
+			if q := err.(*errs.Error).Question; !strings.Contains(q, label+" (dev): lore project member add --project "+label+" ") {
 				t.Errorf("rejoin preview misses %q:\n%s", label, q)
 			}
 		})
@@ -791,7 +791,7 @@ func (r trashRoster) ListTrash(_ context.Context, table row.Table) ([]row.Row, e
 
 // TestRejoinListsTrashedUnstarted: a membership the offboard moved to the
 // trash before it began is listed by the rejoin, in the preview and the
-// done text, with `lore trash restore <id>`, and in --json
+// done text, with `lore trash restore --target <id>`, and in --json
 // (trashed_memberships, not_started, starts_on); the rejoin does not
 // restore it. A roster that cannot
 // list its trash lists none ([] in JSON).
@@ -803,7 +803,7 @@ func TestRejoinListsTrashedUnstarted(t *testing.T) {
 	if _, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-09-01"}); err != nil {
 		t.Fatal(err)
 	}
-	line := "lab (qa) starting 2026-10-15, " + MemberTrashReasonUnstarted + ": lore trash restore " + future.String()
+	line := "lab (qa) starting 2026-10-15, " + MemberTrashReasonUnstarted + ": lore trash restore --target " + future.String()
 	o := ops{env: trashEnv{Fake: w.f}}
 	_, err := o.rejoin(context.Background(), RejoinIn{Actor: "@mira", Type: schema.PeriodTypeContractor, On: "2026-09-30"})
 	wantCode(t, err, errs.NeedsConfirm)

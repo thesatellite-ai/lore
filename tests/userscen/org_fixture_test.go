@@ -5,7 +5,7 @@ package userscen
 // Fixture of the org area (TestOrg*): one agency org on a lore store, the
 // way a team starts one for real. mira creates the store and the org from
 // her clone of the agency's own app repo (`lore store init`, `lore org
-// create`); a teammate joins with `lore org import <store url>` from
+// create`); a teammate joins with `lore org import --url <store url>` from
 // outside any repo, then clones the app. Every person has their own HOME,
 // a local personal store and live.fetch_ttl 0s (each command sees the
 // others' pushes at once).
@@ -197,7 +197,7 @@ func listActors(t *testing.T, c *th.Clone, extra ...string) orgActorList {
 	return v
 }
 
-// showActor runs `lore actor show <ref> --json` in c.
+// showActor runs `lore actor show --id <ref> --json` in c.
 func showActor(t *testing.T, c *th.Clone, ref string) orgActor {
 	t.Helper()
 	v := th.DecodeJSON[orgActorShow](t, c.MustLore("actor", "show", ref, "--json"))

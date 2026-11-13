@@ -98,10 +98,10 @@ func relateOps(o ops) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRelate, Summary: "Relate a task to another (duplicates, relates-to, follows-up, blocked-by, blocks)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.Cycle, errs.OpenChildren),
-			Examples: []op.Example{{Title: "mark a duplicate", CLI: "lore task relate tsk_<a> --duplicates tsk_<b>", Want: "duplicates"}},
+			Examples: []op.Example{{Title: "mark a duplicate", CLI: "lore task relate --id tsk_<a> --duplicates tsk_<b>", Want: "duplicates"}},
 		}, o.relate),
 		op.Define(op.Spec{
-			Name: OpUnrelate, Examples: []op.Example{{Title: "drop a see-also", CLI: "lore task unrelate tsk_<id> --relates-to tsk_<other>", Want: "tsk_"}}, Summary: "Remove a relation added with task relate",
+			Name: OpUnrelate, Examples: []op.Example{{Title: "drop a see-also", CLI: "lore task unrelate --id tsk_<id> --relates-to tsk_<other>", Want: "tsk_"}}, Summary: "Remove a relation added with task relate",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.unrelate),
 	}

@@ -69,12 +69,12 @@ The rules, first match wins: the `--setup` flag, `LORE_SETUP`, this repo's pin, 
 
 ## Step 2 — Look at one setup
 
-`lore setup show <name>` prints one setup's entry: keys and paths, never a secret (at most a key file path and its fingerprint). Once a check has run for it (`lore doctor --all`, the setup page, a saved step), it also prints `health:`, the same cell `lore setup list` shows, and `problems:`, every failing or warning check that cell counts, each with its fix; a check two steps ran counts once.
+`lore setup show --name <name>` prints one setup's entry: keys and paths, never a secret (at most a key file path and its fingerprint). Once a check has run for it (`lore doctor --all`, the setup page, a saved step), it also prints `health:`, the same cell `lore setup list` shows, and `problems:`, every failing or warning check that cell counts, each with its fix; a check two steps ran counts once.
 
 <!-- example: setup-cli#show -->
 ```console
 # tomas, in ~
-$ lore setup show personal
+$ lore setup show --name personal
 setup:
   name: personal
   kind: solo
@@ -93,8 +93,8 @@ setup:
 Three ways to override the folder rule, from narrowest to widest:
 
 - `--setup <name>` on any command, for that command only.
-- `LORE_SETUP=<name>` for a shell; `lore setup use <name>` prints the line to paste and writes nothing.
-- `lore setup use <name> --here` pins this repo to the setup, on this machine only (stored under `repo_setups:` in `~/.lore/config.yaml`; the repo needs a lore project id from `lore init`). `lore setup use --here --clear` removes the pin.
+- `LORE_SETUP=<name>` for a shell; `lore setup use --name <name>` prints the line to paste and writes nothing.
+- `lore setup use --name <name> --here` pins this repo to the setup, on this machine only (stored under `repo_setups:` in `~/.lore/config.yaml`; the repo needs a lore project id from `lore init`). `lore setup use --here --clear` removes the pin.
 
 A name that is not a setup is refused, on a read as on a write:
 
@@ -104,16 +104,16 @@ A name that is not a setup is refused, on a read as on a write:
 $ lore --setup personal whoami | head -2
 org        agency  (matched by: own pattern github.com/agency/* of agency)
 setup      personal  (flag: --setup personal)
-$ lore setup use personal
+$ lore setup use --name personal
 export LORE_SETUP=personal
-$ lore setup use personal --here
+$ lore setup use --name personal --here
 pinned this repo to setup personal (this machine only; lore setup use --here --clear removes the pin)
 $ lore setup list | tail -2
 active: personal (repo: rep_2ad3…f891)
 This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup personal (repo rep_2ad3…f891)
 $ lore setup use --here --clear
 cleared this repo's setup pin; lore setup list shows the setup lore picks here now
-$ lore --setup nope task add 'check the sitemap'
+$ lore --setup nope task add --title 'check the sitemap'
 ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: agency, personal
   hint: lore setup list
 (exit 27)
@@ -122,15 +122,15 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: ag
 
 ## Step 4 — Edit a setup
 
-`lore setup edit <name>` changes one setup in place. `--folder` replaces the whole folder list (repeat it for several globs), `--note` records why the setup exists (shown by `show`, `trash list` and the page's Home):
+`lore setup edit --name <name>` changes one setup in place. `--folder` replaces the whole folder list (repeat it for several globs), `--note` records why the setup exists (shown by `show`, `trash list` and the page's Home):
 
 <!-- example: setup-cli#edit -->
 ```console
 # tomas, in ~
-$ lore setup edit personal --folder '~/work/personal/**' --folder '~/src/**' --note 'side projects and dotfiles'
+$ lore setup edit --name personal --folder '~/work/personal/**' --folder '~/src/**' --note 'side projects and dotfiles'
 name: personal
 changed: true
-$ lore setup show personal
+$ lore setup show --name personal
 setup:
   name: personal
   kind: solo
@@ -145,7 +145,7 @@ setup:
 
 The other flags: `--github-user`, `--route ssh|https`, `--host-alias`, `--ssh-key` (the private key file or its `.pub`) or `--no-ssh-key`, `--gh-account`, `--personal-store inherit|none|<url>`, `--tool` (replaces the list), `--secrets`, `--default` / `--no-default`, `--no-note`. Two setups whose most specific globs tie (both `~/work/**`) are refused when lore has to choose between them (`E_SETUP_AMBIGUOUS`); make one glob more specific.
 
-`lore setup rename <name> <new>` gives a setup a new name: its entry keeps everything else, the repos pinned to it stay pinned, and an unfinished setup's saved steps follow it. A name another setup holds is refused with `E_SETUP_NAME_TAKEN`. On the setup page, **Edit** on a setup's row opens its steps as "Edit setup: <name>": every Save changes that setup, a new name on the first step renames it, and a new kind opens the steps that kind asks for.
+`lore setup rename --name <name> --to <new>` gives a setup a new name: its entry keeps everything else, the repos pinned to it stay pinned, and an unfinished setup's saved steps follow it. A name another setup holds is refused with `E_SETUP_NAME_TAKEN`. On the setup page, **Edit** on a setup's row opens its steps as "Edit setup: <name>": every Save changes that setup, a new name on the first step renames it, and a new kind opens the steps that kind asks for.
 
 ## Step 5 — Disable and enable
 
@@ -154,54 +154,54 @@ Disabling keeps the setup in `config.yaml` with `disabled: true` but takes it ou
 <!-- example: setup-cli#disable-and-enable -->
 ```console
 # tomas, in ~
-$ lore setup disable personal
+$ lore setup disable --name personal
 disabled setup personal: it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable personal turns it back on
 
 # tomas, in personal/dotfiles
-$ lore --setup personal task add 'rotate the backup key'
+$ lore --setup personal task add --title 'rotate the backup key'
 ERROR: [E_SETUP_NOT_FOUND] setup "personal" is disabled; it matches nothing until it is enabled
   hint: lore setup enable personal
 (exit 27)
 
 # tomas, in ~
-$ lore setup enable personal
+$ lore setup enable --name personal
 enabled setup personal
 ```
 <!-- /example -->
 
 ## Step 6 — Remove, restore and purge
 
-`lore setup remove` moves the setup to the setup trash (`trash.setups[]` in `config.yaml`) with the time it was removed and the repos pinned to it; its stores, repos and org entry are never touched. `lore setup trash restore <name>` brings the newest trashed entry of that name back with its pins (`--as <new>` when a setup of that name exists again). `lore setup trash purge` deletes a trashed setup for good: `--dry-run` lists what is deleted and what stays, and it only deletes with `--confirm` (`--yes` never purges):
+`lore setup remove` moves the setup to the setup trash (`trash.setups[]` in `config.yaml`) with the time it was removed and the repos pinned to it; its stores, repos and org entry are never touched. `lore setup trash restore --name <name>` brings the newest trashed entry of that name back with its pins (`--as <new>` when a setup of that name exists again). `lore setup trash purge` deletes a trashed setup for good: `--dry-run` lists what is deleted and what stays, and it only deletes with `--confirm` (`--yes` never purges):
 
 <!-- example: setup-cli#remove-and-restore -->
 ```console
 # tomas, in personal/dotfiles
-$ lore setup use personal --here
+$ lore setup use --name personal --here
 pinned this repo to setup personal (this machine only; lore setup use --here --clear removes the pin)
 
 # tomas, in ~
-$ lore setup remove personal
+$ lore setup remove --name personal
 moved setup personal to the trash; lore setup trash restore personal brings it back
 $ lore setup trash list
 setups in the trash (lore setup trash restore <name> brings one back):
   personal  solo  removed 2026-11-02T10:01:25Z  — side projects and dotfiles
-$ lore setup trash restore personal
+$ lore setup trash restore --name personal
 restored setup personal from the trash
-$ lore setup remove personal
+$ lore setup remove --name personal
 moved setup personal to the trash; lore setup trash restore personal brings it back
-$ lore setup trash purge personal --dry-run
+$ lore setup trash purge --name personal --dry-run
 would delete for good:
   - the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
 stays:
   - the personal store local in ~/.lore/config.yaml
   - every GitHub repo: lore never deletes a repository
-$ lore setup trash purge personal
+$ lore setup trash purge --name personal
 ERROR: [E_NEEDS_CONFIRM] deletes: the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
 stays: the personal store local in ~/.lore/config.yaml; every GitHub repo: lore never deletes a repository
 Delete setup personal for good?
   hint: rerun with --confirm to delete it for good (--yes never purges); --dry-run shows what stays
 (exit 26)
-$ lore setup trash purge personal --confirm
+$ lore setup trash purge --name personal --confirm
 deleted for good:
   - the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
 stays:
@@ -216,7 +216,7 @@ Two more purge flags, `--clear-identity` and `--clear-personal-store`, also remo
 
 ## Step 7 — Save setup steps from a script
 
-The page is a list of steps, and each step is also a command: `lore setup plan --kind <k>` lists the steps of a kind (and the saved progress of setups being made), `lore setup check <setup> --step <id> --answers '<json>'` validates one step's answers and runs its checks (it saves only the progress), and `lore setup apply` saves the step once every error-level check passes. Steps are saved in order: a step whose earlier steps are not done is `E_SETUP_STEP_ORDER`.
+The page is a list of steps, and each step is also a command: `lore setup plan --kind <k>` lists the steps of a kind (and the saved progress of setups being made), `lore setup check --setup <setup> --step <id> --answers '<json>'` validates one step's answers and runs its checks (it saves only the progress), and `lore setup apply` saves the step once every error-level check passes. Steps are saved in order: a step whose earlier steps are not done is `E_SETUP_STEP_ORDER`.
 
 <!-- example: setup-cli#steps -->
 ```console
@@ -327,22 +327,22 @@ steps:
     help: Every step and every warning with its fix.
     kinds: solo, member, admin
     values: {}
-$ lore setup apply side --step kind --answers '{"kind":"solo","name":"side"}' | head -4
+$ lore setup apply --setup side --step kind --answers '{"kind":"solo","name":"side"}' | head -4
 step: kind
 status: done
 changed: true
 wrote: ~/.lore/config.yaml
-$ lore setup check side --step identity --answers '{"name":"Tomas Weber","email":"tomas@home.example"}' | head -2
+$ lore setup check --setup side --step identity --answers '{"name":"Tomas Weber","email":"tomas@home.example"}' | head -2
 step: identity
 status: ready
-$ lore setup apply side --step github --answers '{"user":"tomas-dev"}'
+$ lore setup apply --setup side --step github --answers '{"user":"tomas-dev"}'
 ERROR: [E_SETUP_STEP_ORDER] step github needs identity first
   hint: run lore setup apply side --step identity
 (exit 23)
 ```
 <!-- /example -->
 
-Here the `kind` step creates the setup `side`, `identity` is checked but not saved, so `github` (which needs `identity`) is refused. Saving a step again with the same answers writes nothing. A `member` or `admin` setup is written to `setups:` only by its `join` or `team` step, once its org entry exists. When a check fails and has a fix lore can run, `lore setup fix <setup> --check <id> --yes` runs it after a confirmation; see [Fixes that lore can run](guided-setup.md#step-7--run-a-fix-from-the-command-line).
+Here the `kind` step creates the setup `side`, `identity` is checked but not saved, so `github` (which needs `identity`) is refused. Saving a step again with the same answers writes nothing. A `member` or `admin` setup is written to `setups:` only by its `join` or `team` step, once its org entry exists. When a check fails and has a fix lore can run, `lore setup fix --setup <setup> --check <id> --yes` runs it after a confirmation; see [Fixes that lore can run](guided-setup.md#step-7--run-a-fix-from-the-command-line).
 
 ## Step 8 — Import from an existing install
 
@@ -383,14 +383,14 @@ The example leaves out the per-repo lines (each repo's `stores.yaml` source and 
 
 ## Step 9 — Join a team from an invite line
 
-`lore setup join <invite>` parses the line an admin sent (see [Team invites](invites.md)) and opens the page on the join step; `--no-open` prints the address, `--json` prints the decoded invite and the step plan. A text that is not an invite is refused at once:
+`lore setup join --invite <invite>` parses the line an admin sent (see [Team invites](invites.md)) and opens the page on the join step; `--no-open` prints the address, `--json` prints the decoded invite and the step plan. A text that is not an invite is refused at once:
 
 <!-- example: setup-cli#join -->
 ```console
 # tomas, in ~
-$ lore setup join lore-invite:v1:garbage
+$ lore setup join --invite lore-invite:v1:garbage
 ERROR: [E_INVITE_INVALID] this is not a lore invite; copy the whole line starting with lore-invite:v1: (the text after the prefix is cut or changed)
-  hint: ask the person who invited you to run lore team invite resend <your email>
+  hint: ask the person who invited you to run lore team invite resend --ref <your-email>
 (exit 20)
 ```
 <!-- /example -->
@@ -412,7 +412,7 @@ This folder: no org, no attached store, written as Tomas Weber <tomas@home.examp
 ```
 <!-- /example -->
 
-Each folder should name the setup you expect on the `active:` line, with the rule you expect. If not, pin the repo (`lore setup use <name> --here`) or make a folder glob more specific (`lore setup edit <name> --folder …`), and run `lore whoami --explain` to see every rule.
+Each folder should name the setup you expect on the `active:` line, with the rule you expect. If not, pin the repo (`lore setup use --name <name> --here`) or make a folder glob more specific (`lore setup edit --name <name> --folder …`), and run `lore whoami --explain` to see every rule.
 
 ## Commands not run on this page
 
@@ -422,10 +422,10 @@ Each folder should name the setup you expect on the `active:` line, with the rul
 
 ## Pitfalls
 
-- **A bad `--setup` name stops every repo command.** `lore --setup nope task list` is refused with `E_SETUP_NOT_FOUND` just like `lore --setup nope task add …`, so a script with a typo fails instead of reading another setup's view. Check the name with `lore setup list` before scripting it. A folder or org tie (`E_SETUP_AMBIGUOUS`) still stops writes only.
+- **A bad `--setup` name stops every repo command.** `lore --setup nope task list` is refused with `E_SETUP_NOT_FOUND` just like `lore --setup nope task add --title …`, so a script with a typo fails instead of reading another setup's view. Check the name with `lore setup list` before scripting it. A folder or org tie (`E_SETUP_AMBIGUOUS`) still stops writes only.
 - **`--folder` replaces the list.** Pass every glob the setup should keep, not only the new one.
-- **A repo pin is per machine.** `lore setup use <name> --here` is stored in this machine's `config.yaml`; a teammate's clone of the same repo is not pinned.
-- **`lore setup use <name>` without `--here` writes nothing.** It prints the `export LORE_SETUP=…` line for you to paste.
+- **A repo pin is per machine.** `lore setup use --name <name> --here` is stored in this machine's `config.yaml`; a teammate's clone of the same repo is not pinned.
+- **`lore setup use --name <name>` without `--here` writes nothing.** It prints the `export LORE_SETUP=…` line for you to paste.
 - **Purge needs `--confirm`.** `--yes` never purges, so a script that passes `--yes` everywhere cannot lose a setup by accident.
 - **Steps are saved in order.** A script that applies `github` before `identity` gets `E_SETUP_STEP_ORDER`; follow the order of `lore setup plan`.
 

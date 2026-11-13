@@ -251,13 +251,13 @@ func Ops(env Env) []op.Entry {
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.InTrash, errs.Purged, errs.Unsupported, errs.RefCycle, errs.RefDepth,
 				errs.RefLimit, errs.RefRequired, errs.NeedsConfirm, errs.RefScheme, errs.VaultEntryUnavailable, errs.Internal},
 			Examples: []op.Example{
-				{Title: "any row by its id", CLI: "lore show mem_01a1b49cf238767ca425d36a07b5cc1e", Want: "mem_"},
-				{Title: "where it came from, as JSON", CLI: "lore show mem_01a1b49cf238767ca425d36a07b5cc1e --origin --json", Want: `"origin"`},
+				{Title: "any row by its id", CLI: "lore show --id mem_01a1b49cf238767ca425d36a07b5cc1e", Want: "mem_"},
+				{Title: "where it came from, as JSON", CLI: "lore show --id mem_01a1b49cf238767ca425d36a07b5cc1e --origin --json", Want: `"origin"`},
 			}}, o.show),
 		op.Define(op.Spec{Name: OpMove, Summary: "Move any row to another store, keeping its id (the old copy is tombstoned)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{Always: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.InTrash, errs.MetaInternal, errs.MetaQuarantined, errs.LeakBlocked,
-				errs.StoreReadOnly, errs.Stale, errs.Unsupported, errs.NotImplemented, errs.Internal}, Examples: []op.Example{{Title: "move a row to your personal store", CLI: "lore row move mem_0c3a --to me"}}}, o.move).Asks(o.moveQuestion),
+				errs.StoreReadOnly, errs.Stale, errs.Unsupported, errs.NotImplemented, errs.Internal}, Examples: []op.Example{{Title: "move a row to your personal store", CLI: "lore row move --id mem_0c3a --to me"}}}, o.move).Asks(o.moveQuestion),
 	}
 }
 
@@ -663,7 +663,7 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 			}
 		} else if src == store.Source(to) {
 			return MoveOut{}, errs.New(errs.InvalidInput, "move: "+id.String()+" is already in store "+to+"; nothing to move").
-				WithHint("name another attached store with --to (`lore store list` shows them); lore row show " + id.String() + " --origin shows where it lives")
+				WithHint("name another attached store with --to (`lore store list` shows them); lore row show --id " + id.String() + " --origin shows where it lives")
 		}
 	}
 	w, err := mv.MoveWith(ctx, engine.Ref{ID: id}, store.Source(to), engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt, WithChildren: in.WithChildren})

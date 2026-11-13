@@ -39,7 +39,7 @@ Bob, on `feat/payments`, gives Alice a task. Alice, on `feat/login`, sees it. He
 <!-- example: small-team#assign-across-branches -->
 ```console
 # bob, in billing
-$ git pull -q && git switch -q -c feat/payments && lore task add 'check the checkout page on a phone' --assign @alice
+$ git pull -q && git switch -q -c feat/payments && lore task add --title 'check the checkout page on a phone' --assign @alice
 lore: wrote ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — check the checkout page on a phone [medium]
@@ -64,11 +64,11 @@ Alice finishes it and names the commit that did the work. The task lands on `mai
 <!-- example: small-team#done-lands-on-main -->
 ```console
 # alice, in billing
-$ lore task start tsk_54fe…28f2
+$ lore task start --id tsk_54fe…28f2
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 started
 lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
-$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done tsk_54fe…28f2 --commit $(git rev-parse --short HEAD)
+$ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done --id tsk_54fe…28f2 --commit $(git rev-parse --short HEAD)
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 done (commit df3a55c); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
@@ -95,8 +95,8 @@ An urgent rule learned on a feature branch can reach `main` without switching br
 
 ```console
 $ lore rule add --body 'Never deploy on a Friday'
-$ lore sync promote rul_05e9…4603 --to main --dry-run
-$ lore sync promote rul_05e9…4603 --to main
+$ lore sync promote --ids rul_05e9…4603 --to main --dry-run
+$ lore sync promote --ids rul_05e9…4603 --to main
 $ git push origin main
 ```
 
@@ -107,7 +107,7 @@ Most teams protect `main` (only pull requests may change it). Then the landing w
 <!-- example: small-team#protected-main -->
 ```console
 # bob, in billing
-$ lore task add 'ask the client for the new logo' --assign @alice
+$ lore task add --title 'ask the client for the new logo' --assign @alice
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
   on tasklist tlt_162d…9666 "default" (the default; --tasklist picks another)
@@ -116,13 +116,13 @@ lore live: 2 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
-$ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
+$ lore sync >/dev/null && lore task done --id tsk_c0f3…b5b8
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
-$ lore explain tsk_c0f3…b5b8
+$ lore explain --id tsk_c0f3…b5b8
 tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
   live (local 51886a5): row, live since 2026-11-02T10:01:20Z, hlc 2026-11-02T10:01:25.000Z/0000/act_7a67…9504
@@ -160,7 +160,7 @@ $ git status --short
 
 - **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
 - **Register first, then branch from a fresh main.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your branch holds her roster entry. A roster entry lands on main at once and then leaves the live list, so a branch cut before it landed does not see it: `git pull` main before `git switch -c`, or `git merge origin/main` into an existing branch (the same rule as any row that left live, see `lore sync peek`).
-- **Rules, decisions and memories travel with the code.** That is on purpose: most rules belong with the change that needs them. Use `lore sync promote <id> --to main` for the one that cannot wait.
+- **Rules, decisions and memories travel with the code.** That is on purpose: most rules belong with the change that needs them. Use `lore sync promote --ids <id> --to main` for the one that cannot wait.
 - **`git push --no-verify`** skips every local check lore runs at push: the ride-along (the rows simply wait and ride on a later push) and, in a client repo, the push leak check (see [Agency with a client repo](agency-client-repo.md)).
 - **Unprotected `main`** receives small `lore: land N rows` commits directly. They change only files under `.lore/data`.
 

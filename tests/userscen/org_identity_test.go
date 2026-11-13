@@ -93,9 +93,9 @@ func TestOrgContactsAndMatching(t *testing.T) {
 	}{
 		{"short phone", []string{"@mira", "phone", "12345"}, orgExitBadInput, []string{"E_CONTACT_TYPE", "at least 7 digits"}},
 		{"identity phone", []string{"@mira", "phone", "5551234567", "--identity"}, orgExitBadInput, []string{"E_CONTACT_TYPE", "not an identity type"}},
-		{"unknown type", []string{"@mira", "fax", "1"}, orgExitBadInput, []string{"E_CONTACT_TYPE", "fax is not in the list", "lore contact-type add fax"}},
+		{"unknown type", []string{"@mira", "fax", "1"}, orgExitBadInput, []string{"E_CONTACT_TYPE", "fax is not in the list", "lore contact-type add --name fax"}},
 		{"bad email", []string{"@mira", "email", "not-an-address"}, orgExitBadInput, []string{"E_CONTACT_TYPE"}},
-		{"someone else's identity", []string{"@bob", "github", "mira-p", "--identity"}, th.ExitRefused, []string{"E_CONTACT_TAKEN", "github:mira-p already belongs to " + orgMiraName, "lore actor show github:mira-p"}},
+		{"someone else's identity", []string{"@bob", "github", "mira-p", "--identity"}, th.ExitRefused, []string{"E_CONTACT_TAKEN", "github:mira-p already belongs to " + orgMiraName, "lore actor show --id github:mira-p"}},
 		{"unknown person", []string{"@ghost", "github", "ghost"}, th.ExitNotFound, []string{"E_NOT_FOUND"}},
 	}
 	for _, c := range refusals {
@@ -311,14 +311,14 @@ func (o *orgScen) orgAdminSetup(t *testing.T) {
 // the solo setup are refused and write nothing; resend prints the same
 // line; revoke asks first, then the revoked invite answers E_INVITE_REVOKED
 // and an accepted-or-revoked invite is no longer pending. The line holds no
-// secret and `lore setup join <line> --json` decodes it without a page.
+// secret and `lore setup join --invite <line> --json` decodes it without a page.
 func TestOrgTeamInvitesFromAnAdminSetup(t *testing.T) {
 	o := newOrgScen(t)
 	o.mira.SetNow(orgDay(t, "2026-11-02"))
 	o.orgAdminSetup(t)
 
 	carol := o.app.MustLore("team", "invite", "carol@example.com", "--role", "dev,reviewer", "--project", "app").
-		Says(t, "written to store", "expires 2026-11-16", "Send this to carol@example.com (it holds no secret)", "lore setup join lore-invite:v1:")
+		Says(t, "written to store", "expires 2026-11-16", "Send this to carol@example.com (it holds no secret)", "lore setup join --invite lore-invite:v1:")
 	line := regexp.MustCompile(`lore-invite:v1:[A-Za-z0-9_-]+`).FindString(carol.Stdout)
 	if line == "" {
 		t.Fatalf("no invite line in %q", carol.Stdout)
@@ -348,7 +348,7 @@ func TestOrgTeamInvitesFromAnAdminSetup(t *testing.T) {
 		code int
 		say  []string
 	}{
-		{"second pending for the same email", []string{"team", "invite", "carol@example.com"}, orgExitBadInput, []string{"E_INVALID_INPUT", "still pending", "lore team invite resend carol@example.com"}},
+		{"second pending for the same email", []string{"team", "invite", "carol@example.com"}, orgExitBadInput, []string{"E_INVALID_INPUT", "still pending", "lore team invite resend --ref carol@example.com"}},
 		{"role without project", []string{"team", "invite", "eve@example.com", "--role", "dev"}, orgExitBadInput, []string{"E_INVALID_INPUT", "no --project is given"}},
 		{"lifetime past 90 days", []string{"team", "invite", "eve@example.com", "--expires", "91d"}, orgExitBadInput, []string{"E_INVALID_INPUT"}},
 		{"from the solo setup", []string{"--setup", "personal", "team", "invite", "eve@example.com"}, th.ExitRefused, []string{"E_REFUSED", "solo setup", "--setup <an admin setup>"}},

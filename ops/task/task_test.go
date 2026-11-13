@@ -67,7 +67,7 @@ func TestTextMatchesV017(t *testing.T) {
 	check("edit", opstest.Text(h.Must(opstask.OpEdit, `{"id":"`+fifth+`","priority":"low"}`)), "✓ tsk_ID updated\n")
 	// Delta: v0.1.17 printed "deleted (hard)"; DQ8 every delete is soft, so
 	// the line names the trash and the restore command.
-	check("delete", opstest.Text(h.MustYes(opstask.OpDelete, `{"id":"`+fifth+`"}`)), "✓ tsk_ID moved to the trash (restore: lore trash restore tsk_ID)\n")
+	check("delete", opstest.Text(h.MustYes(opstask.OpDelete, `{"id":"`+fifth+`"}`)), "✓ tsk_ID moved to the trash (restore: lore trash restore --target tsk_ID)\n")
 	check("empty list", opstask.ListOut{}.Text(), "(no tasks)\n")
 }
 
@@ -115,7 +115,7 @@ func TestNotFoundAndBadIDs(t *testing.T) {
 			}
 			_, err := h.RunYes(name, in)
 			if id == gone { // DELETION 3.2: a trashed task says where it is
-				if !errs.Has(err, errs.InTrash) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore "+id) {
+				if !errs.Has(err, errs.InTrash) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --target "+id) {
 					t.Errorf("%s %s: %v, want E_IN_TRASH", name, id, err)
 				}
 				continue

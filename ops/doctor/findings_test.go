@@ -157,7 +157,7 @@ func TestFindingFixes(t *testing.T) {
 	b.Warnings = []string{
 		"acme: unpushed store work (2 rows); `lore sync` pushes it",
 		"a credential is in git remote origin; remove it: git remote set-url origin git@x:y",
-		"quarantined metadata: dec dec_1: bad (fix with lore meta set dec_1 …, or lore meta unset)",
+		"quarantined metadata: dec dec_1: bad (fix with lore meta set --id dec_1 --pair …, or lore meta unset)",
 	}
 	runs := []CheckRun{{Check: "rendered_copy", Findings: []Finding{{Check: "rendered_copy", Level: LevelWarning, Line: "rendered_copy: .lore/LORE.md is stale; fix: lore render", Fix: "lore render"}}}}
 	env := &fakeEnv{host: &fakeHost{base: b}, runs: runs}
@@ -213,8 +213,8 @@ func TestRunnableFix(t *testing.T) {
 		{"lore render", []string{"lore", "render"}},
 		{"run `lore sync` now", []string{"lore", "sync"}},
 		{"lore config fmt", []string{"lore", "config", "fmt"}},
-		{"lore setup enable <name>", nil},
-		{"lore meta set dec_1 …", nil},
+		{"lore setup enable --name <name>", nil},
+		{"lore meta set --id dec_1 --pair …", nil},
 		{"git remote set-url origin x", nil},
 		{"lore render; rm -rf /", nil},
 		{"lore", nil},

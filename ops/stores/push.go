@@ -249,8 +249,8 @@ func pushOps(m Manager) []op.Entry {
 			Name: OpSet, Summary: "Set a store's push mode and history compaction (me, an org store as its admin, or a .lore/stores.yaml store)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: pushErrors,
 			Examples: []op.Example{
-				{Title: "batch the personal store's pushes", CLI: "lore store set me push=batch push_every=10m", Want: "push batch every 10m"},
-				{Title: "compact an org store's history older than 30 days", CLI: "lore store set team compact=on compact_after=30d", Want: "compact on after 30d"},
+				{Title: "batch the personal store's pushes", CLI: "lore store set --store me --settings push=batch --settings push_every=10m", Want: "push batch every 10m"},
+				{Title: "compact an org store's history older than 30 days", CLI: "lore store set --store team --settings compact=on --settings compact_after=30d", Want: "compact on after 30d"},
 			},
 		}, func(ctx context.Context, in SetIn) (PushView, error) {
 			p, err := pusher(m, "set")
@@ -268,8 +268,8 @@ func pushOps(m Manager) []op.Entry {
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: pushErrors,
 			Confirm: op.ConfirmRule{MayAsk: true, PersonOnlyEligible: true},
 			Examples: []op.Example{
-				{Title: "see what would be squashed", CLI: "lore store compact me --before 30d --dry-run", Want: ""},
-				{Title: "compact the personal store", CLI: "lore store compact me --yes", Want: ""},
+				{Title: "see what would be squashed", CLI: "lore store compact --store me --before 30d --dry-run", Want: ""},
+				{Title: "compact the personal store", CLI: "lore store compact --store me --yes", Want: ""},
 			},
 		}, func(ctx context.Context, in CompactIn) (CompactOut, error) {
 			p, err := pusher(m, "compact")
@@ -344,8 +344,8 @@ func pushNowOp(m Manager) op.Entry {
 		// --restore writes every old row into the remote someone reset: it asks.
 		Confirm: op.ConfirmRule{MayAsk: true, PersonOnlyEligible: true, NoSecretFindings: true},
 		Examples: []op.Example{
-			{Title: "push the personal store now", CLI: "lore store push me", Want: ""},
-			{Title: "put the local copy back into a reset remote", CLI: "lore store push team --restore --yes", Want: ""},
+			{Title: "push the personal store now", CLI: "lore store push --store me", Want: ""},
+			{Title: "put the local copy back into a reset remote", CLI: "lore store push --store team --restore --yes", Want: ""},
 		},
 	}, func(ctx context.Context, in PushIn) (PushOut, error) {
 		p, ok := upgrade.As[StorePusherNow](m)

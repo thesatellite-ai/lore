@@ -55,6 +55,7 @@ func Define[In, Out any](spec Spec, run func(context.Context, In) (Out, error)) 
 	}
 	in := fieldsOf(spec.Name, reflect.TypeFor[In](), dirInput)
 	checkGroups(spec.Name, in)
+	namePositionals(spec.Name, in)
 	return &Op[In, Out]{
 		spec: spec,
 		run:  run,
@@ -415,7 +416,7 @@ func checkRequired(v reflect.Value, fields []FieldInfo) error {
 func requiredHint(f FieldInfo) string {
 	switch {
 	case f.Flag != "":
-		return "pass --" + f.Flag + " <" + f.Name + ">"
+		return "pass --" + f.Flag + ` "<` + f.Name + `>"`
 	case f.Arg != NoArg:
 		return "give " + f.Name + " as argument " + strconv.Itoa(f.Arg+1)
 	default:

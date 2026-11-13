@@ -131,7 +131,7 @@ func (e *Engine) resourceIntoClient(ctx context.Context, to store.Source, id ids
 	}
 	if len(quarantined) > 0 {
 		return nil, nil, errs.New(errs.ResourceQuarantined, ""+id.String()+" has invalid fields: "+strings.Join(quarantined, "; ")+"; fix them before moving; nothing written").
-			WithHint("lore resource lint shows the fix; lore resource edit <name> --set <field>=<value>")
+			WithHint("lore resource lint shows the fix; lore resource edit --id <name> --set <field>=<value>")
 	}
 	if len(leaks) > 0 {
 		// A leak and an internal value together: one refusal listing both,
@@ -141,11 +141,11 @@ func (e *Engine) resourceIntoClient(ctx context.Context, to store.Source, id ids
 	}
 	if len(internal) > 0 {
 		return nil, nil, errs.New(errs.ResourceInternal, "moving "+id.String()+" into client repo "+string(to)+": "+strings.Join(internal, "; ")+"; nothing written").
-			WithHint("lore move " + id.String() + " --to " + string(to) + " --drop-internal (removes them), or unset them first")
+			WithHint("lore move --id " + id.String() + " --to " + string(to) + " --drop-internal (removes them), or unset them first")
 	}
 	if len(sensitive) > 0 && !Confirmed(ctx) {
 		return nil, nil, errs.New(errs.NeedsConfirm, "move "+id.String()+" into the client repo "+string(to)+"? everyone with access to it can read the sensitive field(s) "+strings.Join(sensitive, ", ")).
-			WithHint("lore move " + id.String() + " --to " + string(to) + " --yes")
+			WithHint("lore move --id " + id.String() + " --to " + string(to) + " --yes")
 	}
 	if len(warns) == 0 {
 		return fields, nil, nil

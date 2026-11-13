@@ -188,7 +188,7 @@ func (e engine) ops() []op.Entry {
 		op.Define(op.Spec{
 			Name: OpReveal, Summary: "Show one of lore's files in the file manager (Finder): lore_home, config_file or repo_lore; never another path",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: errCodes, Local: true,
-			Examples: []op.Example{{Title: "show config.yaml in Finder", CLI: "lore machine reveal config_file", Want: ""}},
+			Examples: []op.Example{{Title: "show config.yaml in Finder", CLI: "lore machine reveal --target config_file", Want: ""}},
 		}, e.reveal),
 		op.Define(op.Spec{
 			Name: OpPathList, Summary: "List the paths of lore's own files on this machine (lore home, config.yaml, this repo's .lore)",

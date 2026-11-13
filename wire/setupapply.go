@@ -841,7 +841,7 @@ func openOrgFolderApp(ctx context.Context, opts Options, org string, one attach.
 		}
 		e := cfg.FindOrg(org)
 		if e == nil {
-			return nil, errs.New(errs.NotFound, "no org named "+org+" in ~/.lore/"+ConfigFile).WithHint("lore org import <store url> --as " + org)
+			return nil, errs.New(errs.NotFound, "no org named "+org+" in ~/.lore/"+ConfigFile).WithHint("lore org import --url <store-url> --as " + org)
 		}
 		return &identity.Org{Name: e.Name, Identity: identity.Entry{Key: e.Identity.Key, Name: e.Identity.Name, Handle: e.Identity.Handle}}, nil
 	}
@@ -923,7 +923,7 @@ func (s setupStore) OrgStoreURLs(_ context.Context, org string) ([]string, bool,
 	return urls, true, nil
 }
 
-// memberOrg resolves a member join's answer (`lore setup join <org or store url>`):
+// memberOrg resolves a member join's answer (`lore setup join --invite <org-or-store-url>`):
 // an org entry on this machine, or the org's store url (imported first
 // when no entry names it, the entry named as the store suggests). It
 // returns the entry name and its store url.
@@ -931,7 +931,7 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 	answer = strings.TrimSpace(answer)
 	if answer == "" {
 		return "", "", errs.New(errs.InvalidInput, "setup join: name the org (or its store url), or paste an invite line").
-			WithHint("lore setup join <the org's store url>")
+			WithHint("lore setup join --invite <store-url>")
 	}
 	if !strings.ContainsAny(answer, ":/") {
 		o, err := ap.a.TeamOrigin(ctx, answer)

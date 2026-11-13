@@ -49,7 +49,7 @@ func TestAddMetaNearDuplicateWarns(t *testing.T) {
 		want  map[string]string // field -> "" (no near line) or the expected near line part
 	}{
 		{[]string{"client=acme"}, map[string]string{"client": ""}},
-		{[]string{"clients=beta"}, map[string]string{"clients": "did you mean client? clients is a new key; fold it with lore meta edit clients --merge-into client"}},
+		{[]string{"clients=beta"}, map[string]string{"clients": "did you mean client? clients is a new key; fold it with lore meta edit --id clients --merge-into client"}},
 		{[]string{"client=gamma"}, map[string]string{}},
 		{[]string{"env=prod"}, map[string]string{"env": ""}},
 		{[]string{"owner=x"}, map[string]string{"owner": ""}},

@@ -245,7 +245,7 @@ func Next(in Input) Result {
 			continue
 		}
 		if t.Gated {
-			res.Waiting = append(res.Waiting, Waiting{Task: t, Kind: WaitGate, Reason: fmt.Sprintf("gate needs approval (lore gate approve %s)", t.ID)})
+			res.Waiting = append(res.Waiting, Waiting{Task: t, Kind: WaitGate, Reason: fmt.Sprintf("gate needs approval (lore gate approve --id %s)", t.ID)})
 			continue
 		}
 		switch t.Claim {
@@ -363,7 +363,7 @@ func ancestorWait(t Task, byID map[string]Task) (Waiting, bool) {
 			return Waiting{Task: t, Kind: WaitDependency, Reason: "waits: parent " + anc.ID + " " + reason}, true
 		}
 		if anc.Gated {
-			return Waiting{Task: t, Kind: WaitGate, Reason: fmt.Sprintf("parent %s gate needs approval (lore gate approve %s)", anc.ID, anc.ID)}, true
+			return Waiting{Task: t, Kind: WaitGate, Reason: fmt.Sprintf("parent %s gate needs approval (lore gate approve --id %s)", anc.ID, anc.ID)}, true
 		}
 		p = anc.ParentID
 	}

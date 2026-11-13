@@ -300,7 +300,7 @@ func TestDoctorBreak_TriageOwnerNamesNobody(t *testing.T) {
 	p.c.MustLore("policy", "set", "tasks.triage_owner", "@nobody-here", "--yes")
 	rep, res := p.doctor(t)
 	if rep.Status != "degraded" || !hasLine(rep.Warnings,
-		"triage_owner: tasks.triage_owner is @nobody-here, which matches no actor; no inbox lists proposed tasks; fix: lore policy set tasks.triage_owner <id or @handle> --to team") {
+		"triage_owner: tasks.triage_owner is @nobody-here, which matches no actor; no inbox lists proposed tasks; fix: lore policy set --key tasks.triage_owner --value <id or @handle> --to team") {
 		t.Fatalf("an unknown triage owner: %s", res)
 	}
 	// The fix names an actor by id (whoami's actor_id), as the hint says.

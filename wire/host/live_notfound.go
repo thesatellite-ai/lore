@@ -27,15 +27,19 @@ import (
 const missingPersonalStore = "no store named " + orgconf.TargetMe + " is attached"
 
 // personalStoreHint is what a person runs before `--to me` works.
-const personalStoreHint = "your personal store is not set up: run `lore store init me` (a local folder) or `lore store init me <url>`, then run the command again"
+const personalStoreHint = "your personal store is not set up: run `lore store init --name me` (a local folder) or `lore store init --name me --url <url>`, then run the command again"
 
 // firstArg is the operation's first positional argument as the caller gave
-// it: the CLI's Args[0], or over `lore api` (no Args) the JSON member of the
+// it: on the CLI the decoded value of that field (by its flag, `--id
+// tsk_…`, or by position: U-4), or over `lore api` (no Args) the JSON member of the
 // input field at argument 0 (the {id} of the route, rest.input). Without
 // the REST form a request for a purged or not-yet-landed id answered a bare
 // E_NOT_FOUND while the CLI said E_PURGED or gave the `lore sync peek`
 // hint (ONE OPERATION SPEC). "" when there is none.
 func firstArg(run *Run) string {
+	if _, ok := run.Decoder.(op.ArgsDecoder); ok {
+		return decodedFirstArg(run) // U-4: given as --id or by position
+	}
 	if len(run.Args) > 0 {
 		return run.Args[0]
 	}
@@ -56,6 +60,31 @@ func firstArg(run *Run) string {
 			return ""
 		}
 		return v
+	}
+	return ""
+}
+
+// decodedFirstArg is the value of the operation's first positional field
+// as decoded from the CLI flags (`lore task show --id tsk_…`, U-4), "" when
+// it has none or the input does not decode.
+func decodedFirstArg(run *Run) string {
+	name := ""
+	for _, f := range run.Entry.InputFields() {
+		if f.Arg == 0 {
+			name = f.Name
+		}
+	}
+	if name == "" {
+		return ""
+	}
+	in, err := run.Entry.Decode(run.Decoder)
+	if err != nil {
+		return ""
+	}
+	for _, tv := range in.Texts() {
+		if tv.Field == name {
+			return tv.Text
+		}
 	}
 	return ""
 }
@@ -169,7 +198,7 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 			}
 		}
 	}
-	peek := "lore sync peek " + remote + "/" + branch + " " + table
+	peek := "lore sync peek --ref " + remote + "/" + branch + " --table " + table
 	return e.WithHint("it may have landed on " + branch + " while this branch is older: `" + peek + "`")
 }
 

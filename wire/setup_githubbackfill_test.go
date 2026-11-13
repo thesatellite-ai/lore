@@ -3,7 +3,7 @@ package wire_test
 // OWN7-5 (owner 2026-11-10): the first unchanged GitHub save fills route
 // and key_fingerprint on an entry saved before they were recorded (a
 // config written by an earlier lore: github {user, host_alias} only).
-// Before, `lore setup edit <name> --github-user <same>` compared the
+// Before, `lore setup edit --name <name> --github-user <same>` compared the
 // edited entry with the old one, found them equal and wrote nothing, so
 // the old entry never got a fingerprint and github.key_matches had
 // nothing to compare. Later unchanged saves stay no-ops, and a recorded

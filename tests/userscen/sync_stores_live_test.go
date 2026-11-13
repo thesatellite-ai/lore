@@ -188,7 +188,7 @@ func TestSyncStores_BranchesAndOpen(t *testing.T) {
 		}
 	}
 
-	a.Lore("store", "open", "nope").Fails(t, th.ExitNotFound, "E_NOT_FOUND", "no store named nope", "lore store open <url>")
+	a.Lore("store", "open", "nope").Fails(t, th.ExitNotFound, "E_NOT_FOUND", "no store named nope", "lore store open --url <url>")
 	a.Lore("store", "open", "notes", "--branch", "nope").Fails(t, 20, "E_INVALID_INPUT", "has no branch nope")
 	if r.Has("refs/heads/nope") {
 		t.Fatal("store open never creates a branch")

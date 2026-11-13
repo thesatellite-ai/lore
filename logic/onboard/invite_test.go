@@ -34,7 +34,7 @@ func TestInviteRoundTrip(t *testing.T) {
 	}
 	want := sampleInvite()
 	want.V = InviteVersion
-	for _, in := range []string{line, "  " + line + "\n", "lore setup join " + line, line + "=="} {
+	for _, in := range []string{line, "  " + line + "\n", "lore setup join --invite " + line, line + "=="} {
 		got, err := DecodeInvite(in)
 		if err != nil {
 			t.Fatalf("decode %q: %v", in, err)

@@ -134,10 +134,10 @@ func (o ops) bulkRun(ctx context.Context, d kindDef, hits []located, dry bool, w
 	for i, r := range hits {
 		if err = one(bctx, r); err != nil {
 			return RowOut{}, errors.Join(err, errs.New(errs.ResourceInvalid, "resource "+what+": stopped after "+strconv.Itoa(i)+
-				" of "+plural.Count(len(hits), "row")+"; the rows written are in batch "+out.Batch+" (undo: lore batch undo "+out.Batch+")"))
+				" of "+plural.Count(len(hits), "row")+"; the rows written are in batch "+out.Batch+" (undo: lore batch undo --id "+out.Batch+")"))
 		}
 	}
-	out.Human = fmt.Sprintf("%s %d %s resources; batch %s (undo: lore batch undo %s)\n", what, len(hits), d.name(), out.Batch, out.Batch)
+	out.Human = fmt.Sprintf("%s %d %s resources; batch %s (undo: lore batch undo --id %s)\n", what, len(hits), d.name(), out.Batch, out.Batch)
 	return out, nil
 }
 

@@ -114,7 +114,7 @@ func TestFolderTargetConfirmThenCreate(t *testing.T) {
 	// the bare shortcut says which org folder is missing, a folder under a
 	// reserved word is no attached store. Nothing is written either way.
 	for _, c := range []struct{ to, msg, hint string }{
-		{"team", "--to team: this repository has no org store folder linked to it", "lore org link <org> --project <folder>"},
+		{"team", "--to team: this repository has no org store folder linked to it", "lore org link --org <org> --project <folder>"},
 		{"company", "--to company: this repository has no org store org folder", "--to <store>/<folder>"},
 		{"team/x", "no store named team/x is attached", ""},
 		{"company/x", "no store named company/x is attached", ""},

@@ -83,28 +83,28 @@ func Ops(env kn.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show decision details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore decision show dec_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore decision show --id dec_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(kn.ReadErrors), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit decision fields (only the flags given change)",
-			Examples:   []op.Example{{Title: "change the body", CLI: `lore decision edit dec_<id> --body "the new text"`, Want: "dec_"}},
+			Examples:   []op.Example{{Title: "change the body", CLI: `lore decision edit --id dec_<id> --body "the new text"`, Want: "dec_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: refErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a decision (hidden from render and search; kept)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore decision archive dec_<id>", Want: "archived"}},
+			Examples:   []op.Example{{Title: "archive one", CLI: "lore decision archive --id dec_<id>", Want: "archived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 		}, o.archive),
 		op.Define(op.Spec{
 			Name: OpUnarchive, Summary: "Bring an archived decision back",
-			Examples:   []op.Example{{Title: "bring it back", CLI: "lore decision unarchive dec_<id>", Want: "unarchived"}},
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore decision unarchive --id dec_<id>", Want: "unarchived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 		}, o.unarchive),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a decision (it goes to the trash; lore trash restore brings it back)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore decision delete dec_<id> --yes", Want: "dec_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore decision delete --id dec_<id> --yes", Want: "dec_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, o.delete).Asks(func(ctx context.Context, in DeleteIn) (string, error) {
@@ -112,7 +112,7 @@ func Ops(env kn.Env) []op.Entry {
 		}),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search over decisions of every attached store",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore decision search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore decision search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.SearchErrors,
 		}, o.search),
 	}
@@ -124,8 +124,8 @@ type AddIn struct {
 	engine.MetaFlags
 
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
-	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
-	Text       string   `json:"text,omitempty" arg:"0" desc:"the decision body, instead of --body"`
+	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
+	Text       string   `json:"text,omitempty" arg:"0" argof:"body" desc:"the decision body, instead of --body"`
 	Status     string   `json:"status,omitempty" flag:"status" desc:"proposed | accepted | superseded | deprecated (default accepted)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance"`

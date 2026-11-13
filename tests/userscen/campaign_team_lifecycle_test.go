@@ -63,7 +63,7 @@ func TestCampaignTeam_ContactReversePath(t *testing.T) {
 			if _, ok := teamContactByValue(teamContacts(t, o.app, "@bob"), v.value); ok {
 				t.Fatal("a removed contact is not listed")
 			}
-			o.app.Lore("actor", "contact", "remove", id).Fails(t, th.ExitRefused, "E_IN_TRASH", "lore trash restore "+id)
+			o.app.Lore("actor", "contact", "remove", id).Fails(t, th.ExitRefused, "E_IN_TRASH", "lore trash restore --target "+id)
 			o.app.MustLore("trash", "list").Says(t, id, "actor_contacts")
 			o.app.MustLore("trash", "restore", id).Says(t, "restored 1 row", id)
 			if c, ok := teamContactByValue(teamContacts(t, o.app, "@bob"), v.value); !ok || c.ID != id || c.Label != "שלום עולם" {
@@ -133,7 +133,7 @@ func TestCampaignTeam_WorkspaceReversePath(t *testing.T) {
 			if listed() {
 				t.Fatal("a deleted workspace is not listed")
 			}
-			c.Lore("workspace", "delete", id, "--yes").Refused(t, "E_IN_TRASH", "lore trash restore "+id)
+			c.Lore("workspace", "delete", id, "--yes").Refused(t, "E_IN_TRASH", "lore trash restore --target "+id)
 			c.MustLore("trash", "restore", id).Says(t, id)
 			if !listed() || show().Name != n.title+" v2" {
 				t.Fatal("restore brings back the edited workspace")
@@ -246,7 +246,7 @@ func TestCampaignTeam_DeactivateSomeoneWhoLeft(t *testing.T) {
 	o.app.MustLore("actor", "offboard", "@bob", "--yes")
 	before := o.notes.Rev("refs/heads/main")
 	for range 2 {
-		o.app.Lore("actor", "deactivate", "@bob").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "Bob Roe (@bob)", "left", "lore actor rejoin @bob").
+		o.app.Lore("actor", "deactivate", "@bob").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "Bob Roe (@bob)", "left", "lore actor rejoin --actor @bob").
 			Never(t, "no one is @bob")
 	}
 	if o.notes.Rev("refs/heads/main") != before {

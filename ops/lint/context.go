@@ -108,12 +108,12 @@ func contextFindings(all map[row.Table][]sourced) []Finding {
 		if text(p.s.r, schema.FieldSummary) == "" && p.noun == "rule" {
 			out = append(out, Finding{Code: NoSummary, ID: id, Store: string(p.s.src),
 				Message: "pinned rule has no summary; its line form is the first sentence (CQ4)",
-				Fix:     "lore " + p.noun + " edit " + id + " --summary \"...\""})
+				Fix:     "lore " + p.noun + " edit --id " + id + " --summary \"...\""})
 		}
 		if len(body) > entryMax {
 			out = append(out, Finding{Code: EntryTooLong, ID: id, Store: string(p.s.src),
 				Message: "body is longer than context.entry_max (1,500 bytes), so LORE.md shows only its line",
-				Fix:     "split it, or add a summary: lore " + p.noun + " edit " + id + " --summary \"...\""})
+				Fix:     "split it, or add a summary: lore " + p.noun + " edit --id " + id + " --summary \"...\""})
 		}
 		if p.noun == "rule" && text(p.s.r, fGlobs) == "" {
 			if m := codePath.FindStringSubmatch(stripCode(body)); m != nil {
@@ -123,7 +123,7 @@ func contextFindings(all map[row.Table][]sourced) []Finding {
 				}
 				out = append(out, Finding{Code: PathNoGlobs, ID: id, Store: string(p.s.src),
 					Message: "names the code path " + m[1] + " but has no globs, so it loads everywhere",
-					Fix:     "lore rule edit " + id + " --activation glob --globs '[\"" + strings.TrimSuffix(dir, "/") + "/**\"]'"})
+					Fix:     "lore rule edit --id " + id + " --activation glob --globs '[\"" + strings.TrimSuffix(dir, "/") + "/**\"]'"})
 			}
 		}
 		if len(listItems(p.s.r, schema.FieldTagIDs)) == 0 {
@@ -131,7 +131,7 @@ func contextFindings(all map[row.Table][]sourced) []Finding {
 				Message: "pinned but untagged, so it is under (no topic) in the index",
 				// `lore tag add` only creates a tag (--name); the edit's --tag
 				// attaches an existing one.
-				Fix: "lore " + p.noun + " edit " + id + " --tag <tag> (create a new tag first: lore tag add --name=<tag>)"})
+				Fix: "lore " + p.noun + " edit --id " + id + " --tag <tag> (create a new tag first: lore tag add --name=<tag>)"})
 		}
 	}
 	return append(out, nearDuplicates(pinned)...)

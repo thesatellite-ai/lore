@@ -225,7 +225,7 @@ func ImportOps(env work.Env) []op.Entry {
 			// XQ2: the preview asks above batch.preview_rows, after
 			// counting the rows; MayAsk gives the command --yes.
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "import a CSV", CLI: "lore task import --from csv tasks.csv --yes", Want: "imported"}},
+			Examples: []op.Example{{Title: "import a CSV", CLI: "lore task import --from csv --file tasks.csv --yes", Want: "imported"}},
 		}, o.importTasks),
 	}
 }
@@ -1011,7 +1011,7 @@ type DuplicateImport struct {
 func (d DuplicateImport) FixCommand() []string {
 	out := make([]string, 0, len(d.IDs)-1)
 	for _, id := range d.IDs[1:] {
-		out = append(out, "lore task delete "+id+" --yes")
+		out = append(out, "lore task delete --id "+id+" --yes")
 	}
 	return out
 }

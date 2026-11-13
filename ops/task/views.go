@@ -381,7 +381,7 @@ func (o ops) stale(ctx context.Context, in StaleIn) (StaleOut, error) {
 		}
 	}
 	out.Closed, out.Batch = true, batch.String()
-	out.Human = work.Success + " " + strconv.Itoa(len(hits)) + " tasks cancelled (close_reason stale, batch " + batch.String() + "); lore batch show " + batch.String() + "\n"
+	out.Human = work.Success + " " + strconv.Itoa(len(hits)) + " tasks cancelled (close_reason stale, batch " + batch.String() + "); lore batch show --id " + batch.String() + "\n"
 	return out, nil
 }
 

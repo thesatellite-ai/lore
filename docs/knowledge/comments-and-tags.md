@@ -56,14 +56,14 @@ lore: wrote ~/work/website/.lore/data/decisions/dec_76bd…3f10.json
 
 ## Step 3 — Search and delete comments
 
-`lore comment search <words>` searches the text of every comment. `lore comment delete <id> --yes` moves a comment to the trash; `lore trash restore <id>` brings it back.
+`lore comment search --query <words>` searches the text of every comment. `lore comment delete --id <id> --yes` moves a comment to the trash; `lore trash restore --target <id>` brings it back.
 
 <!-- example: knowledge#comment only=3,4 -->
 ```console
 # alice, in website
-$ lore comment search confirmed
+$ lore comment search --query confirmed
 cmt_06b1…3d1c [decisions/dec_76bd…3f10] The client confirmed this on the call.
-$ lore comment delete cmt_06b1…3d1c --yes
+$ lore comment delete --id cmt_06b1…3d1c --yes
 lore: wrote ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json
 ✓ cmt_06b1…3d1c moved to the trash (restore: lore trash restore cmt_06b1…3d1c)
 lore live: (live, pushed) commit 05513aa to origin refs/lore/live
@@ -73,12 +73,12 @@ lore live: landed on main (dfd8dc8); leaves live once main is fetched
 
 ## Step 4 — Rename a tag or give it files
 
-`lore tag edit <tag>` changes a tag's `--name`, `--color` (`#RRGGBB`) or `--globs`, the files the topic covers (comma separated; `-` clears it). Tagged rows keep the tag, because they point at its id, not its name. You can name the tag by its name or its `tag_` id.
+`lore tag edit --id <tag>` changes a tag's `--name`, `--color` (`#RRGGBB`) or `--globs`, the files the topic covers (comma separated; `-` clears it). Tagged rows keep the tag, because they point at its id, not its name. You can name the tag by its name or its `tag_` id.
 
 <!-- example: knowledge#tag-edit -->
 ```console
 # alice, in website
-$ lore tag edit payments --name billing --color '#1f6feb' --globs 'src/checkout/**'
+$ lore tag edit --id payments --name billing --color '#1f6feb' --globs 'src/checkout/**'
 lore: wrote ~/work/website/.lore/data/tags/tag_7289…c813.json
 ✓ tag billing tag_7289…c813 (globs src/checkout/**)
 $ lore tag list

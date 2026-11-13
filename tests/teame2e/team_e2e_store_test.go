@@ -807,7 +807,7 @@ func TestRecipe12_InternalTasksNeverReachClient(t *testing.T) {
 //
 // Q8 (coordinator, changed): `lore org link` never creates a missing store
 // branch, because a typo in the branch name would silently start a new lore;
-// it refuses with a hint, and `lore store init <url> --branch staging`
+// it refuses with a hint, and `lore store init --name <url> --branch staging`
 // creates the branch explicitly as a parentless commit (C2).
 func TestRecipe13_StagingLoreIsSeparate(t *testing.T) {
 	a := newAgency(t, th.Cmd("org", "use"), th.Flag("to", "task", "add"), th.Cmd("store", "init"), th.Flag("from", "task", "done"))

@@ -311,9 +311,9 @@ func Ops(env Env) []op.Entry {
 			Name: OpRun, Summary: "Unified full-text search across all entities (fans out per entity + RRF-merges)",
 			Permission: op.PermRead, Access: op.AccessRead, RESTNoun: restNoun, Errors: readErrs,
 			Examples: []op.Example{
-				{Title: "search every kind", CLI: `lore search "invoice rounding"`, Want: "hit"},
-				{Title: "deploy, but not the rows that mention friday", CLI: `lore search "deploy -friday"`, Want: "hit"},
-				{Title: "only rules and memories", CLI: `lore search deploy --tables rule,memory --json`, Want: "search.global"},
+				{Title: "search every kind", CLI: `lore search --query "invoice rounding"`, Want: "hit"},
+				{Title: "deploy, but not the rows that mention friday", CLI: `lore search --query "deploy -friday"`, Want: "hit"},
+				{Title: "only rules and memories", CLI: `lore search --query deploy --tables rule,memory --json`, Want: "search.global"},
 			},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) { return run(ctx, env, in) }),
 		op.Define(op.Spec{

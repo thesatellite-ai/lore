@@ -16,7 +16,7 @@ import (
 func (a *App) MetaStatusLines(ctx context.Context) (quarantined, overCap []string) {
 	if qs, err := a.MetaQuarantined(ctx); err == nil {
 		for _, q := range qs {
-			quarantined = append(quarantined, q.Table+" "+q.ID+": "+strings.Join(q.Problems, "; ")+" (fix with lore meta set "+q.ID+" …, or lore meta unset)")
+			quarantined = append(quarantined, q.Table+" "+q.ID+": "+strings.Join(q.Problems, "; ")+" (fix with lore meta set --id "+q.ID+" …, or lore meta unset)")
 		}
 	}
 	if over, err := opssettings.RegistriesOverCap(ctx, a); err == nil {

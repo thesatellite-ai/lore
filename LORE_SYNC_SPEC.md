@@ -110,7 +110,7 @@ Found while building it: the first `ProbeMerge` used plain `git merge-tree`, whi
 
 - **One gate:** `task check` runs build, then lint (vet, gofmt, staticcheck, six-target cross-build), `go mod tidy -diff`, `ds check`, every package's tests and the race detector on the concurrent packages in parallel, then every end-to-end suite (userscen, team, setup page, scenarios, chaos, docs examples) in parallel, and stamps the tested tree. The committed `.githooks/pre-push` (enabled by `task lore:hooks:install`) runs it unless it already passed for exactly the code being pushed, and refuses to push code it did not test. Pinned by `prepush_hook_test.go`.
 - **True coverage:** `task lore:test:cover` builds the end-to-end binary with `-cover` (`LORE_E2E_COVERDIR`), so subprocess runs count. Measured with the shell scenarios too, CLI functions reached by no test went from 81 of 543 to 0 of 550 (`usecases_{tasks,misc,bench}_test.go`, every function mutation-checked).
-- **Docs drift gate extended:** `TestDocsMatchCLI` now checks positional arguments (cobra `ValidateArgs`) and flag values. It found 55 examples passing body text positionally (`lore memory add "…"`), which every body-primary command refuses; all fixed, and those commands now declare `Args: bodyOnlyArgs` so the rule is visible to cobra and the test.
+- **Docs drift gate extended:** `TestDocsMatchCLI` now checks positional arguments (cobra `ValidateArgs`) and flag values. It found 55 examples passing body text positionally (`lore memory add --body "…"`), which every body-primary command refuses; all fixed, and those commands now declare `Args: bodyOnlyArgs` so the rule is visible to cobra and the test.
 
 | Bug found by the new tests | Fix |
 |---|---|
@@ -169,7 +169,7 @@ Real per-command overhead at 2k rows (`lore tag list`): 64 ms with sync on vs 42
 | File id ≠ file name (E30) | trust the content; `doctor --fix` renames | refuse to import; report on every pass | Loud beats clever; renaming is a one-line manual fix |
 | `min_lore_version` (E45) | in `_meta.json` | not added: every row file carries `_v`, and older binaries refuse newer files per file | Same protection without an extra field |
 | Duplicate detection (E48) | similarity | exact match after case and whitespace normalisation (`lore sync dupes`), folded with `lore sync merge-rows` | Similarity is a judgement call; exact duplicates are the common case after adopt |
-| P7 items | later | shipped: `peek` (the Q1 cross-branch view, as `lore sync peek <ref>`), `promote`, `purge` | All phases were requested |
+| P7 items | later | shipped: `peek` (the Q1 cross-branch view, as `lore sync peek --ref <ref>`), `promote`, `purge` | All phases were requested |
 
 ## 1. Problem
 
@@ -609,7 +609,7 @@ As built, the numbers behind E28 and E32 are named constants: a pass waits up to
 |---|---|---|
 | E37 | Developer forgets to commit `.lore/data` changes | Every lore command prints "N lore files not committed" when dirty; agents read lore output and commit them; optional pre-commit hook auto-stages. **As built:** the reminder prints after commands that wrote row files; `lore sync status` / doctor always show the count. |
 | E38 | Developer stages only specific files, leaves lore out, PR merges without its knowledge | Same warning keeps showing on their branch after merge; `lore doctor` flags "lore changes exist that are not on any pushed commit". |
-| E39 | Knowledge that must apply to every branch immediately (urgent rule) | The path is a small PR to `main` that branches then merge. **As built:** `lore sync promote <id> --to main` commits the row onto local `main` (never pushes); the push or PR stays with the user. |
+| E39 | Knowledge that must apply to every branch immediately (urgent rule) | The path is a small PR to `main` that branches then merge. **As built:** `lore sync promote --ids <id> --to main` commits the row onto local `main` (never pushes); the push or PR stays with the user. |
 | E40 | Existing projects with a populated, never-shared `lore.db` per developer | Bootstrap export + adopt, see §12. |
 
 ## 12. Existing `lore.db` files and direct DB writes
@@ -644,7 +644,7 @@ Between two commands, a row can change in the DB (via tui) AND in its file (via 
 | changed | same | export DB → file |
 | same | changed | import file → DB |
 | changed | changed, equal to DB | nothing (record new base) |
-| changed | changed, different | field-level 3-way with the §9 rules; on a text conflict the **file wins**, the DB version is saved in `sync_errors` as a conflict copy, and every command warns until `lore sync resolve <id>` is run |
+| changed | changed, different | field-level 3-way with the §9 rules; on a text conflict the **file wins**, the DB version is saved in `sync_errors` as a conflict copy, and every command warns until `lore sync resolve --id <id>` is run |
 
 Order per command: drain outbox (DB-side changes) and reconcile (file-side changes) run in one locked pass so this table is applied to the union of both change sets.
 
@@ -699,7 +699,7 @@ If two people bootstrap in parallel before either merges, both `_meta.json` file
 | E45 | A teammate still on an old lore binary keeps writing to their DB with no triggers | Their changes are invisible until they upgrade; on upgrade, ADOPT exports them (rows only in the DB) and conflict-copies any that diverged. `_meta.json` carries `min_lore_version`; future versions refuse to write below it. Rollout note: upgrade everyone in step 2 above. **As built:** no `min_lore_version` field; the per-file `_v` check gives the same protection. |
 | E46 | Existing hook manager owns `core.hooksPath` (husky, lefthook, a repo's `.githooks` like sync_go) | Append lore's marked block to that directory's scripts; never repoint `core.hooksPath` (also referenced in §10). |
 | E47 | Rows deleted on `main` (via archive) get resurrected by an old DB during ADOPT | Cannot happen for archived rows (file still exists with `archived_at`; DB row is older → file wins by `updated_at`). Can happen only after `lore sync purge` removed the file; purge therefore records purged ids in `.lore/data/_purged.json`, and ADOPT skips them. |
-| E48 | Two developers independently wrote the same knowledge with different ids (both added "use JWT") | Not auto-merged (content similarity is a judgement call). `lore sync dupes` lists rows recorded twice (same text, different ids) for a human or agent to fold with `lore sync merge-rows <table> --keep <id> --drop <id>`. |
+| E48 | Two developers independently wrote the same knowledge with different ids (both added "use JWT") | Not auto-merged (content similarity is a judgement call). `lore sync dupes` lists rows recorded twice (same text, different ids) for a human or agent to fold with `lore sync merge-rows --table <table> --keep <id> --drop <id>`. |
 | E49 | Mode B projects (`.lore/lore.toml` → shared DB) | Out of scope for v1 (Q4): bootstrap does not run when the project resolves via Mode B, and prints why once. |
 
 ## 13. Plan
@@ -715,13 +715,13 @@ All phases shipped; sync is on by default (`LORE_SYNC=0` turns it off). Per-phas
 | **P4 — merge** | `lore merge-driver` (field-level 3-way, loud on text), `lore-keep-ours` driver for `LORE.md`, `.gitattributes` writer | Harness merges with the driver AND with plain `git merge` (no driver, simulating GitHub) and asserts no silent loss in either |
 | **P5 — git wiring** | Auto-config of merge driver + `core.hooksPath` with chaining into existing hook dirs (E46 husky / `.githooks`); optional hooks | Fresh-clone test: first lore command configures everything; existing `.githooks/pre-commit` (sync_go style) still runs after lore appends |
 | **P6 — migration + default on** | BOOTSTRAP and ADOPT (§12.3) with pre-backup; both-sides-changed resolution (§12.2) and `lore sync resolve`; `backup restore --prefer` (E43); `_purged.json` (E47); `lore doctor` checks (E1, E8, E12, E30, E38, E48); `lore init` adopts existing `.lore/data`; rollout guide (§12.4); flip default | Harness: two clones with independent pre-existing `lore.db` files bootstrap + adopt, merge, and end with identical data and a clean doctor; old-binary DB adopted without loss |
-| **P7 — done** | read another branch's rows: `lore sync peek origin/feature/x [table]` (designed as `task list --ref`); `lore sync promote <id> --to <branch>`; `lore sync purge --archived-before` | e2e peek / promote / purge tests |
+| **P7 — done** | read another branch's rows: `lore sync peek --ref origin/feature/x [--table table]` (designed as `task list --ref`); `lore sync promote --ids <id> --to <branch>`; `lore sync purge --archived-before` | e2e peek / promote / purge tests |
 
 **Test harness (built in P3, used by every later phase):** a Go test helper that creates a bare "origin" repo plus two or three clones in a temp dir, runs real lore commands and real git commands in each, and asserts on the resulting DB contents. Every edge case row above gets at least one scenario in it.
 
 ## 14. Open questions — resolved
 
-The owner asked for the recommendations to be applied. As built: Q1 tasks follow branches, plus `lore sync peek <ref>` as the cross-branch view; Q2 loud conflicts for free text; Q3 actor keys committed as is (changed from the recommendation, see §0 Deltas); Q4 Mode B untouched; Q5 revisions stay local; Q6 `.lore/LORE.md` committed, merged with keep-ours and re-rendered from the merged data (verified byte-identical across clones); Q7 split as in `registry.go` (`snapshots`, `suggestions`, `handoffs`, `external_sources`, `reminders` sync; `task_views`, `learn_candidates`, `tech_doc_pages`, `trusted_plugins`, `memory_code_refs`, `drafts` stay local).
+The owner asked for the recommendations to be applied. As built: Q1 tasks follow branches, plus `lore sync peek --ref <ref>` as the cross-branch view; Q2 loud conflicts for free text; Q3 actor keys committed as is (changed from the recommendation, see §0 Deltas); Q4 Mode B untouched; Q5 revisions stay local; Q6 `.lore/LORE.md` committed, merged with keep-ours and re-rendered from the merged data (verified byte-identical across clones); Q7 split as in `registry.go` (`snapshots`, `suggestions`, `handoffs`, `external_sources`, `reminders` sync; `task_views`, `learn_candidates`, `tech_doc_pages`, `trusted_plugins`, `memory_code_refs`, `drafts` stay local).
 
 The original questions, for the record:
 

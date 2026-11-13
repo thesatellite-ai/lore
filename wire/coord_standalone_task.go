@@ -55,7 +55,7 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 	}
 	var lines []string
 	if in.Coordinate && len(opts.OpenChildren(in.ID)) > 0 {
-		lines = append(lines, fmt.Sprintf("you now coordinate %s; claim a child to work: lore task claim %s", in.ID, opts.OpenChildren(in.ID)[0]))
+		lines = append(lines, fmt.Sprintf("you now coordinate %s; claim a child to work: lore task claim --id %s", in.ID, opts.OpenChildren(in.ID)[0]))
 	}
 	if in.Strict && len(cr.Overlaps) > 0 && !cr.Plan.Resumed {
 		// The claim is taken; --strict gives it back at once.
@@ -72,7 +72,7 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 func claimLines(id string, cr coord.ClaimResult, ttl time.Duration, ref string) []string {
 	s := cr.Plan.Signal
 	if cr.Plan.Resumed {
-		return []string{fmt.Sprintf("you hold %s already (until %s); resume, or `lore task release %s`", id, s.Expires.UTC().Format(time.Kitchen), id)}
+		return []string{fmt.Sprintf("you hold %s already (until %s); resume, or `lore task release --id %s`", id, s.Expires.UTC().Format(time.Kitchen), id)}
 	}
 	extra := ""
 	if cr.Plan.Reclaim && cr.Plan.Prev != nil {
@@ -336,7 +336,7 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 		return opscoord.NextOut{Lines: lines}, coordErr(err)
 	}
 	if res.Resumed {
-		lines = append(lines, fmt.Sprintf("you hold %s; resume, or `lore task release %s`", res.Task, res.Task))
+		lines = append(lines, fmt.Sprintf("you hold %s; resume, or `lore task release --id %s`", res.Task, res.Task))
 		return opscoord.NextOut{Claimed: res.Task, Lines: lines}, nil
 	}
 	lines = append(lines, claimLines(res.Task, res.Claim, w.lease.TTL, env.Signals.Ref)...)
@@ -346,7 +346,7 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 			lines = append(lines, "    "+l)
 		}
 	}
-	lines = append(lines, "  read its notes: lore task show "+res.Task)
+	lines = append(lines, "  read its notes: lore task show --id "+res.Task)
 	return opscoord.NextOut{Claimed: res.Task, Lines: lines}, nil
 }
 

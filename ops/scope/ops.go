@@ -64,7 +64,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show the scope chain for a path: which rules apply and which file serves each level",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
-			Examples: []op.Example{{Title: "chain for a file", CLI: "lore scope show src/booking/refund.go", Want: "scope chain"}},
+			Examples: []op.Example{{Title: "chain for a file", CLI: "lore scope show --path src/booking/refund.go", Want: "scope chain"}},
 		}, o.show),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List every folder scope of this repo with its entries and file",
@@ -74,7 +74,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpMove, Summary: "Relabel a folder scope after a folder rename (ids unchanged, no row rewritten)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
-			Examples: []op.Example{{Title: "after git mv src/booking src/bookings", CLI: "lore scope move src/booking src/bookings", Want: "src/bookings"}},
+			Examples: []op.Example{{Title: "after git mv src/booking src/bookings", CLI: "lore scope move --old src/booking --new src/bookings", Want: "src/bookings"}},
 		}, o.move),
 	}
 }

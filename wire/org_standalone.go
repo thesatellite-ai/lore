@@ -53,8 +53,8 @@ const (
 	orgYAMLMode = 0o644 // committed: world-readable like every repo file
 	loreDirName = ".lore"
 	// hintNotAStore is v0.1.17's storeHintInit.
-	hintNotAStore = "make it a store with `lore store init <name> <url>`, or fix the url in ~/.lore/config.yaml"
-	hintNoBranch  = "a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)"
+	hintNotAStore = "make it a store with `lore store init --name <name> --url <url>`, or fix the url in ~/.lore/config.yaml"
+	hintNoBranch  = "a store branch is made only on purpose; 0.1.18 makes stores with `lore store init --name <name> --url <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)"
 )
 
 // standaloneOrg implements opsorgcmd.Host for cmd/lore.
@@ -93,7 +93,7 @@ func (h *standaloneOrg) needsRepo(ctx context.Context, verb, what string) error 
 		return nil
 	}
 	return errs.New(errs.NotAStore, "org "+verb+": it "+what+", and "+h.res.dir+" is not inside a git repo").
-		WithHint("cd into the repo (run `lore init` there first if it is not a lore project yet); a store's folders are made from anywhere in the setup with `lore store folder add team <folder>`")
+		WithHint("cd into the repo (run `lore init` there first if it is not a lore project yet); a store's folders are made from anywhere in the setup with `lore store folder add --store team --folder <folder>`")
 }
 
 // Use implements opsorgcmd.Host: the machine-only choice for this project.
@@ -299,7 +299,7 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 	}
 	org := s.Config.FindOrg(in.Org)
 	if org == nil {
-		hint := "this machine has no org entry yet; import the org first: lore org import <store url>"
+		hint := "this machine has no org entry yet; import the org first: lore org import --url <store-url>"
 		if names := s.Config.OrgNames(); len(names) > 0 {
 			hint = "name one of the org entries: " + strings.Join(names, ", ")
 		}
@@ -307,7 +307,7 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 	}
 	if s.ProjectID == "" {
 		return opsorgcmd.Report{}, errs.New(errs.NotProjectRoot, "no store links this repo: it has no project id (.lore/data/_meta.json) and no link names its remote").
-			WithHint("`lore whoami` says what this repo resolves to; `lore org link <org> --project <folder>` links it by its remote")
+			WithHint("`lore whoami` says what this repo resolves to; `lore org link --org <org> --project <folder>` links it by its remote")
 	}
 	g := &orgcfg.GitLinks{Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
 	found, err := g.FindLinks(ctx, org.Name, s.ProjectID, strings.Trim(in.Project, "/"))

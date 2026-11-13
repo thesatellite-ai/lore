@@ -59,7 +59,7 @@ func (a *App) DoctorKindRoutes(ctx context.Context) ([]DoctorFinding, error) {
 			n := h.name
 			out = append(out, DoctorFinding{Check: DoctorCheckKindRoute, Level: DoctorWarning, Store: src,
 				Message: "kind " + n + " (" + h.id + ") has the name of a resource command, so " + kindRoutePrefix + n + " runs lore resource " + n + " instead of the kind's routes",
-				Fix:     "lore resource kind rename " + n + " <new_name>"})
+				Fix:     "lore resource kind rename --id " + n + " --new-name <new_name>"})
 		}
 	}
 	return out, nil

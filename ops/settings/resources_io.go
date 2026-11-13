@@ -162,13 +162,13 @@ func (o ops) resourceIOOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpResImport, Summary: "Import resources from a csv, json or yaml file (one batch, all or nothing)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.ResourcePlace, errs.ResourceTaken, errs.ResourceBatch), Confirm: op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "import hosts", CLI: "lore resource import hosts.csv --kind host --yes", Want: "imported"}}}, o.resImport),
+			Examples: []op.Example{{Title: "import hosts", CLI: "lore resource import --file hosts.csv --kind host --yes", Want: "imported"}}}, o.resImport),
 		op.Define(op.Spec{Name: OpResExport, Summary: "Export resources of a kind in the import format (sensitive values masked)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}, Examples: []op.Example{{Title: "every host as CSV", CLI: "lore resource export --kind host --format csv"}}}, o.resExport),
 		op.Define(op.Spec{Name: OpResRepoint, Summary: "Move every ref from one resource to another of the same kind, then archive the old one", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceKindMismatch), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "move references to a new resource (preview)", CLI: "lore resource repoint prod_db primary_db --dry-run"}}}, o.resRepoint),
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceKindMismatch), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "move references to a new resource (preview)", CLI: "lore resource repoint --old prod_db --new primary_db --dry-run"}}}, o.resRepoint),
 		op.Define(op.Spec{Name: OpResClone, Summary: "Add a resource with another resource's values (--set overrides)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.ResourcePlace, errs.ResourceTaken), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "a staging copy of a resource", CLI: "lore resource clone prod_db staging_db --set host=staging.example.com"}}}, o.resClone),
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceName, errs.ResourcePlace, errs.ResourceTaken), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "a staging copy of a resource", CLI: "lore resource clone --from prod_db --name staging_db --set host=staging.example.com"}}}, o.resClone),
 	}
 }
 

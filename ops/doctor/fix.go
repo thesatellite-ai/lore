@@ -67,7 +67,7 @@ func fixOp(env Env) op.Entry {
 		Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
 		Confirm:  op.ConfirmRule{MayAsk: true},
 		Errors:   []errs.Code{errs.Internal, errs.Unsupported, errs.NeedsConfirm, errs.FixRefused, errs.NotFound},
-		Examples: []op.Example{{Title: "refresh a stale rendered copy doctor found", CLI: "lore doctor fix 0123456789abcdef --yes", Want: ""}},
+		Examples: []op.Example{{Title: "refresh a stale rendered copy doctor found", CLI: "lore doctor fix --finding 0123456789abcdef --yes", Want: ""}},
 	}, func(ctx context.Context, in FixIn) (FixOut, error) {
 		return Fix(ctx, env, in)
 	})

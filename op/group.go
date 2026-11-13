@@ -144,6 +144,58 @@ func (d ArgsDecoder) routeGroup(g FieldInfo) (outer map[string][]string, items [
 	return outer, items, nil
 }
 
+// routeGroupByFlag is routeGroup for a group whose items are the values
+// of its flag g.ArgOf (`lore task split --id tsk_… --title a --priority
+// high --title b`, U-4): a group flag typed after the k-th item flag (by
+// FlagSeq) is item k's, one typed before the first is shared. The item
+// flag itself leaves the outer input: its values are the items.
+func (d ArgsDecoder) routeGroupByFlag(g FieldInfo) (outer map[string][]string, items []map[string][]string, err error) {
+	headSeq := d.FlagSeq[g.ArgOf]
+	if len(headSeq) != len(d.Flags[g.ArgOf]) {
+		return nil, nil, errs.New(errs.Internal, "--"+g.ArgOf+": values and their order differ")
+	}
+	items = make([]map[string][]string, len(headSeq))
+	outer = make(map[string][]string, len(d.Flags))
+	for name, vals := range d.Flags {
+		if name != g.ArgOf {
+			outer[name] = vals
+		}
+	}
+	for _, name := range g.GroupFlags() {
+		vals, ok := d.Flags[name]
+		if !ok {
+			continue
+		}
+		seq := d.FlagSeq[name]
+		if len(seq) != len(vals) {
+			return nil, nil, errs.New(errs.Internal, "--"+name+": values and their order differ")
+		}
+		var shared []string
+		for k, v := range vals {
+			i := -1 // the last item flag typed before this value
+			for j, hs := range headSeq {
+				if hs < seq[k] {
+					i = j
+				}
+			}
+			if i < 0 {
+				shared = append(shared, v)
+				continue
+			}
+			if items[i] == nil {
+				items[i] = map[string][]string{}
+			}
+			items[i][name] = append(items[i][name], v)
+		}
+		if len(shared) == 0 {
+			delete(outer, name)
+		} else {
+			outer[name] = shared
+		}
+	}
+	return outer, items, nil
+}
+
 // decodeGroup fills the []S of group g: one item per positional from the
 // group's index, each item decoded by its own ArgsDecoder (head + flags).
 func decodeGroup(fv reflect.Value, g FieldInfo, args []string, items []map[string][]string) error {

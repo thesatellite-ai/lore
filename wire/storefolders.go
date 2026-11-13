@@ -80,7 +80,7 @@ func (a *App) refuseStoresFileOutsideRepo(ctx context.Context, name string) erro
 	}
 	verb := "store " + strings.ReplaceAll(strings.TrimPrefix(name, storeOpPrefix), "_", "-")
 	return errs.New(errs.NotAStore, verb+": it edits a repo's .lore/stores.yaml, and "+a.opts.RepoDir+" is not inside a git repo").
-		WithHint("cd into the repo that should attach the store; outside a repo, `lore store folder add team <folder>` and `lore store list` work from the setup alone (`lore store init me` makes the personal store)")
+		WithHint("cd into the repo that should attach the store; outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)")
 }
 
 // storeOpPrefix starts every store operation name.
@@ -133,7 +133,7 @@ func (a *App) lookupStore(ctx context.Context, verb, name string) (attach.Store,
 					WithHint("run it in a folder of an admin or member setup (`lore setup list` shows each setup's folders), or pass --setup <name>")
 			}
 			return attach.Store{}, errs.New(errs.NotFound, verb+": this repository has no team store").
-				WithHint("link the repo to an org (`lore org link <org> --project <folder>`), or name the store")
+				WithHint("link the repo to an org (`lore org link --org <org> --project <folder>`), or name the store")
 		}
 		look = string(alias)
 	}
@@ -220,7 +220,7 @@ func (a *App) orgStoreAt(ctx context.Context, verb, raw string) (attach.Store, e
 		}
 	}
 	return attach.Store{}, errs.New(errs.NotFound, verb+": "+raw+" is not the store of an org in your setups").
-		WithHint("name an org store's url as `lore store show` lists it, or attach the store to a repo with `lore store add <name> <url>`")
+		WithHint("name an org store's url as `lore store show` lists it, or attach the store to a repo with `lore store add --name <name> --url <url>`")
 }
 
 // storeLabel is the name a store command's output gives the store name

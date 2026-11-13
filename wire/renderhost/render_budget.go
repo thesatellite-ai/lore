@@ -207,7 +207,7 @@ func indexText(topics []topicLine) string {
 	for _, t := range topics {
 		fetch := "`lore context --topic " + t.Name + "`"
 		if t.Name == noTopic {
-			fetch = "`lore search \"<keywords>\"`"
+			fetch = "`lore search --query \"<keywords>\"`"
 		}
 		b.WriteString("| " + t.Name + " | " + countsText(t.Counts) + " | " + fetch + " |\n")
 	}
@@ -227,7 +227,7 @@ func indexCollapsedText(topics []topicLine) string {
 const standingInstruction = "## How to use this file\n\n" +
 	"This file is a summary of the project's lore store, not all of it.\n\n" +
 	"1. Before you work on a file or an area, run `lore context --for-file <path>` (or `--for-task <id>`, `--topic <name>`). It prints the rules, hotfixes and notes for that place.\n" +
-	"2. If what you need is not here, run `lore search \"<keywords>\"` before you answer or change code.\n" +
+	"2. If what you need is not here, run `lore search --query \"<keywords>\"` before you answer or change code.\n" +
 	"3. Cite what you use by id.\n" +
 	"4. If `lore` is not installed: install it (`brew install thesatellite-ai/tap/lore`). Until then, `grep` the file `.lore/LORE.full.md`, which has every pinned entry in full.\n\n"
 
@@ -451,10 +451,10 @@ func notInFile(lines int) string {
 	var b strings.Builder
 	b.WriteString("## Not in this file\n\n")
 	if lines > 0 {
-		fmt.Fprintf(&b, "- %s shown here only as one line: `lore show <id>` prints the full text.\n", plural.Of(lines, "pinned entry is", "pinned entries are"))
+		fmt.Fprintf(&b, "- %s shown here only as one line: `lore show --id <id>` prints the full text.\n", plural.Of(lines, "pinned entry is", "pinned entries are"))
 	}
-	b.WriteString("- Memories, decisions, patterns, should/may rules and medium/low hotfixes are search-only: `lore search \"<keywords>\"`.\n")
-	b.WriteString("- Infrastructure facts: `lore resource list` / `lore resource show <name>`.\n")
+	b.WriteString("- Memories, decisions, patterns, should/may rules and medium/low hotfixes are search-only: `lore search --query \"<keywords>\"`.\n")
+	b.WriteString("- Infrastructure facts: `lore resource list` / `lore resource show --id <name>`.\n")
 	return b.String()
 }
 
@@ -653,7 +653,7 @@ func suggestTargets(sessions []wire.SessionRow, projectID, repo string, now time
 	sort.Strings(tools)
 	out := make([]string, 0, len(tools))
 	for _, t := range tools {
-		out = append(out, fmt.Sprintf("context: %s sessions ran in this repo in the last 30 days but %s is not a target; add it with: lore policy set %s %s --yes",
+		out = append(out, fmt.Sprintf("context: %s sessions ran in this repo in the last 30 days but %s is not a target; add it with: lore policy set --key %s --value %s --yes",
 			t, t, policy.KeyContextTargets, strings.Join(append(append([]string(nil), names...), t), ",")))
 	}
 	return out

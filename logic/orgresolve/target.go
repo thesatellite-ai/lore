@@ -161,7 +161,7 @@ func defaultLink(in TargetInputs) (string, string, error) {
 		if in.LinkUnknown {
 			return "", "", ErrLinkUnknown
 		}
-		return "", "", fmt.Errorf("%w (use --to %s/<folder>, or `lore org link %s --project <folder>`)", ErrNoLinkedProject, in.Org, in.Org)
+		return "", "", fmt.Errorf("%w (use --to %s/<folder>, or `lore org link --org %s --project <folder>`)", ErrNoLinkedProject, in.Org, in.Org)
 	case 1:
 		return in.Links[0].Folder, "the linked project " + in.Links[0].Folder + "/", nil
 	}
@@ -176,7 +176,7 @@ func defaultLink(in TargetInputs) (string, string, error) {
 	if len(defaults) == 1 {
 		return defaults[0], "the default link " + defaults[0] + "/", nil
 	}
-	return "", "", fmt.Errorf("%w: candidates %s; pass --to %s/<folder> or mark one with `lore org link %s --project <folder> --default`",
+	return "", "", fmt.Errorf("%w: candidates %s; pass --to %s/<folder> or mark one with `lore org link --org %s --project <folder> --default`",
 		ErrTwoLinksNoDefault, strings.Join(all, ", "), in.Org, in.Org)
 }
 

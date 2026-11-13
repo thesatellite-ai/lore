@@ -6,7 +6,7 @@ package teame2e
 // (F7–F11), real binary and real git in the agency world: alice's notes go
 // to the northwind store, acme/app is the client repo (bare origin).
 //
-//   - F11: `lore move <mem> --to repo --yes` of a note long enough for the
+//   - F11: `lore move --id <mem> --to repo --yes` of a note long enough for the
 //     text rule works, commits and pushes; a move whose text also quotes a
 //     second internal note is refused, and the hint is not the same command.
 //   - F7: a `git commit --no-verify` carrying an internal sentence is
@@ -200,8 +200,8 @@ func TestLeak_TrialF10_CommitHintNamesRepoRow(t *testing.T) {
 	a.aliceApp.WriteFile(rel, strings.Replace(body, "money is integer cents, never floats", leakNote, 1))
 	a.aliceApp.Git("add", "-A")
 	r := a.aliceApp.TryGit("commit", "-m", "add a rule")
-	r.Fails(t, 1, "E_LEAK_BLOCKED", "lore move "+rul+" --to <org>", "lore rule delete "+rul+" --confirm")
-	r.Never(t, "lore move "+mem)
+	r.Fails(t, 1, "E_LEAK_BLOCKED", "lore move --id "+rul+" --to <org>", "lore rule delete --id "+rul+" --confirm")
+	r.Never(t, "lore move --id "+mem)
 }
 
 // The write-time check costs a plain repo (no org, no store) nothing.

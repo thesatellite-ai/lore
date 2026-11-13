@@ -308,7 +308,7 @@ func (l liveSync) SyncConflicts(ctx context.Context, _ opssync.ConflictsIn) (ops
 			names = append(names, f.name)
 		}
 		out.Data = append(out.Data, opssync.Conflict{ID: int64(len(out.Data) + 1), Table: p.Key.Table, RowID: p.Key.ID, Kept: conflictKeptBoth, At: at, Fields: names})
-		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, conflict markers in a text field; settle with lore sync resolve %d --take kept|other, or edit the row)", len(out.Data), p.Key.Table, p.Key.ID, conflictKeptBoth, len(out.Data)))
+		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, conflict markers in a text field; settle with lore sync resolve --id %d --take kept|other, or edit the row)", len(out.Data), p.Key.Table, p.Key.ID, conflictKeptBoth, len(out.Data)))
 		// B2-23: both versions of each clashing field, as for a store row;
 		// kept is the first section (the edit of the machine that merged),
 		// other the second

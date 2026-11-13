@@ -1180,7 +1180,7 @@ func repoFork(ctx context.Context, env Env, files RepoFiles, in RepoForkIn) (Rep
 	if _, caseOnly := up.History.CaseVariant(mustKey(clean[0].URL)); caseOnly {
 		// PROV3: a case-only difference is the same repo; never a fork.
 		return RepoForkOut{}, errs.New(errs.InvalidInput, "this clone's remote differs from "+up.Meta.RepoID+"'s address only in letter case: it is the same repo").
-			WithHint("confirm it with `lore repo set-url " + mustKey(clean[0].URL) + "`")
+			WithHint("confirm it with `lore repo set-url --url " + mustKey(clean[0].URL) + "`")
 	}
 	nid, err := ids.New[ids.Repo]()
 	if err != nil {

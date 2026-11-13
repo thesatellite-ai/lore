@@ -227,13 +227,13 @@ func errCodeRepoPush(verb string) error {
 // errFolderStorePush is the refusal on a file:// store.
 func errFolderStorePush(verb, name string) error {
 	return errs.New(errs.Refused, verb+": store "+name+" is a folder store (file://): it has no remote to push to and no history to compact").
-		WithHint("push modes and compaction apply to git stores; `lore store set-url " + name + " <git url>` moves it to one")
+		WithHint("push modes and compaction apply to git stores; `lore store set-url --name " + name + " --url <git url>` moves it to one")
 }
 
 // errNotAdmin refuses an org store's shared setting to a non-admin.
 func errNotAdmin(verb, name, org string) *errs.Error {
 	return errs.New(errs.Refused, verb+": store "+name+" belongs to org "+org+" and only an admin of "+org+" may change its shared settings; this machine has no admin setup of "+org).
-		WithHint("ask the org admin to run `lore store set " + name + " …`; a member cannot override the org's setting locally")
+		WithHint("ask the org admin to run `lore store set --store " + name + " --settings …`; a member cannot override the org's setting locally")
 }
 
 // placeOf decides where name's settings live; for an org store it also

@@ -444,7 +444,7 @@ func (o ops) valueNotUsed(ctx context.Context, k located, v located) error {
 	}
 	key, vn := text(k.Row, mName), text(v.Row, mName)
 	return errs.New(errs.MetaInUse, fmt.Sprintf("%s (%s) is used on %d rows", vn, short(v.Row.ID), n)).
-		WithHint(fmt.Sprintf("to change them: lore meta set --where '%s=%s' %s=<value> --dry-run", key, vn, key))
+		WithHint(fmt.Sprintf("to change them: lore meta set --where '%s=%s' --pair %s=<value> --dry-run", key, vn, key))
 }
 
 // metaMergeInto folds key k into survivor (3.8 Fold, OQ3), the only way two
@@ -467,12 +467,12 @@ func (o ops) metaMergeInto(ctx context.Context, k located, into string) (RowOut,
 		return RowOut{}, errs.New(errs.InvalidInput, "meta edit: a key cannot be folded into itself")
 	case text(sv.Row, mMergedInto) != "":
 		return RowOut{}, errs.New(errs.MetaRetired, sname+" is retired (merged into "+text(sv.Row, mMergedInto)+")").
-			WithHint("fold into the survivor: lore meta edit " + name + " --merge-into " + text(sv.Row, mMergedInto))
+			WithHint("fold into the survivor: lore meta edit --id " + name + " --merge-into " + text(sv.Row, mMergedInto))
 	case text(k.Row, mMergedInto) != "":
 		return RowOut{}, errs.New(errs.MetaRetired, name+" is already merged into "+text(k.Row, mMergedInto))
 	case text(sv.Row, mType) != text(k.Row, mType):
 		return RowOut{}, errs.New(errs.MetaType, fmt.Sprintf("%s is %s, %s is %s; a fold needs one type", name, text(k.Row, mType), sname, text(sv.Row, mType))).
-			WithHint("lore meta edit " + name + " --type " + text(sv.Row, mType))
+			WithHint("lore meta edit --id " + name + " --type " + text(sv.Row, mType))
 	}
 	rows, err := o.metaRows(ctx)
 	if err != nil {
@@ -553,7 +553,7 @@ func (o ops) metaMergeInto(ctx context.Context, k located, into string) (RowOut,
 		}
 		if _, err = o.env.Update(engine.WithMeta(bctx, mw), engine.Ref{ID: r.Row.ID}, map[string]value.Value{}); err != nil {
 			return RowOut{}, errs.Prefix("meta edit --merge-into: stopped after "+strconv.Itoa(i)+" of "+strconv.Itoa(len(hits))+
-				" rows (batch "+bid.String()+"; see: lore batch show "+bid.String()+")", err)
+				" rows (batch "+bid.String()+"; see: lore batch show --id "+bid.String()+")", err)
 		}
 	}
 	mi, err := txt(sv.Row.ID.String())
@@ -563,6 +563,6 @@ func (o ops) metaMergeInto(ctx context.Context, k located, into string) (RowOut,
 	if _, err := o.env.Update(bctx, engine.Ref{Store: k.Src, Table: schema.TableMetaKeys, ID: k.Row.ID}, map[string]value.Value{mMergedInto: mi}); err != nil {
 		return RowOut{}, err
 	}
-	return RowOut{ID: sv.Row.ID.String(), Store: string(sv.Src), Human: fmt.Sprintf("folded %s (%s) into %s (%s): %d rows rewritten in batch %s (see: lore batch show %s)\n",
+	return RowOut{ID: sv.Row.ID.String(), Store: string(sv.Src), Human: fmt.Sprintf("folded %s (%s) into %s (%s): %d rows rewritten in batch %s (see: lore batch show --id %s)\n",
 		name, short(k.Row.ID), sname, short(sv.Row.ID), len(hits), bid, bid)}, nil
 }

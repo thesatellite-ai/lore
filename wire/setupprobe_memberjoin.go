@@ -1,7 +1,7 @@
 package wire
 
 // setupprobe_memberjoin.go — invite.found for a member's join without an
-// invite line (`lore setup join <org or store url>`, B2-13). Before this
+// invite line (`lore setup join --invite <org-or-store-url>`, B2-13). Before this
 // the check skipped ("not checked here"), so `lore setup check --step
 // join` said ready for an email not on the roster and only apply refused;
 // the setup page, which checks first, showed a green step that then

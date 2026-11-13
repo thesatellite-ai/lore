@@ -19,7 +19,7 @@ Lore fetches once per command and reuses that fetch for 60 seconds; `lore sync` 
 
 ## If this, then that
 
-- **If you give a teammate a task,** do nothing special: tasks are live, so `lore task add 'Send the invoice reminder before Friday' --assign @bob` reaches Bob (another developer on your team) on his next command, even on another branch.
+- **If you give a teammate a task,** do nothing special: tasks are live, so `lore task add --title 'Send the invoice reminder before Friday' --assign @bob` reaches Bob (another developer on your team) on his next command, even on another branch.
 - **If you add a rule that only makes sense with your change** ("Run the tests before you push" in the branch that adds the tests), keep it with the code. It is reviewed in the same pull request.
 - **If a rule is urgent for everyone** ("Never deploy on a Friday"), add it with `--live`. Everyone sees it now, and a copy lands on `main` at once.
 - **If you want your tasks to follow your branches,** turn live off for tasks in `~/.lore/config.yaml` with `live: {defaults: {tasks: false}}`, or pass `--no-live` per task.
@@ -31,7 +31,7 @@ Lore fetches once per command and reuses that fetch for 60 seconds; `lore sync` 
 
 - **Hidden is not private.** Anyone who can clone the repo can fetch the live list. `--live` decides *when* people see a note; `--to` decides *who* (see [How to lay out your stores](store-layout.md)). In a client's repo, a live note is a note the client can read, unless it goes to your store (a separate private repo that only you can open).
 - **Live is temporary.** ZIP downloads, forks, plain mirrors and shallow clones do not carry the live list. That is why open rows are copied to `main` after `live.max_age` (7 days by default).
-- **If a note is in both places, the live copy wins,** always. Use `lore explain <id>` to see where a row is and why.
+- **If a note is in both places, the live copy wins,** always. Use `lore explain --id <id>` to see where a row is and why.
 - **No live rows in a folder store.** Live rows hang off the repo's own git remote; notes written `--to` a folder store are never live ([Where your notes live](database-mode.md)).
 - **A branch note stays on its branch.** A rule you add on `feat/x` is invisible on `main` until `feat/x` merges. Read it from elsewhere with `lore sync peek`.
 

@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -400,9 +401,15 @@ func checkInvocation(rootCmd *cobra.Command, code string) string {
 			}
 			continue
 		}
+		if shellBreak(tok) {
+			break // `&`, `< file`, a continuation: the command ends here
+		}
 		name, ok := flagName(tok)
 		if !ok {
 			positional = append(positional, tok)
+			if strings.HasSuffix(tok, ";") {
+				break // `… 9666; echo …`: the next command
+			}
 			continue
 		}
 		f := lookupFlag(rootCmd, cmd, name)
@@ -414,7 +421,18 @@ func checkInvocation(rootCmd *cobra.Command, code string) string {
 		// unless it was written "--title=value".
 		if !strings.Contains(tok, "=") && flagTakesValue(f) && k+1 < len(rest) {
 			k++
+			if strings.HasSuffix(rest[k], ";") && !strings.HasSuffix(rest[k], "';") && !strings.HasSuffix(rest[k], `";`) || strings.HasPrefix(rest[k], "$("+binaryName) {
+				break // `--after tsk_…9666; echo …` or `--id $(lore …)`: another command
+			}
 		}
+	}
+	// U-4 (named args everywhere): a command built from the registry is
+	// shown with every value under its flag (`lore task show --id tsk_…`);
+	// its positional form is a quiet alias that no doc, skill or example
+	// may teach. Host commands (lore init <dir>, lore help <cmd>) keep
+	// their own arguments.
+	if v := positionalValue(positional); !notation && v != "" && cli.Generated(cmd) && !cmd.HasSubCommands() {
+		return "`" + cmd.CommandPath() + "` given the positional value " + v + ": write it with its flag (" + namedHint(cmd) + ")"
 	}
 	abbreviated := strings.Contains(code, placeholderUnicode) || strings.Contains(code, placeholderEllipsis)
 	nameOnly := i == len(toks)
@@ -768,4 +786,46 @@ func TestGlobalFlagBeforeSubcommand(t *testing.T) {
 	if p := checkInvocation(driftRoot(t), docLine); p != "" {
 		t.Errorf("checkInvocation(%q) = %q, want valid", docLine, p)
 	}
+}
+
+// namedHint is the usage line of cmd: where its values' flags are named.
+func namedHint(cmd *cobra.Command) string {
+	return cmd.Parent().CommandPath() + " " + cmd.Use
+}
+
+// notationWords are positional words that stand for "something here" or
+// separate alternatives in a listing, never a value: an ellipsis, a list
+// separator, a box-drawing or arrow glyph.
+var notationWords = []string{placeholderEllipsis, placeholderUnicode, "\\|", "<command>", "flags"}
+
+// listSeparator separates the verbs of a listing ("lore vars set · list").
+const listSeparator = "·"
+
+// positionalValue is the first positional word that is a value, "" when
+// every one is notation (U-4 gate). A diagram glyph or a "·" list
+// separator ends the command: what follows annotates it.
+func positionalValue(positional []string) string {
+	for _, p := range positional {
+		if diagramGlyph(p) || p == listSeparator {
+			return ""
+		}
+		if slices.Contains(notationWords, p) || strings.Contains(p, "|") {
+			continue
+		}
+		return p
+	}
+	return ""
+}
+
+// diagramGlyph reports a word starting with an arrow or box-drawing rune
+// (U+2190..U+25FF): a diagram drawn around a command, not a value.
+func diagramGlyph(w string) bool {
+	r := []rune(w)
+	return len(r) > 0 && r[0] >= 0x2190 && r[0] <= 0x25FF
+}
+
+// shellBreak reports a word that ends a documented command line: a
+// background `&`, an input redirect `<`, a line continuation `\`.
+func shellBreak(tok string) bool {
+	return tok == "&" || tok == "<" || tok == "\\"
 }

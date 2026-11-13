@@ -139,7 +139,7 @@ func TestDoctorTriageOwner(t *testing.T) {
 	got, err := a.DoctorTriageOwner(ctx)
 	if err != nil || len(got) != 1 || got[0].Level != DoctorWarning ||
 		got[0].Message != "tasks.triage_owner is @nobody-here, which matches no actor; no inbox lists proposed tasks" ||
-		!strings.HasPrefix(got[0].Fix, "lore policy set tasks.triage_owner ") {
+		!strings.HasPrefix(got[0].Fix, "lore policy set --key tasks.triage_owner ") {
 		t.Fatalf("unknown owner: %+v %v", got, err)
 	}
 	setOwner("@" + strings.ToUpper(me.String()))

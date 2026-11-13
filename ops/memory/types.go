@@ -43,8 +43,8 @@ type AddIn struct {
 
 	// Body is v0.1.17's --body. Text is the same value given positionally
 	// (`lore memory add "…"`); exactly one of them must be set.
-	Body string `json:"body,omitempty" flag:"body" desc:"the memory text (or give it as the first argument)" ui:"widget=markdown"`
-	Text string `json:"text,omitempty" arg:"0" desc:"the memory text, instead of --body"`
+	Body string `json:"body,omitempty" flag:"body" desc:"the memory text" ui:"widget=markdown"`
+	Text string `json:"text,omitempty" arg:"0" argof:"body" desc:"the memory text, instead of --body"`
 	// Kind is one of schema.MemoryKinds; empty means retrieved.
 	Kind string `json:"kind,omitempty" flag:"kind" desc:"core | retrieved | episodic | procedural | archival (default retrieved)"`
 	// Source is source_kind; empty means manual.

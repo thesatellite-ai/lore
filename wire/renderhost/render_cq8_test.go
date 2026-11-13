@@ -181,7 +181,7 @@ func TestSuggestTargets(t *testing.T) {
 		t.Fatalf("suggestions %q, want tools %v", got, want)
 	}
 	for i, tool := range want {
-		cmd := "lore policy set context.targets " + toolprofile.NameClaudeCode + "," + tool + " --yes"
+		cmd := "lore policy set --key context.targets --value " + toolprofile.NameClaudeCode + "," + tool + " --yes"
 		if !strings.HasPrefix(got[i], "context: "+tool+" sessions ran in this repo") || !strings.HasSuffix(got[i], cmd) {
 			t.Fatalf("line %d %q, want tool %s and %q", i, got[i], tool, cmd)
 		}

@@ -130,7 +130,7 @@ func (s setupStore) PinRepo(ctx context.Context, name string) (string, error) {
 		// that, not "run it inside a git repo" (it is one).
 		if top, err := s.a.knownRepoTop(ctx); err == nil && top != "" {
 			return "", errs.New(errs.InvalidInput, "setup use --here: this git repo has no lore project yet, so it has no repo id to pin ("+top+"/.lore/data/_meta.json is missing)").
-				WithHint("run `lore init` here first, then `lore setup use " + name + " --here`")
+				WithHint("run `lore init` here first, then `lore setup use --name " + name + " --here`")
 		}
 		repoID = ""
 	}
@@ -202,13 +202,13 @@ func progressOfRow(r row.Row) (onboard.Progress, error) {
 	if raw := fieldRawJSON(r, schema.FieldProgressAnswers); raw != nil {
 		if err := json.Unmarshal(raw, &p.Answers); err != nil {
 			return p, errs.Wrap(errs.Internal, "setup_progress "+p.Setup+"/"+string(p.Step)+": answers are not valid JSON", err).
-				WithHint("lore setup remove " + p.Setup + " clears the saved progress")
+				WithHint("lore setup remove --name " + p.Setup + " clears the saved progress")
 		}
 	}
 	if raw := fieldRawJSON(r, schema.FieldProgressChecks); raw != nil {
 		if err := json.Unmarshal(raw, &p.Checks); err != nil {
 			return p, errs.Wrap(errs.Internal, "setup_progress "+p.Setup+"/"+string(p.Step)+": checks are not valid JSON", err).
-				WithHint("lore setup remove " + p.Setup + " clears the saved progress")
+				WithHint("lore setup remove --name " + p.Setup + " clears the saved progress")
 		}
 	}
 	return p, nil

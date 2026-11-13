@@ -586,7 +586,7 @@ func TestRealCatalogPlanAndJoin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	j, err := e.Join(bg, JoinIn{Invite: "lore setup join " + line, NoOpen: true})
+	j, err := e.Join(bg, JoinIn{Invite: "lore setup join --invite " + line, NoOpen: true})
 	if err != nil {
 		t.Fatal(err)
 	}

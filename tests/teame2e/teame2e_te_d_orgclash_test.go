@@ -5,7 +5,7 @@ package teame2e
 // later.md 288 (renameOrgClashes e2e, the r4 repro) on cmd/lore with two
 // clones: a repo whose committed .lore/stores.yaml already uses the org's
 // bare name for the store root (written before the repo was linked, as
-// v0.1.17's `lore store init <org>` did) still sends --to team into its
+// v0.1.17's `lore store init --name <org>` did) still sends --to team into its
 // linked folder: the folder entry is attached as "<org>/<folder>"; --to
 // <org> keeps v0.1.17's place (the linked folder, wire linkedFolderName)
 // and `--to <org>/.` is the explicit store root, on every teammate's clone.

@@ -12,7 +12,7 @@ import (
 // of a "found nowhere" report.
 func explainSpec(s op.Spec) op.Spec {
 	s.Examples = []op.Example{
-		{Title: "why does this row look the way it does", CLI: "lore explain mem_<id>", Want: "mem_"},
+		{Title: "why does this row look the way it does", CLI: "lore explain --id mem_<id>", Want: "mem_"},
 	}
 	s.Errors = append(append([]errs.Code{}, s.Errors...), errs.InvalidID)
 	return s

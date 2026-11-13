@@ -60,8 +60,8 @@ func TestNonEmptyFlag(t *testing.T) {
 // give; anything else is a Define-time panic, like every other bad tag.
 func TestNonEmptyTagMisuse(t *testing.T) {
 	t.Parallel()
-	type onArg struct {
-		A string `arg:"0" nonempty:"x" json:"a"`
+	type onArg struct { // a nonempty bool is no string
+		A bool `nonempty:"x" json:"a" flag:"a"`
 	}
 	type blank struct {
 		A string `flag:"a" nonempty:"" json:"a"`
@@ -78,7 +78,7 @@ func TestNonEmptyTagMisuse(t *testing.T) {
 		}()
 		f()
 	}
-	check("on an arg", func() {
+	check("on a bool", func() {
 		Define(Spec{Name: "a.b"}, func(context.Context, onArg) (struct{}, error) { return struct{}{}, nil })
 	})
 	check("blank", func() {

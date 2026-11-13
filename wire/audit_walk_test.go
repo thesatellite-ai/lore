@@ -158,7 +158,7 @@ func TestAuditOnEveryList(t *testing.T) {
 				return
 			}
 			// a noun with no show of its own (comment, link, tag, ...) is
-			// shown by `lore show <id>` (row.show), with the record at the
+			// shown by `lore show --id <id>` (row.show), with the record at the
 			// top level rather than under data
 			showOp, path := noun+showSuffix, []string{"data"}
 			if !shows[noun] {

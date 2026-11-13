@@ -207,7 +207,7 @@ func TestRowShowReveal(t *testing.T) {
 	}
 }
 
-// TestSecretsShowByRef: `lore secrets show <manager://entry>` names every
+// TestSecretsShowByRef: `lore secrets show --id <manager://entry>` names every
 // row and field that holds the entry (as list does), whatever holder
 // options the row wrote; a reference no row holds prints "-" and counts no
 // row; a row id still shows that row's references.

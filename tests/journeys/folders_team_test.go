@@ -87,7 +87,7 @@ func TestJourneyFoldersTeamFromLinkedRepo(t *testing.T) {
 			folderID[f.Folder] = f.ID
 		}
 		lee.LoreIn(hub, "team", "invite", jTeamDevEmail, "--github", jTeamDevGitHub, "--role", "dev",
-			"--project", folderID["client_a"], "--project", folderID["client_b"], "--yes").OK(t).Says(t, "lore setup join lore-invite:v1:")
+			"--project", folderID["client_a"], "--project", folderID["client_b"], "--yes").OK(t).Says(t, "lore setup join --invite lore-invite:v1:")
 		inv := jInvites(t, lee, hub.Dir)
 		if len(inv) != 1 || len(inv[0].Projects) != 2 {
 			t.Fatalf("the invite names two projects: %+v", inv)

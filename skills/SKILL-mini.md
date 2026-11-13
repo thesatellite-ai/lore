@@ -299,7 +299,7 @@ T[file a bug | make a support bundle | generate a bundle for the issue]
                                           # (default omits memory/rule content; pass --include-content if rule bodies should be in the bundle)
 T[who modified X | audit trail for X | who changed X | when was X last edited]
                                           → lore audit log --limit 0 --json | jq '.data[] | select(.target_id == "<X>" or .target_table == "<X>")'
-                                          # newest first; lore audit verify checks the chain
+                                          # newest first; `lore audit verify` checks the chain
 T[why did you do X?]                     → why-context --rendered
 T[show me mem_<id> | tsk_<id> | rul_<id> | dec_<id>]        → <kind> show <code>
 
@@ -355,19 +355,19 @@ lore doctor                        # DB integrity + FTS5 check; exit 0/1/2
 
 1. Read the core: `.lore/LORE.md` is already loaded through the pointer file (must rules, critical/high hotfixes, topic index). Obey it.
 2. Before touching a path: `lore context --for-file <path>` (rules, hotfixes, notes for that file and its folders). Task: `lore context --for-task <tsk_id>`. Topic from the index: `lore context --topic <t>`.
-3. Everything else: `lore search "<keywords>"` before a substantive answer; cite hits by id.
+3. Everything else: `lore search --query "<keywords>"` before a substantive answer; cite hits by id.
 
 ## SEARCH (FTS5 BM25)
 
 ```bash
-lore memory search "redis"              # single keyword, BM25-ranked
-lore memory search "redis OR cache"     # boolean OR / AND / NOT (uppercase)
-lore memory search "auth*"              # prefix: auth, authenticate, authorize
-lore memory search '"connection pool"'  # exact phrase (words in order, adjacent)
-lore memory search "auth NOT deprecated" --json
-lore memory search "" --json            # no FTS; all newest-first
-lore memory search "tailwind" --repo=web --no-inherit
-lore memory search "tailwind" --all-repos
+lore memory search --query "redis"              # single keyword, BM25-ranked
+lore memory search --query "redis OR cache"     # boolean OR / AND / NOT (uppercase)
+lore memory search --query "auth*"              # prefix: auth, authenticate, authorize
+lore memory search --query '"connection pool"'  # exact phrase (words in order, adjacent)
+lore memory search --query "auth NOT deprecated" --json
+lore memory search --query "" --json            # no FTS; all newest-first
+lore memory search --query "tailwind" --repo=web --no-inherit
+lore memory search --query "tailwind" --all-repos
 ```
 
 `search` works on every entity kind (`rule search`, `decision search`, etc.).
@@ -415,16 +415,16 @@ P4  capture a recurring warning
     lore render
 
 P5  multi-repo scoping
-    lore repo add web   --origin=git@…
-    lore repo add api   --origin=git@…
+    lore repo add --mount-name web   --origin=git@…
+    lore repo add --mount-name api   --origin=git@…
     lore memory add --body="<web-only fact>"  --repo=web
     lore memory add --body="<cross-cutting>"
     (cd web && lore render)
     (cd api && lore render)
 
 P6  notes shared by sibling projects (a store; Mode B is retired)
-    lore store init shared "file://$HOME/stores/shared"   # first repo
-    lore store add shared "file://$HOME/stores/shared"    # each other repo
+    lore store init --name shared --url "file://$HOME/stores/shared"   # first repo
+    lore store add --name shared --url "file://$HOME/stores/shared"    # each other repo
     # old Mode B repo: lore migrate run
 
 P7  disaster recovery
@@ -435,13 +435,13 @@ P7  disaster recovery
     lore render
 
 P8  mission + tasks
-    M=$(lore mission add "<title>" --target=YYYY-MM-DD --json | jq -r '.data.id')
+    M=$(lore mission add --title "<title>" --target=YYYY-MM-DD --json | jq -r '.data.id')
     TL=$(lore tasklist list --json | jq -r '.data[0].id')   # every task needs --tasklist
-    lore task add "<t>" --tasklist=$TL --mission=$M --commitment=accepted --priority=high
+    lore task add --title "<t>" --tasklist=$TL --mission=$M --commitment=accepted --priority=high
     lore task list --mission=$M --json
 
 P9  periodic review reminder
-    lore reminder add "review rules" --due=YYYY-MM-DD --recurrence=30d
+    lore reminder add --message "review rules" --due=YYYY-MM-DD --recurrence=30d
 
 P10 inspect what the agent is seeing
     lore render --dry-run
@@ -467,10 +467,10 @@ TEAM SYNC (.lore/data/ = one committed JSON file per shared row; automatic)
     commit .lore/data + .gitattributes WITH the code change that produced the knowledge
     lore sync status | conflicts                      inspect
     lore trash list --local                           rows sync removed (file disappeared)
-    lore sync merge-rows <table> --keep <id> --drop <id>   fold a duplicate (refs move, drop → trash)
-    lore sync resolve <n> --take kept|other           after the user picks a side
-    lore sync peek origin/<branch> [table]            another branch, read-only
-    lore sync promote <id> --to main                  local commit on main (confirm first)
+    lore sync merge-rows --table <table> --keep <id> --drop <id>   fold a duplicate (refs move, drop → trash)
+    lore sync resolve --id <n> --take kept|other           after the user picks a side
+    lore sync peek --ref origin/<branch> [--table table]            another branch, read-only
+    lore sync promote --ids <id> --to main                  local commit on main (confirm first)
     PR conflict in .lore/data on GitHub → on the branch: git pull origin main; settle; push
     lore sync install-action [--auto]                 opt-in workflow that does that for PRs (ask first);
                                                       runs only by hand unless --auto (spends Actions time)
@@ -478,16 +478,16 @@ TEAM SYNC (.lore/data/ = one committed JSON file per shared row; automatic)
     settle with `lore <entity> edit <id> --body "…"` after the user picks; never delete the file
 
 P14 promote memory → rule  (ALL 4 STEPS REQUIRED — do NOT skip the show)
-    lore memory show mem_<id> --json | jq -r '.data.body'   # MUST fetch the actual body first;
+    lore memory show --id mem_<id> --json | jq -r '.data.body'   # MUST fetch the actual body first;
                                                           # never invent the rule text.
     lore rule add --severity=must --body="<text from show>"
-    lore memory archive mem_<id>
+    lore memory archive --id mem_<id>
     lore render
 
 P15 demote rule → memory
-    lore rule show rul_<id> --json | jq -r '.data.body'
+    lore rule show --id rul_<id> --json | jq -r '.data.body'
     lore memory add --body="<text>"
-    lore rule archive rul_<id>
+    lore rule archive --id rul_<id>
     lore render
 
 P16 periodic review
@@ -519,20 +519,20 @@ P20 migrate to new lore version
 
 ## TEAMS (orgs, live rows, agents)
 
-Tasks are live: they reach everyone at once on any branch and land on main when done (`--live` / `--no-live` per write). In a client repo a note without `--to` goes to the internal store; move a note to the client on purpose only (`lore move <id> --to repo`). Exit 12/13/14 = the task is no longer yours: stop. Agents never approve gates.
+Tasks are live: they reach everyone at once on any branch and land on main when done (`--live` / `--no-live` per write). In a client repo a note without `--to` goes to the internal store; move a note to the client on purpose only (`lore move --id <id> --to repo`). Exit 12/13/14 = the task is no longer yours: stop. Agents never approve gates.
 
 ```bash
 lore whoami                                           # org, why, identity: run once per repo
-lore check pr-body body.md                            # before posting a PR body or comment
-lore move mem_01 --to repo                            # deliberate move into the client repo
+lore check pr-body --file body.md                            # before posting a PR body or comment
+lore move --id mem_01 --to repo                            # deliberate move into the client repo
 lore agent start --label agent-backend --owner @alice     # export what it prints
 lore inbox
 lore task next --mission mis_12                       # exit 10 = no ready work
 lore task heartbeat
-lore hold claim full-suite --ttl 30m                  # one heavy run at a time; hold release after
+lore hold claim --name full-suite --ttl 30m                  # one heavy run at a time; hold release after
 lore context --internal                               # internal notes as text; never paste where the client reads
-lore task note tsk_30 "progress"
-lore task done tsk_30 --pr 412 --lesson "what you learned"
+lore task note --id tsk_30 --text "progress"
+lore task done --id tsk_30 --pr 412 --lesson "what you learned"
 ```
 
 ## TOP ERROR CODES
@@ -615,7 +615,7 @@ You: (This is a HOW-question — explain in prose, do NOT emit any `lore add`.)
 
 User: Pattern pat_019e... is obsolete now — archive it but don't delete.
 You: (User already gave the opaque ID. Do NOT pipeline `pattern list | jq | xargs` — just archive directly.)
-  lore pattern archive pat_019e...
+  lore pattern archive --id pat_019e...
   lore render
 
 User: DB feels slow lately, queries are taking longer — what should I check first?
@@ -626,7 +626,7 @@ You: (Symptom + "what should I check?" → DIAGNOSTIC question. Do NOT capture a
 
 User: I have a 'commit-msg' prompt template saved. Use it to draft a commit message for X.
 You: (User said "I HAVE … saved" → RETRIEVE the existing prompt, do NOT `prompt add` a new one.)
-  lore prompt show commit-msg
+  lore prompt show --id commit-msg
   # then apply the retrieved template to the user's context
 
 User: Note our system architecture decision: backend is a single Go binary, DB is PostgreSQL with pgvector, NATS for events, Redis for cache.
@@ -694,7 +694,7 @@ You:
 
 User: Add a task to refactor the auth middleware, high priority.
 You:
-  lore task add "Refactor the auth middleware" --tasklist=<tlt_id> --commitment=accepted --priority=high
+  lore task add --title "Refactor the auth middleware" --tasklist=<tlt_id> --commitment=accepted --priority=high
   lore render
 
 User: We decided to use pgvector over Pinecone because of ops simplicity and no vendor lock-in.
@@ -708,15 +708,15 @@ You:
 
 User: What memories do we have about redis or cache?
 You:
-  lore memory search "redis OR cache" --json
+  lore memory search --query "redis OR cache" --json
 
 User: Find anything starting with auth.
 You:
-  lore memory search "auth*" --json
+  lore memory search --query "auth*" --json
 
 User: Find memories about auth or session but NOT logging.
 You: (Use FTS5 boolean operators in the query string itself — do NOT post-filter with jq when FTS5 can do it natively.)
-  lore memory search "(auth OR session) NOT logging" --json
+  lore memory search --query "(auth OR session) NOT logging" --json
 
 User: Render a context that fits under 4000 bytes, but preview first without writing.
 You: (There is no `--budget` flag. Render is already a hybrid: it pins only the directive + `must` rules + critical/high hotfixes, so the generated `.lore/LORE.md` stays small. Preview its size without writing; to shrink further, lower rule/hotfix severities so fewer rows pin.)
@@ -739,8 +739,8 @@ You: (NO capture — this is a HOW-question)
 
 User: Scratch the previous rule about avoiding globals — we DO use a single global request-id context now.
 You: (REVERSING a captured rule requires search + archive + new-add in ONE response. Emit ALL THREE commands together, using `$(…)` to chain. Do NOT stop after the search.)
-  RID=$(lore rule search "globals" --json | jq -r '.data[0].id')
-  lore rule archive "$RID"
+  RID=$(lore rule search --query "globals" --json | jq -r '.data[0].id')
+  lore rule archive --id "$RID"
   lore rule add --severity=should --body="A single global request-id context is allowed for tracing"
   lore render
 

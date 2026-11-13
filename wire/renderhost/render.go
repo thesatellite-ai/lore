@@ -534,7 +534,7 @@ func (h *Host) printTargetPick(w *strings.Builder, pick targetPick) {
 	for _, p := range pick.sel.Unwired {
 		hint := "lore render --target " + p.Name
 		if pick.sel.Reason == toolprofile.ReasonSetting {
-			hint = "lore policy set " + string(policy.KeyContextTargets) + " <profiles incl. " + p.Name + "> --yes"
+			hint = "lore policy set --key " + string(policy.KeyContextTargets) + " --value \"<profiles incl. " + p.Name + ">\" --yes"
 		}
 		fmt.Fprintf(w, "%s %s found but not wired to lore; add it with: %s\n", h.decor.muted("·"), p.PointerFile, hint)
 	}
@@ -542,7 +542,7 @@ func (h *Host) printTargetPick(w *strings.Builder, pick targetPick) {
 	// but is not in context.targets is left as it is; say so and how to
 	// list it, instead of skipping it silently.
 	for _, p := range pick.sel.Unlisted {
-		fmt.Fprintf(w, "%s %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set %s <profiles incl. %s> --yes\n",
+		fmt.Fprintf(w, "%s %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set --key %s --value \"<profiles incl. %s>\" --yes\n",
 			h.decor.muted("·"), p.PointerFile, policy.KeyContextTargets, policy.KeyContextTargets, p.Name)
 	}
 }
@@ -571,7 +571,7 @@ func (h *Host) resolveTargets(ctx context.Context, root string, values []string,
 			sel, selErr := reg.Select(names, rootProbe{root: root})
 			if selErr != nil {
 				return targetPick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(selErr).Error.Message, string(policy.KeyContextTargets)+": "), selErr).
-					WithHint("change it with: lore policy set " + string(policy.KeyContextTargets) + " <profiles> --yes, or add the profile under context.profiles in ~/.lore/config.yaml")
+					WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in ~/.lore/config.yaml")
 			}
 			pick.sel = sel
 		} else {

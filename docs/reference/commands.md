@@ -366,8 +366,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore member` … | The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join <the org's store url> | — |
-| `lore member add` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join <the org's store url> | — |
+| `lore member` … | The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join --invite "<the org's store url>" | — |
+| `lore member add` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join --invite "<the org's store url>" | — |
 | `lore member edit` | Change a person's name, @handle or org-level role | — |
 | `lore member list` | List the org's people: email, name, org role, handle, teams | — |
 | `lore member remove` | Take a person off the org (actor offboard: their stint and memberships end; the row stays for history) | — |
@@ -660,7 +660,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore row` … | Any row by id: show it, or move it to another store | — |
-| `lore row edit` | Write back an edited Markdown view of a row (lore edit <id> opens your editor for it) | [knowledge/editing-rows › Without an editor (scripts and agents)](../../docs/knowledge/editing-rows.md#without-an-editor-scripts-and-agents) |
+| `lore row edit` | Write back an edited Markdown view of a row (lore edit --id <id> opens your editor for it) | [knowledge/editing-rows › Without an editor (scripts and agents)](../../docs/knowledge/editing-rows.md#without-an-editor-scripts-and-agents) |
 | `lore row markdown` | Print any row as the Markdown view lore edit opens (fields as frontmatter, long text as body) | [knowledge/editing-rows › Without an editor (scripts and agents)](../../docs/knowledge/editing-rows.md#without-an-editor-scripts-and-agents) |
 | `lore row move` | Move any row to another store, keeping its id (the old copy is tombstoned) | [sync/stores › Step 5 — Move a note out of the repo](../../docs/sync/stores.md#step-5--move-a-note-out-of-the-repo) |
 | `lore row path` | Print the file path of any row by id (also lore path, lore open) | [knowledge/editing-rows › Find a row's file: lore path](../../docs/knowledge/editing-rows.md#find-a-rows-file-lore-path) |

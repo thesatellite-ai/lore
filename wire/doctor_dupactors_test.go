@@ -60,7 +60,7 @@ func TestDoctorDuplicateActorsOrg(t *testing.T) {
 	if err != nil || len(f) != 1 {
 		t.Fatalf("doctor duplicate_actors: %v %v, want one finding", f, err)
 	}
-	want := "lore actor contact add " + me.String() + " email " + dupOldEmail + " --identity --merge"
+	want := "lore actor contact add --actor " + me.String() + " --type email --value " + dupOldEmail + " --identity --merge"
 	if f[0].Level != DoctorWarning || f[0].Fix != want || !strings.Contains(f[0].Message, old.String()) || !strings.Contains(f[0].Message, me.String()) {
 		t.Fatalf("finding %+v, want a warning naming %s and %s with fix %q", f[0], me, old, want)
 	}

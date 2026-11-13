@@ -98,7 +98,7 @@ $ git log --oneline refs/lore/live
 **Landing** writes a live row into `main`'s `.lore/data`, its lasting home. Then, once lore sees that `main` holds the same content, it removes the row from live. Lore calls this **leaves live**.
 
 ```text
- lore task add "…"            lore task done tsk_…          next lore command
+ lore task add --title "…"            lore task done --id tsk_…          next lore command
         │                            │                             │
         ▼                            ▼                             ▼
   refs/lore/live: tsk  ──▶  commit "lore: land 2 rows" ──▶  main holds the same file:
@@ -134,7 +134,7 @@ A **store** is a separate private repo that only your company can open, like a l
 
 Each folder in a store is a full lore project. It has branch data (on the store's `main`), live rows and signals, and the same landing rules. Lore keeps one clone of each store, a normal git clone at `~/.lore/stores/<owner>/<repo>/` that you can open and browse; lore's own lock and stamps sit in its `.git/lore/`. See [Troubleshooting](troubleshooting.md#where-a-stores-clone-lives).
 
-A **link** ties a client repo to its internal project: "project `prj_…` at `github.com/client/website` belongs to `client/`". Someone at the agency makes it once with `lore org link agency --project client`. The link is saved **only in the store** (in `client/_meta.json`). So nothing is written to the client's repo, and everyone at the agency finds the link on their next command. Several repos can link to one project. That is a **group**: three client 2 repos, one `client2/` project.
+A **link** ties a client repo to its internal project: "project `prj_…` at `github.com/client/website` belongs to `client/`". Someone at the agency makes it once with `lore org link --org agency --project client`. The link is saved **only in the store** (in `client/_meta.json`). So nothing is written to the client's repo, and everyone at the agency finds the link on their next command. Several repos can link to one project. That is a **group**: three client 2 repos, one `client2/` project.
 
 ## Orgs, identity and `whoami`
 
@@ -204,7 +204,7 @@ Contacts marked as **identity contacts** tie every email and GitHub login of one
    --to me        --to agency           --to agency/org    --to repo
 ```
 
-`--to` picks **who** sees a row. `--live` picks **when**. The two are independent. In a client repo, a row written without `--to` goes to the org's default for its kind. By default, tasks and memories go to the linked internal project, and rules and decisions need a person at a terminal or an explicit `--to`. So forgetting a flag puts a note in the safe place. Moving a row to a wider audience is always one deliberate step: `lore move <id> --to <target>` shows the text, asks, and moves the row with the same id (a row has one home, so there is never a second copy). A pointer (a row that names another row's id) never goes from a wider layer to a narrower one, because the pointer alone would show that the hidden row exists.
+`--to` picks **who** sees a row. `--live` picks **when**. The two are independent. In a client repo, a row written without `--to` goes to the org's default for its kind. By default, tasks and memories go to the linked internal project, and rules and decisions need a person at a terminal or an explicit `--to`. So forgetting a flag puts a note in the safe place. Moving a row to a wider audience is always one deliberate step: `lore move --id <id> --to <target>` shows the text, asks, and moves the row with the same id (a row has one home, so there is never a second copy). A pointer (a row that names another row's id) never goes from a wider layer to a narrower one, because the pointer alone would show that the hidden row exists.
 
 ## The fixed rules in plain words
 

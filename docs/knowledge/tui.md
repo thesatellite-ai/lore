@@ -70,12 +70,12 @@ The first decision says `status: superseded` and names the decision that replace
 
 ## Show one row without the TUI
 
-When you already have an id, `lore show <id>` (also spelled `lore row show <id>`) prints every field of any row, whatever its kind. `--origin` adds where the row came from: the store, project, repo, branch and command that wrote it, who created and last changed it, and any moves between stores.
+When you already have an id, `lore show --id <id>` (also spelled `lore row show --id <id>`) prints every field of any row, whatever its kind. `--origin` adds where the row came from: the store, project, repo, branch and command that wrote it, who created and last changed it, and any moves between stores.
 
 <!-- example: knowledge#show-any-row only=2 -->
 ```console
 # alice, in website
-$ lore row show dec_76bd…3f10 --origin
+$ lore row show --id dec_76bd…3f10 --origin
 dec_76bd…3f10  decisions  repo  "We use Stripe for payments"
   body: Stripe already works in the client shop app, so we keep one payment provider.
   created_by_actor_id: act_ada3…c018
@@ -127,7 +127,7 @@ Flags:
 ## Pitfalls
 
 - **It does not edit.** To change a row, copy its id from the row screen and run `lore <kind> edit <id>`.
-- **Sensitive values stay hidden.** A field marked sensitive shows `••••`; use `lore show <id> --show-sensitive` when you really need the value.
+- **Sensitive values stay hidden.** A field marked sensitive shows `••••`; use `lore show --id <id> --show-sensitive` when you really need the value.
 
 ## Related
 

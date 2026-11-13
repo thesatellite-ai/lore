@@ -88,7 +88,7 @@ func TestF01_TombstoneStopsLookup(t *testing.T) {
 }
 
 // F1 edge case + side effect 12: a row that landed is "not found" on an
-// older branch, and the error points at `lore sync peek origin/main`.
+// older branch, and the error points at `lore sync peek --ref origin/main`.
 func TestF01_LandedRowOnOlderBranchHintsPeek(t *testing.T) {
 	rt := newRepoTeam(t, th.Cmd("land"))
 	rt.c2.Git("checkout", "-q", "-b", "feat/old")

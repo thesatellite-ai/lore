@@ -220,5 +220,5 @@ func (a *App) DoctorRemovedEnv(context.Context) ([]DoctorFinding, error) {
 		return nil, nil
 	}
 	return []DoctorFinding{{Check: DoctorCheckRemovedEnv, Level: DoctorWarning, Plain: true,
-		Message: EnvRemovedSyncAllow + " is set but does nothing since 0.1.18 (the hooks always scan); unset it, and switch one rule off with `lore secrets rule off <id> --reason …` instead"}}, nil
+		Message: EnvRemovedSyncAllow + " is set but does nothing since 0.1.18 (the hooks always scan); unset it, and switch one rule off with `lore secrets rule off --id <id> --reason …` instead"}}, nil
 }

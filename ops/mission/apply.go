@@ -119,7 +119,7 @@ func applyOp(o ops) op.Entry {
 		Name: OpApply, Summary: "Create a mission and its tasks from a YAML plan; a re-run adds nothing",
 		Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(append([]errs.Code{}, work.WriteErrors...), errs.Unsupported),
 		Confirm:  op.ConfirmRule{MayAsk: true},
-		Examples: []op.Example{{Title: "apply a plan file", CLI: "lore mission apply invite.yaml", Want: "msn_"}},
+		Examples: []op.Example{{Title: "apply a plan file", CLI: "lore mission apply --file invite.yaml", Want: "msn_"}},
 	}, o.apply)
 }
 

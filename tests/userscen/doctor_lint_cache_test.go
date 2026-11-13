@@ -86,8 +86,8 @@ func TestDoctorLint_CleanAndReferences(t *testing.T) {
 
 	out := p.lint(t)
 	if out.Count != 3 ||
-		!out.has("dangling_ref", "body: ${row:"+tmp+"} points at no live row", "lore trash restore "+tmp) ||
-		!out.has("dangling_ref", "body: ${var:deploy_host} names no variable", "lore vars set deploy_host <value>") ||
+		!out.has("dangling_ref", "body: ${row:"+tmp+"} points at no live row", "lore trash restore --target "+tmp) ||
+		!out.has("dangling_ref", "body: ${var:deploy_host} names no variable", "lore vars set --name deploy_host --value <value>") ||
 		!out.has("unknown_scheme", "body: ${nope:x} names no known scheme", "write $${…} to keep it literal") {
 		t.Fatalf("three reference findings on %s: %+v", mem, out)
 	}
@@ -98,7 +98,7 @@ func TestDoctorLint_CleanAndReferences(t *testing.T) {
 	}
 	// Text form: code, id, store, message, fix line, count; exit 0.
 	text := p.c.Lore("lint")
-	if text.Code != 0 || !strings.Contains(text.Stdout, "dangling_ref "+mem+" (repo): body: ${var:deploy_host} names no variable\n  fix: lore vars set deploy_host <value>\n") ||
+	if text.Code != 0 || !strings.Contains(text.Stdout, "dangling_ref "+mem+" (repo): body: ${var:deploy_host} names no variable\n  fix: lore vars set --name deploy_host --value <value>\n") ||
 		!strings.HasSuffix(text.Stdout, "3 finding(s)\n") {
 		t.Fatalf("lint text with findings (exit 0, a report): %s", text)
 	}
@@ -134,8 +134,8 @@ func TestDoctorLint_ContextFindings(t *testing.T) {
 	p := newDoctorPerson(t)
 	id := ruleIDRe.FindString(p.c.MustLore("rule", "list").Stdout)
 	out := p.lint(t, "--context")
-	if !out.has("no_summary", "pinned rule has no summary", "lore rule edit "+id+" --summary") ||
-		!out.has("untagged", "pinned but untagged", "lore rule edit "+id+" --tag <tag> (create a new tag first: lore tag add --name=<tag>)") {
+	if !out.has("no_summary", "pinned rule has no summary", "lore rule edit --id "+id+" --summary") ||
+		!out.has("untagged", "pinned but untagged", "lore rule edit --id "+id+" --tag <tag> (create a new tag first: lore tag add --name=<tag>)") {
 		t.Fatalf("context findings on an untagged pinned rule: %+v", out)
 	}
 	// Plain lint does not include the context checks.

@@ -94,7 +94,7 @@ func TestLiveSyncConflictsAndResolve(t *testing.T) {
 			if err != nil || list.Count != 2 || list.Data[0].RowID != ltTaskA || list.Data[1].RowID != ltTaskB {
 				t.Fatalf("conflicts before: %+v %v", list.Data, err)
 			}
-			if !strings.Contains(list.Lines[0], "lore sync resolve 1 --take kept|other") {
+			if !strings.Contains(list.Lines[0], "lore sync resolve --id 1 --take kept|other") {
 				t.Fatalf("the conflict line names the resolve command: %q", list.Lines[0])
 			}
 			wrote := f.s.wrote

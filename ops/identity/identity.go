@@ -240,7 +240,7 @@ func (o ShowOut) Text() string {
 	fmt.Fprintf(&b, "resolved:    %s\ndisplay:     %s\nkind:        %s\nsource:      %s\n", o.StableKey, o.DisplayName, o.Kind, o.Source)
 	stable := "yes"
 	if !o.Stable {
-		stable = "NO (ephemeral — run `lore identity set <email>` to fix)"
+		stable = "NO (ephemeral — run `lore identity set --identity <email>` to fix)"
 	}
 	fmt.Fprintf(&b, "stable:      %s\n", stable)
 	if o.Setup.Name != "" {
@@ -293,7 +293,7 @@ func Key(arg, key string) (display, stableKey string, err error) {
 		return display, HumanKeyPrefix + argEmail, nil
 	}
 	return "", "", errs.New(errs.InvalidInput, fmt.Sprintf("%q is a name, not an email: your identity key is your email", arg)).
-		WithHint(fmt.Sprintf("run `lore identity set <you>@example.com`, or keep the name with `lore identity set %q --key %s<your email>`", arg, HumanKeyPrefix))
+		WithHint(fmt.Sprintf("run `lore identity set --identity <you>@example.com`, or keep the name with `lore identity set --identity %q --key %s<your-email>`", arg, HumanKeyPrefix))
 }
 
 // errorCodes are the codes the identity operations return.
@@ -311,7 +311,7 @@ func Ops(m Manager) []op.Entry {
 			Name: OpSet, Summary: "Persist an identity: the active setup's in ~/.lore/config.yaml (top-level identity: with no setup), or one org's (--org)",
 			Permission: op.PermWrite, Access: op.AccessRead, Errors: errorCodes, Local: true,
 			Examples: []op.Example{
-				{Title: "your email", CLI: "lore identity set alice@example.com", Want: "identity persisted"},
+				{Title: "your email", CLI: "lore identity set --identity alice@example.com", Want: "identity persisted"},
 				{Title: "inside one org", CLI: "lore identity set --org agency --key human:alice@agency.example --name \"Alice Doe\" --handle alice", Want: "identity in agency"},
 			},
 		}, func(ctx context.Context, in SetIn) (WriteOut, error) {

@@ -55,7 +55,7 @@ func quoteShort(s string) string {
 // the page and the command say the same thing.
 func UnknownOrgErr(org string) error {
 	return errs.New(errs.JoinOrgUnknown, "setup join: no org named "+quoteShort(org)+" on this machine yet; join with the org's store url the admin gave you").
-		WithHint("lore setup join <the org's store url> (lore member add printed it for your admin); an outsider: paste the whole line starting with " + InvitePrefix)
+		WithHint("lore setup join --invite \"<the org's store url>\" (lore member add printed it for your admin); an outsider: paste the whole line starting with " + InvitePrefix)
 }
 
 // Join is setup.join. The setup name is the global --setup, else the
@@ -74,7 +74,7 @@ func (e engine) Join(ctx context.Context, in JoinIn) (JoinOut, error) {
 				return JoinOut{}, UnknownOrgErr(text)
 			}
 			return JoinOut{}, errs.New(errs.InviteInvalid, "setup join: "+quoteShort(text)+" is not an invite line, an org on this machine, or a store url").
-				WithHint("an admin added you (lore member add): lore setup join <the org's store url>; an outsider: paste the whole line starting with " + InvitePrefix)
+				WithHint("an admin added you (lore member add): lore setup join --invite <store-url>; an outsider: paste the whole line starting with " + InvitePrefix)
 		}
 		return e.joinMember(ctx, text, in.NoOpen)
 	}

@@ -193,7 +193,7 @@ func oldIdentityFileNotes(home string) ([]string, error) {
 	var notes []string
 	for _, f := range []struct{ name, note string }{
 		{identity.LegacyFile, "is from v0.1.17 and is read only while identity: in ~/.lore/" + ConfigFile + " is unset: `lore migrate run` moves it into identity:"},
-		{legacyIdentityTOML, "is from before v0.1.17 and is not read: set who you are with `lore identity set <email>`; `lore identity unset` removes the old file"},
+		{legacyIdentityTOML, "is from before v0.1.17 and is not read: set who you are with `lore identity set --identity <email>`; `lore identity unset` removes the old file"},
 	} {
 		switch _, err := os.Stat(filepath.Join(home, f.name)); {
 		case err == nil:

@@ -79,7 +79,7 @@ const walkKind = "walk_box"
 // run of the list carries. A list needing input without an entry here
 // fails the walk, so a new one cannot slip past it.
 var walkListSetups = map[string]func(h *opstest.H) (map[string]string, string){
-	// resource.list lists one kind (lore resource list <kind>).
+	// resource.list lists one kind (lore resource list --kind <kind>).
 	"resource.list": func(h *opstest.H) (map[string]string, string) {
 		kind := h.ID(h.Must("resource.kind.add", `{"kind":"`+walkKind+`"}`))
 		return map[string]string{"kind": opstest.Quote(kind)}, `"kind":"` + walkKind + `"`
@@ -258,7 +258,7 @@ func TestEveryPurgePathRefusesYes(t *testing.T) {
 			// TestCampaignSync_LivePurgeDryRunAndConfirm walk it.
 			continue
 		case name == opssetup.OpTrashPurge:
-			// lore setup trash purge (owner decision 2026-11-06): a trashed
+			// lore setup trash purge --name (owner decision 2026-11-06): a trashed
 			// setup of config.yaml, refused before the lookup, so any name
 			// serves and nothing is read or removed.
 			modes = []string{`{"name":"any-setup"}`, `{"name":"any-setup","clear_identity":true}`}

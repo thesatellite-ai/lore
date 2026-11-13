@@ -133,7 +133,7 @@ func TestStoreCheckoutIsNoCodeRepo(t *testing.T) {
 	foreign := openWith(t, filepath.Join(mine, "client_a"), Options{Home: home})
 	_, err = run(t, foreign, opstask.OpList, `{}`, false)
 	var e *errs.Error
-	if !errors.As(err, &e) || e.Code != errs.Refused || !strings.Contains(e.Message, mine) || !strings.Contains(e.Hint, "lore store use "+mine) {
+	if !errors.As(err, &e) || e.Code != errs.Refused || !strings.Contains(e.Message, mine) || !strings.Contains(e.Hint, "lore store use --path "+mine) {
 		t.Fatalf("a clone lore does not use: %v (hint %q)", err, hintOf(err))
 	}
 }

@@ -323,7 +323,7 @@ func TestAllTextTwoSetups(t *testing.T) {
 		"\nsetup acme-hub (member of agency) ─ " + env.home + "/www/agency/**\n",
 		"  ✗ store agency   read ✓ write ✗ private ✓\n",
 		"  ✗ store.write  agency: Permission to agency-org/notes.git denied to mira-agency\n",
-		"      repair: lore setup repair acme-hub\n",
+		"      repair: lore setup repair --name acme-hub\n",
 		" · 1 warning · 1 error → broken (exit 2)\n",
 		"\n2 setups · ",
 	}

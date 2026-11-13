@@ -134,8 +134,8 @@ func Ops(env work.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported, errs.ResourceAmbiguous}, treeAddErrors...)...),
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
-				{Title: "add a task", CLI: `lore task add "Fix the login redirect" --priority high`, Want: "tsk_"},
-				{Title: "a proposed task, as JSON", CLI: `lore task add "Try a cache" --commitment proposed --json`, Want: `"task.show"`},
+				{Title: "add a task", CLI: `lore task add --title "Fix the login redirect" --priority high`, Want: "tsk_"},
+				{Title: "a proposed task, as JSON", CLI: `lore task add --title "Try a cache" --commitment proposed --json`, Want: `"task.show"`},
 			},
 		}, o.addOp),
 		op.Define(op.Spec{
@@ -144,26 +144,26 @@ func Ops(env work.Env) []op.Entry {
 			Examples: []op.Example{{Title: "list as JSON", CLI: "lore task list --json", Want: `"data"`}},
 		}, o.list),
 		op.Define(op.Spec{
-			Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore task show tsk_<id> --json", Want: `"task.show"`}}, Summary: "Show task details",
+			Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore task show --id tsk_<id> --json", Want: `"task.show"`}}, Summary: "Show task details",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.show),
 		op.Define(op.Spec{
-			Name: OpEdit, Examples: []op.Example{{Title: "raise the priority", CLI: "lore task edit tsk_<id> --priority urgent", Want: "tsk_"}}, Summary: "Edit task fields (only flags you pass are applied)",
+			Name: OpEdit, Examples: []op.Example{{Title: "raise the priority", CLI: "lore task edit --id tsk_<id> --priority urgent", Want: "tsk_"}}, Summary: "Edit task fields (only flags you pass are applied)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), append([]errs.Code{errs.Unsupported, errs.OpenChildren, errs.ResourceAmbiguous}, treeAddErrors...)...),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.editOp),
 		op.Define(op.Spec{
-			Name: OpStart, Examples: []op.Example{{Title: "start work", CLI: "lore task start tsk_<id>", Want: "in_progress"}}, Summary: "Mark task as in_progress",
+			Name: OpStart, Examples: []op.Example{{Title: "start work", CLI: "lore task start --id tsk_<id>", Want: "in_progress"}}, Summary: "Mark task as in_progress",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.start),
 		op.Define(op.Spec{
 			Name: OpDone, Summary: "Mark a task done (with the code that finished it)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren, errs.OpenItems, errs.Refused), // E_REFUSED: an agent finishing a task someone else claimed (B-ERRS-4)
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "done with a lesson", CLI: `lore task done tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"`, Want: "done"}},
+			Examples: []op.Example{{Title: "done with a lesson", CLI: `lore task done --id tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"`, Want: "done"}},
 		}, o.done),
 		op.Define(op.Spec{
-			Name: OpCancel, Examples: []op.Example{{Title: "cancel with a reason", CLI: `lore task cancel tsk_<id> --reason obsolete`, Want: "cancelled"}}, Summary: "Cancel a task",
+			Name: OpCancel, Examples: []op.Example{{Title: "cancel with a reason", CLI: `lore task cancel --id tsk_<id> --reason obsolete`, Want: "cancelled"}}, Summary: "Cancel a task",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren, errs.Refused), // E_REFUSED: an agent cancelling a claimed task (B-ERRS-4)
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.cancel),
@@ -171,9 +171,9 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpSplit, Summary: "Split a task into sub-tasks (one batch)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), treeAddErrors...),
 			Examples: []op.Example{
-				{Title: "preview a split", CLI: `lore task split tsk_<id> --title "Export query" --title "Download button" --dry-run`, Want: "would add"},
+				{Title: "preview a split", CLI: `lore task split --id tsk_<id> --title "Export query" --title "Download button" --dry-run`, Want: "would add"},
 				// P3-TASK-1: flags before the first title are shared, after a title that sub-task's own.
-				{Title: "per-child flags", CLI: `lore task split tsk_<id> --priority low "Export query" --assign @ann --priority high "Download button" --dry-run`, Want: "priority high, assign @ann"},
+				{Title: "per-child flags", CLI: `lore task split --id tsk_<id> --priority low --title "Export query" --assign @ann --priority high --title "Download button" --dry-run`, Want: "priority high, assign @ann"},
 			},
 		}, o.split),
 		op.Define(op.Spec{
@@ -182,12 +182,12 @@ func Ops(env work.Env) []op.Entry {
 			// TSQ3: the op asks itself, so the question can list the subtree
 			// and its claimed children (bulk.Ask); it always asks.
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task delete tsk_<id> --yes", Want: "moved to the trash"}},
+			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task delete --id tsk_<id> --yes", Want: "moved to the trash"}},
 		}, o.deleteOp),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across task title + body (BM25 ranked)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.SearchErrors,
-			Examples: []op.Example{{Title: "search as JSON", CLI: `lore task search "login" --json`, Want: `"task.search"`}},
+			Examples: []op.Example{{Title: "search as JSON", CLI: `lore task search --query "login" --json`, Want: `"task.search"`}},
 		}, o.search),
 		op.Define(op.Spec{
 			Name: OpTriage, Examples: []op.Example{{Title: "proposed tasks", CLI: "lore task triage", Want: ""}}, Summary: "Show proposed tasks (agent-suggested, not yet committed)",
@@ -277,7 +277,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
-		return AddOut{}, errs.New(errs.InvalidInput, "task add: the title is empty").WithHint(`lore task add "<title>"`)
+		return AddOut{}, errs.New(errs.InvalidInput, "task add: the title is empty").WithHint(`lore task add --title "<title>"`)
 	}
 	project, err := work.Project(ctx, o.env, Noun, in.Project)
 	if err != nil {

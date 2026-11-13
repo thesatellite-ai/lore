@@ -8,7 +8,7 @@ Every command takes `--color auto|always|never` and `--trace`; most take `--json
 
 ## Bootstrap
 
-### `lore init [path]`
+### `lore init [--path <path>]`
 Initializes a project at cwd: writes the project and repo rows to `.lore/data/` (commit it), adds lore's machine files (lock, state) to `.gitignore` (the local cache lives in `~/.lore/cache/repo/`, never in the repo), and writes `.lore/LORE.md` and the tool pointer file. In a clone that already has `.lore/data/` it adopts the shared project instead of minting a new one.
 
 ```bash
@@ -25,8 +25,8 @@ Flags: `--name=<str>`, `--non-interactive`.
 One folder store holds the notes several repos share; each repo attaches it once. (The v0.1.17 shared-database mode, `lore project shared-init`, is retired; `lore migrate run` converts a repo that still has its `.lore/lore.yaml` pointer.)
 
 ```bash
-lore store init client2 "file://$HOME/stores/client2"   # in the first repo: make the store, attach it
-lore store add client2 "file://$HOME/stores/client2"    # in every other repo: attach it
+lore store init --name client2 --url "file://$HOME/stores/client2"   # in the first repo: make the store, attach it
+lore store add --name client2 --url "file://$HOME/stores/client2"    # in every other repo: attach it
 lore rule add --to client2 --body "Every screen works on a phone"
 lore migrate run --dry-run                              # in a v0.1.17 Mode B repo: what moves
 ```
@@ -43,7 +43,7 @@ There is no importer in 0.1.18 (`learn-from` and `learn` are dropped). Read CLAU
 lore memory add --body="Tailwind v4 only" [--repo=web] [--kind=procedural] [--tag=frontend] [--yes]
 
 # search (FTS5 BM25; LIKE fallback)
-lore memory search "tailwind" [--limit=10] [--all-repos|--master-only|--no-inherit] [--include-archived] [--json]
+lore memory search --query "tailwind" [--limit=10] [--all-repos|--master-only|--no-inherit] [--include-archived] [--json]
 
 # list — repo-scoped, SAME scope semantics as search
 lore memory list [--repo=web | --all-repos | --master-only | --no-inherit] [--json]
@@ -91,7 +91,7 @@ JSON envelope:
 ```bash
 lore rule add --severity=must --activation=always --body="no fmt.Println in prod" [--globs='["**/*.go"]']
 lore rule list [--json]
-lore rule show <id> [--json]
+lore rule show --id <id> [--json]
 ```
 
 | Severity | Effect |
@@ -114,7 +114,7 @@ lore rule show <id> [--json]
 ```bash
 lore decision add --title="Use SQLite not Postgres" --body="local-first; zero ops"
 lore decision list [--json]
-lore decision show <id> [--json]
+lore decision show --id <id> [--json]
 ```
 
 Status: `proposed | accepted | superseded | rejected`.
@@ -126,7 +126,7 @@ Status: `proposed | accepted | superseded | rejected`.
 ```bash
 lore hotfix add --severity=high --title="ent regen wipes resolver helpers" --body="Beware: ent regen wipes resolver/ helpers"
 lore hotfix list [--json]
-lore hotfix show <id> [--json]
+lore hotfix show --id <id> [--json]
 ```
 
 Severity: `info | low | medium | high | critical`. Hotfixes are **never truncated** under render budget pressure.
@@ -137,14 +137,14 @@ Severity: `info | low | medium | high | critical`. Hotfixes are **never truncate
 
 ```bash
 # mission = container for tasks
-lore mission add "Ship v0.1" --target=2026-06-30 --body="..." [--json]   # --json: the new mission (.data.id)
+lore mission add --title "Ship v0.1" --target=2026-06-30 --body="..." [--json]   # --json: the new mission (.data.id)
 lore mission list [--status=active|paused|done|cancelled] [--json]
-lore mission show <id> [--json]   # --json: mission fields + .data.tasks
-lore mission done <id>
+lore mission show --id <id> [--json]   # --json: mission fields + .data.tasks
+lore mission done --id <id>
 
 # task = discrete work — `--tasklist` is REQUIRED.
 # `--commitment` is REQUIRED for agent callers (no default; missing = hard error)
-lore task add "Wire FTS5 backend" \
+lore task add --title "Wire FTS5 backend" \
   --tasklist=tlt_<id> \
   --commitment=accepted \    # accepted | proposed | someday  (agents MUST pass this)
   --priority=high \
@@ -161,14 +161,14 @@ lore task list [--status=…] [--commitment=…] [--mission=<id>] [--assignee=<r
 lore task triage                   # commitment=proposed (agent-suggested, not committed)
 lore task someday                  # commitment=someday (parking lot)
 lore task deferred                 # snoozed: deferred_until in the future
-lore task show <id> [--json]
-lore task start <id>           # auto-promotes commitment=accepted, clears defer
-lore task done <id>            # auto-promotes commitment=accepted, clears defer
-lore task cancel <id>
-lore task search <query> [--all]   # default surfaces only ActiveTask hits
+lore task show --id <id> [--json]
+lore task start --id <id>           # auto-promotes commitment=accepted, clears defer
+lore task done --id <id>            # auto-promotes commitment=accepted, clears defer
+lore task cancel --id <id>
+lore task search --query <query> [--all]   # default surfaces only ActiveTask hits
 
 # task edit — reparent, reassign, reprioritize, commit/snooze in one place
-lore task edit <id> \
+lore task edit --id <id> \
   [--title=…] [--body=…] [--priority=…] [--status=…] \
   [--commitment=accepted|proposed|someday] \
   [--defer-until=YYYY-MM-DD | --clear-defer] \
@@ -181,7 +181,7 @@ lore task edit <id> \
 
 Priority: `low | medium | high | urgent`. Status: `todo | in_progress | done | cancelled | blocked`. Commitment: `accepted | proposed | someday` (orthogonal to status; agents must set it explicitly on `add`).
 
-**Required fields for `task add`:** `<title>` (positional) and `--tasklist=<tlt_id>`. Create the tasklist first (`lore tasklist add --title=...`) if none exists. **Agent callers must also pass `--commitment`** — `accepted` (user asked / doing now), `proposed` (your speculative idea), or `someday` (parking lot). No default; omitting it as an agent is a hard error so speculative tasks can't silently pollute the active list.
+**Required fields for `task add`:** `--title "<title>"` and `--tasklist=<tlt_id>`. Create the tasklist first (`lore tasklist add --title=...`) if none exists. **Agent callers must also pass `--commitment`** — `accepted` (user asked / doing now), `proposed` (your speculative idea), or `someday` (parking lot). No default; omitting it as an agent is a hard error so speculative tasks can't silently pollute the active list.
 
 **Relation flags (apply across `<entity> add`):**
 - `--mission`, `--tasklist`, `--plan` — group/parent relations (task)
@@ -199,22 +199,22 @@ Task JSON eager-loads parent IDs (`mission_id`, `tasklist_id`, `plan_id`).
 ```bash
 # actor — inspect who's writing
 lore actor list [--json]
-lore actor show <act_id> [--json]
+lore actor show --id <act_id> [--json]
 
 # snapshot — point-in-time knowledge captures
 lore snapshot add --title="<t>" --body="<body>"     # body via arg or stdin
 lore snapshot list [--json]
-lore snapshot show <id> [--json]
+lore snapshot show --id <id> [--json]
 lore snapshot archive / unarchive <id>
 
 # secret rules — your own secret detectors (settings rows; pii-pattern add|enable|disable refuse)
 lore secrets rules
-lore secrets rule add <rule-id> --regex=<re> [--description=<d>] [--to <store>]
+lore secrets rule add --id <rule-id> --regex=<re> [--description=<d>] [--to <store>]
 lore secrets rule off|on <rule-id>
 lore pii-pattern list              # read-only: patterns copied from v0.1.17, not checked
 
 # task view — saved task-list filters (rows in .lore/data, travel with git)
-lore task view add <name> --where '<filter>' [--sort <key>[:asc|:desc]] [--group-by <field>]
+lore task view add --name <name> --where '<filter>' [--sort <key>[:asc|:desc]] [--group-by <field>]
 lore task view list|show|edit|delete
 lore task list --view <name>
 
@@ -226,12 +226,12 @@ lore external-source enable / disable <id>
 # techdoc — external documentation refs
 lore techdoc add --name=<n> [--base-url=<u>] [--description=<d>]
 lore techdoc list [--json]
-lore techdoc show <id> [--json]
+lore techdoc show --id <id> [--json]
 
 # config — DB-level KV (dbconfig table)
-lore config get <key>
-lore config set <key> <value>
-lore config unset <key> [--dry-run]
+lore config get --key <key>
+lore config set --key <key> --value <value>
+lore config unset --key <key> [--dry-run]
 lore config fmt [--dry-run]
 lore config list [--json]
 ```
@@ -242,29 +242,29 @@ Every text-bearing entity exposes a `search` subcommand. Powered by SQLite FTS5 
 
 ```bash
 # Per-entity search
-lore task search "<query>"       [--limit=20] [--all] [--json]
-lore memory search "<query>"
-lore rule search "<query>"
-lore decision search "<query>"
-lore hotfix search "<query>"
-lore pattern search "<query>"
-lore playbook search "<query>"
-lore prompt search "<query>"
-lore architecturenote search "<query>"
-lore behaviour search "<query>"
-lore cookbookrecipe search "<query>"
-lore incident search "<query>"
-lore suggestion search "<query>"
-lore tastepref search "<query>"
-lore snapshot search "<query>"
-lore handoff search "<query>"
-lore mission search "<query>"
-lore tasklist search "<query>"
-lore plan search "<query>"
-lore workflow search "<query>"
-lore workspace search "<query>"
-lore techdoc search "<query>"
-lore comment search "<query>"
+lore task search --query "<query>"       [--limit=20] [--all] [--json]
+lore memory search --query "<query>"
+lore rule search --query "<query>"
+lore decision search --query "<query>"
+lore hotfix search --query "<query>"
+lore pattern search --query "<query>"
+lore playbook search --query "<query>"
+lore prompt search --query "<query>"
+lore architecturenote search --query "<query>"
+lore behaviour search --query "<query>"
+lore cookbookrecipe search --query "<query>"
+lore incident search --query "<query>"
+lore suggestion search --query "<query>"
+lore tastepref search --query "<query>"
+lore snapshot search --query "<query>"
+lore handoff search --query "<query>"
+lore mission search --query "<query>"
+lore tasklist search --query "<query>"
+lore plan search --query "<query>"
+lore workflow search --query "<query>"
+lore workspace search --query "<query>"
+lore techdoc search --query "<query>"
+lore comment search --query "<query>"
 ```
 
 **Query syntax** (FTS5):
@@ -305,10 +305,10 @@ lore comment search "<query>"
 
 ```bash
 # One call returns ranked hits across all 23 text-bearing entities
-lore search "auth middleware"
-lore search "redis OR cache"
-lore search "auth NOT login" --json
-lore search "auth*" --tables=memory,rule,decision --limit=10
+lore search --query "auth middleware"
+lore search --query "redis OR cache"
+lore search --query "auth NOT login" --json
+lore search --query "auth*" --tables=memory,rule,decision --limit=10
 
 # Output shape
 # rule      rul_<id>  <body excerpt>  (score=0.017)
@@ -396,10 +396,10 @@ lore link list --commit=abc1234      # entities linked to a sha
 lore link list --json
 
 # Reverse lookup
-lore commit show abc1234             # all entities for this sha
+lore commit show --id abc1234             # all entities for this sha
 
 # Remove
-lore link remove cml_xxx --yes      # asks first; --yes after the person agrees
+lore link remove --id cml_xxx --yes      # asks first; --yes after the person agrees
 ```
 
 **Note**: `--commit=HEAD` runs `git rev-parse HEAD` + `git log -1 --format=...` to capture full sha, message, author, and committed-at automatically. Pass a literal sha if you're outside the repo or want a specific commit.
@@ -408,7 +408,7 @@ lore link remove cml_xxx --yes      # asks first; --yes after the person agrees
 
 ## Run timing (agent-driven)
 
-A run times one attempt at a task: which agent, which model, how it ended, tokens and cost. Lore does NOT execute runs; the agent (a coding tool, a human or a hook) opens and closes them. When the run names a task, `run end` / `run cancel` add the run's span to that task's time (`lore task time show <task-id>`). The run row itself stays on this machine.
+A run times one attempt at a task: which agent, which model, how it ended, tokens and cost. Lore does NOT execute runs; the agent (a coding tool, a human or a hook) opens and closes them. When the run names a task, `run end` / `run cancel` add the run's span to that task's time (`lore task time show --id <task-id>`). The run row itself stays on this machine.
 
 ```bash
 # Open a run before starting work; prints "<run-id> started"
@@ -419,13 +419,13 @@ RID=$(lore run start \
     --goal="wire auth middleware against JWT provider" | awk '{print $1}')
 
 # Close
-lore run end $RID --outcome=success --summary="shipped" --tokens-in=1200 --tokens-out=340 --cost=0.05
+lore run end --id $RID --outcome=success --summary="shipped" --tokens-in=1200 --tokens-out=340 --cost=0.05
 # Or fail / cancel
-lore run end $RID --outcome=failed --error="timeout fetching JWKS"
-lore run cancel $RID --reason="scope changed"
+lore run end --id $RID --outcome=failed --error="timeout fetching JWKS"
+lore run cancel --id $RID --reason="scope changed"
 
 # The time it added to the task
-lore task time show tsk_<id>
+lore task time show --id tsk_<id>
 ```
 
 **Outcomes:** `success`, `partial`, `failed`, `cancelled`.
@@ -492,7 +492,7 @@ lore plan add --title="Q2 roadmap" --body="..."
 lore tasklist add --title="Triage queue" --body="..." [--json]   # --json: .data.id, for task add --tasklist
 lore workflow add --title="release" --body="..."
 lore workspace add --title="dev" --body="..."
-lore handoff add --for @alice --task tsk_31 "ctx for next session"
+lore handoff add --for @alice --task tsk_31 --body "ctx for next session"
 ```
 
 `plan show --json` eager-loads attached tasks.
@@ -520,9 +520,9 @@ lore tastepref add --body="..."
 ## Reminder
 
 ```bash
-lore reminder add "Review FTS quality" --due=2026-06-01 [--recurrence=30d] [--on-table=tasks --on-id=tsk_...]
+lore reminder add --message "Review FTS quality" --due=2026-06-01 [--recurrence=30d] [--on-table=tasks --on-id=tsk_...]
 lore reminder list [--done] [--json]
-lore reminder done <id>      # recurring → reschedules; one-shot → marks done
+lore reminder done --id <id>      # recurring → reschedules; one-shot → marks done
 ```
 
 Recurrence values: `7d | 30d | 1m | 3m | 6m | 1y` (typed enum; bad values rejected).
@@ -551,10 +551,10 @@ Entity tables you can attach to: `memories | rules | decisions | hotfixes | patt
 
 ```bash
 lore project list [--json]
-lore project show <id-or-name> [--json]    # JSON eager-loads repos
+lore project show --id <id-or-name> [--json]    # JSON eager-loads repos
 lore store list                            # stores this repo sees (replaces project shared-list)
 
-lore repo add <mount> [--origin=git@...] [--display-name=...]
+lore repo add --mount-name <mount> [--origin=git@...] [--display-name=...]
 lore repo list [--json]
 ```
 
@@ -607,7 +607,7 @@ lore doctor [--json]              # exit 0 healthy, 1 degraded, 2 broken
 lore doctor --fix                 # repair what doctor can fix safely (reversed --supersedes links, a task lead missing from assignees); safe to re-run
 
 # read-only SQL over every table (counts, joins); sensitive values masked
-lore sql "SELECT count(*) FROM rules"
+lore sql --query "SELECT count(*) FROM rules"
 
 # a damaged or lost cache: the files in .lore/data are the truth
 rm -f ~/.lore/cache/repo/<repo folder>-*   # the next command rebuilds the cache from .lore/data
@@ -625,7 +625,7 @@ lore upgrade --check                              # is there a newer release? `l
 
 ```bash
 lore identity show           # who am I, what resolution step won
-lore identity set "Alice <alice@example.com>"    # writes identity: in ~/.lore/config.yaml (an email is required)
+lore identity set --identity "Alice <alice@example.com>"    # writes identity: in ~/.lore/config.yaml (an email is required)
 lore identity unset          # clears it; resolution falls back down the chain
 ```
 
@@ -642,26 +642,26 @@ lore whoami                                   # org, why it matched, identity, w
 lore config check                             # validate ~/.lore/config.yaml
 ```
 
-Live rows (shared with everyone at once; tasks, missions, handoffs and comments are live by default; rules, decisions and memories travel with the code, `lore sync promote <id> --to main` sends one to main now):
+Live rows (shared with everyone at once; tasks, missions, handoffs and comments are live by default; rules, decisions and memories travel with the code, `lore sync promote --ids <id> --to main` sends one to main now):
 
 ```bash
-lore task add "Rotate the staging keys"            # tasks, missions, handoffs and comments are live
+lore task add --title "Rotate the staging keys"            # tasks, missions, handoffs and comments are live
 lore land --all --dry-run                     # what would land on main now
 lore live show                                # this project's live rows
-lore explain tsk_01                           # where an id lives and which copy won
+lore explain --id tsk_01                           # where an id lives and which copy won
 ```
 
 Orgs and stores (internal notes never go into a client repo):
 
 ```bash
-lore store init git@github.com:agency/notes            # once, in an empty repo
-lore org link agency --project client                   # tie this client repo to its internal project
-lore org use agency                                     # pick the org entry for this project on this machine (not committed)
+lore store init --name git@github.com:agency/notes            # once, in an empty repo
+lore org link --org agency --project client                   # tie this client repo to its internal project
+lore org use --entry agency                                     # pick the org entry for this project on this machine (not committed)
 lore context --internal [--table rules] [--search <text>]   # internal and personal notes for this repo as text (never paste where the client reads)
 lore memory add --body "client prefers calls" --to agency
 lore memory add --body "my own reminder" --to me
-lore move mem_01 --to repo                               # move to the client on purpose (asks)
-lore check pr-body body.md                               # before posting a PR body or comment
+lore move --id mem_01 --to repo                               # move to the client on purpose (asks)
+lore check pr-body --file body.md                               # before posting a PR body or comment
 ```
 
 Agents (one actor per session; claims have a lease):
@@ -671,21 +671,21 @@ lore agent start --label agent-backend --owner @alice        # prints LORE_ACTOR
 lore inbox
 lore task next --mission mis_12                          # claims the best ready task (exit 10 = no work)
 lore task heartbeat                                      # keep the claim alive
-lore hold claim full-suite --ttl 30m                     # one heavy run at a time; lore hold release full-suite after
-lore task note tsk_30 "mutation done; tests next"
-lore task done tsk_30 --pr 412 --lesson "tokens expire in 48h"
-lore memory add "invite links must use the public website address"   # a fact every agent finds with lore search
-lore handoff add --for @agent-frontend-2 --task tsk_31 "form is half done"
+lore hold claim --name full-suite --ttl 30m                     # one heavy run at a time; after it: lore hold release --name full-suite
+lore task note --id tsk_30 --text "mutation done; tests next"
+lore task done --id tsk_30 --pr 412 --lesson "tokens expire in 48h"
+lore memory add --body "invite links must use the public website address"   # a fact every agent finds with lore search
+lore handoff add --for @agent-frontend-2 --task tsk_31 --body "form is half done"
 ```
 
 Humans coordinating:
 
 ```bash
-lore mission apply plan.yaml                     # mission + tasks; a re-run adds nothing
-lore task add "invite UI" --after tsk_30:merged
-lore gate request tsk_31 && lore gate approve tsk_31
-lore mission status mis_12
-lore task revoke tsk_31                       # the holder is fenced out
+lore mission apply --file plan.yaml                     # mission + tasks; a re-run adds nothing
+lore task add --title "invite UI" --after tsk_30:merged
+lore gate request --id tsk_31 && lore gate approve --id tsk_31
+lore mission status --id mis_12
+lore task revoke --id tsk_31                       # the holder is fenced out
 ```
 
 ## Support Bundle (incident reporting)
@@ -812,12 +812,12 @@ lore sync                          # run a pass now; non-zero exit when a file c
 lore sync --json                   # {pass, imported[], exported[], removed_files[], deleted_rows[], conflicts[], errors[], warnings[], pending_exports}
 lore sync status --json            # {baselined, data_dir_present, tracked_files, pending_exports, open_conflicts, trash_rows, errors[], uncommitted[]}
 lore sync conflicts [--all] [--json]
-lore sync resolve <n> --take kept|other
+lore sync resolve --id <n> --take kept|other
 lore trash list --local [--json]   # rows sync removed because their file disappeared (this machine)
-lore trash restore <n> --local     # core rows refuse and name the `git checkout` that brings the file back
-lore sync peek <git-ref> [table] [--json]          # rows on another branch, nothing imported
-lore sync promote <id>... --to <branch> [--dry-run]  # new local commit on <branch>; never pushes; not the current branch
-lore sync merge-rows <table> --keep <id> --drop <id>   # fold a duplicate: references move to --keep, --drop goes to the trash
+lore trash restore --target <n> --local     # core rows refuse and name the `git checkout` that brings the file back
+lore sync peek --ref <git-ref> [--table table] [--json]          # rows on another branch, nothing imported
+lore sync promote --ids <id>... --to <branch> [--dry-run]  # new local commit on <branch>; never pushes; not the current branch
+lore sync merge-rows --table <table> --keep <id> --drop <id>   # fold a duplicate: references move to --keep, --drop goes to the trash
 lore trash purge --archived-before <date|90d|720h> (--dry-run | --confirm)
 lore sync fix-projects [--keep <prj_id>] [--dry-run]
 lore sync ci-merge --base <ref> [--dry-run] [--json]
