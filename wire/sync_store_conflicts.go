@@ -28,6 +28,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -74,6 +75,7 @@ func (a *App) StoreConflicts(ctx context.Context) ([]StoreConflict, error) {
 	if err != nil || len(recs) == 0 {
 		return nil, err
 	}
+	a.attachHeldFolders(ctx, recs)
 	st, err := a.state(ctx)
 	if err != nil {
 		return nil, err
@@ -85,10 +87,23 @@ func (a *App) StoreConflicts(ctx context.Context) ([]StoreConflict, error) {
 	var out []StoreConflict
 	seen := map[string]bool{}
 	for _, r := range recs {
-		if r.HeldBy != "" || (errs.Code(r.Code) != errs.Stale && errs.Code(r.Code) != errs.ResourceConflict) {
-			continue // a held folder or a push the remote refused: not a row to settle
+		var rows []string
+		switch {
+		case r.HeldBy != "":
+			// a push held by another folder's conflict: its rows, which
+			// attachHeldFolders made readable when that folder is not
+			// attached here (B2-27)
+			for _, h := range recordHeldOn(r) {
+				if settleable(h.Code) {
+					rows = append(rows, h.Rows...)
+				}
+			}
+		case settleable(r.Code):
+			rows = r.Rows
+		default:
+			continue // a push the remote refused: not a row to settle
 		}
-		for _, raw := range r.Rows {
+		for _, raw := range rows {
 			id, perr := ids.ParseAny(raw)
 			if perr != nil || seen[raw] {
 				continue
@@ -107,6 +122,69 @@ func (a *App) StoreConflicts(ctx context.Context) ([]StoreConflict, error) {
 		}
 	}
 	return out, nil
+}
+
+// settleable reports a refusal code of a row both sides changed.
+func settleable(code string) bool {
+	return errs.Code(code) == errs.Stale || errs.Code(code) == errs.ResourceConflict
+}
+
+// recordHeldOn is every folder whose refusal holds the record's push.
+func recordHeldOn(r StorePushRefusal) []HeldFolder {
+	if len(r.HeldOn) > 0 {
+		return r.HeldOn
+	}
+	return []HeldFolder{{Folder: r.HeldBy, Code: r.Code, Rows: r.Rows}}
+}
+
+// folderNamer is a store backend that names its rowfs folder.
+type folderNamer interface {
+	Folder() string
+}
+
+// attachHeldFolders attaches, for this command only, each folder of the
+// org's stores whose conflict holds a push here but which this repo does
+// not attach (B2-27). A row written or edited through the by-id fallback
+// (idfolder.go) lives in such a folder: its conflict held this repo's
+// sync, yet `lore sync conflicts` and `resolve` saw nothing to settle.
+func (a *App) attachHeldFolders(ctx context.Context, recs []StorePushRefusal) {
+	want := map[string]bool{}
+	for _, r := range recs {
+		if r.HeldBy == "" {
+			continue
+		}
+		for _, h := range recordHeldOn(r) {
+			if settleable(h.Code) && h.Folder != "" {
+				want[h.Folder] = true
+			}
+		}
+	}
+	if len(want) == 0 {
+		return
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return
+	}
+	for _, b := range st.byName {
+		if f, ok := concrete(b).(folderNamer); ok {
+			delete(want, f.Folder()) // attached here already
+		}
+	}
+	if len(want) == 0 {
+		return
+	}
+	for _, f := range a.orgFolders(ctx).Folders {
+		if !want[f.Folder] {
+			continue
+		}
+		delete(want, f.Folder)
+		name := f.Org
+		if name == "" {
+			name = f.Label
+		}
+		a.attachExtra(attach.Store{Name: store.Source(name + targetSep + f.Folder), URL: f.URL, Folder: f.Folder, Branch: f.Branch})
+	}
 }
 
 // rowSides is the conflict of id in the store the refusal record names

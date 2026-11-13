@@ -56,6 +56,8 @@ store clones:
       the store lock (holds no data)
   ~/.lore/stores/acme/notes/.git/lore/push_stamp (store git@github.com:acme/notes)
       when lore last pushed
+  ~/.lore/stores/acme/notes/.git/lore/remote-tip (store git@github.com:acme/notes)
+      the store branch's tip on the remote when lore last saw it, so a store repo deleted and made again is noticed, never refilled
   ~/.lore/stores/acme/notes/.git/lore/state (store git@github.com:acme/notes)
       the store lock's journal of audit records not yet acknowledged
   ~/.lore/stores/acme/notes/.git/config [user.name] (store git@github.com:acme/notes)

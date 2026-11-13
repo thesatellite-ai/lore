@@ -43,8 +43,8 @@ import (
 // A cursor issued by liveBackend: prefix, the live ref's commit, separator,
 // then the wrapped backend's cursor. Any other cursor reads from the start.
 const (
-	liveCursorPrefix = "lv1:"
-	liveCursorSep    = "|"
+	liveCursorPrefix = wire.LiveCursorPrefix
+	liveCursorSep    = wire.LiveCursorSep
 )
 
 // liveAnonymousWriter stamps an agent's live block (D8: an agent never
@@ -292,7 +292,7 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, store.Cursor, error) {
 	s := b.session(ctx)
 	if s == nil {
-		return b.inner.Read(ctx, cursor)
+		return b.readNoSession(ctx, cursor)
 	}
 	oid, files, err := b.liveFiles(ctx, s)
 	if err != nil {
@@ -358,6 +358,18 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		out = append(out, b.landedRows(ctx, s, have)...)
 	}
 	return out, store.Cursor(liveCursorPrefix + oid + liveCursorSep + string(next)), nil
+}
+
+// readNoSession is Read in a run with no live session (a git hook, live
+// rows off): the wrapped backend's rows. A cursor a live run wrote keeps
+// its live part (B1-23): this run read nothing from the live ref, so the
+// part still says what the cache holds. Answering with the bare inner
+// cursor made the next live run see "the live ref moved" and re-read and
+// re-apply every row (~5 s per command on a 5,000-row repo after each
+// commit, whose hooks run without a live session), and the hook the same
+// the other way round.
+func (b *liveBackend) readNoSession(ctx context.Context, cursor store.Cursor) ([]store.Row, store.Cursor, error) {
+	return wire.ReadKeepingLive(ctx, b.inner, cursor)
 }
 
 // Write implements store.Backend: each change's Expect is checked against

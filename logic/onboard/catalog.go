@@ -136,9 +136,13 @@ func Catalog() []Step {
 		{ // ONB 4.3
 			ID:    StepGitHub,
 			Title: "Which GitHub account?",
-			Help:  "Pick the account this setup works as. lore then finds how git reaches GitHub as it: an ssh route (an alias of ~/.ssh/config, or github.com itself) that logs in as the account, else https with its gh login. lore never edits ~/.ssh/config.",
+			Help:  "Pick the account this setup works as. lore then finds how git reaches GitHub as it: an ssh route (an alias of ~/.ssh/config, or github.com itself) that logs in as the account, else https with its gh login. lore never edits ~/.ssh/config. Skip it (save it with no answers: lore setup apply <setup> --step github --answers '{}') when your stores are not on GitHub (another git host, a local path) or this machine is offline: git then reaches each store as it is configured.",
 			Kinds: allKinds(),
 			Needs: []StepID{StepIdentity},
+			// B1-24: a store on another git host or a local path, or a
+			// machine with no gh login or GitHub key, could never finish
+			// the guided setup; skipped, git reaches stores as configured.
+			Optional: true,
 			Questions: []Question{
 				{ID: QIDGitHubAccount, Label: "GitHub account", Type: QChoice, Required: true,
 					Choices: ChoiceSource{Prefill: PrefillGitHubUsers},
@@ -203,15 +207,15 @@ func Catalog() []Step {
 		},
 		{ // ONB 4.6
 			ID:    StepTeam,
-			Title: "Start your team",
-			Help:  "lore makes a private org store for the team's shared notes, tasks and roster, and adds you as its first admin.",
+			Title: "Start or attach your team store",
+			Help:  "lore makes a private org store for the team's shared notes, tasks and roster, and adds you as its first admin. Given your team's existing store (a new machine of an admin), lore attaches it: the org entry is built from the store's lore-org.yaml (every store, own and repos, as a member's join) and you are added to its roster as an admin when you are not on it yet.",
 			Kinds: []Kind{KindAdmin},
 			Needs: []StepID{StepIdentity, StepGitHub},
 			Questions: []Question{
 				{ID: QIDOrg, Label: "Team name", Type: QText, Required: true,
 					Rules: []Rule{R(RuleOrgName), MaxLen(SetupNameMaxLen), NotIn(reservedSetupNames...)}},
 				{ID: QIDStoreURL, Label: "Team store url", Type: QText, Required: true,
-					Help:    "A new or empty private repo, e.g. git@github.com:agency/lore-team.git.",
+					Help:    "A new or empty private repo, e.g. git@github.com:agency/lore-team.git, or your team's existing store to attach it.",
 					Prefill: PrefillStoreURLCreate, Rules: []Rule{R(RuleGitURL), MaxLen(maxURL)}},
 				{ID: QIDOwn, Label: "The team's own repos", Type: QGlobList,
 					Help: "Patterns like github.com/agency/*.", Rules: []Rule{MaxLen(maxPattern)}},
@@ -500,7 +504,7 @@ var checkMeta = map[CheckID]checkInfo{
 	CheckInvitePending:      {"No stale pending invites", LevelWarn, ProbeRoster},
 	CheckInviteGitHubAccess: {"Invited people can reach the store", LevelWarn, ProbeGHRepo},
 
-	CheckOrgFree:     {"The store holds no org yet", LevelError, ProbeStoreMarker},
+	CheckOrgFree:     {"The store is new, empty or already a lore store", LevelError, ProbeStoreMarker},
 	CheckOrgNameFree: {"The team name is free", LevelError, ProbePure},
 
 	CheckStoreAddress: {"Each store has one address on this machine", LevelWarn, ProbePure},

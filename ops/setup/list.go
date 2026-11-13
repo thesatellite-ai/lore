@@ -157,7 +157,15 @@ func (e engine) Show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
-	return ShowOut{Setup: ent}, nil
+	out := ShowOut{Setup: ent}
+	// B1-25: the Health cell of setup list, and each problem it counts
+	// with its fix, so a "⚠ 2" on Home is never a count nothing names.
+	if st, serr := e.env.SetupStore(ctx); serr == nil {
+		hs, _ := e.env.(HealthSource)
+		rs := e.healthResults(ctx, st, hs, name)
+		out.Health, out.Problems = HealthCell(rs), Problems(rs)
+	}
+	return out, nil
 }
 
 // entry is the named setups[] entry, E_SETUP_NOT_FOUND when absent.
@@ -222,6 +230,13 @@ const (
 // finished setup has no progress rows: doctor only). "" when neither has
 // results (never checked; `lore doctor --all` fills it). Nothing is probed.
 func (e engine) health(ctx context.Context, st Store, hs HealthSource, name string) string {
+	return HealthCell(e.healthResults(ctx, st, hs, name))
+}
+
+// healthResults are the results health counts (the newer of the two
+// sources), one per check and target (Latest): the same list setup show
+// prints the problems of, so every count on Home is explained there.
+func (e engine) healthResults(ctx context.Context, st Store, hs HealthSource, name string) []onboard.CheckResult {
 	var doc []onboard.CheckResult
 	if hs != nil {
 		if rs, ok := hs.SetupHealth(ctx, name); ok {
@@ -235,9 +250,55 @@ func (e engine) health(ctx context.Context, st Store, hs HealthSource, name stri
 		}
 	}
 	if len(doc) > 0 && (len(prog) == 0 || !lastChecked(prog).After(lastChecked(doc))) {
-		return HealthCell(doc)
+		return Latest(doc)
 	}
-	return HealthCell(prog)
+	return Latest(prog)
+}
+
+// Latest keeps one result per check and target, the newest (B1-25): two
+// steps that run the same check (identity.git_email in the identity step
+// and again later) left two results, and Home counted one warning twice.
+// The order of first appearance is kept.
+func Latest(rs []onboard.CheckResult) []onboard.CheckResult {
+	type key struct {
+		check  onboard.CheckID
+		target string
+	}
+	at := map[key]int{}
+	out := make([]onboard.CheckResult, 0, len(rs))
+	for _, r := range rs {
+		k := key{r.Check, r.Target}
+		if r.Check == "" { // no check id: nothing to match it by, kept
+			out = append(out, r)
+			continue
+		}
+		if i, seen := at[k]; seen {
+			if !r.CheckedAt.Before(out[i].CheckedAt) {
+				out[i] = r
+			}
+			continue
+		}
+		at[k] = len(out)
+		out = append(out, r)
+	}
+	return out
+}
+
+// Problems are the results of rs a person may act on: failing, warning or
+// unrun checks, not notes (info-level) or passes; each carries its fix.
+// nil when there are none, so setup show prints no empty problems table (B1-26).
+func Problems(rs []onboard.CheckResult) []onboard.CheckResult {
+	var out []onboard.CheckResult
+	for _, r := range rs {
+		if r.Note() {
+			continue
+		}
+		switch r.Status {
+		case onboard.StatusFail, onboard.StatusWarn, onboard.StatusError:
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // lastChecked is the newest CheckedAt of rs (zero when empty).
@@ -255,10 +316,10 @@ func lastChecked(rs []onboard.CheckResult) time.Time {
 // many results have it — "✗ n" for failing error-level checks, else
 // "⚠ n" for warnings and warn-level fails, else "? n" for probes that
 // could not run, else "✓ n" passing checks; "" when there are none.
-// Skipped checks are not counted.
+// Skipped checks are not counted, and a check counts once (Latest).
 func HealthCell(rs []onboard.CheckResult) string {
 	var ok, warn, fail, errd int
-	for _, r := range rs {
+	for _, r := range Latest(rs) {
 		switch {
 		case r.Note(): // info: nothing to fix (as the page and the doctor count it)
 			ok++

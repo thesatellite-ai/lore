@@ -138,6 +138,8 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		if repoBackend, err = wrapBackend(ctx, opts, store.SourceRepo, "", repo); err != nil {
 			return fail(err)
 		}
+	} else {
+		repoBackend = liveCursorKeeper{repo} // livecursor.go: a hook's read keeps a live run's cursor
 	}
 
 	var attached []attach.Opened

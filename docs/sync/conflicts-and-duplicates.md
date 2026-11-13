@@ -118,6 +118,8 @@ Rows of a team or personal store do not travel with your code commits: `lore syn
 - `lore sync resolve <n> --take kept` keeps her version of each field both changed, `--take other` takes Bob's; either way lore merges the store, sends the result and both machines end with the same row. Only the clashing fields take the chosen side: a field only one of them changed (her status, his priority) keeps that change.
 - Or she edits the row to any value (hers, Bob's, or a third one) and runs `lore sync`: an edit made after the conflict was reported settles the clashing fields with her values, and Bob's changes to the other fields are kept.
 
+This works from her repo even for a row in a folder of the org's store that the repo does not attach (one she reached by its id, or wrote with `--to <org>/<folder>`): `lore sync conflicts` and `lore sync resolve` read that folder for the one command.
+
 If Bob changes the row again before she settles it, her choice no longer applies and the next sync reports the new conflict.
 
 ## Step 3 — The file and your database both changed

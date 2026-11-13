@@ -69,7 +69,7 @@ The rules, first match wins: the `--setup` flag, `LORE_SETUP`, this repo's pin, 
 
 ## Step 2 — Look at one setup
 
-`lore setup show <name>` prints one setup's entry: keys and paths, never a secret (at most a key file path and its fingerprint).
+`lore setup show <name>` prints one setup's entry: keys and paths, never a secret (at most a key file path and its fingerprint). Once a check has run for it (`lore doctor --all`, the setup page, a saved step), it also prints `health:`, the same cell `lore setup list` shows, and `problems:`, every failing or warning check that cell counts, each with its fix; a check two steps ran counts once.
 
 <!-- example: setup-cli#show -->
 ```console
@@ -262,6 +262,7 @@ steps:
       route           How git connects  Optional: ss
     checks: github.ssh_key, github.ssh_auth, github.
     apply: github
+    optional: true
     values: {}
   - id: personal_store
     title: Where do your own notes go?

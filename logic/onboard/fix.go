@@ -522,7 +522,7 @@ var fixes = map[fixKey]Fix{
 	{check: CheckInviteGitHubAccess}: {Text: "{github} has no access to {owner}/{repo} yet. Grant push access: gh api -X PUT repos/{owner}/{repo}/collaborators/{github} -f permission=push",
 		Command: argv(cmdGH, "api", "-X", "PUT", "repos/{owner}/{repo}/collaborators/{github}", "-f", "permission=push"), Runnable: true, Outward: true},
 
-	{check: CheckOrgFree}:     {Text: "This store already holds org {store_org}; join it with lore setup join, or ask its admin for an invite"},
+	{check: CheckOrgFree}:     {Text: "This repo holds files but is not a lore store; give a new or empty private repo, or your team's existing lore store"},
 	{check: CheckOrgNameFree}: {Text: "An orgs[] entry named {org} already exists; pick another name, or lore org rename"},
 
 	{check: CheckLiveMode}: {Text: "Autopush is on, but the remote of {repo_root} refused a dry-run push of refs/lore/live. Get push access, or set live.autopush: false on setup {setup}"},

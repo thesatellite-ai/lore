@@ -209,6 +209,9 @@ func readMachineLocal(ctx context.Context, eng *engine.Engine, path string, dryR
 		stage = engine.Staging(ctx)
 		defer engine.Discard(stage) // after a Commit: nothing left to drop
 	}
+	if !dryRun {
+		stage = engine.WithScanMemo(stage) // copyMachineTable prescans each table's rows on every CPU
+	}
 	var out []machineCount
 	for _, def := range eng.Registry().Tables() {
 		if !def.MachineLocal {
@@ -284,7 +287,15 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 	if err = rows.Err(); err != nil {
 		return 0, nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
 	}
-	for _, r := range all {
+	type toCopy struct {
+		at     int // index in all: the skip notes stay in lore.db's row order
+		id     ids.AnyID
+		raw    string
+		fields map[string]value.Value
+	}
+	var copies []toCopy
+	notes := make([][]string, len(all))
+	for at, r := range all {
 		id, perr := ids.ParseAny(r.id)
 		if perr != nil {
 			r.bad = "id: " + perr.Error()
@@ -294,7 +305,7 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 			}
 		}
 		if r.bad != "" {
-			skipped = append(skipped, r.id+" ("+r.bad+")")
+			notes[at] = append(notes[at], r.id+" ("+r.bad+")")
 			continue
 		}
 		if _, _, gerr := eng.Get(ctx, engine.Ref{Table: def.Name, ID: id}); gerr == nil {
@@ -306,19 +317,30 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 			n++
 			continue
 		}
-		_, werr := eng.CreateWithID(ctx, store.SourceMachine, def.Name, id, r.fields)
+		copies = append(copies, toCopy{at: at, id: id, raw: r.id, fields: r.fields})
+	}
+	// B1-23: each create below scans its row's fields for secrets, one row
+	// after another (render histories and run notes are big: ~170 s of a
+	// first lore fix); the scans run on every CPU first (engine.Prescan)
+	prescan := make([]map[string]value.Value, len(copies))
+	for i, c := range copies {
+		prescan[i] = c.fields
+	}
+	eng.Prescan(ctx, def.Name, prescan)
+	for _, c := range copies {
+		_, werr := eng.CreateWithID(ctx, store.SourceMachine, def.Name, c.id, c.fields)
 		if secretFinding(werr) {
 			// item 47: a secret-looking value in an old machine-local row
 			// (runs.notes free text) is redacted, never a stop: the row
 			// stays on this machine and the rest of the migration lands.
 			found := findingsText(werr)
-			if _, werr = eng.CreateWithID(eng.WithSecretUnstored(ctx), store.SourceMachine, def.Name, id, r.fields); werr == nil {
+			if _, werr = eng.CreateWithID(eng.WithSecretUnstored(ctx), store.SourceMachine, def.Name, c.id, c.fields); werr == nil {
 				n++
-				skipped = append(skipped, redactedNote(def.Name, r.id, found))
+				notes[c.at] = append(notes[c.at], redactedNote(def.Name, c.raw, found))
 				continue
 			}
 			if secretFinding(werr) {
-				skipped = append(skipped, secretSkipNote(def.Name, r.id, werr))
+				notes[c.at] = append(notes[c.at], secretSkipNote(def.Name, c.raw, werr))
 				continue
 			}
 		}
@@ -329,10 +351,13 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 			// in the trash or purged on purpose since the last copy: the
 			// person's later choice wins over the old row
 		case errs.DefOf(errs.CodeOf(werr)).Class == errs.ClassBadInput:
-			skipped = append(skipped, r.id+" ("+werr.Error()+")") // e.g. a reference or scan refusal
+			notes[c.at] = append(notes[c.at], c.raw+" ("+werr.Error()+")") // e.g. a reference or scan refusal
 		default:
 			return 0, nil, werr
 		}
+	}
+	for _, ns := range notes {
+		skipped = append(skipped, ns...)
 	}
 	return n, skipped, nil
 }

@@ -18,6 +18,14 @@ package git
 //
 // Only RestoreRemote (`store push --restore`) clears the mark; forgetting
 // the clone removes it with the folder.
+//
+// "The clone had the branch" cannot rest on the tracking ref alone: every
+// fetch prunes, and another fetch of the same clone (a read's refresh, the
+// org link index) may have pruned it before the sync looks (B2-28: an org
+// store emptied and refilled with every old commit). So each fetch that
+// sees the branch, and each push that lands, records its tip in
+// <clone>/.git/lore/remote-tip (noteRemoteTip); the check reads it when
+// the tracking ref is gone.
 
 import (
 	"context"
@@ -37,6 +45,46 @@ const remoteResetName = "remote-reset"
 // ErrRemoteReset marks the refusal of a sync whose remote was reset; wire
 // matches it to name the store in the way out (errors.Is).
 var ErrRemoteReset = errors.New("git: the store's remote was reset")
+
+// remoteTipName is the last remote tip of the clone's branch a fetch or
+// push saw, under the clone's StateDir.
+const remoteTipName = "remote-tip"
+
+// remoteTipPath is that file in the clone at dir.
+func remoteTipPath(dir string) string {
+	return filepath.Join(PathsOf(dir).StateDir, remoteTipName)
+}
+
+// noteRemoteTip records the tip of the store branch on the remote after a
+// fetch or push saw it ("" records nothing: an absent branch must not
+// erase what the clone knew). Best effort: a lost note only weakens the
+// reset check back to the tracking ref.
+func (b *Backend) noteRemoteTip(ctx context.Context, tip string) {
+	if b.branch == "" || b.work == "" {
+		return
+	}
+	if tip == "" {
+		t, err := b.resolve(ctx, b.work, trackingRefNS+b.branch)
+		if err != nil || t == "" {
+			return
+		}
+		tip = t
+	}
+	p := remoteTipPath(b.work)
+	if old, err := os.ReadFile(p); err == nil && strings.TrimSpace(string(old)) == tip {
+		return
+	}
+	_ = os.WriteFile(p, []byte(tip+"\n"), 0o600) // best effort (above)
+}
+
+// knownRemoteTip is the remote tip the clone last saw ("" when none).
+func knownRemoteTip(dir string) string {
+	b, err := os.ReadFile(remoteTipPath(dir))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
 
 // remoteResetPath is the mark's file in the clone at dir.
 func remoteResetPath(dir string) string {
@@ -66,10 +114,13 @@ func (b *Backend) remoteResetError(why string) error {
 // refusal; a clone already marked stays refused.
 func (b *Backend) checkRemoteReset(ctx context.Context, before, remote, h string) error {
 	if RemoteResetAt(b.work) {
-		return b.remoteResetError("lore found it reset earlier")
+		return b.remoteResetError("found when lore last reached it")
 	}
 	if h == "" {
 		return nil // nothing of ours to push
+	}
+	if before == "" {
+		before = knownRemoteTip(b.work) // the tracking ref may have been pruned by another fetch
 	}
 	why := ""
 	switch {
@@ -134,8 +185,10 @@ func (b *Backend) RemoteReset(ctx context.Context) (bool, error) {
 // sync pushes this copy of the store into the remote again (`lore store
 // push --restore`). No mark is no error.
 func RestoreRemote(dir string) error {
-	if err := os.Remove(remoteResetPath(dir)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return errs.FileIO("remove", remoteResetPath(dir), err)
+	for _, p := range []string{remoteResetPath(dir), remoteTipPath(dir)} {
+		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return errs.FileIO("remove", p, err)
+		}
 	}
 	return nil
 }

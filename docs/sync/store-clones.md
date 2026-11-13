@@ -108,6 +108,7 @@ fetch-stamp
 identity
 lock
 push_stamp
+remote-tip
 state
 $ head -12 README.md
 # A lore store

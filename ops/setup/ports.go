@@ -431,6 +431,11 @@ type ShowIn struct {
 // ShowOut is setup.show's output: the entry, keys only, no secrets.
 type ShowOut struct {
 	Setup onboard.SetupEntry `json:"setup"`
+	// Health is setup list's Health cell ("⚠ 1"; "" when never checked).
+	Health string `json:"health,omitempty"`
+	// Problems are the failing and warning checks Health counts, each with
+	// its fix (B1-25).
+	Problems []onboard.CheckResult `json:"problems,omitempty"`
 }
 
 // UseIn is setup.use's input.

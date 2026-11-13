@@ -512,6 +512,7 @@ func (b *Backend) push(ctx context.Context, tip string) (pushVerdict, string, er
 		return pushApplied, "", nil
 	case flagFastForward, flagForced, flagDeleted, flagNew:
 		b.recordPush(tip, flag == flagForced)
+		b.noteRemoteTip(ctx, tip)
 		return pushApplied, "", nil
 	case flagRejected:
 		for _, r := range lostRaceReasons {
