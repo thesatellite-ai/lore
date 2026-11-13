@@ -15,6 +15,11 @@ package wire
 //	               taken, a line saying so; the run migrates locally
 //	             offline / autopush off: E_OFFLINE
 //	        ─► renew every 2m until release ─► release: Store.Write(delete)
+//	             ─► Store.DropIfEmpty: the ref leaves the remote when no
+//	                other signal is on it (C-4)
+//
+// Only `--team-lock` reaches Acquire (ops/migrate takeTeamLock): the lock
+// is a push to the remote, and its line says so.
 //	Unlock  ─► expired hold: dropped · own hold from this host: dropped
 //	        ─► any other live hold: E_MIGRATE_LOCKED
 
@@ -92,12 +97,20 @@ func (l migrateTeamLock) open(ctx context.Context) (*coordWorld, *signals.Store,
 }
 
 // lockPlace names where the team lock lives, for the run's lines: the
-// signals ref, and the store folder when it is a linked store's.
+// signals ref on its remote, and the store folder when it is a linked
+// store's (the person sees that the lock is a write to that remote).
 func lockPlace(w *coordWorld) string {
 	if w.spot.store {
-		return w.spot.ref + " of the linked store (folder " + w.folder + ")"
+		return w.spot.ref + " of the linked store (folder " + w.folder + ") on its remote " + w.spot.remoteName
 	}
-	return w.spot.ref
+	return w.spot.ref + " on the remote " + w.spot.remoteName
+}
+
+// teamLockTakenLine is the line of a hold just pushed: where (lockPlace),
+// until when, and that the release takes it off the remote again.
+func teamLockTakenLine(w *coordWorld, until time.Time) string {
+	return "team lock: pushed a hold to " + lockPlace(w) + " until " + until.UTC().Format(time.RFC3339) +
+		" (renewed every " + migrateLockRenew.String() + "; removed from the remote when the run ends)"
 }
 
 // Acquire implements opsmigrate.TeamLock.
@@ -136,7 +149,7 @@ func (l migrateTeamLock) Acquire(ctx context.Context) (func() error, string, err
 		}
 		return nil, "", migrateLockError(err, l.a.opts.Wall())
 	}
-	line := "team lock: taken on " + lockPlace(w) + " until " + held.Expires.UTC().Format(time.RFC3339) + " (renewed every " + migrateLockRenew.String() + ")"
+	line := teamLockTakenLine(w, held.Expires)
 	if held.RenewedSeq > 0 {
 		line = "team lock: renewed this machine's own hold on " + lockPlace(w)
 	}
@@ -162,10 +175,16 @@ func (l migrateTeamLock) Acquire(ctx context.Context) (func() error, string, err
 		once.Do(func() {
 			close(stop)
 			wg.Wait()
-			_, rerr = st.Write(context.WithoutCancel(ctx), func(v signals.View) (signals.Change, error) {
+			bg := context.WithoutCancel(ctx)
+			_, rerr = st.Write(bg, func(v signals.View) (signals.Change, error) {
 				p, derr := signals.DecideUnhold(v, w.caller(), w.folder, migrateLockName)
 				return signals.Change{Delete: []string{p}}, derr
 			})
+			if rerr == nil {
+				// the hold is gone; a ref that carries nothing else leaves
+				// the remote too (C-4), a teammate's signal keeps it there
+				_, rerr = st.DropIfEmpty(bg)
+			}
 		})
 		return rerr
 	}

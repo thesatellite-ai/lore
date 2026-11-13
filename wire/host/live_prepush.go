@@ -33,7 +33,7 @@ const (
 	shortOIDLen      = 7
 	objectBlob       = "blob"
 	objectCommit     = "commit"
-	commitMsgWhere   = "message of commit "
+	commitMsgWhere   = wire.PushCommitMsgPrefix
 )
 
 // parsePushUpdates reads the hook's stdin (malformed lines skipped).
@@ -63,7 +63,60 @@ func (h *liveHost) prePushLeakCheck(ctx context.Context, repo *gitref.Repo, remo
 		return errs.Wrap(errs.LeakBlocked, "cannot check: could not list what this push sends", err).
 			WithHint("bypassing the check is your deliberate `git push --no-verify`")
 	}
-	return h.cfg.LeakCheck(ctx, wire.LeakWherePush, docs)
+	return h.cfg.LeakCheck(wire.WithPushBases(ctx, pushBases(ctx, repo, remote, updates)), wire.LeakWherePush, docs)
+}
+
+// maxPushBases caps the remote commits a push check compares with (as the
+// commit check's maxHistoryBases).
+const maxPushBases = 8
+
+// pushBases returns the commits the remote already has that this push
+// builds on: each updated ref's current remote tip, and the boundary of
+// what the push sends (`rev-list --boundary <tips> --not --remotes=<remote>`).
+// The secret check treats a value the same row held at one of them as
+// already on the remote (wire.WithPushBases). Nil on any git error or an
+// empty remote: then every finding blocks, as before (fails closed).
+func pushBases(ctx context.Context, repo *gitref.Repo, remote string, updates []pushUpdate) []string {
+	var bases []string
+	seen := map[string]bool{}
+	add := func(c string) {
+		if c != "" && !seen[c] && len(bases) < maxPushBases {
+			seen[c] = true
+			bases = append(bases, c)
+		}
+	}
+	args := []string{"rev-list", "--boundary"}
+	tips := 0
+	for _, u := range updates {
+		if isZeroOID(u.localSHA) {
+			continue
+		}
+		args = append(args, u.localSHA)
+		tips++
+		if !isZeroOID(u.remoteSHA) {
+			if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"cat-file", "-e", u.remoteSHA + "^{commit}"}}); err == nil {
+				add(u.remoteSHA)
+				args = append(args, "^"+u.remoteSHA)
+			}
+		}
+	}
+	if tips == 0 {
+		return bases
+	}
+	notRemote := "--remotes"
+	if remote != "" {
+		notRemote += "=" + remote
+	}
+	out, err := repo.Run(ctx, gitref.Invocation{Args: append(args, "--not", notRemote)})
+	if err != nil {
+		return bases
+	}
+	for _, l := range strings.Split(string(out), "\n") {
+		if c, ok := strings.CutPrefix(strings.TrimSpace(l), "-"); ok {
+			add(c)
+		}
+	}
+	return bases
 }
 
 // pushDocs lists every new blob (at the first path git reports for it) and

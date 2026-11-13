@@ -90,7 +90,7 @@ With `--json` (and every `lore api` error body), one object:
 | `E_STALE` | 23 | the row changed between read and write and could not be merged | read the row again and redo the edit |
 | `E_OLD_LORE` | 19 | this binary is below the project's `min_lore_version` or does not know one of its features (reads still work) | `lore upgrade` |
 | `E_FORMAT_OLD` | 24 | the project (or a shared store) is on the lore 0.1.17 format: this lore reads it but writes nothing there (no row, live row, landing or render) | tell the person; only they decide to run `lore migrate run` (or `lore fix --migrate`) once, after every teammate has lore 0.1.18. A write to the personal store or a migrated org store still works |
-| `E_LEAK_BLOCKED` | 19 | the write would put internal content where the client can read it (or lore cannot check it) | write it to the internal store (`--to`), or `lore check leaks --explain` |
+| `E_LEAK_BLOCKED` | 19 | the write would put internal content where the client can read it (or lore cannot check it: `cannot check (…)` names the store it could not read, and nothing was written) | write it to the internal store (`--to`), or `lore check leaks --explain`; for `cannot check`, tell the person: `lore sync` once that store is reachable, then rerun |
 | `E_META_QUARANTINED` | 23 | a move of a row whose metadata is quarantined (a value that no longer fits its key) | `lore meta show --id <id>` prints each problem and its fix; fix it, then move |
 | `E_META_STORE_UNREADABLE` | 19 | a write carrying metadata (`--meta`, `meta set|unset`) in a client repo while an org store has no local copy and cannot be reached, so lore cannot check the keys | nothing was written: go online once (or `lore sync` in the store), then write again |
 | `E_STORE_LOCKED` | 23 | the store lock stayed held past `store.lock_timeout` (another lore command is writing) | wait and run again |
@@ -123,6 +123,7 @@ Every code of 0.1.18, grouped. "Not raised" marks codes kept for compatibility t
 | `E_BUSY_TIMEOUT` | 23 | other writers kept moving the store branch; run the command again |
 | `E_AUDIT_CHAIN_BROKEN` | 23 | `lore audit verify` found an edited or deleted audit entry. Inspect with `lore audit log`; tell the person |
 | `E_SYNC_DATA_IGNORED` | 23 | git ignores files under `.lore/data`, so teammates would not receive them; nothing was pushed. Lore adds `!.lore/data/` exceptions itself when it can; this means a whole parent folder (usually `.lore/`) is ignored: change that rule |
+| `E_PUSH_AGAIN` | 23 | lore's pre-push hook added a commit of rows that finished in live to the branch being pushed, so this `git push` stopped once; the input was fine | run the same `git push` again (once); it sends that commit too |
 | `E_NOT_PROJECT_ROOT` | 23 | this folder is not a lore project: `cd` to the repo, or `lore init` there |
 | `E_AMBIGUOUS_PROJECT` | 23 | the repository holds several projects; pass `--project` |
 | `E_ALREADY_INITIALIZED` | 23 | this folder already has a `.lore/` |

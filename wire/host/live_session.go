@@ -191,7 +191,7 @@ func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top st
 		sig = h.loreSignature(ctx)
 	}
 	s.ref = &live.Ref{
-		Repo: repo, Name: live.RefLive, Remote: remote, RemoteName: remoteName,
+		Repo: repo, Name: live.RefLive, Remote: remote, RemoteName: remoteName, RemoteURL: s.remoteURL,
 		StateDir: s.stateDir, Clock: s.clk, Signature: sig,
 		IgnoreKeys: []string{updatedAtKey}, PushRetries: cfg.PushRetries, Backoff: liveBackoff,
 	}
@@ -270,6 +270,11 @@ func (s *liveSession) prepare(ctx context.Context) {
 	s.integrate(ctx)
 }
 
+// liveNeverPushedLine is said when the remote (%s) has no live ref and
+// this clone saw one on another remote url (A-6): nothing was deleted, the
+// rows stay here, and no write is stopped.
+const liveNeverPushedLine = "the remote %s has no live ref: never pushed here (this clone saw it on another remote url); your live rows stay on this clone's refs/lore/live and writes go on"
+
 // integrate is F3 step 3: the tracking ref into the local live ref.
 func (s *liveSession) integrate(ctx context.Context) {
 	res, err := s.ref.Integrate(ctx)
@@ -278,6 +283,8 @@ func (s *liveSession) integrate(ctx context.Context) {
 		s.blocked = err
 	case err != nil:
 		s.warn("integrate: " + err.Error())
+	case res.Action == live.IntegrateNeverPushed:
+		s.warn(fmt.Sprintf(liveNeverPushedLine, s.ref.RemoteName))
 	default:
 		s.notes = append(s.notes, res.Notes...)
 	}

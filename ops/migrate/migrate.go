@@ -153,6 +153,10 @@ type RunIn struct {
 	NoPush bool `json:"no_push,omitempty" flag:"no-push" desc:"commit the store changes but do not push them"`
 	// Offline rewrites the repo's branch files only (FORMAT_EVOLUTION 7.3).
 	Offline bool `json:"offline,omitempty" flag:"offline" desc:"branch files only: skip the settings, live rows and stores (they need the network)"`
+	// TeamLock also holds the team lock on the remote's refs/lore/signals
+	// while the run lasts (FORMAT_EVOLUTION 7.2). Off by default: the lock
+	// is a push, and nothing pushes unless the person asks (A-7).
+	TeamLock bool `json:"team_lock,omitempty" flag:"team-lock" desc:"also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the run lasts (removed when it ends), so a teammate cannot migrate at the same time; ignored with --dry-run, --no-push and --offline"`
 	// MachineLocal copies the repo's v0.1.17 machine-local rows into this
 	// machine's store even from a checkout that is not this machine's own
 	// (wire machinecopy.go says when it is).
@@ -345,7 +349,8 @@ func Ops(rw Rewriter) []op.Entry {
 // Begin (backup ref + journal, or resume) → settings → live → rewrites
 // (--offline: the repo's rows only) → Finish (push unless --no-push or
 // --offline). Lock order M then T (7.5); T only for a run that pushes
-// (not --dry-run, --no-push or --offline: nothing reaches a teammate).
+// (not --dry-run, --no-push or --offline: nothing reaches a teammate) and
+// was asked for it (--team-lock: T itself is a push to the remote).
 func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}, Verbose: in.Verbose}
 	if !in.DryRun { // a dry run only reads, and reading works on a gated project
@@ -368,7 +373,7 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	if !in.DryRun && !pushes {
 		ctx = WithNoPush(ctx) // --no-push / --offline: no write or sync of the run pushes
 	}
-	hold, err := takeTeamLock(ctx, pushes)
+	hold, err := takeTeamLock(ctx, pushes, in.TeamLock)
 	if err != nil {
 		return RunOut{}, err
 	}

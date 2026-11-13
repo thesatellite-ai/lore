@@ -46,11 +46,19 @@ import (
 const rowFileSuffix = ".json"
 
 // historyNotice is the one line a commit check prints when it let findings
-// through because the same row already held them at HEAD.
-const historyNotice = " secret-looking value(s) in this commit were already in the same row(s) at HEAD, not new, so they do not block it; list every stored one with `lore check leaks --rows`"
+// through because the same row already held them at HEAD; pushHistoryNotice
+// is the push check's, for values the remote already held.
+const (
+	historyNotice     = " secret-looking value(s) in this commit were already in the same row(s) at HEAD, not new, so they do not block it; list every stored one with `lore check leaks --rows`"
+	pushHistoryNotice = " secret-looking value(s) in this push were already in the same row(s) on the remote, not new, so they do not block it; list every stored one with `lore check leaks --rows`"
+)
 
-// historyLine is the notice of n findings let through as already in history.
-func historyLine(n int) string {
+// historyLine is the notice of n findings of the action where let through
+// as already in history.
+func historyLine(n int, where string) string {
+	if where == LeakWherePush {
+		return "lore: " + strconv.Itoa(n) + pushHistoryNotice
+	}
 	return "lore: " + strconv.Itoa(n) + historyNotice
 }
 
@@ -58,14 +66,16 @@ func historyLine(n int) string {
 // every finding whose fingerprint the same row (a row file) or the same
 // path (any other file) already held at HEAD, and returns the rest with
 // the number removed. See the file comment.
-func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore bool, paths []string, docs map[string][]byte, hits [][]leakcheck.SecretHit) ([][]leakcheck.SecretHit, int) {
+// bases are the commits to compare with: nil means historyBases (a
+// commit check), a push check passes the commits the remote has.
+func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore bool, paths []string, docs map[string][]byte, hits [][]leakcheck.SecretHit, bases []string) ([][]leakcheck.SecretHit, int) {
 	want := map[ids.AnyID]bool{}
 	rowOf := make([]ids.AnyID, len(paths))
 	dirs := map[string]bool{} // the .lore/data folders the rows sit in (a code repo)
 	var plain []string        // other files with findings: compared with HEAD at the same path
 	for i, p := range paths {
-		if len(hits[i]) == 0 || p == checkWhereCommitMsg {
-			continue // the commit message is new by definition
+		if len(hits[i]) == 0 || isCommitMessageDoc(p) {
+			continue // a commit message is new by definition
 		}
 		if !isRowDocPath(p, inStore) {
 			plain = append(plain, p)
@@ -97,7 +107,10 @@ func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore 
 	}
 	oldRows := map[ids.AnyID]map[string]bool{}
 	oldFiles := map[string]map[string]bool{}
-	for _, base := range historyBases(ctx, top) { // none: fail closed
+	if bases == nil {
+		bases = historyBases(ctx, top)
+	}
+	for _, base := range bases { // none: fail closed
 		if len(want) > 0 {
 			for id, set := range historyFingerprints(ctx, sc, top, inStore, want, specs, base) {
 				oldRows[id] = union(oldRows[id], set)
@@ -301,5 +314,5 @@ func (a *App) migratedSecretsLine(ctx context.Context, top, tree, data string, d
 		more = ", and " + strconv.Itoa(n-len(named)) + " more"
 	}
 	return "warning: " + strconv.Itoa(n) + " secret-looking value(s) in the rewritten rows (row field rule fingerprint): " + strings.Join(named, "; ") + more +
-		". They were already committed, so the commit check lets this migration through; still move each real secret to your vault (lore edit --id <id>, ${secret:…}), or mark one that is not: lore secrets allow <id> --field <field> --rule <rule> --match-hash <fingerprint> --reason \"<why>\" (every one: lore check leaks --rows)"
+		". They were already committed, so the commit check lets this migration through; still move each real secret to your vault (lore edit --id <id>, ${secret:…}), or mark one that is not: " + leakcheck.AllowRowCommand("<row>", "<field>", "<rule>", "<fingerprint>") + " (every one, each with its own line: lore check leaks --rows)"
 }

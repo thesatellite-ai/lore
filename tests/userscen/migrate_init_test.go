@@ -271,13 +271,13 @@ func TestMigrateClientRepo(t *testing.T) {
 	c.AdminPush("origin", "main")
 	clientRefs := client.Refs("refs/lore")
 
-	out := th.DecodeJSON[migRunOut](t, c.Lore("migrate", "run", "--json"))
+	out := th.DecodeJSON[migRunOut](t, c.Lore("migrate", "run", "--team-lock", "--json"))
 	// The count also holds the org's personal-store and roster steps (see
 	// the migrate report); the planted branch row is the one asserted here.
 	if !slices.Contains(out.Rows, k.table+"/"+id) {
 		t.Fatalf("client repo run: %+v, want row %s/%s", out, k.table, id)
 	}
-	if len(out.Journal) == 0 || !strings.Contains(out.Journal[0], "team lock: taken on") || !strings.Contains(out.Journal[0], "of the linked store") {
+	if len(out.Journal) == 0 || !strings.Contains(out.Journal[0], "team lock: pushed a hold to") || !strings.Contains(out.Journal[0], "of the linked store") {
 		t.Fatalf("client repo run: the team lock must live on the linked store: %q", out.Journal)
 	}
 	migAssertRewritten(t, c, planted)

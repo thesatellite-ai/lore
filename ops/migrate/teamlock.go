@@ -3,9 +3,15 @@ package migrate
 // The team lock (FORMAT_EVOLUTION 7.2, 7.5): a `lore-migrate` hold on the
 // project's signals ref, so two teammates never migrate at once.
 //
-//	run ─► M (LockMigration, machine) ─► T (TeamLock.Acquire; not for --dry-run,
-//	       --no-push, --offline) ─► … ─► release T ─► release M
-//	rollback ─► M ─► T ─► …                      (7.2: a rollback cannot race a run)
+//	run ─► M (LockMigration, machine) ─► T (TeamLock.Acquire; only with
+//	       --team-lock, never for --dry-run, --no-push, --offline) ─► … ─►
+//	       release T ─► release M
+//	rollback ─► M ─► T (--team-lock) ─► …        (7.2: a rollback cannot race a run)
+//
+// T writes to the remote (a hold on refs/lore/signals), so it is taken
+// only when the person names --team-lock (owner rule 1: nothing reaches a
+// remote without an explicit push, sync or flag); a plain run holds only
+// the machine lock M and says so (localLockLine).
 //	unlock --team ─► clear a stale M ─► M ─► TeamLock.Unlock ─► release M
 //
 // The signals machinery lives in the host (the CLI), which the core cannot
@@ -52,6 +58,12 @@ func teamLockFrom(ctx context.Context) (TeamLock, bool) {
 // noTeamLockLine is the journal line of a run on a surface with no team lock.
 const noTeamLockLine = "team lock: not available on this surface (no signals ref here); run `lore migrate run` from the CLI to guard against a teammate migrating at the same time"
 
+// localLockLine is the journal line of a run that would push but was not
+// asked for --team-lock: only this machine's lock guarded it, and nothing
+// was written to the remote for the lock (A-7: the lock used to push
+// refs/lore/signals to origin on every run).
+const localLockLine = "team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time"
+
 // teamLockReleasedLine ends the journal of a run that took T.
 const teamLockReleasedLine = "team lock released"
 
@@ -64,11 +76,16 @@ type teamHold struct {
 	taken   bool
 }
 
-// takeTeamLock takes T when the host gives one and the run will push.
-func takeTeamLock(ctx context.Context, pushes bool) (teamHold, error) {
+// takeTeamLock takes T when the person asked for it (asked: --team-lock),
+// the host gives one and the run will push. A run that pushes without
+// --team-lock gets localLockLine and writes nothing to the remote.
+func takeTeamLock(ctx context.Context, pushes, asked bool) (teamHold, error) {
 	none := func() error { return nil }
 	if !pushes {
 		return teamHold{release: none}, nil
+	}
+	if !asked {
+		return teamHold{release: none, line: localLockLine}, nil
 	}
 	l, ok := teamLockFrom(ctx)
 	if !ok {

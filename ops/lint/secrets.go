@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/logic/rowscan"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -46,7 +47,7 @@ func secretFindings(sc scan.Scanner, all map[row.Table][]sourced) []Finding {
 		id, f, hit := h.ID.String(), h.Finding.Field, h.Finding
 		out = append(out, Finding{Code: SecretFound, ID: id, Store: h.Source,
 			Message: f + " looks like a secret (" + hit.RuleID + ") at line " + strconv.Itoa(hit.Line) + ": " + hit.Preview,
-			Fix:     "move the value to your vault and write ${secret:…}: lore edit " + id + ", or if it is not a secret: lore secrets allow --row-id " + id + " --field " + f + " --rule " + hit.RuleID + " --match-hash " + strconv.FormatUint(uint64(hit.MatchHash), 10) + ` --reason "<why>"`})
+			Fix:     "move the value to your vault and write ${secret:…}: lore edit " + id + ", or if it is not a secret: " + leakcheck.AllowRowCommand(id, f, hit.RuleID, strconv.FormatUint(uint64(hit.MatchHash), 10))})
 	}
 	return out
 }

@@ -374,7 +374,7 @@ func (o ops) secretOps() []op.Entry {
 		op.Define(op.Spec{Name: OpSecretRuleOn, Summary: "Switch a secret rule back on at a level", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "switch a rule on again", CLI: "lore secrets rule on --id srl_0d4e"}}}, o.ruleOn).Asks(o.ruleOnQuestion),
 		op.Define(op.Spec{Name: OpSecretAllow, Summary: "Record one finding as not a secret for one row, field and rule", Permission: op.PermWrite,
-			Access: op.AccessWrite, Errors: writeErrors, Examples: []op.Example{{Title: "keep a test fixture key as not a secret", CLI: `lore secrets allow mem_0c3a --rule srl_0d4e --match fixture-token-123 --reason "a test fixture"`}}}, o.allow).Checks(allowCheck),
+			Access: op.AccessWrite, Errors: writeErrors, Examples: []op.Example{{Title: "keep a test fixture key as not a secret", CLI: `lore secrets allow --row-id mem_0c3a --field body --rule generic-api-key --match fixture-token-123 --reason "a test fixture"`}}}, o.allow).Checks(allowCheck),
 		op.Define(op.Spec{Name: OpSecretAllowRm, Summary: "Remove an allow entry (the finding is reported again)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "stop allowing a finding", CLI: "lore secrets allow rm --id sal_2e19"}}}, o.allowRm).Asks(o.allowRmQuestion),
 		op.Define(op.Spec{Name: OpSecretAllowList, Summary: "List the allow entries", Permission: op.PermRead, Access: op.AccessRead,

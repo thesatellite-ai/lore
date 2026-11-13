@@ -47,6 +47,25 @@ import (
 // leakCannotCheck is the refusal when the internal rows cannot be read.
 const leakCannotCheck = "cannot check: store unreachable and nothing cached"
 
+// leakCannotCheckHint is the way out of every "cannot check" refusal: the
+// check reads stores this machine could not read, and nothing was written.
+const leakCannotCheckHint = "the leak check reads the stores of this repo's org before anything reaches the client, and one could not be read here; nothing was written. Run `lore sync` once the store is reachable (`lore doctor` names it), then run the command again"
+
+// leakCannotCheckErr is the E_LEAK_BLOCKED "cannot check" refusal: what
+// could not be read ("" for nothing more specific), the cause's own line
+// when there is one, and leakCannotCheckHint (B-15: it used to print the
+// bare line with no store, no cause and no way out).
+func leakCannotCheckErr(what string, cause error) error {
+	msg := leakCannotCheck
+	if what != "" {
+		msg += " (" + what + ")"
+	}
+	if cause == nil {
+		return errs.New(errs.LeakBlocked, msg).WithHint(leakCannotCheckHint)
+	}
+	return errs.Wrap(errs.LeakBlocked, msg+": "+oneLine(cause.Error()), cause).WithHint(leakCannotCheckHint)
+}
+
 // leakTextFields are the prose fields of core rows the text rule compares
 // against. Only prose: a field holding ids would make an internal row that
 // legitimately points at a client row match the client row's own id.
@@ -81,10 +100,10 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 	}
 	s, err := res.Situation(ctx)
 	if err != nil {
-		return errs.Wrap(errs.LeakBlocked, leakCannotCheck, err)
+		return leakCannotCheckErr("", err)
 	}
 	if s.ResolveErr != nil {
-		return errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (the org of this repo: "+s.ResolveErr.Error()+")", s.ResolveErr)
+		return leakCannotCheckErr("the org of this repo", s.ResolveErr)
 	}
 	client := s.Result.Role == orgresolve.RoleClient
 	if (s.Result.Role == orgresolve.RoleOwn && !s.Result.LinkUnknown) || s.ProjectID == "" {
@@ -92,7 +111,7 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 	}
 	expected, err := res.OrgStores(ctx)
 	if err != nil {
-		return errs.Wrap(errs.LeakBlocked, leakCannotCheck, err)
+		return leakCannotCheckErr("", err)
 	}
 	names := make([]store.Source, 0, len(expected))
 	for _, e := range expected {
@@ -105,7 +124,7 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 	if client {
 		keys, kerr := a.List(ctx, store.SourceRepo, schema.TableMetaKeys)
 		if kerr != nil {
-			return errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (the repo's key rows)", kerr)
+			return leakCannotCheckErr("the repo's key rows", kerr)
 		}
 		rows = withRepoKeys(rows, keys)
 	}
@@ -308,7 +327,7 @@ func (a *App) leakRows(ctx context.Context, client bool, expected []store.Source
 func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []store.Source) ([]leakcheck.IndexRow, error) {
 	idents, err := a.StoreIdentities(ctx)
 	if err != nil {
-		return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck, err)
+		return nil, leakCannotCheckErr("", err)
 	}
 	attached := make(map[store.Source]bool, len(idents))
 	for _, si := range idents {
@@ -316,7 +335,7 @@ func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []sto
 	}
 	for _, name := range expected {
 		if !attached[name] {
-			return nil, errs.New(errs.LeakBlocked, leakCannotCheck+" (store "+string(name)+")")
+			return nil, leakCannotCheckErr("store "+string(name)+": never read on this machine", nil)
 		}
 	}
 	var out []leakcheck.IndexRow
@@ -326,7 +345,7 @@ func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []sto
 		}
 		class, err := a.StoreClass(ctx, si.Name)
 		if err != nil {
-			return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck, err)
+			return nil, leakCannotCheckErr("", err)
 		}
 		if !leakIndexesClass(class, client) {
 			continue
@@ -334,13 +353,13 @@ func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []sto
 		label := leakStoreLabelPrefix + string(si.Name)
 		keyRows, err := a.List(ctx, si.Name, schema.TableMetaKeys)
 		if err != nil {
-			return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (store "+string(si.Name)+")", err)
+			return nil, leakCannotCheckErr("store "+string(si.Name), err)
 		}
 		keys := leakKeysOf(keyRows)
 		for _, t := range CoreTables() {
 			rows, err := a.List(ctx, si.Name, t)
 			if err != nil {
-				return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (store "+string(si.Name)+")", err)
+				return nil, leakCannotCheckErr("store "+string(si.Name), err)
 			}
 			out = append(out, leakIndexRows(rows, t, si.Name, label, keys)...)
 		}

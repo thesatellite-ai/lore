@@ -146,7 +146,12 @@ var _ opsmigrate.RepoSettingsMigrator = (*App)(nil)
 // repo store's rows: the entity_tags links folded into tag_ids (M-1).
 func (a *App) MigrateRepoSettings(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
 	steps, rows, err := a.migrateTags(ctx, dryRun)
-	return opsmigrate.Settings{Steps: steps, Rows: rows}, err
+	if err != nil {
+		return opsmigrate.Settings{}, err
+	}
+	// branch files only (--offline): the repo's actor copies are among them
+	proj, n, err := a.migrateActorProjection(ctx, dryRun)
+	return opsmigrate.Settings{Steps: append(steps, proj...), Rows: rows + n}, err
 }
 
 // migrateSettings is MigrateSettings returning its steps and row count.
@@ -288,7 +293,14 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 	if err != nil {
 		return nil, 0, err
 	}
-	return append(steps, copySteps...), rows + n, nil
+	steps, rows = append(steps, copySteps...), rows+n
+	// actor copies in the repo trimmed to {id, display name, kind}, after
+	// every step that writes one (migrate_actorprojection.go)
+	projSteps, n, err := a.migrateActorProjection(ctx, dryRun)
+	if err != nil {
+		return nil, 0, err
+	}
+	return append(steps, projSteps...), rows + n, nil
 }
 
 // StepPIIPatterns names the pii_patterns step (3.3, SETTINGS ARE DATA).

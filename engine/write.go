@@ -129,6 +129,9 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err != nil {
 		return Written{}, err
 	}
+	if noOriginCopy(table, st) {
+		origin = value.JSON{}
+	}
 	actor := e.actorOf(cl)
 	stamp := e.clock.Now()
 	r := row.Row{

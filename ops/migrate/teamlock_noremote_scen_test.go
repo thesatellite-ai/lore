@@ -56,7 +56,7 @@ func TestMigrateScenNoRemoteNeverSaysReleased(t *testing.T) {
 			}
 			l := &noRemoteTeamLock{}
 			e := Ops(journaled{f})[0]
-			in, derr := e.Decode(op.JSONDecoder{Body: []byte(`{}`)})
+			in, derr := e.Decode(op.JSONDecoder{Body: []byte(`{"team_lock":true}`)})
 			if derr != nil {
 				t.Fatal(derr)
 			}
@@ -98,7 +98,7 @@ func TestMigrateScenNoRemoteRollback(t *testing.T) {
 	if rb == nil {
 		t.Fatal("no rollback operation")
 	}
-	in, err := rb.Decode(op.JSONDecoder{Body: []byte(`{}`)})
+	in, err := rb.Decode(op.JSONDecoder{Body: []byte(`{"team_lock":true}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

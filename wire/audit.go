@@ -394,7 +394,7 @@ func (r *routedAudit) noteWrite(ctx context.Context, ev engine.Event) {
 	if l == nil || ev.Store == store.SourceMachine || ev.Table == schema.TableSessions || slices.Contains(engine.SecretActions(), ev.Action) {
 		return
 	}
-	w := Written{Store: string(ev.Store)}
+	w := Written{Store: string(ev.Store), key: string(ev.Table) + "/" + ev.ID.String()}
 	if r.rowFile != nil {
 		w.File = r.rowFile(ev.Store, ev.Table, ev.ID)
 	}

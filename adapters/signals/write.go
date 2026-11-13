@@ -687,3 +687,35 @@ func (s *Store) changes(v View, bad []string, ch Change) (gitref.Changes, error)
 	}
 	return out, nil
 }
+
+// DropIfEmpty deletes the signals ref on the remote when its board holds
+// no signal at all (the last hold was just removed), so a short-lived hold such
+// as the migration team lock leaves the remote as it found it (C-4: the
+// ref stayed on origin after "team lock released"). The delete is leased
+// on the commit just read: a teammate who wrote a signal meanwhile wins
+// and the ref stays. dropped is false when the board is not empty, the
+// ref is absent, or the race was lost; offline or autopush off is an
+// *OfflineError like Write.
+func (s *Store) DropIfEmpty(ctx context.Context) (dropped bool, err error) {
+	if !s.Autopush {
+		return false, &OfflineError{Reason: "autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0)"}
+	}
+	old, tree, err := s.fetchState(ctx)
+	if err != nil || old == "" {
+		return false, err
+	}
+	v, bad := s.view(ctx, tree)
+	if len(bad) > 0 || len(v.Board) > 0 {
+		return false, nil // a signal (even an expired or unreadable one) is still there: leave it to its owner
+	}
+	again, err := s.push(ctx, []gitremote.RefUpdate{{Dst: s.Ref, Mode: gitremote.ModeLease, Expect: old}}, false)
+	if err != nil || again {
+		return false, err
+	}
+	if track, terr := s.tracking(); terr == nil {
+		if derr := s.Repo.DeleteRef(ctx, track, old); derr != nil {
+			s.trace(fmt.Sprintf("signals: tracking ref not dropped: %v", derr)) // the next fetch drops it
+		}
+	}
+	return true, nil
+}

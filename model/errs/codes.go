@@ -183,6 +183,12 @@ const (
 	// project still on an older format (decision D13: only lore migrate
 	// run raises a project's format).
 	FormatOld Code = "E_FORMAT_OLD"
+	// PushAgain stops a `git push` once because lore's pre-push hook added
+	// a commit to the pushed branch (rows that finished in live land with
+	// the person's push): nothing is wrong with the input, the same push
+	// run again sends the branch with that commit (A-13: it was
+	// E_INVALID_INPUT, which scripts read as a mistake of theirs).
+	PushAgain Code = "E_PUSH_AGAIN"
 	// FORMAT_EVOLUTION rule 4, FQ5.
 	MigrateRollbackLoses Code = "E_MIGRATE_ROLLBACK_LOSES"
 	URLUserinfo          Code = "E_URL_CREDENTIALS"
@@ -427,6 +433,7 @@ var table = map[Code]entry{
 	MetaForeignKey:        {class: ClassGuard, desc: "a client-repo row carries a key id or scope label from outside its registry"},
 	MetaStoreUnreadable:   {class: ClassGuard, desc: "a client-repo key registration while the store's key rows cannot be read"},
 	MigrateLocked:         {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
+	PushAgain:             {class: ClassRefused, desc: "lore's pre-push hook added a commit of finished live rows to the branch being pushed, so this push stopped once; run the same git push again (it sends that commit too)"},
 	FormatOld:             {class: ClassMigrate, desc: "the project is on an older lore format; only lore migrate run upgrades it, and this lore writes nothing there until then"},
 	MigrateRollbackLoses:  {class: ClassMigrate, desc: "rolling back the migration would lose changes made after it; nothing was changed"},
 	URLUserinfo:           {class: ClassBadInput, desc: "a URL value holds credentials"},

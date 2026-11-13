@@ -200,7 +200,7 @@ Lore checks twice. At commit, the `pre-commit` hook checks the staged files and 
 
 A row written to the client repo (`--to repo`, or a kind whose default is the repo) is checked before it is written: if it quotes an internal note, lore refuses with `E_LEAK_BLOCKED`, says "Nothing written" and writes nothing.
 
-`git commit --no-verify` and `git push --no-verify` skip every local check. So the client's CI should run `lore check leaks --ci` as the backstop. It needs no store, so it catches internal rows by their ids and structure, not pasted sentences.
+`git commit --no-verify` and `git push --no-verify` skip every local check. So the client's CI should run `lore check leaks --ci` as the backstop. It needs no store, so it catches internal rows by their ids and structure, not pasted sentences. Each finding names its file; an actor copy holding more than {id, display name, kind} (a `stable_key` left by lore 0.1.17) names `lore migrate run`, which trims every actor copy in `.lore/data` (it is safe to run again on a migrated repo): commit and push the rewritten files.
 
 Agents check a pull request body or comment before posting it. The same text is refused there. An unrelated text passes:
 

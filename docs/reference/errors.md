@@ -125,6 +125,7 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 |---|---|---|---|
 | `E_AUDIT_CHAIN_BROKEN` | 23 | `lore audit verify` found an audit entry that was edited or deleted | `lore audit log` shows the entries; `lore <kind> show <id>` the rows named |
 | `E_SYNC_DATA_IGNORED` | 23 | `lore sync` found row files under `.lore/data` that git still ignores, so teammates would never get those notes; nothing was pushed | remove the line that ignores them from `.gitignore` |
+| `E_PUSH_AGAIN` | 23 | lore's pre-push hook added a commit to the branch you pushed (rows that finished in live land with your push), so this `git push` stopped once; nothing you typed was wrong | run the same `git push` again: it sends the branch with that commit (a script that pushes once retries on this code) |
 
 lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. When a rule it cannot override, such as a `.gitignore` inside `.lore/data`, still hides row files, `lore sync` stops with `E_SYNC_DATA_IGNORED` (exit 23) and pushes nothing.
 
@@ -342,7 +343,7 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 | `E_ORG_DISAGREES` | 17 | `LORE_ORG` or `lore org use` names another org than the store's link for this repo | name the place with `--to <org>`, or fix the choice with `lore org use` (or unset `LORE_ORG`) |
 | `E_LINK_UNKNOWN` | 18 | the store cannot be reached and no saved link list exists, so lore cannot tell whether this is a client repo | pass `--to`, or try again online (`lore store doctor`) |
 | `E_NOT_A_STORE` | 19 | the folder is not inside a git work tree; or the git repo has no lore data (`lore isn't set up in … (no .lore folder)`): every command but `lore init`, `lore setup` and the link commands refuses there and changes nothing, not even `.git/config`, `.git/hooks` or `.git/info`; or a repo under `stores:` has no `lore-store.yaml`, or holds files that are not lore notes | outside git: cd into a git checkout, or run `git init` first; a repo with no lore data: `lore init` (or the This folder step of `lore setup`) when you want lore there; for a store: make one with `lore store init` in a new, empty repo |
-| `E_LEAK_BLOCKED` | 19 | the write would put internal notes where the client can read them | see `lore check leaks --explain` |
+| `E_LEAK_BLOCKED` | 19 | the write would put internal notes where the client can read them, or (`cannot check (…)`) a store the check must read could not be read on this machine; the message names it and its cause, and nothing was written | see `lore check leaks --explain`; for `cannot check`, run `lore sync` once the store is reachable (`lore doctor` names it) and run the command again |
 | `E_CYCLE` | 19 | the `--after` link would make tasks wait on each other in a circle | drop one `--after` link |
 | `E_OLD_LORE` | 19 | this lore is older than the live rows here allow; reading still works | upgrade lore |
 | `E_CONFIG_INVALID` | 20 | `~/.lore/config.yaml` has a mistake | run `lore config check`; it lists every problem |

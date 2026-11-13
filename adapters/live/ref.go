@@ -37,6 +37,11 @@ type Ref struct {
 	Remote gitremote.Remote
 	// RemoteName names the remote for tracking refs ("origin").
 	RemoteName string
+	// RemoteURL is the remote's url ("" when the caller does not know
+	// it). The seen marker records it, so a remote that lacks the ref but
+	// is not the one this clone saw it on is told apart from a deletion
+	// (A-6: a repo moved to a new remote is "never pushed here").
+	RemoteURL string
 	// StateDir is the per-repo machine state folder (.git/lore, or
 	// <bare clone>/lore): fetch stamp, seen marker, pending list.
 	StateDir string
@@ -89,6 +94,7 @@ const defaultRemote = "origin"
 // one live ref per store branch, so the ref name is part of the file name).
 const (
 	seenSuffix    = ".seen"
+	seenURLSuffix = ".seen-url"
 	pendingSuffix = ".pending.json"
 	stateDirMode  = 0o755
 	stateFileMode = 0o644
@@ -167,6 +173,10 @@ const (
 	IntegrateFastForward IntegrateAction = "fast-forward" // local behind
 	IntegrateMerged      IntegrateAction = "merged"       // both moved: F4 onto the remote tip
 	IntegrateReapplied   IntegrateAction = "reapplied"    // remote compacted: F8 reader path
+	// IntegrateNeverPushed: the remote has no live ref and this clone saw
+	// one on a different remote url, so the ref was never pushed here (a
+	// repo moved to a new remote); the local ref is kept, nothing blocks.
+	IntegrateNeverPushed IntegrateAction = "never-pushed"
 )
 
 // Integrate brings the tracking ref into the local ref (F3 step 3).
@@ -178,6 +188,11 @@ func (r *Ref) Integrate(ctx context.Context) (IntegrateResult, error) {
 	switch {
 	case s.Tracking == "":
 		if s.Seen != "" && s.Local != "" {
+			if r.seenElsewhere() {
+				// the ref was seen on another remote url: this remote never
+				// had it, nothing was deleted (A-6); forget the old marker
+				return IntegrateResult{Action: IntegrateNeverPushed}, r.ClearSeen()
+			}
 			return r.rewritten(ctx, s)
 		}
 		return IntegrateResult{Action: IntegrateNothing}, nil
@@ -456,15 +471,31 @@ func (r *Ref) pruneBackups(ctx context.Context) error {
 }
 
 func (r *Ref) markSeen(oid string) error {
+	if r.RemoteURL != "" {
+		if err := writeState(r.stateFile(seenURLSuffix), []byte(r.RemoteURL+"\n")); err != nil {
+			return err
+		}
+	}
 	return writeState(r.stateFile(seenSuffix), []byte(oid+"\n"))
+}
+
+// seenElsewhere reports whether the seen marker was recorded on a remote
+// url other than RemoteURL. Unknown (no url recorded by an older lore, or
+// RemoteURL unset) is false: a deletion cannot be ruled out, so the
+// rewrite guard stays.
+func (r *Ref) seenElsewhere() bool {
+	at := readTrim(r.stateFile(seenURLSuffix))
+	return at != "" && r.RemoteURL != "" && at != r.RemoteURL
 }
 
 // ClearSeen forgets the last integrated remote commit (after `lore live
 // restore` re-created the remote ref from a backup).
 func (r *Ref) ClearSeen() error {
-	err := os.Remove(r.stateFile(seenSuffix))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("live: clear seen: %w", err)
+	for _, suf := range []string{seenSuffix, seenURLSuffix} {
+		err := os.Remove(r.stateFile(suf))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("live: clear seen: %w", err)
+		}
 	}
 	return nil
 }

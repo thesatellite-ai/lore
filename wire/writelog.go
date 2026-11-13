@@ -9,6 +9,9 @@ package wire
 //	host Around (not a read) ─▶ WithWriteLog ─▶ op runs ─▶ engine writes
 //	   ─▶ routedAudit.Record ─▶ log.add(store, row file)
 //	   ─▶ "lore: wrote <file>" (a few) / "lore: wrote N row files in <dir>"
+//	liveBackend (wire/host) ─▶ NoteLiveWrite: the row went to the local
+//	   live ref, not its file ─▶ "lore: wrote <table>/<id> on this clone's
+//	   refs/lore/live (not pushed yet; <file> unchanged)" (C-5)
 
 import (
 	"context"
@@ -31,6 +34,13 @@ type Written struct {
 	// File is the row file's absolute path ("" when the store keeps no
 	// file per row, or its backend cannot say).
 	File string
+	// Live is the local live ref the row was written to instead of File
+	// ("" when the write changed File): File is then left as it was (C-5:
+	// "wrote <file>" for a file the write did not touch sent the person
+	// to commit an unchanged file).
+	Live string
+	// key is "table/id", matching NoteLiveWrite's records.
+	key string
 }
 
 // WriteLog collects the row files one command wrote.
@@ -38,6 +48,8 @@ type WriteLog struct {
 	mu    sync.Mutex
 	files []Written
 	seen  map[Written]bool
+	// live maps "table/id" to the live ref a row of this command went to.
+	live map[string]string
 }
 
 // writeLogKey carries the log on a context.
@@ -45,7 +57,7 @@ type writeLogKey struct{}
 
 // WithWriteLog returns ctx with a new WriteLog and the log.
 func WithWriteLog(ctx context.Context) (context.Context, *WriteLog) {
-	l := &WriteLog{seen: map[Written]bool{}}
+	l := &WriteLog{seen: map[Written]bool{}, live: map[string]string{}}
 	return context.WithValue(ctx, writeLogKey{}, l), l
 }
 
@@ -53,6 +65,20 @@ func WithWriteLog(ctx context.Context) (context.Context, *WriteLog) {
 func writeLogOf(ctx context.Context) *WriteLog {
 	l, _ := ctx.Value(writeLogKey{}).(*WriteLog)
 	return l
+}
+
+// NoteLiveWrite records that the row table/id of this command was written
+// to the local live ref ref rather than to its row file. The live backend
+// (wire/host) calls it once the local ref holds the row; WrittenLines then
+// names the ref, not the file. A context without a log ignores it.
+func NoteLiveWrite(ctx context.Context, table row.Table, id string, ref string) {
+	l := writeLogOf(ctx)
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.live[string(table)+"/"+id] = ref
 }
 
 // add records w once.
@@ -76,6 +102,7 @@ func (l *WriteLog) Files() []Written {
 	out := append([]Written(nil), l.files...)
 	for i := range out {
 		out[i].File = currentRowFile(out[i].File)
+		out[i].Live = l.live[out[i].key]
 	}
 	return out
 }
@@ -122,6 +149,10 @@ func WrittenLines(files []Written) []string {
 	if len(files) <= WrittenShowAll {
 		out := make([]string, 0, len(files))
 		for _, f := range files {
+			if f.Live != "" {
+				out = append(out, liveWrittenLine(f))
+				continue
+			}
 			if f.File == "" {
 				out = append(out, "lore: wrote a row in store "+f.Store)
 				continue
@@ -130,12 +161,12 @@ func WrittenLines(files []Written) []string {
 		}
 		return out
 	}
-	type group struct{ store, dir string }
+	type group struct{ store, dir, live string }
 	counts := map[group]int{}
 	var order []group
 	for _, f := range files {
-		g := group{store: f.Store}
-		if f.File != "" {
+		g := group{store: f.Store, live: f.Live}
+		if f.File != "" && f.Live == "" {
 			g.dir = filepath.Dir(filepath.Dir(f.File)) // <folder data>/<table>/<id>.json → the folder's data
 		}
 		if counts[g] == 0 {
@@ -147,6 +178,10 @@ func WrittenLines(files []Written) []string {
 	out := make([]string, 0, len(order))
 	for _, g := range order {
 		n := counts[g]
+		if g.live != "" {
+			out = append(out, "lore: wrote "+strconv.Itoa(n)+" live row(s) on this clone's "+g.live+storeSuffix(g.store)+" (not pushed yet; their files are unchanged)")
+			continue
+		}
 		if g.dir == "" {
 			out = append(out, "lore: wrote "+strconv.Itoa(n)+" row(s) in store "+g.store)
 			continue
@@ -154,6 +189,17 @@ func WrittenLines(files []Written) []string {
 		out = append(out, "lore: wrote "+strconv.Itoa(n)+" row file(s) in "+g.dir+storeSuffix(g.store))
 	}
 	return out
+}
+
+// liveWrittenLine is the line of one row written to the local live ref:
+// where it went, that it is not pushed yet, and that its file (when it
+// has one) did not change.
+func liveWrittenLine(f Written) string {
+	line := "lore: wrote " + f.key + " on this clone's " + f.Live + storeSuffix(f.Store) + " (a live row, not pushed yet"
+	if f.File != "" {
+		line += "; " + f.File + " is unchanged"
+	}
+	return line + ")"
 }
 
 // storeSuffix names the store after a path ("" for the repo's own rows,

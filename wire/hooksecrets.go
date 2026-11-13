@@ -56,20 +56,55 @@ const (
 
 // HookSecrets scans docs for credentials before a commit or push from the
 // repository at root; where names the action ("commit", "push").
-// A commit's findings already in history (hooksecrets_history.go) go to
-// the notice sink as one line.
+// Findings already in history (hooksecrets_history.go: at HEAD for a
+// commit, on the remote for a push) go to the notice sink as one line.
 func (a *App) HookSecrets(ctx context.Context, root, where string, docs map[string][]byte) error {
 	old, err := a.hookSecrets(ctx, root, where, docs)
 	if old > 0 {
-		a.notice(historyLine(old))
+		a.notice(historyLine(old, where))
 	}
 	return err
 }
 
+// PushCommitMsgPrefix starts the doc key of a pushed commit's message
+// ("message of commit <short sha>"), as the pre-push hook names it: a
+// message is no file, so it has no row, field or path an allow entry can
+// name, and no earlier version to compare with.
+const PushCommitMsgPrefix = "message of commit "
+
+// isCommitMessageDoc reports whether doc key p is a commit message (the
+// one a commit check reads, or a pushed commit's).
+func isCommitMessageDoc(p string) bool {
+	return p == checkWhereCommitMsg || strings.HasPrefix(p, PushCommitMsgPrefix)
+}
+
+// pushBasesKey is the context key of the commits a push check counts as
+// already on the remote (WithPushBases).
+type pushBasesKey struct{}
+
+// WithPushBases returns ctx whose push secret check treats a value the
+// same row already held at one of bases (commits the remote has: the
+// boundary of what the push sends) as not new, exactly as the commit
+// check treats a value the row held at HEAD (bug B1-14). Why: after `lore
+// migrate run` every row file is rewritten, so every pushed row is a new
+// blob; without this the commit passed ("already in the same row at HEAD")
+// and the push of that same commit was refused (user report). Without
+// bases (an empty remote, or a caller that sets none) every finding of a
+// pushed blob blocks, as before.
+func WithPushBases(ctx context.Context, bases []string) context.Context {
+	return context.WithValue(ctx, pushBasesKey{}, bases)
+}
+
+// pushBasesOf is the bases WithPushBases set (nil when none).
+func pushBasesOf(ctx context.Context) []string {
+	b, _ := ctx.Value(pushBasesKey{}).([]string)
+	return b
+}
+
 // hookSecrets is HookSecrets returning, instead of printing, how many
-// findings of a commit were let through as already in history: `lore check
-// leaks` runs on its own App, whose notice sink the command hooks never
-// set, so it prints that line as its result.
+// findings were let through as already in history: `lore check leaks`
+// runs on its own App, whose notice sink the command hooks never set, so
+// it prints that line as its result.
 func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[string][]byte) (inHistory int, err error) {
 	if len(docs) == 0 {
 		return 0, nil
@@ -90,14 +125,21 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 	}
 	sort.Strings(paths)
 	hits := scanDocs(sc, allows, paths, docs, inStore)
-	if where == checkWhereCommit {
+	switch where {
+	case checkWhereCommit:
 		// D2: a commit is blocked only for what it adds; a value the same
 		// row already held at HEAD (a format rewrite, a moved row file) is
 		// counted and named once (hooksecrets_history.go).
-		hits, inHistory = dropHistoryHits(ctx, sc, root, inStore, paths, docs, hits)
+		hits, inHistory = dropHistoryHits(ctx, sc, root, inStore, paths, docs, hits, nil)
+	case LeakWherePush:
+		// The same rule for a push: a value the same row already held on
+		// the remote is not new (WithPushBases).
+		if bases := pushBasesOf(ctx); len(bases) > 0 {
+			hits, inHistory = dropHistoryHits(ctx, sc, root, inStore, paths, docs, hits, bases)
+		}
 	}
 	var lines, refused []string
-	named := true // every hit got its own ready allow line
+	var k findingKinds
 	for i, p := range paths {
 		for _, h := range hits[i] {
 			at := fmt.Sprintf("%s:%d", p, h.Line)
@@ -105,14 +147,15 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 				at += " (field " + h.Field + ")"
 			}
 			lines = append(lines, fmt.Sprintf("  %-40s secret: rule %s match %s", at, h.Rule, h.Preview))
-			l := ""
-			if where == checkWhereCommit {
-				l = allowLineOf(p, h, inStore)
-			}
-			if l != "" {
+			switch l := allowLineOf(p, h, inStore); {
+			case isCommitMessageDoc(p):
+				k.message = true
+				lines = append(lines, "      fix: "+messageFix(where))
+			case l != "":
+				k.file = true
 				lines = append(lines, "      not a secret? "+l)
-			} else {
-				named = false
+			default:
+				k.file, k.unnamed = true, true
 			}
 			refused = append(refused, "path="+p+" rule="+h.Rule)
 		}
@@ -122,7 +165,23 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 	}
 	a.auditHookRefused(ctx, where, refused)
 	return inHistory, errs.New(errs.LeakBlocked, "blocked, this "+where+" carries a secret:\n"+strings.Join(lines, "\n")).
-		WithHint(leakHint(inStore, named))
+		WithHint(leakHint(where, inStore, k))
+}
+
+// findingKinds is what a refusal's findings were, for its hint: in a
+// commit message, in a file, and whether some file finding got no ready
+// allow line of its own.
+type findingKinds struct{ message, file, unnamed bool }
+
+// messageFix is the next step of a finding in a commit message: a message
+// has no row id, field or path an allow entry can name, so the fix is
+// always to edit the message (user report: the hint asked for --row-id
+// and --field).
+func messageFix(where string) string {
+	if where == LeakWherePush {
+		return "reword that commit without the value (git commit --amend for the last commit, git rebase -i for an older one), then push again"
+	}
+	return "edit the commit message and remove the value, then commit again (git commit --amend if the commit is already made)"
 }
 
 // allowLineOf is the exact `lore secrets allow` command that accepts the
@@ -134,14 +193,14 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 func allowLineOf(p string, h leakcheck.SecretHit, inStore bool) string {
 	const reason = ` --reason "<why>"`
 	switch {
-	case p == checkWhereCommitMsg:
+	case isCommitMessageDoc(p):
 		return ""
 	case isRowDocPath(p, inStore):
 		id, err := ids.ParseAny(strings.TrimSuffix(path.Base(p), ".json"))
 		if err != nil || h.Field == "" {
 			return ""
 		}
-		return "lore secrets allow --row-id " + id.String() + " --rule " + h.Rule + " --field " + shellWord(h.Field) + " --match-hash " + h.Preview + reason
+		return leakcheck.AllowRowCommand(id.String(), shellWord(h.Field), h.Rule, h.Preview)
 	case inStore:
 		return ""
 	}
@@ -150,20 +209,30 @@ func allowLineOf(p string, h leakcheck.SecretHit, inStore bool) string {
 
 // leakHint is the next step of a refused commit or push. A code repo keeps
 // its allow entries in .lore/data/secret_allows, to be committed with the
-// change; a store clone has no .lore/data: `lore secrets allow` there
-// writes and commits the entry itself, as <folder>/secret_allows/<id>.json
-// in the store, so the person only commits again (never --no-verify).
-// named: every finding was printed with its own ready allow line, so the
-// hint points at those lines instead of a template to fill in.
-func leakHint(inStore, named bool) string {
-	vault := "store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow --row-id <row-id> --rule <rule> --field <field> --match-hash <the sha256:… match shown> --reason \"<why>\""
-	if named {
+// change (and, for a push, pushed again); a store clone has no .lore/data:
+// `lore secrets allow` there writes and commits the entry itself, as
+// <folder>/secret_allows/<id>.json in the store, so the person only
+// commits (or pushes) again (never --no-verify). k says what the findings
+// were: a refusal of a commit message alone never names an allow command.
+func leakHint(where string, inStore bool, k findingKinds) string {
+	if !k.file {
+		return "the value is in a commit message: follow the `fix:` line under it (no --no-verify needed)"
+	}
+	vault := "store the value in your vault and reference it (${secret:…}); if it is not a secret: " + leakcheck.AllowRowTemplate()
+	if !k.unnamed {
 		vault = "store the value in your vault and reference it (${secret:…}, or a placeholder such as ${DB_PASSWORD}); if a finding is not a secret, run the `not a secret?` line printed under it with your reason (a .gitleaksignore <path>:<rule>:<line> entry works too)"
 	}
-	if inStore {
-		return vault + " (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again (no --no-verify needed)"
+	again, storeAgain := "then commit again", "commit again"
+	if where == LeakWherePush {
+		again, storeAgain = "commit it, then push again", "push again"
 	}
-	return vault + ", add the new .lore/data/secret_allows file, then commit again (no --no-verify needed)"
+	if k.message {
+		vault += "; for a finding in a commit message, follow the `fix:` line under it"
+	}
+	if inStore {
+		return vault + " (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then " + storeAgain + " (no --no-verify needed)"
+	}
+	return vault + ", add the new .lore/data/secret_allows file, " + again + " (no --no-verify needed)"
 }
 
 // hookIndexEnv passes on the index git gave the hook. `git commit -a`,

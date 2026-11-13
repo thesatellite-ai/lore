@@ -220,7 +220,7 @@ func TestMigrateRaceOneRepo(t *testing.T) {
 
 // TestMigrateRaceNClones (7.8, the barrier variant without a fake GitHub
 // pause): five clones of one remote start `lore migrate run` at once, each
-// pushing (so each asks for the team lock on the signals ref). Every run
+// pushing with --team-lock (so each asks for the team lock on the signals ref). Every run
 // succeeds or stops E_MIGRATE_LOCKED; then each clone that was locked out
 // reruns until it succeeds, and every clone's memories folder is
 // byte-identical to every other's.
@@ -232,7 +232,7 @@ func TestMigrateRaceNClones(t *testing.T) {
 	}
 	ps := make([]*th.Pending, len(clones))
 	for i, c := range clones {
-		ps[i] = c.Prepare("migrate", "run")
+		ps[i] = c.Prepare("migrate", "run", "--team-lock")
 	}
 	results := w.Simultaneously(ps...)
 	ok := 0
@@ -244,7 +244,7 @@ func TestMigrateRaceNClones(t *testing.T) {
 		// Locked out: once the winner released, a rerun completes (7.8).
 		deadline := time.Now().Add(30 * time.Second)
 		for {
-			rr := clones[i].Lore("migrate", "run")
+			rr := clones[i].Lore("migrate", "run", "--team-lock")
 			if raceOutcome(t, rr) == "ok" {
 				break
 			}
