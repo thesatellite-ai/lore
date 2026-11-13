@@ -97,7 +97,13 @@ func (o RemoveOut) Text() string {
 	if strings.Contains(o.Name, folderSep) {
 		what = "folder entry "
 	}
-	line := "✓ detached " + what + o.Name + " from " + storesFileShown + "; its rows stay in the store (`lore store forget` drops this machine's copy); commit the file to share\n"
+	// The name is gone from stores.yaml now, so forget takes the url
+	// (B3-30: `lore store forget <name>` then said "no store named").
+	forget := "`lore store forget`"
+	if o.URL != "" && what == "store " && !strings.HasPrefix(o.URL, fileScheme) { // a folder store has no copy to forget
+		forget = "`lore store forget " + o.URL + "`"
+	}
+	line := "✓ detached " + what + o.Name + " from " + storesFileShown + "; its rows stay in the store (" + forget + " drops this machine's copy); commit the file to share\n"
 	if len(o.Folders) > 0 {
 		line += "  folder entries detached with it: " + strings.Join(o.Folders, ", ") + "\n"
 	}

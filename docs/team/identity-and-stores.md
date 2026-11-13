@@ -212,7 +212,7 @@ org
 
 # bob, in ~
 $ lore store forget git@github.com:agency/notes
-✓ forgot github.com/agency/notes (removed ~/.lore/stores/agency/notes; the next command that needs it clones it again)
+✓ forgot git@github.com:agency/notes (removed ~/.lore/stores/agency/notes; the next command that needs it clones it again)
 ```
 <!-- /example -->
 

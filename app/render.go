@@ -7,11 +7,13 @@ package app
 // Host is set right after wire.New.
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	contextop "github.com/thesatellite-ai/lore/ops/context"
@@ -119,8 +121,46 @@ func refreshHook(h *renderhost.Host, wd string) func(context.Context) {
 		if _, err := os.Stat(out); err != nil || h == nil {
 			return
 		}
+		// B3-32: the committed render files change under the person's feet
+		// after a pull; say so in one line, and only when bytes changed
+		files := []string{out, filepath.Join(filepath.Dir(out), refreshFullName)}
+		before := readAll(files)
 		if _, err := h.Run(ctx, renderhost.Flags{OutPath: out, NoPointer: true, Quiet: true}); err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "lore: refresh: re-render "+renderhost.LoreMDRel+": "+err.Error()) // stderr gone: nothing left to report to
+			return
+		}
+		if changed := changedFiles(wd, files, before); len(changed) > 0 {
+			_, _ = fmt.Fprintln(os.Stderr, "lore: re-rendered "+strings.Join(changed, " and ")+" for the rows git brought in; commit it with your next change") // stderr gone: nothing left to report to
 		}
 	}
+}
+
+// refreshFullName is the full render file beside .lore/LORE.md.
+const refreshFullName = "LORE.full.md"
+
+// readAll is the bytes of each file (nil when it cannot be read).
+func readAll(files []string) [][]byte {
+	out := make([][]byte, len(files))
+	for i, f := range files {
+		out[i], _ = os.ReadFile(filepath.Clean(f)) // a missing file reads as nil: "changed" when it appears
+	}
+	return out
+}
+
+// changedFiles are the files (relative to wd, slash-separated) whose
+// bytes differ from before; a render that wrote the same bytes is none.
+func changedFiles(wd string, files []string, before [][]byte) []string {
+	var out []string
+	after := readAll(files)
+	for i, f := range files {
+		if bytes.Equal(before[i], after[i]) {
+			continue
+		}
+		rel, err := filepath.Rel(wd, f)
+		if err != nil {
+			rel = f
+		}
+		out = append(out, filepath.ToSlash(rel))
+	}
+	return out
 }

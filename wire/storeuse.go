@@ -24,6 +24,7 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
@@ -176,14 +177,14 @@ func (a *App) useEntry(ctx context.Context, named string, r gitbackend.Remote, h
 			}
 		}
 		if src, err := a.lookupStore(ctx, useVerb, named); err == nil {
-			return opsstores.Entry{}, errs.New(errs.InvalidInput, useVerb+": the origin of "+top+" is "+r.Norm+", but store "+named+" is "+src.URL).
+			return opsstores.Entry{}, errs.New(errs.InvalidInput, useVerb+": the origin of "+top+" is "+repourl.ShownStore(r.Norm)+", but store "+named+" is "+src.URL).
 				WithHint("give the clone of " + named + ", or the store this clone belongs to (`lore store list`)")
 		}
 		return opsstores.Entry{}, errs.New(errs.NotFound, useVerb+": no store named "+named+" is configured here").
 			WithHint("`lore store list` names the stores; attach a store first with lore store add <name> <url>")
 	}
 	if len(cands) == 0 {
-		return opsstores.Entry{}, errs.New(errs.NotFound, useVerb+": "+top+" is a clone of "+r.Norm+", which is not one of the stores lore knows here").
+		return opsstores.Entry{}, errs.New(errs.NotFound, useVerb+": "+top+" is a clone of "+repourl.ShownStore(r.Norm)+", which is not one of the stores lore knows here").
 			WithHint("attach it first (lore store add <name> <url>, or the org's setup), then run lore store use " + top + " again; `lore store list` names the stores")
 	}
 	var branches []string
@@ -204,7 +205,7 @@ func (a *App) useEntry(ctx context.Context, named string, r gitbackend.Remote, h
 	for _, e := range cands {
 		names = append(names, e.Name)
 	}
-	return opsstores.Entry{}, errs.New(errs.InvalidInput, useVerb+": "+r.Norm+" is configured on several branches ("+strings.Join(names, ", ")+"), and the branch "+top+" has checked out names none of them").
+	return opsstores.Entry{}, errs.New(errs.InvalidInput, useVerb+": "+repourl.ShownStore(r.Norm)+" is configured on several branches ("+strings.Join(names, ", ")+"), and the branch "+top+" has checked out names none of them").
 		WithHint("name the store: lore store use " + top + " --store <name>")
 }
 
@@ -214,7 +215,7 @@ func (a *App) useDefaultClone(ctx context.Context, named string) (opsstores.UseO
 	var e opsstores.Entry
 	r, err := gitbackend.RemoteOfRaw(named)
 	if err == nil {
-		e = opsstores.Entry{Name: r.Norm, URL: named}
+		e = opsstores.Entry{Name: repourl.ShownStore(r.Norm), URL: named}
 		e.Branch, _ = opsstores.PinnedBranch(named, "")
 		if cs := a.useCandidates(ctx, r); len(cs) > 0 && e.Branch == "" {
 			e.Name = cs[0].Name
@@ -238,7 +239,7 @@ func (a *App) useDefaultClone(ctx context.Context, named string) (opsstores.UseO
 		for k, v := range rec {
 			if strings.HasPrefix(k, r.Norm+"@") && v.Why == gitbackend.WhyOwn {
 				if ok {
-					return opsstores.UseOut{}, errs.New(errs.InvalidInput, useVerb+": "+r.Norm+" has own clones on several branches").
+					return opsstores.UseOut{}, errs.New(errs.InvalidInput, useVerb+": "+repourl.ShownStore(r.Norm)+" has own clones on several branches").
 						WithHint("name the store by its configured name: lore store use --default <name>")
 				}
 				key, got, ok = k, v, true

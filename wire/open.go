@@ -498,7 +498,12 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		return nil, nil, err
 	}
 	// ONBOARDING 3.4: the active setup's personal_store replaces it.
-	if p := effectivePersonalURL(ctx, home, optsProjectDir(opts), mc); p != "" {
+	// B4-22: a lore 0.1.17 local personal store already attached as `me`
+	// (personal.store: local, localPersonalStores) is never attached a
+	// second time from a setup's personal_store: the 0.1.17 one is read
+	// until lore migrate run (or the setup step) moves it
+	v017Me := slices.ContainsFunc(cfg.Stores, func(s attach.Store) bool { return s.Name == store.Source(attach.ReservedMe) })
+	if p := effectivePersonalURL(ctx, home, optsProjectDir(opts), mc); p != "" && !v017Me {
 		me := attach.Store{Name: store.Source(attach.ReservedMe), URL: p}
 		dup := false
 		if pc, perr := canonical(me); perr == nil {
@@ -510,6 +515,11 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		}
 		if !dup {
 			cfg.Stores = append(cfg.Stores, me)
+		}
+		// D10: the personal store this setup stopped using, while it holds
+		// notes (personal_previous.go)
+		if pb, ok := previousPersonalStore(home, setupPersonalValue(ctx, home, optsProjectDir(opts))); ok && !slices.ContainsFunc(cfg.Stores, func(s attach.Store) bool { return s.Name == pb.Name }) {
+			cfg.Stores = append(cfg.Stores, pb)
 		}
 		// D5: lore 0.1.17's notes for this repo's org keep their folder
 		// (personal_orgs.go)

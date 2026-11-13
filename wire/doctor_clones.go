@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storeaddr"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -108,7 +109,7 @@ func storeCloneFinding(c gitbackend.CloneFound) (DoctorFinding, bool) {
 			Fix:     fix}, true
 	case gitbackend.CloneMissing:
 		return DoctorFinding{Check: DoctorCheckStoreClone, Level: DoctorWarning,
-			Message: p.Dir + " (your own clone of " + c.Rel + ", recorded by `lore store use`) is gone, so lore cannot read that store; clone it there again, or go back to lore's own clone",
+			Message: p.Dir + " (your own clone of " + repourl.ShownStore(c.Rel) + ", recorded by `lore store use`) is gone, so lore cannot read that store; clone it there again, or go back to lore's own clone",
 			Fix:     "lore store use --default " + useArgOf(c)}, true
 	case gitbackend.CloneWhole:
 	}
@@ -123,6 +124,9 @@ func useArgOf(c gitbackend.CloneFound) string {
 		return c.Origin
 	}
 	norm, _, _ := strings.Cut(c.Rel, branchCloneSep)
+	if shown := repourl.ShownStore(norm); shown != norm {
+		return shown // a local repository: its path (B3-30)
+	}
 	return "https://" + norm
 }
 
