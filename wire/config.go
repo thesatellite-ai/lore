@@ -147,7 +147,7 @@ const configLockWait = 10 * time.Second
 // first, as writeFileAtomic would).
 func lockMachineConfig(home string) (func() error, error) {
 	if err := os.MkdirAll(home, cacheDirMode); err != nil {
-		return nil, errs.FileIO("create", home, err)
+		return nil, errs.FileIO("create the lore home", home, err)
 	}
 	release, err := rowfs.LockFile(context.Background(), filepath.Join(home, configLockFile), configLockWait)
 	if errs.Has(err, errs.StoreLocked) {
@@ -314,7 +314,7 @@ func retireLegacyIdentity(home string) (string, error) {
 func writeFileAtomic(path string, b []byte, mode os.FileMode) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, cacheDirMode); err != nil {
-		return errs.FileIO("create", dir, err)
+		return errs.FileIO("create the config folder", dir, err)
 	}
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {

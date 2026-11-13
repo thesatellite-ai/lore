@@ -71,7 +71,7 @@ func writeHolder(f *os.File) error {
 // ctx ends. A timeout is store.ErrLocked (E_STORE_LOCKED).
 func acquireFile(ctx context.Context, path string, wait time.Duration) (*fileLock, error) {
 	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "rowfs: create the lock folder", err)
+		return nil, errs.FileIO("create the lock folder", filepath.Dir(path), err)
 	}
 	deadline := time.Now().Add(wait)
 	for waited := false; ; waited = true {

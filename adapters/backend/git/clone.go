@@ -113,7 +113,7 @@ func NewOpener(opts ...Option) store.Opener {
 				return nil, err
 			}
 		}
-		remote := r.URL
+		remote := gitAddress(r.URL)
 		if spelled, ok := build(opts).origins[r.URL]; ok && spelled != "" {
 			remote = spelled
 		}
@@ -149,7 +149,7 @@ func OpenClone(ctx context.Context, remote, dir, folder string, o store.OpenOpti
 			WithHint("a run that is not a dry run clones it to " + dir)
 	}
 	if err = os.MkdirAll(paths.StateDir, cloneDirMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "git: create the clone folder", err)
+		return nil, errs.FileIO("create the clone folder", paths.StateDir, err)
 	}
 	lockOpts := []rowfs.Option{rowfs.WithLockPath(paths.Lock), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithAllowNetworkFS(o.AllowNetworkFS)}
 	setupRoot, err := rowfs.Open(dir, lockOpts...)

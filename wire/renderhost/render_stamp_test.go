@@ -7,6 +7,7 @@ package renderhost
 
 import (
 	"errors"
+	"github.com/thesatellite-ai/lore/store"
 	"os"
 	"path/filepath"
 	"strings"
@@ -214,5 +215,17 @@ func TestLocalCopyMessage(t *testing.T) {
 	}
 	if got := localCopyMessage(opsrender.CopyStale, "x.md", "the index"); got != copyMessage(opsrender.CopyStale, "x.md", "the index") {
 		t.Errorf("stale: %q", got)
+	}
+}
+
+// B4-17: a finding about a store without its sto_ id yet names the store,
+// not a name- file render never writes once `lore fix` gave it the id.
+func TestPrivateSourcesOf(t *testing.T) {
+	p := &privatePlan{stores: []privateStore{{stem: privateNoIDPrefix + "acme", sources: []store.Source{"acme", "acme/org"}}}}
+	if got := p.sourcesOf(privateNoIDPrefix + "acme"); got != "acme, acme/org" {
+		t.Fatalf("sourcesOf = %q", got)
+	}
+	if got := p.sourcesOf(privateNoIDPrefix + "me"); got != "me" {
+		t.Fatalf("unknown stem = %q", got)
 	}
 }

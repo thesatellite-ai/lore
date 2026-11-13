@@ -76518,6 +76518,10 @@
                   "url": {
                     "type": "string",
                     "description": "the store url (or a store name this repo attaches) whose clone this machine drops"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "required": [
@@ -76595,6 +76599,16 @@
           },
           "409": {
             "description": "E_REFUSED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -76897,6 +76911,157 @@
           },
           "503": {
             "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stores/push": {
+      "post": {
+        "operationId": "store.push",
+        "summary": "Push a store's local commits now; --restore puts this machine's copy back into a store remote that was deleted and made again",
+        "tags": [
+          "store"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "restore": {
+                    "type": "boolean",
+                    "description": "put this machine's copy back into a store remote that was deleted and made again (lore found it reset)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "the store: a name this repo or machine uses (me, team, a .lore/stores.yaml store) or its url"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "store"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "offline": {
+                      "type": "boolean"
+                    },
+                    "restored": {
+                      "type": "boolean"
+                    },
+                    "sent": {
+                      "type": "integer"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "store",
+                    "url",
+                    "sent"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT, E_STORE_SCHEME",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CANCELLED, E_CONTENDED, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE, E_STORE_UNREACHABLE",
             "content": {
               "application/json": {
                 "schema": {

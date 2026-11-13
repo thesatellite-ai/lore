@@ -504,7 +504,7 @@ func Ops(m Manager) []op.Entry {
 		adoptOp(m),
 		setURLOp(m),
 		useOp(m),
-	}, append(cloneOps(m), pushOps(m)...)...)
+	}, append(append(cloneOps(m), pushOps(m)...), pushNowOp(m))...)
 }
 
 // OrgLister is the optional Manager upgrade behind store.list's org rows

@@ -52,6 +52,9 @@ type CloneIdentity struct {
 	// Why says whose identity it is ("your identity in org acme, the one
 	// lore signs this store's commits with").
 	Why string
+	// Who is Why in a few words ("org acme", "personal store owner",
+	// "lore identity") for the one-line notice when lore sets it.
+	Who string
 	// Was is the user.email lore had written before and replaced ("" for
 	// a clone that had none).
 	Was string
@@ -120,7 +123,7 @@ func setLocalIdentity(ctx context.Context, r runner, dir string, s Signature) er
 	}
 	state := StateDirOf(dir)
 	if err := os.MkdirAll(state, cloneDirMode); err != nil {
-		return errs.FileIO("create", state, err)
+		return errs.FileIO("create the clone state folder", state, err)
 	}
 	p := filepath.Join(state, IdentityRecordFile)
 	if err := os.WriteFile(p, []byte(s.Email+"\n"), 0o600); err != nil {

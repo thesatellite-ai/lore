@@ -2,6 +2,7 @@ package repourl
 
 import (
 	"fmt"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"path"
 	"strings"
 )
@@ -21,6 +22,9 @@ const LocalStoreHost = "_local"
 // across clones; a store url is an address, and a local one is valid.
 func NormalizeStore(raw string) (string, error) {
 	s := strings.TrimSpace(raw)
+	if fileuri.IsDrivePath(s) {
+		s = fileuri.DriveURLPath(s) // C:\x is a local path (B3-27)
+	}
 	if !IsLocalStorePath(s) {
 		return Normalize(s)
 	}
@@ -34,5 +38,8 @@ func NormalizeStore(raw string) (string, error) {
 // IsLocalStorePath reports a store url written as a plain absolute path
 // (no scheme, no query): a git repository on this machine.
 func IsLocalStorePath(s string) bool {
+	if fileuri.IsDrivePath(s) {
+		return !strings.ContainsAny(s, "?#")
+	}
 	return strings.HasPrefix(s, "/") && !strings.Contains(s, schemeSep) && !strings.ContainsAny(s, "?#")
 }

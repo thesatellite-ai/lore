@@ -190,7 +190,7 @@ func syncAuditFile(path string) error {
 // appendLine appends line to path, fsynced when durable.
 func appendLine(path string, dirMode os.FileMode, line []byte, durable bool) error {
 	if mkErr := os.MkdirAll(filepath.Dir(path), dirMode); mkErr != nil {
-		return errs.Wrap(errs.Internal, "wire: create the audit folder", mkErr)
+		return errs.FileIO("create the audit folder", filepath.Dir(path), mkErr)
 	}
 	// The repo's file (.lore/state/audit-v2.jsonl) sits inside the
 	// checkout, where a cloned repository can commit a symlink: appending

@@ -50,7 +50,7 @@ A CI clone has the `.lore/data` files but not the local cache, and not lore's gi
 ```console
 # alice, in ci-clone
 $ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/ci-clone/.git/config; hook blocks in ~/work/ci-clone/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/ci-clone/.git/config; hook blocks in ~/work/ci-clone/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 rul_162d…9666 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore doctor; echo "doctor exit $?"
@@ -123,7 +123,7 @@ Clone a repo that uses lore into a new folder, as a CI job would, and list its r
 ```console
 # alice, in ci-clone
 $ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/ci-clone/.git/config; hook blocks in ~/work/ci-clone/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/ci-clone/.git/config; hook blocks in ~/work/ci-clone/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 rul_162d…9666 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
 ```

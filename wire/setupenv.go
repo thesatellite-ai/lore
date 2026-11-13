@@ -75,7 +75,7 @@ func (a *App) onboardProbe(ctx context.Context) (*probe.Prober, error) {
 	}
 	tmp := filepath.Join(a.opts.Home, probeTmpDir)
 	if err = os.MkdirAll(tmp, 0o700); err != nil {
-		return nil, errs.FileIO("create", tmp, err)
+		return nil, errs.FileIO("create the setup probe folder", tmp, err)
 	}
 	timeout := time.Duration(cfg.Settings.ProbeTimeoutS) * time.Second
 	return probe.New(probe.Options{Home: home, TmpDir: tmp, GitTimeout: timeout, SSHTimeout: timeout, Limiter: a.probeLimiter}), nil

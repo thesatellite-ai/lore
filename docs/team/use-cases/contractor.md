@@ -43,13 +43,13 @@ Alice creates the three stores (from a plain folder of hers, `stores`, which att
 ```console
 # alice, in stores
 $ lore store init agency git@github.com:agency/notes --yes && lore store init client git@github.com:agency/notes-client --yes && lore store init client2 git@github.com:agency/notes-client2 --yes
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes-client (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes-client: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 ✓ created store client (sto_2ad3…f891) at git@github.com:agency/notes-client; recorded in .lore/stores.yaml; commit it to share
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes-client2 (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes-client2: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 ✓ created store client2 (sto_162d…9666) at git@github.com:agency/notes-client2; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
@@ -102,7 +102,7 @@ links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore actor register
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore actor register: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Bob Roe <bob@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore actor register: store clone ~/.lore/stores/agency/notes: git user set to Bob Roe <bob@agency.example> (your identity in org agency)
 lore actor register: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
 lore: pushed store agency/.: commit cf563f3 to branch main
 lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_b4f4…a5b0.json (store agency/.)

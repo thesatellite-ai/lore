@@ -477,7 +477,7 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 ```console
 # alice, in website
 $ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Alice <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
 lore store init: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
 ✓ created store agency (sto_c0f3…b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 $ cat .lore/stores.yaml

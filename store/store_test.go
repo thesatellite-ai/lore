@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"net/url"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -71,5 +72,28 @@ func TestFromRowAndDecode(t *testing.T) {
 	}
 	if !errs.Has(store.ErrStale, errs.Stale) || errs.CodeOf(store.ErrNotFound) != errs.NotFound {
 		t.Fatal("sentinel codes")
+	}
+}
+
+// TestOpenersDrivePath (B3-27): a Windows drive path, in either separator,
+// opens through the PathScheme opener as the url path "/C:/…", never as a
+// url with scheme "c".
+func TestOpenersDrivePath(t *testing.T) {
+	t.Parallel()
+	o := store.NewOpeners()
+	var got []string
+	if err := o.Register(store.PathScheme, func(_ context.Context, u *url.URL, _ store.OpenOptions) (store.Backend, error) {
+		got = append(got, u.Path)
+		return nil, errs.New(errs.NotFound, "test opener")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range []string{`C:\Users\nina\notes.git`, `C:/Users/nina/notes.git`} {
+		if _, err := o.Open(context.Background(), in, store.OpenOptions{}); !errs.Has(err, errs.NotFound) {
+			t.Fatalf("Open(%q) = %v, want the path opener's error", in, err)
+		}
+	}
+	if len(got) != 2 || got[0] != "/C:/Users/nina/notes.git" || got[1] != got[0] {
+		t.Fatalf("the path opener saw %q", got)
 	}
 }

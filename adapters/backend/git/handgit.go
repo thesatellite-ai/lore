@@ -192,7 +192,7 @@ func (b *Backend) ensureAttributeLine(want, drop string) error {
 		kept = append(kept, want)
 	}
 	if err := os.MkdirAll(info, cloneDirMode); err != nil {
-		return errs.Wrap(errs.Internal, "git: create .git/info", err)
+		return errs.FileIO("create .git/info", info, err)
 	}
 	if err := os.WriteFile(p, []byte(strings.Join(kept, "\n")+"\n"), 0o600); err != nil {
 		return errs.Wrap(errs.Internal, "git: write .git/info/attributes", err)
@@ -235,7 +235,7 @@ func (b *Backend) ensurePreCommit(lines []string) error {
 		return b.ensureExecutable(p)
 	}
 	if err := os.MkdirAll(dir, cloneDirMode); err != nil {
-		return errs.FileIO("create", dir, err)
+		return errs.FileIO("create the git hooks folder", dir, err)
 	}
 	if err := os.WriteFile(p, []byte(next), hookFileMode); err != nil {
 		return errs.FileIO("write", p, err)

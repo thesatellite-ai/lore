@@ -71,7 +71,7 @@ type DoctorCache struct {
 // doctor cache table in the machine store file at path. The caller closes it.
 func OpenDoctorCache(ctx context.Context, path string) (*DoctorCache, error) {
 	if err := os.MkdirAll(filepath.Dir(path), localDirMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "doctor cache: create "+filepath.Dir(path), err)
+		return nil, errs.FileIO("create the doctor cache folder", filepath.Dir(path), err)
 	}
 	dsn, err := fileDSN(path)
 	if err != nil {

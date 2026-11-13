@@ -387,6 +387,7 @@ Examples:
 
 Flags:
       --json   print the result (or the error) as JSON
+      --yes    answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 

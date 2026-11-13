@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"net/url"
 	"slices"
 	"strings"
@@ -87,6 +88,9 @@ func IsLocalPath(u *url.URL) bool {
 // scheme is ErrScheme (E_STORE_SCHEME). The url never appears in the error:
 // it may carry a token.
 func (o *Openers) Open(ctx context.Context, rawURL string, opts OpenOptions) (Backend, error) {
+	if fileuri.IsDrivePath(rawURL) {
+		rawURL = fileuri.DriveURLPath(rawURL) // C:\x is a local path, not scheme "c" (B3-27)
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme == "" && !IsLocalPath(u)) {
 		return nil, errs.New(errs.StoreScheme, "store: the url has no scheme")

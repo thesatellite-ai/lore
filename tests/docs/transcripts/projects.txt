@@ -186,7 +186,7 @@ alice (work/infra)$ cat .lore/lore.yaml
 db_path: ${HOME}/.lore/client2.db
 project_id: prj_4f89f5fcb1d81152bdf3f52979ebb64b
 alice (work/infra)$ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/infra/.git/config; hook blocks in ~/work/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 ERROR: [E_UNSUPPORTED] this repo uses the retired shared-database mode (.lore/lore.yaml); run lore fix
   hint: `lore fix --dry-run` lists what moves: the project's rows become a folder store attached in .lore/stores.yaml, and the pointer is kept as <file>.migrated
 (exit 23)

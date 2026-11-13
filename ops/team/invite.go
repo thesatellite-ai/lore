@@ -52,7 +52,7 @@ func (o ops) invite(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInvit
 	}
 	roles, projectRefs := splitList(in.Roles), splitList(in.Projects)
 	if len(projectRefs) > 0 && len(roles) == 0 {
-		return setup.TeamInviteOut{}, errs.New(errs.InvalidInput, "--project needs at least one --role: a project membership has one or more roles (TEAM_PROFILES TP-10)").
+		return setup.TeamInviteOut{}, errs.New(errs.InvalidInput, "--project needs at least one --role: a project membership has one or more roles").
 			WithHint("--role dev")
 	}
 	if len(roles) > 0 && len(projectRefs) == 0 {

@@ -347,7 +347,8 @@ func dryNeedsStores(dry bool, err error) bool {
 
 // dryStoresLine is the dry run's migrate line when the stores are missing.
 func dryStoresLine(err error) string {
-	return "would migrate once the stores are on this machine (a dry run clones and moves none; the next command that is not a dry run does): " + withHint(err)
+	_ = err // the cause is only that the stores are not here yet: never shown as an error code (B4-14)
+	return "would fetch, clone or move the stores this project uses (this dry run touches none), then migrate the rows lore 0.1.17 wrote"
 }
 
 // reopenState closes the App's open state so the next call opens it

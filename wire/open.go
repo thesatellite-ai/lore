@@ -186,7 +186,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		// A write's implicit setup still makes .lore/ (a read reaches here
 		// only when it exists: MkdirAll then changes nothing).
 		if mkErr := os.MkdirAll(filepath.Join(st.repoTop, loreFolderName), cacheDirMode); mkErr != nil {
-			return fail(errs.Wrap(errs.Internal, "wire: create the .lore folder", mkErr))
+			return fail(errs.FileIO("create the .lore folder", filepath.Join(st.repoTop, loreFolderName), mkErr))
 		}
 		repoCache = RepoCachePath(opts.Home, st.repoTop)
 		if mkErr := mkCacheDir(filepath.Dir(repoCache)); mkErr != nil {

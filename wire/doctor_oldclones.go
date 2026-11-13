@@ -55,6 +55,14 @@ func (a *App) DoctorOldClones(ctx context.Context) ([]DoctorFinding, error) {
 			continue
 		}
 		e, ok, why := git.MovedSafely(ctx, home, o)
+		if _, recorded := git.ReadMoveRecord(home).Moves[o.Base]; !ok && !recorded {
+			// not moved yet (a dry run, or doctor before any other command):
+			// the next lore command moves it; nothing is at risk (B4-14)
+			out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorNote,
+				Message: "old store clone " + o.GitDir() + " is not moved to " + filepath.Join(home, git.StoresDir) + " yet; the next lore command that is not a dry run moves it (commits it holds included)",
+				Fix:     "run any lore command (lore fix does it with the rest)"})
+			continue
+		}
 		if !ok {
 			out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorWarning,
 				Message: "old store clone " + o.GitDir() + " still holds work the new layout does not have: " + why,

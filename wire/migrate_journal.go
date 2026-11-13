@@ -147,7 +147,7 @@ func writeJournal(path string, j migrateJournal) error {
 		return errs.Wrap(errs.Internal, "migrate: encode the journal", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), cacheDirMode); err != nil {
-		return errs.Wrap(errs.Internal, "migrate: create .lore/state", err)
+		return errs.FileIO("create .lore/state", filepath.Dir(path), err)
 	}
 	return writeFileAtomic(path, append(b, '\n'), lockFileMode)
 }
@@ -635,7 +635,7 @@ func (a *App) applyRollback(ctx context.Context, snaps git.Snapshots, top string
 			}
 			fileMode, dirMode := restoreModes(p)
 			if err := os.MkdirAll(filepath.Dir(full), dirMode); err != nil {
-				return "", errs.Wrap(errs.Internal, "migrate: restore "+rel, err)
+				return "", errs.FileIO("create the folder to restore "+rel+" in", filepath.Dir(full), err)
 			}
 			if err := writeFileAtomic(full, b, fileMode); err != nil {
 				return "", err

@@ -116,7 +116,7 @@ func Init(dir string, m rowfs.Marker, opts ...rowfs.Option) error {
 		return errs.New(errs.BadPath, "folder: the store path must be absolute")
 	}
 	if err := os.MkdirAll(dir, storeFolderMode); err != nil {
-		return errs.Wrap(errs.Internal, "folder: create the store folder", err)
+		return errs.FileIO("create the store folder", dir, err)
 	}
 	r, err := rowfs.Open(dir, opts...)
 	if err != nil {

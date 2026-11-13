@@ -34,6 +34,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -332,6 +333,18 @@ func (b *storePush) pushNow(ctx context.Context) {
 	b.carry(rep, err)
 	b.observeSync(ctx, rep, err)
 	switch {
+	case errors.Is(err, gitbackend.ErrRemoteReset):
+		// B3-29: the remote was deleted and made again; the commit waits
+		// here until the person picks a way out (the refusal names both).
+		msg, hint := err.Error(), ""
+		var le *errs.Error
+		if errors.As(err, &le) {
+			msg, hint = le.Message, le.Hint
+		}
+		_, _ = fmt.Fprintln(b.notes, "lore: the change is committed in the local copy of store "+string(b.name)+" and not pushed: "+msg)
+		if hint != "" {
+			_, _ = fmt.Fprintln(b.notes, "  hint: "+hint)
+		}
 	case err != nil:
 		b.note("pushing failed")
 	case rep.Offline:

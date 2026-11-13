@@ -140,7 +140,7 @@ func TestReadsNeverWireGit(t *testing.T) {
 	}
 	// and the store clone got its git identity with the write, said as
 	// the write
-	if got := strings.TrimSpace(w.git(t, storeClone, "config", "--local", "--get", "user.email")); got != "pat@example.com" || !strings.Contains(errOut, "lore memory add: set user.name and user.email in the store clone "+storeClone) {
+	if got := strings.TrimSpace(w.git(t, storeClone, "config", "--local", "--get", "user.email")); got != "pat@example.com" || !strings.Contains(errOut, "lore memory add: store clone ") || !strings.Contains(errOut, ": git user set to ") {
 		t.Fatalf("the write did not give the store clone its identity (user.email %q):\n%s", got, errOut)
 	}
 	// the store clone got its row attributes with the write (a test binary

@@ -102,3 +102,18 @@ func LocalPath(raw string) string {
 	FoldDriveHost(u)
 	return OSPath(u.Path)
 }
+
+// IsDrivePath reports a Windows drive path, `C:\x` or `C:/x` (a letter, a
+// colon and a separator), on every OS: lore reads it as a local path, never
+// as a url whose scheme is the drive letter (B3-27). On a system without
+// drives it simply does not exist.
+func IsDrivePath(s string) bool {
+	return hasDrive(s) && len(s) > drivePrefixLen && (s[drivePrefixLen] == '\\' || s[drivePrefixLen] == '/')
+}
+
+// DriveURLPath is the url path of the drive path s: `C:\x\y` → "/C:/x/y",
+// the form a file: url and lore's store urls carry.
+func DriveURLPath(s string) string { return "/" + strings.ReplaceAll(s, `\`, "/") }
+
+// IsDriveURLPath reports a url path that names a drive path ("/C:/x").
+func IsDriveURLPath(p string) bool { return strings.HasPrefix(p, "/") && IsDrivePath(p[1:]) }

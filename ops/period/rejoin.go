@@ -60,7 +60,7 @@ func (o RejoinOut) Preview() string {
 		lead = "             "
 	}
 	if len(o.Memberships) > 0 {
-		b.WriteString("             memberships are not restored (TP-16)\n")
+		b.WriteString("             memberships are not restored\n")
 	}
 	lead = "  trashed    "
 	for _, m := range o.TrashedMemberships {

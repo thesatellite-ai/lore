@@ -81,7 +81,7 @@ func recordStoreAddress(home, id, raw string, now time.Time) error {
 	}
 	p := storeAddrRecordPath(home)
 	if err = os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-		return errs.FileIO("create", filepath.Dir(p), err)
+		return errs.FileIO("create the state folder", filepath.Dir(p), err)
 	}
 	tmp := p + ".tmp"
 	if err = os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {

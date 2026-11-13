@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,5 +63,36 @@ func TestOldLoreLockoutLines(t *testing.T) {
 	}
 	if strings.Contains(all, "E_OLD_LORE") {
 		t.Error("lore 0.1.17 never says E_OLD_LORE for a store")
+	}
+}
+
+// TestOldLoreLockoutOncePerMachine (B4-21): the block is said before the
+// first commit 0.1.17 cannot read and never again for that store on this
+// machine, also from a later command (a new process: the record lives in
+// the clone's .git/lore).
+func TestOldLoreLockoutOncePerMachine(t *testing.T) {
+	clone := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(clone, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	say := func() string {
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := os.Stderr
+		os.Stderr = w
+		(&App{}).SayOldLoreLockout("lore-me", clone)
+		os.Stderr = old
+		_ = w.Close()
+		b, _ := io.ReadAll(r)
+		lockoutSaid.Delete(clone) // the next call stands for a later command
+		return string(b)
+	}
+	if got := say(); !strings.Contains(got, "store lore-me moves to the 0.1.18 layout now") {
+		t.Fatalf("first call said %q", got)
+	}
+	if got := say(); got != "" {
+		t.Fatalf("a later command said the block again: %q", got)
 	}
 }

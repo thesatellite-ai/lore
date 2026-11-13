@@ -42,6 +42,7 @@ func TestJourneyStoreCommands(t *testing.T) {
 	me := w.Remote(jCmdsMeSlug)
 	teamClone := lee.LorePath("stores", "acme-co", "lore-team")
 	twoClone := lee.LorePath("stores", "acme-co", "notes-two")
+	twoTilde := "~/.lore/stores/acme-co/notes-two" // twoClone as the identity line shows it (under ~)
 	localEmail := func(dir string) string {
 		t.Helper()
 		return strings.TrimSpace(w.TryGit(dir, "config", "--local", "--get", "user.email").Stdout)
@@ -67,8 +68,8 @@ func TestJourneyStoreCommands(t *testing.T) {
 
 	w.Step("day1/a-new-clone-gets-the-setup-identity", func() {
 		r := lee.Lore(parent, "store", "folder", "add", two.SSHURL(), "client_a").OK(t)
-		r.Says(t, "set user.name and user.email in the store clone "+twoClone, tlLee.Name+" <"+jCmdsWorkEmail+">", "your global git config is unchanged")
-		if n := strings.Count(r.Out(), "set user.name and user.email"); n != 1 {
+		r.Says(t, "store clone "+twoTilde+": git user set to "+tlLee.Name+" <"+jCmdsWorkEmail+">")
+		if n := strings.Count(r.Out(), ": git user set to "); n != 1 {
 			t.Errorf("the identity line was said %d times, want once: %s", n, r)
 		}
 		for _, dir := range []string{teamClone, twoClone} {
@@ -82,7 +83,7 @@ func TestJourneyStoreCommands(t *testing.T) {
 		// lore where lists the entry it wrote
 		lee.Lore(parent, "where").OK(t).Says(t, filepath.Join(twoClone, ".git", "config")+" [user.email]")
 		// a second command says nothing more
-		lee.Lore(parent, "store", "list").OK(t).Never(t, "set user.name and user.email")
+		lee.Lore(parent, "store", "list").OK(t).Never(t, ": git user set to ")
 	})
 
 	w.Step("day2/doctor-flags-a-clone-with-the-personal-identity", func() {
@@ -98,11 +99,11 @@ func TestJourneyStoreCommands(t *testing.T) {
 		// a clone whose entry was removed: a read leaves it so (owner bug
 		// 6); the next sync or write gives it again, said as that command
 		lee.OpenClone(two, twoClone).Git("config", "--unset", "user.email")
-		lee.Lore(parent, "store", "folder", "list").OK(t).Never(t, "set user.name and user.email")
+		lee.Lore(parent, "store", "folder", "list").OK(t).Never(t, ": git user set to ")
 		if got := localEmail(twoClone); got != "" {
 			t.Errorf("a read wrote user.email %q into the store clone", got)
 		}
-		lee.Lore(parent, "sync").OK(t).Says(t, "lore sync: set user.name and user.email in the store clone "+twoClone)
+		lee.Lore(parent, "sync").OK(t).Says(t, "lore sync: store clone "+twoTilde+": git user set to ")
 		if got := localEmail(twoClone); got != jCmdsWorkEmail {
 			t.Errorf("the reopened clone's user.email = %q", got)
 		}

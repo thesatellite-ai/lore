@@ -349,7 +349,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks, cfgPath, bin,
 		missing = append(missing, "hook blocks in "+hooks+" ("+strings.Join(stale, ", ")+")")
 	}
 	if len(missing) > 0 {
-		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
+		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
 	}
 	if data {
 		switch still, err := stillIgnoredData(ctx, root, false); {

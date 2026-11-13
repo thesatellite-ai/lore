@@ -133,7 +133,7 @@ $ git clone -q https://github.com/client/website
 
 # bob, in website
 $ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 rul_162d…9666 [must/always] Run the tests before you push.
 ```
 <!-- /example -->

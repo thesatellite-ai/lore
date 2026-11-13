@@ -30,6 +30,7 @@ import (
 	"strings"
 	"sync"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
@@ -860,7 +861,12 @@ func staleRowsAnswer(e op.Entry, err error, storeWrites int) bool {
 func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) error {
 	if s.fetchErr != nil {
 		if age := s.fetchAge(); age != "" {
-			h.line(liveLogPrefix + s.fetchFault() + ": using live rows as fetched " + age + " ago")
+			if gitbackend.NoClone(ctx) {
+				// `lore fix --dry-run` fetches nothing on purpose: not offline (B4-14)
+				h.line(liveLogPrefix + "dry run: using live rows as fetched " + age + " ago (a real run fetches first)")
+			} else {
+				h.line(liveLogPrefix + s.fetchFault() + ": using live rows as fetched " + age + " ago")
+			}
 		}
 	}
 	if spec.Access != op.AccessWrite || opslive.IsOp(spec.Name) {

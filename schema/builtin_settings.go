@@ -16,8 +16,8 @@ const (
 // settingsDefs returns the built-in settings tables beyond coreDefs.
 func settingsDefs() []TableDef {
 	return []TableDef{
-		Table(TableTaskTemplates, ids.PrefixTaskTemplate, Synced(), Noun("task.template"), Description("a named task tree applied with arguments (TASK 11)"),
-			Text(FieldTemplateName, Required(), Describe("snake_case label; the id is permanent (OQ20)")),
+		Table(TableTaskTemplates, ids.PrefixTaskTemplate, Synced(), Noun("task.template"), Description("a named task tree applied with arguments"),
+			Text(FieldTemplateName, Required(), Describe("snake_case label; the id is permanent")),
 			Text("description"),
 			JSON(FieldTemplateArgs, Describe("{name: {type, required, default}}")),
 			// One task grammar (11.2): the mission-file task shape with

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // helpSpecID is an internal spec or decision id in parentheses, the way
@@ -41,3 +42,27 @@ func TestHelpTextHasNoSpecIDs(t *testing.T) {
 		}
 	}
 }
+
+// TestSchemaTextHasNoSpecIDs walks every built-in table's description and
+// every field's: `lore tui` lists the table descriptions, and the REST
+// docs and field help print both (bug hunt B3-26: "(TP-14)", "(spec 4.3)",
+// "(TASK 11)" on the tui's first screen).
+func TestSchemaTextHasNoSpecIDs(t *testing.T) {
+	for _, d := range schema.Builtin() {
+		texts := []string{d.Description}
+		for _, f := range d.Fields {
+			texts = append(texts, f.Description)
+		}
+		for _, txt := range texts {
+			for _, m := range schemaSpecID.FindAllString(txt, -1) {
+				if !helpNotSpecIDs[m] {
+					t.Errorf("table %s: description carries the spec id %q: %q", d.Name, m, txt)
+				}
+			}
+		}
+	}
+}
+
+// schemaSpecID is helpSpecID plus the lower-case "(spec 4.3)" form the
+// schema text used.
+var schemaSpecID = regexp.MustCompile(helpSpecID.String() + `|\(spec [0-9][0-9.]*\)|\b[A-Z]{2,} [0-9]+(\.[0-9]+)*\)`)

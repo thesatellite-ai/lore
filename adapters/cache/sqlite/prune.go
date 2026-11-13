@@ -202,7 +202,7 @@ func RecordUse(cacheRoot, repoTop string, uses []Use) error {
 		return nil
 	}
 	if mkErr := os.MkdirAll(filepath.Dir(path), useDirMode); mkErr != nil {
-		return errs.Wrap(errs.Internal, "sqlite: create the cache use folder", mkErr)
+		return errs.FileIO("create the cache use folder", filepath.Dir(path), mkErr)
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".use-*")
 	if err != nil {

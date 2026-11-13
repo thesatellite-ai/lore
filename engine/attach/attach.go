@@ -151,6 +151,9 @@ func CleanURL(raw string) (string, error) {
 
 // parseStoreURL turns the scp form into ssh:// and parses the url.
 func parseStoreURL(raw string) (*url.URL, error) {
+	if fileuri.IsDrivePath(raw) {
+		raw = fileuri.DriveURLPath(raw) // C:\x is a local path, not scheme "c" (B3-27)
+	}
 	if m := scpForm.FindStringSubmatch(raw); m != nil {
 		raw = "ssh://" + m[1] + "@" + m[2] + "/" + m[3]
 	}
