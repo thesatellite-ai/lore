@@ -327,7 +327,7 @@ A bad entry is `E_CONFIG_INVALID` naming `context.profiles`.
 |---|---|---|
 | `live.max_age` | `7d` | an open live row is copied to `main` once it is this old, and again every 7 days while it still differs |
 | `live.fetch_ttl` | `60s` | lore fetches once per command, cached 60 s: a command skips the fetch when the last one is younger than this. `lore sync` always fetches |
-| `live.autopush` | `true` | push live writes at once; `false` keeps them on your machine until you run `lore sync` |
+| `live.autopush` | `false` | unset or `false`: live writes stay on your machine until you run `lore sync` or your own `git push` (which sends them), and lore fetches only then; lore says so once per repo. `true`: push each live write at once (lore says once per repo how to turn it off). Claims, releases and holds always reach the remote at once unless this is set to `false`. Either way, finished rows land on `main` only on `lore sync`, `lore land` or your own `git push` |
 | `live.compact_after` | `1000` | how many commits the live list may collect before lore squeezes it into one |
 | `live.remote` | `origin` | the git remote that holds the live rows |
 | `live.defaults.<kind>` | see the next table | whether rows of this kind are live without `--live` |

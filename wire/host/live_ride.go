@@ -279,12 +279,14 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 	if s == nil {
 		return nil
 	}
-	branch, ok := s.rideBranch(ctx)
-	if !ok {
-		return nil
+	if len(args) > 0 && args[0] == s.ref.RemoteName {
+		// The person's own push to the live remote says "send": the
+		// waiting live writes go with it (finish pushes them), whatever
+		// live.autopush says (U-2).
+		s.kind = live.FetchAlways
 	}
-	items, err := s.waitingRows(ctx)
-	if err != nil || len(items) == 0 {
+	branch, items, ok := s.prePushRows(ctx)
+	if !ok || len(items) == 0 {
 		return nil
 	}
 	head, _, err := s.repo.ResolveCommit(ctx, "HEAD")
@@ -307,11 +309,41 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 			return nil
 		}
 		if added != "" {
-			return errs.New(errs.InvalidInput, "lore added '"+added+"' to "+branch+" (rows waiting for a protected main); run git push again").
+			why := "rows waiting for a protected main"
+			if branch == s.defaultBranch(ctx) {
+				why = "rows that finished in live land with your push"
+			}
+			return errs.New(errs.InvalidInput, "lore added '"+added+"' to "+branch+" ("+why+"); run git push again").
 				WithHint("the commit only adds .lore/data files of rows that finished in live")
 		}
 	}
 	return nil
+}
+
+// prePushRows are the branch a pre-push ride commit goes on and the rows
+// it carries. On the default branch it is the landing folded into the
+// person's own `git push` (U-2: lore never moves the remote default branch
+// by itself, so the rows finished in live land with the person's push and
+// main never diverges behind their back); on another branch it is the F6
+// ride-along of rows a protected main refused. ok=false: no ride commit.
+func (s *liveSession) prePushRows(ctx context.Context) (string, []live.LandItem, bool) {
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "HEAD"}})
+	if err != nil {
+		return "", nil, false // detached
+	}
+	if branch := strings.TrimSpace(string(out)); branch != "" && branch == s.defaultBranch(ctx) {
+		if busy, err := repoHistoryInProgress(ctx, s.repo); err != nil || busy || s.blocked != nil {
+			return "", nil, false
+		}
+		items, err := s.landableRows(ctx)
+		return branch, items, err == nil
+	}
+	branch, ok := s.rideBranch(ctx)
+	if !ok {
+		return "", nil, false
+	}
+	items, err := s.waitingRows(ctx)
+	return branch, items, ok && err == nil
 }
 
 // rideBranch is the branch a ride commit may go on; false when F6 says
@@ -386,6 +418,12 @@ func (s *liveSession) waitingRows(ctx context.Context) ([]live.LandItem, error) 
 	if s.noteText(liveNoteProtected) == "" {
 		return nil, nil // never refused as protected on this machine
 	}
+	return s.landableRows(ctx)
+}
+
+// landableRows are the live rows a landing pass would land or copy now,
+// in every live folder, without companions that would land alone.
+func (s *liveSession) landableRows(ctx context.Context) ([]live.LandItem, error) {
 	_, tree, err := s.ref.LocalTree(ctx)
 	if err != nil {
 		return nil, err

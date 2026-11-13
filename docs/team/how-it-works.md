@@ -112,12 +112,13 @@ Offline, reads use the last fetched state. A **hook** is a small script git runs
  3. same tree as before? stop (writing the same thing twice is a no-op)
  4. commit "lore: live N rows (<folder>)" on top of the live ref
  5. move refs/lore/live only if nobody moved it meanwhile (compare-and-swap)
- 6. push it; rejected because a teammate pushed first? back to 1, merge, retry
+ 6. push it (only with live.autopush: true; else on lore sync or your git push);
+    rejected because a teammate pushed first? back to 1, merge, retry
 ```
 
 Step 2 uses a **private index**: a scratch staging area of lore's own, so your `git add` work is not touched. Step 5 is a **compare-and-swap**: lore moves the list only if it still points where lore last saw it, like saving a document only if nobody saved over it meanwhile.
 
-Your branch, your staged files and your working folder are never touched. Lore builds commits with git's low-level commands, outside any checkout. Sometimes the push cannot happen: you are offline, `live.autopush: false` or `LORE_LIVE_AUTOPUSH=0` is set, or the host refuses `refs/lore/*`. Then the write stays on your local live list and lore says `(live, not pushed yet: N waiting; …)` with why and what happens next, once: not again on every read or git hook until the count or the reason changes. The next command pushes it. When the remote is not there at all (a mistyped or deleted `origin`, a path with no repository) or refuses your credentials, or is a local folder you may not read (it then says `cannot read <path> (permission denied)` and that the address is right), the line says so and names the remote instead of "offline", `lore sync` gives the same reason, and `lore doctor` warns until a push goes through. `lore live diff` shows what is waiting:
+Your branch, your staged files and your working folder are never touched. Lore builds commits with git's low-level commands, outside any checkout. By default a live write is not pushed by itself: `live.autopush` is off, so lore keeps the write here, says so once per repo (`lore live: (live, kept here: …)`), and sends it on your next `lore sync` or `git push` (the pre-push hook pushes the live list with it). With `live.autopush: true` each write is pushed at once, and lore says once per repo that `lore config set --key live.autopush --value false` turns that off. Sometimes the push cannot happen: you are offline, `LORE_LIVE_AUTOPUSH=0` is set, or the host refuses `refs/lore/*`. Then the write stays on your local live list and lore says `(live, not pushed yet: N waiting; …)` with why and what happens next, once: not again on every read or git hook until the count or the reason changes. The next command pushes it. When the remote is not there at all (a mistyped or deleted `origin`, a path with no repository) or refuses your credentials, or is a local folder you may not read (it then says `cannot read <path> (permission denied)` and that the address is right), the line says so and names the remote instead of "offline", `lore sync` gives the same reason, and `lore doctor` warns until a push goes through. `lore live diff` shows what is waiting:
 
 <!-- example: errors#refs-refused-by-the-host only=1,2 -->
 ```console
@@ -156,14 +157,18 @@ lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: 
           accepted              → done; local main is never read or moved
           main moved meanwhile  → start again on the new origin/main
           main is protected     → ride along (next section)
+          no main on the remote → nothing to land yet (a brand-new repo): quiet, rows stay live
+
+ when:  lore sync · lore land · your own git push of main (pre-push adds the landing
+        commit to your main and asks you to push again); never by itself after a write
 
  leave live:  next fetch sees main's file == live file, and the row is finished
               → remove it from live (only if the live copy did not change meanwhile)
 ```
 
-Landing twice writes the same file and commits nothing. A row reopened after it landed differs from `main`, so it stays live and lands again later. A deleted row lands as a file delete plus an entry in `.lore/data/_purged.json`, so an old branch copy cannot bring it back. For a store project the same steps run on lore's own clone of the store (a plain git clone under `~/.lore/stores/<owner>/<repo>`) and the store branch. A store branch must accept direct pushes (`lore store doctor` checks). Your personal store and an org store may push in batches instead of at once, and their old history may be folded into one commit: see [How writes reach the remote](identity-and-stores.md#how-writes-reach-the-remote).
+Landing never moves the remote `main` behind your back: a write records the row on the live list only, and the landing runs when you run `lore sync` or `lore land`, or folds into your own `git push` of `main` (the pre-push hook commits the finished rows onto your `main` as `lore: land N rows`, stops that push and asks you to run `git push` again, so the push carries them). Landing twice writes the same file and commits nothing. A row reopened after it landed differs from `main`, so it stays live and lands again later. A deleted row lands as a file delete plus an entry in `.lore/data/_purged.json`, so an old branch copy cannot bring it back. For a store project the same steps run on lore's own clone of the store (a plain git clone under `~/.lore/stores/<owner>/<repo>`) and the store branch. A store branch must accept direct pushes (`lore store doctor` checks). Your personal store and an org store may push in batches instead of at once, and their old history may be folded into one commit: see [How writes reach the remote](identity-and-stores.md#how-writes-reach-the-remote).
 
-**On a feature branch.** Between "landed on main" and your next pull, lore reads a landed row from `origin/main` only while this checkout is on the default branch (the "found nowhere, on main" step above). On any other branch, a row that landed and left live drops out of your lists and `lore show` until you merge main into the branch. The write that lands it says so on stderr:
+**On a feature branch.** Between "landed on main" and your next pull, lore reads a landed row from `origin/main` only while this checkout is on the default branch (the "found nowhere, on main" step above). On any other branch, a row that landed and left live drops out of your lists and `lore show` until you merge main into the branch. The sync that lands it says so on stderr:
 
 ```text
 lore live: landed on main (1a2b3c4); leaves live once main is fetched

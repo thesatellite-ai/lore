@@ -66,6 +66,13 @@ func explainLeaveLine(branch string) string {
 	return "leaves live on the next sync (finished, " + branch + " holds it)"
 }
 
+// explainLandsLine is explain's land line for a row the next landing
+// writes to the default branch: a write never lands by itself (U-2), so it
+// names what does, never "land: land: finished".
+func explainLandsLine(branch, reason string) string {
+	return "lands on " + branch + " on the next `lore sync` or your `git push` of it (" + reason + ")"
+}
+
 // explainWaitsLine is explain's land line while the default branch is protected.
 func explainWaitsLine(branch string) string {
 	return "waits: " + branch + " is protected; rides on your next push"
@@ -217,6 +224,9 @@ func (s *liveSession) explainLines(ctx context.Context, folder, id string) (opss
 					continue
 				}
 				what := string(p.Decision.Action) + ": " + p.Decision.Reason
+				if p.Decision.Action == live.LandFinal {
+					what = explainLandsLine(branch, p.Decision.Reason)
+				}
 				if p.Leave {
 					what = explainLeaveLine(branch)
 				} else if p.Decision.Action != live.LandStay && s.noteText(liveNoteProtected) != "" {

@@ -3,7 +3,7 @@ package host
 // live_holdlines.go — the order of a CLI command's output (v0.1.17): its
 // own result first, then the live lines its run's end printed
 //
-//	op ─▶ next ─▶ (deferred) liveRun.finish: push, autoLand ─▶ lines HELD
+//	op ─▶ next ─▶ (deferred) liveRun.finish: push ─▶ lines HELD
 //	surface prints the result ─▶ cmd/lore: Live.FlushHeld ─▶ held lines
 //
 // Only with LiveConfig.HoldFinishLines, and never for a `lore api` request

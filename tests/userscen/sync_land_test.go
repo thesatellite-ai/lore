@@ -70,7 +70,8 @@ func TestSyncLand_TagCarriedByLiveCommentsStaysReadable(t *testing.T) {
 		}
 		id := trashID(t, c.MustLore(args...))
 		c.MustLore("tag", "attach", "--on-table", a.table, "--on-id", id, "--tag", "ttag").Never(t, "E_NOT_FOUND")
-		out := c.MustLore("comment", "add", "--on-table", a.table, "--on-id", id, "--body", "a comment").Never(t, "E_NOT_FOUND")
+		c.MustLore("comment", "add", "--on-table", a.table, "--on-id", id, "--body", "a comment").Never(t, "E_NOT_FOUND", "landed on main")
+		out := c.MustLore("sync") // landing waits for sync (U-2)
 		landed = landed || strings.Contains(out.Out(), "landed on main")
 		c.MustLore("tag", "list").Says(t, "ttag")
 	}

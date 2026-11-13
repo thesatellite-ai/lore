@@ -73,6 +73,7 @@ func TestCampaignKnowledge_ExplainJSONCopies(t *testing.T) {
 	a, b := st.clones[0], st.clones[1]
 	liveID := th.DecodeJSON[knowAdded](t, a.Lore("memory", "add", "--body", "live row", "--live", "--json")).ID
 	branchID := th.DecodeJSON[knowAdded](t, a.Lore("memory", "add", "--body", "kept with the code", "--no-live", "--json")).ID
+	a.Lore("sync").OK(t) // lands the finished live row (never by itself, U-2)
 	cases := []struct {
 		name      string
 		c         *th.Clone
@@ -82,8 +83,8 @@ func TestCampaignKnowledge_ExplainJSONCopies(t *testing.T) {
 		reasonHas string
 		land      bool
 	}{
-		// a live write lands on main at once here (autopush), so main
-		// holds it too; live still wins
+		// the sync above landed the live row, so main holds it too; live
+		// still wins until main is fetched
 		{"live copy wins", a, liveID, []string{"live", "default_branch"}, "live", "rule 4", true},
 		{"work tree copy (not committed)", a, branchID, []string{"work_tree"}, "work_tree", "this branch's copy", false},
 		{"found nowhere", b, branchID, nil, "", "not found in live", false},
@@ -161,7 +162,8 @@ func TestCampaignKnowledge_EditLandedNotPulled(t *testing.T) {
 			a, b := st.clones[0], st.clones[1]
 			k := knowKindByNoun(t, c.noun)
 			id := th.DecodeJSON[knowAdded](t, a.Lore(c.noun, "add", "--body", "live at once", "--live", "--json")).ID
-			a.Lore("sync").OK(t)
+			a.Lore("sync").OK(t) // lands it (landing waits for sync, U-2)
+			a.Lore("sync").OK(t) // main fetched: the landed row leaves live
 			b.Lore("explain", id).OK(t).Says(t, "origin/main: present")
 			// the row's own table: bob's first write also creates his actor
 			// row (a new file alice does not have, so the pull is not hurt)

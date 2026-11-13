@@ -98,7 +98,7 @@ func TestCampaignKnowledge_LiveRowsOnlineOffline(t *testing.T) {
 			b.Git("pull", "-q", "--no-rebase", "origin", "main")
 			b.Lore(noun, "edit", live, "--body", "bob changed the landed row").OK(t)
 			b.CommitAll("edit")
-			b.AdminPush("origin", "main")
+			b.AdminPushLanding("origin", "main") // bob's finished live rows land with his push (U-2)
 			a.Git("pull", "-q", "--no-rebase", "origin", "main")
 			if got := knowShowRow(t, a, k, live).Body; got != "bob changed the landed row" {
 				t.Fatalf("alice sees %q after bob's pushed edit", got)

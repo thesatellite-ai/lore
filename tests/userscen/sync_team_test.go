@@ -532,7 +532,7 @@ func TestSyncTeam_DeleteVersusEditKeepsTheEdit(t *testing.T) {
 // one write overrides it, and --no-live overrides alice's live default.
 // Matrix over (default, flag) → where the row goes.
 func TestSyncTeam_LiveDefaultsAndFlagsPickWhereARowGoes(t *testing.T) {
-	liveOff := th.Config{Live: &th.Live{FetchTTL: "0s", Defaults: map[string]bool{syncTblTasks: false}}}
+	liveOff := th.Config{Live: &th.Live{FetchTTL: "0s", Autopush: th.Bool(true), Defaults: map[string]bool{syncTblTasks: false}}}
 	st := newSyncTeam(t, 2, th.Config{Live: th.FreshFetch()}, liveOff)
 	cases := []struct {
 		who  int

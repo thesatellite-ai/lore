@@ -45,7 +45,8 @@ func TestLiveLand_RowsStayReadableInTheWritingCheckout(t *testing.T) {
 		id := trashID(t, c.MustLore(append(a.args, "--json")...))
 		c.MustLore("tag", "attach", "--on-table", a.table, "--on-id", id, "--tag", "ttag").Never(t, "E_NOT_FOUND")
 		r := c.MustLore("comment", "add", "--on-table", a.table, "--on-id", id, "--body", "comment on "+a.table, "--json")
-		landed = landed || strings.Contains(r.Out(), "landed on main")
+		r.Never(t, "landed on main") // a write never lands by itself (U-2)
+		landed = landed || strings.Contains(c.MustLore("sync").Out(), "landed on main")
 		rows = append(rows, made{table: a.table, list: strings.Join(a.list, " "), id: id, comment: trashID(t, r)})
 	}
 	if !landed {
@@ -54,6 +55,10 @@ func TestLiveLand_RowsStayReadableInTheWritingCheckout(t *testing.T) {
 	// The state the issue is about: at least the tag and the first two
 	// comments landed on origin/main, left live, and are not in HEAD (this
 	// checkout never pulled).
+	// what the last sync landed leaves live once main is fetched: this
+	// sync fetches it, the next one sees main holds the rows and drops them
+	c.MustLore("sync")
+	c.MustLore("sync")
 	c.MustLore("live", "show")
 	onMain := c.Git("ls-tree", "-r", "--name-only", "origin/main")
 	inHead := c.Git("ls-tree", "-r", "--name-only", "HEAD")

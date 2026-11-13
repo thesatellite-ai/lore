@@ -263,7 +263,8 @@ func TestLeak_TrialF7_RideAlongStillPushesInClientRepo(t *testing.T) {
 	c := a.aliceApp
 	c.Git("switch", "-q", "-c", "feat/totals")
 	id := mustID(t, c.MustLore("task", "add", "fix checkout totals for inr", "--to", "repo", "--commitment", "accepted"), "tsk")
-	c.MustLore("task", "done", id).Says(t, "protected")
+	c.MustLore("task", "done", id)
+	c.MustLore("sync").Says(t, "protected") // landing waits for sync (U-2); main refuses it
 	c.WriteFile("src/totals.ts", "export const cents = (n: number) => Math.round(n * 100)\n")
 	c.CommitAll("fix checkout totals")
 	if subj := commitSubjects(c, 1); !strings.HasPrefix(subj[0], "lore: land") {

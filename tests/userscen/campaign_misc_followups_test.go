@@ -198,7 +198,8 @@ func TestMiscFollowups_RefusedWriteLeavesNoActorRow(t *testing.T) {
 			a, b := st.clones[0], st.clones[1]
 			noun := c.args("")[0]
 			id := th.DecodeJSON[knowAdded](t, a.Lore(noun, "add", "--body", "live at once", "--live", "--json")).ID
-			a.Lore("sync").OK(t)
+			a.Lore("sync").OK(t) // lands it (landing waits for sync, U-2)
+			a.Lore("sync").OK(t) // main fetched: the landed row leaves live
 			before := b.Git("status", "--porcelain", "--untracked-files=all", "--", ".lore")
 			r := b.Lore(c.args(id)...)
 			// the refusal comes after the actor step (the backend write)

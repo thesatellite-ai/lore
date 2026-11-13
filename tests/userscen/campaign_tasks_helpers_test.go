@@ -214,6 +214,14 @@ func campTasksTreeHash(t *testing.T, dir string) string {
 			if strings.HasPrefix(rel, ".git") {
 				return nil
 			}
+		case "fetch-stamp", "signals-seen.json":
+			// lore's fetch bookkeeping (.git/lore), like FETCH_HEAD: a
+			// not-found answer fetches once and retries, and with
+			// live.autopush off (the default, U-2) that can be the
+			// clone's first fetch
+			if strings.HasPrefix(rel, filepath.Join(".git", "lore")) {
+				return nil
+			}
 		}
 		// The local cache (.lore/lore-cache.db, git-ignored, rebuilt from the
 		// rows) may be refreshed by any read; it is not a row a person sees.

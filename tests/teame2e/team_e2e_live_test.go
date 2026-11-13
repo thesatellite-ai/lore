@@ -94,7 +94,8 @@ func TestF01_LandedRowOnOlderBranchHintsPeek(t *testing.T) {
 	rt.c2.Git("checkout", "-q", "-b", "feat/old")
 	id := rt.addTask(t, rt.c1, "finish me")
 	rt.c1.MustLore("task", "done", id)
-	rt.c1.MustLore("sync")
+	rt.c1.MustLore("sync").Says(t, "landed on main") // landing waits for sync (U-2)
+	rt.c1.MustLore("sync")                           // main fetched: the row leaves live
 	if _, ok := rt.liveTask(t, id); ok {
 		t.Fatal("a done row whose main copy matches must have left live")
 	}
@@ -382,7 +383,7 @@ func TestF03_PlainGitFetchNeverClobbersUnpushedLiveWrite(t *testing.T) {
 // than live.fetch_ttl; `lore sync` always fetches.
 func TestF03_FetchIsCachedForFetchTTL(t *testing.T) {
 	rt := newRepoTeam(t)
-	rt.dev1.WriteConfig(th.Config{Live: &th.Live{FetchTTL: "60s"}})
+	rt.dev1.WriteConfig(th.Config{Live: &th.Live{FetchTTL: "60s", Autopush: th.Bool(true)}})
 	rt.dev1.SetNow(t0)
 	rt.c1.MustLore("task", "list")
 	rt.addTask(t, rt.c2, "fresh news")
@@ -447,6 +448,7 @@ func TestF04_DeleteVersusEditKeepsTheEditedRow(t *testing.T) {
 		t.Fatalf("modify must beat delete with the full edited row: %+v", row)
 	}
 	rt.c2.MustLore("task", "done", id)
+	rt.c2.MustLore("sync") // landing waits for sync (U-2)
 	if _, ok := rt.mainTask(t, id); !ok {
 		t.Fatal("the surviving row must land")
 	}
@@ -497,9 +499,10 @@ func TestF04_TextClashKeepsBothAndBlocksLanding(t *testing.T) {
 
 // ---------------------------------------------------------------- F5 landing
 
-// E3: unprotected repo, `task done` lands the row on origin/main without its
-// _live block, the row leaves live, and the user's unpushed local main
-// commit is neither pushed nor moved.
+// E3: unprotected repo, a done row lands on origin/main on `lore sync`
+// (never by itself, owner rule U-2) without its _live block, the row leaves
+// live, and the user's unpushed local main commit is neither pushed nor
+// moved.
 func TestE03_DoneLandsOnMainAndLeavesLive(t *testing.T) {
 	rt := newRepoTeam(t, capLand)
 	id := rt.addTask(t, rt.c1, "ship it")
@@ -507,7 +510,11 @@ func TestE03_DoneLandsOnMainAndLeavesLive(t *testing.T) {
 	rt.c1.CommitAll("local only")
 	localMain := rt.c1.Head()
 
-	rt.c1.MustLore("task", "done", id).Says(t, "landed on main")
+	rt.c1.MustLore("task", "done", id).Never(t, "landed on main")
+	if _, ok := rt.mainTask(t, id); ok {
+		t.Fatal("task done must not land by itself (U-2)")
+	}
+	rt.c1.MustLore("sync").Says(t, "landed on main")
 	row := mustRow(t, rt.app, refMain, mainRowPath("", tblTasks, id))
 	if row.Status != statusDone {
 		t.Fatalf("landed status %q", row.Status)
@@ -600,15 +607,16 @@ func TestF05_LandByMission(t *testing.T) {
 }
 
 // Rule 6 / TEAM-027 / cookbook 7: a rule written --live on a feature branch
-// lands on main at once and leaves live once main matches; a later edit
-// lands again.
+// lands on main on the next `lore sync` (never by itself, owner rule U-2)
+// and leaves live once main matches; a later edit lands again.
 func TestRecipe07_UrgentRuleLandsFromAFeatureBranch(t *testing.T) {
 	rt := newRepoTeam(t, capLand, th.Flag("live", "rule", "add"), th.Flag("live", "rule", "edit"))
 	rt.c1.Git("checkout", "-q", "-b", "feat/x")
 	r := rt.c1.MustLore("rule", "add", "--body", "never run migrations from the app container", "--live")
 	id := mustID(t, r, "rul")
+	rt.c1.MustLore("sync")
 	if !strings.Contains(mustRow(t, rt.app, refMain, mainRowPath("", tblRules, id)).Body, "never run migrations") {
-		t.Fatal("a rule is finished on every write and must land at once")
+		t.Fatal("a rule is finished on every write and must land on the next sync")
 	}
 	if rt.app.Has("refs/heads/feat/x") {
 		t.Fatal("landing must not need the feature branch")
@@ -625,6 +633,7 @@ func TestRecipe07_UrgentRuleLandsFromAFeatureBranch(t *testing.T) {
 	rt.c1.Lore("rule", "edit", id, "--body", "never run migrations from any container", "--live").Refused(t, "lore sync peek")
 	rt.c1.Git("merge", "-q", "--no-edit", "origin/main")
 	rt.c1.MustLore("rule", "edit", id, "--body", "never run migrations from any container", "--live")
+	rt.c1.MustLore("sync")
 	if !strings.Contains(mustRow(t, rt.app, refMain, mainRowPath("", tblRules, id)).Body, "any container") {
 		t.Fatal("each live write of a rule lands a new copy")
 	}
@@ -666,7 +675,8 @@ func TestSideEffect22_ReopenedRowStaysLiveAndLandsAgain(t *testing.T) {
 		t.Fatalf("main keeps the landed done copy until the next landing: %q", r.Status)
 	}
 	rt.c2.MustLore("task", "done", id)
-	rt.c1.MustLore("sync")
+	rt.c2.MustLore("sync") // lands again (landing waits for sync, U-2)
+	rt.c1.MustLore("sync") // main fetched: the row leaves live
 	if _, ok := rt.liveTask(t, id); ok {
 		t.Fatal("done again → lands again and leaves live")
 	}
@@ -731,13 +741,15 @@ func commitSubjects(c *th.Clone, n int) []string {
 	return strings.Split(c.Git("log", "--format=%s", "-n", strconv.Itoa(n), "HEAD"), "\n")
 }
 
-// rideTask makes dev1 finish a task on feat/login of a protected repo and
-// commit code, which must add the ride commit.
+// rideTask makes dev1 finish a task on feat/login of a protected repo, sync
+// (the landing attempt main refuses as protected: a write never lands by
+// itself, owner rule U-2) and commit code, which must add the ride commit.
 func rideTask(t *testing.T, rt *repoTeam) string {
 	t.Helper()
 	rt.c1.Git("checkout", "-q", "-b", "feat/login")
 	id := rt.addTask(t, rt.c1, "fix login timeout")
-	rt.c1.MustLore("task", "done", id).Says(t, "protected")
+	rt.c1.MustLore("task", "done", id)
+	rt.c1.MustLore("sync").Says(t, "protected")
 	if _, ok := rt.mainTask(t, id); ok {
 		t.Fatal("protected main cannot have received the row")
 	}
@@ -814,6 +826,7 @@ func TestF06_NoRideWhereItMustNotRide(t *testing.T) {
 			rt := newProtectedTeam(t)
 			id := rt.addTask(t, rt.c1, "waits")
 			rt.c1.MustLore("task", "done", id)
+			rt.c1.MustLore("sync").Says(t, "protected")
 			tc.setup(t, rt, id)
 			rt.c1.WriteFile("src/a.go", "package src\n")
 			rt.c1.Git("add", "src/a.go")
@@ -905,6 +918,7 @@ func TestSideEffect34_MonorepoOneRideCommitForAllProjects(t *testing.T) {
 	webTask := mustID(t, web.MustLore("task", "add", "web task", "--tasklist", webTL), "tsk")
 	rt.c1.MustLore("task", "done", root)
 	web.MustLore("task", "done", webTask)
+	rt.c1.MustLore("sync").Says(t, "protected")
 	rt.c1.WriteFile("src/x.go", "package src\n")
 	rt.c1.CommitAll("code")
 	if s := commitSubjects(rt.c1, 2); !strings.HasPrefix(s[0], "lore: land 2 rows") || strings.HasPrefix(s[1], "lore: land") {
@@ -1166,8 +1180,9 @@ func TestRecipe16_MonorepoOneLiveRefFolderPerProject(t *testing.T) {
 }
 
 // F5 + brief "crash mid-landing": lore is killed just before or just after
-// the push of the landing commit; the next `lore sync` finishes the job with
-// no lost row and no duplicate landing commit.
+// the push of the landing commit (the landing `lore sync` runs, U-2); the
+// next `lore sync` finishes the job with no lost row and no duplicate
+// landing commit.
 func TestF05_CrashMidLandingRecovers(t *testing.T) {
 	for _, when := range []string{th.KillBefore, th.KillAfter} {
 		t.Run("killed "+when+" the main push", func(t *testing.T) {
@@ -1175,7 +1190,8 @@ func TestF05_CrashMidLandingRecovers(t *testing.T) {
 			id := rt.addTask(t, rt.c1, "crash test")
 			counter := rt.w.Root + "/kill-" + when
 			crash := rt.c1.With(th.EnvKillOn+"=:refs/heads/main", th.EnvKillWhen+"="+when, th.EnvKillCounter+"="+counter)
-			if r := crash.Lore("task", "done", id); r.Code == 0 {
+			rt.c1.MustLore("task", "done", id)
+			if r := crash.Lore("sync"); r.Code == 0 {
 				t.Fatalf("the crash injection did not fire: %s", r)
 			}
 			_, onMain := rt.mainTask(t, id)
@@ -1221,5 +1237,6 @@ func TestSideEffect13_SyncStatusListsRowsWaitingOnProtectedMain(t *testing.T) {
 	rt := newProtectedTeam(t)
 	id := rt.addTask(t, rt.c1, "waits for a push")
 	rt.c1.MustLore("task", "done", id)
+	rt.c1.MustLore("sync").Says(t, "protected") // the landing attempt main refuses
 	rt.c1.MustLore("sync", "status").Says(t, id, "protected")
 }

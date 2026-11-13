@@ -657,7 +657,7 @@ func TestE07_SquashMergeWithTrailerRecordsMerged(t *testing.T) {
 	cr.toolsC.Git("fetch", "-q", "origin", "agent/backend-1/retry")
 	cr.toolsC.Git("merge", "-q", "--squash", "FETCH_HEAD")
 	cr.toolsC.With("LORE_RIDE_ACTIVE=1").Git("commit", "-q", "--no-verify", "-m", "retry helper (#7)\n\nLore-Task: "+id)
-	cr.toolsC.AdminPush("origin", "main")
+	cr.toolsC.AdminPushLanding("origin", "main")
 	if got := rawString(t, cr.liveOrMainTask(t, id), "merged_at"); got != "" {
 		t.Fatalf("control: merged_at must not be set before a lore command looks: %q", got)
 	}
@@ -698,9 +698,11 @@ func TestF09_MergeCommitFoundByAncestryAndCheckWritesNothing(t *testing.T) {
 	}
 	cr.toolsC.Git("pull", "-q")
 	cr.toolsC.Git("merge", "-q", "--no-ff", "--no-edit", "origin/agent/merger/work")
-	cr.toolsC.AdminPush("origin", "main")
+	cr.toolsC.AdminPushLanding("origin", "main")
 	cr.toolsC.MustLore("task", "list")
-	r := mustRow(t, cr.tools, refMain, mainRowPath("", tblTasks, id))
+	// the push landed the done row before merged_at was known; the check
+	// records merged_at on the live row, which lands on the next sync (U-2)
+	r := cr.liveOrMainTask(t, id)
 	if rawString(t, r, "merged_at") == "" {
 		t.Fatal("merged_at must be set once done_commit is an ancestor of origin/main")
 	}
@@ -793,7 +795,7 @@ tasks:
 // ---------------------------------------------------------------- cookbook 2, 9, 15
 
 // Cookbook 2 (see QUESTION Q4): three developers, tasks reach people at once
-// on any branch; done lands on main.
+// on any branch; a done row lands on main on the next sync.
 func TestRecipe02_SmallTeamOneRepo(t *testing.T) {
 	rt := newRepoTeam(t, th.Flag("assign", "task", "add"), th.Flag("mine", "task", "list"), th.Flag("commit", "task", "done"))
 	dev3 := rt.w.Human("dev3", "dev3@acme.example")
@@ -810,6 +812,7 @@ func TestRecipe02_SmallTeamOneRepo(t *testing.T) {
 	c3.WriteFile("retry.go", "package app\n")
 	c3.CommitAll("retry")
 	c3.MustLore("task", "done", id, "--commit", c3.Head())
+	c3.MustLore("sync") // landing waits for sync (U-2)
 	if r := mustRow(t, rt.app, refMain, mainRowPath("", tblTasks, id)); rawString(t, r, "done_commit") == "" {
 		t.Fatalf("done lands with its outcome: %v", r.Raw)
 	}
