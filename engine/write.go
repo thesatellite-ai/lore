@@ -1208,6 +1208,9 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 				}
 			}
 		}
+		if pending[key] && errs.Has(rerr, errs.FormatOld) {
+			continue // the project is on an older format (D13): the record waits, as designed, for lore migrate run
+		}
 		if pending[key] {
 			warns = append(warns, Warning{Code: WarnAuditDeferred, Message: "the audit record of " + ev.ID.String() +
 				" is kept with the row and will be added to the audit log by a later write: " + rerr.Error()})

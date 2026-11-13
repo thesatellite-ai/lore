@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -282,17 +281,16 @@ func projectID(t *testing.T, a *App) string {
 	return p.String()
 }
 
-// TestFormatQuestion (DOCS O6, then owner item 11): in a repo still holding
-// v0.1.17 rows, the first write runs lore fix's safe steps itself (the
-// migration), says so in one notice line, and goes through; it no longer
-// asks, whoever wrote the v1 rows. Afterwards no v1 row is left.
+// TestFormatQuestion (DOCS O6, then decision D13): in a repo still holding
+// v0.1.17 rows (format 1), a write to the project's rows is refused with
+// E_FORMAT_OLD and changes nothing: no migration by itself, whoever wrote
+// the v1 rows; the rows stay v1 until lore migrate run.
 func TestFormatQuestion(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
 		name string
 		by   string
-		ask  bool
-	}{{"teammate wrote v1", otherActor, true}, {"only my rows", testActor, false}, {"unknown writer", "", false}} {
+	}{{"teammate wrote v1", otherActor}, {"only my rows", testActor}, {"unknown writer", ""}} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			repo := gitRepo(t)
@@ -312,16 +310,11 @@ func TestFormatQuestion(t *testing.T) {
 			if !hasV017Rows(repo) {
 				t.Fatal("the fixture holds no v0.1.17 row")
 			}
-			if _, err := run(t, a, opsmemory.OpAdd, `{"body":"new note"}`, false); err != nil {
-				t.Fatalf("the first write in a v0.1.17 repo: %v", err)
+			if _, err := run(t, a, opsmemory.OpAdd, `{"body":"new note"}`, false); !errs.Has(err, errs.FormatOld) {
+				t.Fatalf("the first write in a v0.1.17 repo: %v, want E_FORMAT_OLD", err)
 			}
-			if hasV017Rows(repo) {
-				meta, _ := os.ReadFile(filepath.Join(repo, ".lore", "data", "_meta.json"))
-				t.Fatalf("v0.1.17 rows left after the first write: notices %q meta %s", notices, meta)
-			}
-			_ = c.ask
-			if !slices.ContainsFunc(notices, func(n string) bool { return strings.Contains(n, "this write first ran lore fix's safe steps") }) {
-				t.Fatalf("no one-line notice of the fix: %q", notices)
+			if !hasV017Rows(repo) {
+				t.Fatalf("a refused write migrated the repo (notices %q)", notices)
 			}
 		})
 	}

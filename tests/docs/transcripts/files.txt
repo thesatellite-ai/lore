@@ -188,7 +188,7 @@ this repo: ~/work/website
   .lore
       lore's folder in this repo
   .lore/data
-      this repo's rows, one JSON file per row (.lore/data/<table>/<id>.json) and _meta.json (the project id); committed
+      this repo's rows, one JSON file per row (.lore/data/<table>/<id>.json) and _meta.json (the project id and format: the lore 0.1.18 format (format 2)); committed
   .lore/lock
       the lock lore takes while it writes rows here; not committed
   .lore/state

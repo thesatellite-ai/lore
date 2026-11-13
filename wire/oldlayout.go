@@ -86,7 +86,39 @@ func (a *App) MoveOldLayout(ctx context.Context, w io.Writer) {
 		a.settleClone(ctx, dir, say)
 	}
 	for _, p := range personalV017Candidates(home) {
+		if personalMarkerOld(p.dir) {
+			continue // D16: lore migrate run moves it (oldLayoutNotices names it)
+		}
 		a.flattenPersonal(ctx, p, say)
+	}
+	a.oldLayoutNotices(home, say)
+}
+
+// personalMarkerOld reports a personal store clone whose marker is lore
+// 0.1.17's: its everywhere/ notes move only with lore migrate run (D16).
+func personalMarkerOld(dir string) bool {
+	m, err := rowfs.ReadMarker(dir)
+	return err == nil && m.Version < rowfs.MarkerFirstStores
+}
+
+// oldLayoutNotices says once per store (a read notice, remembered under
+// the lore home) that a store clone is still on lore 0.1.17's layout and
+// which command upgrades it (D16): the first-run step no longer does.
+func (a *App) oldLayoutNotices(home string, say func(string)) {
+	found, err := git.ScanClones(home)
+	if err != nil {
+		return
+	}
+	for _, c := range found {
+		if c.State != git.CloneWhole || !personalMarkerOld(c.Paths.Dir) {
+			continue
+		}
+		key := "store-layout-v017:" + c.Paths.Dir
+		if ReadNoticeSaid(home, key, "1") {
+			continue
+		}
+		say(StoreFormatOldErr(filepath.Base(c.Paths.Dir)).(*errs.Error).Message)
+		MarkReadNotice(home, key, "1")
 	}
 }
 
@@ -211,7 +243,7 @@ func (a *App) FlattenAfterMigrate(ctx context.Context) []string {
 		return nil
 	}
 	flat := flattenCandidates(home)
-	if len(flat) == 0 {
+	if len(flat) == 0 && len(personalV017Candidates(home)) == 0 {
 		return nil
 	}
 	_ = a.reopenState() // a close error leaves nothing open that a reopen needs
@@ -219,6 +251,12 @@ func (a *App) FlattenAfterMigrate(ctx context.Context) []string {
 	say := func(line string) { lines = append(lines, line) }
 	for _, dir := range flat {
 		a.settleClone(ctx, dir, say)
+	}
+	// D16: the personal store's everywhere/ move is lore migrate run's too
+	for _, p := range personalV017Candidates(home) {
+		if !personalMarkerOld(p.dir) {
+			a.flattenPersonal(ctx, p, say)
+		}
 	}
 	return lines
 }

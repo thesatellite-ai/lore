@@ -648,20 +648,38 @@ func dryRun(run *Run) bool {
 // fixDryRun reports whether run is `lore fix --dry-run` (CLI flag or REST
 // body); an input it cannot read is a dry run, the side that changes less.
 func fixDryRun(run *Run) bool {
+	return fixBoolFlag(run, fixDryRunFlag, func(in opsfix.RunIn) bool { return in.DryRun }, true)
+}
+
+// fixMigrateFlag is lore fix's --migrate (opsfix.RunIn.Migrate).
+const fixMigrateFlag = "migrate"
+
+// fixMigrate reports whether run is `lore fix --migrate` (D15); an input it
+// cannot read is not (the side that changes less).
+func fixMigrate(run *Run) bool {
+	return fixBoolFlag(run, fixMigrateFlag, func(in opsfix.RunIn) bool { return in.Migrate }, false)
+}
+
+// fixBoolFlag reads one boolean flag of a lore fix run from the command
+// line or the REST body; unreadable answers onBad.
+func fixBoolFlag(run *Run, flag string, field func(opsfix.RunIn) bool, onBad bool) bool {
 	if run.Entry.Spec().Name != opsfix.OpRun {
 		return false
 	}
 	if run.Cmd != nil {
-		if f, err := run.Cmd.Flags().GetBool(fixDryRunFlag); err == nil {
+		if f, err := run.Cmd.Flags().GetBool(flag); err == nil {
 			return f
 		}
 		// the bare-noun shortcut's command may not carry the flag: the
 		// command line says it
-		return slices.Contains(run.Args, "--"+fixDryRunFlag)
+		return slices.Contains(run.Args, "--"+flag)
 	}
 	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
 		var in opsfix.RunIn
-		return json.Unmarshal(d.Body, &in) != nil || in.DryRun
+		if json.Unmarshal(d.Body, &in) != nil {
+			return onBad
+		}
+		return field(in)
 	}
 	return false
 }

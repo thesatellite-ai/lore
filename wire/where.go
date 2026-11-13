@@ -430,6 +430,15 @@ func fileHas(p, s string) bool {
 	return err == nil && strings.Contains(string(b), s)
 }
 
+// whereFormat is the project format as lore where names it (D12).
+func whereFormat(top string) string {
+	pf, err := ProjectFormatAt(top)
+	if err != nil {
+		return "unreadable: " + errLine(err)
+	}
+	return ProjectFormatLine(pf)
+}
+
 // whereRepo lists what lore keeps in the code repo at top.
 func whereRepo(ctx context.Context, top string) []opswhere.Entry {
 	var out []opswhere.Entry
@@ -444,7 +453,7 @@ func whereRepo(ctx context.Context, top string) []opswhere.Entry {
 	lore := filepath.Join(top, rowfs.LoreDir)
 	add(lore, opswhere.KindFolder, "lore's folder in this repo", "the files below say which are committed")
 	add(filepath.Join(top, filepath.FromSlash(rowfs.LayoutRepo.DataPath(rowfs.FolderRoot))), opswhere.KindFolder,
-		"this repo's rows, one JSON file per row ("+filepath.Join(filepath.FromSlash(rowfs.LayoutRepo.DataPath(rowfs.FolderRoot)), "<table>", "<id>"+rowfs.RowFileExt)+") and "+rowfs.MetaFileName+" (the project id); committed",
+		"this repo's rows, one JSON file per row ("+filepath.Join(filepath.FromSlash(rowfs.LayoutRepo.DataPath(rowfs.FolderRoot)), "<table>", "<id>"+rowfs.RowFileExt)+") and "+rowfs.MetaFileName+" (the project id and format: "+whereFormat(top)+"); committed",
 		"rows may be edited with any editor; deleting "+rowfs.MetaFileName+" gives the repo a new project id")
 	for _, f := range []string{RepoCacheFile, RepoCacheFile + "-wal", RepoCacheFile + "-shm"} {
 		add(filepath.Join(top, filepath.FromSlash(f)), opswhere.KindFile, "an earlier lore build's search cache of this repo (the cache now lives under the lore home, cache/"+repoCacheDir+"/); untracked and rebuildable", "safe to delete; `lore fix` removes it")

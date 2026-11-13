@@ -90,7 +90,7 @@ func TestJourneyMixedVersionsOneStore(t *testing.T) {
 		// after the line that warns the 0.1.17 users of the store
 		// (the personal note was filed for acme: it keeps its folder, D5, so
 		// no personal move commit is made)
-		up.LoreIn(lap, "fix").Says(t, "must upgrade lore", "0.1.17 refuses the new layout", "layout commit", "pushed store lore-notes").
+		up.LoreIn(lap, "fix", "--migrate").Says(t, "must upgrade lore", "0.1.17 refuses the new layout", "layout commit", "pushed store lore-notes").
 			Never(t, "run `lore sync` to push the org store changes")
 		up.LoreIn(lap, "memory", "list").OK(t).Says(t, mxOrgNote, mxNote)
 		if len(org.FilesMatching("main", "/.lore/data/")) != 0 {
@@ -138,7 +138,7 @@ func TestJourneyMixedVersionsOneStore(t *testing.T) {
 
 	w.Step("day2/desk-upgrades", func() {
 		up := desk.Upgrade()
-		up.LoreIn(dsk, "fix")
+		up.LoreIn(dsk, "fix", "--migrate")
 		before := len(st.FilesMatching("main", "memories/mem_"))
 		up.LoreIn(dsk, "memory", "add", "--body", mxLater, "--to", "me").OK(t)
 		up.LoreIn(dsk, "sync").OK(t)
@@ -187,7 +187,7 @@ func TestJourneyStoreOnlyUpgrade(t *testing.T) {
 		}
 		// the read moved every row already; fix converts the marker
 		// (lore_store: 4, checked below) and pushes it
-		up.LoreIn(lap, "fix").Says(t, "lore-store.yaml v1 → v2", "pushed").
+		up.LoreIn(lap, "fix", "--migrate").Says(t, "lore-store.yaml v1 → v2", "pushed").
 			Never(t, "store lore-me moves to the 0.1.18 layout now") // said once per store and machine (B4-21)
 		for _, r := range []*teamharness.Remote{st} {
 			if m, _ := r.Read("main", "lore-store.yaml"); !strings.Contains(m, "lore_store: 4") {
@@ -198,7 +198,7 @@ func TestJourneyStoreOnlyUpgrade(t *testing.T) {
 			}
 		}
 		// a second fix has nothing left to do in the stores
-		up.LoreIn(lap, "fix").Never(t, "layout commit", "v1 → v2")
+		up.LoreIn(lap, "fix", "--migrate").Never(t, "layout commit", "v1 → v2")
 	})
 }
 

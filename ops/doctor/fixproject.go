@@ -86,6 +86,22 @@ const (
 // ResultCurrent is a step's result when nothing was needed.
 const ResultCurrent = "current"
 
+// migrateKey marks a ctx whose fix run was asked to migrate (lore fix
+// --migrate, D15).
+type migrateKey struct{}
+
+// WithMigrate marks ctx: the fix steps may migrate a project on an older
+// format (they run `lore migrate run`); without it they never do.
+func WithMigrate(ctx context.Context) context.Context {
+	return context.WithValue(ctx, migrateKey{}, true)
+}
+
+// MigrateAsked reports whether ctx carries WithMigrate.
+func MigrateAsked(ctx context.Context) bool {
+	v, _ := ctx.Value(migrateKey{}).(bool)
+	return v
+}
+
 // FixStepsEnv is the optional upgrade of Env that runs the fix steps
 // outside the doctor checks (*wire.App implements it).
 type FixStepsEnv interface {

@@ -21,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // statusField is the column holding a row's lifecycle state.
@@ -284,6 +285,11 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 	var out landOutcome
 	if s.blocked != nil {
 		return out, s.blocked
+	}
+	if wire.ProjectFormatOld(s.top) {
+		// D13: a landing writes rows onto the default branch; a project on
+		// lore 0.1.17's format gets none until lore migrate run
+		return out, wire.FormatOldErr(s.top)
 	}
 	out.Branch = s.defaultBranch(ctx)
 	out.Checkout, out.OffDefault = s.checkoutBranch(ctx, out.Branch)

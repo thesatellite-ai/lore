@@ -51,7 +51,7 @@ The [full list](#the-full-list) below links every code with its exit status.
 | 21 | a name matches more than one definition (`E_META_AMBIGUOUS`, `E_RESOURCE_AMBIGUOUS`) |
 | 22 | a kind or key definition is missing or out of date (`E_KIND_UNKNOWN`, `E_META_STALE`, …) |
 | 23 | lore refused in this state (`E_READ_ONLY`, `E_DB_CORRUPT`, `E_HAS_DEPENDENTS`, …) |
-| 24 | a migration is locked or would lose data (`E_MIGRATE_LOCKED`, `E_MIGRATE_ROLLBACK_LOSES`) |
+| 24 | a migration is locked or would lose data, or the project is on an older format (`E_MIGRATE_LOCKED`, `E_MIGRATE_ROLLBACK_LOSES`, `E_FORMAT_OLD`) |
 | 25 | an upgrade problem (`E_SCHEMA_OLD`, `E_UPGRADE_PINNED`, …) |
 | 26 | `E_NEEDS_CONFIRM`: ask the person, then run again with `--yes` (or `--confirm` where the command says so); for a secret warning, with one of the choices it names ([below](#when-a-write-looks-like-it-holds-a-secret)) |
 | 27 | `E_NOT_FOUND`: no row, key or project with that name or id |
@@ -325,6 +325,7 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 | `E_UPGRADE_PINNED` | 25 | an upgrade in CI without a pinned version, or `--version` against the team's pin | set `LORE_VERSION_PIN` or `lore_version_pin`, or pass `--ignore-pin` |
 | `E_MIGRATE_LOCKED` | 24 | another teammate's `lore migrate run` holds the team migration lock | wait for it to finish |
 | `E_MIGRATE_ROLLBACK_LOSES` | 24 | rolling back the migration would lose changes made after it; nothing was changed | keep the migration, or copy those changes out first |
+| `E_FORMAT_OLD` | 24 | the project is on the lore 0.1.17 format: this lore reads it but writes nothing there (no row, no live row, no landing) until it is migrated | run `lore migrate run` once (teammates need lore 0.1.18 after it); a write to your personal store or a migrated org store still works |
 
 ### Teams and agents
 

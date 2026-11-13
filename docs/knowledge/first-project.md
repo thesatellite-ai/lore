@@ -153,6 +153,7 @@ Binary: dev
   merge driver:     true
   data gitignored:  false
   uncommitted:      0
+  format:           the lore 0.1.18 format (format 2)
 [identity]
   resolved: human:alice@agency.example
   source:   git config user.email

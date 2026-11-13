@@ -145,6 +145,9 @@ type Sync struct {
 	DataIgnored    bool        `json:"data_dir_gitignored"`
 	MergeDriverOK  bool        `json:"merge_driver_configured"`
 	InGitRepo      bool        `json:"in_git_repo"`
+	// Format names the project's format (D12: the committed _meta.json's
+	// "format", or the rows'), "" outside a lore project.
+	Format string `json:"format,omitempty"`
 
 	// lore.db counters (old binary only; see above).
 	Baselined       bool        `json:"baselined,omitempty"`
@@ -223,7 +226,7 @@ func (r *RawJSON) UnmarshalText(b []byte) error { return r.UnmarshalJSON(b) }
 
 // RunIn is the input of doctor.run.
 type RunIn struct {
-	Fix bool `json:"fix,omitempty" flag:"fix" desc:"run lore fix's steps: migrate v0.1.17 rows, render, agent hooks, old store clones proved safe, then every safe doctor repair (git info/exclude, store clone identity, merge driver, config style, actor roster, reversed --supersedes links, …); prints each step and the status after them"`
+	Fix bool `json:"fix,omitempty" flag:"fix" desc:"run lore fix's steps (never a migration: a project on the lore 0.1.17 format needs lore migrate run or lore fix --migrate): render, agent hooks, old store clones proved safe, then every safe doctor repair (git info/exclude, store clone identity, merge driver, config style, actor roster, reversed --supersedes links, …); prints each step and the status after them"`
 	// All checks every setup on this machine (ONB 6), not only the active
 	// one.
 	All bool `json:"all,omitempty" flag:"all" desc:"check every setup on this machine: identity, GitHub, stores, repos, tools (exit 0 healthy, 1 degraded, 2 broken)"`
@@ -537,7 +540,11 @@ func (s *Sync) text() string {
 	if s.NoLoreDB {
 		fmt.Fprintf(&b, "  data gitignored:  %v\n", s.DataIgnored)
 	}
-	fmt.Fprintf(&b, "  uncommitted:      %d\n\n", s.Uncommitted)
+	fmt.Fprintf(&b, "  uncommitted:      %d\n", s.Uncommitted)
+	if s.Format != "" {
+		fmt.Fprintf(&b, "  format:           %s\n", s.Format)
+	}
+	b.WriteString("\n")
 	return b.String()
 }
 

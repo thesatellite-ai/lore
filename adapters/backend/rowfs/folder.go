@@ -213,8 +213,8 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 			// below it, its own files and a person's files: only a table
 			// folder is lore's to read here (D-d)
 			continue
-		case IsOSJunk(name), name == MetaFileName, name == PurgedFileName:
-			continue
+		case IsOSJunk(name), name == MetaFileName, name == PurgedFileName, name == SignpostFile:
+			continue // SignpostFile: the note for lore 0.1.17 a migration leaves (wire raiseProjectFormat)
 		case strings.HasPrefix(name, tmpPrefix):
 			removeStaleTmp(filepath.Join(f.dataDir, name))
 			continue

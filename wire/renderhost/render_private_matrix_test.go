@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -106,6 +107,13 @@ func privWorld(t *testing.T, srcs []privSrc, files map[string]string) (*wire.App
 	all := append([]privSrc{{name: string(store.SourceRepo), word: "repoword"}}, srcs...)
 	for _, s := range all {
 		target := store.Source(s.name)
+		// A store on lore 0.1.17's layout refuses writes outside lore migrate
+		// run (D16), so its rows are seeded the one way it accepts them, as
+		// they were before it was upgraded.
+		ctx := ctx
+		if s.name == "old_v1" {
+			ctx = opsmigrate.WithRun(ctx)
+		}
 		p, cerr := a.Create(ctx, target, schema.TableProjects, map[string]value.Value{"name": text(t, "p-"+s.name)})
 		if cerr != nil {
 			t.Fatalf("project in %s: %v", s.name, cerr)

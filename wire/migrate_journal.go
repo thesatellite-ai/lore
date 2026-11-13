@@ -32,6 +32,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -106,6 +107,12 @@ type migrateJournal struct {
 	// changes nothing puts it back (FA-FMT-3), so a no-op second run never
 	// takes away the rollback of the first.
 	Previous *migrateJournal `json:"previous,omitempty"`
+	// FormatBefore is the project's format when the run began
+	// (ProjectFormatAt): only a run that starts on the lore 0.1.17 format
+	// records the raise and leaves the signpost (FP-3); a run in a
+	// project of this lore's format (a settings step, an actor copy) does
+	// not.
+	FormatBefore int `json:"format_before,omitempty"`
 }
 
 // placeBackend is a backend whose data folder lives on disk (git and
@@ -257,6 +264,9 @@ func (a *App) Begin(ctx context.Context, offline bool) (opsmigrate.Begun, error)
 		prev = &done
 	}
 	j = migrateJournal{Target: row.FormatVersion, Date: date, BackupRef: ref, BackupCommit: commit, Phase: phaseRunning, Offline: offline, Places: places, Previous: prev}
+	if pf, ferr := ProjectFormatAt(top); ferr == nil {
+		j.FormatBefore = pf.Format
+	}
 	if pointer, modeB := FindModeBPointer(top); modeB {
 		j.ModeBPointer = modeBDir + "/" + filepath.Base(pointer)
 	}
@@ -313,15 +323,39 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 		if err != nil {
 			return none, err
 		}
+		var formatLine string
+		if p.Entry == repoEntry && !p.Clone && j.FormatBefore == rowfs.ProjectFormatV017 && (len(diff) > 0 || count > 0) {
+			// FP-3 (D14): the run that raises the project's format records
+			// it, who and when, and leaves the signpost for lore 0.1.17, in
+			// the same change set as the rows (the data folder's diff)
+			if formatLine, err = a.raiseProjectFormat(ctx, top); err != nil {
+				return none, err
+			}
+			if formatLine != "" {
+				if p.TreeAfter, err = snaps.Snapshot(ctx, top, p.Dir, p.Data); err != nil {
+					return none, err
+				}
+				if diff, err = snaps.DiffTrees(ctx, top, p.TreeBefore, p.TreeAfter); err != nil {
+					return none, err
+				}
+			}
+		}
 		if len(diff) == 0 && p.TipAfter == p.TipBefore {
 			continue
 		}
 		changed = true
+		if formatLine != "" {
+			lines = append(lines, formatLine)
+		}
 		line := placeLabel(*p) + ": " + strconv.Itoa(len(diff)) + " files upgraded"
 		if n := metaFilesIn(diff); n > 0 {
 			// B1-9: "Upgraded 16 rows" then "17 files upgraded" read as a
 			// row gone missing; the extra file is the format file
-			line += " (" + strconv.Itoa(len(diff)-n) + " row files and " + rowfs.MetaFileName + ")"
+			extra := rowfs.MetaFileName
+			if n > 1 {
+				extra += " and " + rowfs.SignpostFile
+			}
+			line += " (" + strconv.Itoa(len(diff)-n) + " row files and " + extra + ")"
 		}
 		switch {
 		case p.Entry == repoEntry && !p.Clone:
@@ -672,6 +706,11 @@ func (a *App) Status(ctx context.Context) (opsmigrate.StatusOut, error) {
 		return opsmigrate.StatusOut{}, err
 	}
 	out := opsmigrate.StatusOut{Writes: row.FormatVersion, Places: []opsmigrate.PlaceStatus{}, Features: []string{}, Pending: []string{}, Notes: []string{}}
+	if pf, ferr := ProjectFormatAt(top); ferr != nil {
+		out.Notes = append(out.Notes, ferr.Error())
+	} else if pf.Format != rowfs.ProjectFormatUnknown {
+		out.Format, out.ProjectFormat = ProjectFormatLine(pf), pf.Format
+	}
 	if d, ok, ferr := rowfs.ReadRepoFormat(top); ferr != nil {
 		out.Notes = append(out.Notes, ferr.Error())
 	} else if ok {
@@ -897,12 +936,50 @@ func setFields(fields map[string]value.Value) map[string]value.Value {
 	return out
 }
 
+// raiseProjectFormat records format 2, who ran the migration and when in
+// the checkout's .lore/data/_meta.json and writes the signpost for lore
+// 0.1.17 beside it (rowfs.SignpostFile: 0.1.17's lore sync names the file
+// first, "<name>: not a table directory", and its line says to upgrade).
+// It returns the line the run prints, "" when the format was recorded as
+// current already (a second run changes nothing) or the checkout has no
+// _meta.json. Both files are .lore/data changes: they go into the same
+// commit as the rewritten rows, and lore migrate rollback takes them back.
+func (a *App) raiseProjectFormat(ctx context.Context, top string) (string, error) {
+	pf, err := rowfs.ReadProjectFormat(top)
+	if err != nil {
+		return "", err
+	}
+	if pf.Recorded && pf.Format >= rowfs.ProjectFormatCurrent {
+		return "", nil
+	}
+	if !fileExists(filepath.Join(top, filepath.FromSlash(rowfs.RepoMetaPath))) {
+		return "", nil
+	}
+	by := ""
+	if id, ierr := resolveIdentity(ctx, a.opts); ierr == nil {
+		by = id.DisplayName
+		if id.StableKey != "" {
+			by += " (" + id.StableKey + ")"
+		}
+	}
+	at := a.opts.Wall().UTC().Format(time.RFC3339)
+	if _, err = rowfs.WriteProjectFormat(top, rowfs.ProjectFormatCurrent, strings.TrimSpace(by), at); err != nil {
+		return "", err
+	}
+	data := filepath.Join(top, rowfs.LoreDir, rowfs.DataDir)
+	if _, err = rowfs.EnsureSignpost(data); err != nil {
+		return "", err
+	}
+	return "format: " + rowfs.FormatName(rowfs.ProjectFormatCurrent) + ", recorded in " + rowfs.RepoMetaPath + " (by " + strings.TrimSpace(by) + ", " + at + "); " +
+		rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.SignpostFile + " tells teammates still on lore 0.1.17 to upgrade (their lore sync names it); commit both with the rows", nil
+}
+
 // metaFilesIn counts the format files (_meta.json) among a migration's
 // changed paths.
 func metaFilesIn(diff []git.TreeChange) int {
 	n := 0
 	for _, d := range diff {
-		if path.Base(d.Path) == rowfs.MetaFileName {
+		if b := path.Base(d.Path); b == rowfs.MetaFileName || b == rowfs.SignpostFile {
 			n++
 		}
 	}

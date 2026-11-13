@@ -229,6 +229,7 @@ places:
 journal: last migration 2026-11-02 converted the shared-database mode (.lore/lore.yaml; backup refs/lore-backup/migrate/2026-11-02); it cannot be rolled back
 lock: free
 alice (work/app)$ lore migrate status
+format: the lore 0.1.18 format (format 2)
 writes: 2
 places:
   PLACE    V1  V2  NEWER  TOTAL

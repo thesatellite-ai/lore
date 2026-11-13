@@ -181,6 +181,7 @@ lock: free
 
 # alice, in app
 $ lore migrate status
+format: the lore 0.1.18 format (format 2)
 writes: 2
 places:
   PLACE    V1  V2  NEWER  TOTAL

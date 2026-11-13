@@ -86,8 +86,18 @@ func TestJourneyUpgraderPersonalNotes(t *testing.T) {
 	m := laptop.Upgrade()
 
 	w.Step("day2/upgrade-keeps-every-personal-note", func() {
+		// D16: the first command moves the clones on this machine only; the
+		// store stays on 0.1.17's layout (read, never written) and says so
 		r := m.LoreIn(api, "memory", "list", "--store", "me").OK(t)
-		r.Says(t, "(0.1.17) -> ", "local commit", "personal store lore-me:", "moved to _store/")
+		r.Says(t, "(0.1.17) -> ", "local commit", "store lore-me is on the lore 0.1.17 layout; run lore migrate run").Never(t, "moved to _store/")
+		for _, b := range []string{upAcmeNote, upAnyNote, upOfflineNote} {
+			upCount(t, "api --store me (0.1.17 layout)", r.Stdout, b)
+		}
+		m.LoreIn(api, "memory", "add", "--body", "refused for now", "--to", "me").Fails(t, 24, "store me is on the lore 0.1.17 layout")
+		// lore migrate run upgrades the store: its layout commit and the
+		// everywhere/ move
+		m.LoreIn(api, "migrate", "run").OK(t).Says(t, "personal store lore-me:", "moved to _store/")
+		r = m.LoreIn(api, "memory", "list", "--store", "me").OK(t)
 		for _, b := range []string{upAcmeNote, upAnyNote, upOfflineNote} {
 			upCount(t, "api --store me", r.Stdout, b)
 		}

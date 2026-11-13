@@ -10,8 +10,9 @@
 //
 //	fix.run          ─▶ doctor.FixProject(dry) ─▶ Out{Repo, Steps, Status}
 //	fix.run --all    ─▶ Env.FixRepos: every git repo the setups know (known
-//	                    repos, the setup folders walked for repos with .lore/
-//	                    or a store link); non-repos noted, not failed
+//	                    repos, the setup folders walked for repos with
+//	                    .lore/); non-repos and repos a store link names
+//	                    that hold no lore data noted, never run in
 //	                 ─▶ Env.FixPrepare: (not dry) fetch each store clone once
 //	                 ─▶ RunAll: Jobs repos at once (default 8), each in its
 //	                    own lore process (Env.FixIn); each repo's block is
@@ -64,6 +65,9 @@ const restNoun = "fix"
 const (
 	LineCurrent = "Everything is current."
 	LineDryRun  = "Nothing changed (dry run)."
+	// LineMigrateAll is the command that migrates every repo --all left on
+	// an older format.
+	LineMigrateAll = "lore fix --all --migrate"
 	// LineStepsFailed starts the line of a run where a step could not run
 	// (B1-5: "Everything is current." after a FAILED migrate read as a
 	// clean repo); the failed steps follow.
@@ -96,13 +100,35 @@ type Env interface {
 	FixCacheSweep(ctx context.Context) []string
 }
 
+// FormatGate is the optional upgrade of Env that tells a project on an
+// older lore format (D13): old is true with the one line saying so and the
+// command that upgrades it (*wire.App implements it).
+type FormatGate interface {
+	FixFormatOld(ctx context.Context) (line string, old bool, err error)
+}
+
+// LoreDataGate is the optional upgrade of Env that tells a repo with no
+// lore data (FP-7): none is true when the repo the command runs in holds
+// no .lore folder, so lore fix has no project to repair and sets nothing
+// up there (*wire.App implements it).
+type LoreDataGate interface {
+	FixNoLoreData(ctx context.Context) (none bool)
+}
+
+// noLoreDataErr is lore fix's answer in a repo with no lore data.
+func noLoreDataErr(top string) error {
+	return errs.New(errs.NotAStore, "lore fix: no lore data in "+top+" (no .lore folder), so there is nothing to fix and lore fix creates nothing there").
+		WithHint("lore init sets this repo up; lore fix --all lists such repos and leaves them as they are")
+}
+
 // Found is what --all found to fix.
 type Found struct {
 	// Roots are the repo roots, sorted, each once.
 	Roots []string
 	// Skipped are folders that looked like a project but are no git repo
-	// (a setup folder, the home holding ~/.lore): a note each, never a
-	// failure (owner item 26).
+	// (a setup folder, the home holding ~/.lore), and repos a store link
+	// names that hold no lore data (FP-7): a note each, never a failure
+	// (owner item 26), never run in.
 	Skipped []Skip
 	// Note says how the repos were chosen when no setup has folders
 	// (B4-8: a machine upgraded from lore 0.1.17), "" otherwise.
@@ -127,6 +153,9 @@ type Prep struct {
 	// Yes: the caller confirmed (lore fix --all --yes), so every child
 	// runs with --yes (owner item 24); set by runAll, not by FixPrepare.
 	Yes bool `json:"-"`
+	// Migrate: lore fix --all --migrate, so every child runs with
+	// --migrate (D15); set by runAll.
+	Migrate bool `json:"-"`
 	// Fetched counts the store clones fetched.
 	Fetched int `json:"stores_fetched,omitempty"`
 	// Failed names the store clones whose fetch failed (the children then
@@ -142,6 +171,10 @@ type RunIn struct {
 	All    bool `json:"all,omitempty" flag:"all" desc:"fix every repo the setups know (their folders and the known repos), one block each; keeps going past a failure and exits 1 naming the failed repos"`
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"show what each step would do; change nothing and reach no remote (no fetch, push or clone)"`
 	Jobs   int  `json:"jobs,omitempty" flag:"jobs" desc:"with --all: how many repos run at once (default 8; 1 runs them one after another)"`
+	// Migrate (D15): lore fix never raises a project's format by itself;
+	// with --migrate it runs `lore migrate run` as its migrate step (a
+	// person's choice: teammates then need lore 0.1.18).
+	Migrate bool `json:"migrate,omitempty" flag:"migrate" desc:"also migrate a project still on the lore 0.1.17 format (runs lore migrate run; teammates then need lore 0.1.18); without it such a project is refused, or listed by --all"`
 	// Dirs (L-6): folders --all also looks through for repos, as it does a
 	// setup's folders: a lore 0.1.17 repo outside the home folder that no
 	// lore command ran in yet is found no other way.
@@ -162,6 +195,10 @@ type RepoResult struct {
 	WallMS int64 `json:"wall_ms"`
 	// Result is the repo's whole output (one-repo runs through FixIn).
 	Result *Out `json:"-"`
+	// FormatOld: the repo's project is on an older lore format and the
+	// run was not asked to migrate (D15): Text is the one line and the
+	// command that upgrades it.
+	FormatOld bool `json:"format_old,omitempty"`
 	// Retried: this is the second run, alone, of a repo whose first run
 	// left a repair that could not fix beside the others (retryAlone).
 	Retried bool `json:"retried,omitempty"`
@@ -246,6 +283,9 @@ func seconds(ms int64) string { return fmt.Sprintf("%.1fs", float64(ms)/1000) }
 // Failed reports whether the repo counts as a failure of --all: the run
 // failed, a step failed, or the repo is broken after it.
 func (r RepoResult) Failed() bool {
+	if r.FormatOld {
+		return false // listed with its command, never a failure (D15)
+	}
 	return r.Error != "" || r.Status == doctor.StatusBroken || r.Exit > 1 /* above degraded: broken or a failed run */ || len(doctor.FailedSteps(r.Steps)) > 0
 }
 
@@ -268,7 +308,11 @@ type Out struct {
 	SetupNotes []string `json:"setup_notes,omitempty"`
 	// Repos are --all's blocks, one per repo.
 	Repos []RepoResult `json:"repos,omitempty"`
-	// Skipped are the folders --all passed over (not git repos), noted.
+	// FormatOld names the repos on an older lore format that --all left
+	// as they are (D15: migrated only with --migrate).
+	FormatOld []string `json:"format_old,omitempty"`
+	// Skipped are the folders --all passed over (not git repos, or no
+	// lore data), noted.
 	Skipped []Skip `json:"skipped,omitempty"`
 	// Note says how --all chose the repos when no setup has folders.
 	Note string `json:"note,omitempty"`
@@ -366,8 +410,12 @@ func (o Out) Summary() string {
 	} else {
 		b.WriteString(" (none failed)")
 	}
+	if len(o.FormatOld) > 0 {
+		// D15: never migrated without --migrate; each block names its command
+		fmt.Fprintf(&b, "; %d on the lore 0.1.17 format, not migrated (%s upgrades them all; teammates then need lore 0.1.18)", len(o.FormatOld), LineMigrateAll)
+	}
 	if len(o.Skipped) > 0 {
-		fmt.Fprintf(&b, "; %d folder(s) skipped, not git repos", len(o.Skipped))
+		fmt.Fprintf(&b, "; %d folder(s) skipped (see the skipped lines)", len(o.Skipped))
 	}
 	if len(o.Errors) > 0 {
 		fmt.Fprintf(&b, "; %d cache error(s)", len(o.Errors))
@@ -422,17 +470,18 @@ func RunAll(ctx context.Context, roots []string, jobs int, run func(ctx context.
 func Ops(env Env) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpRun, Summary: "Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them",
+			Name: OpRun, Summary: "Bring this project up to date: render, agent hooks, old clones, every safe doctor repair (with --migrate, first migrate a project on the lore 0.1.17 format); prints each step and the status after them",
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
 			// a doctor repair may ask first (reversed --supersedes links)
 			Confirm: op.ConfirmRule{MayAsk: true},
-			Errors:  []errs.Code{errs.NotAStore, errs.InvalidInput, errs.NeedsConfirm, errs.Internal},
+			Errors:  []errs.Code{errs.NotAStore, errs.InvalidInput, errs.FormatOld, errs.NeedsConfirm, errs.Internal},
 			Examples: []op.Example{
 				{Title: "fix this project", CLI: "lore fix", Want: "Status:"},
 				{Title: "see what it would do", CLI: "lore fix --dry-run", Want: ""},
 				{Title: "every repo on this machine", CLI: "lore fix --all", Want: ""},
 				{Title: "every repo, one at a time", CLI: "lore fix --all --jobs 1", Want: ""},
 				{Title: "also the repos under these folders", CLI: "lore fix --all ~/code ~/work", Want: ""},
+				{Title: "also migrate a project on the lore 0.1.17 format", CLI: "lore fix --migrate", Want: ""},
 			},
 		}, func(ctx context.Context, in RunIn) (Out, error) {
 			return Run(ctx, env, in)
@@ -453,6 +502,20 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	if err != nil || top == "" {
 		return Out{}, errs.New(errs.NotAStore, "lore fix works on one project: not inside a git repo here").
 			WithHint("run lore fix inside the repo, or lore fix --all for every repo the setups know")
+	}
+	// FP-7: a repo with no lore data is never set up by lore fix (its
+	// open would create .lore/); refused before any step runs
+	if g, ok := env.(LoreDataGate); ok && g.FixNoLoreData(ctx) {
+		return Out{}, noLoreDataErr(top)
+	}
+	// D13, D15: a project on an older format is never written, and lore
+	// fix migrates only when asked (--migrate)
+	if in.Migrate {
+		ctx = doctor.WithMigrate(ctx)
+	} else if g, ok := env.(FormatGate); ok {
+		if line, old, gerr := g.FixFormatOld(ctx); gerr == nil && old {
+			return Out{}, errs.New(errs.FormatOld, line)
+		}
 	}
 	r, err := doctor.FixProject(ctx, env, in.DryRun)
 	if err != nil {
@@ -503,6 +566,7 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 	roots := found.Roots
 	prep := env.FixPrepare(ctx, in.DryRun, jobs)
 	prep.Yes = op.Confirmed(ctx) // --yes reaches each repo's own run
+	prep.Migrate = in.Migrate    // D15: only --migrate migrates, in each repo
 	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep, Skipped: found.Skipped, Note: found.Note}
 	var emit func(RepoResult)
 	if w := env.FixProgress(); w != nil {
@@ -516,9 +580,12 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 		retryAlone(ctx, env, out.Repos, prep, emit)
 	}
 	for _, r := range out.Repos {
-		if r.Failed() {
+		switch {
+		case r.FormatOld:
+			out.FormatOld = append(out.FormatOld, r.Repo)
+		case r.Failed():
 			out.Failed = append(out.Failed, r.Repo)
-		} else {
+		default:
 			out.OK++
 		}
 	}

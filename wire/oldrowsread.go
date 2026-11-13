@@ -31,9 +31,10 @@ func OldRowsRead(ctx context.Context) bool {
 // HasV017RowsAt reports whether the git repo dir is in still holds rows
 // lore 0.1.17 wrote and was never migrated (hasV017Rows).
 func HasV017RowsAt(ctx context.Context, dir string) bool {
-	return hasV017Rows(gitTopLevel(ctx, dir))
+	top := gitTopLevel(ctx, dir)
+	return top != "" && ProjectFormatOld(top)
 }
 
 // OldRowsSyncLine is what `lore sync` says in such a repo instead of
 // syncing it.
-const OldRowsSyncLine = "nothing synced in this repo: its rows were written by lore 0.1.17 and are not migrated yet, and only lore fix changes them (a teammate's lore fix commit then pulls cleanly); run lore fix, or git pull it from the teammate who did"
+const OldRowsSyncLine = "nothing synced in this repo: it is on the lore 0.1.17 format and this lore writes nothing there until lore migrate run (a teammate's migration commit then pulls cleanly)"

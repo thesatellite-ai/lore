@@ -157,6 +157,14 @@ type fakeEnv struct {
 	sweep    []string
 	sweeps   int
 	gotDirs  []string
+	// gotMigrate: each FixIn's Prep.Migrate
+	gotMigrate []bool
+	// old: FixFormatOld's answer (D13)
+	old bool
+}
+
+func (f *fakeEnv) FixFormatOld(context.Context) (string, bool, error) {
+	return "app is on the lore 0.1.17 format; run lore migrate run to upgrade it (teammates need lore 0.1.18)", f.old, nil
 }
 
 func (f *fakeEnv) RepoTop(context.Context) (string, error) { return "", nil }
@@ -179,7 +187,11 @@ func (f *fakeEnv) FixIn(_ context.Context, root string, dry bool, p Prep) RepoRe
 	f.mu.Lock()
 	f.gotDry = append(f.gotDry, dry)
 	f.gotYes = append(f.gotYes, p.Yes)
+	f.gotMigrate = append(f.gotMigrate, p.Migrate)
 	f.mu.Unlock()
+	if strings.HasSuffix(root, "old") && !p.Migrate {
+		return RepoResult{Repo: root, FormatOld: true, Text: "  old is on the lore 0.1.17 format; run lore migrate run to upgrade it (teammates need lore 0.1.18)\n"}
+	}
 	if strings.HasSuffix(root, "bad") {
 		return RepoResult{Repo: root, Error: "lore fix exited 2: panic: boom", Exit: 2}
 	}
@@ -423,5 +435,58 @@ func TestAllTakesNamedFolders(t *testing.T) {
 	}
 	if !strings.Contains(LineNoRepos, "lore fix --all ~/code ~/work") {
 		t.Fatalf("the no-repo line does not name the folder form: %s", LineNoRepos)
+	}
+}
+
+// TestFormatOldNeverMigratedUnasked pins D15: lore fix in a project on the
+// lore 0.1.17 format refuses with E_FORMAT_OLD and the one line; --all
+// lists such a repo (never a failure, counted apart) and passes --migrate
+// on only when asked.
+func TestFormatOldNeverMigratedUnasked(t *testing.T) {
+	env := &fakeEnv{old: true}
+	_, err := Run(context.Background(), &topEnv{env}, RunIn{})
+	if !errs.Has(err, errs.FormatOld) || !strings.Contains(err.Error(), "is on the lore 0.1.17 format; run lore migrate run") {
+		t.Fatalf("plain lore fix in an old project: %v", err)
+	}
+	all := &fakeEnv{roots: []string{"/w/new", "/w/old"}}
+	out, err := Run(context.Background(), all, RunIn{All: true, Jobs: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Exit != 0 || len(out.Failed) != 0 || len(out.FormatOld) != 1 || out.OK != 1 ||
+		!strings.Contains(out.Summary(), "1 on the lore 0.1.17 format, not migrated ("+LineMigrateAll) {
+		t.Fatalf("--all with an old repo: %+v\n%s", out, out.Summary())
+	}
+	if slices.Contains(all.gotMigrate, true) {
+		t.Fatal("--all passed --migrate on unasked")
+	}
+	again := &fakeEnv{roots: []string{"/w/old"}}
+	if out, err = Run(context.Background(), again, RunIn{All: true, Jobs: 1, Migrate: true}); err != nil || len(out.FormatOld) != 0 || !slices.Equal(again.gotMigrate, []bool{true}) {
+		t.Fatalf("--all --migrate: %+v %v %v", out, again.gotMigrate, err)
+	}
+}
+
+// topEnv is fakeEnv inside a repo (RepoTop answers).
+type topEnv struct{ *fakeEnv }
+
+func (e *topEnv) RepoTop(context.Context) (string, error) { return "/w/app", nil }
+
+// noDataEnv is topEnv in a repo with no lore data (FP-7).
+type noDataEnv struct{ *topEnv }
+
+func (e *noDataEnv) FixNoLoreData(context.Context) bool { return true }
+
+// TestNoLoreDataRefusedBeforeAnyStep (FP-7): lore fix (dry or not, with
+// --migrate too) in a repo with no lore data refuses with E_NOT_A_STORE
+// naming the repo, before any step: the steps open the repo store, and
+// that open would create .lore/ there. The embedded doctor.Env is nil, so
+// reaching a step would panic.
+func TestNoLoreDataRefusedBeforeAnyStep(t *testing.T) {
+	env := &noDataEnv{&topEnv{&fakeEnv{}}}
+	for _, in := range []RunIn{{}, {DryRun: true}, {Migrate: true}} {
+		_, err := Run(context.Background(), env, in)
+		if !errs.Has(err, errs.NotAStore) || !strings.Contains(err.Error(), "no lore data in /w/app") {
+			t.Fatalf("lore fix %+v in a repo with no lore data: %v", in, err)
+		}
 	}
 }

@@ -117,3 +117,15 @@ func folderHasRows(p string) bool {
 	})
 	return found
 }
+
+// personalEverywhereStore is the `me/everywhere` entry (read; its writes
+// are refused by storeFormatGuard until lore migrate run) of the git
+// personal store at raw while its clone is on lore 0.1.17's layout and
+// still holds everywhere/ (D16: the move to _store/ is lore migrate run's).
+func personalEverywhereStore(home, raw string) (attach.Store, bool) {
+	dir := personalCloneDir(home, raw)
+	if dir == "" || !git.PersonalEverywhereV017At(dir) {
+		return attach.Store{}, false
+	}
+	return attach.Store{Name: store.Source(attach.ReservedMe + targetSep + personalEverywhereV017), URL: raw, Folder: personalEverywhereV017}, true
+}

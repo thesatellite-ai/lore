@@ -43,7 +43,7 @@ func TestJourneyTwoMachinesMintOneRepoID(t *testing.T) {
 	w.Step("day1/dana-fixes-the-old-repo-and-pushes", func() {
 		dc = dana.Laptop().Clone(remote, "one")
 		fixOldRepo(t, dc)
-		dana.Laptop().LoreIn(dc, "fix").OK(t)
+		dana.Laptop().LoreIn(dc, "fix", "--migrate").OK(t)
 		dc.CommitAll("lore fix")
 		dc.Git("push", "-q", "origin", "HEAD:main")
 		sc = sam.Laptop().Clone(remote, "one")

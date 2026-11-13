@@ -235,8 +235,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore fix` … | Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them | [operations/upgrade › Fix a project: lore fix](../../docs/operations/upgrade.md#fix-a-project-lore-fix) |
-| `lore fix run` | Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them | [operations/upgrade › Fix a project: lore fix](../../docs/operations/upgrade.md#fix-a-project-lore-fix) |
+| `lore fix` … | Bring this project up to date: render, agent hooks, old clones, every safe doctor repair (with --migrate, first migrate a project on the lore 0.1.17 format); prints each step and the status after them | [operations/upgrade › Fix a project: lore fix](../../docs/operations/upgrade.md#fix-a-project-lore-fix) |
+| `lore fix run` | Bring this project up to date: render, agent hooks, old clones, every safe doctor repair (with --migrate, first migrate a project on the lore 0.1.17 format); prints each step and the status after them | [operations/upgrade › Fix a project: lore fix](../../docs/operations/upgrade.md#fix-a-project-lore-fix) |
 
 ### lore gate
 

@@ -14622,7 +14622,7 @@
                   },
                   "fix": {
                     "type": "boolean",
-                    "description": "run lore fix's steps: migrate v0.1.17 rows, render, agent hooks, old store clones proved safe, then every safe doctor repair (git info/exclude, store clone identity, merge driver, config style, actor roster, reversed --supersedes links, …); prints each step and the status after them"
+                    "description": "run lore fix's steps (never a migration: a project on the lore 0.1.17 format needs lore migrate run or lore fix --migrate): render, agent hooks, old store clones proved safe, then every safe doctor repair (git info/exclude, store clone identity, merge driver, config style, actor roster, reversed --supersedes links, …); prints each step and the status after them"
                   },
                   "fresh": {
                     "type": "boolean",
@@ -16185,7 +16185,7 @@
     "/v1/fix/run": {
       "post": {
         "operationId": "fix.run",
-        "summary": "Bring this project up to date: migrate v0.1.17 rows, render, agent hooks, old clones, every safe doctor repair; prints each step and the status after them",
+        "summary": "Bring this project up to date: render, agent hooks, old clones, every safe doctor repair (with --migrate, first migrate a project on the lore 0.1.17 format); prints each step and the status after them",
         "tags": [
           "fix"
         ],
@@ -16214,6 +16214,10 @@
                   "jobs": {
                     "type": "integer",
                     "description": "with --all: how many repos run at once (default 8; 1 runs them one after another)"
+                  },
+                  "migrate": {
+                    "type": "boolean",
+                    "description": "also migrate a project still on the lore 0.1.17 format (runs lore migrate run; teammates then need lore 0.1.18); without it such a project is refused, or listed by --all"
                   },
                   "yes": {
                     "type": "boolean",
@@ -16246,6 +16250,12 @@
                       "type": "integer"
                     },
                     "failed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "format_old": {
                       "type": "array",
                       "items": {
                         "type": "string"
@@ -16290,6 +16300,9 @@
                           },
                           "exit_status": {
                             "type": "integer"
+                          },
+                          "format_old": {
+                            "type": "boolean"
                           },
                           "repo": {
                             "type": "string"
@@ -16477,6 +16490,16 @@
           },
           "403": {
             "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_FORMAT_OLD",
             "content": {
               "application/json": {
                 "schema": {
@@ -33345,6 +33368,9 @@
                         "type": "string"
                       }
                     },
+                    "format": {
+                      "type": "string"
+                    },
                     "journal": {
                       "type": "string"
                     },
@@ -33395,6 +33421,9 @@
                           "total"
                         ]
                       }
+                    },
+                    "project_format": {
+                      "type": "integer"
                     },
                     "unfinished": {
                       "type": "boolean"
