@@ -37,15 +37,15 @@ func EditName(noun, name, title string) (string, error) {
 	case name == "" || name == title:
 		name = title
 	default:
-		return "", errs.New(errs.InvalidInput, noun+" edit: --name and --title are the same flag and were given different values").
-			WithHint("pass one of them")
+		return "", errs.New(errs.InvalidInput, noun+" edit: name and title are the same field and were given different values").
+			WithHint("give the new name once, as --title \"…\"")
 	}
 	// A name of only spaces is no name: add refuses it (title required),
 	// and edit stored "   " as the new name (campaign knowledge
 	// 2026-11-08). "" still means "not given".
 	if name != "" && strings.TrimSpace(name) == "" {
 		return "", errs.New(errs.InvalidInput, noun+" edit: the new name is blank").
-			WithHint("give the new name, or leave --name / --title out to keep the old one")
+			WithHint("give the new name, or leave --title out to keep the old one")
 	}
 	return name, nil
 }

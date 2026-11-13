@@ -69,7 +69,7 @@ func Ops(env content.Env) []op.Entry {
 			Name: OpEdit, Summary: "Edit workspace fields",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "rename a workspace", CLI: `lore workspace edit wsp_01jd9a00c001 --name "Site redesign"`, Want: "wsp_"}},
+			Examples: []op.Example{{Title: "rename a workspace", CLI: `lore workspace edit wsp_01jd9a00c001 --title "Site redesign"`, Want: "wsp_"}},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a workspace (it goes to the trash; lore trash restore brings it back)",

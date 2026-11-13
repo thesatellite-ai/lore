@@ -58,7 +58,7 @@ type PeekIn struct {
 // like feature/x would read as <store>/<folder> there.
 type PromoteIn struct {
 	IDs    []string `json:"ids" arg:"0" rest:"true" desc:"row ids to commit onto the branch"`
-	Branch string   `json:"branch" flag:"to" desc:"target branch (required)"`
+	Branch string   `json:"branch" flag:"to" alias:"branch" desc:"target branch (required)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be committed"`
 }
 
