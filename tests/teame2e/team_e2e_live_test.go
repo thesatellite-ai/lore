@@ -191,7 +191,8 @@ func TestF02_SameWriteTwiceIsANoOp(t *testing.T) {
 }
 
 // E2 / F3: a write made offline is not lost when a teammate writes meanwhile;
-// the next command once online pushes it.
+// once online a read keeps it on this clone (a read never pushes, S-1) and
+// lore sync, the push asked for, sends it.
 func TestE02_OfflineWriteSurvivesTeammateWrite(t *testing.T) {
 	rt := newRepoTeam(t)
 	rt.dev1.Offline()
@@ -203,10 +204,16 @@ func TestE02_OfflineWriteSurvivesTeammateWrite(t *testing.T) {
 	}
 	b := rt.addTask(t, rt.c2, "written online")
 	rt.dev1.Online()
-	rt.c1.MustLore("task", "list")
+	if titles := listedTitles(t, rt.c1); !hasItem(titles, "written offline") || !hasItem(titles, "written online") {
+		t.Fatalf("dev1 lost a row after reconnect: %v", titles)
+	}
+	if _, ok := rt.liveTask(t, a); ok {
+		t.Fatal("a read pushed the offline write (S-1: a read never pushes)")
+	}
+	rt.c1.MustLore("sync")
 	for _, id := range []string{a, b} {
 		if _, ok := rt.liveTask(t, id); !ok {
-			t.Fatalf("%s lost after reconnect; live has %v", id, rt.app.Files(refLive))
+			t.Fatalf("%s not on origin after lore sync; live has %v", id, rt.app.Files(refLive))
 		}
 	}
 	titles := listedTitles(t, rt.c2)
@@ -981,7 +988,9 @@ func atoiTrim(t *testing.T, s string) int {
 }
 
 // E6 / F8 reader path: a clone holding a pending write while another clone
-// compacts re-applies only its pending write; nothing is lost.
+// compacts re-applies only its pending write; nothing is lost. The reader
+// path runs on dev1's next command (a read here, which keeps the pending
+// write on the clone and never pushes it, S-1); lore sync then sends it.
 func TestE06_CompactionWhileACloneHoldsAPendingWrite(t *testing.T) {
 	rt := newRepoTeam(t, th.Cmd("live", "compact"))
 	rt.dev1.Offline()
@@ -991,10 +1000,13 @@ func TestE06_CompactionWhileACloneHoldsAPendingWrite(t *testing.T) {
 	rt.c2.MustLore("live", "compact")
 	epoch, _ := rt.app.Read(refLive, liveEpochPath)
 	rt.dev1.Online()
-	rt.c1.MustLore("task", "list")
+	if titles := listedTitles(t, rt.c1); !hasItem(titles, "pending on A") || !hasItem(titles, "B one") || !hasItem(titles, "B two") {
+		t.Fatalf("dev1 lost a row in the reader path: %v", titles)
+	}
+	rt.c1.MustLore("sync")
 	for _, id := range []string{pending, b1, b2} {
 		if _, ok := rt.liveTask(t, id); !ok {
-			t.Fatalf("%s missing after the reader path: %v", id, rt.app.Files(refLive))
+			t.Fatalf("%s missing after the reader path and lore sync: %v", id, rt.app.Files(refLive))
 		}
 	}
 	if now, _ := rt.app.Read(refLive, liveEpochPath); atoiTrim(t, now) < atoiTrim(t, epoch) {
@@ -1022,7 +1034,9 @@ func TestF08_Race_CompactionVersusWriter(t *testing.T) {
 	}
 }
 
-// F8 edge case: a clone offline across two compactions still pushes its write.
+// F8 edge case: a clone offline across two compactions keeps its write
+// through the reader path (a read, which never pushes it, S-1) and lore
+// sync sends it.
 func TestF08_OfflineAcrossTwoCompactions(t *testing.T) {
 	rt := newRepoTeam(t, th.Cmd("live", "compact"))
 	rt.dev1.Offline()
@@ -1032,9 +1046,12 @@ func TestF08_OfflineAcrossTwoCompactions(t *testing.T) {
 	rt.addTask(t, rt.c2, "between again")
 	rt.c2.MustLore("live", "compact")
 	rt.dev1.Online()
-	rt.c1.MustLore("task", "list")
+	if !hasItem(listedTitles(t, rt.c1), "slept through two") {
+		t.Fatal("a write held across two compactions was lost in the reader path")
+	}
+	rt.c1.MustLore("sync")
 	if _, ok := rt.liveTask(t, pending); !ok {
-		t.Fatal("a write held across two compactions must be pushed")
+		t.Fatal("a write held across two compactions must be pushed by lore sync")
 	}
 }
 
@@ -1216,7 +1233,8 @@ func TestF05_CrashMidLandingRecovers(t *testing.T) {
 }
 
 // F2 crash: lore is killed after its live commit is made locally but before
-// the push; the next command pushes it (the local ref is the queue).
+// the push; the local ref is the queue: a read keeps it there (a read never
+// pushes, S-1) and the next write pushes it with its own row.
 func TestF02_CrashBeforeLivePushIsRecovered(t *testing.T) {
 	rt := newRepoTeam(t)
 	rt.addTask(t, rt.c1, "warm up")
@@ -1225,9 +1243,15 @@ func TestF02_CrashBeforeLivePushIsRecovered(t *testing.T) {
 	if r.Code == 0 {
 		t.Fatalf("the crash injection did not fire: %s", r)
 	}
-	rt.c1.MustLore("task", "list")
+	if !hasItem(listedTitles(t, rt.c1), "made before the crash") {
+		t.Fatal("a live write committed locally before a crash was lost")
+	}
+	if hasItem(listedTitles(t, rt.c2), "made before the crash") {
+		t.Fatal("a read pushed the waiting write (S-1: a read never pushes)")
+	}
+	rt.addTask(t, rt.c1, "the next write")
 	if !hasItem(listedTitles(t, rt.c2), "made before the crash") {
-		t.Fatal("a live write committed locally before a crash must reach teammates on the next command")
+		t.Fatal("a live write committed locally before a crash must reach teammates on the next write")
 	}
 }
 
