@@ -888,7 +888,7 @@ func hasV017Rows(top string) bool {
 	}
 	data := filepath.Join(top, rowfs.LoreDir, rowfs.DataDir)
 	migrated := map[string]bool{} // the tables migrate rewrites (status pending counts them)
-	for _, t := range CoreTables() {
+	for _, t := range FormatTables() {
 		migrated[t.String()] = true
 	}
 	found := false

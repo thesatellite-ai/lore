@@ -10,6 +10,9 @@ package wire
 //	checkout's migration journal holds one      finish; run lore fix
 //	that did not finish (interrupted, rolled
 //	back)
+//	v1 rows only of tables a run before T-2  ──▶ note: an earlier migration left
+//	left (actors, projects, repos), repo         them; run lore fix --migrate
+//	migrated
 //	v1 rows, repo migrated (min_lore_version ──▶ warning: a lore older than
 //	set; finished here, or no journal: a        0.1.18 still writes here
 //	teammate's checkout)
@@ -36,7 +39,10 @@ package wire
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/model/row"
 )
 
 // DoctorCheckRowFormat names the v1-row-files check.
@@ -47,6 +53,7 @@ const (
 	rowFormatBeforeFix  = "lore fix --migrate"
 	rowFormatAfterWarn  = "row files at _v: 1 after this repo's migration (min_lore_version %s): a lore older than 0.1.18 still writes here, cannot read the migrated rows and cannot commit beside them (%s)"
 	rowFormatAfterFix   = "upgrade lore on the machine that wrote them (lore upgrade), then run lore fix --migrate"
+	rowFormatLeftBefore = "row files an earlier lore migrate run left at _v: 1 (%s): this lore's migration rewrites them too"
 	rowFormatUnfinished = "row files written by lore 0.1.17 (_v: 1) are not migrated yet (%s); the last migration of this repo did not finish or was rolled back (min_lore_version %s)"
 )
 
@@ -65,6 +72,26 @@ func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorNote,
 			Message: fmt.Sprintf(rowFormatBeforeNote, pending), Fix: rowFormatBeforeFix}}, nil
 	}
+	if onlyLeftBefore(st.Pending) {
+		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorNote,
+			Message: fmt.Sprintf(rowFormatLeftBefore, pending), Fix: rowFormatBeforeFix}}, nil
+	}
 	return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
 		Message: fmt.Sprintf(rowFormatAfterWarn, st.MinLoreVersion, pending), Fix: rowFormatAfterFix}}, nil
+}
+
+// onlyLeftBefore reports whether every pending line names a table that a
+// migrate run before T-2 left at _v: 1 (in FormatTables, not CoreTables:
+// actors, projects, repos, …). Such files in a migrated repo come from that
+// older run, not from a lore older than 0.1.18 writing here.
+func onlyLeftBefore(pending []string) bool {
+	core := CoreTables()
+	formats := FormatTables()
+	for _, p := range pending {
+		t, _, ok := strings.Cut(p, ": ")
+		if !ok || slices.Contains(core, row.Table(t)) || !slices.Contains(formats, row.Table(t)) {
+			return false
+		}
+	}
+	return len(pending) > 0
 }

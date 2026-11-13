@@ -40,8 +40,10 @@ import (
 
 var _ opsmigrate.Rewriter = (*App)(nil)
 
-// MigratedTables implements opsmigrate.Rewriter: the core-owned tables.
-func (a *App) MigratedTables() []row.Table { return CoreTables() }
+// MigratedTables implements opsmigrate.Rewriter: every table migrate run
+// rewrites (FormatTables: the core tables, then actors, projects, repos
+// and the other synced tables of the registry; T-2).
+func (a *App) MigratedTables() []row.Table { return FormatTables() }
 
 // CoreTables is THE list of tables whose nouns run on the new core (their
 // operations are in Registry). migrate.run rewrites exactly these; the

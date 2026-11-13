@@ -33308,6 +33308,34 @@
                         "type": "string"
                       }
                     },
+                    "left": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "files": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "what": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "what",
+                          "files",
+                          "why"
+                        ]
+                      }
+                    },
                     "rows": {
                       "type": "array",
                       "items": {

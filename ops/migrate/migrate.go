@@ -55,6 +55,33 @@ type AllTablesRewriter interface {
 	RewriteAllV1(ctx context.Context, tables []row.Table, repoOnly, dryRun bool) (map[row.Table][]ids.AnyID, error)
 }
 
+// LeftReporter is a Rewriter that names the files a run leaves at
+// `_v: 1` (T-2: a run left actors, projects, repos, entity_tags and the
+// data root's _meta.json at v1 and said nothing, so the repo was mixed
+// silently). run asks it after the rewrites, dry run included, and prints
+// every group with why it stays and what converts it.
+type LeftReporter interface {
+	// LeftV1 lists what the run leaves at `_v: 1` in the places it
+	// rewrote (the repo store only when repoOnly), given the tables it
+	// rewrites. A dry run names what the real run would leave.
+	LeftV1(ctx context.Context, tables []row.Table, repoOnly, dryRun bool) ([]Left, error)
+}
+
+// Left is one group of files a run leaves at `_v: 1`: a table's rows, or
+// a folder file. Never empty: a group has at least one file.
+type Left struct {
+	// What names the group: a table ("entity_tags") or a file path
+	// (".lore/data/_meta.json").
+	What string `json:"what"`
+	// Table is the table of a group of rows ("" for a folder file).
+	Table string `json:"table,omitempty"`
+	// Files are the rows of a table group ("table/id") or the one path.
+	Files []string `json:"files"`
+	// Why says why the run does not rewrite it and what converts it
+	// (or that nothing has to).
+	Why string `json:"why"`
+}
+
 // Rewriter rewrites the v1 rows of one table in the repo store. The
 // composition root implements it with the store backend: a rewrite changes
 // only the format (_v, _hlc), so it must NOT go through the engine's Update,
@@ -145,6 +172,9 @@ type RunOut struct {
 	// changed, waiting for the person's commit (Text ends with
 	// CommitLine; lore never commits a code repo).
 	Uncommitted int `json:"uncommitted,omitempty"`
+	// Left names what the run leaves at `_v: 1` and why (LeftReporter);
+	// empty when every file is in the current format.
+	Left []Left `json:"left,omitempty"`
 	// Verbose is RunIn.Verbose: Text lists every row.
 	Verbose bool `json:"-"`
 }
@@ -189,6 +219,48 @@ func RowLines(rows []string, verbose bool) []string {
 	return append(lines, out...)
 }
 
+// LeftText is the human form of what a run leaves at `_v: 1`: a header
+// with the file count, then one line per group with its count, its first
+// files (every file with verbose) and why ("" when nothing is left).
+func LeftText(left []Left, dryRun, verbose bool) string {
+	n := 0
+	for _, l := range left {
+		n += len(l.Files)
+	}
+	if n == 0 {
+		return ""
+	}
+	var b strings.Builder
+	verb := "Left"
+	if dryRun {
+		verb = "Would leave"
+	}
+	b.WriteString(verb + " " + plural.Count(n, "file") + " at _v: 1:\n")
+	for _, l := range left {
+		shown := l.Files
+		if !verbose && len(shown) > rowsShown {
+			shown = shown[:rowsShown]
+		}
+		names := make([]string, 0, len(shown))
+		for _, f := range shown {
+			if l.Table != "" {
+				f = strings.TrimPrefix(f, l.Table+"/") // a table's rows by id
+			}
+			names = append(names, f)
+		}
+		line := "  " + l.What
+		if len(l.Files) != 1 || l.Files[0] != l.What { // a folder file is its own name
+			line += ": " + plural.Count(len(l.Files), "file") + " (" + strings.Join(names, ", ")
+			if more := len(l.Files) - len(shown); more > 0 {
+				line += " … " + strconv.Itoa(more) + " more"
+			}
+			line += ")"
+		}
+		b.WriteString(line + " — " + l.Why + "\n")
+	}
+	return b.String()
+}
+
 var _ op.Texter = RunOut{}
 
 // Text implements op.Texter: the human form of a run, one line per item
@@ -215,6 +287,7 @@ func (o RunOut) Text() string {
 	for _, s := range o.Steps {
 		b.WriteString("  " + s + "\n")
 	}
+	b.WriteString(LeftText(o.Left, o.DryRun, o.Verbose))
 	for _, j := range o.Journal {
 		b.WriteString(j + "\n")
 	}
@@ -370,6 +443,15 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 	}
 	out.Count += len(out.Rows)
+	if lr, ok := rw.(LeftReporter); ok {
+		// T-2: never leave a mixed repo silently; name every file the run
+		// does not rewrite, why, and what converts it
+		left, err := lr.LeftV1(ctx, tables, repoOnly, in.DryRun)
+		if err != nil {
+			return RunOut{}, err
+		}
+		out.Left = left
+	}
 	if !in.DryRun {
 		if err := At(ctx, PointFinish); err != nil {
 			return RunOut{}, err
