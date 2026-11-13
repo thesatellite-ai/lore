@@ -238,7 +238,7 @@ To see which tasks are ready and which are waiting, put them in a mission and ru
 
 ## Step 10 — Group tasks in a tasklist
 
-A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from the demo". Every task belongs to one. If you do not pick one, lore uses the project's default list, which it creates the first time you add a task; that add prints one more line, `created tasklist tlt_… "default" for tasks added without --tasklist`. Use `--tasklist` on `task add` or `task edit` to pick another.
+A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from the demo". Every task belongs to one. If you do not pick one, lore uses the project's default list, which it creates the first time you add a task; that add prints one more line, `created tasklist tlt_… "default" for tasks added without --tasklist`, and every later add without `--tasklist` prints `on tasklist tlt_… "default" (the default; --tasklist picks another)`. Use `--tasklist` on `task add` or `task edit` to pick another; an empty `--tasklist=` (likewise `--mission=` and `--plan=`) is refused with `E_INVALID_INPUT`, never read as "use the default". Make a list with `lore tasklist add 'Launch week'`: the title is the first argument (or `--title`), and the body is optional, as a second argument or `--body`.
 
 <!-- example: tasks#tasklist -->
 ```console

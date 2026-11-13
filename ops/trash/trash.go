@@ -133,7 +133,7 @@ type TargetIn struct {
 	Target     string `json:"target" arg:"0" desc:"a row id or a batch id (bat_…)"`
 	Parent     string `json:"parent,omitempty" flag:"parent" desc:"new parent task (tsk_…) for a sub-task whose parent was purged"`
 	NoParent   bool   `json:"no_parent,omitempty" flag:"no-parent" desc:"restore a sub-task whose parent was purged as a top-level task"`
-	Tasklist   string `json:"tasklist,omitempty" flag:"tasklist" desc:"new tasklist (tlt_…) for a task whose tasklist was purged"`
+	Tasklist   string `json:"tasklist,omitempty" flag:"tasklist" nonempty:"a tasklist id (tlt_…); --no-tasklist restores with none" desc:"new tasklist (tlt_…) for a task whose tasklist was purged"`
 	NoTasklist bool   `json:"no_tasklist,omitempty" flag:"no-tasklist" desc:"restore a task whose tasklist was purged with no tasklist"`
 	Mission    string `json:"mission,omitempty" flag:"mission" desc:"new mission id for the restored row"`
 	Plan       string `json:"plan,omitempty" flag:"plan" desc:"new plan id for the restored row"`

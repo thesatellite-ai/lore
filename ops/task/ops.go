@@ -245,6 +245,10 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	// the add named --tasklist): the add line says so (bug hunt B3-8: the
 	// first task add wrote a tasklist the person never asked for, silently).
 	var newList string
+	// defaultList is the existing default list this add put the task on
+	// (no --tasklist, no parent to inherit from): the add line names it too
+	// (U-3: a task landed on "default" without a word).
+	var defaultList string
 	// --assign resolves before anything is written (v0.1.17: the default
 	// task list is not created for a handle on no roster).
 	assign, err := o.resolveAssigns(ctx, in.Assign)
@@ -371,6 +375,8 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		}
 		if created {
 			newList = in.Tasklist
+		} else {
+			defaultList = in.Tasklist
 		}
 	}
 	if err = setRefs(fields, []refFlag{
@@ -479,6 +485,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	out.Human += metaNotes.String()
 	if newList != "" {
 		out.Human += newListLine(newList)
+	}
+	if defaultList != "" {
+		out.Human += defaultListLine(defaultList)
 	}
 	return out, nil
 }
@@ -619,6 +628,12 @@ func (o ops) routedTarget(ctx context.Context, to string) (string, error) {
 // project's default task list for the task.
 func newListLine(id string) string {
 	return "  created tasklist " + id + " \"" + DefaultTasklistTitle + "\" for tasks added without --tasklist\n"
+}
+
+// defaultListLine is the one line a task add prints when it put the task
+// on the project's existing default task list (no --tasklist given).
+func defaultListLine(id string) string {
+	return "  on tasklist " + id + " \"" + DefaultTasklistTitle + "\" (the default; --tasklist picks another)\n"
 }
 
 // defaultTasklist returns the project's "default" task list in the target

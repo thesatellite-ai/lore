@@ -42,11 +42,11 @@ type AddIn struct {
 	Commitment string `json:"commitment,omitempty" flag:"commitment" desc:"accepted | proposed | someday (default accepted)"`
 	DeferUntil string `json:"defer_until,omitempty" flag:"defer-until" desc:"snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM); hides from active list until then"`
 	Due        string `json:"due,omitempty" flag:"due" desc:"due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"`
-	Mission    string `json:"mission,omitempty" flag:"mission" desc:"mission_id (msn_*) to attach to"`
+	Mission    string `json:"mission,omitempty" flag:"mission" nonempty:"a mission id (msn_…)" desc:"mission_id (msn_*) to attach to"`
 	// Tasklist empty means the project's "default" list (created on
 	// demand, v0.1.17 coordinator answer Q1).
-	Tasklist   string `json:"tasklist,omitempty" flag:"tasklist" desc:"tasklist_id (tlt_*); default: the project's default list (created on demand)"`
-	Plan       string `json:"plan,omitempty" flag:"plan" desc:"plan_id (pln_*) to attach to"`
+	Tasklist   string `json:"tasklist,omitempty" flag:"tasklist" nonempty:"a tasklist id (tlt_…)" desc:"tasklist_id (tlt_*); default: the project's default list (created on demand)"`
+	Plan       string `json:"plan,omitempty" flag:"plan" nonempty:"a plan id (pln_…)" desc:"plan_id (pln_*) to attach to"`
 	AssignedTo string `json:"assigned_to,omitempty" flag:"assigned-to" desc:"actor_id (act_*) the task is assigned to"`
 	// After are --after dependencies: <id>[:done|:merged], repeatable or
 	// comma separated.
@@ -405,11 +405,11 @@ type EditIn struct {
 	ClearDefer    bool          `json:"clear_defer,omitempty" flag:"clear-defer" desc:"un-defer (clear deferred_until)"`
 	Due           string        `json:"due,omitempty" flag:"due" desc:"due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"`
 	ClearDue      bool          `json:"clear_due,omitempty" flag:"clear-due" desc:"remove due date"`
-	Tasklist      string        `json:"tasklist,omitempty" flag:"tasklist" desc:"move to tasklist_id (tlt_*)"`
+	Tasklist      string        `json:"tasklist,omitempty" flag:"tasklist" nonempty:"a tasklist id (tlt_…); --clear-tasklist takes the task off its list" desc:"move to tasklist_id (tlt_*)"`
 	ClearTasklist bool          `json:"clear_tasklist,omitempty" flag:"clear-tasklist" desc:"take the task off its task list (clear tasklist_id)"`
-	Mission       string        `json:"mission,omitempty" flag:"mission" desc:"attach to mission_id (msn_*)"`
+	Mission       string        `json:"mission,omitempty" flag:"mission" nonempty:"a mission id (msn_…); --clear-mission detaches" desc:"attach to mission_id (msn_*)"`
 	ClearMission  bool          `json:"clear_mission,omitempty" flag:"clear-mission" desc:"detach from mission"`
-	Plan          string        `json:"plan,omitempty" flag:"plan" desc:"attach to plan_id (pln_*)"`
+	Plan          string        `json:"plan,omitempty" flag:"plan" nonempty:"a plan id (pln_…); --clear-plan detaches" desc:"attach to plan_id (pln_*)"`
 	ClearPlan     bool          `json:"clear_plan,omitempty" flag:"clear-plan" desc:"detach from plan"`
 	AssignedTo    string        `json:"assigned_to,omitempty" flag:"assigned-to" desc:"actor_id (act_*) to assign to"`
 	ClearAssignee bool          `json:"clear_assignee,omitempty" flag:"clear-assignee" desc:"unassign"`
