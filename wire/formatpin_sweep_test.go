@@ -311,7 +311,7 @@ func fpsToV017(t *testing.T, h *opstest.H) {
 		if jerr := json.Unmarshal(b, &o); jerr != nil {
 			t.Fatal(jerr)
 		}
-		for _, k := range []string{rowfs.MetaKeyFormat, rowfs.MetaKeyMigratedBy, rowfs.MetaKeyMigratedAt, "min_lore_version", "features"} {
+		for _, k := range []string{rowfs.MetaKeyFormat, rowfs.MetaKeyMigratedBy, rowfs.MetaKeyMigratedVia, rowfs.MetaKeyMigratedAt, "min_lore_version", "features"} {
 			delete(o, k)
 		}
 		o["_v"] = json.RawMessage(`1`)

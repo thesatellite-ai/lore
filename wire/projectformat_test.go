@@ -56,7 +56,7 @@ func TestProjectFormatAt(t *testing.T) {
 	}
 
 	top := mk(t, `{"_v": 1, "keep": "me", "project_id": "p"}`, v2)
-	rel, err := rowfs.WriteProjectFormat(top, rowfs.ProjectFormatCurrent, "Pat Doe <pat@example.com>", "2026-11-13T10:00:00Z")
+	rel, err := rowfs.WriteProjectFormat(top, rowfs.ProjectFormatCurrent, rowfs.ProjectMigration{By: "Pat Doe <pat@example.com>", At: "2026-11-13T10:00:00Z"})
 	if err != nil || rel != rowfs.RepoMetaPath {
 		t.Fatalf("write: %s %v", rel, err)
 	}
