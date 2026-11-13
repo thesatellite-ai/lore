@@ -685,6 +685,9 @@ func sotLiveCopies(t *testing.T) {
 	if e := explain(a); e.Winner != "live" {
 		t.Errorf("after a live write the winner is %q (%s), want live", e.Winner, e.Reason)
 	}
+	// live.autopush is off by default (U-2): the person's sync sends the
+	// live write to the remote
+	sotOK(t, m, a, "sync")
 
 	sotGit(t, m, code, "clone", "-q", url, "sot-b")
 	b := filepath.Join(code, "sot-b")

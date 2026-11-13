@@ -23,9 +23,7 @@ func TestDefaultTasklistReachesTeammate(t *testing.T) {
 	if code != 0 || id == "" {
 		t.Fatalf("task add: %d %s", code, out)
 	}
-	if code, out = w.loreOut(t, b, "sync"); code != 0 {
-		t.Fatalf("sync in b: %d %s", code, out)
-	}
+	syncBoth(t, w, a, b)
 	if code, out = w.loreOut(t, b, "task", "split", id, "first half", "second half"); code != 0 {
 		t.Fatalf("task split in the second clone: exit %d %s", code, out)
 	}
@@ -42,14 +40,23 @@ func TestDefaultTasklistReachesTeammate(t *testing.T) {
 	if code != 0 || rid == "" {
 		t.Fatalf("rule add --live --scope: %d %s", code, out)
 	}
-	if code, out = w.loreOut(t, b, "sync"); code != 0 {
-		t.Fatalf("sync in b: %d %s", code, out)
-	}
+	syncBoth(t, w, a, b)
 	if code, out = w.loreOut(t, b, "rule", "edit", rid, "--body", "keep handlers short"); code != 0 {
 		t.Fatalf("rule edit in the second clone: exit %d %s", code, out)
 	}
 	if code, out = w.loreOut(t, b, "scope", "list"); code != 0 || !strings.Contains(out, "dir:svc") {
 		t.Fatalf("scope list in the second clone does not show the svc scope with its rule: exit %d %s", code, out)
+	}
+}
+
+// syncBoth sends a's live writes (live.autopush is off by default, U-2:
+// they go out on `lore sync`) and brings them into b.
+func syncBoth(t *testing.T, w *cliWorld, a, b string) {
+	t.Helper()
+	for _, dir := range []string{a, b} {
+		if code, out := w.loreOut(t, dir, "sync"); code != 0 {
+			t.Fatalf("sync in %s: %d %s", filepath.Base(dir), code, out)
+		}
 	}
 }
 
@@ -89,9 +96,7 @@ func TestUnlandedRefsRideLive(t *testing.T) {
 	if id == "" {
 		t.Fatal("no task id")
 	}
-	if code, out := w.loreOut(t, b, "sync"); code != 0 {
-		t.Fatalf("sync in b: %d %s", code, out)
-	}
+	syncBoth(t, w, a, b)
 	if code, out := w.loreOut(t, b, "task", "split", id, "part"); code != 0 {
 		t.Fatalf("task split of a task in an earlier run's list, second clone: exit %d %s", code, out)
 	}

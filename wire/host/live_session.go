@@ -19,7 +19,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -70,6 +69,10 @@ const (
 	// hook while it stays true (B3-13); a new write changes the count and
 	// so the line, a delivered push removes it.
 	liveNoteSaid = "live-waiting-said"
+	// liveNoteAutopush holds which live.autopush line this repo was last
+	// told (liveAutopushOn or liveAutopushOff), so each is said once per
+	// repo, and again only after the person flips the setting.
+	liveNoteAutopush = "live-autopush-said"
 	// liveNoteFault holds why the last push did not reach the remote when
 	// waiting cannot fix it (no repository at the address, credentials
 	// refused): `lore live doctor` and `lore doctor` warn with it (B3-14).
@@ -92,18 +95,21 @@ func liveDisabled() bool {
 
 // liveSession is one repository's live state for one run.
 type liveSession struct {
-	// quietPush: the push after autoLand reports only a push that did not
-	// go through (v0.1.17 push(ctx, false))
-	quietPush bool
-	h         *liveHost
-	top       string
-	repo      *gitref.Repo
-	ref       *live.Ref
-	cfg       liveSettings
-	clk       clock.Clock
-	stateDir  string
-	autopush  bool
-	kind      live.FetchKind
+	h        *liveHost
+	top      string
+	repo     *gitref.Repo
+	ref      *live.Ref
+	cfg      liveSettings
+	clk      clock.Clock
+	stateDir string
+	// autopush: live.autopush on (and LORE_LIVE_AUTOPUSH not "0"): each
+	// write pushes at once. It gates pushes only (D18 amended): reads and
+	// writes still fetch teammates' rows when the fetch is due.
+	autopush bool
+	// offline: LORE_LIVE_AUTOPUSH=0 keeps lore off the network on its own,
+	// fetches included (only `lore sync` reaches the remote).
+	offline bool
+	kind    live.FetchKind
 	// agent: an agent runs the operation (D8: never named in a live hlc).
 	agent bool
 	// read: the command is a read (liveRun.read): it writes no git config.
@@ -126,12 +132,10 @@ type liveSession struct {
 	blocked  error
 	prepared bool
 	finished bool
-	// wrote counts rows this run committed to the local live ref;
-	// folders are the live folders they went to (the landing pass).
-	wrote   int
-	folders map[string]bool
-	notes   []live.MergeNote
-	lock    *liveLock
+	// wrote counts rows this run committed to the local live ref.
+	wrote int
+	notes []live.MergeNote
+	lock  *liveLock
 	// cache is the read cache repo runs git through (nil when the session
 	// was built without one); prepare invalidates it once the lock is held.
 	cache *gitref.ReadCache
@@ -167,6 +171,7 @@ func openLiveSession(ctx context.Context, h *liveHost, repo *gitref.Repo, top st
 		h: h, top: top, repo: repo, cfg: cfg, clk: h.clock(), kind: kind,
 		stateDir: filepath.Join(strings.TrimSpace(string(out)), liveStateDirName),
 		autopush: cfg.Autopush && os.Getenv(EnvLiveAutopush) != envOff,
+		offline:  os.Getenv(EnvLiveAutopush) == envOff,
 	}
 	remoteName := cfg.Remote
 	if v := os.Getenv(EnvLiveRemote); v != "" {
@@ -250,7 +255,7 @@ func (s *liveSession) prepare(ctx context.Context) {
 	now := s.clk.Now()
 	if live.ShouldFetch(live.FetchInputs{
 		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: s.cfg.FetchTTL,
-		Kind: s.kind, Autopush: s.autopush, HasRemote: s.ref.Remote != nil,
+		Kind: s.kind, Autopush: !s.offline, HasRemote: s.ref.Remote != nil,
 	}) {
 		s.fetch(ctx, now)
 	}
@@ -287,7 +292,7 @@ func (s *liveSession) fetch(ctx context.Context, now time.Time) {
 }
 
 // refetch fetches and integrates once more for a run that did not fetch
-// (the last fetch was younger than live.fetch_ttl, or autopush is off),
+// (the last fetch was younger than live.fetch_ttl, or LORE_LIVE_AUTOPUSH=0),
 // and reports whether it did. A coordination op whose claim was fenced
 // explains the fence from the task row (coord classify: E_CANCELLED for a
 // task a person cancelled meanwhile, E_REASSIGNED), and one that did not
@@ -333,7 +338,10 @@ func (s *liveSession) defaultBranch(ctx context.Context) string {
 
 // finish ends the run's live work: held companions, the push and its
 // status line, then automatic compaction; the lock is released last.
-// Landing finished rows is `lore land` / `lore sync` (ops/sync), not here.
+// Landing finished rows onto the default branch never happens here: it is
+// `lore sync` / `lore land` (live_sync.go) or the person's own `git push`
+// (the pre-push hook, live_ride.go), so the default branch never moves on
+// the remote behind the person's back (owner rule U-2).
 func (s *liveSession) finish(ctx context.Context) {
 	defer s.release()
 	if !s.prepared || s.finished {
@@ -348,39 +356,8 @@ func (s *liveSession) finish(ctx context.Context) {
 	if err := s.flushCompanions(ctx); err != nil {
 		s.warn("supporting rows (actors, metadata keys) were not written: " + err.Error())
 	}
-	if !s.push(ctx) {
-		return
-	}
-	s.autoLand(ctx)
-	// the landing's own push repeats no "(live, pushed)": v0.1.17 reported
-	// it only when it did not go through (push(ctx, false) in live_wire.go)
-	s.quietPush = true
 	if s.push(ctx) {
 		s.autoCompact(ctx)
-	}
-}
-
-// autoLand is the landing pass at the end of a run that wrote live rows
-// (v0.1.17 finish → autoLand): every folder written this run, then its
-// status lines. Best effort: a failure is a stderr line, the rows stay live.
-func (s *liveSession) autoLand(ctx context.Context) {
-	if s.blocked != nil || s.ref.Remote == nil || s.wrote == 0 || (!s.autopush && s.kind != live.FetchAlways) {
-		return
-	}
-	folders := make([]string, 0, len(s.folders))
-	for f := range s.folders {
-		folders = append(folders, f)
-	}
-	sort.Strings(folders)
-	for _, f := range folders {
-		out, err := s.landPass(ctx, f, nil, true)
-		if err != nil {
-			s.warn("land: " + err.Error())
-			continue
-		}
-		for _, l := range landLines(out) {
-			s.h.line(l)
-		}
 	}
 }
 
@@ -410,7 +387,7 @@ func (s *liveSession) push(ctx context.Context) bool {
 	}
 	if !s.autopush && s.kind != live.FetchAlways {
 		if s.wrote > 0 {
-			s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; autopush is off, `lore sync` pushes)", s.waiting()))
+			s.sayAutopushOnce(liveAutopushOff)
 		}
 		s.waitWhy = "autopush is off"
 		return false
@@ -425,9 +402,7 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.warn("push: " + err.Error())
 		return false
 	}
-	if !s.quietPush || out.Status != live.PushDone {
-		s.reportPush(out)
-	}
+	s.reportPush(out)
 	return out.Pushed()
 }
 
@@ -439,6 +414,9 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 		where := livePushWhere(out) // no hidden network writes: the commit, the remote, the ref
 		if s.wrote > 0 {
 			s.warn("(live, pushed)" + where)
+			if s.autopush && s.kind != live.FetchAlways {
+				s.sayAutopushOnce(liveAutopushOn)
+			}
 		} else {
 			s.warn("pushed waiting live writes" + where)
 		}
@@ -601,14 +579,6 @@ func mainDataPath(folder, rel string) string {
 	return folder + "/" + p
 }
 
-// markFolder records a live folder this run wrote to.
-func (s *liveSession) markFolder(folder string) {
-	if s.folders == nil {
-		s.folders = map[string]bool{}
-	}
-	s.folders[folder] = true
-}
-
 // livePushWhere is " commit <sha> to <remote> <ref>" for a push that sent
 // a commit, "" when the outcome names none.
 func livePushWhere(out live.PushOutcome) string {
@@ -616,4 +586,25 @@ func livePushWhere(out live.PushOutcome) string {
 		return ""
 	}
 	return " commit " + shortCommit(out.Commit) + " to " + out.Remote + " " + out.Ref
+}
+
+// The once-per-repo live.autopush lines (owner rule U-2: nothing pushes
+// without the person saying so, and a person who turned pushing on is
+// told once how to turn it off).
+const (
+	liveAutopushOff = "(live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)"
+	liveAutopushOn  = "live.autopush is on: each live write is pushed at once; `lore config set --key live.autopush --value false` turns that off"
+)
+
+// sayAutopushOnce prints line once per repo (liveNoteAutopush): every
+// later write with the same setting stays quiet. Under syncReport it only
+// records the line, as sayOnce does.
+func (s *liveSession) sayAutopushOnce(line string) {
+	if s.noteText(liveNoteAutopush) == line {
+		return
+	}
+	if !s.syncReport {
+		s.warn(line)
+	}
+	_ = s.writeNote(liveNoteAutopush, line) // best effort: a lost note only repeats the line once
 }

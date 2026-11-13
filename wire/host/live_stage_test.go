@@ -48,7 +48,7 @@ func TestLiveAtomic_StagesOnly(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			f := newLiveFixture(t)
+			f := newLiveFixtureWith(t, "live:\n  autopush: true\n", nil) // the atomic push needs a session that pushes
 			f.s.release()
 			top := f.s.top
 			bare := filepath.Join(t.TempDir(), "r.git")

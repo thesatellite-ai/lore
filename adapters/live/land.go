@@ -218,7 +218,7 @@ const (
 	LandDone       LandStatus = "landed"      // pushed to main
 	LandProtected  LandStatus = "protected"   // main refused direct pushes: ride-along (F6)
 	LandOffline    LandStatus = "offline"     // no verdict
-	LandNoRemote   LandStatus = "no-remote"   // nowhere to land
+	LandNoRemote   LandStatus = "no-remote"   // nowhere to land: no remote, or no default branch on it yet
 	LandRetriesOut LandStatus = "retries-out" // main kept moving
 	LandRefused    LandStatus = "refused"     // any other refusal
 )
@@ -261,6 +261,11 @@ func (r *Ref) Land(ctx context.Context, req LandRequest) (LandResult, error) {
 			if errors.Is(err, gitremote.ErrUnconfirmed) {
 				return LandResult{Status: LandOffline}, nil
 			}
+			if errors.Is(err, gitremote.ErrRemoteRefMissing) {
+				// a brand-new repo whose remote has no default branch yet:
+				// nothing to land on, the rows stay live (U-2)
+				return LandResult{Status: LandNoRemote}, nil
+			}
 			return LandResult{}, err
 		}
 		tip, ok, err := r.Repo.ResolveRef(ctx, trk)
@@ -268,7 +273,7 @@ func (r *Ref) Land(ctx context.Context, req LandRequest) (LandResult, error) {
 			return LandResult{}, err
 		}
 		if !ok {
-			return LandResult{Status: LandRefused, Detail: "the remote has no " + req.Branch + " branch"}, nil
+			return LandResult{Status: LandNoRemote}, nil // as above: no default branch on the remote yet
 		}
 		ch, changed, err := r.landChanges(ctx, tip, req)
 		if err != nil {

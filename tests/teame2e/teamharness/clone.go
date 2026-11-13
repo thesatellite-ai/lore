@@ -77,6 +77,25 @@ func (c *Clone) AdminPush(args ...string) {
 	c.With(EnvAdminPush + "=1").Git(append([]string{"push", "-q"}, args...)...)
 }
 
+// AdminPushLanding is AdminPush of the default branch by a person whose
+// clone has rows that finished in live: the pre-push hook lands them onto
+// the local branch and stops that push once ("run git push again", owner
+// rule U-2: landing folds into the person's own push), and the second
+// push carries the landing commit. Fails unless the first push either went
+// through or stopped for exactly that reason.
+func (c *Clone) AdminPushLanding(args ...string) {
+	c.A.w.T.Helper()
+	admin := c.With(EnvAdminPush + "=1")
+	r := admin.TryGit(append([]string{"push", "-q"}, args...)...)
+	if r.Code == 0 {
+		return
+	}
+	if !strings.Contains(r.Out(), "run git push again") {
+		c.A.w.T.Fatalf("git push %v in %s: exit %d\n%s", args, c.Dir, r.Code, r.Out())
+	}
+	admin.Git(append([]string{"push", "-q"}, args...)...)
+}
+
 // CommitAll stages everything and commits (hooks run).
 func (c *Clone) CommitAll(msg string) {
 	c.A.w.T.Helper()

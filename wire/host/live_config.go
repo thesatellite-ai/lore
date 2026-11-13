@@ -22,7 +22,7 @@ import (
 const (
 	defaultLiveFetchTTL     = 60 * time.Second
 	defaultLiveMaxAge       = 7 * 24 * time.Hour // TEAM-026: an open row is copied to main after a week
-	defaultLiveAutopush     = true
+	defaultLiveAutopush     = false              // owner rule: nothing pushes without the person saying so (lore sync, git push)
 	defaultLiveCompactAfter = 1000
 	defaultLiveRemote       = "origin"
 	defaultPushRetries      = 5

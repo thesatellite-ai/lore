@@ -436,7 +436,6 @@ func (l liveSync) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 		return opssync.DoneOut{}, errs.Wrap(errs.Internal, "live: write the local live ref", err)
 	}
 	s.wrote += len(res.Written)
-	s.markFolder(folder)
 	done := fmt.Sprintf("resolved #%d %s/%s (took %s)", n, hit.Key.Table, hit.Key.ID, take)
 	return opssync.DoneOut{Done: done, Lines: []string{"✓ " + done}}, nil
 }

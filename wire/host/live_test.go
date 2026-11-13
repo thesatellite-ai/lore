@@ -49,13 +49,14 @@ func join(s []string) string {
 	return out
 }
 
-// TestLoadLiveSettings: defaults without a file, then each key of the
+// TestLoadLiveSettings: defaults without a file (live.autopush off: U-2,
+// nothing pushes without the person saying so), then each key of the
 // live:, lease: and default_branch blocks overrides only itself; a broken
 // file keeps the defaults.
 func TestLoadLiveSettings(t *testing.T) {
 	home := t.TempDir()
 	d := loadLiveSettings(home)
-	if d.FetchTTL != defaultLiveFetchTTL || !d.Autopush || d.Remote != defaultLiveRemote || d.PushRetries != defaultPushRetries || !d.Defaults["tasks"] || d.Defaults["rules"] {
+	if d.FetchTTL != defaultLiveFetchTTL || d.Autopush || d.Remote != defaultLiveRemote || d.PushRetries != defaultPushRetries || !d.Defaults["tasks"] || d.Defaults["rules"] {
 		t.Fatalf("defaults = %+v", d)
 	}
 	write := func(body string) {
@@ -63,13 +64,13 @@ func TestLoadLiveSettings(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("default_branch: trunk\nlive:\n  fetch_ttl: 5m\n  autopush: false\n  remote: up\n  defaults:\n    rules: true\nlease:\n  push_retries: 2\n")
+	write("default_branch: trunk\nlive:\n  fetch_ttl: 5m\n  autopush: true\n  remote: up\n  defaults:\n    rules: true\nlease:\n  push_retries: 2\n")
 	s := loadLiveSettings(home)
-	if s.FetchTTL != 5*time.Minute || s.Autopush || s.Remote != "up" || s.PushRetries != 2 || !s.Defaults["rules"] || !s.Defaults["tasks"] || s.DefaultBranch != "trunk" || s.CompactAfter != defaultLiveCompactAfter {
+	if s.FetchTTL != 5*time.Minute || !s.Autopush || s.Remote != "up" || s.PushRetries != 2 || !s.Defaults["rules"] || !s.Defaults["tasks"] || s.DefaultBranch != "trunk" || s.CompactAfter != defaultLiveCompactAfter {
 		t.Fatalf("overrides = %+v", s)
 	}
 	write("live: [not a map")
-	if b := loadLiveSettings(home); b.FetchTTL != defaultLiveFetchTTL || !b.Autopush {
+	if b := loadLiveSettings(home); b.FetchTTL != defaultLiveFetchTTL || b.Autopush {
 		t.Fatalf("broken file = %+v", b)
 	}
 }

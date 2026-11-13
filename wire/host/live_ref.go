@@ -171,7 +171,6 @@ func (a *liveRefAdapter) Purge(ctx context.Context, ids []string) error {
 		return errs.Wrap(errs.Internal, "purge", err)
 	}
 	s.wrote += len(ids)
-	s.markFolder(a.folder)
 	return nil
 }
 

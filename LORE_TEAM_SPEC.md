@@ -405,7 +405,7 @@ live:
   defaults: {tasks: true, missions: true, handoffs: true, comments: true, rules: false, decisions: false, memories: false}
   max_age: 7d
   fetch_ttl: 60s
-  autopush: true
+  autopush: false   # nothing pushes without the person saying so: lore sync or git push sends live writes
   compact_after: 1000
 ```
 

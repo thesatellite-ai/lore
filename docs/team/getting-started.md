@@ -100,7 +100,7 @@ Look at what `git status` and `git ls-remote` show. No file changed in your chec
 
 ## Step 5 — Your first landing
 
-Finishing a task lands it. Lore writes it to `main`'s `.lore/data` with a commit of its own and pushes that straight to the remote. Your local `main` is not touched:
+Finishing a task marks it ready to land; nothing goes to the remote by itself. `lore sync` lands it: lore writes it to `main`'s `.lore/data` with a commit of its own and pushes that to the remote, and your local `main` is not touched. Your own `git push` of `main` lands it too: the pre-push hook adds the `lore: land N rows` commit to your `main` and asks you to push again, so the push carries it:
 
 <!-- example: getting-started#first-landing -->
 ```console

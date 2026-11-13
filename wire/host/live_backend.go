@@ -551,7 +551,6 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	s.dropCompanions(companions)
 	b.leaveWorkTree(ctx, s, carried)
 	s.wrote += len(res.Written)
-	s.markFolder(b.folder)
 	return nil
 }
 
@@ -869,7 +868,6 @@ func (b *liveBackend) WritePurge(ctx context.Context, changes []store.Change, pu
 		return errs.Wrap(errs.Internal, "live: list the purged ids on the local live ref", err)
 	}
 	s.wrote += len(list)
-	s.markFolder(b.folder)
 	return nil
 }
 

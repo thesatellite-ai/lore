@@ -122,6 +122,9 @@ func fenceWorld(t *testing.T) (w *cliWorld, person, holder string) {
 	t.Helper()
 	w = newCLIWorld(t).person().author()
 	person, holder = w.livePair(t)
+	// a team that turned live.autopush on (off by default, U-2): each
+	// write reaches the remote at once, which the fetch_ttl fence is about
+	w.mustLore(t, person, "config", "set", "live.autopush", "true")
 	return w, person, holder
 }
 

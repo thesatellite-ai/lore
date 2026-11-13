@@ -1,4 +1,4 @@
-# docsync refs format=2 extract=1 repo=lore commit=81dc286 scanned_at=2026-11-13T04:48:04Z
+# docsync refs format=2 extract=1 repo=lore commit=59172f6 scanned_at=2026-11-13T10:10:57Z
 id	repo	doc	line	verb	carrier	acked_hash	seen_hash	sentence_hash	env	args
 sync-datanames-dgnn2vn8	lore	README.md	314	block	block		2050e8b87094d0455c9428632bc1e3f247715e9f829e6479271c404892e83770			id=sync-datanames-dgnn2vn8
 sync-syncedtables-fa4jung7	lore	README.md	329	block	block		466300e6006333fae1f70a409fb3e5f5cf06da6e7acc21ed390edd6e7b10eda9			id=sync-syncedtables-fa4jung7
@@ -8,15 +8,15 @@ sync-mergedriver-config-cthptudb	lore	README.md	334	block	block		9392b72e5552cd2
 sync-strategyfor-db9rgsqn	lore	README.md	335	block	block		264435f658f8a00641e1c48e69b1fc28ecc0926574771cbc113c43fedb73170c			id=sync-strategyfor-db9rgsqn
 sync-env-pe9vvf3f	lore	README.md	346	block	block		444beca81df996fcca3f372060b6f6d56232fcd407a5c3f308f2189dec8cd590			id=sync-env-pe9vvf3f
 sync-hooklines-g87bgvsj	lore	README.md	349	block	block	7044567eb59fc41503f0eb2500655ad710d5be678c60fd4e4e1b50ea3cce9b44	1b849cbc7041bbb7bace2aa910da3a054a6f0484db5ea16e6d1dc627f450cf30			id=sync-hooklines-g87bgvsj lines=33-48
-render-pins-buj9dujv	lore	docs/knowledge/first-project.md	216	block	comment		56429be8b427a54cb2c2d8fae7cb93ec2dd14e23c16931cc334e0bd113d3fb11	3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112		id=render-pins-buj9dujv
+render-pins-buj9dujv	lore	docs/knowledge/first-project.md	217	block	comment		56429be8b427a54cb2c2d8fae7cb93ec2dd14e23c16931cc334e0bd113d3fb11	3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112		id=render-pins-buj9dujv
 render-pins-buj9dujv	lore	docs/knowledge/render-and-agent-files.md	312	block	comment		56429be8b427a54cb2c2d8fae7cb93ec2dd14e23c16931cc334e0bd113d3fb11	3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112		id=render-pins-buj9dujv
 search-defaults-z8rpj5sv	lore	docs/knowledge/search.md	193	block	comment		054911fee75277bfb07a311df04e08e3b5edbd969d97cfdd73a361ad654f3643	3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112		id=search-defaults-z8rpj5sv
 env-read-only-5jn4jxqx	lore	docs/operations/ci.md	9	block	comment		3cdd44c3a24cd75b84b05072b5409123b72f131a76c3419b54322ab6984dcadb	3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112		id=env-read-only-5jn4jxqx
 doctor-statuses-y89guvyz	lore	docs/operations/ci.md	11	block	comment	2d5f2e0bffe01762cdd9ae2543938cf8595bce7f30ef69e1fcd38d4bec33ebd0	51aa0d691e4f3e6c7a25bc0cb880c66e0152441c350f3a2cef7381f6271edf53	3973e022e93220f9212c18d0d0c543ae7c309e46640da93a4a0314de999f5112		id=doctor-statuses-y89guvyz
-doctor-statuses-y89guvyz	lore	docs/operations/doctor.md	73	block	block	2d5f2e0bffe01762cdd9ae2543938cf8595bce7f30ef69e1fcd38d4bec33ebd0	51aa0d691e4f3e6c7a25bc0cb880c66e0152441c350f3a2cef7381f6271edf53			id=doctor-statuses-y89guvyz
+doctor-statuses-y89guvyz	lore	docs/operations/doctor.md	74	block	block	2d5f2e0bffe01762cdd9ae2543938cf8595bce7f30ef69e1fcd38d4bec33ebd0	51aa0d691e4f3e6c7a25bc0cb880c66e0152441c350f3a2cef7381f6271edf53			id=doctor-statuses-y89guvyz
 team-config-defaults-amp24fsn	lore	docs/reference/config.md	324	block	block		a9c2bdf767a5e05b187b356318304173f2d6fd9c4204005ba595d35d6fa8cec6			id=team-config-defaults-amp24fsn
 team-live-kinds-88j26q7s	lore	docs/reference/config.md	342	block	block		0435f691855fc3a6769240a145d4e1e5f79fbc7d2caa6f8e49cac9b62739d371			id=team-live-kinds-88j26q7s
-team-store-allowed-a7qb5uuj	lore	docs/reference/config.md	460	block	block	6b3fea1ab00eaa46753e899feabd0e37a4262c5beb20bbecd015441a62449a26	fa8fd14e2e4a07cb01319b64929db996e12f7f698526bbf40a4ab00a4eda21a2			id=team-store-allowed-a7qb5uuj lines=1-30
+team-store-allowed-a7qb5uuj	lore	docs/reference/config.md	460	block	block	3bbc7c948af02cdaf846fadd230504835d69a55118448bec8cf8f8dadbcf5e62	fa8fd14e2e4a07cb01319b64929db996e12f7f698526bbf40a4ab00a4eda21a2			id=team-store-allowed-a7qb5uuj lines=1-30
 sync-env-pe9vvf3f	lore	docs/reference/environment.md	154	block	block		444beca81df996fcca3f372060b6f6d56232fcd407a5c3f308f2189dec8cd590			id=sync-env-pe9vvf3f
 sync-env-pe9vvf3f	lore	docs/reference/environment.md	166	block	block		444beca81df996fcca3f372060b6f6d56232fcd407a5c3f308f2189dec8cd590			id=sync-env-pe9vvf3f
 team-env-org-z6mz7n3q	lore	docs/reference/environment.md	259	block	block		e2d5041156b91e0f017bdd944acb2e48c76d2bb4120402e5c12993e616248218			id=team-env-org-z6mz7n3q
@@ -42,6 +42,6 @@ team-env-org-z6mz7n3q	lore	docs/team/commands.md	1512	block	block		e2d5041156b91
 team-config-defaults-amp24fsn	lore	docs/team/commands.md	1529	block	block		a9c2bdf767a5e05b187b356318304173f2d6fd9c4204005ba595d35d6fa8cec6			id=team-config-defaults-amp24fsn
 team-live-kinds-88j26q7s	lore	docs/team/commands.md	1530	block	block		0435f691855fc3a6769240a145d4e1e5f79fbc7d2caa6f8e49cac9b62739d371			id=team-live-kinds-88j26q7s
 team-exit-codes-eqpyx54h	lore	docs/team/commands.md	1568	block	block		80e7f8b09842024d5fa7896fff5c708c6b159a8602d6177b5fc6ef96bcf3eeba			id=team-exit-codes-eqpyx54h
-team-store-allowed-a7qb5uuj	lore	docs/team/how-it-works.md	446	block	block	6b3fea1ab00eaa46753e899feabd0e37a4262c5beb20bbecd015441a62449a26	fa8fd14e2e4a07cb01319b64929db996e12f7f698526bbf40a4ab00a4eda21a2			id=team-store-allowed-a7qb5uuj lines=1-30
-team-leak-words-jpw3kpv4	lore	docs/team/how-it-works.md	451	block	block		2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3			id=team-leak-words-jpw3kpv4
+team-store-allowed-a7qb5uuj	lore	docs/team/how-it-works.md	451	block	block	3bbc7c948af02cdaf846fadd230504835d69a55118448bec8cf8f8dadbcf5e62	fa8fd14e2e4a07cb01319b64929db996e12f7f698526bbf40a4ab00a4eda21a2			id=team-store-allowed-a7qb5uuj lines=1-30
+team-leak-words-jpw3kpv4	lore	docs/team/how-it-works.md	456	block	block		2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3			id=team-leak-words-jpw3kpv4
 team-ci-markers-ec4tqnjs	lore	docs/team/troubleshooting.md	260	block	block		3166af3cc09e61396e07ee339e7dbdc05bfc624723d3d88df261b38a609a6392			id=team-ci-markers-ec4tqnjs

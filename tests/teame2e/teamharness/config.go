@@ -103,7 +103,11 @@ type LinkIndex struct {
 // the fetch cache itself: fetch_ttl 0s makes every command see teammates'
 // writes at once, so a test's outcome never depends on how many seconds
 // passed between two commands (F3 caches fetches for 60 s by default).
-func FreshFetch() *Live { return &Live{FetchTTL: "0s"} }
+// Autopush true: these teams turned live.autopush on (it is off by default,
+// owner rule U-2), so each live write reaches the remote at once and a
+// teammate sees it on the next command; landing on main still waits for
+// `lore sync` / `lore land` or the person's own `git push`.
+func FreshFetch() *Live { return &Live{FetchTTL: "0s", Autopush: Bool(true)} }
 
 // Bool returns a pointer for the optional boolean keys.
 func Bool(v bool) *bool { return &v }

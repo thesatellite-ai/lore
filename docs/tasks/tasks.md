@@ -140,7 +140,7 @@ $ lore task list --all
 
 Done tasks leave the normal list. `--all` shows everything, including done and cancelled tasks.
 
-When a task is done, lore writes it into `main` on GitHub by itself ("landed on main"). That is called *landing*, like filing a finished job in the project folder. It keeps the finished task with the code for good. See [Pitfalls](#pitfalls) for what this means for your next `git push`.
+When a task is done, lore writes it into `main` on GitHub on your next `lore sync`, or with your own `git push` of `main` ("landed on main"); it never pushes by itself. That is called *landing*, like filing a finished job in the project folder. It keeps the finished task with the code for good. See [Pitfalls](#pitfalls) for what this means for your next `git push`.
 
 ## Step 7 — Search your tasks
 

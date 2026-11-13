@@ -12,7 +12,7 @@ type FetchKind int
 
 const (
 	// FetchCached is for an ordinary command: it fetches unless the last fetch is
-	// younger than live.fetch_ttl, and never when autopush is off.
+	// younger than live.fetch_ttl, and never when Autopush is false.
 	FetchCached FetchKind = iota
 	// FetchAlways is for `lore sync` and for a write whose push was rejected (its
 	// compare-and-swap must never act on stale data).
@@ -26,8 +26,10 @@ type FetchInputs struct {
 	LastFetch time.Time
 	TTL       time.Duration
 	Kind      FetchKind
-	// Autopush false (LORE_LIVE_AUTOPUSH=0 / live.autopush: false) means
-	// lore never touches the network on its own.
+	// Autopush false means lore never touches the network on its own. Live
+	// rows pass false only for LORE_LIVE_AUTOPUSH=0: live.autopush: false
+	// stops pushes, never fetches (D18 amended). A store passes its own
+	// autopush (storepush_standalone.go).
 	Autopush bool
 	// HasRemote is false for a repo without the live remote.
 	HasRemote bool

@@ -48,12 +48,14 @@ func cdSeesAll(t *testing.T, x *th.Clone, suffix string, ids map[string]string) 
 	x.MustLore("resource", "show", ids["resource"]).Says(t, "one")
 }
 
-// cdPush commits and pushes c's main (pulling first: a live land may have
-// moved origin/main while the person worked).
+// cdPush commits and pushes c's main (pulling first: a land may have moved
+// origin/main while the person worked). Rows that finished in live land
+// with this push (U-2): the pre-push hook adds them and asks once to push
+// again.
 func cdPush(c *th.Clone, msg string) {
 	c.CommitAll(msg)
 	c.Git("pull", "-q", "--no-rebase", "origin", "main")
-	c.AdminPush("origin", "main")
+	c.AdminPushLanding("origin", "main")
 }
 
 // TestCampaignData_SyncTwoClones: alice's data rows reach bob after push

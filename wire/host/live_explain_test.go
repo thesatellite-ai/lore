@@ -48,7 +48,7 @@ func TestExplain_CopiesAndWinner(t *testing.T) {
 		want []string
 	}{
 		"live row":       {ltTaskA, []string{ltTaskA + " in ", "live (local ", ": row, live since ", "this branch (HEAD): not present", "origin/" + branch + ": not present", "wins: the live copy (rule 4", "  land: "}},
-		"live tombstone": {ltTaskB, []string{": tombstone, ", "wins: the live tombstone (rule 4)"}},
+		"live tombstone": {ltTaskB, []string{": tombstone, ", "wins: the live tombstone (rule 4)", "  land: lands on " + branch + " on the next `lore sync`"}},
 		"branch only":    {branchMem, []string{"live: not present", "this branch (HEAD): " + rel + " (", "wins: this branch's copy (not live)"}},
 		"nowhere":        {nowhere, []string{"live: not present", "not found in live or on this branch", "lore sync peek --ref origin/" + branch}},
 	}
@@ -63,6 +63,9 @@ func TestExplain_CopiesAndWinner(t *testing.T) {
 				if !strings.Contains(joined, w) {
 					t.Errorf("missing %q in\n%s", w, joined)
 				}
+			}
+			if strings.Contains(joined, "land: land:") {
+				t.Errorf("land line repeats its action:\n%s", joined)
 			}
 			if strings.Contains(joined, "main") {
 				t.Errorf("names main, but the default branch is %q:\n%s", branch, joined)

@@ -18,7 +18,8 @@ func TestF01_LandedRowStaysListedUntilPulled(t *testing.T) {
 	id := rt.addTask(t, rt.c1, "landed before the pull")
 	rt.c2.MustLore("task", "list")
 	rt.c1.MustLore("task", "done", id)
-	rt.c1.MustLore("sync")
+	rt.c1.MustLore("sync") // lands (landing waits for sync, U-2)
+	rt.c1.MustLore("sync") // main fetched: the row leaves live
 	if _, ok := rt.liveTask(t, id); ok {
 		t.Fatal("control: the done row must have landed and left live")
 	}

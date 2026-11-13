@@ -164,6 +164,22 @@ func TestLandOnMainNeverTouchesLocalMain(t *testing.T) {
 	}
 }
 
+// U-2: a brand-new repo whose remote has no default branch yet has nothing
+// to land on: no error (the old "fetch: remote ref not found ...
+// refs/heads/main"), nothing pushed, the rows stay live.
+func TestLandRemoteWithoutDefaultBranchIsQuiet(t *testing.T) {
+	w := gitremotetest.NewWorld(t)
+	a := w.Clone("a")
+	r := newRef(t, a, a.Remote)
+	res, err := r.Land(context.Background(), LandRequest{Branch: "trunk", Items: []LandItem{landItem("x")}, Layout: testLayout})
+	if err != nil || res.Status != LandNoRemote {
+		t.Fatalf("want no-remote and no error: %+v %v", res, err)
+	}
+	if got := w.OriginRef("refs/heads/trunk"); got != "" {
+		t.Fatalf("nothing may be pushed: trunk = %q", got)
+	}
+}
+
 // F5 "main moved during push": a non-fast-forward rebuilds on the new tip.
 func TestLandRetriesWhenMainMoves(t *testing.T) {
 	w := gitremotetest.NewWorld(t)

@@ -46,13 +46,15 @@ func TestLiveLand_FeatureBranchSaysWhenRowsShow(t *testing.T) {
 				id := trashID(t, c.MustLore("architecturenote", "add", "--title", "arch "+title, "--body", "body "+title, "--json"))
 				r := c.MustLore("comment", "add", "--on-table", "architecture_notes", "--on-id", id, "--body", "comment "+title, "--json")
 				ids = append(ids, trashID(t, r))
-				landed = landed || strings.Contains(r.Stderr, "landed on main (")
-				said = said || strings.Contains(r.Stderr, note)
-				if strings.Contains(r.Stdout, "this checkout is on") {
-					t.Fatalf("write %d: the branch note went to stdout (it must stay out of --json):\n%s", i, r.Stdout)
+				r.Never(t, "landed on main") // a write never lands by itself (U-2)
+				s := c.MustLore("sync")      // landing waits for sync (U-2)
+				landed = landed || strings.Contains(s.Out(), "landed on main (")
+				said = said || strings.Contains(s.Out(), note)
+				if strings.Contains(r.Out(), "this checkout is on") {
+					t.Fatalf("write %d: a branch note on a write that landed nothing:\n%s", i, r.Out())
 				}
-				if strings.Contains(r.Stderr, "this checkout is on") && !tc.says {
-					t.Fatalf("write %d on %s: a branch note on the default branch:\n%s", i, tc.branch, r.Stderr)
+				if strings.Contains(s.Out(), "this checkout is on") && !tc.says {
+					t.Fatalf("sync %d on %s: a branch note on the default branch:\n%s", i, tc.branch, s.Out())
 				}
 			}
 			if !landed {
