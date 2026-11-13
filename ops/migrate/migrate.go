@@ -67,6 +67,17 @@ type LeftReporter interface {
 	LeftV1(ctx context.Context, tables []row.Table, repoOnly, dryRun bool) ([]Left, error)
 }
 
+// RepoSettingsMigrator is a Rewriter with settings steps that touch only
+// the repo's own branch files, so `--offline` runs them too (M-1: an
+// offline run left every 0.1.17 entity_tags link unfolded, and once the
+// link files are rewritten as `_v: 2` no later run would fold them).
+type RepoSettingsMigrator interface {
+	// MigrateRepoSettings runs the repo-only settings steps (the entity_tags
+	// links folded into tag_ids); MigrateSettings runs them as well, so an
+	// online run never calls both.
+	MigrateRepoSettings(ctx context.Context, dryRun bool) (Settings, error)
+}
+
 // Left is one group of files a run leaves at `_v: 1`: a table's rows, or
 // a folder file. Never empty: a group has at least one file.
 type Left struct {
@@ -391,6 +402,14 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	if repoOnly {
 		rewrite = j.RewriteRepoV1
 		out.Journal = append(out.Journal, "offline: no team lock taken; branch files only (settings, live rows and stores skipped: run `lore migrate run` again when online)")
+		if rs, ok := rw.(RepoSettingsMigrator); ok {
+			settings, err := rs.MigrateRepoSettings(ctx, in.DryRun)
+			if err != nil {
+				return RunOut{}, err
+			}
+			out.Steps = append(out.Steps, settings.Steps...)
+			out.Count += settings.Rows
+		}
 	} else {
 		settings, err := rw.MigrateSettings(ctx, in.DryRun)
 		if err != nil {

@@ -168,7 +168,7 @@ func (c Clones) Doctor(ctx context.Context, norm, url string, branches []string)
 		info.Problems = append(info.Problems, ProblemOpen+err.Error())
 		return info
 	}
-	if err := fetchLocked(ctx, c.Route, dir, c.now()); err != nil {
+	if err := fetchLocked(withHeadRefresh(ctx), c.Route, dir, c.now()); err != nil {
 		info.Problems = append(info.Problems, ProblemUnreachable)
 	}
 	base := c.Inspect(ctx, norm)

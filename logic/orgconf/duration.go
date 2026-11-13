@@ -22,8 +22,11 @@ const daySuffix = "d"
 
 // Defaults of the durations, as v0.1.17 (TEAM-025, F11).
 const (
-	// DefaultFetchTTL is how long a fetched store clone counts as fresh.
-	DefaultFetchTTL = 60 * time.Second
+	// DefaultFetchTTL is how long a fetched store clone (and the repo's
+	// live fetch) counts as fresh: a read within it makes no network call.
+	// Owner item M-4: at v0.1.17's 60 s a person's reads minutes apart each
+	// paid a fetch of every store over ssh (8 calls, ~25 s on a Mac).
+	DefaultFetchTTL = 5 * time.Minute
 	// DefaultLinkIndexMaxAge is how old a store copy may be and still
 	// answer links while the store is unreachable.
 	DefaultLinkIndexMaxAge = time.Hour

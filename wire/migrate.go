@@ -139,6 +139,16 @@ func (a *App) MigrateSettings(ctx context.Context, dryRun bool) (opsmigrate.Sett
 	return opsmigrate.Settings{Steps: steps, Rows: rows}, err
 }
 
+var _ opsmigrate.RepoSettingsMigrator = (*App)(nil)
+
+// MigrateRepoSettings implements opsmigrate.RepoSettingsMigrator: the
+// settings steps an --offline run takes too, because they change only the
+// repo store's rows: the entity_tags links folded into tag_ids (M-1).
+func (a *App) MigrateRepoSettings(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
+	steps, rows, err := a.migrateTags(ctx, dryRun)
+	return opsmigrate.Settings{Steps: steps, Rows: rows}, err
+}
+
 // migrateSettings is MigrateSettings returning its steps and row count.
 func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, error) {
 	steps, rows, err := a.MigrateModeB(ctx, dryRun)
@@ -701,7 +711,9 @@ func v1TagLinkOf(doc []byte) (opsmemory.TagLink, bool) {
 // tag_ids of every row they tag (O11), for every table whose definition
 // carries tag_ids (one pass, not per noun), written through the engine
 // (refs checked: a tag that does not exist is refused, fail closed). The
-// entity_tags files stay for the v0.1.17 readers of the other nouns. The
+// entity_tags files stay (the run then rewrites them as `_v: 2` like every
+// FormatTables row, M-1) for the readers of the nouns the core does not own
+// yet; a link file reads the same at either version (flat columns). The
 // int is the rows whose tag_ids are set (would be, under dryRun).
 func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, int, error) {
 	st, err := a.state(ctx)

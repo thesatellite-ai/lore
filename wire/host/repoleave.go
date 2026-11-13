@@ -10,6 +10,7 @@ package host
 import (
 	"slices"
 
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -31,3 +32,16 @@ var storeOnlyOps = []string{opssetup.OpTeamInvite, opssetup.OpTeamInviteList, op
 func leavesWorkRepo(name string) bool {
 	return opsstores.LeavesRepo(name) || slices.Contains(storeOnlyOps, name)
 }
+
+// tracksOnlyLoreData are the operations that may change no tracked file of
+// the repo but its .lore/data (M-6, plain files sweep 3.8): the
+// migration's. A run once appended .lore/lock and .lore/data/**/.tmp-* to
+// a repo's tracked .gitignore ("commit it"); lore's local files go to the
+// clone's .git/info/exclude instead (GitignoreHook), and the git wiring
+// (.gitattributes, hook blocks, merge driver) is left to the next write,
+// sync or fix, as a read leaves it (runWireMode).
+var tracksOnlyLoreData = []string{opsmigrate.OpRun, opsmigrate.OpEnable, opsmigrate.OpStatus, opsmigrate.OpRollback, opsmigrate.OpUnlock}
+
+// changesOnlyLoreData reports whether the operation name may change no
+// tracked file of the repo but .lore/data (tracksOnlyLoreData).
+func changesOnlyLoreData(name string) bool { return slices.Contains(tracksOnlyLoreData, name) }

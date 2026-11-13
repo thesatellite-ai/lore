@@ -278,7 +278,7 @@ no match in any ref
 
 ## Pitfalls
 
-- **The first command after a teammate registers** may not find `@bob` for up to 60 seconds (the fetch cache). `lore sync` refreshes at once.
+- **The first command after a teammate registers** may not find `@bob` for up to 5 minutes (the fetch cache). `lore sync` refreshes at once.
 - **`--no-verify` skips every local check.** `git commit --no-verify` skips the commit check and `git push --no-verify` the push check. Only `lore check leaks --ci` in the client's CI is left, and it sees ids, not sentences.
 - **Short sentences slip through the text check.** The commit check matches runs of 8 or more words. "they approve faster on WhatsApp" (5 words) pasted into a file is not caught. A longer copy is. Paraphrase is never caught. The check stops copy-paste accidents. It is not a wall.
 - **No store, no guess.** If the store cannot be read and there is no cached link index, writes without `--to` fail with `E_LINK_UNKNOWN`. See [Troubleshooting](../troubleshooting.md#e_link_unknown).

@@ -20,8 +20,13 @@ func hookLines(lines []string) []string {
 // post-commit and pre-push blocks is a warning that a read leaves as it is;
 // the fixing run (lore fix, doctor --fix) installs both and says so; the
 // re-check then has no warning about them, only the note that they are in.
+// The clone was wired before (its merge driver is set): a clone lore never
+// set up is a note instead (TestDoctorHooksFreshCloneIsANote).
 func TestLiveDoctorFixInstallsRideHooks(t *testing.T) {
 	f := newLiveFixture(t)
+	if _, err := f.s.repo.Run(f.ctx, gitref.Invocation{Args: []string{"config", "--local", "merge." + mergeDriverLore + ".driver", "lore merge-driver %O %A %B %P"}}); err != nil {
+		t.Fatal(err)
+	}
 	dir, err := f.s.hooksDir(f.ctx)
 	if err != nil {
 		t.Fatal(err)

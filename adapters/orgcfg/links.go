@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -255,6 +256,10 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 	var out []indexedLink
 	var offlineWhy []string
 	var stale []indexedLink // links of copies older than maxAge (offline)
+	if g.Always {
+		ctx = withHeadRefresh(ctx) // lore sync asks each store for its HEAD branch again
+	}
+	fetched := g.prefetch(ctx, o, ttl)
 	for _, sc := range o.Stores {
 		norm, err := repourl.NormalizeStore(sc.URL)
 		if err != nil {
@@ -266,7 +271,9 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		}
 		last := lastFetch(dir)
 		offline := false
-		if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
+		if res, done := fetched[dir]; done {
+			offline = res != nil
+		} else if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
 			if ferr := fetchLocked(ctx, g.Route, dir, g.now()); ferr != nil {
 				offline = true
 			} else {
@@ -324,6 +331,55 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		return out[i].ProjectID+out[i].Remote < out[j].ProjectID+out[j].Remote
 	})
 	return out, status, o.Name, nil
+}
+
+// prefetch fetches every store of o that is due (g.Always, never fetched,
+// or its last fetch older than ttl) at the same time, one goroutine per
+// clone, and returns each fetched clone's result by folder (nil: fetched).
+// Owner item M-4: a read on a Mac fetched three org stores one after
+// another, ~3 s each over ssh. A store whose url does not parse or whose
+// clone cannot be made is left to entryLinks, which reports it.
+func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org, ttl time.Duration) map[string]error {
+	type job struct{ dir, url, norm string }
+	var jobs []job
+	seen := map[string]bool{}
+	for _, sc := range o.Stores {
+		norm, err := repourl.NormalizeStore(sc.URL)
+		if err != nil {
+			continue
+		}
+		dir, _ := cloneDir(g.Home, norm)
+		if seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		last := lastFetch(dir)
+		if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
+			jobs = append(jobs, job{dir: dir, url: sc.URL, norm: norm})
+		}
+	}
+	out := map[string]error{}
+	if len(jobs) < 2 {
+		return out // one store: entryLinks fetches it as before
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, j := range jobs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dir, own := cloneDir(g.Home, j.norm)
+			if err := ensureClone(ctx, dir, j.url, own); err != nil {
+				return // entryLinks makes the clone again and reports the error
+			}
+			err := fetchLocked(ctx, g.Route, dir, g.now())
+			mu.Lock()
+			out[j.dir] = err
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return out
 }
 
 // branchTip is the commit to read a store branch at: the local branch when

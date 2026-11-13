@@ -313,7 +313,7 @@ The whole run that leads to this screen, from `lore mission plan` to the gate, i
 - **Revoke and reassign need the holder to write once more to notice.** The agent finds out on its next heartbeat, note or `done`. An agent that never writes again keeps working on its copy. The claim is still gone, and its `done` is refused.
 - **Resources are per project in a repo without a store.** A linked client repo keeps its holds on the store's signals ref; only a client repo with no store link refuses `lore hold claim` with `E_UNSUPPORTED`, and `--on machine` answers `E_NOT_IMPLEMENTED` (use your machine's own lock tool, such as `flock`); run shared-resource scripts from the agency's own repos.
 - **The roster lives where `lore actor register` ran.** In a repo with no org, each person is a row in that repo's `.lore/data`, so commit it with your change, like any other row.
-- **The 60-second cache.** Lore fetches once per command and reuses that fetch for 60 seconds (`lore sync` always fetches). A teammate's claim from a few seconds ago may not be visible yet; a claim itself always checks the remote.
+- **The 5-minute cache.** Lore fetches once per command and reuses that fetch for 5 minutes (`lore sync` always fetches). A teammate's claim from a few seconds ago may not be visible yet; a claim itself always checks the remote.
 - **One label per session.** Two sessions started with the same `--label` are one actor, and their claims collide.
 
 ## Related

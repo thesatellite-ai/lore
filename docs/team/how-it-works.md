@@ -9,7 +9,7 @@ Each section has a diagram and a short explanation. The [Concepts](concepts.md) 
 - **Live** is the hidden list every teammate sees at once, whatever branch they are on. A row on live is shared now, not when a branch merges.
 - **Landing** is the step that copies a finished row from live into `main`, so it is saved with the code.
 
-Contents: [writing a row](#writing-a-row-where-it-goes) · [lookup](#lookup-which-copy-of-a-row-wins) · [fetch](#fetch-the-tracking-ref-and-the-60-second-cache) · [writing to live](#writing-to-live) · [landing](#landing) · [protected main](#protected-main-the-ride-along-commit) · [merging a row](#merging-two-versions-of-a-row) · [compaction](#compaction-and-the-epoch) · [signals and claims](#signals-claim-renew-expire-reclaim) · [done and merged](#done-then-merged) · [org resolution](#org-resolution) · [links](#lore-org-link-and-the-link-scan) · [store checks](#store-checks) · [leak guards](#leak-guards) · [render](#rendering-context-outside-the-checkout)
+Contents: [writing a row](#writing-a-row-where-it-goes) · [lookup](#lookup-which-copy-of-a-row-wins) · [fetch](#fetch-the-tracking-ref-and-the-5-minute-cache) · [writing to live](#writing-to-live) · [landing](#landing) · [protected main](#protected-main-the-ride-along-commit) · [merging a row](#merging-two-versions-of-a-row) · [compaction](#compaction-and-the-epoch) · [signals and claims](#signals-claim-renew-expire-reclaim) · [done and merged](#done-then-merged) · [org resolution](#org-resolution) · [links](#lore-org-link-and-the-link-scan) · [store checks](#store-checks) · [leak guards](#leak-guards) · [render](#rendering-context-outside-the-checkout)
 
 ## Writing a row: where it goes
 
@@ -66,7 +66,7 @@ tsk_54fe…28f2 in ~/work/billing (folder _root)
 ```
 <!-- /example -->
 
-## Fetch: the tracking ref and the 60-second cache
+## Fetch: the tracking ref and the 5-minute cache
 
 On the first lore command in a clone, lore adds one fetch rule to the repo's git config:
 
@@ -89,7 +89,7 @@ $ git config --get-all remote.origin.fetch
 
 The remote's hidden lists arrive in **tracking copies** under `refs/lore-remote/`. A tracking copy is your clone's note of what the remote holds. Lore then merges it into your own `refs/lore/live`. It never overwrites your copy, so a live write you made offline is kept until it can be pushed.
 
-Each lore command fetches once: one `git fetch` gets live, signals and `main` together. It skips the fetch if the last one is less than `live.fetch_ttl` (60 seconds) old. `lore sync` always fetches. So a teammate's change shows up within a minute, or at once after `lore sync`:
+Each lore command fetches once: one `git fetch` gets live, signals and `main` together. It skips the fetch if the last one is less than `live.fetch_ttl` (5 minutes) old. `lore sync` always fetches. So a teammate's change shows up within a minute, or at once after `lore sync`:
 
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console

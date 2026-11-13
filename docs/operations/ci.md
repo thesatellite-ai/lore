@@ -44,7 +44,7 @@ Older lore versions printed "search index is out of date, run `lore setup`" afte
 
 ## Step 3 — Look at the fresh clone
 
-A CI clone has the `.lore/data` files but not the local cache, and not lore's git settings. The first lore command builds the cache from the files, even in read-only mode (the cache is only a local copy; no note changes), and wires git in the clone: lore's merge helper, the `.gitattributes` check and its hook blocks. That wiring runs after every command in a git checkout, read-only ones included, because it writes only git's own config and hook files, never your notes. There is no separate install step:
+A CI clone has the `.lore/data` files but not the local cache, and not lore's git settings. The first lore command builds the cache from the files, even in read-only mode (the cache is only a local copy; no note changes). A read leaves git as it is: it says once that the clone is not set up for lore yet, and the next lore write, `lore sync` or `lore fix` sets up lore's merge helper and its hook blocks. A clone lore has not set up yet is not a problem, so `lore doctor` lists it under Notes and the clone reads HEALTHY. There is no separate install step:
 
 <!-- example: ops#ci only=1,2 keep=lore|rul_|Status|merge|exit -->
 ```console
@@ -54,7 +54,7 @@ lore rule list: git is not set up for lore's row files in this clone: `lore sync
 rul_162d…9666 [must/always] Run the tests before you push
 rul_7a67…9504 [must/always] Never put passwords in the code
 $ lore doctor; echo "doctor exit $?"
-Status: DEGRADED
+Status: HEALTHY
   …
   merge driver:     false
   …
@@ -63,13 +63,13 @@ Status: DEGRADED
   - lore merge driver not configured in this clone (a read leaves git as it is: `lore sync`, `lore doctor --fix` or the next lore write here installs it, unless LORE_SYNC_GIT=0)
   - live: tracking refspec not configured, so a plain `git fetch` does not fetch live rows (lore's own fetch does); `lore sync` or `lore doctor --fix` adds it
   …
+  - live: git hook block missing in post-commit, pre-push (rows cannot ride along on a protected main); this clone is not set up for lore yet (a fresh clone): the next lore write here, `lore sync` or `lore fix` installs it
+  …
   -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
   …
-  - live: git hook block missing in post-commit, pre-push (rows cannot ride along on a protected main); run `lore fix` (or `lore sync`) to install it; a read never does
-  …
   - context: .lore/LORE.md not rendered yet (lore render)
-doctor exit 1
+doctor exit 0
 ```
 <!-- /example -->
 
@@ -83,10 +83,9 @@ Save the JSON report and act on the exit code. Read `status` from the JSON, not 
 $ lore audit verify
 ✓ audit chain intact (0 entries)
 $ lore doctor --json > doctor.json; echo "doctor exit $?"
-doctor exit 1
+doctor exit 0
 $ grep '"status"' doctor.json
-  "status": "degraded",
-      "status": "warn",
+  "status": "healthy",
 ```
 <!-- /example -->
 
