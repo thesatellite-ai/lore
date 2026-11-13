@@ -188,6 +188,7 @@ $ git status --short
 $ lore task add 'Check the contact form on a phone'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Check the contact form on a phone [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore live show
 task_lists tlt_7a67…9504     live      since 2026-11-02 10:00
@@ -204,6 +205,7 @@ tasks      tsk_162d…9666     live      since 2026-11-02 10:00
 $ LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Renew the SSL certificate [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, not pushed yet: 1 waiting; autopush is off, `lore sync` pushes)
 $ lore live diff
 local     86dbae476bd6

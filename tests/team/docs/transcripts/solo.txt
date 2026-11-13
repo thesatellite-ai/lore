@@ -29,6 +29,7 @@ alice (work/scratch)$ git status --short
 alice (work/scratch)$ lore task add 'tidy the scripts folder'
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — tidy the scripts folder [medium]
+  on tasklist tlt_2ad3618e878ebbf527d34d446ef4f891 "default" (the default; --tasklist picks another)
 alice (work/scratch)$ git status --short
 ?? .gitattributes
 ?? .gitignore

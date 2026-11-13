@@ -194,6 +194,7 @@ $ lore task add 'update the contact page' --to agency --assign @bob
 lore: pushed store agency: commit 6d00426 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
 ✓ tsk_d431…313a — update the contact page [medium] → [agency/client]
+  on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
 
 # bob, in website
 $ lore task claim tsk_d431…313a

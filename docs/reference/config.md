@@ -182,6 +182,7 @@ default_branch: develop
 $ lore task add 'Fix the footer links'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — Fix the footer links [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 $ lore task done tsk_05e9…4603
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json

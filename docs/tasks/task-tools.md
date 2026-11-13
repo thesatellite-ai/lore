@@ -38,10 +38,12 @@ lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task add 'Pick the product photos' --priority low
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Pick the product photos [low]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add 'Set up the payment provider' --priority urgent
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Set up the payment provider [urgent]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 $ lore task start tsk_54fe…28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
@@ -139,6 +141,7 @@ A task whose body already has `- [ ]` / `- [x]` lines (copied from an issue, say
 $ lore task add 'Check the shop on a phone' --body $'- [ ] iPhone\n- [ ] Android\n- [x] Tablet'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
 ✓ tsk_28f8…03df — Check the shop on a phone [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
 $ lore task checklist import tsk_28f8…03df --from body
 ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_28f8…03df?
@@ -221,6 +224,7 @@ When copies of the notes were merged and two tasks ended up as each other's pare
 $ lore task add 'Write the launch mail'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b — Write the launch mail [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 $ lore task relate tsk_4f89…b64b --duplicates tsk_2ad3…f891
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_77cb…76c4.json
@@ -231,6 +235,7 @@ lore live: landed on main (8c373dc); leaves live once main is fetched
 $ lore task add 'Thank-you email after the first order'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 ✓ tsk_d191…45c2 — Thank-you email after the first order [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 6f11034 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 $ lore task relate tsk_d191…45c2 --follows-up tsk_2ad3…f891 --blocked-by tsk_54fe…28f2
@@ -400,6 +405,7 @@ would add 4 tasks (template release):
 $ lore task add --template release --arg version=1.4
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 ✓ tsk_bfed…eeea — Release 1.4 [high]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
   template release: added 1 task and 3 sub-tasks
 lore live: (live, pushed) commit 59e9d31 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
@@ -433,6 +439,7 @@ $ lore task add 'Back up the shop database' --recur 'every week'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json
 ✓ tsk_376c…8e1a — Back up the shop database [medium]
   recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_67e2…291e, #1)
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 7540e63 to origin refs/lore/live
 $ lore task recur show tsk_376c…8e1a
 tsk_376c…8e1a Back up the shop database

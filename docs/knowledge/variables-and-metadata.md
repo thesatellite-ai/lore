@@ -223,9 +223,11 @@ The refusal names the allowed values and the command that adds a new one (`lore 
 $ lore task add 'Update the footer links' --meta client=acme && lore task add 'Add dark mode' --meta client=globex
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
 ✓ tsk_28f8…03df — Update the footer links [medium]
+  on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4c59…6c38.json
 ✓ tsk_4c59…6c38 — Add dark mode [medium]
+  on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 $ lore meta set --where client=acme billing=monthly --dry-run
 would set billing on 2 rows (tasks 2): tsk_76bd…3f10, tsk_28f8…03df

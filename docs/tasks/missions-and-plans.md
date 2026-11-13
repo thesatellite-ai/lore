@@ -39,10 +39,12 @@ lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add 'Write the product pages' --mission msn_7a67…9504 --after tsk_162d…9666
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Write the product pages [medium]
+  on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 $ lore task add 'Send the invoice reminder'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — Send the invoice reminder [medium]
+  on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ lore task edit tsk_05e9…4603 --mission msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
@@ -295,6 +297,7 @@ lore already knew Alice from `lore init`, so it says `already registered (refres
 $ lore task add 'Write the about page'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
 ✓ tsk_f147…5139 — Write the about page [medium]
+  on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 $ lore handoff add --for @alice --task tsk_f147…5139 'Two of the three sections are written; the team photo is still missing'

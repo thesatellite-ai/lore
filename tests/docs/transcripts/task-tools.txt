@@ -9,10 +9,12 @@ lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 alice (work/website)$ lore task add 'Pick the product photos' --priority low
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 — Pick the product photos [low]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 alice (work/website)$ lore task add 'Set up the payment provider' --priority urgent
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — Set up the payment provider [urgent]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 alice (work/website)$ lore task start tsk_54fe984c9b495744c0217776765a28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
@@ -84,6 +86,7 @@ alice (work/website)$ lore task list --parent tsk_2ad3618e878ebbf527d34d446ef4f8
 alice (work/website)$ lore task add 'Check the shop on a phone' --body $'- [ ] iPhone\n- [ ] Android\n- [x] Tablet'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json
 ✓ tsk_28f8d32584b2db54ffb146bede5b03df — Check the shop on a phone [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
 alice (work/website)$ lore task checklist import tsk_28f8d32584b2db54ffb146bede5b03df --from body
 ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_28f8d32584b2db54ffb146bede5b03df?
@@ -134,6 +137,7 @@ alice (work/website)$ lore task tree check
 alice (work/website)$ lore task add 'Write the launch mail'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b.json
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b — Write the launch mail [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 alice (work/website)$ lore task relate tsk_4f89f5fcb1d81152bdf3f52979ebb64b --duplicates tsk_2ad3618e878ebbf527d34d446ef4f891
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_77cb2df809cef85479f6587c4a7d76c4.json
@@ -144,6 +148,7 @@ lore live: landed on main (8c373dc); leaves live once main is fetched
 alice (work/website)$ lore task add 'Thank-you email after the first order'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json
 ✓ tsk_d191616cfa49f94ede5d5148b8b045c2 — Thank-you email after the first order [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 6f11034 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 alice (work/website)$ lore task relate tsk_d191616cfa49f94ede5d5148b8b045c2 --follows-up tsk_2ad3618e878ebbf527d34d446ef4f891 --blocked-by tsk_54fe984c9b495744c0217776765a28f2
@@ -277,6 +282,7 @@ would add 4 tasks (template release):
 alice (work/website)$ lore task add --template release --arg version=1.4
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 ✓ tsk_bfed655e145f36ce2ef425180e72eeea — Release 1.4 [high]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
   template release: added 1 task and 3 sub-tasks
 lore live: (live, pushed) commit 59e9d31 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
@@ -296,6 +302,7 @@ alice (work/website)$ lore task add 'Back up the shop database' --recur 'every w
 lore: wrote ~/work/website/.lore/data/tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a.json
 ✓ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a — Back up the shop database [medium]
   recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #1)
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 7540e63 to origin refs/lore/live
 alice (work/website)$ lore task recur show tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a
 tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a Back up the shop database

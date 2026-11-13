@@ -160,9 +160,11 @@ ERROR: [E_META_VALUE] meta: "asap" is not an allowed value of priority_band; all
 alice (work/website)$ lore task add 'Update the footer links' --meta client=acme && lore task add 'Add dark mode' --meta client=globex
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json
 ✓ tsk_28f8d32584b2db54ffb146bede5b03df — Update the footer links [medium]
+  on tasklist tlt_c0f3c11a5724b0cfd74b256190d9b5b8 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
 ✓ tsk_4c590afb2a0cc7ae1b97b7e4e62d6c38 — Add dark mode [medium]
+  on tasklist tlt_c0f3c11a5724b0cfd74b256190d9b5b8 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 alice (work/website)$ lore meta set --where client=acme billing=monthly --dry-run
 would set billing on 2 rows (tasks 2): tsk_76bd560aff0771fab8457dbfa9823f10, tsk_28f8d32584b2db54ffb146bede5b03df

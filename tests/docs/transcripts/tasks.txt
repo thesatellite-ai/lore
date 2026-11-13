@@ -9,10 +9,12 @@ lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 alice (work/website)$ lore task add 'Fix the typo on the pricing page' --body 'The Pro plan says 9 a month; it should say 19.'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 — Fix the typo on the pricing page [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 alice (work/website)$ lore task add 'Update the footer year'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — Update the footer year [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 
 ### list
@@ -92,6 +94,7 @@ alice (work/website)$ lore task list --status cancelled
 alice (work/website)$ lore task add 'Test task, please ignore'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json
 ✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — Test task, please ignore [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore task delete tsk_c0f3c11a5724b0cfd74b256190d9b5b8
@@ -107,10 +110,12 @@ lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
 alice (work/website)$ lore task add 'Write the welcome email'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
 ✓ tsk_76bd560aff0771fab8457dbfa9823f10 — Write the welcome email [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
 alice (work/website)$ lore task add 'Send the welcome email' --after tsk_76bd560aff0771fab8457dbfa9823f10
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json
 ✓ tsk_d4314eba822f1bf5908b2b8ded5f313a — Send the welcome email [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
 alice (work/website)$ lore task show tsk_d4314eba822f1bf5908b2b8ded5f313a
 tsk_d4314eba822f1bf5908b2b8ded5f313a
@@ -164,11 +169,13 @@ alice (work/website)$ lore task list --view open_todo
 alice (work/website)$ lore task add 'Try a dark mode for the shop' --commitment someday
 lore: wrote ~/work/website/.lore/data/tasks/tsk_3b6283bc4392c556bbae5f094246e913.json
 ✓ tsk_3b6283bc4392c556bbae5f094246e913 — Try a dark mode for the shop [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore task add 'Add a FAQ page' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147dd95f1aaf742dd4f5214843a5139.json
 ✓ tsk_f147dd95f1aaf742dd4f5214843a5139 — Add a FAQ page [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
 alice (work/website)$ lore task list
 ▶ tsk_162df51b7f78b785c97c26b41ea89666 Fix the typo on the pricing page [medium]
@@ -194,6 +201,7 @@ alice (work/website)$ lore task triage
 alice (work/website)$ lore task add 'Renew the SSL certificate' --defer-until 2026-12-01
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb.json
 ✓ tsk_2537f9b2f7de77bfe5ca958860216bbb — Renew the SSL certificate [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit a8de760 to origin refs/lore/live
 alice (work/website)$ lore task deferred
 ○ tsk_2537f9b2f7de77bfe5ca958860216bbb Renew the SSL certificate [medium] ⏾2026-12-01
@@ -301,6 +309,7 @@ lore live: landed on main (ef62c83); leaves live once main is fetched
 alice (work/website)$ lore task add 'Shrink the hero image'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b.json
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b — Shrink the hero image [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit dd85e7d to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore task done tsk_4f89f5fcb1d81152bdf3f52979ebb64b --no-lesson
@@ -328,11 +337,13 @@ lore: wrote ~/work/website/.lore/data/commit_links/cml_6a866bb99ce08addfe04ea845
 alice (work/website)$ lore task add 'Add a size guide' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb2df809cef85479f6587c4a7d76c4.json
 ✓ tsk_77cb2df809cef85479f6587c4a7d76c4 — Add a size guide [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit d33587e to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 alice (work/website)$ lore task add 'Rename the shop to Website Pro' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json
 ✓ tsk_d191616cfa49f94ede5d5148b8b045c2 — Rename the shop to Website Pro [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 34010c1 to origin refs/lore/live
 alice (work/website)$ lore task triage
 ○ tsk_77cb2df809cef85479f6587c4a7d76c4 Add a size guide [medium] (proposed)
