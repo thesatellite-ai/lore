@@ -341,7 +341,7 @@ func setupFolder(ctx context.Context, q SetupQuery) string {
 // gitTopLevel runs `git rev-parse --show-toplevel` in dir ("" outside a
 // repo or without git), once per folder in a read run (doctor_nocreate.go).
 func gitTopLevel(ctx context.Context, dir string) string {
-	if run := noCreateOf(ctx); run != nil {
+	if run := noCreateOf(ctx); run != nil && !run.write { // a write may make a repo: no memory
 		return run.topLevel(dir, func() string { return gitTopLevelNow(ctx, dir) })
 	}
 	return gitTopLevelNow(ctx, dir)

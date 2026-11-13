@@ -41,6 +41,12 @@ func markClientRepo(ctx context.Context, root string, res *OrgResolution) {
 	if top == "" {
 		return
 	}
+	if !loreFolderAt(top) && !loreFolderAt(root) {
+		// S-2: a repo with no lore data (one a store only links) has no
+		// lore hook that reads the mark, and its git config is not lore's
+		// to change (`lore check leaks` run by hand there)
+		return
+	}
 	client := false
 	if res != nil {
 		s, err := res.Situation(ctx)

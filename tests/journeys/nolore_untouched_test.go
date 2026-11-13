@@ -9,16 +9,28 @@ package journeys
 // .lore/ behind (an owner found one in ~96 repos that had no notes). Now
 // --all lists it as having no lore data, and fix --all, doctor, a read and
 // the link's resolution leave its tree byte-identical.
+//
+// S-2 widens it to the standing rule: EVERY registry operation that is not
+// init, setup or link, run in such a linked repo, leaves it byte-identical
+// (internal/untouchedwalk; app's TestUntouchedRepoEveryCommand walks a repo
+// no link names).
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/internal/untouchedwalk"
+	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 const (
@@ -95,6 +107,79 @@ func TestJourneyNoLoreRepoUntouched(t *testing.T) {
 		lee.LoreIn(out, "fix")
 		nlSame(t, "lore doctor, memory list and fix", out.Dir, before)
 	})
+
+	w.Step("day3/every-command-leaves-the-linked-repo-alone", func() {
+		// S-2: every registry operation but init, setup and link, each in
+		// its own copy of the linked clone (in the setup's folders, so the
+		// link resolves), nlWalkers at a time on lee's machine
+		quiet := filepath.Join(parent, "quiet")
+		var mu sync.Mutex
+		var failed []string
+		sem := make(chan struct{}, nlWalkers)
+		var wg sync.WaitGroup
+		walked := 0
+		for i, e := range nlRegistry(t) {
+			path := op.CLIPath(e.Spec().Name)
+			if !untouchedwalk.Walked(path, e) {
+				continue
+			}
+			walked++
+			args := untouchedwalk.Args(path, e)
+			dir := filepath.Join(parent, fmt.Sprintf("quiet-walk-%03d", i))
+			if out, err := exec.Command("cp", "-a", quiet, dir).CombinedOutput(); err != nil {
+				t.Fatalf("copy the linked clone: %v %s", err, out)
+			}
+			wg.Add(1)
+			sem <- struct{}{}
+			go func() {
+				defer wg.Done()
+				defer func() { <-sem }()
+				before, err := untouchedwalk.Tree(dir)
+				if err == nil {
+					r := lee.Actor.Lore(dir, args...)
+					var after map[string]string
+					if after, err = untouchedwalk.Tree(dir); err == nil {
+						if diff := untouchedwalk.Diff(before, after); diff != "" {
+							err = fmt.Errorf("changed the linked repo:\n%s\nstderr:\n%s", diff, r.Stderr)
+						}
+					}
+				}
+				if err != nil {
+					mu.Lock()
+					failed = append(failed, "lore "+strings.Join(args, " ")+": "+err.Error())
+					mu.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+		if walked < nlMinWalked {
+			t.Fatalf("the walk ran only %d operations: the registry walk is broken", walked)
+		}
+		if len(failed) > 0 {
+			slices.Sort(failed)
+			t.Fatalf("%d of %d commands changed a repo only a store link names:\n%s", len(failed), walked, strings.Join(failed, "\n\n"))
+		}
+	})
+}
+
+// nlWalkers is how many commands the day-3 walk runs at once.
+const nlWalkers = 8
+
+// nlMinWalked keeps the day-3 walk from passing by finding nothing.
+const nlMinWalked = 300
+
+// nlRegistry is every operation of the lore registry (wire's, as the
+// binary builds it).
+func nlRegistry(t testing.TB) []op.Entry {
+	t.Helper()
+	wd, home := t.TempDir(), t.TempDir()
+	base, _ := wire.StandaloneOptionsOrg(wd, home, wd, "dev")
+	a, err := wire.New(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = a.Close() })
+	return a.Registry().Entries()
 }
 
 // nlSame fails when dir's tree is no longer the one hashed before cmd ran.

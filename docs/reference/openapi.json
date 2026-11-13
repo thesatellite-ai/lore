@@ -14078,6 +14078,16 @@
               }
             }
           },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "500": {
             "description": "E_INTERNAL",
             "content": {
@@ -14141,6 +14151,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -22507,6 +22527,16 @@
               }
             }
           },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "E_NOT_FOUND",
             "content": {
@@ -22623,6 +22653,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -33162,6 +33202,16 @@
               }
             }
           },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "E_NOT_FOUND",
             "content": {
@@ -33304,7 +33354,7 @@
             }
           },
           "403": {
-            "description": "E_OLD_LORE",
+            "description": "E_NOT_A_STORE, E_OLD_LORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -33549,6 +33599,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -49937,6 +49997,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -80200,6 +80270,16 @@
               }
             }
           },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "E_NOT_FOUND",
             "content": {
@@ -80333,6 +80413,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -80597,6 +80687,16 @@
               }
             }
           },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "E_NOT_FOUND",
             "content": {
@@ -80757,6 +80857,16 @@
               }
             }
           },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "E_NOT_FOUND",
             "content": {
@@ -80861,6 +80971,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -81116,6 +81236,16 @@
               }
             }
           },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "E_NOT_FOUND",
             "content": {
@@ -81215,6 +81345,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
             "content": {
               "application/json": {
                 "schema": {
@@ -81903,6 +82043,16 @@
           },
           "401": {
             "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
             "content": {
               "application/json": {
                 "schema": {

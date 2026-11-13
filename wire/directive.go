@@ -91,6 +91,14 @@ func (a *App) contextTargetsSetting(ctx context.Context) (names []string, ok boo
 // DirectiveTargets implements opsdirective.Manager (v0.1.17 resolveTargets
 // + printTargetPick).
 func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirective.Pick, error) {
+	// S-2: a git repo with no lore data (one a store only links included)
+	// gets no tool file either: lore init sets the repo up and installs
+	// the directive in the same step
+	if NoCreate(ctx) {
+		if top := gitTopLevel(ctx, a.projectDir()); top != "" && !loreFolderAt(a.loreRootFrom(top)) {
+			return opsdirective.Pick{}, noProjectErr(ctx, top)
+		}
+	}
 	reg, err := a.toolRegistry(ctx)
 	if err != nil {
 		return opsdirective.Pick{}, err

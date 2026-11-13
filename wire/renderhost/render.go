@@ -202,6 +202,16 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		return h.renderPrivate(ctx, f.out(), root, true, f.quiet)
 	}
 
+	// S-2: a repo with no lore data (one a store only links) gets no
+	// LORE.md and no pointer block. The re-render after a command's sync
+	// (quiet) says nothing there; `lore render` says why it wrote nothing.
+	if top := wire.UntouchedRepo(ctx, root); top != "" {
+		if f.quiet {
+			return nil
+		}
+		return wire.UntouchedError(top)
+	}
+
 	// Generated content goes to the out file (default .lore/LORE.md), never
 	// into a tool's own file — so hand-written content there is never
 	// clobbered. Each tool file only receives an idempotent pointer block

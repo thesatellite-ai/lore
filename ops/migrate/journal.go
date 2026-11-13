@@ -242,7 +242,7 @@ func journalOps(rw Rewriter, j Journal) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRollback, Summary: "Undo the last migration (local undo before push, new commits after)",
 			Permission: op.PermAdmin, Access: op.AccessWrite, RESTNoun: restNoun,
-			Errors: []errs.Code{errs.MigrateLocked, errs.MigrateRollbackLoses, errs.NotFound, errs.Unsupported, errs.Internal},
+			Errors: []errs.Code{errs.MigrateLocked, errs.MigrateRollbackLoses, errs.NotFound, errs.NotAStore, errs.Unsupported, errs.Internal},
 			Examples: []op.Example{
 				{Title: "undo the last migration", CLI: "lore migrate rollback", Want: "backup_ref:"},
 			},
@@ -266,7 +266,7 @@ func journalOps(rw Rewriter, j Journal) []op.Entry {
 			Name: OpUnlock, Summary: "Release this machine's stale migration lock (its process is gone), or with --team a stale team lock",
 			Permission: op.PermAdmin, Access: op.AccessWrite, RESTNoun: restNoun,
 			Confirm: op.ConfirmRule{When: "team"},
-			Errors:  []errs.Code{errs.MigrateLocked, errs.NeedsConfirm, errs.Offline, errs.InvalidInput, errs.Internal},
+			Errors:  []errs.Code{errs.MigrateLocked, errs.NeedsConfirm, errs.Offline, errs.InvalidInput, errs.NotAStore, errs.Internal},
 			Examples: []op.Example{
 				{Title: "after a crashed run", CLI: "lore migrate unlock", Want: "released:"},
 			},

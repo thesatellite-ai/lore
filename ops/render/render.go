@@ -187,7 +187,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRun, Summary: "Render .lore/LORE.md from scoped knowledge and point your AI tools at it",
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
-			Errors: []errs.Code{errs.InvalidInput, errs.BadPath, errs.Refused, errs.ConfigInvalid, errs.NotFound, errs.Unsupported, errs.Internal},
+			Errors: []errs.Code{errs.InvalidInput, errs.BadPath, errs.Refused, errs.NotAStore, errs.ConfigInvalid, errs.NotFound, errs.Unsupported, errs.Internal},
 			Examples: []op.Example{
 				{Title: "render and wire the repo's tools", CLI: "lore render", Want: ""},
 				{Title: "wire one more tool and keep it in context.targets", CLI: "lore render --add-target claude_code", Want: ""},

@@ -174,6 +174,11 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		// repo with no .lore/ has none, so it is left as it is
 		ctx = wire.WithNoCreate(ctx)
 	}
+	if !setsUpRepo(e.Spec().Name) {
+		// S-2: no other command sets a repo up, so in a git repo with no
+		// .lore/ it refuses before anything is made there (repo_setup.go)
+		ctx = wire.WithNoSetUp(ctx)
+	}
 	run0 := &Run{Entry: e, Decoder: d, Cmd: r.State.Cmd, Args: r.State.Args}
 	if fixDryRun(run0) {
 		ctx = wire.WithNoCreate(ctx)      // lore fix --dry-run changes nothing
@@ -214,7 +219,17 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 			}
 		}
 	}
+	// S-2: a set-up command refused in a repo with no lore data leaves it
+	// untouched (repo_setup.go): its folders, and the git set-up files the
+	// write snapshot covers (store add is no write, yet sets git up)
+	var fresh *freshRepo
+	if wd, werr := os.Getwd(); werr == nil {
+		if fresh = takeFreshRepo(ctx, e.Spec().Name, wd); fresh != nil && snap == nil && !run.ReadOnly {
+			snap = takeSetupSnapshot(ctx, wd)
+		}
+	}
 	undo := func(err error) error {
+		defer fresh.restore()
 		undone := append(snap.restore(), tree.restore(ctx)...)
 		slices.Sort(undone)
 		announceUndo(os.Stderr, slices.Compact(undone))

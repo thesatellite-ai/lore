@@ -348,9 +348,16 @@ func (s *Store) readTracking(ctx context.Context) (string, map[string][]byte, er
 func (s *Store) view(ctx context.Context, tree map[string][]byte) (View, []string) {
 	b, bad := ParseBoard(tree)
 	now := s.Clock.Now()
-	seen := s.Seen.Load(ctx, s.Ref).Observe(b, now)
-	if err := s.Seen.Save(ctx, s.Ref, seen); err != nil {
-		s.trace(fmt.Sprintf("signals: %v", err))
+	loaded := s.Seen.Load(ctx, s.Ref)
+	seen := loaded.Observe(b, now)
+	// Saved only when it changed: a read that saw what the file already
+	// holds writes nothing, and a clone with no claims at all (a repo with
+	// no lore data, S-2) gets no .git/lore/signals-seen.json from a
+	// `lore task list`.
+	if !seen.Same(loaded) {
+		if err := s.Seen.Save(ctx, s.Ref, seen); err != nil {
+			s.trace(fmt.Sprintf("signals: %v", err))
+		}
 	}
 	return View{Board: b, Seen: seen, Now: now, Lease: s.Lease}, bad
 }

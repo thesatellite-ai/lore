@@ -489,7 +489,7 @@ func StoreOnlyRoster(ctx context.Context, opts Options, target store.Source) (*A
 // git repo whose full open refuses it: no .lore/ at its top and no store
 // linking it by its remote (open.go: such a repo opens read-only instead).
 func readWithoutProject(ctx context.Context, opts Options) bool {
-	if !NoCreate(ctx) {
+	if !readOnlyRun(ctx) {
 		return false
 	}
 	top := gitTopLevel(ctx, opts.RepoDir)
