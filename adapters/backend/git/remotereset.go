@@ -98,11 +98,20 @@ func RemoteResetAt(dir string) bool {
 	return err == nil
 }
 
-// remoteResetError is the refusal of a sync into a reset remote.
-func (b *Backend) remoteResetError(why string) error {
+// remoteResetError is the refusal of a sync into a reset remote. remote
+// and h are the remote tip and the clone's head: when the remote now holds
+// another lore store (its marker names a different store id), someone
+// started it fresh, so the only way out for this machine is to drop its
+// old copy and clone the new store (B2-34); --restore would be refused by
+// the same check, so it is not offered.
+func (b *Backend) remoteResetError(ctx context.Context, why, remote, h string) error {
 	shown := b.git.remote
 	if o, err := OriginOf(shown); err == nil {
 		shown = o
+	}
+	if newID, oldID := b.storeIDAtCommit(ctx, remote), b.storeIDAtCommit(ctx, h); newID != "" && oldID != "" && newID != oldID {
+		return errs.Wrap(errs.Refused, "git: the store at "+shown+" was started fresh by someone (it is now store "+newID+"); this machine's clone "+b.work+" still holds the old store "+oldID+", which lore will not push there", ErrRemoteReset).
+			WithHint("drop this machine's old copy with lore store forget " + shown + " --yes, then run lore sync to clone the new store (or ask whoever reset it)")
 	}
 	return errs.Wrap(errs.Refused, "git: the store at "+shown+" was reset ("+why+"), but this machine's clone "+b.work+" still holds the old store; lore will not push it there on its own", ErrRemoteReset).
 		WithHint("put this copy back: lore store push --restore " + shown + "; or start fresh: lore store forget " + shown + ", then lore store init <name> " + shown)
@@ -120,7 +129,7 @@ func (b *Backend) checkRemoteReset(ctx context.Context, before, remote, h string
 		if back, err := b.sharesHistory(ctx, h, remote); err != nil {
 			return err
 		} else if !back {
-			return b.remoteResetError("found when lore last reached it")
+			return b.remoteResetError(ctx, "found when lore last reached it", remote, h)
 		}
 		if err := RestoreRemote(b.work); err != nil {
 			return err
@@ -150,7 +159,7 @@ func (b *Backend) checkRemoteReset(ctx context.Context, before, remote, h string
 	if err := os.WriteFile(remoteResetPath(b.work), []byte(strings.TrimSpace(before)+"\n"), 0o600); err != nil {
 		return errs.FileIO("write", remoteResetPath(b.work), err)
 	}
-	return b.remoteResetError(why)
+	return b.remoteResetError(ctx, why, remote, h)
 }
 
 // RemoteReset fetches the store and reports whether its remote was reset
@@ -226,3 +235,16 @@ func (b *Backend) sharesHistory(ctx context.Context, h, remote string) (bool, er
 // TakeCameBack reports, once, that a sync found a store lore had marked
 // reset back on its remote and cleared the mark (B2-30); wire says so.
 func (b *Backend) TakeCameBack() bool { return b.cameBack.Swap(false) }
+
+// storeIDAtCommit is the store id in the marker at commit ("" when commit
+// is "" or holds no readable marker with an id).
+func (b *Backend) storeIDAtCommit(ctx context.Context, commit string) string {
+	if commit == "" {
+		return ""
+	}
+	m, err := b.markerAt(ctx, commit)
+	if err != nil {
+		return ""
+	}
+	return m.ID.String()
+}

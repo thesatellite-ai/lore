@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -60,8 +61,16 @@ func TestSyncRefusesAResetRemote(t *testing.T) {
 	other := newRemote(t, true)
 	gitT(t, filepath.Join(filepath.Dir(other), "seed"), "push", "--quiet", remote, testBranch)
 	write(t, a, store.Change{Row: g.row(newID(t), "after the second reset", hlc.HLC{})})
-	if _, err := a.Sync(ctx); !errors.Is(err, ErrRemoteReset) {
+	_, err := a.Sync(ctx)
+	if !errors.Is(err, ErrRemoteReset) {
 		t.Fatalf("sync into an unrelated history: %v, want ErrRemoteReset", err)
+	}
+	// B2-34: the remote is another lore store now (another store id):
+	// only forget + sync is offered, never --restore or init
+	var le *errs.Error
+	if !errors.As(err, &le) || !strings.Contains(le.Message, "started fresh") || !strings.Contains(le.Hint, "lore store forget") ||
+		strings.Contains(le.Hint, "--restore") || strings.Contains(le.Hint, "store init") {
+		t.Fatalf("a store started fresh by someone: %v (hint %q)", err, le.Hint)
 	}
 }
 
