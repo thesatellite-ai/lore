@@ -955,22 +955,18 @@ func (a *App) raiseProjectFormat(ctx context.Context, top string) (string, error
 	if !fileExists(filepath.Join(top, filepath.FromSlash(rowfs.RepoMetaPath))) {
 		return "", nil
 	}
-	by := ""
+	m := rowfs.ProjectMigration{At: a.opts.Wall().UTC().Format(time.RFC3339)}
 	if id, ierr := resolveIdentity(ctx, a.opts); ierr == nil {
-		by = id.DisplayName
-		if id.StableKey != "" {
-			by += " (" + id.StableKey + ")"
-		}
+		m.By, m.Via = migratedBy(id)
 	}
-	at := a.opts.Wall().UTC().Format(time.RFC3339)
-	if _, err = rowfs.WriteProjectFormat(top, rowfs.ProjectFormatCurrent, strings.TrimSpace(by), at); err != nil {
+	if _, err = rowfs.WriteProjectFormat(top, rowfs.ProjectFormatCurrent, m); err != nil {
 		return "", err
 	}
 	data := filepath.Join(top, rowfs.LoreDir, rowfs.DataDir)
 	if _, err = rowfs.EnsureSignpost(data); err != nil {
 		return "", err
 	}
-	return "format: " + rowfs.FormatName(rowfs.ProjectFormatCurrent) + ", recorded in " + rowfs.RepoMetaPath + " (by " + strings.TrimSpace(by) + ", " + at + "); " +
+	return "format: " + rowfs.FormatName(rowfs.ProjectFormatCurrent) + ", recorded in " + rowfs.RepoMetaPath + " (by " + m.By + ", " + m.At + "); " +
 		rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.SignpostFile + " tells teammates still on lore 0.1.17 to upgrade (their lore sync names it); commit both with the rows", nil
 }
 

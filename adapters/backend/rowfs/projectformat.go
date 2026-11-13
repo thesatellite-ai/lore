@@ -5,7 +5,11 @@ package rowfs
 // committed .lore/data/_meta.json records:
 //
 //	"format": 2            the format the project's rows are written in
-//	"migrated_by": "…"     who ran `lore migrate run` that raised it
+//	"migrated_by": "…"     the person who ran `lore migrate run` that raised
+//	                       it, "Name <email>" (never an agent: T-1)
+//	"migrated_via": "…"    the agent the person ran it through, when one
+//	                       did ("claude_code (agent:auto/…)"); audit only,
+//	                       as the Lore-Agent trailer of a commit
 //	"migrated_at": "…"     when (RFC 3339, UTC)
 //
 // A _meta.json without "format" says it the older way: min_lore_version
@@ -25,9 +29,10 @@ import (
 
 // Keys of the project format (file format: they must not change).
 const (
-	MetaKeyFormat     = "format"
-	MetaKeyMigratedBy = "migrated_by"
-	MetaKeyMigratedAt = "migrated_at"
+	MetaKeyFormat      = "format"
+	MetaKeyMigratedBy  = "migrated_by"
+	MetaKeyMigratedVia = "migrated_via"
+	MetaKeyMigratedAt  = "migrated_at"
 )
 
 // The project formats.
@@ -49,10 +54,13 @@ type ProjectFormat struct {
 	// Recorded is true when the "format" key itself is in the file (not
 	// derived from min_lore_version or the rows).
 	Recorded bool `json:"recorded"`
-	// MigratedBy and MigratedAt are who ran the migration that raised the
-	// format, and when ("" when not recorded).
+	// MigratedBy and MigratedAt are the person who ran the migration that
+	// raised the format ("Name <email>"), and when ("" when not recorded).
 	MigratedBy string `json:"migrated_by,omitempty"`
 	MigratedAt string `json:"migrated_at,omitempty"`
+	// MigratedVia is the agent the person ran it through ("" when the
+	// person ran it themselves): an audit field, never shown as who.
+	MigratedVia string `json:"migrated_via,omitempty"`
 	// MinLoreVersion is the file's min_lore_version ("" when unset).
 	MinLoreVersion string `json:"min_lore_version,omitempty"`
 }
@@ -96,7 +104,7 @@ func ReadProjectFormat(top string) (ProjectFormat, error) {
 	} else if d.MinLoreVersion != "" {
 		pf.Format = ProjectFormatCurrent
 	}
-	for key, dst := range map[string]*string{MetaKeyMigratedBy: &pf.MigratedBy, MetaKeyMigratedAt: &pf.MigratedAt} {
+	for key, dst := range map[string]*string{MetaKeyMigratedBy: &pf.MigratedBy, MetaKeyMigratedVia: &pf.MigratedVia, MetaKeyMigratedAt: &pf.MigratedAt} {
 		if raw, ok := o[key]; ok {
 			if jerr := json.Unmarshal(raw, dst); jerr != nil {
 				return ProjectFormat{}, unreadableMeta(key + " is not a string")
@@ -106,12 +114,20 @@ func ReadProjectFormat(top string) (ProjectFormat, error) {
 	return pf, nil
 }
 
+// ProjectMigration is who raised a project's format and when
+// (WriteProjectFormat): By is the person ("Name <email>"), Via the agent
+// they ran it through ("" for none), At the RFC 3339 time. An empty field
+// is left out of the file.
+type ProjectMigration struct {
+	By, Via, At string
+}
+
 // WriteProjectFormat records format f, who raised it and when in the
 // checkout's _meta.json (every other key kept) and returns the file's
 // path relative to top. It is a .lore/data change like any row: committed
 // with the rows it belongs to. A checkout without _meta.json is
 // E_NOT_FOUND (run lore init first).
-func WriteProjectFormat(top string, f int, by, at string) (string, error) {
+func WriteProjectFormat(top string, f int, m ProjectMigration) (string, error) {
 	if err := checkChain(top, RepoMetaPath); err != nil {
 		return "", err
 	}
@@ -128,7 +144,7 @@ func WriteProjectFormat(top string, f int, by, at string) (string, error) {
 		return "", unreadableMeta("not a JSON object")
 	}
 	o[MetaKeyFormat] = json.RawMessage(strconv.Itoa(f))
-	for key, v := range map[string]string{MetaKeyMigratedBy: by, MetaKeyMigratedAt: at} {
+	for key, v := range map[string]string{MetaKeyMigratedBy: m.By, MetaKeyMigratedVia: m.Via, MetaKeyMigratedAt: m.At} {
 		if v == "" {
 			delete(o, key)
 			continue
