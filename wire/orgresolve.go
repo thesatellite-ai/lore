@@ -243,9 +243,17 @@ func (r *OrgResolution) OrgStores(ctx context.Context) ([]attach.Store, error) {
 	if org == nil || len(org.Stores) == 0 {
 		return nil, nil
 	}
+	links := s.Result.Links
 	if s.Result.LinkUnknown {
-		return nil, errs.New(errs.LinkUnknown, "the store links of this repo cannot be read: "+s.Result.LinkDetail).
-			WithHint(linkUnknownHint).WithNext("lore", "sync")
+		// W-15: offline with a copy older than the link index max age,
+		// the folders the last fetched links name stay attached, so the
+		// rows fetched then still read; the role still fails closed
+		// (Result.LinkUnknown refuses an org write that names no store)
+		if !slices.ContainsFunc(s.OldLinks, func(l orgresolve.Link) bool { return l.Entry == org.Name }) {
+			return nil, errs.New(errs.LinkUnknown, "the store links of this repo cannot be read: "+s.Result.LinkDetail).
+				WithHint(linkUnknownHint).WithNext("lore", "sync")
+		}
+		links = s.OldLinks
 	}
 	if s.Result.Disagreement != nil {
 		// F10: LORE_ORG / org use contradicting a link. Nothing of the
@@ -257,8 +265,8 @@ func (r *OrgResolution) OrgStores(ctx context.Context) ([]attach.Store, error) {
 	}
 	var out []attach.Store
 	var linked *orgresolve.Link
-	for i := range s.Result.Links {
-		l := &s.Result.Links[i]
+	for i := range links {
+		l := &links[i]
 		if l.Entry != org.Name {
 			continue
 		}

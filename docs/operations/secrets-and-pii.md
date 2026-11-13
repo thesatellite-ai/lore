@@ -41,12 +41,12 @@ When the match is not a real secret (a sample value like this one, a test string
 ```console
 # alice, in website
 $ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
-lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_3b62…e913.json
-✓ mem_4c59…6c38
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
+✓ mem_3b62…e913
   scope: [master]
 $ grep -rl AKIA .lore/data || echo 'not in .lore/data'
-.lore/data/memories/mem_4c59…6c38.json
+.lore/data/memories/mem_3b62…e913.json
 ```
 <!-- /example -->
 
@@ -55,9 +55,9 @@ Delete the row (or edit the key out) before you commit:
 <!-- example: ops#allow-secrets only=3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_4c59…6c38 --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
-✓ mem_4c59…6c38 moved to the trash (restore: lore trash restore mem_4c59…6c38)
+$ lore memory delete mem_3b62…e913 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
 ```
 <!-- /example -->
 
@@ -117,7 +117,6 @@ Once the value is in your manager, `lore secrets link <row> --at <n> --ref "<man
 # alice, in website
 $ lore secrets link mem_2ad3…f891 --at 1 --ref 'gopass://acme/website/mail-relay'
 lore: wrote ~/work/website/.lore/data/memories/mem_2ad3…f891.json
-lore: wrote ~/work/website/.lore/data/.json
 Replaced ${secret:unstored} #1 in mem_2ad3…f891 body with ${secret:gopass://acme/website/mail-relay?holder=mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff}.
 Its task stays open: rotate the secret, then lore task done <task>.
 $ lore secrets show mem_2ad3…f891
@@ -137,22 +136,20 @@ gopass://acme/website/mail-relay?holder=mch_017941fe53b8eca065d80ff150a20e9fa70f
 ```console
 # alice, in website
 $ lore memory add --secret-ref 'env://STAGING_DB_PASSWORD' --body "Staging database password=$DB_PASSWORD"
-lore: wrote ~/work/website/.lore/data/memories/mem_d431…313a.json
-✓ mem_d431…313a
+lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
+✓ mem_b4f4…a5b0
   scope: [master]
 $ lore secrets check
-lore: wrote ~/work/website/.lore/data/.json
 REF	HOLDER	USED IN	STATE
 gopass://acme/website/staging-deploy	-	mem_7a67…9504 body	not_checked
 gopass://acme/website/smtp-relay?holder=act_05e9…4603	act_05e99e22	mem_2ad3…f891 body	not_checked
-env://STAGING_DB_PASSWORD	-	mem_d431…313a body	missing
+env://STAGING_DB_PASSWORD	-	mem_b4f4…a5b0 body	missing
 3 references in 3 rows.
 $ lore secrets check
-lore: wrote ~/work/website/.lore/data/.json
 REF	HOLDER	USED IN	STATE
 gopass://acme/website/staging-deploy	-	mem_7a67…9504 body	not_checked
 gopass://acme/website/smtp-relay?holder=act_05e9…4603	act_05e99e22	mem_2ad3…f891 body	not_checked
-env://STAGING_DB_PASSWORD	-	mem_d431…313a body	present
+env://STAGING_DB_PASSWORD	-	mem_b4f4…a5b0 body	present
 3 references in 3 rows.
 ```
 <!-- /example -->
@@ -183,7 +180,6 @@ When an entry is renamed in the password manager, `lore secrets rename-entry --m
 # alice, in website
 $ lore secrets rename-entry --manager gopass --from acme/website/mail-relay --to acme/website/smtp-relay
 lore: wrote ~/work/website/.lore/data/memories/mem_2ad3…f891.json
-lore: wrote ~/work/website/.lore/data/.json
 Renamed 1 reference in 1 row (batch bat_54fe…28f2).
 $ lore secrets list --manager gopass
 REF	HOLDER	USED IN	STATE
@@ -208,9 +204,10 @@ repo       no org  (fallback identity)
 $ lore whoami --json | grep '"machine"'
     "machine": "mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff",
 $ lore secrets move --from mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff --to act_05e9…4603 --yes
-lore: wrote 1 row file(s) in ~/work/website/.lore
-lore: wrote 3 row file(s) in ~/work/website/.lore/data
-Moved 1 reference in 1 row (batch bat_c0f3…b5b8). Added task tsk_76bd…3f10 (tasklist secrets, repo).
+lore: wrote ~/work/website/.lore/data/memories/mem_2ad3…f891.json
+lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
+lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_76bd…3f10.json
+Moved 1 reference in 1 row (batch bat_d431…313a). Added task tsk_c0f3…b5b8 (tasklist secrets, repo).
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore secrets list --holder act_05e9…4603
 REF	HOLDER	USED IN	STATE
@@ -218,7 +215,7 @@ gopass://acme/website/smtp-relay?holder=act_05e9…4603	act_05e99e22	mem_2ad3…
 1 reference in 1 row.
 $ lore task list
 ○ tsk_162d…9666 Store the secret redacted from mem_2ad3…f891, then rotate it [medium]
-○ tsk_76bd…3f10 Rotate secrets mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff held: 1 entries [medium]
+○ tsk_c0f3…b5b8 Rotate secrets mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff held: 1 entries [medium]
 ```
 <!-- /example -->
 
@@ -232,25 +229,23 @@ Every `--not-a-secret` answer is recorded as an allow entry: one row, one field,
 ```console
 # alice, in website
 $ lore memory add --body 'Test fixture token: ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --not-a-secret --reason 'fixture in tests' --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_28f8…03df.json
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
-✓ mem_b4f4…a5b0
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
+✓ mem_3b62…e913
   scope: [master]
 $ lore secrets allow list
 ID	ROW	FIELD	RULE	REASON
-sal_28f8…03df	mem_b4f4…a5b0	body	github_token	fixture in tests (confirmed not a secret by alice (memory add))
-sal_4c59…6c38	mem_b4f4…a5b0	body	github-pat	fixture in tests (confirmed not a secret by alice (memory add))
+sal_28f8…03df	mem_3b62…e913	body	github_token	fixture in tests (confirmed not a secret by alice (memory add))
+sal_4c59…6c38	mem_3b62…e913	body	github-pat	fixture in tests (confirmed not a secret by alice (memory add))
 $ lore secrets allow rm sal_4c59…6c38 --yes
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
-lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
 ✓ removed sal_…6c38; the finding is reported again on the next scan
 $ lore secrets allow list | grep -c sal_
 1
-$ lore secrets allow mem_b4f4…a5b0 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_3b62…e913.json
-lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
-✓ github-pat: mem_…a5b0.body marked not a secret (sal_…e913)
+$ lore secrets allow mem_3b62…e913 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_f147…5139.json
+✓ github-pat: mem_…e913.body marked not a secret (sal_…5139)
 ```
 <!-- /example -->
 
@@ -284,18 +279,18 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (invoice-number) at line 1: sh
 $ lore secrets rules
 (no rule rows: gitleaks defaults and lore's own pack apply)
 $ lore secrets rule off generic-password --reason 'our tests use fake passwords' --yes
-lore: wrote ~/work/website/.lore/data/secret_rules/srl_f147…5139.json
-✓ generic-password off in this repo (srl_…5139)
-$ lore secrets rule edit aws_access_key --description 'cloud keys, any account' --yes
 lore: wrote ~/work/website/.lore/data/secret_rules/srl_2537…6bbb.json
-✓ aws_access_key changed in this repo (srl_…6bbb)
+✓ generic-password off in this repo (srl_…6bbb)
+$ lore secrets rule edit aws_access_key --description 'cloud keys, any account' --yes
+lore: wrote ~/work/website/.lore/data/secret_rules/srl_b69e…5ed7.json
+✓ aws_access_key changed in this repo (srl_…5ed7)
 $ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 aws_access_key	changed	repo	this repo	cloud keys, any account
 generic-password	off	repo	this repo	our tests use fake passwords
 $ lore secrets rule on generic-password --yes
-lore: wrote ~/work/website/.lore/data/secret_rules/srl_f147…5139.json
-✓ generic-password on in this repo (srl_…5139 removed)
+lore: wrote ~/work/website/.lore/data/secret_rules/srl_2537…6bbb.json
+✓ generic-password on in this repo (srl_…6bbb removed)
 $ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 aws_access_key	changed	repo	this repo	cloud keys, any account

@@ -18,6 +18,25 @@ func PrintError(stdout, stderr io.Writer, err error, asJSON bool) int {
 	return printError(stdout, stderr, err, asJSON, Palette{}, "")
 }
 
+// PrintErrorNamed is PrintError with the human line's "by act_…" named
+// through name (the @handle or name; nil or an id it cannot name keeps
+// the id), for a host error printed once the app exists (bug hunt W-7:
+// such lines still showed ids while command errors showed names). The
+// --json envelope keeps the ids.
+func PrintErrorNamed(stdout, stderr io.Writer, err error, asJSON bool, name func(string) string) int {
+	if asJSON || name == nil {
+		return PrintError(stdout, stderr, err, asJSON)
+	}
+	var line strings.Builder
+	code := printError(stdout, &line, err, false, Palette{}, "")
+	text := line.String()
+	if byActorID.MatchString(text) {
+		text = replaceActorIDs(text, name)
+	}
+	_, _ = io.WriteString(stderr, text)
+	return code
+}
+
 // JSONRequested reports whether args (the process arguments without the
 // program name) ask for --json, for an error printed before cobra parsed
 // them: "--json", or "--json=<bool>" with a true value. Arguments after

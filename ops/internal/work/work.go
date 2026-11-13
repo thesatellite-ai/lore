@@ -777,13 +777,15 @@ func TaskCounts(ctx context.Context, env Env, field string) (map[string]int, err
 	return n, nil
 }
 
-// ListLine is one row of a plan or tasklist list: "<badge>  <id>  <title>
+// ListLine is one row of a plan or tasklist list: "<id>  <title>
 // [<status>]  (<n> tasks)" and the store label of a row of another store
 // (opsmemory.LabelSuffix). v0.1.17 printed only "<badge>  <id>", so two
 // lists could not be told apart and the auto-created "Inbox" list looked
-// like nothing a person had made (bug hunt B3-8).
-func ListLine(badge, id, title, status string, tasks int, label string) string {
-	s := badge + "  " + id
+// like nothing a person had made (bug hunt B3-8); the row starts with the
+// id like the task, mission, memory and rule lists (no "TA"/"PL" badge
+// a person never sees elsewhere; bug hunt W-7).
+func ListLine(id, title, status string, tasks int, label string) string {
+	s := id
 	if t := textcut.Cut(strings.Join(strings.Fields(title), " "), listTitleMax, listTitleMax-len(textcut.Ellipsis)); t != "" {
 		s += "  " + t
 	}

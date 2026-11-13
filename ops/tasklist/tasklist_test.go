@@ -46,7 +46,7 @@ func TestTasklistLifecycle(t *testing.T) {
 		t.Fatalf("show %q", got)
 	}
 	list := h.Must("tasklist.list", ``)
-	if got := opstest.IDPattern(opstest.Text(list)); got != "TA  tlt_ID  Sprint 1 [active]  (0 tasks)\nTA  tlt_ID  Sprint 2 [active]  (0 tasks)\n" {
+	if got := opstest.IDPattern(opstest.Text(list)); got != "tlt_ID  Sprint 1 [active]  (0 tasks)\ntlt_ID  Sprint 2 [active]  (0 tasks)\n" {
 		t.Fatalf("list %q", got)
 	}
 	if !strings.Contains(h.JSON(list), `"kind":"taskList.list"`) || !strings.Contains(h.JSON(list), `"count":2`) {

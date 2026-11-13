@@ -76,4 +76,21 @@ func TestJourneyTeamLeadHeldConflict(t *testing.T) {
 		}
 		tt.lore(tlAnn, "sync", "conflicts").OK(t).Says(t, "no conflicts")
 	})
+
+	// W-15: the next day, offline before any other command, the row read
+	// by id shows the copy fetched yesterday (it said E_NOT_FOUND), and an
+	// edit made there goes out with the next sync, named by its folder
+	// (W-14: the push was named after the first attached folder).
+	w.Step("day3/offline-the-next-day", func() {
+		w.AdvanceDays(1)
+		tt.m[tlAnn.Email].SetEnv("LORE_OFFLINE", "1")
+		tt.lore(tlAnn, "task", "show", id).OK(t).Says(t, "Ann's title")
+		tt.lore(tlAnn, "task", "edit", id, "--title", "Ann's offline title", "--yes").OK(t)
+		tt.m[tlAnn.Email].SetEnv("LORE_OFFLINE", "0")
+		r := tt.lore(tlAnn, "sync", "run").OK(t)
+		t.Logf("sync after the offline edit:\n%s", r)
+		r.Says(t, "pushed store "+tlOrg+"/sync:").Never(t, "pushed store "+tlOrg+"/core:", "pushed store "+tlOrg+"/org:")
+		tt.lore(tlLee, "sync", "run").OK(t)
+		tt.lore(tlLee, "task", "show", id).OK(t).Says(t, "Ann's offline title")
+	})
 }

@@ -4,6 +4,7 @@
 #   FAST_MAP="<table>" tests/lib/fast-plan.sh steps       # the e2e gate steps to add, one per line
 #   RACE_PKGS="<patterns>" tests/lib/fast-plan.sh race    # the race-set packages the change touches
 #   tests/lib/fast-plan.sh files                          # the changed files
+#   SKIP_DOCS=1 tests/lib/fast-plan.sh keep <step>...     # the steps to run, one per line
 #
 # The change is every file that differs from the merge base with FAST_BASE (default
 # origin/main): committed on this branch, staged, unstaged or untracked (not ignored).
@@ -12,6 +13,10 @@
 # "<bash glob> <step> [<step>...]" ("-" for no e2e step), first match wins. A file that no rule
 # matches is the safe fallback: every step of the map's "*" rule, which must be the last line
 # and names every e2e step. Unsure means run it.
+#
+# keep: the given steps, without the docs steps (docs-examples, docsync) when SKIP_DOCS is set
+# to anything but "" or "0" (`task check:fast SKIP_DOCS=1`: a fix that cannot change a docs
+# transcript skips the slowest step; the full gate on main still runs them).
 #
 # race: the packages of RACE_PKGS (./x/... or ./x) that hold a changed .go file. A change to
 # go.mod or go.sum, or a base that cannot be found, selects the whole race set.
@@ -63,6 +68,16 @@ $rules
 EOF
   done | sort -u
   ;;
+keep)
+  shift
+  for s in "$@"; do
+    case "${SKIP_DOCS:-}:$s" in
+    :*|0:*) echo "$s" ;;
+    *:docs-examples|*:docsync) ;;
+    *) echo "$s" ;;
+    esac
+  done
+  ;;
 race)
   files=$(changed_files)
   if printf '%s\n' "$files" | grep -qxE 'go\.(mod|sum)' || ! git merge-base HEAD "$base_ref" >/dev/null 2>&1; then
@@ -84,7 +99,7 @@ race)
   done | sort -u
   ;;
 *)
-  echo "usage: $0 files|steps|race" >&2
+  echo "usage: $0 files|steps|keep|race" >&2
   exit 2
   ;;
 esac

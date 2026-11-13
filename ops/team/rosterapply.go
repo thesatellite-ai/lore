@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -39,6 +40,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // OrgEntries answers the orgs[] entry of an org (Env implements it).
@@ -114,7 +116,9 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 	admit := func(ctx context.Context, _ string) error {
 		return checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email)
 	}
-	if res.Imported, err = ensureImported(ctx, d, req, email, admit, false); err != nil {
+	// SkipRegister (W-12): the joining person's actor row is written below,
+	// in the join's one store commit, not as a commit of its own first.
+	if res.Imported, err = ensureImported(ctx, d, req, email, admit, true); err != nil {
 		return RosterResult{}, err
 	}
 	if !res.Imported {
@@ -122,10 +126,26 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 			return RosterResult{}, err
 		}
 	}
-	r, done, err := d.Profiles.Roster(ctx, true)
+	// W-12: the whole join is ONE store commit and one push: the roster
+	// opens without registering the caller (RegisterInCommit), and the
+	// registration is the first staged row below.
+	sctx := engine.Staging(store.WithCommitTitle(ctx, "setup join: "+email))
+	committed := false
+	defer func() {
+		if !committed {
+			engine.Discard(sctx)
+		}
+	}()
+	r, done, err := d.Profiles.Roster(WithRegisterInCommit(ctx), true)
 	defer done()
 	if err != nil {
 		return RosterResult{}, err
+	}
+	registered := false
+	if rr, ok := r.(CallerRegisterer); ok {
+		if registered, err = rr.RegisterCaller(sctx); err != nil {
+			return RosterResult{}, err
+		}
 	}
 	x, err := readInvite(ctx, r, inv, inviteID)
 	if err != nil {
@@ -135,7 +155,15 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 	// — wire canonicalActor rebinds a key that is an identity contact of
 	// an existing actor (TEAM_PROFILES 6.3, engine RebindActor) — so an
 	// offboarded person invited again writes on their old actor row.
-	actor, err := r.Get(ctx, schema.TableActors, r.Caller().Any())
+	actor, err := r.Get(sctx, schema.TableActors, r.Caller().Any())
+	if errs.Has(err, errs.NotFound) && registered {
+		// registered just now, in the stage: reads see it only after the
+		// commit, so the writes below act on the row as it was written
+		// (a person, active, created today: no stint yet)
+		actor, err = row.Row{Table: schema.TableActors, ID: r.Caller().Any(), CreatedAt: r.Today(), UpdatedAt: r.Today(),
+			Fields: map[string]value.Value{staffFieldKind: mustText(schema.ActorKindHuman), actorFieldStatus: mustText(schema.ActorStatusActive),
+				actorFieldActive: value.BoolOf(true)}}, nil
+	}
 	if err != nil {
 		return RosterResult{}, errs.Prefix("the joining person is not on the roster in "+r.Where()+" after org.import", err).
 			WithHint("lore actor register, then lore setup join again")
@@ -148,6 +176,11 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 	}
 	if verdict == onboard.VerdictAlready {
 		res.Already = true
+		committed = true
+		if _, err = engine.Commit(sctx); err != nil { // a registration made for a join already done
+			return RosterResult{}, err
+		}
+		r.Push(ctx)
 		return res, nil
 	}
 	w := &writer{r: r, actor: actor, today: today}
@@ -156,28 +189,39 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 	if err = w.checkStints(ctx, x.Projects); err != nil {
 		return RosterResult{}, err
 	}
-	if err = w.identity(ctx, req.Emails, email, req.GitHubUser); err != nil {
-		return RosterResult{}, err
-	}
-	// The period before the status: the period synthesised from
-	// active/left_at must be read from the row as it was (a left actor's
-	// ended stint), then materialised.
-	if err = w.openPeriod(ctx, x.PeriodType); err != nil {
-		return RosterResult{}, err
-	}
-	if res.Rejoined, err = w.reactivate(ctx); err != nil {
-		return RosterResult{}, err
-	}
-	for _, p := range x.Projects {
-		if err = w.membership(ctx, p, x.Roles); err != nil {
-			return RosterResult{}, err
+	// W-12: every roster row of the join (contacts, stint, status,
+	// memberships, teams, the invite accepted) in ONE store commit, one
+	// push, so a teammate never fetches half a join.
+	err = func(ctx context.Context) error {
+		if err := w.identity(ctx, req.Emails, email, req.GitHubUser); err != nil {
+			return err
 		}
-	}
-	if res.Teams, res.SkippedTeams, err = w.joinTeams(ctx, x.Teams); err != nil {
+		// The period before the status: the period synthesised from
+		// active/left_at must be read from the row as it was (a left
+		// actor's ended stint), then materialised.
+		if err := w.openPeriod(ctx, x.PeriodType); err != nil {
+			return err
+		}
+		var werr error
+		if res.Rejoined, werr = w.reactivate(ctx); werr != nil {
+			return werr
+		}
+		for _, p := range x.Projects {
+			if err := w.membership(ctx, p, x.Roles); err != nil {
+				return err
+			}
+		}
+		if res.Teams, res.SkippedTeams, werr = w.joinTeams(ctx, x.Teams); werr != nil {
+			return werr
+		}
+		return w.accept(ctx, x.ID)
+	}(sctx)
+	if err != nil {
 		return RosterResult{}, err
 	}
-	if err = w.accept(ctx, x.ID); err != nil {
-		return RosterResult{}, err
+	committed = true
+	if _, err = engine.Commit(sctx); err != nil {
+		return RosterResult{}, errs.Prefix("setup join: the roster write (nothing written)", err)
 	}
 	r.Push(ctx)
 	res.Wrote = w.wrote
@@ -948,7 +992,9 @@ func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (Ro
 	}
 	res.Actor = actor.ID.String()
 	w := &writer{r: r, actor: actor, today: r.Today()}
-	if err = w.identity(ctx, emails, matched, req.GitHubUser); err != nil {
+	if err = joinInOneCommit(ctx, "setup join: "+matched, func(ctx context.Context) error {
+		return w.identity(ctx, emails, matched, req.GitHubUser) // W-12: the contacts in one commit
+	}); err != nil {
 		return RosterResult{}, err
 	}
 	if len(w.wrote) > 0 {
@@ -1015,3 +1061,53 @@ func notMember(org, where string, emails []string) error {
 
 // OrgRoleAdmin is the org-level role of the person who created the org.
 const OrgRoleAdmin = "admin"
+
+// joinInOneCommit runs write with every roster write staged and commits
+// them as ONE store commit titled title, as member add does (W-12: a join
+// wrote each contact, the stint, the memberships and the invite as
+// commits of their own, each pushed). A failed write discards the stage:
+// nothing is written.
+func joinInOneCommit(ctx context.Context, title string, write func(ctx context.Context) error) error {
+	sctx := engine.Staging(store.WithCommitTitle(ctx, title))
+	if err := write(sctx); err != nil {
+		engine.Discard(sctx)
+		return err
+	}
+	if _, err := engine.Commit(sctx); err != nil {
+		return errs.Prefix(title+" (nothing written)", err)
+	}
+	return nil
+}
+
+// registerInCommitKey marks a roster open whose caller registration the
+// caller writes itself, inside its own staged commit (W-12).
+type registerInCommitKey struct{}
+
+// WithRegisterInCommit is ctx for a write-mode Roster open that must not
+// register the caller on its own commit: the join registers them with
+// CallerRegisterer.RegisterCaller inside its one staged commit (W-12).
+func WithRegisterInCommit(ctx context.Context) context.Context {
+	return context.WithValue(ctx, registerInCommitKey{}, true)
+}
+
+// RegisterInCommit reports whether ctx asks the roster open to leave the
+// caller's registration to the op (WithRegisterInCommit).
+func RegisterInCommit(ctx context.Context) bool {
+	v, ok := ctx.Value(registerInCommitKey{}).(bool)
+	return ok && v
+}
+
+// CallerRegisterer is the optional upgrade of an opened Roster that
+// registers its caller (as `lore actor register` does: identity-contact
+// match, handle check) when they have no row yet; with a staged ctx the
+// row joins the op's one commit (W-12). wire's org roster implements it.
+type CallerRegisterer interface {
+	// RegisterCaller reports whether it wrote the caller's row.
+	RegisterCaller(ctx context.Context) (bool, error)
+}
+
+// mustText is a fixed, valid text value.
+func mustText(s string) value.Value {
+	v, _ := value.TextOf(s) // the constants passed are valid text
+	return v
+}

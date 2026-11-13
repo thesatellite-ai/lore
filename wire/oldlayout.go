@@ -251,13 +251,13 @@ func (a *App) moveOldClones(ctx context.Context, home string, say func(string)) 
 			say(fmt.Sprintf("old store clone %s had no commit of its own (nothing the remote lacks); nothing to move (the store's next use clones it to %s)", movedFrom(o), filepath.Join(home, git.StoresDir)))
 			left = append(left, o.Base)
 		default:
-			say(fmt.Sprintf("moved store clone %s -> %s (branch %s%s)", movedFrom(o), res.To, res.Branch, carriedText(res)))
+			say(fmt.Sprintf("moved store clone %s -> %s%s", movedFrom(o), underHome(res.To), carriedText(res)))
 			out = append(out, res.To)
 			left = append(left, o.Base)
 		}
 	}
 	if len(left) > 0 {
-		say("the old clone folders are left in place; once you have checked the moved clones, `lore doctor` names the command that removes each")
+		say("old clone folders kept; `lore doctor` names how to remove them once you have checked the moves")
 		if v017, _ := git.ScanOldOrgClones(home); len(v017) > 0 {
 			say(fmt.Sprintf("%s holds %d org link clone(s) of the earlier build; this lore no longer uses them (`lore doctor` names the command that removes them)", filepath.Join(home, git.OldOrgClonesDir), len(v017)))
 		}
@@ -270,35 +270,29 @@ func (a *App) moveOldClones(ctx context.Context, home string, say func(string)) 
 // as 0.1.17's so the person knows which lore left it.
 func movedFrom(o git.OldClone) string {
 	if o.V017 {
-		return o.Bare + " (lore 0.1.17)"
+		return underHome(o.Bare) + " (0.1.17)"
 	}
-	return o.Base
+	return underHome(o.Base)
 }
 
-// carriedText describes what a move carried.
+// carriedText describes what a move carried, in a few words: the local
+// commits the remote lacked, the uncommitted files, a merge into a clone
+// already there (W-4: one short line per moved clone).
 func carriedText(res git.MoveResult) string {
 	var parts []string
 	if res.Carried > 0 {
-		parts = append(parts, strconv.Itoa(res.Carried)+" commit(s) the remote does not have carried")
+		parts = append(parts, plural(res.Carried, "local commit"))
 	}
 	if len(res.Files) > 0 {
-		parts = append(parts, strconv.Itoa(len(res.Files))+" uncommitted file(s) carried ("+strings.Join(capList(res.Files, 5), ", ")+")")
+		parts = append(parts, plural(len(res.Files), "local file"))
 	}
 	if res.Into {
-		parts = append(parts, "merged into the clone that was there")
+		parts = append(parts, "merged")
 	}
 	if len(parts) == 0 {
 		return ""
 	}
-	return "; " + strings.Join(parts, "; ")
-}
-
-// capList is list cut to n entries, with a count of the rest.
-func capList(list []string, n int) []string {
-	if len(list) <= n {
-		return list
-	}
-	return append(append([]string(nil), list[:n]...), "and "+strconv.Itoa(len(list)-n)+" more")
+	return " (kept " + strings.Join(parts, ", ") + ")"
 }
 
 // containsDir reports whether list holds dir.

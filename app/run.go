@@ -272,7 +272,7 @@ func run(ctx context.Context, args []string) int {
 		if code := cli.ExitCode(err); code != cli.ExitUnknown || h.printed {
 			return code
 		}
-		return printHostError(sqlite.ExplainDiskFull(err))
+		return printHostErrorNamed(ctx, app, sqlite.ExplainDiskFull(err))
 	}
 	liveRows.FlushHeld() // v0.1.17 order: the result, then `lore live: …`
 	if isSessionEndHook(args) {

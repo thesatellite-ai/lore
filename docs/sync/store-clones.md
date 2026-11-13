@@ -123,7 +123,7 @@ This folder is a lore store: notes, rules, decisions, tasks and the other record
 - `org/` (when the store has one) holds the company's people, teams and rules, and `org/lore-org.yaml`, the company's settings.
 $ git log --format='%an <%ae>  %s'
 alice <alice@agency.example>  lore: memory add mem_54fe…28f2
-alice <alice@agency.example>  lore: write mch_c0f3…b5b8
+alice <alice@agency.example>  lore: machine register mch_c0f3…b5b8
 alice <alice@agency.example>  lore: task add: Renew the TLS certificate (3 rows)
 alice <alice@agency.example>  lore: store init
 ```

@@ -18,6 +18,7 @@ package stores
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 
@@ -626,6 +627,68 @@ type Report struct {
 	// folder's attached name; Held is the line that says so (HeldLine).
 	HeldBy string `json:"held_by,omitempty"`
 	Held   string `json:"held,omitempty"`
+	// Unattached marks the rows a sync of the clone carried for a folder
+	// no attached store names here (a folder reached by id or written
+	// with --to <org>/<folder>): reported under that folder's name, never
+	// added to another folder's counts (bug hunt W-5).
+	Unattached bool `json:"unattached,omitempty"`
+}
+
+// folderSync is one synced store's name and report, for attributeFolders.
+type folderSync struct {
+	name string
+	rep  store.SyncReport
+}
+
+// attributeFolders moves each sync's counts for the store's other folders
+// (SyncReport.Others) to the report of the attached store that reads that
+// folder, or to a new Unattached report named "<org>/<folder>" when no
+// attached store does. Reports keep their order; new ones are added after
+// the store whose sync carried them.
+func attributeFolders(reports []Report, synced []folderSync) []Report {
+	byFolder := map[string]int{}
+	for i, d := range synced {
+		if d.rep.Folder != "" {
+			if _, ok := byFolder[d.rep.Folder]; !ok {
+				byFolder[d.rep.Folder] = i
+			}
+		}
+	}
+	extra := map[string]int{} // unattached report name -> index in out
+	out := slices.Clone(reports)
+	for _, d := range synced {
+		for _, f := range slices.Sorted(maps.Keys(d.rep.Others)) {
+			c := d.rep.Others[f]
+			if c.Sent == 0 && c.Received == 0 {
+				continue
+			}
+			if i, ok := byFolder[f]; ok {
+				out[i].Sent += c.Sent
+				out[i].Received += c.Received
+				continue
+			}
+			name := unattachedName(d.name, f)
+			i, ok := extra[name]
+			if !ok {
+				out = append(out, Report{Store: name, Unattached: true})
+				i = len(out) - 1
+				extra[name] = i
+			}
+			out[i].Sent += c.Sent
+			out[i].Received += c.Received
+		}
+	}
+	return out
+}
+
+// unattachedName names folder of the store that synced it as `<org>/<folder>`
+// (the org part of the synced store's name; the bare name for the root).
+func unattachedName(synced, folder string) string {
+	org, _, _ := strings.Cut(synced, "/")
+	if folder == rowfs.FolderRoot || folder == "" {
+		return org
+	}
+	return org + "/" + folder
 }
 
 // SyncAll syncs every attached store except the repo store (the person
@@ -703,6 +766,11 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 		}
 		out.Stores = append(out.Stores, r)
 	}
+	fs := make([]folderSync, 0, len(done))
+	for _, d := range done {
+		fs = append(fs, folderSync{name: string(d.name), rep: d.rep})
+	}
+	out.Stores = attributeFolders(out.Stores, fs)
 	if serr != nil {
 		return out, serr
 	}

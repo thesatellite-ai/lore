@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/storepush"
@@ -77,8 +78,34 @@ func readRun(ctx context.Context) bool {
 func (b *storePush) reportPushes() {
 	if gb := gitOf(b.inner); gb != nil {
 		b.reportBack(gb)
-		printPushes(b.notes, string(b.name), gb.TakePushes())
+		for _, p := range gb.TakePushes() {
+			_, _ = fmt.Fprintln(b.notes, PushLine(pushName(string(b.name), gb.Folder(), p.Folders), p))
+		}
 	}
+}
+
+// pushName names a push by the folders it carried (W-14): one clone pushes
+// every folder, so a row written to folder sync/ and pushed by the next
+// command that opened folder core/ is "acme/sync", not "acme/core". name
+// and own are the pushing store's name and folder; a push of only own's
+// rows, or of unknown folders, keeps name.
+func pushName(name, own string, folders []string) string {
+	if len(folders) == 0 || (len(folders) == 1 && folders[0] == own) {
+		return name
+	}
+	org, _, _ := strings.Cut(name, "/")
+	names := make([]string, 0, len(folders))
+	for _, f := range folders {
+		switch {
+		case f == own:
+			names = append(names, name)
+		case f == rowfs.FolderRoot:
+			names = append(names, org)
+		default:
+			names = append(names, org+"/"+f)
+		}
+	}
+	return strings.Join(names, ", ")
 }
 
 // reportBack says, once, that a store lore had found reset is back on its

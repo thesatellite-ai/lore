@@ -23,6 +23,7 @@ package git
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -125,6 +126,10 @@ func (b *Backend) usable(ctx context.Context) error {
 // Dir is the worktree (clone mode) or repository top (repo mode).
 func (b *Backend) Dir() string { return b.work }
 
+// RemoteURL is the store url origin points at ("" when unknown), for a
+// message that names where a push did not go.
+func (b *Backend) RemoteURL() string { return b.git.remote }
+
 // Branch is the store branch (clone mode; "" in repo mode).
 func (b *Backend) Branch() string { return b.branch }
 
@@ -132,12 +137,54 @@ func (b *Backend) Branch() string { return b.branch }
 // empty store and in repo mode.
 func (b *Backend) Marker() rowfs.Marker { return b.marker }
 
-// Get implements store.Backend: the row file in the worktree.
+// Get implements store.Backend: the row file in the worktree. While a
+// person's git operation is in progress in a store clone (a `git pull`
+// that stopped on a conflict: lore's merge driver leaves the markers
+// inside the JSON values), a row file git lists as unmerged is read as the
+// last commit has it (W-10): the conflict is the person's to settle in
+// git, and lore shows the row as it was, never the half-merged file.
 func (b *Backend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store.Row, error) {
 	if err := b.usable(ctx); err != nil {
 		return store.Row{}, err
 	}
+	if b.mode == modeClone {
+		path := b.folder.StorePath(table, id)
+		if b.unmergedPaths(ctx)[path] {
+			return b.rowAtHead(ctx, path, table, id)
+		}
+	}
 	return b.folder.Get(table, id)
+}
+
+// unmergedPaths are the files git lists as unmerged in the clone while a
+// person's git operation is in progress (nil otherwise: no git process
+// runs when no operation is in progress).
+func (b *Backend) unmergedPaths(ctx context.Context) map[string]bool {
+	if op, _ := b.personGitOp(ctx, b.work); op == "" {
+		return nil
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"diff", "--name-only", "-z", "--diff-filter=U"}})
+	if err != nil {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, p := range splitZ(out) {
+		if p != "" {
+			set[p] = true
+		}
+	}
+	return set
+}
+
+// rowAtHead is the row file at path (relative to the clone) as HEAD has
+// it; store.ErrNotFound when the last commit has none (a file the merge
+// brings in).
+func (b *Backend) rowAtHead(ctx context.Context, path string, table row.Table, id ids.AnyID) (store.Row, error) {
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "blob", "HEAD:" + path}})
+	if err != nil {
+		return store.Row{}, store.ErrNotFound
+	}
+	return rowfs.DecodeRowFile(rowfs.RowPath(table, id), out)
 }
 
 // Read implements store.Backend. Clone mode: the cursor is a commit id and
@@ -199,12 +246,27 @@ func (b *Backend) ReadProblems() []rowfs.Problem {
 }
 
 // Problems lists data-folder entries that are not usable rows; for
-// `lore doctor`.
+// `lore doctor`. A file a person's merge left unmerged (W-10) is not one:
+// doctor names the merge in progress and the way out instead.
 func (b *Backend) Problems(ctx context.Context) ([]rowfs.Problem, error) {
 	if err := b.usable(ctx); err != nil {
 		return nil, err
 	}
-	return b.folder.Problems(ctx)
+	probs, err := b.folder.Problems(ctx)
+	if err != nil || b.mode != modeClone || len(probs) == 0 {
+		return probs, err
+	}
+	unmerged := b.unmergedPaths(ctx)
+	if len(unmerged) == 0 {
+		return probs, nil
+	}
+	out := probs[:0]
+	for _, p := range probs {
+		if !unmerged[path.Join(b.folder.DataPath(), p.Path)] {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }
 
 // Batch names one write for its commit (clone mode): the operation that
@@ -510,7 +572,8 @@ func subjectOf(ctx context.Context, op string, changes []store.Change) string {
 // of git history (every `git log --oneline`, the forge's commit list) and
 // outlives a delete or purge. A delete, trash or purge subject names only
 // the operation and the id, and a title the secret scanner flags falls
-// back to the id too. A plain write or purge keeps `lore: <op> <id>`.
+// back to the id too. A write made outside a command is named after its
+// table (`lore: machine register mch_…`); a purge keeps `lore: purge <id>`.
 func subject(op string, changes []store.Change) string {
 	c := primaryChange(op, changes)
 	words := strings.ReplaceAll(op, ".", " ")
@@ -524,10 +587,53 @@ func subject(op string, changes []store.Change) string {
 		}
 		return s
 	}
+	if op == DefaultOp {
+		// W-11: a write made outside any command (the machine profile, the
+		// caller's actor copy, …) is named in words after its table, never
+		// "write"; the id stays, no text (B3-23)
+		s = "lore: " + backgroundWords(c) + " " + c.Row.ID.String()
+		if c.Row.Deleted {
+			s = "lore: " + singular(string(c.Row.Table)) + " delete " + c.Row.ID.String()
+		}
+		if len(changes) > 1 {
+			s += " (" + strconv.Itoa(len(changes)) + " rows)"
+		}
+		return s
+	}
 	if n := len(changes) - 1; n > 0 {
 		s += " (+" + strconv.Itoa(n) + " more)"
 	}
 	return s
+}
+
+// backgroundTitles name the writes lore makes by itself, per table; any
+// other table is "<noun> save".
+var backgroundTitles = map[string]string{
+	"machines": "machine register",
+	"actors":   "actor copy",
+}
+
+// backgroundWords is the words of a write made outside a command.
+func backgroundWords(c store.Change) string {
+	if w, ok := backgroundTitles[string(c.Row.Table)]; ok {
+		return w
+	}
+	return singular(string(c.Row.Table)) + " save"
+}
+
+// singular is a table name as one noun with spaces (memories → memory,
+// task_lists → task list).
+func singular(table string) string {
+	n := strings.ReplaceAll(table, "_", " ")
+	switch {
+	case strings.HasSuffix(n, "ies"):
+		return strings.TrimSuffix(n, "ies") + "y"
+	case strings.HasSuffix(n, "ses"):
+		return strings.TrimSuffix(n, "es")
+	case strings.HasSuffix(n, "s"):
+		return strings.TrimSuffix(n, "s")
+	}
+	return n
 }
 
 // removingVerbs are the operation words that take a row away; their

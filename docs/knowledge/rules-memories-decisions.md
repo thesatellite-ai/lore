@@ -236,15 +236,15 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: sha
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 $ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_3b62…e913.json
-✓ mem_4c59…6c38
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
+✓ mem_3b62…e913
   scope: [master]
-$ ls .lore/data/memories | grep -c mem_4c59…6c38 || true
+$ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
-$ lore memory delete mem_4c59…6c38 --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
-✓ mem_4c59…6c38 moved to the trash (restore: lore trash restore mem_4c59…6c38)
+$ lore memory delete mem_3b62…e913 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
 ```
 <!-- /example -->
 

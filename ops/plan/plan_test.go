@@ -63,7 +63,7 @@ func TestPlanLifecycle(t *testing.T) {
 		t.Fatalf("show %q", got)
 	}
 	list := opstest.IDPattern(opstest.Text(h.Must("plan.list", ``)))
-	if list != "PL  pln_ID  Q4 plan [draft]  (0 tasks)\nPL  pln_ID  Arg plan [draft]  (0 tasks)\n" {
+	if list != "pln_ID  Q4 plan [draft]  (0 tasks)\npln_ID  Arg plan [draft]  (0 tasks)\n" {
 		t.Fatalf("list %q", list)
 	}
 	if got := opstest.Text(h.Must("plan.search", `{"query":"ship"}`)); got != id+" Q4 plan\n" {

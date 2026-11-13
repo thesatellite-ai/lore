@@ -125,7 +125,7 @@ $ git reset -q -- _store/tasks/tsk_2ad3…f891.json && git checkout -- _store/ta
 ```
 <!-- /example -->
 
-While a `git pull` (merge), rebase, cherry-pick, revert or bisect of yours is unfinished in a store clone, lore leaves that clone alone: it never aborts or resets it, a read does not pick up hand edits there and says so in one line, and a write or `lore sync` that would touch the clone is refused with `store clone <path> is in the middle of a git merge` and the commands that end it (`git add` the files and `git commit`, or `git merge --abort`). Finish it, then run the lore command again.
+While a `git pull` (merge), rebase, cherry-pick, revert or bisect of yours is unfinished in a store clone, lore leaves that clone alone: it never aborts or resets it, a read does not pick up hand edits there and says so in one line, a row file the merge left unmerged (conflict markers inside its values) is read as your last commit has it and is not reported as a broken file, and a write or `lore sync` that would touch the clone is refused with `store clone <path> is in the middle of a git merge` and the commands that end it (`git add` the files and `git commit`, or `git merge --abort`). Finish it, then run the lore command again.
 
 ## Files that are not rows
 

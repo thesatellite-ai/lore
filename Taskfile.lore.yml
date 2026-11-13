@@ -140,6 +140,7 @@ vars:
     chaos             1   chaos:run JOBS=4
     race              2   test:race:rest
     cross-builds      4   build:cross
+    cross-tests       6   build:cross:tests
     staticcheck       2   lint:staticcheck
     vet               2   lint:vet
     journey-frame     1   test:journeys:frame PARALLEL=1
@@ -158,10 +159,10 @@ vars:
     teame2e           8   test:team:run PARALLEL=12
   # The steps lore:check:fast always runs, whatever the change (names from GATE_STEPS and
   # FAST_EXTRA_STEPS); FAST_MAP adds the end-to-end ones.
-  FAST_UNIT_STEPS: "test-all race-changed cross-builds staticcheck vet gofmt tidy docsync"
+  FAST_UNIT_STEPS: "test-all race-changed cross-builds cross-tests staticcheck vet gofmt tidy docsync"
   # The fast tier's mapping (lore:check:fast): which end-to-end steps of GATE_STEPS a change
   # needs, by the paths it changes. One rule per line, "<bash glob> <step>..." ("-" = no e2e
-  # step; the fast tier always runs build, vet, gofmt, staticcheck, cross-builds, tidy, docsync,
+  # step; the fast tier always runs build, vet, gofmt, staticcheck, cross-builds, cross-tests, tidy, docsync,
   # every unit test and the race set of the touched packages). The first rule that matches a
   # changed file wins; a file no rule names falls to "*", which runs every e2e step: when unsure,
   # run it (tests/lib/fast-plan.sh). Product code (any other .go file) runs what reads the
@@ -410,7 +411,7 @@ tasks:
         echo "✓ gate passed for tree $tree ({{.STAMP}})"
 
   check:
-    desc: "FULL tier, THE gate — run before every push (the pre-push hook enforces it; a small fix may land on lore:check:fast, then this runs on main): bound the Go cache, compile once, build, then every step of GATE_STEPS (lint, cross-builds, tidy, docsync, every unit test, the race set, every end-to-end suite) under the GATE_SLOTS load budget, heaviest first; per-step logs, wall and CPU times in tmp/check"
+    desc: "FULL tier, THE gate — run before every push (the pre-push hook enforces it; a small fix may land on lore:check:fast, then this runs on main): bound the Go cache, compile once, build, then every step of GATE_STEPS (lint, cross-builds, the Windows and macOS compile check of every package with its tests (cross-tests), tidy, docsync, every unit test, the race set, every end-to-end suite) under the GATE_SLOTS load budget, heaviest first; per-step logs, wall and CPU times in tmp/check"
     cmds:
       - testlock task --taskfile "{{.TASKFILE}}" check:run
 
@@ -440,9 +441,11 @@ tasks:
       - echo "✓ task check — every gate passed (logs in {{.GATE_LOG_DIR}})"
 
   check:fast:
-    desc: "FAST tier for landing a small fix, about 5 min: build, vet, gofmt, staticcheck, cross-builds, tidy, docsync, every unit test (go test ./..., cached), the race detector on the touched race-set packages, and the end-to-end steps the changed paths need (FAST_MAP; unsure = run it). Writes its own stamp (lore-check-fast-passed), which the pre-push hook accepts; the full gate then runs on the landed main (lore:check:after-land). docs/DEVELOPMENT.md \"Landing\""
+    desc: "FAST tier for landing a small fix, about 5 min: build, vet, gofmt, staticcheck, cross-builds, the Windows and macOS compile check of every package with its tests (cross-tests), tidy, docsync, every unit test (go test ./..., cached), the race detector on the touched race-set packages, and the end-to-end steps the changed paths need (FAST_MAP; unsure = run it). Writes its own stamp (lore-check-fast-passed), which the pre-push hook accepts; the full gate then runs on the landed main (lore:check:after-land). docs/DEVELOPMENT.md \"Landing\""
     cmds:
-      - testlock task --taskfile "{{.TASKFILE}}" check:fast:run
+      # SKIP_DOCS reaches the inner task as an argument: a CLI variable of this call is not
+      # passed to the task process testlock starts
+      - testlock task --taskfile "{{.TASKFILE}}" check:fast:run SKIP_DOCS='{{.SKIP_DOCS}}'
 
   check:fast:run:
     desc: "Body of lore:check:fast WITHOUT the machine-wide test lock; call lore:check:fast instead"
@@ -452,6 +455,7 @@ tasks:
       GATE_SELF: "{{.SELF}}"
       FAST_MAP: "{{.FAST_MAP}}"
       RACE_PKGS: "{{.RACE_PKGS}}"
+      SKIP_DOCS: "{{.SKIP_DOCS}}"
     cmds:
       - task: check:begin
       - tests/lib/gate-parallel.sh cache 'gocache={{.SELF}} check:gocache'
@@ -462,7 +466,11 @@ tasks:
         e2e=$(tests/lib/fast-plan.sh steps)
         echo "changed files: $(tests/lib/fast-plan.sh files | wc -l | tr -d ' ') (since the merge base with ${FAST_BASE:-origin/main})"
         echo "end-to-end steps for them: ${e2e:-none}" | tr '\n' ' '; echo
-        GATE_SLOTS={{.GATE_SLOTS}} tests/lib/gate-steps.sh fast {{.FAST_UNIT_STEPS}} $e2e
+        # shellcheck disable=SC2086 # step names are single words
+        steps=$(tests/lib/fast-plan.sh keep {{.FAST_UNIT_STEPS}} $e2e)
+        case "${SKIP_DOCS:-}" in ""|0) ;; *) echo "SKIP_DOCS=$SKIP_DOCS: docs-examples and docsync skipped (the full gate on main runs them)" ;; esac
+        # shellcheck disable=SC2086
+        GATE_SLOTS={{.GATE_SLOTS}} tests/lib/gate-steps.sh fast $steps
       - task: check:stamp
         vars: {STAMP: "{{.CHECK_FAST_STAMP}}"}
       - echo "✓ task check:fast passed (logs in {{.GATE_LOG_DIR}}); the full gate runs on main after landing (task check:after-land)"
@@ -830,6 +838,33 @@ tasks:
     cmds:
       - CGO_ENABLED=0 GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -o /dev/null ./cmd/lore
 
+  # build:cross builds only ./cmd/lore, so a test file (or a test-only helper) with OS-specific
+  # code was never compiled for the other platforms: Windows-only code was built and vetted by
+  # hand, never by the gate, and one e2e suite (setupe2e) did not even compile on Windows.
+  # go vet type-checks every package with its test files for the target, runs nothing, and
+  # needs no target machine; the tagged suites are checked too (their build tags may exclude
+  # the target, as the journeys and machines suites exclude Windows).
+  build:cross:tests:
+    desc: "Compile-check every package with its tests (go vet, nothing runs) for Windows and macOS, the root module and the tagged end-to-end suites, so OS-specific code and tests are checked on every gate, not only on those machines"
+    deps:
+      - {task: build:cross:tests:one, vars: {GOOS: windows, GOARCH: amd64}}
+      - {task: build:cross:tests:one, vars: {GOOS: darwin, GOARCH: arm64}}
+
+  build:cross:tests:one:
+    desc: "go vet the root module and the tagged suites for one GOOS/GOARCH (called by build:cross:tests)"
+    internal: true
+    env: {CGO_ENABLED: "0", GOOS: "{{.GOOS}}", GOARCH: "{{.GOARCH}}"}
+    cmds:
+      - go vet ./...
+      # A suite whose build tags exclude the target (journeys and machines are !windows) has no
+      # package there, and go vet refuses an empty pattern: skip it, named.
+      - |
+        for s in "teame2e ./tests/..." "setupe2e ./tests/setupe2e/..." "machines ./tests/machines/..." "journeys ./tests/journeys/..." "userscen ./tests/userscen/..."; do
+          set -- $s
+          if [ -z "$(go list -tags "$1" "$2" 2>/dev/null)" ]; then echo "{{.GOOS}}: $1 suite does not build there (its build tags), skipped"; continue; fi
+          go vet -tags "$1" "$2" || exit 1
+        done
+
   lint:
     desc: "Static checks: vet + fmt + staticcheck + cross-OS build, in parallel"
     deps: [build:cross, lint:vet, lint:fmt, lint:staticcheck]
@@ -838,11 +873,14 @@ tasks:
     desc: "go vet on the root module and on the tagged end-to-end suites"
     cmds:
       - go vet ./...
-      - go vet -tags teame2e ./tests/...
-      - go vet -tags setupe2e ./tests/setupe2e/...
-      - go vet -tags machines ./tests/machines/...
-      - go vet -tags journeys ./tests/journeys/...
-      - go vet -tags userscen ./tests/userscen/...
+      # A suite whose build tags exclude the target (journeys and machines are !windows) has no
+      # package there, and go vet refuses an empty pattern: skip it, named.
+      - |
+        for s in "teame2e ./tests/..." "setupe2e ./tests/setupe2e/..." "machines ./tests/machines/..." "journeys ./tests/journeys/..." "userscen ./tests/userscen/..."; do
+          set -- $s
+          if [ -z "$(go list -tags "$1" "$2" 2>/dev/null)" ]; then echo "{{.GOOS}}: $1 suite does not build there (its build tags), skipped"; continue; fi
+          go vet -tags "$1" "$2" || exit 1
+        done
 
   lint:fmt:
     desc: "Fail when a Go file is not gofmt-formatted"

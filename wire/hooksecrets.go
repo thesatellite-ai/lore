@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/logic/scan"
@@ -283,12 +284,80 @@ func scanDoc(sc scan.Scanner, allows []scan.Allow, p string, b []byte, inStore b
 	content := string(b)
 	if strings.Contains("/"+p, "/"+loreDataMark) || (inStore && isStoreRowPath(p)) {
 		if r, err := row.Decode(b); err == nil && !r.ID.IsZero() {
-			return scanRowDoc(sc, allows, r, content)
+			return oneHitPerValue(scanRowDoc(sc, allows, r, content))
 		}
 	}
 	// The path is the field of a plain document, so path-scoped filters
 	// (a go.sum module hash) can tell the file; hits keep no field.
-	return hitsOf(content, "", fileAllowed(p, sc.Scan(p, content), allows))
+	found := sc.Scan(p, content)
+	return oneHitPerValue(hitsOf(content, "", sameValueAllowed(found, fileAllowed(p, found, allows))))
+}
+
+// sameValueAllowed drops from kept (found after the allow entries) every
+// finding whose value an entry allowed under another rule: one value is
+// often matched by a lore rule and the gitleaks rule it covers, the
+// refusal names one of them (oneHitPerValue), and an entry written for
+// that one must accept the value, not leave the other rule blocking it.
+func sameValueAllowed(found, kept []scan.Finding) []scan.Finding {
+	if len(kept) == len(found) {
+		return kept
+	}
+	left := map[scan.Finding]bool{}
+	for _, f := range kept {
+		left[f] = true
+	}
+	allowed := map[string]bool{} // field + fingerprint of each allowed value
+	for _, f := range found {
+		if !left[f] {
+			allowed[f.Field+"\x00"+f.Preview] = true
+		}
+	}
+	out := kept[:0:0]
+	for _, f := range kept {
+		if !allowed[f.Field+"\x00"+f.Preview] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// oneHitPerValue keeps one hit per (line, field, fingerprint) (W-9, spec
+// 19.10): lore's own rule and the gitleaks rule it covers (github_token
+// and github-pat) both match one token, and the refusal listed the value
+// twice under two rules. The kept rule is chosen the same way every run:
+// a lore pack rule (gitleaks.Covers) before any other, then the smaller
+// id. Order otherwise stays as found.
+func oneHitPerValue(hits []leakcheck.SecretHit) []leakcheck.SecretHit {
+	if len(hits) < 2 {
+		return hits
+	}
+	type key struct {
+		line         int
+		field, print string
+	}
+	own := gitleaks.Covers()
+	better := func(a, b string) bool { // a is preferred over b
+		_, ownA := own[a]
+		_, ownB := own[b]
+		if ownA != ownB {
+			return ownA
+		}
+		return a < b
+	}
+	at := map[key]int{}
+	out := make([]leakcheck.SecretHit, 0, len(hits))
+	for _, h := range hits {
+		k := key{h.Line, h.Field, h.Preview}
+		if i, dup := at[k]; dup {
+			if better(h.Rule, out[i].Rule) {
+				out[i] = h
+			}
+			continue
+		}
+		at[k] = len(out)
+		out = append(out, h)
+	}
+	return out
 }
 
 // isStoreRowPath reports whether p is a row file of a store clone.
@@ -320,7 +389,7 @@ func scanRowDoc(sc scan.Scanner, allows []scan.Allow, r row.Row, content string)
 				seen[secretKey{f.RuleID, f.MatchHash}] = true
 			}
 			line := lineOfField(content, name)
-			for _, f := range scan.Filter(r.ID, found, allows) {
+			for _, f := range sameValueAllowed(found, scan.Filter(r.ID, found, allows)) {
 				out = append(out, leakcheck.SecretHit{Line: line, Rule: f.RuleID, Preview: f.Preview, Field: name, Hash: f.MatchHash})
 			}
 		}

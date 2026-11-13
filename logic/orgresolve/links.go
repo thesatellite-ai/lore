@@ -63,6 +63,13 @@ type LinkResult struct {
 	// write, but a client link among them keeps the leak guards on until
 	// the person re-links the repo or gives it a new id (StepMovedLink).
 	Moved []Link
+	// Old are links read from a local store copy older than the link
+	// index max age while the store could not be reached (Status is then
+	// Unknown). They never decide the role or route a write (F10 stays
+	// fail closed), but a read still attaches the folders they name, so
+	// the rows fetched last stay readable offline whatever their age
+	// (bug hunt W-15: they vanished, E_NOT_FOUND).
+	Old []Link
 	// Detail explains the status in one line (which store was unreachable,
 	// how old the cached index is, or why nothing was checked).
 	Detail string

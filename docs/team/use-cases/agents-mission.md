@@ -288,7 +288,7 @@ The deploy task waits for every task it depends on to be merged. `agent-infra` f
 # agent-coord, in api
 $ lore task next --mission msn_2ad3…f891 --role coordinator
 lore: pushed store agency: commit 40bd5f4 to branch main
-lore: the command was refused, so the git set-up it made first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
+lore: the command was refused, so what it changed first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: waits for tsk_05e9…4603 to be merged (done, merge unknown)
   hint: lore task board shows what each task waits on
@@ -308,13 +308,13 @@ Now the deploy task is ready except for its gate. The coordinator stops there. A
 ```console
 # agent-coord, in api
 $ lore task next --mission msn_2ad3…f891 --role coordinator
-lore: the command was refused, so the git set-up it made first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
+lore: the command was refused, so what it changed first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: gate needs approval (lore gate approve tsk_c0f3…b5b8)
   hint: lore task board shows what each task waits on
 (exit 10)
 $ lore gate approve tsk_c0f3…b5b8
-lore: the command was refused, so the git set-up it made first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
+lore: the command was refused, so what it changed first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_INVALID_INPUT] approvals come from your identity file, never from LORE_ACTOR (LORE_ACTOR is set here)
   hint: an agent session cannot approve; run `lore gate approve` in your own shell
 (exit 20)

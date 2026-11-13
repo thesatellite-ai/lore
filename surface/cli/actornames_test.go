@@ -70,3 +70,26 @@ func TestNamedErrorLine(t *testing.T) {
 		}
 	}
 }
+
+// TestPrintErrorNamed: a host error printed once the app exists names the
+// actor on the human line and keeps the id under --json (bug hunt W-7).
+func TestPrintErrorNamed(t *testing.T) {
+	const nina = "act_0123456789abcdef0123456789abcdef"
+	name := func(id string) string {
+		if id == nina {
+			return "Nina Newcomer"
+		}
+		return id
+	}
+	err := errs.New(errs.NotFound, "mem_1 is in the trash (deleted by "+nina+" on 2026-11-02 10:02)")
+	var out, errOut bytes.Buffer
+	PrintErrorNamed(&out, &errOut, err, false, name)
+	if !strings.Contains(errOut.String(), "deleted by Nina Newcomer on") {
+		t.Errorf("human line: %q", errOut.String())
+	}
+	out.Reset()
+	PrintErrorNamed(&out, &errOut, err, true, name)
+	if !strings.Contains(out.String(), nina) {
+		t.Errorf("--json must keep the id: %s", out.String())
+	}
+}

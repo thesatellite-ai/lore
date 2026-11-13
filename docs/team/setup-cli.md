@@ -319,8 +319,6 @@ steps:
     help: The folder you started lore setup in: whic
     kinds: solo, member, admin
     needs: kind
-    questions:
-      ID  LABEL  HELP  TYPE  REQUIRED  PREFILL  CHOI
     checks: repo.init, repo.org, repo.stores, identi
     optional: true
     values: {}
@@ -328,10 +326,7 @@ steps:
     title: Summary
     help: Every step and every warning with its fix.
     kinds: solo, member, admin
-    questions:
-      ID  LABEL  HELP  TYPE  REQUIRED  PREFILL  CHOI
     values: {}
-progress:
 $ lore setup apply side --step kind --answers '{"kind":"solo","name":"side"}' | head -4
 step: kind
 status: done
@@ -357,7 +352,6 @@ Here the `kind` step creates the setup `side`, `identity` is checked but not sav
 ```console
 # tomas, in ~
 $ lore setup import-scan --folder ~/work
-proposals:
 sources:
   KIND             PATH                                                                              STATE    DETAIL
   config           ~/.lore/config.yaml       found    1 org, 2 setups, 1 deleted setup
@@ -382,8 +376,6 @@ banner:
 banner_key: 
 $ lore setup import --setups '[{"name":"personal","kind":"solo"}]'
 imported: personal
-skipped:
-  NAME  REASON
 ```
 <!-- /example -->
 

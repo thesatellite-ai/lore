@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -104,7 +105,7 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 			if !isOffline(ferr) {
 				return rep, ferr
 			}
-			rep.Offline = true
+			rep.Offline, rep.OfflineDetail = true, stderrOf(ferr)
 			break
 		}
 		remote, rerr := b.resolve(ctx, b.work, trackingRefNS+b.branch)
@@ -161,7 +162,7 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		case pushApplied:
 			pushedOver, pushed = remote, true
 		case pushOffline:
-			rep.Offline = true
+			rep.Offline, rep.OfflineDetail = true, msg
 		case pushRefused:
 			rep.Refused = append(rep.Refused, b.refusedRows(ctx, remote, h, "the remote refused the push: "+msg)...)
 		case pushLostRace:
@@ -224,22 +225,49 @@ func (b *Backend) count(ctx context.Context, rep store.SyncReport, before, pushe
 	if err != nil {
 		return rep, err
 	}
-	if rep.Received, err = b.countRows(ctx, before, after); err != nil {
+	rep.Folder = b.folder.Name()
+	received, err := b.countRows(ctx, before, after)
+	if err != nil {
 		return rep, err
 	}
+	var sent map[string]int
 	if pushed {
-		if rep.Sent, err = b.countRows(ctx, pushedOver, after); err != nil {
+		if sent, err = b.countRows(ctx, pushedOver, after); err != nil {
 			return rep, err
+		}
+	}
+	// this folder's rows are this store's counts; every other folder's
+	// go to Others, named by their folder (W-5: a write to a folder no
+	// store attaches here was reported as this folder's)
+	rep.Received, rep.Sent = received[rep.Folder], sent[rep.Folder]
+	for f, n := range received {
+		if f != rep.Folder {
+			rep.Others = addFolderCount(rep.Others, f, store.FolderCount{Received: n})
+		}
+	}
+	for f, n := range sent {
+		if f != rep.Folder {
+			rep.Others = addFolderCount(rep.Others, f, store.FolderCount{Sent: n})
 		}
 	}
 	return rep, nil
 }
 
-// countRows counts row files (any folder) that differ between from and to;
-// from "" counts every row file at to.
-func (b *Backend) countRows(ctx context.Context, from, to string) (int, error) {
+// addFolderCount adds c to m[folder], making m when nil.
+func addFolderCount(m map[string]store.FolderCount, folder string, c store.FolderCount) map[string]store.FolderCount {
+	if m == nil {
+		m = map[string]store.FolderCount{}
+	}
+	o := m[folder]
+	m[folder] = store.FolderCount{Sent: o.Sent + c.Sent, Received: o.Received + c.Received}
+	return m
+}
+
+// countRows counts the row files changed between from and to ("" from:
+// every row file at to), by the data folder that holds each.
+func (b *Backend) countRows(ctx context.Context, from, to string) (map[string]int, error) {
 	if to == "" || from == to {
-		return 0, nil
+		return nil, nil
 	}
 	var out []byte
 	var err error
@@ -249,12 +277,12 @@ func (b *Backend) countRows(ctx context.Context, from, to string) (int, error) {
 		out, err = b.git.run(ctx, call{dir: b.work, args: []string{"diff", "--name-only", "-z", "--no-renames", from, to}})
 	}
 	if err != nil {
-		return 0, errs.Wrap(errs.Internal, "git: count changed rows", err)
+		return nil, errs.Wrap(errs.Internal, "git: count changed rows", err)
 	}
-	n := 0
+	n := map[string]int{}
 	for _, p := range splitZ(out) {
-		if _, ok := rowRel(p); ok {
-			n++
+		if folder, _, ok := rowPlace(p); ok {
+			n[folder]++
 		}
 	}
 	return n, nil
@@ -495,7 +523,8 @@ func checkMerged(rel string, doc []byte) error {
 // push sends the local tip to the store branch as a fast-forward and reads
 // git's verdict from --porcelain. msg is git's summary for a refusal.
 func (b *Backend) push(ctx context.Context, tip string) (pushVerdict, string, error) {
-	b.pushed() // the open's fetch no longer stands for the remote (OpenFetchReuse)
+	b.pushed()                                                  // the open's fetch no longer stands for the remote (OpenFetchReuse)
+	before, _ := b.resolve(ctx, b.work, trackingRefNS+b.branch) // display only: "" counts every row at tip
 	dst := headsPrefix + b.branch
 	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"push", "--porcelain", "--no-verify", "--", RemoteName, tip + ":" + dst}})
 	if err != nil {
@@ -505,13 +534,13 @@ func (b *Backend) push(ctx context.Context, tip string) (pushVerdict, string, er
 	}
 	flag, summary, found := porcelainVerdict(string(out), dst)
 	if !found {
-		return pushOffline, "", nil
+		return pushOffline, stderrOf(err), nil // git's reason: no network, no repository, no access
 	}
 	switch flag {
 	case flagUpToDate:
 		return pushApplied, "", nil
 	case flagFastForward, flagForced, flagDeleted, flagNew:
-		b.recordPush(tip, flag == flagForced)
+		b.recordPush(tip, flag == flagForced, b.pushedFolders(ctx, before, tip))
 		b.noteRemoteTip(ctx, tip)
 		return pushApplied, "", nil
 	case flagRejected:
@@ -524,6 +553,19 @@ func (b *Backend) push(ctx context.Context, tip string) (pushVerdict, string, er
 	default:
 		return pushRefused, summary, nil
 	}
+}
+
+// pushedFolders is the sorted folders whose row files changed from before
+// to tip (what a push carried); nil when git cannot say.
+func (b *Backend) pushedFolders(ctx context.Context, before, tip string) []string {
+	if before == "" || before == tip {
+		return nil
+	}
+	n, err := b.countRows(ctx, before, tip)
+	if err != nil || len(n) == 0 {
+		return nil
+	}
+	return slices.Sorted(maps.Keys(n))
 }
 
 // porcelainVerdict finds the ref line for dst in `git push --porcelain`

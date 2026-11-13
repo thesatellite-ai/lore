@@ -32,7 +32,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/thesatellite-ai/lore/tests/e2eenv"
@@ -552,7 +551,7 @@ func (w *World) Start(ctx context.Context, port int, lore string) error {
 	c.Dir = w.StartDir()
 	c.Env = w.env(filepath.Dir(lore), api.URL())
 	w.runEnv = c.Env
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	ownGroup(c)
 	w.output = &syncBuffer{}
 	pr, pw := io.Pipe()
 	c.Stdout, c.Stderr = pw, pw
@@ -620,9 +619,7 @@ func (w *World) Output() string {
 // Stop kills the server (its process group) and the fake API.
 func (w *World) Stop() {
 	if w.cmd != nil && w.cmd.Process != nil {
-		_ = syscall.Kill(-w.cmd.Process.Pid, syscall.SIGTERM)
-		time.Sleep(50 * time.Millisecond)
-		_ = syscall.Kill(-w.cmd.Process.Pid, syscall.SIGKILL)
+		stopGroup(w.cmd.Process)
 	}
 	if w.api != nil {
 		w.api.Close()

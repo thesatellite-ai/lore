@@ -65,6 +65,10 @@ func sameAnswers(a, b Answers) bool {
 // step's repo url field is empty.
 const SkipNoStoreURL = "pick or paste the repo URL first"
 
+// SkipNoStoreNeeded is the detail of a store check skipped because the
+// personal_store choice (local, none) has no store url to check (W-6).
+const SkipNoStoreNeeded = "not needed: this choice has no store url to check"
+
 // StoreURLMissing reports a personal store step answered "use an existing
 // repo" with an empty repo url: its store checks must not run (they would
 // probe a url the person cannot see, e.g. one saved earlier, while the
@@ -74,6 +78,21 @@ const SkipNoStoreURL = "pick or paste the repo URL first"
 func StoreURLMissing(step StepID, a Answers) bool {
 	return step == StepPersonalStore && a[QIDPersonalStore].Text == PersonalStoreExisting &&
 		strings.TrimSpace(a[QIDStoreURL].Text) == ""
+}
+
+// StoreChecksNotApplicable reports a personal_store choice no store url
+// belongs to: a local folder lore makes itself, or none (W-6). Its store.*
+// checks are skipped with SkipNoStoreNeeded rather than "no store url
+// yet", which read as something missing.
+func StoreChecksNotApplicable(step StepID, a Answers) bool {
+	if step != StepPersonalStore {
+		return false
+	}
+	switch strings.TrimSpace(a[QIDPersonalStore].Text) {
+	case PersonalStoreLocal, PersonalStoreNone:
+		return true
+	}
+	return false
 }
 
 // CreateWithoutURL reports answers that pick "create a new private repo"

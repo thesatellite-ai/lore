@@ -5,6 +5,7 @@ package app
 // `lore version`. Same behaviour as the old binary's (core_mount.go).
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -208,4 +209,19 @@ func (h *host) versionCommand() *cobra.Command {
 // caller asked for (run strips an init <path> but never --json).
 func printHostError(err error) int {
 	return cli.PrintError(os.Stdout, os.Stderr, err, cli.JSONRequested(os.Args[1:]))
+}
+
+// printHostErrorNamed is printHostError once the app exists: the human
+// line names actors ("by act_…" → "by <name>") as command errors do.
+// The namer is built only when the line names an actor id: building it
+// reads the app's state, which a refused command must not open.
+func printHostErrorNamed(ctx context.Context, app *wire.App, err error) int {
+	var named func(string) string
+	lazy := func(id string) string {
+		if named == nil {
+			named = app.ActorNamer(ctx)
+		}
+		return named(id)
+	}
+	return cli.PrintErrorNamed(os.Stdout, os.Stderr, err, cli.JSONRequested(os.Args[1:]), lazy)
 }

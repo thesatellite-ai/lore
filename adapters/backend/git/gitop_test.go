@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -110,5 +111,81 @@ func TestRecoverOwnMergeBeforePickUp(t *testing.T) {
 	}
 	if exists(mergeHead) || exists(filepath.Join(dir, ".git", ownMergeFile)) {
 		t.Fatal("lore's own crashed merge was not aborted before the pick-up")
+	}
+}
+
+// TestGetDuringPersonMergeReadsHead (W-10): while a person's `git pull`
+// stopped on a conflicted row file in a store clone, Get gives the row as
+// the last commit has it and doctor lists no read problem; with no git
+// operation in progress a broken file is still an error.
+func TestGetDuringPersonMergeReadsHead(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	b := clone(t, newRemote(t, true))
+	dir := b.Dir()
+	g := newGen(t)
+	id := newID(t)
+	if err := b.Write(ctx, []store.Change{{Row: g.row(id, "base", hlc.HLC{})}}); err != nil {
+		t.Fatal(err)
+	}
+	rel := b.folder.StorePath(memories, id)
+	file := filepath.Join(dir, filepath.FromSlash(rel))
+	edit := func(body string) {
+		t.Helper()
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(file, []byte(strings.Replace(string(raw), `"base"`, `"`+body+`"`, 1)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitT(t, dir, "checkout", "-q", "-b", "side")
+	edit("side")
+	gitT(t, dir, "commit", "-q", "-am", "side")
+	gitT(t, dir, "checkout", "-q", testBranch)
+	edit("mine")
+	gitT(t, dir, "commit", "-q", "-am", "mine")
+	if _, err := tryGit(t, dir, "merge", "side"); err == nil {
+		t.Fatal("the merge was meant to conflict")
+	}
+	// what lore's merge driver leaves for a person to settle: the markers
+	// inside the JSON value (git's own merge leaves "ours" for a row file)
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marked := strings.Replace(string(raw), `"mine"`, `"<<<<<<< ours\nmine\n=======\nside\n>>>>>>> theirs"`, 1)
+	if marked == string(raw) {
+		t.Fatalf("setup: no body to mark in %s", rel)
+	}
+	if err = os.WriteFile(file, []byte(marked), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := b.Get(ctx, memories, id)
+	if err != nil {
+		t.Fatalf("Get during the person's merge: %v", err)
+	}
+	r, err := got.Decode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body, ok := r.Fields["body"].(value.Text); !ok || body.String() != "mine" {
+		t.Fatalf("body %v, want the last commit's %q", r.Fields["body"], "mine")
+	}
+	if probs, perr := b.Problems(ctx); perr != nil || len(probs) != 0 {
+		t.Fatalf("the person's unmerged file is a read problem: %v %v", probs, perr)
+	}
+	// the merge given up but the markers left (no git operation): the
+	// work tree is read as it is again, and doctor names the file
+	if err = os.Remove(filepath.Join(dir, ".git", "MERGE_HEAD")); err != nil {
+		t.Fatal(err)
+	}
+	got, err = b.Get(ctx, memories, id)
+	if err != nil || !strings.Contains(string(got.Doc), "<<<<<<<") {
+		t.Fatalf("without a merge in progress Get reads the work tree: %v", err)
+	}
+	if probs, perr := b.Problems(ctx); perr != nil || len(probs) != 1 || !probs[0].FieldMarkers {
+		t.Fatalf("markers with no merge in progress are not named: %v %v", probs, perr)
 	}
 }

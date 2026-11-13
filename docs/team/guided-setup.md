@@ -162,8 +162,6 @@ steps:
     help: The folder you started lore setup in: whic
     kinds: solo, member, admin
     needs: kind
-    questions:
-      ID  LABEL  HELP  TYPE  REQUIRED  PREFILL  CHOI
     checks: repo.init, repo.org, repo.stores, identi
     optional: true
     values: {}
@@ -171,10 +169,7 @@ steps:
     title: Summary
     help: Every step and every warning with its fix.
     kinds: solo, member, admin
-    questions:
-      ID  LABEL  HELP  TYPE  REQUIRED  PREFILL  CHOI
     values: {}
-progress:
 ```
 <!-- /example -->
 
@@ -237,8 +232,6 @@ aliases:
   ALIAS       IDENTITY_FILE      KEY_MISSING  KEY_NEARBY  PUB_KEY  FINGERPRINT  NO_PUB  IDENTITIES_ONLY  LOGS_IN_AS  STATUS  DETAIL
   github.com  ~/.ssh/id_ed25519  true                                           false   false            tomas-dev   ok      
   gh-agency   ~/.ssh/id_agency   true                                           false   true             tomas-dev   ok      
-gh:
-  USER  ACTIVE
 route:
   line: 
 ```

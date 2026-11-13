@@ -41,10 +41,13 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/fsreason"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -348,7 +351,7 @@ func (b *storePush) pushNow(ctx context.Context) {
 	case err != nil:
 		b.note("pushing failed")
 	case rep.Offline:
-		b.note("the store is unreachable")
+		b.note(b.offlineWhy(rep))
 	case len(rep.Refused) > 0:
 		if own, _ := splitHeld(rep.Refused); len(own) == 0 {
 			b.note("the push waits on a refused row in another folder of the store (`lore sync status` shows which)")
@@ -383,6 +386,23 @@ func (b *storePush) pushed(ctx context.Context, sent bool) {
 	b.forgetWaitSaid()
 	writeStamp(b.stateDir, pushStampFile, b.res.now())
 	b.autoCompact(ctx)
+}
+
+// offlineWhy is the store-push note's reason for a push that did not
+// reach the remote, read from git's own error text the way the read path
+// does (gitfault): no answer stays "the store is unreachable"; a missing
+// repository, an unreadable folder or refused credentials say so and name
+// the store's url (credentials masked), since waiting fixes none of them.
+func (b *storePush) offlineWhy(rep store.SyncReport) string {
+	kind := gitfault.ClassifyAt(rep.OfflineDetail, fsreason.GitPathState)
+	if rep.OfflineDetail == "" || kind == gitfault.Unreachable {
+		return "the store is unreachable"
+	}
+	shown := string(b.name)
+	if gb := gitOf(b.inner); gb != nil && gb.RemoteURL() != "" {
+		shown = repourl.Mask(gb.RemoteURL())
+	}
+	return gitfault.Describe(rep.OfflineDetail, shown, fsreason.GitPathState) + "; " + gitbackend.ProbeHint(kind, shown)
 }
 
 // pushAfterWrite pushes the commit a write just made (autopush on, mode
@@ -479,8 +499,24 @@ func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
 	rep.Sent += b.earlier.Sent
 	rep.Received += b.earlier.Received
 	rep.Merged = append(b.earlier.Merged, rep.Merged...)
+	rep.Others = addOthers(rep.Others, b.earlier.Others)
 	b.earlier = store.SyncReport{}
 	return rep, nil
+}
+
+// addOthers adds the per-folder counts of from to into (made when nil):
+// the rows a read's fetch merged for the store's other folders must reach
+// `lore sync`'s report as the folder's own counts do (W-5 split them off;
+// a store synced whole outside a repo said "up to date" after pulling).
+func addOthers(into, from map[string]store.FolderCount) map[string]store.FolderCount {
+	for f, c := range from {
+		if into == nil {
+			into = map[string]store.FolderCount{}
+		}
+		o := into[f]
+		into[f] = store.FolderCount{Sent: o.Sent + c.Sent, Received: o.Received + c.Received}
+	}
+	return into
 }
 
 // carry adds a sync's counts to earlier (reported by the next Sync).
@@ -491,6 +527,7 @@ func (b *storePush) carry(rep store.SyncReport, err error) {
 	b.earlier.Sent += rep.Sent
 	b.earlier.Received += rep.Received
 	b.earlier.Merged = append(b.earlier.Merged, rep.Merged...)
+	b.earlier.Others = addOthers(b.earlier.Others, rep.Others)
 }
 
 // Capabilities implements store.Backend.

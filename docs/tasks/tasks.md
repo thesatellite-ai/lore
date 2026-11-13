@@ -255,8 +255,8 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 updated
 lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
 $ lore tasklist list
-TA  tlt_7a67…9504  default [active]  (4 tasks)
-TA  tlt_b4f4…a5b0  Launch week [active]  (2 tasks)
+tlt_7a67…9504  default [active]  (4 tasks)
+tlt_b4f4…a5b0  Launch week [active]  (2 tasks)
 $ lore tasklist search launch
 tlt_b4f4…a5b0 Launch week
 $ lore tasklist edit tlt_b4f4…a5b0 --status closed

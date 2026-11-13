@@ -165,7 +165,7 @@ func writeTable(b *strings.Builder, list reflect.Value, fields []op.FieldInfo, i
 		cells := make([]string, len(fields))
 		for j, f := range fields {
 			fv, ok := jsonField(item, f.Name)
-			if !ok {
+			if !ok || omittedZero(fv, f) {
 				continue
 			}
 			cells[j] = cutCell(cellText(fv, f))
@@ -177,11 +177,22 @@ func writeTable(b *strings.Builder, list reflect.Value, fields []op.FieldInfo, i
 	return tw.Flush()
 }
 
+// omittedZero reports whether a table cell is an optional field at its
+// zero value, which --json leaves out: a blank cell, never "0" (W-8: the
+// LINE column of import-scan read 0 for values with no line). A bool is
+// never optional here (op marks every bool not required), so "false"
+// still prints.
+func omittedZero(fv reflect.Value, f op.FieldInfo) bool {
+	return !f.Required && f.Type != op.TypeBool && fv.IsZero()
+}
+
 // emptyList reports whether fv is a list or map field with no items. Why:
-// a required one printed "wrote: " with nothing after it (B2-17); --json
-// keeps the empty list.
+// a required one printed "wrote: " with nothing after it (B2-17), and an
+// empty list of records printed its table header with no row (a setup
+// step with no check that applies, W-6; B1-26's rule); --json keeps the
+// empty list.
 func emptyList(fv reflect.Value, t op.FieldType) bool {
-	return (t == op.TypeStrings || t == op.TypeStringMap) && fv.Len() == 0
+	return (t == op.TypeStrings || t == op.TypeStringMap || t == op.TypeList) && fv.Kind() != reflect.Invalid && fv.Len() == 0
 }
 
 // cutCell is a table cell cut to maxCell characters, the cut marked with

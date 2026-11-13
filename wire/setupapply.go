@@ -793,7 +793,9 @@ func (o orgRosterStore) Roster(ctx context.Context, write bool) (profilestore.Ro
 		// forever: the caller is registered here as `lore actor register`
 		// does it (identity-contact match, handle check), only when no row
 		// exists.
-		err = x.ensureRegistered(ctx, st, r)
+		if !team.RegisterInCommit(ctx) { // a join registers inside its one commit (W-12): profileRoster.RegisterCaller
+			err = x.ensureRegistered(ctx, st, r)
+		}
 	}
 	if err != nil {
 		done()
@@ -860,14 +862,29 @@ func openOrgFolderApp(ctx context.Context, opts Options, org string, one attach.
 	return x, nil
 }
 
+var _ team.CallerRegisterer = (*profileRoster)(nil)
+
+// RegisterCaller implements team.CallerRegisterer: ensureRegistered on the
+// opened roster, with the op's (staged) ctx.
+func (p *profileRoster) RegisterCaller(ctx context.Context) (bool, error) {
+	return p.app.ensureRegisteredDid(ctx, p.st, p.at)
+}
+
 // ensureRegistered registers the caller on r's roster when st has no
 // actors row for the caller's actor id (see orgRosterStore.Roster). An
 // agent's caller is the person it acts for (rosterCaller), so the row
 // looked for is the person's, never the agent's.
 func (x *App) ensureRegistered(ctx context.Context, st *state, r rosterAt) error {
+	_, err := x.ensureRegisteredDid(ctx, st, r)
+	return err
+}
+
+// ensureRegisteredDid is ensureRegistered reporting whether it wrote a new
+// actor row (a contact match or an existing row writes nothing).
+func (x *App) ensureRegisteredDid(ctx context.Context, st *state, r rosterAt) (bool, error) {
 	who, err := x.rosterCaller(ctx, r)
 	if err != nil {
-		return err
+		return false, err
 	}
 	id := st.actor.Any()
 	if !who.ID.IsZero() {
@@ -875,13 +892,13 @@ func (x *App) ensureRegistered(ctx context.Context, st *state, r rosterAt) error
 	}
 	_, got, err := st.eng.Get(ctx, engine.Ref{Store: r.src, Table: schema.TableActors, ID: id})
 	if err == nil && !got.Deleted {
-		return nil
+		return false, nil
 	}
 	if err != nil && !errs.Has(err, errs.NotFound) {
-		return err
+		return false, err
 	}
-	_, err = x.registerCaller(ctx, r)
-	return err
+	out, err := x.registerCaller(ctx, r)
+	return err == nil && out.Created, err
 }
 
 var _ opssetup.OrgStoreLister = setupStore{}

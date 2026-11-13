@@ -38,7 +38,7 @@ func TestJourneySoloLocalPathStore(t *testing.T) {
 		lap.LoreIn(app, "store", "init", "me", bare, "--yes").OK(t).Says(t, "created store me", bare)
 		lap.LoreIn(app, "memory", "add", "--body", note, "--to", "me").OK(t)
 		lap.LoreIn(app, "sync").OK(t)
-		if log := w.Git(w.Root, "--git-dir", bare, "log", "--oneline", "main"); !strings.Contains(log, "store init") || !strings.Contains(log, "lore: write") {
+		if log := w.Git(w.Root, "--git-dir", bare, "log", "--oneline", "main"); !strings.Contains(log, "store init") || !strings.Contains(log, "lore: memory add mem_") {
 			t.Fatalf("the notes did not reach the bare repository: %q", log)
 		}
 		// B3-21: the clone is ~/.lore/stores/_local/<repo>, not a copy of

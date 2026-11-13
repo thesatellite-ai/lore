@@ -337,7 +337,7 @@ A bad entry is `E_CONFIG_INVALID` naming `context.profiles`.
 | `agents.max_claims_per_agent` | `1` | how many tasks one agent may hold at once |
 | `agents.max_attempts` | `3` | how many agents may try a task before it is marked `blocked` |
 | `merge_check.adapter` | `none` | `none` learns about merges from commits only; `github` also asks the `gh` tool about merged pull requests |
-| `link_index.max_age` | `1h` | how old the saved list of linked client repos may be when the store cannot be reached |
+| `link_index.max_age` | `1h` | how old the saved list of linked client repos may be when the store cannot be reached; past it lore still attaches the folders the saved list names, so reads show the rows fetched last, but a write that needs to know whether this is a client repo is refused until a sync |
 
 <!-- ds:block id=team-live-kinds-88j26q7s -->
 Kinds that are live by default (the keys are table names, as in `live.defaults.memories: true`):
@@ -478,7 +478,7 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 # alice, in website
 $ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
-lore store init: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+lore store init: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store agency (sto_c0f3…b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 $ cat .lore/stores.yaml
 stores:

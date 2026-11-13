@@ -22,6 +22,11 @@ type Pushed struct {
 	// Forced marks a history rewrite (compaction, a batch squash onto an
 	// adopted epoch) pushed with --force-with-lease.
 	Forced bool `json:"forced,omitempty"`
+	// Folders are the data folders whose row files the push carried
+	// (rowfs folder names, "." for the root), sorted; empty when unknown.
+	// One clone pushes every folder, so the caller names the push by
+	// these, not by the folder that happened to push (bug hunt W-14).
+	Folders []string `json:"folders,omitempty"`
 }
 
 // ShortCommitLen is how many hex digits of a commit id output shows.
@@ -42,11 +47,11 @@ type pushLog struct {
 }
 
 // recordPush notes that the remote took tip on the store branch.
-func (b *Backend) recordPush(tip string, forced bool) {
+func (b *Backend) recordPush(tip string, forced bool, folders []string) {
 	l := &b.pushes
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.pushes = append(l.pushes, Pushed{Commit: tip, Branch: b.branch, Remote: RemoteName, Forced: forced})
+	l.pushes = append(l.pushes, Pushed{Commit: tip, Branch: b.branch, Remote: RemoteName, Forced: forced, Folders: folders})
 }
 
 // TakePushes returns the pushes made since the last call and forgets

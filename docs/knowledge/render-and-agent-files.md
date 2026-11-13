@@ -204,7 +204,7 @@ created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
 total_bytes:  2842
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
-scope:        {"included":{"rules":1,"hotfixes":1,"memories":0},"cut_summary":{"file":".lore/LORE.md","profile":"claude_code","budget":32000,"before":520,"after":2842,"budget_exceeded":false,"index_collapsed":false,"entries":[]}}
+scope:        1 rules, 1 hotfixes, 0 memories in full; 2842 of 32000 bytes (profile claude_code), nothing moved out of the core
 ```
 <!-- /example -->
 

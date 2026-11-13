@@ -261,6 +261,11 @@ type Out struct {
 	// with --all, Errors are the machine-wide cache sweep's lines.
 	Warnings []string `json:"warnings,omitempty"`
 	Errors   []string `json:"errors,omitempty"`
+	// Setup and SetupNotes are the active setup's checks that are not ok
+	// (one repo, not a dry run): the problems, and the notes that change
+	// nothing in the status, as lore doctor lists them.
+	Setup      []string `json:"setup,omitempty"`
+	SetupNotes []string `json:"setup_notes,omitempty"`
 	// Repos are --all's blocks, one per repo.
 	Repos []RepoResult `json:"repos,omitempty"`
 	// Skipped are the folders --all passed over (not git repos), noted.
@@ -324,6 +329,12 @@ func (o Out) Text() string {
 	}
 	for _, w := range o.Warnings {
 		b.WriteString("warning: " + w + "\n")
+	}
+	for _, w := range o.Setup {
+		b.WriteString("warning: " + w + "\n")
+	}
+	for _, n := range o.SetupNotes {
+		b.WriteString("note: " + n + "\n")
 	}
 	// owner item C2: what the person does next (the migrated files to
 	// commit) is one line, last before the status
@@ -449,6 +460,7 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	}
 	out := Out{DryRun: in.DryRun, Repo: top, Steps: r.Steps, Status: r.Status, Warnings: r.Warnings, Errors: r.Errors,
 		Failed: doctor.FailedSteps(r.Steps), Exit: r.Exit}
+	out.Setup, out.SetupNotes = doctor.SetupLines(r)
 	if len(out.Failed) > 0 && out.Exit == 0 {
 		out.Exit = 1 // a step that could not run is not a healthy result
 	}

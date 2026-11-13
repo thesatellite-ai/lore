@@ -32,7 +32,12 @@ func (c config) nameActors(ctx context.Context, text string) string {
 	if c.actorNamer == nil || !byActorID.MatchString(text) {
 		return text
 	}
-	name := c.actorNamer(ctx)
+	return replaceActorIDs(text, c.actorNamer(ctx))
+}
+
+// replaceActorIDs is text with each "by act_…" that name can name
+// replaced by "by <name>".
+func replaceActorIDs(text string, name func(string) string) string {
 	return byActorID.ReplaceAllStringFunc(text, func(m string) string {
 		id := byActorID.FindStringSubmatch(m)[1]
 		if n := name(id); n != "" {

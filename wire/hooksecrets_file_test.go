@@ -79,3 +79,35 @@ func TestHookScannerFailureNamesCause(t *testing.T) {
 		t.Fatalf("err = %v, want a refusal naming .gitleaks.toml", err)
 	}
 }
+
+// TestCommitCheckOneHitPerValue (W-9): a token both lore's rule and the
+// gitleaks rule it covers match is listed once, under lore's rule, every
+// run; an allow entry written for that rule accepts the value whatever
+// other rule also matches it. Break-verified: without oneHitPerValue the
+// refusal lists the value twice; without sameValueAllowed the allowed
+// value still blocks under the other rule.
+func TestCommitCheckOneHitPerValue(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	ctx := context.Background()
+	tok := "ghp_" + strings.Repeat("aB3dE5fG7h", 3) + "Jk9LmN" // built at run time
+	docs := map[string][]byte{"notes.md": []byte("token = " + tok + "\n")}
+	if err := os.WriteFile(filepath.Join(h.Repo, "notes.md"), docs["notes.md"], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	allowGit(t, h.Repo, "add", "notes.md")
+	for range 3 {
+		err := h.App.HookSecrets(ctx, h.Repo, commitWhere, docs)
+		if !errs.Has(err, errs.LeakBlocked) {
+			t.Fatalf("err = %v, want E_LEAK_BLOCKED", err)
+		}
+		if n := strings.Count(err.Error(), "secret: rule"); n != 1 || !strings.Contains(err.Error(), "rule github_token ") {
+			t.Fatalf("the token is listed %d times (want once, as github_token):\n%v", n, err)
+		}
+	}
+	out := h.MustYes("secrets.allow", `{"file":"`+filepath.Join(h.Repo, "notes.md")+`","rule":"github_token","match_hash":"`+scan.Mask(tok)+`","reason":"sample token"}`)
+	allowGit(t, h.Repo, "add", "--", allowRowFile(t, h.Repo, "secret_allows", h.ID(out)))
+	if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, docs); err != nil {
+		t.Fatalf("allowed token: err = %v, want pass", err)
+	}
+}

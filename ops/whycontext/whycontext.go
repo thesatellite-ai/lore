@@ -139,16 +139,33 @@ func (o ShowOut) Text() string {
 	fmt.Fprintf(&b, "target:       %s\n", o.TargetPath)
 	fmt.Fprintf(&b, "total_bytes:  %d\n", o.TotalBytes)
 	fmt.Fprintf(&b, "sha256:       %s\n", o.SHA256)
-	scope := ""
-	if js, err := json.Marshal(o.ScopeSummary); err == nil {
-		scope = string(js)
-	}
-	fmt.Fprintf(&b, "scope:        %s\n", scope)
+	fmt.Fprintf(&b, "scope:        %s\n", o.ScopeSummary.Text())
 	if o.RenderedText != "" {
 		b.WriteString("\n--- rendered text ---\n")
 		b.WriteString(o.RenderedText + "\n")
 	}
 	return b.String()
+}
+
+// Text is the scope summary as a person reads it: what went in in full,
+// and the cut (bytes against the budget, how many entries moved out of
+// the core). Why: the summary line was the record's JSON (W-8); --json
+// keeps scope_summary as it was.
+func (s Scope) Text() string {
+	in := s.Included
+	t := fmt.Sprintf("%d rules, %d hotfixes, %d memories in full", in.Rules, in.Hotfixes, in.Memories)
+	c := s.Cut
+	if c.File == "" && c.Budget == 0 {
+		return t // a record written before 0.1.18 has no cut
+	}
+	t += fmt.Sprintf("; %d of %d bytes (profile %s)", c.After, c.Budget, c.Profile)
+	if c.Over {
+		t += ", over budget"
+	}
+	if len(c.Entries) == 0 {
+		return t + ", nothing moved out of the core"
+	}
+	return t + fmt.Sprintf(", %d moved out of the core (lore why-context --cut lists them)", len(c.Entries))
 }
 
 // Text is the human form of the cut list (CONTEXT_BUDGET 6.11).

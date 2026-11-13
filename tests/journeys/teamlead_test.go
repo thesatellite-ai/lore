@@ -444,7 +444,13 @@ func TestJourneyTeamLeadUndo(t *testing.T) {
 		// Ann pastes the first line she got: refused, saying why, nothing joined.
 		b, _ := json.Marshal(map[string]any{"invite": first})
 		ann.LoreIn(tt.repo[tlAnn.Email], "setup", "apply", tlTeamSetup, "--step", "join", "--answers", string(b), "--json").Refused(t, "revoked")
+		before := ownCommits(tt.store, "refs/heads/main")
 		tlApply(t, ann, dir, tlTeamSetup, "join", map[string]any{"invite": line})
+		// W-12: her actor row, contacts, stint, membership and the invite
+		// accepted land as ONE store commit (it was one per row)
+		if n := ownCommits(tt.store, "refs/heads/main") - before; n != 1 {
+			t.Errorf("setup join wrote %d store commits, want one: %v", n, tt.store.Log("refs/heads/main")[:n])
+		}
 		tlLastSteps(t, ann, dir, tlTeamSetup, []string{tlFolders})
 		tt.seesRule(t, tlAnn, ruleID, tlRuleBody)
 		tt.lore(tlLee, "sync", "run").OK(t)
