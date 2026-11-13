@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -54,7 +55,9 @@ func TestSetupSnapshotRestore(t *testing.T) {
 
 // TestTreeSnapshotRestore (W-6): a refused write's earlier changes to the
 // work tree (a rewritten tracked file, a new file) go back; a change the
-// person had before stays.
+// person had before stays, and one the write never touched is left alone:
+// not reported, not staged (an unstaged edit stays unstaged, a staged one
+// staged).
 func TestTreeSnapshotRestore(t *testing.T) {
 	dir := t.TempDir()
 	run := func(args ...string) {
@@ -78,9 +81,14 @@ func TestTreeSnapshotRestore(t *testing.T) {
 	}
 	write("row.json", "v1\n")
 	write("mine.txt", "base\n")
+	write("meta.json", "{}\n")
+	write("staged.txt", "base\n")
 	run("add", "-A")
 	run("commit", "-q", "-m", "base")
-	write("mine.txt", "my edit\n") // the person's own change, before the write
+	write("mine.txt", "my edit\n")       // the person's own change, before the write
+	write("meta.json", "{broken\n")      // the person's edit the write never touches
+	write("staged.txt", "staged edit\n") // staged by the person, never touched
+	run("add", "staged.txt")
 	snap := takeTreeSnapshot(context.Background(), dir)
 	if snap == nil {
 		t.Fatal("no snapshot")
@@ -88,13 +96,25 @@ func TestTreeSnapshotRestore(t *testing.T) {
 	write("row.json", "v2\n")         // the auto-migrate's rewrite
 	write("LORE.full.md", "render\n") // a new rendered file
 	write("mine.txt", "my edit\nmore\n")
-	snap.restore(context.Background())
-	for p, want := range map[string]string{"row.json": "v1\n", "mine.txt": "my edit\n"} {
+	undone := snap.restore(context.Background())
+	if want := []string{"LORE.full.md", "mine.txt", "row.json"}; !slices.Equal(undone, want) {
+		t.Errorf("undone = %v, want %v (an untouched edit is not reported)", undone, want)
+	}
+	for p, want := range map[string]string{"row.json": "v1\n", "mine.txt": "my edit\n", "meta.json": "{broken\n", "staged.txt": "staged edit\n"} {
 		if b, _ := os.ReadFile(filepath.Join(dir, p)); string(b) != want {
 			t.Errorf("%s = %q, want %q", p, b, want)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, "LORE.full.md")); err == nil {
 		t.Error("the new file was left")
+	}
+	cmd := exec.Command("git", "status", "--porcelain=v1", "--", "meta.json", "staged.txt")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(out), " M meta.json\nM  staged.txt\n"; got != want {
+		t.Errorf("index after restore:\n%s\nwant:\n%s", got, want)
 	}
 }

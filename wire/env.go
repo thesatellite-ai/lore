@@ -537,9 +537,12 @@ func (a *App) writeStateFor(ctx context.Context, target store.Source) (*state, e
 	repoTarget := target == "" || target == store.SourceRepo
 	// D13: a project on the 0.1.17 format is never written by this lore,
 	// so the old "has everyone upgraded?" question is not asked; the write
-	// is refused (formatold.go)
-	if repoTarget && !opsmigrate.InRun(ctx) && ProjectFormatOld(st.repoTop) {
-		return nil, FormatOldErr(st.repoTop)
+	// is refused (formatold.go); an unreadable _meta.json refuses with its
+	// own reason (ProjectWriteRefusal)
+	if repoTarget && !opsmigrate.InRun(ctx) {
+		if err := ProjectWriteRefusal(st.repoTop); err != nil {
+			return nil, err
+		}
 	}
 	if err := st.format.check(); err != nil && repoTarget && !opsmigrate.InRun(ctx) {
 		return nil, err

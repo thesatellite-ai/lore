@@ -32,6 +32,23 @@ func ProjectFormatOld(top string) bool {
 	return err != nil || OlderFormat(pf)
 }
 
+// ProjectWriteRefusal is the refusal of a write into the project at top,
+// nil when its format allows one. A _meta.json that cannot be read refuses
+// with its own reason (formatgate.Unreadable, E_OLD_LORE: fail closed,
+// fix the file), never as "on the 0.1.17 format": lore cannot tell the
+// format, so telling the person to run lore migrate run would be a guess.
+// A project on an older format refuses with FormatOldErr (D13).
+func ProjectWriteRefusal(top string) error {
+	pf, err := ProjectFormatAt(top)
+	if err != nil {
+		return err
+	}
+	if OlderFormat(pf) {
+		return FormatOldErr(top)
+	}
+	return nil
+}
+
 // FormatOldErr is the one-line refusal of a write in the project at top
 // (D13).
 func FormatOldErr(top string) error {
@@ -55,7 +72,10 @@ func (g formatGuard) Write(ctx context.Context, changes []store.Change) error {
 	if len(changes) == 0 || opsmigrate.InRun(ctx) {
 		return g.Backend.Write(ctx, changes)
 	}
-	return FormatOldErr(g.top)
+	if err := ProjectWriteRefusal(g.top); err != nil {
+		return err
+	}
+	return FormatOldErr(g.top) // wrapped at open as old: stay closed for this run
 }
 
 // Unwrap implements Unwrapper.
