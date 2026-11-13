@@ -97,6 +97,13 @@ type FieldInfo struct {
 	// type is Enumerated (enum.go), in the type's order; nil otherwise.
 	// surface/docs writes it as the JSON Schema `enum`.
 	Enum []string
+	// NonEmpty is what a CLI flag of the field must name when it is given
+	// (`nonempty:"a tasklist id or name"`): `--tasklist=` with nothing is
+	// refused, `--tasklist is empty; give a tasklist id or name`, instead
+	// of reading as "not given" and silently taking the default (U-3: an
+	// empty --tasklist attached the task to an auto-created default list).
+	// "" lets an empty value through, as before.
+	NonEmpty string
 
 	index []int
 }
@@ -123,14 +130,15 @@ const NoArg = -1
 
 // Struct tag keys read by Define.
 const (
-	tagJSON  = "json"
-	tagArg   = "arg"
-	tagFlag  = "flag"
-	tagShort = "short"
-	tagDesc  = "desc"
-	tagUI    = "ui"
-	tagRest  = "rest"
-	tagAlias = "alias"
+	tagJSON     = "json"
+	tagArg      = "arg"
+	tagFlag     = "flag"
+	tagShort    = "short"
+	tagDesc     = "desc"
+	tagUI       = "ui"
+	tagRest     = "rest"
+	tagAlias    = "alias"
+	tagNonEmpty = "nonempty"
 )
 
 // ui tag keys.
@@ -303,6 +311,12 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 			}
 			f.Aliases = append(f.Aliases, a)
 		}
+	}
+	if ne, ok := sf.Tag.Lookup(tagNonEmpty); ok {
+		if f.Flag == "" || ne == "" || f.Type != TypeString {
+			panic(tagError{where + `: nonempty goes with a string flag and names what to give`})
+		}
+		f.NonEmpty = ne
 	}
 	if sh, ok := sf.Tag.Lookup(tagShort); ok {
 		if f.Flag == "" || !shortName.MatchString(sh) {

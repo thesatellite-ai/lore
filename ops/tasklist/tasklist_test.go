@@ -72,16 +72,18 @@ func TestTasklistLifecycle(t *testing.T) {
 	h.Fails("tasklist.show", `{"id":"`+id+`"}`, errs.InTrash)
 }
 
-// TestTasklistRefusals: title and body required (v0.1.17 "body required"),
-// body once, nothing to change, malformed / foreign ids.
+// TestTasklistRefusals: title required, body once, nothing to change,
+// malformed / foreign ids. Delta (U-3): v0.1.17 also required a body;
+// a list is added by its title alone now, as a task is.
 func TestTasklistRefusals(t *testing.T) {
 	h := opstest.New(t)
-	for _, in := range []string{`{"title":"Sprint 2"}`, `{"title":"x","body":" \n"}`, `{"title":"  ","body":"b"}`, `{"title":"t","body":"a","text":"b"}`} {
+	for _, in := range []string{`{"body":"b"}`, `{"title":"  ","body":"b"}`, `{"title":"t","body":"a","text":"b"}`} {
 		h.Fails("tasklist.add", in, errs.InvalidInput)
 	}
-	if msg := h.Fails("tasklist.add", `{"title":"Sprint 2"}`, errs.InvalidInput); !strings.Contains(msg, "body required") {
-		t.Fatalf("v0.1.17 words: %s", msg)
+	if msg := h.Fails("tasklist.add", `{"body":"b"}`, errs.InvalidInput); !strings.Contains(msg, "a title is required") {
+		t.Fatalf("title refusal: %s", msg)
 	}
+	addID(t, h, `{"title":"Sprint 2"}`)
 	id := addID(t, h, `{"title":"t","body":"b"}`)
 	h.Fails("tasklist.edit", `{"id":"`+id+`"}`, errs.InvalidInput)
 	for _, bad := range []string{"tlt_bad", "pln_01a1a684b528751aa2fc45745b154d16"} {

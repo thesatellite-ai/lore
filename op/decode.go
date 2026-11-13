@@ -104,6 +104,10 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 			}
 			used[f.Flag] = true
 			vals = v
+			if f.NonEmpty != "" && emptyValues(v) {
+				return errs.New(errs.InvalidInput, "--"+f.Flag+" is empty; give "+f.NonEmpty).
+					WithHint("give a value, or leave --" + f.Flag + " out")
+			}
 		default:
 			continue
 		}
@@ -121,6 +125,17 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 		}
 	}
 	return nil
+}
+
+// emptyValues reports a flag given with only blank values (`--tasklist=`,
+// `--tasklist ""`): for a NonEmpty field that is a mistake, not "unset".
+func emptyValues(vals []string) bool {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // setField parses vals into one field.

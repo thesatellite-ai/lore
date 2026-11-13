@@ -35,7 +35,7 @@ func TestTextMatchesV017(t *testing.T) {
 	add(h, "Prop one", `"commitment":"proposed"`)
 	add(h, "Some one", `"commitment":"someday"`)
 	add(h, "Later", `"defer_until":"2099-01-05"`)
-	check("add --key", opstest.Text(h.Must(opstask.OpAdd, `{"title":"Keyed","key":"k1"}`)), "✓ tsk_ID — Keyed [medium]\n")
+	check("add --key", opstest.Text(h.Must(opstask.OpAdd, `{"title":"Keyed","key":"k1"}`)), "✓ tsk_ID — Keyed [medium]\n  on tasklist tlt_ID \"default\" (the default; --tasklist picks another)\n") // delta (U-3): names the default list
 	check("add --key again", opstest.Text(h.Must(opstask.OpAdd, `{"title":"Keyed","key":"k1"}`)), "✓ tsk_ID — Keyed (already added with --key k1)\n")
 
 	check("list", opstest.Text(h.Must(opstask.OpList, ``)),
