@@ -450,9 +450,10 @@ func (a *App) rosterContactMatch(ctx context.Context, r rosterAt, stableKey stri
 const identityContactPrefix = "identity contact: "
 
 // IdentityContactLine is `lore whoami`'s identity-contact line for the
-// caller (TEAM_PROFILES 6.3; identityContactLine), read on a read state.
+// caller (TEAM_PROFILES 6.3; identityContactLine). It reads the identity
+// tables' row files only, so it never builds a cache (rowState).
 func (a *App) IdentityContactLine(ctx context.Context) (string, error) {
-	st, err := a.state(ctx)
+	st, err := a.rowState(ctx)
 	if err != nil {
 		return "", err
 	}

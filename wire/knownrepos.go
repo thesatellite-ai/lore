@@ -48,16 +48,21 @@ const KnownRepoTouchEvery = time.Hour
 // state the command already opened (the full one, else the repo-only one
 // the store operations use; both attach the machine store) and does
 // nothing when the command opened neither (`lore version`, help, a Local
-// op), so it never opens a store of its own. Its error is for the caller
-// to drop or log, never to fail the command with.
+// op), so it never opens a store of its own. A state opened for row reads
+// only (App.rowState: `lore whoami`, `lore store list`) is skipped too: its
+// format answer is not read yet, and the touch's write would refresh every
+// cache the command was spared (B-3); the next command that opens fully
+// records the repo. Its error is for the caller to drop or log, never to
+// fail the command with.
 func (a *App) TouchKnownRepo(ctx context.Context) error {
 	a.mu.Lock()
 	st := a.st
 	if st == nil {
 		st = a.cfg
 	}
+	rowsOnly := st != nil && st.refreshPending
 	a.mu.Unlock()
-	if st == nil {
+	if st == nil || rowsOnly {
 		return nil
 	}
 	meta, exists, err := rowfs.ReadRepoMeta(st.repoTop)

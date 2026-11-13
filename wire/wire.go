@@ -466,6 +466,24 @@ type state struct {
 	// positive answer (no RepoIsClient hook, or its error); empty when the
 	// hook answered.
 	repoClassNote string
+	// unfinished: open built this state and nobody ran its finish yet
+	// (App.finishOpen: the cache refresh when deferred, then the pick-up of
+	// hand edits and the store syncs). Set only by open; a state built any
+	// other way has nothing to finish. Guarded by App.mu.
+	unfinished bool
+	// refreshPending: open skipped the cache refresh and the format reads
+	// (withoutCacheRefresh, App.rowState), so finishOpen must run them
+	// before any cache read or write.
+	refreshPending bool
+	// refreshOnce runs that deferred refresh once; every caller of
+	// finishRefresh waits on it, so a concurrent request (`lore serve`)
+	// never queries a cache the refresh is still filling. refreshErr is
+	// its result.
+	refreshOnce sync.Once
+	refreshErr  error
+	// formatRepo is the repo store's own backend (no wrapper) that
+	// readFormats reads; nil inside a store's checkout.
+	formatRepo store.Backend
 }
 
 // New validates opts and builds the registry of every migrated operation,
@@ -632,10 +650,26 @@ func (a *App) Engine(ctx context.Context) (*engine.Engine, error) {
 	return st.eng, nil
 }
 
+// rowEngine is Engine for a caller that only lists or gets rows
+// (engine.List and Get read the row files, never a cache): it opens
+// through rowState, so no cache is refreshed for it. A caller that writes
+// or queries uses Engine.
+func (a *App) rowEngine(ctx context.Context) (*engine.Engine, error) {
+	st, err := a.rowState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return st.eng, nil
+}
+
 // Actor opens the App on first use and returns the actor its writes are
-// stamped with (Options.Actor, or what ResolveActor found).
+// stamped with (Options.Actor, or what ResolveActor found). The open
+// settles the actor itself (resolveActor, the contact match on the row
+// files), so Actor opens through rowState: the session bookkeeping of a
+// read (the known-repo touch after `lore whoami`) asks it, and must not
+// build the repo's cache for it.
 func (a *App) Actor(ctx context.Context) (ids.ID[ids.Actor], error) {
-	st, err := a.state(ctx)
+	st, err := a.rowState(ctx)
 	if err != nil {
 		return ids.ID[ids.Actor]{}, err
 	}
@@ -660,26 +694,53 @@ func (a *App) ServeAsPerson() {
 // state opens the App once. A failed open is remembered: every later call
 // returns the same error rather than half-opening again.
 func (a *App) state(ctx context.Context) (*state, error) {
-	st, opened, err := a.openState(ctx)
+	st, finish, err := a.openState(ctx, false)
 	if err != nil {
 		return st, a.refineNoProject(ctx, err) // G-3: the specific "no project" answer (untouched_reason.go)
 	}
-	if opened && err == nil {
+	if finish {
 		// outside a.mu: the pick-up writes through the engine, whose
 		// scanner and hooks ask the App again (handedit.go)
-		if err = st.pickUpThenSync(ctx, a.opts); err != nil {
+		if err = a.finishOpen(ctx, st); err != nil {
 			a.mu.Lock()
 			a.err = err
 			a.mu.Unlock()
 			return nil, err
 		}
 	}
-	return st, err
+	return st, nil
 }
 
-// openState is state's open under a.mu; opened reports that this call
-// opened it (the pick-up of hand edits then runs once, in state).
-func (a *App) openState(ctx context.Context) (st *state, opened bool, err error) {
+// rowState is state for a read that goes straight to the row files
+// (engine.List, Get) and never to a cache: `lore whoami`'s identity,
+// identity-contact and session lookups. It opens the App without
+// refreshing the caches and without the pick-up of hand edits, so the
+// first whoami in a 5,000-row repo no longer builds that repo's cache
+// (3-5 s) before printing who you are. A later state call on the same App
+// runs what was skipped (finishOpen) before any cache read.
+func (a *App) rowState(ctx context.Context) (*state, error) {
+	st, _, err := a.openState(withoutCacheRefresh(ctx), true)
+	if err != nil {
+		return st, a.refineNoProject(ctx, err)
+	}
+	return st, nil
+}
+
+// finishOpen is the end of a full open that state runs once, outside
+// a.mu: the cache refresh and format reads open left to it
+// (refreshPending, with the row file notices that refresh finds), then
+// the pick-up of hand edits and the store syncs.
+func (a *App) finishOpen(ctx context.Context, st *state) error {
+	if err := a.finishRefresh(ctx, st); err != nil {
+		return err
+	}
+	return st.pickUpThenSync(ctx, a.opts)
+}
+
+// openState is state's open under a.mu. finish reports that this call
+// must run finishOpen (once per opened state); a rowsOnly call (rowState)
+// never claims it, so the next state call does.
+func (a *App) openState(ctx context.Context, rowsOnly bool) (st *state, finish bool, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run := noCreateOf(ctx)
@@ -687,15 +748,18 @@ func (a *App) openState(ctx context.Context) (st *state, opened bool, err error)
 		return nil, false, run.stateErr // refused earlier in this read run (doctor_nocreate.go)
 	}
 	if !a.opened {
-		a.opened, opened = true, true
+		a.opened = true
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
 		if a.err == nil {
+			a.st.unfinished = true
 			a.st.eng.SetRedactHook(a.redactTask) // D21: write-time store-then-rotate task (wire/secretmgrs.go)
 			a.notePlaces(a.st)                   // servestale.go
 		}
 		if a.err == nil && a.opts.Notice != nil {
 			a.healedNotices(a.st)
-			a.rowFileNotices(a.st) // fail closed: name every row file the refresh left out (rowfile_notice.go)
+			if !a.st.refreshPending {
+				a.rowFileNotices(a.st) // fail closed: name every row file the refresh left out (rowfile_notice.go)
+			}
 			if n := liveNote(ctx, a.st); n != "" {
 				a.opts.Notice(n)
 			}
@@ -708,16 +772,35 @@ func (a *App) openState(ctx context.Context) (st *state, opened bool, err error)
 			run.stateErr = a.err
 		}
 	}
-	return a.st, opened, a.err
+	if a.err == nil && !rowsOnly && a.st.unfinished {
+		a.st.unfinished, finish = false, true
+	}
+	return a.st, finish, a.err
 }
 
 // configState opens the repo-only state once (see App.cfg).
 func (a *App) configState(ctx context.Context) (*state, error) {
 	st, err := a.configStateLocked(ctx)
+	if err == nil && st.refreshPending {
+		// opened for a read before (configRowState): its cache refresh and
+		// format reads run now, outside a.mu as open runs them
+		err = a.finishRefresh(ctx, st)
+	}
 	return st, a.refineNoProject(ctx, err) // G-3 (untouched_reason.go), outside a.mu
 }
 
-// configStateLocked is configState's open under a.mu.
+// configRowState is configState for a store operation that only reads
+// (`lore store list`, `store folder list`): those read stores.yaml and the
+// setup, never the repo's rows, so the open skips the cache refresh that
+// made `lore store list` take 4 s in a 5,000-row repo. A later
+// configState call on the same App runs it.
+func (a *App) configRowState(ctx context.Context) (*state, error) {
+	st, err := a.configStateLocked(withoutCacheRefresh(ctx))
+	return st, a.refineNoProject(ctx, err)
+}
+
+// configStateLocked is configState's open under a.mu (configRowState's
+// with withoutCacheRefresh on ctx).
 func (a *App) configStateLocked(ctx context.Context) (*state, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -737,6 +820,34 @@ func (a *App) configStateLocked(ctx context.Context) (*state, error) {
 		}
 	}
 	return a.cfg, a.cfgErr
+}
+
+// finishRefresh runs what an open under withoutCacheRefresh skipped (the
+// cache refresh, then the format reads), once, with the row file notices
+// that refresh finds. Outside a.mu, as open runs them; a concurrent caller
+// waits for the one run (refreshOnce) and gets its error.
+func (a *App) finishRefresh(ctx context.Context, st *state) error {
+	a.mu.Lock()
+	pending := st.refreshPending
+	a.mu.Unlock()
+	if !pending {
+		return nil
+	}
+	st.refreshOnce.Do(func() {
+		if st.refreshErr = st.refreshAll(ctx); st.refreshErr != nil {
+			return
+		}
+		a.mu.Lock()
+		st.refreshErr = st.readFormats(ctx, a.opts) // the O6 answers are guarded by a.mu
+		if st.refreshErr == nil {
+			st.refreshPending = false
+		}
+		a.mu.Unlock()
+		if st.refreshErr == nil {
+			a.rowFileNotices(st)
+		}
+	})
+	return st.refreshErr
 }
 
 // healedNotices hands Options.Notice one line per damaged cache file the
@@ -928,7 +1039,11 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		if err := a.confirmClientStoresFile(ctx, e, d, c); err != nil {
 			return op.Result{}, err
 		}
-		st, err := a.configState(ctx)
+		open := a.configState
+		if e.Spec().OnlyReads() {
+			open = a.configRowState // reads config, never the repo's rows: no cache refresh
+		}
+		st, err := open(ctx)
 		if err != nil {
 			return op.Result{}, err
 		}

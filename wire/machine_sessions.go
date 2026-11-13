@@ -162,9 +162,11 @@ func (a *App) FindOrCreateSession(ctx context.Context, projectID string, d Sessi
 }
 
 // Sessions returns this machine's sessions, newest ended_at first (ties by
-// id); limit <= 0 returns all.
+// id); limit <= 0 returns all. It lists the machine store's rows directly
+// (engine.List never reads a cache), so it opens through rowState: `lore
+// whoami` and `lore session list` build no repo cache for it.
 func (a *App) Sessions(ctx context.Context, limit int) ([]SessionRow, error) {
-	eng, err := a.Engine(ctx)
+	eng, err := a.rowEngine(ctx)
 	if err != nil {
 		return nil, err
 	}

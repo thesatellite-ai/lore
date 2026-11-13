@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -77,6 +78,20 @@ func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error
 	s.full[st.Backend] = snapRead{rows: slices.Clone(rows), next: next}
 	s.mu.Unlock()
 	return rows, next, nil
+}
+
+// readOneTable is the rows readTable filters for table: the run's shared
+// full read when ctx has a read snapshot (doctor's checks list ~80 tables,
+// so one full read serves them all), else a full read narrowed to table's
+// rows (store.WithTables). The backend may ignore the hint and return
+// every row; the caller keeps only table's rows either way.
+func readOneTable(ctx context.Context, st Attached, table row.Table) ([]store.Row, error) {
+	if snapshotOf(ctx) != nil {
+		rows, _, err := readAll(ctx, st)
+		return rows, err
+	}
+	rows, _, err := st.Backend.Read(store.WithTables(ctx, table), "")
+	return rows, err
 }
 
 // dropSnapshot forgets ctx's snapshot of st's backend: called before every

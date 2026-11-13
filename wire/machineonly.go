@@ -36,7 +36,7 @@ import (
 // succeeds (doctor's NoCreate retry) the fallback is closed first.
 func (a *App) machineApp(ctx context.Context) (*App, error) {
 	if insideWorkTree(ctx, a.opts.RepoDir) && opssetup.LoreRepoAt(a.opts.RepoDir) {
-		_, err := a.Engine(ctx)
+		_, err := a.rowState(ctx) // only whether the repo opens: no cache refresh for it (`lore setup list`)
 		if err == nil {
 			return a, a.closeMachineOnly()
 		}
