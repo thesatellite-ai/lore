@@ -27,10 +27,13 @@ func TestRewrittenRemoteRefusesThenRestores(t *testing.T) {
 	gitT(t, top, "init", "-q", "--bare", "-b", "main", bare)
 	gitT(t, top, "remote", "add", "origin", bare)
 	gitT(t, top, "push", "-q", "origin", "main")
-	// run is one command: a fresh run whose session fetches (FetchAlways).
+	// run is one command: a fresh run whose session fetches (FetchAlways)
+	// and pushes what it wrote, as a push the person asked for does
+	// (asked: live.autopush is off by default, and fetching like sync is
+	// not asking for a push, S-1).
 	run := func(rows ...store.Row) error {
 		t.Helper()
-		r := &liveRun{h: f.s.h, sessions: map[string]*liveSession{}, kind: live.FetchAlways}
+		r := &liveRun{h: f.s.h, sessions: map[string]*liveSession{}, kind: live.FetchAlways, asked: true}
 		ctx := withRun(context.Background(), r)
 		defer r.finish(ctx)
 		b := &liveBackend{inner: f.inner, top: top, folder: live.RootFolder}

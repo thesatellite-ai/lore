@@ -201,3 +201,24 @@ func TestCompactEpochRaisesByOneOnlyWhenHistoryIsRewritten(t *testing.T) {
 		t.Fatalf("second real compaction: %+v %v, remote epoch %d", res, err, epochAt())
 	}
 }
+
+// S-1: a compaction with nothing to compact pushes nothing, not even a
+// local write that waits for lore sync (live.autopush false): the remote
+// has no live ref before and after. Old code pushed the waiting write
+// before it looked at the plan.
+func TestCompactWithNothingToDoPushesNoWaitingWrite(t *testing.T) {
+	ctx := context.Background()
+	w := gitremotetest.NewWorld(t)
+	a := w.Clone("a")
+	r := newRef(t, a, a.Remote)
+	write(t, r, put("tsk_1", NewVersion(nil, row("tsk_1", "x", "low"), t0, "a")))
+	for _, dry := range []bool{false, true} {
+		res, err := r.Compact(ctx, dry)
+		if err != nil || res.Status != PushNothing {
+			t.Fatalf("dry %v: %+v %v", dry, res, err)
+		}
+		if got := w.OriginRef(RefLive); got != "" {
+			t.Fatalf("dry %v: compact pushed the waiting write: origin %s = %s", dry, RefLive, got)
+		}
+	}
+}

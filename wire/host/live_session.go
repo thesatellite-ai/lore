@@ -114,6 +114,9 @@ type liveSession struct {
 	agent bool
 	// read: the command is a read (liveRun.read): it writes no git config.
 	read bool
+	// asked: the command is a push the person asked for (liveRun.asked):
+	// it pushes waiting live writes even with live.autopush off.
+	asked bool
 	// fetchErr is the last fetch failure (offline).
 	fetchErr error
 	// remoteURL is remote.<RemoteName>.url as configured ("" without a
@@ -385,7 +388,15 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.clearWaitNotes()
 		return true
 	}
-	if !s.autopush && s.kind != live.FetchAlways {
+	// A read or a dry run never pushes (S-1, docs/sync/store-clones.md),
+	// not even one that fetches like sync (sync status, live compact
+	// --dry-run: FetchAlways): what waits goes out on `lore sync`, the next
+	// write, or the person's git push.
+	if s.read {
+		s.waitWhy = "a read never pushes"
+		return false
+	}
+	if !s.autopush && !s.asked {
 		if s.wrote > 0 {
 			s.sayAutopushOnce(liveAutopushOff)
 		}

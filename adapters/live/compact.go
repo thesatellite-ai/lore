@@ -100,8 +100,9 @@ const compactRetries = 5
 // tip's tree (purged rows dropped), the epoch raised by one and
 // compacted_at set, after keeping a local backup; the push is a lease on
 // the tip it read, so a concurrent writer makes it start again instead of
-// being overwritten (F8). Local writes not pushed yet are pushed first, so
-// they are part of what is compacted. With dryRun nothing changes.
+// being overwritten (F8). When a rewrite is needed, local writes not
+// pushed yet are pushed first, so they are part of what is compacted; when
+// none is (or with dryRun) nothing changes and nothing is pushed.
 func (r *Ref) Compact(ctx context.Context, dryRun bool) (CompactResult, error) {
 	for attempt := 0; attempt < compactRetries; attempt++ {
 		res, err := r.compactOnce(ctx, dryRun)
@@ -126,61 +127,33 @@ func (r *Ref) compactOnce(ctx context.Context, dryRun bool) (CompactResult, erro
 		if _, err := r.Integrate(ctx); err != nil {
 			return res, err
 		}
-		if !dryRun {
-			out, err := r.Push(ctx)
-			if err != nil {
-				return res, err
-			}
-			if !out.Pushed() {
-				res.Status = out.Status
-				return res, nil
-			}
+	}
+	// The plan is read before anything is pushed: a compaction with nothing
+	// to do (or a dry run) pushes nothing, not even local writes that wait
+	// for lore sync under live.autopush false (S-1: no push without asking).
+	p, err := r.compactPlan(ctx)
+	if err != nil || !p.needed || dryRun {
+		res.Plan, res.Status = p.plan, p.status
+		return res, err
+	}
+	if r.Remote != nil {
+		// Local writes not pushed yet are pushed first, so they are part of
+		// what is compacted; the push may integrate, so plan again after it.
+		out, err := r.Push(ctx)
+		if err != nil {
+			return res, err
+		}
+		if !out.Pushed() {
+			res.Status = out.Status
+			return res, nil
+		}
+		if p, err = r.compactPlan(ctx); err != nil || !p.needed {
+			res.Plan, res.Status = p.plan, p.status
+			return res, err
 		}
 	}
-	s, err := r.Snapshot(ctx)
-	if err != nil {
-		return res, err
-	}
-	if s.Local == "" {
-		res.Status = PushNothing
-		return res, nil
-	}
-	tree, err := r.ReadTree(ctx, s.Local)
-	if err != nil {
-		return res, err
-	}
-	n, err := r.CommitCount(ctx)
-	if err != nil {
-		return res, err
-	}
-	purged, err := tree.Purged()
-	if err != nil {
-		return res, err
-	}
-	ch := gitref.Changes{Put: map[string][]byte{
-		EpochPath:       encodeEpoch(tree.Epoch() + 1),
-		compactedAtPath: []byte(r.now().Format(time.RFC3339) + "\n"),
-	}}
-	dropped := 0
-	for p, b := range tree {
-		if dropsPurged(p, b, purged) {
-			ch.Delete = append(ch.Delete, p)
-			dropped++
-		}
-	}
-	if !CompactNeeded(n, dropped) {
-		// Already one commit with nothing purged to drop: a rewrite would
-		// change only the epoch, and a higher epoch sends every teammate
-		// through the F8 reader path (back up, discard, re-apply) for no
-		// gain. Write nothing and keep the epoch.
-		res.Plan = CompactPlan{Commits: n, Files: len(tree), FromEpoch: tree.Epoch(), ToEpoch: tree.Epoch()}
-		res.Status = PushNothing
-		return res, nil
-	}
-	res.Plan = CompactPlan{Commits: n, Files: len(tree) - dropped, FromEpoch: tree.Epoch(), ToEpoch: tree.Epoch() + 1, Purged: dropped}
-	if dryRun {
-		return res, nil
-	}
+	s, ch := p.snap, p.changes
+	res.Plan = p.plan
 	c, err := r.Repo.MakeCommit(ctx, gitref.CommitRequest{
 		Base: s.Local, History: gitref.HistoryReplace, Changes: ch,
 		Message: fmt.Sprintf("lore: live compact (epoch %d)", res.Plan.ToEpoch), Signature: r.sig(),
@@ -280,4 +253,64 @@ func (r *Ref) Purge(ctx context.Context, ids []string, version string) (WriteRes
 			return res, err
 		}
 	}
+}
+
+// compactPlanned is compactPlan's answer: the plan, whether a rewrite is
+// needed (CompactNeeded), and for one that is the snapshot it starts from
+// and the tree changes it makes. status is PushNothing when none is.
+type compactPlanned struct {
+	plan    CompactPlan
+	status  PushStatus
+	needed  bool
+	snap    Snapshot
+	changes gitref.Changes
+}
+
+// compactPlan reads the local live ref and works out what a compaction
+// would do, writing nothing.
+func (r *Ref) compactPlan(ctx context.Context) (compactPlanned, error) {
+	var p compactPlanned
+	s, err := r.Snapshot(ctx)
+	if err != nil {
+		return p, err
+	}
+	if s.Local == "" {
+		p.status = PushNothing
+		return p, nil
+	}
+	tree, err := r.ReadTree(ctx, s.Local)
+	if err != nil {
+		return p, err
+	}
+	n, err := r.CommitCount(ctx)
+	if err != nil {
+		return p, err
+	}
+	purged, err := tree.Purged()
+	if err != nil {
+		return p, err
+	}
+	ch := gitref.Changes{Put: map[string][]byte{
+		EpochPath:       encodeEpoch(tree.Epoch() + 1),
+		compactedAtPath: []byte(r.now().Format(time.RFC3339) + "\n"),
+	}}
+	dropped := 0
+	for path, b := range tree {
+		if dropsPurged(path, b, purged) {
+			ch.Delete = append(ch.Delete, path)
+			dropped++
+		}
+	}
+	if !CompactNeeded(n, dropped) {
+		// Already one commit with nothing purged to drop: a rewrite would
+		// change only the epoch, and a higher epoch sends every teammate
+		// through the F8 reader path (back up, discard, re-apply) for no
+		// gain. Write nothing and keep the epoch.
+		p.plan = CompactPlan{Commits: n, Files: len(tree), FromEpoch: tree.Epoch(), ToEpoch: tree.Epoch()}
+		p.status = PushNothing
+		return p, nil
+	}
+	p.plan = CompactPlan{Commits: n, Files: len(tree) - dropped, FromEpoch: tree.Epoch(), ToEpoch: tree.Epoch() + 1, Purged: dropped}
+	p.needed, p.snap, p.changes = true, s, ch
+	return p, nil
 }

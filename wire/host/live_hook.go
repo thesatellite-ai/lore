@@ -190,9 +190,12 @@ type liveRun struct {
 	h     *liveHost
 	kind  live.FetchKind
 	agent bool
-	// read: the run is a read command (readRun), which writes no git
-	// config (owner bug 6): no tracking refspec, no wiring.
-	read     bool
+	// read: the run is a read command (readRun) or a dry run (dryRun),
+	// which writes no git config (owner bug 6): no tracking refspec, no
+	// wiring, and it never pushes (S-1).
+	read bool
+	// asked: the run is a push the person asked for (pushAsked).
+	asked    bool
 	sessions map[string]*liveSession
 	// storeWrites counts the store writes this run asked a liveBackend for
 	// (Write, WriteAudited, WritePurge with at least one change or purged
@@ -263,6 +266,7 @@ func (r *liveRun) session(ctx context.Context, top string) *liveSession {
 		if s != nil {
 			s.agent = r.agent
 			s.read = r.read
+			s.asked = r.asked
 			s.cache = cache
 			r.addCache(cache)
 		}
@@ -543,6 +547,13 @@ var fetchAlways = map[string]bool{
 	opslive.OpRestore: true, opslive.OpCompact: true,
 }
 
+// pushAsked are the operations that are a push the person asked for
+// (lore sync, lore land): their run's finish pushes waiting live writes
+// even with live.autopush off. Fetching like sync is not asking for a
+// push: sync status, live compact and live restore push only their own
+// rewrite (S-1: no push without asking).
+var pushAsked = map[string]bool{"sync.run": true, "land.run": true}
+
 // leakExemptOps are the nouns whose branch writes skip the write-time F16
 // check (noSessionLeakCheck): migrate rewrites the rows a repo already
 // holds into the 0.1.18 format and adds no text of its own.
@@ -777,7 +788,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if liveDisabled() || skipLiveRun(run) {
 		return next(ctx)
 	}
-	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run)}
+	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name]}
 	if fetchAlways[spec.Name] {
 		r.kind = live.FetchAlways
 	}
