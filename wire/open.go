@@ -195,11 +195,13 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		if repoCache, err = remoteRepoCachePath(opts.Home, st.repoTop); err != nil {
 			return fail(err)
 		}
-	case NoCreate(ctx) && !loreFolderAt(st.repoTop): // doctor_nocreate.go: a read never creates .lore/
-		return fail(noProjectErr(st.repoTop))
+	case NoCreate(ctx) && !loreFolderAt(st.repoTop): // doctor_nocreate.go: a read (or a write that may not set up, S-2) never creates .lore/
+		return fail(noProjectErr(ctx, st.repoTop))
 	default:
-		// A write's implicit setup still makes .lore/ (a read reaches here
-		// only when it exists: MkdirAll then changes nothing).
+		// Only a command that sets a repo up on purpose (init, setup,
+		// link, store add, sync: host.setsUpRepo) or an in-process caller
+		// with a plain ctx makes .lore/ here (a read reaches here only when
+		// it exists: MkdirAll then changes nothing).
 		if mkErr := os.MkdirAll(filepath.Join(st.repoTop, loreFolderName), cacheDirMode); mkErr != nil {
 			return fail(errs.FileIO("create the .lore folder", filepath.Join(st.repoTop, loreFolderName), mkErr))
 		}

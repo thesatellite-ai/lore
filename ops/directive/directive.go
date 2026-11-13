@@ -138,7 +138,7 @@ func splitValues(values []string) []string {
 }
 
 // errorCodes are the codes the directive operations return.
-var errorCodes = []errs.Code{errs.InvalidInput, errs.ConfigInvalid, errs.BadPath, errs.Internal}
+var errorCodes = []errs.Code{errs.InvalidInput, errs.ConfigInvalid, errs.BadPath, errs.NotAStore, errs.Internal}
 
 // Ops returns the directive operations bound to m.
 func Ops(m Manager) []op.Entry {

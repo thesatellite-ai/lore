@@ -70,6 +70,11 @@ func (r RepoSync) SyncPromote(ctx context.Context, in opssync.PromoteIn) (opssyn
 // SyncInstallAction implements opssync.Env's install-action verb.
 func (r RepoSync) SyncInstallAction(ctx context.Context, in opssync.InstallActionIn) (opssync.ActionOut, error) {
 	out := opssync.ActionOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindAction}
+	if top := UntouchedRepo(ctx, r.dir()); top != "" && !in.DryRun {
+		// S-2: a repo with no lore data (one a store only links) has no
+		// row files to merge in pull requests, and gets no workflow file
+		return out, UntouchedError(top)
+	}
 	res, err := reposync.Install(ctx, reposync.InstallOptions{
 		Dir: r.dir(), Branches: in.Branches, Auto: in.Auto, Manual: in.Manual,
 		LoreVersion: in.LoreVersion, DryRun: in.DryRun, Force: in.Force, Own: r.Version,

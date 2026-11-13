@@ -42,6 +42,12 @@ type noCreateKey struct{}
 // run's ctx, not on the App, so the next run (a long-lived `lore api`)
 // opens afresh. Its fields are read and written under App.mu.
 type noCreateRun struct {
+	// write marks a run that may write, but not set a repo up
+	// (WithNoSetUp): open refuses in a git repo with no .lore/ as for a
+	// read, while the run is not a read anywhere else (push reports,
+	// the roster fallback of a read outside a project).
+	write bool
+
 	stateErr  error // App.state's refusal in this run
 	configErr error // App.configState's refusal in this run
 
@@ -73,13 +79,37 @@ func (r *noCreateRun) topLevel(dir string, ask func() string) string {
 // read the project after the op (the Context section) are covered too.
 // A ctx that is already a read run keeps its memory (one run, one answer).
 func WithNoCreate(ctx context.Context) context.Context {
-	if NoCreate(ctx) {
+	if readOnlyRun(ctx) {
 		return ctx
 	}
 	return context.WithValue(ctx, noCreateKey{}, &noCreateRun{})
 }
 
-// NoCreate reports whether ctx forbids creating .lore/ (WithNoCreate).
+// WithNoSetUp is ctx for a run that may write but must not set a repo up
+// (S-2, the untouched-repo rule): every command but the ones that set a
+// repo up on purpose (init, setup, link: host.setsUpRepo). In a git repo
+// with no .lore/ its open refuses like a read's, with the write's line
+// (noProjectErr), so nothing is created there: no .lore/, no cache, no
+// live lock in .git/lore, no hooks or merge driver. Before, a write there
+// (lore vars set, lore task add) made .lore/ and wired git by itself, or
+// refused with E_NOT_FOUND only after taking the live lock. A ctx that is
+// already a read run stays one.
+func WithNoSetUp(ctx context.Context) context.Context {
+	if NoCreate(ctx) {
+		return ctx
+	}
+	return context.WithValue(ctx, noCreateKey{}, &noCreateRun{write: true})
+}
+
+// readOnlyRun reports whether ctx is a read run (WithNoCreate), not a
+// write that only may not set a repo up (WithNoSetUp).
+func readOnlyRun(ctx context.Context) bool {
+	r := noCreateOf(ctx)
+	return r != nil && !r.write
+}
+
+// NoCreate reports whether ctx forbids creating .lore/ (WithNoCreate,
+// WithNoSetUp).
 func NoCreate(ctx context.Context) bool {
 	return noCreateOf(ctx) != nil
 }
@@ -103,8 +133,11 @@ func loreFolderAt(top string) bool {
 }
 
 // noProjectErr is open's refusal under noCreate: top is a git repo with no
-// .lore/.
-func noProjectErr(top string) error {
+// .lore/. A write run (WithNoSetUp) says so with its own line.
+func noProjectErr(ctx context.Context, top string) error {
+	if r := noCreateOf(ctx); r != nil && r.write {
+		return UntouchedError(top)
+	}
 	return errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); a read creates nothing there").
 		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)")
 }
@@ -143,4 +176,42 @@ func (a *App) loreRootFrom(top string) string {
 		}
 	}
 	return top
+}
+
+// UntouchedRepo is the top of the git repo dir is in when that repo holds
+// no lore data (no .lore/ from dir up to its top, as loreRootFrom looks),
+// "" otherwise (a lore project, or not a git repo). S-2: such a repo, one
+// a store only links included, is left byte-identical by every command but
+// init, setup and link, so the commands that write files of the work tree
+// outside the repo store (render, sync install-action) ask this first.
+func UntouchedRepo(ctx context.Context, dir string) string {
+	top := gitTopLevel(ctx, dir)
+	if top == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = dir
+	}
+	if r, rerr := filepath.EvalSymlinks(abs); rerr == nil {
+		abs = r
+	}
+	for d := abs; len(d) >= len(top); d = filepath.Dir(d) {
+		if loreFolderAt(d) {
+			return ""
+		}
+		if d == top || filepath.Dir(d) == d {
+			break
+		}
+	}
+	if loreFolderAt(top) {
+		return ""
+	}
+	return top
+}
+
+// UntouchedError is the refusal of a write in an UntouchedRepo (top).
+func UntouchedError(top string) error {
+	return errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); lore changes nothing in a repo it isn't set up in").
+		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)")
 }

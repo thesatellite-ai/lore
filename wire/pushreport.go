@@ -71,7 +71,7 @@ func readRun(ctx context.Context) bool {
 	if access, known := engine.AccessOf(ctx); known {
 		return access == op.AccessRead
 	}
-	return NoCreate(ctx)
+	return readOnlyRun(ctx) // a write that may not set up (WithNoSetUp) is no read
 }
 
 // reportPushes prints the pushes the clone made since the last report.

@@ -115,7 +115,7 @@ type CoreStores interface {
 func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	read := []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.Internal}
-	write := append(append([]errs.Code{}, read...), errs.ReadOnly, errs.Stale)
+	write := append(append([]errs.Code{}, read...), errs.ReadOnly, errs.Stale, errs.NotAStore)
 	r := func(name, summary string, ex ...op.Example) op.Spec {
 		return op.Spec{Name: name, Summary: summary, Permission: op.PermRead, Access: op.AccessRead, Errors: read, Examples: ex}
 	}

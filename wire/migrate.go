@@ -84,6 +84,13 @@ func (a *App) LockMigration(ctx context.Context) (func() error, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !loreFolderAt(top) {
+		// S-2: a repo with no lore data (one a store only links) has no
+		// rows to migrate, and gets no lock, journal, backup ref or
+		// .lore/state from trying
+		return nil, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder), so there is nothing to migrate there; lore changes nothing in a repo it isn't set up in").
+			WithHint("run lore migrate run in a repo lore is set up in (lore migrate status shows what needs it)")
+	}
 	path := filepath.Join(top, filepath.FromSlash(MigrateLockFile))
 	if err := acquireMigrateLock(ctx, path, a.opts.Notice); err != nil {
 		return nil, err

@@ -64,6 +64,21 @@ func (o Observations) Observe(b Board, now time.Time) Observations {
 	return out
 }
 
+// Same reports whether o and other record the same observations (the
+// same paths, tokens, sequences and instants).
+func (o Observations) Same(other Observations) bool {
+	if len(o) != len(other) {
+		return false
+	}
+	for p, a := range o {
+		b, ok := other[p]
+		if !ok || a.Token != b.Token || a.Seq != b.Seq || !a.Since.Equal(b.Since) {
+			return false
+		}
+	}
+	return true
+}
+
 // Expired reports whether a reader may treat the signal at p as absent:
 // now is past Expires + Grace on the reader's clock AND the reader has seen
 // the same token and renewed_seq for at least RenewEvery. A signal the
