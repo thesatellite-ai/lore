@@ -86,6 +86,16 @@ func placeholderValue(match, _ string) bool {
 	return !passwordPairStopwords[strings.ToLower(strings.TrimRight(v, ".!?"))]
 }
 
+// valueOf is the credential part of a finding's text: credentialValue
+// while the rule is still the built-in one (a changed rule's regex may
+// cut its match differently), else the whole text.
+func (s *Scanner) valueOf(ruleID, text string) string {
+	if s.builtin[ruleID] {
+		return credentialValue(ruleID, text)
+	}
+	return text
+}
+
 func isLetter(b byte) bool { return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') }
 
 // tokenUser is the url_token_user post-filter (14.6): the URL's user name
@@ -315,6 +325,9 @@ func (s *Scanner) keep(text string, fs []scan.Finding) []scan.Finding {
 			if ok && !pf(text[f.Offset:f.Offset+f.Length], lineRest(text, f.Offset+f.Length)) {
 				continue
 			}
+		}
+		if in && isPlaceholder(s.valueOf(f.RuleID, text[f.Offset:f.Offset+f.Length])) {
+			continue // a template reference or mask, never a credential (every rule)
 		}
 		if in && len(s.allow) > 0 && allowed(s.allow, f.RuleID, text[f.Offset:f.Offset+f.Length]) {
 			continue
