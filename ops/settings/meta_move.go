@@ -185,7 +185,7 @@ func (o ops) metaAdopt(ctx context.Context, in MetaAdoptIn) (MetaMoveOut, error)
 	}
 	if len(clash) > 0 {
 		return MetaMoveOut{}, errs.New(errs.MetaTaken, "both places define "+strings.Join(clash, ", ")).
-			WithHint("rename one (lore meta rename) or fold it (lore meta edit <key> --merge-into <other>) first; nothing written")
+			WithHint("rename one (lore meta rename) or fold it (lore meta edit --id <key> --merge-into <other>) first; nothing written")
 	}
 	if err = o.refuseReturn(ctx, keys, from, to); err != nil {
 		return MetaMoveOut{}, err

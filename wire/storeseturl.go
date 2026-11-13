@@ -80,7 +80,7 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 			out.Note = "the old address could not be read (" + string(errs.CodeOf(oerr)) + "), so its store id was not compared"
 		case !oldID.IsZero() && oldID != newID:
 			return opsstores.SetURLOut{}, errs.New(errs.InvalidInput, verb+": "+raw+" is another store ("+newID.String()+"; "+in.Name+" is "+oldID.String()+")").
-				WithHint("attach it under its own name: lore store add <name> " + raw)
+				WithHint("attach it under its own name: lore store add --name <name> --url " + raw)
 		}
 	}
 	// B3-15: a clone at an old address holding unpushed work is carried

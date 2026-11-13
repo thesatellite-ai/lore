@@ -431,8 +431,8 @@ var fixes = map[fixKey]Fix{
 	// would "finish" and leave the check failing; the person edits the file.
 	{check: CheckSetupConfig}: {Text: "setups[{setup}] in ~/.lore/config.yaml does not validate; lore config check lists every problem, then edit the file",
 		Command: argv(cmdLore, "config", "check")},
-	{check: CheckSetupOrgEntry}: {Text: "orgs[{org}] is missing, so setup {setup} has no identity or store; join again with lore setup join <invite>, or lore setup remove {setup}"},
-	{check: CheckSetupNameFree}: {Text: "setup {name} already exists; pick another name or run lore setup edit {name}"},
+	{check: CheckSetupOrgEntry}: {Text: "orgs[{org}] is missing, so setup {setup} has no identity or store; join again with lore setup join --invite <invite>, or lore setup remove --name {setup}"},
+	{check: CheckSetupNameFree}: {Text: "setup {name} already exists; pick another name or run lore setup edit --name {name}"},
 
 	{check: CheckIdentityEmailFormat}: {Text: "Type the address you use for this work, e.g. you@company.example"},
 	{check: CheckIdentityInviteEmail}: {Text: "This invite is for {invite_email}. Use that address, or ask {inviter} for a new invite to {email}"},
@@ -442,9 +442,9 @@ var fixes = map[fixKey]Fix{
 	{check: CheckIdentityGitEmail, variant: FixRepo}: {Text: "{repo_root} commits as {git_email}. To use {email}: git -C {repo_root} config user.email {email}",
 		Command: argv(cmdGit, "-C", "{repo_root}", "config", "user.email", "{email}")},
 	// SOURCE_OF_TRUTH rows 7 and 9: one source per copied datum.
-	{check: CheckStoreAddress}: {Text: "Store {store_id} is reached at two addresses on this machine, and lore writes only to {url}. Run it to point every place naming the store at {url}: lore store set-url {store_id} {url} (to keep the other address, run lore store set-url {store_id} <that address> instead)",
+	{check: CheckStoreAddress}: {Text: "Store {store_id} is reached at two addresses on this machine, and lore writes only to {url}. Run it to point every place naming the store at {url}: lore store set-url {store_id} {url} (to keep the other address, run lore store set-url --name {store_id} --url <that-address> instead)",
 		Command: argv(cmdLore, "store", "set-url", "{store_id}", "{url}"), Runnable: true},
-	{check: CheckOrgSource}: {Text: "The {org} entry in ~/.lore/config.yaml is older than, or differs from, the store's lore-org.yaml (the team's source for its stores and repo patterns). Run it to copy them in: lore org refresh {org}",
+	{check: CheckOrgSource}: {Text: "The {org} entry in ~/.lore/config.yaml is older than, or differs from, the store's lore-org.yaml (the team's source for its stores and repo patterns). Run it to copy them in: lore org refresh --org {org}",
 		Command: argv(cmdLore, "org", "refresh", "{org}"), Runnable: true},
 	{check: CheckIdentityRoster}: {Text: "Your email is not on the {org} roster yet; finish the join step or run lore actor contact add --actor <you> --type email --value <your-email>"},
 	{check: CheckIdentityPeriod}: {Text: "You are marked as left in {org}. If you are back, ask an admin of {org} to run lore member add {email} (it reopens a stint that ended today)"},
@@ -467,9 +467,9 @@ var fixes = map[fixKey]Fix{
 	{check: CheckGitHubSSHUser, variant: FixRecordedKey}: {Text: "The key this setup records, {ssh_key}, logs in as {got}, not {user}. The fix is github.key_matches' Run it: it points this setup at a route that logs in as {user}"},
 	{check: CheckGitHubSSHUser}:                          {Text: "{alias} logs in as {got}, not {user}. In ~/.ssh/config point Host {alias} at {user}'s key (IdentityFile <that key>, IdentitiesOnly yes), or pick the {got} account"},
 	{check: CheckGitHubKeyMatches}:                       {Text: "Nothing lore can use logs in as {user}. Run the GitHub step again so lore finds a route (an ssh alias that logs in as {user}, or https with {user}'s gh login: gh auth login), or add a Host block for {user}'s key to ~/.ssh/config"},
-	{check: CheckGitHubKeyMatches, variant: FixKeyPair}: {Text: "Use {fix_alias} with {fix_key}, which log in as {user}: lore setup edit {setup} --route ssh --host-alias {fix_alias} --ssh-key {fix_key}",
+	{check: CheckGitHubKeyMatches, variant: FixKeyPair}: {Text: "Use {fix_alias} with {fix_key}, which log in as {user}: lore setup edit --name {setup} --route ssh --host-alias {fix_alias} --ssh-key {fix_key}",
 		Command: argv(cmdLore, "setup", "edit", "{setup}", "--route", "ssh", "--host-alias", "{fix_alias}", "--ssh-key", "{fix_key}"), Runnable: true},
-	{check: CheckGitHubKeyMatches, variant: FixKeyAliasOnly}: {Text: "Use {fix_alias}, which logs in as {user}, with its own key: lore setup edit {setup} --route ssh --host-alias {fix_alias} --no-ssh-key",
+	{check: CheckGitHubKeyMatches, variant: FixKeyAliasOnly}: {Text: "Use {fix_alias}, which logs in as {user}, with its own key: lore setup edit --name {setup} --route ssh --host-alias {fix_alias} --no-ssh-key",
 		Command: argv(cmdLore, "setup", "edit", "{setup}", "--route", "ssh", "--host-alias", "{fix_alias}", "--no-ssh-key"), Runnable: true},
 	{check: CheckGitHubAliasConfig}: {Text: "Add 'IdentitiesOnly yes' under 'Host {alias}' in ~/.ssh/config so ssh does not offer your other keys first"},
 	{check: CheckGitHubGHAccount}: {Text: "gh is optional; it only speeds up checks and lets lore offer 'create repo'. To add: gh auth login --hostname github.com",
@@ -513,10 +513,10 @@ var fixes = map[fixKey]Fix{
 
 	{check: CheckInviteParse}:                         {Text: "This is not a lore invite. Copy the whole line starting with lore-invite:v1:"},
 	{check: CheckInviteFound}:                         {Text: "Invite {id} is not in {org}'s store. Ask {by} to run lore team invite {invite_email} again"},
-	{check: CheckInviteFound, variant: FixMemberJoin}: {Text: "{email} is not on the org's roster. Ask an admin to run lore member add {email}, then join again (an outsider joins with an invite line instead)"},
+	{check: CheckInviteFound, variant: FixMemberJoin}: {Text: "{email} is not on the org's roster. Ask an admin to run lore member add --email {email}, then join again (an outsider joins with an invite line instead)"},
 	{check: CheckInviteStatus}:                        {Text: "Invite {id} is {status}. Ask {by} for a new one"},
 	{check: CheckInviteEmail}:                         {Text: "This invite is for {invite_email}. Use that address, or ask {inviter} for a new invite to {email}"},
-	{check: CheckInvitePending}: {Text: "Invite {id} for {invite_email} is still pending. Resend it (lore team invite resend {id}) or revoke it (lore team invite revoke {id})",
+	{check: CheckInvitePending}: {Text: "Invite {id} for {invite_email} is still pending. Resend it (lore team invite resend --ref {id}) or revoke it (lore team invite revoke --ref {id})",
 		Command: argv(cmdLore, "team", "invite", "resend", "{id}"), Runnable: true},
 	// --grant (Q9): runs only after an explicit confirm.
 	{check: CheckInviteGitHubAccess}: {Text: "{github} has no access to {owner}/{repo} yet. Grant push access: gh api -X PUT repos/{owner}/{repo}/collaborators/{github} -f permission=push",
@@ -556,11 +556,11 @@ var fixes = map[fixKey]Fix{
 
 	{check: CheckSecretsBackendPresent}: {Text: "{backend} is not on PATH; references to {backend}:// will not resolve on this machine"},
 
-	{check: CheckFoldersExist}:   {Text: "{folder} is not a folder on this machine; create it, or change the glob with lore setup edit {setup} --folder <glob>"},
+	{check: CheckFoldersExist}:   {Text: "{folder} is not a folder on this machine; create it, or change the glob with lore setup edit --name {setup} --folder <glob>"},
 	{check: CheckFoldersOverlap}: {Text: "{folder} matches setups {setup} and {other} equally; make one folder glob more specific (lore setup edit) or run with --setup"},
 	{check: CheckFoldersShadow}:  {Text: "{other_folder} stays with {other}"},
 	// Shown, not run: --default takes default: true from the other setup.
-	{check: CheckFoldersReachable}: {Text: "Add a folder on the Folders step (lore picks {setup} inside it), or make {setup} the default for folders no setup matches: lore setup edit {setup} --default",
+	{check: CheckFoldersReachable}: {Text: "Add a folder on the Folders step (lore picks {setup} inside it), or make {setup} the default for folders no setup matches: lore setup edit --name {setup} --default",
 		Command: argv(cmdLore, "setup", "edit", "{setup}", "--default")},
 
 	// Runs in the repo: the FixRunner uses the result's repo as cwd.

@@ -239,7 +239,7 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 		if reset {
 			shown := raw
 			return rowfs.Marker{}, false, errs.New(errs.Refused, "store init: "+shown+" was deleted and made again, but this machine's clone "+gb.Dir()+" still holds the old store ("+old.ID.String()+"); nothing was changed").
-				WithHint("start fresh: lore store forget --url " + shown + ", then run this command again; or put the old store back: lore store add <name> " + shown + ", then lore store push <name> --restore")
+				WithHint("start fresh: lore store forget --url " + shown + ", then run this command again; or put the old store back: lore store add --name <name> --url " + shown + ", then lore store push --store <name> --restore")
 		}
 		return old, true, nil
 	}

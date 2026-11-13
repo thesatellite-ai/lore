@@ -199,7 +199,7 @@ func (a *App) adoptTop(ctx context.Context, from string) (string, error) {
 	if err != nil {
 		if from == "" {
 			return "", errs.New(errs.NotProjectRoot, adoptVerb+": "+dir+" is not inside a git repo, so there is no repo to adopt").
-				WithHint("run it in the repo, or name it: lore store adopt <store>/<folder> --from <repo path>")
+				WithHint("run it in the repo, or name it: lore store adopt --target <store>/<folder> --from <repo-path>")
 		}
 		return "", errs.Wrap(errs.NotProjectRoot, adoptVerb+": --from "+from+" is not a git repo", err).
 			WithHint("name the repo's folder (a clone of it works the same)")

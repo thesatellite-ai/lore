@@ -69,7 +69,7 @@ func Ops(env kn.Env) []op.Entry {
 			Name: OpAdd, Summary: "Add a new hotfix (a loud recurring warning: we keep hitting this, beware)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "warn about a trap", CLI: `lore hotfix add --title="Flaky CI" --body="Rerun the job once" --severity=high`, Want: "hfx_"}},
+			Examples: []op.Example{{Title: "warn about a trap", CLI: `lore hotfix add --title "Flaky CI" --body "Rerun the job once" --severity high`, Want: "hfx_"}},
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List hotfixes",

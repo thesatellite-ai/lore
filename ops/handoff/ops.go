@@ -134,7 +134,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	}
 	if strings.TrimSpace(text) == "" {
 		return content.WriteOut{}, errs.New(errs.EmptyBody, "handoff add: the text is empty").
-			WithHint(`example: lore handoff add --for @agent "what is left"`)
+			WithHint(`example: lore handoff add --for @agent --body "what is left"`)
 	}
 	to, err := o.actor(ctx, who)
 	if err != nil {

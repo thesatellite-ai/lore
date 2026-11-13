@@ -233,7 +233,7 @@ func (h *standaloneOrg) Refresh(ctx context.Context, in opsorgcmd.RefreshIn) (op
 	o := cfg.FindOrg(in.Org)
 	if o == nil {
 		return opsorgcmd.Report{}, errs.New(errs.NotFound, "no org entry named "+in.Org+" in ~/.lore/config.yaml").
-			WithHint("entries: lore config check lists them; join one with lore org import <url>")
+			WithHint("entries: lore config check lists them; join one with lore org import --url <url>")
 	}
 	sc := o.OrgFolderStore()
 	if sc == nil {

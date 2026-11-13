@@ -106,5 +106,5 @@ func NeedsDone(step Step, kind Kind, progress []Progress) error {
 		names[i] = string(m)
 	}
 	return errs.New(errs.SetupStepOrder, "step "+string(step.ID)+" needs "+strings.Join(names, ", ")+" first").
-		WithHint("finish " + strconv.Quote(names[0]) + " (lore setup apply <setup> --step " + names[0] + ") and try again")
+		WithHint("finish " + strconv.Quote(names[0]) + " (lore setup apply --setup <setup> --step " + names[0] + ") and try again")
 }

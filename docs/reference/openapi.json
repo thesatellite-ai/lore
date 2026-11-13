@@ -16222,7 +16222,7 @@
                   },
                   "dirs": {
                     "type": "array",
-                    "description": "with --all: folders to look through for repos too, as deep as a setup's folders (lore fix --all ~/code ~/work)",
+                    "description": "with --all: folders to look through for repos too, as deep as a setup's folders (lore fix --all --dirs ~/code --dirs ~/work)",
                     "items": {
                       "type": "string"
                     }
@@ -31866,7 +31866,7 @@
                   },
                   "keys": {
                     "type": "array",
-                    "description": "more keys to remove (repeatable)",
+                    "description": "a key to remove (repeatable; deploy removes deploy.env too)",
                     "items": {
                       "type": "string"
                     }
@@ -32852,7 +32852,7 @@
                   },
                   "keys": {
                     "type": "array",
-                    "description": "more keys to remove (repeatable)",
+                    "description": "a key to remove (repeatable; deploy removes deploy.env too)",
                     "items": {
                       "type": "string"
                     }
@@ -80200,7 +80200,7 @@
     "/v1/sync/trashes/{id}/restore": {
       "post": {
         "operationId": "sync.trash.restore",
-        "summary": "Moved: lore trash restore --local \u003cn\u003e",
+        "summary": "Moved: lore trash restore --local --target \u003cn\u003e",
         "tags": [
           "sync"
         ],

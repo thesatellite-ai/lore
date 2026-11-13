@@ -152,7 +152,7 @@ func (o ops) resEditWhere(ctx context.Context, in ResEditIn) (RowOut, error) {
 	// would tag only its first row: refused rather than half applied.
 	if !in.Empty() {
 		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: --meta is not taken by the bulk form --where; nothing written").
-			WithHint("edit metadata row by row: lore resource edit <name> --meta key=value")
+			WithHint("edit metadata row by row: lore resource edit --id <name> --meta key=value")
 	}
 	if in.Archive && (len(sets) > 0 || len(in.Unset) > 0) {
 		return RowOut{}, errs.New(errs.InvalidInput, "resource edit: --archive takes no --set or --unset; run them apart")

@@ -71,7 +71,7 @@ type AddIn struct {
 	// actor (INTEG-AUDIT-1, ops/internal/creator).
 	ValidatedBy string `json:"validated_by,omitempty" flag:"validated-by" desc:"actor id (act_…) that validated this memory"`
 	// Tags are tag names of the project (repeatable --tag; each must exist:
-	// `lore tag add --name=<tag>`), stored as tag_ids (O11).
+	// `lore tag add --name <tag>`), stored as tag_ids (O11).
 	Tags []string `json:"tags,omitempty" flag:"tag" desc:"tag name (repeatable; the tag must exist)"`
 	// Key is the idempotency key (CLEANUP Qs): the memory's id is natural
 	// over (project, key), so a retry with the same key finds the row it

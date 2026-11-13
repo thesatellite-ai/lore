@@ -340,7 +340,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 		// FTS5's NOT needs something to subtract from: "-friday" alone
 		// would mean every row in scope without friday
 		return RunOut{}, errs.New(errs.InvalidInput, "search needs a word to search for: every term of "+fmt.Sprintf("%q", in.Query)+" starts with '-', which leaves rows out").
-			WithHint(`add a word to search for: lore search "deploy -friday"`)
+			WithHint(`add a word to search for: lore search --query "deploy -friday"`)
 	}
 	targets, err := TargetsFor(in.Tables)
 	if err != nil {

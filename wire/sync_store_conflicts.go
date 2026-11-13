@@ -349,7 +349,7 @@ func (a *App) explainStore(ctx context.Context, out opssync.ExplainOut, id strin
 				names = append(names, f.Name)
 			}
 			lines = append(lines, "  CONFLICT: the store's remote holds another edit ("+strings.Join(names, ", ")+"); both are kept and this machine's waits to be pushed",
-				"  see both: lore sync conflicts; settle: lore sync resolve <n> --take kept|other, or edit the row so both agree")
+				"  see both: lore sync conflicts; settle: lore sync resolve --id <n> --take kept|other, or edit the row so both agree")
 			for i := range out.Copies {
 				if out.Copies[i].Place == opssync.ExplainStore {
 					out.Copies[i].Conflict = true

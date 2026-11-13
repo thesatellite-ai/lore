@@ -143,7 +143,7 @@ func (o ops) metaForget(ctx context.Context, in MetaForgetIn) (RowOut, error) {
 		if u := use[k.Row.ID.String()]; u != nil {
 			key := text(k.Row, mName)
 			return RowOut{}, errs.New(errs.MetaInUse, fmt.Sprintf("%s is used on %d rows (%s)", key, u.rows, u.tableCounts())).
-				WithHint(fmt.Sprintf("to stop using it: lore meta unset --where '%s?' %s --dry-run; or lore meta delete --id %s", key, key, key))
+				WithHint(fmt.Sprintf("to stop using it: lore meta unset --where '%s?' --key %s --dry-run; or lore meta delete --id %s", key, key, key))
 		}
 		keys = append(keys, k)
 	}

@@ -120,7 +120,7 @@ func (a *App) bareFolderStore(ctx context.Context, verb, folderName string) (fol
 	}
 	if len(scan.Searched) == 0 && len(scan.Unread) == 0 {
 		return folderPlace{}, errs.New(errs.InvalidInput, verb+": \""+folderName+"\" names no folder; give <store>/<folder> (a folder named alone is looked up in the org's stores, and this command sees no org)").
-			WithHint("e.g. lore store adopt team/" + folderName + " (`lore store folder list` shows the folders)")
+			WithHint("e.g. lore store adopt --target team/" + folderName + " (`lore store folder list` shows the folders)")
 	}
 	return folderPlace{}, errs.New(errs.NotFound, verb+": no store of the org has a folder "+folderName+scan.missDetail()+scan.foundDetail()).
 		WithHint("name it as `lore store folder list` shows it, or <store>/<folder>; make it first with `lore store folder add --store <store> --folder " + folderName + "`")

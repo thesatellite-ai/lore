@@ -189,7 +189,7 @@ type StaffListOut struct {
 // Text is a table of the members.
 func (o StaffListOut) Text() string {
 	if len(o.Members) == 0 {
-		return "no members on " + o.Where + "'s roster (lore member add <email>)\n"
+		return "no members on " + o.Where + "'s roster (lore member add --email <email>)\n"
 	}
 	var b strings.Builder
 	for _, m := range o.Members {

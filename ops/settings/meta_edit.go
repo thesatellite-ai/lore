@@ -502,7 +502,7 @@ func (o ops) metaMergeInto(ctx context.Context, k located, into string) (RowOut,
 	}
 	if len(clash) > 0 {
 		return RowOut{}, errs.New(errs.MetaConflict, fmt.Sprintf("%d rows hold different values under both %s and %s: %s", len(clash), name, sname, strings.Join(clash, ", "))).
-			WithHint("settle each row first: lore meta unset <id> " + name + " (or set " + sname + " to the value to keep), then fold")
+			WithHint("settle each row first: lore meta unset --id <id> " + name + " (or set " + sname + " to the value to keep), then fold")
 	}
 	if err = bulk.Ask(ctx, fmt.Sprintf("fold %s (%s) into %s (%s)? %d rows are rewritten", name, short(k.Row.ID), sname, short(sv.Row.ID), len(hits))); err != nil {
 		return RowOut{}, err

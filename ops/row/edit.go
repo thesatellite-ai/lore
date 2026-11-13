@@ -195,7 +195,7 @@ func parseID(s string) (ids.AnyID, error) {
 	id, err := ids.ParseAny(s)
 	if err != nil {
 		return ids.AnyID{}, lookup.BadID(s+" is not a row id", err).
-			WithHint("a row id is a kind prefix and 32 hex characters (tsk_…, mem_…, rul_…); find one with lore search <words>")
+			WithHint("a row id is a kind prefix and 32 hex characters (tsk_…, mem_…, rul_…); find one with lore search --query <words>")
 	}
 	return id, nil
 }
@@ -375,7 +375,7 @@ func editText(in EditIn) ([]byte, string, error) {
 		b, err := os.ReadFile(file)
 		if err != nil {
 			return nil, "", errs.Wrap(errs.InvalidInput, "edit: cannot read "+file, err).
-				WithHint("name the Markdown view file to write back (lore row markdown <id> > view.md makes one)")
+				WithHint("name the Markdown view file to write back (lore row markdown --id <id> > view.md makes one)")
 		}
 		return b, file, nil
 	case inline != "":

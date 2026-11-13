@@ -213,7 +213,7 @@ func viewOutOf(src store.Source, r row.Row) (ViewOut, error) {
 func (o ops) viewAdd(ctx context.Context, in ViewAddIn) (ViewOut, error) {
 	name := strings.TrimSpace(in.Name)
 	if !row.ValidName(name) {
-		return ViewOut{}, errs.New(errs.InvalidInput, "task view name "+strconv.Quote(name)+" must be snake_case (a-z, 0-9, _), starting with a letter").WithHint("e.g. lore task view add my_urgent --where 'priority>=high'")
+		return ViewOut{}, errs.New(errs.InvalidInput, "task view name "+strconv.Quote(name)+" must be snake_case (a-z, 0-9, _), starting with a letter").WithHint("e.g. lore task view add --name my_urgent --where 'priority>=high'")
 	}
 	project, err := work.Project(ctx, o.env, viewNoun, in.Project)
 	if err != nil {

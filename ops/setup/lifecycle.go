@@ -168,7 +168,7 @@ func (o TrashListOut) Text() string {
 		return "the setup trash is empty\n"
 	}
 	var b strings.Builder
-	b.WriteString("setups in the trash (lore setup trash restore <name> brings one back):\n")
+	b.WriteString("setups in the trash (lore setup trash restore --name <name> brings one back):\n")
 	for _, t := range o.Setups {
 		b.WriteString("  " + t.Setup.Name + "  " + string(t.Setup.Kind) + "  removed " + t.RemovedAt)
 		if t.NameTaken {

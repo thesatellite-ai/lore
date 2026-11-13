@@ -284,7 +284,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil {
 		return ShowOut{}, lookup.BadID(strings.TrimSpace(in.ID)+" is not a row id", err).
-			WithHint("a row id is a kind prefix and 32 hex characters (mem_…, tsk_…, res_…); find one with lore search <words>")
+			WithHint("a row id is a kind prefix and 32 hex characters (mem_…, tsk_…, res_…); find one with lore search --query <words>")
 	}
 	src, r, err := o.env.Get(ctx, engine.Ref{ID: id})
 	if err != nil {

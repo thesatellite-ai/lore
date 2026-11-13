@@ -78,7 +78,7 @@ func Ops(env kn.Env) []op.Entry {
 			Name: OpAdd, Summary: "Add a new rule (a hard constraint: must / should / may)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "add a rule", CLI: `lore rule add --body="Never log tokens" --severity=must`, Want: "rul_"}},
+			Examples: []op.Example{{Title: "add a rule", CLI: `lore rule add --body "Never log tokens" --severity must`, Want: "rul_"}},
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List rules (archived ones too with --archived)",

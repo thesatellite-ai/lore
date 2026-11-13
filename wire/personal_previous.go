@@ -140,7 +140,7 @@ func (a *App) previousPersonalNote(_ context.Context, oldValue, value string) st
 	if n == 0 {
 		return ""
 	}
-	where := "it is not read by this setup any more; move each note with lore move <id> --to me --yes"
+	where := "it is not read by this setup any more; move each note with lore move --id <id> --to me --yes"
 	if previousPersonalURL(home, value) != "" {
 		where = "it stays readable here as store " + PreviousPersonalStore + " (labelled [" + PreviousPersonalStore + "]; nothing new is written there); move each note with lore move <id> --to me --yes (lore memory list --store " + PreviousPersonalStore + " lists them)"
 	}

@@ -228,7 +228,7 @@ func validateSetupsRaw(raw []byte) (onboard.Config, error) {
 // setupsInvalid is the E_CONFIG_INVALID of a list of problems.
 func setupsInvalid(problems []string) error {
 	return errs.New(errs.ConfigInvalid, "~/.lore/"+ConfigFile+": "+strings.Join(problems, "; ")).
-		WithHint("fix the entries named above (lore setup edit <name>, or edit ~/.lore/" + ConfigFile + "), then lore config check")
+		WithHint("fix the entries named above (lore setup edit --name <name>, or edit ~/.lore/" + ConfigFile + "), then lore config check")
 }
 
 // editSetups runs edit on the node tree, then validates the candidate

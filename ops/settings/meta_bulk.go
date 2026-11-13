@@ -203,11 +203,9 @@ func (o ops) metaUnsetWhere(ctx context.Context, in MetaUnsetIn) (RowOut, error)
 	if in.All && !in.DryRun {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta unset: --all belongs to --dry-run")
 	}
-	var keys []string
-	for _, k := range append([]string{in.ID, in.Key}, in.More...) {
-		if k != "" {
-			keys = append(keys, k)
-		}
+	keys := unsetKeys(in)
+	if in.ID != "" { // with --where, the positional slot of the id holds a key
+		keys = append([]string{in.ID}, keys...)
 	}
 	if len(keys) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta unset --where: name the key").WithHint("lore meta unset --where 'client?' --key client --dry-run")

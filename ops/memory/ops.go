@@ -109,7 +109,7 @@ func Ops(env Env) []op.Entry {
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
 				{Title: "add a memory", CLI: `lore memory add --body "Retry the gateway twice on 502"`, Want: "id: mem_"},
-				{Title: "to another store", CLI: `lore memory add --body="We use UTC for all timestamps" --to team_kb`, Want: "store: team_kb"},
+				{Title: "to another store", CLI: `lore memory add --body "We use UTC for all timestamps" --to team_kb`, Want: "store: team_kb"},
 			},
 		}, o.add),
 		op.Define(op.Spec{

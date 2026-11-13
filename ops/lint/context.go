@@ -131,7 +131,7 @@ func contextFindings(all map[row.Table][]sourced) []Finding {
 				Message: "pinned but untagged, so it is under (no topic) in the index",
 				// `lore tag add` only creates a tag (--name); the edit's --tag
 				// attaches an existing one.
-				Fix: "lore " + p.noun + " edit --id " + id + " --tag <tag> (create a new tag first: lore tag add --name=<tag>)"})
+				Fix: "lore " + p.noun + " edit --id " + id + " --tag <tag> (create a new tag first: lore tag add --name <tag>)"})
 		}
 	}
 	return append(out, nearDuplicates(pinned)...)

@@ -655,7 +655,7 @@ func sqliteErrText(se *modernc.Error) string {
 // lensQueryHint is the next step after the caller's own SQL failed to
 // compile or run: every lens table and view is listed in
 // sqlite_temp_master, and pragma_table_info names a table's columns.
-const lensQueryHint = `check the statement; list the tables with lore sql "SELECT name FROM sqlite_temp_master ORDER BY name" and a table's columns with lore sql "SELECT name FROM pragma_table_info('memories')"`
+const lensQueryHint = `check the statement; list the tables with lore sql --query "SELECT name FROM sqlite_temp_master ORDER BY name" and a table's columns with lore sql "SELECT name FROM pragma_table_info('memories')"`
 
 // primaryCodeMask keeps the primary result code of an extended one.
 const primaryCodeMask = 0xff

@@ -114,7 +114,7 @@ func (b *Backend) remoteResetError(ctx context.Context, why, remote, h string) e
 			WithHint("drop this machine's old copy with lore store forget --url " + shown + " --yes, then run lore sync to clone the new store (or ask whoever reset it)")
 	}
 	return errs.Wrap(errs.Refused, "git: the store at "+shown+" was reset ("+why+"), but this machine's clone "+b.work+" still holds the old store; lore will not push it there on its own", ErrRemoteReset).
-		WithHint("put this copy back: lore store push --restore " + shown + "; or start fresh: lore store forget --url " + shown + ", then lore store init <name> " + shown)
+		WithHint("put this copy back: lore store push --restore " + shown + "; or start fresh: lore store forget --url " + shown + ", then lore store init --name <name> " + shown)
 }
 
 // checkRemoteReset decides, after a fetch, whether the remote was reset:

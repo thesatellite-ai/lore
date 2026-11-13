@@ -78,7 +78,7 @@ func TestSearchNegatedWords(t *testing.T) {
 		}
 	}
 	_, err := h.Run(search.OpRun, `{"query":"-friday"}`)
-	if hint := errs.EnvelopeOf(err).Error.Hint; hint != `add a word to search for: lore search "deploy -friday"` {
+	if hint := errs.EnvelopeOf(err).Error.Hint; hint != `add a word to search for: lore search --query "deploy -friday"` {
 		t.Errorf("hint %q", hint)
 	}
 }

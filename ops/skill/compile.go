@@ -397,7 +397,7 @@ suitable for small-context (32K) and weak-instruction-following models
 
 12. **REQUIRED: ❌ FORBIDDEN PATTERN block.** Insert after the ⛔ DO NOT CAPTURE block. Must explicitly forbid:
     DO NOT EVER emit `+"`lore rule add --severity=must \"<X>\" --body=\"<Y>\"`"+` (rule has no --body)
-    The exact user phrase "We decided … because …" MUST map to `+"`lore decision add --title=\"<X>\" --body=\"<Y>\"`"+`
+    The exact user phrase "We decided … because …" MUST map to `+"`lore decision add --title \"<X>\" --body \"<Y>\"`"+`
     State: "No exceptions."
 
 13. **REQUIRED: CRITICAL DISCRIMINATION RULES block.** Insert after the FORBIDDEN PATTERN block. Five rules, in priority order:
@@ -419,11 +419,11 @@ suitable for small-context (32K) and weak-instruction-following models
     These must be emitted as ONE atomic shell script using `+"`$(…)`"+` command substitution to extract the rule code in-line — NOT as multi-step "Step 1 / Step 2" examples (weak models stop after step 1). Example form:
         RID=$(lore rule search --query "<keyword>" --json | jq -r '.data[0].code')
         lore rule archive --id "$RID"
-        lore rule add --severity=should --body "<new stance>"
+        lore rule add --severity should --body "<new stance>"
         lore render
 
 17. **FEW-SHOTS section must include:**
-    - A render-flags combo example: `+"`lore render --budget=4000 --dry-run`"+` for "budget-trimmed LORE.md, preview only"
+    - A render-flags combo example: `+"`lore render --budget 4000 --dry-run`"+` for "budget-trimmed LORE.md, preview only"
     - An error-recovery example for E_DB_LOCKED showing retry-with-backoff in prose+bash (NOT a capture command)
     - A conflict-resolution example using the `+"`$(…)`"+` atomic-script form (rule 16)
     - An FTS5 boolean example showing `+"`(auth OR session) NOT logging`"+` and the explicit note "do NOT post-filter with jq when FTS5 can do it natively" — models tend to default to `+"`jq | select(... | not)`"+` instead of the in-query NOT operator
@@ -450,9 +450,9 @@ suitable for small-context (32K) and weak-instruction-following models
     T[who am I | what identity | whoami in aicoder]
         → lore identity show
     T[set my identity to X | record me as X]
-        → lore identity set --actor="<X>"
+        → lore identity set --actor "<X>"
     T[file a bug | make a support bundle | generate a bundle for the issue]
-        → lore support-bundle --out=/tmp/aicoder-bundle.tar.gz
+        → lore support-bundle --out /tmp/aicoder-bundle.tar.gz
     Mention inline that `+"`support-bundle`"+` omits memory/rule content by default; `+"`--include-content`"+` opts in
 
 22. **ENTITY MODEL must include rare entities** (don't drop them in compression):
@@ -463,7 +463,7 @@ suitable for small-context (32K) and weak-instruction-following models
 23. **No learn or bench examples.** `+"`lore learn`"+`, `+"`lore learn-from`"+` and `+"`lore bench`"+` are not commands of this release; drop every trigger, playbook step or few-shot that uses them
 
 24. **Note the CLI gaps that don't have direct verbs.** Mention briefly that:
-    - There is NO `+"`lore task block <tsk_id>`"+` transition (despite `+"`blocked`"+` being a valid status enum); the workaround is `+"`lore comment add --on-table=tasks --on-id=tsk_<id> --body=\"blocked: <reason>\"`"+`
+    - There is NO `+"`lore task block <tsk_id>`"+` transition (despite `+"`blocked`"+` being a valid status enum); the workaround is `+"`lore comment add --on-table tasks --on-id tsk_<id> --body \"blocked: <reason>\"`"+`
     - There is NO `+"`lore audit`"+` CLI verb yet; audit-log access is raw SQL (covered in rule 20)
 
 25. **No bench triggers** (see rule 23)
@@ -497,15 +497,15 @@ suitable for small-context (32K) and weak-instruction-following models
 
 31. **TRIGGER GRAMMAR must include decision-revisit pattern** (flag without archiving):
     T[flag dec_<id> for re-eval | revisit dec_<id> | re-evaluate decision | conditions changed for dec_<id> but don't archive yet]
-        → lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>; conditions changed <when>"
-          OR: lore tag attach --on-table=decisions --on-id=dec_<id> --name=revisit
+        → lore comment add --on-table decisions --on-id dec_<id> --body "REVISIT: <why>; conditions changed <when>"
+          OR: lore tag attach --on-table decisions --on-id dec_<id> --name revisit
     Critical: do NOT create a NEW decision when the user wants to flag an existing one. The old decision stays active until explicitly archived
 
 32. **No bench grader triggers** (see rule 23)
 
 33. **TRIGGER GRAMMAR must include cancel-with-reason pattern** (CLI has no native --reason flag, so workaround is cancel + comment):
     T[cancel tsk_<id> because <reason> | cancel with note]
-        → task cancel tsk_<id>; lore comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"
+        → task cancel tsk_<id>; lore comment add --on-table tasks --on-id tsk_<id> --body "cancelled: <reason>"
 
 34. **Capture-vs-question disambiguation rule.** Question forms like "what does X check?" / "what does X do?" / "what's X's behavior?" are HOW-questions and should be answered with prose or `+"`<cmd> --help`"+`, NOT by running the command silently. Add to the ⛔ DO NOT CAPTURE block
 
