@@ -485,11 +485,15 @@ func StoreOnlyRoster(ctx context.Context, opts Options, target store.Source) (*A
 	return a, true, nil
 }
 
-// readWithoutProject reports whether ctx is a read (WithNoCreate) run in a
-// git repo whose full open refuses it: no .lore/ at its top and no store
-// linking it by its remote (open.go: such a repo opens read-only instead).
+// readWithoutProject reports whether ctx is a run whose full open refuses
+// a git repo with no .lore/ at its top and no store linking it by its
+// remote (open.go: such a repo opens read-only instead): a read
+// (WithNoCreate) or a write that may not set a repo up (WithNoSetUp, S-2).
+// Either is served by the org store alone: the roster lives there, so
+// `lore team invite --setup <admin>` from a fresh clone writes the invite
+// and leaves the clone untouched (R-12).
 func readWithoutProject(ctx context.Context, opts Options) bool {
-	if !readOnlyRun(ctx) {
+	if !NoCreate(ctx) {
 		return false
 	}
 	top := gitTopLevel(ctx, opts.RepoDir)
