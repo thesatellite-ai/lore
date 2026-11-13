@@ -37,6 +37,12 @@ func (a *App) DoctorRenderedCopies(ctx context.Context) ([]DoctorFinding, error)
 		// DoctorChecks skips a NotAStore check outside a git work tree.
 		return nil, errs.New(errs.NotAStore, "not inside a git repo, so there are no rendered files to compare").WithHint("run lore doctor in a repo")
 	}
+	if ProjectFormatOld(root) {
+		// fmt1: lore render writes nothing in a project on the 0.1.17
+		// format (lore 0.1.17 renders LORE.md in its own layout there), so
+		// its copies are not this lore's to compare until lore migrate run
+		return nil, nil
+	}
 	found, err := cc.RenderedCopies(ctx, root)
 	if noProjectToRender(err) {
 		return nil, nil // B1-8: no lore project here, so nothing is rendered to compare (not a check that could not run)

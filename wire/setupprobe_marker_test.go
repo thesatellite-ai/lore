@@ -134,7 +134,9 @@ func TestOrgEntryIdentityEmailGitHub(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(loreHome, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	e := onboard.SetupEntry{Name: "agency-admin", Kind: onboard.KindAdmin, Org: "agency"}
+	// A route but no user: with no github block at all the github step was
+	// skipped and every github check skips before reading the identity.
+	e := onboard.SetupEntry{Name: "agency-admin", Kind: onboard.KindAdmin, Org: "agency", GitHub: onboard.SetupGitHub{HostAlias: "github-agency"}}
 	r := sp.Probe(context.Background(), []opssetup.ProbeRequest{{Check: onboard.Check{ID: onboard.CheckGitHubIdentityEmail, Level: onboard.LevelWarn}, Setup: e}})[0]
 	if r.Vars[onboard.VarEmail] != "tomas@agency.example" || strings.Contains(r.Detail, "no identity email") {
 		t.Fatalf("github.identity_email = %+v, want the org entry's email used", r)

@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -241,6 +243,24 @@ type importRecord struct {
 	parent int
 	// checklist is the export's [{text, done}] (--with-checklist).
 	checklist []importItem
+	// line is the record's first file line in a CSV (header = 1); 0 in JSON.
+	line int
+}
+
+// problem is a record check's refusal as the problem of its place in the
+// file (its CSV line, else its external id), so the import lists every bad
+// record at once; ok is false for an error that is not a lore refusal.
+func (r importRecord) problem(err error) (fromfile.Problem, bool) {
+	var e *errs.Error
+	if !errors.As(err, &e) {
+		return fromfile.Problem{}, false
+	}
+	at := r.extID
+	if r.line > 0 {
+		at = fromfile.Line(r.line)
+	}
+	reason := strings.TrimPrefix(strings.TrimPrefix(e.Message, "task import: "), r.extID+" ")
+	return fromfile.Problem{At: at, Reason: reason, Fix: e.Hint, Code: e.Code}, true
 }
 
 // importItem is one checklist item as task export --with-checklist writes it.
@@ -267,7 +287,7 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	if err != nil {
 		return ImportOut{}, err
 	}
-	recs, ignored, err := parseImport(from, filepath.Base(in.File), raw, rename)
+	recs, ignored, err := parseImport(from, in.File, raw, rename)
 	if err != nil {
 		return ImportOut{}, err
 	}
@@ -289,9 +309,15 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 			Message: "column " + strconv.Quote(c) + " is the exporter's record; not set on the imported tasks"})
 	}
 	items := make([]bulk.Item, 0, len(recs))
+	var bad []fromfile.Problem
 	for _, r := range recs {
 		if err = checkRecord(r); err != nil {
-			return ImportOut{}, err
+			p, ok := r.problem(err)
+			if !ok {
+				return ImportOut{}, err
+			}
+			bad = append(bad, p)
+			continue
 		}
 		ir := ImportRow{ExtID: r.extID, Title: strings.TrimSpace(r.cols[colTitle]), Checklist: len(r.checklist)}
 		if r.parent >= 0 {
@@ -300,6 +326,8 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		out.Rows = append(out.Rows, ir)
 		items = append(items, bulk.Item{ID: r.extID, Label: strings.TrimSpace(r.cols[colTitle])})
 	}
+	// bad is refused after the estimates are checked too: one refusal
+	// lists every bad record
 	out.Count = len(recs)
 	target := store.Source(in.To)
 	if target == "" {
@@ -314,9 +342,16 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	for _, r := range recs {
 		if raw := r.cols[colEstimate]; raw != "" {
 			if _, perr := estimate.Parse(raw, unit); perr != nil {
-				return ImportOut{}, errors.Join(perr, errs.New(errs.InvalidInput, "task import: in "+r.extID))
+				p, ok := r.problem(perr)
+				if !ok {
+					return ImportOut{}, errors.Join(perr, errs.New(errs.InvalidInput, "task import: in "+r.extID))
+				}
+				bad = append(bad, p)
 			}
 		}
+	}
+	if e := fromfile.Refuse("task import --file", in.File, bad, "lore task import --file "+in.File+" --dry-run"); e != nil {
+		return ImportOut{}, e
 	}
 	// G-TASK-3 (TSQ8 dedupe by external id): a record whose (source,
 	// external id) a live task in the target already carries adds nothing.
@@ -728,15 +763,16 @@ func readImportFile(path string) ([]byte, error) {
 // parseImport turns the file into records with renamed columns. A record
 // without an id column gets ext_id "<file>:<row>" (row 1 = the first
 // record), so importing the same file again names the same external ids.
-func parseImport(from, base string, raw []byte, rename map[string]string) ([]importRecord, []string, error) {
+func parseImport(from, path string, raw []byte, rename map[string]string) ([]importRecord, []string, error) {
+	base := filepath.Base(path)
 	var rows []jsonRow
 	if from == FromCSV {
-		flat, err := csvRows(raw)
+		flat, lines, err := csvRows(path, raw)
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, m := range flat {
-			rows = append(rows, jsonRow{cols: m, parent: -1})
+		for i, m := range flat {
+			rows = append(rows, jsonRow{cols: m, parent: -1, line: lines[i]})
 		}
 	} else {
 		var objs []map[string]json.RawMessage
@@ -782,7 +818,7 @@ func parseImport(from, base string, raw []byte, rename map[string]string) ([]imp
 		} else if ext == "" {
 			ext = out[jr.parent].extID + extIDKidSep + strconv.Itoa(kids[jr.parent])
 		}
-		out = append(out, importRecord{extID: ext, cols: cols, parent: jr.parent, checklist: jr.checklist})
+		out = append(out, importRecord{extID: ext, cols: cols, parent: jr.parent, checklist: jr.checklist, line: jr.line})
 	}
 	out, err := linkParentColumn(out)
 	if err != nil {
@@ -868,32 +904,60 @@ type jsonRow struct {
 	cols      map[string]string
 	parent    int
 	checklist []importItem
+	// line is the CSV file line of the row (0 for JSON).
+	line int
 }
 
-// csvRows reads a CSV with a header row.
-func csvRows(raw []byte) ([]map[string]string, error) {
-	recs, err := csv.NewReader(bytes.NewReader(raw)).ReadAll()
+// csvRows reads a CSV with a header row, and each row's first file line
+// (header = 1). A row whose cells do not fit the header is listed with the
+// others; a broken quote stops the read, naming its line and the reason.
+func csvRows(path string, raw []byte) ([]map[string]string, []int, error) {
+	cr := csv.NewReader(bytes.NewReader(raw))
+	recheck := "lore task import --file " + path + " --dry-run"
+	head, err := cr.Read()
+	if errors.Is(err, io.EOF) {
+		return nil, nil, nil
+	}
 	if err != nil {
-		return nil, errs.Wrap(errs.InvalidInput, "task import: the CSV does not parse", err)
+		return nil, nil, fromfile.CSV("task import --file", path, raw, err, recheck)
 	}
-	if len(recs) == 0 {
-		return nil, nil
-	}
-	head := make([]string, len(recs[0]))
-	for i, h := range recs[0] {
+	for i, h := range head {
 		head[i] = strings.TrimSpace(strings.TrimPrefix(h, utf8BOM))
 	}
-	out := make([]map[string]string, 0, len(recs)-1)
-	for _, r := range recs[1:] {
+	var out []map[string]string
+	var lines []int
+	var bad []fromfile.Problem
+	for {
+		r, rerr := cr.Read()
+		if errors.Is(rerr, io.EOF) {
+			break
+		}
+		if rerr != nil {
+			p, ok := fromfile.CSVProblem(raw, rerr)
+			if !ok || !errors.Is(rerr, csv.ErrFieldCount) {
+				if !ok {
+					p = fromfile.Problem{At: "the file", Reason: rerr.Error()}
+				}
+				return nil, nil, fromfile.Refuse("task import --file", path, append(bad, p), recheck)
+			}
+			p.Reason = fmt.Sprintf("it has %d cells, the header has %d", len(r), len(head))
+			bad = append(bad, p)
+			continue
+		}
 		m := map[string]string{}
 		for i, v := range r {
 			if v != "" {
 				m[head[i]] = v
 			}
 		}
+		line, _ := cr.FieldPos(0)
 		out = append(out, m)
+		lines = append(lines, line)
 	}
-	return out, nil
+	if e := fromfile.Refuse("task import --file", path, bad, recheck); e != nil {
+		return nil, nil, e
+	}
+	return out, lines, nil
 }
 
 // jsonRows flattens a JSON array of task objects in pre-order. Values are
@@ -957,7 +1021,7 @@ func jsonScalar(v json.RawMessage) (string, bool, error) {
 // every record before the first write.
 func checkRecord(r importRecord) error {
 	if strings.TrimSpace(r.cols[colTitle]) == "" {
-		return errs.New(errs.InvalidInput, "task import: "+r.extID+" has no title")
+		return errs.New(errs.InvalidInput, "task import: "+r.extID+" has no title").WithHint("give it a title")
 	}
 	if p := r.cols[colPriority]; p != "" {
 		if err := work.OneOf(Noun, colPriority, p, schema.TaskPriorities()); err != nil {

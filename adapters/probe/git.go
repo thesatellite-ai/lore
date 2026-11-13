@@ -27,8 +27,10 @@ const (
 )
 
 // gitSpec builds a git child for route: the alias rewrite options first
-// (Q5 a), then args; never a prompt (GIT_TERMINAL_PROMPT=0, ssh BatchMode),
-// English messages for classification (LC_ALL=C).
+// (Q5 a), then args; never a git prompt (GIT_TERMINAL_PROMPT=0), English
+// messages for classification (LC_ALL=C). It sets no ssh command: a local
+// git call needs none, and a call that reaches a remote goes through
+// remoteGitSpec.
 func (p *Prober) gitSpec(route Route, dir string, args ...string) cmdSpec {
 	return cmdSpec{
 		bin:  gitBin,
@@ -38,9 +40,45 @@ func (p *Prober) gitSpec(route Route, dir string, args ...string) cmdSpec {
 			envGitPrompt + "=0",
 			envGCMInteractive + "=never",
 			envLCAll + "=C",
-			envGitSSHCommand + "=" + route.GitSSHCommand(p.o.Home),
 		},
 	}
+}
+
+// remoteGitSpec is gitSpec for a git call that reaches a remote (fetch,
+// push --dry-run). It sets GIT_SSH_COMMAND to lore's own ssh line
+// (BatchMode, ConnectTimeout, and -i with the key fallback of Q5 c) only
+// when lore needs one: the route names a key file, or the person has no
+// ssh command of their own. A person's GIT_SSH_COMMAND, GIT_SSH or
+// core.sshCommand (a jump-host wrapper, a proxy, a key script) is how
+// their plain git reaches the host, so replacing it made the store probes
+// fail where git itself worked (logic/gitenv keeps GIT_SSH_COMMAND for the
+// same reason).
+func (p *Prober) remoteGitSpec(ctx context.Context, route Route, dir string, args ...string) cmdSpec {
+	spec := p.gitSpec(route, dir, args...)
+	if route.needsOwnSSH() || !p.personHasSSHCommand(ctx) {
+		spec.env = append(spec.env, envGitSSHCommand+"="+route.GitSSHCommand(p.o.Home))
+	}
+	return spec
+}
+
+// personHasSSHCommand reports whether the person's git already runs its
+// own ssh command: GIT_SSH_COMMAND or GIT_SSH in the probes' base
+// environment, else core.sshCommand in their git config (read once per
+// Prober; a failed read counts as none).
+func (p *Prober) personHasSSHCommand(ctx context.Context) bool {
+	for _, kv := range p.baseEnv() {
+		k, v, _ := strings.Cut(kv, "=")
+		if (k == envGitSSHCommand || k == envGitSSH) && strings.TrimSpace(v) != "" {
+			return true
+		}
+	}
+	p.sshCfg.once.Do(func() {
+		cctx, cancel := context.WithTimeout(ctx, p.o.VersionTimeout)
+		defer cancel()
+		r := p.run(cctx, p.gitSpec(Route{}, "", "config", "--get", keyCoreSSHCommand))
+		p.sshCfg.set = r.ok() && strings.TrimSpace(r.stdout) != ""
+	})
+	return p.sshCfg.set
 }
 
 // ReadResult is the store.read probe (ONB 4.4).
@@ -120,7 +158,7 @@ func (p *Prober) dryRunPush(ctx context.Context, u string, route Route, machineI
 		o.Took = time.Since(start)
 		return WriteResult{Outcome: *o}
 	}
-	r := p.run(cctx, p.gitSpec(route, dir, "push", "--dry-run", "--porcelain", u, commit+":"+ProbeRefPrefix+machineID))
+	r := p.run(cctx, p.remoteGitSpec(cctx, route, dir, "push", "--dry-run", "--porcelain", u, commit+":"+ProbeRefPrefix+machineID))
 	if !r.ok() {
 		o := failure(r, gitBin, classifyRemote)
 		o.Took = time.Since(start)
@@ -272,6 +310,8 @@ func (p *Prober) RepoIdentity(ctx context.Context, dir string) GitIdentity {
 const (
 	keyUserName  = "user.name"
 	keyUserEmail = "user.email"
+	// keyCoreSSHCommand is git's configured ssh program (personHasSSHCommand).
+	keyCoreSSHCommand = "core.sshCommand"
 )
 
 func (p *Prober) identity(ctx context.Context, dir string, scope ...string) GitIdentity {

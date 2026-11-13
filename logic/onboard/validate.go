@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/row"
 )
 
@@ -212,15 +213,26 @@ func ValidateValue(r Rule, v string) (why string, ok bool) {
 		if hasControl(v) || !(v == "~" || strings.HasPrefix(v, "~/") || strings.HasPrefix(v, "/") || filepath.IsAbs(v)) {
 			return "must be absolute (start with / or ~/)", false
 		}
+	case RuleRepoPattern:
+		if _, err := repourl.Compile(v); err != nil {
+			// fieldMsg names the value already: keep only the reason
+			why := strings.TrimPrefix(err.Error(), "repourl: ")
+			why = strings.TrimPrefix(strings.TrimPrefix(why, "pattern "+strconv.Quote(v)), ":")
+			return strings.TrimSpace(why) + "; write host/owner/repo with * or ** as whole segments, like " + RepoPatternExample, false
+		}
 	default:
 		return "unknown rule " + strconv.Quote(string(r)), false
 	}
 	return "", true
 }
 
+// RepoPatternExample is the accepted shape of an own/repos pattern, named
+// in RuleRepoPattern's message and the team step's help.
+const RepoPatternExample = "github.com/agency/*"
+
 // knownRuleKinds is every RuleKind ValidateValue implements.
 func knownRuleKinds() []RuleKind {
-	return []RuleKind{RuleEmail, RuleSnakeCase, RuleSetupName, RuleOrgName, RuleGitURL, RuleMaxLen, RuleNotIn, RuleKeyPath, RuleAbsGlob}
+	return []RuleKind{RuleEmail, RuleSnakeCase, RuleSetupName, RuleOrgName, RuleGitURL, RuleMaxLen, RuleNotIn, RuleKeyPath, RuleAbsGlob, RuleRepoPattern}
 }
 
 // questionApplies reports whether q is asked for kind.

@@ -51,6 +51,14 @@ func TestValidateValue(t *testing.T) {
 		{R(RuleAbsGlob), "/srv/work/**", true},
 		{R(RuleAbsGlob), "www/**", false},
 		{R(RuleAbsGlob), "~", true},
+		// own/repos: the shape the org entry's save accepts (repourl.Compile)
+		{R(RuleRepoPattern), "github.com/agency/*", true},
+		{R(RuleRepoPattern), "git.example.test/acme/**", true},
+		{R(RuleRepoPattern), "git@github.com:agency/app.git", true},
+		{R(RuleRepoPattern), "*/sync_go", false},
+		{R(RuleRepoPattern), "**/app", false},
+		{R(RuleRepoPattern), "github.com/agency/app-*", false},
+		{R(RuleRepoPattern), "agency", false},
 		{Rule("nope"), "x", false},
 	}
 	for _, c := range cases {
@@ -65,6 +73,7 @@ func TestValidateAnswers(t *testing.T) {
 	ident, _ := StepByID(StepIdentity)
 	folders, _ := StepByID(StepFolders)
 	ps, _ := StepByID(StepPersonalStore)
+	team, _ := StepByID(StepTeam)
 	txt := func(s string) Answer { return Answer{Text: s} }
 	list := func(s ...string) Answer { return Answer{List: s, IsList: true} }
 	b := func(v bool) Answer { return Answer{Bool: v, IsBool: true} }
@@ -88,6 +97,10 @@ func TestValidateAnswers(t *testing.T) {
 		{"identity bad email", ident, KindAdmin, Answers{"name": txt("Mira"), "email": txt("mira at agency")}, []fe{{"email", "email"}}},
 		{"folders relative", folders, KindSolo, Answers{"folders": list("~/www/**", "www/x")}, []fe{{"folders", "abs_glob"}}},
 		{"store token url", ps, KindSolo, Answers{"personal_store": txt("existing"), "store_url": txt("https://ghp_" + "x" + "@github.com/a/b.git")}, []fe{{"store_url", "git_url"}}},
+		// A-3: check passed an own pattern the team step's save then refused
+		// (after cloning the store); it is a field error now, before any probe.
+		{"team own wildcard host", team, KindAdmin, Answers{"org": txt("acme"), "store_url": txt("git@github.com:acme/lore-team.git"), "own": list("github.com/acme/*", "*/sync_go")}, []fe{{"own", "repo_pattern"}}},
+		{"team repos ok", team, KindAdmin, Answers{"org": txt("acme"), "store_url": txt("git@github.com:acme/lore-team.git"), "repos": list("github.com/client/*")}, nil},
 		{"store none", ps, KindSolo, Answers{"personal_store": txt("none")}, nil},
 		{"unknown key", ps, KindSolo, Answers{"personal_store": txt("none"), "zz": txt("x")}, []fe{{"zz", FieldRuleUnknown}}},
 	}

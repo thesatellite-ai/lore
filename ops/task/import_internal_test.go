@@ -1,7 +1,11 @@
 package task
 
 import (
+	"errors"
+	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/model/errs"
 
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -83,5 +87,29 @@ func TestImportKeyOf(t *testing.T) {
 	kb, _ := importKey(row.Row{Origin: b})
 	if ka != kb {
 		t.Errorf("same src, different source: %+v vs %+v", ka, kb)
+	}
+}
+
+// TestCSVImportNamesLines (B-2 class): a broken quote names its line and
+// reason, and every row with the wrong number of cells is listed by its
+// file line, a quoted cell over two lines counted.
+func TestCSVImportNamesLines(t *testing.T) {
+	t.Parallel()
+	_, _, err := parseImport(FromCSV, "t.csv", []byte("title,priority\n\"A,p1\nB,p2\n"), nil)
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "line 2: a quote") || !strings.Contains(e.Hint, "close the quote") {
+		t.Fatalf("broken quote: %v", err)
+	}
+	_, _, err = parseImport(FromCSV, "t.csv", []byte("title,priority\n\"A\nsecond\",p1\nB,p2,x\nC\n"), nil)
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "2 lines need a fix") ||
+		!strings.Contains(e.Message, "line 4: it has 3 cells, the header has 2") || !strings.Contains(e.Message, "line 5: it has 1 cells") {
+		t.Fatalf("cell count: %v", err)
+	}
+	recs, _, err := parseImport(FromCSV, "t.csv", []byte("title,priority\n\"A\nsecond\",p1\nB,p2\n"), nil)
+	if err != nil || len(recs) != 2 || recs[0].line != 2 || recs[1].line != 4 {
+		t.Fatalf("lines: %v %+v", err, recs)
+	}
+	if p, ok := recs[1].problem(errs.New(errs.InvalidInput, "task import: t.csv:2 has no title")); !ok || p.At != "line 4" || p.Reason != "has no title" {
+		t.Fatalf("problem: %+v", p)
 	}
 }

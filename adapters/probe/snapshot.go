@@ -179,7 +179,7 @@ func (p *Prober) fetchSnapshot(ctx context.Context, u string, route Route) remot
 		return fail(*o)
 	}
 	defer os.RemoveAll(dir)
-	r := p.run(cctx, p.gitSpec(route, dir, "fetch", "--quiet", "--no-tags", "--depth=1", "--filter=blob:none",
+	r := p.run(cctx, p.remoteGitSpec(cctx, route, dir, "fetch", "--quiet", "--no-tags", "--depth=1", "--filter=blob:none",
 		u, headRef+":"+snapHeadRef, headsRefspec))
 	if !r.ok() {
 		if !r.timedOut && !r.missing && strings.Contains(strings.ToLower(r.stderr), noRemoteHEAD) {

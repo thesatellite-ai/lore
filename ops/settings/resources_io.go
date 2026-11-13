@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/resname"
 	"github.com/thesatellite-ai/lore/schema"
@@ -210,7 +211,7 @@ func readResFile(path string) ([]byte, error) {
 
 // parseResImport turns the file into records. ext ids are "<kind>/<name>"
 // so a re-import names the same external ids (PROVENANCE 11.4).
-func parseResImport(format, kind string, raw []byte) ([]resRecord, error) {
+func parseResImport(format, kind, path string, raw []byte) ([]resRecord, error) {
 	var out []resRecord
 	switch format {
 	case FormatCSV:
@@ -219,7 +220,7 @@ func parseResImport(format, kind string, raw []byte) ([]resRecord, error) {
 		}
 		rows, err := csv.NewReader(bytes.NewReader(raw)).ReadAll()
 		if err != nil {
-			return nil, errs.Wrap(errs.InvalidInput, "resource import: csv", err)
+			return nil, fromfile.CSV("resource import --file", path, raw, err, "lore resource import --file "+path+" --kind "+kind+" --dry-run")
 		}
 		if len(rows) == 0 {
 			return nil, nil
@@ -487,7 +488,7 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 	if err != nil {
 		return ResImportOut{}, err
 	}
-	recs, err := parseResImport(format, in.Kind, raw)
+	recs, err := parseResImport(format, in.Kind, in.File, raw)
 	if err != nil {
 		return ResImportOut{}, err
 	}

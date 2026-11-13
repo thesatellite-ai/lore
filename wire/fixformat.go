@@ -62,6 +62,21 @@ func (a *App) FixFormatOld(ctx context.Context) (string, bool, error) {
 	return formatOldLine(top), true, nil
 }
 
+// FormatOldAt is the refusal line of the project of the git repository
+// holding dir when it is on an older lore format (old true), for a command
+// that writes tracked files without a row write (lore render's LORE.md,
+// pointer blocks and folder files): it skips with this line instead of
+// churning files a 0.1.17 teammate rewrites in its own layout (fmt1). An
+// unreadable _meta.json is not old here: the write paths refuse it with
+// their own reason.
+func FormatOldAt(ctx context.Context, dir string) (line string, old bool) {
+	top := gitTopLevel(ctx, dir)
+	if o, err := projectFormatOld(top); err != nil || !o {
+		return "", false
+	}
+	return formatOldLine(top), true
+}
+
 // fixFormatOldSteps are the fix steps of a project on an older format when
 // the run was not asked to migrate (lore doctor --fix): the migrate step
 // says the line, the steps that would write the project's files are
@@ -70,7 +85,7 @@ func (a *App) fixFormatOldSteps(ctx context.Context, top string, dry bool) []ops
 	line := formatOldLine(top)
 	skipped := "skipped: " + line
 	return []opsdoctor.FixStep{
-		{Step: opsdoctor.StepMigrate, Where: filepath.Join(top, ".lore", "data"), Result: "not migrated: " + line + "; lore fix --migrate does it"},
+		{Step: opsdoctor.StepMigrate, Where: filepath.Join(top, ".lore", "data"), Result: "not migrated: " + line}, // fmt1: one next step, the line's lore migrate run
 		{Step: opsdoctor.StepRender, Where: top, Result: skipped},
 		{Step: opsdoctor.StepAgentHooks, Where: top, Result: skipped},
 		a.fixOldClones(ctx, dry),

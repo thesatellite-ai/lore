@@ -269,10 +269,15 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		}
 	}
 	attrs := filepath.Join(root, gitAttributesFile)
+	// fmt1: a project on the 0.1.17 format gets no tracked file written
+	// before lore migrate run (.gitattributes, .gitignore); the clone's
+	// own .git/config and hooks are not tracked and are still set up
+	formatOld := wire.ProjectFormatOld(root)
 	switch {
 	case !wire.HoldsLoreData(root):
 		// no row files here (a client repo): the rules would only change
 		// a tracked file of theirs for nothing (plain files sweep 3.8)
+	case formatOld:
 	default:
 		if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
 			s.warn("git wiring: " + err.Error())
@@ -300,6 +305,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		// repo is changed (plain files sweep 3.8)
 		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
 		return
+	}
+	if formatOld {
+		return // no stamp: the first command after lore migrate run adds the tracked rules
 	}
 	switch changed, still, err := EnsureDataNotIgnored(ctx, root); {
 	case err != nil:
@@ -350,7 +358,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks, cfgPath, bin,
 		sort.Strings(stale)
 		missing = append(missing, "hook blocks in "+hooks+" ("+strings.Join(stale, ", ")+")")
 	}
-	if len(missing) > 0 {
+	if len(missing) > 0 && !wire.ProjectFormatOld(root) { // fmt1: lore sync and writes set nothing up there before lore migrate run
 		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
 	}
 	if data {

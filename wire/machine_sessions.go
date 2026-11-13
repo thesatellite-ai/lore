@@ -309,7 +309,7 @@ func machineRef(id string) (engine.Ref, error) {
 	if err != nil {
 		return engine.Ref{}, errs.Wrap(errs.InvalidID, "wire: session id", err)
 	}
-	return engine.Ref{Table: schema.TableSessions, ID: rid}, nil
+	return engine.Ref{Store: store.SourceMachine, Table: schema.TableSessions, ID: rid}, nil
 }
 
 // jsonOfStringMap is m as a JSON object value.

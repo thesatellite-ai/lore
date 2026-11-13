@@ -96,25 +96,18 @@ func TestReadsLeaveAV017RepoAlone(t *testing.T) {
 			t.Fatalf("lore %v asked for a commit of a file it must not have written:\n%s", args, errOut)
 		}
 	}
-	// the reads said what is wrong and how to fix it
+	// the reads name the one next step for a repo on the 0.1.17 format
 	_, out, errOut := w.lore(t, dir, "doctor")
-	for _, want := range []string{"`lore doctor --fix` re-includes them in .gitignore", ".gitignore does not list lore's local files (", "`lore doctor --fix` adds them"} {
-		if !strings.Contains(out+errOut, want) {
-			t.Errorf("doctor does not say %q:\n%s\n%s", want, out, errOut)
-		}
+	if !strings.Contains(out+errOut, "lore migrate run") {
+		t.Errorf("doctor does not name lore migrate run:\n%s\n%s", out, errOut)
 	}
-	// doctor --fix does the rewrite the reads left alone
+	// doctor --fix leaves the tracked .gitignore alone until lore migrate run
 	w.lore(t, dir, "doctor", "--fix")
 	gi, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"!.lore/data/", ".lore/lock"} {
-		if !strings.Contains(string(gi), want) {
-			t.Errorf("doctor --fix did not add %q to .gitignore:\n%s", want, gi)
-		}
-	}
-	if !strings.HasPrefix(string(gi), v017ReadsIgnore) {
-		t.Errorf("doctor --fix rewrote the person's own lines:\n%s", gi)
+	if string(gi) != v017ReadsIgnore {
+		t.Errorf("doctor --fix edited the tracked .gitignore of a 0.1.17-format repo:\n%s", gi)
 	}
 }

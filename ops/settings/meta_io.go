@@ -21,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -256,7 +257,7 @@ func (l metaLabels) relabel(keyID string, en meta.Entry) meta.Entry {
 }
 
 // parseMetaImport reads the records of an import file.
-func parseMetaImport(format string, raw []byte) ([]MetaRecord, error) {
+func parseMetaImport(format, path string, raw []byte) ([]MetaRecord, error) {
 	var recs []MetaRecord
 	if format == metaFormatJSON {
 		dec := json.NewDecoder(bytes.NewReader(raw))
@@ -275,7 +276,7 @@ func parseMetaImport(format string, raw []byte) ([]MetaRecord, error) {
 	rd := csv.NewReader(bytes.NewReader(raw))
 	all, err := rd.ReadAll()
 	if err != nil {
-		return nil, errs.Wrap(errs.InvalidInput, "meta import: csv", err)
+		return nil, fromfile.CSV("meta import --file", path, raw, err, "lore meta import --file "+path+" --dry-run")
 	}
 	if len(all) == 0 || !slices.Equal(all[0], metaCSVHeader) {
 		return nil, errs.New(errs.InvalidInput, "meta import: the first csv row must be id,key,value")
@@ -316,7 +317,7 @@ func (o ops) metaImport(ctx context.Context, in MetaImportIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	recs, err := parseMetaImport(format, raw)
+	recs, err := parseMetaImport(format, in.File, raw)
 	if err != nil {
 		return RowOut{}, err
 	}

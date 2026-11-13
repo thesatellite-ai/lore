@@ -558,6 +558,11 @@ func (h *Host) contextDoctor(ctx context.Context, root string) (warnings, notes 
 	lore := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
 	size := fileSize(lore)
 	if size < 0 {
+		if _, old := wire.FormatOldAt(ctx, root); old {
+			// fmt1: lore render skips a 0.1.17-format project; doctor's
+			// one next step there is lore migrate run
+			return warnings, []string{"context: " + toolprofile.CanonicalOutput + " not rendered yet (lore render writes it after lore migrate run)"}
+		}
 		return warnings, []string{"context: " + toolprofile.CanonicalOutput + " not rendered yet (lore render)"}
 	}
 	line := fmt.Sprintf("context: %s %d of %d bytes (%d%%, profile %s); warn at %d%%",

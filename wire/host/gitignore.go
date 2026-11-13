@@ -66,7 +66,11 @@ func GitignoreHook(workDir string) Hook {
 				return
 			}
 			onlyData := run.Entry != nil && changesOnlyLoreData(run.Entry.Spec().Name)
-			if readRun(run) || !wire.HoldsLoreData(root) || onlyData {
+			// fmt1: a project on the 0.1.17 format gets no tracked file
+			// edited before lore migrate run either (doctor --fix and
+			// lore fix agree): its .gitignore lines wait for the first
+			// command after the migration.
+			if readRun(run) || !wire.HoldsLoreData(root) || onlyData || wire.ProjectFormatOld(root) {
 				// A repo that holds no lore data (a client repo linked to
 				// a store folder; plain files sweep 3.8) never gets a
 				// tracked file changed, by any command, doctor --fix
@@ -253,6 +257,9 @@ func announceExclude(w io.Writer, root string, added []string, migration bool) {
 	switch {
 	case !wire.HoldsLoreData(root):
 		why = "this repo holds no lore data, so lore changes none of its tracked files"
+	case wire.ProjectFormatOld(root) && !migration:
+		// fmt1: no tracked file changes before lore migrate run
+		why = filepath.Base(root) + " is on the lore 0.1.17 format, so lore changes none of its tracked files until lore migrate run"
 	case migration:
 		why = "a migration changes no tracked file but .lore/data: `lore doctor --fix` adds them to " + filepath.Join(root, gitignoreName)
 	}

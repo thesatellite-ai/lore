@@ -28,10 +28,12 @@ package team
 // session on the audit trail, as every roster write).
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -50,6 +52,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
@@ -339,6 +342,12 @@ type staffSpec struct {
 	Projects     []string
 	ProjectRoles []string
 	invite       *inviteRow
+	// at is where a --from file names this person ("line 8", "entry 3");
+	// empty for flags and invites.
+	at string
+	// bad is a line whose cells do not fit the header; planStaff lists it
+	// with the other bad lines.
+	bad *fromfile.Problem
 }
 
 // staffAdd is member.add.
@@ -388,7 +397,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 			Teams: splitList(in.Teams), Projects: splitList(in.Projects), ProjectRoles: splitList(in.ProjectRoles)}}
 	}
 	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
-	plans, err := o.planStaff(ctx, r, specs, pending, &out)
+	plans, err := o.planStaff(ctx, r, specs, in.From, pending, &out)
 	if err != nil {
 		return StaffAddOut{}, err
 	}
@@ -449,34 +458,65 @@ func staffEmails(plans []staffPlan) string {
 	return strings.Join(es, ", ")
 }
 
-// planStaff checks every spec before anything is written (one bad line
-// refuses the whole file, naming the line and the fix) and fills out.
-func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staffSpec, pending map[string]inviteRow, out *StaffAddOut) ([]staffPlan, error) {
+// planStaff checks every spec before anything is written and fills out.
+// Every bad spec is collected, not only the first (B-2): a --from file is
+// refused once, naming each bad line by its file line ("line 8", header
+// counted) with the fix for it, so an admin fixes the whole file in one
+// pass; nothing is written on a refusal. from is the --from path ("" for
+// flags or --from-invites).
+func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staffSpec, from string, pending map[string]inviteRow, out *StaffAddOut) ([]staffPlan, error) {
 	var plans []staffPlan
-	seen := map[string]bool{}
+	var bad []fromfile.Problem
+	seen := map[string]string{} // email -> where it was first listed
 	taken, err := takenHandles(ctx, r)
 	if err != nil {
 		return nil, err
 	}
+	emailFix := "lore member add --email <their work email>"
+	if from != "" {
+		emailFix = "put the person's work email in the email column"
+	}
 	for i, s := range specs {
-		where := "member add"
-		if len(specs) > 1 {
-			where = fmt.Sprintf("member add: person %d (%s)", i+1, s.Email)
+		at := s.at
+		if at == "" && len(specs) > 1 {
+			at = fmt.Sprintf("person %d (%s)", i+1, s.Email)
+		}
+		if s.bad != nil {
+			bad = append(bad, *s.bad)
+			continue
+		}
+		var ps []fromfile.Problem
+		refuse := func(code errs.Code, reason, fix string) {
+			ps = append(ps, fromfile.Problem{At: at, Reason: reason, Fix: fix, Code: code})
+		}
+		// check is a lookup's refusal: one a person fixes in the input
+		// joins the list; any other error (a read failing) stops the run.
+		check := func(err error) error {
+			if err == nil {
+				return nil
+			}
+			var e *errs.Error
+			if !errors.As(err, &e) || !slices.Contains(staffFixable, e.Code) {
+				return err
+			}
+			refuse(e.Code, e.Message, e.Hint)
+			return nil
 		}
 		email, err := teamprofile.Normalize(schema.ContactKindEmail, s.Email)
-		if err != nil || email == "" {
-			return nil, errs.New(errs.InvalidInput, where+": "+work.Quote(s.Email)+" is not an email address").WithHint("lore member add --email mira@agency.example")
+		switch first, dup := seen[email]; {
+		case err != nil || email == "":
+			refuse(errs.InvalidInput, work.Quote(s.Email)+" is not an email address", emailFix)
+		case dup:
+			refuse(errs.InvalidInput, email+" is already on "+first, "delete it, or merge it into "+first)
+		default:
+			seen[email] = cmp.Or(at, "an earlier line")
 		}
-		if seen[email] {
-			return nil, errs.New(errs.InvalidInput, where+": "+email+" is listed twice").WithHint("keep one line per person")
-		}
-		seen[email] = true
 		s.Email = email
 		if s.Type == "" {
 			s.Type = schema.PeriodTypeEmployee
 		}
 		if !slices.Contains(schema.PeriodTypes(), s.Type) {
-			return nil, errs.New(errs.InvalidInput, where+": type "+work.Quote(s.Type)+" is not one of "+strings.Join(schema.PeriodTypes(), ", "))
+			refuse(errs.InvalidInput, "type "+work.Quote(s.Type)+" is not one of "+strings.Join(schema.PeriodTypes(), ", "), "type one of "+strings.Join(schema.PeriodTypes(), ", "))
 		}
 		if s.Name == "" {
 			s.Name, _, _ = strings.Cut(email, "@")
@@ -484,7 +524,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		if s.GitHub = strings.TrimPrefix(strings.TrimSpace(s.GitHub), handleMark); s.GitHub != "" {
 			// the login is kept as given (its contact's norm is lowercase)
 			if gh, gerr := teamprofile.Normalize(schema.ContactKindHandle, s.GitHub); gerr != nil || gh == "" {
-				return nil, errs.New(errs.InvalidInput, where+": --github "+work.Quote(s.GitHub)+" is not a GitHub user name")
+				refuse(errs.InvalidInput, "github "+work.Quote(s.GitHub)+" is not a GitHub user name", "the GitHub login, or leave it empty")
 			}
 		}
 		var notes []string
@@ -498,8 +538,8 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 			}
 		}
 		h, note, herr := personHandle(cmp.Or(strings.TrimSpace(s.Handle), derived))
-		if herr != nil {
-			return nil, errs.Prefix(where, herr)
+		if err := check(herr); err != nil {
+			return nil, err
 		}
 		if derived != "" && h != "" && taken[h] {
 			notes = append(notes, email+": no handle (@"+h+" is taken; member edit "+email+" --handle <h> sets one)")
@@ -517,29 +557,32 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		s.Handle = h
 
 		if len(s.Projects) > 0 && len(s.ProjectRoles) == 0 {
-			return nil, errs.New(errs.InvalidInput, where+": --project needs at least one --project-role (a project membership has roles); the org-level role is --role").
-				WithHint("--project-role dev")
+			refuse(errs.InvalidInput, "--project needs at least one --project-role (a project membership has roles); the org-level role is --role", "--project-role dev")
 		}
-		if err := checkRoles(ctx, r, s.ProjectRoles); err != nil {
-			return nil, errs.Prefix(where, err)
+		if err := check(checkRoles(ctx, r, s.ProjectRoles)); err != nil {
+			return nil, err
 		}
-		teams, err := inviteTeams(ctx, r, s.Teams)
-		if err != nil {
-			return nil, errs.Prefix(where, err)
+		teams, terr := inviteTeams(ctx, r, s.Teams)
+		if err := check(terr); err != nil {
+			return nil, err
 		}
 		s.Teams = teams
 		p := staffPlan{spec: s}
 		for _, ref := range s.Projects {
 			pid, perr := resolveProject(ctx, o.env, r, ref)
-			if perr != nil {
-				return nil, errs.Prefix(where, perr)
+			if err := check(perr); err != nil {
+				return nil, err
 			}
-			if !slices.Contains(p.projects, pid) {
+			if perr == nil && !slices.Contains(p.projects, pid) {
 				p.projects = append(p.projects, pid)
 			}
 		}
+		if len(ps) > 0 {
+			bad = append(bad, ps...)
+			continue
+		}
 		if p.id, err = identity.ActorID(humanKeyPrefix + email); err != nil {
-			return nil, errs.Wrap(errs.InvalidInput, where+": no actor id for "+email, err)
+			return nil, errs.Wrap(errs.InvalidInput, "member add: no actor id for "+email+": "+err.Error(), err)
 		}
 		cur, found, err := staffActor(ctx, r, email, p.id)
 		if err != nil {
@@ -571,8 +614,20 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		out.Notes = append(out.Notes, notes...)
 		plans = append(plans, p)
 	}
+	if from != "" {
+		if e := fromfile.Refuse("member add --from", from, bad, "lore member add --from "+from+" --dry-run"); e != nil {
+			return nil, e
+		}
+	} else if e := fromfile.Refuse("member add", "", bad, ""); e != nil {
+		return nil, e
+	}
 	return plans, nil
 }
+
+// staffFixable are the codes of a member add check that the person fixes
+// in their input (a bad role, an unknown team or project); planStaff lists
+// them all instead of stopping at the first.
+var staffFixable = []errs.Code{errs.InvalidInput, errs.NotFound, errs.RoleUnknown, errs.StatusChange}
 
 // mustActorID is id as an actor id (ids read from actor rows always are).
 func mustActorID(id ids.AnyID) ids.ID[ids.Actor] {
@@ -700,14 +755,22 @@ func addToTeams(ctx context.Context, r profilestore.Roster, adds map[string][]st
 	return n, nil
 }
 
+// staffHeader is the --from CSV header member add reads.
+const staffHeader = "email,name,handle,github,role,type,teams,projects,project_roles"
+
 // readStaffFile reads --from: a .json list of objects or a .csv with a
 // header (email,name,handle,github,role,type,teams,projects,project_roles;
-// list cells comma- or space-separated inside quotes or with ';').
+// list cells comma- or space-separated inside quotes or with ';'). Each
+// person keeps where the file names them (its file line, header counted, or
+// its JSON entry), so every refusal points at the line to edit. A line with
+// the wrong number of cells is listed with the others; a quote that breaks
+// the rest of the file stops the read, naming its line and the reason.
 func readStaffFile(path string) ([]staffSpec, error) {
 	b, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		return nil, errs.Wrap(errs.InvalidInput, "member add --from: cannot read "+path, err).WithHint("give a .csv or .json file")
+		return nil, fromfile.Unreadable("member add --from", path, err).WithHint("give a .csv or .json file")
 	}
+	recheck := "lore member add --from " + path + " --dry-run"
 	if strings.EqualFold(filepath.Ext(path), ".json") {
 		var rows []struct {
 			Email        string   `json:"email"`
@@ -721,30 +784,31 @@ func readStaffFile(path string) ([]staffSpec, error) {
 			ProjectRoles []string `json:"project_roles"`
 		}
 		if err := json.Unmarshal(b, &rows); err != nil {
-			return nil, errs.Wrap(errs.InvalidInput, "member add --from "+path+": not a JSON list of people", err).
-				WithHint(`[{"email":"mira@agency.example","name":"Mira","teams":["@web"]}]`)
+			return nil, fromfile.JSON("member add --from", path, b, err, "a JSON list of people", `[{"email":"<work email>","name":"<name>","teams":["@<team>"]}]`)
 		}
 		out := make([]staffSpec, 0, len(rows))
-		for _, x := range rows {
+		for i, x := range rows {
 			out = append(out, staffSpec{Email: x.Email, Name: x.Name, Handle: x.Handle, GitHub: x.GitHub, Role: x.Role, Type: x.Type,
-				Teams: splitList(x.Teams), Projects: splitList(x.Projects), ProjectRoles: splitList(x.ProjectRoles)})
+				Teams: splitList(x.Teams), Projects: splitList(x.Projects), ProjectRoles: splitList(x.ProjectRoles), at: fromfile.Entry(i + 1)})
 		}
 		return out, nil
 	}
-	cr := csv.NewReader(strings.NewReader(string(b)))
+	cr := csv.NewReader(bytes.NewReader(b))
 	cr.TrimLeadingSpace = true
 	head, err := cr.Read()
+	if errors.Is(err, io.EOF) {
+		return nil, errs.New(errs.InvalidInput, "member add --from "+path+": the file is empty").WithHint("first line: " + staffHeader)
+	}
 	if err != nil {
-		return nil, errs.Wrap(errs.InvalidInput, "member add --from "+path+": no CSV header", err).
-			WithHint("first line: email,name,handle,github,role,type,teams,projects,project_roles")
+		return nil, fromfile.CSV("member add --from", path, b, err, recheck)
 	}
 	col := map[string]int{}
 	for i, h := range head {
-		col[strings.ToLower(strings.TrimSpace(h))] = i
+		col[strings.ToLower(strings.TrimSpace(strings.TrimPrefix(h, "\ufeff")))] = i
 	}
 	if _, ok := col["email"]; !ok {
-		return nil, errs.New(errs.InvalidInput, "member add --from "+path+": the header has no email column").
-			WithHint("first line: email,name,handle,github,role,type,teams,projects,project_roles")
+		return nil, errs.New(errs.InvalidInput, "member add --from "+path+": line 1 (the header) has no email column").
+			WithHint("first line: " + staffHeader)
 	}
 	cell := func(rec []string, name string) string {
 		if i, ok := col[name]; ok && i < len(rec) {
@@ -756,19 +820,36 @@ func readStaffFile(path string) ([]staffSpec, error) {
 		return splitList(strings.FieldsFunc(s, func(r rune) bool { return r == ';' || r == ' ' || r == ',' }))
 	}
 	var out []staffSpec
-	for line := 2; ; line++ {
+	for {
 		rec, rerr := cr.Read()
-		if rerr == io.EOF {
+		if errors.Is(rerr, io.EOF) {
 			break
 		}
 		if rerr != nil {
-			return nil, errs.Wrap(errs.InvalidInput, fmt.Sprintf("member add --from %s: line %d", path, line), rerr)
+			p, ok := fromfile.CSVProblem(b, rerr)
+			if !ok || !errors.Is(rerr, csv.ErrFieldCount) {
+				// a broken quote: the lines after it cannot be read
+				var bad []fromfile.Problem
+				for _, s := range out {
+					if s.bad != nil {
+						bad = append(bad, *s.bad)
+					}
+				}
+				return nil, fromfile.Refuse("member add --from", path, append(bad, cmp.Or(p, fromfile.Problem{At: "the file", Reason: rerr.Error()})), recheck)
+			}
+			// the cells were read: the line is listed with its other
+			// problems, and the lines after it are still checked
+			p.Reason = fmt.Sprintf("it has %d cells, the header has %d", len(rec), len(head))
+			out = append(out, staffSpec{at: p.At, bad: &p})
+			continue
 		}
 		if cell(rec, "email") == "" {
 			continue
 		}
+		line, _ := cr.FieldPos(0)
 		out = append(out, staffSpec{Email: cell(rec, "email"), Name: cell(rec, "name"), Handle: cell(rec, "handle"), GitHub: cell(rec, "github"),
-			Role: cell(rec, "role"), Type: cell(rec, "type"), Teams: list(cell(rec, "teams")), Projects: list(cell(rec, "projects")), ProjectRoles: list(cell(rec, "project_roles"))})
+			Role: cell(rec, "role"), Type: cell(rec, "type"), Teams: list(cell(rec, "teams")), Projects: list(cell(rec, "projects")), ProjectRoles: list(cell(rec, "project_roles")),
+			at: fromfile.Line(line)})
 	}
 	if len(out) == 0 {
 		return nil, errs.New(errs.InvalidInput, "member add --from "+path+": no people in it").WithHint("one line per person after the header")

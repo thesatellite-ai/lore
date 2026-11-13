@@ -147,6 +147,11 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 			s.ProjectFiles = len(rows)
 		}
 	}
+	// fmt1: in a project on the 0.1.17 format the one next step is lore
+	// migrate run (the format line says it); the git wiring and .gitignore
+	// notes would point at lore fix (which refuses there) or at a
+	// .gitignore edit that waits for the migration, so they are left out
+	formatOld := s.DataDirPresent && ProjectFormatOld(gitTopLevel(ctx, dir))
 	git := func(args ...string) ([]byte, error) { return gitRun{dir: dir, args: args}.output(ctx) }
 	if out, gerr := git("rev-parse", "--is-inside-work-tree"); gerr != nil || strings.TrimSpace(string(out)) != gitInsideTrue {
 		return s // not a git checkout: the git fields do not apply
@@ -156,7 +161,7 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	case gerr != nil || strings.TrimSpace(string(out)) == "":
 		if remote := linkedByRemote(ctx, a.opts); remote != "" {
 			note(doctorLinkedByRemoteNote(remote)) // nothing is ever wired in such a repo
-		} else {
+		} else if !formatOld {
 			note(doctorNoMergeDriverNote)
 		}
 	case !reposync.DriverRuns(string(out)):
@@ -206,7 +211,7 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	}
 	// A read never adds these lines (wire/gitignorelines.go): the finding
 	// names them and the command that does.
-	if missing := MissingGitignoreLines(ctx, dir); len(missing) > 0 && HoldsLoreData(dir) {
+	if missing := MissingGitignoreLines(ctx, dir); len(missing) > 0 && HoldsLoreData(dir) && !formatOld {
 		note(doctorGitignoreLinesNote(missing)) // clutter in a teammate's git status, never lost data: a note
 	}
 	// A repo with no lore data of its own (a client repo) never gets its

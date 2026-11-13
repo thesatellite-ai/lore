@@ -360,6 +360,11 @@ const (
 	RuleNotIn     RuleKind = "not_in"     // not_in:repo,me,team,company
 	RuleKeyPath   RuleKind = "key_path"   // an ssh key file path (private or .pub), absolute or ~/
 	RuleAbsGlob   RuleKind = "abs_glob"   // absolute after ~ expansion
+	// RuleRepoPattern is a repo pattern of an org's own/repos (host/path,
+	// * or ** as whole segments, never for the host): the same
+	// repourl.Compile the org entry's save runs, so a check never passes a
+	// pattern the save then refuses.
+	RuleRepoPattern RuleKind = "repo_pattern"
 )
 
 // Rule is one validation rule in its text form, "kind" or "kind:arg"

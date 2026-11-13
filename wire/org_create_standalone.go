@@ -566,7 +566,7 @@ func orgConfigWith(home string, edit func(root *yaml.Node) error) ([]byte, error
 	var out []byte
 	err := editMachineConfigBytes(home, edit, func(b []byte) error {
 		if _, perr := orgconf.Parse(b); perr != nil {
-			return errs.Wrap(errs.ConfigInvalid, "the entry does not validate; nothing changed: "+perr.Error(), perr)
+			return errs.Wrap(errs.ConfigInvalid, "the org entry does not validate, so config.yaml was not changed (a store clone made before this check stays): "+perr.Error(), perr)
 		}
 		out = b
 		return nil

@@ -65,17 +65,8 @@ func (ap setupApplier) Apply(ctx context.Context, req opssetup.ApplyRequest) (op
 	switch req.Apply {
 	case onboard.ApplyNone:
 		return opssetup.ApplyResult{Wrote: []string{}, Setup: e}, nil
-	case onboard.ApplySetupEntry:
-		if k := answerText(req.Answers, onboard.QIDKind); k != "" {
-			e.Kind = onboard.Kind(k)
-		}
-		if !e.Kind.HasOrg() {
-			e.Org = "" // a team setup turned solo keeps no org (orgs[] itself stays)
-		}
-		if a, ok := req.Answers[onboard.QIDDefault]; ok && a.IsBool {
-			e.Default = a.Bool
-		}
-		return ap.putEntry(e, req.DryRun)
+	case onboard.ApplySetupEntry, onboard.ApplyTools, onboard.ApplySecrets, onboard.ApplyFolders:
+		return ap.putEntry(withStepAnswers(e, req.Apply, req.Answers), req.DryRun)
 	case onboard.ApplyIdentity:
 		return ap.applyIdentity(ctx, e, req)
 	case onboard.ApplyGitHub:
@@ -83,31 +74,63 @@ func (ap setupApplier) Apply(ctx context.Context, req opssetup.ApplyRequest) (op
 		return ap.putEntry(e, req.DryRun)
 	case onboard.ApplyPersonalStore:
 		return ap.applyPersonalStore(ctx, e, req)
-	case onboard.ApplyTools:
-		if a, ok := req.Answers[onboard.QIDTools]; ok {
-			e.Tools = slices.Clone(a.List)
-		}
-		return ap.putEntry(e, req.DryRun)
-	case onboard.ApplySecrets:
-		if a, ok := req.Answers[onboard.QIDBackend]; ok {
-			e.Secrets.Backend = strings.TrimSpace(a.Text)
-			if e.Secrets.Backend == onboard.SecretsNone {
-				e.Secrets.Backend = ""
-			}
-		}
-		return ap.putEntry(e, req.DryRun)
-	case onboard.ApplyFolders:
-		if a, ok := req.Answers[onboard.QIDFolders]; ok {
-			e.Folders = slices.Clone(a.List)
-		}
-		if a, ok := req.Answers[onboard.QIDDefault]; ok && a.IsBool {
-			e.Default = a.Bool
-		}
-		return ap.putEntry(e, req.DryRun)
 	case onboard.ApplyJoin, onboard.ApplyTeam:
 		return ap.applyRoster(ctx, e, req)
 	}
 	return opssetup.ApplyResult{}, errs.New(errs.InvalidInput, "setup apply: unknown apply "+string(req.Apply)).WithHint("lore setup plan lists the steps")
+}
+
+// withStepAnswers is e with what a kind, tools, secrets or folders step's
+// answers record (any other apply returns e unchanged). It is shared by
+// the step's own apply and by withEarlySteps, which replays the steps a
+// member or admin setup saved before its join or team step wrote the
+// entry: the one mapping keeps both writes the same.
+func withStepAnswers(e onboard.SetupEntry, apply onboard.ApplyID, a onboard.Answers) onboard.SetupEntry {
+	switch apply {
+	case onboard.ApplySetupEntry:
+		if k := answerText(a, onboard.QIDKind); k != "" {
+			e.Kind = onboard.Kind(k)
+		}
+		if !e.Kind.HasOrg() {
+			e.Org = "" // a team setup turned solo keeps no org (orgs[] itself stays)
+		}
+	case onboard.ApplyTools:
+		if v, ok := a[onboard.QIDTools]; ok {
+			e.Tools = slices.Clone(v.List)
+		}
+	case onboard.ApplySecrets:
+		if v, ok := a[onboard.QIDBackend]; ok {
+			e.Secrets.Backend = strings.TrimSpace(v.Text)
+			if e.Secrets.Backend == onboard.SecretsNone {
+				e.Secrets.Backend = ""
+			}
+		}
+	case onboard.ApplyFolders:
+		if v, ok := a[onboard.QIDFolders]; ok {
+			e.Folders = slices.Clone(v.List)
+		}
+	default:
+		return e
+	}
+	// the kind and folders steps both ask whether this is the default setup
+	if v, ok := a[onboard.QIDDefault]; ok && v.IsBool && (apply == onboard.ApplySetupEntry || apply == onboard.ApplyFolders) {
+		e.Default = v.Bool
+	}
+	return e
+}
+
+// replayedSteps are the steps whose saved answers withEarlySteps writes
+// into a member or admin entry its join or team step creates, in plan
+// order (the folders step's default answer wins over the kind step's, as
+// it does when both are saved on a written entry).
+var replayedSteps = []struct {
+	step  onboard.StepID
+	apply onboard.ApplyID
+}{
+	{onboard.StepKind, onboard.ApplySetupEntry},
+	{onboard.StepTools, onboard.ApplyTools},
+	{onboard.StepSecrets, onboard.ApplySecrets},
+	{onboard.StepFolders, onboard.ApplyFolders},
 }
 
 // githubBlock is the github block the step's answers record (ONB 4.3; the
@@ -507,10 +530,12 @@ func (ap setupApplier) withEarlySteps(ctx context.Context, e onboard.SetupEntry)
 		return e, "", err
 	}
 	initURL := ""
+	done := map[onboard.StepID]onboard.Progress{}
 	for _, p := range ps {
 		if p.Status != onboard.StepDone {
 			continue
 		}
+		done[p.Step] = p
 		switch p.Step {
 		case onboard.StepGitHub:
 			if e.GitHub.User == "" && answerText(p.Answers, onboard.QIDGitHubAccount) != "" {
@@ -525,6 +550,26 @@ func (ap setupApplier) withEarlySteps(ctx context.Context, e onboard.SetupEntry)
 				}
 			}
 		}
+	}
+	// The kind, tools, secrets and folders steps of a member or admin
+	// setup may be saved before its join or team step: their writes found
+	// no entry (putEntry: orgReady) and were kept only as progress. The
+	// entry is created now, so those answers go in with it; before, they
+	// were reported done and dropped (default false, no folders, no tools).
+	// An entry already in config.yaml holds its own values (each step wrote
+	// it), so an edit of a finished setup is never overridden from progress.
+	cfg, err := ReadSetupsConfig(ap.a.opts.Home)
+	if err != nil {
+		return e, "", err
+	}
+	if _, written := cfg.Setup(e.Name); !written {
+		kind, org := e.Kind, e.Org // the join or team step just set them
+		for _, r := range replayedSteps {
+			if p, ok := done[r.step]; ok {
+				e = withStepAnswers(e, r.apply, p.Answers)
+			}
+		}
+		e.Kind, e.Org = kind, org
 	}
 	return e, initURL, nil
 }
