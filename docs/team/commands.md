@@ -979,11 +979,13 @@ Flags:
       --json                  print the result (or the error) as JSON
       --lead string           only tasks led by this actor (@me, act_ id, stable key or name)
       --leaves                only tasks with no open sub-tasks (what can be worked on)
+      --limit int             at most this many rows (default: all; 50 when --page is given)
       --max-time string       only tasks with at most this effort (e.g. 30m)
       --meta stringArray      filter by metadata: key=value, key!=value, key~=text, key>n, key?, key!? (repeatable, all must match)
       --min-time string       only tasks with at least this effort (e.g. 2h)
       --mine                  assigned to me or my team, and unclaimed or claimed by me
       --mission string        filter by mission_id
+      --page int              page number, from 1 (with --limit)
       --parent string         only the direct sub-tasks of this task (tsk_…)
       --place string          narrow --meta names to one place: repo, project, org or a scope label (project:acme-hub)
       --project string        only tasks of this project (prj_ id or name)

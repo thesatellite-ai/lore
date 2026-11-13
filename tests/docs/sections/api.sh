@@ -36,7 +36,7 @@ EXTRA_ENV="$api_env" on alice . 'curl -s -H "Authorization: Bearer $(cat ~/.lore
 on alice work/website "lore rule list"
 
 note "api error"
-EXTRA_ENV="$api_env" on alice . 'curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" "http://127.0.0.1:$PORT/v1/rules?limit=5"'
+EXTRA_ENV="$api_env" on alice . 'curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" "http://127.0.0.1:$PORT/v1/rules?colour=red"'
 EXTRA_ENV="$api_env" on alice . 'curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" http://127.0.0.1:$PORT/v1/notes'
 
 # The running server checks the token file on every request, so the rotate reaches it

@@ -22,8 +22,8 @@ alice (work/website)$ lore rule list
 rul_7a670ae8548ed05bf57ad29ad0759504 [must/always] Run the tests before you push
 
 ### api error
-alice$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" "http://127.0.0.1:$PORT/v1/rules?limit=5"
-{"error":{"code":"E_INVALID_INPUT","message":"unknown parameter limit","exit":20,"class":"bad_input","retryable":false,"needs_person":false}}
+alice$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" "http://127.0.0.1:$PORT/v1/rules?colour=red"
+{"error":{"code":"E_INVALID_INPUT","message":"unknown parameter colour","exit":20,"class":"bad_input","retryable":false,"needs_person":false}}
 
 HTTP 400
 alice$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" http://127.0.0.1:$PORT/v1/notes
