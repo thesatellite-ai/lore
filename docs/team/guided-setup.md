@@ -94,6 +94,7 @@ steps:
       route           How git connects  Optional: ss
     checks: github.ssh_key, github.ssh_auth, github.
     apply: github
+    optional: true
     values: {}
   - id: personal_store
     title: Where do your own notes go?
@@ -181,10 +182,10 @@ progress:
 |---|---|---|---|
 | `kind` | What kind of setup is this? | all | the setup's kind and name; for `solo`, whether it is the default |
 | `identity` | Who are you? | all | your name, email, other addresses and handle (a `member` setup is prefilled with the invite's email) |
-| `github` | Which GitHub account? | all | the GitHub user you pick, and the route lore found for it: `route: ssh` with the host alias (`github.com` or a `Host` block of yours) and the key's fingerprint (plus the key path when a `.pub` sits beside it or you gave one), or `route: https` (the account's gh login) |
+| `github` | Which GitHub account? | all, optional | the GitHub user you pick, and the route lore found for it: `route: ssh` with the host alias (`github.com` or a `Host` block of yours) and the key's fingerprint (plus the key path when a `.pub` sits beside it or you gave one), or `route: https` (the account's gh login). Skip it (`lore setup apply <setup> --step github --answers '{}'`, or Skip on the page) when your stores are not on GitHub (another git host, a local path) or the machine has no gh login or GitHub key: git then reaches each store as it is configured |
 | `personal_store` | Where do your own notes go? | all | your personal store (`--to me`): create a new private repo, use an existing one, a local folder (`file://~/.lore/stores/_me`), the same as your other setups, or none |
 | `join` | Join your team | member | the invite you were sent; joins the org and its roster |
-| `team` | Start your team | admin | the team name, a new or empty private repo for its store, the team's own repo patterns and client repo patterns |
+| `team` | Start or attach your team store | admin | the team name, a new or empty private repo for its store, the team's own repo patterns and client repo patterns; or your team's existing store, on a new machine of an admin: lore attaches it, builds the org entry from its `lore-org.yaml` (every store, `own` and `repos`, as a member's join does) and adds you to its roster as an admin when you are not on it yet. Only a repo that holds files and is not a lore store is refused (`org.free`) |
 | `tools` | Which coding tools do you use? | all, optional | the tool profiles (`claude_code`, `codex`, …); lore installs its skill for each ([skill install](../knowledge/skill-install.md)) |
 | `secrets` | Where do you keep secrets? | all, optional | the default secret manager for new secret references (lore only asks it for its version) |
 | `folders` | Which folders is this setup for? | all, optional | folder globs and whether this is the default setup |
@@ -394,7 +395,7 @@ Everything the page does is also a command, so scripts and agents can do it too.
 | Command | What it does |
 |---|---|
 | `lore setup list` | every setup with kind, org, default, folders and last health, and which one is active here and why |
-| `lore setup show <name>` | one setup's entry: keys and paths, never a secret |
+| `lore setup show <name>` | one setup's entry: keys and paths, never a secret; its health and every problem the health cell counts, with fixes |
 | `lore setup edit <name> [flags]` | change `--folder` (replaces the list; repeat it), `--github-user`, `--route ssh\|https`, `--host-alias`, `--ssh-key` (a key file: the private key or its `.pub`) or `--no-ssh-key` (use the alias's own key), `--gh-account`, `--personal-store inherit\|none\|<url>`, `--tool` (replaces the list), `--secrets`, `--default` / `--no-default`, `--note "<why this setup exists>"` / `--no-note` |
 | `lore setup rename <name> <new>` | give the setup a new name; its repo pins and saved steps follow it. Refused with `E_SETUP_NAME_TAKEN` when another setup has that name |
 | `lore setup use <name>` | print `export LORE_SETUP=<name>` for this shell (it writes nothing) |

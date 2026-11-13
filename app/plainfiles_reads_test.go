@@ -47,11 +47,14 @@ func pfLastPush(s string) string {
 // LORE_TEAM_SPEC §1; `lore where` lists it) and lore's rebuildable repo
 // cache, and the "said once" notes (waiting_said, live-waiting-said:
 // what a read last told the person, so it does not repeat it, B3-13).
+// remote-tip is fetch bookkeeping too: the remote tip a fetch saw, kept
+// past a later prune so a wiped store is never refilled (B2-28); it must
+// be written by the read's own fetch, the fetch that prunes.
 func pfSkip(rel string) bool {
 	base := filepath.Base(rel)
 	switch {
 	case base == "index" || base == "FETCH_HEAD" || base == "fetch-stamp" || base == "ORIG_HEAD" || base == "lock" || base == "live.lock" || base == "signals-seen.json" ||
-		base == "waiting_said" || base == "live-waiting-said":
+		base == "waiting_said" || base == "live-waiting-said" || base == "remote-tip":
 		return true
 	case strings.HasPrefix(base, "lore-cache.db"):
 		return true

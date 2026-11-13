@@ -64,3 +64,31 @@ func TestSyncRefusesAResetRemote(t *testing.T) {
 		t.Fatalf("sync into an unrelated history: %v, want ErrRemoteReset", err)
 	}
 }
+
+// TestResetFoundAfterAnotherFetchPruned (B2-28): another fetch of the
+// clone (a read's refresh, the org link index) pruned the tracking ref
+// before the sync looked; the remote tip the clone last saw still tells
+// the emptied remote from one that never had the branch.
+func TestResetFoundAfterAnotherFetchPruned(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithMerger(newestMerger{}))
+	g := newGen(t)
+	write(t, a, store.Change{Row: g.row(newID(t), "old", hlc.HLC{})})
+	if _, err := a.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(remote); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, filepath.Dir(remote), "init", "--quiet", "--bare", "--initial-branch="+testBranch, remote)
+	gitT(t, a.Dir(), "fetch", "--quiet", "--prune", RemoteName)
+	write(t, a, store.Change{Row: g.row(newID(t), "after the wipe", hlc.HLC{})})
+	if _, err := a.Sync(ctx); !errors.Is(err, ErrRemoteReset) {
+		t.Fatalf("sync after a pruning fetch: %v, want ErrRemoteReset", err)
+	}
+	if got := gitT(t, remote, "for-each-ref"); got != "" {
+		t.Fatalf("the emptied remote was refilled: %s", got)
+	}
+}

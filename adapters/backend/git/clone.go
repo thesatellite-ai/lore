@@ -504,7 +504,8 @@ func (b *Backend) runFetch(ctx context.Context, dir string, args ...string) erro
 	}
 	_, err := b.git.run(ctx, call{dir: dir, args: args})
 	if err == nil {
-		b.stampFetch(ctx, dir) // RES 3.6: the remote answered (fresh.go)
+		b.stampFetch(ctx, dir)   // RES 3.6: the remote answered (fresh.go)
+		b.noteRemoteTip(ctx, "") // remotereset.go: what the remote held, kept past a later prune
 		return nil
 	}
 	if _, ran := exitCode(err); !ran {

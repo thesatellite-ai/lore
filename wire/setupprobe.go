@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/machine"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
@@ -370,10 +371,14 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		if _, ok := sp.p.FolderStorePath(u); ok {
 			return skip(skipFolderStore) // an org store is a git repo the team shares
 		}
-		f := sp.p.RootFiles(ctx, u, sp.route(r), orgcfg.OrgFile)
+		// B1-24 (D8): an existing lore store is attached (the team step
+		// builds the org entry from its lore-org.yaml, as a member's join
+		// does), an empty repo is made a store; only a repo that holds
+		// files and is no lore store is refused.
+		f := sp.p.RootFiles(ctx, u, sp.route(r), rowfs.MarkerFile, orgcfg.OrgFile)
 		res := outcome(f.Outcome, sp.urlVars(u, r))
-		if res.Status == onboard.StatusOK && len(f.Found) > 0 {
-			res.Status, res.Detail = onboard.StatusFail, "the store already holds "+orgcfg.OrgFile
+		if res.Status == onboard.StatusOK && !f.EmptyRepo && len(f.Found) == 0 {
+			res.Status, res.Detail = onboard.StatusFail, "the repo holds files but no "+rowfs.MarkerFile+": it is not a lore store"
 		}
 		return res
 	case onboard.CheckStorePrivate:
@@ -1183,7 +1188,7 @@ const (
 	detailNoStores    = "no stores attached in .lore/stores.yaml"
 	detailNoOrgRepo   = "this repo names no org"
 	detailSetupNoOrg  = "a solo setup works in any repo"
-	detailOrgFree     = "no lore-org.yaml in the store yet"
+	detailOrgFree     = "a new or empty repo, or a lore store this setup attaches"
 	detailLoreMissing = "lore is not set up in this repo yet (repo.init)"
 	detailHooksOther  = "hooks are checked in the repo lore runs in"
 	detailNoTools     = "no tools chosen for this setup"

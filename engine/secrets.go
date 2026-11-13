@@ -5,14 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/scan"
+	"github.com/thesatellite-ai/lore/logic/validate"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -115,8 +119,31 @@ func (e *Engine) detect(ctx context.Context, cl call, target store.Source, rowID
 		return screened{}, err
 	}
 	loreRec := e.loreRecordFields(rowID)
-	look := func(field string, item int, text string) {
-		found, warn := e.scanText(field, text)
+	// The texts are scanned at once, the joined-fields scan beside them
+	// (B1-23: a write of big fields scanned them one after another, ~80 s
+	// of the first lore fix of a big repo copying machine-local rows); the
+	// findings are then read in the fixed order below.
+	jobs := scanJobs(fields, names)
+	var (
+		cross   []crossField
+		inField []scan.Finding
+		wg      sync.WaitGroup
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// 19.2: the joined-fields scan (read below, after the fields)
+		cross, inField = e.crossFieldFindings(ctx, fields, names, func(id string) bool { return rules.IsOff(id, own) })
+	}()
+	for _, j := range jobs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			j.found, j.warn = e.scanTextIn(ctx, j.field, j.text)
+		}()
+	}
+	wg.Wait()
+	look := func(field string, item int, found []scan.Finding, warn *Warning) {
 		if warn != nil {
 			out.warnings = append(out.warnings, *warn)
 		}
@@ -135,30 +162,12 @@ func (e *Engine) detect(ctx context.Context, cl call, target store.Source, rowID
 			out.hits = append(out.hits, fieldHit{field: field, item: item, findings: kept})
 		}
 	}
-	for _, name := range names {
-		switch v := fields[name].(type) {
-		case value.Text:
-			look(name, -1, v.String())
-		case value.JSON:
-			look(name, -1, v.String())
-		case value.List:
-			// A list read back from a file may hold json objects as items
-			// (value.Infer): scan those too. Redacting one is refused
-			// (redactValueWith), never skipped.
-			for i, it := range v.Items() {
-				switch t := it.(type) {
-				case value.Text:
-					look(name, i, t.String())
-				case value.JSON:
-					look(name, i, t.String())
-				}
-			}
-		}
+	for _, j := range jobs {
+		look(j.field, j.item, j.found, j.warn)
 	}
 	// 19.2: the joined-fields scan. A finding spanning two fields is
 	// refused in every mode; one that lies inside a single field but only
 	// shows once the fields are joined is that field's hit, as usual.
-	cross, inField := e.crossFieldFindings(fields, names, func(id string) bool { return rules.IsOff(id, own) })
 	if len(cross) > 0 {
 		for _, c := range cross {
 			if err := e.AuditSecret(ctx, ActionSecretDetected, SecretAudit{Command: cl.op, Row: rowID,
@@ -371,37 +380,12 @@ type crossField struct {
 // ones the per-field scan already had. A rule that is off is skipped; an
 // allow entry cannot name a split finding (no single field), so none
 // applies to cross. Fewer than two text fields: nothing to join.
-func (e *Engine) crossFieldFindings(fields map[string]value.Value, names []string, off func(string) bool) (cross []crossField, inField []scan.Finding) {
-	type seg struct {
-		name       string
-		start, end int
-	}
-	var segs []seg
-	var b strings.Builder
-	for _, name := range names {
-		var t string
-		switch v := fields[name].(type) {
-		case value.Text:
-			t = v.String()
-		case value.JSON:
-			t = v.String()
-		default:
-			continue
-		}
-		if t == "" {
-			continue
-		}
-		if b.Len() > 0 {
-			b.WriteByte('\n')
-		}
-		segs = append(segs, seg{name: name, start: b.Len(), end: b.Len() + len(t)})
-		b.WriteString(t)
-	}
+func (e *Engine) crossFieldFindings(ctx context.Context, fields map[string]value.Value, names []string, off func(string) bool) (cross []crossField, inField []scan.Finding) {
+	joined, segs := joinFields(fields, names)
 	if len(segs) < 2 {
 		return nil, nil
 	}
-	joined := b.String()
-	found, _ := e.scanText(crossFieldName, joined)
+	found, _ := e.scanTextIn(ctx, crossFieldName, joined)
 	for _, f := range found {
 		// The session-id rule is a literal match the per-field pass already
 		// decides (with its lore-record exception, BUG-T7): never joined.
@@ -959,4 +943,165 @@ func (r redacting) Record(ctx context.Context, ev Event) error {
 		return errs.Prefix("the row is stored but its store-then-rotate task failed (lore secrets check adds it)", err)
 	}
 	return nil
+}
+
+// textJob is one text of a write that detect scans: a field's text or
+// json, or one text item of a list, with its findings once scanned.
+type textJob struct {
+	field string
+	item  int // -1: the whole field
+	text  string
+	found []scan.Finding
+	warn  *Warning
+}
+
+// scanJobs lists the texts detect scans in fields, in names order.
+func scanJobs(fields map[string]value.Value, names []string) []*textJob {
+	var jobs []*textJob
+	for _, name := range names {
+		switch v := fields[name].(type) {
+		case value.Text:
+			jobs = append(jobs, &textJob{field: name, item: -1, text: v.String()})
+		case value.JSON:
+			jobs = append(jobs, &textJob{field: name, item: -1, text: v.String()})
+		case value.List:
+			// A list read back from a file may hold json objects as items
+			// (value.Infer): scan those too. Redacting one is refused
+			// (redactValueWith), never skipped.
+			for i, it := range v.Items() {
+				switch t := it.(type) {
+				case value.Text:
+					jobs = append(jobs, &textJob{field: name, item: i, text: t.String()})
+				case value.JSON:
+					jobs = append(jobs, &textJob{field: name, item: i, text: t.String()})
+				}
+			}
+		}
+	}
+	return jobs
+}
+
+// fieldSeg is one field's span in joinFields' text.
+type fieldSeg struct {
+	name       string
+	start, end int
+}
+
+// joinFields is the joined-fields text (19.2): the non-empty text and json
+// fields in names order, one per line, and where each one sits.
+func joinFields(fields map[string]value.Value, names []string) (string, []fieldSeg) {
+	var segs []fieldSeg
+	var b strings.Builder
+	for _, name := range names {
+		var t string
+		switch v := fields[name].(type) {
+		case value.Text:
+			t = v.String()
+		case value.JSON:
+			t = v.String()
+		default:
+			continue
+		}
+		if t == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		segs = append(segs, fieldSeg{name: name, start: b.Len(), end: b.Len() + len(t)})
+		b.WriteString(t)
+	}
+	return b.String(), segs
+}
+
+// scanMemo holds scan results by field and text for the writes under one
+// context (WithScanMemo): a scan depends on the field, the text and the
+// rules only, and the rules do not change inside a stage.
+type scanMemo struct {
+	mu sync.Mutex
+	m  map[[2]string]scanResult
+}
+
+type scanResult struct {
+	found []scan.Finding
+	warn  *Warning
+}
+
+type scanMemoKey struct{}
+
+// WithScanMemo returns ctx whose writes share their secret-scan results
+// (B1-23: lore fix copies hundreds of big machine-local rows from lore.db;
+// Prescan scans them on every CPU first, then each create finds its scans
+// done). Use it only inside one stage (Staging), whose rules are read once.
+func WithScanMemo(ctx context.Context) context.Context {
+	return context.WithValue(ctx, scanMemoKey{}, &scanMemo{m: map[[2]string]scanResult{}})
+}
+
+// scanTextIn is scanText through ctx's scan memo, if any.
+func (e *Engine) scanTextIn(ctx context.Context, field, text string) ([]scan.Finding, *Warning) {
+	m, _ := ctx.Value(scanMemoKey{}).(*scanMemo)
+	if m == nil {
+		return e.scanText(field, text)
+	}
+	k := [2]string{field, text}
+	m.mu.Lock()
+	r, ok := m.m[k]
+	m.mu.Unlock()
+	if ok {
+		return slices.Clone(r.found), r.warn
+	}
+	found, warn := e.scanText(field, text)
+	m.mu.Lock()
+	m.m[k] = scanResult{found: slices.Clone(found), warn: warn}
+	m.mu.Unlock()
+	return found, warn
+}
+
+// Prescan runs, on every CPU, the secret scans a create of each of rows in
+// table would run, into ctx's scan memo (WithScanMemo; without one it does
+// nothing). A row that would not pass validation is left to the create,
+// which refuses it as before.
+func (e *Engine) Prescan(ctx context.Context, table row.Table, rows []map[string]value.Value) {
+	if m, _ := ctx.Value(scanMemoKey{}).(*scanMemo); m == nil {
+		return
+	}
+	def, err := e.tableDef(table)
+	if err != nil {
+		return
+	}
+	var texts [][2]string
+	for _, fields := range rows {
+		typed, err := validate.Fields(def, fields, validate.Whole)
+		if err != nil {
+			continue
+		}
+		dropNulls(typed)
+		names := slices.Sorted(maps.Keys(typed))
+		stripped, _, err := stripURLs(typed)
+		if err != nil {
+			continue
+		}
+		for _, j := range scanJobs(stripped, names) {
+			texts = append(texts, [2]string{j.field, j.text})
+		}
+		if joined, segs := joinFields(stripped, names); len(segs) >= 2 {
+			texts = append(texts, [2]string{crossFieldName, joined})
+		}
+	}
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(texts)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(texts) {
+					return
+				}
+				e.scanTextIn(ctx, texts[i][0], texts[i][1])
+			}
+		}()
+	}
+	wg.Wait()
 }

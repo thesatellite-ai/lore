@@ -153,6 +153,7 @@ steps:
       route           How git connects  Optional: ss
     checks: github.ssh_key, github.ssh_auth, github.
     apply: github
+    optional: true
     values: {}
   - id: personal_store
     title: Where do your own notes go?

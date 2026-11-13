@@ -72359,6 +72359,107 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "health": {
+                      "type": "string"
+                    },
+                    "problems": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "check": {
+                            "type": "string"
+                          },
+                          "checked_at": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "fix": {
+                            "type": "object",
+                            "properties": {
+                              "choices": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "command": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "command"
+                                  ]
+                                }
+                              },
+                              "command": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "outward": {
+                                "type": "boolean"
+                              },
+                              "runnable": {
+                                "type": "boolean"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "why": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "text",
+                              "command"
+                            ]
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "error",
+                              "warn",
+                              "info"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ok",
+                              "warn",
+                              "fail",
+                              "skip",
+                              "error"
+                            ]
+                          },
+                          "target": {
+                            "type": "string"
+                          },
+                          "took_ms": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "check",
+                          "status",
+                          "level"
+                        ]
+                      }
+                    },
                     "setup": {
                       "type": "object",
                       "properties": {

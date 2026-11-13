@@ -237,6 +237,12 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 			res.Offline = offline
 			return res, nil
 		}
+		if gitbackend.RemoteResetAt(dir) {
+			// B2-28: a sync found this store's remote deleted and made
+			// again; nothing is pushed into it until the person picks
+			// `lore store push --restore` or forget + init.
+			return res, fmt.Errorf("%w: %s %s: the store was reset (deleted and made again); the commit stays in the clone until you run lore store push --restore %s, or lore store forget %s", ErrStoreRefused, target, branch, target, target)
+		}
 		out, perr := netGit(ctx, c.Route, dir, "push", "--quiet", "--porcelain", remoteName, oid+":"+localRef(branch))
 		if perr == nil {
 			res.Pushed = true

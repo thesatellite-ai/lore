@@ -260,7 +260,7 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `invite.email` | error | your email is the invite's | use that address, or ask for a new invite |
 | `invite.pending` | warn | (admin) no pending invite is waiting | `lore team invite resend <id>` (runnable) or `revoke` |
 | `invite.github_access` | warn | (admin) invited people can reach the store on GitHub | `gh api -X PUT repos/…/collaborators/<user> -f permission=push` (runnable, asks) |
-| `org.free` | error | (team step) the store holds no org yet | join that org with `lore setup join`, or ask its admin |
+| `org.free` | error | (team step) the store is new, empty or already a lore store (an existing team store is attached) | give a new or empty private repo, or your team's existing lore store |
 | `org.name_free` | error | (team step) no org entry of that name exists here | pick another name, or `lore org rename` |
 | `live.mode` | warn | with autopush on, the repo's remote accepts a dry-run push of lore's live rows | get push access, or set `live.autopush: false` on the setup |
 | `tools.skill_installed` | warn | the lore skill is installed for each tool | `lore skill install --tool <tool>` (runnable) |
