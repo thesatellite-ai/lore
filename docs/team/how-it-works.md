@@ -130,8 +130,8 @@ Your branch, your staged files and your working folder are never touched. Lore b
 ```console
 # bob, in portal
 $ lore task add --title 'set up the portal CI'
+lore: wrote 2 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
-lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
   created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
@@ -284,7 +284,7 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 ```console
 # agent-backend, in website
 $ lore task claim --id tsk_76bd…3f10
-lore: pushed store agency: commit cf563f3 to branch main
+lore: pushed store agency/client (here: agency): commit cf563f3 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_f147…5139.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
 ✓ claimed tsk_76bd…3f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
@@ -362,12 +362,12 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 ```console
 # agent-backend, in agents/api
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
-lore: pushed store agency: commit a8de760 to branch main
-lore: pushed store agency: commit 9169078 to branch main
-lore: pushed store agency: commit b733d8a to branch main
+lore: pushed store agency/client2 (here: agency): commit a8de760 to branch main
+lore: pushed store agency/client2 (here: agency): commit 9169078 to branch main
+lore: pushed store agency/client2 (here: agency): commit b733d8a to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_3b62…e913.json (store agency)
-✓ tsk_162d…9666 done (commit 1833373); waiting for merge
+✓ tsk_162d…9666 done (commit 1833373, not linked to the task; link it with: lore link add --entity tsk_162d…9666 --commit 1833373f9e4e); waiting for merge
   lesson → mem_3b62…e913
 
 # agent-frontend, in agents/app
@@ -382,14 +382,14 @@ $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && g
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
 lore: store agency: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 59e9d31)
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 7540e63)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
-lore: pushed store agency: commit 7540e63 to branch main
-lore: pushed store agency: commit ef62c83 to branch main
+lore: pushed store agency/client2 (here: agency): commit ef62c83 to branch main
+lore: pushed store agency/client2 (here: agency): commit dd85e7d to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main

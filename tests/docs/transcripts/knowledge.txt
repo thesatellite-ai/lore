@@ -336,7 +336,7 @@ b back · q quit
 
 ### comment
 alice (work/website)$ lore comment add --on-table decisions --on-id dec_76bd560aff0771fab8457dbfa9823f10 --body 'The client confirmed this on the call.'
-lore: wrote ~/work/website/.lore/data/comments/cmt_06b12747c0fad05aadf714f05f1d3d1c.json
+lore: wrote comments/cmt_06b12747c0fad05aadf714f05f1d3d1c on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/comments/cmt_06b12747c0fad05aadf714f05f1d3d1c.json is unchanged)
 ✓ comment cmt_06b12747c0fad05aadf714f05f1d3d1c on decisions/dec_76bd560aff0771fab8457dbfa9823f10 
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 alice (work/website)$ lore comment list --on-table decisions --on-id dec_76bd560aff0771fab8457dbfa9823f10
@@ -344,7 +344,7 @@ cmt_06b12747c0fad05aadf714f05f1d3d1c on decisions/dec_76bd560aff0771fab8457dbfa9
 alice (work/website)$ lore comment search --query confirmed
 cmt_06b12747c0fad05aadf714f05f1d3d1c [decisions/dec_76bd560aff0771fab8457dbfa9823f10] The client confirmed this on the call.
 alice (work/website)$ lore comment delete --id cmt_06b12747c0fad05aadf714f05f1d3d1c --yes
-lore: wrote ~/work/website/.lore/data/comments/cmt_06b12747c0fad05aadf714f05f1d3d1c.json
+lore: wrote comments/cmt_06b12747c0fad05aadf714f05f1d3d1c on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/comments/cmt_06b12747c0fad05aadf714f05f1d3d1c.json is unchanged)
 ✓ cmt_06b12747c0fad05aadf714f05f1d3d1c moved to the trash (restore: lore trash restore --id cmt_06b12747c0fad05aadf714f05f1d3d1c)
 
 ### tag
@@ -377,6 +377,7 @@ alice (work/website)$ git status --short | head -5
 ?? .lore/data/architecture_notes/
 ?? .lore/data/behaviours/
 alice (work/website)$ git add -A && git commit -qm 'lore: notes' && git log --oneline | head -1
+lore: refreshed .lore/LORE.md in this commit for the row files it carries
 86dbae4 lore: notes
 
 ### import

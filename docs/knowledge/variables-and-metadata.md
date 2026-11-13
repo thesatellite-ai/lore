@@ -155,19 +155,19 @@ references:
 ```console
 # alice, in website
 $ lore task add --title 'Fix the Safari checkout button'
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_c0f3…b5b8.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+lore: wrote task_lists/tlt_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_c0f3…b5b8.json is unchanged)
+lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 ✓ tsk_76bd…3f10 — Fix the Safari checkout button [medium]
   created tasklist tlt_c0f3…b5b8 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore meta set --id tsk_76bd…3f10 --pair client=acme
-lore: wrote ~/work/website/.lore/data/meta_keys/mky_d431…313a.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+lore: wrote meta_keys/mky_d431…313a on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/meta_keys/mky_d431…313a.json is unchanged)
+lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 tasks tsk_…3f10: set client = acme
 new keys in repo: client (text)
 $ lore meta set --id tsk_76bd…3f10 --pair cost_hours:number=3
-lore: wrote ~/work/website/.lore/data/meta_keys/mky_b4f4…a5b0.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+lore: wrote meta_keys/mky_b4f4…a5b0 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/meta_keys/mky_b4f4…a5b0.json is unchanged)
+lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 tasks tsk_…3f10: set cost_hours = 3
 new keys in repo: cost_hours (number)
 $ lore meta get --id tsk_76bd…3f10
@@ -199,7 +199,7 @@ $ lore meta add --name priority_band --type text --strict --values low,normal,ur
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 added mky_…7ab0 priority_band (text, strict, values low, normal, urgent) to this repo (not internal)
 $ lore meta set --id tsk_76bd…3f10 --pair priority_band=urgent
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 tasks tsk_…3f10: set priority_band = urgent
 $ lore meta set --id tsk_76bd…3f10 --pair priority_band=asap
 ERROR: [E_META_VALUE] meta: "asap" is not an allowed value of priority_band; allowed: low, normal, urgent
@@ -218,19 +218,19 @@ The refusal names the allowed values and the command that adds a new one (`lore 
 ```console
 # alice, in website
 $ lore task add --title 'Update the footer links' --meta client=acme && lore task add --title 'Add dark mode' --meta client=globex
-lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+lore: wrote tasks/tsk_28f8…03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8…03df.json is unchanged)
 ✓ tsk_28f8…03df — Update the footer links [medium]
   on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4c59…6c38.json
+lore: wrote tasks/tsk_4c59…6c38 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_4c59…6c38.json is unchanged)
 ✓ tsk_4c59…6c38 — Add dark mode [medium]
   on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
 $ lore meta set --where client=acme --id billing=monthly --dry-run
 would set billing on 2 rows (tasks 2): tsk_76bd…3f10, tsk_28f8…03df
 dry run: nothing written
 $ lore meta set --where client=acme --id billing=monthly --yes
-lore: wrote ~/work/website/.lore/data/meta_keys/mky_3b62…e913.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+lore: wrote meta_keys/mky_3b62…e913 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/meta_keys/mky_3b62…e913.json is unchanged)
+lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
+lore: wrote tasks/tsk_28f8…03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8…03df.json is unchanged)
 set billing on 2 rows; batch bat_f147…5139 (undo: lore batch undo --id bat_f147…5139)
 new keys in repo: billing (text)
 $ lore meta export --key client,billing
@@ -265,7 +265,7 @@ priority_band	repo	text	1	asap, low, normal
 ```console
 # alice, in website
 $ lore meta rename --id client --new-name customer --rewrite-rows
-lore: wrote 4 row file(s) in ~/work/website/.lore/data
+lore: wrote 4 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 renamed client → customer in the registry; rewrote 3 row labels (batch bat_b69e…5ed7; labels only, no values or dates changed)
 $ lore meta get --id tsk_76bd…3f10
 billing	monthly
@@ -283,7 +283,7 @@ priority_band	urgent
 ```console
 # alice, in website
 $ lore meta unset --id tsk_76bd…3f10 --key cost_hours
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 tasks tsk_…3f10: removed cost_hours
 $ lore meta get --id tsk_76bd…3f10
 billing	monthly

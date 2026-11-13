@@ -18,14 +18,14 @@ Each developer registers once, then shares the registration with `lore sync` (lo
 ```console
 # alice, in billing
 $ lore actor register
-lore: wrote ~/work/billing/.lore/data/actors/act_7a67…9504.json
+lore: wrote actors/act_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/actors/act_7a67…9504.json is unchanged)
 ✓ act_7a67…9504 alice (@alice) already registered (refreshed) in this repo
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 
 # bob, in billing
 $ lore actor register
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/billing/.git/config; hook blocks in ~/work/billing/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: wrote ~/work/billing/.lore/data/actors/act_2ad3…f891.json
+lore: wrote actors/act_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/actors/act_2ad3…f891.json is unchanged)
 ✓ act_2ad3…f891 bob (@bob) registered in this repo
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 
@@ -49,8 +49,8 @@ Bob, on `feat/payments`, gives Alice a task and shares it with `lore sync`. Alic
 ```console
 # bob, in billing
 $ git pull -q && git switch -q -c feat/payments && lore task add --title 'check the checkout page on a phone' --assign @alice
-lore: wrote ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json
-lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote task_lists/tlt_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json is unchanged)
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — check the checkout page on a phone [medium]
   created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
 $ lore sync
@@ -76,11 +76,11 @@ Alice finishes it and names the commit that did the work. Her next `lore sync` l
 ```console
 # alice, in billing
 $ lore task start --id tsk_54fe…28f2
-lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 started
 $ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done --id tsk_54fe…28f2 --commit $(git rev-parse --short HEAD)
-lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
-✓ tsk_54fe…28f2 done (commit 6d00426); waiting for merge
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
+✓ tsk_54fe…28f2 done (commit 6d00426, not linked to the task; link it with: lore link add --entity tsk_54fe…28f2 --commit 6d00426); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ lore sync
 lore live: pushed waiting live writes commit 34ee210 to origin refs/lore/live
@@ -119,7 +119,7 @@ Most teams protect `main` (only pull requests may change it). Then `lore sync` c
 ```console
 # bob, in billing
 $ lore task add --title 'ask the client for the new logo' --assign @alice
-lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
+lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json is unchanged)
 ✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
   on tasklist tlt_162d…9666 "default" (the default; --tasklist picks another)
 $ lore sync
@@ -130,7 +130,7 @@ lore live: pushed waiting live writes commit 22efc3b to origin refs/lore/live
 
 # alice, in billing
 $ lore sync >/dev/null && lore task done --id tsk_c0f3…b5b8
-lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
+lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json is unchanged)
 ✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ lore sync

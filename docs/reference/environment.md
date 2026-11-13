@@ -69,7 +69,7 @@ Upgraded 1 row
   mode-b: rules/rul_3b62…e913 → store shared (~/shared-dbs/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-team lock: this repo has no remote origin; nobody to race, none taken
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
@@ -104,7 +104,7 @@ Upgraded 1 row
   mode-b: rules/rul_3b62…e913 → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-team lock: this repo has no remote origin; nobody to race, none taken
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
@@ -186,7 +186,7 @@ $ git status --short
 ?? .lore/data/task_lists/
 ?? .lore/data/tasks/
 $ lore task add --title 'Check the contact form on a phone'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 — Check the contact form on a phone [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
@@ -203,7 +203,7 @@ tasks      tsk_162d…9666     live      since 2026-11-02 10:00
 ```console
 # alice, in website
 $ LORE_LIVE_AUTOPUSH=0 lore task add --title 'Renew the SSL certificate'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — Renew the SSL certificate [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore live diff
@@ -251,9 +251,9 @@ $ LORE_TRACE=1 lore task list 2>&1 | grep '^trace:' | head -6
 trace: git rev-parse --is-bare-repository --show-object-format (<time>, ok)
 trace: git rev-parse --path-format=absolute --git-common-dir (<time>, ok)
 trace: git config --get remote.origin.url (<time>, ok)
-trace: git config --get user.name (<time>, ok)
-trace: git config --get user.email (<time>, ok)
+trace: git config --get-regexp ^user\.(name|email)$ (<time>, ok)
 trace: git check-ref-format refs/lore/live (<time>, ok)
+trace: git for-each-ref --format=%(objectname) %(refname) -- refs/lore/live (<time>, ok)
 ```
 <!-- /example -->
 

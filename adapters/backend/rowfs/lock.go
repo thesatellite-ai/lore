@@ -90,6 +90,13 @@ func acquireFile(ctx context.Context, path string, wait time.Duration) (*fileLoc
 		if !waited {
 			locktrace.Lock(locktrace.Busy, path)
 		}
+		// A done ctx is the answer before the hold timeout: under load the
+		// wait left to this call (the caller's budget minus its gate wait)
+		// can be spent already, and a cancelled caller is told it was
+		// cancelled, not that the store is locked.
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if !time.Now().Before(deadline) {
 			return nil, lockedErr(wait)
 		}

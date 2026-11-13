@@ -105,10 +105,15 @@ def main(path: str) -> None:
             if kind == "sha":
                 for (k, v), new in list(seen.items()):
                     if k == "sha" and (v.startswith(value) or value.startswith(v)):
-                        full = new if len(new) >= len(value) else None
-                        if full:
-                            seen[key] = full[: len(value)]
-                            break
+                        if len(new) >= len(value):
+                            seen[key] = new[: len(value)]
+                        else:
+                            # the short form came first (`done (commit 1833373, … --commit
+                            # <full>)`): the full one keeps its stand-in as the prefix, so
+                            # the page shows one commit, not two
+                            counts[kind] = counts.get(kind, 0) + 1
+                            seen[key] = (new + stand_in(kind, counts[kind], 40)[len(new):])[: len(value)]
+                        break
             if key not in seen:
                 counts[kind] = counts.get(kind, 0) + 1
                 seen[key] = stand_in(kind, counts[kind], len(value) if kind != "sha" else 40)[: len(value)]

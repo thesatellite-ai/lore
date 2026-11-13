@@ -1,21 +1,21 @@
 
 ### board
 alice (work/website)$ lore task add --title 'Write the launch email' --priority high
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json is unchanged)
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Write the launch email [high]
   created tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 alice (work/website)$ lore task add --title 'Pick the product photos' --priority low
-lore: wrote ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
+lore: wrote tasks/tsk_162df51b7f78b785c97c26b41ea89666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json is unchanged)
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 — Pick the product photos [low]
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 alice (work/website)$ lore task add --title 'Set up the payment provider' --priority urgent
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+lore: wrote tasks/tsk_54fe984c9b495744c0217776765a28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json is unchanged)
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — Set up the payment provider [urgent]
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 alice (work/website)$ lore task start --id tsk_54fe984c9b495744c0217776765a28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+lore: wrote tasks/tsk_54fe984c9b495744c0217776765a28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json is unchanged)
 ✓ tsk_54fe984c9b495744c0217776765a28f2 started
 alice (work/website)$ lore task board
 todo (2)
@@ -37,13 +37,13 @@ low (1)
 
 ### checklist
 alice (work/website)$ lore task checklist add --id tsk_2ad3618e878ebbf527d34d446ef4f891 --text 'Subject line' --item 'Product links' --item 'Discount code' --item 'Send a test to the client'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ 4 checklist items on tsk_2ad3618e878ebbf527d34d446ef4f891 (chk_05e99e22e9e86e96fe4daa7777994603, chk_c0f3c11a5724b0cfd74b256190d9b5b8, chk_76bd560aff0771fab8457dbfa9823f10, chk_d4314eba822f1bf5908b2b8ded5f313a)
 alice (work/website)$ lore task checklist tick --id tsk_2ad3618e878ebbf527d34d446ef4f891 --item 1
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ [x] Subject line (1/4)
 alice (work/website)$ lore task checklist edit --id tsk_2ad3618e878ebbf527d34d446ef4f891 --item 3 --text 'Discount code LAUNCH10'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ chk_76bd560aff0771fab8457dbfa9823f10 Discount code LAUNCH10
 alice (work/website)$ lore task checklist list --id tsk_2ad3618e878ebbf527d34d446ef4f891
 1. [x] Subject line  chk_05e99e22e9e86e96fe4daa7777994603
@@ -54,10 +54,10 @@ alice (work/website)$ lore task checklist list --id tsk_2ad3618e878ebbf527d34d44
 
 ### checklist untick and rm
 alice (work/website)$ lore task checklist untick --id tsk_2ad3618e878ebbf527d34d446ef4f891 --item 1
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ [ ] Subject line (0/4)
 alice (work/website)$ lore task checklist rm --id tsk_2ad3618e878ebbf527d34d446ef4f891 --item 2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ removed chk_c0f3c11a5724b0cfd74b256190d9b5b8 Product links
 alice (work/website)$ lore task checklist list --id tsk_2ad3618e878ebbf527d34d446ef4f891
 1. [ ] Subject line  chk_05e99e22e9e86e96fe4daa7777994603
@@ -67,15 +67,15 @@ alice (work/website)$ lore task checklist list --id tsk_2ad3618e878ebbf527d34d44
 
 ### checklist promote
 alice (work/website)$ lore task checklist promote --id tsk_2ad3618e878ebbf527d34d446ef4f891 --item 3
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b4f4765e593d51fd1352985e8af3a5b0.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_b4f4765e593d51fd1352985e8af3a5b0 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_b4f4765e593d51fd1352985e8af3a5b0.json is unchanged)
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ chk_d4314eba822f1bf5908b2b8ded5f313a became tsk_b4f4765e593d51fd1352985e8af3a5b0 "Send a test to the client" under tsk_2ad3618e878ebbf527d34d446ef4f891
 alice (work/website)$ lore task list --parent tsk_2ad3618e878ebbf527d34d446ef4f891
 ○ tsk_b4f4765e593d51fd1352985e8af3a5b0 Send a test to the client [high]
 
 ### checklist import
 alice (work/website)$ lore task add --title 'Check the shop on a phone' --body $'- [ ] iPhone\n- [ ] Android\n- [x] Tablet'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json
+lore: wrote tasks/tsk_28f8d32584b2db54ffb146bede5b03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json is unchanged)
 ✓ tsk_28f8d32584b2db54ffb146bede5b03df — Check the shop on a phone [medium]
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 alice (work/website)$ lore task checklist import --id tsk_28f8d32584b2db54ffb146bede5b03df --from body
@@ -87,7 +87,7 @@ ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_28f8d32584b2db54ffb146bede
   hint: ask the person, then rerun with --yes
 (exit 26)
 alice (work/website)$ lore task checklist import --id tsk_28f8d32584b2db54ffb146bede5b03df --from body --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json
+lore: wrote tasks/tsk_28f8d32584b2db54ffb146bede5b03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json is unchanged)
 ✓ 3 checklist items from the body of tsk_28f8d32584b2db54ffb146bede5b03df
 alice (work/website)$ lore task checklist list --id tsk_28f8d32584b2db54ffb146bede5b03df
 1. [ ] iPhone  chk_4c590afb2a0cc7ae1b97b7e4e62d6c38
@@ -104,9 +104,9 @@ would add 3 sub-tasks under tsk_162df51b7f78b785c97c26b41ea89666 Pick the produc
   inherited: tasklist tlt_7a670ae8548ed05bf57ad29ad0759504, priority low, commitment accepted
 nothing written (--dry-run)
 alice (work/website)$ lore task split --id tsk_162df51b7f78b785c97c26b41ea89666 --title 'Shoot the shirts' --title 'Shoot the mugs' --priority high --title 'Edit the photos'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b69e8368dd4986838455061d5d9e5ed7.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_0aaebe6aca5bb46cc521869f5ba2a61f.json
+lore: wrote tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb.json is unchanged)
+lore: wrote tasks/tsk_b69e8368dd4986838455061d5d9e5ed7 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_b69e8368dd4986838455061d5d9e5ed7.json is unchanged)
+lore: wrote tasks/tsk_0aaebe6aca5bb46cc521869f5ba2a61f on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_0aaebe6aca5bb46cc521869f5ba2a61f.json is unchanged)
 ✓ 3 sub-tasks under tsk_162df51b7f78b785c97c26b41ea89666 Pick the product photos (batch bat_6a866bb99ce08addfe04ea845052ed8c):
   1  tsk_2537f9b2f7de77bfe5ca958860216bbb Shoot the shirts
   2  tsk_b69e8368dd4986838455061d5d9e5ed7 Shoot the mugs  (priority high)
@@ -123,44 +123,44 @@ alice (work/website)$ lore task tree check
 
 ### relate
 alice (work/website)$ lore task add --title 'Write the launch mail'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b.json
+lore: wrote tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b.json is unchanged)
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b — Write the launch mail [medium]
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 alice (work/website)$ lore task relate --id tsk_4f89f5fcb1d81152bdf3f52979ebb64b --duplicates tsk_2ad3618e878ebbf527d34d446ef4f891
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_77cb2df809cef85479f6587c4a7d76c4.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b.json
+lore: wrote tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_4f89f5fcb1d81152bdf3f52979ebb64b.json is unchanged)
 ✓ tsk_4f89f5fcb1d81152bdf3f52979ebb64b duplicates tsk_2ad3618e878ebbf527d34d446ef4f891; tsk_4f89f5fcb1d81152bdf3f52979ebb64b cancelled (close_reason duplicate)
 alice (work/website)$ lore task add --title 'Thank-you email after the first order'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json
+lore: wrote tasks/tsk_d191616cfa49f94ede5d5148b8b045c2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json is unchanged)
 ✓ tsk_d191616cfa49f94ede5d5148b8b045c2 — Thank-you email after the first order [medium]
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 alice (work/website)$ lore task relate --id tsk_d191616cfa49f94ede5d5148b8b045c2 --follows-up tsk_2ad3618e878ebbf527d34d446ef4f891 --blocked-by tsk_54fe984c9b495744c0217776765a28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json
+lore: wrote tasks/tsk_d191616cfa49f94ede5d5148b8b045c2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json is unchanged)
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_b4d3d8fc9a019dca1371ad55c6a611aa.json
 ✓ tsk_d191616cfa49f94ede5d5148b8b045c2 waits for tsk_54fe984c9b495744c0217776765a28f2
 ✓ tsk_d191616cfa49f94ede5d5148b8b045c2 follows up tsk_2ad3618e878ebbf527d34d446ef4f891
 
 ### unrelate
 alice (work/website)$ lore task unrelate --id tsk_d191616cfa49f94ede5d5148b8b045c2 --blocked-by tsk_54fe984c9b495744c0217776765a28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json
+lore: wrote tasks/tsk_d191616cfa49f94ede5d5148b8b045c2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d191616cfa49f94ede5d5148b8b045c2.json is unchanged)
 ✓ tsk_d191616cfa49f94ede5d5148b8b045c2 no longer waits for tsk_54fe984c9b495744c0217776765a28f2
 
 ### watch
 alice (work/website)$ lore task watch --id tsk_54fe984c9b495744c0217776765a28f2
 already watching tsk_54fe984c9b495744c0217776765a28f2
 alice (work/website)$ lore task unwatch --id tsk_54fe984c9b495744c0217776765a28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+lore: wrote tasks/tsk_54fe984c9b495744c0217776765a28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json is unchanged)
 ✓ stopped watching tsk_54fe984c9b495744c0217776765a28f2
 alice (work/website)$ lore task watch --id tsk_54fe984c9b495744c0217776765a28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+lore: wrote tasks/tsk_54fe984c9b495744c0217776765a28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json is unchanged)
 ✓ watching tsk_54fe984c9b495744c0217776765a28f2
 
 ### history
 alice (work/website)$ lore task edit --id tsk_54fe984c9b495744c0217776765a28f2 --priority high
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+lore: wrote tasks/tsk_54fe984c9b495744c0217776765a28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json is unchanged)
 ✓ tsk_54fe984c9b495744c0217776765a28f2 updated
 alice (work/website)$ lore task done --id tsk_54fe984c9b495744c0217776765a28f2 --no-lesson
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+lore: wrote tasks/tsk_54fe984c9b495744c0217776765a28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json is unchanged)
 ✓ tsk_54fe984c9b495744c0217776765a28f2 done
 alice (work/website)$ lore task history --id tsk_54fe984c9b495744c0217776765a28f2
 2026-11-02 10:00  alice               created
@@ -256,7 +256,7 @@ would add 4 tasks (template release):
     Run the tests
     Deploy to the shop
 alice (work/website)$ lore task add --template release --arg version=1.4
-lore: wrote 4 row file(s) in ~/work/website/.lore/data
+lore: wrote 4 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 ✓ tsk_bfed655e145f36ce2ef425180e72eeea — Release 1.4 [high]
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
   template release: added 1 task and 3 sub-tasks
@@ -273,7 +273,7 @@ lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34c925c88945140e68f54
 
 ### recur
 alice (work/website)$ lore task add --title 'Back up the shop database' --recur 'every week'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a.json
+lore: wrote tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a.json is unchanged)
 ✓ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a — Back up the shop database [medium]
   recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #1)
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
@@ -285,8 +285,8 @@ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a Back up the shop database
 
 ### recur done
 alice (work/website)$ lore task done --id tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a --no-lesson
-lore: wrote ~/work/website/.lore/data/tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f.json
+lore: wrote tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a.json is unchanged)
+lore: wrote tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f.json is unchanged)
 ✓ tsk_376c6af9f6ebb2ad01d8b3c0201b8e1a done
   every week due 2026-11-02
   next instance: tsk_8567cf97b52ccbe51c3bd8cd91d6366f due 2026-11-09 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #2)
@@ -296,15 +296,15 @@ alice (work/website)$ lore task list --series rcs_67e20cdd829de837b50a73f9dc3c29
 
 ### recur skip
 alice (work/website)$ lore task recur skip --id tsk_8567cf97b52ccbe51c3bd8cd91d6366f
-lore: wrote ~/work/website/.lore/data/tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json
+lore: wrote tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_8567cf97b52ccbe51c3bd8cd91d6366f.json is unchanged)
+lore: wrote tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json is unchanged)
 ✓ tsk_8567cf97b52ccbe51c3bd8cd91d6366f skipped
   every week due 2026-11-09
   next instance: tsk_71f07e3f4ec7ebaeff7d0686d814c07d due 2026-11-16 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #3)
 
 ### recur edit
 alice (work/website)$ lore task recur edit --id tsk_71f07e3f4ec7ebaeff7d0686d814c07d --rule 'every! 14 days'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json
+lore: wrote tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json is unchanged)
 ✓ tsk_71f07e3f4ec7ebaeff7d0686d814c07d updated
   recurs: every! 14 days → next: 2026-11-16, 2026-11-30, 2026-12-14 (series rcs_67e20cdd829de837b50a73f9dc3c291e, #3)
 alice (work/website)$ lore task recur show --id tsk_71f07e3f4ec7ebaeff7d0686d814c07d
@@ -319,7 +319,7 @@ ERROR: [E_NEEDS_CONFIRM] task recur stop tsk_71f07e3f4ec7ebaeff7d0686d814c07d?
   hint: ask the person, then rerun with --yes
 (exit 26)
 alice (work/website)$ lore task recur stop --id tsk_71f07e3f4ec7ebaeff7d0686d814c07d --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json
+lore: wrote tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_71f07e3f4ec7ebaeff7d0686d814c07d.json is unchanged)
 ✓ tsk_71f07e3f4ec7ebaeff7d0686d814c07d series rcs_67e20cdd829de837b50a73f9dc3c291e stopped (no further instances; this one stays)
 alice (work/website)$ lore task recur show --id tsk_71f07e3f4ec7ebaeff7d0686d814c07d
 tsk_71f07e3f4ec7ebaeff7d0686d814c07d Back up the shop database
@@ -351,7 +351,7 @@ alice (work/website)$ lore task stale --close --dry-run
   tsk_d7c7956f4acfc4409bcde8bcf2627fe6  Deploy to the shop
 would cancel them with close_reason stale (nothing written, --dry-run)
 alice (work/website)$ lore task stale --close --yes
-lore: wrote 9 row file(s) in ~/work/website/.lore/data
+lore: wrote 9 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 ✓ 9 tasks cancelled (close_reason stale, batch bat_06b12747c0fad05aadf714f05f1d3d1c); lore batch show --id bat_06b12747c0fad05aadf714f05f1d3d1c
 alice (work/website)$ lore task list
 ○ tsk_2ad3618e878ebbf527d34d446ef4f891 Write the launch email [high] 0/0

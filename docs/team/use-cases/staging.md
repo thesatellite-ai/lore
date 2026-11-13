@@ -77,7 +77,7 @@ $ LORE_ORG=agency-stag lore task list
 $ git ls-remote https://github.com/agency/notes
 9b40ce71af28	HEAD
 9b40ce71af28	refs/heads/main
-05513aa29b78	refs/heads/staging
+86dbae429b78	refs/heads/staging
 ```
 <!-- /example -->
 

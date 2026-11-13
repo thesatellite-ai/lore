@@ -180,11 +180,11 @@ default_branch: develop
 
 # alice, in website
 $ lore task add --title 'Fix the footer links'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
 ✓ tsk_05e9…4603 — Fix the footer links [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task done --id tsk_05e9…4603
-lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1

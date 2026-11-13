@@ -67,6 +67,7 @@ Status: HEALTHY
   …
   -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
+  - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
   …
   - context: .lore/LORE.md not rendered yet (lore render)
 doctor exit 0

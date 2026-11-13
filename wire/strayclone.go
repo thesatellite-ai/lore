@@ -43,7 +43,7 @@ func strayCloneLines(dir string) []string {
 			return filepath.SkipDir
 		}
 		if o := git.OriginAt(p); o != "" {
-			if r, rerr := git.RemoteOfRaw(o); rerr == nil && r.Norm == want.Norm {
+			if r, rerr := git.RemoteOfRaw(o); rerr == nil && r.Norm == want.Norm && !otherBranchClone(root, want, dir, p) {
 				out = append(out, "store clone "+underHome(p)+" is also a clone of this store (a renamed or copied folder?); lore reads and writes only "+underHome(dir)+": copy what you need from it, then delete it")
 			}
 			return filepath.SkipDir // a clone's own folders hold no other clone
@@ -54,6 +54,22 @@ func strayCloneLines(dir string) []string {
 		return nil
 	})
 	return out
+}
+
+// otherBranchClone reports whether p is lore's own clone of the store for
+// another branch than dir: the default clone or a branch-pinned one
+// (<repo>@<branch>, git.DefaultCloneDir). A store used on main and pinned
+// to staging has both folders on purpose; neither is a renamed copy, and
+// telling the person to delete one would lose the clone lore uses.
+func otherBranchClone(root string, want git.Remote, dir, p string) bool {
+	home := filepath.Dir(root) // DefaultCloneDir puts clones at <home>/stores/...
+	for _, branch := range []string{"", headBranch(p)} {
+		def, err := git.DefaultCloneDir(home, want, branch)
+		if err == nil && sameFolder(def, p) && !sameFolder(def, dir) {
+			return true
+		}
+	}
+	return false
 }
 
 // storesRootOf is the stores/ folder dir sits in, "" when none.

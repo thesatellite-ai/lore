@@ -20,8 +20,9 @@ The mistake, and what the client sees:
 ```console
 # alice, in website
 $ lore task add --title 'chase the client about the unpaid March invoice' --to repo
-lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
-lore: wrote 3 row file(s) in ~/work/website/.lore/data
+lore: wrote 3 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
+lore: wrote 1 live row(s) on this clone's refs/lore/live (store me) (not pushed yet; their files are unchanged)
+lore: wrote 1 row file(s) in ~/.lore/personal/agency (store me)
 ✓ tsk_7a67…9504 — chase the client about the unpaid March invoice [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)

@@ -34,8 +34,8 @@ config     ~/.lore/config.yaml does not exist (no orgs configured)
 
 ### first live task
 alice (work/notes-app)$ lore task add --title 'fix login timeout'
-lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe984c9b495744c0217776765a28f2.json
-lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json
+lore: wrote task_lists/tlt_54fe984c9b495744c0217776765a28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/notes-app/.lore/data/task_lists/tlt_54fe984c9b495744c0217776765a28f2.json is unchanged)
+lore: wrote tasks/tsk_05e99e22e9e86e96fe4daa7777994603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/notes-app/.lore/data/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json is unchanged)
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 — fix login timeout [medium]
   created tasklist tlt_54fe984c9b495744c0217776765a28f2 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
@@ -47,7 +47,7 @@ lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
 · already in sync
 86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a	HEAD
 86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a	refs/heads/main
-9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91	refs/lore/live
+601d2851af28cc54b467a9dd89dcb5ad6e6c0e91	refs/lore/live
 alice (work/notes-app)$ lore live show
 task_lists tlt_54fe984c9b495744c0217776765a28f2     live      since 2026-11-02 10:00
 tasks      tsk_05e99e22e9e86e96fe4daa7777994603     live      since 2026-11-02 10:00
@@ -55,7 +55,7 @@ tasks      tsk_05e99e22e9e86e96fe4daa7777994603     live      since 2026-11-02 1
 
 ### first landing
 alice (work/notes-app)$ lore task done --id tsk_05e99e22e9e86e96fe4daa7777994603
-lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json
+lore: wrote tasks/tsk_05e99e22e9e86e96fe4daa7777994603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/notes-app/.lore/data/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json is unchanged)
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 alice (work/notes-app)$ git fetch -q origin && git log --oneline origin/main

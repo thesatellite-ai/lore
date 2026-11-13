@@ -1042,6 +1042,17 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		open := a.configState
 		if e.Spec().OnlyReads() {
 			open = a.configRowState // reads config, never the repo's rows: no cache refresh
+		} else if e.Spec().Name == opsstores.OpUse {
+			// `lore store use` first runs the full open every other command
+			// runs (the pick-up of hand edits, then the store syncs that
+			// push a store clone's unpushed work): it checks that lore's
+			// clone holds no unpushed work and was refused while the sync
+			// had not pushed it yet. It ran through Who before Who opened
+			// rows only; a failed open is left to the config open below to
+			// report, as then. Only store use: the other store ops attach
+			// or change stores, and an early full open would cache a state
+			// that misses what they attach.
+			_, _ = a.state(ctx)
 		}
 		st, err := open(ctx)
 		if err != nil {

@@ -97,7 +97,8 @@ When the password manager is not at hand, `--secret-unstored` keeps the note wit
 ```console
 # alice, in website
 $ lore memory add --secret-unstored --body "Mail relay password=$RELAY_PASSWORD"
-lore: wrote 4 row file(s) in ~/work/website/.lore/data
+lore: wrote 2 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
+lore: wrote 2 row file(s) in ~/work/website/.lore/data
 ✓ mem_2ad3…f891
   scope: [master]
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
@@ -205,7 +206,7 @@ $ lore whoami --json | grep '"machine"'
     "machine": "mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff",
 $ lore secrets move --from mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff --to act_05e9…4603 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_2ad3…f891.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
+lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json is unchanged)
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_76bd…3f10.json
 Moved 1 reference in 1 row (batch bat_d431…313a). Added task tsk_c0f3…b5b8 (tasklist secrets, repo).
 $ lore secrets list --holder act_05e9…4603
@@ -366,7 +367,7 @@ Upgraded 1 row
   mode-b: rules/rul_3b62…e913 → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-team lock: this repo has no remote origin; nobody to race, none taken
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list

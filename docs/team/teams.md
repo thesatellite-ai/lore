@@ -43,7 +43,7 @@ members (2):
 ```console
 # tomas, in acme-hub
 $ lore task add --title 'ship the checkout page' --to agency --assign @web
-lore: pushed store agency: commit 86dbae4 to branch main
+lore: pushed store agency/acme-hub (here: agency): commit 86dbae4 to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/acme-hub (store agency)
 ✓ tsk_54fe…28f2 — ship the checkout page [medium] → [agency/acme-hub]

@@ -30,21 +30,21 @@ Alice (an agency developer) plans the launch of the client's online shop in `git
 ```console
 # alice, in website
 $ lore task add --title 'Write the launch email' --priority high
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote task_lists/tlt_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json is unchanged)
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ tsk_2ad3…f891 — Write the launch email [high]
   created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task add --title 'Pick the product photos' --priority low
-lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 — Pick the product photos [low]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task add --title 'Set up the payment provider' --priority urgent
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — Set up the payment provider [urgent]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task start --id tsk_54fe…28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 started
 $ lore task board
 todo (2)
@@ -74,13 +74,13 @@ A checklist item is a small step of one task: no owner, no status, no claim. Add
 ```console
 # alice, in website
 $ lore task checklist add --id tsk_2ad3…f891 --text 'Subject line' --item 'Product links' --item 'Discount code' --item 'Send a test to the client'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ 4 checklist items on tsk_2ad3…f891 (chk_05e9…4603, chk_c0f3…b5b8, chk_76bd…3f10, chk_d431…313a)
 $ lore task checklist tick --id tsk_2ad3…f891 --item 1
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ [x] Subject line (1/4)
 $ lore task checklist edit --id tsk_2ad3…f891 --item 3 --text 'Discount code LAUNCH10'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ chk_76bd…3f10 Discount code LAUNCH10
 $ lore task checklist list --id tsk_2ad3…f891
 1. [x] Subject line  chk_05e9…4603
@@ -97,10 +97,10 @@ $ lore task checklist list --id tsk_2ad3…f891
 ```console
 # alice, in website
 $ lore task checklist untick --id tsk_2ad3…f891 --item 1
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ [ ] Subject line (0/4)
 $ lore task checklist rm --id tsk_2ad3…f891 --item 2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ removed chk_c0f3…b5b8 Product links
 $ lore task checklist list --id tsk_2ad3…f891
 1. [ ] Subject line  chk_05e9…4603
@@ -116,8 +116,8 @@ If a step turns out to be real work that someone could pick up on its own, `prom
 ```console
 # alice, in website
 $ lore task checklist promote --id tsk_2ad3…f891 --item 3
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b4f4…a5b0.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_b4f4…a5b0 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_b4f4…a5b0.json is unchanged)
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ chk_d431…313a became tsk_b4f4…a5b0 "Send a test to the client" under tsk_2ad3…f891
 $ lore task list --parent tsk_2ad3…f891
 ○ tsk_b4f4…a5b0 Send a test to the client [high]
@@ -130,7 +130,7 @@ A task whose body already has `- [ ]` / `- [x]` lines (copied from an issue, say
 ```console
 # alice, in website
 $ lore task add --title 'Check the shop on a phone' --body $'- [ ] iPhone\n- [ ] Android\n- [x] Tablet'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+lore: wrote tasks/tsk_28f8…03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8…03df.json is unchanged)
 ✓ tsk_28f8…03df — Check the shop on a phone [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task checklist import --id tsk_28f8…03df --from body
@@ -141,7 +141,7 @@ ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_28f8…03df?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore task checklist import --id tsk_28f8…03df --from body --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+lore: wrote tasks/tsk_28f8…03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8…03df.json is unchanged)
 ✓ 3 checklist items from the body of tsk_28f8…03df
 $ lore task checklist list --id tsk_28f8…03df
 1. [ ] iPhone  chk_4c59…6c38
@@ -166,9 +166,9 @@ would add 3 sub-tasks under tsk_162d…9666 Pick the product photos:
   inherited: tasklist tlt_7a67…9504, priority low, commitment accepted
 nothing written (--dry-run)
 $ lore task split --id tsk_162d…9666 --title 'Shoot the shirts' --title 'Shoot the mugs' --priority high --title 'Edit the photos'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_b69e…5ed7.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_0aae…a61f.json
+lore: wrote tasks/tsk_2537…6bbb on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json is unchanged)
+lore: wrote tasks/tsk_b69e…5ed7 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_b69e…5ed7.json is unchanged)
+lore: wrote tasks/tsk_0aae…a61f on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_0aae…a61f.json is unchanged)
 ✓ 3 sub-tasks under tsk_162d…9666 Pick the product photos (batch bat_6a86…ed8c):
   1  tsk_2537…6bbb Shoot the shirts
   2  tsk_b69e…5ed7 Shoot the mugs  (priority high)
@@ -210,19 +210,19 @@ When copies of the notes were merged and two tasks ended up as each other's pare
 ```console
 # alice, in website
 $ lore task add --title 'Write the launch mail'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
+lore: wrote tasks/tsk_4f89…b64b on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json is unchanged)
 ✓ tsk_4f89…b64b — Write the launch mail [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task relate --id tsk_4f89…b64b --duplicates tsk_2ad3…f891
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_77cb…76c4.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
+lore: wrote tasks/tsk_4f89…b64b on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json is unchanged)
 ✓ tsk_4f89…b64b duplicates tsk_2ad3…f891; tsk_4f89…b64b cancelled (close_reason duplicate)
 $ lore task add --title 'Thank-you email after the first order'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+lore: wrote tasks/tsk_d191…45c2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d191…45c2.json is unchanged)
 ✓ tsk_d191…45c2 — Thank-you email after the first order [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task relate --id tsk_d191…45c2 --follows-up tsk_2ad3…f891 --blocked-by tsk_54fe…28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+lore: wrote tasks/tsk_d191…45c2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d191…45c2.json is unchanged)
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_b4d3…11aa.json
 ✓ tsk_d191…45c2 waits for tsk_54fe…28f2
 ✓ tsk_d191…45c2 follows up tsk_2ad3…f891
@@ -235,7 +235,7 @@ lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_b4d3…11aa.json
 ```console
 # alice, in website
 $ lore task unrelate --id tsk_d191…45c2 --blocked-by tsk_54fe…28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+lore: wrote tasks/tsk_d191…45c2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d191…45c2.json is unchanged)
 ✓ tsk_d191…45c2 no longer waits for tsk_54fe…28f2
 ```
 <!-- /example -->
@@ -250,10 +250,10 @@ Whoever creates a task, and everyone assigned to it, watches it already (unless 
 $ lore task watch --id tsk_54fe…28f2
 already watching tsk_54fe…28f2
 $ lore task unwatch --id tsk_54fe…28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ stopped watching tsk_54fe…28f2
 $ lore task watch --id tsk_54fe…28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ watching tsk_54fe…28f2
 ```
 <!-- /example -->
@@ -266,10 +266,10 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ```console
 # alice, in website
 $ lore task edit --id tsk_54fe…28f2 --priority high
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 updated
 $ lore task done --id tsk_54fe…28f2 --no-lesson
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 done
 $ lore task history --id tsk_54fe…28f2
 2026-11-02 10:00  alice               created
@@ -379,7 +379,7 @@ would add 4 tasks (template release):
     Run the tests
     Deploy to the shop
 $ lore task add --template release --arg version=1.4
-lore: wrote 4 row file(s) in ~/work/website/.lore/data
+lore: wrote 4 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 ✓ tsk_bfed…eeea — Release 1.4 [high]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
   template release: added 1 task and 3 sub-tasks
@@ -410,7 +410,7 @@ lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34…b418.json
 ```console
 # alice, in website
 $ lore task add --title 'Back up the shop database' --recur 'every week'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json
+lore: wrote tasks/tsk_376c…8e1a on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json is unchanged)
 ✓ tsk_376c…8e1a — Back up the shop database [medium]
   recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_67e2…291e, #1)
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
@@ -428,8 +428,8 @@ Finishing an instance creates the next one, and `lore task list --series <rcs_�
 ```console
 # alice, in website
 $ lore task done --id tsk_376c…8e1a --no-lesson
-lore: wrote ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_8567…366f.json
+lore: wrote tasks/tsk_376c…8e1a on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json is unchanged)
+lore: wrote tasks/tsk_8567…366f on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_8567…366f.json is unchanged)
 ✓ tsk_376c…8e1a done
   every week due 2026-11-02
   next instance: tsk_8567…366f due 2026-11-09 (series rcs_67e2…291e, #2)
@@ -445,8 +445,8 @@ $ lore task list --series rcs_67e2…291e --all --sort due_at
 ```console
 # alice, in website
 $ lore task recur skip --id tsk_8567…366f
-lore: wrote ~/work/website/.lore/data/tasks/tsk_8567…366f.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
+lore: wrote tasks/tsk_8567…366f on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_8567…366f.json is unchanged)
+lore: wrote tasks/tsk_71f0…c07d on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json is unchanged)
 ✓ tsk_8567…366f skipped
   every week due 2026-11-09
   next instance: tsk_71f0…c07d due 2026-11-16 (series rcs_67e2…291e, #3)
@@ -459,7 +459,7 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
 ```console
 # alice, in website
 $ lore task recur edit --id tsk_71f0…c07d --rule 'every! 14 days'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
+lore: wrote tasks/tsk_71f0…c07d on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json is unchanged)
 ✓ tsk_71f0…c07d updated
   recurs: every! 14 days → next: 2026-11-16, 2026-11-30, 2026-12-14 (series rcs_67e2…291e, #3)
 $ lore task recur show --id tsk_71f0…c07d
@@ -480,7 +480,7 @@ ERROR: [E_NEEDS_CONFIRM] task recur stop tsk_71f0…c07d?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore task recur stop --id tsk_71f0…c07d --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
+lore: wrote tasks/tsk_71f0…c07d on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json is unchanged)
 ✓ tsk_71f0…c07d series rcs_67e2…291e stopped (no further instances; this one stays)
 $ lore task recur show --id tsk_71f0…c07d
 tsk_71f0…c07d Back up the shop database
@@ -520,7 +520,7 @@ $ lore task stale --close --dry-run
   tsk_d7c7…7fe6  Deploy to the shop
 would cancel them with close_reason stale (nothing written, --dry-run)
 $ lore task stale --close --yes
-lore: wrote 9 row file(s) in ~/work/website/.lore/data
+lore: wrote 9 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 ✓ 9 tasks cancelled (close_reason stale, batch bat_06b1…3d1c); lore batch show --id bat_06b1…3d1c
 $ lore task list
 ○ tsk_2ad3…f891 Write the launch email [high] 0/0

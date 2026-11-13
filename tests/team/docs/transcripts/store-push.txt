@@ -33,7 +33,7 @@ me: push batch every 10m, compact off
 alice (work/website)$ lore sync
 lore: pushed store me: commit 601d285 to branch main
 store me: sent 4, received 0, merged 0, refused 0
-store agency: sent 0, received 0, merged 0, refused 0
+store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 alice (work/website)$ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
 lore: batch 4 rows (actors 1, machines 1, memories 2)
@@ -96,8 +96,8 @@ alice (work/website)$ lore store compact --store agency --before 30d --yes
 ✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae476bd6)
   pushed store agency: commit 9b40ce7 to branch main
 bob (work/website)$ lore sync
-lore: pushed store agency: commit 05513aa to branch main
-store agency: sent 2, received 0, merged 0, refused 0
+lore: pushed store agency/client (here: agency): commit 05513aa to branch main
+store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 bob (work/website)$ lore memory list
 mem_76bd560aff0771fab8457dbfa9823f10 [retrieved] the client signs off designs on Thursdays [agency/client]

@@ -36,3 +36,35 @@ func TestStrayCloneLines(t *testing.T) {
 		t.Fatalf("a clone outside stores/: %q", got)
 	}
 }
+
+// A store used on its default branch and pinned to staging has two clones
+// on purpose (<repo> and <repo>@staging): neither names the other as a
+// renamed copy to delete; a renamed copy beside them still is named.
+// Break-verified: without otherBranchClone the pinned clone names the
+// default one ("then delete it").
+func TestStrayCloneLinesKeepBranchClones(t *testing.T) {
+	home := t.TempDir()
+	stores := filepath.Join(home, ".lore", "stores")
+	url := "git@git.example.test:acme/notes.git"
+	clone := func(rel, branch string) string {
+		dir := filepath.Join(stores, filepath.FromSlash(rel))
+		for _, args := range [][]string{{"init", "-q", dir}, {"-C", dir, "remote", "add", "origin", url}, {"-C", dir, "symbolic-ref", "HEAD", "refs/heads/" + branch}} {
+			if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v %s", args, err, out)
+			}
+		}
+		return dir
+	}
+	main := clone("acme/notes", "main")
+	staging := clone("acme/notes@staging", "staging")
+	if got := strayCloneLines(staging); len(got) != 0 {
+		t.Fatalf("the pinned clone named the default clone: %q", got)
+	}
+	if got := strayCloneLines(main); len(got) != 0 {
+		t.Fatalf("the default clone named the pinned clone: %q", got)
+	}
+	copied := clone("acme/notes-old", "main")
+	if got := strayCloneLines(main); len(got) != 1 || !strings.Contains(got[0], copied+" is also a clone of this store") {
+		t.Fatalf("a renamed copy beside branch clones: %q", got)
+	}
+}

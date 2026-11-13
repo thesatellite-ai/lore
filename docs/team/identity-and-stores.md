@@ -182,8 +182,8 @@ lore: wrote 2 row file(s) in ~/work/website/.lore/data
 ✓ mem_54fe…28f2
   scope: [master]
 $ lore move --id mem_54fe…28f2 --to agency --yes
-lore: pushed store agency: commit 9b40ce7 to branch main
-lore: pushed store agency: commit 05513aa to branch main
+lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
+lore: pushed store agency/client (here: agency): commit 05513aa to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_54fe…28f2.json (store agency)
 lore: wrote ~/work/website/.lore/data/memories/mem_54fe…28f2.json
@@ -203,7 +203,7 @@ Lore keeps one clone of each store, a plain git clone at `~/.lore/stores/<owner>
 ```console
 # alice, in ~
 $ lore store open --url git@github.com:agency/notes
-✓ ~/.lore/stores/agency/notes on main (dfd8dc87ab36): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
+✓ ~/.lore/stores/agency/notes on main (05513aa7ab36): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
 $ ls ~/.lore/stores/agency/notes
 README.md
 client
@@ -287,7 +287,7 @@ me: push batch every 10m, compact off
 $ lore sync
 lore: pushed store me: commit 601d285 to branch main
 store me: sent 4, received 0, merged 0, refused 0
-store agency: sent 0, received 0, merged 0, refused 0
+store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 $ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
 lore: batch 4 rows (actors 1, machines 1, memories 2)
@@ -436,8 +436,8 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (st
 ✓ mem_c0f3…b5b8 [agency/client]
   scope: [master]
 $ lore sync
-lore: pushed store agency: commit 05513aa to branch main
-store agency: sent 2, received 0, merged 0, refused 0
+lore: pushed store agency/client (here: agency): commit 05513aa to branch main
+store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 $ lore memory list
 mem_76bd…3f10 [retrieved] the client signs off designs on Thursdays [agency/client]

@@ -217,8 +217,8 @@ host hub_prod
 ```console
 # alice, in infra
 $ lore task add --title 'Rotate the hub_api database password' --ref res_4c59…6c38
-lore: wrote ~/work/infra/.lore/data/task_lists/tlt_f147…5139.json
-lore: wrote ~/work/infra/.lore/data/tasks/tsk_2537…6bbb.json
+lore: wrote task_lists/tlt_f147…5139 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/infra/.lore/data/task_lists/tlt_f147…5139.json is unchanged)
+lore: wrote tasks/tsk_2537…6bbb on this clone's refs/lore/live (a live row, not pushed yet; ~/work/infra/.lore/data/tasks/tsk_2537…6bbb.json is unchanged)
 lore: wrote ~/work/infra/.lore/data/knowledge_refs/kfr_b69e…5ed7.json
 ✓ tsk_2537…6bbb — Rotate the hub_api database password [medium]
   created tasklist tlt_f147…5139 "default" for tasks added without --tasklist
