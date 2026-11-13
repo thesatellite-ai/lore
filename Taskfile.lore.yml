@@ -149,64 +149,27 @@ vars:
     docsync           1   check:docs
   # Lines lore:check:fast puts in front of GATE_STEPS (same format; a name listed twice keeps
   # its first line): the race detector on just the race-set packages the change touches
-  # (lore:test:race:changed, a step only the fast tier has), and a larger share, started first,
-  # for the two suites product code always brings in. The fast tier runs a handful of steps, so
-  # userscen at its full-gate share (13 cores) took 407 of its 426 s while half the budget sat
-  # idle (sample of 2026-11-11).
+  # (lore:test:race:changed, a step only the fast tier has).
   FAST_EXTRA_STEPS: |
     race-changed      6   test:race:changed
-    userscen          24  test:scen PARALLEL=28
-    teame2e           8   test:team:run PARALLEL=12
   # The steps lore:check:fast always runs, whatever the change (names from GATE_STEPS and
-  # FAST_EXTRA_STEPS); FAST_MAP adds the end-to-end ones.
-  FAST_UNIT_STEPS: "test-all race-changed cross-builds cross-tests staticcheck vet gofmt tidy docsync"
+  # FAST_EXTRA_STEPS); FAST_MAP adds the end-to-end ones. No docs step (docs-examples, docsync)
+  # and no Windows/macOS test compile (cross-tests, ~27 CPU minutes): the full gate runs them.
+  FAST_UNIT_STEPS: "test-all race-changed cross-builds staticcheck vet gofmt tidy"
   # The fast tier's mapping (lore:check:fast): which end-to-end steps of GATE_STEPS a change
   # needs, by the paths it changes. One rule per line, "<bash glob> <step>..." ("-" = no e2e
-  # step; the fast tier always runs build, vet, gofmt, staticcheck, cross-builds, cross-tests, tidy, docsync,
-  # every unit test and the race set of the touched packages). The first rule that matches a
-  # changed file wins; a file no rule names falls to "*", which runs every e2e step: when unsure,
-  # run it (tests/lib/fast-plan.sh). Product code (any other .go file) runs what reads the
-  # binary's output and behaviour most widely (every docs section, the scenarios, chaos, the
-  # user scenarios and the team suite); the setup, doctor, store and migration code adds the
-  # suites built around them. The full gate still runs every step on the landed main
-  # (lore:check:after-land), so the map decides what a small fix waits for, not what is tested.
+  # step); the first rule that matches a changed file wins (tests/lib/fast-plan.sh).
+  #
+  # The fast tier is a quick sanity check that fits in about 5 minutes on the shared server:
+  # build, vet, gofmt, staticcheck, tidy, the release cross-builds, every unit test (the layer
+  # and no-any guards are unit tests) and the race detector on the touched race-set packages.
+  # No end-to-end suite runs in it (userscen, teame2e, setupe2e, machines, the sweeps and life
+  # parts, the journeys, scenarios, chaos, the docs examples and docsync): with them it took
+  # 22 minutes (1340 s, 2026-11-13). The full gate (lore:check, and lore:check:after-land on
+  # the landed main) runs every step and is the real gate; what fails there is fixed in the
+  # next change. A narrow step a path really needs can be named here again, if it fits.
   FAST_MAP: |
-    docs/team/*                     docs-examples
-    docs/*                          docs-examples
-    tests/docs/*                    docs-examples
-    tests/team/docs/*               docs-examples
-    tests/lib/parallel-sections.sh  docs-examples
-    tests/userscen/*                userscen
-    tests/teame2e/teamharness/*     teame2e userscen journey-frame journey-teamlead journey-solo journey-agency journey-joiner journey-agents journey-folders journey-upgrader journey-land journey-rest
-    tests/teame2e/*                 teame2e
-    tests/setupe2e/*                setupe2e
-    tests/machines/*                machines sweep-rest sweep-tasks life-teams life-setups life-objects life-rest
-    tests/journeys/*                journey-frame journey-teamlead journey-solo journey-agency journey-joiner journey-agents journey-folders journey-upgrader journey-land journey-rest
-    tests/scenarios/*               scenarios
-    tests/chaos/*                   chaos
-    tests/lib/common.sh             scenarios chaos
-    tests/lib/run-scripts.sh        scenarios chaos
-    tests/tools/*                   scenarios chaos
-    tests/lib/gotest-shards.sh      race-wire
-    tests/lib/gate-*.sh             -
-    tests/lib/fast-plan.sh          -
-    tests/lib/gocache-trim.sh       -
-    .githooks/*                     -
-    Taskfile*.yml                   -
-    *_test.go                       -
-    *.md                            -
-    skills/*                        -
-    .ds/*                           -
-    ops/setup/*                     docs-examples scenarios chaos userscen teame2e setupe2e machines life-setups life-teams life-rest journey-joiner journey-teamlead journey-rest
-    surface/setupweb/*              docs-examples scenarios chaos userscen teame2e setupe2e life-rest
-    wire/setup*                     docs-examples scenarios chaos userscen teame2e setupe2e machines life-setups life-teams life-rest
-    ops/doctor/*                    docs-examples scenarios chaos userscen teame2e machines sweep-rest sweep-tasks
-    adapters/orgcfg/*               docs-examples scenarios chaos userscen teame2e setupe2e machines life-teams journey-agency journey-joiner journey-rest
-    ops/migrate/*                   docs-examples scenarios chaos userscen teame2e journey-upgrader machines journey-rest
-    *.go                            docs-examples scenarios chaos userscen teame2e
-    go.mod                          docs-examples scenarios chaos userscen teame2e
-    go.sum                          docs-examples scenarios chaos userscen teame2e
-    *                               journey-teamlead journey-solo userscen setupe2e journey-agency journey-joiner teame2e machines sweep-rest life-teams docs-examples journey-land journey-agents journey-folders journey-upgrader life-setups sweep-tasks life-objects life-rest scenarios chaos journey-frame journey-rest
+    *                               -
   # Runs one step of lore:check as its own task process (tests/lib/gate-parallel.sh starts each
   # step in a separate shell). TASKFILE is this file's own path, so it works when this file is
   # included as `lore:` and when it is run alone with `task -t Taskfile.lore.yml`.
@@ -441,7 +404,7 @@ tasks:
       - echo "✓ task check — every gate passed (logs in {{.GATE_LOG_DIR}})"
 
   check:fast:
-    desc: "FAST tier for landing a small fix, about 5 min: build, vet, gofmt, staticcheck, cross-builds, the Windows and macOS compile check of every package with its tests (cross-tests), tidy, docsync, every unit test (go test ./..., cached), the race detector on the touched race-set packages, and the end-to-end steps the changed paths need (FAST_MAP; unsure = run it). Writes its own stamp (lore-check-fast-passed), which the pre-push hook accepts; the full gate then runs on the landed main (lore:check:after-land). docs/DEVELOPMENT.md \"Landing\""
+    desc: "FAST tier for landing a small fix, a quick sanity check of about 5 min: build, vet, gofmt, staticcheck, cross-builds, tidy, every unit test (go test ./..., cached) and the race detector on the touched race-set packages; no end-to-end suite and no docs step (FAST_MAP names none; the full gate after landing runs them all). Writes its own stamp (lore-check-fast-passed), which the pre-push hook accepts; the full gate then runs on the landed main (lore:check:after-land). docs/DEVELOPMENT.md \"Landing\""
     cmds:
       # SKIP_DOCS reaches the inner task as an argument: a CLI variable of this call is not
       # passed to the task process testlock starts
@@ -468,7 +431,7 @@ tasks:
         echo "end-to-end steps for them: ${e2e:-none}" | tr '\n' ' '; echo
         # shellcheck disable=SC2086 # step names are single words
         steps=$(tests/lib/fast-plan.sh keep {{.FAST_UNIT_STEPS}} $e2e)
-        case "${SKIP_DOCS:-}" in ""|0) ;; *) echo "SKIP_DOCS=$SKIP_DOCS: docs-examples and docsync skipped (the full gate on main runs them)" ;; esac
+        case "${SKIP_DOCS:-}" in ""|0) ;; *) echo "SKIP_DOCS=$SKIP_DOCS: nothing to drop, the fast tier runs no docs step (the full gate on main runs them)" ;; esac
         # shellcheck disable=SC2086
         GATE_SLOTS={{.GATE_SLOTS}} tests/lib/gate-steps.sh fast $steps
       - task: check:stamp
