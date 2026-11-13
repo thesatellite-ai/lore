@@ -262,15 +262,17 @@ Shared knowledge lives in `.lore/data/` — one committed JSON file per row — 
 
 ### P13b — Roll sync out to a team that already uses lore
 
-Each developer has v0.1.17 data (an old `.lore/lore.db`, or `_v: 1` row files).
+Each developer has v0.1.17 data (an old `.lore/lore.db`, or `_v: 1` row files). The repo stays on the lore 0.1.17 format until one person runs `lore migrate run`: until then 0.1.18 reads it and refuses writes there with `E_FORMAT_OLD`, and no 0.1.18 command converts it by itself, so teammates still on 0.1.17 keep working. lore 0.1.17 cannot read the migrated repo, so everyone installs 0.1.18 first.
 
 ```bash
-# 1. One person, on main, after upgrading lore:
+# 0. Everyone: install lore 0.1.18 (lore upgrade, brew or the install script)
+
+# 1. Then one person, on main:
 lore migrate run --dry-run            # what moves; then:
 lore migrate run                      # converts the v0.1.17 data (keeps a local backup ref; lore migrate rollback undoes it)
 git add .lore/data .gitattributes && git commit -m "lore: shared knowledge" && git push
 
-# 2. Everyone else, after upgrading:
+# 2. Everyone else:
 git pull
 lore memory list                      # adopts .lore/data: switches to the shared project id,
                                       # imports teammates' rows, exports their private rows
@@ -426,13 +428,15 @@ lore upgrade                 # or brew / the install script
 
 # 3. Nothing else to run: the cache and search index rebuild themselves from
 #    .lore/data and the machine store updates when it is opened.
-#    Only a repo with v0.1.17 data needs one step:
-lore migrate status          # the row format of every place
-lore migrate run --dry-run && lore migrate run
+#    Only a repo with v0.1.17 data needs one step, run by one person once
+#    every teammate has the new lore (nothing else ever migrates it):
+lore migrate status          # the project's format and the row format of every place
+lore migrate run --dry-run && lore migrate run   # or: lore fix --migrate
+git add .lore/data && git commit -m "lore: migrate rows to format 2"
 
 # 4. Verify
 lore doctor --json | jq '.status, .db_ok'
 lore render   # confirm output unchanged
 ```
 
-A binary below the project's `min_lore_version` (or one that does not know a format feature the project uses) refuses writes with `E_OLD_LORE` (reads still work): run `lore upgrade`. `lore setup` is optional (safe to repeat; `--agent-hooks` installs the coding tools' hooks).
+A binary below the project's `min_lore_version` (or one that does not know a format feature the project uses) refuses writes with `E_OLD_LORE` (reads still work): run `lore upgrade`. A project still on the lore 0.1.17 format refuses writes with `E_FORMAT_OLD` (reads still work): `lore migrate run` raises it, once, when the team is ready; `lore fix` alone never does (`lore fix --migrate` does). `lore setup` is optional (safe to repeat; `--agent-hooks` installs the coding tools' hooks).

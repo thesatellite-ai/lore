@@ -175,7 +175,7 @@ search (any entity)        <kind> search "<q>" --json   (23 entities: task/rule/
 search syntax              auth*  /  "exact phrase"  /  redis OR cache  /  auth NOT login
 search index admin         search status (drift health) | search rebuild [--kind=<e>]
 list / show                memory list | memory show <id>  (and `<kind> list / show` for every entity)
-post-upgrade migrate       nothing to run (cache + search index rebuild themselves); v0.1.17 data: migrate run [--dry-run]
+post-upgrade migrate       nothing to run (cache + search index rebuild themselves); v0.1.17 data: a person runs migrate run [--dry-run] once, after every teammate upgraded (never automatic; E_FORMAT_OLD until then)
 edit in place              <kind> edit <id> --field=…  (16 entities; only flags you pass are applied)
 move/reparent task         task edit <id> --tasklist=… --mission=… --plan=… --assigned-to=… (+ --clear-* for nullable fields)
 archive (soft-delete)      <kind> archive <id>  (memory|rule|decision|hotfix|pattern|playbook|prompt|project|repo)

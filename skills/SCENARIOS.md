@@ -600,4 +600,4 @@ lore audit log --limit 50  # who changed what, newest first
 **Refuse.** The cache `~/.lore/cache/repo/<repo folder>-<hash>.db` is rebuilt from `.lore/data`, so a direct edit is lost and skips validation and the secret checks. Use the CLI (N.6 / N.7); for read-only questions `lore sql "<SELECT …>"`.
 
 ### O.5 User: "skip the migration check"
-**Refuse.** There is no migration check to skip in 0.1.18: the cache rebuilds itself. v0.1.17 data is converted once with `lore migrate run`; `E_OLD_LORE` means `lore upgrade`.
+**Refuse.** There is no migration check to skip in 0.1.18: the cache rebuilds itself. v0.1.17 data is converted once with `lore migrate run` (or `lore fix --migrate`), and only when the person asks: a project on the lore 0.1.17 format answers writes with `E_FORMAT_OLD`, and an agent never runs the migration on its own, since teammates still on 0.1.17 cannot read a migrated repo; `E_OLD_LORE` means `lore upgrade`.

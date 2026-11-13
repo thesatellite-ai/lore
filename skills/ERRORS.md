@@ -55,7 +55,7 @@ With `--json` (and every `lore api` error body), one object:
 | 21 | `ambiguous` | a bare name matches two things | name it by id or level |
 | 22 | `definition` | a kind or metadata key is not defined or not visible here | define it, or sync first |
 | 23 | `refused` | lore refuses in this state or by a fixed rule (`E_REFUSED`, `E_READ_ONLY`, `E_POLICY_DENIED`, `E_STALE`, …) | read the message and hint; some set `needs_person` |
-| 24 | `migrate` | the team migration lock, or a rollback that would lose work | wait, or ask the person |
+| 24 | `migrate` | the team migration lock, a rollback that would lose work, or a project on the lore 0.1.17 format (`E_FORMAT_OLD`) | wait, or ask the person |
 | 25 | `upgrade` | `lore upgrade` could not finish, or the local database is older than this binary | follow the hint |
 | 26 | `needs_confirmation` | `E_NEEDS_CONFIRM`: the command asks first and ran without a terminal and without `--yes` | ask the person (below) |
 | 27 | `not_found` | `E_NOT_FOUND`: a well-formed id or name that does not exist here | check the id with a `list` |
@@ -89,6 +89,7 @@ With `--json` (and every `lore api` error body), one object:
 | `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule. Coordination refusals use it too: an agent with no person behind it doing a human override (cancel, reassign, revoke, finishing another's claim; `needs_person: true`; a person's own coding agent acts for them and passes), the WIP limit, a poisoned task, a task that is not open | follow the message; for `needs_person`, hand it to the person |
 | `E_STALE` | 23 | the row changed between read and write and could not be merged | read the row again and redo the edit |
 | `E_OLD_LORE` | 19 | this binary is below the project's `min_lore_version` or does not know one of its features (reads still work) | `lore upgrade` |
+| `E_FORMAT_OLD` | 24 | the project (or a shared store) is on the lore 0.1.17 format: this lore reads it but writes nothing there (no row, live row, landing or render) | tell the person; only they decide to run `lore migrate run` (or `lore fix --migrate`) once, after every teammate has lore 0.1.18. A write to the personal store or a migrated org store still works |
 | `E_LEAK_BLOCKED` | 19 | the write would put internal content where the client can read it (or lore cannot check it) | write it to the internal store (`--to`), or `lore check leaks --explain` |
 | `E_META_QUARANTINED` | 23 | a move of a row whose metadata is quarantined (a value that no longer fits its key) | `lore meta show <id>` prints each problem and its fix; fix it, then move |
 | `E_META_STORE_UNREADABLE` | 19 | a write carrying metadata (`--meta`, `meta set|unset`) in a client repo while an org store has no local copy and cannot be reached, so lore cannot check the keys | nothing was written: go online once (or `lore sync` in the store), then write again |
@@ -153,7 +154,9 @@ Besides the ones above: `E_NOT_IMPLEMENTED` / `E_UNSUPPORTED` (not built in this
 After upgrading lore
     → nothing to run: the cache and search index rebuild themselves from
       .lore/data and the machine store updates when it is opened.
-      A repo with v0.1.17 data: `lore migrate run` once (`--dry-run` first).
+      A repo with v0.1.17 data stays on that format (writes: E_FORMAT_OLD)
+      until a person runs `lore migrate run` once (`--dry-run` first),
+      after every teammate upgraded; `lore fix` never migrates without --migrate.
       `lore setup` is optional (safe to repeat; `--agent-hooks` installs the
       coding tools' hooks).
 
