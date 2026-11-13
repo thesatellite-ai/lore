@@ -511,6 +511,9 @@ type RemoveOut struct {
 type JoinIn struct {
 	Invite string `json:"invite" arg:"0" desc:"your org's name or store url (a member an admin added with lore member add), or an invite line starting with lore-invite:v1:"`
 	NoOpen bool   `json:"no_open,omitempty" flag:"no-open" desc:"print the page address instead of opening a browser"`
+	// Web opens the page without a terminal (cmd/lore reads --web; the op
+	// only reports it), e.g. over ssh with the port forwarded.
+	Web bool `json:"web,omitempty" flag:"web" desc:"open the setup page even when not run in a terminal (default: a terminal opens it, a script gets the lore setup apply lines)"`
 }
 
 // Invite is the parsed invite text (ONB 4.5): no secret, grants nothing.
@@ -527,6 +530,25 @@ type JoinOut struct {
 	Web    WebStart `json:"web"`
 	Invite Invite   `json:"invite"`
 	Plan   PlanOut  `json:"plan"`
+	// Commands are the `lore setup apply` lines that make the same member
+	// setup without the page (joincli.go): what a run with no terminal
+	// prints, and what a script runs.
+	Commands []string `json:"commands"`
+	// Org is the org joined when the answer names it (an invite line or
+	// an org name); "" for a store url until the join reads the store.
+	Org string `json:"org,omitempty"`
+}
+
+// Text implements op.Texter: the join lines (the page, when it opens,
+// follows them).
+func (o JoinOut) Text() string {
+	var b strings.Builder
+	b.WriteString("To join from the command line (no browser needed), run in order:\n")
+	for _, c := range o.Commands {
+		b.WriteString("  " + c + "\n")
+	}
+	b.WriteString("Each line checks its step first and says what to fix; lore setup list then shows the setup.\n")
+	return b.String()
 }
 
 // RepairIn is setup.repair's input.

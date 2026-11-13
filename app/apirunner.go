@@ -23,6 +23,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/surface/rest"
 	"github.com/thesatellite-ai/lore/wire"
@@ -31,7 +32,10 @@ import (
 // apiRunner serves REST requests through inner, one at a time.
 type apiRunner struct {
 	inner op.Runner
-	mu    sync.Mutex
+	// join is the join the page serves (`lore setup join`), zero
+	// otherwise: setup.list then offers that member setup (B-10).
+	join opssetup.JoinContext
+	mu   sync.Mutex
 }
 
 var _ op.Runner = (*apiRunner)(nil)
@@ -41,7 +45,7 @@ func (r *apiRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Call
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	// OV3: the request's writes carry no session of the server process
-	return r.inner.Run(wire.RemoteRequest(ctx), e, d, c)
+	return r.inner.Run(opssetup.WithJoin(wire.RemoteRequest(ctx), r.join), e, d, c)
 }
 
 // apiKinds is the rest.KindSource of `lore api` (SPEC 9.6, CLI_REFERENCE

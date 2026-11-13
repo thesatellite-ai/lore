@@ -53,14 +53,14 @@ stores     git@github.com:agency/notes on branch staging  (org folder org)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
 personal   me -> ~/.lore/personal
 $ lore org link --org agency-stag --project client --yes
-lore: pushed store github.com/agency/notes: commit 601d285 to branch staging
+lore: pushed store agency: commit 601d285 to branch staging
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency-stag.
   link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
 ✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
 $ lore task add --title 'seed staging with demo data' --to agency-stag
-lore: pushed store agency-stag: commit 86dbae4 to branch staging
+lore: pushed store agency/client (here: agency-stag): commit 86dbae4 to branch staging
 lore: wrote 2 row file(s) in ~/.lore/personal/agency-stag (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes@staging/client (store agency-stag)
 ✓ tsk_54fe…28f2 — seed staging with demo data [medium] → [agency-stag/client]

@@ -804,7 +804,7 @@ Available Commands:
 
 Flags:
       --add-target stringArray   add tool profiles to the repo's context.targets (keeping the ones it has) and wire them (repeatable, comma-separated)
-      --check                    CI check: write nothing, fail when LORE.md would be over the warn level or the budget
+      --check                    CI check: write nothing, fail when LORE.md would be over the budget or a rendered file is stale (over the warn level: a warning)
       --dry-run                  print the generated body instead of writing it
       --json                     print the result (or the error) as JSON
       --no-pointer               do not stitch the pointer into the agent file

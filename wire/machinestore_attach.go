@@ -1,7 +1,7 @@
 package wire
 
 // machinestore_attach.go — the state half of the machine store (P3-LOCAL-2):
-// open and openStoreOnly attach it through withMachine, refresh it with
+// open and storeOnlyApp attach it through withMachine, refresh it with
 // refreshAll, and state.close closes it (state.machine).
 
 import (

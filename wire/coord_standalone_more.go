@@ -77,7 +77,7 @@ func (h standaloneCoord) TaskReassignPlan(ctx context.Context, in opscoord.Reass
 	if err != nil {
 		return opscoord.ReassignPlan{}, err
 	}
-	who, err := h.resolveActor(ctx, in.From)
+	who, err := h.resolveFrom(ctx, in.From)
 	if err != nil {
 		return opscoord.ReassignPlan{}, err
 	}
@@ -128,6 +128,27 @@ func (h standaloneCoord) resolveActor(ctx context.Context, handle string) (strin
 		return "", err
 	}
 	return as.ActorID, nil
+}
+
+// resolveFrom is --from as an actor id: an actor id as is, else the
+// roster member @handle or email names, people who left included (B-12:
+// the hand-over runs after `lore member remove`).
+func (h standaloneCoord) resolveFrom(ctx context.Context, ref string) (string, error) {
+	v := strings.TrimSpace(ref)
+	if id, err := ids.Parse[ids.Actor](v); err == nil {
+		return id.String(), nil
+	}
+	x, r, ok, err := h.a.rosterMember(ctx, v)
+	switch {
+	case err != nil:
+		return "", err
+	case ok:
+		return x.ID, nil
+	}
+	if _, isRef := parseMemberRef(v); isRef {
+		return "", memberMissErr(r, v)
+	}
+	return h.resolveActor(ctx, v)
 }
 
 // historyEntryTag types the ids of history entries reassign writes (the_…,

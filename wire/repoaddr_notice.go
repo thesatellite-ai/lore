@@ -48,7 +48,14 @@ const (
 // SyncRepoAddresses runs the address pass and writes its notices to w;
 // with terminal (a person at stdin), a newly recorded address is asked
 // about once, reading the answer from in.
+//
+// A client repo is skipped (B-8, B-11): minting its id writes the tracked
+// _meta.json (with the client's remote) and a repos row file into the
+// client's checkout, which a sync must never do there.
 func (a *App) SyncRepoAddresses(ctx context.Context, w io.Writer, in io.Reader, terminal bool) {
+	if client, cerr := a.ClientRepo(ctx); cerr == nil && client {
+		return
+	}
 	rep, err := a.CheckRepoAddresses(ctx)
 	if err != nil {
 		if !errs.Has(err, errs.NotFound) { // no `lore init` yet: nothing to identify

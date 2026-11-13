@@ -108,10 +108,14 @@ func (r pageRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Call
 	// One line about the folder lore setup was started in (fix-all item
 	// 3); the page's Home banner gets the same answer through the session.
 	here, herr := r.env.app.SetupHere(ctx)
+	if flow == setupweb.FlowJoin {
+		// the folder is offered the member setup being joined, not solo
+		here = opssetup.HereForJoin(opssetup.WithJoin(ctx, joinOf(res, web)), here)
+	}
 	if herr == nil {
 		_, _ = io.WriteString(r.env.out, onboard.HereLine(here)+"\n")
 	}
-	if err := r.serve(ctx, ln, web, flow, here); err != nil {
+	if err := r.serve(opssetup.WithJoin(ctx, joinOf(res, web)), ln, web, flow, here); err != nil {
 		return res, err
 	}
 	return res.WithTextEdit(func(string) string { return "" }), nil
@@ -134,7 +138,12 @@ func (r pageRunner) webStart(name string, res op.Result) (opssetup.WebStart, set
 			(r.env.stdoutTTY() || webAsked(r.env.args))
 		return out.Web, setupweb.FlowHome, open
 	case opssetup.JoinOut:
-		return out.Web, setupweb.FlowJoin, name == opssetup.OpJoin
+		// B-10: like bare `lore setup`, the page needs a terminal or
+		// --web; a script, an agent or a pipe gets the op's text, the
+		// `lore setup apply` lines, and an exit instead of a page that
+		// waits 30 idle minutes.
+		return out.Web, setupweb.FlowJoin, name == opssetup.OpJoin &&
+			(r.env.stdoutTTY() || webAsked(r.env.args))
 	case opssetup.RepairOut:
 		return out.Web, setupweb.FlowHome, name == opssetup.OpRepair && out.Web != (opssetup.WebStart{}) && r.env.stdoutTTY()
 	}
@@ -176,7 +185,7 @@ func (r pageRunner) serve(ctx context.Context, ln net.Listener, web opssetup.Web
 	conf, _ := wire.ReadSetupsConfig(r.env.home)
 	cfg := conf.Settings
 	page, err := setupweb.New(ln, setupweb.Options{
-		Registry: r.env.app.Registry(), Runner: &apiRunner{inner: r.env.inner},
+		Registry: r.env.app.Registry(), Runner: &apiRunner{inner: r.env.inner, join: opssetup.JoinOf(ctx)},
 		Actor: pageActor(ctx, r.env.app), LoreVersion: version,
 		IdleMinutes: cfg.IdleMinutes, Flow: flow, Invite: web.Invite, Setup: web.Setup,
 		UI: setupUI, DebugLog: wire.SetupDebugLogPath(r.env.home), Here: here,
@@ -263,4 +272,18 @@ func pageOpsMissing(names []string, has func(string) bool) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// joinOf is the join a setup.join result serves (zero for any other op).
+func joinOf(res op.Result, web opssetup.WebStart) opssetup.JoinContext {
+	v := res.Value()
+	if !v.IsValid() || !v.CanInterface() {
+		return opssetup.JoinContext{}
+	}
+	// Interface() is the reflect boundary; it is narrowed at once.
+	out, ok := v.Interface().(opssetup.JoinOut)
+	if !ok {
+		return opssetup.JoinContext{}
+	}
+	return opssetup.JoinContext{Setup: web.Setup, Org: out.Org}
 }

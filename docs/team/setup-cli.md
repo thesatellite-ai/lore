@@ -383,7 +383,7 @@ The example leaves out the per-repo lines (each repo's `stores.yaml` source and 
 
 ## Step 9 — Join a team from an invite line
 
-`lore setup join --invite <invite>` parses the line an admin sent (see [Team invites](invites.md)) and opens the page on the join step; `--no-open` prints the address, `--json` prints the decoded invite and the step plan. A text that is not an invite is refused at once:
+`lore setup join --invite <invite>` parses the line an admin sent (see [Team invites](invites.md)), or takes the org's store url `lore member add` printed, and prints the `lore setup apply` lines that join step by step (kind `member`, identity from the invite or git, `github` skipped, personal store, `join`, folders); on a terminal it then opens the page on the join step, and with no terminal it stops there, so a script or an ssh session runs those lines instead of waiting for a page. `--web` opens the page without a terminal, `--no-open` prints the address, `--json` prints the decoded invite, the step plan and the lines. A text that is not an invite is refused at once:
 
 <!-- example: setup-cli#join -->
 ```console

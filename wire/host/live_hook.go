@@ -43,6 +43,7 @@ import (
 	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
 	opsorg "github.com/thesatellite-ai/lore/ops/orgcmd"
+	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opsrepoinit "github.com/thesatellite-ai/lore/ops/repoinit"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
@@ -601,6 +602,9 @@ func runWireMode(run *Run) wireMode {
 	if run.OldRows {
 		return wireRead // D7: a sync in an unmigrated 0.1.17 repo wires nothing
 	}
+	if dryRun(run) || renderReads(run) {
+		return wireRead // C-8: --dry-run, render --check/--report/--trend write nothing, .git included
+	}
 	if changesOnlyLoreData(run.Entry.Spec().Name) {
 		return wireRead // M-6: a migration edits no tracked file but .lore/data (.gitattributes, hooks in a tracked folder)
 	}
@@ -628,6 +632,39 @@ func runWireMode(run *Run) wireMode {
 		return wireInstall
 	}
 	return wireRead // doctor without --fix reads
+}
+
+// renderReadFlags are the flags of `lore render` that write nothing: the
+// CI check, the budget report and trend, and the dry run.
+var renderReadFlags = []string{"check", "report", "trend", "dry-run"}
+
+// renderReads reports whether run is `lore render` with one of
+// renderReadFlags (CLI flag or REST body). render.run carries write
+// permission for a plain render, so its read-only forms are told apart
+// here: a CI clone's `lore render --check` wired the merge driver and seven
+// hook blocks into .git before it checked (C-8). An input it cannot read
+// is a read, the side that changes less.
+func renderReads(run *Run) bool {
+	if run.Entry == nil || run.Entry.Spec().Name != opsrender.OpRun {
+		return false
+	}
+	if run.Cmd != nil {
+		for _, f := range renderReadFlags {
+			v, err := run.Cmd.Flags().GetBool(f)
+			if (err == nil && v) || (err != nil && slices.Contains(run.Args, "--"+f)) {
+				return true
+			}
+		}
+		return false
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in opsrender.RunIn
+		if json.Unmarshal(d.Body, &in) != nil {
+			return true
+		}
+		return in.Check || in.Report || in.Trend || in.DryRun
+	}
+	return false
 }
 
 // fixDryRunFlag is lore fix's --dry-run.

@@ -94,3 +94,34 @@ func TestMigrateEditsNoTrackedFile(t *testing.T) {
 		t.Fatalf("an ordinary write no longer adds the .gitignore lines: %q %v", b, err)
 	}
 }
+
+// TestReadsWriteNoExclude (C-8): a read, `lore migrate status` included,
+// writes nothing inside .git, not even info/exclude, in a repo whose
+// .gitignore lacks lore's lines (a CI clone's checks once appended them):
+// doctor names the lines, and a write or a migration adds them.
+func TestReadsWriteNoExclude(t *testing.T) {
+	ctx := context.Background()
+	for _, spec := range []op.Spec{
+		{Name: opsmigrate.OpStatus, Permission: op.PermRead, Access: op.AccessRead},
+		{Name: "task.list", Permission: op.PermRead, Access: op.AccessRead},
+	} {
+		t.Run(spec.Name, func(t *testing.T) {
+			root := t.TempDir()
+			gitInit(t, root)
+			if err := os.MkdirAll(filepath.Join(root, ".lore", "data"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			excl := filepath.Join(root, ".git", "info", "exclude")
+			before, _ := os.ReadFile(excl)
+			if err := GitignoreHook(root).Before(ctx, &Run{Entry: specEntry{spec: spec}}); err != nil {
+				t.Fatal(err)
+			}
+			if after, _ := os.ReadFile(excl); string(after) != string(before) {
+				t.Fatalf("%s wrote .git/info/exclude:\n%s", spec.Name, after)
+			}
+			if _, err := os.Stat(filepath.Join(root, gitignoreName)); err == nil {
+				t.Fatalf("%s wrote the tracked .gitignore", spec.Name)
+			}
+		})
+	}
+}

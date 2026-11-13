@@ -67,7 +67,7 @@ func (e engine) List(ctx context.Context, _ ListIn) (ListOut, error) {
 		// The folder line is context, not the list: a failure to read it
 		// never hides the setups.
 		if h, herr := src.SetupHere(ctx); herr == nil {
-			out.Here = h
+			out.Here = HereForJoin(ctx, h) // the page `lore setup join` opened offers that member setup
 		}
 	}
 	return out, nil

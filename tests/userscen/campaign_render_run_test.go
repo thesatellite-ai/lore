@@ -6,7 +6,7 @@ package userscen
 // 6.1-6.11) beyond the render_*_test.go scenarios:
 //   - --json of every mode: {"output": …} for a run and --dry-run, the
 //     report / trend object for --report / --trend, the E_REFUSED envelope
-//     for --check over the warn level;
+//     for --check over the budget (over the warn level it warns and passes);
 //   - one read mode at a time: --check with --report (a CI gate that must
 //     not pass by printing a report), --trend with --dry-run, … refused;
 //     every read mode leaves the whole work tree as it was;
@@ -82,8 +82,11 @@ func TestCampaignRender_RunJSONShapes(t *testing.T) {
 	}
 	c.MustLore("render", "--check").Says(t, "✓ .lore/LORE.md would be")
 	campSameTree(t, "the read modes", before, campTree(t, c.Dir))
-	// Over the warn level --check refuses, text and JSON alike.
+	// Over the warn level --check warns and passes (C-8); over the budget
+	// it refuses, text and JSON alike.
 	c.MustLore("policy", "set", "context.warn_at", "1", "--yes")
+	c.MustLore("render", "--check").Says(t, "over the warn level")
+	c.MustLore("policy", "set", "context.budget.codex", "100", "--yes")
 	before = campTree(t, c.Dir)
 	campRefusal(t, c, campExitRefused, "E_REFUSED", "lore render --report", "render", "--check")
 	campSameTree(t, "a refused --check", before, campTree(t, c.Dir))
@@ -92,9 +95,9 @@ func TestCampaignRender_RunJSONShapes(t *testing.T) {
 func TestCampaignRender_RunOneReadModeAtATime(t *testing.T) {
 	c := renderSolo(t)
 	c.MustLore("render")
-	// warn_at 1: a --check that ran would refuse, so a combination that
+	// budget 100: a --check that ran would refuse, so a combination that
 	// exits 0 would be a CI gate that never fails.
-	c.MustLore("policy", "set", "context.warn_at", "1", "--yes")
+	c.MustLore("policy", "set", "context.budget.codex", "100", "--yes")
 	before := campTree(t, c.Dir)
 	for _, combo := range [][]string{
 		{"--check", "--report"}, {"--check", "--trend"}, {"--check", "--dry-run"},

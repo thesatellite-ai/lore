@@ -65,30 +65,28 @@ func GitignoreHook(workDir string) Hook {
 			if root == "" {
 				return
 			}
+			// C-8: a read (doctor, render --check, migrate status, any
+			// read-only operation) writes nothing inside .git, not even
+			// info/exclude: a CI clone that only checks stays as cloned.
+			// It creates no file in the repo either (its cache is under
+			// the lore home), so there is nothing of its own to hide;
+			// `lore doctor` names the missing lines and `lore doctor --fix`
+			// adds them.
 			onlyData := run.Entry != nil && changesOnlyLoreData(run.Entry.Spec().Name)
+			if (readRun(run) && !onlyData) || (run.Entry != nil && readSpec(run.Entry.Spec())) {
+				return // a migration reads as wireRead but takes .lore/lock and writes .tmp-* files: it goes on
+			}
 			// fmt1: a project on the 0.1.17 format gets no tracked file
 			// edited before lore migrate run either (doctor --fix and
 			// lore fix agree): its .gitignore lines wait for the first
 			// command after the migration.
-			if readRun(run) || !wire.HoldsLoreData(root) || onlyData || wire.ProjectFormatOld(root) {
+			if !wire.HoldsLoreData(root) || onlyData || wire.ProjectFormatOld(root) {
 				// A repo that holds no lore data (a client repo linked to
 				// a store folder; plain files sweep 3.8) never gets a
 				// tracked file changed, by any command, doctor --fix
 				// included: lore's local files go to .git/info/exclude.
 				// A migration edits no tracked file but .lore/data (M-6).
-				// A read never edits the tracked .gitignore: the cache and
-				// lock it creates stay out of git status through the
-				// clone's own exclude file, and `lore doctor` names the
-				// missing lines and `lore doctor --fix` (best effort: a
-				// read never fails for it). The first time, it says so.
-				// A read creates no file in the repo (its cache is under
-				// the lore home, owner item 16): it hides only what is
-				// already there, so with nothing there it writes nothing.
-				ensure := wire.EnsureLocalExclude
-				if readRun(run) && !onlyData { // a migration takes .lore/lock and writes .tmp-* files after this
-					ensure = wire.EnsureLocalExcludeExisting
-				}
-				if added, _ := ensure(ctx, root); len(added) > 0 {
+				if added, _ := wire.EnsureLocalExclude(ctx, root); len(added) > 0 {
 					announceExclude(os.Stderr, root, added, onlyData)
 				}
 				return

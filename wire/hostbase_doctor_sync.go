@@ -223,7 +223,7 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 // doctorGitignoreLinesNote is the [sync] line of a .gitignore that lacks
 // lore's local files (a v0.1.17 repo before its first 0.1.18 write).
 func doctorGitignoreLinesNote(missing []string) string {
-	return ".gitignore does not list lore's local files (" + strings.Join(missing, ", ") + "), so a teammate's clone shows them in git status; `lore doctor --fix` adds them (then commit .gitignore); this clone keeps them out of git status meanwhile (.git/info/exclude)"
+	return ".gitignore does not list lore's local files (" + strings.Join(missing, ", ") + "), so a teammate's clone shows them in git status; `lore doctor --fix` adds them (then commit .gitignore); a read creates none of them"
 }
 
 // doctorSyncFiles fills open_conflicts and file_errors from the repo

@@ -1118,11 +1118,11 @@ func cleanStoresFileURLs(top string, cfg attach.Config) error {
 	return nil
 }
 
-// openStoreOnly builds the core with no repo store: only the org store
-// folder named target (one of Options.OrgStores) is opened (BUG-T3,
-// FA-AGENT-9). It serves the roster commands run outside any repo
-// (`lore actor register`, `lore org import`'s register step), and only
-// them (StoreOnlyRoster). Each place open uses the repo gets an explicit
+// The store-only open (storeOnlyApp → openDetached) builds the core with no
+// repo store: only one store folder is opened (BUG-T3, FA-AGENT-9). It
+// serves the roster commands run outside any repo (`lore actor register`,
+// `lore org import`'s register step; StoreOnlyRoster) and a write naming
+// its store with --to there (targetoutside.go). Each place open uses the repo gets an explicit
 // answer here:
 //
 //   - repo store: none; the engine's only store is target, which is also
@@ -1142,20 +1142,23 @@ func cleanStoresFileURLs(top string, cfg attach.Config) error {
 //     store is internal.
 //   - format gate (O6): the repo's never asks; target's v0.1.17 question
 //     still applies (readStoreFormats).
-func openStoreOnly(ctx context.Context, opts Options, target store.Source) (*state, error) {
+
+// orgStoreNamed is the org store folder target of Options.OrgStores, or
+// E_NOT_FOUND when the setup configures none by that name.
+func orgStoreNamed(ctx context.Context, opts Options, target store.Source) (attach.Store, error) {
 	org := rawOrgStores(ctx, opts)
 	idx := slices.IndexFunc(org, func(s attach.Store) bool { return s.Name == target })
 	if idx < 0 {
-		return nil, errs.New(errs.NotFound, "roster: no org store named "+string(target)+" is configured").
+		return attach.Store{}, errs.New(errs.NotFound, "roster: no org store named "+string(target)+" is configured").
 			WithHint("the org entry in ~/.lore/config.yaml names the store and its org_folder")
 	}
-	return openDetached(ctx, opts, &org[idx])
+	return org[idx], nil
 }
 
-// openDetached is openStoreOnly's body: the core with no repo store and
+// openDetached is the store-only open: the core with no repo store and
 // only one (when one is not nil) attached, as its default target; with
 // one nil it is the machine-only open (openMachineOnly): the machine
-// store alone, the default target. Every answer listed on openStoreOnly
+// store alone, the default target. Every answer listed on the store-only open
 // holds for both.
 func openDetached(ctx context.Context, opts Options, one *attach.Store) (*state, error) {
 	return openDetachedHere(ctx, opts, one, "")

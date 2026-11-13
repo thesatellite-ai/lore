@@ -23,6 +23,11 @@ import (
 // (INTEG-MIGREST-2): a project lives in a git checkout.
 const notAWorkTreeHint = "cd into a git checkout, or run git init here first"
 
+// notAWorkTreeHomeHint is notAWorkTreeHint in the home folder (or above
+// it): `git init` there would make every file of the person a repository,
+// so the hint names the store target a write can take instead (B-7).
+const notAWorkTreeHomeHint = "cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)"
+
 func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts ...Option) (*Backend, error) {
 	cfg := build(opts)
 	g, dirRoot, err := repoRoot(ctx, cfg, dir, o.Home)
@@ -106,8 +111,36 @@ func notAWorkTree(ctx context.Context, g runner, dir string) error {
 			return errs.Wrap(errs.NotAStore, insideGitDirMsg, store.ErrNotAStore).WithHint(insideGitDirFix)
 		}
 	}
+	hint := notAWorkTreeHint
+	if home, herr := os.UserHomeDir(); herr == nil && atOrAboveHome(dir, home) {
+		hint = notAWorkTreeHomeHint
+	}
 	return errs.Wrap(errs.NotAStore, "git: the folder is not inside a git work tree", store.ErrNotAStore).
-		WithHint(notAWorkTreeHint)
+		WithHint(hint)
+}
+
+// atOrAboveHome reports whether dir is the home folder or one of its
+// parents (a folder `git init` must never be suggested for).
+func atOrAboveHome(dir, home string) bool {
+	if home == "" || dir == "" {
+		return false
+	}
+	d, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	h, err := filepath.Abs(home)
+	if err != nil {
+		return false
+	}
+	if real, rerr := filepath.EvalSymlinks(d); rerr == nil {
+		d = real
+	}
+	if real, rerr := filepath.EvalSymlinks(h); rerr == nil {
+		h = real
+	}
+	rel, err := filepath.Rel(d, h)
+	return err == nil && (rel == "." || !strings.HasPrefix(rel, ".."))
 }
 
 // Sync implements store.Backend. Repo mode has nothing to do (the person

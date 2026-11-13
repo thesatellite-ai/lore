@@ -75,7 +75,7 @@ func guidedOps(e engine) []op.Entry {
 			Permission: op.PermWrite, Errors: with(),
 			Examples: []op.Example{{Title: "remove a setup", CLI: "lore setup remove --name old-client", Want: ""}}}),
 			e.Remove),
-		op.Define(local(op.Spec{Name: OpJoin, Summary: "Join your org: by its name or store url when an admin added you (lore member add; matched by your email), or from an invite line; opens the setup page on the join step",
+		op.Define(local(op.Spec{Name: OpJoin, Summary: "Join your org: by its name or store url when an admin added you (lore member add; matched by your email), or from an invite line; prints the lore setup apply lines that join, and on a terminal (or --web) opens the setup page on the join step",
 			Errors:   with(errs.InviteInvalid, errs.JoinOrgUnknown),
 			Examples: []op.Example{{Title: "join as a member", CLI: "lore setup join --invite agency --no-open --json", Want: ""}, {Title: "join from an invite", CLI: "lore setup join --invite lore-invite:v1:… --no-open --json", Want: ""}}}),
 			e.Join),

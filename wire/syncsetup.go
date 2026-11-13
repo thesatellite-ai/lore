@@ -104,6 +104,14 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 		if stores, err = a.setupStores(ctx); err != nil {
 			return out, err
 		}
+		// B-9: one clone per store, each named as `lore store list` names
+		// it from any repo (a client repo's linked folder is attached under
+		// the org's name, so two clones were both "acme")
+		for i := range stores {
+			if n := orgStoreLabel(a.opts.Home, stores[i].URL); n != "" {
+				stores[i].Name = store.Source(n)
+			}
+		}
 	}
 	if len(stores) == 0 {
 		out.Lines = []string{"no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)"}

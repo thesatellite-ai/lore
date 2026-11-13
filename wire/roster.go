@@ -7,6 +7,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -451,7 +452,7 @@ func teamOfRow(r row.Row) RosterTeam {
 
 // StoreOnlyRoster returns an App for a roster command run outside any repo
 // (BUG-T3, FA-AGENT-9): when opts.RepoDir is not inside a git work tree,
-// the App opens only the org store folder target (openStoreOnly) and has
+// the App opens only the org store folder target (storeOnlyApp) and has
 // no repo state, so every repo-only path (store operations, SeedRepoMeta,
 // anything on configState) fails with E_NOT_A_STORE. Inside a work tree it
 // returns nil, false: the caller keeps its normal App, whose full open
@@ -467,22 +468,53 @@ func StoreOnlyRoster(ctx context.Context, opts Options, target store.Source) (*A
 	if insideWorkTree(ctx, opts.RepoDir) && !readWithoutProject(ctx, opts) {
 		return nil, false, nil
 	}
+	one, err := orgStoreNamed(ctx, opts, target)
+	if err != nil {
+		return nil, false, err
+	}
+	a, err := storeOnlyApp(ctx, opts, one)
+	if err != nil {
+		return nil, false, err
+	}
+	return a, true, nil
+}
+
+// storeOnlyApp is an App opened on store one alone (openStoreOnlyOn),
+// for the roster commands run outside any repo (StoreOnlyRoster).
+func storeOnlyApp(ctx context.Context, opts Options, one attach.Store) (*App, error) {
 	a, err := New(opts)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	st, err := openStoreOnly(ctx, a.opts, target) // a.opts: New filled the defaults (Wall)
+	if err := a.openStoreOnlyOn(ctx, one, ""); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// openStoreOnlyOn opens a on store one alone (openDetachedHere: no repo
+// store, one is the default target; a non-empty here makes one answer for
+// the repo store, as a store checkout does). It serves a command that
+// writes only there outside any repo: the roster commands and a write
+// naming its store with --to (targetoutside.go). An App opened before is
+// closed first. Its repo-only state refuses with E_NOT_A_STORE.
+func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.Source) error {
+	st, err := openDetachedHere(ctx, a.opts, &one, here) // a.opts: New filled the defaults (Wall)
 	if err != nil {
-		return nil, false, err
+		return err
 	}
+	st.here = here                     // "" for the roster: its rows name no project folder
 	st.eng.SetRedactHook(a.redactTask) // D21, as App.state does
 	a.mu.Lock()
-	a.opened, a.st = true, st
+	defer a.mu.Unlock()
+	if a.st != nil {
+		_ = a.st.close()
+	}
+	a.opened, a.st, a.err = true, st, nil
 	a.cfgOpened = true
-	a.cfgErr = errs.New(errs.NotAStore, "wire: this command needs a repo; only the roster commands run outside one").
+	a.cfgErr = errs.New(errs.NotAStore, "wire: this command needs a repo; outside one only a write naming its store (--to) and the roster commands run").
 		WithHint("run it inside a git repository")
-	a.mu.Unlock()
-	return a, true, nil
+	return nil
 }
 
 // readWithoutProject reports whether ctx is a run whose full open refuses

@@ -26,9 +26,12 @@ func PushReportHook() Hook { return pushReportHook(os.Stderr) }
 
 // pushReportHook reports to w (tests pass a buffer).
 func pushReportHook(w io.Writer) Hook {
-	return Hook{Name: HookPushReport, Around: func(ctx context.Context, _ *Run, next Next) (op.Result, error) {
-		return next(orgcfg.WithPushReporter(ctx, func(p orgcfg.StorePush) {
-			_, _ = fmt.Fprintln(w, wire.StorePushLine(p.Store, p.Commit, p.Branch))
-		}))
-	}}
+	home := "" // the lore home, for the store's own name (B-9); set by Options
+	return Hook{Name: HookPushReport,
+		Options: func(o *wire.Options) { home = o.Home },
+		Around: func(ctx context.Context, _ *Run, next Next) (op.Result, error) {
+			return next(orgcfg.WithPushReporter(ctx, func(p orgcfg.StorePush) {
+				_, _ = fmt.Fprintln(w, wire.StorePushLine(wire.OrgStoreName(home, p.Store), p.Commit, p.Branch))
+			}))
+		}}
 }

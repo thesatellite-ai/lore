@@ -376,3 +376,60 @@ func stagedLine(before, after map[string]string) string {
 	}
 	return fmt.Sprintf("lore: added %d lore row file(s) to this commit: %s%s (lore's rows travel with your commits)", len(paths), strings.Join(shown, ", "), more)
 }
+
+// CommitRender renders the project at root for the commit being made and
+// returns the render files (relative to root) to stage with it; nil stages
+// nothing. cmd/lore passes renderhost.Host.CommitRender.
+type CommitRender func(ctx context.Context, root string) []string
+
+// commitRenderLine is the pre-commit line when the commit now carries a
+// fresh render of the rows it adds.
+const commitRenderLine = "lore: refreshed .lore/LORE.md in this commit for the row files it carries"
+
+// stageCommitRender is the pre-commit hook's second step (A-12): when the
+// commit carries row files, the committed render is refreshed and staged
+// with them, so the next checkout of this commit has nothing to re-render
+// and no hook leaves a tracked LORE.md dirty. A store clone, a commit
+// without row files and any git problem stage nothing; it never refuses
+// the commit.
+func (h *liveHost) stageCommitRender(ctx context.Context, render CommitRender) {
+	if render == nil {
+		return
+	}
+	if _, isGit, inStore := rowfs.StoreTop(h.cfg.WorkDir); inStore && isGit {
+		return
+	}
+	root := liveProjectRoot(h.cfg.WorkDir)
+	if root == "" {
+		return
+	}
+	repo, err := gitref.Open(ctx, root, h.cfg.Git)
+	if err != nil {
+		return
+	}
+	env := hookIndexEnv(ctx, repo, root)
+	if !stagedDiffers(ctx, repo, root, env, loreDataPathspec) {
+		return // no row file in this commit: its render is the one HEAD has
+	}
+	files := render(ctx, root)
+	if len(files) == 0 {
+		return
+	}
+	if _, err := repo.Run(ctx, gitref.Invocation{Dir: root, Env: env, Args: append([]string{"add", "--"}, files...)}); err != nil {
+		h.line("lore: pre-commit: stage " + strings.Join(files, " and ") + ": " + err.Error())
+		return
+	}
+	if stagedDiffers(ctx, repo, root, env, files...) {
+		h.line(commitRenderLine)
+	}
+}
+
+// stagedDiffers reports whether the index being committed differs from
+// HEAD under paths (true with no HEAD yet: a first commit carries all).
+func stagedDiffers(ctx context.Context, repo *gitref.Repo, root string, env []string, paths ...string) bool {
+	if _, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"rev-parse", "--verify", "-q", "HEAD"}}); err != nil {
+		return true
+	}
+	_, err := repo.Run(ctx, gitref.Invocation{Dir: root, Env: env, Args: append([]string{"diff", "--cached", "--quiet", "HEAD", "--"}, paths...)})
+	return err != nil
+}

@@ -79,7 +79,7 @@ func (b *storePush) reportPushes() {
 	if gb := gitOf(b.inner); gb != nil {
 		b.reportBack(gb)
 		for _, p := range gb.TakePushes() {
-			_, _ = fmt.Fprintln(b.notes, PushLine(pushName(string(b.name), gb.Folder(), p.Folders), p))
+			_, _ = fmt.Fprintln(b.notes, PushLine(b.pushShown(gb.Folder(), p.Folders), p))
 		}
 	}
 }
@@ -106,6 +106,20 @@ func pushName(name, own string, folders []string) string {
 		}
 	}
 	return strings.Join(names, ", ")
+}
+
+// pushShown names one push (pushName) by the store's own name when it has
+// one, adding the repo's name for it when that differs (B-9): a push from
+// a client repo says which store received it.
+func (b *storePush) pushShown(own string, folders []string) string {
+	if b.own == "" {
+		return pushName(string(b.name), own, folders)
+	}
+	n := pushName(b.own, own, folders)
+	if n == b.own {
+		return storeShown(string(b.name), b.own)
+	}
+	return n
 }
 
 // reportBack says, once, that a store lore had found reset is back on its

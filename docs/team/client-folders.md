@@ -73,7 +73,7 @@ Once North's repo exists, link it to its folder. `lore store folder list` run in
 ```console
 # tomas, in clients/north-web
 $ lore org link --org agency --project client_north --yes
-lore: pushed store github.com/agency/notes: commit 601d285 to branch main
+lore: pushed store agency: commit 601d285 to branch main
 This marks github.com/client/north-web as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_north/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe…28f2 at github.com/client/north-web → github.com/agency/notes@main:client_north/ (default=false)
@@ -96,15 +96,15 @@ A client's repo must never hold lore files. Link it without `lore init`: the lin
 ```console
 # tomas, in clients/south-app
 $ lore org link --org agency --project client_south --yes
-lore: pushed store github.com/agency/notes: commit 86dbae4 to branch main
+lore: pushed store agency: commit 86dbae4 to branch main
 This marks github.com/client/south-app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_south/,
 and the leak guards turn on for everyone in agency.
   link: project prj_05e9…4603 at github.com/client/south-app → github.com/agency/notes@main:client_south/ (default=false)
 ✓ github.com/client/south-app (prj_05e9…4603) linked to github.com/agency/notes client_south/ (pushed)
   nothing was written to this repo
 $ lore task add --title 'set up the staging deploy'
-lore: pushed store agency: commit 9b40ce7 to branch main
-lore: pushed store agency: commit 05513aa to branch main
+lore: pushed store agency/client_south (here: agency): commit 9b40ce7 to branch main
+lore: pushed store agency/client_south (here: agency): commit 05513aa to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)
 ✓ tsk_c0f3…b5b8 — set up the staging deploy [medium]
@@ -203,5 +203,6 @@ An org entry lists every store (`lore org refresh --org <org>` takes them from t
 | `lore store init --name <name>`, `add`, `remove`, `set-url` | need a repo: they edit its `.lore/stores.yaml` (`lore store init --name me` works anywhere) |
 | `lore org link`, `unlink`, `set`, `use` | need a git repo: they are about that repo (`lore org link` needs no `lore init`) |
 | `lore org create`, `import`, `rename`, `refresh`, `lore team invite --email …` | always |
+| a write with `--to <store>` or `--to <store>/<folder>` (`lore rule add --to acme/org …`, `lore memory add --to me …`) | the same names: it lands in that store folder (a new folder asks first, or `--create`); a write with no `--to` needs a repo, and in the home folder the hint names `--to` instead of `git init` |
 
 A command that only changes a store also leaves the repo you run it in alone: it does not touch that repo's `.gitignore`, `.gitattributes` or git hooks.

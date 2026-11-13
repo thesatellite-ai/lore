@@ -18,7 +18,7 @@ A row lives in exactly one place, so there is no copy: `lore move --id <id> --to
 ```console
 # alice, in website
 $ lore memory add --body 'checkout must support INR and USD'
-lore: pushed store agency: commit 34ee210 to branch main
+lore: pushed store agency/client (here: agency): commit 34ee210 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
 ✓ mem_f147…5139 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
@@ -28,7 +28,7 @@ This becomes visible to everyone with access to repo (client):
   "checkout must support INR and USD" (mem_f147…5139, id kept), now in agency
   kept back: internal metadata, internal and sensitive resource fields, time entries and claim state (listed after the move)
 Move it? [y/N] y
-lore: pushed store agency: commit 7898daa to branch main
+lore: pushed store agency/client (here: agency): commit 7898daa to branch main
 lore: wrote ~/work/website/.lore/data/memories/mem_f147…5139.json
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
 ✓ mem_f147…5139 moved to store repo (same id; the old copy is tombstoned)

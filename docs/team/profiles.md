@@ -476,7 +476,7 @@ A leave that has passed its end date does not end on its own: `actor show` and `
 ```console
 # tomas, in acme-hub
 $ lore task add --title 'move the invoice export to the new API' --to agency --assign @mira
-lore: pushed store agency: commit 7540e63 to branch main
+lore: pushed store agency/acme-hub (here: agency): commit 7540e63 to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/acme-hub (store agency)
 ✓ tsk_d191…45c2 — move the invoice export to the new API [medium] → [agency/acme-hub]
