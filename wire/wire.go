@@ -661,6 +661,9 @@ func (a *App) ServeAsPerson() {
 // returns the same error rather than half-opening again.
 func (a *App) state(ctx context.Context) (*state, error) {
 	st, opened, err := a.openState(ctx)
+	if err != nil {
+		return st, a.refineNoProject(ctx, err) // G-3: the specific "no project" answer (untouched_reason.go)
+	}
 	if opened && err == nil {
 		// outside a.mu: the pick-up writes through the engine, whose
 		// scanner and hooks ask the App again (handedit.go)
@@ -710,6 +713,12 @@ func (a *App) openState(ctx context.Context) (st *state, opened bool, err error)
 
 // configState opens the repo-only state once (see App.cfg).
 func (a *App) configState(ctx context.Context) (*state, error) {
+	st, err := a.configStateLocked(ctx)
+	return st, a.refineNoProject(ctx, err) // G-3 (untouched_reason.go), outside a.mu
+}
+
+// configStateLocked is configState's open under a.mu.
+func (a *App) configStateLocked(ctx context.Context) (*state, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	run := noCreateOf(ctx)
