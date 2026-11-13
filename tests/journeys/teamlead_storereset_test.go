@@ -125,4 +125,46 @@ func TestJourneyTeamLeadStoreWipedEmpty(t *testing.T) {
 		tlApply(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, "team", map[string]any{"org": tlOrg, "store_url": tt.store.SSHURL()})
 		tt.lore(tlLee, "member", "list").OK(t).Says(t, tlLee.Email)
 	})
+
+	w.Step("day6/an-old-build-clone-never-refills-it", func() {
+		// L-2: a clone whose lore kept no remote tip (an older build), its
+		// tracking ref pruned by another fetch: its push stamp still tells
+		// lore it pushed this store, so the emptied repo stays empty
+		w.AdvanceDays(1)
+		tt.lore(tlLee, "memory", "add", "a note in the fresh store", "--to", tlOrg+"/"+tlProject).OK(t)
+		tt.lore(tlLee, "sync").OK(t)
+		if err := os.Remove(filepath.Join(clone, ".git", "lore", "remote-tip")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(clone, ".git", "lore", "push_stamp")); err != nil {
+			t.Fatalf("the clone has no push stamp after a push: %v", err)
+		}
+		wipe()
+		lee.OpenClone(tt.store, clone).Git("fetch", "-q", "--prune", "origin")
+		if r := tt.lore(tlLee, "sync"); r.Code == 0 {
+			t.Errorf("an old-build clone's sync into the emptied store must be refused: %s", r)
+		}
+		tt.lore(tlLee, "memory", "add", "written after the second wipe", "--to", tlOrg+"/"+tlProject)
+		if refs := w.TryGit(tt.store.Dir, "for-each-ref").Stdout; strings.TrimSpace(refs) != "" {
+			t.Errorf("an old-build clone refilled the emptied org store: %s", refs)
+		}
+	})
+
+	w.Step("day7/an-org-link-write-without-a-fetch", func() {
+		// the store is put back, then wiped again with no fetch on Lee's
+		// clone (its tracking ref still shows the old branch): an org link
+		// write asks the remote itself and is refused; the repo stays empty
+		w.AdvanceDays(1)
+		tt.lore(tlLee, "store", "push", tt.store.SSHURL(), "--restore", "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
+		wipe()
+		r := tt.lore(tlLee, "org", "link", tlOrg, "--project", tlProject, "--yes")
+		if r.Code == 0 {
+			t.Errorf("an org link write into the wiped store must be refused: %s", r)
+		}
+		r.Says(t, "reset")
+		if refs := w.TryGit(tt.store.Dir, "for-each-ref").Stdout; strings.TrimSpace(refs) != "" {
+			t.Errorf("an org link write refilled the wiped org store: %s", refs)
+		}
+	})
 }

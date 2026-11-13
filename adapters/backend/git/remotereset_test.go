@@ -136,3 +136,55 @@ func TestResetMarkClearsWhenTheStoreIsBack(t *testing.T) {
 		t.Fatal("the reset mark was not cleared once, with one came-back note")
 	}
 }
+
+// TestResetFoundForAnOldBuildClone (L-2): a clone from a build that kept
+// no remote tip, its tracking ref pruned by another fetch, still never
+// refills an emptied remote: lore's push stamp says it pushed before. A
+// first push allowed by the caller (store init, --restore) goes through.
+// The org pushes (GuardPushAt) refuse the same remote, and keep refusing
+// once it is marked.
+func TestResetFoundForAnOldBuildClone(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithMerger(newestMerger{}))
+	g := newGen(t)
+	write(t, a, store.Change{Row: g.row(newID(t), "old", hlc.HLC{})})
+	if _, err := a.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	state := PathsOf(a.Dir()).StateDir
+	if err := os.Remove(filepath.Join(state, remoteTipName)); err != nil { // an older build kept none
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(state, pushStampName), []byte("2026-11-01T00:00:00Z\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(remote); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, filepath.Dir(remote), "init", "--quiet", "--bare", "--initial-branch="+testBranch, remote)
+	gitT(t, a.Dir(), "fetch", "--quiet", "--prune", RemoteName)
+	if err := os.Remove(filepath.Join(state, remoteTipName)); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err) // the plain git fetch above recorded nothing, but be sure
+	}
+	h := gitT(t, a.Dir(), "rev-parse", "HEAD")
+	if err := GuardPushAt(ctx, a.Dir(), testBranch, h); !errors.Is(err, ErrRemoteReset) {
+		t.Fatalf("org push into the emptied remote: %v, want ErrRemoteReset", err)
+	}
+	if err := GuardPushAt(ctx, a.Dir(), testBranch, h); !errors.Is(err, ErrRemoteReset) {
+		t.Fatalf("org push into a marked remote: %v, want ErrRemoteReset", err)
+	}
+	if _, err := a.Sync(ctx); !errors.Is(err, ErrRemoteReset) {
+		t.Fatalf("sync of an old-build clone into the emptied remote: %v, want ErrRemoteReset", err)
+	}
+	if got := gitT(t, remote, "for-each-ref"); got != "" {
+		t.Fatalf("the emptied remote was refilled: %s", got)
+	}
+	if err := RestoreRemote(a.Dir()); err != nil {
+		t.Fatal(err)
+	}
+	if rep, err := a.Sync(WithFirstPush(ctx)); err != nil || rep.Sent == 0 {
+		t.Fatalf("a push the caller allowed (restore): %+v, %v", rep, err)
+	}
+}

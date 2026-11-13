@@ -48,7 +48,14 @@ func TestJourneyPullRebase(t *testing.T) {
 		b.Git("push", "-q", "origin", "HEAD:main")
 		pia.Laptop().LoreIn(a, "rule", "add", "--body", "Rule three from pia").OK(t)
 		a.WriteFile("main.go", "package main\n")
-		a.CommitAll("pia's rule and code")
+		// L-3: the person stages only their code; the pre-commit hook adds
+		// lore's new row file and says so in one line
+		a.Git("add", "main.go")
+		r := a.TryGit("commit", "-q", "-m", "pia's rule and code")
+		if r.Code != 0 || !strings.Contains(r.Stderr, "lore: added 1 lore row file(s) to this commit: .lore/data/rules/") {
+			t.Fatalf("the commit does not say which lore row it added: exit %d\n%s%s", r.Code, r.Stdout, r.Stderr)
+		}
+		a.CommitAll("anything left")
 		if s := a.Status(); s != "" {
 			t.Fatalf("pia's clone is not clean before the pull:\n%s", s)
 		}

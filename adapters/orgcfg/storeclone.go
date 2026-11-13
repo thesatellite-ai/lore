@@ -101,6 +101,10 @@ func fetchLocked(ctx context.Context, r Router, dir string, now time.Time, branc
 		want = branch[0]
 	}
 	if want != "" {
+		// this fetch pruned like the backend's: keep the tip it saw (remotereset.go)
+		gitbackend.NoteRemoteTipAt(lctx, dir, want, "")
+	}
+	if want != "" {
 		_ = gitbackend.FinishCheckout(lctx, dir, want) // best effort: the backend's next open does it too
 	}
 	return nil

@@ -252,10 +252,15 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 	} else if readme != "" {
 		files = append(files, readme)
 	}
+	if wrote, serr := rowfs.EnsureSignpost(gb.Dir()); serr != nil {
+		return rowfs.Marker{}, false, serr
+	} else if wrote {
+		files = append(files, rowfs.SignpostFile) // a new store: lore 0.1.17 says so first (rowfs/signpost.go)
+	}
 	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), initSubject, files...); err != nil {
 		return rowfs.Marker{}, false, err
 	}
-	rep, err := gb.Sync(ctx)
+	rep, err := gb.Sync(git.WithFirstPush(ctx)) // the store's first push (remotereset.go)
 	if err != nil {
 		return rowfs.Marker{}, false, err
 	}
@@ -290,6 +295,24 @@ func readmeForCommit(ctx context.Context, dir string) (string, error) {
 		return "", err
 	}
 	return rowfs.ReadmeFile, nil
+}
+
+// signpostForCommit writes the signpost lore 0.1.17 names first
+// (rowfs.SignpostFile) into the git store clone dir when the store has
+// none (not in its files, not in its last commit) and returns its path for
+// the commit lore is about to make there; "" when nothing was written.
+func signpostForCommit(ctx context.Context, dir string) (string, error) {
+	if rowfs.HasSignpost(dir) {
+		return "", nil
+	}
+	if _, err := (gitRun{dir: dir, args: []string{"cat-file", "-e", "HEAD:" + rowfs.SignpostFile}}).output(ctx); err == nil {
+		return "", nil // removed from the files only: the person's change, kept
+	}
+	wrote, err := rowfs.EnsureSignpost(dir)
+	if err != nil || !wrote {
+		return "", err
+	}
+	return rowfs.SignpostFile, nil
 }
 
 // gitCommitFilesAs commits paths (slash-separated, relative to dir) of a
@@ -1043,6 +1066,11 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 		return rerr
 	} else if readme != "" && !slices.Contains(paths, readme) {
 		paths = append(paths, readme)
+	}
+	if sign, serr := signpostForCommit(ctx, gb.Dir()); serr != nil {
+		return serr
+	} else if sign != "" && !slices.Contains(paths, sign) {
+		paths = append(paths, sign)
 	}
 	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), subject, paths...); err != nil {
 		return err

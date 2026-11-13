@@ -148,6 +148,11 @@ func (b *Backend) checkRemoteReset(ctx context.Context, before, remote, h string
 	switch {
 	case remote == "" && before != "":
 		why = "its branch " + b.branch + " is gone"
+	case remote == "" && pushedBefore(b.work) && !firstPushAllowed(ctx) && b.remoteHasNoHeads(ctx):
+		// L-2: a clone from a build that kept no remote tip, its tracking
+		// ref pruned: lore's push stamp still says it pushed this store
+		// before, so an empty remote now is a reset, not a new store.
+		why = "its branch " + b.branch + " is gone"
 	case remote != "":
 		if back, err := b.sharesHistory(ctx, h, remote); err != nil || back {
 			return err
@@ -247,4 +252,97 @@ func (b *Backend) storeIDAtCommit(ctx context.Context, commit string) string {
 		return ""
 	}
 	return m.ID.String()
+}
+
+// pushStampName is the stamp wire writes in the clone's StateDir when a
+// push of the store landed (wire/storepushmode.go pushStampFile); its
+// presence says this clone pushed the store before, also for a clone
+// from a build that kept no remote tip.
+const pushStampName = "push_stamp"
+
+// pushedBefore reports whether the clone at dir pushed its store before.
+func pushedBefore(dir string) bool {
+	_, err := os.Stat(filepath.Join(PathsOf(dir).StateDir, pushStampName))
+	return err == nil
+}
+
+// firstPushKey marks a context whose sync may push into an empty remote
+// although the clone pushed before: store init (the store's first push)
+// and store push --restore (the person put the old store back).
+type firstPushKey struct{}
+
+// WithFirstPush returns ctx allowing a push into an empty remote.
+func WithFirstPush(ctx context.Context) context.Context {
+	return context.WithValue(ctx, firstPushKey{}, true)
+}
+
+func firstPushAllowed(ctx context.Context) bool {
+	v, _ := ctx.Value(firstPushKey{}).(bool)
+	return v
+}
+
+// GuardPushAt is the reset check for a push lore makes into the clone at
+// dir outside a Backend (adapters/orgcfg: org links, lore-org.yaml, the
+// org source stamp): after the caller's fetch, h (the commit about to be
+// pushed) must not go into a remote lore found reset, or that a sync
+// would find reset (checkRemoteReset); a reset found is marked, so every
+// later sync and write refuses too. It also records the remote tip the
+// fetch saw (noteRemoteTip).
+func GuardPushAt(ctx context.Context, dir, branch, h string) error {
+	bin, err := lookGit(DefaultBinary)
+	if err != nil {
+		return err
+	}
+	b := &Backend{git: runner{bin: bin, owned: true}, work: dir, branch: branch}
+	b.git.remote = OriginAt(dir)
+	if RemoteResetAt(dir) {
+		// no "came back" here: this push path may not have fetched, so a
+		// stale tracking ref must not clear the mark (only a sync does)
+		return b.remoteResetError(ctx, "found when lore last reached it", "", h)
+	}
+	remote, err := b.resolve(ctx, dir, trackingRefNS+branch)
+	if err != nil {
+		return err
+	}
+	b.noteRemoteTip(ctx, remote)
+	return b.checkRemoteReset(ctx, "", remote, h)
+}
+
+// NoteRemoteTipAt records the remote tip of branch the clone at dir holds
+// now (after a fetch or push lore made outside a Backend). Best effort.
+func NoteRemoteTipAt(ctx context.Context, dir, branch, tip string) {
+	bin, err := lookGit(DefaultBinary)
+	if err != nil {
+		return
+	}
+	b := &Backend{git: runner{bin: bin, owned: true}, work: dir, branch: branch}
+	b.noteRemoteTip(ctx, tip)
+}
+
+// remoteHasNoHeads reports whether the clone's last fetch found no branch
+// at all on the remote (an emptied repo, not one branch removed).
+func (b *Backend) remoteHasNoHeads(ctx context.Context) bool {
+	if b.headsKnown {
+		return b.noHeads // GuardPushGone: the caller asked the remote itself
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"for-each-ref", "--count=1", "--format=%(refname)", trackingRefNS}})
+	return err == nil && trimmed(out) == ""
+}
+
+// GuardPushGone is GuardPushAt for a caller that asked the remote itself
+// (`git ls-remote --heads`, one call) instead of trusting a tracking ref
+// that may be stale: the store branch is not on the remote, and noHeads
+// says the remote has no branch at all. The reset rule then runs as a
+// sync's does (adapters/orgcfg commitStore, before its first push).
+func GuardPushGone(ctx context.Context, dir, branch, h string, noHeads bool) error {
+	bin, err := lookGit(DefaultBinary)
+	if err != nil {
+		return err
+	}
+	b := &Backend{git: runner{bin: bin, owned: true}, work: dir, branch: branch, headsKnown: true, noHeads: noHeads}
+	b.git.remote = OriginAt(dir)
+	if RemoteResetAt(dir) {
+		return b.remoteResetError(ctx, "found when lore last reached it", "", h)
+	}
+	return b.checkRemoteReset(ctx, "", "", h)
 }

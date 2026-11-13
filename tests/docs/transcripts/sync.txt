@@ -183,6 +183,7 @@ bob (work/website)$ lore rule edit rul_b4f4765e593d51fd1352985e8af3a5b0 --body '
 lore: wrote ~/work/website/.lore/data/actors/act_28f8d32584b2db54ffb146bede5b03df.json
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
+lore: added 1 lore row file(s) to this commit: .lore/data/actors/act_28f8d32584b2db54ffb146bede5b03df.json (lore's rows travel with your commits)
 bob (work/website)$ git pull --no-rebase origin main
 From /srv/git/github.com/client/website
  * branch            main       -> FETCH_HEAD

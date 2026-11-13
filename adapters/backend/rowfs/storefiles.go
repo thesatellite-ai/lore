@@ -60,6 +60,7 @@ func IsOrgFileName(name string) bool { return name == OrgFileName || name == Org
 // store's top, as git ls-tree prints it) may exist in a lore store:
 //
 //	lore-store.yaml                       the marker
+//	.0-needs-lore-0.1.18-or-newer         the signpost lore 0.1.17 names (SignpostFile)
 //	README*, LICENSE*, .gitignore, …      a git host's starter files (IsStarterFile)
 //	.github/workflows/lore-*.yml          lore's CI workflow
 //	lore-org.yaml[.migrated]              the org file when org_folder is "."
@@ -77,7 +78,7 @@ func StoreFileAllowed(p string) bool {
 	if p == "" || strings.HasPrefix(p, "/") || path.Clean(p) != p {
 		return false
 	}
-	if p == MarkerFile {
+	if p == MarkerFile || p == SignpostFile {
 		return true
 	}
 	if !strings.Contains(p, "/") {

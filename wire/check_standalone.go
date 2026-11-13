@@ -201,13 +201,35 @@ func stagedFiles(ctx context.Context, root string, docs map[string][]byte) error
 		return nil // not a git checkout: nothing is staged
 	}
 	env := hookIndexEnv(top) // `git commit -a` / `<paths>`: the hook's temporary index
-	out, err := gitRun{dir: top, env: env, args: []string{"diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"}}.output(ctx)
-	if err != nil {
-		return errs.Wrap(errs.Internal, "list staged files", err)
+	// Staged against the commits the check counts as history (bug L-1):
+	// HEAD when it is pushed; else the pushed commits under it, so an
+	// amend checks every file of the commit it replaces, not only what
+	// the amend changes.
+	against := historyBases(ctx, top)
+	if len(against) == 0 || (len(against) == 1 && against[0] == "HEAD") {
+		against = []string{""} // HEAD (none yet: everything staged)
+	}
+	seen := map[string]bool{}
+	var paths []string
+	for _, base := range against {
+		args := []string{"diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"}
+		if base != "" {
+			args = append(args, base)
+		}
+		out, err := gitRun{dir: top, env: env, args: args}.output(ctx)
+		if err != nil {
+			return errs.Wrap(errs.Internal, "list staged files", err)
+		}
+		for _, p := range strings.Split(string(out), "\x00") {
+			if p != "" && !seen[p] {
+				seen[p] = true
+				paths = append(paths, p)
+			}
+		}
 	}
 	// One `git cat-file --batch` for every path (indexblobs.go), not one
 	// `git show` each; a submodule or a missing path is left out as before.
-	blobs, err := indexBlobs(ctx, top, env, strings.Split(string(out), "\x00"))
+	blobs, err := indexBlobs(ctx, top, env, paths)
 	if err != nil {
 		return err
 	}

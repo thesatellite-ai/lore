@@ -251,6 +251,7 @@ lore: wrote ~/work/website/.lore/data/reminders/rmd_0aaebe6aca5bb46cc521869f5ba2
 
 ### push after done
 alice (work/website)$ git commit -qm 'Fix the Pro plan price on the pricing page'
+lore: added 5 lore row file(s) to this commit: .lore/data/_meta.json, .lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json, .lore/data/reminders/rmd_b69e8368dd4986838455061d5d9e5ed7.json, .lore/data/reminders/rmd_0aaebe6aca5bb46cc521869f5ba2a61f.json, .lore/data/task_views/tvw_4c590afb2a0cc7ae1b97b7e4e62d6c38.json (lore's rows travel with your commits)
 alice (work/website)$ git push -q origin main
 To /srv/git/github.com/client/website
  ! [rejected]        main -> main (non-fast-forward)

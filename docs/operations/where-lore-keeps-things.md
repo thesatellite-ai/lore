@@ -45,7 +45,7 @@ lore's home: ~/.lore
       the stores lore keeps on this machine: stores/<owner>/<repo>/ is a plain git clone of each store (rows are JSON files you may open and edit; its .git/config holds lore's merge driver and your git identity for that store, user.name and user.email, so your own commits there carry it), stores/_me/ the personal store when it is a plain folder (the _ keeps it apart from any owner folder); `lore where` lists each one
 store clones:
   ~/.lore/stores/acme/notes (store git@github.com:acme/notes)
-      a git clone of store git@github.com:acme/notes; rows are JSON files at ~/.lore/stores/acme/notes/<folder>/<table>/<id>.json (the store's own rows: ~/.lore/stores/acme/notes/_store/<table>/<id>.json); README.md at its top says how to browse and edit it
+      a git clone of store git@github.com:acme/notes; rows are JSON files at ~/.lore/stores/acme/notes/<folder>/<table>/<id>.json (the store's own rows: ~/.lore/stores/acme/notes/_store/<table>/<id>.json); README.md at its top says how to browse and edit it; .0-needs-lore-0.1.18-or-newer there is for lore 0.1.17, which names it when it refuses the store (it says to upgrade)
   ~/.lore/stores/acme/notes/.git/lore (store git@github.com:acme/notes)
       lore's own files for this clone: never committed, never in the files you browse
   ~/.lore/stores/acme/notes/.git/lore/fetch-stamp (store git@github.com:acme/notes)

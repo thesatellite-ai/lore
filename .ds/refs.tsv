@@ -1,4 +1,4 @@
-# docsync refs format=2 extract=1 repo=lore commit=30285e4 scanned_at=2026-11-13T03:27:49Z
+# docsync refs format=2 extract=1 repo=lore commit=81dc286 scanned_at=2026-11-13T04:48:04Z
 id	repo	doc	line	verb	carrier	acked_hash	seen_hash	sentence_hash	env	args
 sync-datanames-dgnn2vn8	lore	README.md	314	block	block		2050e8b87094d0455c9428632bc1e3f247715e9f829e6479271c404892e83770			id=sync-datanames-dgnn2vn8
 sync-syncedtables-fa4jung7	lore	README.md	329	block	block		466300e6006333fae1f70a409fb3e5f5cf06da6e7acc21ed390edd6e7b10eda9			id=sync-syncedtables-fa4jung7

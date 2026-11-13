@@ -486,10 +486,29 @@ func (r *OrgResolution) linkedFolderTarget(ctx context.Context, s *orgcfg.Situat
 	if err != nil {
 		return "", err
 	}
+	linked := map[string]bool{} // the folders the link names
+	for _, l := range s.Result.Links {
+		if l.Entry == s.Result.Org.Name {
+			linked[l.Folder] = true
+		}
+	}
 	for _, a := range attached {
-		if a.Name == store.Source(s.Result.Org.Name) {
+		// the org store attached at the linked folder; one attached at its
+		// root (the link's store is not the entry's) is not that folder
+		if a.Name == store.Source(s.Result.Org.Name) && linked[a.Folder] {
 			r.routed = "this repo holds no lore files; its store link by remote (" + s.LinkedByRemote + ") names " + string(a.Name) + "/" + a.Folder
 			return a.Name, nil
+		}
+	}
+	// L-4: the linked folder is not attached (its store is not one of the
+	// org entry's stores here): the read-only repo cache would refuse the
+	// write with E_STORE_READ_ONLY, naming nothing to do. Refuse here with
+	// the exact --to that reaches the linked folder.
+	for _, l := range s.Result.Links {
+		if l.Entry == s.Result.Org.Name && l.Folder != "" {
+			to := s.Result.Org.Name + "/" + l.Folder
+			return "", errs.New(errs.ReadOnly, "this repo holds no lore files and its store link by remote ("+s.LinkedByRemote+") names folder "+l.Folder+" of "+l.StoreURL+", which is not attached here, so a write has nowhere to go").
+				WithHint("name the folder: --to " + to + " (or add that store to the org entry in ~/.lore/config.yaml so writes go there by themselves)")
 		}
 	}
 	return "", nil

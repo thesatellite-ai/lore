@@ -372,7 +372,7 @@ func (o ops) secretOps() []op.Entry {
 		op.Define(op.Spec{Name: OpSecretRuleOn, Summary: "Switch a secret rule back on at a level", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "switch a rule on again", CLI: "lore secrets rule on srl_0d4e"}}}, o.ruleOn).Asks(o.ruleOnQuestion),
 		op.Define(op.Spec{Name: OpSecretAllow, Summary: "Record one finding as not a secret for one row, field and rule", Permission: op.PermWrite,
-			Access: op.AccessWrite, Errors: writeErrors, Examples: []op.Example{{Title: "keep a test fixture key as not a secret", CLI: `lore secrets allow mem_0c3a --rule srl_0d4e --match fixture-token-123 --reason "a test fixture"`}}}, o.allow),
+			Access: op.AccessWrite, Errors: writeErrors, Examples: []op.Example{{Title: "keep a test fixture key as not a secret", CLI: `lore secrets allow mem_0c3a --rule srl_0d4e --match fixture-token-123 --reason "a test fixture"`}}}, o.allow).Checks(allowCheck),
 		op.Define(op.Spec{Name: OpSecretAllowRm, Summary: "Remove an allow entry (the finding is reported again)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "stop allowing a finding", CLI: "lore secrets allow rm sal_2e19"}}}, o.allowRm).Asks(o.allowRmQuestion),
 		op.Define(op.Spec{Name: OpSecretAllowList, Summary: "List the allow entries", Permission: op.PermRead, Access: op.AccessRead,
@@ -604,22 +604,41 @@ func (o ops) ruleOn(ctx context.Context, in RuleOnIn) (RowOut, error) {
 	return RowOut{ID: have.Row.ID.String(), Store: string(target), Human: fmt.Sprintf("✓ %s on in %s (%s removed)\n", in.RuleID, place(target), short(have.Row.ID))}, nil
 }
 
-func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
+// allowCheck refuses a secrets allow input that is wrong on its face (a
+// row id and --file together, a row id that cannot be one, no rule or
+// reason, --match with --match-hash, a --match-hash that is neither form),
+// with nothing opened: the Runner calls it before the app opens
+// (op.Prechecker, bug L-1: these answered only after ~4 s), and allow runs
+// it again for every other surface. The --file form takes no row id.
+// Checks that need the row or the file stay in allow / allowFile.
+func allowCheck(in AllowIn) error {
 	if strings.TrimSpace(in.File) != "" {
 		if strings.TrimSpace(in.Row) != "" {
-			return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give a row id or --file, not both")
+			return errs.New(errs.InvalidInput, "secrets allow: give a row id or --file, not both")
 		}
+	} else if _, err := ids.ParseAny(strings.TrimSpace(in.Row)); err != nil {
+		return lookup.BadID("secrets allow: "+quote(in.Row)+" is not a row id; "+allowFileHint, err)
+	}
+	if in.Rule == "" || strings.TrimSpace(in.Reason) == "" {
+		return errs.New(errs.InvalidInput, "secrets allow: --rule and --reason are required")
+	}
+	if in.Match != "" && strings.TrimSpace(string(in.MatchHash)) != "" {
+		return errs.New(errs.InvalidInput, "secrets allow: give --match or --match-hash, not both")
+	}
+	_, _, err := parseMatchHash(string(in.MatchHash))
+	return err
+}
+
+func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
+	if err := allowCheck(in); err != nil {
+		return RowOut{}, err
+	}
+	if strings.TrimSpace(in.File) != "" {
 		return o.allowFile(ctx, in)
 	}
 	rowID, err := ids.ParseAny(strings.TrimSpace(in.Row))
 	if err != nil {
 		return RowOut{}, lookup.BadID("secrets allow: "+quote(in.Row)+" is not a row id; "+allowFileHint, err)
-	}
-	if in.Rule == "" || strings.TrimSpace(in.Reason) == "" {
-		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: --rule and --reason are required")
-	}
-	if in.Match != "" && strings.TrimSpace(string(in.MatchHash)) != "" {
-		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match or --match-hash, not both")
 	}
 	hash, fingerprint, err := parseMatchHash(string(in.MatchHash))
 	if err != nil {

@@ -52,7 +52,7 @@ const (
 
 // FixRepos are the repo roots of --all and the folders passed over
 // (opsfix.Env).
-func (a *App) FixRepos(ctx context.Context) (opsfix.Found, error) {
+func (a *App) FixRepos(ctx context.Context, dirs []string) (opsfix.Found, error) {
 	known, err := a.KnownRepos(ctx)
 	if err != nil {
 		return opsfix.Found{}, err
@@ -85,8 +85,15 @@ func (a *App) FixRepos(ctx context.Context) (opsfix.Found, error) {
 			}
 		}
 	}
+	// L-6: folders named on the command line are looked through as a
+	// setup's folders are (same depth); a folder that is not there is
+	// refused, never passed over in silence
+	named, err := a.fixNamedDirs(dirs)
+	if err != nil {
+		return opsfix.Found{}, err
+	}
 	var note string
-	if len(w.bases) == 0 {
+	if len(w.bases) == 0 && len(named) == 0 {
 		// lore 0.1.17 kept no list of its repos on the machine (its
 		// caches and renders are named by project id only), so with no
 		// setup folders the home folder is looked through, a few levels
@@ -96,6 +103,7 @@ func (a *App) FixRepos(ctx context.Context) (opsfix.Found, error) {
 			w.bases, w.depth = []string{h}, fixHomeDepth
 		}
 	}
+	w.bases = append(w.bases, named...)
 	w.linked = storeLinkedRemotes(ctx, a.opts.Home)
 	w.remotes = func(ctx context.Context, dir string) []string {
 		norm, _ := orgcfg.Remotes(ctx, dir)
@@ -106,8 +114,28 @@ func (a *App) FixRepos(ctx context.Context) (opsfix.Found, error) {
 	return found, err
 }
 
+// fixNamedDirs resolves the folders of `lore fix --all <dir>…`: ~ is the
+// home folder, a relative one is from where the command runs; each must
+// be a folder.
+func (a *App) fixNamedDirs(dirs []string) ([]string, error) {
+	out := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		p := onboard.ExpandHome(d, userHome(SetupQuery{}))
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(a.projectDir(), p)
+		}
+		p = filepath.Clean(p)
+		if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
+			return nil, errs.New(errs.InvalidInput, "lore fix --all: "+d+" is not a folder").
+				WithHint("name folders that hold your repos: lore fix --all ~/code ~/work")
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
 // fixNoSetupFolders is --all's note when no setup has folders.
-const fixNoSetupFolders = "no setup has folders yet, so lore fix --all took the repo you run it in, the repos lore has run in on this machine (its known repos and cache records) and the repos with .lore/ up to 4 folders below your home folder; add the folder holding your repos to a setup (`lore setup`) to fix every repo under it"
+const fixNoSetupFolders = "no setup has folders yet, so lore fix --all took the repo you run it in, the repos lore has run in on this machine (its known repos and cache records) and the repos with .lore/ up to 4 folders below your home folder; for repos elsewhere name their folders (lore fix --all ~/code ~/work) or add them to a setup (`lore setup`)"
 
 // fixHomeDepth is how deep --all looks below the home folder when no
 // setup has folders (~/work/client/repo is three levels).

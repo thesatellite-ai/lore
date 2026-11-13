@@ -115,7 +115,11 @@ func TestJourneyMixedVersionsOneStore(t *testing.T) {
 		// moves those after the upgrade, checked below.)
 		before := org.CommitCount("main")
 		desk.Old(dsk, "memory", "add", "--body", mxLater, "--to", "me").Refused(t, "E_NOT_A_STORE")
-		desk.Old(dsk, "memory", "add", "--body", mxLater, "--to", "acme").Refused(t, "E_NOT_A_STORE")
+		// the store's signpost is the first path 0.1.17 names (D11)
+		desk.Old(dsk, "memory", "add", "--body", mxLater, "--to", "acme").Refused(t, "E_NOT_A_STORE", "such as .0-needs-lore-0.1.18-or-newer, ")
+		if body, ok := org.Read("main", ".0-needs-lore-0.1.18-or-newer"); !ok || !strings.Contains(body, "needs lore 0.1.18 or newer: upgrade lore") {
+			t.Errorf("the org store's signpost: %q %v", body, ok)
+		}
 		// in a repo linked to the org store, 0.1.17's pre-commit hook runs
 		// the same check: code commits are refused until the upgrade (the
 		// upgrade docs say so, and --no-verify gets past it)

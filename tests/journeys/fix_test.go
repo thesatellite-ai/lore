@@ -126,6 +126,28 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		four.CommitAll("no lore project")
 	})
 
+	w.Step("day1/fix-all-takes-named-folders", func() {
+		// L-6: a lore 0.1.17 repo outside the home folder that no lore
+		// command ran in is not found by --all (no setup folders yet)
+		// until its folder is named on the command line
+		five := lap.Clone(w.Remote("github.com/widgets/five"), "five")
+		fixOldRepo(t, five)
+		code := filepath.Join(filepath.Dir(lap.Home), "elsewhere", "code")
+		if err := os.MkdirAll(code, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		lap.MoveClone(t, five, filepath.Join(code, "five"))
+		lap.Lore("", "fix", "--all").OK(t).Never(t, "== "+five.Dir)
+		if !fixV1Left(t, five) {
+			t.Fatal("setup: the repo outside home was fixed without being named")
+		}
+		lap.Lore("", "fix", "--all", code).OK(t).Says(t, "== "+five.Dir, "Upgraded 1 row")
+		if fixV1Left(t, five) {
+			t.Fatal("lore fix --all <folder> left v1 rows in the repo under it")
+		}
+		lap.Lore("", "fix", "--all", filepath.Join(code, "missing")).Fails(t, 20, "is not a folder", "lore fix --all ~/code ~/work")
+	})
+
 	w.Step("day1/fix-all-over-the-setup-folder", func() {
 		folder := filepath.Dir(three.Dir)
 		cfg := filepath.Join(lap.Home, ".lore", "config.yaml")

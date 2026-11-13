@@ -20,6 +20,7 @@ alice$ find ~/.lore/stores -maxdepth 3 -not -path '*/.git/*' | sort
 ~/.lore/stores
 ~/.lore/stores/acme
 ~/.lore/stores/acme/notes
+~/.lore/stores/acme/notes/.0-needs-lore-0.1.18-or-newer
 ~/.lore/stores/acme/notes/.git
 ~/.lore/stores/acme/notes/README.md
 ~/.lore/stores/acme/notes/_store
@@ -27,6 +28,7 @@ alice$ find ~/.lore/stores -maxdepth 3 -not -path '*/.git/*' | sort
 alice (.lore/stores/acme/notes)$ ls -a; cat lore-store.yaml
 .
 ..
+.0-needs-lore-0.1.18-or-newer
 .git
 README.md
 _store
@@ -162,7 +164,7 @@ lore's home: ~/.lore
 
 store clones:
   ~/.lore/stores/acme/notes (store git@github.com:acme/notes)
-      a git clone of store git@github.com:acme/notes; rows are JSON files at ~/.lore/stores/acme/notes/<folder>/<table>/<id>.json (the store's own rows: ~/.lore/stores/acme/notes/_store/<table>/<id>.json); README.md at its top says how to browse and edit it
+      a git clone of store git@github.com:acme/notes; rows are JSON files at ~/.lore/stores/acme/notes/<folder>/<table>/<id>.json (the store's own rows: ~/.lore/stores/acme/notes/_store/<table>/<id>.json); README.md at its top says how to browse and edit it; .0-needs-lore-0.1.18-or-newer there is for lore 0.1.17, which names it when it refuses the store (it says to upgrade)
   ~/.lore/stores/acme/notes/.git/lore (store git@github.com:acme/notes)
       lore's own files for this clone: never committed, never in the files you browse
   ~/.lore/stores/acme/notes/.git/lore/fetch-stamp (store git@github.com:acme/notes)

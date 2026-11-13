@@ -320,6 +320,16 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 			return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "wire: this repository's lore project is in rows lore 0.1.17 wrote, which are not migrated yet").
 				WithHint("run lore fix (it migrates them; `lore migrate status` shows what is pending)")
 		}
+		if sl, ok := a.findStaleLink(ctx); ok {
+			// L-7: say why the link is gone instead of only offering init
+			org := a.staleLinkOrg(ctx)
+			who := "no org entry on this machine lists it any more"
+			if org != "" {
+				who = "org " + org + "'s entry no longer lists it"
+			}
+			return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "wire: "+noLoreProject+": its remote "+sl.Remote+" was linked in store "+sl.StoreURL+" (folder "+sl.Folder+"), and "+who).
+				WithHint("re-add that store to the org's lore-org.yaml and run `lore org refresh`, or run `lore init` for a project of this repo's own")
+		}
 		return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "wire: "+noLoreProject).
 			WithHint("run `lore init` in the repository first (or `lore sync`, which writes the project's row file to .lore/data)")
 	case 1:
