@@ -280,7 +280,7 @@ type ListIn struct {
 	Repo     string `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts (task list shows every repo's tasks)"`
 	AllRepos bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"every repo of the project (the default)"`
 	Project  string `json:"project,omitempty" flag:"project" desc:"only tasks of this project (prj_ id or name)"`
-	Store    string `json:"store,omitempty" flag:"store" alias:"to" desc:"only tasks of this store (default every attached store)"`
+	Store    string `json:"store,omitempty" flag:"store" alias:"to" desc:"only tasks of this store and its folders, <store>/<folder> (default every attached store)"`
 	// Mine and ClaimedBy read claims on the signals ref through the
 	// host's work.Team (team.go).
 	Mine      bool   `json:"mine,omitempty" flag:"mine" desc:"assigned to me or my team, and unclaimed or claimed by me"`
@@ -557,5 +557,5 @@ type SearchIn struct {
 	// Columns restricts the match to some full-text fields (v0.1.17
 	// --column; tasks index title and body).
 	Columns []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable; tasks have: title, body)"`
-	Store   string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only tasks of this store (default every attached store)"`
+	Store   string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only tasks of this store and its folders, <store>/<folder> (default every attached store)"`
 }

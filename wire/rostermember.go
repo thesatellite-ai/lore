@@ -5,8 +5,8 @@ package wire
 // person who left: `lore task reassign --from @ruth` and
 // `lore task list --assignee ruth@example.com` must still find them,
 // because their row stays on the roster for history. `--assign` keeps
-// resolving active people only (ResolveHandle): nobody is given work
-// after they left.
+// resolving active people only (ResolveHandle, RosterAssignable): nobody
+// is given work after they left, and naming them says so (F-10).
 
 import (
 	"context"
@@ -14,9 +14,13 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
-var _ opstask.RosterRefer = (*App)(nil)
+var (
+	_ opstask.RosterRefer    = (*App)(nil)
+	_ opstask.RosterAssigner = (*App)(nil)
+)
 
 // stableKeyKindSep splits a stable key's kind from its name
 // ("human:ana@example.com").
@@ -118,4 +122,81 @@ func memberMissErr(r rosterAt, raw string) error {
 	m, _ := parseMemberRef(raw)
 	return errs.New(errs.NotFound, "no one is "+m.shown()+" on the roster in "+r.shown()+", now or before").
 		WithHint("lore member list shows the roster; an actor id (act_…) works too")
+}
+
+// rosterLeftTakesWork ends the refusal of naming a person who left where
+// work goes to someone (--assign, an approver).
+const rosterLeftTakesWork = "only people still in the org take work"
+
+// rosterLeftMember is the person raw (@handle or email) names on r when
+// every match has left the org (an active match wins: a handle freed by a
+// leaver and taken again names the new holder). ok false otherwise, and
+// when the roster cannot be read (the caller's own lookup answers).
+func (a *App) rosterLeftMember(ctx context.Context, r rosterAt, raw string) (RosterActor, bool) {
+	m, isRef := parseMemberRef(raw)
+	if !isRef {
+		return RosterActor{}, false
+	}
+	actors, err := a.RosterActors(ctx, r.src)
+	if err != nil {
+		return RosterActor{}, false
+	}
+	var gone *RosterActor
+	for i := range actors {
+		if !m.matches(actors[i]) {
+			continue
+		}
+		if actors[i].Active {
+			return RosterActor{}, false
+		}
+		if gone == nil {
+			gone = &actors[i]
+		}
+	}
+	if gone == nil {
+		return RosterActor{}, false
+	}
+	return *gone, true
+}
+
+// rosterLeftErr refuses giving work to x, who left r's org: who, since
+// when, and why (rest). E_STATUS_CHANGE, as for any other step a person's
+// status rules out.
+func rosterLeftErr(r rosterAt, x RosterActor, rest string) error {
+	org := r.org
+	if org == "" {
+		org = r.shown()
+	}
+	status := x.Status
+	if status == "" {
+		status = schema.ActorStatusLeft
+	}
+	verb := "left " + org
+	if status != schema.ActorStatusLeft {
+		verb = "is " + status + " in " + org
+	}
+	if day, _, _ := strings.Cut(x.LeftAt, "T"); day != "" {
+		verb += " on " + day
+	}
+	return errs.New(errs.StatusChange, rosterShown(x)+" "+verb+"; "+rest).
+		WithHint("lore member list shows who is in the org; lore task reassign --from " + rosterRef(x) + " --assign @<someone> --yes hands their tasks over")
+}
+
+// RosterAssignable implements opstask.RosterAssigner: the refusal of
+// --assign raw when it names (by @handle or email) a person who left the
+// org, nil otherwise. A handle reaches it as well as an email, so a coord
+// host's own handle lookup cannot hand work to a leaver either.
+func (a *App) RosterAssignable(ctx context.Context, raw string) error {
+	if _, isRef := parseMemberRef(raw); !isRef {
+		return nil
+	}
+	r, err := a.coordRoster(ctx)
+	if err != nil {
+		return nil // no roster to ask: the --assign lookup answers
+	}
+	x, ok := a.rosterLeftMember(ctx, r, raw)
+	if !ok {
+		return nil
+	}
+	return rosterLeftErr(r, x, "--assign takes only people still in the org")
 }

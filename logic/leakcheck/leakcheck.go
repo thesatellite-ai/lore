@@ -86,6 +86,14 @@ type Index struct {
 	ProjectIDs map[string]string
 	// actors are roster ids: a client row may reference them (projection).
 	actors map[string]bool
+	// actorLabels maps a roster actor id to its source label: outside row
+	// files (a commit message, a source file) the id itself is an internal
+	// detail and blocks like any other row id (F-4).
+	actorLabels map[string]string
+	// emails maps a lowercased roster email to its source label (F-4: a
+	// person's address on the org's roster never goes into a client repo
+	// as text; identity trailers aside, see emailHits).
+	emails map[string]string
 	// shingles maps a normalised MinRunWords-word window to every row id
 	// whose text holds it, in index order. Every row is kept (not only the
 	// first) so that allowing one row's text for a shared copy never hides
@@ -122,12 +130,16 @@ type IndexRow struct {
 	// item 1), never the id or text rules.
 	RepoKey      bool
 	RepoKeyScope string
+	// Emails are a roster actor's addresses (its stable key and email
+	// contacts), for the email rule; set on actor rows only.
+	Emails []string
 }
 
 // NewIndex builds an Index. Actor rows feed only the actor exception, never
 // the text rule (names are not secrets on their own).
 func NewIndex(rows []IndexRow, projectIDs map[string]string) *Index {
-	idx := &Index{IDs: map[string]string{}, ProjectIDs: map[string]string{}, actors: map[string]bool{}, shingles: map[string][]string{}, sharedFrom: map[string]string{}}
+	idx := &Index{IDs: map[string]string{}, ProjectIDs: map[string]string{}, actors: map[string]bool{},
+		actorLabels: map[string]string{}, emails: map[string]string{}, shingles: map[string][]string{}, sharedFrom: map[string]string{}}
 	for k, v := range projectIDs {
 		idx.ProjectIDs[k] = v
 	}
@@ -140,6 +152,14 @@ func NewIndex(rows []IndexRow, projectIDs map[string]string) *Index {
 		idx.meta.addMeta(r)
 		if r.Table == tableActors || r.Table == tableTeams {
 			idx.actors[r.ID] = true
+			if r.Label != "" {
+				idx.actorLabels[r.ID] = r.Label
+			}
+			for _, e := range r.Emails {
+				if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
+					idx.emails[e] = r.Label
+				}
+			}
 			continue
 		}
 		if r.Table == tableProjects {
@@ -512,6 +532,7 @@ func checkItem(it Item, idx *Index, o Options, secrets SecretScan) []Finding {
 		out = append(out, checkRowFile(it, m[1], m[2], idx, o)...)
 	} else if idx != nil {
 		out = append(out, idHits(it, content, idx)...)
+		out = append(out, emailHits(it, content, idx)...)
 	}
 	if idx != nil {
 		allowed := allowedRows(it, idx)
@@ -716,11 +737,52 @@ func idHits(it Item, content string, idx *Index) []Finding {
 	for _, loc := range idRe.FindAllStringIndex(content, -1) {
 		id := content[loc[0]:loc[1]]
 		label, ok := idx.IDs[id]
+		detail := "names a row of " + label
+		if !ok {
+			// F-4: a roster actor id outside a row file (the projection
+			// rule covers row files) names a person of the org
+			if label, ok = idx.actorLabels[id]; ok {
+				detail = "names a person on the roster of " + label
+			}
+		}
 		if !ok || seen[id] {
 			continue
 		}
 		seen[id] = true
-		out = append(out, Finding{Rule: RuleID, Where: it.Where, Line: lineOf(content, loc[0]), RowID: id, Label: label, Detail: "names a row of " + label})
+		out = append(out, Finding{Rule: RuleID, Where: it.Where, Line: lineOf(content, loc[0]), RowID: id, Label: label, Detail: detail})
+	}
+	return out
+}
+
+// emailRe finds email addresses in text (loose: the roster decides).
+var emailRe = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
+
+// identityTrailerRe is a git identity trailer line (Signed-off-by:,
+// Co-authored-by:): it names the commit's people by design, as the author
+// line does, so the email rule skips it.
+var identityTrailerRe = regexp.MustCompile(`(?i)^[a-z-]+-by:`)
+
+// emailHits finds roster emails (F-4) in content outside row files. The
+// finding names the store label, never the address's owner.
+func emailHits(it Item, content string, idx *Index) []Finding {
+	if len(idx.emails) == 0 {
+		return nil
+	}
+	var out []Finding
+	seen := map[string]bool{}
+	for _, loc := range emailRe.FindAllStringIndex(content, -1) {
+		e := strings.ToLower(content[loc[0]:loc[1]])
+		label, ok := idx.emails[e]
+		if !ok || seen[e] {
+			continue
+		}
+		start := strings.LastIndexByte(content[:loc[0]], '\n') + 1
+		if identityTrailerRe.MatchString(strings.TrimSpace(content[start:loc[0]])) {
+			continue
+		}
+		seen[e] = true
+		out = append(out, Finding{Rule: RuleID, Where: it.Where, Line: lineOf(content, loc[0]), Label: label,
+			Detail: "names the email of a person on the roster of " + label})
 	}
 	return out
 }

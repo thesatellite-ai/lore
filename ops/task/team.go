@@ -50,6 +50,11 @@ func (o ops) resolveAssign(ctx context.Context, raw string) (work.Assignee, erro
 	if ref == "" {
 		return work.Assignee{}, nil
 	}
+	if ra, ok := o.env.(RosterAssigner); ok {
+		if err := ra.RosterAssignable(ctx, ref); err != nil {
+			return work.Assignee{}, err
+		}
+	}
 	if !work.IsHandle(ref) {
 		id, err := o.actorRef(ctx, ref)
 		return work.Assignee{ActorID: id}, err

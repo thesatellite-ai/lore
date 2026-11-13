@@ -127,6 +127,18 @@ func (h HeldStore) Get(session, task string) (HeldRecord, bool) {
 	return HeldRecord{}, false
 }
 
+// Any reports whether any session holds a record. Why: the commit-msg
+// hook asks it before resolving who is committing (which opens lore's
+// caches), so a commit with no claim on this clone pays nothing (D-16).
+func (h HeldStore) Any() bool {
+	for _, recs := range h.read().Sessions {
+		if len(recs) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // List returns the session's records, newest claim first.
 func (h HeldStore) List(session string) []HeldRecord {
 	recs := append([]HeldRecord(nil), h.read().Sessions[session]...)

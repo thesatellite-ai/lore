@@ -69,7 +69,7 @@ func openMachine(ctx context.Context, home string, reg *schema.Registry, c *cach
 	if !hasMachineLocal(reg) {
 		return nil, nil, nil
 	}
-	if !dryRunProcess() {
+	if !scratchHome(home) { // dry run or an unwritable home: nothing is written there
 		writeHomeReadme(home) // ~/.lore/README.md, when missing or for another layout
 	}
 	home = writableHome(home)        // dryhome.go: a dry run's machine store and cache are a scratch copy

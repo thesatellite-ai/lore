@@ -170,6 +170,17 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 		s.MergeDriverOK = true
 	}
 	s.TrackedFiles = trackedDataFiles(ctx, d)
+	// A rendered file git left unmerged (no keep-ours rule yet, or a merge
+	// without the driver) is an open conflict too (devco D-19): lore can
+	// write it again, and git still waits for the add.
+	if out, gerr := git("diff", "--name-only", "-z", "--relative", "--diff-filter=U"); gerr == nil {
+		for _, p := range nulFields(out) {
+			if IsRenderedFile(p) {
+				s.OpenConflicts++
+				warn(doctorRenderedConflictLine(p))
+			}
+		}
+	}
 	if out, gerr := git("status", "--porcelain=v1", "-z", "--ignored", "--untracked-files=all", "--", dataRel); gerr == nil {
 		entries := nulFields(out)
 		for i := 0; i < len(entries); i++ {
@@ -218,6 +229,13 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	// .gitignore changed, not even by --fix (plain files sweep 3.8): lore's
 	// local files stay out of git status through .git/info/exclude only.
 	return s
+}
+
+// doctorRenderedConflictLine is the [sync] warning of a rendered file git
+// left unmerged: lore writes it again from the merged rows, then git needs
+// the add that marks it resolved.
+func doctorRenderedConflictLine(rel string) string {
+	return rel + " has a git merge conflict; lore generates it, so `lore render && git add " + rel + "` settles it"
 }
 
 // doctorGitignoreLinesNote is the [sync] line of a .gitignore that lacks

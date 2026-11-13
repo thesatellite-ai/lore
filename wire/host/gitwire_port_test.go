@@ -100,21 +100,118 @@ func TestGitWireHookBlocks(t *testing.T) {
 func TestGitWireCommitMsgTrailerThenLeakCheck(t *testing.T) {
 	for _, rel := range []string{"", "services/api"} {
 		lines := hookBlocks(rel)[hookCommitMsg].lines
-		if len(lines) != 2 {
-			t.Fatalf("%q: commit-msg has %d lines, want trailer + leak check: %q", rel, len(lines), lines)
+		if len(lines) != 3 {
+			t.Fatalf("%q: commit-msg has %d lines, want one call + trailer + leak check: %q", rel, len(lines), lines)
 		}
-		if !strings.Contains(lines[0], "task hook commit-msg") || !strings.HasSuffix(lines[0], "|| true") {
-			t.Fatalf("%q: the first line adds the trailer and never fails: %s", rel, lines[0])
+		if !strings.Contains(lines[0], "task hook commit-msg --check-leaks") || !strings.HasSuffix(lines[0], "|| true") {
+			t.Fatalf("%q: the first line runs trailer and check in one lore and never fails by itself: %s", rel, lines[0])
 		}
-		if !strings.Contains(lines[1], "check leaks --staged --commit-msg") || !strings.HasSuffix(lines[1], "|| exit $?") {
-			t.Fatalf("%q: the second line runs the leak check and can refuse: %s", rel, lines[1])
+		for _, l := range lines[1:] {
+			if !strings.HasPrefix(l, `[ -n "$lore_cm_ok" ] || `) {
+				t.Fatalf("%q: the separate calls run only when the one call did not pass: %s", rel, l)
+			}
 		}
-		if !strings.Contains(lines[1], binaryName+" check leaks --help") {
-			t.Fatalf("%q: the leak check probes first, so an older lore never refuses: %s", rel, lines[1])
+		if !strings.Contains(lines[1], "task hook commit-msg") || !strings.HasSuffix(lines[1], "|| true") {
+			t.Fatalf("%q: the second line adds the trailer and never fails: %s", rel, lines[1])
 		}
-		if !strings.Contains(lines[1], "git config --get "+wire.ClientRepoGitKey+")\" = true ]; then") || !strings.Contains(lines[1], "exit 1; fi") {
-			t.Fatalf("%q: with no lore to check, a clone marked as a client repo refuses the commit: %s", rel, lines[1])
+		if !strings.Contains(lines[2], "check leaks --staged --commit-msg") || !strings.HasSuffix(lines[2], "|| exit $?") {
+			t.Fatalf("%q: the third line runs the leak check and can refuse: %s", rel, lines[2])
 		}
+		if !strings.Contains(lines[2], binaryName+" check leaks --help") {
+			t.Fatalf("%q: the leak check probes first, so an older lore never refuses: %s", rel, lines[2])
+		}
+		if !strings.Contains(lines[2], "git config --get "+wire.ClientRepoGitKey+")\" = true ]; then") || !strings.Contains(lines[2], "exit 1; fi") {
+			t.Fatalf("%q: with no lore to check, a clone marked as a client repo refuses the commit: %s", rel, lines[2])
+		}
+	}
+}
+
+// runHookLines runs lines as an sh script in dir with a fake lore (script)
+// first on PATH that appends each call's arguments to a log; it returns
+// the exit code, stderr and the logged calls.
+func runHookLines(t *testing.T, dir string, lines []string, script string, args ...string) (int, string, []string) {
+	t.Helper()
+	bin := t.TempDir()
+	log := filepath.Join(bin, "calls.log")
+	fake := filepath.Join(bin, binaryName)
+	body := "#!/bin/sh\necho \"$*\" >> '" + log + "'\n" + script
+	if err := os.WriteFile(fake, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(fake, fakeLoreMode); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(context.Background(), "sh", append([]string{"-s", "--"}, args...)...)
+	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n") + "\n")
+	cmd.Dir = dir
+	cmd.Env = []string{"PATH=" + bin + string(os.PathListSeparator) + "/usr/bin:/bin", "HOME=" + dir, "GIT_CONFIG_NOSYSTEM=1"}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	code := 0
+	var ee *exec.ExitError
+	if rerr := cmd.Run(); errors.As(rerr, &ee) {
+		code = ee.ExitCode()
+	} else if rerr != nil {
+		t.Fatal(rerr)
+	}
+	b, _ := os.ReadFile(filepath.Clean(log)) // no log: lore never ran
+	calls := strings.Split(strings.TrimSpace(string(b)), "\n")
+	if len(b) == 0 {
+		calls = nil
+	}
+	return code, stderr.String(), calls
+}
+
+// TestGitWireCodeOnlyCommitStartsOneLore (D-16): a commit that changes
+// nothing under .lore/data starts no lore in pre-commit, and commit-msg
+// runs trailer and leak check in one lore. A refusal still stops the
+// commit and is printed once; a lore without --check-leaks (an older
+// build) gets the separate calls as before.
+func TestGitWireCodeOnlyCommitStartsOneLore(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		return // the hook lines are POSIX sh
+	}
+	work := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "dev@example.test"}, {"config", "user.name", "Dev"}} {
+		if out, err := exec.CommandContext(context.Background(), "git", append([]string{"-C", work}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(work, "main.go"), []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	msg := filepath.Join(work, ".git", "COMMIT_EDITMSG")
+	if err := os.WriteFile(msg, []byte("chore: code\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pre := hookBlocks("")[hookPreCommit].lines
+	cm := hookBlocks("")[hookCommitMsg].lines
+
+	if code, _, calls := runHookLines(t, work, pre, "exit 3\n"); code != 0 || len(calls) != 0 {
+		t.Fatalf("pre-commit of a code-only commit: exit %d, lore calls %q; want 0 and none", code, calls)
+	}
+	if code, _, calls := runHookLines(t, work, cm, "exit 0\n", msg); code != 0 || len(calls) != 1 || !strings.Contains(calls[0], "--check-leaks") {
+		t.Fatalf("commit-msg, current lore: exit %d, calls %q; want one --check-leaks call", code, calls)
+	}
+	refuse := "[ \"$3\" = \"--help\" ] && exit 0\necho 'E_LEAK_BLOCKED refused' >&2\nexit 19\n"
+	code, stderr, _ := runHookLines(t, work, cm, refuse, msg)
+	if code != 19 || strings.Count(stderr, "E_LEAK_BLOCKED") != 1 {
+		t.Fatalf("commit-msg, refusing lore: exit %d stderr %q; want 19 with the refusal once", code, stderr)
+	}
+	old := "case \"$*\" in *--check-leaks*) echo 'unknown flag' >&2; exit 20;; *--help*) exit 1;; esac\nexit 0\n"
+	if code, stderr, calls := runHookLines(t, work, cm, old, msg); code != 0 || len(calls) != 3 {
+		t.Fatalf("commit-msg, older lore: exit %d stderr %q calls %q; want 0 after the separate calls", code, stderr, calls)
+	}
+	// a change under .lore/data runs the pre-commit check
+	rows := filepath.Join(work, ".lore", "data", "memories")
+	if err := os.MkdirAll(rows, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rows, "mem_1.json"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, calls := runHookLines(t, work, pre, "exit 0\n"); code != 0 || len(calls) == 0 {
+		t.Fatalf("pre-commit with a row change: exit %d, calls %q; want the check to run", code, calls)
 	}
 }
 

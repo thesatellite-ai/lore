@@ -34,7 +34,7 @@ type ListIn struct {
 	content.MetaFlags
 
 	Project string `json:"project,omitempty" flag:"project" desc:"only sources of this project (prj_ id or name)"`
-	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only sources of this store (default every attached store)"`
+	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only sources of this store and its folders, <store>/<folder> (default every attached store)"`
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
 }

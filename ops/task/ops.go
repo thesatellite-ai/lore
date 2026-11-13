@@ -126,6 +126,14 @@ type RosterRefer interface {
 	RosterActorRef(ctx context.Context, ref string) (id string, found bool, err error)
 }
 
+// RosterAssigner is the optional upgrade of the env that refuses --assign
+// naming (by @handle or email) a person who left the org, with who and
+// since when (F-10): RosterActorRef resolves leavers for hand-over and
+// filters, so --assign asks first. nil lets the lookup go on.
+type RosterAssigner interface {
+	RosterAssignable(ctx context.Context, ref string) error
+}
+
 // ContactActorer is the optional upgrade of the env that resolves an
 // actor reference in contact form (github:mirap, email:…, a bare email)
 // through the identity contacts (TEAM_PROFILES 6.3). found is false when

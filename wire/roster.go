@@ -54,6 +54,9 @@ type RosterActor struct {
 	// It is not the derived teamprofile.StatusOf: register needs to tell
 	// an offboarded person (rejoin) from a v0.1.17 deactivate (register).
 	Status string
+	// LeftAt is the left_at column (RFC 3339) of a person who left; empty
+	// while they are in the org. Refusals name the day (rosterLeftErr).
+	LeftAt string
 }
 
 // RosterTeam is one team on a roster.
@@ -85,6 +88,16 @@ func (a *App) rosterState(ctx context.Context, target store.Source, write bool) 
 	}
 	if st.eng.IsClient(target) {
 		return nil, errs.New(errs.LeakBlocked, "roster: "+string(target)+" is a client repo; the roster lives in the org's store")
+	}
+	// D-17: a roster write stamps its writer, and an agent session (`lore
+	// agent start` inside a coding tool) had no actor row in the org store,
+	// so every member's doctor warned about it for good. Its row goes in
+	// first, as any other write's does (ensureActor); a person's own row
+	// is the register write itself.
+	if write && actorKindOf(st.who.Kind) == schema.ActorKindAgent {
+		if err = a.ensureActor(ctx, st, target); err != nil {
+			return nil, err
+		}
 	}
 	return st, nil
 }
@@ -409,7 +422,8 @@ func fieldActive(r row.Row) bool { return fieldText(r, rosterFieldActive) != "fa
 func actorOfRow(r row.Row) RosterActor {
 	return RosterActor{ID: r.ID.String(), Kind: fieldText(r, actorFieldKind), StableKey: fieldText(r, actorFieldKey),
 		Name: fieldText(r, actorFieldDisplay), Handle: fieldText(r, actorFieldHandle), Label: fieldText(r, rosterFieldLabel),
-		OwnerID: fieldText(r, rosterFieldOwner), Active: fieldActive(r), Status: fieldText(r, schema.FieldActorStatus)}
+		OwnerID: fieldText(r, rosterFieldOwner), Active: fieldActive(r), Status: fieldText(r, schema.FieldActorStatus),
+		LeftAt: fieldText(r, schema.FieldActorLeftAt)}
 }
 
 // rosterGone reports whether an explicit status puts a person off the

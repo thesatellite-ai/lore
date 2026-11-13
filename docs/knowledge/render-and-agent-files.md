@@ -165,6 +165,8 @@ agent-notes.md
 ```
 <!-- /example -->
 
+In a package project (a folder below the repository's top with its own `.lore/`, made by `lore init` there), the sentence names the package's own file from the repository root (``Read `workers/extraction/.lore/LORE.md` (at the repository root) …``), so an agent that loads every AGENTS.md reads each project's rules. When two targets are one file (a `CLAUDE.md` that is a symbolic link to `AGENTS.md`), render writes one pointer block that serves both tools, the Claude Code `@import` lines then the sentence, and prints `= ~/work/website/CLAUDE.md (the same file as ~/work/website/AGENTS.md through a link: one pointer block serves both)`; the next render finds it present and writes nothing.
+
 `--no-pointer` writes the generated file and leaves every agent file alone:
 
 <!-- example: render#no-pointer -->

@@ -504,6 +504,11 @@ var fixes = map[fixKey]Fix{
 	// {store_name} is the checked store's own name (me in the personal
 	// store step, the org's store name in doctor): never a fixed "me".
 	{check: CheckStoreMarker}: {Text: "This repo is not a lore store yet; Save will run lore store init --name {store_name} --url {url}"},
+	// The marker could not be looked for (F-11): an unread store is not
+	// "not a store", and store init over the org's store is never the step.
+	{check: CheckStoreMarker, variant: FixUnreachable}:   {Text: "The store at {url} did not answer, so lore could not look for its lore-store.yaml. Check your network or VPN; lore will retry"},
+	{check: CheckStoreMarker, variant: FixReachedBefore}: {Text: "lore read {url} before and keeps its local copy, but the store now refuses this machine: your access was most likely removed (or the repo was moved or deleted). Ask an admin of the store whether you still have access; do not run lore store init over it. If it moved: lore store set-url --name {store_name} --url <new-url>"},
+	{check: CheckStoreMarker, variant: FixNoRead}:        {Text: "lore cannot read {url}, so it cannot tell whether it is a lore store. Fix store.read first: the url, this setup's key, or access from the store's owner"},
 	{check: CheckStorePrivate}: {Text: "This repo is public. Your personal notes would be readable by anyone: gh repo edit {owner}/{repo} --visibility private",
 		Command: argv(cmdGH, "repo", "edit", "{owner}/{repo}", "--visibility", "private"), Runnable: true, Outward: true},
 	{check: CheckStorePrivate, variant: FixGHOptional}:                 {Text: "Optional: install gh and run gh auth login so lore can check that {owner}/{repo} is private"},

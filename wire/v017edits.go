@@ -33,7 +33,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -78,13 +77,7 @@ func (a *App) v017Edits(ctx context.Context) ([]v017Edit, error) {
 	} else if err != nil {
 		return nil, errs.Wrap(errs.Internal, "stat "+v017LoreDB, err)
 	}
-	query := "mode=ro"
-	if git.NoClone(ctx) {
-		// a dry run writes nothing (B4-14): read the old db as it is on
-		// disk, without the -shm/-wal files even a read-only WAL open makes
-		query += "&immutable=1"
-	}
-	db, err := sql.Open(sqliteDriver, fileuri.URL(path, query))
+	db, err := sql.Open(sqliteDriver, fileuri.URL(path, v017ReadQuery(ctx, path)))
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "open "+v017LoreDB, err)
 	}

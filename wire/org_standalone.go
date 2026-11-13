@@ -54,7 +54,7 @@ const (
 	loreDirName = ".lore"
 	// hintNotAStore is v0.1.17's storeHintInit.
 	hintNotAStore = "make it a store with `lore store init --name <name> --url <url>`, or fix the url in ~/.lore/config.yaml"
-	hintNoBranch  = "a store branch is made only on purpose; 0.1.18 makes stores with `lore store init --name <name> --url <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)"
+	hintNoBranch  = "the store repo has branches but not this one (an empty repo gets its branch with the first link): check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org> if they are wrong"
 )
 
 // standaloneOrg implements opsorgcmd.Host for cmd/lore.

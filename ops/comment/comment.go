@@ -128,7 +128,7 @@ func (o AddOut) Text() string {
 type ListIn struct {
 	OnTable string `json:"on_table,omitempty" flag:"on-table" desc:"filter by entity table"`
 	OnID    string `json:"on_id,omitempty" flag:"on-id" desc:"filter by entity id"`
-	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only comments of this store (default every attached store)"`
+	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only comments of this store and its folders, <store>/<folder> (default every attached store)"`
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit
@@ -188,7 +188,7 @@ type SearchIn struct {
 	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"accepted for v0.1.17 scripts; comments have no repo scope"`
 	MasterOnly      bool     `json:"master_only,omitempty" flag:"master-only" desc:"accepted for v0.1.17 scripts; comments have no repo scope"`
 	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"accepted for v0.1.17 scripts; comments have no repo scope"`
-	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only comments of this store (default every attached store)"`
+	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only comments of this store and its folders, <store>/<folder> (default every attached store)"`
 }
 
 // SearchOut is v0.1.17's search envelope (count always printed).
@@ -299,7 +299,19 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, errs.New(errs.EmptyBody, "comment add: the body is empty").
 			WithHint(`lore comment add --on-table <table> --on-id <id> --body "<text>"`)
 	}
-	tbl, id, err := o.target(ctx, store.Source(in.To), in.OnTable, in.OnID)
+	to := store.Source(in.To)
+	if to == "" {
+		// F-5: a comment with no --to follows its target's store (a task
+		// filed to the linked project of a client repo gets its comments
+		// there too), instead of the repo store, where F15 refused the
+		// pointer and the hint named no store.
+		// The machine store (runs) holds no comments: such a target keeps
+		// the repo default and F15's verdict on it.
+		if src, ok := o.targetStore(ctx, in.OnTable, in.OnID); ok && src != store.SourceRepo && src != store.SourceMachine {
+			to = src
+		}
+	}
+	tbl, id, err := o.target(ctx, to, in.OnTable, in.OnID)
 	if err != nil {
 		return AddOut{}, err
 	}
@@ -313,17 +325,35 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if fields[fieldBody], err = value.TextOf(in.Body); err != nil {
 		return AddOut{}, errs.Prefix("comment add: body", err)
 	}
-	w, err := o.env.Create(ctx, store.Source(in.To), table, fields)
+	w, err := o.env.Create(ctx, to, table, fields)
 	if err != nil {
 		return AddOut{}, err
 	}
-	src := o.storeOf(ctx, w.Row.ID, store.Source(in.To))
+	src := o.storeOf(ctx, w.Row.ID, to)
 	out := AddOut{ID: w.Row.ID.String(), Store: src, OnTable: string(tbl), OnID: id.String()}
 	out.label = opsmemory.Label(opsmemory.LabelerOf(o.env), store.Source(src))
 	for _, x := range w.Warnings {
 		out.Warnings = append(out.Warnings, Warning{Code: string(x.Code), Field: x.Field, Message: x.Message})
 	}
 	return out, nil
+}
+
+// targetStore is the store holding the comment's target row, when the
+// flags name a live row of a core table (target reports every other case).
+func (o ops) targetStore(ctx context.Context, rawTable, rawID string) (store.Source, bool) {
+	tbl, err := row.ParseTable(strings.TrimSpace(rawTable))
+	if err != nil {
+		return "", false
+	}
+	id, err := ids.ParseAny(strings.TrimSpace(rawID))
+	if err != nil {
+		return "", false
+	}
+	src, r, err := o.env.Get(ctx, engine.Ref{Table: tbl, ID: id})
+	if err != nil || r.Deleted {
+		return "", false
+	}
+	return src, true
 }
 
 // target validates --on-table/--on-id. A table on the core must hold the

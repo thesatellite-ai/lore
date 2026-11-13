@@ -137,7 +137,7 @@ func readV017Config(ctx context.Context, top string) ([]personalSetting, error) 
 	} else if err != nil {
 		return nil, errs.Wrap(errs.Internal, "migrate: stat "+v017LoreDB, err)
 	}
-	dsn := fileuri.URL(path, v017ReadQuery(ctx))
+	dsn := fileuri.URL(path, v017ReadQuery(ctx, path))
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "migrate: open "+v017LoreDB, err)

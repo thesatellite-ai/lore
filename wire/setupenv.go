@@ -73,7 +73,9 @@ func (a *App) onboardProbe(ctx context.Context) (*probe.Prober, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmp := filepath.Join(a.opts.Home, probeTmpDir)
+	// writableHome: a read-only lore home (a CI runner, F-6) puts the
+	// probe's temp repos in the scratch home, so the check still runs
+	tmp := filepath.Join(writableHome(a.opts.Home), probeTmpDir)
 	if err = os.MkdirAll(tmp, 0o700); err != nil {
 		return nil, errs.FileIO("create the setup probe folder", tmp, err)
 	}

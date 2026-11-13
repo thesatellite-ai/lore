@@ -311,7 +311,15 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 	if err == nil {
 		return opstask.Assignee{ActorID: x.ID}, nil
 	}
-	if !allowTeam || !errs.Has(err, errs.InvalidInput) {
+	if !errs.Has(err, errs.InvalidInput) {
+		return opstask.Assignee{}, err
+	}
+	// F-10: a person who left is on the roster; "no one is @h" and "they
+	// run lore actor register" would send the caller the wrong way.
+	if gone, ok := t.a.rosterLeftMember(ctx, r, rosterHandleMark+h); ok {
+		return opstask.Assignee{}, rosterLeftErr(r, gone, rosterLeftTakesWork)
+	}
+	if !allowTeam {
 		return opstask.Assignee{}, err
 	}
 	teams, err := t.a.RosterTeams(ctx, r.src)
@@ -353,7 +361,9 @@ func (a *App) coordRoster(ctx context.Context) (rosterAt, error) {
 		return r, errs.New(errs.NotImplemented, "org "+org.Name+"'s roster is kept in its org store, which this lore build does not reach for the roster").
 			WithHint("set org_folder on one of the org's stores in ~/.lore/config.yaml")
 	}
-	return newRosterAt(src, org.Name+" "+folder+"/"), nil
+	r = newRosterAt(src, org.Name+" "+folder+"/")
+	r.org = org.Name
+	return r, nil
 }
 
 // Claims implements opstask.Team: the last fetched copy of this repo's

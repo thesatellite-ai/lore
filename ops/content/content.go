@@ -376,7 +376,7 @@ type Listed struct {
 func (o Ops) List(ctx context.Context, only string, keep func(row.Row) bool) ([]Listed, error) {
 	sources := engine.ReadStoresOf(o.Env)
 	if only != "" {
-		sources = []store.Source{store.Source(only)}
+		sources = engine.NamedSources(o.Env, store.Source(only)) // the store and its folders (E-14)
 	}
 	var out []Listed
 	for _, src := range sources {

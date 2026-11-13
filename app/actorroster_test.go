@@ -130,6 +130,26 @@ func TestEveryWriterInTheStoreRoster(t *testing.T) {
 	if _, out = w.loreOut(t, dir, "doctor"); strings.Contains(out, "an actor its roster does not hold") {
 		t.Fatalf("doctor still reports the gap after --fix:\n%s", out)
 	}
+
+	// D-17: the agent session's row leaves me; the person reading doctor
+	// cannot add another actor's row, so it is a note (named once, with
+	// nothing to run) and the status is not DEGRADED for it.
+	var agent string
+	for _, a := range list.Data {
+		if a.Kind != "human" {
+			agent = a.ID
+		}
+	}
+	if agent == "" {
+		t.Fatalf("no agent in the actor list")
+	}
+	if err := os.Remove(filepath.Join(meDir, "_store", "actors", agent+".json")); err != nil {
+		t.Fatal(err)
+	}
+	_, out = w.loreOut(t, dir, "doctor")
+	if !strings.Contains(out, "nothing to run here") || strings.Contains(out, "("+agent+") ("+agent+")") || strings.Contains(out, "warning: actor_roster") || strings.Contains(out, "DEGRADED") {
+		t.Fatalf("another actor's missing row must be a note that leaves the status alone:\n%s", out)
+	}
 }
 
 // TestActorListStores (FB-ACTOR-STORES, FB-ACTOR-KEY): an actor held by

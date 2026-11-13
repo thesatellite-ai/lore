@@ -221,6 +221,9 @@ type rosterAt struct {
 	// where names it in messages: "this repo", "northwind org/". An org
 	// folder is no secret: it is printed as it is, in a pipe and in CI too.
 	where string
+	// org is the org's name for an org roster ("" for the repo's own): a
+	// person who left is named as having left the org (rosterLeftErr).
+	org string
 }
 
 // newRosterAt is the roster at src named where.

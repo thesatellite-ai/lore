@@ -40,6 +40,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -126,7 +127,7 @@ func (V017ModeB) ExportModeB(ctx context.Context, pointerPath string) (_ ModeBEx
 	if _, serr := os.Stat(dbPath); serr != nil {
 		return ModeBExport{}, errs.Wrap(errs.NotFound, "migrate: the shared lore.db "+dbPath+" named by "+pointerPath+" is not there", serr)
 	}
-	dsn := fileuri.URL(dbPath, "mode=ro")
+	dsn := fileuri.URL(dbPath, sqlite.LegacyReadQuery(dbPath, false, ""))
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return ModeBExport{}, errs.Wrap(errs.Internal, "migrate: open "+dbPath, err)
@@ -568,7 +569,7 @@ func v017TagLinks(ctx context.Context, db *sql.DB, exported map[string]bool) ([]
 // B folder store does not. projectID "" means the database's only
 // project; a database with several is refused naming them.
 func (V017ModeB) ExportRepoDB(ctx context.Context, dbPath, projectID string) (_ ModeBExport, err error) {
-	db, err := sql.Open(sqliteDriver, fileuri.URL(dbPath, "mode=ro"))
+	db, err := sql.Open(sqliteDriver, fileuri.URL(dbPath, sqlite.LegacyReadQuery(dbPath, false, "")))
 	if err != nil {
 		return ModeBExport{}, errs.Wrap(errs.Internal, "migrate: open "+dbPath, err)
 	}

@@ -10,6 +10,9 @@ package wire
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,7 +52,10 @@ func TestSetupTeamStepByAnAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	ans := onboard.Answers{onboard.QIDOrg: {Text: "northwind"}, onboard.QIDStoreURL: {Text: "https://github.com/agency/team"},
-		onboard.QIDEmail: {Text: "ana@agency.example"}, onboard.QIDName: {Text: "Ana"}}
+		onboard.QIDEmail: {Text: "ana@agency.example"}, onboard.QIDName: {Text: "Ana"},
+		// the repo the step runs in is the org's own (its own: pattern), so
+		// the org store attaches there without a .lore/stores.yaml entry
+		onboard.QIDOwn: {List: []string{"github.com/acme/*"}, IsList: true}}
 	req := opssetup.ApplyRequest{Setup: onboard.SetupEntry{Name: "northwind", Kind: onboard.KindAdmin}, Step: onboard.StepTeam, Apply: onboard.ApplyTeam, Answers: ans}
 
 	// No policy anywhere and no team store yet: the agent creates the team.
@@ -62,6 +68,14 @@ func TestSetupTeamStepByAnAgent(t *testing.T) {
 	}
 	if files := orgGit(t, filepath.Join(w.hosts, "agency/team.git"), "for-each-ref"); files == "" {
 		t.Fatal("the team store has no commits after the agent's team step")
+	}
+	// D-6: the step makes the store for this machine (the org entry points
+	// at it); it writes nothing into the repo it runs in, which may be a
+	// client's
+	if b, rerr := os.ReadFile(filepath.Join(w.repo, ".lore", "stores.yaml")); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+		t.Fatal(rerr)
+	} else if strings.Contains(string(b), "agency/team") || strings.Contains(string(b), "northwind") {
+		t.Fatalf("the team step attached its store in the repo it ran in:\n%s", b)
 	}
 
 	// A person sets the flag false on the team's org folder: the agent's

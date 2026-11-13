@@ -169,7 +169,7 @@ func ProbeRemote(ctx context.Context, work, remote string, opts ...Option) error
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	if _, err = g.run(ctx, call{dir: work, args: []string{"ls-remote", "--heads", "--", RemoteName}}); err != nil {
-		return probeError(remote, stderrOf(err), g.accessNote, err)
+		return probeError(remote, stderrOf(err), g.accessNote, FetchedOnce(work), err)
 	}
 	return nil
 }
@@ -178,7 +178,9 @@ func ProbeRemote(ctx context.Context, work, remote string, opts ...Option) error
 // the tail of its advice (B3-12 printed "and the repository exists."),
 // the url with its credentials masked, and the next step for that kind of
 // failure (gitfault: no answer, no repository there, credentials refused).
-func probeError(remote, stderr, accessNote string, cause error) error {
+// fetchedBefore (the clone fetched from remote once) turns "no repository"
+// and "denied" into the lost-access text (LostAccessText, F-11).
+func probeError(remote, stderr, accessNote string, fetchedBefore bool, cause error) error {
 	shown := repourl.Mask(remote)
 	kind := gitfault.ClassifyAt(stderr, fsreason.GitPathState)
 	msg := gitfault.Describe(stderr, shown, fsreason.GitPathState)
@@ -188,7 +190,12 @@ func probeError(remote, stderr, accessNote string, cause error) error {
 	if accessNote != "" {
 		msg += " — " + accessNote
 	}
-	return errs.Wrap(errs.StoreUnreachable, msg, &FaultError{Kind: kind, Text: msg}).WithHint(ProbeHint(kind, shown))
+	hint := ProbeHint(kind, shown)
+	if fetchedBefore && (kind == gitfault.Missing || kind == gitfault.Denied) {
+		msg = LostAccessText(shown) + " (" + msg + ")"
+		hint = LostAccessHint(storeNamePlaceholder)
+	}
+	return errs.Wrap(errs.StoreUnreachable, msg, &FaultError{Kind: kind, Text: msg}).WithHint(hint)
 }
 
 // FaultError is the cause of ProbeRemote's error: the kind of failure, so
@@ -210,6 +217,25 @@ func ProbeFault(err error) gitfault.Kind {
 		return f.Kind
 	}
 	return ""
+}
+
+// LostAccessText is what a store that served this clone before and now
+// answers "no repository there" or "access denied" most likely means:
+// hosts such as GitHub answer "not found" for a private repo an account
+// may no longer read, so "check the address" would send the person after
+// a typo that is not there (F-11). It names the url (masked).
+func LostAccessText(shown string) string {
+	return "the store refused this machine: " + shown + " served this store before and now answers that there is no repository or no access, which is what a host says once your access was removed (or the store was moved or deleted)"
+}
+
+// storeNamePlaceholder stands for the store's name in a hint written
+// where only its url is known.
+const storeNamePlaceholder = "<store>"
+
+// LostAccessHint is the next step after LostAccessText: ask, and the way
+// for a store that only moved.
+func LostAccessHint(storeName string) string {
+	return "ask an admin of the store whether you still have access; nothing written here is lost (it stays in the local copy, but cannot be delivered without access); if the store moved: lore store set-url --name " + storeName + " --url <url>"
 }
 
 // ProbeHint is the next step for a store remote that failed a probe, by

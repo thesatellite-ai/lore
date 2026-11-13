@@ -118,7 +118,7 @@ type ListIn struct {
 	Kind       string `json:"kind,omitempty" flag:"kind" desc:"only memories of this kind"`
 	// Tags keeps memories carrying every named tag.
 	Tags  []string `json:"tags,omitempty" flag:"tag" desc:"only memories with this tag (repeatable: all must match)"`
-	Store string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only memories of this store (default every attached store)"`
+	Store string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only memories of this store and its folders, <store>/<folder> (default every attached store)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
 	metalist.Flags
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
@@ -271,7 +271,7 @@ type SearchIn struct {
 	// DefaultSearchLimit.
 	Limit           int    `json:"limit,omitempty" flag:"limit" desc:"at most this many results (default 10)"`
 	IncludeArchived bool   `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived memories"`
-	Store           string `json:"store,omitempty" flag:"store" alias:"to" desc:"only memories of this store (default every attached store)"`
+	Store           string `json:"store,omitempty" flag:"store" alias:"to" desc:"only memories of this store and its folders, <store>/<folder> (default every attached store)"`
 }
 
 // SearchOut is the output of memory.search: v0.1.17's search envelope

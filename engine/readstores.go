@@ -68,21 +68,25 @@ func ReadStoresOf(l StoreLister) []store.Source {
 	return slices.Clone(l.Stores())
 }
 
-// personalStoreName is the personal store's reserved name (attach.ReservedMe).
-const personalStoreName = "me"
+// storeFolderSep joins a store's name and one of its folders in a read
+// store's name ("acme/org", "me/acme").
+const storeFolderSep = "/"
 
 // NamedSources is the read stores a `--store <name>` filter means: name
-// itself, and for the personal store also every `me/<folder>` attached
-// beside it (lore 0.1.17's per-org personal notes keep their org folder,
-// attached as me/<org> in that org's repos, D5), so `--store me` lists
-// every personal note this repo reads.
+// itself and every `<name>/<folder>` attached beside it. An org store's
+// rows live in its folders (acme/org for the company, acme/<project> per
+// project; E-14: `--store acme` said "(no memories)" while acme/org held
+// five), and lore 0.1.17's per-org personal notes keep their org folder,
+// attached as me/<org> (D5), so `--store me` lists every personal note
+// this repo reads. A name that already names a folder (acme/org) is that
+// folder alone.
 func NamedSources(l StoreLister, name store.Source) []store.Source {
 	out := []store.Source{name}
-	if name != personalStoreName {
+	if strings.Contains(string(name), storeFolderSep) {
 		return out
 	}
 	for _, s := range ReadStoresOf(l) {
-		if strings.HasPrefix(string(s), personalStoreName+"/") {
+		if s != name && strings.HasPrefix(string(s), string(name)+storeFolderSep) {
 			out = append(out, s)
 		}
 	}

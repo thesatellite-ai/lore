@@ -113,7 +113,8 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 	}
 	res := LinkWriteResult{StoreURL: target, NoPush: !g.autopush(o.Live)}
 	cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(target), Store: target, Branch: w.Plan.Branch, NoPush: res.NoPush, Route: g.Route, NewMarker: w.NewMarker,
-		Message: fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature,
+		FirstCommit: w.NewMarker != nil,
+		Message:     fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature,
 		Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
 			put, created, changed, cerr := linkChange(ctx, repo, tip, target, w)
 			res.CreatedFolder = res.CreatedFolder || created
@@ -142,6 +143,13 @@ type storeCommit struct {
 	// NewMarker, when set, adds a marker to a tip of lore files only that
 	// has none (LinkWrite.NewMarker), in the same commit.
 	NewMarker func() ([]byte, error)
+	// FirstCommit lets a store repo with no branch at all (a brand-new
+	// empty repo `lore org store add` just listed) get its first commit:
+	// the marker and Change's files, on a new root commit (the docs'
+	// "a brand-new empty repo becomes a lore store with the first write to
+	// it"). It needs NewMarker; a repo with other branches still refuses a
+	// missing branch (a typo must not start a second line).
+	FirstCommit bool
 	// PushPending, when Change has nothing to put, still pushes a local
 	// branch that is ahead of the remote's (an earlier commit made with
 	// NoPush, B-4: `lore org store add --push` after an add without it).
@@ -176,8 +184,12 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 			offline = fetch(ctx, c.Route, dir) != nil
 		}
 		tip, ok := branchTip(ctx, dir, branch)
+		first := false // the store's first commit, into an empty repo
 		if !ok {
-			return res, fmt.Errorf("%w: %s has no branch %s", ErrNoStoreBranch, target, branch)
+			if !c.FirstCommit || c.NewMarker == nil || !cloneHasNoBranches(ctx, dir) {
+				return res, fmt.Errorf("%w: %s has no branch %s", ErrNoStoreBranch, target, branch)
+			}
+			first = true
 		}
 		repo, err := gitref.Open(ctx, dir, nil)
 		if err != nil {
@@ -198,12 +210,20 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 		if !hasOld {
 			old = ""
 		}
-		_, hasMarker, merr := repo.ReadFile(ctx, tip, storeMarkerFile)
-		if merr != nil {
-			return res, merr
+		hasMarker := false
+		if !first {
+			_, found, merr := repo.ReadFile(ctx, tip, storeMarkerFile)
+			if merr != nil {
+				return res, merr
+			}
+			hasMarker = found
 		}
 		var marker []byte
-		if !hasMarker {
+		if first {
+			if marker, err = c.NewMarker(); err != nil {
+				return res, err
+			}
+		} else if !hasMarker {
 			// lore files only and no marker: adopted (the marker goes in
 			// this commit); anything else is not a store
 			if c.NewMarker == nil || checkStoreTree(ctx, dir, tip, target, branch) != nil {
@@ -286,9 +306,12 @@ func linkChange(ctx context.Context, repo *gitref.Repo, tip, store string, w Lin
 	if err != nil {
 		return nil, false, false, err
 	}
-	raw, found, err := repo.ReadFile(ctx, tip, path)
-	if err != nil {
-		return nil, false, false, err
+	var raw []byte
+	found := false
+	if tip != "" { // "" is an empty store's first commit: no file yet
+		if raw, found, err = repo.ReadFile(ctx, tip, path); err != nil {
+			return nil, false, false, err
+		}
 	}
 	doc := map[string]json.RawMessage{}
 	if found {
@@ -431,6 +454,9 @@ func oldMetaPathOf(folder string) string {
 // only that exists (a folder not moved yet keeps one _meta.json), else
 // the store layout's.
 func metaPathAt(ctx context.Context, repo *gitref.Repo, tip, folder string) (string, error) {
+	if tip == "" {
+		return metaPathOf(folder), nil // an empty store: nothing to read yet
+	}
 	if _, found, err := repo.ReadFile(ctx, tip, metaPathOf(folder)); err != nil || found {
 		return metaPathOf(folder), err
 	}
@@ -438,6 +464,14 @@ func metaPathAt(ctx context.Context, repo *gitref.Repo, tip, folder string) (str
 		return oldMetaPathOf(folder), err
 	}
 	return metaPathOf(folder), nil
+}
+
+// cloneHasNoBranches reports whether the clone at dir holds no branch at
+// all, local or fetched: the remote is a brand-new empty repo (an error
+// reading the refs counts as "has branches", the safe answer).
+func cloneHasNoBranches(ctx context.Context, dir string) bool {
+	out, err := gitRun(ctx, "-C", dir, "for-each-ref", "--count=1", "--format=%(refname)", "refs/heads/", "refs/remotes/")
+	return err == nil && strings.TrimSpace(out) == ""
 }
 
 // localRef / trackingRef name a store branch in the clone.

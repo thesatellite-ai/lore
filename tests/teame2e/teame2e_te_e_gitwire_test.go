@@ -29,6 +29,9 @@ var teEAttrLines = []string{
 	".lore/data/**/*.json text eol=lf merge=lore linguist-generated=true",
 	".lore/data/*.json text eol=lf merge=lore linguist-generated=true",
 	".lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true",
+	".lore/LORE.full.md text eol=lf merge=lore-keep-ours linguist-generated=true",
+	".claude/rules/lore/lore-*.md text eol=lf merge=lore-keep-ours linguist-generated=true",
+	".cursor/rules/lore-*.mdc text eol=lf merge=lore-keep-ours linguist-generated=true",
 }
 
 // teEAwsKey is the AWS documentation example key, built at run time

@@ -3,6 +3,8 @@ package wire
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -201,4 +203,55 @@ func TestStandaloneResolveHandle(t *testing.T) {
 	if _, claimed, _ := b.Claim("tsk_01a1ac2f60977e82abe757a9387b48bc"); claimed {
 		t.Fatal("a repo with no signals ref has no claims")
 	}
+}
+
+// TestAssignRefusesMemberWhoLeft (F-10): --assign naming a person who left,
+// by handle or email, says they left and since when, never "no one is @h"
+// with a register hint; an active person still resolves, and a handle a
+// leaver freed and someone else took names the new holder.
+func TestAssignRefusesMemberWhoLeft(t *testing.T) {
+	t.Parallel()
+	a, _, _ := standaloneTask(t)
+	ctx := background()
+	gone, _, err := a.RosterRegister(ctx, store.SourceRepo, RosterActor{Kind: schema.ActorKindHuman, StableKey: "mailto:olga@acme.example", Name: "Olga", Handle: "olga", Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = a.RosterDeactivate(ctx, store.SourceRepo, gone); err != nil {
+		t.Fatal(err)
+	}
+	team := standaloneTeam{a: a}
+	for _, allowTeam := range []bool{true, false} {
+		_, rerr := team.ResolveHandle(ctx, "@olga", allowTeam)
+		if !errs.Has(rerr, errs.StatusChange) {
+			t.Fatalf("@olga (teams %v): %v, want E_STATUS_CHANGE", allowTeam, rerr)
+		}
+		if msg := leftText(rerr); !strings.Contains(msg, "Olga (@olga) left") || strings.Contains(msg, "actor register") {
+			t.Fatalf("@olga (teams %v) says %q", allowTeam, msg)
+		}
+	}
+	for _, ref := range []string{"@olga", "olga@acme.example", "@olga@acme.example"} {
+		rerr := a.RosterAssignable(ctx, ref)
+		if !errs.Has(rerr, errs.StatusChange) || !strings.Contains(rerr.Error(), "--assign takes only people still in the org") {
+			t.Fatalf("RosterAssignable(%q) = %v", ref, rerr)
+		}
+	}
+	if _, _, err = a.RosterRegister(ctx, store.SourceRepo, RosterActor{Kind: schema.ActorKindHuman, StableKey: "mailto:olga2@acme.example", Name: "Olga Two", Handle: "olga", Active: true}); err != nil {
+		t.Fatal(err)
+	}
+	if rerr := a.RosterAssignable(ctx, "@olga"); rerr != nil {
+		t.Fatalf("@olga taken again by an active person: %v", rerr)
+	}
+	if rerr := a.RosterAssignable(ctx, "act_0123"); rerr != nil {
+		t.Fatalf("an actor id is not checked here: %v", rerr)
+	}
+}
+
+// leftText is an error's message and hint, as the CLI prints both.
+func leftText(err error) string {
+	var e *errs.Error
+	if !errors.As(err, &e) {
+		return fmt.Sprint(err)
+	}
+	return e.Message + " | " + e.Hint
 }

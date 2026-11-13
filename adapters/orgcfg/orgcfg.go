@@ -306,6 +306,50 @@ func Remotes(ctx context.Context, dir string) (norm, notes []string) {
 	return norm, notes
 }
 
+// repoTopProjectID is the project id of the git top of the checkout root
+// is in, when root is a package folder below that top ("" otherwise).
+func repoTopProjectID(ctx context.Context, root string) string {
+	out, err := gitRun(ctx, "-C", root, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return ""
+	}
+	top := strings.TrimSpace(out)
+	if top == "" || sameDir(top, root) {
+		return ""
+	}
+	return ProjectID(top)
+}
+
+// sameDir reports whether a and b name one folder (symlinks resolved).
+func sameDir(a, b string) bool {
+	ra, aerr := filepath.EvalSymlinks(a)
+	rb, berr := filepath.EvalSymlinks(b)
+	if aerr != nil || berr != nil {
+		return filepath.Clean(a) == filepath.Clean(b)
+	}
+	return ra == rb
+}
+
+// clientPatternMatches reports whether a repos: (client) pattern of any
+// org entry matches one of remotes (D-7: only such a repo can be linked by
+// its remote after the fact).
+func clientPatternMatches(cfg *orgconf.Config, remotes []string) bool {
+	for i := range cfg.Orgs {
+		for _, raw := range cfg.Orgs[i].Repos {
+			p, err := repourl.Compile(raw)
+			if err != nil {
+				continue
+			}
+			for _, r := range remotes {
+				if p.Match(r) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // Gather reads the machine and runs F10. A broken config is an error
 // (E_CONFIG_INVALID); every other problem lands in the Situation.
 func Gather(ctx context.Context, in In) (*Situation, error) {
@@ -337,28 +381,60 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 		// A repo with no lore data in it is linked by its remote
 		// (orgresolve.RemoteProjectID): the first remote a store links
 		// gives the project id, which lives only in that link row.
-		for _, r := range s.Remotes {
-			pid, perr := orgresolve.RemoteProjectID(r)
-			if perr != nil {
-				continue
+		byRemote := func(src orgresolve.LinkSource) {
+			for _, r := range s.Remotes {
+				pid, perr := orgresolve.RemoteProjectID(r)
+				if perr != nil {
+					continue
+				}
+				got, lerr := src.Links(ctx, pid, []string{r})
+				if lerr != nil {
+					// a store that cannot be read as one (a code repo listed
+					// under stores:) is reported by the project's own lookup and
+					// by whoami, as before; here it only means no remote link
+					// was found, so `lore init` in such a repo still runs
+					break
+				}
+				if len(got.Links) > 0 {
+					s.ProjectID, s.LinkedByRemote = pid, r
+					break
+				}
 			}
-			got, lerr := links.Links(ctx, pid, []string{r})
-			if lerr != nil {
-				// a store that cannot be read as one (a code repo listed
-				// under stores:) is reported by the project's own lookup and
-				// by whoami, as before; here it only means no remote link
-				// was found, so `lore init` in such a repo still runs
-				break
-			}
-			if len(got.Links) > 0 {
-				s.ProjectID, s.LinkedByRemote = pid, r
-				break
+		}
+		byRemote(links)
+		if s.ProjectID == "" {
+			// D-7: a client repo (an org's repos: pattern matches it) that
+			// no link names in this machine's copy of the org stores may
+			// have been linked since the last fetch (the admin's `lore org
+			// link`): fetch those stores once now, whatever live.fetch_ttl
+			// says, so the first write after the link goes through instead
+			// of failing until the copy expires.
+			if gl, ok := links.(*GitLinks); ok && !gl.Always && clientPatternMatches(cfg, s.Remotes) {
+				fresh := *gl
+				fresh.Always = true
+				links = &fresh
+				byRemote(links)
 			}
 		}
 	}
 	lr, err = links.Links(ctx, s.ProjectID, s.Remotes)
 	if err != nil {
 		return nil, err
+	}
+	if len(lr.Links) == 0 && s.ProjectID != "" && s.LinkedByRemote == "" {
+		// D-13: a package project of a monorepo (its own .lore below the
+		// repo top) has no link of its own; the repo's link (the root
+		// project's) covers it, so its writes go to the folder the repo is
+		// linked to instead of failing "no internal project is linked".
+		if rootPID := repoTopProjectID(ctx, root); rootPID != "" && rootPID != s.ProjectID {
+			rl, rerr := links.Links(ctx, rootPID, s.Remotes)
+			if rerr != nil {
+				return nil, rerr
+			}
+			if len(rl.Links) > 0 {
+				lr.Links, lr.Status, lr.Detail = rl.Links, rl.Status, rl.Detail+" (the repo's link: this package project has none of its own)"
+			}
+		}
 	}
 	s.OldLinks = lr.Old
 	s.Result, s.ResolveErr = orgresolve.Resolve(orgresolve.Inputs{

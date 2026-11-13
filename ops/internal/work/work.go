@@ -446,7 +446,7 @@ func BulkRows(rows []Sourced) ([]wheredel.Row, string) {
 func ListAll(ctx context.Context, env Env, table row.Table, only string) ([]Sourced, error) {
 	sources := engine.ReadStoresOf(env)
 	if only != "" {
-		sources = []store.Source{store.Source(only)}
+		sources = engine.NamedSources(env, store.Source(only)) // the store and its folders (E-14)
 	}
 	var out []Sourced
 	for _, src := range sources {

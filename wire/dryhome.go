@@ -7,7 +7,9 @@ package wire
 // for that one command) those go to a scratch folder instead: the caches
 // start as copies of the real ones (seedDryCache) and catch up from the
 // row files, the machine store is a copy of the real one, and the CLI
-// removes the folder when the command ends (RemoveDryScratch).
+// removes the folder when the command ends (RemoveDryScratch). A lore
+// home lore cannot write (a CI runner's read-only HOME, F-6) is handled
+// the same way, so reads work there instead of failing E_READ_ONLY_FS.
 //
 // Why the caches are copied (T-3): a scratch cache built from nothing
 // read, decoded and indexed every row on each dry run (5,500 rows: 5-17 s
@@ -18,9 +20,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 )
@@ -30,22 +34,33 @@ var (
 	dryScratchDir string
 	// dryRealHome is the lore home the scratch folder stands in for.
 	dryRealHome string
+	// homeWritableMemo caches homeWritable per lore home (one probe per
+	// process and home).
+	homeWritableMemo = map[string]bool{}
 )
 
 // dryRunProcess reports the dry-run switch (git.ForbidClones).
 func dryRunProcess() bool { return git.NoClone(context.Background()) }
 
 // writableHome is where an open writes its caches and machine store:
-// home, or under the dry-run switch a scratch copy's folder (the real
-// machine store copied in once, so reads still see it).
+// home, or a scratch copy's folder (the real machine store copied in once,
+// so reads still see it) under the dry-run switch or when lore cannot
+// write home at all. Why the second case: a CI runner often has a
+// read-only HOME, and a read (list, search, render --check, doctor) must
+// still work there (F-6); its caches are rebuildable, so a temp folder
+// removed at exit serves as well, and machine-local writes simply do not
+// outlive the command, as they could not have been kept anyway.
 func writableHome(home string) string {
-	if !dryRunProcess() || home == "" {
+	if home == "" || !dryRunProcess() && homeWritable(home) {
 		return home
 	}
 	dryScratchMu.Lock()
 	defer dryScratchMu.Unlock()
+	if dryScratchDir != "" && dryRealHome != home && !dryRunProcess() {
+		return home // a second unwritable home in one process (tests): left as it is
+	}
 	if dryScratchDir == "" {
-		dir, err := os.MkdirTemp("", "lore-dry-run-")
+		dir, err := os.MkdirTemp("", "lore-scratch-home-")
 		if err != nil {
 			return home
 		}
@@ -59,6 +74,43 @@ func writableHome(home string) string {
 		}
 	}
 	return dryScratchDir
+}
+
+// scratchHome reports whether home is redirected to a scratch folder
+// (writableHome returns another folder for it).
+func scratchHome(home string) bool { return home != "" && writableHome(home) != home }
+
+// homeWritable reports whether lore can create files under the lore home:
+// a probe file is created and removed in the nearest folder that exists of
+// <home>/cache, <home> and its parent (so a home not made yet is judged by
+// the folder it would be made in). Permissions and a read-only mount both
+// read as not writable; the answer is kept for the process.
+func homeWritable(home string) bool {
+	dryScratchMu.Lock()
+	ok, seen := homeWritableMemo[home]
+	dryScratchMu.Unlock()
+	if seen {
+		return ok
+	}
+	ok = true
+	for _, dir := range []string{filepath.Join(home, cacheDir), home, filepath.Dir(home)} {
+		fi, err := os.Stat(dir)
+		if err != nil || !fi.IsDir() {
+			continue
+		}
+		f, err := os.CreateTemp(dir, ".lore-write-probe-")
+		if err != nil {
+			ok = !errors.Is(err, fs.ErrPermission) && !errors.Is(err, syscall.EROFS)
+		} else {
+			_ = f.Close()
+			_ = os.Remove(f.Name()) // best effort: a probe file left behind is harmless
+		}
+		break
+	}
+	dryScratchMu.Lock()
+	homeWritableMemo[home] = ok
+	dryScratchMu.Unlock()
+	return ok
 }
 
 // seedDryCache copies the real cache that path, a cache file in the
@@ -146,7 +198,8 @@ func copyFile(src, dst string) (err error) {
 }
 
 // RemoveDryScratch removes the scratch folder; the CLI calls it when the
-// dry-run command ends (several Apps of one process may share it).
+// command ends (a dry run, or a run on a lore home lore cannot write;
+// several Apps of one process may share it).
 func RemoveDryScratch() {
 	dryScratchMu.Lock()
 	defer dryScratchMu.Unlock()

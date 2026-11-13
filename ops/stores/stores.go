@@ -121,10 +121,13 @@ type InitIn struct {
 	Name       string `json:"name" arg:"0" desc:"the store's name in this repo (me = your personal store)"`
 	URL        string `json:"url,omitempty" arg:"1" desc:"git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)"`
 	Visibility string `json:"visibility,omitempty" flag:"visibility" desc:"internal (default) or shareable: whether its rows may reach client repos"`
-	// RepoOptional (callers only, never the CLI): run outside a repo too.
-	// The setup page's Start a team step makes the team store from wherever
-	// `lore setup` runs; the org entry in config.yaml is what points at it,
-	// and .lore/stores.yaml gets the store only when a repo is here.
+	// RepoOptional (callers only, never the CLI): the store is made for
+	// this machine, not for the repo the command runs in. The setup page's
+	// Start a team step makes the team store from wherever `lore setup`
+	// runs; the org entry in config.yaml is what points at it, so no repo's
+	// .lore/stores.yaml is written (D-6: run inside a client repo, it put
+	// the internal team-store url into that repo, and the client's notes
+	// then went to the store root instead of its linked folder).
 	RepoOptional bool `json:"-"`
 }
 

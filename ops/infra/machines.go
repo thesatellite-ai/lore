@@ -86,7 +86,7 @@ type MachineVersions interface {
 
 // MachineListIn is the input of machine.list.
 type MachineListIn struct {
-	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"only machines of this store (default every attached store)"`
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"only machines of this store and its folders, <store>/<folder> (default every attached store)"`
 	// Org narrows to the stores this repo attaches for an org: the store
 	// named <org> and its folders <org>/<folder> (CLI_REFERENCE 3.8).
 	Org string `json:"org,omitempty" flag:"org" desc:"only machines of this org's attached stores"`

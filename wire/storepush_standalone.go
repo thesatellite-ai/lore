@@ -427,8 +427,15 @@ func (b *storePush) offlineWhy(rep store.SyncReport) string {
 		return "the store is unreachable"
 	}
 	shown := string(b.name)
-	if gb := gitOf(b.inner); gb != nil && gb.RemoteURL() != "" {
+	gb := gitOf(b.inner)
+	if gb != nil && gb.RemoteURL() != "" {
 		shown = repourl.Mask(gb.RemoteURL())
+	}
+	// F-11: a store this clone fetched from before that now says "no
+	// repository" or "denied" has most likely shut this person out
+	// (access revoked), not moved to a mistyped address.
+	if gb != nil && (kind == gitfault.Missing || kind == gitfault.Denied) && gitbackend.FetchedOnce(gb.Dir()) {
+		return gitbackend.LostAccessText(shown) + "; " + gitbackend.LostAccessHint(string(b.name))
 	}
 	return gitfault.Describe(rep.OfflineDetail, shown, fsreason.GitPathState) + "; " + gitbackend.ProbeHint(kind, shown)
 }

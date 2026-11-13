@@ -109,6 +109,9 @@ func (h standaloneCoord) reassignCaller(ctx context.Context, in opscoord.Reassig
 	if err = w.requireHuman(ctx, "reassign"); err != nil {
 		return nil, "", err
 	}
+	if err = h.a.RosterAssignable(ctx, in.Assign); err != nil {
+		return nil, "", err
+	}
 	to, err := h.resolveActor(ctx, in.Assign)
 	if err != nil {
 		return nil, "", err

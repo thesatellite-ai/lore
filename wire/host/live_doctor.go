@@ -154,7 +154,9 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 	}
 	s.doctorHooks(ctx, branch, fix, warn, note)
 	if out, serr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--is-shallow-repository"}}); serr == nil && strings.TrimSpace(string(out)) == "true" {
-		warn("shallow clone: landing and merged checks need the default branch's history")
+		// F-7: a shallow clone is the normal CI checkout (GitHub Actions'
+		// fetch-depth: 1), not damage: a note, so doctor stays HEALTHY there
+		note("shallow clone (a CI checkout's default): landing and merged checks need the default branch's history; fetch it in full (git fetch --unshallow, or fetch-depth: 0 in GitHub Actions) where they must run")
 	}
 	return base, nil
 }
