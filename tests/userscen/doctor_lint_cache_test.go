@@ -86,7 +86,7 @@ func TestDoctorLint_CleanAndReferences(t *testing.T) {
 
 	out := p.lint(t)
 	if out.Count != 3 ||
-		!out.has("dangling_ref", "body: ${row:"+tmp+"} points at no live row", "lore trash restore --target "+tmp) ||
+		!out.has("dangling_ref", "body: ${row:"+tmp+"} points at no live row", "lore trash restore --id "+tmp) ||
 		!out.has("dangling_ref", "body: ${var:deploy_host} names no variable", "lore vars set --name deploy_host --value <value>") ||
 		!out.has("unknown_scheme", "body: ${nope:x} names no known scheme", "write $${…} to keep it literal") {
 		t.Fatalf("three reference findings on %s: %+v", mem, out)

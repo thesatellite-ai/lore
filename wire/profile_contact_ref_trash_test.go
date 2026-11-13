@@ -17,7 +17,7 @@ import (
 // TestProfileRosterContactRefInTrash: over a real git org roster, an actor
 // reference in contact form (github:, email:, human:<email>, a bare email)
 // whose only holder is a removed (trashed) identity contact answers
-// E_IN_TRASH with `lore trash restore --target <contact id>` (DELETION 3.2, the
+// E_IN_TRASH with `lore trash restore --id <contact id>` (DELETION 3.2, the
 // rule liveContact applies to a contact id); a live holder always wins
 // (a live duplicate on another person, a person's own stable key), and a
 // purged or never-written contact stays E_NOT_FOUND. One op-level check:
@@ -133,7 +133,7 @@ func TestProfileRosterContactRefInTrash(t *testing.T) {
 		switch tc.want {
 		case inTrash:
 			id := ids[tc.of]
-			if !errs.Has(err, errs.InTrash) || !strings.Contains(err.Error(), id) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --target "+id) {
+			if !errs.Has(err, errs.InTrash) || !strings.Contains(err.Error(), id) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --id "+id) {
 				t.Errorf("%s: %v, want E_IN_TRASH naming %s with the restore hint", tc.ref, err, id)
 			}
 		case notFound:

@@ -35,7 +35,7 @@ var purgeCallers = map[string]bool{
 	// rows (names, emails, store urls) go for good with the setup
 	// (setupStore.PurgeProgress → purgeRow; setuplifecycle.go).
 	"wire/setupstore.go#purgeRow": true,
-	// lore trash purge --target <target|--older-than|--expired|--archived-before> --confirm.
+	// lore trash purge --id <target|--older-than|--expired|--archived-before> --confirm.
 	"ops/trash/trash.go#purge":             true,
 	"ops/trash/trash.go#purgeArchived":     true,
 	"wire/trash.go#PurgeOlder":             true,

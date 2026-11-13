@@ -25,7 +25,7 @@ func TestProjectListTrashFlags(t *testing.T) {
 	h := opstest.New(t, ticking(fixedAt))
 	old := h.Seed(schema.TableProjects, map[string]string{"name": `"old"`})
 	h.MustYes(infra.OpProjectDelete, `{"id":"`+old+`"}`)
-	note := "in the trash: " + old + " (lore trash show --id <id>; lore trash restore --target <id>)\n"
+	note := "in the trash: " + old + " (lore trash show --id <id>; lore trash restore --id <id>)\n"
 	for _, c := range []struct {
 		name, in string
 		want     string

@@ -4,7 +4,7 @@
 // each delete now says where the row went and how to get it back:
 //
 //	noun delete → engine.Delete (tombstone + trash) → Moved / MovedBatch
-//	                                                     → "✓ … moved to the trash (restore: lore trash restore --target <id|bat_…>)"
+//	                                                     → "✓ … moved to the trash (restore: lore trash restore --id <id|bat_…>)"
 //
 // It imports nothing so every ops package (memory included, which sits
 // under ops/internal/work) can use it.
@@ -15,7 +15,7 @@ package trashline
 const Mark = "✓"
 
 // restoreCmd is the command the hint names (DELETION 3.1).
-const restoreCmd = "lore trash restore --target "
+const restoreCmd = "lore trash restore --id "
 
 // Moved is the line of one deleted row: label is what the user sees
 // (usually the id, or "<id> — template X"); id is what restore takes.

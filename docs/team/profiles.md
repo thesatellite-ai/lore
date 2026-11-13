@@ -526,7 +526,7 @@ act_77cb…76c4 [human] carol                   repo
 What it does:
 
 - ends the current company period on `--on` (default today; a future date is `E_INVALID_INPUT`, a date before the stint started is `E_PERIOD_OVERLAP`), with the reason and note;
-- ends every current project membership on the same date; a membership that has not started yet (added with a future `--on`) shows as "not started yet (starts <date>): ends unstarted" and goes to the trash (reason "offboarded before it started", `lore trash restore --target <id>` brings it back);
+- ends every current project membership on the same date; a membership that has not started yet (added with a future `--on`) shows as "not started yet (starts <date>): ends unstarted" and goes to the trash (reason "offboarded before it started", `lore trash restore --id <id>` brings it back);
 - lists every open task where the person is an assignee or the lead (a task they only hold a claim on is not listed yet), with a `reassign:` line for each. **No task is changed:** reassign them yourself;
 - marks every agent the person owns as inactive;
 - takes the person off every team that lists them (the preview names them: `teams      @web: taken off`);
@@ -571,7 +571,7 @@ act_7a67…9504  Mira Patel (@mira)  active
 
 - It starts a new company period on `--on` (default today), which must be after the last stint ended (`E_PERIOD_OVERLAP` otherwise) and not in the future (`E_INVALID_INPUT`: use today or a past day; run it on their first day back), and sets the status back to `active`. On the day the last stint ended (a removal undone the same day) it reopens that stint instead of starting a new one. The new stint and the status are one store commit.
 - Project memberships are **not** restored. The preview lists the ones that ended when the person left, each with the `lore project member add` line to add it back.
-- A membership the offboard moved to the trash because it had not started yet ("offboarded before it started") is listed too, under `trashed`, with its start date and the `lore trash restore --target <id>` line that brings it back; the rejoin does not restore it. `--json` lists them in `trashed_memberships` (with `starts_on` and `not_started`).
+- A membership the offboard moved to the trash because it had not started yet ("offboarded before it started") is listed too, under `trashed`, with its start date and the `lore trash restore --id <id>` line that brings it back; the rejoin does not restore it. `--json` lists them in `trashed_memberships` (with `starts_on` and `not_started`).
 - Agents the person owns stay inactive; the preview gives `lore actor status --actor <agent> --to active` for each.
 - Rejoining someone who is active is `E_STATUS_CHANGE`.
 - Only rejoin brings someone back. When a person who left (or was archived) runs `lore actor register` or `lore agent start` themselves, lore answers `E_STATUS_CHANGE` naming their status and the `lore actor rejoin` line for an admin, and writes nothing. (A v0.1.17 `lore actor deactivate`, which sets no status, is still undone by registering again; it is the only way back on a roster without an org.)

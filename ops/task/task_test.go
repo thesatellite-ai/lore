@@ -57,7 +57,7 @@ func TestTextMatchesV017(t *testing.T) {
 		"✓ tsk_ID done (pr #12); waiting for merge\n  learned something? `lore memory add --body \"…\"` (or pass --lesson next time)\n")
 	third := add(h, "Third", "")
 	check("done --commit --lesson", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+third+`","commit":"abcdef1234567","lesson":"learned x"}`)),
-		"✓ tsk_ID done (commit abcdef1); waiting for merge\n  lesson → mem_ID\n")
+		"✓ tsk_ID done (commit abcdef1, not linked to the task; link it with: lore link add --entity tsk_ID --commit abcdef1234567); waiting for merge\n  lesson → mem_ID\n") // A-11: says the commit is not linked
 	fourth := add(h, "Fourth", "")
 	check("done", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+fourth+`"}`)),
 		"✓ tsk_ID done\n  learned something? `lore memory add --body \"…\"` (or pass --lesson next time)\n")
@@ -67,7 +67,7 @@ func TestTextMatchesV017(t *testing.T) {
 	check("edit", opstest.Text(h.Must(opstask.OpEdit, `{"id":"`+fifth+`","priority":"low"}`)), "✓ tsk_ID updated\n")
 	// Delta: v0.1.17 printed "deleted (hard)"; DQ8 every delete is soft, so
 	// the line names the trash and the restore command.
-	check("delete", opstest.Text(h.MustYes(opstask.OpDelete, `{"id":"`+fifth+`"}`)), "✓ tsk_ID moved to the trash (restore: lore trash restore --target tsk_ID)\n")
+	check("delete", opstest.Text(h.MustYes(opstask.OpDelete, `{"id":"`+fifth+`"}`)), "✓ tsk_ID moved to the trash (restore: lore trash restore --id tsk_ID)\n")
 	check("empty list", opstask.ListOut{}.Text(), "(no tasks)\n")
 }
 
@@ -115,7 +115,7 @@ func TestNotFoundAndBadIDs(t *testing.T) {
 			}
 			_, err := h.RunYes(name, in)
 			if id == gone { // DELETION 3.2: a trashed task says where it is
-				if !errs.Has(err, errs.InTrash) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --target "+id) {
+				if !errs.Has(err, errs.InTrash) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --id "+id) {
 					t.Errorf("%s %s: %v, want E_IN_TRASH", name, id, err)
 				}
 				continue

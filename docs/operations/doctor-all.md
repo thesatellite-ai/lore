@@ -10,6 +10,8 @@ Plain [`lore doctor`](doctor.md) checks the repo you are in: hooks, cache, sync.
 
 You want it after you set up a new machine, after you change `~/.ssh/config` or log in to `gh` as someone else, when a push to a store suddenly fails, and before you ask a teammate why lore "does not work". It writes nothing.
 
+It finds your repos through the setups' folders. On a machine with no setup it checks no repo and says so, with the next steps: `lore doctor` inside one repo, `lore fix --all --dirs <folder> --dry-run` for every repo under a folder, or `lore setup` to make a setup.
+
 ## Before you start
 
 - lore 0.1.18 or later, with at least one setup (`lore setup list` shows them).

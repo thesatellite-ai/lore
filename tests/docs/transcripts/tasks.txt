@@ -92,7 +92,7 @@ ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3c11a5724b0cfd74b256190d9b5b8 Test t
 (exit 26)
 alice (work/website)$ lore task delete --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --yes
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json
-✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 moved to the trash (restore: lore trash restore --target tsk_c0f3c11a5724b0cfd74b256190d9b5b8)
+✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 moved to the trash (restore: lore trash restore --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8)
 
 ### after
 alice (work/website)$ lore task add --title 'Write the welcome email'
@@ -231,7 +231,7 @@ ERROR: [E_NEEDS_CONFIRM] reminder delete rmd_0aaebe6aca5bb46cc521869f5ba2a61f?
 (exit 26)
 alice (work/website)$ lore reminder delete --id rmd_0aaebe6aca5bb46cc521869f5ba2a61f --yes
 lore: wrote ~/work/website/.lore/data/reminders/rmd_0aaebe6aca5bb46cc521869f5ba2a61f.json
-✓ rmd_0aaebe6aca5bb46cc521869f5ba2a61f moved to the trash (restore: lore trash restore --target rmd_0aaebe6aca5bb46cc521869f5ba2a61f)
+✓ rmd_0aaebe6aca5bb46cc521869f5ba2a61f moved to the trash (restore: lore trash restore --id rmd_0aaebe6aca5bb46cc521869f5ba2a61f)
 
 ### push after done
 alice (work/website)$ git commit -qm 'Fix the Pro plan price on the pricing page'
@@ -267,7 +267,7 @@ Commit 86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a — 1 linked entities:
 ### done with commit
 alice (work/website)$ lore task done --id tsk_162df51b7f78b785c97c26b41ea89666 --commit $(git rev-parse HEAD) --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
-✓ tsk_162df51b7f78b785c97c26b41ea89666 done (commit 86dbae4); waiting for merge
+✓ tsk_162df51b7f78b785c97c26b41ea89666 done (commit 86dbae4, linked); waiting for merge
 alice (work/website)$ lore sync
 lore live: pushed waiting live writes commit 9b40ce7 to origin refs/lore/live
 lore live: landed on main (05513aa); leaves live once main is fetched

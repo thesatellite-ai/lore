@@ -85,7 +85,7 @@ Commit 86dbae476bd6 — 1 linked entities:
 # alice, in website
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
-✓ tsk_162d…9666 done (commit 86dbae4); waiting for merge
+✓ tsk_162d…9666 done (commit 86dbae4, linked); waiting for merge
 $ lore sync
 lore live: pushed waiting live writes commit 9b40ce7 to origin refs/lore/live
 lore live: landed on main (05513aa); leaves live once main is fetched

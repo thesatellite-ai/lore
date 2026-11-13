@@ -104,7 +104,7 @@ func TestCampaignTasks_RemindersRunsSessions(t *testing.T) {
 	campTasksStep(t, c, "reminder.done", "reminder", "done", rm)
 	c.Lore("reminder", "list", "--json").OK(t).Never(t, rm)
 	campTasksStep(t, c, "reminder.list", "reminder", "list", "--done").Says(t, rm)
-	if e := campTasksErr(t, c.Lore("reminder", "add", "bad date", "--due", "someday-ish", "--json")); e.Error.Code != "E_INVALID_INPUT" || e.Error.Hint == "" {
+	if e := campTasksErr(t, c.Lore("reminder", "add", "bad date", "--due", "someday-ish", "--json")); e.Error.Code != "E_DATE" || e.Error.Hint == "" {
 		t.Errorf("reminder add with a bad --due: %+v", e.Error)
 	}
 

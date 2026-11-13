@@ -73,7 +73,8 @@ func TestMissionLifecycle(t *testing.T) {
 	}
 
 	for _, step := range []struct{ op, line string }{{"mission.pause", "paused"}, {"mission.resume", "resumed"}, {"mission.done", "completed"}} {
-		if got := opstest.Text(h.Must(step.op, `{"id":"`+id+`"}`)); got != "✓ "+id+" "+step.line+"\n" {
+		// done names the open child (A-17, done_open_test.go); the first line is the same
+		if got := opstest.Text(h.Must(step.op, `{"id":"`+id+`"}`)); !strings.HasPrefix(got, "✓ "+id+" "+step.line+"\n") {
 			t.Fatalf("%s: %q", step.op, got)
 		}
 	}

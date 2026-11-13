@@ -16,7 +16,7 @@ Alice (an agency developer) keeps the dates for the client's website, `github.co
 
 ## Step 1 — Add reminders
 
-`--due` is required. It takes a date (`YYYY-MM-DD`) or a full time. `--recurrence` makes it repeat.
+`--due` is required. It reads dates the way every lore date flag does: a day (`YYYY-MM-DD`), a full time (RFC 3339), or a phrase such as `tomorrow`, `fri`, `in 3d` or `eom` (lore prints the day it stored for a phrase). `--recurrence` makes it repeat.
 
 <!-- example: tasks#reminder -->
 ```console
@@ -72,7 +72,7 @@ ERROR: [E_NEEDS_CONFIRM] reminder delete rmd_0aae…a61f?
 (exit 26)
 $ lore reminder delete --id rmd_0aae…a61f --yes
 lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
-✓ rmd_0aae…a61f moved to the trash (restore: lore trash restore --target rmd_0aae…a61f)
+✓ rmd_0aae…a61f moved to the trash (restore: lore trash restore --id rmd_0aae…a61f)
 ```
 <!-- /example -->
 

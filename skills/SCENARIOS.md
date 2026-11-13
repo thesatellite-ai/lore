@@ -552,7 +552,7 @@ lore doctor
 ### N.6 User: "I want to delete a memory"
 ```bash
 lore memory delete --id mem_<id> --reason "<why>"   # to the trash; asks first
-lore trash restore --target mem_<id>                    # undo
+lore trash restore --id mem_<id>                    # undo
 # or keep it out of the context without deleting:
 lore memory archive --id mem_<id>
 ```

@@ -419,6 +419,9 @@ const (
 	ReasonFallback Reason = "fallback"
 	// ReasonSetting: the repo's context.targets settings row (Select).
 	ReasonSetting Reason = "setting"
+	// ReasonSetup: no context.targets row; the tools the guided setup that
+	// applies here chose (A-9), plus every file already wired (FromSetup).
+	ReasonSetup Reason = "setup"
 )
 
 // Selection is the resolved context.targets of a repo.
@@ -554,6 +557,36 @@ func (r *Registry) Select(names []string, probe Probe) (Selection, error) {
 		}
 	}
 	return sel, nil
+}
+
+// FromSetup is the selection of a repo with no context.targets row whose
+// guided setup chose tools (A-9: `lore render` left Codex and Cursor
+// unwired after setup chose them, until --target). It is base (Resolve's
+// answer) with the setup's tools added: a file lore already wires stays
+// wired (EXISTING REPOS KEEP WORKING), a file only detected is wired only
+// when the setup names its tool, else it stays in Unwired so the caller
+// names it (only when its pointer file exists). An unknown name is skipped (the setup was checked when saved;
+// a profile removed since is not this repo's error).
+func (r *Registry) FromSetup(names []string, base Selection, probe Probe) Selection {
+	sel := Selection{Reason: ReasonSetup}
+	if base.Reason == ReasonWired {
+		sel.Profiles = slices.Clone(base.Profiles)
+	}
+	for _, p := range r.profiles {
+		if slices.Contains(names, p.Name) && !slices.ContainsFunc(sel.Profiles, func(q Profile) bool { return q.Name == p.Name }) {
+			sel.Profiles = append(sel.Profiles, p)
+		}
+	}
+	unwired := slices.Clone(base.Unwired)
+	if base.Reason == ReasonDetected {
+		unwired = append(unwired, base.Profiles...)
+	}
+	for _, p := range unwired {
+		if !slices.ContainsFunc(sel.Profiles, func(q Profile) bool { return q.Name == p.Name }) && p.HasPointerFile() && probe.State(p.PointerFile) == FilePresent {
+			sel.Unwired = append(sel.Unwired, p)
+		}
+	}
+	return sel
 }
 
 // LimitNote is the warning for a budget of n bytes on p: "" unless p

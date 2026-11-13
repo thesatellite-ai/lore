@@ -296,8 +296,8 @@ func TestUsageErrorJSON(t *testing.T) {
 		{[]string{"memory", "list", "--json", "--colour", "never"}, "unknown flag: --colour", listHint},
 		{[]string{"memory", "list", "-Z", "--json=true"}, "unknown shorthand flag: 'Z' in -Z", listHint},
 		{[]string{"--bogus", "--json"}, "unknown flag: --bogus", RootName + " --help lists its flags"},
-		{[]string{"memory", "bogus", "--json"}, `unknown command "bogus" for "` + RootName + ` memory"`, ""},
-		{[]string{"bogus", "--json"}, `unknown command "bogus" for "` + RootName + `"`, ""},
+		{[]string{"memory", "bogus", "--json"}, `unknown command "bogus" for "` + RootName + ` memory"`, RootName + " memory --help lists its commands"},
+		{[]string{"bogus", "--json"}, `unknown command "bogus" for "` + RootName + `"`, RootName + " --help lists its commands"},
 	}
 	for _, c := range cases {
 		r := execute(Build(f.reg, f, WithArgs(c.args)), "", c.args...)
@@ -333,7 +333,7 @@ func TestUsageErrorBytes(t *testing.T) {
 		{[]string{"memory", "list", "--colour", "never", "--json=false"}, "ERROR: [E_INVALID_INPUT] unknown flag: --colour\n" + memListFlagsHint},
 		{[]string{"memory", "list", "-Z"}, "ERROR: [E_INVALID_INPUT] unknown shorthand flag: 'Z' in -Z\n" + memListFlagsHint},
 		{[]string{"--bogus"}, "ERROR: [E_INVALID_INPUT] unknown flag: --bogus\n  hint: " + RootName + " --help lists its flags\n"},
-		{[]string{"memory", "bogus"}, "ERROR: [E_INVALID_INPUT] unknown command \"bogus\" for \"" + RootName + " memory\"\n"},
+		{[]string{"memory", "bogus"}, "ERROR: [E_INVALID_INPUT] unknown command \"bogus\" for \"" + RootName + " memory\"\n  hint: " + RootName + " memory --help lists its commands\n"}, // C-13: a next step
 	}
 	for _, c := range cases {
 		r := execute(Build(f.reg, f, WithArgs(c.args)), "", c.args...)

@@ -814,7 +814,7 @@ lore sync status --json            # {baselined, data_dir_present, tracked_files
 lore sync conflicts [--all] [--json]
 lore sync resolve --id <n> --take kept|other
 lore trash list --local [--json]   # rows sync removed because their file disappeared (this machine)
-lore trash restore --target <n> --local     # core rows refuse and name the `git checkout` that brings the file back
+lore trash restore --id <n> --local     # core rows refuse and name the `git checkout` that brings the file back
 lore sync peek --ref <git-ref> [--table table] [--json]          # rows on another branch, nothing imported
 lore sync promote --ids <id>... --to <branch> [--dry-run]  # new local commit on <branch>; never pushes; not the current branch
 lore sync merge-rows --table <table> --keep <id> --drop <id>   # fold a duplicate: references move to --keep, --drop goes to the trash

@@ -142,6 +142,10 @@ type storeCommit struct {
 	// NewMarker, when set, adds a marker to a tip of lore files only that
 	// has none (LinkWrite.NewMarker), in the same commit.
 	NewMarker func() ([]byte, error)
+	// PushPending, when Change has nothing to put, still pushes a local
+	// branch that is ahead of the remote's (an earlier commit made with
+	// NoPush, B-4: `lore org store add --push` after an add without it).
+	PushPending bool
 }
 
 // storeCommitResult says where the commit went.
@@ -216,7 +220,7 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 		if len(put) > 0 && marker != nil {
 			put[storeMarkerFile] = marker
 		}
-		if len(put) == 0 && attempt == 0 {
+		if len(put) == 0 && attempt == 0 && !(c.PushPending && !c.NoPush && aheadOfRemote(ctx, repo, branch, tip)) {
 			return res, nil // already so: nothing to commit or push
 		}
 		oid := tip
@@ -439,6 +443,13 @@ func metaPathAt(ctx context.Context, repo *gitref.Repo, tip, folder string) (str
 // localRef / trackingRef name a store branch in the clone.
 func localRef(branch string) string    { return "refs/heads/" + branch }
 func trackingRef(branch string) string { return "refs/remotes/" + remoteName + "/" + branch }
+
+// aheadOfRemote reports whether tip is not the remote-tracking tip of
+// branch: a local commit not pushed yet (no tracking ref counts too).
+func aheadOfRemote(ctx context.Context, repo *gitref.Repo, branch, tip string) bool {
+	t, ok, err := repo.ResolveRef(ctx, trackingRef(branch))
+	return err == nil && (!ok || t != tip)
+}
 
 // moveRef points ref at oid from wherever it is now.
 func moveRef(ctx context.Context, repo *gitref.Repo, ref, oid string) error {

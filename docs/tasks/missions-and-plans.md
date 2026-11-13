@@ -145,6 +145,7 @@ lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 $ lore mission done --id msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 completed
+warning: 2 task(s) of this mission are still open; they stay open: tsk_54fe…28f2 Write the product pages, tsk_05e9…4603 Send the invoice reminder; close each with lore task done --id <id> or lore task cancel --id <id> (list them: lore task list --mission msn_7a67…9504) (W_OPEN_TASKS)
 $ lore mission list
 (no missions)
 $ lore mission list --all
@@ -166,7 +167,7 @@ ERROR: [E_NEEDS_CONFIRM] run mission delete?
 (exit 26)
 $ lore mission delete --id msn_c0f3…b5b8 --yes
 lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
-✓ msn_c0f3…b5b8 moved to the trash (restore: lore trash restore --target msn_c0f3…b5b8)
+✓ msn_c0f3…b5b8 moved to the trash (restore: lore trash restore --id msn_c0f3…b5b8)
 ```
 <!-- /example -->
 
@@ -359,7 +360,7 @@ Other traps:
 
 - **Changing a title in the plan file does not change the task.** A re-run finds each task by its key and leaves it as it is. Use `lore task edit` to rename it.
 - **Misspelled fields are ignored.** A field lore does not know, such as `afer:`, is skipped without a warning. Check the `after` part of the `mission apply` output.
-- **`lore mission done` does not check the tasks.** You can close a mission that still has open tasks; they stay open.
+- **`lore mission done` does not close the tasks.** You can close a mission that still has open tasks; they stay open, and lore prints a warning naming them (`W_OPEN_TASKS`) with the commands that close them.
 
 ## Related
 

@@ -449,7 +449,7 @@ func trashDeleteRestore(t *testing.T, tw *trashWorld, tc *trashCase) {
 
 	// Gone from the normal reads, with the trash named.
 	e := trashErr(t, c, "E_IN_TRASH", th.ExitRefused, "show", tc.id)
-	if !strings.Contains(e.Error.Hint, "lore trash restore --target "+tc.id) {
+	if !strings.Contains(e.Error.Hint, "lore trash restore --id "+tc.id) {
 		t.Errorf("show of a trashed row names the restore: %+v", e.Error)
 	}
 	if tc.searchable && trashContains(trashSearchIDs(t, c, tc.mark), tc.id) {

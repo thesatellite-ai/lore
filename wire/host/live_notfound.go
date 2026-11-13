@@ -183,6 +183,7 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 		table = nounTable
 	}
 	remote, branch := defaultLiveRemote, defaultBranchFallback
+	upToDate := false
 	if root := liveProjectRoot(h.cfg.WorkDir); root != "" && !liveDisabled() {
 		top, folder := livePlace(root)
 		if repo, rerr := gitref.Open(ctx, top, h.git()); rerr == nil && !repo.Bare() {
@@ -195,11 +196,38 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 					return explained
 				}
 				remote, branch = s.ref.RemoteName, s.defaultBranch(ctx)
+				upToDate = holdsBranch(ctx, repo, remote, branch)
 			}
 		}
 	}
 	peek := "lore sync peek --ref " + remote + "/" + branch + " --table " + table
+	if upToDate {
+		// A-15: this branch already holds everything on the default
+		// branch as last fetched, so "while this branch is older" is
+		// wrong; the usual cause is a row of another repo, and a row
+		// pushed since that fetch is the other (peek fetches).
+		return e.WithHint("this branch has everything on " + branch + " as last fetched: the row may belong to another repo (a row lives in one repo's notes: run the command there), or be newer than that fetch: `" + peek + "`")
+	}
 	return e.WithHint("it may have landed on " + branch + " while this branch is older: `" + peek + "`")
+}
+
+// holdsBranch reports whether HEAD already contains remote/branch as
+// last fetched (that tip is an ancestor of HEAD, or HEAD itself). False
+// when either is unknown: the older-branch hint then stays.
+func holdsBranch(ctx context.Context, repo *gitref.Repo, remote, branch string) bool {
+	tip, ok, err := repo.ResolveRef(ctx, "refs/remotes/"+remote+"/"+branch)
+	if err != nil || !ok {
+		return false
+	}
+	head, ok, err := repo.ResolveCommit(ctx, "HEAD")
+	if err != nil || !ok {
+		return false
+	}
+	if tip == head {
+		return true
+	}
+	anc, err := repo.IsAncestor(ctx, tip, head)
+	return err == nil && anc
 }
 
 // purgedHint is the hint of an E_PURGED answer, as the engine's purgedErr

@@ -1,6 +1,6 @@
 # Render and agent files
 
-**In short:** `lore render` writes your most important notes into one file, `.lore/LORE.md`, and adds a short pointer to it at the top of the file each of your coding tools reads when it starts (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, a Cursor rule, or any file you name). No tool is the default: `lore init` wires the tools picked by the setup that applies to the folder, else the tools your repo already uses, and `AGENTS.md` when it finds none.
+**In short:** `lore render` writes your most important notes into one file, `.lore/LORE.md`, and adds a short pointer to it at the top of the file each of your coding tools reads when it starts (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, a Cursor rule, or any file you name). No tool is the default: `lore init` wires the tools picked by the setup that applies to the folder, else the tools your repo already uses, and `AGENTS.md` when it finds none. It saves that choice as the repo's `context.targets` setting; in a repo without that setting (a clone you adopt with `lore init`, or an older repo), `lore init` and `lore render` still wire the setup's tools, next to every file lore already wires.
 
 ## What it is and when you want it
 

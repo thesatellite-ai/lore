@@ -1514,7 +1514,7 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	case in.PR > 0:
 		code = " (pr #" + strconv.Itoa(in.PR) + "); waiting for merge"
 	case in.Commit != "":
-		code = " (commit " + shortSHA(in.Commit) + "); waiting for merge"
+		code = " (commit " + shortSHA(in.Commit) + o.linkNote(ctx, id.String(), strings.TrimSpace(in.Commit)) + "); waiting for merge"
 	}
 	// TSQ14 / 17.2: the history's status entry records the unticked items.
 	w, err := o.patchAt(withHistoryNote(ctx, "open_items_at_close: "+strconv.Itoa(forced)), o.hist(), dsrc, id, patch, work.Success+" "+id.String()+" done"+code+"\n")
@@ -1555,6 +1555,31 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 
 // Text implements op.Texter.
 func (o DoneOut) Text() string { return o.Human }
+
+// linkNote is the done line's word on whether the commit is linked to
+// the task. --commit is kept on the task (done_commit) but makes no
+// commit_links row, so `lore commit show` does not list the task until
+// `lore link add`: A-11, a newcomer read "done (commit …)" as linked. An
+// unreadable link table says nothing rather than guess.
+func (o ops) linkNote(ctx context.Context, id, commit string) string {
+	want := strings.ToLower(commit)
+	for _, src := range engine.ReadStoresOf(o.env) {
+		rows, err := o.env.List(ctx, src, schema.TableCommitLinks)
+		if err != nil {
+			return ""
+		}
+		for _, r := range rows {
+			sha := strings.ToLower(work.Field(r, fieldLinkSHA))
+			if !r.Deleted && work.Field(r, schema.FieldEntityID) == id && sha != "" && (strings.HasPrefix(sha, want) || strings.HasPrefix(want, sha)) {
+				return ", linked"
+			}
+		}
+	}
+	return ", not linked to the task; link it with: lore link add --entity " + id + " --commit " + commit
+}
+
+// fieldLinkSHA is the commit_links field holding the linked sha.
+const fieldLinkSHA = "sha"
 
 // shortSHAlen is how much of a commit v0.1.17 printed.
 const shortSHAlen = 7

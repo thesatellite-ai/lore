@@ -106,7 +106,7 @@ func InTrashErr(r row.Row) error {
 			msg += " (" + strings.Join(parts, " ") + ")"
 		}
 	}
-	return errs.New(errs.InTrash, msg).WithHint("lore trash show --id " + r.ID.String() + "; bring it back with lore trash restore --target " + r.ID.String())
+	return errs.New(errs.InTrash, msg).WithHint("lore trash show --id " + r.ID.String() + "; bring it back with lore trash restore --id " + r.ID.String())
 }
 
 // Read returns r's delete fields (ok false when r is not in the trash).

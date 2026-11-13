@@ -16,6 +16,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/logic/timecalc"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -24,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
@@ -80,7 +82,7 @@ type TimeLogIn struct {
 	ID       string      `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	Duration string      `json:"duration" arg:"1" desc:"how long: 45m, 1h30m, 1.5h (no day unit; at most time.max_entry)"`
 	Note     string      `json:"note,omitempty" flag:"note" desc:"one line, up to 200 characters"`
-	At       string      `json:"at,omitempty" flag:"at" desc:"when: a day (2026-11-17) or a datetime with zone (2026-11-17T14:00+05:30); default: ends now"`
+	At       string      `json:"at,omitempty" flag:"at" desc:"when: a day (2026-11-17 or a phrase: yesterday, mon, in 3d) or a datetime with zone (2026-11-17T14:00+05:30); default: ends now"`
 	By       op.ActorRef `json:"by,omitempty" flag:"by" desc:"who did the work (handle, actor id, @me); default: you"`
 }
 
@@ -90,7 +92,7 @@ type TimeEditIn struct {
 	Duration string      `json:"duration,omitempty" flag:"duration" desc:"new length (keeps the start)"`
 	Start    string      `json:"start,omitempty" flag:"start" desc:"new start (datetime with zone)"`
 	End      string      `json:"end,omitempty" flag:"end" desc:"new end (datetime with zone)"`
-	At       string      `json:"at,omitempty" flag:"at" desc:"new day or datetime of a manual entry"`
+	At       string      `json:"at,omitempty" flag:"at" desc:"new day (YYYY-MM-DD or a date phrase) or datetime with zone of a manual entry"`
 	Note     string      `json:"note,omitempty" flag:"note" desc:"new note"`
 	By       op.ActorRef `json:"by,omitempty" flag:"by" desc:"new worker"`
 }
@@ -708,9 +710,12 @@ func parseNote(raw string) (string, error) {
 	return s, nil
 }
 
-// parseAt reads --at: a day (no clock time) or a datetime WITH a zone (a
-// zoneless RFC3339 is refused, R12). day is set for a day, t for a time.
-func parseAt(raw string) (day string, t time.Time, err error) {
+// parseAt reads --at (and --start/--end, flag names which): a day, or a
+// datetime WITH a zone (a zoneless RFC3339 is refused, R12). day is set
+// for a day, t for a time. A-10: a day may also be any date phrase of
+// every other date flag (yesterday, mon, in 3d; dateflag), read with c; a
+// phrase with a clock time is refused like a zoneless datetime.
+func parseAt(c dates.Clock, flag, raw string) (day string, t time.Time, err error) {
 	raw = strings.TrimSpace(raw)
 	if d, derr := time.Parse(timeentry.DayLayout, raw); derr == nil {
 		return d.Format(timeentry.DayLayout), time.Time{}, nil
@@ -720,8 +725,12 @@ func parseAt(raw string) (day string, t time.Time, err error) {
 			return "", v, nil
 		}
 	}
-	return "", time.Time{}, errs.New(errs.InvalidInput, "--at "+work.Quote(raw)+" is not a day or a datetime with a zone").
-		WithHint("e.g. 2026-11-17 or 2026-11-17T14:00+05:30")
+	bad := errs.New(errs.InvalidInput, "--"+flag+" "+work.Quote(raw)+" is not a day, a date phrase or a datetime with a zone").
+		WithHint("e.g. --" + flag + " 2026-11-17, --" + flag + " yesterday or --" + flag + " 2026-11-17T14:00+05:30")
+	if r, _, perr := dateflag.Parse(c, flag, raw); perr == nil && r.Day {
+		return r.Text(), time.Time{}, nil
+	}
+	return "", time.Time{}, bad
 }
 
 // meOrBy resolves --by (default the caller) to an actor id.
@@ -767,9 +776,13 @@ func (o ops) timeLog(ctx context.Context, in TimeLogIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
+	clk, err := o.clock(ctx, store.SourceRepo)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
 	day, at := "", time.Time{}
 	if in.At != "" {
-		if day, at, err = parseAt(in.At); err != nil {
+		if day, at, err = parseAt(clk, "at", in.At); err != nil {
 			return work.WriteOut{}, err
 		}
 	}
@@ -908,18 +921,22 @@ func (o ops) timeEdit(ctx context.Context, in TimeEditIn) (work.WriteOut, error)
 	before := e
 	manual := e.Source == timeentry.SourceManual
 	start, end := e.StartTime(), e.EndTime()
+	clk, err := o.clock(ctx, h.src)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
 	if in.Start != "" {
-		if _, start, err = parseAt(in.Start); err != nil || start.IsZero() {
+		if _, start, err = parseAt(clk, "start", in.Start); err != nil || start.IsZero() {
 			return work.WriteOut{}, errs.New(errs.InvalidInput, "--start needs a datetime with a zone").WithHint("e.g. 2026-11-12T09:00+01:00")
 		}
 	}
 	if in.End != "" {
-		if _, end, err = parseAt(in.End); err != nil || end.IsZero() {
+		if _, end, err = parseAt(clk, "end", in.End); err != nil || end.IsZero() {
 			return work.WriteOut{}, errs.New(errs.InvalidInput, "--end needs a datetime with a zone").WithHint("e.g. 2026-11-12T18:00+01:00")
 		}
 	}
 	if in.At != "" {
-		day, at, aerr := parseAt(in.At)
+		day, at, aerr := parseAt(clk, "at", in.At)
 		if aerr != nil {
 			return work.WriteOut{}, aerr
 		}

@@ -471,7 +471,46 @@ func (o ops) done(ctx context.Context, in IDIn) (work.WriteOut, error) {
 		return work.WriteOut{}, err
 	}
 	patch[work.FieldCompleted] = work.Now(o.env)
-	return work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" completed\n")
+	open, err := o.openTasks(ctx, id.String())
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	out, err := work.Patch(ctx, o.env, Noun, table, id, patch, work.Success+" "+id.String()+" completed\n")
+	if err != nil || len(open) == 0 {
+		return out, err
+	}
+	// A-17: done with open tasks is allowed (a mission can end with work
+	// left over), but never silent: say which tasks stay open and how to
+	// close them.
+	msg := strconv.Itoa(len(open)) + " task(s) of this mission are still open; they stay open: " + strings.Join(open[:min(len(open), maxOpenShown)], ", ")
+	if len(open) > maxOpenShown {
+		msg += ", …"
+	}
+	msg += "; close each with lore task done --id <id> or lore task cancel --id <id> (list them: lore task list --mission " + id.String() + ")"
+	out.Warnings = append(out.Warnings, work.Warning{Code: warnOpenTasks, Field: work.FieldStatus, Message: msg})
+	return out, nil
+}
+
+// warnOpenTasks is the warning code of a mission done with open tasks.
+const warnOpenTasks = "W_OPEN_TASKS"
+
+// maxOpenShown caps the open tasks one done line names.
+const maxOpenShown = 5
+
+// openTasks lists the mission's tasks that are neither done nor
+// cancelled, as "tsk_… title".
+func (o ops) openTasks(ctx context.Context, id string) ([]string, error) {
+	rows, err := o.missionRows(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, r := range rows {
+		if st := work.Field(r, work.FieldStatus); st != schema.TaskStatusDone && st != schema.TaskStatusCancelled {
+			out = append(out, r.ID.String()+" "+work.Field(r, work.FieldTitle))
+		}
+	}
+	return out, nil
 }
 
 // setStatus sets the mission's status (pause / resume).

@@ -33,7 +33,7 @@ alice <alice@agency.example>  hand edit: memories mem_54fe…28f2
 |---|---|
 | changed fields in a row file | writes the changed fields as an edit: a new HLC, `updated_by` = you, `updated_at` = now, so your change wins over older changes when teammates sync |
 | added a new row file (named after its own id) | creates the row with that id |
-| deleted a row file | deletes the row the way `lore task delete` (or the row's own delete) does: it goes to the trash, and `lore trash restore --target <id>` brings it back |
+| deleted a row file | deletes the row the way `lore task delete` (or the row's own delete) does: it goes to the trash, and `lore trash restore --id <id>` brings it back |
 | moved a row file to another folder of the store (same id) | moves the row there, as a move with lore would |
 | changed nothing but spacing, or only fields lore writes itself (`_hlc`, `updated_at`) | puts the file back as lore wrote it |
 
@@ -55,7 +55,7 @@ D  _store/memories/mem_54fe…28f2.json
 $ lore memory list --store notes
 lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
 lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_54fe…28f2" in ~/.lore/stores/acme/notes
-  deleted memories mem_54fe…28f2 (moved to the trash; lore trash restore --target mem_54fe…28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json
+  deleted memories mem_54fe…28f2 (moved to the trash; lore trash restore --id mem_54fe…28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json
 (no memories)
 $ lore trash list
 mem_54fe…28f2  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by alice  bat_b4f4…a5b0

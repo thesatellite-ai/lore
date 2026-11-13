@@ -118,7 +118,7 @@ const defaultPageRows = 50
 
 // ShowIn is the input of trash.show.
 type ShowIn struct {
-	ID            string `json:"id" arg:"0" desc:"the row id"`
+	ID            string `json:"id" arg:"0" flag:"id" alias:"target" desc:"the row id"` // --target like restore/purge (A-18)
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive field values (asks first)"`
 	FromHistory   bool   `json:"from_history,omitempty" flag:"from-history" desc:"show a purged row's last content from git history (3.6)"`
 }
@@ -130,7 +130,9 @@ const showSensitiveField = "show_sensitive"
 // TargetIn is the input of trash.restore. The home flags give a row whose
 // parent was purged a new home, or none, in the same write (DELETION 4.2).
 type TargetIn struct {
-	Target     string `json:"target" arg:"0" desc:"a row id or a batch id (bat_…)"`
+	// A-18: --id like trash show (and every other command naming a row);
+	// --target, the first spelling, stays an alias.
+	Target     string `json:"target" arg:"0" flag:"id" alias:"target" desc:"a row id or a batch id (bat_…)"`
 	Parent     string `json:"parent,omitempty" flag:"parent" desc:"new parent task (tsk_…) for a sub-task whose parent was purged"`
 	NoParent   bool   `json:"no_parent,omitempty" flag:"no-parent" desc:"restore a sub-task whose parent was purged as a top-level task"`
 	Tasklist   string `json:"tasklist,omitempty" flag:"tasklist" nonempty:"a tasklist id (tlt_…); --no-tasklist restores with none" desc:"new tasklist (tlt_…) for a task whose tasklist was purged"`
@@ -146,14 +148,14 @@ type TargetIn struct {
 
 // PurgeIn is the input of trash.purge.
 type PurgeIn struct {
-	Target    string `json:"target,omitempty" arg:"0" desc:"a row id or a batch id (bat_…); or use --older-than / --expired"`
+	Target    string `json:"target,omitempty" arg:"0" flag:"id" alias:"target" desc:"a row id or a batch id (bat_…); or use --older-than / --expired"`
 	OlderThan string `json:"older_than,omitempty" flag:"older-than" desc:"purge rows deleted longer ago than this (180d, 720h)"`
 	Expired   bool   `json:"expired,omitempty" flag:"expired" desc:"purge rows past trash.retention_days"`
 	// ArchivedBefore purges archived rows (archived_at before a date or
 	// an age), the v0.1.17 `lore sync purge --archived-before` (DEL-ARCH).
 	ArchivedBefore string `json:"archived_before,omitempty" flag:"archived-before" desc:"purge archived rows archived before a date (2006-01-02) or an age (90d)"`
 	DryRun         bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show what would be purged; write nothing"`
-	Confirm        bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: purge removes content for good"`
+	Confirm        bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: purge removes content for good (--yes does not purge)"`
 	// Local and Purged together drop this machine's safety copies of rows
 	// the repo's _purged.json lists (local_purged.go, DELETION 3.10).
 	Local  bool `json:"local,omitempty" flag:"local" desc:"with --purged: this machine's safety copies (_lore_sync_trash) only"`
@@ -293,9 +295,9 @@ func Ops(env Env) []op.Entry {
 			// MayAsk: the restore re-scan may ask about a secret (P2-DEL-3,
 			// FB-SEC-1), so the answer flags (--secret-ref,
 			// --secret-unstored, --not-a-secret --reason) and --yes exist.
-			Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "bring a row back", CLI: "lore trash restore --target rul_1f3a"}, {Title: "undo a whole bulk delete", CLI: "lore trash restore --target bat_9e02"}}}, o.restore),
+			Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "bring a row back", CLI: "lore trash restore --id rul_1f3a"}, {Title: "undo a whole bulk delete", CLI: "lore trash restore --id bat_9e02"}}}, o.restore),
 		op.Define(op.Spec{Name: OpPurge, Summary: "Remove rows from the trash for good, with their comments and links (a tombstone stays forever); needs --confirm",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported), Examples: []op.Example{{Title: "see what a purge would remove", CLI: "lore trash purge --older-than 180d --dry-run"}, {Title: "remove one row for good", CLI: "lore trash purge --target rul_1f3a --confirm"}}}, o.purge),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported), Examples: []op.Example{{Title: "see what a purge would remove", CLI: "lore trash purge --older-than 180d --dry-run"}, {Title: "remove one row for good", CLI: "lore trash purge --id rul_1f3a --confirm"}}}, o.purge),
 		op.Define(op.Spec{Name: OpStats, Summary: "Count the trash per type, store and deleter, rows past retention, and tombstones",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: read,
 			Examples: []op.Example{{Title: "trash counts as JSON", CLI: "lore trash stats --json", Want: `"tombstones"`}}}, o.stats),
@@ -500,7 +502,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 	}
 	if modes != 1 {
 		return ResultOut{}, errs.New(errs.InvalidInput, "trash purge: give exactly one of <id|batch>, --older-than, --expired or --archived-before").
-			WithHint("see what is there with `lore trash list`, then e.g. lore trash purge --target <id> --confirm")
+			WithHint("see what is there with `lore trash list`, then e.g. lore trash purge --id <id> --confirm")
 	}
 	if before != "" {
 		return o.purgeArchived(ctx, before, in.DryRun, in.Confirm)
@@ -514,7 +516,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 			return resultOf("would purge", res, true), nil
 		}
 		if !in.Confirm {
-			return ResultOut{}, needsConfirm("purge removes "+target+" (its dependents in the trash, its comments and links too) for good; only a tombstone stays", "trash", "purge", target, "--confirm")
+			return ResultOut{}, needsConfirm(ctx, "purge removes "+target+" (its dependents in the trash, its comments and links too) for good; only a tombstone stays", "trash", "purge", "--id", target, "--confirm")
 		}
 		res, err := o.env.PurgeTrash(ctx, target)
 		if err != nil {
@@ -536,7 +538,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		args = []string{"trash", "purge", "--older-than", in.OlderThan, "--confirm"}
 	}
 	if !in.DryRun && !in.Confirm {
-		return ResultOut{}, needsConfirm("purge removes every matching row in the trash (and their comments and links) for good; only tombstones stay", args...)
+		return ResultOut{}, needsConfirm(ctx, "purge removes every matching row in the trash (and their comments and links) for good; only tombstones stay", args...)
 	}
 	res, err := o.env.PurgeOlder(ctx, cutoff, in.Expired, in.DryRun)
 	if err != nil {
@@ -575,7 +577,7 @@ func (o ops) purgeArchived(ctx context.Context, before string, dry, confirm bool
 		return ResultOut{}, errs.New(errs.Unsupported, "trash purge: --archived-before is not available here")
 	}
 	if !dry && !confirm {
-		return ResultOut{}, needsConfirm("purge removes every row archived before "+before+" for good; only tombstones stay",
+		return ResultOut{}, needsConfirm(ctx, "purge removes every row archived before "+before+" for good; only tombstones stay",
 			"trash", "purge", "--archived-before", before, "--confirm")
 	}
 	res, err := p.PurgeArchived(ctx, cutoff, dry)
@@ -753,10 +755,16 @@ func fieldText(r row.Row, name string) string {
 	return v.String()
 }
 
-// needsConfirm is E_NEEDS_CONFIRM naming --confirm (DQ2: --yes never purges).
-func needsConfirm(msg string, args ...string) error {
+// needsConfirm is E_NEEDS_CONFIRM naming --confirm (DQ2: --yes never
+// purges). A-18: when --yes was given it says so, since everywhere else
+// --yes is the confirmation.
+func needsConfirm(ctx context.Context, msg string, args ...string) error {
+	hint := "ask the person, then re-run with --confirm"
+	if c, ok := engine.CallerOf(ctx); (ok && c.Yes) || op.Confirmed(ctx) {
+		hint = "--yes does not purge: a purge removes content for good, so it takes its own --confirm; ask the person, then re-run with --confirm"
+	}
 	return errs.New(errs.NeedsConfirm, "trash: "+msg).
-		WithHint("ask the person, then re-run with --confirm").
+		WithHint(hint).
 		WithQuestion(msg+"?").
 		WithNext("lore", args...)
 }

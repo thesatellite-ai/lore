@@ -542,6 +542,19 @@ func (h *Host) contextTargetsOf(ctx context.Context, app *wire.App) ([]string, b
 type targetPick struct {
 	targets []contextTarget
 	sel     toolprofile.Selection
+	// setup names the setup whose tools chose the targets (ReasonSetup).
+	setup string
+}
+
+// setupTools is the tools of the guided setup that applies in this repo
+// and that setup's name (wire.App.SetupInitTools): none without an app,
+// a setup, or a chosen tool with a pointer file.
+func (h *Host) setupTools(ctx context.Context) ([]string, string) {
+	if h.app == nil {
+		return nil, ""
+	}
+	st := h.app.SetupInitTools(ctx)
+	return st.Profiles, st.Setup
 }
 
 // printTargetPick prints how the targets were chosen (silent for an
@@ -551,6 +564,8 @@ func (h *Host) printTargetPick(w *strings.Builder, pick targetPick) {
 	switch pick.sel.Reason {
 	case toolprofile.ReasonDetected, toolprofile.ReasonFallback:
 		fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), describeReason(pick.sel.Reason))
+	case toolprofile.ReasonSetup:
+		fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), setupReason(pick.setup))
 	case toolprofile.ReasonWired, toolprofile.ReasonSetting:
 	}
 	// TOOL NEUTRAL, no surprises: a tool file added after lore was wired
@@ -601,6 +616,11 @@ func (h *Host) resolveTargets(ctx context.Context, root string, values []string,
 			pick.sel = sel
 		} else {
 			pick.sel = reg.Resolve(rootProbe{root: root})
+			// A-9: no row, so the guided setup that applies here names the
+			// tools (the same ones `lore init` wires), before detection.
+			if names, setup := h.setupTools(ctx); len(names) > 0 {
+				pick.sel, pick.setup = reg.FromSetup(names, pick.sel, rootProbe{root: root}), setup
+			}
 		}
 		for _, p := range pick.sel.Profiles {
 			pick.targets = append(pick.targets, contextTarget{profile: p, file: p.PointerFile, known: true})
@@ -661,6 +681,9 @@ func describeTargets(ts []contextTarget) string {
 
 // describeReason says in words why these targets were chosen.
 func describeReason(r toolprofile.Reason) string {
+	if r == toolprofile.ReasonSetup {
+		return setupReason("")
+	}
 	switch r {
 	case toolprofile.ReasonDetected:
 		return "detected in this repo; change with --target <profile>"
@@ -671,6 +694,14 @@ func describeReason(r toolprofile.Reason) string {
 	case toolprofile.ReasonWired:
 	}
 	return "already wired"
+}
+
+// setupReason says the targets are the tools a guided setup chose.
+func setupReason(setup string) string {
+	if setup == "" {
+		return "the tools of the setup that applies here; change with --target <profile>"
+	}
+	return "the tools of setup " + setup + "; change with --target <profile>"
 }
 
 // stitchPointer ensures t's tool file carries the lore pointer block,

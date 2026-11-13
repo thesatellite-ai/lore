@@ -140,7 +140,7 @@ func (o ops) nodeFindings(ctx context.Context, f forest, id string, depthCap map
 		if pid, perr := ids.ParseAny(stored); perr == nil {
 			if lookup.InTrash(ctx, o.env, engine.Ref{Store: s.Source, Table: table, ID: pid}) != nil {
 				fd.Message = "parent " + stored + " is in the trash; " + id + " is shown at top level"
-				fd.Fix = "lore trash restore --target " + stored + " (or lore task edit --id " + id + " --no-parent)"
+				fd.Fix = "lore trash restore --id " + stored + " (or lore task edit --id " + id + " --no-parent)"
 			}
 		}
 		out = append(out, fd)

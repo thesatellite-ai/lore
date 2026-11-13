@@ -182,7 +182,7 @@ ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3…b5b8 Test task, please ignore?
 (exit 26)
 $ lore task delete --id tsk_c0f3…b5b8 --yes
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
-✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore --target tsk_c0f3…b5b8)
+✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore --id tsk_c0f3…b5b8)
 ```
 <!-- /example -->
 

@@ -406,7 +406,8 @@ func TestCLITree_UnknownSubcommand(t *testing.T) {
 		if !n.PureGroup {
 			continue
 		}
-		want := fmt.Sprintf("ERROR: [E_INVALID_INPUT] unknown command %q for %q\n", cliNoWord, n.name())
+		// C-13: the refusal names a next step, where the commands are listed
+		want := fmt.Sprintf("ERROR: [E_INVALID_INPUT] unknown command %q for %q\n  hint: %s --help lists its commands\n", cliNoWord, n.name(), n.name())
 		if r.Code != cliExitUsage || r.Stderr != want || r.Stdout != "" {
 			t.Errorf("%s: want exit %d and exactly %q: %s", n.name(), cliExitUsage, want, r)
 		}

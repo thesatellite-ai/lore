@@ -146,7 +146,7 @@ local m_demo; m_demo=$(id mem)
 on alice work/website "lore memory delete --id $m_demo --reason 'the demo moved' --yes"
 on alice work/website "lore trash list"
 on alice work/website "lore trash show --id $m_demo"
-on alice work/website "lore trash restore --target $m_demo"
+on alice work/website "lore trash restore --id $m_demo"
 on alice work/website "lore memory list | grep demo"
 
 note "bulk delete and undo"
@@ -228,5 +228,5 @@ local m_sign; m_sign=$(id mem)
 on alice work/website "lore rule add --body 'Ship only after the client sign-off, see \${row:$m_sign}.'"
 on alice work/website "lore memory delete --id $m_sign --yes"
 on alice work/website "lore lint"
-on alice work/website "lore trash restore --target $m_sign >/dev/null && lore lint --code dangling_ref"
+on alice work/website "lore trash restore --id $m_sign >/dev/null && lore lint --code dangling_ref"
 on alice work/website "git add -A && git commit -qm 'lore: sign-off rule' && git push -q origin main"

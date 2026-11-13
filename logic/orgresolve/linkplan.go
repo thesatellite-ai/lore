@@ -146,7 +146,9 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 			}
 		}
 		if !found {
-			return LinkPlan{}, refuse("--store "+want+" is not one of "+o.Name+"'s stores", "pass one of them: "+storeURLs(o))
+			// B-4: the hint also names the command that makes it one.
+			return LinkPlan{}, refuse("--store "+want+" is not one of "+o.Name+"'s stores",
+				"pass one of them: "+storeURLs(o)+"; or add it to the org first: lore org store add --org "+o.Name+" --url "+req.StoreURL)
 		}
 	}
 	if req.Own && !matchesAny(o.Own, []string{remote}) {

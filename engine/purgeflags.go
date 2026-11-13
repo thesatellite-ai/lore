@@ -27,7 +27,7 @@ const trashLineMark = "moved to the trash"
 
 // softDeleteNote is DQ8's hint after a plain delete given v0.1.17's
 // --confirm: the delete is soft, the purge is a separate command.
-const softDeleteNote = "  note: a delete is soft now (restorable); to remove content for good: lore trash purge --target <id> --confirm\n"
+const softDeleteNote = "  note: a delete is soft now (restorable); to remove content for good: lore trash purge --id <id> --confirm\n"
 
 // bindInputPurge is Run's step for an input embedding op.PurgeFlags (any
 // other input passes through unchanged, pr nil). It refuses --purge

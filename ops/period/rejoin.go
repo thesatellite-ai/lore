@@ -64,7 +64,7 @@ func (o RejoinOut) Preview() string {
 	}
 	lead = "  trashed    "
 	for _, m := range o.TrashedMemberships {
-		fmt.Fprintf(&b, "%s%s (%s) starting %s, %s: lore trash restore --target %s\n", lead, m.Project, strings.Join(m.Roles, listSep), m.StartsOn, MemberTrashReasonUnstarted, m.ID)
+		fmt.Fprintf(&b, "%s%s (%s) starting %s, %s: lore trash restore --id %s\n", lead, m.Project, strings.Join(m.Roles, listSep), m.StartsOn, MemberTrashReasonUnstarted, m.ID)
 		lead = "             "
 	}
 	if len(o.TrashedMemberships) > 0 {

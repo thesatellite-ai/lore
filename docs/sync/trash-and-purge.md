@@ -9,7 +9,7 @@ The files in `.lore/data` are the truth; the database follows them ([How notes t
 | Tool | Use it when |
 |---|---|
 | `git checkout HEAD -- <file>` | a note's file disappeared and you want it back |
-| `lore trash list`, `lore trash show --id <id>`, then `lore trash restore --target <id>` | a note was deleted (or folded by `lore sync merge-rows`) with a lore command |
+| `lore trash list`, `lore trash show --id <id>`, then `lore trash restore --id <id>` | a note was deleted (or folded by `lore sync merge-rows`) with a lore command |
 | `lore batch list`, then `lore batch undo --id <bat_id>` | a bulk command (`delete --where`, a bulk edit, an import) did more than you wanted |
 | `git checkout HEAD -- .lore/data` | the `.lore/data` folder was deleted, or files went missing |
 | `lore trash purge --archived-before <date-or-age> --confirm` | archived notes should be deleted for good, everywhere |
@@ -99,7 +99,7 @@ Purge empties each purged row's file to a deletion marker (only its id and `"_de
 
 ## Step 4 — Delete a note with lore and bring it back
 
-A note deleted with a lore command (`lore memory delete`, `lore rule delete`, …) goes to lore's trash. Its file stays in `.lore/data` with the delete recorded in it, so the delete travels with your next commit like any other change. `--reason` is stored with it; every verb that moves a row to the trash takes it (also `lore task view delete`, `lore task template delete`, `lore link remove`, `lore vars rm`, `lore project delete` and `lore secrets allow rm`), and with the policy `delete.require_reason` on, a delete without one is refused with `E_REASON_REQUIRED`. Rows that belong to the deleted row go into the trash with it in one batch (a task's sub-tasks, a mission's or tasklist's tasks); comments and links on it are their own rows and stay where they are, still pointing at it, so `lore comment list --on-id <id>` keeps listing them and a restore finds the thread intact; only a purge of the row (`lore trash purge --target <id> --confirm`) takes its comments and links with it. `lore trash list` shows each trashed row with when, by whom, why and the batch it belongs to; `lore trash show --id <id>` prints the whole row (sensitive values masked); `lore trash restore --target <id>` brings it back with the same id:
+A note deleted with a lore command (`lore memory delete`, `lore rule delete`, …) goes to lore's trash. Its file stays in `.lore/data` with the delete recorded in it, so the delete travels with your next commit like any other change. `--reason` is stored with it; every verb that moves a row to the trash takes it (also `lore task view delete`, `lore task template delete`, `lore link remove`, `lore vars rm`, `lore project delete` and `lore secrets allow rm`), and with the policy `delete.require_reason` on, a delete without one is refused with `E_REASON_REQUIRED`. Rows that belong to the deleted row go into the trash with it in one batch (a task's sub-tasks, a mission's or tasklist's tasks); comments and links on it are their own rows and stay where they are, still pointing at it, so `lore comment list --on-id <id>` keeps listing them and a restore finds the thread intact; only a purge of the row (`lore trash purge --id <id> --confirm`) takes its comments and links with it. `lore trash list` shows each trashed row with when, by whom, why and the batch it belongs to; `lore trash show --id <id>` prints the whole row (sensitive values masked); `lore trash restore --id <id>` brings it back with the same id:
 
 <!-- example: sync#delete-and-restore -->
 ```console
@@ -110,7 +110,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
   scope: [master]
 $ lore memory delete --id mem_2537…6bbb --reason 'the demo moved' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
-✓ mem_2537…6bbb moved to the trash (restore: lore trash restore --target mem_2537…6bbb)
+✓ mem_2537…6bbb moved to the trash (restore: lore trash restore --id mem_2537…6bbb)
 $ lore trash list
 mem_2537…6bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by alice  reason "the demo moved"  bat_b69e…5ed7
 mem_3b62…e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by bob  reason "merged into mem_4c59…6c38"  bat_f147…5139
@@ -131,7 +131,7 @@ memories mem_2537…6bbb  "The demo is on Friday at 10."  in the trash
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000003Z
-$ lore trash restore --target mem_2537…6bbb
+$ lore trash restore --id mem_2537…6bbb
 lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
 restored 1 row (batch bat_b69e…5ed7)
   mem_2537…6bbb (memories, repo)
@@ -158,7 +158,7 @@ would delete 2 memory(s): mem_0aae…a61f Staging deploys at 9.; mem_6a86…ed8c
 $ lore memory delete --where 'body~=deploys' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_0aae…a61f.json
 lore: wrote ~/work/website/.lore/data/memories/mem_6a86…ed8c.json
-✓ 2 memory(s) (--where) moved to the trash (batch bat_4f89…b64b; restore: lore trash restore --target bat_4f89…b64b)
+✓ 2 memory(s) (--where) moved to the trash (batch bat_4f89…b64b; restore: lore trash restore --id bat_4f89…b64b)
 $ lore trash stats
 3 rows in the trash (0 dependents), 0 past trash.retention_days
 by type
@@ -188,7 +188,7 @@ mem_6a86…ed8c [retrieved] Production deploys on Tuesday.
 ```
 <!-- /example -->
 
-Preview a bulk delete with `--dry-run`; it writes nothing, so it never asks. A batch's `rows` count is the rows it wrote, each once: the single-row delete restored in Step 4 stays `1 rows (repo 1)`, and its list line adds `; restore 1, trash 1`. `lore batch list` filters with `--kind task|meta|delete|resource|import|secrets`, `--by` and `--since`; `lore batch show --all` lists every row instead of a sample. `lore trash restore --target <bat_id>` also brings back a whole delete batch.
+Preview a bulk delete with `--dry-run`; it writes nothing, so it never asks. A batch's `rows` count is the rows it wrote, each once: the single-row delete restored in Step 4 stays `1 rows (repo 1)`, and its list line adds `; restore 1, trash 1`. `lore batch list` filters with `--kind task|meta|delete|resource|import|secrets`, `--by` and `--since`; `lore batch show --all` lists every row instead of a sample. `lore trash restore --id <bat_id>` also brings back a whole delete batch.
 
 ## Try it — the old local safety copies
 
@@ -205,7 +205,7 @@ this machine only: local safety copies of rows sync removed (never shared)
 
 ## Pitfalls
 
-- **A removed file is not in the trash.** `lore trash list` shows notes deleted with a lore command (`lore <kind> delete`, `lore sync merge-rows`), and `lore trash restore --target <id>` brings one back with the same id. A file removed with git comes back from git. Prefer `archive` for notes you may still want to read.
+- **A removed file is not in the trash.** `lore trash list` shows notes deleted with a lore command (`lore <kind> delete`, `lore sync merge-rows`), and `lore trash restore --id <id>` brings one back with the same id. A file removed with git comes back from git. Prefer `archive` for notes you may still want to read.
 - **`lore trash list --local` is only for copies from v0.1.17.** It lists the safety copies an older lore kept in this machine's `lore.db` when a file disappeared; 0.1.18 adds no new ones. Numbers there (`#4`) are per machine, not row ids.
 - **`lore sync trash` is the old spelling.** It still works in 0.1.18, prints a note that names `lore trash --local`, and goes away in the next release.
 - **Purge only touches archived rows.** A row that is not archived is never purged, however old it is.

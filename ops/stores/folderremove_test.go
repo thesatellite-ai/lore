@@ -35,7 +35,7 @@ func TestFolderRemoveWords(t *testing.T) {
 	out := RemovedOut(c)
 	out.Batch, out.Note = "bat_1", "committed here"
 	text := out.Text()
-	for _, want := range []string{"removed folder client_a (prj_1) from acme", "4 rows", "lore trash restore --target bat_1", "lore store folder add --store acme --folder client_a", "committed here"} {
+	for _, want := range []string{"removed folder client_a (prj_1) from acme", "4 rows", "lore trash restore --id bat_1", "lore store folder add --store acme --folder client_a", "committed here"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text %q lacks %q", text, want)
 		}

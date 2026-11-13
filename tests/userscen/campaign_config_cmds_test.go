@@ -233,7 +233,7 @@ func TestCampaignConfig_RepoLifecycle(t *testing.T) {
 	if _, ok := ccRepos(t, c)["web"]; !ok {
 		t.Fatal("an unconfirmed delete removed the repo")
 	}
-	c.MustLore("repo", "delete", web.ID, "--yes").Says(t, "moved to the trash", "lore trash restore --target "+web.ID)
+	c.MustLore("repo", "delete", web.ID, "--yes").Says(t, "moved to the trash", "lore trash restore --id "+web.ID)
 	if _, ok := ccRepos(t, c)["web"]; ok {
 		t.Fatal("deleted repo still listed")
 	}

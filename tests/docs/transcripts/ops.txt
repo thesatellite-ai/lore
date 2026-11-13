@@ -230,7 +230,7 @@ alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'
 .lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
 alice (work/website)$ lore memory delete --id mem_3b6283bc4392c556bbae5f094246e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
-✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore --target mem_3b6283bc4392c556bbae5f094246e913)
+✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore --id mem_3b6283bc4392c556bbae5f094246e913)
 alice (work/website)$ lore doctor
 Status: HEALTHY
 Binary: dev
