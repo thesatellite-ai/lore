@@ -70,6 +70,21 @@ func (c machineConfig) localPersonalV017(home string) string {
 	return ""
 }
 
+// sharedPersonalURL is the store every setup that inherits personal.store
+// opens as `me`: personal.store's url, or for v0.1.17's value `local` its
+// folder (localPersonalV017) as a file:// url; "" when there is none.
+// personalURL alone is "" for `local`, so the setup page offered "Same as
+// my other setups" there and Save refused it (B1-27).
+func (c machineConfig) sharedPersonalURL(home string) string {
+	if u := c.personalURL(); u != "" {
+		return u
+	}
+	if strings.TrimSpace(c.Personal.Store) == PersonalLocalV017 {
+		return fileURL(c.localPersonalV017(home))
+	}
+	return ""
+}
+
 // fileURL is the file:// url of an absolute dir.
 func fileURL(dir string) string {
 	return fileuri.URL(dir, "")

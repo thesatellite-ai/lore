@@ -76,7 +76,16 @@ func readRun(ctx context.Context) bool {
 // reportPushes prints the pushes the clone made since the last report.
 func (b *storePush) reportPushes() {
 	if gb := gitOf(b.inner); gb != nil {
+		b.reportBack(gb)
 		printPushes(b.notes, string(b.name), gb.TakePushes())
+	}
+}
+
+// reportBack says, once, that a store lore had found reset is back on its
+// remote (someone restored it), so the mark is gone and it synced (B2-30).
+func (b *storePush) reportBack(gb *gitbackend.Backend) {
+	if gb.TakeCameBack() {
+		_, _ = fmt.Fprintln(b.notes, "lore: the store at "+gitbackend.OriginAt(gb.Dir())+" is back (someone restored it); store "+cloneStoreName(b.name)+" syncs as usual again")
 	}
 }
 
@@ -94,6 +103,9 @@ func (b *storePush) readRefresh(ctx context.Context, in live.FetchInputs, autopu
 			defer cancel()
 		}
 		rep, err := b.syncInner(ctx, true)
+		if gb := gitOf(b.inner); gb != nil {
+			b.reportBack(gb)
+		}
 		b.carry(rep, err)
 		if len(rep.Refused) > 0 {
 			// a fetch-only sync pushed nothing, so it cannot say a refused
@@ -158,7 +170,13 @@ func (b *storePush) sayWaiting(ctx context.Context) {
 		return // another folder of this clone already named its commits
 	}
 	b.waitSaid = true
-	_, _ = fmt.Fprintln(b.notes, WaitingLine(cloneStoreName(b.name), n))
+	if gitbackend.RemoteResetAt(gb.Dir()) {
+		// B2-32: a reset store's commits are not pushed by a sync or write
+		// (gitbackend remotereset.go): say so, with the two ways out.
+		_, _ = fmt.Fprintln(b.notes, ResetWaitingLine(cloneStoreName(b.name), n, gitbackend.OriginAt(gb.Dir())))
+	} else {
+		_, _ = fmt.Fprintln(b.notes, WaitingLine(cloneStoreName(b.name), n))
+	}
 	if b.stateDir != "" {
 		_ = os.WriteFile(filepath.Join(b.stateDir, waitSaidFile), []byte(said+"\n"), stampFileMode) // best effort: a lost note only repeats the line once
 	}
@@ -236,4 +254,11 @@ func (w *waitedClones) first(dir string, req requestID) bool {
 // WaitingLine is what a read says about commits that wait to be pushed.
 func WaitingLine(storeName string, n int) string {
 	return "lore: store " + storeName + ": " + strconv.Itoa(n) + " local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)"
+}
+
+// ResetWaitingLine is WaitingLine for a store whose remote lore found
+// reset (deleted and made again): no sync pushes these commits until the
+// person picks a way out (B2-32).
+func ResetWaitingLine(storeName string, n int, url string) string {
+	return "lore: store " + storeName + ": the store at " + url + " was reset (deleted and made again); " + strconv.Itoa(n) + " local commit(s) of the old store stay here and lore will not push them on its own: put it back with `lore store push --restore " + url + "`, or start fresh with `lore store forget " + url + " --yes`"
 }

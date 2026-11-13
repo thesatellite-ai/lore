@@ -201,6 +201,9 @@ func loginsOf(t AliasesOut) []onboard.AliasLogin {
 // account refused here rather than by a later network check.
 func (e engine) validateStep(ctx context.Context, step onboard.Step, kind onboard.Kind, answers onboard.Answers) []onboard.FieldError {
 	fe := e.cat.Validate(step, kind, answers)
+	if step.ID == onboard.StepPersonalStore {
+		return withoutUnusedStoreURL(fe, answers)
+	}
 	if step.ID != onboard.StepGitHub {
 		return fe
 	}
@@ -221,6 +224,25 @@ func (e engine) validateStep(ctx context.Context, step onboard.Step, kind onboar
 		}
 	}
 	return fe
+}
+
+// withoutUnusedStoreURL drops the store_url errors of a personal_store
+// answer whose choice does not use the url: only create and existing
+// write it, while the page fills the field for every choice (inherit
+// shows personal.store, which may be the v0.1.17 value "local"). Save
+// refused that value the page filled itself (B1-27, setupe2e pagee2e).
+func withoutUnusedStoreURL(fe []onboard.FieldError, answers onboard.Answers) []onboard.FieldError {
+	switch strings.TrimSpace(answers[onboard.QIDPersonalStore].Text) {
+	case onboard.PersonalStoreCreate, onboard.PersonalStoreExisting:
+		return fe
+	}
+	out := fe[:0:0]
+	for _, f := range fe {
+		if f.Question != onboard.QIDStoreURL {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // ruleAliasUser is the FieldError.Rule of a picked alias that logs in as

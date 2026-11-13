@@ -34,16 +34,6 @@ func (a *App) PushStoreNow(ctx context.Context, in opsstores.PushIn) (opsstores.
 		return opsstores.PushOut{}, errs.New(errs.NotFound, "store push: this machine has no clone of "+raw).
 			WithHint("lore store add <name> " + raw + " attaches it")
 	}
-	if in.Restore {
-		if !gitbackend.RemoteResetAt(dir) {
-			return opsstores.PushOut{}, errs.New(errs.InvalidInput, "store push --restore: lore has not found the store at "+raw+" reset; nothing to restore").
-				WithHint("lore store push " + in.Store + " pushes it as usual")
-		}
-		if err = gitbackend.RestoreRemote(dir); err != nil {
-			return opsstores.PushOut{}, err
-		}
-		out.Restored = true
-	}
 	canon, err := canonical(attach.Store{URL: raw, Branch: in.Branch})
 	if err != nil {
 		return opsstores.PushOut{}, err
@@ -53,6 +43,27 @@ func (a *App) PushStoreNow(ctx context.Context, in opsstores.PushIn) (opsstores.
 		return opsstores.PushOut{}, err
 	}
 	defer func() { _ = b.Close() }() // the sync below is the only work
+	if in.Restore {
+		if !gitbackend.RemoteResetAt(dir) {
+			// B2-31: the person knows the remote was wiped before any
+			// other command found it: check the remote now.
+			gb := gitOf(b)
+			reset := false
+			if gb != nil {
+				if reset, err = gb.RemoteReset(ctx); err != nil {
+					return opsstores.PushOut{}, err
+				}
+			}
+			if !reset {
+				return opsstores.PushOut{}, errs.New(errs.InvalidInput, "store push --restore: the store at "+raw+" was not reset: its remote still shares history with this clone (or could not be reached); nothing to restore").
+					WithHint("`lore sync` sends its waiting commits as usual; lore store doctor shows the store's state")
+			}
+		}
+		if err = gitbackend.RestoreRemote(dir); err != nil {
+			return opsstores.PushOut{}, err
+		}
+		out.Restored = true
+	}
 	rep, err := b.Sync(ctx)
 	if err != nil {
 		return opsstores.PushOut{}, err

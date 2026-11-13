@@ -114,7 +114,20 @@ func (b *Backend) remoteResetError(why string) error {
 // refusal; a clone already marked stays refused.
 func (b *Backend) checkRemoteReset(ctx context.Context, before, remote, h string) error {
 	if RemoteResetAt(b.work) {
-		return b.remoteResetError("found when lore last reached it")
+		// B2-30: someone put the store back (store push --restore on
+		// another machine): the remote shares history with this clone
+		// again, so the mark goes and the sync runs as usual.
+		if back, err := b.sharesHistory(ctx, h, remote); err != nil {
+			return err
+		} else if !back {
+			return b.remoteResetError("found when lore last reached it")
+		}
+		if err := RestoreRemote(b.work); err != nil {
+			return err
+		}
+		b.cameBack.Store(true)
+		b.noteRemoteTip(ctx, remote)
+		return nil
 	}
 	if h == "" {
 		return nil // nothing of ours to push
@@ -127,12 +140,8 @@ func (b *Backend) checkRemoteReset(ctx context.Context, before, remote, h string
 	case remote == "" && before != "":
 		why = "its branch " + b.branch + " is gone"
 	case remote != "":
-		_, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge-base", h, remote}})
-		if err == nil {
-			return nil
-		}
-		if code, ran := exitCode(err); !ran || code != 1 {
-			return errs.Wrap(errs.Internal, "git: compare the clone with the remote", err)
+		if back, err := b.sharesHistory(ctx, h, remote); err != nil || back {
+			return err
 		}
 		why = "its history shares no commit with this clone's"
 	default:
@@ -192,3 +201,28 @@ func RestoreRemote(dir string) error {
 	}
 	return nil
 }
+
+// sharesHistory reports whether the remote tip shares a commit with the
+// clone's head h (one is the other's ancestor, or they forked from a
+// common commit). An absent remote branch shares nothing; a clone with no
+// commit shares with any remote.
+func (b *Backend) sharesHistory(ctx context.Context, h, remote string) (bool, error) {
+	if remote == "" {
+		return false, nil
+	}
+	if h == "" {
+		return true, nil
+	}
+	_, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge-base", h, remote}})
+	if err == nil {
+		return true, nil
+	}
+	if code, ran := exitCode(err); !ran || code != 1 {
+		return false, errs.Wrap(errs.Internal, "git: compare the clone with the remote", err)
+	}
+	return false, nil
+}
+
+// TakeCameBack reports, once, that a sync found a store lore had marked
+// reset back on its remote and cleared the mark (B2-30); wire says so.
+func (b *Backend) TakeCameBack() bool { return b.cameBack.Swap(false) }

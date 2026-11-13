@@ -8,6 +8,7 @@ package wire
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -100,8 +101,37 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 	// that fixed something (or failed part way) may have changed files
 	// around the engine, so the next check starts a new snapshot.
 	shared := engine.WithReadSnapshot(ctx)
-	for _, c := range checks {
-		found, err := c.run(shared)
+	type ran struct {
+		found []DoctorFinding
+		err   error
+	}
+	var results []ran
+	if !fix {
+		// A check that fixes nothing only reads, so they run at once over
+		// the shared snapshot (B1-23: one after another they took ~5 s of
+		// lore doctor in a 5,000-row repo); their order is kept below.
+		if _, err := a.state(ctx); err == nil { // open once, before the checks race to it
+			results = make([]ran, len(checks))
+			var wg sync.WaitGroup
+			for i, c := range checks {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					found, err := c.run(shared)
+					results[i] = ran{found: found, err: err}
+				}()
+			}
+			wg.Wait()
+		}
+	}
+	for i, c := range checks {
+		var found []DoctorFinding
+		var err error
+		if results != nil {
+			found, err = results[i].found, results[i].err
+		} else {
+			found, err = c.run(shared)
+		}
 		if fix && (err != nil || anyFixed(found)) {
 			shared = engine.WithReadSnapshot(ctx)
 		}

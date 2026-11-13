@@ -12,6 +12,7 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -116,6 +117,11 @@ func (c *standaloneClones) ForgetClone(ctx context.Context, in opsstores.ForgetI
 	// (journeys joiner/month3/leave-job-a, agency offboard). The ids are
 	// read before the clones are deleted.
 	ids := c.storeIDsOf(ctx, clones)
+	if len(ids) > 0 {
+		// B2-33: a store init of this url next is "start fresh", not a
+		// first init (storemgr.go reads and drops the note)
+		_ = noteForgottenStore(c.home, norm, time.Now()) // best effort: without it init records the store as a first init would
+	}
 	for _, cl := range clones {
 		if cl.own {
 			if ferr := gitbackend.ForgetCloneRecord(c.home, cl.key); ferr != nil {
@@ -328,4 +334,72 @@ func realChanges(porcelain string) int {
 		n++
 	}
 	return n
+}
+
+// forgottenStoresFile (under <home>/state) names the store urls whose
+// clone `lore store forget` deleted while it held a store: the next
+// `lore store init` of such a url that an org entry lists starts that
+// org's store fresh (B2-33) instead of attaching it to the repo.
+const forgottenStoresFile = "store-forgotten.json"
+
+// forgottenStores is the file: normalised url -> when it was forgotten.
+type forgottenStores struct {
+	Stores map[string]string `json:"stores"`
+}
+
+func forgottenStoresPath(home string) string {
+	return filepath.Join(home, "state", forgottenStoresFile)
+}
+
+func readForgottenStores(home string) forgottenStores {
+	f := forgottenStores{Stores: map[string]string{}}
+	b, err := os.ReadFile(filepath.Clean(forgottenStoresPath(home)))
+	if err != nil || json.Unmarshal(b, &f) != nil || f.Stores == nil {
+		return forgottenStores{Stores: map[string]string{}}
+	}
+	return f
+}
+
+func writeForgottenStores(home string, f forgottenStores) error {
+	p := forgottenStoresPath(home)
+	if len(f.Stores) == 0 {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return errs.FileIO("remove", p, err)
+		}
+		return nil
+	}
+	b, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return errs.Wrap(errs.Internal, "encode "+forgottenStoresFile, err)
+	}
+	if err = os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return errs.FileIO("create", filepath.Dir(p), err)
+	}
+	if err = os.WriteFile(p, append(b, '\n'), 0o600); err != nil {
+		return errs.FileIO("write", p, err)
+	}
+	return nil
+}
+
+// noteForgottenStore records that norm's clone was forgotten.
+func noteForgottenStore(home, norm string, now time.Time) error {
+	f := readForgottenStores(home)
+	f.Stores[norm] = now.UTC().Format(time.RFC3339)
+	return writeForgottenStores(home, f)
+}
+
+// takeForgottenStore reports whether raw's clone was forgotten, and drops
+// the note (one store init consumes it).
+func takeForgottenStore(home, raw string) bool {
+	norm, err := repourl.Normalize(raw)
+	if err != nil {
+		return false
+	}
+	f := readForgottenStores(home)
+	if _, ok := f.Stores[norm]; !ok {
+		return false
+	}
+	delete(f.Stores, norm)
+	_ = writeForgottenStores(home, f) // best effort: a kept note only repeats the start-fresh path once
+	return true
 }

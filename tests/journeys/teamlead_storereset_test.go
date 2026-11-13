@@ -14,6 +14,7 @@ package journeys
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -24,6 +25,13 @@ func TestJourneyTeamLeadStoreWipedEmpty(t *testing.T) {
 	w := tt.w
 	lee := tt.person(tlLee)
 	clone := lee.LorePath("stores", "acme-co", "lore-team")
+	wipe := func() {
+		t.Helper()
+		if err := os.RemoveAll(tt.store.Dir); err != nil {
+			t.Fatal(err)
+		}
+		w.Git(w.Root, "init", "-q", "--bare", "-b", "main", tt.store.Dir)
+	}
 
 	w.Step("day1/team-with-a-project-note", func() {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
@@ -37,10 +45,7 @@ func TestJourneyTeamLeadStoreWipedEmpty(t *testing.T) {
 
 	w.Step("day2/store-repo-made-again-empty", func() {
 		w.AdvanceDays(1)
-		if err := os.RemoveAll(tt.store.Dir); err != nil {
-			t.Fatal(err)
-		}
-		w.Git(w.Root, "init", "-q", "--bare", "-b", "main", tt.store.Dir)
+		wipe()
 		// another fetch of the clone (a read's refresh, the org link
 		// index) prunes the tracking ref before the sync looks
 		lee.OpenClone(tt.store, clone).Git("fetch", "-q", "--prune", "origin")
@@ -61,6 +66,11 @@ func TestJourneyTeamLeadStoreWipedEmpty(t *testing.T) {
 			Never(t, "the next lore command that reaches the store pushes them")
 	})
 
+	w.Step("day2/plain-doctor-says-reset", func() {
+		// B2-32: lore doctor names the reset, not "run lore sync"
+		tt.lore(tlLee, "doctor").Never(t, "a read never pushes: run `lore sync`")
+	})
+
 	w.Step("day2/lee-restores-it", func() {
 		tt.lore(tlLee, "store", "push", tt.store.SSHURL(), "--restore", "--yes").OK(t).Says(t, "is back at")
 		if !tt.store.Has("refs/heads/main") {
@@ -68,5 +78,51 @@ func TestJourneyTeamLeadStoreWipedEmpty(t *testing.T) {
 		}
 		tt.lore(tlLee, "sync").OK(t)
 		tt.lore(tlLee, "store", "doctor").Never(t, "was reset")
+	})
+
+	var backup string
+	w.Step("day3/restored-from-a-backup-elsewhere", func() {
+		// B2-30: the store is wiped, Lee's lore marks it reset, then the
+		// store is put back from a backup (as a teammate's --restore
+		// would): Lee's next sync clears the mark by itself
+		w.AdvanceDays(1)
+		backup = tt.store.Dir + ".backup"
+		w.Git(w.Root, "clone", "-q", "--bare", tt.store.Dir, backup)
+		wipe()
+		tt.lore(tlLee, "sync").Says(t, "was reset")
+		if err := os.RemoveAll(tt.store.Dir); err != nil {
+			t.Fatal(err)
+		}
+		w.Git(w.Root, "clone", "-q", "--bare", backup, tt.store.Dir)
+		tt.lore(tlLee, "sync").OK(t).Says(t, "is back")
+		tt.lore(tlLee, "store", "doctor").Never(t, "was reset")
+		tt.lore(tlLee, "memory", "add", "after the store came back", "--to", tlOrg+"/"+tlProject).OK(t).Never(t, "was reset")
+	})
+
+	w.Step("day4/restore-as-the-first-command", func() {
+		// B2-31: --restore checks the remote itself
+		w.AdvanceDays(1)
+		wipe()
+		tt.lore(tlLee, "store", "push", tt.store.SSHURL(), "--restore", "--yes").OK(t).Says(t, "is back at")
+		if !tt.store.Has("refs/heads/main") {
+			t.Error("--restore as the first command did not put the store back")
+		}
+	})
+
+	w.Step("day5/start-fresh-keeps-it-the-orgs-store", func() {
+		// B2-33: forget + init in the repo: the store stays the org's
+		w.AdvanceDays(1)
+		wipe()
+		tt.lore(tlLee, "store", "forget", tt.store.SSHURL(), "--yes").OK(t)
+		storesFile := filepath.Join(tt.repo[tlLee.Email].Dir, ".lore", "stores.yaml")
+		before, _ := os.ReadFile(storesFile)
+		r := tt.lore(tlLee, "store", "init", tlOrg, tt.store.SSHURL(), "--yes").OK(t)
+		r.Says(t, "org "+tlOrg+"'s store", "lore setup apply "+tlLeadSetup+" --step team", "lore member add").Never(t, "recorded in .lore/stores.yaml")
+		if after, _ := os.ReadFile(storesFile); string(after) != string(before) {
+			t.Errorf("store init changed the code repo's .lore/stores.yaml:\n%s", after)
+		}
+		// the step the hint names writes the org file and roster again
+		tlApply(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, "team", map[string]any{"org": tlOrg, "store_url": tt.store.SSHURL()})
+		tt.lore(tlLee, "member", "list").OK(t).Says(t, tlLee.Email)
 	})
 }
