@@ -43,8 +43,11 @@ const (
 	inviteTimeout = 3 * time.Minute
 )
 
-// reInviteLine is the invite token `lore team invite` prints after "lore setup join".
-var reInviteLine = regexp.MustCompile(`lore setup join (lore-invite:\S+)`)
+// reInviteLine is the invite token `lore team invite` prints after
+// "lore setup join --invite" (the named form every printed command uses
+// since U-4; the 0.1.17 positional form "lore setup join <token>" is still
+// matched so an older lore under test works too).
+var reInviteLine = regexp.MustCompile(`lore setup join (?:--invite )?(lore-invite:\S+)`)
 
 // Invite makes the hub team (from HOME, no repo) and returns an invite
 // line for email. The world must be started and have a gh account (the
