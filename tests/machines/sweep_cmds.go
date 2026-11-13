@@ -164,6 +164,12 @@ var reads = []sweepStep{
 	// the store push tests).
 	{Cmd: "store set", Args: []string{"repo", "push=batch"}, In: inRepo},
 	{Cmd: "store compact", Args: []string{"repo", "--dry-run"}, In: inRepo},
+	// store push: the code repo has no store clone to push (a documented
+	// refusal); --restore on a store lore never found reset refuses too
+	// (the push and restore paths run in the store-reset journeys and
+	// adapters/backend/git TestSyncRefusesAResetRemote).
+	{Cmd: "store push", Args: []string{"repo"}, In: inRepo},
+	{Cmd: "store push", Args: []string{"repo", "--restore", "--yes"}, In: inRepo},
 	{Cmd: "repo list", In: inBoth},
 	{Cmd: "project list", In: inBoth},
 	{Cmd: "project shared-list", In: inRepo},

@@ -226,7 +226,7 @@ $ lore task list
 
 ## Step 7 — Review what was marked not a secret
 
-Every `--not-a-secret` answer is recorded as an allow entry: one row, one field, one rule, with your reason and only a hash of the matched text. `lore secrets allow list` shows them, `lore secrets allow rm <sal_…>` removes one (the finding is reported again on the next scan), and `lore secrets allow <row> --rule <rule> --match <text> --reason <why>` (or `--match-hash` with the `sha256:…` fingerprint a refused commit printed, or the number `lore check leaks --rows` prints) adds one by hand for a finding on a row that is already saved:
+Every `--not-a-secret` answer is recorded as an allow entry: one row, one field, one rule, with your reason and only a hash of the matched text. `lore secrets allow list` shows them, `lore secrets allow rm <sal_…>` removes one (the finding is reported again on the next scan), and `lore secrets allow <row> --rule <rule> --match <text> --reason <why>` (or `--match-hash` with the `sha256:…` fingerprint a refused commit printed, or the number `lore check leaks --rows` prints) adds one by hand for a finding on a row that is already saved: A finding in an ordinary repo file (a schema field named `password`, a test fixture) has no row: a refused commit prints the ready line for it, `lore secrets allow --file <path> --rule <rule> --match-hash sha256:… --reason '<why>'`, which records the repo-relative path, rule and hash; commit the new `.lore/data/secret_allows` file with the change and the commit check accepts that value in that file only (another value in the file, or the same value in another file, is still refused).
 
 <!-- example: secrets#allow -->
 ```console
