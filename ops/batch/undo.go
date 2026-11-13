@@ -376,7 +376,7 @@ func (o UndoOut) Text() string {
 	}
 	if len(o.Trashed) > 0 {
 		b.WriteString("✓ moved " + plural.Count(len(o.Trashed), "row") + " batch " + o.Batch + " created to the trash (batch " + o.Into +
-			"; restore: lore trash restore --target " + o.Into + ")\n")
+			"; restore: lore trash restore --id " + o.Into + ")\n")
 	}
 	if len(o.Reverted) > 0 {
 		b.WriteString("✓ restored " + plural.Count(len(o.Reverted), "row") + " to their values before " + o.Batch +

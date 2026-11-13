@@ -238,5 +238,8 @@ func (e *Engine) unknownTarget(err error) error {
 	for _, s := range e.order {
 		places = append(places, "--to "+string(s))
 	}
-	return ee.WithHint("give one of: " + strings.Join(places, ", ") + " (lore store list shows the attached stores)")
+	// A-15: a project or repo name is the usual wrong guess (`lore move
+	// --to <other repo>`); a row lives in one store and never moves into
+	// another repo's .lore/data, so say what --to names.
+	return ee.WithHint("give one of: " + strings.Join(places, ", ") + " (lore store list shows the attached stores); --to names a store, never another repo: a row cannot move into another repo's notes, add it there instead")
 }

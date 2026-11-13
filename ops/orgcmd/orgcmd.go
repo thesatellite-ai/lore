@@ -262,7 +262,7 @@ func Ops(env Env) []op.Entry {
 				}
 				return h.Use(ctx, in)
 			}),
-	}, refreshOp(o, spec, codes)) // refresh.go
+	}, refreshOp(o, spec, codes), storeAddOp(o, spec, append([]errs.Code{errs.NeedsConfirm}, codes...))) // refresh.go, storeadd.go
 }
 
 // ops binds the run functions to one Env.

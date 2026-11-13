@@ -119,8 +119,25 @@ func TestRunDecisions(t *testing.T) {
 			t.Fatalf("out %+v err %v created %v undone %v primed %v", out, err, f.created, f.undone, f.primed)
 		}
 		want := "✓ adopted the shared lore project at /work/acme-hub\n    project_id: " + f.pid.String() + "\n"
-		if out.Body() != want {
-			t.Fatalf("body %q, want %q", out.Body(), want)
+		if out.Body() != want || f.targets != nil {
+			t.Fatalf("body %q targets %q, want %q and no tool file touched", out.Body(), f.targets, want)
+		}
+	})
+	// A-9: adopting under a setup that chose tools wires them (the host
+	// resolves nil targets: the repo's row, else the setup's tools), and
+	// --target is wired as given; the lines follow the adopted line.
+	t.Run("adopt wires the setup's tools and --target", func(t *testing.T) {
+		f := newFake(t)
+		f.hasProject = true
+		f.setupTools = SetupTools{Setup: "test1", Profiles: []string{"codex"}, Files: []string{"AGENTS.md"}}
+		out, err := Run(ctx, f, InitIn{})
+		if err != nil || !out.Adopted || f.targets != nil || !strings.HasSuffix(out.Body(), "  wired AGENTS.md\n") {
+			t.Fatalf("setup: out %+v err %v targets %q", out, err, f.targets)
+		}
+		g := newFake(t)
+		g.hasProject = true
+		if _, err := Run(ctx, g, InitIn{Target: []string{"cursor"}}); err != nil || len(g.targets) != 1 || g.targets[0] != "cursor" {
+			t.Fatalf("--target: err %v targets %q", err, g.targets)
 		}
 	})
 	t.Run("fresh, flag name lower-cased, origin kept, shared id inherited", func(t *testing.T) {

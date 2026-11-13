@@ -224,12 +224,12 @@ lore: wrote ~/work/website/.lore/data/rules/rul_bfed…eeea.json
   scope: [master] severity: must
 $ lore memory delete --id mem_9a34…b418 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
-✓ mem_9a34…b418 moved to the trash (restore: lore trash restore --target mem_9a34…b418)
+✓ mem_9a34…b418 moved to the trash (restore: lore trash restore --id mem_9a34…b418)
 $ lore lint
 dangling_ref rul_bfed…eeea (repo): body: ${row:mem_9a34…b418} points at no live row
-  fix: lore edit the row, or restore mem_9a34…b418 (lore trash restore --target mem_9a34…b418)
+  fix: lore edit the row, or restore mem_9a34…b418 (lore trash restore --id mem_9a34…b418)
 1 finding(s)
-$ lore trash restore --target mem_9a34…b418 >/dev/null && lore lint --code dangling_ref
+$ lore trash restore --id mem_9a34…b418 >/dev/null && lore lint --code dangling_ref
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
 lint: no findings
 ```

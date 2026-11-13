@@ -193,7 +193,7 @@ func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Re
 		// one delete for every row: one store write per store (owner
 		// report 2026-11-12: a write and a push per row)
 		if derr := md.DeleteMany(bctx, refs); derr != nil {
-			return Result{}, errs.Prefix(sp.Noun+" delete --where: the "+strconv.Itoa(len(refs))+" rows could not go to the trash (batch "+out.Batch+"; `lore trash restore --target "+out.Batch+"` brings back any that did)", derr)
+			return Result{}, errs.Prefix(sp.Noun+" delete --where: the "+strconv.Itoa(len(refs))+" rows could not go to the trash (batch "+out.Batch+"; `lore trash restore --id "+out.Batch+"` brings back any that did)", derr)
 		}
 		refs = nil
 	}
@@ -201,7 +201,7 @@ func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Re
 		if _, derr := env.Delete(bctx, ref); derr != nil {
 			if i > 0 {
 				return Result{}, errs.Prefix(sp.Noun+" delete --where: "+ref.ID.String()+" failed after "+strconv.Itoa(i)+
-					" of "+strconv.Itoa(len(refs))+" went to the trash in batch "+out.Batch+" (lore trash restore --target "+out.Batch+")", derr)
+					" of "+strconv.Itoa(len(refs))+" went to the trash in batch "+out.Batch+" (lore trash restore --id "+out.Batch+")", derr)
 			}
 			return Result{}, derr
 		}

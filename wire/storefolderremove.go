@@ -234,7 +234,7 @@ func (a *App) RemoveFolder(ctx context.Context, in opsstores.FolderRemoveIn, c o
 	if err != nil {
 		if out.Batch != "" {
 			return opsstores.FolderRemoveOut{}, errs.Prefix(folderRemoveVerb+": the rows are in the trash under "+out.Batch+" but the folder is still there", err).
-				WithHint("rerun `lore store folder remove --store " + in.Store + " --folder " + c.Folder + " --purge --yes`, or `lore trash restore --target " + out.Batch + "`")
+				WithHint("rerun `lore store folder remove --store " + in.Store + " --folder " + c.Folder + " --purge --yes`, or `lore trash restore --id " + out.Batch + "`")
 		}
 		return opsstores.FolderRemoveOut{}, err
 	}

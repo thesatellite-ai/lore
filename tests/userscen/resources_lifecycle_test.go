@@ -48,8 +48,8 @@ func TestResourcesLifecycleAddToPurge(t *testing.T) {
 	}
 	c.Lore("resource", "show", "web1").Fails(t, resExitNotFound, "E_NOT_FOUND")
 	// Delete → trash; the row answers E_IN_TRASH with the restore command.
-	c.MustLore("resource", "delete", "web_one", "--yes").Says(t, "moved to the trash", "lore trash restore --target "+add.ID, "still pointing at it: api")
-	c.Lore("resource", "show", "web_one").Fails(t, resExitRefused, "E_IN_TRASH", "lore trash restore --target "+add.ID)
+	c.MustLore("resource", "delete", "web_one", "--yes").Says(t, "moved to the trash", "lore trash restore --id "+add.ID, "still pointing at it: api")
+	c.Lore("resource", "show", "web_one").Fails(t, resExitRefused, "E_IN_TRASH", "lore trash restore --id "+add.ID)
 	if l := resList(t, c, "host"); l.Count != 0 {
 		t.Fatalf("a trashed row leaves list: %+v", l)
 	}

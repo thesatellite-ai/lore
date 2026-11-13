@@ -177,7 +177,7 @@ ERROR: [E_NEEDS_CONFIRM] project delete prj_b69e8368dd4986838455061d5d9e5ed7?
 alice (work/scratch)$ lore project delete --id prj_b69e8368dd4986838455061d5d9e5ed7 --yes
 lore: wrote ~/work/scratch/.lore/data/repos/rep_0aaebe6aca5bb46cc521869f5ba2a61f.json
 lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e8368dd4986838455061d5d9e5ed7.json
-✓ scratch (and this repo's row) moved to the trash (batch bat_6a866bb99ce08addfe04ea845052ed8c; restore: lore trash restore --target bat_6a866bb99ce08addfe04ea845052ed8c)
+✓ scratch (and this repo's row) moved to the trash (batch bat_6a866bb99ce08addfe04ea845052ed8c; restore: lore trash restore --id bat_6a866bb99ce08addfe04ea845052ed8c)
 alice (work/scratch)$ lore project list
 (no projects)
 

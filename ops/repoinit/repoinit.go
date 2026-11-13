@@ -172,7 +172,7 @@ type InitOut struct {
 // Body is the stdout text of `lore init`, byte for byte as before the move.
 func (o InitOut) Body() string {
 	if o.Adopted {
-		return fmt.Sprintf("✓ adopted the shared lore project at %s\n    project_id: %s\n", o.Path, o.ProjectID)
+		return fmt.Sprintf("✓ adopted the shared lore project at %s\n    project_id: %s\n", o.Path, o.ProjectID) + o.ToolLines
 	}
 	from := ""
 	if o.ToolsFromSetup != "" {
@@ -252,6 +252,17 @@ func Run(ctx context.Context, h Host, in InitIn) (InitOut, error) {
 		out.addWarning(warnGitignore, h.EnsureGitignore(ctx))
 		h.Prime(ctx)
 		ok = true
+		// A-9: adopting wires the tools asked for (--target) or chosen by
+		// the setup that applies here, as a fresh init does; with neither
+		// it touches no tool file (a teammate's clone is already wired).
+		// WireToolFiles with no targets reads the repo's context.targets
+		// row first, so a team's saved choice still wins over a setup.
+		st := h.SetupTools(ctx)
+		if len(in.Target) > 0 || len(st.Profiles) > 0 {
+			lines, terr := h.WireToolFiles(ctx, in.Target)
+			out.ToolLines = lines
+			out.addWarning(warnToolFiles, terr)
+		}
 		return out, nil
 	} else if !errs.Has(perr, errs.NotFound) {
 		return InitOut{}, perr

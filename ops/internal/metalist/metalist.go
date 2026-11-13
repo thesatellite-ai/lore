@@ -90,7 +90,7 @@ func (f Trash) TrashNotes(rows []row.Row) []string {
 	if len(in) == 0 {
 		return nil
 	}
-	return []string{"in the trash: " + strings.Join(in, ", ") + " (lore trash show --id <id>; lore trash restore --target <id>)"}
+	return []string{"in the trash: " + strings.Join(in, ", ") + " (lore trash show --id <id>; lore trash restore --id <id>)"}
 }
 
 // Empty reports that no flag was given (the list is unchanged).

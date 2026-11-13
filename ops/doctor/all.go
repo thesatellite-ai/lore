@@ -1002,6 +1002,13 @@ func reportConfigBroken(r *Report, err error) {
 	r.Status = worse(r.Status, out.status)
 }
 
+// NoteNoSetups is doctor --all's note on a machine with no setup (C-12):
+// nothing names the repos, so none was checked.
+const NoteNoSetups = "no setup on this machine, so --all checked no repo (a setup's folders tell it where your repos are)\n" +
+	"  check one repo: run lore doctor inside it\n" +
+	"  every repo under a folder: lore fix --all --dirs <folder> --dry-run (lists each repo and what it needs, changes nothing)\n" +
+	"  make a setup: lore setup"
+
 // addSetups adds the setup part to r: with --all every setup plus the
 // machine checks (6.2, 6.3), else the active setup's [setup] section
 // (6.2 last line). Both fold into r.Status by the 6.4 rule. A binary
@@ -1061,6 +1068,13 @@ func addSetups(ctx context.Context, env Env, in RunIn, r *Report) error {
 		r.disabled = out.disabled
 		r.Notes = append(r.Notes, out.unchecked...)
 		r.unchecked = out.unchecked
+		if len(out.setups) == 0 && len(out.disabled) == 0 {
+			// C-12: --all checks repos through the setups' folders; with
+			// none it checks no repo, and a bare "healthy" read as "every
+			// repo is fine". Say so, with the next steps.
+			r.Notes = append(r.Notes, NoteNoSetups)
+			r.unchecked = append(r.unchecked, NoteNoSetups)
+		}
 		if out.warning != "" {
 			r.Warnings = append(r.Warnings, warnSetupPrefix+out.warning)
 		}

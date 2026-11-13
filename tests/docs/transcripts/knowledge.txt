@@ -135,10 +135,10 @@ lore: wrote ~/work/website/.lore/data/memories/mem_28f8d32584b2db54ffb146bede5b0
   scope: [master]
 alice (work/website)$ lore memory delete --id mem_28f8d32584b2db54ffb146bede5b03df --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_28f8d32584b2db54ffb146bede5b03df.json
-✓ mem_28f8d32584b2db54ffb146bede5b03df moved to the trash (restore: lore trash restore --target mem_28f8d32584b2db54ffb146bede5b03df)
+✓ mem_28f8d32584b2db54ffb146bede5b03df moved to the trash (restore: lore trash restore --id mem_28f8d32584b2db54ffb146bede5b03df)
 alice (work/website)$ lore memory show --id mem_28f8d32584b2db54ffb146bede5b03df || true
 ERROR: [E_IN_TRASH] mem_28f8d32584b2db54ffb146bede5b03df is in the trash (deleted by alice on 2026-11-02 10:02)
-  hint: lore trash show --id mem_28f8d32584b2db54ffb146bede5b03df; bring it back with lore trash restore --target mem_28f8d32584b2db54ffb146bede5b03df
+  hint: lore trash show --id mem_28f8d32584b2db54ffb146bede5b03df; bring it back with lore trash restore --id mem_28f8d32584b2db54ffb146bede5b03df
 
 ### secrets
 alice (work/website)$ lore memory add --body 'The staging password is pass''word=example-only'
@@ -154,7 +154,7 @@ alice (work/website)$ ls .lore/data/memories | grep -c mem_3b6283bc4392c556bbae5
 1
 alice (work/website)$ lore memory delete --id mem_3b6283bc4392c556bbae5f094246e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
-✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore --target mem_3b6283bc4392c556bbae5f094246e913)
+✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore --id mem_3b6283bc4392c556bbae5f094246e913)
 
 ### hotfix
 alice (work/website)$ lore hotfix add --title 'Checkout button is broken on Safari' --body 'Use the old button until the fix ships.' --severity critical
@@ -345,7 +345,7 @@ alice (work/website)$ lore comment search --query confirmed
 cmt_06b12747c0fad05aadf714f05f1d3d1c [decisions/dec_76bd560aff0771fab8457dbfa9823f10] The client confirmed this on the call.
 alice (work/website)$ lore comment delete --id cmt_06b12747c0fad05aadf714f05f1d3d1c --yes
 lore: wrote ~/work/website/.lore/data/comments/cmt_06b12747c0fad05aadf714f05f1d3d1c.json
-✓ cmt_06b12747c0fad05aadf714f05f1d3d1c moved to the trash (restore: lore trash restore --target cmt_06b12747c0fad05aadf714f05f1d3d1c)
+✓ cmt_06b12747c0fad05aadf714f05f1d3d1c moved to the trash (restore: lore trash restore --id cmt_06b12747c0fad05aadf714f05f1d3d1c)
 
 ### tag
 alice (work/website)$ lore tag add --name payments

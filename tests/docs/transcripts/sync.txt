@@ -321,7 +321,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216
   scope: [master]
 alice (work/website)$ lore memory delete --id mem_2537f9b2f7de77bfe5ca958860216bbb --reason 'the demo moved' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json
-✓ mem_2537f9b2f7de77bfe5ca958860216bbb moved to the trash (restore: lore trash restore --target mem_2537f9b2f7de77bfe5ca958860216bbb)
+✓ mem_2537f9b2f7de77bfe5ca958860216bbb moved to the trash (restore: lore trash restore --id mem_2537f9b2f7de77bfe5ca958860216bbb)
 alice (work/website)$ lore trash list
 mem_2537f9b2f7de77bfe5ca958860216bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by alice  reason "the demo moved"  bat_b69e8368dd4986838455061d5d9e5ed7
 mem_3b6283bc4392c556bbae5f094246e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by bob  reason "merged into mem_4c590afb2a0cc7ae1b97b7e4e62d6c38"  bat_f147dd95f1aaf742dd4f5214843a5139
@@ -342,7 +342,7 @@ memories mem_2537f9b2f7de77bfe5ca958860216bbb  "The demo is on Friday at 10."  i
   source_kind: manual
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000003Z
-alice (work/website)$ lore trash restore --target mem_2537f9b2f7de77bfe5ca958860216bbb
+alice (work/website)$ lore trash restore --id mem_2537f9b2f7de77bfe5ca958860216bbb
 lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json
 restored 1 row (batch bat_b69e8368dd4986838455061d5d9e5ed7)
   mem_2537f9b2f7de77bfe5ca958860216bbb (memories, repo)
@@ -359,7 +359,7 @@ would delete 2 memory(s): mem_0aaebe6aca5bb46cc521869f5ba2a61f Staging deploys a
 alice (work/website)$ lore memory delete --where 'body~=deploys' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_0aaebe6aca5bb46cc521869f5ba2a61f.json
 lore: wrote ~/work/website/.lore/data/memories/mem_6a866bb99ce08addfe04ea845052ed8c.json
-✓ 2 memory(s) (--where) moved to the trash (batch bat_4f89f5fcb1d81152bdf3f52979ebb64b; restore: lore trash restore --target bat_4f89f5fcb1d81152bdf3f52979ebb64b)
+✓ 2 memory(s) (--where) moved to the trash (batch bat_4f89f5fcb1d81152bdf3f52979ebb64b; restore: lore trash restore --id bat_4f89f5fcb1d81152bdf3f52979ebb64b)
 alice (work/website)$ lore trash stats
 3 rows in the trash (0 dependents), 0 past trash.retention_days
 by type
@@ -539,12 +539,12 @@ lore: wrote ~/work/website/.lore/data/rules/rul_bfed655e145f36ce2ef425180e72eeea
   scope: [master] severity: must
 alice (work/website)$ lore memory delete --id mem_9a34c925c88945140e68f54b1ba3b418 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34c925c88945140e68f54b1ba3b418.json
-✓ mem_9a34c925c88945140e68f54b1ba3b418 moved to the trash (restore: lore trash restore --target mem_9a34c925c88945140e68f54b1ba3b418)
+✓ mem_9a34c925c88945140e68f54b1ba3b418 moved to the trash (restore: lore trash restore --id mem_9a34c925c88945140e68f54b1ba3b418)
 alice (work/website)$ lore lint
 dangling_ref rul_bfed655e145f36ce2ef425180e72eeea (repo): body: ${row:mem_9a34c925c88945140e68f54b1ba3b418} points at no live row
-  fix: lore edit the row, or restore mem_9a34c925c88945140e68f54b1ba3b418 (lore trash restore --target mem_9a34c925c88945140e68f54b1ba3b418)
+  fix: lore edit the row, or restore mem_9a34c925c88945140e68f54b1ba3b418 (lore trash restore --id mem_9a34c925c88945140e68f54b1ba3b418)
 1 finding(s)
-alice (work/website)$ lore trash restore --target mem_9a34c925c88945140e68f54b1ba3b418 >/dev/null && lore lint --code dangling_ref
+alice (work/website)$ lore trash restore --id mem_9a34c925c88945140e68f54b1ba3b418 >/dev/null && lore lint --code dangling_ref
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34c925c88945140e68f54b1ba3b418.json
 lint: no findings
 alice (work/website)$ git add -A && git commit -qm 'lore: sign-off rule' && git push -q origin main

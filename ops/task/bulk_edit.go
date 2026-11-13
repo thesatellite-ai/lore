@@ -168,7 +168,7 @@ func (o ops) deleteOp(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	}
 	for _, s := range roots {
 		if _, derr := work.Delete(bctx, o.env, Noun, table, s.Row.ID, ""); derr != nil {
-			return work.WriteOut{}, errs.Prefix("task delete --where: "+s.Row.ID.String()+" failed after earlier tasks of batch "+batch.String()+" went to the trash (lore trash restore --target "+batch.String()+")", derr)
+			return work.WriteOut{}, errs.Prefix("task delete --where: "+s.Row.ID.String()+" failed after earlier tasks of batch "+batch.String()+" went to the trash (lore trash restore --id "+batch.String()+")", derr)
 		}
 	}
 	human := trashline.MovedBatch(strconv.Itoa(len(affected))+" tasks (--where)", batch.String())

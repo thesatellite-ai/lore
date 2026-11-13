@@ -133,7 +133,7 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_NOT_FOUND` | 27 | no row with that id | check the id; it may have landed on main while your branch is older. A task or gate command whose `--id` is the task has already fetched once and retried before answering this ([team troubleshooting](../team/troubleshooting.md#e_not_found-on-a-task-id-a-teammate-just-added)) |
+| `E_NOT_FOUND` | 27 | no row with that id | check the id; when your branch is behind main it may have landed there (the hint names `lore sync peek`); when your branch already has main as last fetched, the row may belong to another repo (run the command there) or be newer than that fetch (the same `lore sync peek`). A task or gate command whose `--id` is the task has already fetched once and retried before answering this ([team troubleshooting](../team/troubleshooting.md#e_not_found-on-a-task-id-a-teammate-just-added)) |
 | `E_INTERNAL` | 1 | something failed inside lore | run `lore support-bundle` and file a bug report with it |
 | `E_NOT_IMPLEMENTED` | 23 | this option exists but this build cannot do it yet | read the message; it says what to use instead |
 | `E_UNSUPPORTED` | 23 | the command does not work here, for example outside a git repo, or `lore migrate rollback` after a shared-database conversion | run it inside a git repo; a shared-database conversion has no rollback (see [the shared-database guide](../sync/shared-database-mode-b.md#pitfalls)) |
@@ -182,7 +182,7 @@ ERROR: [E_SQL_REFUSED] only one SELECT, WITH or VALUES statement (optionally aft
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_IN_TRASH` | 23 | an edit or delete of a row that is already in the trash | `lore trash restore --target <id>` first |
+| `E_IN_TRASH` | 23 | an edit or delete of a row that is already in the trash | `lore trash restore --id <id>` first |
 | `E_PURGED` | 23 | the row was removed for good; only a deletion marker is left | nothing to restore; write it again if you need it |
 | `E_PARENT_DELETED` | 23 | a restore of a child whose parent is in the trash | restore the parent first |
 | `E_PARENT_PURGED` | 23 | a restore of a child whose parent was removed for good | restore it under another parent, or not at all |

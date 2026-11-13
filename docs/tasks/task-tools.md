@@ -398,7 +398,7 @@ $ lore task template list
 shop_release  repo  1 task, 3 sub-tasks, 2 checklist items
 $ lore task template delete --name shop_release --yes
 lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34…b418.json
-✓ ttp_9a34…b418 — template shop_release moved to the trash (restore: lore trash restore --target ttp_9a34…b418)
+✓ ttp_9a34…b418 — template shop_release moved to the trash (restore: lore trash restore --id ttp_9a34…b418)
 ```
 <!-- /example -->
 

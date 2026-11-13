@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -75,7 +76,7 @@ func TestReminderLifecycle(t *testing.T) {
 	}
 
 	h.Fails("reminder.delete", `{"id":"`+rfc+`"}`, errs.NeedsConfirm)
-	if got := opstest.Text(h.MustYes("reminder.delete", `{"id":"`+rfc+`"}`)); got != "✓ "+rfc+" moved to the trash (restore: lore trash restore --target "+rfc+")\n" {
+	if got := opstest.Text(h.MustYes("reminder.delete", `{"id":"`+rfc+`"}`)); got != "✓ "+rfc+" moved to the trash (restore: lore trash restore --id "+rfc+")\n" {
 		t.Fatalf("delete %q", got)
 	}
 	if strings.Contains(opstest.Text(h.Must("reminder.list", ``)), rfc) {
@@ -96,8 +97,8 @@ func TestReminderAddRefusals(t *testing.T) {
 		want string
 	}{
 		{`{"message":"x","due":"2099-03-04","recurrence":"2w"}`, errs.InvalidInput, `bad --recurrence "2w" (want 7d | 30d | 1m | 3m | 6m | 1y)`},
-		{`{"message":"x","due":"tomorrow"}`, errs.InvalidInput, "bad --due (want YYYY-MM-DD)"},
-		{`{"message":"x","due":"2099-13-40"}`, errs.InvalidInput, "bad --due"},
+		{`{"message":"x","due":"someday-ish"}`, errs.Date, "--due: \"someday-ish\" is not a date lore reads"},
+		{`{"message":"x","due":"2099-13-40"}`, errs.Date, "--due"},
 		{`{"message":"x","due":"   "}`, errs.InvalidInput, `required flag(s) "due" not set`},
 		{`{"message":"x"}`, errs.InvalidInput, "due"},
 		{`{"message":"   ","due":"2099-01-01"}`, errs.EmptyBody, "message is empty"},
@@ -166,5 +167,20 @@ func TestReminderOnIDDirection(t *testing.T) {
 	}
 	if env.Count != len(allowed) {
 		t.Fatalf("%d reminders, want %d (a refused add wrote a row)", env.Count, len(allowed))
+	}
+}
+
+// TestReminderAddDuePhrase: A-10, --due reads the date grammar of every
+// other date flag (task add --due tomorrow), not only YYYY-MM-DD, and says
+// which day it stored for a phrase; v0.1.17's two forms still read.
+func TestReminderAddDuePhrase(t *testing.T) {
+	h := opstest.New(t)
+	out := h.Must("reminder.add", `{"message":"check rollout","due":"tomorrow"}`)
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	if got := opstest.Text(out); !strings.Contains(got, "due "+tomorrow) || !strings.Contains(got, `(from "tomorrow")`) {
+		t.Fatalf("--due tomorrow: %q (want due %s and the phrase note)", got, tomorrow)
+	}
+	for _, due := range []string{"2099-03-04", "2099-03-04T10:00:00Z", "in 3d"} {
+		h.Must("reminder.add", `{"message":"x","due":`+opstest.Quote(due)+`}`)
 	}
 }

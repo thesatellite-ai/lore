@@ -40,7 +40,11 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), initTargetReason(len(values) > 0, pick.sel.Reason))
+	reason := initTargetReason(len(values) > 0, pick.sel.Reason)
+	if len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetup {
+		reason = setupReason(pick.setup)
+	}
+	fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), reason)
 	out := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
 	for _, t := range pick.targets {
 		if err := h.stitchPointer(w, root, t, out); err != nil {

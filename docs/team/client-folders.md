@@ -137,7 +137,7 @@ ERROR: [E_REFUSED] store folder remove: folder client_north of agency holds 1 re
 <!-- /example -->
 
 - Keep what is in it: move the rows with `lore move --id <id> --to <store>/<folder>`, and unlink each repo with `lore org unlink --org <org> --project <folder>` run in that repo; then remove the empty folder.
-- Or remove it with everything in it: `lore store folder remove --store <store> --folder <folder> --purge --confirm`. The live rows go to the store's trash first (one `bat_` batch), the repo links and the folder's id are dropped. To bring the rows back, make the folder again with `lore store folder add --store <store> --folder <folder>` (it gets the same id), attach it to a repo, then `lore trash restore --target <bat_…>`.
+- Or remove it with everything in it: `lore store folder remove --store <store> --folder <folder> --purge --confirm`. The live rows go to the store's trash first (one `bat_` batch), the repo links and the folder's id are dropped. To bring the rows back, make the folder again with `lore store folder add --store <store> --folder <folder>` (it gets the same id), attach it to a repo, then `lore trash restore --id <bat_…>`.
 - The org folder (`org_folder`, which holds the roster, teams and `lore-org.yaml`) is never removed.
 - For an org store only the org's admin removes folders; for any other store, whoever can push to it. `agents.person_only` can keep coding agents out (`lore policy set --key agents.person_only --value '[store.folder.remove]'`).
 - A repo whose `.lore/stores.yaml` still attaches a removed folder gets a `removed_store_folder` warning from `lore doctor`, naming the commit that removed it and `lore store remove --name <name>`.

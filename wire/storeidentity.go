@@ -118,6 +118,9 @@ func sayCloneIdentity(ctx context.Context, b store.Backend, notice func(string))
 	}
 	if id, ok := gb.IdentitySetUp(); ok {
 		notice(cloneIdentityLine(ctx, gb.Dir(), id))
+		for _, l := range strayCloneLines(gb.Dir()) { // A-16 (strayclone.go)
+			notice(CommandPrefix(ctx) + l)
+		}
 	}
 }
 
@@ -128,6 +131,9 @@ func cloneIdentitySay(notice func(string)) git.Option {
 	return git.WithCloneIdentitySay(func(ctx context.Context, dir string, id git.CloneIdentity) {
 		if notice != nil {
 			notice(cloneIdentityLine(ctx, dir, id))
+			for _, l := range strayCloneLines(dir) { // A-16 (strayclone.go)
+				notice(CommandPrefix(ctx) + l)
+			}
 		}
 	})
 }

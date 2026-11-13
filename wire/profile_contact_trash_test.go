@@ -16,7 +16,7 @@ import (
 
 // TestProfileRosterContactInTrash: over a real git org roster, the roster
 // seam tells a removed (trashed) contact from a gone one, so the contact
-// ops answer E_IN_TRASH with `lore trash restore --target <id>` like every other
+// ops answer E_IN_TRASH with `lore trash restore --id <id>` like every other
 // trashed row (DELETION 3.2): live and purged answer nil, trashed answers
 // E_IN_TRASH; actor.contact.remove of a removed contact says the same.
 func TestProfileRosterContactInTrash(t *testing.T) {
@@ -69,7 +69,7 @@ func TestProfileRosterContactInTrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = r.InTrash(ctx, schema.TableActorContacts, c.ID)
-	if !errs.Has(err, errs.InTrash) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --target "+c.ID.String()) {
+	if !errs.Has(err, errs.InTrash) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --id "+c.ID.String()) {
 		done()
 		t.Fatalf("trashed contact: %v, want E_IN_TRASH with the restore hint", err)
 	}

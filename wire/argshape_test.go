@@ -54,6 +54,10 @@ var registryShapeExceptions = map[string]string{
 	// lore sync promote <id> --to <branch> reads as the destination;
 	// --branch is its alias.
 	"branch": "sync promote names the destination --to (alias --branch)",
+	// trash restore/purge store the row id under JSON "target" (the REST
+	// body since 0.1.18) but name it --id like trash show (A-18), alias
+	// --target; machine reveal's --target is what to reveal, not a row.
+	"target": "trash restore/purge: the row id is --id (alias --target); machine reveal --target is something else",
 }
 
 // opNoun is the noun of an operation name: every part but the verb.

@@ -164,7 +164,7 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		if err := os.Remove(file(jHandA, t2)); err != nil {
 			t.Fatal(err)
 		}
-		lee.Lore(web, "task", "list").OK(t).Says(t, "deleted tasks "+t2, "lore trash restore --target "+t2).Never(t, "Task two")
+		lee.Lore(web, "task", "list").OK(t).Says(t, "deleted tasks "+t2, "lore trash restore --id "+t2).Never(t, "Task two")
 		lee.Lore(web, "trash", "list").OK(t).Says(t, t2)
 		lee.Lore(web, "trash", "restore", t2).OK(t)
 		lee.Lore(web, "show", t2).OK(t).Says(t, "Task two")

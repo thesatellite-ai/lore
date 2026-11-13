@@ -246,7 +246,7 @@ func (o FolderRemoveOut) Text() string {
 	}
 	b.WriteString("\n")
 	if o.Purged && o.Batch != "" {
-		b.WriteString("  its rows are in the store's trash under " + o.Batch + "; to bring them back: `lore store folder add --store " + o.Store + " --folder " + o.Folder + "`, attach the folder to a repo, then `lore trash restore --target " + o.Batch + "`\n")
+		b.WriteString("  its rows are in the store's trash under " + o.Batch + "; to bring them back: `lore store folder add --store " + o.Store + " --folder " + o.Folder + "`, attach the folder to a repo, then `lore trash restore --id " + o.Batch + "`\n")
 	}
 	if o.Note != "" {
 		b.WriteString("  " + o.Note + "\n")

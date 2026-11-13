@@ -57,7 +57,7 @@ Delete the row (or edit the key out) before you commit:
 # alice, in website
 $ lore memory delete --id mem_3b62…e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
-✓ mem_3b62…e913 moved to the trash (restore: lore trash restore --target mem_3b62…e913)
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore --id mem_3b62…e913)
 ```
 <!-- /example -->
 

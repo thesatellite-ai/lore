@@ -442,7 +442,7 @@ func TestContactLookupTrashMatrix(t *testing.T) {
 					}
 					wantCode(t, state, err, want[state])
 					hint := errs.EnvelopeOf(err).Error.Hint
-					if restore := "lore trash restore --target " + id; (state == stTrashed) != strings.Contains(hint, restore) {
+					if restore := "lore trash restore --id " + id; (state == stTrashed) != strings.Contains(hint, restore) {
 						t.Fatalf("%s: hint %q, restore hint wanted only for a trashed contact", state, hint)
 					}
 				})

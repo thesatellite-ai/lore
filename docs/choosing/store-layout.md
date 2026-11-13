@@ -17,7 +17,7 @@ Anything in the client's repo, on any branch or hidden list (a list on GitHub th
 | **A staging branch** | a second branch of the same store, for example `staging` | the same people as the store | you want test notes and staging-only tasks that never mix with the real ones |
 | **Personal store** | `personal: {store: local}` or your own private repo | only you | notes for you alone, like "I prefer tabs over spaces" |
 
-All of these are plain config in `~/.lore/config.yaml`; the commands are the same in every layout. A layout can change later: add a store to the `stores:` list, create it with `lore store init --name <url>`, and link the client's repo to it with `lore org link --org agency --project client --store <url>`.
+All of these are plain config in `~/.lore/config.yaml`; the commands are the same in every layout. A layout can change later: create the store with `lore store init --name <name> --url <url>`, add it to the org with `lore org store add --org agency --url <url> --push --yes` (it adds the store to the org's `lore-org.yaml`, committed in the org store, and to your entry), and link the client's repo to it with `lore org link --org agency --project client --store <url>`.
 
 ## If this, then that
 

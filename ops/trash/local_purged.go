@@ -96,7 +96,7 @@ func (o ops) purgeLocalPurged(ctx context.Context, in PurgeIn) (ResultOut, error
 		return out, nil
 	}
 	if !in.Confirm {
-		return ResultOut{}, needsConfirm("drop "+strconv.Itoa(len(found))+" local cop(ies) of purged rows on this machine for good", localPurgedNext...)
+		return ResultOut{}, needsConfirm(ctx, "drop "+strconv.Itoa(len(found))+" local cop(ies) of purged rows on this machine for good", localPurgedNext...)
 	}
 	d, ok := upgrade.As[LocalCopyDropper](o.env)
 	if !ok {

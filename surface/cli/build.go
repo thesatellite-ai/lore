@@ -3,7 +3,6 @@ package cli
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"slices"
 	"strconv"
@@ -137,7 +136,7 @@ func Build(reg *op.Registry, runner op.Runner, opts ...Option) *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			return usageError(cmd, cfg, fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath()))
+			return unknownWord(cmd, cfg, args[0])
 		},
 	}
 	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error { return cfg.flagError(cmd, err, nil) })
@@ -260,7 +259,7 @@ func group(parent *cobra.Command, name string, cfg config) *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			return usageError(cmd, cfg, fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath()))
+			return unknownWord(cmd, cfg, args[0])
 		},
 	}
 	acceptJSON(g)
@@ -562,21 +561,6 @@ func examples(ex []op.Example) string {
 		lines = append(lines, "  "+x.CLI)
 	}
 	return strings.Join(lines, "\n")
-}
-
-// usageError prints a cobra usage error (unknown flag, unknown shorthand
-// flag, unknown command) as one line on stderr, `ERROR: [E_INVALID_INPUT]
-// <cobra's message>`, and returns it as ExitUsage already printed.
-//
-// FLAG2: a usage error is an invalid argument, so it carries
-// E_INVALID_INPUT and exits 20 (bad_input), not v0.1.17's bare line with
-// exit 1; this supersedes CLI_REFERENCE 1.5. Still no "Run '… --help'"
-// line. Under --json (found in the raw arguments, cfg.args: the flags may
-// not have parsed far enough for cobra to know) it is the same JSON error
-// envelope on stdout every other error prints, so a script reading stdout
-// always gets one document.
-func usageError(cmd *cobra.Command, cfg config, err error) error {
-	return printUsage(cmd, cfg, errs.Wrap(UsageCode, err.Error(), err))
 }
 
 // changed reports whether the flag was given under its name or an alias.

@@ -337,7 +337,7 @@ func (e *Engine) TrashMany(ctx context.Context, refs []Ref) (Written, error) {
 	}
 	if pr := purgeOf(ctx); pr != nil && pr.Asked {
 		return Written{}, errs.New(errs.Unsupported, "a many-row delete goes to the trash; purge its batch afterwards").
-			WithHint("lore trash purge --target <bat_id>")
+			WithHint("lore trash purge --id <bat_id>")
 	}
 	reason, err := trash.Reason(reasonOf(ctx))
 	if err != nil {
@@ -956,7 +956,7 @@ func (e *Engine) checkParents(ctx context.Context, r row.Row, set map[ids.AnyID]
 			} else if ok {
 				in, _ := trash.Read(pr)
 				return errs.New(errs.ParentDeleted, ""+pid.String()+" is in the trash; restore it with its batch "+in.Batch).
-					WithHint("lore trash restore --target " + in.Batch)
+					WithHint("lore trash restore --id " + in.Batch)
 			}
 			sr, err := e.stores[name].Backend.Get(ctx, def.Name, pid)
 			if errors.Is(err, store.ErrNotFound) {
@@ -968,7 +968,7 @@ func (e *Engine) checkParents(ctx context.Context, r row.Row, set map[ids.AnyID]
 			found = true
 			if sr.Deleted {
 				return errs.New(errs.ParentPurged, ""+pid.String()+" was deleted for good; "+r.ID.String()+" cannot come back under it").
-					WithHint("give it a new home in the same restore: lore trash restore --target " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
+					WithHint("give it a new home in the same restore: lore trash restore --id " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
 			}
 		}
 		if !found {
@@ -980,7 +980,7 @@ func (e *Engine) checkParents(ctx context.Context, r row.Row, set map[ids.AnyID]
 		}
 		if !found { // DELETION 4.2: the old parent is in no attached store; never restore an orphan
 			return errs.New(errs.NotFound, ""+r.ID.String()+"'s parent "+pid.String()+" is not in any attached store").
-				WithHint("give it a new home in the same restore: lore trash restore --target " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
+				WithHint("give it a new home in the same restore: lore trash restore --id " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
 		}
 	}
 	return nil
@@ -998,7 +998,7 @@ func (e *Engine) parentPurgedListed(ctx context.Context, r row.Row, pid ids.AnyI
 		}
 		if set[pid.String()] {
 			return errs.New(errs.ParentPurged, ""+pid.String()+" was deleted for good; "+r.ID.String()+" cannot come back under it").
-				WithHint("give it a new home in the same restore: lore trash restore --target " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
+				WithHint("give it a new home in the same restore: lore trash restore --id " + r.ID.String() + " --parent|--tasklist <id>, or --no-parent|--no-tasklist")
 		}
 	}
 	return nil
@@ -1130,7 +1130,7 @@ func (e *Engine) rehome(ctx context.Context, res TrashResult, set map[ids.AnyID]
 			}
 			if pr.Deleted {
 				return res, errs.New(errs.ParentDeleted, ""+h.To.String()+" is deleted; it cannot be the new home").
-					WithHint("restore it first: lore trash restore --target " + h.To.String())
+					WithHint("restore it first: lore trash restore --id " + h.To.String())
 			}
 			t, terr := value.TextOf(h.To.String())
 			if terr != nil {

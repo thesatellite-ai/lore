@@ -55,7 +55,7 @@ lore: wrote ~/work/website/.lore/data/decisions/dec_76bd…3f10.json
 
 ## Step 3 — Search and delete comments
 
-`lore comment search --query <words>` searches the text of every comment. `lore comment delete --id <id> --yes` moves a comment to the trash; `lore trash restore --target <id>` brings it back.
+`lore comment search --query <words>` searches the text of every comment. `lore comment delete --id <id> --yes` moves a comment to the trash; `lore trash restore --id <id>` brings it back.
 
 <!-- example: knowledge#comment only=3,4 -->
 ```console
@@ -64,7 +64,7 @@ $ lore comment search --query confirmed
 cmt_06b1…3d1c [decisions/dec_76bd…3f10] The client confirmed this on the call.
 $ lore comment delete --id cmt_06b1…3d1c --yes
 lore: wrote ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json
-✓ cmt_06b1…3d1c moved to the trash (restore: lore trash restore --target cmt_06b1…3d1c)
+✓ cmt_06b1…3d1c moved to the trash (restore: lore trash restore --id cmt_06b1…3d1c)
 ```
 <!-- /example -->
 

@@ -476,7 +476,7 @@ $ lore resource delete --id hub_prod_new --with-dependents --dry-run
 would delete 3 resources: host hub_prod_new, service hub_api, service hub_web (dry run, nothing written)
 $ lore resource delete --id hub_db --yes
 lore: wrote ~/work/infra/.lore/data/resources/res_d191…45c2.json
-✓ res_…45c2 (hub_db) moved to the trash (restore: lore trash restore --target res_d191…45c2)
+✓ res_…45c2 (hub_db) moved to the trash (restore: lore trash restore --id res_d191…45c2)
 ```
 <!-- /example -->
 

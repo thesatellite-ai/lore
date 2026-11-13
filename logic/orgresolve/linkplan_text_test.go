@@ -34,7 +34,7 @@ func TestPlanLinkRefusalTexts(t *testing.T) {
 			next: "run lore org refresh --org nostores to copy its stores from the team's lore-org.yaml, or add one under stores: in ~/.lore/config.yaml"},
 		{name: "--store not the entry's", mod: func(r *LinkRequest) { r.StoreURL = "git@github.com:betalabs/lore" },
 			msg:  "--store github.com/betalabs/lore is not one of northwind's stores",
-			next: "pass one of them: git@github.com:northwind/lore"},
+			next: "pass one of them: git@github.com:northwind/lore; or add it to the org first: lore org store add --org northwind --url git@github.com:betalabs/lore"}, // B-4
 		{name: "--own on a client repo", mod: func(r *LinkRequest) { r.Own = true },
 			msg:  "--own is only for repos matching the org entry's own: patterns: github.com/acme/app does not match northwind's own: patterns (github.com/northwind/*)",
 			next: "link it without --own (as a client repo), or add a matching pattern to own: in northwind's lore-org.yaml and run lore org refresh --org northwind"},

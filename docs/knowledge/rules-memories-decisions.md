@@ -185,17 +185,17 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 
 ## Step 8 — Delete a row for good
 
-`delete` moves a row to the trash, and it asks first; `--yes` answers for you (a script or an agent has no terminal to answer on). `lore trash restore --target <id>` brings it back; `delete --purge --confirm` (or `lore trash purge --target <id> --confirm` later) removes it for good, keeping only a small marker so an old copy never comes back. Archive is usually what you want.
+`delete` moves a row to the trash, and it asks first; `--yes` answers for you (a script or an agent has no terminal to answer on). `lore trash restore --id <id>` brings it back; `delete --purge --confirm` (or `lore trash purge --id <id> --confirm` later) removes it for good, keeping only a small marker so an old copy never comes back. Archive is usually what you want.
 
 <!-- example: knowledge#delete only=2,3 -->
 ```console
 # alice, in website
 $ lore memory delete --id mem_28f8…03df --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
-✓ mem_28f8…03df moved to the trash (restore: lore trash restore --target mem_28f8…03df)
+✓ mem_28f8…03df moved to the trash (restore: lore trash restore --id mem_28f8…03df)
 $ lore memory show --id mem_28f8…03df || true
 ERROR: [E_IN_TRASH] mem_28f8…03df is in the trash (deleted by alice on 2026-11-02 10:02)
-  hint: lore trash show --id mem_28f8…03df; bring it back with lore trash restore --target mem_28f8…03df
+  hint: lore trash show --id mem_28f8…03df; bring it back with lore trash restore --id mem_28f8…03df
 ```
 <!-- /example -->
 
@@ -244,7 +244,7 @@ $ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
 $ lore memory delete --id mem_3b62…e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
-✓ mem_3b62…e913 moved to the trash (restore: lore trash restore --target mem_3b62…e913)
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore --id mem_3b62…e913)
 ```
 <!-- /example -->
 

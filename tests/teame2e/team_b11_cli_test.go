@@ -224,7 +224,7 @@ func TestB11_CompatFlagsCoreNouns(t *testing.T) {
 			}
 		}
 		before := b11RowFiles(t, c, n.table)
-		c.MustLore(n.name, "delete", id, "--confirm").Says(t, "moved to the trash", "lore trash purge --target <id> --confirm")
+		c.MustLore(n.name, "delete", id, "--confirm").Says(t, "moved to the trash", "lore trash purge --id <id> --confirm")
 		if after := b11RowFiles(t, c, n.table); after != before {
 			t.Fatalf("%s delete --confirm purged the row file (%d -> %d)", n.name, before, after)
 		}
@@ -495,7 +495,7 @@ func TestB11_ResourceMetaDeletePurgeConfirm(t *testing.T) {
 		for _, refused := range [][]string{{"--purge"}, {"--purge", "--yes"}} {
 			c.Lore(append([]string{n.noun, "delete", n.gone}, refused...)...).Fails(t, 26, "E_NEEDS_CONFIRM", "--confirm")
 		}
-		c.MustLore(n.noun, "delete", n.soft, "--confirm").Says(t, "moved to the trash", "lore trash purge --target <id> --confirm")
+		c.MustLore(n.noun, "delete", n.soft, "--confirm").Says(t, "moved to the trash", "lore trash purge --id <id> --confirm")
 		c.MustLore(n.noun, "delete", n.gone, "--purge", "--confirm").Says(t, "purged for good")
 	}
 	c.Lore("resource", "delete", "--kind", "host", "--where", "provider=x", "--purge").Fails(t, 26, "every matching row")

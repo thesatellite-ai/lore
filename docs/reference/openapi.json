@@ -37643,6 +37643,158 @@
         }
       }
     },
+    "/v1/org/stores": {
+      "post": {
+        "operationId": "org.store.add",
+        "summary": "Add a store to an org: its lore-org.yaml (committed in the org store's clone; --push sends it) and this machine's org entry",
+        "tags": [
+          "org"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "description": "the store branch (default: the store's default branch)"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "the store's short name (default: the repo name of --url)"
+                  },
+                  "org": {
+                    "type": "string",
+                    "description": "the org entry (default: the only org entry on this machine, else the active setup's org)"
+                  },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "the store to add: its git url (required)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_NOT_IMPLEMENTED, E_NOT_PROJECT_ROOT, E_ORG_AMBIGUOUS, E_ORG_DISAGREES, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE, E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/orgs/create": {
       "post": {
         "operationId": "org.create",
@@ -49751,7 +49903,7 @@
       },
       "post": {
         "operationId": "reminder.add",
-        "summary": "Add a reminder (--due YYYY-MM-DD)",
+        "summary": "Add a reminder (--due a day or a phrase: 2026-12-01, tomorrow, in 3d)",
         "tags": [
           "reminder"
         ],
@@ -49764,7 +49916,7 @@
                 "properties": {
                   "due": {
                     "type": "string",
-                    "description": "due date YYYY-MM-DD or RFC3339 (required)"
+                    "description": "due date (YYYY-MM-DD, RFC3339 or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM) (required)"
                   },
                   "message": {
                     "type": "string",
@@ -88237,7 +88389,7 @@
                 "properties": {
                   "at": {
                     "type": "string",
-                    "description": "new day or datetime of a manual entry"
+                    "description": "new day (YYYY-MM-DD or a date phrase) or datetime with zone of a manual entry"
                   },
                   "by": {
                     "type": "string",
@@ -88440,7 +88592,7 @@
                 "properties": {
                   "at": {
                     "type": "string",
-                    "description": "when: a day (2026-11-17) or a datetime with zone (2026-11-17T14:00+05:30); default: ends now"
+                    "description": "when: a day (2026-11-17 or a phrase: yesterday, mon, in 3d) or a datetime with zone (2026-11-17T14:00+05:30); default: ends now"
                   },
                   "by": {
                     "type": "string",
@@ -106760,7 +106912,7 @@
                   },
                   "confirm": {
                     "type": "boolean",
-                    "description": "required: purge removes content for good"
+                    "description": "required: purge removes content for good (--yes does not purge)"
                   },
                   "dry_run": {
                     "type": "boolean",

@@ -59,7 +59,7 @@ func TestSecretsVarsLifecycle(t *testing.T) {
 
 	s.c.MustLore("vars", "rm", "database_host", "--yes").Says(t, "removed variable database_host")
 	// The removed variable is in the trash, and show names the way back.
-	s.c.Lore("vars", "show", "database_host").Fails(t, th.ExitRefused, "E_IN_TRASH", "lore trash restore --target "+one.ID)
+	s.c.Lore("vars", "show", "database_host").Fails(t, th.ExitRefused, "E_IN_TRASH", "lore trash restore --id "+one.ID)
 	s.c.Lore("vars", "rm", "database_host").Refused(t)
 	s.c.MustLore("vars", "list").Never(t, "database_host")
 	// A removed variable's name may be set again.

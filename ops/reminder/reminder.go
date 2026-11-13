@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
+	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
 	"slices"
 	"strconv"
 	"strings"
@@ -151,7 +152,7 @@ type AddIn struct {
 	engine.MetaFlags
 
 	Message    string `json:"message" arg:"0" rest:"true" desc:"the reminder text (several words are joined)"`
-	Due        string `json:"due" flag:"due" desc:"due date YYYY-MM-DD or RFC3339 (required)"`
+	Due        string `json:"due" flag:"due" desc:"due date (YYYY-MM-DD, RFC3339 or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM) (required)"`
 	Recurrence string `json:"recurrence,omitempty" flag:"recurrence" desc:"recurrence: 7d | 30d | 1m | 3m | 6m | 1y"`
 	OnTable    string `json:"on_table,omitempty" flag:"on-table" desc:"optional target entity table"`
 	OnID       string `json:"on_id,omitempty" flag:"on-id" desc:"optional target entity id"`
@@ -261,7 +262,7 @@ func Ops(env Env) []op.Entry {
 	o := ops{env: env}
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpAdd, Summary: "Add a reminder (--due YYYY-MM-DD)",
+			Name: OpAdd, Summary: "Add a reminder (--due a day or a phrase: 2026-12-01, tomorrow, in 3d)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "a weekly review",
@@ -298,10 +299,17 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 	if strings.TrimSpace(in.Due) == "" {
 		return work.WriteOut{}, errs.New(errs.InvalidInput, `required flag(s) "due" not set`)
 	}
-	due, err := parseDue(in.Due)
+	// A-10: the date grammar of every --due (dateflag): YYYY-MM-DD,
+	// RFC3339 (v0.1.17's two forms) or a phrase such as tomorrow / in 3d.
+	clk, err := dateflag.Clock(ctx, o.env, store.Source(in.To))
 	if err != nil {
 		return work.WriteOut{}, err
 	}
+	r, note, err := dateflag.Parse(clk, "due", in.Due)
+	if err != nil {
+		return work.WriteOut{}, err
+	}
+	due := r.At
 	if in.Recurrence != "" && !slices.Contains(schema.ReminderRecurrences(), in.Recurrence) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput,
 			fmt.Sprintf("bad --recurrence %q (want %s)", in.Recurrence, strings.Join(schema.ReminderRecurrences(), " | ")))
@@ -334,21 +342,10 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 		return work.WriteOut{}, err
 	}
 	human := work.Success + " reminder " + w.Row.ID.String() + " due " + due.UTC().Format(work.DateLayout) + "\n"
+	if note != "" {
+		human += "  " + note + "\n"
+	}
 	return work.Out(src, w, human), nil
-}
-
-// parseDue reads --due as YYYY-MM-DD, else RFC3339 (v0.1.17's order and
-// error text).
-func parseDue(s string) (time.Time, error) {
-	t, err := time.Parse(work.DateLayout, s)
-	if err == nil {
-		return t, nil
-	}
-	t, err = time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, errs.Wrap(errs.InvalidInput, "bad --due (want YYYY-MM-DD)", err).WithHint("e.g. --due 2026-12-01")
-	}
-	return t, nil
 }
 
 // list returns pending (or done) reminders of every attached store, oldest

@@ -451,7 +451,7 @@ func (st *state) pickUpOne(ctx context.Context, co *handCheckout, src store.Sour
 		if _, err := st.eng.Delete(ctx, ref); err != nil {
 			return refuse(nil, errors.Join(err, gitbackend.PutBack(c, nil)))
 		}
-		return picked{c: c, what: "deleted " + rowName(c) + " (moved to the trash; lore trash restore --target " + c.ID.String() + " brings it back)", undo: func() error { return gitbackend.PutBack(c, nil) }}, true
+		return picked{c: c, what: "deleted " + rowName(c) + " (moved to the trash; lore trash restore --id " + c.ID.String() + " brings it back)", undo: func() error { return gitbackend.PutBack(c, nil) }}, true
 	case gitbackend.HandAdded:
 		h, err := decodeHand(c, hand)
 		if err != nil {

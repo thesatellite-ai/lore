@@ -279,7 +279,7 @@ alice (work/infra)$ lore resource delete --id hub_prod_new --with-dependents --d
 would delete 3 resources: host hub_prod_new, service hub_api, service hub_web (dry run, nothing written)
 alice (work/infra)$ lore resource delete --id hub_db --yes
 lore: wrote ~/work/infra/.lore/data/resources/res_d191616cfa49f94ede5d5148b8b045c2.json
-✓ res_…45c2 (hub_db) moved to the trash (restore: lore trash restore --target res_d191616cfa49f94ede5d5148b8b045c2)
+✓ res_…45c2 (hub_db) moved to the trash (restore: lore trash restore --id res_d191616cfa49f94ede5d5148b8b045c2)
 
 ### fields
 alice (work/infra)$ lore resource field edit --kind host --field provider --add-value linode

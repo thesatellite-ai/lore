@@ -108,6 +108,7 @@ func TestRefusalsBeforeHost(t *testing.T) {
 		{OpLink, `{"org":"a"}`, "--project"},
 		{OpSet, `{"org":"a"}`, "--commit"},
 		{OpUse, `{"entry":"a","clear":true}`, "not both"},
+		{OpStoreAdd, `{"org":"a","url":"  "}`, "--url"}, // B-4
 	} {
 		if _, err := run(t, h, tc.name, tc.body, true); !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("%s %s: %v", tc.name, tc.body, err)
@@ -120,7 +121,7 @@ func TestRefusalsBeforeHost(t *testing.T) {
 		t.Fatalf("org folder default: %v %q", err, h.got.OrgFolder)
 	}
 	bodies := map[string]string{OpCreate: `{"org":"a","store":"s"}`, OpImport: `{"url":"u"}`, OpLink: `{"org":"a","project":"p"}`, OpUnlink: `{"org":"a"}`,
-		OpRename: `{"old":"a","new":"b"}`, OpSet: `{"org":"a","commit":true}`, OpUse: `{"entry":"a"}`, OpRefresh: `{"org":"a"}`}
+		OpRename: `{"old":"a","new":"b"}`, OpSet: `{"org":"a","commit":true}`, OpUse: `{"entry":"a"}`, OpRefresh: `{"org":"a"}`, OpStoreAdd: `{"org":"a","url":"u"}`}
 	for _, e := range Ops(env{nil}) {
 		in, err := e.Decode(op.JSONDecoder{Body: []byte(bodies[e.Spec().Name])})
 		if err != nil {

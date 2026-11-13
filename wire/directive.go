@@ -158,6 +158,11 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 		}
 	} else {
 		sel = reg.Resolve(repoProbe{root: root})
+		// A-9: no row, so the setup that applies here names the tools,
+		// as render and init read them.
+		if st := a.SetupInitTools(ctx); len(st.Profiles) > 0 {
+			sel = reg.FromSetup(st.Profiles, sel, repoProbe{root: root})
+		}
 	}
 	for _, p := range sel.Profiles {
 		pick.Targets = append(pick.Targets, opsdirective.Target{File: p.PointerFile, Profile: p})
@@ -173,7 +178,7 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 func targetPickNotes(sel toolprofile.Selection, targets []opsdirective.Target) []string {
 	var out []string
 	switch sel.Reason {
-	case toolprofile.ReasonDetected, toolprofile.ReasonFallback:
+	case toolprofile.ReasonDetected, toolprofile.ReasonFallback, toolprofile.ReasonSetup:
 		parts := make([]string, 0, len(targets))
 		for _, t := range targets {
 			if t.Profile.HasPointerFile() {
@@ -183,7 +188,10 @@ func targetPickNotes(sel toolprofile.Selection, targets []opsdirective.Target) [
 			}
 		}
 		why := "detected in this repo; change with --target <profile>"
-		if sel.Reason == toolprofile.ReasonFallback {
+		switch sel.Reason {
+		case toolprofile.ReasonSetup:
+			why = "the tools of the setup that applies here; change with --target <profile>"
+		case toolprofile.ReasonFallback:
 			why = "no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>"
 		}
 		out = append(out, "· context targets: "+strings.Join(parts, ", ")+" ("+why+")")

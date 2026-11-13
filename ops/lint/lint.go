@@ -277,7 +277,7 @@ func checkText(s sourced, field, txt string, live, vars map[string]bool, aliases
 		case refs.SchemeRow:
 			target, _, _ := strings.Cut(r.Body, rowRefSep)
 			if _, err := ids.ParseAny(target); err == nil && !live[target] {
-				at(DanglingRef, r.String()+" points at no live row", "lore edit the row, or restore "+target+" (lore trash restore --target "+target+")")
+				at(DanglingRef, r.String()+" points at no live row", "lore edit the row, or restore "+target+" (lore trash restore --id "+target+")")
 			}
 		case refs.SchemeVar:
 			name, _, _ := strings.Cut(r.Body, ":-")
