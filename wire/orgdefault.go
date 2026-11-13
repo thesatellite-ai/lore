@@ -39,5 +39,5 @@ func (h *standaloneOrg) DefaultOrg(ctx context.Context, verb string) (name, why 
 		return e.Org, "the org of the active setup " + e.Name, nil
 	}
 	return "", "", errs.New(errs.InvalidInput, "lore "+verb+": name the org: this machine has "+strconv.Itoa(len(names))+" org entries ("+strings.Join(names, ", ")+") and no active setup here names one").
-		WithHint("run `lore " + verb + " " + names[0] + "` (or another of: " + strings.Join(names, ", ") + "), or run it in a folder of that org's setup")
+		WithHint("run `lore " + verb + " --org " + names[0] + "` (or another of: " + strings.Join(names, ", ") + "), or run it in a folder of that org's setup")
 }
