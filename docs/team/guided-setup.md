@@ -14,7 +14,7 @@ There are three kinds:
 |---|---|---|
 | `solo` | Just me | your own projects; the setup carries its own identity (name and email) |
 | `member` | Join a team | a team someone invited you to; your identity is the one in that org's entry (`orgs:` in `~/.lore/config.yaml`) |
-| `admin` | Start a team | a team you run: lore creates the team's store and org and makes you its first member (when the store already holds the org's `org/lore-org.yaml`, your org entry copies it, every store, `own` and `repos`, as a member's join does); only an admin setup can send [invites](invites.md) |
+| `admin` | Start a team | a team you run: lore creates the team's store and org and makes you its first member (when the store already holds the org's `org/lore-org.yaml`, your org entry copies it, every store, `own` and `repos`, as a member's join does); only an admin setup can send [invites](invites.md); the store is made for this machine, wherever `lore setup` runs: the step adds nothing to the `.lore/stores.yaml` of the repo it was started in (the org entry in `~/.lore/config.yaml` points at the store). |
 
 A setup name is lowercase letters, digits, `_` or `-`, at most 64 characters, and may not be `repo`, `me`, `team` or `company` (those already mean something to `--to`).
 

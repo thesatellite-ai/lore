@@ -28,6 +28,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
@@ -652,7 +653,13 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		// rows, so agents.may_manage_people has its default, true, at the
 		// roster write (profileWriter). A store that already holds the
 		// team's false still refuses there.
-		res, err = team.ApplyAdmin(withApplyingSetup(ctx, e.Name, org), team.AdminDeps{Stores: ap.a, Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
+		actx := withApplyingSetup(ctx, e.Name, org)
+		if len(emails) > 0 {
+			// F-16: the new org's store is signed by this step's identity
+			// from its first commit, not the folder's setup (another org).
+			actx = withApplyingSigner(actx, url, git.Signature{Name: name, Email: emails[0]})
+		}
+		res, err = team.ApplyAdmin(actx, team.AdminDeps{Stores: ap.a, Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
 			team.AdminRequest{Org: org, StoreURL: url, OrgFolder: answerText(ans, onboard.QIDOrgFolder), Own: slices.Clone(ans[onboard.QIDOwn].List),
 				Repos: slices.Clone(ans[onboard.QIDRepos].List), Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 	}

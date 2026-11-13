@@ -48,7 +48,8 @@ func (c *caches) rosterCaches() []rosterCache {
 // written around that path, and a teammate reading the store sees a bare
 // act_ id. When the writer is the caller, `lore doctor --fix` writes the
 // caller's actor row there (the write path's own ensureActor); any other
-// writer's next write to the store registers it.
+// writer's next write to the store registers it, so for them it is a
+// note that leaves the doctor status alone (D-17).
 func (a *App) DoctorActorRoster(ctx context.Context, fix bool) ([]DoctorFinding, error) {
 	st, err := a.state(ctx)
 	if err != nil {
@@ -79,10 +80,19 @@ func (a *App) DoctorActorRoster(ctx context.Context, fix bool) ([]DoctorFinding,
 			missing = append(missing, tv.Actor)
 		}
 		for _, actor := range missing {
-			f := DoctorFinding{Check: DoctorCheckActorRoster, Level: DoctorWarning, Store: rc.src,
-				Message: "store " + string(rc.src) + " holds rows saved by " + name(actor) + " (" + actor + "), an actor its roster does not hold",
-				Fix:     "that actor's next write to " + string(rc.src) + " adds it to the roster"}
+			who := name(actor)
+			if who != actor {
+				who += " (" + actor + ")"
+			}
+			// Another actor's rows (D-17: an agent session of a teammate)
+			// are a note: no one reading this can add that row, and the
+			// rows read fine; only the id shows where a name would. The
+			// caller's own missing row stays a warning --fix repairs.
+			f := DoctorFinding{Check: DoctorCheckActorRoster, Level: DoctorNote, Store: rc.src,
+				Message: "store " + string(rc.src) + " holds rows saved by " + who + ", an actor its roster does not hold, so they show that id instead of a name",
+				Fix:     "nothing to run here: that actor's next write to " + string(rc.src) + " adds it to the roster"}
 			if actor == st.actor.String() {
+				f.Level = DoctorWarning
 				f.Fix = "lore doctor --fix (writes your actor row into " + string(rc.src) + ")"
 				if fix {
 					if ferr := a.EnsureActor(ctx, rc.src); ferr != nil {

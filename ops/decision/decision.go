@@ -191,7 +191,7 @@ type ListIn struct {
 	All        bool     `json:"all,omitempty" flag:"all" desc:"every row: every repo's and the archived ones (the default list says how many it hides)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	Tags       []string `json:"tags,omitempty" flag:"tag" desc:"only decisions with this tag (repeatable: all must match)"`
-	Store      string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store (default every attached store)"`
+	Store      string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store and its folders, <store>/<folder> (default every attached store)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
 	kn.MetaFlags
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
@@ -335,7 +335,7 @@ type SearchIn struct {
 	Project         string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
-	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store (default every attached store)"`
+	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store and its folders, <store>/<folder> (default every attached store)"`
 }
 
 // SearchOut is v0.1.17's search envelope.

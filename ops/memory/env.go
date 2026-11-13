@@ -155,16 +155,25 @@ func SearchStore(env engine.StoreLister, noun, name string) (store.Source, error
 		return "", nil
 	}
 	want := store.Source(name)
-	if slices.Contains(env.Stores(), want) {
-		return want, nil
+	for _, s := range env.Stores() {
+		if FromStore(want, s) { // the store, or one of its folders (E-14)
+			return want, nil
+		}
 	}
 	return "", errs.New(errs.NotFound, noun+" search: no attached store named "+strconv.Quote(name)).
 		WithHint("lore store list shows the attached stores")
 }
 
 // FromStore reports whether a hit from src passes a search's store
-// filter only ("" = every store).
-func FromStore(only, src store.Source) bool { return only == "" || src == only }
+// filter only ("" = every store): src is only, or one of its folders
+// (only/<folder>) when only names a store, as engine.NamedSources reads
+// for a list (E-14: an org store's rows live in its folders).
+func FromStore(only, src store.Source) bool {
+	if only == "" || src == only {
+		return true
+	}
+	return !strings.Contains(string(only), "/") && strings.HasPrefix(string(src), string(only)+"/")
+}
 
 // SearchFields is env.Search, restricted to the named full-text fields of
 // table when fields is not empty (`search --column`, v0.1.17 named FTS5

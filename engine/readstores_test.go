@@ -116,3 +116,31 @@ func TestReadStoresRowOnce(t *testing.T) {
 		})
 	}
 }
+
+// namedLister is a StoreLister with a fixed store list.
+type namedLister []store.Source
+
+func (n namedLister) Stores() []store.Source { return n }
+
+// TestNamedSourcesTakesFolders (E-14): `--store acme` reads acme and every
+// acme/<folder> attached (the org store's rows live in its folders), as
+// `--store me` reads me/<org>; a folder name reads that folder alone, and
+// a store whose name only starts the same (acme2) is another store.
+func TestNamedSourcesTakesFolders(t *testing.T) {
+	t.Parallel()
+	l := namedLister{"repo", "me", "me/acme", "acme", "acme/org", "acme/site", "acme2", "acme2/org"}
+	for _, c := range []struct {
+		name store.Source
+		want []store.Source
+	}{
+		{"acme", []store.Source{"acme", "acme/org", "acme/site"}},
+		{"me", []store.Source{"me", "me/acme"}},
+		{"acme/org", []store.Source{"acme/org"}},
+		{"repo", []store.Source{"repo"}},
+		{"gone", []store.Source{"gone"}},
+	} {
+		if got := NamedSources(l, c.name); !slices.Equal(got, c.want) {
+			t.Errorf("NamedSources(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

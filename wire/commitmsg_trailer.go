@@ -48,10 +48,6 @@ func (a *App) CommitMsgTrailers(ctx context.Context, file string) error {
 	if os.Getenv(envRideActive) == "1" {
 		return nil
 	}
-	who, err := a.Who(ctx)
-	if err != nil {
-		return err
-	}
 	repo, err := gitref.Open(ctx, a.projectDir(), nil)
 	if err != nil {
 		return err
@@ -61,6 +57,13 @@ func (a *App) CommitMsgTrailers(ctx context.Context, file string) error {
 		return err
 	}
 	held := coord.HeldStore{Path: filepath.Join(strings.TrimSpace(string(gitDir)), signalsStateDir, heldFile)}
+	if !held.Any() {
+		return nil // no claim in this clone: who is committing does not matter (D-16)
+	}
+	who, err := a.Who(ctx)
+	if err != nil {
+		return err
+	}
 	recs := held.List(coordSession(who))
 	if len(recs) == 0 {
 		return nil

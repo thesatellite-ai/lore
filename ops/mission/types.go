@@ -50,7 +50,7 @@ type ListIn struct {
 	Status  string `json:"status,omitempty" flag:"status" desc:"filter: active | paused | done | cancelled (empty = default open set, see --all)"`
 	All     bool   `json:"all,omitempty" flag:"all" desc:"include done + cancelled missions (default: hide them)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"only missions of this project (prj_ id or name)"`
-	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only missions of this store (default every attached store)"`
+	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only missions of this store and its folders, <store>/<folder> (default every attached store)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
 	work.MetaFlags
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
@@ -192,5 +192,5 @@ type SearchIn struct {
 	// Columns restricts the match to some full-text fields (v0.1.17
 	// --column).
 	Columns []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable; missions have: title, body, status)"`
-	Store   string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only missions of this store (default every attached store)"`
+	Store   string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only missions of this store and its folders, <store>/<folder> (default every attached store)"`
 }

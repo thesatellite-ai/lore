@@ -58,6 +58,9 @@ $ cat .gitattributes
 .lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
 .lore/data/*.json text eol=lf merge=lore linguist-generated=true
 .lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.lore/LORE.full.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.claude/rules/lore/lore-*.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.cursor/rules/lore-*.mdc text eol=lf merge=lore-keep-ours linguist-generated=true
 # <<< lore-sync <<<
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
 ```
@@ -236,6 +239,9 @@ pre-push
 .lore/data/**/*.json text eol=lf merge=lore linguist-generated=true
 .lore/data/*.json text eol=lf merge=lore linguist-generated=true
 .lore/LORE.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.lore/LORE.full.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.claude/rules/lore/lore-*.md text eol=lf merge=lore-keep-ours linguist-generated=true
+.cursor/rules/lore-*.mdc text eol=lf merge=lore-keep-ours linguist-generated=true
 # <<< lore-sync <<<
 ```
 <!-- /example -->

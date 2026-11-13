@@ -4387,10 +4387,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only architecturenotes of this store (default every attached store)",
+            "description": "only architecturenotes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only architecturenotes of this store (default every attached store)"
+              "description": "only architecturenotes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -4856,7 +4856,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only architecturenotes of this store (default every attached store)"
+                    "description": "only architecturenotes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -6662,10 +6662,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only behaviours of this store (default every attached store)",
+            "description": "only behaviours of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only behaviours of this store (default every attached store)"
+              "description": "only behaviours of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -7117,7 +7117,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only behaviours of this store (default every attached store)"
+                    "description": "only behaviours of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -8358,10 +8358,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only comments of this store (default every attached store)",
+            "description": "only comments of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only comments of this store (default every attached store)"
+              "description": "only comments of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -8810,7 +8810,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only comments of this store (default every attached store)"
+                    "description": "only comments of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -10899,10 +10899,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only cookbookrecipes of this store (default every attached store)",
+            "description": "only cookbookrecipes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only cookbookrecipes of this store (default every attached store)"
+              "description": "only cookbookrecipes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -11361,7 +11361,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only cookbookrecipes of this store (default every attached store)"
+                    "description": "only cookbookrecipes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -12288,10 +12288,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only decisions of this store (default every attached store)",
+            "description": "only decisions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only decisions of this store (default every attached store)"
+              "description": "only decisions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -12909,7 +12909,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only decisions of this store (default every attached store)"
+                    "description": "only decisions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -15734,10 +15734,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only sources of this store (default every attached store)",
+            "description": "only sources of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only sources of this store (default every attached store)"
+              "description": "only sources of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -17142,10 +17142,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only handoffs of this store (default every attached store)",
+            "description": "only handoffs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only handoffs of this store (default every attached store)"
+              "description": "only handoffs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -17611,7 +17611,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only handoffs of this store (default every attached store)"
+                    "description": "only handoffs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -18743,10 +18743,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only hotfixes of this store (default every attached store)",
+            "description": "only hotfixes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only hotfixes of this store (default every attached store)"
+              "description": "only hotfixes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -19364,7 +19364,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only hotfixes of this store (default every attached store)"
+                    "description": "only hotfixes of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -21391,10 +21391,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only incidents of this store (default every attached store)",
+            "description": "only incidents of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only incidents of this store (default every attached store)"
+              "description": "only incidents of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -21863,7 +21863,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only incidents of this store (default every attached store)"
+                    "description": "only incidents of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -24665,10 +24665,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only machines of this store (default every attached store)",
+            "description": "only machines of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only machines of this store (default every attached store)"
+              "description": "only machines of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -26854,10 +26854,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only memories of this store (default every attached store)",
+            "description": "only memories of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only memories of this store (default every attached store)"
+              "description": "only memories of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -27517,7 +27517,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only memories of this store (default every attached store)"
+                    "description": "only memories of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -34444,10 +34444,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only missions of this store (default every attached store)",
+            "description": "only missions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only missions of this store (default every attached store)"
+              "description": "only missions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -35614,7 +35614,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only missions of this store (default every attached store)"
+                    "description": "only missions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -39092,10 +39092,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only patterns of this store (default every attached store)",
+            "description": "only patterns of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only patterns of this store (default every attached store)"
+              "description": "only patterns of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -39593,7 +39593,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only patterns of this store (default every attached store)"
+                    "description": "only patterns of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -41819,10 +41819,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only plans of this store (default every attached store)",
+            "description": "only plans of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only plans of this store (default every attached store)"
+              "description": "only plans of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -42449,7 +42449,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only plans of this store (default every attached store)"
+                    "description": "only plans of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -43537,10 +43537,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only playbooks of this store (default every attached store)",
+            "description": "only playbooks of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only playbooks of this store (default every attached store)"
+              "description": "only playbooks of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -44020,7 +44020,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only playbooks of this store (default every attached store)"
+                    "description": "only playbooks of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -46702,10 +46702,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only projects of this store (default every attached store)",
+            "description": "only projects of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only projects of this store (default every attached store)"
+              "description": "only projects of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -47951,10 +47951,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only prompts of this store (default every attached store)",
+            "description": "only prompts of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only prompts of this store (default every attached store)"
+              "description": "only prompts of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -48423,7 +48423,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only prompts of this store (default every attached store)"
+                    "description": "only prompts of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -49629,10 +49629,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only reminders of this store (default every attached store)",
+            "description": "only reminders of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only reminders of this store (default every attached store)"
+              "description": "only reminders of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -61531,10 +61531,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only rules of this store (default every attached store)",
+            "description": "only rules of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only rules of this store (default every attached store)"
+              "description": "only rules of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -62175,7 +62175,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only rules of this store (default every attached store)"
+                    "description": "only rules of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -74599,10 +74599,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only snapshots of this store (default every attached store)",
+            "description": "only snapshots of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only snapshots of this store (default every attached store)"
+              "description": "only snapshots of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -75082,7 +75082,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only snapshots of this store (default every attached store)"
+                    "description": "only snapshots of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -79730,10 +79730,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only suggestions of this store (default every attached store)",
+            "description": "only suggestions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only suggestions of this store (default every attached store)"
+              "description": "only suggestions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -80188,7 +80188,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only suggestions of this store (default every attached store)"
+                    "description": "only suggestions of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -83282,10 +83282,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only tags of this store (default every attached store)",
+            "description": "only tags of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only tags of this store (default every attached store)"
+              "description": "only tags of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -90657,10 +90657,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only lists of this store (default every attached store)",
+            "description": "only lists of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only lists of this store (default every attached store)"
+              "description": "only lists of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -91281,7 +91281,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only lists of this store (default every attached store)"
+                    "description": "only lists of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -92609,10 +92609,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only tasks of this store (default every attached store)",
+            "description": "only tasks of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only tasks of this store (default every attached store)"
+              "description": "only tasks of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -94660,7 +94660,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only tasks of this store (default every attached store)"
+                    "description": "only tasks of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   },
                   "top": {
                     "type": "boolean",
@@ -96147,7 +96147,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only tasks of this store (default every attached store)"
+                    "description": "only tasks of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -102065,10 +102065,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only tasteprefs of this store (default every attached store)",
+            "description": "only tasteprefs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only tasteprefs of this store (default every attached store)"
+              "description": "only tasteprefs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -102513,7 +102513,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only tasteprefs of this store (default every attached store)"
+                    "description": "only tasteprefs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -105469,10 +105469,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only techdocs of this store (default every attached store)",
+            "description": "only techdocs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only techdocs of this store (default every attached store)"
+              "description": "only techdocs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -105930,7 +105930,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only techdocs of this store (default every attached store)"
+                    "description": "only techdocs of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -109926,10 +109926,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only workflows of this store (default every attached store)",
+            "description": "only workflows of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only workflows of this store (default every attached store)"
+              "description": "only workflows of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -110381,7 +110381,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only workflows of this store (default every attached store)"
+                    "description": "only workflows of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [
@@ -111325,10 +111325,10 @@
             "name": "store",
             "in": "query",
             "required": false,
-            "description": "only workspaces of this store (default every attached store)",
+            "description": "only workspaces of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)",
             "schema": {
               "type": "string",
-              "description": "only workspaces of this store (default every attached store)"
+              "description": "only workspaces of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
             }
           },
           {
@@ -111780,7 +111780,7 @@
                   },
                   "store": {
                     "type": "string",
-                    "description": "only workspaces of this store (default every attached store)"
+                    "description": "only workspaces of this store and its folders, \u003cstore\u003e/\u003cfolder\u003e (default every attached store)"
                   }
                 },
                 "required": [

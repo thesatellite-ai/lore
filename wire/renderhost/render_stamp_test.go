@@ -163,6 +163,20 @@ func TestStaleError(t *testing.T) {
 	}
 }
 
+// TestSplitLocalCopies (D-9): render --check fails on the committed files
+// only; a fresh clone never has this machine's private render.
+func TestSplitLocalCopies(t *testing.T) {
+	priv := opsrender.CopyFinding{Kind: opsrender.CopyMissing, File: "~/.lore/render/x.md", Message: "private", Local: true}
+	lore := opsrender.CopyFinding{Kind: opsrender.CopyStale, File: LoreMDRel, Message: "lore"}
+	tracked, local := splitLocalCopies([]opsrender.CopyFinding{priv, lore})
+	if len(tracked) != 1 || tracked[0].File != LoreMDRel || len(local) != 1 || !local[0].Local {
+		t.Fatalf("tracked %+v, local %+v", tracked, local)
+	}
+	if tracked, _ = splitLocalCopies([]opsrender.CopyFinding{priv}); staleError(tracked) != nil {
+		t.Error("a missing private render fails the check")
+	}
+}
+
 func TestPointerCopies(t *testing.T) {
 	root := t.TempDir()
 	reg, err := toolprofile.New(nil)

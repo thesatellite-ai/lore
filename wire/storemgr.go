@@ -76,16 +76,16 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 			return opsstores.InitOut{}, err
 		}
 	}
-	// noRepo: a caller that may run outside a repo (the team step), and no
-	// repo here or the repo attaches this very store under this name
-	// already: the repo-only checks and the .lore/stores.yaml entry are
+	// noRepo: a caller that makes the store for this machine (the team
+	// step, in a repo or not), or the repo attaches this very store under
+	// this name already: the repo-only checks and the .lore/stores.yaml entry are
 	// skipped, everything about the store itself still runs.
 	noRepo := false
 	if in.Name != opsstores.PersonalName {
 		top, terr := a.repoTop(ctx)
 		switch {
-		case in.RepoOptional && errs.Has(terr, errs.NotAStore):
-			noRepo = true
+		case in.RepoOptional:
+			noRepo = true // the store is the machine's (D-6): no repo entry, wherever this runs
 		case terr == nil:
 			// The repo attaches this name already (a team re-made after its
 			// setup was purged, purge never touching a repo; `lore store

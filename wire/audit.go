@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -124,6 +125,14 @@ func (f *fileAudit) Record(ctx context.Context, ev engine.Event) error {
 	if ev.Store != store.SourceRepo {
 		return nil
 	}
+	// F-12: a checkout that holds no lore data (a linked client repo, a
+	// repo lore was never set up in) gets no audit file: a refused write
+	// there (a cancelled secret prompt) left .lore/state/audit-v2.jsonl
+	// with an actor id in the client's tree. The machine-local chain under
+	// the lore home still records the event (chainAudit).
+	if !auditProjectHasData(f.path) {
+		return nil
+	}
 	line, err := encodeAuditLine(ev)
 	if err != nil {
 		return err
@@ -147,6 +156,15 @@ func encodeAuditLine(ev engine.Event) ([]byte, error) {
 		return nil, errs.Wrap(errs.Internal, "wire: encode an audit event", err)
 	}
 	return line, nil
+}
+
+// auditProjectHasData reports whether the project of a checkout audit
+// file path (<project>/.lore/state/audit-v2.jsonl) holds lore data
+// (.lore/data): a bare .lore/state that a lock or a refused run left
+// does not make the repo one lore is set up in.
+func auditProjectHasData(path string) bool {
+	fi, err := os.Stat(filepath.Join(filepath.Dir(filepath.Dir(path)), rowfs.DataDir))
+	return err == nil && fi.IsDir()
 }
 
 // appendAuditLine appends one fsynced line to path (mode auditFileMode),

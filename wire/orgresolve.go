@@ -439,6 +439,22 @@ var routeKinds = map[row.Table]string{
 	schema.TableComments:  "comment",
 	schema.TableTasks:     "task",
 	schema.TableMissions:  "mission",
+	// D-12: every other kind of note a person writes follows the same
+	// rule (docs: "tasks, memories and other kinds: the linked project");
+	// left out, `lore plan add` in a client repo wrote internal planning
+	// text into the client's .lore/data, or was refused there.
+	schema.TablePlans:             "plan",
+	schema.TableTasklists:         "tasklist",
+	schema.TablePatterns:          "pattern",
+	schema.TablePlaybooks:         "playbook",
+	schema.TablePrompts:           "prompt",
+	schema.TableHotfixes:          "hotfix",
+	schema.TableReminders:         "reminder",
+	schema.TableIncidents:         "incident",
+	schema.TableArchitectureNotes: "architecture_note",
+	schema.TableCookbookRecipes:   "cookbook_recipe",
+	schema.TableHandoffs:          "handoff",
+	schema.TableTechDocs:          "tech_doc",
 }
 
 // Routed is the F14 rule that chose the target of this process's routed

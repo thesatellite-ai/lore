@@ -1,8 +1,9 @@
 package wire
 
 // targetoutside.go — a write that names its store (`--to <store>` or
-// `--to <store>/<folder>`) run outside any git work tree, e.g. an admin's
-// `lore rule add --to acme/org …` from the home folder.
+// `--to <store>/<folder>`) run outside any git work tree, or in a git repo
+// lore is not set up in (no .lore/, F-15), e.g. an admin's
+// `lore rule add --to acme/org …` from the home folder or a fresh clone.
 //
 //	App.run ─▶ write, not inside a work tree or a store checkout, `to` set
 //	        ─▶ outsideTarget: the org's stores, then `me`, then an org
@@ -29,13 +30,16 @@ import (
 )
 
 // runOutsideRepo runs e on a store-only App when it is a write naming a
-// store and the folder is no git work tree; handled is false when the
+// store and the folder is no git work tree (or a repo with no .lore/);
+// handled is false when the
 // command takes the usual path (inside a repo, a read, no target).
 func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (res op.Result, handled bool, err error) {
 	if e.Spec().Access != op.AccessWrite || e.Spec().Local {
 		return op.Result{}, false, nil
 	}
-	if insideWorkTree(ctx, a.opts.RepoDir) || inStore(a.opts.RepoDir) {
+	// A git repo lore is not set up in counts as no repo (F-15): the write
+	// names its store, and the repo is left untouched (S-2) either way.
+	if (insideWorkTree(ctx, a.opts.RepoDir) && UntouchedRepo(ctx, a.opts.RepoDir) == "") || inStore(a.opts.RepoDir) {
 		return op.Result{}, false, nil
 	}
 	in, derr := e.Decode(d)

@@ -48,6 +48,11 @@ func TestJourneySoloNewLaptopRender(t *testing.T) {
 		desk.LoreIn(repo, "doctor").OK(t).
 			Says(t, "Status: HEALTHY", "not rendered yet on this machine").
 			Never(t, "DEGRADED", "is missing:", "lines is")
+		// D-9: render --check judges the committed files; the private
+		// render this laptop has not written yet is a note, not a failure
+		desk.LoreIn(repo, "render", "--check").OK(t).
+			Says(t, "rendered files match their rows", "not checked (kept only on this machine)").
+			Never(t, "E_REFUSED")
 		desk.LoreIn(repo, "fix", "--yes").OK(t).Says(t, "HEALTHY")
 		desk.LoreIn(repo, "doctor").OK(t).Says(t, "Status: HEALTHY").Never(t, "not rendered yet on this machine")
 	})

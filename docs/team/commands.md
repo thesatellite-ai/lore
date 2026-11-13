@@ -993,7 +993,7 @@ Flags:
       --series string         only the instances of this recurrence series (rcs_…); add --all for closed ones
       --sort stringArray      sort by a task field, urgency, time_spent or elapsed: <key>, <key>:asc or <key>:desc (repeatable; ties keep the default order)
       --status string         filter: todo | in_progress | done | cancelled | blocked (empty = default active set, see --all)
-      --store string          only tasks of this store (default every attached store) (also --to)
+      --store string          only tasks of this store and its folders, <store>/<folder> (default every attached store) (also --to)
       --top                   only top-level tasks
       --under string          only the whole subtree under this task (tsk_…)
       --updated-by string     only rows this actor changed last (act_ id, or unknown)
@@ -1584,7 +1584,7 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `orgs[].stores[].name` | the url's repo name without `.git` | the store's short name in store list, output, store arguments and `<store>/<folder>` targets; two stores of one org may not share one |
 | `orgs[].own` | — | URL patterns of the org's own repos (`*` one path segment, `**` any depth) |
 | `orgs[].repos` | — | URL patterns of client repos |
-| `orgs[].defaults.client_repos.<kind>` | tasks, memories and other kinds: the linked project | where a row goes in a client repo without `--to`: `repo`, `<org>` or `<org>/<folder>`; rules and decisions by an agent or without a terminal always need `--to` |
+| `orgs[].defaults.client_repos.<kind>` | tasks, memories, plans and every other kind of note: the linked project | where a row goes in a client repo without `--to`: `repo`, `<org>` or `<org>/<folder>`; rules and decisions by an agent or without a terminal always need `--to`; a comment without `--to` goes to the store of the row it is on |
 | `orgs[].agent_details` | `internal` | `client` keeps agent work notes in the client repo |
 | `live.defaults.<kind>` | tasks, missions, handoffs, comments: `true`; rules, decisions, memories: `false` | which kinds are live |
 | `live.max_age` | `7d` | an open live row is copied to `main` this often while it differs |

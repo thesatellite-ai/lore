@@ -44,7 +44,7 @@ type ListIn struct {
 	content.MetaFlags
 
 	Project string `json:"project,omitempty" flag:"project" desc:"only playbooks of this project (prj_ id or name)"`
-	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only playbooks of this store (default every attached store)"`
+	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only playbooks of this store and its folders, <store>/<folder> (default every attached store)"`
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
 }
@@ -169,7 +169,7 @@ type SearchIn struct {
 	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"accepted for v0.1.17 scripts (playbooks are project-wide)"`
 	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts (playbooks are project-wide)"`
 	Project         string   `json:"project,omitempty" flag:"project" desc:"only playbooks of this project (prj_ id or name)"`
-	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only playbooks of this store (default every attached store)"`
+	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only playbooks of this store and its folders, <store>/<folder> (default every attached store)"`
 }
 
 // SearchOut is v0.1.17's search envelope.

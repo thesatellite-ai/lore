@@ -46,6 +46,9 @@ func (s storeSigner) cloneIdentity(ctx context.Context, remote string) git.Clone
 		}
 		return git.CloneIdentity{Signature: sig, Why: why, Who: who}
 	}
+	if sig, ok := applyingSigner(ctx, remote); ok {
+		return git.CloneIdentity{Signature: sig, Why: "your identity in the org this setup step creates, the one lore signs this store's commits with", Who: "your identity in the new org"}
+	}
 	if p, ok := s.personal(ctx, remote); ok {
 		return git.CloneIdentity{Signature: p.Sig, Why: p.Why + ", the one lore signs this store's commits with", Who: "personal store owner"}
 	}
@@ -70,6 +73,9 @@ func (s storeSigner) personal(ctx context.Context, remote string) (personalIdent
 // hand edit (adapters/backend/git identity.go personSignature).
 func (s storeSigner) identityFor(ctx context.Context, remote string) git.Signature {
 	if sig, ok := s.owner(ctx, remote); ok {
+		return sig
+	}
+	if sig, ok := applyingSigner(ctx, remote); ok {
 		return sig
 	}
 	if p, ok := s.personal(ctx, remote); ok {

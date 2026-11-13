@@ -104,7 +104,7 @@ func (o AddOut) Text() string { return "✓ tag " + o.Name + " " + o.ID + "\n" }
 
 // ListIn is the input of tag.list.
 type ListIn struct {
-	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"only tags of this store (default every attached store)"`
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"only tags of this store and its folders, <store>/<folder> (default every attached store)"`
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit

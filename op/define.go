@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -56,16 +57,50 @@ func Define[In, Out any](spec Spec, run func(context.Context, In) (Out, error)) 
 	if run == nil {
 		panic(tagError{"op.Define(" + spec.Name + "): nil run function"})
 	}
-	in := fieldsOf(spec.Name, reflect.TypeFor[In](), dirInput)
-	checkGroups(spec.Name, in)
-	namePositionals(spec.Name, in)
+	sh := shapeOf(spec.Name, reflect.TypeFor[In](), reflect.TypeFor[Out]())
 	return &Op[In, Out]{
 		spec: spec,
 		run:  run,
-		in:   in,
-		out:  fieldsOf(spec.Name, reflect.TypeFor[Out](), dirOutput),
-		page: pageShapeOf(spec.Name, reflect.TypeFor[In](), reflect.TypeFor[Out]()),
+		in:   slices.Clone(sh.in),
+		out:  slices.Clone(sh.out),
+		page: sh.page,
 	}
+}
+
+// opShape is what Define reads from an operation's In and Out types.
+type opShape struct {
+	in, out []FieldInfo
+	page    *pageShape
+}
+
+// shapeKey names one Define shape: the operation and its two types.
+type shapeKey struct {
+	name    string
+	in, out reflect.Type
+}
+
+// shapes keeps each shape read once per process. Why: every App builds
+// the whole registry, and a command that opens a second App (lore check
+// leaks, run from every commit's commit-msg hook) read every struct tag of
+// every operation twice (D-16: about 20-40 ms per registry).
+var shapes sync.Map // shapeKey → *opShape
+
+// shapeOf is the shape of the operation name with input in and output
+// out, read from the tags the first time (panicking on a bad tag, as
+// Define documents) and from shapes after that.
+func shapeOf(name string, in, out reflect.Type) *opShape {
+	k := shapeKey{name: name, in: in, out: out}
+	if v, ok := shapes.Load(k); ok {
+		if sh, ok := v.(*opShape); ok {
+			return sh
+		}
+	}
+	fields := fieldsOf(name, in, dirInput)
+	checkGroups(name, fields)
+	namePositionals(name, fields)
+	sh := &opShape{in: fields, out: fieldsOf(name, out, dirOutput), page: pageShapeOf(name, in, out)}
+	shapes.Store(k, sh)
+	return sh
 }
 
 // Spec implements Entry.

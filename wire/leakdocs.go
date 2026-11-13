@@ -363,9 +363,59 @@ func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []sto
 			}
 			out = append(out, leakIndexRows(rows, t, si.Name, label, keys)...)
 		}
+		roster, err := leakRosterRows(ctx, a, si.Name, label)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, roster...)
 	}
 	return out, nil
 }
+
+// leakRosterRows is the store's roster as actor index rows: each actor's
+// id and its addresses (stable key "human:<email>", email contacts), so a
+// roster actor id or email named in a client repo's commit message or
+// source blocks (F-4); row files keep the actor projection rule.
+func leakRosterRows(ctx context.Context, a leakReader, src store.Source, label string) ([]leakcheck.IndexRow, error) {
+	actors, err := a.List(ctx, src, schema.TableActors)
+	if err != nil {
+		return nil, leakCannotCheckErr("store "+string(src), err)
+	}
+	if len(actors) == 0 {
+		return nil, nil
+	}
+	contacts, err := a.List(ctx, src, schema.TableActorContacts)
+	if err != nil {
+		return nil, leakCannotCheckErr("store "+string(src), err)
+	}
+	emails := map[string][]string{}
+	for _, c := range contacts {
+		if c.Deleted || fieldText(c, schema.FieldContactType) != schema.ContactKindEmail {
+			continue
+		}
+		id := fieldText(c, schema.FieldContactActor)
+		emails[id] = append(emails[id], fieldText(c, schema.FieldContactValue))
+	}
+	out := make([]leakcheck.IndexRow, 0, len(actors))
+	for _, r := range actors {
+		if r.Deleted {
+			continue
+		}
+		id := r.ID.String()
+		es := emails[id]
+		if k, ok := strings.CutPrefix(fieldText(r, leakActorStableKey), leakHumanKeyPrefix); ok && strings.Contains(k, "@") {
+			es = append(es, k)
+		}
+		out = append(out, leakcheck.IndexRow{ID: id, Table: string(schema.TableActors), Label: label, Source: string(src), Emails: es})
+	}
+	return out, nil
+}
+
+// Roster fields leakRosterRows reads.
+const (
+	leakActorStableKey = "stable_key"
+	leakHumanKeyPrefix = "human:"
+)
 
 // leakIndexesClass: personal stores always, internal ones seen from a
 // client repo only, never repo or client-class stores.

@@ -138,7 +138,7 @@ notes-client
 
 - **GitHub permissions are the access control.** Leaving a store out of Bob's config is only a convenience. Removing Bob's access to that repo is what actually keeps it out of reach.
 - **Folder names are unique across an org's stores**, and exactly one store sets `org_folder`.
-- **Offboarding** (when Bob leaves) means removing two repo permissions. Then run `lore member remove --who @bob --reason 'contract ended' --yes`: it lists his open tasks and prints `lore task reassign --from @bob --assign @<someone> --yes` to run in each repo that holds them ([Members](../members.md)). The roster row stays, marked inactive, because old rows point at it. Copies Bob already fetched stay on Bob's machine, like any git clone.
+- **Offboarding** (when Bob leaves) means removing two repo permissions. Then run `lore member remove --who @bob --reason 'contract ended' --yes`: it lists his open tasks and prints `lore task reassign --from @bob --assign @<someone> --yes` to run in each repo that holds them ([Members](../members.md)). The roster row stays, marked inactive, because old rows point at it. Copies Bob already fetched stay on Bob's machine, like any git clone. Once his access is gone, Bob's lore says so: a write is kept in his local copy with `the store refused this machine: <url> served this store before and now answers that there is no repository or no access …` (never "check the store's address"), and `lore doctor` names the lost access instead of offering `lore store init` over the org's store.
 - The three layouts (one store for everything, one per client, or a mix) are all plain config. The commands do not change. One store per client is the recommended layout once you have contractors or NDAs (secrecy agreements).
 
 ## Related

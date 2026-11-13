@@ -37,6 +37,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	opsrender "github.com/thesatellite-ai/lore/ops/render"
 
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -172,12 +173,19 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		// lore 0.1.17's (its own layout) and lore render skips: only the
 		// budget is checked, as in a repo that never rendered
 		formatLine, formatOld := wire.FormatOldAt(ctx, root)
+		var private []opsrender.CopyFinding
 		if rendered && !formatOld {
 			stale, serr := h.copiesOf(ctx, root, f.outPath, p)
 			if serr != nil {
 				return serr
 			}
-			if err := staleError(stale); err != nil {
+			// D-9: the check judges the committed files only; a copy kept
+			// on this machine alone (~/.lore/render, a tool's untracked
+			// import file) is never in a clone, so a CI job or a new
+			// laptop failed on it. It is printed as a note instead.
+			var tracked []opsrender.CopyFinding
+			tracked, private = splitLocalCopies(stale)
+			if err := staleError(tracked); err != nil {
 				return err
 			}
 		}
@@ -194,6 +202,9 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 			fmt.Fprintf(f.out(), "%s rendered files match their rows\n", h.decor.check())
 		default:
 			fmt.Fprintf(f.out(), "%s %s is not rendered yet (lore render)\n", h.decor.muted("·"), f.outPath)
+		}
+		for _, c := range private {
+			fmt.Fprintf(f.out(), "%s not checked (kept only on this machine): %s; `%s` writes it\n", h.decor.muted("·"), c.Message, c.Fix)
 		}
 		return nil
 	}
@@ -222,6 +233,17 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	if top := wire.UntouchedRepo(ctx, root); top != "" {
 		if f.quiet {
 			return nil
+		}
+		// F-2: a linked client repo must never hold lore files, so it gets
+		// no rendered files by design: say so and name what agents use
+		// there, instead of the not-set-up refusal whose hint (lore init)
+		// would put lore files into the client's repo.
+		if h.app != nil {
+			if client, cerr := h.app.ClientRepo(ctx); cerr == nil && client {
+				fmt.Fprintf(f.out(), "%s lore render: nothing written: %s is a client repo, which never holds lore files (no LORE.md, no pointer block); agents read its notes with %s, or through the agent hook\n",
+					h.decor.muted("·"), top, renderClientContextCmd)
+				return nil
+			}
 		}
 		return wire.UntouchedError(ctx, top)
 	}
@@ -306,10 +328,8 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		if !f.quiet {
 			h.printTargetPick(f.out(), pick)
 		}
-		for _, t := range pick.targets {
-			if err = h.stitchPointer(f.out(), root, t, resolvedOut); err != nil {
-				return err
-			}
+		if err = h.stitchPointers(f.out(), root, pick.targets, resolvedOut); err != nil {
+			return err
 		}
 	}
 	// 6.7: path-scoped rule files per target; stale lore-path-* files go.
@@ -705,41 +725,113 @@ func setupReason(setup string) string {
 	return "the tools of setup " + setup + "; change with --target <profile>"
 }
 
-// stitchPointer ensures t's tool file carries the lore pointer block,
-// bounded by sentinel markers. Idempotent: an existing block is replaced in
-// place; a missing one is placed at the top (after a Cursor rule's
-// frontmatter); if nothing changes the file is left untouched. An @import
-// path is computed RELATIVE to the tool file's directory so the tool
-// resolves it regardless of cwd. A profile without a pointer file
-// (generic) has nothing to stitch.
+// stitchPointer ensures t's tool file carries the lore pointer block
+// (stitchPointerFile). A profile without a pointer file (generic) has
+// nothing to stitch.
 func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, outFile string) error {
-	if !t.profile.HasPointerFile() {
-		return nil
+	return h.stitchPointers(w, root, []contextTarget{t}, outFile)
+}
+
+// stitchPointers stitches the pointer of every target, once per file: the
+// targets whose files resolve to the same file (CLAUDE.md a link to
+// AGENTS.md) share one block holding each tool's lines (devco D-23: a
+// block per tool rewrote the file twice every render and kept only the
+// last tool's text, so Claude Code lost its @import).
+func (h *Host) stitchPointers(w *strings.Builder, root string, targets []contextTarget, outFile string) error {
+	var order []string
+	groups := map[string][]pointerTarget{}
+	for _, t := range targets {
+		if !t.profile.HasPointerFile() {
+			continue
+		}
+		pt, err := resolvePointerTarget(root, t, outFile)
+		if err != nil {
+			return err
+		}
+		key := pt.absAgent // a skipped file stays on its own
+		if pt.skip == "" {
+			key = resolvedOrSelf(pt.writeAt)
+		}
+		if _, seen := groups[key]; !seen {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], pt)
 	}
+	for _, key := range order {
+		if err := h.stitchPointerFile(w, root, groups[key]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// pointerTarget is one target's pointer file, resolved: the path named,
+// where it is written (the end of a link chain) and LORE.md as seen from it.
+type pointerTarget struct {
+	t        contextTarget
+	absAgent string
+	writeAt  string
+	isLink   bool
+	skip     string // why the file is left as it is ("" = written)
+	link     toolprofile.Link
+}
+
+// resolvePointerTarget resolves t's pointer file and LORE.md's link.
+func resolvePointerTarget(root string, t contextTarget, outFile string) (pointerTarget, error) {
 	agentFile := t.file
 	if !filepath.IsAbs(agentFile) {
 		agentFile = filepath.Join(root, filepath.FromSlash(agentFile))
 	}
 	absAgent, err := filepath.Abs(agentFile)
 	if err != nil {
-		return errs.Wrap(errs.BadPath, "resolve "+agentFile, err)
+		return pointerTarget{}, errs.Wrap(errs.BadPath, "resolve "+agentFile, err)
 	}
 	absOut, err := filepath.Abs(outFile)
 	if err != nil {
-		return errs.Wrap(errs.BadPath, "resolve "+outFile, err)
+		return pointerTarget{}, errs.Wrap(errs.BadPath, "resolve "+outFile, err)
 	}
-	link := toolprofile.Link{FromPointer: relSlash(filepath.Dir(absAgent), absOut, outFile), FromRoot: relSlash(root, absOut, outFile)}
-
+	// FromRoot is said "at the repository root", so it is taken from the
+	// git top, not the project root: in a package project the two differ,
+	// and the package pointer named the root project's file (devco D-22).
+	link := toolprofile.Link{FromPointer: relSlash(filepath.Dir(absAgent), absOut, outFile), FromRoot: relSlash(repoTopOf(root), absOut, outFile)}
 	// A pointer file that is a link (or a chain of them) is read and
 	// written at the chain's end, so the link stays. One that cannot be
 	// written through (dangling out of the repo, a folder, unreadable, a
 	// file of another kind outside the repo: wire.PointerLinkEnd) is left
 	// as it is with a note naming it and why; the render goes on.
 	writeAt, isLink, skip := wire.PointerLinkEnd(root, absAgent)
-	if skip != "" {
-		h.pointerSkipped(w, absAgent, skip)
+	return pointerTarget{t: t, absAgent: absAgent, writeAt: writeAt, isLink: isLink, skip: skip, link: link}, nil
+}
+
+// resolvedOrSelf is p with every link resolved, p itself when it cannot be
+// (a file not written yet): the key two names of one file share.
+func resolvedOrSelf(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
+}
+
+// stitchPointerFile ensures the one file of group carries the lore pointer
+// block, bounded by sentinel markers. Idempotent: an existing block is
+// replaced in place; a missing one is placed at the top (after a Cursor
+// rule's frontmatter); if nothing changes the file is left untouched. An
+// @import path is computed RELATIVE to the tool file's directory so the
+// tool resolves it regardless of cwd. The file is named by the member that
+// is not a link when there is one (the file itself).
+func (h *Host) stitchPointerFile(w *strings.Builder, root string, group []pointerTarget) error {
+	lead := group[0]
+	for _, pt := range group {
+		if !pt.isLink {
+			lead = pt
+			break
+		}
+	}
+	if lead.skip != "" {
+		h.pointerSkipped(w, lead.absAgent, lead.skip)
 		return nil
 	}
+	absAgent, writeAt, isLink := lead.absAgent, lead.writeAt, lead.isLink
 	existing := ""
 	if data, err := os.ReadFile(filepath.Clean(writeAt)); err == nil {
 		existing = string(data)
@@ -755,10 +847,15 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 			WithHint("give --target a tool profile name or the path of a file (not a folder) you can read and write")
 	}
 
-	out := t.profile.StitchPointer(existing, link)
+	members := make([]toolprofile.PointerMember, 0, len(group))
+	for _, pt := range group {
+		members = append(members, toolprofile.PointerMember{Profile: pt.t.profile, Link: pt.link})
+	}
+	out := toolprofile.StitchSharedPointer(existing, members)
 	if note := toolprofile.StrayNote(absAgent, out, toolprofile.PointerStartMarker, toolprofile.PointerEndMarker); note != "" {
 		fmt.Fprintf(w, "%s %s\n", h.decor.warn("⚠"), note)
 	}
+	defer h.sharedPointerLines(w, lead, group)
 	if out == existing {
 		fmt.Fprintf(w, "%s %s (pointer present)\n", h.decor.muted("="), absAgent)
 		return nil
@@ -766,7 +863,7 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 	if banner := toolprofile.GeneratedBanner(existing); banner != "" {
 		// D-2: another tool generates this file; a stitched pointer is lost
 		// on its next run and the two tools fight over it in every diff.
-		h.pointerSkipped(w, absAgent, generatedSkipReason(banner, t.profile.Name, link.FromRoot))
+		h.pointerSkipped(w, absAgent, generatedSkipReason(banner, lead.t.profile.Name, lead.link.FromRoot))
 		return nil
 	}
 	if isLink {
@@ -777,7 +874,7 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 			h.pointerSkipped(w, absAgent, "it is a symbolic link to "+writeAt+", which cannot be written ("+err.Error()+")")
 			return nil
 		}
-		fmt.Fprintf(w, "%s %s (pointer → %s, written through the link to %s)\n", h.decor.check(), absAgent, link.FromPointer, writeAt)
+		fmt.Fprintf(w, "%s %s (pointer → %s, written through the link to %s)\n", h.decor.check(), absAgent, lead.link.FromPointer, writeAt)
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(writeAt), dirMode); err != nil {
@@ -786,7 +883,7 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 	if err := writeFileInDir(writeAt, []byte(out), fileMode); err != nil {
 		return wire.WriteError("write", absAgent, err, renderWriteHint)
 	}
-	fmt.Fprintf(w, "%s %s (pointer → %s)\n", h.decor.check(), absAgent, link.FromPointer)
+	fmt.Fprintf(w, "%s %s (pointer → %s)\n", h.decor.check(), absAgent, lead.link.FromPointer)
 	return nil
 }
 
@@ -800,6 +897,17 @@ func generatedSkipReason(banner, profile, lorePath string) string {
 	return "its banner says another tool generates it (" + strconv.Quote(banner) + "), which would drop the pointer on its next run; add a line pointing at " + lorePath + " to that tool's source, or wire another file: " + other
 }
 
+// sharedPointerLines names each other member of group: a file that is the
+// lead's file through a link, served by the same block.
+func (h *Host) sharedPointerLines(w *strings.Builder, lead pointerTarget, group []pointerTarget) {
+	for _, pt := range group {
+		if pt.absAgent == lead.absAgent {
+			continue
+		}
+		fmt.Fprintf(w, "%s %s (the same file as %s through a link: one pointer block serves both)\n", h.decor.muted("="), pt.absAgent, lead.absAgent)
+	}
+}
+
 // pointerSkipped prints the note for a pointer file left as it is.
 func (h *Host) pointerSkipped(w *strings.Builder, file, why string) {
 	fmt.Fprintf(w, "%s %s%s%s\n", h.decor.warn("⚠"), file, wire.PointerSkippedMark, why)
@@ -808,6 +916,24 @@ func (h *Host) pointerSkipped(w *strings.Builder, file, why string) {
 // renderWriteHint is the hint of a render write that failed for a reason
 // other than a permission (wire.WriteError names the chmod for those).
 const renderWriteHint = "check that the file and its folder can be written, then run lore render again"
+
+// repoTopOf is the nearest folder from dir up that holds .git (a folder,
+// or a worktree's or submodule's file); dir itself when there is none (a
+// project outside git, where the project root is the only root).
+func repoTopOf(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return dir
+	}
+	for d := abs; ; d = filepath.Dir(d) {
+		if _, serr := os.Lstat(filepath.Join(d, ".git")); serr == nil {
+			return d
+		}
+		if filepath.Dir(d) == d {
+			return dir
+		}
+	}
+}
 
 // relSlash is target relative to base with slashes; fallback (the path as
 // given) when the two cannot be related (different volumes).
@@ -930,3 +1056,8 @@ func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
+
+// renderClientContextCmd is what render names in a client repo (F-2): the
+// agent's fetch command, which reads the linked internal project's notes
+// without writing a file into the client's tree.
+const renderClientContextCmd = "`lore context --for-file <path>` (or --for-task <id>)"

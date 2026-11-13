@@ -329,6 +329,20 @@ func (h *Host) renderedCopies(ctx context.Context, root string) ([]opsrender.Cop
 	return append(found, pointerCopies(root, p.pick)...), nil
 }
 
+// splitLocalCopies splits found into the copies a clone carries (tracked)
+// and those kept only on this machine (Local: the private render, a
+// tool's untracked import file), keeping their order.
+func splitLocalCopies(found []opsrender.CopyFinding) (tracked, local []opsrender.CopyFinding) {
+	for _, f := range found {
+		if f.Local {
+			local = append(local, f)
+		} else {
+			tracked = append(tracked, f)
+		}
+	}
+	return tracked, local
+}
+
 // staleError is render --check's refusal for out-of-date copies (nil when
 // there are none). DECISION OV18-1: a failed check is E_REFUSED.
 func staleError(found []opsrender.CopyFinding) error {

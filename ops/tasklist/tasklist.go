@@ -145,7 +145,7 @@ func (o ShowOut) baseText() string {
 // ListIn is the input of tasklist.list.
 type ListIn struct {
 	Project string `json:"project,omitempty" flag:"project" desc:"only lists of this project (prj_ id or name)"`
-	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only lists of this store (default every attached store)"`
+	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only lists of this store and its folders, <store>/<folder> (default every attached store)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
 	work.MetaFlags
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
@@ -216,7 +216,7 @@ type SearchIn struct {
 	// Columns restricts the match to some full-text fields (v0.1.17
 	// --column).
 	Columns []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable; tasklists have: title, body, status_str)"`
-	Store   string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only lists of this store (default every attached store)"`
+	Store   string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only lists of this store and its folders, <store>/<folder> (default every attached store)"`
 }
 
 // Ops returns every tasklist operation bound to env.

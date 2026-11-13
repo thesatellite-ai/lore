@@ -36,6 +36,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -187,11 +188,8 @@ func readMachineLocal(ctx context.Context, eng *engine.Engine, path string, dryR
 		return nil, errs.Wrap(errs.Internal, "migrate: stat "+v017LoreDB, err)
 	}
 	// read-only: v0.1.17 may still be using the file
-	query := "mode=ro"
-	if dryRun && git.NoClone(ctx) {
-		query += "&immutable=1" // `lore fix --dry-run` writes nothing: no -shm/-wal either (B4-14)
-	}
-	dsn := fileuri.URL(path, query)
+	// `lore fix --dry-run` writes nothing: no -shm/-wal either (B4-14)
+	dsn := fileuri.URL(path, sqlite.LegacyReadQuery(path, dryRun && git.NoClone(ctx), ""))
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "migrate: open "+v017LoreDB, err)

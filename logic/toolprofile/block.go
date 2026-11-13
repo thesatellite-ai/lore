@@ -3,6 +3,7 @@ package toolprofile
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -146,4 +147,54 @@ func StrayNote(file, content, start, end string) string {
 		return ""
 	}
 	return fmt.Sprintf("%s line %d: %s is half of a lore block (its other marker was deleted); lore left that line and your text around it as they are and keeps its own block apart: delete that line", file, line, m)
+}
+
+// PointerMember is one tool whose pointer file is a file another tool's
+// pointer file also resolves to, with LORE.md's place as seen from it.
+type PointerMember struct {
+	Profile Profile
+	Link    Link
+}
+
+// StitchSharedPointer returns content with one pointer block that serves
+// every member: their block lines, @import styles first, each line once.
+// It is for one file that two tools read (CLAUDE.md a link to AGENTS.md,
+// devco D-23): a block per tool replaced the other's on every render, so
+// the file was written twice and kept only the last tool's text. One
+// member is StitchPointer.
+func StitchSharedPointer(content string, members []PointerMember) string {
+	switch len(members) {
+	case 0:
+		return content
+	case 1:
+		return members[0].Profile.StitchPointer(content, members[0].Link)
+	}
+	ordered := append([]PointerMember(nil), members...)
+	slices.SortStableFunc(ordered, func(a, b PointerMember) int {
+		return importRank(a.Profile.Import) - importRank(b.Profile.Import)
+	})
+	var lines []string
+	for _, m := range ordered {
+		block := strings.TrimSuffix(m.Profile.PointerBlock(m.Link), "\n")
+		for _, l := range strings.Split(block, "\n") {
+			if l == "" || l == PointerStartMarker || l == PointerEndMarker || slices.Contains(lines, l) {
+				continue
+			}
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) == 0 {
+		return content
+	}
+	block := PointerStartMarker + "\n" + strings.Join(lines, "\n") + "\n" + PointerEndMarker + "\n"
+	return ordered[0].Profile.Place(content, block, pointerRe)
+}
+
+// importRank orders the styles inside a shared block: the @import a tool
+// resolves first, then the sentences an agent reads.
+func importRank(s Import) int {
+	if s == ImportAt {
+		return 0
+	}
+	return 1
 }

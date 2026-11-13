@@ -8,19 +8,25 @@ package journeys
 // init here first"), assigns two tasks to Ann, finds them with
 // `task list --assignee @ann`, removes Ann (the output lists her open tasks
 // and the hand-over line), and runs that line: her handle and email still
-// resolve after she left.
+// resolve after she left, and --assign naming her says she left (F-10).
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // Names of the hand-over journey (placeholders).
 const (
-	jhoRule     = "every estimate is reviewed by two people"
-	jhoTaskOne  = "handover: finish the billing retry"
-	jhoTaskTwo  = "handover: write the retry runbook"
-	jhoFolders  = "~/**"
-	jhoAnn      = "ann"
-	jhoBob      = "bob"
-	jhoHandover = "lore task reassign --from @ann --assign @<someone> --yes"
+	jhoRule      = "every estimate is reviewed by two people"
+	jhoTaskOne   = "handover: finish the billing retry"
+	jhoTaskTwo   = "handover: write the retry runbook"
+	jhoFolders   = "~/**"
+	jhoAnn       = "ann"
+	jhoBob       = "bob"
+	jhoHandover  = "lore task reassign --from @ann --assign @<someone> --yes"
+	jhoToolsRule = "every release names its rollback step"
+	jhoToolsSlug = "github.com/acme-co/tools"
 )
 
 func TestJourneyTeamHandover(t *testing.T) {
@@ -43,6 +49,18 @@ func TestJourneyTeamHandover(t *testing.T) {
 		tt.lore(tlLee, "rule", "list").OK(t).Says(t, jhoRule)
 	})
 
+	w.Step("day1/company-rule-from-a-repo-without-lore", func() {
+		// F-15: a fresh clone lore is not set up in: a --to write lands in
+		// the store folder as it does from ~, and the clone stays untouched.
+		tools := lee.Clone(w.Remote(jhoToolsSlug), "tools")
+		lee.MoveClone(t, tools, filepath.Join(lee.Home, "code", "tools")) // inside the setup's folders
+		lee.LoreIn(tools, "rule", "add", "--to", tlOrg+"/org", "--body", jhoToolsRule).OK(t).Never(t, "lore init", "E_NOT_A_STORE")
+		if _, err := os.Stat(filepath.Join(tools.Dir, ".lore")); !os.IsNotExist(err) {
+			t.Fatalf("the --to write made .lore/ in a repo lore is not set up in (%v)", err)
+		}
+		tt.lore(tlLee, "rule", "list").OK(t).Says(t, jhoToolsRule)
+	})
+
 	w.Step("week2/tasks-for-ann", func() {
 		tt.lore(tlLee, "org", "link", tlOrg, "--project", tlProject, "--yes").OK(t)
 		tt.lore(tlLee, "task", "add", "--title", jhoTaskOne, "--assign", "@"+jhoAnn).OK(t)
@@ -54,6 +72,12 @@ func TestJourneyTeamHandover(t *testing.T) {
 		tt.lore(tlLee, "member", "remove", "--who", "@"+jhoAnn, "--reason", "left the company", "--yes").OK(t).
 			Says(t, "open tasks (2)", jhoTaskOne, jhoTaskTwo, jhoHandover)
 		tt.lore(tlLee, "task", "list", "--assignee", tlAnn.Email).OK(t).Says(t, jhoTaskOne, jhoTaskTwo)
+		// F-10: --assign naming Ann (handle or email) says she left, never
+		// "no one is @ann" with a register hint.
+		tt.lore(tlLee, "task", "reassign", "--from", "@"+jhoAnn, "--assign", "@"+jhoAnn, "--yes").
+			Fails(t, 23, "(@"+jhoAnn+") left "+tlOrg, "--assign takes only people still in the org").Never(t, "actor register", "no one is")
+		tt.lore(tlLee, "task", "add", "--title", "for ann after she left", "--assign", tlAnn.Email).
+			Fails(t, 23, "(@"+jhoAnn+") left "+tlOrg).Never(t, "actor register")
 		tt.lore(tlLee, "task", "reassign", "--from", "@"+jhoAnn, "--assign", "@"+jhoBob, "--yes").OK(t).
 			Says(t, "2 tasks reassigned to @"+jhoBob)
 		tt.lore(tlLee, "task", "list", "--assignee", "@"+jhoBob).OK(t).Says(t, jhoTaskOne, jhoTaskTwo)

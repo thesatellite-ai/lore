@@ -34,7 +34,12 @@ import (
 
 // check output and names (v0.1.17's).
 const (
-	checkCIClean        = "✓ lore check leaks --ci: every row in .lore/data belongs to this project"
+	checkCIClean = "✓ lore check leaks --ci: every row in .lore/data belongs to this project"
+	// checkCINoLore is --ci's clean line in a repo with no .lore/ at all
+	// (a linked client repo, as the docs require): no row file can leak
+	// through it; ids in staged files and commit messages are the commit
+	// hook's check (it reads the org store, which CI has not got).
+	checkCINoLore       = "✓ lore check leaks --ci: this repo has no .lore folder, so it holds no lore rows (ids in commits are checked by the commit hook, lore check leaks)"
 	checkWhereCommit    = "commit"
 	checkWhereCommitMsg = "commit message"
 	checkDataPrefix     = ".lore/data/"
@@ -85,6 +90,12 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	}
 	switch {
 	case in.CI:
+		if UntouchedRepo(ctx, root) != "" {
+			// F-3: a client repo holds no lore files by design, so --ci
+			// (run from its root or any subfolder) has no rows to check:
+			// clean, never "run from the project root".
+			return opscheck.LeaksOut{Message: checkCINoLore}, nil
+		}
 		if cerr := checkCI(ctx, root); cerr != nil {
 			return opscheck.LeaksOut{}, cerr
 		}
@@ -149,7 +160,8 @@ func checkCI(ctx context.Context, root string) error {
 	}
 	pid := orgcfg.ProjectID(root)
 	if pid == "" {
-		return errs.New(errs.InvalidInput, "no .lore/data/_meta.json here; run from the project root")
+		return errs.New(errs.InvalidInput, "a .lore folder without .lore/data/_meta.json in "+root+": rows cannot be checked against this project").
+			WithHint("lore doctor names what the .lore folder is missing; a client repo must hold no .lore folder at all")
 	}
 	dataDir := filepath.Join(root, rowfs.LoreDir, rowfs.DataDir)
 	tree, err := readDataTree(dataDir)

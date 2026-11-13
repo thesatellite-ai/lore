@@ -23,7 +23,7 @@ import (
 
 // ProjectListIn is the input of project.list.
 type ProjectListIn struct {
-	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"only projects of this store (default every attached store)"`
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"only projects of this store and its folders, <store>/<folder> (default every attached store)"`
 	// Trash: --include-deleted / --deleted-only (DELETION 3.2).
 	metalist.Trash
 	// --created-by / --updated-by: the shared writer filters of every

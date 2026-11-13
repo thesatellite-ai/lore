@@ -38,6 +38,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -503,6 +504,39 @@ type applyingSetupKey struct{}
 // the org that step makes or joins.
 type applyingSetup struct {
 	name, org string
+	// storeURL and signer are the store an admin team step creates and
+	// the person's identity in the new org (F-16): the store is cloned
+	// before orgs[<org>] exists, so the org identity cannot sign yet and
+	// the folder's setup (another org) would (withApplyingSigner).
+	storeURL string
+	signer   git.Signature
+}
+
+// withApplyingSigner records, on a ctx withApplyingSetup marked, that the
+// store at storeURL is signed by sig while the step runs (F-16: the new
+// org's first commit carried the first org's email).
+func withApplyingSigner(ctx context.Context, storeURL string, sig git.Signature) context.Context {
+	s, ok := ctx.Value(applyingSetupKey{}).(applyingSetup)
+	if !ok || storeURL == "" || sig.Email == "" {
+		return ctx
+	}
+	s.storeURL, s.signer = storeURL, sig
+	return context.WithValue(ctx, applyingSetupKey{}, s)
+}
+
+// applyingSigner is the signer withApplyingSigner set for the store at
+// remote (any spelling of its url), if any.
+func applyingSigner(ctx context.Context, remote string) (git.Signature, bool) {
+	s, ok := ctx.Value(applyingSetupKey{}).(applyingSetup)
+	if !ok || s.storeURL == "" {
+		return git.Signature{}, false
+	}
+	want, ok1 := storeKey(s.storeURL)
+	got, ok2 := storeKey(remote)
+	if !ok1 || !ok2 || want != got {
+		return git.Signature{}, false
+	}
+	return s.signer, true
 }
 
 // withApplyingSetup marks ctx as the writes of setup name's step for org

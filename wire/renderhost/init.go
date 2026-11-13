@@ -46,10 +46,8 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 	}
 	fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), reason)
 	out := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
-	for _, t := range pick.targets {
-		if err := h.stitchPointer(w, root, t, out); err != nil {
-			return err
-		}
+	if err := h.stitchPointers(w, root, pick.targets, out); err != nil {
+		return err
 	}
 	if len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetting {
 		return nil // the row already says it (a re-init over shared data)

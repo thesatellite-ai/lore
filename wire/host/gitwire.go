@@ -59,13 +59,21 @@ const (
 )
 
 // gitAttributeLines are the project's .gitattributes rules: row files LF,
-// lore's field merge driver, collapsed in PR diffs; LORE.md keeps ours.
+// lore's field merge driver, collapsed in PR diffs; every file render
+// writes at a fixed path keeps ours, because lore renders it again from the
+// merged rows. LORE.full.md had no rule (devco D-19): two people adding
+// rules and pulling got a text conflict in it on every merge.
 // ds:def id=sync-gitattributes-symdu732 owner=@khanakia stability=stable desc=".gitattributes rules lore installs"
-var gitAttributeLines = []string{
-	".lore/data/**/*.json text eol=lf merge=" + mergeDriverLore + " linguist-generated=true",
-	".lore/data/*.json text eol=lf merge=" + mergeDriverLore + " linguist-generated=true",
-	loreMDRel + " text eol=lf merge=" + mergeDriverKeepOurs + " linguist-generated=true",
-}
+var gitAttributeLines = func() []string {
+	lines := []string{
+		".lore/data/**/*.json text eol=lf merge=" + mergeDriverLore + " linguist-generated=true",
+		".lore/data/*.json text eol=lf merge=" + mergeDriverLore + " linguist-generated=true",
+	}
+	for _, p := range wire.RenderedFilePatterns {
+		lines = append(lines, p+" text eol=lf merge="+mergeDriverKeepOurs+" linguist-generated=true")
+	}
+	return lines
+}()
 
 // mergeDriverConfig is the per-clone config the attributes refer to; bin is
 // mergeDriverBinary (bare `lore` only when that is this very binary, so a
@@ -178,14 +186,25 @@ func hookBlocks(rel string) map[string]struct {
 		marker string
 		lines  []string
 	}
+	// D-16: a commit that changes nothing under .lore/data (a code-only
+	// commit) has nothing for the pre-commit check: one git status instead
+	// of three lore processes. Any git error still runs the check.
+	noRows := `{ d="$(git status --porcelain --untracked-files=all -- .lore/data 2>/dev/null)" && [ -z "$d" ] && exit 0; true; } && `
+	// D-16: the trailer and the leak check in one lore process; a lore
+	// without --check-leaks (an older build), or any failure, runs the
+	// separate calls below exactly as before, so a refusal still stops the
+	// commit and is printed once.
+	oneCall := "lore_cm_ok=; ( " + absMsg + cd + guard + `o="$(` + bn + ` task hook commit-msg --check-leaks "$m" 2>&1)" && { [ -z "$o" ] || printf '%s\n' "$o" >&2; } ) && lore_cm_ok=1 || true`
+	fallback := `[ -n "$lore_cm_ok" ] || `
 	return map[string]block{
-		hookPreCommit:    {marker, []string{"( " + cd + "if command -v " + bn + " >/dev/null 2>&1; then if ! " + coreProbe + " && " + hasV2 + "; then " + needsCore + "; elif " + probe + "; then " + bn + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"}},
+		hookPreCommit:    {marker, []string{"( " + cd + noRows + "if command -v " + bn + " >/dev/null 2>&1; then if ! " + coreProbe + " && " + hasV2 + "; then " + needsCore + "; elif " + probe + "; then " + bn + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"}},
 		hookPostCheckout: {marker, refresh(hookPostCheckout, "")},
 		hookPostMerge:    {marker, refresh(hookPostMerge, "")},
 		hookPostRewrite:  {marker, refresh(hookPostRewrite, ` "$1"`)},
 		hookCommitMsg: {marker, []string{
-			"( " + absMsg + cd + guard + bn + ` task hook commit-msg "$m" >/dev/null 2>&1 ) || true`,
-			"( " + absMsg + cd + "if command -v " + bn + " >/dev/null 2>&1 && " + bn + " check leaks --help >/dev/null 2>&1; then " + bn + ` check leaks --staged --commit-msg "$m"; ` + noChecker + `fi ) || exit $?`,
+			oneCall,
+			fallback + "( " + absMsg + cd + guard + bn + ` task hook commit-msg "$m" >/dev/null 2>&1 ) || true`,
+			fallback + "( " + absMsg + cd + "if command -v " + bn + " >/dev/null 2>&1 && " + bn + " check leaks --help >/dev/null 2>&1; then " + bn + ` check leaks --staged --commit-msg "$m"; ` + noChecker + `fi ) || exit $?`,
 		}},
 		hookPostCommit: {rideHookMarker, rideHookLines[hookPostCommit]},
 		hookPrePush:    {rideHookMarker, rideHookLines[hookPrePush]},

@@ -390,8 +390,9 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		res := outcome(m.Outcome, vars)
 		if res.Status == onboard.StatusOK && !m.Present {
 			res.Status, res.Detail = onboard.StatusFail, "no lore-store.yaml in the store yet"
+			return res
 		}
-		return res
+		return sp.markerVars(res, m.Class, u, r)
 	case onboard.CheckOrgFree:
 		u := sp.storeURL(ctx, r)
 		if u == "" {
@@ -518,6 +519,23 @@ func (sp setupProber) urlVars(u string, r opssetup.ProbeRequest) map[string]stri
 func readVars(res opssetup.ProbeResult, c probe.Class) opssetup.ProbeResult {
 	if c == probe.ClassUnreachable || c == probe.ClassTimeout {
 		res.Vars[onboard.VarFixVariant] = string(onboard.FixUnreachable)
+	}
+	return res
+}
+
+// markerVars picks store.marker's fix variant when the marker could not be
+// looked for (the remote did not answer or refused the read, F-11): the
+// default "not a lore store yet; store init" is only for a store read
+// without the file. No answer is FixUnreachable, a store this machine
+// fetched before is FixReachedBefore (access removed, or moved), any
+// other refused read FixNoRead. A variant set already is kept.
+func (sp setupProber) markerVars(res opssetup.ProbeResult, c probe.Class, u string, r opssetup.ProbeRequest) opssetup.ProbeResult {
+	if res.Status != onboard.StatusFail || c == probe.ClassOK {
+		return res
+	}
+	res = sp.reachedBefore(readVars(res, c), u, r)
+	if res.Vars[onboard.VarFixVariant] == "" {
+		res.Vars[onboard.VarFixVariant] = string(onboard.FixNoRead)
 	}
 	return res
 }

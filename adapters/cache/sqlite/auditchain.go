@@ -453,7 +453,7 @@ func ReadLegacyAuditLog(ctx context.Context, path string) (_ []auditchain.Record
 	if err != nil {
 		return nil, errs.Wrap(errs.BadPath, "audit chain: lore.db path", err)
 	}
-	db, err := sql.Open(driverName, fileuri.URL(abs, "mode=ro&_pragma=busy_timeout("+strconv.Itoa(busyTimeoutMS)+")"))
+	db, err := sql.Open(driverName, fileuri.URL(abs, LegacyReadQuery(abs, false, "_pragma=busy_timeout("+strconv.Itoa(busyTimeoutMS)+")")))
 	if err != nil {
 		return nil, dbErr("open lore.db for the audit import", err)
 	}

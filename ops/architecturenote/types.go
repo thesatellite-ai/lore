@@ -55,7 +55,7 @@ type ListIn struct {
 	AllRepos   bool   `json:"all_repos,omitempty" flag:"all-repos" desc:"list across every repo (ignore --repo)"`
 	All        bool   `json:"all,omitempty" flag:"all" desc:"every row: every repo's and the archived ones (the default list says how many it hides)"`
 	Project    string `json:"project,omitempty" flag:"project" desc:"only architecturenotes of this project (prj_ id or name)"`
-	Store      string `json:"store,omitempty" flag:"store" alias:"to" desc:"only architecturenotes of this store (default every attached store)"`
+	Store      string `json:"store,omitempty" flag:"store" alias:"to" desc:"only architecturenotes of this store and its folders, <store>/<folder> (default every attached store)"`
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
 }
@@ -172,7 +172,7 @@ type SearchIn struct {
 	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope: --repo only, no master inheritance"`
 	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Project         string   `json:"project,omitempty" flag:"project" desc:"only architecturenotes of this project (prj_ id or name)"`
-	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only architecturenotes of this store (default every attached store)"`
+	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only architecturenotes of this store and its folders, <store>/<folder> (default every attached store)"`
 }
 
 // SearchOut is v0.1.17's search envelope (count always printed).
