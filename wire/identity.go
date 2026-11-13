@@ -96,8 +96,13 @@ func detectAgent(inputs func() agentdetect.Inputs) (agentdetect.Result, error) {
 func stdinTTY() bool { return StdinIsTerminal() }
 
 // Who is the App's resolved identity (zero when Options named the actor).
+//
+// The identity is settled by the open itself (resolveActor, then the
+// contact match on the row files), so Who opens through rowState: every
+// command asks it (CallerAgent in App.run), and `lore store list` or
+// `lore machine show` in a 5,000-row repo must not build its cache for it.
 func (a *App) Who(ctx context.Context) (identity.Resolved, error) {
-	st, err := a.state(ctx)
+	st, err := a.rowState(ctx)
 	if err != nil {
 		return identity.Resolved{}, err
 	}

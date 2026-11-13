@@ -288,7 +288,7 @@ func (e *Engine) readRows(ctx context.Context, name store.Source, cursor store.C
 // trash mark (BUG-TIME-BENCH).
 func (e *Engine) readTable(ctx context.Context, name store.Source, table row.Table) ([]store.Row, error) {
 	st := e.stores[name]
-	all, _, err := readAll(ctx, st)
+	all, err := readOneTable(ctx, st, table)
 	if err != nil {
 		return nil, err
 	}

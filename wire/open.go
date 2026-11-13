@@ -338,16 +338,15 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	scanner.bindEngine(st.eng) // D8: secrets.use_repo_gitleaks decides whether the repo .gitleaks.toml allow applies
-	if err = st.refreshAll(ctx); err != nil {
+	if err = st.refreshUnlessDeferred(ctx); err != nil {
 		return fail(err)
 	}
 	// TEAM_PROFILES 6.3 (TP-4): a second email or login of a person writes
-	// as their one actor; the contacts are readable only now, after the
-	// refresh, and nothing has been written yet.
+	// as their one actor; the contacts are read from the row files (the
+	// engine is built now), and nothing has been written yet.
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil {
 		return fail(err)
 	}
-	actor = st.actor
 	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: a removed person writes only to their personal store (B2-12)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
@@ -360,13 +359,29 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			}
 		}
 	}
-	if st.format, err = readFormat(ctx, repo, actor); err != nil {
-		return fail(err)
-	}
-	if st.storeFormat, err = readStoreFormats(ctx, opts, st.repoTop, st.byName, actor); err != nil {
-		return fail(err)
+	st.formatRepo = repo
+	// rowState: App.finishOpen reads the formats before the first write
+	if !st.refreshPending {
+		if err = st.readFormats(ctx, opts); err != nil {
+			return fail(err)
+		}
 	}
 	return st, nil
+}
+
+// readFormats computes the O6 answers a write checks (format.go): the repo
+// store's (formatRepo; none inside a store's checkout) and each attached
+// v0.1.17 org store's. Both read every row of their store, so a read that
+// never writes (App.rowState) leaves them to App.finishOpen.
+func (st *state) readFormats(ctx context.Context, opts Options) error {
+	var err error
+	if st.formatRepo != nil {
+		if st.format, err = readFormat(ctx, st.formatRepo, st.actor); err != nil {
+			return err
+		}
+	}
+	st.storeFormat, err = readStoreFormats(ctx, opts, st.repoTop, st.byName, st.actor)
+	return err
 }
 
 // resolveActor sets st.actor (and st.who for a resolved identity) from
@@ -1270,15 +1285,18 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		return fail(err)
 	}
 	scanner.bindEngine(st.eng)
-	if err = st.refreshAll(ctx); err != nil {
+	if err = st.refreshUnlessDeferred(ctx); err != nil {
 		return fail(err)
 	}
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil { // TEAM_PROFILES 6.3, as in open
 		return fail(err)
 	}
 	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: inside a store clone too (B2-25)
-	if st.storeFormat, err = readStoreFormats(ctx, opts, "", st.byName, st.actor); err != nil {
-		return fail(err)
+	// rowState: App.finishOpen reads the formats before the first write
+	if !st.refreshPending {
+		if err = st.readFormats(ctx, opts); err != nil {
+			return fail(err)
+		}
 	}
 	return st, nil
 }

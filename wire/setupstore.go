@@ -151,7 +151,7 @@ func (s setupStore) progressRows(ctx context.Context, setup string) ([]row.Row, 
 	if err != nil {
 		return nil, err
 	}
-	eng, err := m.Engine(ctx)
+	eng, err := m.rowEngine(ctx) // List reads the machine store's rows directly: no cache refresh
 	if err != nil {
 		return nil, err
 	}

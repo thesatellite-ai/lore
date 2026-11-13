@@ -285,7 +285,13 @@ func (f *Folder) scanTable(table string, files map[string]entry) ([]Problem, err
 // is NOT a delete (only tombstones delete): it is simply absent from the
 // next cursor, and Missing reports it. An unreadable cursor reads
 // everything.
+//
+// A full read (cursor "") under a table hint (store.WithTables) reads only
+// those tables' folders: see readTables.
 func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, store.Cursor, error) {
+	if tables := store.TablesOf(ctx); cursor == "" && len(tables) > 0 {
+		return f.readTables(ctx, tables)
+	}
 	at := nanos(f.root.now())
 	prev, _ := ParseStatCursor(cursor)
 	seen := prev.byPath()
@@ -337,6 +343,46 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 		return nil, "", err
 	}
 	return out, c, nil
+}
+
+// readTables is a full Read of only tables' folders (store.WithTables):
+// listing the identity tables of a 5,000-row repo read one small folder
+// each instead of decoding every row file. A table with no folder has no
+// rows. It answers the empty cursor and leaves the problems list (f.bad)
+// as the last full read left it: it saw only part of the folder, so it can
+// neither say what a cache holds nor that a file elsewhere is fine.
+func (f *Folder) readTables(ctx context.Context, tables []row.Table) ([]store.Row, store.Cursor, error) {
+	if err := checkChain(f.root.dir, f.rel); err != nil {
+		return nil, "", err
+	}
+	at := nanos(f.root.now())
+	files := map[string]entry{}
+	for _, t := range tables {
+		info, err := os.Lstat(filepath.Join(f.dataDir, string(t)))
+		if errors.Is(err, fs.ErrNotExist) || (err == nil && !info.IsDir()) {
+			continue // no folder (or not a folder: a full read reports it)
+		}
+		if err != nil {
+			return nil, "", errs.Wrap(errs.Internal, "rowfs: stat a table folder", err)
+		}
+		if _, err := f.scanTable(string(t), files); err != nil {
+			return nil, "", err
+		}
+	}
+	rels := sortedKeys(files)
+	results := make([]checked, len(rels))
+	if err := parallel(ctx, len(rels), func(i int) {
+		results[i].stat, results[i].row, results[i].ok, results[i].bad = f.check(rels[i], files[rels[i]], FileStat{}, false, 0, at)
+	}); err != nil {
+		return nil, "", err
+	}
+	var out []store.Row
+	for _, c := range results {
+		if c.ok && c.row != nil {
+			out = append(out, *c.row)
+		}
+	}
+	return out, "", nil
 }
 
 // settled reports whether next lists exactly prev's files with the same

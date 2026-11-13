@@ -136,7 +136,8 @@ func (w *standaloneWhoami) identityContact(ctx context.Context) string {
 // actor was found under; a detected coding agent the identity derived from
 // its owner's kept id (movedAgentOwner), so whoami's act_ id is the one
 // this machine writes as. id itself when nothing moved or the stores
-// cannot be opened (whoami is the diagnostic: best effort).
+// cannot be opened (whoami is the diagnostic: best effort). The open
+// reads row files only (rowState): whoami never builds a cache.
 func (w *standaloneWhoami) movedIdentity(ctx context.Context, id identity.Resolved) identity.Resolved {
 	if w.app == nil {
 		return id
@@ -145,7 +146,7 @@ func (w *standaloneWhoami) movedIdentity(ctx context.Context, id identity.Resolv
 	if app == nil {
 		return id
 	}
-	st, err := app.state(ctx)
+	st, err := app.rowState(ctx)
 	if err != nil {
 		return id
 	}

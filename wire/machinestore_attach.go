@@ -25,6 +25,27 @@ func (st *state) withMachine(ctx context.Context, home string, reg *schema.Regis
 	return append(engOpts, o), nil
 }
 
+// cacheRefreshKey marks an open whose caches are left as they are
+// (withoutCacheRefresh).
+type cacheRefreshKey struct{}
+
+// withoutCacheRefresh is ctx for an open that must not refresh the
+// caches: App.rowState, whose reads go to the row files only. The state it
+// opens says so (refreshPending) and App.finishOpen refreshes later.
+func withoutCacheRefresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, cacheRefreshKey{}, true)
+}
+
+// refreshUnlessDeferred is refreshAll, or, under withoutCacheRefresh, only
+// the note that it is still to run (refreshPending).
+func (st *state) refreshUnlessDeferred(ctx context.Context) error {
+	if deferred, _ := ctx.Value(cacheRefreshKey{}).(bool); deferred {
+		st.refreshPending = true
+		return nil
+	}
+	return st.refreshAll(ctx)
+}
+
 // refreshAll brings every attached store's cache up to date, then the
 // machine store's when attached (it is never one of Stores()).
 func (st *state) refreshAll(ctx context.Context) error {
