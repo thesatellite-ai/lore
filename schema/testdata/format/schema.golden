@@ -390,6 +390,7 @@ scopes.path text required
 scopes.repo_id ref required
 secret_allows.field text required
 secret_allows.match_hash number required
+secret_allows.path text
 secret_allows.reason text
 secret_allows.row_id ref required
 secret_allows.rule_id text required

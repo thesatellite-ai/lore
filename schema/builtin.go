@@ -408,6 +408,11 @@ func coreDefs() []TableDef {
 			Text("rule_id", Required()),
 			Number("match_hash", Required()),
 			Text("reason"),
+			// path is set on a file entry (`secrets allow --file`): a finding
+			// in an ordinary repo file, keyed by this repo-relative slash
+			// path, rule_id and match_hash; row_id then names the project
+			// row and field is "file", which older releases match nothing on.
+			Text("path"),
 			IndexOn("row_id"),
 		),
 		Table(TableTags, ids.PrefixTag, Synced(), Description("a tag; per project, same name allowed across projects"),

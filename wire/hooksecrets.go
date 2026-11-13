@@ -47,6 +47,7 @@ const (
 	allowFieldField = "field"
 	allowFieldRule  = "rule_id"
 	allowFieldHash  = "match_hash"
+	allowFieldPath  = "path"
 	maxMatchHash    = 1<<32 - 1
 	loreDataMark    = ".lore/data/"
 )
@@ -101,6 +102,10 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 				at += " (field " + h.Field + ")"
 			}
 			lines = append(lines, fmt.Sprintf("  %-40s secret: rule %s match %s", at, h.Rule, h.Preview))
+			if where == checkWhereCommit && !inStore && p != checkWhereCommitMsg && !isRowDocPath(p, inStore) {
+				// an ordinary file: the exact allow line, fingerprint only
+				lines = append(lines, "      not a secret? lore secrets allow --file "+shellWord(p)+" --rule "+h.Rule+" --match-hash "+h.Preview+" --reason '<why>'")
+			}
 			refused = append(refused, "path="+p+" rule="+h.Rule)
 		}
 	}
@@ -194,10 +199,6 @@ func allowOfFile(b []byte) (scan.Allow, bool) {
 	if err != nil || r.Deleted {
 		return scan.Allow{}, false
 	}
-	target, err := ids.ParseAny(fieldText(r, allowFieldRowID))
-	if err != nil {
-		return scan.Allow{}, false
-	}
 	n, ok := r.Fields[allowFieldHash].(value.Number)
 	if !ok {
 		return scan.Allow{}, false
@@ -206,7 +207,43 @@ func allowOfFile(b []byte) (scan.Allow, bool) {
 	if err != nil || h < 0 || h > maxMatchHash {
 		return scan.Allow{}, false
 	}
+	if path := fieldText(r, allowFieldPath); path != "" {
+		// a file entry (`secrets allow --file`): no row, the path is the key
+		return scan.Allow{Field: fileAllowKey(path), RuleID: fieldText(r, allowFieldRule), MatchHash: uint32(h)}, true
+	}
+	target, err := ids.ParseAny(fieldText(r, allowFieldRowID))
+	if err != nil {
+		return scan.Allow{}, false
+	}
 	return scan.Allow{RowID: target, Field: fieldText(r, allowFieldField), RuleID: fieldText(r, allowFieldRule), MatchHash: uint32(h)}, true
+}
+
+// fileAllowPrefix marks a file entry among the allows: its Allow has no
+// RowID and Field "file:<repo-relative path>", so scan.Filter (row ids)
+// never matches it and fileAllowed matches only that path.
+const fileAllowPrefix = "file:"
+
+// fileAllowKey is the Allow.Field of a file entry for path.
+func fileAllowKey(path string) string { return fileAllowPrefix + path }
+
+// fileAllowed drops the findings of a plain file at p that a committed
+// file entry accepts (same path, rule and match hash).
+func fileAllowed(p string, found []scan.Finding, allows []scan.Allow) []scan.Finding {
+	key := fileAllowKey(p)
+	out := found[:0:0]
+	for _, f := range found {
+		ok := false
+		for _, a := range allows {
+			if a.RowID.IsZero() && a.Field == key && a.RuleID == f.RuleID && a.MatchHash == f.MatchHash {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // scanDocs scans every document on GOMAXPROCS goroutines (the scanner is
@@ -251,7 +288,7 @@ func scanDoc(sc scan.Scanner, allows []scan.Allow, p string, b []byte, inStore b
 	}
 	// The path is the field of a plain document, so path-scoped filters
 	// (a go.sum module hash) can tell the file; hits keep no field.
-	return hitsOf(content, "", sc.Scan(p, content))
+	return hitsOf(content, "", fileAllowed(p, sc.Scan(p, content), allows))
 }
 
 // isStoreRowPath reports whether p is a row file of a store clone.
@@ -399,4 +436,73 @@ func (a *App) FindingMatchHash(ctx context.Context, r row.Row, field, rule, fing
 		return 0, errs.New(errs.NotFound, "secrets allow: no "+rule+" finding with fingerprint sha256:"+fingerprint+" in the "+field+" of "+r.ID.String()).WithHint(list)
 	}
 	return 0, errs.New(errs.InvalidInput, "secrets allow: fingerprint sha256:"+fingerprint+" names more than one "+rule+" finding in the "+field+" of "+r.ID.String()).WithHint("give more of the fingerprint, or " + list)
+}
+
+var _ opssettings.FileAllower = (*App)(nil)
+
+// RepoFilePath implements opssettings.FileAllower: p (absolute, or
+// relative to the working directory when that is inside the repo, else to
+// the repo top) as a slash path relative to the repo top, the key the
+// commit check compares with. A path outside the repo is refused.
+func (a *App) RepoFilePath(ctx context.Context, p string) (string, error) {
+	top := gitTop(ctx, a.opts.RepoDir)
+	if top == "" {
+		return "", errs.New(errs.InvalidInput, "secrets allow --file: "+a.opts.RepoDir+" is not in a git repo")
+	}
+	top = realPath(top)
+	abs := p
+	if !filepath.IsAbs(abs) {
+		base := top
+		if wd, err := os.Getwd(); err == nil && within(top, realPath(wd)) {
+			base = realPath(wd)
+		}
+		abs = filepath.Join(base, p)
+	}
+	abs = filepath.Join(realPath(filepath.Dir(abs)), filepath.Base(abs))
+	rel, err := filepath.Rel(top, abs)
+	if err != nil || !within(top, abs) || rel == "." {
+		return "", errs.New(errs.InvalidInput, "secrets allow --file: "+p+" is not a file in this repo ("+top+")")
+	}
+	return filepath.ToSlash(rel), nil
+}
+
+// FileFindingHash implements opssettings.FileAllower: the match hash of
+// the one finding of rule in the repo file path (as staged, else as on
+// disk) whose fingerprint starts with fingerprint.
+func (a *App) FileFindingHash(ctx context.Context, path, rule, fingerprint string) (uint32, error) {
+	top := gitTop(ctx, a.opts.RepoDir)
+	var content []byte
+	if top != "" {
+		if blobs, err := indexBlobs(ctx, top, hookIndexEnv(top), []string{path}); err == nil {
+			content = blobs[path]
+		}
+	}
+	if content == nil {
+		b, err := os.ReadFile(filepath.Join(realPath(top), filepath.FromSlash(path)))
+		if err != nil {
+			return 0, errs.Wrap(errs.NotFound, "secrets allow --file: cannot read "+path, err)
+		}
+		content = b
+	}
+	sc, err := a.HookScanner(ctx)
+	if err != nil {
+		return 0, err
+	}
+	found := map[uint32]bool{}
+	for _, f := range sc.Scan(path, string(content)) {
+		fp := strings.TrimPrefix(f.Preview, "sha256:")
+		if f.RuleID == rule && (strings.HasPrefix(fp, fingerprint) || strings.HasPrefix(fingerprint, fp)) {
+			found[f.MatchHash] = true
+		}
+	}
+	switch len(found) {
+	case 1:
+		for h := range found {
+			return h, nil
+		}
+	case 0:
+		return 0, errs.New(errs.NotFound, "secrets allow --file: no "+rule+" finding with fingerprint sha256:"+fingerprint+" in "+path).
+			WithHint("stage the file and run lore check leaks --staged: it prints each finding's rule and fingerprint")
+	}
+	return 0, errs.New(errs.InvalidInput, "secrets allow --file: fingerprint sha256:"+fingerprint+" names more than one "+rule+" finding in "+path).WithHint("give more of the fingerprint")
 }

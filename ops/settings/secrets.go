@@ -100,7 +100,11 @@ type RuleOnIn struct {
 
 // AllowIn is the input of secrets.allow.
 type AllowIn struct {
-	Row    string `json:"row_id" arg:"0" desc:"the row id the finding is on"`
+	Row string `json:"row_id,omitempty" arg:"0" desc:"the row id the finding is on (or --file for a finding in a repo file)"`
+	// File is a repo file the finding is in (a schema field named
+	// password, a test fixture): the entry is keyed by its repo-relative
+	// path, rule and hash, and the commit check honours it for that file.
+	File   string `json:"file,omitempty" flag:"file" desc:"a repo file the finding is in, instead of a row id"`
 	Rule   string `json:"rule" flag:"rule" desc:"the rule id of the finding"`
 	Reason string `json:"reason" flag:"reason" desc:"why it is not a secret"`
 	Field  string `json:"field,omitempty" flag:"field" desc:"the field (default the one text field holding --match)"`
@@ -135,6 +139,85 @@ func (m *MatchHashArg) UnmarshalText(b []byte) error { *m = MatchHashArg(b); ret
 
 // MarshalText implements encoding.TextMarshaler.
 func (m MatchHashArg) MarshalText() ([]byte, error) { return []byte(m), nil }
+
+// allowFileHint is the next step of `secrets allow <not a row id>`: a
+// finding in an ordinary repo file is allowed by its path.
+const allowFileHint = "for a finding in a repo file: lore secrets allow --file <path> --rule <rule> --match-hash <sha256:… fingerprint> --reason \"<why>\""
+
+// fileAllowField is the field a file entry stores. An entry also names the
+// project row as row_id: releases before --file read every entry as a row
+// entry (row_id required, a malformed entry fails every write), and the
+// project row has no field of this name, so to them it allows nothing.
+const fileAllowField = "file"
+
+// aPath is the secret_allows field of a file entry.
+const aPath = "path"
+
+// FileAllower is an optional Env upgrade (wire.App) for `secrets allow
+// --file`: the repo-relative slash path of a file named on the command
+// line, and the match hash of the finding of rule in that file (as staged,
+// else as on disk) whose fingerprint starts with fingerprint.
+type FileAllower interface {
+	RepoFilePath(ctx context.Context, p string) (string, error)
+	FileFindingHash(ctx context.Context, path, rule, fingerprint string) (uint32, error)
+}
+
+// allowFile is `secrets allow --file`: one entry for a finding in an
+// ordinary repo file, keyed by path, rule and hash, in the repo store.
+func (o ops) allowFile(ctx context.Context, in AllowIn) (RowOut, error) {
+	if in.Rule == "" || strings.TrimSpace(in.Reason) == "" {
+		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: --rule and --reason are required")
+	}
+	if in.Match != "" && strings.TrimSpace(string(in.MatchHash)) != "" {
+		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give --match or --match-hash, not both")
+	}
+	hash, fingerprint, err := parseMatchHash(string(in.MatchHash))
+	if err != nil {
+		return RowOut{}, err
+	}
+	fa, ok := o.env.(FileAllower)
+	if !ok {
+		return RowOut{}, errs.New(errs.Unsupported, "secrets allow --file: not available here")
+	}
+	path, err := fa.RepoFilePath(ctx, in.File)
+	if err != nil {
+		return RowOut{}, err
+	}
+	switch {
+	case in.Match != "":
+		hash = scan.HashMatch(in.Match)
+	case fingerprint != "":
+		if hash, err = fa.FileFindingHash(ctx, path, in.Rule, fingerprint); err != nil {
+			return RowOut{}, err
+		}
+	case strings.TrimSpace(string(in.MatchHash)) == "":
+		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow --file: give --match-hash <sha256:… fingerprint> (the refused commit prints it)")
+	}
+	projects, err := liveRows(ctx, o.env, []store.Source{store.SourceRepo}, schema.TableProjects)
+	if err != nil {
+		return RowOut{}, err
+	}
+	if len(projects) == 0 {
+		return RowOut{}, errs.New(errs.NotAStore, "secrets allow --file: this repo has no lore project").WithHint("run lore init here first")
+	}
+	fields := map[string]value.Value{aHash: value.Int(int64(hash))}
+	if err = optTexts(fields, map[string]string{aField: fileAllowField, aPath: path, aRuleID: in.Rule, aReason: in.Reason}); err != nil {
+		return RowOut{}, err
+	}
+	if fields[aRowID], err = ref(projects[0].Row.ID); err != nil {
+		return RowOut{}, err
+	}
+	w, err := o.env.Create(ctx, store.SourceRepo, schema.TableSecretAllows, fields)
+	if err != nil {
+		return RowOut{}, err
+	}
+	if err = o.auditSecretEvent(ctx, auditAllowAdded, "secrets allow", projects[0].Row.ID, "allow="+w.Row.ID.String(), "file="+path,
+		"rule="+in.Rule, "reason="+strings.TrimSpace(in.Reason)); err != nil {
+		return RowOut{}, err
+	}
+	return RowOut{ID: w.Row.ID.String(), Store: string(store.SourceRepo),
+		Human: fmt.Sprintf("✓ %s: %s marked not a secret (%s); commit the new .lore/data/secret_allows file with it\n", in.Rule, path, short(w.Row.ID))}, nil
+}
 
 // FindingHasher is an optional Env upgrade (wire.App): the match hash of
 // the finding of rule in a row's field whose fingerprint (scan.Mask) is
@@ -240,6 +323,7 @@ type Allow struct {
 	ID        string `json:"id"`
 	RowID     string `json:"row_id"`
 	Field     string `json:"field"`
+	Path      string `json:"path,omitempty"` // a file entry (secrets allow --file)
 	RuleID    string `json:"rule_id"`
 	MatchHash string `json:"match_hash"`
 	Reason    string `json:"reason,omitempty"`
@@ -264,7 +348,11 @@ func (o AllowsOut) Text() string {
 	var b strings.Builder
 	b.WriteString("ID\tROW\tFIELD\tRULE\tREASON\n")
 	for _, a := range o.Data {
-		fmt.Fprintf(&b, "%s\t%s\t%s\t%s\t%s\n", a.ID, a.RowID, a.Field, a.RuleID, a.Reason)
+		row, field := a.RowID, a.Field
+		if a.Path != "" {
+			row, field = "file "+a.Path, "-"
+		}
+		fmt.Fprintf(&b, "%s\t%s\t%s\t%s\t%s\n", a.ID, row, field, a.RuleID, a.Reason)
 	}
 	return b.String()
 }
@@ -517,9 +605,15 @@ func (o ops) ruleOn(ctx context.Context, in RuleOnIn) (RowOut, error) {
 }
 
 func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
+	if strings.TrimSpace(in.File) != "" {
+		if strings.TrimSpace(in.Row) != "" {
+			return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: give a row id or --file, not both")
+		}
+		return o.allowFile(ctx, in)
+	}
 	rowID, err := ids.ParseAny(strings.TrimSpace(in.Row))
 	if err != nil {
-		return RowOut{}, lookup.BadID("secrets allow: "+quote(in.Row)+" is not a row id", err)
+		return RowOut{}, lookup.BadID("secrets allow: "+quote(in.Row)+" is not a row id; "+allowFileHint, err)
 	}
 	if in.Rule == "" || strings.TrimSpace(in.Reason) == "" {
 		return RowOut{}, errs.New(errs.InvalidInput, "secrets allow: --rule and --reason are required")
@@ -623,7 +717,7 @@ func (o ops) allowList(ctx context.Context, _ AllowListIn) (AllowsOut, error) {
 	out := AllowsOut{Data: []Allow{}}
 	for _, l := range rows {
 		out.Data = append(out.Data, Allow{ID: l.Row.ID.String(), RowID: text(l.Row, aRowID), Field: text(l.Row, aField),
-			RuleID: text(l.Row, aRuleID), MatchHash: text(l.Row, aHash), Reason: text(l.Row, aReason), Store: string(l.Src),
+			Path: text(l.Row, aPath), RuleID: text(l.Row, aRuleID), MatchHash: text(l.Row, aHash), Reason: text(l.Row, aReason), Store: string(l.Src),
 			CreatedBy: auditrec.Of(l.Row).CreatedBy, UpdatedBy: auditrec.Of(l.Row).UpdatedBy})
 	}
 	out.Count = len(out.Data)

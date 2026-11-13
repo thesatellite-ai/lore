@@ -64503,6 +64503,10 @@
                     "type": "string",
                     "description": "the field (default the one text field holding --match)"
                   },
+                  "file": {
+                    "type": "string",
+                    "description": "a repo file the finding is in, instead of a row id"
+                  },
                   "match": {
                     "type": "string",
                     "description": "the matched text (only its hash is stored)"
@@ -64517,7 +64521,7 @@
                   },
                   "row_id": {
                     "type": "string",
-                    "description": "the row id the finding is on"
+                    "description": "the row id the finding is on (or --file for a finding in a repo file)"
                   },
                   "rule": {
                     "type": "string",
@@ -64525,7 +64529,6 @@
                   }
                 },
                 "required": [
-                  "row_id",
                   "rule",
                   "reason"
                 ],
@@ -64707,6 +64710,9 @@
                             "type": "string"
                           },
                           "match_hash": {
+                            "type": "string"
+                          },
+                          "path": {
                             "type": "string"
                           },
                           "reason": {
