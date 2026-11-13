@@ -21,9 +21,14 @@ import (
 //   - for-each-ref, ls-tree, rev-parse, cat-file, merge-base and the read
 //     form of symbolic-ref (one name, no -d): kept until the next command
 //     that is not one of these runs through the same cache (update-ref,
-//     commit-tree, fetch, push, hash-object, config, ...), or until
+//     commit-tree, fetch, push, hash-object, config set, ...), or until
 //     Invalidate. Anything not recognised as a read counts as a write, so a
 //     new plumbing call can only make the cache drop more, never serve stale.
+//   - log and the read forms of config (--get, --get-all, --get-regexp,
+//     --list): run every time and never kept, but they drop nothing either.
+//     Counting them as writes made every identity or remote-url lookup and
+//     every merged-check log wipe the cache mid-operation, so a 5,500-row
+//     list re-ran its whole-tree ls-trees three times and doctor seventeen.
 //
 // Invariant: after a write that went through this cache returns, no read
 // answer from before it is served again. A read that overlapped a write
@@ -96,6 +101,10 @@ const (
 	// classRead: the answer depends on refs and objects; kept until the
 	// next write.
 	classRead
+	// classPassthrough: a read whose answer is not kept (config can change
+	// through a runner this cache never sees) but that writes nothing, so
+	// it leaves every kept answer in place.
+	classPassthrough
 )
 
 // genReads are the subcommands that only read refs, objects or repository
@@ -120,8 +129,53 @@ func classify(inv Invocation) readClass {
 		return classRead
 	case sub == "symbolic-ref" && symbolicRefReads(rest):
 		return classRead
+	case sub == "log" && logReads(rest), sub == "config" && configReads(rest):
+		return classPassthrough
 	}
 	return classWrite
+}
+
+// logReads reports whether log's arguments only print history (no
+// --output file).
+func logReads(args []string) bool {
+	for _, a := range args {
+		if a == "--output" || strings.HasPrefix(a, "--output=") {
+			return false
+		}
+	}
+	return true
+}
+
+// configReadFlags are the config options that only read; any other option
+// (--unset, --add, --replace-all, --edit, ...) or a plain "key value" set
+// leaves the call a write.
+var configReadFlags = map[string]bool{
+	"--get": true, "--get-all": true, "--get-regexp": true, "--get-urlmatch": true, "--list": true, "-l": true,
+}
+
+// configReadScopes are the options that only pick which file a read looks
+// at or how it prints, allowed beside a read flag.
+var configReadScopes = map[string]bool{
+	"--global": true, "--system": true, "--local": true, "--worktree": true, "--null": true, "-z": true,
+	"--name-only": true, "--show-origin": true, "--show-scope": true, "--includes": true, "--no-includes": true,
+	"--bool": true, "--int": true, "--path": true, "--type=bool": true, "--type=int": true, "--type=path": true,
+}
+
+// configReads reports whether config's arguments are one read flag plus
+// read-only options and names (no write option, no -f/--file whose name a
+// later argument would carry).
+func configReads(args []string) bool {
+	read := false
+	for _, a := range args {
+		switch {
+		case configReadFlags[a]:
+			read = true
+		case configReadScopes[a]:
+		case strings.HasPrefix(a, "-"):
+			return false
+		}
+	}
+	return read
 }
 
 // symbolicRefReads reports whether symbolic-ref's arguments ask a question
@@ -158,8 +212,11 @@ func cacheKey(inv Invocation) string {
 // Run implements Git.
 func (c *ReadCache) Run(ctx context.Context, inv Invocation) ([]byte, error) {
 	class := classify(inv)
-	if class == classWrite {
+	switch class {
+	case classWrite:
 		return c.runWrite(ctx, inv)
+	case classPassthrough:
+		return c.inner.Run(ctx, inv)
 	}
 	key := cacheKey(inv)
 	c.mu.Lock()

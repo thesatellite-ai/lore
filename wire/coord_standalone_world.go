@@ -725,6 +725,26 @@ func (r engineRows) List(ctx context.Context) ([]coord.Doc, error) {
 	return out, nil
 }
 
+// anyRow reports whether keep holds for a live task row of any read store,
+// after the same rollback List makes; it decodes no document (List does).
+func (r engineRows) anyRow(ctx context.Context, keep func(row.Row) bool) (bool, error) {
+	if err := r.rollback(ctx); err != nil {
+		return false, err
+	}
+	for _, src := range r.a.ReadStores() {
+		rows, err := r.a.List(ctx, src, schema.TableTasks)
+		if err != nil {
+			return false, err
+		}
+		for _, rw := range rows {
+			if !rw.Deleted && keep(rw) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // RepoName maps a repo id to its mount name (what --repo matches).
 func (r engineRows) RepoName(repoID string) string {
 	id, err := ids.ParseAny(repoID)

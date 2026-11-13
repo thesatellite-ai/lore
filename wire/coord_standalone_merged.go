@@ -31,6 +31,8 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/mergewatch"
 	"github.com/thesatellite-ai/lore/adapters/signals"
 	"github.com/thesatellite-ai/lore/adapters/signals/coord"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -110,16 +112,35 @@ func (a *App) hasMergeCandidates(ctx context.Context) bool {
 	if _, err := a.state(ctx); err != nil {
 		return false
 	}
-	docs, err := engineRows{a: a}.List(ctx)
+	found, err := engineRows{a: a}.anyRow(ctx, unmergedRow)
+	return err == nil && found
+}
+
+// unmergedRow is unmerged on a row as docOfRow would build its document,
+// reading only the two fields it asks about: this check runs before every
+// task list, and building the whole document of each of a 5,500-row repo's
+// tasks (every field marshalled and parsed again) was most of its cost.
+func unmergedRow(r row.Row) bool {
+	return rowDocStr(r, fieldStatus) == schema.TaskStatusDone && rowDocStr(r, fieldMergedAt) == ""
+}
+
+// rowDocStr is docOfRow(r).Str(field): the field's JSON string ("" when
+// absent or not a string).
+func rowDocStr(r row.Row, field string) string {
+	v, ok := r.Fields[field]
+	if !ok || v == nil {
+		return ""
+	}
+	b, err := v.MarshalJSON()
 	if err != nil {
-		return false
+		return ""
 	}
-	for _, d := range docs {
-		if unmerged(d) {
-			return true
-		}
+	cv, err := canonjson.Raw(b)
+	if err != nil {
+		return ""
 	}
-	return false
+	s, _ := cv.AsString()
+	return s
 }
 
 // unmerged reports a done task without merged_at.

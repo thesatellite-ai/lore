@@ -107,3 +107,27 @@ func TestLiveUnreadableRemoteNamed(t *testing.T) {
 		t.Fatalf("unreadable remote line:\n%s", got)
 	}
 }
+
+// A host that refuses refs/lore/*: the refusal line is said once per state
+// like the offline one (a sync used to print it twice, once for its own
+// push and again at the end of the run), never during sync's own report,
+// and the session keeps the host's words for sync's line.
+func TestLiveRefusedLineSaidOnce(t *testing.T) {
+	s, out := offlineSession(t, "https://git.example.test/acme/site.git")
+	refused := live.PushOutcome{Status: live.PushRefused, Detail: "[remote rejected] (pre-receive hook declined)"}
+	s.syncReport = true
+	s.reportPush(refused)
+	if got := out.String(); strings.Contains(got, "not pushed yet") {
+		t.Fatalf("sync's report says it in its own line; the session must not:\n%s", got)
+	}
+	if s.waitWhy != liveRefusedWhy || s.refusedDetail != refused.Detail {
+		t.Fatalf("waitWhy %q detail %q: sync's line needs both", s.waitWhy, s.refusedDetail)
+	}
+	s.syncReport = false
+	for range 3 { // the finish push of the same run, then later commands
+		s.reportPush(refused)
+	}
+	if n := strings.Count(out.String(), "the remote refused refs/lore/live"); n != 0 {
+		t.Fatalf("already said during sync: said %d more times:\n%s", n, out.String())
+	}
+}

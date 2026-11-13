@@ -125,16 +125,45 @@ func decodeLanded(raw []byte) (store.Row, bool) {
 
 // dataPaths maps every row file under the folder's .lore/data at rev to its
 // blob id (none when rev does not exist, e.g. no fetched default branch).
+// The map is the session's, kept by commit id (a commit's tree never
+// changes): every table read of a run asks for HEAD's and origin's
+// listing, and a 5,500-row repo's listing took ~10 ms of parsing per ask.
+// Callers only read it.
 func (b *liveBackend) dataPaths(ctx context.Context, s *liveSession, rev string) map[string]string {
-	raw, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-tree", "-r", rev, "--", mainDataPath(b.folder, "")}})
+	commit, ok, err := s.repo.ResolveCommit(ctx, rev)
+	if err != nil || !ok {
+		return nil
+	}
+	dir := mainDataPath(b.folder, "")
+	key := commit + "\x00" + dir
+	if m, ok := s.listings[key]; ok {
+		return m
+	}
+	raw, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-tree", "-r", commit, "--", dir}})
 	if err != nil {
 		return nil
 	}
+	out := parseTreeListing(raw)
+	if s.listings == nil {
+		s.listings = map[string]map[string]string{}
+	}
+	s.listings[key] = out
+	return out
+}
+
+// parseTreeListing maps each path of `git ls-tree -r` output to its object
+// id; lines are "<mode> <type> <oid>\t<path>".
+func parseTreeListing(raw []byte) map[string]string {
 	out := map[string]string{}
 	for _, line := range strings.Split(string(raw), "\n") {
-		meta, p, ok := strings.Cut(line, "\t") // "<mode> <type> <oid>\t<path>"
-		if f := strings.Fields(meta); ok && len(f) == 3 {
-			out[p] = f[2]
+		meta, p, ok := strings.Cut(line, "\t")
+		if !ok {
+			continue
+		}
+		_, rest, ok1 := strings.Cut(meta, " ")
+		_, oid, ok2 := strings.Cut(rest, " ")
+		if ok1 && ok2 && oid != "" && !strings.Contains(oid, " ") {
+			out[p] = oid
 		}
 	}
 	return out

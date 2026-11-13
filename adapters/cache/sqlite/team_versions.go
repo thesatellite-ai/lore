@@ -21,6 +21,10 @@ type TeamVersion struct {
 // Rows without a stamp are older than 0.1.18 and are not listed (OQ7: no
 // stamp means older than 0.1.18; doctor says so in its own words).
 //
+// The instr test runs first: a doc without the "_w" key text cannot carry a
+// stamp, and skipping its JSON parse keeps doctor from parsing every row of
+// a 5,500-row repo to find the few stamped ones (0.9 s of CPU before).
+//
 // DECISION TEAMV-VIEW (ov6-upgrade): the team_versions "cache" is computed
 // on read from `_rows` instead of a second stored table, so it can never
 // drift from the rows and needs no rebuild step (OQ7's "rebuilt from the
@@ -33,7 +37,7 @@ WITH stamped AS (
 	       COALESCE(json_extract(doc, '$.updated_at'), json_extract(doc, '$.created_at'), '') AS seen,
 	       hlc
 	FROM "` + tblRows + `"
-	WHERE deleted = 0 AND json_valid(doc) AND json_type(doc, '$._w.v') = 'text'
+	WHERE deleted = 0 AND instr(doc, '"_w"') > 0 AND json_valid(doc) AND json_type(doc, '$._w.v') = 'text'
 ), ranked AS (
 	SELECT actor, machine, version, seen,
 	       ROW_NUMBER() OVER (PARTITION BY actor, machine ORDER BY hlc DESC) AS rn
