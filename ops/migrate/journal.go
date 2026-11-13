@@ -59,6 +59,16 @@ type Journal interface {
 	Unlock(ctx context.Context) (UnlockOut, error)
 }
 
+// Aborter is a Journal that can put back what a failed run changed (E-5):
+// run calls AbortRun when a step returns an error after Begin, so a run
+// that fails part way never leaves the repo mixed `_v: 1` / `_v: 2`. The
+// lines say what was put back (or why a place stays, e.g. a store commit
+// that already reached its remote). A test hook's stop (At) is a crash,
+// not a failure: it skips AbortRun so the next run resumes.
+type Aborter interface {
+	AbortRun(ctx context.Context) ([]string, error)
+}
+
 // Finished is what Journal.Finish recorded.
 type Finished struct {
 	// Lines are the journal's lines (one per changed place, undo).

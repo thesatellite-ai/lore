@@ -548,6 +548,13 @@ func (st *state) pickUpRepoEdits(ctx context.Context, gb *gitbackend.Backend, sa
 	if gb.GitBusy(ctx) {
 		return
 	}
+	if op, _ := gitbackend.PersonGitOpAt(ctx, gb.Dir()); op != "" {
+		// E-7: mid-revert (merge, cherry-pick, rebase) the changed row
+		// files are git's, not hand edits: a reverted migration's files
+		// were refused as "hand edits" that "went ahead". The pick-up
+		// runs on the first command after the operation finishes.
+		return
+	}
 	rep, err := gb.HandChanges(ctx)
 	if err != nil {
 		say(handLinePrefix + "could not look for hand edits in " + gb.Dir() + ": " + err.Error())
@@ -620,7 +627,7 @@ func repoEditCandidateOf(reg *schema.Registry, c gitbackend.HandChange) repoEdit
 		// B1-10/B1-16: a v1 file the migration rewrote (not committed
 		// yet) keeps its stamp; its field changes are the migration's
 		// (empty refs as null, audit defaults), not a hand edit
-		base = upcastV1(reg, base)
+		base = migratedBase(reg, base, h)
 	}
 	// Compare the fields before asking the engine: a format rewrite
 	// (`lore fix` migrating every row file) changes thousands of files
