@@ -7,6 +7,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 
@@ -86,7 +87,14 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 	// the repo class check. Only a repo neither set up nor linked stops at
 	// one note.
 	if NoCreate(ctx) && a.gitRepoWithoutLore(ctx) && linkedByRemote(ctx, a.opts) == "" { // doctor_nocreate.go
-		return []opsdoctor.CheckRun{{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: opsdoctor.LevelNote, Line: doctorNoProjectNote}}}}
+		line := doctorNoProjectNote
+		if top := gitTopLevel(ctx, a.projectDir()); top != "" {
+			var e *errs.Error
+			if be := beforeLoreErr(ctx, top, errs.NotAStore); be != nil && errors.As(be, &e) {
+				line = e.Message + " (" + e.Hint + ")" // D-8/D-10: not "lore init"
+			}
+		}
+		return []opsdoctor.CheckRun{{Check: string(DoctorCheckRepoClass), Findings: []opsdoctor.Finding{{Check: string(DoctorCheckRepoClass), Level: opsdoctor.LevelNote, Line: line}}}}
 	}
 	// Outside any git work tree there is no repo store to open: a check
 	// that needs it is skipped (one note below), not counted as a check

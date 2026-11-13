@@ -134,7 +134,7 @@ A note (`notes.txt`), a folder of your own or any other file that is not a row i
 
 ## Code repos
 
-In a code repo the rows live in `.lore/data/`, and lore never commits there: you commit rows with your code. A hand edit of a committed row (fields changed, its `_hlc` left as committed) is picked up the same way: checked, re-stamped with your name and the time, and written back into the file for your next commit; a refused file is named with its line and reason. New and deleted row files in a code repo keep their usual handling: the repo's pre-commit hook checks a new file when you commit it, and a missing file is reported by `lore doctor` and comes back with git (`git checkout HEAD -- <file>`) ([Hooks and the merge driver](hooks-and-merge-driver.md), [Trash, restore from git and purge](trash-and-purge.md)).
+In a code repo the rows live in `.lore/data/`, and lore never commits there: you commit rows with your code. A hand edit of a committed row (fields changed, its `_hlc` left as committed) is picked up the same way: checked, re-stamped with your name and the time, and written back into the file for your next commit; a refused file is named with its line and reason, and the repo's pre-commit hook refuses to commit it (an unknown field or a value outside its field's set is named with its line) until you fix it or put it back. New and deleted row files in a code repo keep their usual handling: the repo's pre-commit hook checks a new file when you commit it, and a missing file is reported by `lore doctor` and comes back with git (`git checkout HEAD -- <file>`) ([Hooks and the merge driver](hooks-and-merge-driver.md), [Trash, restore from git and purge](trash-and-purge.md)).
 
 ## Try it
 

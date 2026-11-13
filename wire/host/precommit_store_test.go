@@ -71,4 +71,32 @@ func TestBadStoreRow(t *testing.T) {
 	if line, why := badStoreRow(reg, rel, []byte(bad)); why == "" || line <= 1 || !strings.Contains(why, "kind") {
 		t.Errorf("a bad kind: line %d, %q", line, why)
 	}
+	// D-18: the code repo's pre-commit refuses what the hand-edit pick-up
+	// refuses (a changed field that is unknown or outside its set), at that
+	// field's line; a valid row, a new file, a row lore restamped and a
+	// file that is not a row pass.
+	repoRel := loreDataPathspec + "/" + rel
+	if _, why := invalidRepoRow(reg, repoRel, doc, doc); why != "" {
+		t.Fatalf("an unchanged repo row was refused: %s", why)
+	}
+	extra := strings.Replace(string(doc), "\n}", ",\n  \"my_note\": \"x\"\n}", 1)
+	if line, why := invalidRepoRow(reg, repoRel, []byte(extra), doc); !strings.Contains(why, "unknown field my_note") || line != strings.Count(extra[:strings.Index(extra, "my_note")], "\n")+1 {
+		t.Errorf("unknown field: line %d, %q", line, why)
+	}
+	if _, why := invalidRepoRow(reg, repoRel, []byte(bad), doc); !strings.Contains(why, "kind") {
+		t.Errorf("a bad kind in the code repo: %q", why)
+	}
+	if _, why := invalidRepoRow(reg, repoRel, []byte(extra), nil); why != "" {
+		t.Errorf("a new file was checked as a hand edit: %q", why)
+	}
+	restamped := strings.Replace(extra, stamp.String(), hlc.NewClock(actor, func() time.Time { return time.Now().Add(time.Hour) }).Now().String(), 1)
+	if restamped == extra {
+		t.Fatalf("the test row has no _hlc line: %s", extra)
+	}
+	if _, why := invalidRepoRow(reg, repoRel, []byte(restamped), doc); why != "" {
+		t.Errorf("a row lore restamped was checked as a hand edit: %q", why)
+	}
+	if _, why := invalidRepoRow(reg, loreDataPathspec+"/_meta.json", []byte(`{"my_note":1}`), []byte(`{}`)); why != "" {
+		t.Errorf("a file that is not a row was checked: %q", why)
+	}
 }

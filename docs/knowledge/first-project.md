@@ -214,7 +214,7 @@ To turn completion on for every new shell, add `source <(lore completion bash)` 
 
 ## Pitfalls
 
-- **Run lore inside the repo.** Any folder of the checkout works. Outside a git checkout a command stops with `E_NOT_A_STORE` ("the folder is not inside a git work tree"); in a git repo lore was never set up in, it stops with "lore isn't set up in … (no .lore folder)" and the hint to run `lore init`.
+- **Run lore inside the repo.** Any folder of the checkout works. Outside a git checkout a command stops with `E_NOT_A_STORE` ("the folder is not inside a git work tree"); in a git repo lore was never set up in, it stops with "lore isn't set up in … (no .lore folder)" and the hint to run `lore init`. In a checkout of a lore repo that only lacks `.lore/` here (a worktree or bisect step at a commit from before lore was added, or a sparse checkout that leaves `.lore/` out), it names the branch to switch to (`git switch main`) or the sparse fix (`git sparse-checkout add .lore`) instead, since `lore init` there would make a second project.
 - **Render after you change rules.** The coding tool reads `.lore/LORE.md`, not the database. A new rule shows up only after the next `lore render`. Running it twice is safe: the second run says `(unchanged)` and `(pointer present)`.
 - <!-- ds:block id=render-pins-buj9dujv --> **Only the strongest notes are pinned.** `lore render` pins `must` rules and `critical` or `high` hotfixes. Memories, decisions and `should` rules are found with `lore search` when the tool needs them. See [Render](render-and-agent-files.md).
 - **Commit `.lore/data`.** lore tells you after each change how many files are not committed. If you never commit them, your teammates and your next clone never see the notes.

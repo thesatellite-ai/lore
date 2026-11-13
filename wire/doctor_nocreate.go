@@ -136,10 +136,10 @@ func loreFolderAt(top string) bool {
 // .lore/. A write run (WithNoSetUp) says so with its own line.
 func noProjectErr(ctx context.Context, top string) error {
 	if r := noCreateOf(ctx); r != nil && r.write {
-		return UntouchedError(top)
+		return UntouchedError(ctx, top)
 	}
-	return errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); a read creates nothing there").
-		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)")
+	return orBeforeLore(ctx, top, errs.NotAStore, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); a read creates nothing there").
+		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)"))
 }
 
 // doctorNoProjectNote is DoctorChecks' one line for a git repo with no
@@ -210,8 +210,10 @@ func UntouchedRepo(ctx context.Context, dir string) string {
 	return top
 }
 
-// UntouchedError is the refusal of a write in an UntouchedRepo (top).
-func UntouchedError(top string) error {
-	return errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); lore changes nothing in a repo it isn't set up in").
-		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)")
+// UntouchedError is the refusal of a write in an UntouchedRepo (top). A
+// checkout of a lore repo that only lacks .lore/ here (a commit from before
+// lore, a sparse cone) gets beforeLoreErr's line instead of "lore init".
+func UntouchedError(ctx context.Context, top string) error {
+	return orBeforeLore(ctx, top, errs.NotAStore, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); lore changes nothing in a repo it isn't set up in").
+		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)"))
 }

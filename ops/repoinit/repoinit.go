@@ -58,11 +58,19 @@ const (
 	alreadyInitializedF = "a lore project already exists here (%s)"
 	// linkedRemoteF says the project id came from an org store link (remote).
 	linkedRemoteF = "  the org store already links %s: this project keeps that link's id, so its store folder's notes reach this repo\n"
+	// otherProjectsF says a new project sits beside others in the same repo
+	// (name, their folders): its notes are its own (D-1, the monorepo answer
+	// of docs/choosing/database-mode.md).
+	otherProjectsF = "  this repo already holds a lore project in %[2]s: %[1]s is a separate project for this folder, with its own notes (run lore here to list or search them; give another name with lore init --name <name>)\n"
 	// toolsFromSetupF says which setup chose the tool files (setup, files).
 	toolsFromSetupF = "  tool files from setup %s: %s\n"
 	// alreadyInitializedHint is the next step of a second init
 	// (INTEG-MIGREST-2, docs/reference/errors.md "use the existing project").
 	alreadyInitializedHint = "nothing to do: the project is ready; lore doctor checks it"
+	// alreadyInitializedTargetHintF is the next step of a second init that
+	// asked for tool files (--target): init never rewires an existing
+	// project, so it names the command that adds them (targets, joined).
+	alreadyInitializedTargetHintF = "the project is ready; to add the tool file(s) run: lore render --add-target %s"
 )
 
 // Host is the machinery behind repo.init, supplied by the binary that owns
@@ -120,6 +128,14 @@ type Host interface {
 	SetupTools(ctx context.Context) SetupTools
 }
 
+// MonorepoHost is an optional Host part: the folders of the checkout's
+// other lore projects (relative to the repo top, "." for the top), so a
+// sub-project's init says it sits beside them (D-1). A Host without it
+// prints no such line.
+type MonorepoHost interface {
+	OtherProjectFolders(ctx context.Context) []string
+}
+
 // SetupTools is what the setup applying to the work folder chose: the
 // tool profiles (in the setup's order) and their pointer files.
 type SetupTools struct {
@@ -161,6 +177,10 @@ type InitOut struct {
 	ToolsFromSetup string `json:"tools_from_setup,omitempty"`
 	// ToolFiles are those tools' pointer files (with ToolsFromSetup).
 	ToolFiles []string `json:"tool_files,omitempty"`
+	// OtherProjects are the folders (relative to the repo top, "." for the
+	// top) of the checkout's other lore projects when init made a new one
+	// beside them (a monorepo sub-project, D-1); init names them.
+	OtherProjects []string `json:"other_projects,omitempty"`
 	// LinkedRemote is the remote an org store link already named this repo
 	// by; the project took that link's id (B1-18). "" for a new project.
 	LinkedRemote string `json:"linked_remote,omitempty"`
@@ -179,6 +199,16 @@ func (o InitOut) Body() string {
 		from = fmt.Sprintf(toolsFromSetupF, o.ToolsFromSetup, strings.Join(o.ToolFiles, ", "))
 	}
 	linked := ""
+	if len(o.OtherProjects) > 0 {
+		folders := make([]string, len(o.OtherProjects))
+		for i, f := range o.OtherProjects {
+			folders[i] = f
+			if f == "." {
+				folders[i] = "the repo root"
+			}
+		}
+		linked = fmt.Sprintf(otherProjectsF, o.Name, strings.Join(folders, ", "))
+	}
 	if o.LinkedRemote != "" {
 		linked = fmt.Sprintf(linkedRemoteF, o.LinkedRemote)
 	}
@@ -245,7 +275,7 @@ func Run(ctx context.Context, h Host, in InitIn) (InitOut, error) {
 	if pid, perr := h.Project(ctx); perr == nil {
 		if h.HadLocalState() {
 			return InitOut{}, errs.New(errs.AlreadyInitialized, fmt.Sprintf(alreadyInitializedF, pid.String())).
-				WithHint(alreadyInitializedHint)
+				WithHint(alreadyInitializedHintFor(in.Target))
 		}
 		// E1: the checkout carries the shared project: adopt it.
 		out.Adopted, out.ProjectID = true, pid.String()
@@ -301,6 +331,9 @@ func Run(ctx context.Context, h Host, in InitIn) (InitOut, error) {
 	if isLinked {
 		out.LinkedRemote = linkedRemote
 	}
+	if mh, isMono := h.(MonorepoHost); isMono {
+		out.OtherProjects = mh.OtherProjectFolders(ctx)
+	}
 	targets := in.Target
 	if len(targets) == 0 {
 		// --target always wins; else the applying setup's tools; else
@@ -313,6 +346,21 @@ func Run(ctx context.Context, h Host, in InitIn) (InitOut, error) {
 	out.ToolLines = lines
 	out.addWarning(warnToolFiles, terr)
 	return out, nil
+}
+
+// alreadyInitializedHintFor is the hint of a second init: with --target it
+// names the render command that wires those tools (D-3), else "nothing to do".
+func alreadyInitializedHintFor(targets []string) string {
+	var keep []string
+	for _, t := range targets {
+		if t = strings.TrimSpace(t); t != "" {
+			keep = append(keep, t)
+		}
+	}
+	if len(keep) == 0 {
+		return alreadyInitializedHint
+	}
+	return fmt.Sprintf(alreadyInitializedTargetHintF, strings.Join(keep, ","))
 }
 
 // projectFields is the projects row of a fresh init and the name it got:

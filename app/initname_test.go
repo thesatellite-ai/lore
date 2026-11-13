@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,6 +47,15 @@ func TestDefaultProjectName(t *testing.T) {
 	git(withOrigin, "remote", "add", "origin", "git@github.com:acme/Widget-API.git")
 	if got := defaultProjectName(ctx, withOrigin); got != "widget-api" {
 		t.Fatalf("with origin: %q", got)
+	}
+	// D-1: a package folder of the repo gets <repo>-<folder>, never the
+	// root project's name.
+	pkg := filepath.Join(withOrigin, "workers", "Extraction")
+	if err := os.MkdirAll(pkg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := defaultProjectName(ctx, pkg); got != "widget-api-extraction" {
+		t.Fatalf("package folder: %q", got)
 	}
 	noOrigin := filepath.Join(t.TempDir(), "MyRepo")
 	git(filepath.Dir(noOrigin), "init", "-q", noOrigin)

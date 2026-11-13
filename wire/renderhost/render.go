@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/fsreason"
@@ -222,7 +223,7 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		if f.quiet {
 			return nil
 		}
-		return wire.UntouchedError(top)
+		return wire.UntouchedError(ctx, top)
 	}
 
 	// fmt1: a project on the 0.1.17 format gets no tracked file written
@@ -762,6 +763,12 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 		fmt.Fprintf(w, "%s %s (pointer present)\n", h.decor.muted("="), absAgent)
 		return nil
 	}
+	if banner := toolprofile.GeneratedBanner(existing); banner != "" {
+		// D-2: another tool generates this file; a stitched pointer is lost
+		// on its next run and the two tools fight over it in every diff.
+		h.pointerSkipped(w, absAgent, generatedSkipReason(banner, t.profile.Name, link.FromRoot))
+		return nil
+	}
 	if isLink {
 		// Through a link: an atomic write at the end's real path (the
 		// links of the chain stay links), keeping the end's mode; a write
@@ -781,6 +788,16 @@ func (h *Host) stitchPointer(w *strings.Builder, root string, t contextTarget, o
 	}
 	fmt.Fprintf(w, "%s %s (pointer → %s)\n", h.decor.check(), absAgent, link.FromPointer)
 	return nil
+}
+
+// generatedSkipReason is the skip note of a pointer file another tool
+// generates (banner: its banner line): where the pointer goes instead.
+func generatedSkipReason(banner, profile, lorePath string) string {
+	other := "lore render --add-target " + toolprofile.NameCodex + " (AGENTS.md)"
+	if profile == toolprofile.NameCodex {
+		other = "lore render --add-target <profile> for another tool file"
+	}
+	return "its banner says another tool generates it (" + strconv.Quote(banner) + "), which would drop the pointer on its next run; add a line pointing at " + lorePath + " to that tool's source, or wire another file: " + other
 }
 
 // pointerSkipped prints the note for a pointer file left as it is.

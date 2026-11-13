@@ -41,9 +41,12 @@ func VersionFromPath(p string) string {
 const metadataDepth = 3
 
 // VersionFromMetadata reads "version" from the package.json of the
-// package that holds script (an npm-installed CLI); "" if none.
+// package that holds script (an npm-installed CLI); "" if none. Only an
+// absolute script path is walked: a bare or relative one (argv "claude")
+// resolves against the current folder, so the walk would read the user's
+// own repo package.json and report the app's version as the agent's.
 func VersionFromMetadata(fr FileReader, script string) string {
-	if fr == nil || script == "" {
+	if fr == nil || !isAbsScript(script) {
 		return ""
 	}
 	dir := path.Dir(strings.ReplaceAll(script, `\`, "/"))
@@ -60,4 +63,14 @@ func VersionFromMetadata(fr FileReader, script string) string {
 		dir = path.Dir(dir)
 	}
 	return ""
+}
+
+// winDriveRe matches a Windows drive-rooted path (C:\ or C:/).
+var winDriveRe = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
+
+// isAbsScript reports whether script is rooted (a POSIX "/" path, a Windows
+// drive path or a UNC share): the only paths whose folder is the tool's
+// install folder rather than the folder lore runs in.
+func isAbsScript(script string) bool {
+	return strings.HasPrefix(script, "/") || strings.HasPrefix(script, `\\`) || winDriveRe.MatchString(script)
 }

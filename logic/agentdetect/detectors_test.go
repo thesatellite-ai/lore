@@ -144,6 +144,17 @@ func TestDetectVersions(t *testing.T) {
 	if r.Version != "0.58.0" || r.Sources["tool_version"] != SourceMetadata {
 		t.Fatalf("metadata: %+v", r)
 	}
+	// A bare argv ("claude") resolves against the current folder: the repo's
+	// own package.json must never be read as the agent's version.
+	repo := fakeFiles{"package.json": `{"version":"0.1.0"}`, "./package.json": `{"version":"0.1.0"}`, "bin/package.json": `{"version":"0.1.0"}`}
+	r, _ = Detect(Inputs{Getenv: envOf(map[string]string{"GEMINI_CLI": "1"}), Files: repo,
+		Procs: fakeProcs{{Exe: "node", Args: []string{"bin/gemini.js"}}}})
+	if r.Version != "" {
+		t.Fatalf("relative script read the repo package.json: %+v", r)
+	}
+	if VersionFromMetadata(repo, "claude") != "" || VersionFromMetadata(fakeFiles{`C:/npm/cli/package.json`: `{"version":"1.2.3"}`}, `C:\npm\cli\bin.js`) != "1.2.3" {
+		t.Fatal("metadata: bare script must be ignored, a drive path walked")
+	}
 	r, _ = Detect(Inputs{Getenv: envOf(map[string]string{"CLAUDE_CODE_CHILD_SESSION": "1", "AI_AGENT": "claude-code_2.1.0_agent"})})
 	if r.Tool != "claude_code" || r.Version != "2.1.0" || r.Sources["tool_version"] != SourceEnv {
 		t.Fatalf("env version: %+v", r)
