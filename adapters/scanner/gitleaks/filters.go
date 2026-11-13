@@ -58,7 +58,7 @@ func proseValue(match, rest string) bool {
 		return true
 	}
 	word := strings.TrimRight(v, ".!?")
-	if passwordPairStopwords[strings.ToLower(word)] {
+	if passwordPairStopwords[strings.ToLower(word)] || unquotedNonSecret(v) {
 		return false
 	}
 	if !plainWordRe.MatchString(word) {
@@ -83,7 +83,7 @@ func placeholderValue(match, _ string) bool {
 	if strings.HasPrefix(v, `"`) || strings.HasPrefix(v, `'`) {
 		return true
 	}
-	return !passwordPairStopwords[strings.ToLower(strings.TrimRight(v, ".!?"))]
+	return !passwordPairStopwords[strings.ToLower(strings.TrimRight(v, ".!?"))] && !unquotedNonSecret(v)
 }
 
 // valueOf is the credential part of a finding's text: credentialValue
@@ -325,6 +325,9 @@ func (s *Scanner) keep(text string, fs []scan.Finding) []scan.Finding {
 			if ok && !pf(text[f.Offset:f.Offset+f.Length], lineRest(text, f.Offset+f.Length)) {
 				continue
 			}
+		}
+		if in && s.builtin[f.RuleID] && f.RuleID == RuleURLWithPassword && passIsUser(text[f.Offset:f.Offset+f.Length]) {
+			continue // postgres:postgres, guest:guest: no secret beyond the user name
 		}
 		if in && isPlaceholder(s.valueOf(f.RuleID, text[f.Offset:f.Offset+f.Length])) {
 			continue // a template reference or mask, never a credential (every rule)
