@@ -92,9 +92,10 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 	})
 
 	w.Step("day1/lore-fix-prints-each-step-and-healthy", func() {
-		// a dry run changes nothing, so the status is today's (degraded: the
-		// ride-along hook blocks a read never installs) and it exits as doctor does
-		lap.LoreIn(one, "fix", "--migrate", "--dry-run").Fails(t, 1, "migrate", "Would upgrade 2 rows", "Nothing changed (dry run).", "run `lore fix` (or `lore sync`) to install it", "Status: DEGRADED")
+		// a dry run changes nothing, so the status is today's: the ride-along
+		// hook blocks a read never installs are a note in a clone lore never
+		// set up (M-5: a fresh clone is not broken), so it is healthy
+		lap.LoreIn(one, "fix", "--migrate", "--dry-run").OK(t).Says(t, "migrate", "Would upgrade 2 rows", "Nothing changed (dry run).", "Status: HEALTHY")
 		if !fixV1Left(t, one) {
 			t.Fatal("lore fix --dry-run migrated the rows")
 		}
