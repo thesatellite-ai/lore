@@ -6,8 +6,8 @@
 # the checkout (.lore/data), so a worktree reads and writes its OWN
 # checkout's rows; v0.1.17's --db escape hatch is gone. This scenario
 # verifies: (1) a worktree's .git is a regular file; (2) a worktree of a
-# commit without .lore refuses (no walk-up into the main checkout, nothing
-# written there); (3) a worktree of a commit that holds .lore reads the
+# commit without .lore refuses with "no lore project" (no walk-up into the
+# main checkout, nothing written there or in the worktree); (3) a worktree of a commit that holds .lore reads the
 # committed rows, and its own write stays in the worktree until merged.
 source "$(dirname "$0")/../lib/common.sh"
 mk_tmp; isolate_home
@@ -29,6 +29,7 @@ OUT=$($LORE memory add --body "should-refuse" 2>&1); RC=$?
 echo "$OUT" | grep -q "no lore project" || fail "worktree without a project should refuse: $OUT"
 [ "$(cd "$TMP/main" && find .lore/data -type f | sort | cksum)" = "$MAIN_FILES" ] \
     || fail "the refused write reached the main checkout"
+[ ! -e .lore ] || fail "the refused write made .lore/ in the worktree (S-2)"
 
 # (3): worktree of the commit with .lore
 cd "$TMP/main"

@@ -155,9 +155,11 @@ func TestJourneyMixedVersionsOneStore(t *testing.T) {
 }
 
 // TestJourneyStoreOnlyUpgrade (M-1): under 0.1.17 Mia's repo holds no row
-// of its own; her note is in her personal store. After the upgrade, `lore
-// fix` in the repo still converts the store and moves it to the new layout (it used to say "current" and leave them at
-// lore_store: 1 forever).
+// of its own; her note is in her personal store. After the upgrade a read
+// works and names lore migrate run; nothing moves by itself (a project's
+// format is the rule, never the binary's: 3a5ff3f3). `lore fix --migrate`
+// in the repo then converts the store and moves it to the new layout (it
+// used to say "current" and leave them at lore_store: 1 forever).
 func TestJourneyStoreOnlyUpgrade(t *testing.T) {
 	t.Parallel()
 	w := NewWorld(t)
@@ -178,17 +180,16 @@ func TestJourneyStoreOnlyUpgrade(t *testing.T) {
 	w.AdvanceDays(1)
 	w.Step("day2/upgrade-and-fix", func() {
 		up := laptop.Upgrade()
-		// the first command, a read, moves 0.1.17's per-org personal notes
-		// to _store/ and pushes: the lockout block comes first, on its own,
-		// then one line for the move and its push (B4-18)
-		r := up.LoreIn(lap, "memory", "list").OK(t).Says(t, "store lore-me moves to the 0.1.18 layout now", "E_NOT_A_STORE", "moved to _store/: commit", ", pushed;")
-		if strings.Index(r.Stderr, "moves to the 0.1.18 layout now") > strings.Index(r.Stderr, "moved to _store/: commit") {
-			t.Errorf("the lockout block comes after the move:\n%s", r.Stderr)
+		// the first command, a read, reads the 0.1.17 store and names the
+		// one command that upgrades it; it moves nothing (3a5ff3f3)
+		up.LoreIn(lap, "memory", "list").OK(t).Says(t, mxNote, "store lore-me is on the lore 0.1.17 layout; run lore migrate run").
+			Never(t, "moves to the 0.1.18 layout now", "moved to _store/")
+		if m, _ := st.Read("main", "lore-store.yaml"); strings.Contains(m, "lore_store: 4") {
+			t.Errorf("a read upgraded the store:\n%s", m)
 		}
-		// the read moved every row already; fix converts the marker
-		// (lore_store: 4, checked below) and pushes it
-		up.LoreIn(lap, "fix", "--migrate").Says(t, "lore-store.yaml v1 → v2", "pushed").
-			Never(t, "store lore-me moves to the 0.1.18 layout now") // said once per store and machine (B4-21)
+		// fix --migrate converts the marker (lore_store: 4, checked below),
+		// moves the rows and pushes
+		up.LoreIn(lap, "fix", "--migrate").OK(t).Says(t, "pushed")
 		for _, r := range []*teamharness.Remote{st} {
 			if m, _ := r.Read("main", "lore-store.yaml"); !strings.Contains(m, "lore_store: 4") {
 				t.Errorf("%s: marker after lore fix:\n%s", r.Slug, m)
@@ -197,16 +198,19 @@ func TestJourneyStoreOnlyUpgrade(t *testing.T) {
 				t.Errorf("%s: rows still in the 0.1.17 place after lore fix: %v", r.Slug, old)
 			}
 		}
+		up.LoreIn(lap, "memory", "list").OK(t).Says(t, mxNote).Never(t, "0.1.17 layout")
 		// a second fix has nothing left to do in the stores
 		up.LoreIn(lap, "fix", "--migrate").Never(t, "layout commit", "v1 → v2")
 	})
 }
 
 // TestJourneyFirstWriteMovesOrgStore (B4-18, B4-10): after the upgrade the
-// first command in the repo is a write. Its safe steps migrate the project
-// and make the org store's layout commit: the lockout block is printed
-// before it, the layout commit and its push are named, and no line names
-// a row file at its old place.
+// first command in the repo is a write. The project and its org store are
+// on the 0.1.17 format, so the write refuses with one line naming lore
+// migrate run and moves nothing (a project's format is the rule, never the
+// binary's: 3a5ff3f3; the first-write auto-migrate is gone). lore migrate
+// run then migrates the project and makes the org store's layout commit,
+// no line names a row file at its old place, and the write goes through.
 func TestJourneyFirstWriteMovesOrgStore(t *testing.T) {
 	t.Parallel()
 	w := NewWorld(t)
@@ -231,19 +235,22 @@ func TestJourneyFirstWriteMovesOrgStore(t *testing.T) {
 	w.AdvanceDays(1)
 	w.Step("day2/first-write", func() {
 		up := laptop.Upgrade()
-		r := up.LoreIn(lap, "memory", "add", "--body", mxLater).OK(t).
-			Says(t, "store lore-notes moves to the 0.1.18 layout now", "store lore-notes: layout commit", "pushed store lore-notes")
+		up.LoreIn(lap, "memory", "add", "--body", mxLater).Fails(t, 24, "E_FORMAT_OLD", "run lore migrate run").
+			Never(t, "moves to the 0.1.18 layout now", "layout commit")
+		if old := org.FilesMatching("main", "/.lore/data/"); len(old) == 0 {
+			t.Errorf("the refused write moved the org store's rows")
+		}
+		r := up.LoreIn(lap, "migrate", "run").OK(t)
 		for _, l := range strings.Split(r.Out(), "\n") {
 			if strings.Contains(l, "stores/mia-dev/") && strings.Contains(l, "/.lore/data") {
 				t.Errorf("a line names a store row at its old place: %s", l)
 			}
 		}
-		if strings.Index(r.Stderr, "store lore-notes moves to the 0.1.18 layout now") > strings.Index(r.Stderr, "store lore-notes: layout commit") {
-			t.Errorf("the lockout block comes after the layout commit:\n%s", r.Stderr)
-		}
+		up.LoreIn(lap, "sync").OK(t)
 		if old := org.FilesMatching("main", "/.lore/data/"); len(old) != 0 {
-			t.Errorf("the org store keeps rows in the 0.1.17 place after the first write: %v", old)
+			t.Errorf("the org store keeps rows in the 0.1.17 place after lore migrate run: %v", old)
 		}
+		up.LoreIn(lap, "memory", "add", "--body", mxLater).OK(t)
 		up.LoreIn(lap, "memory", "list").OK(t).Says(t, mxOrgNote, mxLater)
 	})
 }
