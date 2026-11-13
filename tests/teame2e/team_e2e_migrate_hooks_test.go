@@ -239,7 +239,7 @@ func TestMigrateRaceCrashMidway(t *testing.T) {
 	}
 }
 
-// TestMigrateRaceLockHolderCrash (7.2, 7.8): alice's pushing run pauses
+// TestMigrateRaceLockHolderCrash (7.2, 7.8): alice's pushing run (--team-lock) pauses
 // right after it took the team lock. While it lives, her own `unlock`
 // refuses; bob's run is E_MIGRATE_LOCKED naming her and his `unlock --team`
 // refuses. Then her process is killed (kill -9): her `unlock` clears the
@@ -257,9 +257,9 @@ func TestMigrateRaceLockHolderCrash(t *testing.T) {
 	start := time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC)
 	alice.A.SetNow(start)
 	bob.SetNow(start)
-	p := pauseAt(t, alice, "team-locked", "migrate", "run")
+	p := pauseAt(t, alice, "team-locked", "migrate", "run", "--team-lock")
 	alice.Lore("migrate", "unlock").Refused(t, migrateLockedCode)
-	bc.Lore("migrate", "run").Refused(t, migrateLockedCode, "alice")
+	bc.Lore("migrate", "run", "--team-lock").Refused(t, migrateLockedCode, "alice")
 	bc.Lore("migrate", "unlock", "--team", "--yes").Refused(t, migrateLockedCode)
 	crashed(t, "team-locked", p.kill())
 	// Today's machine lock (wire/migrate.go LockMigration) is a plain
@@ -275,16 +275,16 @@ func TestMigrateRaceLockHolderCrash(t *testing.T) {
 	alice.MustLore("migrate", "status").Says(t, "stale")
 	alice.MustLore("migrate", "unlock").Says(t, "released")
 	bob.Advance(5 * time.Minute) // inside the 10-minute lease
-	bc.Lore("migrate", "run").Refused(t, migrateLockedCode)
+	bc.Lore("migrate", "run", "--team-lock").Refused(t, migrateLockedCode)
 	bob.Advance(6 * time.Minute) // past Expires, inside the 2-minute grace
-	bc.Lore("migrate", "run").Refused(t, migrateLockedCode)
+	bc.Lore("migrate", "run", "--team-lock").Refused(t, migrateLockedCode)
 	bob.Advance(2 * time.Minute) // past Expires + grace, the same renewed_seq watched since t0
 	// carol looks for the first time now: past the time check, but she has
 	// not watched the hold for renew_every yet, so it is still held for her.
 	carol := w.Human("carol", "carol@acme.example")
 	carol.SetNow(bob.Now())
-	carol.Clone(app, "app").Lore("migrate", "run").Refused(t, migrateLockedCode)
-	bc.MustLore("migrate", "run").Says(t, "team lock")
+	carol.Clone(app, "app").Lore("migrate", "run", "--team-lock").Refused(t, migrateLockedCode)
+	bc.MustLore("migrate", "run", "--team-lock").Says(t, "team lock")
 	assertMigrated(t, "bob", memoryFiles(t, bc))
 }
 

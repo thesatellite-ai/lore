@@ -178,13 +178,13 @@ func TestMigrateRunOldDataMatrix(t *testing.T) {
 				t.Fatalf("a dry run changed the work tree:\n%s", s)
 			}
 
-			// The run: every row rewritten, every field kept, pushed under the team lock.
-			out := th.DecodeJSON[migRunOut](t, run.Lore("migrate", "run", "--json"))
+			// The run: every row rewritten, every field kept, pushed under the team lock (asked for: --team-lock).
+			out := th.DecodeJSON[migRunOut](t, run.Lore("migrate", "run", "--team-lock", "--json"))
 			if out.DryRun || out.Count != n || !strings.HasPrefix(out.BackupRef, migBackupPrefix) {
 				t.Fatalf("run: %+v, want count %d and a backup ref", out, n)
 			}
 			migWantRows(t, "run", out.Rows, planted)
-			if len(out.Journal) == 0 || !strings.HasPrefix(out.Journal[0], "team lock: taken") || out.Journal[len(out.Journal)-1] != "team lock released" {
+			if len(out.Journal) == 0 || !strings.HasPrefix(out.Journal[0], "team lock: pushed a hold to refs/lore/signals") || out.Journal[len(out.Journal)-1] != "team lock released" {
 				t.Errorf("run journal %q: want the team lock taken first and released last", out.Journal)
 			}
 			if !slices.Contains(migBackupRefs(c), out.BackupRef) {
@@ -272,7 +272,7 @@ func TestMigrateRunSoloRepoNoRemote(t *testing.T) {
 				migDowngrade(t, dir+"/"+rel)
 			}
 		}
-		out := th.DecodeJSON[migRunOut](t, alice.Lore(dir, "migrate", "run", "--json"))
+		out := th.DecodeJSON[migRunOut](t, alice.Lore(dir, "migrate", "run", "--team-lock", "--json"))
 		if len(out.Journal) == 0 || out.Journal[0] != noRemote {
 			t.Fatalf("%s: journal %q, want it to start with %q", rows, out.Journal, noRemote)
 		}

@@ -148,11 +148,10 @@ lore: wrote ~/work/notes-app/.lore/data/actors/act_162d…9666.json
 Upgraded 1 row
   identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
   actor_copies: refreshed 1 actor copy from their source: Alice Doe (act_162d…9666)
-team lock: taken on refs/lore/signals until 2026-11-02T10:11:20Z (renewed every 2m0s)
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 branch (.lore/data): 1 files upgraded, not committed (lore never commits a code repo)
 undo: lore migrate rollback
-team lock released
 1 upgraded file in .lore/data waits for your commit: git add .lore/data && git commit -m "lore: migrate rows to format 2"
 
 # alice, in ~
@@ -170,7 +169,7 @@ identity:
 ```
 <!-- /example -->
 
-The `actor_copies` line is the copy of Alice's actor row in this repo, written before the v0.1.17 identity file named her Alice Doe, brought up to date from her identity; commit `.lore/data` as the run says.
+The `actor_copies` line is the copy of Alice's actor row in this repo, written before the v0.1.17 identity file named her Alice Doe, brought up to date from her identity; commit `.lore/data` as the run says. In a repo outside any org, or a client repo, the run also trims every actor copy in `.lore/data` to {id, display name, kind} (an `actor_projection:` line names the keys it dropped, such as the `stable_key` lore 0.1.17 wrote), so the migrated files pass the client-repo commit check and `lore check leaks --ci`; an org's own repo keeps them.
 
 An identity file from before v0.1.17 (`~/.lore/identity.toml`) is not read at all: set who you are with `lore identity set --identity <email>`, and `lore identity unset` removes the old file. A project's v0.1.17 shared-database pointer (`.lore/lore.yaml`, or the older `.lore/lore.toml`) is read only by `lore migrate run`, which converts the project to row files (see [Shared database (Mode B)](../sync/shared-database-mode-b.md)).
 

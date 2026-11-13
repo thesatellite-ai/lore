@@ -314,8 +314,10 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 			if branch == s.defaultBranch(ctx) {
 				why = "rows that finished in live land with your push"
 			}
-			return errs.New(errs.InvalidInput, "lore added '"+added+"' to "+branch+" ("+why+"); run git push again").
-				WithHint("the commit only adds .lore/data files of rows that finished in live")
+			// E_PUSH_AGAIN, not an input error (A-13): the push is right,
+			// it only has to carry the commit lore just added
+			return errs.New(errs.PushAgain, "lore added '"+added+"' to "+branch+" ("+why+"); run git push again").
+				WithHint("the commit only adds .lore/data files of rows that finished in live; the same git push now sends it (a script that pushes once can retry on E_PUSH_AGAIN, exit 23)")
 		}
 	}
 	return nil

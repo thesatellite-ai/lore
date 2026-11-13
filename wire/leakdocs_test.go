@@ -317,9 +317,32 @@ func TestLeakRowsFailsClosedOnReadFailures(t *testing.T) {
 			if !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), "cannot check") || !errors.Is(err, boom) {
 				t.Fatalf("want E_LEAK_BLOCKED cannot check carrying the cause, got %v", err)
 			}
+			// B-15: the refusal names the cause and the way out
+			var coded *errs.Error
+			if !errors.As(err, &coded) || !strings.Contains(coded.Message, boom.Error()) || coded.Hint != leakCannotCheckHint {
+				t.Fatalf("want the cause in the message and the sync hint, got %+v", coded)
+			}
 			if got != nil {
 				t.Fatalf("a refusal returns no partial index: %v", got)
 			}
 		})
+	}
+}
+
+// TestLeakRowsNamesANeverReadStore (B-15): an org store the check needs
+// that this machine never read refuses naming that store, with the hint
+// that says how to get past it (it printed the bare "cannot check" line).
+func TestLeakRowsNamesANeverReadStore(t *testing.T) {
+	if isolate.Run(t) {
+		return
+	}
+	f := faultyLeakReader{App: leakWorld(t, true)}
+	_, err := leakRowsFrom(background(), f, true, []store.Source{"client-store"})
+	var coded *errs.Error
+	if !errors.As(err, &coded) || coded.Code != errs.LeakBlocked {
+		t.Fatalf("want E_LEAK_BLOCKED, got %v", err)
+	}
+	if !strings.Contains(coded.Message, "store client-store") || !strings.Contains(coded.Message, "never read on this machine") || coded.Hint != leakCannotCheckHint {
+		t.Fatalf("refusal %q hint %q: want the store named and the sync hint", coded.Message, coded.Hint)
 	}
 }

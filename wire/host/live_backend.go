@@ -551,6 +551,9 @@ func (b *liveBackend) Write(ctx context.Context, changes []store.Change) error {
 	s.dropCompanions(companions)
 	b.leaveWorkTree(ctx, s, carried)
 	s.wrote += len(res.Written)
+	for k := range liveRows {
+		wire.NoteLiveWrite(ctx, row.Table(k.Table), k.ID, s.ref.Name) // C-5: the line names the ref, not the file
+	}
 	return nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -65,6 +66,18 @@ func (e *Engine) originOf(ctx context.Context, opName string, st Attached) (valu
 	// the reduced block at write time; it was born here, so dir and git
 	// (minus a local-only branch) are the client's own facts.
 	return origin.ClientFilter(o, e.clientOf(ctx, st, f.Repo, true))
+}
+
+// noOriginCopy reports whether a row of table created in st is written with
+// no `_o` at all: an actor copy in a code repo (the repo store, or any
+// client store). Why: a repo's actor copy is the {id, display name, kind}
+// projection (F18, FLAG6), and `lore check leaks --ci` and the client-repo
+// guard refuse an actor file with any other key; the `_o` block (command,
+// git branch and commit, project folder) is provenance of the write, not
+// of the actor, so lore stopped writing files its own CI check rejected
+// (user report). Actor rows in stores keep their `_o`.
+func noOriginCopy(table row.Table, st Attached) bool {
+	return table == schema.TableActors && (st.Client || st.Name == store.SourceRepo)
 }
 
 // movedIntoClient returns the `_o` a row moved into the client repo st

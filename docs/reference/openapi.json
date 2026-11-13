@@ -33545,6 +33545,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "team_lock": {
+                    "type": "boolean",
+                    "description": "also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the rollback runs (removed when it ends), so it cannot race a teammate's migration"
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -33678,6 +33684,10 @@
                   "offline": {
                     "type": "boolean",
                     "description": "branch files only: skip the settings, live rows and stores (they need the network)"
+                  },
+                  "team_lock": {
+                    "type": "boolean",
+                    "description": "also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the run lasts (removed when it ends), so a teammate cannot migrate at the same time; ignored with --dry-run, --no-push and --offline"
                   },
                   "verbose": {
                     "type": "boolean",

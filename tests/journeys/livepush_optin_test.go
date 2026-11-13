@@ -64,7 +64,7 @@ func TestJourneyLivePushOptIn(t *testing.T) {
 	w.Step("day1/the-first-git-push-carries-the-finished-task", func() {
 		c.Git("add", "-A")
 		c.Git("commit", "-q", "-m", "first")
-		c.TryGit("push", "-q", "-u", "origin", "main").Says(t, "run git push again")
+		c.TryGit("push", "-q", "-u", "origin", "main").Says(t, "run git push again", "E_PUSH_AGAIN").Never(t, "E_INVALID_INPUT")
 		c.TryGit("push", "-q", "-u", "origin", "main").OK(t)
 		if f := remote.FilesMatching("refs/heads/main", "tasks/"); len(f) != 1 {
 			t.Fatalf("main holds %v, want the finished task", f)
@@ -82,7 +82,7 @@ func TestJourneyLivePushOptIn(t *testing.T) {
 		c.WriteFile("kite.txt", "red\n")
 		c.Git("add", "kite.txt")
 		c.Git("commit", "-q", "-m", "kite")
-		c.TryGit("push", "-q").Says(t, "run git push again")
+		c.TryGit("push", "-q").Says(t, "run git push again", "E_PUSH_AGAIN").Never(t, "E_INVALID_INPUT")
 		c.TryGit("push", "-q").OK(t)
 		if remote.Rev("refs/lore/live") == liveBefore {
 			t.Fatal("git push did not send the waiting live writes")

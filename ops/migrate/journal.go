@@ -166,8 +166,13 @@ func (o StatusOut) Text() string {
 	return b.String()
 }
 
-// RollbackIn is the input of migrate.rollback (none).
-type RollbackIn struct{}
+// RollbackIn is the input of migrate.rollback.
+type RollbackIn struct {
+	// TeamLock holds the team lock on the remote's refs/lore/signals while
+	// the rollback runs (7.2: a rollback cannot race a run); off by default
+	// because the lock is a push (A-7).
+	TeamLock bool `json:"team_lock,omitempty" flag:"team-lock" desc:"also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the rollback runs (removed when it ends), so it cannot race a teammate's migration"`
+}
 
 // RollbackOut is the output of migrate.rollback.
 type RollbackOut struct {
@@ -246,13 +251,13 @@ func journalOps(rw Rewriter, j Journal) []op.Entry {
 			Examples: []op.Example{
 				{Title: "undo the last migration", CLI: "lore migrate rollback", Want: "backup_ref:"},
 			},
-		}, func(ctx context.Context, _ RollbackIn) (RollbackOut, error) {
+		}, func(ctx context.Context, in RollbackIn) (RollbackOut, error) {
 			unlock, err := rw.LockMigration(ctx)
 			if err != nil {
 				return RollbackOut{}, err
 			}
-			defer func() { _ = unlock() }()      // a failed release is reported by the next run
-			hold, err := takeTeamLock(ctx, true) // 7.2: a rollback cannot race a run
+			defer func() { _ = unlock() }()                   // a failed release is reported by the next run
+			hold, err := takeTeamLock(ctx, true, in.TeamLock) // 7.2: with --team-lock a rollback cannot race a run
 			if err != nil {
 				return RollbackOut{}, err
 			}

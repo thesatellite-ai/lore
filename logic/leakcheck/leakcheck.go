@@ -570,7 +570,7 @@ func checkRowFile(it Item, table, id string, idx *Index, o Options) []Finding {
 			// reason names the file, the actor id and the keys.
 			out = append(out, Finding{Rule: RuleActor, Where: it.Where, RowID: id, Path: it.Path, Warn: !StableKeyBlocks,
 				Detail: "actor " + id + " in client-repo file " + actorFileName(it) + " carries " + strings.Join(extra, ", ") +
-					": a client repo may hold only {id, display name, kind} of an actor (privacy rule); remove those keys from the file"})
+					": a client repo may hold only {id, display name, kind} of an actor (privacy rule); trim every actor copy with: " + ActorCopyFix})
 		}
 		return out
 	}
@@ -767,6 +767,11 @@ type CIFinding struct {
 	// row id itself is withheld (it may be an internal id).
 	Where  string
 	Detail string
+	// Path is the repo-relative file (a path names nothing internal), and
+	// Fix the one command that repairs it ("" when the author must remove
+	// the file by hand), so the CI line is actionable (user report).
+	Path string
+	Fix  string
 }
 
 // CheckCI is the client CI's check (F16 CI mode): it needs no store. For
@@ -804,7 +809,7 @@ func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
 			// BATCH2 #14: name the keys (exact reason); the id stays
 			// withheld as for every CI finding.
 			if extra := actorExtraKeys(doc); len(extra) > 0 {
-				out = append(out, CIFinding{Where: where, Detail: "an actor copy holds more than {id, display name, kind}: " + strings.Join(extra, ", ")})
+				out = append(out, CIFinding{Where: where, Path: p, Fix: ActorCopyFix, Detail: "an actor copy holds more than {id, display name, kind}: " + strings.Join(extra, ", ")})
 			}
 			continue
 		}

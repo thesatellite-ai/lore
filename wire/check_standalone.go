@@ -137,7 +137,7 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 		return opscheck.LeaksOut{}, serr
 	}
 	if old > 0 { // values the same rows already held at HEAD: let through, named once
-		return opscheck.LeaksOut{Message: historyLine(old)}, nil
+		return opscheck.LeaksOut{Message: historyLine(old, checkWhereCommit)}, nil
 	}
 	return opscheck.LeaksOut{}, nil // silent when clean
 }
@@ -162,11 +162,30 @@ func checkCI(ctx context.Context, root string) error {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "lore check leaks --ci: %d row file(s) must not be in this repo:\n", len(fs))
+	fixes := map[string]bool{}
+	var hint []string
+	byHand := 0 // findings no command repairs
 	for _, f := range fs {
-		fmt.Fprintf(&b, "  %s: %s\n", f.Where, f.Detail)
+		where := f.Where
+		if f.Path != "" {
+			where = f.Path + " (" + f.Where + ")"
+		}
+		fmt.Fprintf(&b, "  %s: %s\n", where, f.Detail)
+		if f.Fix == "" {
+			byHand++
+		} else if !fixes[f.Fix] {
+			fixes[f.Fix] = true
+			hint = append(hint, "run `"+f.Fix+"` in a checkout of this repo, then commit and push the rewritten files")
+		}
 	}
-	b.WriteString("ask the author to remove them (and run `lore check leaks` locally, which names them)")
-	return errs.New(errs.LeakBlocked, b.String())
+	// A finding with no command (a row of another project, a team
+	// profile) is the author's to remove; `lore check leaks` without --ci
+	// checks staged files only, so it is never named as the way to list
+	// them (user report: it exits 0 in the same clone).
+	if byHand > 0 {
+		hint = append(hint, "ask the author to remove the files listed above that name no command")
+	}
+	return errs.New(errs.LeakBlocked, strings.TrimSuffix(b.String(), "\n")).WithHint(strings.Join(hint, "; "))
 }
 
 // keyLoosening joins KeyLooseningsSince findings into one E_LEAK_BLOCKED.

@@ -891,6 +891,9 @@ func staleRowsAnswer(e op.Entry, err error, storeWrites int) bool {
 	return storeWrites == 0 && refetchesOnNotFound(e) && errs.Has(err, errs.NotFound)
 }
 
+// migrateOpPrefix starts the name of every `lore migrate …` operation.
+const migrateOpPrefix = "migrate."
+
 // refuse is the pre-run part of v0.1.17 livePreRun: the offline note, and
 // for a write the rewritten-remote and version-floor refusals.
 func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) error {
@@ -908,6 +911,13 @@ func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) err
 		return nil // reads, and `lore live …` (restore is the repair), always run
 	}
 	if s.blocked != nil {
+		// A-6: a project still on the 0.1.17 format refuses the write
+		// anyway; that refusal comes first, so nobody pushes a live ref
+		// (`lore live restore`) for a write that cannot happen (lore
+		// migrate itself is the format's repair and keeps its own path)
+		if ferr := wire.ProjectWriteRefusal(s.top); ferr != nil && !strings.HasPrefix(spec.Name, migrateOpPrefix) {
+			return ferr
+		}
 		return rewrittenError(errs.ReadOnly, s.blocked)
 	}
 	if err := s.ref.CheckFloor(ctx, h.cfg.Version); errors.Is(err, live.ErrBelowFloor) {

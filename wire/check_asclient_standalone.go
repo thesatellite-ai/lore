@@ -104,7 +104,7 @@ func (a *App) CheckAsClient(ctx context.Context, root string, explain bool) erro
 	}
 	sessions, err := a.KnownToolSessionIDs(ctx)
 	if err != nil {
-		return errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (this machine's session ids)", err)
+		return leakCannotCheckErr("this machine's session ids", err)
 	}
 	var lines []string
 	fs := leakcheck.Blocking(leakcheck.Check(items, idx, leakcheck.Options{Secrets: true, SecretScan: secrets,
@@ -171,7 +171,7 @@ func asClientLine(f leakcheck.Finding, explain bool) string {
 func (a *App) asClientIndex(ctx context.Context) (*leakcheck.Index, error) {
 	idents, err := a.StoreIdentities(ctx)
 	if err != nil {
-		return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck, err)
+		return nil, leakCannotCheckErr("", err)
 	}
 	names := make([]store.Source, 0, len(idents))
 	for _, si := range idents {
@@ -183,7 +183,7 @@ func (a *App) asClientIndex(ctx context.Context) (*leakcheck.Index, error) {
 	}
 	keys, err := a.List(ctx, store.SourceRepo, schema.TableMetaKeys)
 	if err != nil {
-		return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (the repo's key rows)", err)
+		return nil, leakCannotCheckErr("the repo's key rows", err)
 	}
 	return leakcheck.NewIndex(withRepoKeys(rows, keys), nil), nil
 }
@@ -231,11 +231,11 @@ func realGitPath(p string) string { return resolvedPath(p) }
 func trackedItems(ctx context.Context, top string) ([]leakcheck.Item, error) {
 	out, err := gitRun{dir: top, args: []string{"ls-files", "-z"}}.output(ctx)
 	if err != nil {
-		return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (the tracked files)", err)
+		return nil, leakCannotCheckErr("the tracked files", err)
 	}
 	rt, err := os.OpenRoot(top)
 	if err != nil {
-		return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (the repo)", err)
+		return nil, leakCannotCheckErr("the repo", err)
 	}
 	defer func() { _ = rt.Close() }() // read-only use
 	var items []leakcheck.Item
@@ -304,7 +304,7 @@ func (a *App) asClientResources(ctx context.Context, top, prefix string, tree ma
 func (a *App) asClientDefs(ctx context.Context) (map[string]leakcheck.ResField, map[string]bool, error) {
 	idents, err := a.StoreIdentities(ctx)
 	if err != nil {
-		return nil, nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck, err)
+		return nil, nil, leakCannotCheckErr("", err)
 	}
 	sources := []store.Source{store.SourceRepo}
 	for _, si := range idents {
@@ -315,7 +315,7 @@ func (a *App) asClientDefs(ctx context.Context) (map[string]leakcheck.ResField, 
 	for _, src := range sources {
 		fields, lerr := a.List(ctx, src, schema.TableKindFields)
 		if lerr != nil {
-			return nil, nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (store "+string(src)+")", lerr)
+			return nil, nil, leakCannotCheckErr("store "+string(src), lerr)
 		}
 		for _, r := range fields {
 			if r.Deleted {
@@ -332,7 +332,7 @@ func (a *App) asClientDefs(ctx context.Context) (map[string]leakcheck.ResField, 
 		}
 		kinds, kerr := a.List(ctx, src, schema.TableKinds)
 		if kerr != nil {
-			return nil, nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (the repo's kinds)", kerr)
+			return nil, nil, leakCannotCheckErr("the repo's kinds", kerr)
 		}
 		for _, k := range kinds {
 			if !k.Deleted {
@@ -374,7 +374,7 @@ func resourceHistory(ctx context.Context, top, prefix string) ([]leakcheck.ResRo
 		if _, herr := (gitRun{dir: top, args: []string{"rev-parse", "--verify", "-q", "HEAD"}}).output(ctx); herr != nil {
 			return nil, nil // no commits yet: no history
 		}
-		return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (git history)", err)
+		return nil, leakCannotCheckErr("git history", err)
 	}
 	blobs := map[string]bool{}
 	for _, l := range strings.Split(string(out), "\n") {
@@ -412,7 +412,7 @@ func catResourceBlobs(ctx context.Context, top string, blobs map[string]bool) ([
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	if rerr := runCancellable(ctx, cmd); rerr != nil {
-		return nil, errs.Wrap(errs.LeakBlocked, leakCannotCheck+" (git history)", rerr)
+		return nil, leakCannotCheckErr("git history", rerr)
 	}
 	rd := bufio.NewReader(&stdout)
 	var rows []leakcheck.ResRow
