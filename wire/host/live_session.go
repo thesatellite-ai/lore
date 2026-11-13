@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/clock"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
@@ -256,8 +257,12 @@ func (s *liveSession) prepare(ctx context.Context) {
 		}
 	}
 	now := s.clk.Now()
+	ttl := s.cfg.FetchTTL
+	if !s.read {
+		ttl = orgconf.ForWrite(ttl) // M-4: only reads reuse a fetch for the whole TTL
+	}
 	if live.ShouldFetch(live.FetchInputs{
-		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: s.cfg.FetchTTL,
+		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: ttl,
 		Kind: s.kind, Autopush: !s.offline, HasRemote: s.ref.Remote != nil,
 	}) {
 		s.fetch(ctx, now)

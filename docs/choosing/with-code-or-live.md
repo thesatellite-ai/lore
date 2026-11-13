@@ -15,7 +15,7 @@
 
 A note is **finished** when it is done or cancelled (tasks), or superseded or rejected (decisions; lore stores "rejected" as the status `deprecated`). Rules, memories, notes and comments count as finished on every write, so a live rule also lands a copy on `main` right away. A row is one note. When `main` is protected and refuses direct pushes, the finished rows ride along: lore adds a separate commit to your branch on your next push, and it reaches `main` with your pull request.
 
-Lore fetches once per command and reuses that fetch for 5 minutes; `lore sync` always fetches. So a teammate's live note can take up to 5 minutes to show up.
+Lore fetches once per command; a read reuses that fetch for 5 minutes, a write for 60 seconds; `lore sync` always fetches. So a teammate's live note can take up to 5 minutes to show up.
 
 ## If this, then that
 

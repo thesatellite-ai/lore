@@ -41,7 +41,7 @@ bob (work/website)$ lore task release --id tsk_05e99e22e9e86e96fe4daa7777994603
 lore: pushed store agency: commit 05513aa to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json (store agency)
 ✓ released tsk_05e99e22e9e86e96fe4daa7777994603
-alice (work/website)$ lore task show --id tsk_05e99e22e9e86e96fe4daa7777994603
+alice (work/website)$ lore sync >/dev/null && lore task show --id tsk_05e99e22e9e86e96fe4daa7777994603
 tsk_05e99e22e9e86e96fe4daa7777994603
   title:    send the invoice reminder before Friday
   status:   in_progress

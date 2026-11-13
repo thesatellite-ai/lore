@@ -29,7 +29,7 @@
 ## Pitfalls
 
 - **Claims need the remote.** Claiming, renewing, releasing, finishing a claimed task, approving a gate and holding a resource succeed only when the git server confirmed them. Offline they fail with `E_OFFLINE`; they are never queued.
-- **The 5-minute cache.** Lore fetches once per command and reuses that fetch for 5 minutes (`lore sync` always fetches). A teammate's claim from a few seconds ago may not show yet; the claim itself always checks the server.
+- **The 5-minute cache.** Lore fetches once per command; a read reuses that fetch for 5 minutes, a write for 60 seconds (`lore sync` always fetches). A teammate's claim from a few seconds ago may not show yet; the claim itself always checks the server.
 - **`lore task next` uses exit statuses.** `0` means you hold a task, `10` means nothing is ready (the message says why each task waits), `11` means another agent got every task you tried first. On `10`, stop or wait; do not loop.
 - **One label per session.** Two sessions started with the same `--label` are one actor (one name on the roster), and their claims collide.
 - **One claim per agent by default** (`agents.max_claims_per_agent: 1`), and after 3 agents have tried a task (`agents.max_attempts`) it is marked `blocked` and needs a person.
