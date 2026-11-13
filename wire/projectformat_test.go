@@ -75,3 +75,39 @@ func TestProjectFormatAt(t *testing.T) {
 		t.Errorf("an older format names the command that raises it: %s", line)
 	}
 }
+
+// TestProjectWriteRefusalUnreadable: a write into a project whose
+// _meta.json cannot be read refuses with that file's own reason
+// (E_OLD_LORE, "cannot be read"), never as "on the lore 0.1.17 format":
+// lore cannot tell the format, so lore migrate run would be a guess. An
+// old project still refuses with E_FORMAT_OLD, a current one not at all.
+func TestProjectWriteRefusalUnreadable(t *testing.T) {
+	mk := func(t *testing.T, meta string) string {
+		t.Helper()
+		top := t.TempDir()
+		data := filepath.Join(top, ".lore", "data", "memories")
+		if err := os.MkdirAll(data, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(top, ".lore", "data", "_meta.json"), []byte(meta), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return top
+	}
+	for _, c := range []struct{ name, meta, code, says string }{
+		{"not JSON", "{broken", "E_OLD_LORE", "cannot be read (not a JSON object)"},
+		{"floor not a string", `{"_v": 1, "min_lore_version": 18, "project_id": "p"}`, "E_OLD_LORE", "cannot be read (min_lore_version is not a string)"},
+		{"0.1.17 format", `{"_v": 1, "format": 1, "project_id": "p"}`, "E_FORMAT_OLD", "lore 0.1.17 format"},
+	} {
+		err := ProjectWriteRefusal(mk(t, c.meta))
+		if err == nil || !strings.Contains(err.Error(), c.code) || !strings.Contains(err.Error(), c.says) {
+			t.Errorf("%s: %v, want %s %q", c.name, err, c.code, c.says)
+		}
+		if c.code == "E_OLD_LORE" && strings.Contains(err.Error(), "migrate run") {
+			t.Errorf("%s: an unreadable _meta.json must not claim a format: %v", c.name, err)
+		}
+	}
+	if err := ProjectWriteRefusal(mk(t, `{"_v": 1, "format": 2, "project_id": "p"}`)); err != nil {
+		t.Errorf("a current project refuses nothing: %v", err)
+	}
+}

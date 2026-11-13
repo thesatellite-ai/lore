@@ -12,6 +12,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -137,15 +138,21 @@ func announceUndo(w io.Writer, undone []string) {
 // treeSnapshot is the work tree of a repo with unmigrated lore 0.1.17 rows
 // before a write (W-6): a person's first write there runs lore fix's safe
 // steps (migrate, render) before the write itself, and when the write is
-// then refused those rewritten files must go back too. It records the
-// tracked changes already there (git stash create: a commit of them, the
-// tree untouched) and the untracked files with their bytes; restore puts
-// every path that changed since back as it was.
+// then refused those rewritten files must go back too. It records the bytes
+// of every tracked file already changed and of every untracked file;
+// restore puts back only the paths that changed since, so a person's own
+// edit the refused write never touched stays exactly as it was (its bytes
+// and whether it is staged).
 type treeSnapshot struct {
 	top       string
-	stash     string            // "" when the tree had no tracked change
-	dirty     map[string]bool   // tracked paths changed before the write
-	untracked map[string][]byte // untracked files before the write
+	dirty     map[string]fileState // tracked paths changed before the write
+	untracked map[string][]byte    // untracked files before the write
+}
+
+// fileState is one path's bytes before the write (gone: it was deleted).
+type fileState struct {
+	body []byte
+	gone bool
 }
 
 // gitIn runs git in dir with lore's clean environment.
@@ -190,13 +197,17 @@ func takeTreeSnapshot(ctx context.Context, dir string) *treeSnapshot {
 	if err != nil {
 		return nil
 	}
-	s := &treeSnapshot{top: top, dirty: tracked, untracked: map[string][]byte{}}
-	if len(tracked) > 0 {
-		out, serr := gitIn(ctx, top, "stash", "create")
-		if serr != nil {
-			return nil
+	s := &treeSnapshot{top: top, dirty: map[string]fileState{}, untracked: map[string][]byte{}}
+	for p := range tracked {
+		b, rerr := os.ReadFile(filepath.Join(top, filepath.FromSlash(p)))
+		switch {
+		case rerr == nil:
+			s.dirty[p] = fileState{body: b}
+		case errors.Is(rerr, fs.ErrNotExist):
+			s.dirty[p] = fileState{gone: true}
+		default:
+			return nil // a file lore cannot read back: never guess
 		}
-		s.stash = strings.TrimSpace(out)
 	}
 	for p := range untracked {
 		b, rerr := os.ReadFile(filepath.Join(top, filepath.FromSlash(p)))
@@ -209,9 +220,10 @@ func takeTreeSnapshot(ctx context.Context, dir string) *treeSnapshot {
 }
 
 // restore puts back every path that changed since the snapshot and
-// returns them: a tracked file to its state then (HEAD, or the stash of
-// the changes it had), a new untracked file removed, an untracked file
-// that existed rewritten with its bytes.
+// returns them: a tracked file lore changed goes back to HEAD, a file the
+// person had changed gets its bytes back only when they differ now (it is
+// never re-staged or rewritten when untouched), a new untracked file is
+// removed, an untracked file that existed gets its bytes.
 func (s *treeSnapshot) restore(ctx context.Context) []string {
 	if s == nil {
 		return nil
@@ -222,15 +234,25 @@ func (s *treeSnapshot) restore(ctx context.Context) []string {
 	}
 	var undone []string
 	for p := range tracked {
-		src := "HEAD"
-		if s.dirty[p] {
-			if s.stash == "" {
-				continue
-			}
-			src = s.stash
+		if _, was := s.dirty[p]; was {
+			continue // compared with its bytes below
 		}
-		if !s.dirty[p] || s.stash != "" {
-			if _, cerr := gitIn(ctx, s.top, "checkout", src, "--", p); cerr == nil {
+		if _, cerr := gitIn(ctx, s.top, "checkout", "HEAD", "--", p); cerr == nil {
+			undone = append(undone, p)
+		}
+	}
+	for p, st := range s.dirty {
+		full := filepath.Join(s.top, filepath.FromSlash(p))
+		cur, rerr := os.ReadFile(full)
+		switch {
+		case st.gone && errors.Is(rerr, fs.ErrNotExist):
+		case st.gone:
+			if os.Remove(full) == nil {
+				undone = append(undone, p)
+			}
+		case rerr == nil && string(cur) == string(st.body):
+		default:
+			if os.MkdirAll(filepath.Dir(full), 0o755) == nil && os.WriteFile(full, st.body, 0o644) == nil {
 				undone = append(undone, p)
 			}
 		}

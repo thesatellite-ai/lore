@@ -286,10 +286,11 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 	if s.blocked != nil {
 		return out, s.blocked
 	}
-	if wire.ProjectFormatOld(s.top) {
-		// D13: a landing writes rows onto the default branch; a project on
-		// lore 0.1.17's format gets none until lore migrate run
-		return out, wire.FormatOldErr(s.top)
+	// D13: a landing writes rows onto the default branch; a project on
+	// lore 0.1.17's format gets none until lore migrate run, and one whose
+	// _meta.json cannot be read gets none until it is fixed
+	if err := wire.ProjectWriteRefusal(s.top); err != nil {
+		return out, err
 	}
 	out.Branch = s.defaultBranch(ctx)
 	out.Checkout, out.OffDefault = s.checkoutBranch(ctx, out.Branch)
