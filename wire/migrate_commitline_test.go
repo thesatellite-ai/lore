@@ -137,3 +137,26 @@ func TestFixMigrateStepNextAndRows(t *testing.T) {
 		t.Fatalf("NextLines = %q", got)
 	}
 }
+
+// TestRowFormatRevertedMigrationIsAWarning (E-7): a repo whose _meta.json
+// says the lore 0.1.17 format but which holds _v: 2 row files (a git
+// revert of the migration commit keeps the rows written after it) is a
+// warning naming the mismatch and one next step, not a healthy repo with
+// a "not migrated yet" note.
+func TestRowFormatRevertedMigrationIsAWarning(t *testing.T) {
+	t.Parallel()
+	repo := gitRepo(t)
+	a := newTestApp(t, repo)
+	withProject(t, a) // a _v: 2 project row
+	v1Row(t, repo, schema.TableMemories, commitLineMemA, `"project_id":"`+projectID(t, a)+`","body":"one"`)
+	meta := filepath.Join(repo, filepath.FromSlash(rowfs.RepoMetaPath))
+	if err := os.WriteFile(meta, []byte(`{"_v": 1}`+"\n"), 0o600); err != nil { // the reverted _meta.json
+		t.Fatal(err)
+	}
+	a.wrote(nil)
+	got, err := a.DoctorRowFormat(background())
+	if err != nil || len(got) != 1 || got[0].Level != DoctorWarning || !strings.Contains(got[0].Message, "git revert of the migration commit") ||
+		!strings.Contains(got[0].Message, "row file(s) are at _v: 2") || got[0].Fix != rowFormatMixedFix {
+		t.Fatalf("reverted migration: %+v %v", got, err)
+	}
+}

@@ -13,6 +13,8 @@ package wire
 //	v1 rows only of tables a run before T-2  ──▶ note: an earlier migration left
 //	left (actors, projects, repos), repo         them; run lore fix --migrate
 //	migrated
+//	format 1 (_meta.json) but _v: 2 files    ──▶ warning: a reverted migration
+//	or the signpost (E-7)                        (formats disagree); lore migrate run
 //	v1 rows, repo migrated (min_lore_version ──▶ warning: a lore older than
 //	set; finished here, or no journal: a        0.1.18 still writes here
 //	teammate's checkout)
@@ -39,10 +41,15 @@ package wire
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/row"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // DoctorCheckRowFormat names the v1-row-files check.
@@ -57,11 +64,28 @@ const (
 	rowFormatUnfinished = "row files written by lore 0.1.17 (_v: 1) are not migrated yet (%s); the last migration of this repo did not finish or was rolled back (min_lore_version %s)"
 )
 
+// rowFormatMixedOld is the warning of a repo on the lore 0.1.17 format
+// that holds `_v: 2` row files (E-7): the usual cause is a `git revert` of
+// the migration commit, which puts the v1 files back but keeps the rows
+// written after the migration (and a signpost a later commit added).
+const rowFormatMixedOld = "this repo is on the lore 0.1.17 format but %d row file(s) are at _v: 2%s, as after a git revert of the migration commit: lore 0.1.17 cannot read them and this lore does not write here until the formats agree (lore migrate rollback, on the machine that ran the migration, is the supported undo)"
+
+// rowFormatMixedFix is the one next step of rowFormatMixedOld: migrating
+// again brings every row to one format; going back to 0.1.17 instead
+// means reverting the commits that added the _v: 2 files too.
+const rowFormatMixedFix = "lore migrate run"
+
 // DoctorRowFormat reports the v1 row files a migration would rewrite.
 func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 	st, err := a.Status(ctx)
-	if err != nil || len(st.Pending) == 0 {
+	if err != nil {
 		return nil, err
+	}
+	if f, ok := a.mixedOldFormat(ctx, st); ok {
+		return []DoctorFinding{f}, nil
+	}
+	if len(st.Pending) == 0 {
+		return nil, nil
 	}
 	pending := strings.Join(st.Pending, ", ")
 	if st.MinLoreVersion != "" && st.Unfinished {
@@ -94,4 +118,33 @@ func onlyLeftBefore(pending []string) bool {
 		}
 	}
 	return len(pending) > 0
+}
+
+// mixedOldFormat is the E-7 finding: the repo's _meta.json says the lore
+// 0.1.17 format, yet its .lore/data holds `_v: 2` row files (or the
+// signpost only a migration writes).
+func (a *App) mixedOldFormat(ctx context.Context, st opsmigrate.StatusOut) (DoctorFinding, bool) {
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return DoctorFinding{}, false
+	}
+	pf, err := ProjectFormatAt(top)
+	if err != nil || pf.Format != rowfs.ProjectFormatV017 {
+		return DoctorFinding{}, false
+	}
+	v2 := 0
+	for _, p := range st.Places {
+		if p.Place == string(store.SourceRepo) {
+			v2 = p.V2
+		}
+	}
+	signpost := ""
+	if _, serr := os.Stat(filepath.Join(top, rowfs.LoreDir, rowfs.DataDir, rowfs.SignpostFile)); serr == nil {
+		signpost = " and .lore/data/" + rowfs.SignpostFile + " is present"
+	}
+	if v2 == 0 && signpost == "" {
+		return DoctorFinding{}, false
+	}
+	return DoctorFinding{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+		Message: fmt.Sprintf(rowFormatMixedOld, v2, signpost), Fix: rowFormatMixedFix}, true
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
+	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -721,12 +722,25 @@ func v1TagLinkOf(doc []byte) (opsmemory.TagLink, bool) {
 
 // migrateTags turns the repo store's v0.1.17 entity_tags rows into the
 // tag_ids of every row they tag (O11), for every table whose definition
-// carries tag_ids (one pass, not per noun), written through the engine
-// (refs checked: a tag that does not exist is refused, fail closed). The
-// entity_tags files stay (the run then rewrites them as `_v: 2` like every
-// FormatTables row, M-1) for the readers of the nouns the core does not own
-// yet; a link file reads the same at either version (flat columns). The
-// int is the rows whose tag_ids are set (would be, under dryRun).
+// carries tag_ids (one pass, not per noun). The entity_tags files stay
+// (the run then rewrites them as `_v: 2` like every FormatTables row, M-1)
+// for the readers of the nouns the core does not own yet; a link file
+// reads the same at either version (flat columns). The int is the rows
+// whose tag_ids are set (would be, under dryRun).
+//
+// A tagged row still at `_v: 1` gets its tag_ids as part of its format
+// rewrite (tagV1Rows): same _hlc, same updated_at, no new author. Through
+// the engine's Update the migration stamped the migrator and the run's
+// time on every tagged row, so a teammate's edit of such a row made
+// before the migration on another branch lost to it field by field when
+// the branch was rebased or merged across the migration (E-4: an archived
+// rule came back active). A row already at `_v: 2` is a real edit and goes
+// through the engine as before.
+//
+// A link whose tagged row or tag no longer exists (0.1.17 left the
+// entity_tags rows of a hard-deleted row behind) is skipped with one line
+// naming its file and why: one orphan link aborted the whole migration
+// (E-5).
 func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, int, error) {
 	st, err := a.state(ctx)
 	if err != nil {
@@ -741,15 +755,23 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, int, erro
 		return nil, 0, err
 	}
 	var links []opsmemory.TagLink
+	linkFile := map[opsmemory.TagLink][]string{} // the entity_tags ids of each link, for the skip lines
+	repoRows := map[ids.AnyID]store.Row{}        // the repo store's live rows by id
 	for _, sr := range rows {
-		if sr.Table.String() != entityTagsTable || sr.Deleted {
+		if sr.Deleted {
+			continue
+		}
+		repoRows[sr.ID] = sr
+		if sr.Table.String() != entityTagsTable {
 			continue
 		}
 		var l v1TagLink
 		if err := json.Unmarshal(sr.Doc, &l); err != nil {
 			return nil, 0, errs.Wrap(errs.InvalidInput, "migrate: entity_tags/"+sr.ID.String()+" is not a v0.1.17 row", err)
 		}
-		links = append(links, opsmemory.TagLink{EntityTable: l.EntityTable, EntityID: l.EntityID, TagID: l.TagID})
+		tl := opsmemory.TagLink{EntityTable: l.EntityTable, EntityID: l.EntityID, TagID: l.TagID}
+		links = append(links, tl)
+		linkFile[tl] = append(linkFile[tl], sr.ID.String())
 	}
 	if len(links) == 0 {
 		return nil, 0, nil
@@ -765,35 +787,127 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, int, erro
 	for _, l := range skipped {
 		steps = append(steps, "tags: skipped entity_tags link "+l.EntityTable+"/"+l.EntityID+" → "+l.TagID+" (not a tagged row id and a tag_ id)")
 	}
+	tagExists := func(t string) bool {
+		tid, err := ids.ParseAny(t)
+		if err != nil {
+			return false
+		}
+		if _, ok := repoRows[tid]; ok {
+			return true
+		}
+		_, r, gerr := st.eng.Get(ctx, engine.Ref{Table: schema.TableTags, ID: tid}) // any attached store
+		return gerr == nil && !r.Deleted
+	}
 	keys := slices.SortedFunc(maps.Keys(merged), func(x, y taggedRow) int { return strings.Compare(x.id.String(), y.id.String()) })
+	var v1Changes []store.Change
+	n := 0
 	for _, key := range keys {
 		m := merged[key]
-		steps = append(steps, "tags: "+key.id.String()+".tag_ids = "+strings.Join(m, ","))
+		sr, live := repoRows[key.id]
+		if !live {
+			steps = append(steps, orphanTagLines(key, m, linkFile, "the row "+key.id.String()+" no longer exists")...)
+			continue
+		}
+		kept := m[:0:0]
+		for _, t := range m {
+			if tagExists(t) {
+				kept = append(kept, t)
+				continue
+			}
+			steps = append(steps, orphanTagLines(key, []string{t}, linkFile, "the tag "+t+" no longer exists")...)
+		}
+		if len(kept) == 0 {
+			continue
+		}
+		n++
+		steps = append(steps, "tags: "+key.id.String()+".tag_ids = "+strings.Join(kept, ","))
 		if dryRun {
 			continue
 		}
-		items := make([]value.Value, 0, len(m))
-		for _, t := range m {
-			tid, err := ids.ParseAny(t)
-			if err != nil {
-				return nil, 0, err
-			}
-			r, err := value.RefOf(tid)
-			if err != nil {
-				return nil, 0, err
-			}
-			items = append(items, r)
-		}
-		list, err := value.ListOf(value.KindRef, items...)
+		list, err := tagIDList(kept)
 		if err != nil {
 			return nil, 0, err
+		}
+		r, err := sr.Decode()
+		if err != nil {
+			return nil, 0, errs.Prefix("migrate: tags of "+key.id.String(), err)
+		}
+		if r.SourceVersion != row.FormatVersion {
+			ch, err := tagV1Row(reg, sr, r, list)
+			if err != nil {
+				return nil, 0, errs.Prefix("migrate: tags of "+key.id.String(), err)
+			}
+			v1Changes = append(v1Changes, ch)
+			continue
 		}
 		ref := engine.Ref{Store: store.SourceRepo, Table: key.table, ID: key.id}
 		if _, err := st.eng.Update(ctx, ref, map[string]value.Value{schema.FieldTagIDs: list}); err != nil {
 			return nil, 0, errs.Prefix("migrate: tags of "+key.id.String(), err)
 		}
 	}
-	return steps, len(keys), nil
+	if len(v1Changes) > 0 {
+		if err := st.backends[0].Write(store.WithCommitMessage(ctx, migrateCommitSubject(ctx, len(v1Changes))), v1Changes); err != nil {
+			return nil, 0, errs.Prefix("migrate: tags", err)
+		}
+		a.wrote(nil)
+		if _, err := st.eng.Refresh(ctx, store.SourceRepo); err != nil {
+			return nil, 0, err
+		}
+	}
+	return steps, n, nil
+}
+
+// orphanTagLines are the step lines of the links of key to tags that the
+// run skips because why (E-5): one line per entity_tags file, naming it,
+// so a person can see (and remove) exactly the files left behind.
+func orphanTagLines(key taggedRow, tags []string, linkFile map[opsmemory.TagLink][]string, why string) []string {
+	var out []string
+	for _, t := range tags {
+		l := opsmemory.TagLink{EntityTable: key.table.String(), EntityID: key.id.String(), TagID: t}
+		files := linkFile[l]
+		if len(files) == 0 {
+			files = []string{"?"}
+		}
+		for _, f := range files {
+			out = append(out, "tags: skipped entity_tags/"+f+" ("+l.EntityTable+"/"+l.EntityID+" → "+t+"): "+why+"; the link file stays as it is")
+		}
+	}
+	return out
+}
+
+// tagIDList is the tag_ids value of the tag ids tags.
+func tagIDList(tags []string) (value.Value, error) {
+	items := make([]value.Value, 0, len(tags))
+	for _, t := range tags {
+		tid, err := ids.ParseAny(t)
+		if err != nil {
+			return nil, err
+		}
+		r, err := value.RefOf(tid)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, r)
+	}
+	return value.ListOf(value.KindRef, items...)
+}
+
+// tagV1Row is the change that writes the v1 row r (read as sr) as `_v: 2`
+// with tag_ids set to list: the format rewrite of upcastV1 plus the tags,
+// keeping r's _hlc and audit times (a format change, not an edit; E-4),
+// refused E_STALE when the file changed meanwhile (Expect).
+func tagV1Row(reg *schema.Registry, sr store.Row, r row.Row, list value.Value) (store.Change, error) {
+	fields := maps.Clone(r.Fields)
+	if fields == nil {
+		fields = map[string]value.Value{}
+	}
+	fields[schema.FieldTagIDs] = list
+	r.Fields = fields
+	up, err := store.FromRow(upcastV1(reg, r))
+	if err != nil {
+		return store.Change{}, err
+	}
+	return store.Change{Row: up, Expect: sr.HLC}, nil
 }
 
 // taggedRow names one row migrateTags writes tag_ids on.
@@ -1179,4 +1293,108 @@ func clientRoutesPolicy(items []string, folderScope string) (map[string]value.Va
 		return nil, errs.Wrap(errs.Internal, "migrate: policy key", err)
 	}
 	return map[string]value.Value{policyFieldKey: key, policyFieldValue: jv, policyFieldScope: scope}, nil
+}
+
+// migratedBase is the row the migration would write for the v1 row base,
+// given hand, the file as it is now: upcastV1 plus the two migration
+// steps that change a v1 file's fields without a new stamp, so their
+// output is never taken for a hand edit and re-stamped (E-9):
+//
+//   - tags: tag_ids comes from the entity_tags links (a v1 file never
+//     carries tag_ids), so hand's tag_ids is the migration's;
+//   - actor_projection: an actor copy trimmed to {id, display name, kind}
+//     (leakcheck.ActorCopyExtraKeys), when hand is that trimmed copy.
+func migratedBase(reg *schema.Registry, base, hand row.Row) row.Row {
+	up := upcastV1(reg, base)
+	if tags, ok := hand.Fields[schema.FieldTagIDs]; ok {
+		if _, had := base.Fields[schema.FieldTagIDs]; !had {
+			fields := maps.Clone(up.Fields)
+			if fields == nil {
+				fields = map[string]value.Value{}
+			}
+			fields[schema.FieldTagIDs] = tags
+			up.Fields = fields
+		}
+	}
+	if up.Table != schema.TableActors {
+		return up
+	}
+	doc, err := store.FromRow(up)
+	if err != nil {
+		return up
+	}
+	handDoc, err := store.FromRow(hand)
+	if err != nil {
+		return up
+	}
+	extra := leakcheck.ActorCopyExtraKeys(doc.Doc)
+	if len(extra) == 0 || len(leakcheck.ActorCopyExtraKeys(handDoc.Doc)) != 0 {
+		return up // hand is not the trimmed copy: compare with the full row
+	}
+	return trimActorCopy(up, extra)
+}
+
+// UpcastForMerge returns the three sides of a row file merge with every
+// `_v: 1` side written as the migration writes it (upcastV1), when at
+// least one side is already `_v: 2`: a branch made before `lore migrate
+// run` and rebased, merged or cherry-picked across it then merges
+// content, not format. Without it the v1 side's `"archived_at": null`
+// and the migrated side's absent key (a row the engine wrote drops its
+// nulls) counted as two different changes,
+// and the migrated side won them (E-4). Sides that all share one version
+// (or do not decode: the driver's own fallback answers those) come back
+// unchanged, so a merge in a repo not yet migrated never writes `_v: 2`.
+func UpcastForMerge(sides ...[]byte) [][]byte {
+	out := slices.Clone(sides)
+	reg, err := builtinRegistry()
+	if err != nil {
+		return out
+	}
+	decoded := make([]row.Row, len(sides))
+	v1, v2 := false, false
+	for i, s := range sides {
+		if len(strings.TrimSpace(string(s))) == 0 {
+			continue
+		}
+		r, err := row.Decode(s)
+		if err != nil {
+			return out
+		}
+		decoded[i] = r
+		if r.SourceVersion == row.FormatVersion {
+			v2 = true
+		} else {
+			v1 = true
+		}
+	}
+	if !v1 || !v2 {
+		return out
+	}
+	for i, r := range decoded {
+		if r.ID.IsZero() {
+			continue
+		}
+		if r.SourceVersion != row.FormatVersion {
+			r = upcastV1(reg, r)
+		}
+		// null and absent are one value: a row the engine wrote drops its
+		// null fields, a v1 file (and a format rewrite of it) keeps them
+		r.Fields = withoutNulls(r.Fields)
+		if b, err := row.Encode(r); err == nil {
+			out[i] = b
+		}
+	}
+	return out
+}
+
+// withoutNulls is fields without its null values (a copy).
+func withoutNulls(fields map[string]value.Value) map[string]value.Value {
+	out := make(map[string]value.Value, len(fields))
+	for k, v := range fields {
+		if v == nil || v.Kind() == value.KindNull {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }

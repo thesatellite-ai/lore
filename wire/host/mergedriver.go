@@ -37,6 +37,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // Merge driver words and limits.
@@ -112,6 +113,12 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 	if err != nil {
 		return errs.Wrap(errs.Internal, "merge driver: core registry", err)
 	}
+	// a branch from before the format migration merges content, not format (E-4)
+	// (the result is then written even when it equals the upcast ours,
+	// so the file lands at `_v: 2` beside the migrated rows)
+	oursFile := ours
+	up := wire.UpcastForMerge(base, ours, theirs)
+	base, ours, theirs = up[0], up[1], up[2]
 	var res merge.Result
 	out, conflict, err := merge.Driver{Registry: reg, Report: func(r merge.Result) { res = r }, OursFirst: true}.Merge(base, ours, theirs)
 	if err != nil {
@@ -119,7 +126,7 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 		// tool): git's line merge, which writes no format of its own.
 		return textMerge(ctx, stderr, basePath, oursPath, theirsPath, repoPath)
 	}
-	if err := writeMerged(oursPath, ours, out); err != nil {
+	if err := writeMerged(oursPath, oursFile, out); err != nil {
 		return err
 	}
 	if len(res.NewerWins) > 0 {

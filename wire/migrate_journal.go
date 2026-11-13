@@ -651,31 +651,9 @@ func (a *App) applyRollback(ctx context.Context, snaps git.Snapshots, top string
 		}
 		return placeLabel(p) + ": local store ref back to " + shortOID(p.TipBefore) + " (" + p.CloneBackup + "); nothing was pushed", nil
 	}
-	var paths []string
-	for _, c := range pl.diff {
-		if pl.keepMeta && c.Path == rowfs.MetaFileName {
-			continue
-		}
-		rel := path.Join(p.Data, c.Path) // Data is "." for a store's root folder
-		full := filepath.Join(p.Dir, filepath.FromSlash(rel))
-		if c.OldBlob == "" {
-			if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return "", errs.Wrap(errs.Internal, "migrate: remove "+rel, err)
-			}
-		} else {
-			b, err := snaps.Blob(ctx, top, c.OldBlob)
-			if err != nil {
-				return "", err
-			}
-			fileMode, dirMode := restoreModes(p)
-			if err := os.MkdirAll(filepath.Dir(full), dirMode); err != nil {
-				return "", errs.FileIO("create the folder to restore "+rel+" in", filepath.Dir(full), err)
-			}
-			if err := writeFileAtomic(full, b, fileMode); err != nil {
-				return "", err
-			}
-		}
-		paths = append(paths, rel)
+	paths, err := a.restoreFiles(ctx, snaps, top, p, pl.diff, pl.keepMeta)
+	if err != nil {
+		return "", err
 	}
 	line := placeLabel(p) + ": " + plural(len(paths), "file") + " restored"
 	if pl.keepMeta {
@@ -697,6 +675,40 @@ func (a *App) applyRollback(ctx context.Context, snaps git.Snapshots, top string
 		return line + ", store commit; push failed (" + err.Error() + "): run `lore sync`", nil
 	}
 	return line + ", store commit pushed", nil
+}
+
+// restoreFiles writes the files of diff (the place's changes since its
+// tree before the run) back to their old bytes, removing those the run
+// created; keepMeta leaves _meta.json as it is. It returns the paths
+// restored, relative to the place's folder.
+func (a *App) restoreFiles(ctx context.Context, snaps git.Snapshots, top string, p journalPlace, diff []git.TreeChange, keepMeta bool) ([]string, error) {
+	var paths []string
+	for _, c := range diff {
+		if keepMeta && c.Path == rowfs.MetaFileName {
+			continue
+		}
+		rel := path.Join(p.Data, c.Path) // Data is "." for a store's root folder
+		full := filepath.Join(p.Dir, filepath.FromSlash(rel))
+		if c.OldBlob == "" {
+			if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return nil, errs.Wrap(errs.Internal, "migrate: remove "+rel, err)
+			}
+		} else {
+			b, err := snaps.Blob(ctx, top, c.OldBlob)
+			if err != nil {
+				return nil, err
+			}
+			fileMode, dirMode := restoreModes(p)
+			if err := os.MkdirAll(filepath.Dir(full), dirMode); err != nil {
+				return nil, errs.FileIO("create the folder to restore "+rel+" in", filepath.Dir(full), err)
+			}
+			if err := writeFileAtomic(full, b, fileMode); err != nil {
+				return nil, err
+			}
+		}
+		paths = append(paths, rel)
+	}
+	return paths, nil
 }
 
 // Status implements opsmigrate.Journal (rule 4 `lore migrate status`).

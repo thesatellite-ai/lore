@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -262,9 +263,49 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 	}
 	if len(out.Lines) == 0 && len(out.Data.Stores) == 0 {
 		out.Lines = []string{syncAlreadyInSync} // v0.1.17: nothing landed, no store, nothing written
+		if line := s.app.uncommittedDataLine(ctx); line != "" {
+			// E-10: setting up the clone (its repo row, the actor copy,
+			// repo_id in _meta.json) wrote files; "already in sync" alone
+			// hid them until a git merge refused to overwrite them
+			out.Lines = []string{line}
+		}
 	}
 	return out, nil
 }
+
+// uncommittedDataLine names the files of the repo's .lore/data that differ
+// from the commit (changed or new), with the commit to run; "" when there
+// are none, outside a code repo, or when git cannot say.
+func (a *App) uncommittedDataLine(ctx context.Context) string {
+	top, err := a.repoTop(ctx)
+	if err != nil || !loreFolderAt(top) {
+		return ""
+	}
+	data := rowfs.LoreDir + "/" + rowfs.DataDir
+	st, err := gitRun{dir: top, args: []string{"-c", "core.quotePath=false", "status", "--porcelain", "--untracked-files=all", "--", data}}.output(ctx)
+	if err != nil {
+		return ""
+	}
+	var paths []string
+	for _, l := range strings.Split(string(st), "\n") {
+		if len(l) > 3 {
+			paths = append(paths, l[3:])
+		}
+	}
+	if len(paths) == 0 {
+		return ""
+	}
+	shown := paths
+	more := ""
+	if len(shown) > uncommittedShown {
+		shown, more = shown[:uncommittedShown], fmt.Sprintf(" and %d more", len(paths)-uncommittedShown)
+	}
+	return fmt.Sprintf("· in sync; %d file(s) in %s wait for your commit (%s%s): git add %s && git commit", len(paths), data, strings.Join(shown, ", "), more, data)
+}
+
+// uncommittedShown is how many uncommitted .lore/data files the sync line
+// names before "and N more".
+const uncommittedShown = 5
 
 // syncMarkedFileWhy is the why of a marked row file in the sync report.
 const syncMarkedFileWhy = "git conflict markers; it is left out of every read until settled (lore sync conflicts, lore sync resolve)"

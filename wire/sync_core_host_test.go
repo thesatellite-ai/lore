@@ -287,13 +287,22 @@ func TestSyncConflictsMarkedFilesLiveOff(t *testing.T) {
 }
 
 // TestSyncRunCoreStoresLines: "· already in sync" only when the host
-// printed nothing and no store reported; an attached store prints its
+// printed nothing, no store reported and .lore/data is committed; an attached store prints its
 // line instead; a host that does not leave stores to the core is untouched.
 func TestSyncRunCoreStoresLines(t *testing.T) {
 	t.Parallel()
 	var notes []string
-	a, _ := coreHostApp(t, coreStub{}, &notes)
+	a, aRepo := coreHostApp(t, coreStub{}, &notes)
+	// E-10: the project row the open wrote is not committed: the line names
+	// it and the commit instead of a bare "already in sync"
 	out, err := a.syncEnv().SyncRun(background(), opssync.RunIn{})
+	if err != nil || len(out.Lines) != 1 || !strings.HasPrefix(out.Lines[0], "· in sync; 1 file(s) in .lore/data wait for your commit (.lore/data/projects/") ||
+		!strings.HasSuffix(out.Lines[0], "git add .lore/data && git commit") {
+		t.Fatalf("uncommitted row file = %+v %v", out, err)
+	}
+	gitT(t, aRepo, "add", ".lore/data")
+	gitT(t, aRepo, "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-q", "-m", "lore data")
+	out, err = a.syncEnv().SyncRun(background(), opssync.RunIn{})
 	if err != nil || len(out.Lines) != 1 || out.Lines[0] != syncAlreadyInSync || out.Data.Pass != "live" || out.Data.Stores != nil {
 		t.Fatalf("nothing to do = %+v %v", out, err)
 	}

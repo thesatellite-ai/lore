@@ -26,6 +26,7 @@ package migrate
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -402,6 +403,14 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 			return RunOut{}, err
 		}
 	}
+	// failed answers a step's error after Begin: the run's changes are put
+	// back first (Aborter, E-5), so a failed run leaves no mixed repo
+	failed := func(err error) (RunOut, error) {
+		if ab, ok := rw.(Aborter); ok && journaled && !in.DryRun {
+			return RunOut{}, abortRun(ctx, ab, err)
+		}
+		return RunOut{}, err
+	}
 	rewrite := rw.RewriteV1
 	repoOnly := in.Offline && journaled
 	if repoOnly {
@@ -410,7 +419,7 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		if rs, ok := rw.(RepoSettingsMigrator); ok {
 			settings, err := rs.MigrateRepoSettings(ctx, in.DryRun)
 			if err != nil {
-				return RunOut{}, err
+				return failed(err)
 			}
 			out.Steps = append(out.Steps, settings.Steps...)
 			out.Count += settings.Rows
@@ -418,7 +427,7 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	} else {
 		settings, err := rw.MigrateSettings(ctx, in.DryRun)
 		if err != nil {
-			return RunOut{}, err
+			return failed(err)
 		}
 		out.Steps = append(out.Steps, settings.Steps...)
 		out.Count += settings.Rows
@@ -427,7 +436,7 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 		live, err := rw.MigrateLive(ctx, in.DryRun)
 		if err != nil {
-			return RunOut{}, err
+			return failed(err)
 		}
 		out.Rows = append(out.Rows, live...)
 		if err := At(ctx, PointLive); err != nil {
@@ -440,14 +449,14 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		// ids per table as the per-table calls, in the same order
 		got, err := all.RewriteAllV1(ctx, tables, repoOnly, in.DryRun)
 		if err != nil {
-			return RunOut{}, err
+			return failed(err)
 		}
 		rewrite = func(_ context.Context, t row.Table, _ bool) ([]ids.AnyID, error) { return got[t], nil }
 	}
 	for _, t := range tables {
 		got, err := rewrite(ctx, t, in.DryRun)
 		if err != nil {
-			return RunOut{}, err
+			return failed(err)
 		}
 		for _, id := range got {
 			// A v0.1.17 live row that also sits at v1 in .lore/data is one
@@ -472,7 +481,7 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		// does not rewrite, why, and what converts it
 		left, err := lr.LeftV1(ctx, tables, repoOnly, in.DryRun)
 		if err != nil {
-			return RunOut{}, err
+			return failed(err)
 		}
 		out.Left = left
 	}
@@ -538,3 +547,24 @@ func baseOps(rw Rewriter) []op.Entry {
 // step of a larger command (lore fix, the first write in a v0.1.17
 // project): the same lock, journal, steps and push as `lore migrate run`.
 func Run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) { return run(ctx, rw, in) }
+
+// abortRun puts back what the failed run changed and returns its error
+// with the outcome appended: "nothing changed" when every place is back,
+// else what stays and why.
+func abortRun(ctx context.Context, ab Aborter, cause error) error {
+	lines, err := ab.AbortRun(context.WithoutCancel(ctx))
+	if err != nil {
+		return errors.Join(cause, errs.Prefix("migrate: put back the failed run's changes (lore migrate rollback undoes them)", err))
+	}
+	what := "the run's changes were put back; the data is as it was before the run"
+	if len(lines) > 0 {
+		what += " (" + strings.Join(lines, "; ") + ")"
+	}
+	var e *errs.Error
+	if errors.As(cause, &e) {
+		out := *e
+		out.Message += "; " + what
+		return &out
+	}
+	return errs.Wrap(errs.Internal, "migrate: "+cause.Error()+"; "+what, cause)
+}

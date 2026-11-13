@@ -133,3 +133,42 @@ func TestMigrateTagsFlow(t *testing.T) {
 		t.Fatalf("entity_tags files: %d %v, want all 5 kept", len(ents), rerr)
 	}
 }
+
+// TestMigrateTagsOrphanLink (E-5): an entity_tags link to a row (or a tag)
+// that no longer exists is skipped with a line naming its file and why;
+// the other links still land and the step does not fail.
+func TestMigrateTagsOrphanLink(t *testing.T) {
+	t.Parallel()
+	ctx := background()
+	repo := gitRepo(t)
+	a := newTestApp(t, repo)
+	withProject(t, a)
+	out, err := run(t, a, opstag.OpAdd, `{"name":"infra"}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	infra := idOf(t, out)
+	if out, err = run(t, a, opsmemory.OpAdd, `{"body":"kept note"}`, false); err != nil {
+		t.Fatal(err)
+	}
+	mem := idOf(t, out)
+	gone := "mem_01a147bba77f702a810a5a30c1675789"    // hard-deleted by 0.1.17: no file
+	goneTag := "tag_2dba3393d2487d919814327c57eacbea" // no such tag
+	v1EntityTag(t, repo, "memories", mem, infra)
+	v1EntityTag(t, repo, "memories", gone, infra)
+	v1EntityTag(t, repo, "memories", mem, goneTag)
+	steps, n, err := a.migrateTags(ctx, false)
+	if err != nil || n != 1 {
+		t.Fatalf("run: %v %d %v, want 1 row and no error", steps, n, err)
+	}
+	for _, want := range []string{"the row " + gone + " no longer exists", "the tag " + goneTag + " no longer exists"} {
+		if !slices.ContainsFunc(steps, func(s string) bool {
+			return strings.HasPrefix(s, "tags: skipped entity_tags/etg_") && strings.Contains(s, want)
+		}) {
+			t.Fatalf("steps %v do not name the orphan link (%s)", steps, want)
+		}
+	}
+	if got := tagIDsOf(t, a, mem); !slices.Equal(got, []string{infra}) {
+		t.Fatalf("memory tag_ids = %v, want [%s]", got, infra)
+	}
+}

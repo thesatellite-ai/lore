@@ -142,7 +142,7 @@ From now on, `git pull`, `git checkout`, `git merge` and `git rebase` just chang
 
 ## Step 4 — Run a pass by hand when you want to see it
 
-`lore sync` runs one pass now and prints what changed; `lore sync status` shows what is waiting:
+`lore sync` runs one pass now and prints what changed; `lore sync status` shows what is waiting. When nothing landed but files in `.lore/data` differ from your commit (a fresh clone's sync writes its repo row, your actor copy and `repo_id` in `_meta.json`), the line names them instead of `· already in sync`: `· in sync; 3 file(s) in .lore/data wait for your commit (.lore/data/_meta.json, …): git add .lore/data && git commit`. Example:
 
 <!-- example: sync#sync-by-hand -->
 ```console
