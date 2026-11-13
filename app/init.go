@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -190,6 +191,22 @@ func (i *initHost) RootAt(_ context.Context) (func(), error) { return rootInitAt
 // Project implements repoinit.Host.
 func (i *initHost) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	return i.h.app.Project(ctx)
+}
+
+// OtherProjectFolders implements repoinit's optional monorepo host: the
+// folders (relative to the repo top, "." for the top) of the checkout's
+// other lore projects, sorted; none when it cannot tell.
+func (i *initHost) OtherProjectFolders(ctx context.Context) []string {
+	metas, err := checkoutRepoMetas(ctx, i.wd)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(metas))
+	for rel := range metas {
+		out = append(out, rel)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // DefaultName implements repoinit.Host (initname.go).

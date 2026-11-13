@@ -51487,6 +51487,12 @@
                     "name": {
                       "type": "string"
                     },
+                    "other_projects": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "path": {
                       "type": "string"
                     },

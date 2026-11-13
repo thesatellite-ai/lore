@@ -322,6 +322,9 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 			// L-7: say why the link is gone instead of only offering init
 			return ids.ID[ids.Project]{}, staleLinkErr(sl, a.staleLinkOrg(ctx))
 		}
+		if e := a.checkoutWithoutLoreErr(ctx); e != nil {
+			return ids.ID[ids.Project]{}, e // D-8/D-10: never "run lore init" there
+		}
 		return ids.ID[ids.Project]{}, noLoreProjectErr()
 	case 1:
 		return ids.As[ids.Project](rows[0].ID)

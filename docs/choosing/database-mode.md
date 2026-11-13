@@ -20,7 +20,7 @@ A few words first:
 ## If this, then that
 
 - **If you work in one repo, alone or with a team,** keep Mode A. Do nothing; `lore init` already set it up.
-- **If one repo holds several apps (a monorepo),** stay on Mode A and run `lore init` in each app folder that wants its own notes. Each folder becomes its own project with its own notes, and all of them share the repo's one hidden list of live rows (notes every teammate sees at once, whatever branch they are on).
+- **If one repo holds several apps (a monorepo),** stay on Mode A and run `lore init` in each app folder that wants its own notes. Each folder becomes its own project with its own notes (named `<repo>-<folder>` unless you pass `--name`; init says which other folders of the repo already hold a project, and the package's notes are listed and searched from its own folder), and all of them share the repo's one hidden list of live rows (notes every teammate sees at once, whatever branch they are on).
 - **If one product is split over several repos and you work alone,** use a folder store for the notes they share, and write those notes `--to` it.
 - **If you cannot or must not commit notes to a repo** (a repo you do not own, a repo that refuses extra files), write them `--to` a folder store instead.
 - **If a repo still has a v0.1.17 shared-database pointer** (`.lore/lore.yaml`), run `lore migrate run` in it; every other command stops and says so.

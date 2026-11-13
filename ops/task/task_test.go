@@ -38,8 +38,8 @@ func TestTextMatchesV017(t *testing.T) {
 	check("add --key", opstest.Text(h.Must(opstask.OpAdd, `{"title":"Keyed","key":"k1"}`)), "✓ tsk_ID — Keyed [medium]\n  on tasklist tlt_ID \"default\" (the default; --tasklist picks another)\n") // delta (U-3): names the default list
 	check("add --key again", opstest.Text(h.Must(opstask.OpAdd, `{"title":"Keyed","key":"k1"}`)), "✓ tsk_ID — Keyed (already added with --key k1)\n")
 
-	check("list", opstest.Text(h.Must(opstask.OpList, ``)),
-		"○ tsk_ID Fix the login redirect [high]\n○ tsk_ID Second [medium] due:2026-12-01\n○ tsk_ID Keyed [medium]\n")
+	check("list", opstest.Text(h.Must(opstask.OpList, ``)), // delta (D-11): says what the commitment filter hid
+		"○ tsk_ID Fix the login redirect [high]\n○ tsk_ID Second [medium] due:2026-12-01\n○ tsk_ID Keyed [medium]\n2 hidden (1 proposed, 1 someday); --include-proposed / --include-someday show them\n")
 	check("list --all", opstest.Text(h.Must(opstask.OpList, `{"all":true}`)),
 		"○ tsk_ID Fix the login redirect [high]\n○ tsk_ID Second [medium] due:2026-12-01\n○ tsk_ID Prop one [medium] (proposed)\n"+
 			"○ tsk_ID Some one [medium] (someday)\n○ tsk_ID Later [medium] ⏾2099-01-05\n○ tsk_ID Keyed [medium]\n")

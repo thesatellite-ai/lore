@@ -62,11 +62,23 @@ func markClientRepo(ctx context.Context, root string, res *OrgResolution) {
 		if _, err := (gitRun{dir: top, args: []string{"config", "--local", ClientRepoGitKey, clientRepoMarkOn}}).output(ctx); err == nil {
 			// no hidden magic: a key lore sets in a person's git config is
 			// named the first time (plain files sweep 3.2)
-			_, _ = fmt.Fprintln(os.Stderr, "lore: set "+ClientRepoGitKey+"="+clientRepoMarkOn+" in "+filepath.Join(top, ".git", "config")+": this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset "+ClientRepoGitKey+"` removes it)")
+			_, _ = fmt.Fprintln(os.Stderr, "lore: set "+ClientRepoGitKey+"="+clientRepoMarkOn+" in "+localGitConfigFile(ctx, top)+": this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset "+ClientRepoGitKey+"` removes it)")
 		}
 	case !client && len(strings.TrimSpace(string(cur))) > 0:
 		if _, err := (gitRun{dir: top, args: []string{"config", "--local", "--unset-all", ClientRepoGitKey}}).output(ctx); err == nil {
-			_, _ = fmt.Fprintln(os.Stderr, "lore: removed "+ClientRepoGitKey+" from "+filepath.Join(top, ".git", "config")+": this repo is no longer a client repo")
+			_, _ = fmt.Fprintln(os.Stderr, "lore: removed "+ClientRepoGitKey+" from "+localGitConfigFile(ctx, top)+": this repo is no longer a client repo")
 		}
 	}
+}
+
+// localGitConfigFile is the file `git config --local` writes in the clone
+// at top: <top>/.git/config in a plain clone, the main clone's config in a
+// linked worktree (whose .git is a one-line gitdir file, so a message
+// naming <worktree>/.git/config would point at nothing).
+func localGitConfigFile(ctx context.Context, top string) string {
+	out, err := gitRun{dir: top, args: []string{"rev-parse", "--path-format=absolute", "--git-path", "config"}}.output(ctx)
+	if p := strings.TrimSpace(string(out)); err == nil && p != "" {
+		return p
+	}
+	return filepath.Join(top, ".git", "config")
 }

@@ -18,11 +18,30 @@ const gitOriginURLKey = "remote.origin.url"
 // not set, as v0.1.17 did: the repo name of origin's URL
 // (git@github.com:acme/widget-api.git → widget-api), else the folder name;
 // lower-cased either way.
+//
+// In a folder below the repo top (a monorepo app or package, D-1) the
+// folder name is added: <repo>-<folder> (acme-api-extraction), so the
+// sub-project and the project at the repo root never share one name.
 func defaultProjectName(ctx context.Context, dir string) string {
-	if n := projectNameFromURL(gitOriginURL(ctx, dir)); n != "" {
-		return strings.ToLower(n)
+	n := projectNameFromURL(gitOriginURL(ctx, dir))
+	if n == "" {
+		return strings.ToLower(filepath.Base(dir))
 	}
-	return strings.ToLower(filepath.Base(dir))
+	if top := gitTopOf(ctx, dir); top != "" && realPath(top) != realPath(dir) {
+		if base := filepath.Base(dir); !strings.EqualFold(base, n) {
+			n += "-" + base
+		}
+	}
+	return strings.ToLower(n)
+}
+
+// gitTopOf is the top of the git work tree dir is in, "" outside one.
+func gitTopOf(ctx context.Context, dir string) string {
+	out, err := gitref.Exec{}.Run(ctx, gitref.Invocation{Dir: dir, Args: []string{"rev-parse", "--show-toplevel"}})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // gitOriginURL is origin's first configured URL in dir, or "" (no git, no

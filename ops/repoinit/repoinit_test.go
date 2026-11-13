@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -109,6 +110,22 @@ func TestRunDecisions(t *testing.T) {
 		}
 		if !f.undone || f.primed {
 			t.Fatalf("undone %v primed %v: a refusal must undo and not prime", f.undone, f.primed)
+		}
+	})
+	t.Run("already initialised with --target names render --add-target", func(t *testing.T) {
+		f := newFake(t)
+		f.local, f.hasProject = true, true
+		_, err := Run(ctx, f, InitIn{Target: []string{"cursor", " "}})
+		var e *errs.Error
+		if !errs.Has(err, errs.AlreadyInitialized) || !errors.As(err, &e) || !strings.Contains(e.Hint, "lore render --add-target cursor") {
+			t.Fatalf("err = %v, want a hint naming lore render --add-target cursor", err)
+		}
+	})
+	t.Run("a sub-project names the repo's other projects", func(t *testing.T) {
+		f := newFake(t)
+		out, err := Run(ctx, monoFake{f, []string{"."}}, InitIn{Name: "acme-web"})
+		if err != nil || !slices.Equal(out.OtherProjects, []string{"."}) || !strings.Contains(out.Body(), "this repo already holds a lore project in the repo root: acme-web is a separate project") {
+			t.Fatalf("out %+v err %v body %q", out, err, out.Body())
 		}
 	})
 	t.Run("adopt a clone", func(t *testing.T) {
@@ -338,3 +355,11 @@ func TestRunTakesTheLinkedProjectID(t *testing.T) {
 		t.Fatalf("no link: project %s, asked for %s:\n%s", out.ProjectID, f.createdID, out.Body())
 	}
 }
+
+// monoFake is fakeHost with the optional MonorepoHost part.
+type monoFake struct {
+	*fakeHost
+	others []string
+}
+
+func (m monoFake) OtherProjectFolders(context.Context) []string { return m.others }

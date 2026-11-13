@@ -957,6 +957,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		}
 		cellsOf(tq.columns, get(r), b) // TASK 16.2 column table
 	}
+	hidden := map[string]int{} // open tasks left out only by their commitment
 	out, err := o.viewWith(ctx, in.Store, project, team.state, order, func(r row.Row) bool {
 		status, commit := work.Field(r, work.FieldStatus), work.Field(r, fieldCommitment)
 		switch {
@@ -975,14 +976,49 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		case in.All:
 			return true
 		case in.Status == "" && !open(r),
-			in.Commitment == "" && !slices.Contains(allowed, commit),
 			!in.IncludeDeferred && deferred(r, now):
+			return false
+		case in.Commitment == "" && !slices.Contains(allowed, commit):
+			hidden[commit]++ // D-11: said in a footer, never dropped silently
 			return false
 		}
 		return true
 	})
 	out.Columns = tq.columns
+	if n := hiddenCommitmentNote(hidden); err == nil && n != "" {
+		out.Notes = append(out.Notes, n)
+	}
 	return out, err
+}
+
+// hiddenFlags names the flag that shows each commitment task list hides.
+var hiddenFlags = map[string]string{
+	schema.TaskCommitmentProposed: "--include-proposed",
+	schema.TaskCommitmentSomeday:  "--include-someday",
+}
+
+// hiddenCommitmentNote is task list's footer for the open tasks it left
+// out only by their commitment ("12 hidden (12 proposed); --include-proposed
+// shows them"), "" when none: agents file tasks as proposed, and a lead must
+// see that work waits for triage (D-11). Proposed comes before someday.
+func hiddenCommitmentNote(hidden map[string]int) string {
+	var parts, flags []string
+	total := 0
+	for _, c := range []string{schema.TaskCommitmentProposed, schema.TaskCommitmentSomeday} {
+		if n := hidden[c]; n > 0 {
+			total += n
+			parts = append(parts, strconv.Itoa(n)+" "+c)
+			flags = append(flags, hiddenFlags[c])
+		}
+	}
+	if total == 0 {
+		return ""
+	}
+	verb := " shows them"
+	if len(flags) > 1 {
+		verb = " show them"
+	}
+	return strconv.Itoa(total) + " hidden (" + strings.Join(parts, ", ") + "); " + strings.Join(flags, " / ") + verb
 }
 
 // view lists the tasks keep accepts, in v0.1.17's envelope.

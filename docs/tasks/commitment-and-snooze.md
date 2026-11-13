@@ -19,7 +19,7 @@ Alice (an agency developer) works on the client's website, `github.com/client/we
 
 ## Step 1 — Add a proposed task and a someday idea
 
-Pass `--commitment` when you add the task. Neither task shows up in `lore task list`: that list shows only accepted tasks that are not snoozed.
+Pass `--commitment` when you add the task. Neither task shows up in `lore task list`: that list shows only accepted tasks that are not snoozed, and ends with one line saying how many open tasks it left out by their commitment and which flag shows them (`2 hidden (1 proposed, 1 someday); --include-proposed / --include-someday show them`), so work a coding agent filed for triage is never invisible.
 
 <!-- example: tasks#commitment -->
 ```console

@@ -161,6 +161,7 @@ alice (work/website)$ lore task list
 ○ tsk_76bd560aff0771fab8457dbfa9823f10 Write the welcome email [medium]
 ○ tsk_d4314eba822f1bf5908b2b8ded5f313a Send the welcome email [medium]
 ○ tsk_28f8d32584b2db54ffb146bede5b03df Check every link on the home page [medium]
+2 hidden (1 proposed, 1 someday); --include-proposed / --include-someday show them
 
 ### triage
 alice (work/website)$ lore task triage
@@ -189,6 +190,7 @@ alice (work/website)$ lore task list --include-deferred
 ○ tsk_28f8d32584b2db54ffb146bede5b03df Check every link on the home page [medium]
 ○ tsk_f147dd95f1aaf742dd4f5214843a5139 Add a FAQ page [medium]
 ○ tsk_2537f9b2f7de77bfe5ca958860216bbb Renew the SSL certificate [medium] ⏾2026-12-01
+1 hidden (1 someday); --include-someday shows them
 
 ### undefer
 alice (work/website)$ lore task edit --id tsk_2537f9b2f7de77bfe5ca958860216bbb --clear-defer
@@ -325,6 +327,7 @@ alice (work/website)$ lore task triage
 (no tasks)
 alice (work/website)$ lore task list --status cancelled
 ✗ tsk_54fe984c9b495744c0217776765a28f2 Update the footer year to 2027 [low] due:2026-11-20
+1 hidden (1 proposed); --include-proposed shows them
 alice (work/website)$ lore task list --status cancelled --all
 ✗ tsk_54fe984c9b495744c0217776765a28f2 Update the footer year to 2027 [low] due:2026-11-20
 ✗ tsk_d191616cfa49f94ede5d5148b8b045c2 Rename the shop to Website Pro [medium] (proposed)

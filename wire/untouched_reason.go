@@ -37,6 +37,9 @@ func (a *App) refineNoProject(ctx context.Context, err error) error {
 	if sl, ok := a.findStaleLink(ctx); ok {
 		return staleLinkErr(sl, a.staleLinkOrg(ctx))
 	}
+	if e := beforeLoreErr(ctx, top, errs.NotFound); e != nil {
+		return e // D-8/D-10: the repo is a lore project in another commit
+	}
 	if loreRanInRepo(ctx, top) {
 		return noLoreProjectErr()
 	}

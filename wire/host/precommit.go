@@ -25,16 +25,21 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/dataignore"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/merge3"
+	"github.com/thesatellite-ai/lore/logic/validate"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -98,6 +103,10 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 			h.line(fmt.Sprintf(migrationLeftOut, n))
 		}
 	}
+	reg, err := schema.NewRegistry(schema.Builtin()...)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "pre-commit: core registry", err)
+	}
 	var bad []string
 	for _, p := range changed {
 		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(p)))) // p is a path git listed under .lore/data
@@ -109,6 +118,8 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 		}
 		if why := brokenLoreFile(b); why != "" {
 			bad = append(bad, p+" ("+why+")")
+		} else if line, why := invalidRepoRow(reg, p, b, headVersion(ctx, repo, root, p)); why != "" {
+			bad = append(bad, p+":"+strconv.Itoa(line)+" ("+why+")") // D-18: what the hand-edit pick-up refused
 		}
 	}
 	if len(bad) > 0 {
@@ -252,6 +263,69 @@ func brokenLoreFile(b []byte) string {
 		}
 	}
 	return ""
+}
+
+// headVersion is HEAD's copy of the file p (relative to root), nil when
+// HEAD has none (a new file, a first commit).
+func headVersion(ctx context.Context, repo *gitref.Repo, root, p string) []byte {
+	out, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"show", "HEAD:./" + p}})
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+// invalidRepoRow is why a hand-edited row file of the code repo (p relative
+// to the project root; head its committed copy) cannot be committed although
+// it is valid JSON: a changed field that is unknown or holds a value outside
+// its kind or set, what the hand-edit pick-up refuses it for (D-18), with
+// the line ("" = fine). Like the pick-up, only a hand edit counts: the file
+// keeps HEAD's _hlc (lore restamps every row it writes), HEAD's copy is on
+// the current format, and only the changed fields are checked.
+func invalidRepoRow(reg *schema.Registry, p string, b, head []byte) (int, string) {
+	rel, ok := strings.CutPrefix(p, loreDataPathspec+"/")
+	if !ok || head == nil {
+		return 0, ""
+	}
+	table, _, isRow := rowfs.ParseRowPath(rel)
+	if !isRow {
+		return 0, ""
+	}
+	def, known := reg.Table(table)
+	r, err := row.Decode(b)
+	base, berr := row.Decode(head)
+	if !known || err != nil || berr != nil || r.Deleted || r.HLC != base.HLC || base.SourceVersion != row.FormatVersion {
+		return 0, "" // not a hand edit lore can check here: the pick-up says why
+	}
+	changed := map[string]value.Value{}
+	for _, name := range engine.PickUpChanged(base, r) {
+		if v, has := r.Fields[name]; has {
+			changed[name] = v
+		}
+	}
+	if len(changed) == 0 {
+		return 0, ""
+	}
+	if _, verr := validate.Fields(def, engine.RetypeFields(def, changed), validate.Patch); verr != nil {
+		msg := verr.Error()
+		var e *errs.Error
+		if errors.As(verr, &e) {
+			msg = e.Message
+		}
+		// the line of the first field the message names as a problem
+		// ("field <name>:" or "unknown field <name> (…)"), never one of
+		// the allowed names it lists
+		line := 0
+		for name := range changed {
+			if strings.Contains(msg, "field "+name+":") || strings.Contains(msg, "field "+name+" ") {
+				if l := keyLine(b, name); line == 0 || l < line {
+					line = l
+				}
+			}
+		}
+		return max(line, 1), msg
+	}
+	return 0, ""
 }
 
 // brokenLoreText is brokenLoreFile's byte-level half: markers or not JSON.

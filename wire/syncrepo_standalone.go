@@ -73,7 +73,7 @@ func (r RepoSync) SyncInstallAction(ctx context.Context, in opssync.InstallActio
 	if top := UntouchedRepo(ctx, r.dir()); top != "" && !in.DryRun {
 		// S-2: a repo with no lore data (one a store only links) has no
 		// row files to merge in pull requests, and gets no workflow file
-		return out, UntouchedError(top)
+		return out, UntouchedError(ctx, top)
 	}
 	res, err := reposync.Install(ctx, reposync.InstallOptions{
 		Dir: r.dir(), Branches: in.Branches, Auto: in.Auto, Manual: in.Manual,
