@@ -84,7 +84,7 @@ Commit 86dbae476bd6 — 1 linked entities:
 ```console
 # alice, in website
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --no-lesson
-lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 done (commit 86dbae4, linked); waiting for merge
 $ lore sync
 lore live: pushed waiting live writes commit 9b40ce7 to origin refs/lore/live
@@ -106,14 +106,14 @@ Sometimes lore cannot see the merge: the task has no commit, or the change reach
 ```console
 # alice, in website
 $ lore task add --title 'Shrink the hero image'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
+lore: wrote tasks/tsk_4f89…b64b on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json is unchanged)
 ✓ tsk_4f89…b64b — Shrink the hero image [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task done --id tsk_4f89…b64b --no-lesson
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
+lore: wrote tasks/tsk_4f89…b64b on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json is unchanged)
 ✓ tsk_4f89…b64b done
 $ lore task merged --id tsk_4f89…b64b
-lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
+lore: wrote tasks/tsk_4f89…b64b on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json is unchanged)
 ✓ tsk_4f89…b64b merged (marked by hand, 10:05)
 ```
 <!-- /example -->

@@ -1,8 +1,8 @@
 
 ### task
 alice (work/website)$ lore task add --title 'Fix the typo on the pricing page'
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json is unchanged)
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — Fix the typo on the pricing page [medium]
   created tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
@@ -13,7 +13,7 @@ run_162df51b7f78b785c97c26b41ea89666 started
 
 ### run end
 alice (work/website)$ lore run end --id run_162df51b7f78b785c97c26b41ea89666 --outcome success --summary 'The price now says 19'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 run_162df51b7f78b785c97c26b41ea89666 ended  (10m 0s)
 
 ### task time
@@ -40,7 +40,7 @@ alice (work/website)$ lore session list
 
 ### time log
 alice (work/website)$ lore task time log --id tsk_2ad3618e878ebbf527d34d446ef4f891 --duration 30m --note 'Call with the client about the prices'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ logged tme_05e99e22e9e86e96fe4daa7777994603  30m  for alice  on 2026-11-02
   hint: this overlaps run time 2026-11-02T10:00:10.000Z to 2026-11-02T10:10:10.000Z (tme_c0f3c11a5724b0cfd74b256190d9b5b8); if it is the same work, remove one: lore task time rm --id tme_05e99e22e9e86e96fe4daa7777994603
 alice (work/website)$ lore task time show --id tsk_2ad3618e878ebbf527d34d446ef4f891
@@ -53,7 +53,7 @@ alice                         10m       30m       40m       2026-11-02 10:10
 
 ### time edit
 alice (work/website)$ lore task time edit --id tme_05e99e22e9e86e96fe4daa7777994603 --duration 45m
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ updated tme_05e99e22e9e86e96fe4daa7777994603  manual  45m (was 30m)
 alice (work/website)$ lore task time show --id tsk_2ad3618e878ebbf527d34d446ef4f891
 tsk_2ad3618e878ebbf527d34d446ef4f891  Fix the typo on the pricing page   (todo)
@@ -65,18 +65,18 @@ alice                         10m       45m       55m       2026-11-02 10:25
 
 ### time rm and restore
 alice (work/website)$ lore task time rm --id tme_05e99e22e9e86e96fe4daa7777994603 --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ removed tme_05e99e22e9e86e96fe4daa7777994603
 alice (work/website)$ lore task time restore --id tme_05e99e22e9e86e96fe4daa7777994603
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ restored tme_05e99e22e9e86e96fe4daa7777994603
 
 ### time stop
 alice (work/website)$ lore task start --id tsk_2ad3618e878ebbf527d34d446ef4f891
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 started
 alice (work/website)$ lore task time stop --id tsk_2ad3618e878ebbf527d34d446ef4f891
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
+lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json is unchanged)
 ✓ stopped your time on tsk_2ad3618e878ebbf527d34d446ef4f891  (20m, entry tme_76bd560aff0771fab8457dbfa9823f10); status stays in_progress
 alice (work/website)$ lore task time show --id tsk_2ad3618e878ebbf527d34d446ef4f891
 tsk_2ad3618e878ebbf527d34d446ef4f891  Fix the typo on the pricing page   (in_progress)

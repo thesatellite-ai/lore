@@ -43,4 +43,4 @@ alice (work/website)$ LORE_ORG=agency-stag lore task list
 alice (work/website)$ git ls-remote https://github.com/agency/notes
 9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91	HEAD
 9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91	refs/heads/main
-05513aa29b7881f12bc94eb06be8acf0d03eaed2	refs/heads/staging
+86dbae429b7881f12bc94eb06be8acf0d03eaed2	refs/heads/staging

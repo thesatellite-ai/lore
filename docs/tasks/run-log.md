@@ -20,8 +20,8 @@ Alice (an agency developer) times how long fixing a typo on the client's pricing
 ```console
 # alice, in website
 $ lore task add --title 'Fix the typo on the pricing page'
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote task_lists/tlt_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json is unchanged)
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ tsk_2ad3…f891 — Fix the typo on the pricing page [medium]
   created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
@@ -48,7 +48,7 @@ run_162d…9666 started
 ```console
 # alice, in website
 $ lore run end --id run_162d…9666 --outcome success --summary 'The price now says 19'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 run_162d…9666 ended  (10m 0s)
 ```
 <!-- /example -->
@@ -94,7 +94,7 @@ Work done away from lore (a phone call, a meeting) is logged with `lore task tim
 ```console
 # alice, in website
 $ lore task time log --id tsk_2ad3…f891 --duration 30m --note 'Call with the client about the prices'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ logged tme_05e9…4603  30m  for alice  on 2026-11-02
   hint: this overlaps run time 2026-11-02T10:00:10.000Z to 2026-11-02T10:10:10.000Z (tme_c0f3…b5b8); if it is the same work, remove one: lore task time rm --id tme_05e9…4603
 $ lore task time show --id tsk_2ad3…f891
@@ -115,7 +115,7 @@ The hint is lore noticing that the new entry overlaps the run's span. If both ar
 ```console
 # alice, in website
 $ lore task time edit --id tme_05e9…4603 --duration 45m
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ updated tme_05e9…4603  manual  45m (was 30m)
 $ lore task time show --id tsk_2ad3…f891
 tsk_2ad3…f891  Fix the typo on the pricing page   (todo)
@@ -131,10 +131,10 @@ alice                         10m       45m       55m       2026-11-02 10:25
 ```console
 # alice, in website
 $ lore task time rm --id tme_05e9…4603 --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ removed tme_05e9…4603
 $ lore task time restore --id tme_05e9…4603
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ restored tme_05e9…4603
 ```
 <!-- /example -->
@@ -147,10 +147,10 @@ While a task is `in_progress`, time runs for whoever started it. `lore task time
 ```console
 # alice, in website
 $ lore task start --id tsk_2ad3…f891
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ tsk_2ad3…f891 started
 $ lore task time stop --id tsk_2ad3…f891
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ stopped your time on tsk_2ad3…f891  (20m, entry tme_76bd…3f10); status stays in_progress
 $ lore task time show --id tsk_2ad3…f891
 tsk_2ad3…f891  Fix the typo on the pricing page   (in_progress)

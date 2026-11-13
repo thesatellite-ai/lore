@@ -21,7 +21,7 @@ Both point at a row by its *table* (the kind of row, in the plural: `rules`, `me
 ```console
 # alice, in website
 $ lore comment add --on-table decisions --on-id dec_76bd…3f10 --body 'The client confirmed this on the call.'
-lore: wrote ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json
+lore: wrote comments/cmt_06b1…3d1c on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json is unchanged)
 ✓ comment cmt_06b1…3d1c on decisions/dec_76bd…3f10 
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 ```
@@ -63,7 +63,7 @@ lore: wrote ~/work/website/.lore/data/decisions/dec_76bd…3f10.json
 $ lore comment search --query confirmed
 cmt_06b1…3d1c [decisions/dec_76bd…3f10] The client confirmed this on the call.
 $ lore comment delete --id cmt_06b1…3d1c --yes
-lore: wrote ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json
+lore: wrote comments/cmt_06b1…3d1c on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json is unchanged)
 ✓ cmt_06b1…3d1c moved to the trash (restore: lore trash restore --id cmt_06b1…3d1c)
 ```
 <!-- /example -->

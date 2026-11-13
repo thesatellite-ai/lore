@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+// identityKeys matches git's user.name and user.email (one
+// `git config --get-regexp` run reads both).
+const (
+	identityKeys = `^user\.(name|email)$`
+	keyUserName  = "user.name"
+	keyUserEmail = "user.email"
+)
+
 // GitIdentity is the identity git itself would sign a commit in this repo
 // with (`git config user.name` / `user.email`, which also read the
 // GIT_CONFIG_* layers and includes). ok is false when either is unset, so
@@ -15,12 +23,22 @@ import (
 // lore identity. Callers that must not carry a personal address (an org
 // store, Q-R2-1) do not ask.
 func (r *Repo) GitIdentity(ctx context.Context) (Signature, bool) {
-	name, nerr := r.Run(ctx, Invocation{Args: []string{"config", "--get", "user.name"}})
-	email, eerr := r.Run(ctx, Invocation{Args: []string{"config", "--get", "user.email"}})
-	if nerr != nil || eerr != nil {
+	// One git run for both keys (a commit path asks often); the last value
+	// of a key wins, as with `git config --get`.
+	out, err := r.Run(ctx, Invocation{Args: []string{"config", "--get-regexp", identityKeys}})
+	if err != nil {
 		return Signature{}, false
 	}
-	n, e := strings.TrimSpace(string(name)), strings.TrimSpace(string(email))
+	var n, e string
+	for l := range strings.SplitSeq(string(out), "\n") {
+		k, v, _ := strings.Cut(l, " ")
+		switch k {
+		case keyUserName:
+			n = strings.TrimSpace(v)
+		case keyUserEmail:
+			e = strings.TrimSpace(v)
+		}
+	}
 	if n == "" || e == "" || strings.ContainsAny(n+e, "\n\r<>") {
 		return Signature{}, false
 	}

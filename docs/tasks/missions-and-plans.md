@@ -27,24 +27,24 @@ Alice (an agency developer) plans the client's online shop in `github.com/client
 ```console
 # alice, in website
 $ lore mission add --title 'Open the online shop' --target 2026-11-30 --body 'The shop goes live with ten products and a launch email.'
-lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
+lore: wrote missions/msn_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/missions/msn_7a67…9504.json is unchanged)
 ✓ msn_7a67…9504 — Open the online shop
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task add --title 'Take the product photos' --mission msn_7a67…9504
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_2ad3…f891.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote task_lists/tlt_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_2ad3…f891.json is unchanged)
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 — Take the product photos [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 $ lore task add --title 'Write the product pages' --mission msn_7a67…9504 --after tsk_162d…9666
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — Write the product pages [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 $ lore task add --title 'Send the invoice reminder'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
 ✓ tsk_05e9…4603 — Send the invoice reminder [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 $ lore task edit --id tsk_05e9…4603 --mission msn_7a67…9504
-lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
 ✓ tsk_05e9…4603 updated
 ```
 <!-- /example -->
@@ -85,7 +85,7 @@ msn_7a67…9504 Open the online shop   3 tasks · 0 done · 0 claimed · 2 ready
   ready     tsk_162d…9666  Take the product photos                   
   waiting   tsk_54fe…28f2  Write the product pages                   waits for tsk_162d…9666 to be done (todo)
 $ lore task done --id tsk_162d…9666 --no-lesson
-lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 done
 $ lore mission status --id msn_7a67…9504
 msn_7a67…9504 Open the online shop   3 tasks · 1 done · 0 claimed · 2 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
@@ -114,7 +114,7 @@ $ lore task list --mission msn_7a67…9504
 ```console
 # alice, in website
 $ lore mission edit --id msn_7a67…9504 --target 2026-12-07 --title 'Open the online shop before Christmas'
-lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
+lore: wrote missions/msn_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/missions/msn_7a67…9504.json is unchanged)
 ✓ msn_7a67…9504 updated
 $ lore mission search --query christmas
 msn_7a67…9504 [active] Open the online shop before Christmas
@@ -127,12 +127,12 @@ Pause a mission you have put on hold, and resume it when you pick it up again:
 ```console
 # alice, in website
 $ lore mission pause --id msn_7a67…9504
-lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
+lore: wrote missions/msn_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/missions/msn_7a67…9504.json is unchanged)
 ✓ msn_7a67…9504 paused
 $ lore mission list
 msn_7a67…9504 [paused] Open the online shop before Christmas   (3 tasks)
 $ lore mission resume --id msn_7a67…9504
-lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
+lore: wrote missions/msn_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/missions/msn_7a67…9504.json is unchanged)
 ✓ msn_7a67…9504 resumed
 ```
 <!-- /example -->
@@ -143,7 +143,7 @@ lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ```console
 # alice, in website
 $ lore mission done --id msn_7a67…9504
-lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
+lore: wrote missions/msn_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/missions/msn_7a67…9504.json is unchanged)
 ✓ msn_7a67…9504 completed
 warning: 2 task(s) of this mission are still open; they stay open: tsk_54fe…28f2 Write the product pages, tsk_05e9…4603 Send the invoice reminder; close each with lore task done --id <id> or lore task cancel --id <id> (list them: lore task list --mission msn_7a67…9504) (W_OPEN_TASKS)
 $ lore mission list
@@ -159,14 +159,14 @@ Delete is for mistakes only. lore asks first; without a terminal it stops with `
 ```console
 # alice, in website
 $ lore mission add --title 'Test mission, please ignore'
-lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
+lore: wrote missions/msn_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json is unchanged)
 ✓ msn_c0f3…b5b8 — Test mission, please ignore
 $ lore mission delete --id msn_c0f3…b5b8
 ERROR: [E_NEEDS_CONFIRM] run mission delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore mission delete --id msn_c0f3…b5b8 --yes
-lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
+lore: wrote missions/msn_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json is unchanged)
 ✓ msn_c0f3…b5b8 moved to the trash (restore: lore trash restore --id msn_c0f3…b5b8)
 ```
 <!-- /example -->
@@ -215,7 +215,7 @@ tasks:
 ```console
 # alice, in website
 $ lore mission apply --file newsletter.yaml
-lore: wrote 4 row file(s) in ~/work/website/.lore/data
+lore: wrote 4 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 ✓ msn_d431…313a Start the monthly newsletter (created)
   tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
   tsk_28f8…03df Write the first newsletter    after form
@@ -267,7 +267,7 @@ A handoff is for someone on the repo's *roster* (the list of people and agents l
 ```console
 # alice, in website
 $ lore actor register
-lore: wrote ~/work/website/.lore/data/actors/act_3b62…e913.json
+lore: wrote actors/act_3b62…e913 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/actors/act_3b62…e913.json is unchanged)
 ✓ act_3b62…e913 alice (@alice) already registered (refreshed) in this repo
 ```
 <!-- /example -->
@@ -278,11 +278,11 @@ lore already knew Alice from `lore init`, so it says `already registered (refres
 ```console
 # alice, in website
 $ lore task add --title 'Write the about page'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
+lore: wrote tasks/tsk_f147…5139 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_f147…5139.json is unchanged)
 ✓ tsk_f147…5139 — Write the about page [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 $ lore handoff add --for @alice --task tsk_f147…5139 --body 'Two of the three sections are written; the team photo is still missing'
-lore: wrote ~/work/website/.lore/data/handoffs/hnd_2537…6bbb.json
+lore: wrote handoffs/hnd_2537…6bbb on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/handoffs/hnd_2537…6bbb.json is unchanged)
 ✓ handoff hnd_2537…6bbb for @alice
 $ lore inbox
 -  handoff  @alice       tsk_f147…5139  Two of the three sections are written; the team photo is still missing
@@ -295,7 +295,7 @@ $ lore inbox
 ```console
 # alice, in website
 $ lore handoff ack --id hnd_2537…6bbb
-lore: wrote ~/work/website/.lore/data/handoffs/hnd_2537…6bbb.json
+lore: wrote handoffs/hnd_2537…6bbb on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/handoffs/hnd_2537…6bbb.json is unchanged)
 ✓ hnd_2537…6bbb acked
 $ lore inbox
 (inbox empty)
@@ -312,7 +312,7 @@ The plan file from Step 6 is all you need. Save it as `newsletter.yaml` in your 
 ```console
 # alice, in website
 $ lore mission apply --file newsletter.yaml
-lore: wrote 4 row file(s) in ~/work/website/.lore/data
+lore: wrote 4 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 ✓ msn_d431…313a Start the monthly newsletter (created)
   tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
   tsk_28f8…03df Write the first newsletter    after form

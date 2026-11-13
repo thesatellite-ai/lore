@@ -25,11 +25,11 @@ Pass `--commitment` when you add the task. Neither task shows up in `lore task l
 ```console
 # alice, in website
 $ lore task add --title 'Try a dark mode for the shop' --commitment someday
-lore: wrote ~/work/website/.lore/data/tasks/tsk_3b62…e913.json
+lore: wrote tasks/tsk_3b62…e913 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_3b62…e913.json is unchanged)
 ✓ tsk_3b62…e913 — Try a dark mode for the shop [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task add --title 'Add a FAQ page' --commitment proposed
-lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
+lore: wrote tasks/tsk_f147…5139 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_f147…5139.json is unchanged)
 ✓ tsk_f147…5139 — Add a FAQ page [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task list
@@ -62,7 +62,7 @@ To accept a proposal, change its commitment with `lore task edit`. It now shows 
 ```console
 # alice, in website
 $ lore task edit --id tsk_f147…5139 --commitment accepted
-lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
+lore: wrote tasks/tsk_f147…5139 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_f147…5139.json is unchanged)
 ✓ tsk_f147…5139 updated
 $ lore task triage
 (no tasks)
@@ -75,22 +75,22 @@ The shorter way is `lore task accept`, which sets the commitment to `accepted` a
 ```console
 # alice, in website
 $ lore task add --title 'Add a size guide' --commitment proposed
-lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
+lore: wrote tasks/tsk_77cb…76c4 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json is unchanged)
 ✓ tsk_77cb…76c4 — Add a size guide [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task add --title 'Rename the shop to Website Pro' --commitment proposed
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
+lore: wrote tasks/tsk_d191…45c2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d191…45c2.json is unchanged)
 ✓ tsk_d191…45c2 — Rename the shop to Website Pro [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task triage
 ○ tsk_77cb…76c4 Add a size guide [medium] (proposed)
 ○ tsk_d191…45c2 Rename the shop to Website Pro [medium] (proposed)
 $ lore task accept --id tsk_77cb…76c4 --priority high
-lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
+lore: wrote tasks/tsk_77cb…76c4 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json is unchanged)
 ✓ tsk_77cb…76c4 updated
 $ lore task decline --id tsk_d191…45c2 --reason wont_do --note 'The client keeps the name'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
-lore: wrote ~/work/website/.lore/data/comments/cmt_b4d3…11aa.json
+lore: wrote tasks/tsk_d191…45c2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d191…45c2.json is unchanged)
+lore: wrote comments/cmt_b4d3…11aa on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/comments/cmt_b4d3…11aa.json is unchanged)
 ✓ tsk_d191…45c2 cancelled
   note kept as a comment
 $ lore task triage
@@ -123,7 +123,7 @@ A declined task keeps its `proposed` commitment, so `lore task list --status can
 ```console
 # alice, in website
 $ lore task add --title 'Renew the SSL certificate' --defer-until 2026-12-01
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
+lore: wrote tasks/tsk_2537…6bbb on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json is unchanged)
 ✓ tsk_2537…6bbb — Renew the SSL certificate [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task deferred
@@ -148,7 +148,7 @@ On that day the task comes back into `lore task list` by itself. You do not need
 ```console
 # alice, in website
 $ lore task edit --id tsk_2537…6bbb --clear-defer
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
+lore: wrote tasks/tsk_2537…6bbb on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json is unchanged)
 ✓ tsk_2537…6bbb updated
 $ lore task deferred
 (no tasks)

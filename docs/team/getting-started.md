@@ -78,8 +78,8 @@ Tasks are live by default. Adding one writes it to a hidden list on GitHub that 
 ```console
 # alice, in notes-app
 $ lore task add --title 'fix login timeout'
-lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
-lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
+lore: wrote task_lists/tlt_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json is unchanged)
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
 ✓ tsk_05e9…4603 — fix login timeout [medium]
   created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
@@ -91,7 +91,7 @@ lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
 · already in sync
 86dbae476bd6	HEAD
 86dbae476bd6	refs/heads/main
-9b40ce71af28	refs/lore/live
+601d2851af28	refs/lore/live
 $ lore live show
 task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
 tasks      tsk_05e9…4603     live      since 2026-11-02 10:00
@@ -109,7 +109,7 @@ Finishing a task marks it ready to land; nothing goes to the remote by itself. `
 ```console
 # alice, in notes-app
 $ lore task done --id tsk_05e9…4603
-lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ git fetch -q origin && git log --oneline origin/main
@@ -271,8 +271,8 @@ In any repo where you ran `lore init`, add a task and list it. The task is live:
 ```console
 # alice, in notes-app
 $ lore task add --title 'fix login timeout'
-lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
-lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
+lore: wrote task_lists/tlt_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json is unchanged)
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
 ✓ tsk_05e9…4603 — fix login timeout [medium]
   created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)

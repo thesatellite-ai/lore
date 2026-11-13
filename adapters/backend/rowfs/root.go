@@ -242,8 +242,12 @@ func (r *Root) enterGate(ctx context.Context) error {
 		case r.gate <- struct{}{}:
 			return nil
 		default:
-			return lockedErr(r.lockWait)
 		}
+		// select picks at random when ctx ended too: cancelled wins
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return lockedErr(r.lockWait)
 	}
 }
 

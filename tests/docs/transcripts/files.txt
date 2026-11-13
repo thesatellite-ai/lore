@@ -369,7 +369,7 @@ alice@agency.example
 alice (.lore/stores/acme/notes)$ sed -i 's/Renew the TLS certificate/Renew the TLS certificate (key AKIA''IOSFODNN7EXAMPLE)/' _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git add _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git commit -qm 'note the key'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit carries a secret:
   _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json:30 (field title) secret: rule aws_access_key match sha256:1a5d44a2dca1
-      not a secret? lore secrets allow --row-id tsk_2ad3618e878ebbf527d34d446ef4f891 --rule aws_access_key --field title --match-hash sha256:1a5d44a2dca1 --reason "<why>"
+      not a secret? lore secrets allow --row-id tsk_2ad3618e878ebbf527d34d446ef4f891 --field title --rule aws_access_key --match-hash sha256:1a5d44a2dca1 --reason "<why>"
   hint: store the value in your vault and reference it (${secret:…}, or a placeholder such as ${DB_PASSWORD}); if a finding is not a secret, run the `not a secret?` line printed under it with your reason (a .gitleaksignore <path>:<rule>:<line> entry works too) (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again (no --no-verify needed)
 (exit 1)
 alice (.lore/stores/acme/notes)$ git reset -q -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git checkout -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git status --short

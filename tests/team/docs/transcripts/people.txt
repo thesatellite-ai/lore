@@ -108,8 +108,8 @@ lore: wrote 2 row file(s) in ~/work/website/.lore/data
 ✓ mem_54fe984c9b495744c0217776765a28f2
   scope: [master]
 alice (work/website)$ lore move --id mem_54fe984c9b495744c0217776765a28f2 --to agency --yes
-lore: pushed store agency: commit 9b40ce7 to branch main
-lore: pushed store agency: commit 05513aa to branch main
+lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
+lore: pushed store agency/client (here: agency): commit 05513aa to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e99e22e9e86e96fe4daa7777994603.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_54fe984c9b495744c0217776765a28f2.json (store agency)
 lore: wrote ~/work/website/.lore/data/memories/mem_54fe984c9b495744c0217776765a28f2.json
@@ -119,7 +119,7 @@ mem_54fe984c9b495744c0217776765a28f2 [retrieved] the client replies faster on Wh
 
 ### store open and forget
 alice$ lore store open --url git@github.com:agency/notes
-✓ ~/.lore/stores/agency/notes on main (dfd8dc87ab36): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
+✓ ~/.lore/stores/agency/notes on main (05513aa7ab36): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
 alice$ ls ~/.lore/stores/agency/notes
 README.md
 client

@@ -23,17 +23,17 @@ Give each task a short title that says what to do. Add `--priority` (`low`, `med
 ```console
 # alice, in website
 $ lore task add --title "Send the invoice reminder before Friday's demo" --due 2026-11-06 --priority high
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote task_lists/tlt_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json is unchanged)
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 ✓ tsk_2ad3…f891 — Send the invoice reminder before Friday's demo [high]
   created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task add --title 'Fix the typo on the pricing page' --body 'The Pro plan says 9 a month; it should say 19.'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 — Fix the typo on the pricing page [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task add --title 'Update the footer year'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — Update the footer year [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 ```
@@ -64,7 +64,7 @@ $ lore task list
 ```console
 # alice, in website
 $ lore task start --id tsk_162d…9666
-lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 started
 $ lore task list --status in_progress
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
@@ -97,7 +97,7 @@ created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:00:25Z by alice
 ```console
 # alice, in website
 $ lore task edit --id tsk_54fe…28f2 --priority low --due 2026-11-20 --title 'Update the footer year to 2027'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 updated
 $ lore task show --id tsk_54fe…28f2
 tsk_54fe…28f2
@@ -118,7 +118,7 @@ created 2026-11-02T10:00:15Z by alice · updated 2026-11-02T10:00:40Z by alice
 ```console
 # alice, in website
 $ lore task done --id tsk_2ad3…f891 --lesson 'The client pays faster when the reminder goes out two days before the demo'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
+lore: wrote tasks/tsk_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json is unchanged)
 lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ tsk_2ad3…f891 done
   lesson → mem_05e9…4603
@@ -160,7 +160,7 @@ Cancel a task you will not do. It stays in the history, so you can still find it
 ```console
 # alice, in website
 $ lore task cancel --id tsk_54fe…28f2
-lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 cancelled
 $ lore task list --status cancelled
 ✗ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
@@ -173,7 +173,7 @@ Delete only removes a task for good, with no undo. lore asks first (without a te
 ```console
 # alice, in website
 $ lore task add --title 'Test task, please ignore'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
+lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json is unchanged)
 ✓ tsk_c0f3…b5b8 — Test task, please ignore [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task delete --id tsk_c0f3…b5b8
@@ -181,7 +181,7 @@ ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3…b5b8 Test task, please ignore?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore task delete --id tsk_c0f3…b5b8 --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
+lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json is unchanged)
 ✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore --id tsk_c0f3…b5b8)
 ```
 <!-- /example -->
@@ -196,11 +196,11 @@ Some work has an order: you cannot send the welcome email before you write it. `
 ```console
 # alice, in website
 $ lore task add --title 'Write the welcome email'
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 ✓ tsk_76bd…3f10 — Write the welcome email [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task add --title 'Send the welcome email' --after tsk_76bd…3f10
-lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
+lore: wrote tasks/tsk_d431…313a on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_d431…313a.json is unchanged)
 ✓ tsk_d431…313a — Send the welcome email [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task show --id tsk_d431…313a
@@ -238,10 +238,10 @@ $ lore tasklist add --title 'Launch week' --body 'Everything that must happen be
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
 ✓ tlt_b4f4…a5b0
 $ lore task add --title 'Check every link on the home page' --tasklist tlt_b4f4…a5b0
-lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
+lore: wrote tasks/tsk_28f8…03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8…03df.json is unchanged)
 ✓ tsk_28f8…03df — Check every link on the home page [medium]
 $ lore task edit --id tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
-lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
+lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 ✓ tsk_76bd…3f10 updated
 $ lore tasklist list
 tlt_7a67…9504  default [active]  (4 tasks)
@@ -249,7 +249,7 @@ tlt_b4f4…a5b0  Launch week [active]  (2 tasks)
 $ lore tasklist search --query launch
 tlt_b4f4…a5b0 Launch week
 $ lore tasklist edit --id tlt_b4f4…a5b0 --status closed
-lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
+lore: wrote task_lists/tlt_b4f4…a5b0 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json is unchanged)
 ✓ tasklist tlt_b4f4…a5b0 updated
 ```
 <!-- /example -->
@@ -328,8 +328,8 @@ would import 2 tasks from csv as new tasks with new ids (dry run, nothing writte
   T-1  Add a cookie banner
   T-2  Compress the product photos
 $ lore task import --file ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
-lore: wrote ~/work/website/.lore/data/tasks/tsk_9a34…b418.json
-lore: wrote ~/work/website/.lore/data/tasks/tsk_bfed…eeea.json
+lore: wrote tasks/tsk_9a34…b418 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_9a34…b418.json is unchanged)
+lore: wrote tasks/tsk_bfed…eeea on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_bfed…eeea.json is unchanged)
 ✓ 2 tasks imported from csv (batch bat_376c…8e1a; `lore task list` shows their new ids)
 $ lore task import --file ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
   2 already imported, nothing added for them:

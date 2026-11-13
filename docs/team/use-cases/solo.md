@@ -22,13 +22,13 @@ lore: wrote ~/work/scratch/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
   scope: [master] severity: must
 $ lore task add --title 'write the README'
-lore: wrote ~/work/scratch/.lore/data/task_lists/tlt_2ad3…f891.json
-lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote task_lists/tlt_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/scratch/.lore/data/task_lists/tlt_2ad3…f891.json is unchanged)
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 — write the README [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task done --id tsk_162d…9666
-lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ lore land --all --dry-run

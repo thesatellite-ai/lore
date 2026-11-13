@@ -314,6 +314,12 @@ const (
 	keyCoreSSHCommand = "core.sshCommand"
 )
 
+// identityKeys matches user.name and user.email for one
+// `git config --get-regexp` run: both keys in one git child, not one per
+// key (doctor --all reads the identity of every repo, and two runs per
+// repo pushed its git budget over).
+const identityKeys = `^user\.(name|email)$`
+
 func (p *Prober) identity(ctx context.Context, dir string, scope ...string) GitIdentity {
 	start := time.Now()
 	cctx, done, ok := p.slot(ctx, p.o.GitTimeout)
@@ -321,24 +327,28 @@ func (p *Prober) identity(ctx context.Context, dir string, scope ...string) GitI
 	if !ok {
 		return GitIdentity{Outcome: timedOut(start)}
 	}
+	args := append(append([]string{"config"}, scope...), "--get-regexp", identityKeys)
+	r := p.run(cctx, p.gitSpec(Route{}, dir, args...))
+	switch {
+	case r.ok():
+	case !r.timedOut && !r.missing && r.exit == 1:
+		// git config: exit 1 is "no key matched" (neither is set)
+		return GitIdentity{Outcome: Outcome{Class: ClassOK, Took: time.Since(start)}}
+	default:
+		o := failure(r, gitBin, func(string) Class { return ClassFailed })
+		o.Took = time.Since(start)
+		return GitIdentity{Outcome: o}
+	}
 	out := GitIdentity{}
-	for _, key := range []string{keyUserName, keyUserEmail} {
-		args := append(append([]string{"config"}, scope...), "--get", key)
-		r := p.run(cctx, p.gitSpec(Route{}, dir, args...))
-		switch {
-		case r.ok():
-		case !r.timedOut && !r.missing && r.exit == 1:
-			continue // git config: exit 1 is "key not set"
-		default:
-			o := failure(r, gitBin, func(string) Class { return ClassFailed })
-			o.Took = time.Since(start)
-			return GitIdentity{Outcome: o}
-		}
-		v := strings.TrimSpace(r.stdout)
-		if key == keyUserName {
-			out.Name = v
-		} else {
-			out.Email = v
+	// One line per value, "key value", in the order git reads its config
+	// files; the last value of a key wins, as with `git config --get`.
+	for l := range strings.SplitSeq(r.stdout, "\n") {
+		k, v, _ := strings.Cut(l, " ")
+		switch k {
+		case keyUserName:
+			out.Name = strings.TrimSpace(v)
+		case keyUserEmail:
+			out.Email = strings.TrimSpace(v)
 		}
 	}
 	out.Outcome = Outcome{Class: ClassOK, Took: time.Since(start)}

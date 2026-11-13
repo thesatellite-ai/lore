@@ -553,9 +553,9 @@ $ lore doctor | grep 'remote live ref'
 $ lore live restore
 ✓ restored refs/lore/live: 3 rows (left out 0 already landed or purged)
 $ git ls-remote origin refs/lore/live
-9b40ce71af28	refs/lore/live
+601d2851af28	refs/lore/live
 $ lore task add --title 'close the books for Q1'
-lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
+lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — close the books for Q1 [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 $ lore task list

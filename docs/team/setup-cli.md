@@ -337,7 +337,7 @@ step: identity
 status: ready
 $ lore setup apply --setup side --step github --answers '{"user":"tomas-dev"}'
 ERROR: [E_SETUP_STEP_ORDER] step github needs identity first
-  hint: run lore setup apply side --step identity
+  hint: run lore setup apply --setup side --step identity
 (exit 23)
 ```
 <!-- /example -->

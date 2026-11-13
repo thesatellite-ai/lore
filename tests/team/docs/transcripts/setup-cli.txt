@@ -170,7 +170,7 @@ steps:
     values: {"personal_store":"inherit"}
   - id: tools
     title: Which coding tools do you use?
-    help: lore installs its skill for each tool and 
+    help: lore records the tools you use and checks 
     kinds: solo, member, admin
     needs: kind
     questions:
@@ -228,7 +228,7 @@ step: identity
 status: ready
 tomas$ lore setup apply --setup side --step github --answers '{"user":"tomas-dev"}'
 ERROR: [E_SETUP_STEP_ORDER] step github needs identity first
-  hint: run lore setup apply side --step identity
+  hint: run lore setup apply --setup side --step identity
 (exit 23)
 
 ### import

@@ -232,8 +232,8 @@ Lore shares live rows through a hidden list on the remote that is not a branch (
 ```console
 # bob, in portal
 $ lore task add --title 'set up the portal CI'
+lore: wrote 2 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
-lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
   created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)

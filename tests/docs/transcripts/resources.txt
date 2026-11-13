@@ -102,8 +102,8 @@ host hub_prod
 alice (work/infra)$ lore resource list --kind service --json | grep -o 'res_[0-9a-f]*' | head -1
 res_4c590afb2a0cc7ae1b97b7e4e62d6c38
 alice (work/infra)$ lore task add --title 'Rotate the hub_api database password' --ref res_4c590afb2a0cc7ae1b97b7e4e62d6c38
-lore: wrote ~/work/infra/.lore/data/task_lists/tlt_f147dd95f1aaf742dd4f5214843a5139.json
-lore: wrote ~/work/infra/.lore/data/tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb.json
+lore: wrote task_lists/tlt_f147dd95f1aaf742dd4f5214843a5139 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/infra/.lore/data/task_lists/tlt_f147dd95f1aaf742dd4f5214843a5139.json is unchanged)
+lore: wrote tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb on this clone's refs/lore/live (a live row, not pushed yet; ~/work/infra/.lore/data/tasks/tsk_2537f9b2f7de77bfe5ca958860216bbb.json is unchanged)
 lore: wrote ~/work/infra/.lore/data/knowledge_refs/kfr_b69e8368dd4986838455061d5d9e5ed7.json
 ✓ tsk_2537f9b2f7de77bfe5ca958860216bbb — Rotate the hub_api database password [medium]
   created tasklist tlt_f147dd95f1aaf742dd4f5214843a5139 "default" for tasks added without --tasklist

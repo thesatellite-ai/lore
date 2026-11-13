@@ -62,6 +62,9 @@ func acquireLiveLock(ctx context.Context, stateDir string) (*liveLock, error) {
 		if !waited {
 			locktrace.Lock(locktrace.Busy, path)
 		}
+		if err := ctx.Err(); err != nil {
+			return nil, err // a cancelled caller is told so, not "locked" (as rowfs acquireFile)
+		}
 		if time.Now().After(deadline) {
 			return nil, errs.New(errs.StoreLocked, "live lock: another lore process kept "+path+" for "+liveLockTimeout.String())
 		}
