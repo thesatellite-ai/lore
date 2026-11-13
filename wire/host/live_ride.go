@@ -282,8 +282,9 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 	if len(args) > 0 && args[0] == s.ref.RemoteName {
 		// The person's own push to the live remote says "send": the
 		// waiting live writes go with it (finish pushes them), whatever
-		// live.autopush says (U-2).
+		// live.autopush says (U-2): a push the person asked for (S-1).
 		s.kind = live.FetchAlways
+		s.asked = true
 	}
 	branch, items, ok := s.prePushRows(ctx)
 	if !ok || len(items) == 0 {

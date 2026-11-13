@@ -128,6 +128,7 @@ vars:
     test-all          6   test:all
     docs-examples     5   docs:examples:verify JOBS=4
     sweep-tasks       4   test:machines:sweep:tasks PARALLEL=4
+    nopush            4   test:machines:nopush PARALLEL=8
     life-setups       3   test:machines:life:setups PARALLEL=3
     life-objects      3   test:machines:life:objects PARALLEL=3
     life-rest         3   test:machines:life:rest PARALLEL=3
@@ -551,7 +552,7 @@ tasks:
     desc: "tests/machines minus the sweep, life and REST parts: the shapes (built-in, links_*, env_*, foreign_*, repos_*), the 4-step setup sequences and the setup campaign"
     cmds:
       - task: test:machines:part
-        vars: {PART: core, FILTER: "-skip '^Test(Sweep(Tasks|Reads|Knowledge|Rows|CoversEveryCommand|CheckersBite|SkillLinkRule)|Life(Setups|SetupEditAgreement|Teams|Objects)|Rest(Lifecycle|TeamStoreURL))$'"}
+        vars: {PART: core, FILTER: "-skip '^Test(Sweep(Tasks|Reads|Knowledge|Rows|CoversEveryCommand|CheckersBite|SkillLinkRule)|Life(Setups|SetupEditAgreement|Teams|Objects)|Rest(Lifecycle|TeamStoreURL)|NoPushWithoutAsking(Examples)?)$'"}
 
   test:machines:sweep:tasks:
     desc: "Command sweep, task/mission/reminder lifecycles on every shape (answers right, disk right, doctor names what is left)"
@@ -564,6 +565,12 @@ tasks:
     cmds:
       - task: test:machines:part
         vars: {PART: sweep-rest, FILTER: "-run '^TestSweep(Reads|Knowledge|Rows|CoversEveryCommand|CheckersBite|SkillLinkRule)$'"}
+
+  test:machines:nopush:
+    desc: "No push without asking (S-1): with push=manual and live.autopush off, every command of the sweep table and every example of every command, in two code repos and two store clones with bare remotes, leaves every remote ref as it was; then every read on the defaults with commits waiting"
+    cmds:
+      - task: test:machines:part
+        vars: {PART: nopush, FILTER: "-run '^TestNoPushWithoutAsking(Examples)?$'"}
 
   test:machines:life:setups:
     desc: "Solo setup lifecycle through the binary on every shape (create, edit every step, rename, default, purge, re-add, import, edit, remove) and the check/apply name agreement for an existing setup"
