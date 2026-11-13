@@ -111,6 +111,7 @@ Sometimes lore cannot see the merge: the task has no commit, or the change reach
 $ lore task add 'Shrink the hero image'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b — Shrink the hero image [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit dd85e7d to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 $ lore task done tsk_4f89…b64b --no-lesson

@@ -110,6 +110,7 @@ Most teams protect `main` (only pull requests may change it). Then the landing w
 $ lore task add 'ask the client for the new logo' --assign @alice
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
+  on tasklist tlt_162d…9666 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main

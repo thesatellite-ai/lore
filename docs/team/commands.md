@@ -540,6 +540,7 @@ $ git ls-remote origin refs/lore/live
 $ lore task add 'close the books for Q1'
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — close the books for Q1 [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 $ lore task list
 ○ tsk_2ad3…f891 send the March invoices [medium]

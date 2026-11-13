@@ -27,11 +27,13 @@ Pass `--commitment` when you add the task. Neither task shows up in `lore task l
 $ lore task add 'Try a dark mode for the shop' --commitment someday
 lore: wrote ~/work/website/.lore/data/tasks/tsk_3b62…e913.json
 ✓ tsk_3b62…e913 — Try a dark mode for the shop [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 $ lore task add 'Add a FAQ page' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
 ✓ tsk_f147…5139 — Add a FAQ page [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
 $ lore task list
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
@@ -79,11 +81,13 @@ The shorter way is `lore task accept`, which sets the commitment to `accepted` a
 $ lore task add 'Add a size guide' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
 ✓ tsk_77cb…76c4 — Add a size guide [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit d33587e to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 $ lore task add 'Rename the shop to Website Pro' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 ✓ tsk_d191…45c2 — Rename the shop to Website Pro [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 34010c1 to origin refs/lore/live
 $ lore task triage
 ○ tsk_77cb…76c4 Add a size guide [medium] (proposed)
@@ -131,6 +135,7 @@ A declined task keeps its `proposed` commitment, so `lore task list --status can
 $ lore task add 'Renew the SSL certificate' --defer-until 2026-12-01
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
 ✓ tsk_2537…6bbb — Renew the SSL certificate [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit a8de760 to origin refs/lore/live
 $ lore task deferred
 ○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01

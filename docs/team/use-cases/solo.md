@@ -60,6 +60,7 @@ live:
 $ lore task add 'tidy the scripts folder'
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — tidy the scripts folder [medium]
+  on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
 $ git status --short
 ?? .gitattributes
 ?? .gitignore

@@ -31,10 +31,12 @@ lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 $ lore task add 'Fix the typo on the pricing page' --body 'The Pro plan says 9 a month; it should say 19.'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Fix the typo on the pricing page [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add 'Update the footer year'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Update the footer year [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 ```
 <!-- /example -->
@@ -182,6 +184,7 @@ Delete only removes a task for good, with no undo. lore asks first (without a te
 $ lore task add 'Test task, please ignore'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 — Test task, please ignore [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 $ lore task delete tsk_c0f3…b5b8
@@ -207,10 +210,12 @@ Some work has an order: you cannot send the welcome email before you write it. `
 $ lore task add 'Write the welcome email'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 — Write the welcome email [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
 $ lore task add 'Send the welcome email' --after tsk_76bd…3f10
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
 ✓ tsk_d431…313a — Send the welcome email [medium]
+  on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
 $ lore task show tsk_d431…313a
 tsk_d431…313a

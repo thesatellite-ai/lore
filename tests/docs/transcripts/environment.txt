@@ -12,6 +12,7 @@ alice (work/website)$ git status --short
 alice (work/website)$ lore task add 'Check the contact form on a phone'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 — Check the contact form on a phone [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
 alice (work/website)$ lore live show
 task_lists tlt_7a670ae8548ed05bf57ad29ad0759504     live      since 2026-11-02 10:00
@@ -22,6 +23,7 @@ tasks      tsk_162df51b7f78b785c97c26b41ea89666     live      since 2026-11-02 1
 alice (work/website)$ LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — Renew the SSL certificate [medium]
+  on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
 lore live: (live, not pushed yet: 1 waiting; autopush is off, `lore sync` pushes)
 alice (work/website)$ lore live diff
 local     86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a

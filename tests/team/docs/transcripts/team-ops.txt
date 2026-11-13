@@ -79,6 +79,7 @@ alice (work/website)$ lore task add 'update the contact page' --to agency --assi
 lore: pushed store agency: commit 6d00426 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json (store agency)
 ✓ tsk_d4314eba822f1bf5908b2b8ded5f313a — update the contact page [medium] → [agency/client]
+  on tasklist tlt_c0f3c11a5724b0cfd74b256190d9b5b8 "default" (the default; --tasklist picks another)
 bob (work/website)$ lore task claim tsk_d4314eba822f1bf5908b2b8ded5f313a
 lore: pushed store agency: commit 34ee210 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json (store agency)
