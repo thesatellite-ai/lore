@@ -156,7 +156,7 @@ func TestJourneyUpgraderTwoMachines(t *testing.T) {
 
 	w.Step("month1/desk-new-lore-reads-old-notes", func() {
 		upLists(t, "desk", desk.LoreIn(dsk, "memory", "list"), []string{upNoteBranch, upNoteLive})
-		desk.LoreIn(dsk, "migrate", "status").OK(t).Says(t, "pending: memories: 2 rows at v1")
+		desk.LoreIn(dsk, "migrate", "status").OK(t).Says(t, "pending: actors: 1 row at v1, memories: 2 rows at v1, projects: 1 row at v1")
 		// Reading never rewrites the old files: the laptop must still read them.
 		upWantFormat(t, dsk, "1", idBranch, idLive)
 		if d := upDataDirty(dsk); d != "" {
@@ -166,7 +166,7 @@ func TestJourneyUpgraderTwoMachines(t *testing.T) {
 
 	w.Step("month1/migrate-dry-run", func() {
 		r := desk.LoreIn(dsk, "migrate", "run", "--dry-run").OK(t)
-		r.Says(t, "Would upgrade 2 rows", "Nothing written (dry run).")
+		r.Says(t, "Would upgrade 4 rows", "Nothing written (dry run).")
 		for _, id := range []string{idBranch, idLive} {
 			if n := strings.Count(r.Stdout, id); n != 1 {
 				t.Errorf("dry run names %s %d times, want once:\n%s", id, n, r.Stdout)
@@ -177,7 +177,7 @@ func TestJourneyUpgraderTwoMachines(t *testing.T) {
 
 	w.Step("month1/migrate", func() {
 		r := desk.LoreIn(dsk, "migrate", "run").OK(t)
-		r.Says(t, "Upgraded 2 rows", "backup: refs/lore-backup/migrate/", "undo: lore migrate rollback", "git add .lore/data")
+		r.Says(t, "Upgraded 4 rows", "backup: refs/lore-backup/migrate/", "undo: lore migrate rollback", "git add .lore/data")
 		upWantFormat(t, dsk, "2", idBranch, idLive)
 		desk.LoreIn(dsk, "migrate", "status").OK(t).Says(t, "min_lore_version: 0.1.18").Never(t, "pending:")
 		upCommitPush(t, dsk, "lore: migrate format")
@@ -309,7 +309,7 @@ func TestJourneyUpgraderUndo(t *testing.T) {
 	w.Step("day2/desk-migrates-a-stale-checkout-then-again", func() {
 		// 0.1.17 had no identity here: its actor copy says "una", the new
 		// lore's git name is "Una Upgrader"; the run refreshes it too.
-		desk.LoreIn(dsk, "migrate", "run").OK(t).Says(t, "Upgraded 2 rows", idFirst, "actor_copies: refreshed 1 actor copy")
+		desk.LoreIn(dsk, "migrate", "run").OK(t).Says(t, "Upgraded 3 rows", idFirst, "actor_copies: refreshed 1 actor copy")
 		dsk.CommitAll("lore: migrate format")
 		upPull(t, dsk)
 		desk.LoreIn(dsk, "migrate", "status").OK(t).Says(t, "pending: memories: 1 row at v1")
@@ -331,7 +331,7 @@ func TestJourneyUpgraderUndo(t *testing.T) {
 	w.Step("day2/undo-first-run", func() {
 		desk.LoreIn(dsk, "migrate", "rollback").OK(t).Never(t, "earlier migration")
 		upWantFormat(t, dsk, "1", idFirst, idSecond)
-		desk.LoreIn(dsk, "migrate", "status").OK(t).Says(t, "pending: memories: 2 rows at v1", "was rolled back")
+		desk.LoreIn(dsk, "migrate", "status").OK(t).Says(t, "pending: actors: 1 row at v1, memories: 2 rows at v1, projects: 1 row at v1", "was rolled back")
 		desk.LoreIn(dsk, "migrate", "rollback").Refused(t, "no migration to roll back")
 		upLists(t, "desk", desk.LoreIn(dsk, "memory", "list"), []string{upNoteBranch, upNoteOldNew})
 		upCommitPush(t, dsk, "lore: roll back format migration")
@@ -350,7 +350,7 @@ func TestJourneyUpgraderUndo(t *testing.T) {
 	w.AdvanceDays(7)
 	w.Step("week2/migrate-again-for-good", func() {
 		upPull(t, dsk)
-		desk.LoreIn(dsk, "migrate", "run").OK(t).Says(t, "Upgraded 4 rows", "actor_copies: refreshed 1 actor copy")
+		desk.LoreIn(dsk, "migrate", "run").OK(t).Says(t, "Upgraded 5 rows", "actor_copies: refreshed 1 actor copy")
 		upWantFormat(t, dsk, "2", idFirst, idSecond)
 	})
 
@@ -371,7 +371,7 @@ func TestJourneyUpgraderUndo(t *testing.T) {
 	})
 
 	w.Step("week2/migrate-and-keep-it", func() {
-		desk.LoreIn(dsk, "migrate", "run").OK(t).Says(t, "Upgraded 4 rows", "actor_copies: refreshed 1 actor copy")
+		desk.LoreIn(dsk, "migrate", "run").OK(t).Says(t, "Upgraded 5 rows", "actor_copies: refreshed 1 actor copy")
 		upCommitPush(t, dsk, "lore: migrate format")
 	})
 

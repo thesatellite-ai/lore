@@ -142,9 +142,11 @@ func TestJourneyUpgraderPersonalNotes(t *testing.T) {
 		old.Old(notesRepo, "memory", "add", "--body", upLocalNote, "--to", "me").OK(t)
 		lm := old.Upgrade()
 		lm.LoreIn(notesRepo, "memory", "add", "--body", upLocalAfter, "--to", "me").OK(t)
-		// lore fix moves the local store's folders to its root (with a v0.1.17
-		// repo row, the first write already did: the same step)
-		lm.LoreIn(notesRepo, "fix")
+		// lore fix --migrate moves the local store's folders to its root: notes
+		// is a 0.1.17-format project (its project and actor rows are _v: 1),
+		// so plain lore fix refuses it (D15) and the move waits for --migrate
+		lm.LoreIn(notesRepo, "fix").Fails(t, 24, "E_FORMAT_OLD")
+		lm.LoreIn(notesRepo, "fix", "--migrate").OK(t)
 		r := lm.LoreIn(notesRepo, "memory", "list", "--store", "me").OK(t)
 		upCount(t, "local --store me", r.Stdout, upLocalNote)
 		upCount(t, "local --store me", r.Stdout, upLocalAfter)
