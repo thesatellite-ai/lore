@@ -44,7 +44,7 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
 		return engine.Written{}, uerr
 	}
-	q, err := a.writeQuery(st, table, fields)
+	q, err := a.writeQuery(ctx, st, table, fields)
 	if err != nil {
 		return engine.Written{}, err
 	}
@@ -393,7 +393,7 @@ func (a *App) guard(ctx context.Context, q WriteQuery, explicit bool) error {
 // writeQuery describes a create for the write hooks: every text value it
 // writes (sorted by field, newline-joined) and, only when a hook needs it,
 // the effective client-repo routes from the policies rows.
-func (a *App) writeQuery(st *state, table row.Table, fields map[string]value.Value) (WriteQuery, error) {
+func (a *App) writeQuery(ctx context.Context, st *state, table row.Table, fields map[string]value.Value) (WriteQuery, error) {
 	q := WriteQuery{Table: table}
 	if a.opts.GuardRepoWrite == nil && a.opts.DefaultTarget == nil {
 		return q, nil
@@ -405,7 +405,7 @@ func (a *App) writeQuery(st *state, table row.Table, fields map[string]value.Val
 		}
 	}
 	q.Text = strings.Join(texts, "\n")
-	set, err := st.eng.Policy(st.defaultTarget)
+	set, err := st.eng.Policy(ctx, st.defaultTarget)
 	if err != nil {
 		return WriteQuery{}, err
 	}

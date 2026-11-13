@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/rowscan"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -42,6 +43,9 @@ func (a *App) RescanRows(ctx context.Context) (string, error) {
 		return "", err
 	}
 	rows := map[row.Table][]rowscan.Row{}
+	// one read of each store for every table (B1-23: each List read the
+	// whole store again, ~80 tables per store)
+	ctx = engine.EnsureReadSnapshot(ctx)
 	for _, def := range schema.Builtin() {
 		for _, src := range st.eng.Stores() {
 			rs, err := st.eng.List(ctx, src, def.Name)

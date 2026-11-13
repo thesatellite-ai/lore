@@ -4,7 +4,7 @@ A journey is one person or team using lore over weeks and months, in order, the 
 
 Every journey is committed Go test code (build tag `journeys`) that drives the real `lore` binary (built with `-tags loretest`, so the `LORE_NOW` clock works). After every step the shared invariants run on every machine of the World, so an invariant added once checks every journey at once.
 
-Run: `task lore:test:journeys` (all), `task lore:test:journeys:<persona>` (one), or `go test -tags journeys -run '^TestJourneySolo' ./tests/journeys/` (builds the binary itself when `JOURNEYS_LORE` is unset). Each persona is its own step of `task check` and stays under about 3 minutes; split a longer one into `TestJourney<Name><Part>` tests (the gate step runs `-run '^TestJourney<Name>'`, so the parts stay in it). `JOURNEYS_STRICT=1` makes steps marked `Pending` fail.
+Run: `task lore:test:journeys` (all), `task lore:test:journeys:<persona>` (one), or `go test -tags journeys -run '^TestJourneySolo' ./tests/journeys/` (builds the binary itself when `JOURNEYS_LORE` is unset). Each persona is its own step of `task check` (every other journey runs in the catch-all step `journey-rest`) and stays under about 3 minutes; split a longer one into `TestJourney<Name><Part>` tests (the gate step runs `-run '^TestJourney<Name>'`, so the parts stay in it). `JOURNEYS_STRICT=1` makes steps marked `Pending` fail.
 
 ## The harness
 
@@ -25,7 +25,7 @@ A lore run that takes over 5 minutes (`TEAMHARNESS_CMD_TIMEOUT`, a Go duration, 
 1. Create `tests/journeys/<persona>_test.go` with `//go:build journeys && !windows` and tests named `TestJourney<Name>…`.
 2. Start a World and the people: `w := NewWorld(t)`, `dev := w.Persona("Dev One", "dev.one@example.test")`. Placeholders only, never a real name, email, URL or key.
 3. Write the timeline as steps (below), including the undo paths a real person takes: delete then restore, purge then regret, edit then edit back, remove a setup then re-add it, leave the setup page halfway and come back the next day.
-4. Add the gate step: a `test:journeys:<persona>` task in `Taskfile.lore.yml` and a `journey-<persona>` entry in the e2e stage of `check:run`.
+4. Nothing more is needed for the gate: a test no named part runs is run by the catch-all part `test:journeys:rest` (step `journey-rest`). A persona that needs its own step gets a `test:journeys:<persona>` task in `Taskfile.lore.yml`, a `journey-<persona>` line in `GATE_STEPS` and in the `FAST_MAP` rules that name the other journey parts, and its `-run` pattern in journey-rest's `-skip`. `gate_parts_test.go` (no build tag, so `go test ./...` runs it) fails when a test is in no part or in two, when a part is not a gate step, or when a `FAST_MAP` rule runs journey parts without the catch-all.
 
 ## Add a step
 

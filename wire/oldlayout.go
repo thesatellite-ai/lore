@@ -111,7 +111,7 @@ func (a *App) PreviewOldLayout(w io.Writer) {
 		say(fmt.Sprintf("would give store clone %s its layout commit (dry run: nothing changed)", dir))
 	}
 	for _, p := range personalV017Candidates(home) {
-		say(fmt.Sprintf("would move lore 0.1.17's per-org personal notes in %s (%s/) to %s/ (dry run: nothing changed)", p.dir, strings.Join(git.PersonalFoldersV017At(p.dir), "/, "), rowfs.StoreDataDir))
+		say(fmt.Sprintf("would move lore 0.1.17's everywhere/ personal notes in %s to %s/ (dry run: nothing changed)", p.dir, rowfs.StoreDataDir))
 	}
 }
 
@@ -133,16 +133,17 @@ func personalV017Candidates(home string) []personalClone {
 		if err != nil || !isDirPath(filepath.Join(dir, ".git")) {
 			continue
 		}
-		if len(git.PersonalFoldersV017At(dir)) > 0 {
+		if git.PersonalEverywhereV017At(dir) {
 			out = append(out, personalClone{raw: raw, dir: dir})
 		}
 	}
 	return out
 }
 
-// flattenPersonal moves the rows lore 0.1.17 filed under per-org folders of
-// a git personal store to its _store/ folder, the only one this lore reads
-// for `me` (git.Backend.FlattenPersonal), and pushes per the push mode.
+// flattenPersonal moves the rows lore 0.1.17 filed under everywhere/ of a
+// git personal store to its _store/ folder (`me`, git.Backend.FlattenPersonal;
+// <org>/ folders keep their scope, personal_orgs.go), and pushes per the
+// push mode.
 func (a *App) flattenPersonal(ctx context.Context, p personalClone, say func(string)) {
 	name := filepath.Base(p.dir)
 	canon, err := canonical(attach.Store{URL: p.raw})
@@ -185,7 +186,7 @@ func (a *App) flattenPersonal(ctx context.Context, p personalClone, say func(str
 	if n := len(res.Merged); n > 0 {
 		merged = fmt.Sprintf(" (%d found in more than one folder, merged)", n)
 	}
-	say(fmt.Sprintf("personal store %s: %d row(s) lore 0.1.17 filed under %s moved to %s/%s: commit %s%s; they now load in every repo, as every personal note does", name, res.Rows, strings.Join(res.Folders, "/, ")+"/", rowfs.StoreDataDir, merged, short(res.Commit), pushed))
+	say(fmt.Sprintf("personal store %s: %d row(s) lore 0.1.17 filed under everywhere/ moved to %s/%s: commit %s%s; notes it filed under an org's folder stay there and load only in that org's repos", name, res.Rows, rowfs.StoreDataDir, merged, short(res.Commit), pushed))
 	for _, m := range res.Kept {
 		say(fmt.Sprintf("personal store %s: %s was in more than one folder and could not be merged; the %s/ copy is kept, the other is in the history (git -C %s log --all -- '*%s')", name, m, rowfs.StoreDataDir, p.dir, filepath.Base(m)))
 	}

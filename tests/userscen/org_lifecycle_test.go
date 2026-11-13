@@ -105,8 +105,10 @@ func TestOrgOffboardThenRejoin(t *testing.T) {
 	}
 	o.app.MustLore("project", "member", "list", "app", "--history").Says(t, "@bob  dev, reviewer  2026-11-10 → 2026-11-10 (offboarded)")
 
-	// Rejoin: same day, future, no type are refused.
-	o.app.Lore("actor", "rejoin", "@bob", "--type", "contractor", "--on", "2026-11-10", "--yes").Fails(t, th.ExitRefused, "E_PERIOD_OVERLAP")
+	// Rejoin: a day inside the ended stint, future, no type are refused.
+	// (The stint's own last day, today, reopens it: B2-24, a removal undone
+	// the same day; so the overlap is checked a day earlier.)
+	o.app.Lore("actor", "rejoin", "@bob", "--type", "contractor", "--on", "2026-11-09", "--yes").Fails(t, th.ExitRefused, "E_PERIOD_OVERLAP")
 	o.app.Lore("actor", "rejoin", "@bob", "--type", "contractor", "--on", "2026-11-11", "--yes").Fails(t, orgExitBadInput, "E_INVALID_INPUT", "in the future")
 	o.app.Lore("actor", "rejoin", "@bob", "--on", "2026-11-10", "--yes").Fails(t, orgExitBadInput, "E_INVALID_INPUT")
 	o.app.Lore("actor", "rejoin", "@bob", "--type", "pirate", "--yes").Fails(t, orgExitBadInput, "E_INVALID_INPUT")

@@ -32,6 +32,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/dataignore"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // dataRel is the committed data folder, relative to the project root.
@@ -49,7 +50,8 @@ func dataUnignoreLines() []string {
 	for _, p := range dataignore.OSJunkPatterns { // OS clutter stays ignored (the later rule wins)
 		out = append(out, dataRel+"/**/"+p)
 	}
-	return out
+	// a dead writer's tmp file stays ignored too (wire.DataTmpLine)
+	return append(out, wire.DataTmpLine)
 }
 
 // maxIgnoredShown caps the ignored paths an error lists (a whole excluded

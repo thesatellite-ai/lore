@@ -17,13 +17,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/logic/conflictpick"
+	"github.com/thesatellite-ai/lore/logic/merge3"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/wire"
@@ -117,6 +121,11 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 
 // SyncRun implements opssync.Env.
 func (l liveSync) SyncRun(ctx context.Context, _ opssync.RunIn) (opssync.RunOut, error) {
+	if wire.OldRowsRead(ctx) {
+		// D7: nothing is synced into a repo lore 0.1.17 wrote until lore fix
+		return opssync.RunOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindReport,
+			Data: opssync.RunData{Pass: syncPassLive}, Lines: []string{wire.OldRowsSyncLine}}, nil
+	}
 	if l.h.cfg.RepoAddresses != nil {
 		l.h.cfg.RepoAddresses(ctx) // PROVENANCE_DESIGN 10.3: records and notices only, never fails the sync
 	}
@@ -293,8 +302,19 @@ func (l liveSync) SyncConflicts(ctx context.Context, _ opssync.ConflictsIn) (ops
 			continue
 		}
 		at := p.File.Block.LiveSince.UTC().Format(time.RFC3339)
-		out.Data = append(out.Data, opssync.Conflict{ID: int64(len(out.Data) + 1), Table: p.Key.Table, RowID: p.Key.ID, Kept: conflictKeptBoth, At: at})
+		sides := liveConflictSides(p.File.Body)
+		names := make([]string, 0, len(sides))
+		for _, f := range sides {
+			names = append(names, f.name)
+		}
+		out.Data = append(out.Data, opssync.Conflict{ID: int64(len(out.Data) + 1), Table: p.Key.Table, RowID: p.Key.ID, Kept: conflictKeptBoth, At: at, Fields: names})
 		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, conflict markers in a text field; settle with lore sync resolve %d --take kept|other, or edit the row)", len(out.Data), p.Key.Table, p.Key.ID, conflictKeptBoth, len(out.Data)))
+		// B2-23: both versions of each clashing field, as for a store row;
+		// kept is the first section (the edit of the machine that merged),
+		// other the second
+		for _, f := range sides {
+			out.Lines = append(out.Lines, "    "+f.name+" kept (first):   "+strconv.Quote(f.kept), "    "+f.name+" other (second): "+strconv.Quote(f.other))
+		}
 	}
 	out.Count = len(out.Data)
 	if out.Count == 0 {
@@ -311,6 +331,38 @@ const conflictKeptBoth = "both"
 // conflict markers (live.ShouldLand's "conflict…" reason).
 func isConflict(p landPlanRow) bool {
 	return p.Decision.Action == live.LandStay && strings.HasPrefix(p.Decision.Reason, "conflict")
+}
+
+// liveConflictField is one field of a live row holding conflict markers:
+// the text --take kept would leave and the text --take other would.
+type liveConflictField struct {
+	name, kept, other string
+}
+
+// maxLiveConflictValue bounds a side repeated in a conflicts line.
+const maxLiveConflictValue = 200
+
+// liveConflictSides is every top-level string field of body holding a
+// marker block, by name, with both sides (conflictpick, the same choice
+// resolve makes).
+func liveConflictSides(body canonjson.Object) []liveConflictField {
+	var out []liveConflictField
+	for _, k := range slices.Sorted(maps.Keys(body)) {
+		v, ok := body[k].AsString()
+		if !ok || !merge3.ContainsConflictMarkers(v) {
+			continue
+		}
+		out = append(out, liveConflictField{name: k, kept: cutLive(conflictpick.Text(v, false)), other: cutLive(conflictpick.Text(v, true))})
+	}
+	return out
+}
+
+// cutLive bounds one side for display.
+func cutLive(s string) string {
+	if len(s) > maxLiveConflictValue {
+		return s[:maxLiveConflictValue] + "…"
+	}
+	return s
 }
 
 // Sides `lore sync resolve --take` names (G-SYNC-1): kept is the first

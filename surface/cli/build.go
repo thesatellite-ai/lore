@@ -353,7 +353,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags, FlagPos: pos}, *yes, sf.choice(cmd))
 		out := cmd.OutOrStdout()
 		if err != nil {
-			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr), cmd.CommandPath()), cause: err}
+			return &exitError{code: cfg.printNamedError(cmd, err, *asJSON), cause: err}
 		}
 		if *asJSON {
 			err = printJSON(out, res)
@@ -364,7 +364,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 			}
 		}
 		if err != nil {
-			return &exitError{code: printError(out, cmd.ErrOrStderr(), err, *asJSON, cfg.color(StreamErr), cmd.CommandPath()), cause: err}
+			return &exitError{code: cfg.printNamedError(cmd, err, *asJSON), cause: err}
 		}
 		// P3-ORG-G-3: an output printed in full may still fail
 		// (op.Failer, whoami's org refusal): the error line goes to
@@ -373,7 +373,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 			if *asJSON {
 				return &exitError{code: errs.EnvelopeOf(ferr).Error.Exit, cause: ferr}
 			}
-			return &exitError{code: printError(out, cmd.ErrOrStderr(), ferr, false, cfg.color(StreamErr), cmd.CommandPath()), cause: ferr}
+			return &exitError{code: cfg.printNamedError(cmd, ferr, false), cause: ferr}
 		}
 		// P3-MISC-8: a successful result may carry its own exit status
 		// (op.ExitStatuser, lore doctor's 1 degraded / 2 broken); it is

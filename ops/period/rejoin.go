@@ -9,6 +9,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
@@ -137,7 +138,18 @@ func (o ops) rejoin(ctx context.Context, in RejoinIn) (RejoinOut, error) {
 			lastEnd = p.EndedOn
 		}
 	}
-	if err = teamprofile.CheckPeriods(append(ps, next)); err != nil {
+	// B2-24: a stint that ended today, rejoined today (a removal undone
+	// the same day), is reopened; a new stint starting that day would overlap
+	// it (an end day is inclusive), which left no way back before tomorrow.
+	var reopen *teamprofile.Period
+	for i := range ps {
+		if p := ps[i]; !p.Synthesised() && !p.Open() && teamprofile.Day(p.EndedOn).Equal(teamprofile.Day(on)) && teamprofile.Day(on).Equal(teamprofile.Day(today)) {
+			reopen = &ps[i]
+		}
+	}
+	if reopen != nil {
+		next.StartedOn = reopen.StartedOn
+	} else if err = teamprofile.CheckPeriods(append(ps, next)); err != nil {
 		return RejoinOut{}, err
 	}
 	out := RejoinOut{ID: a.ID.String(), Name: nameOf(a), Period: periodOut(next), From: from, Memberships: []MemberEnd{}, Agents: []AgentOut{}, Where: r.Where()}
@@ -183,15 +195,31 @@ func (o ops) rejoin(ctx context.Context, in RejoinIn) (RejoinOut, error) {
 	if err != nil {
 		return RejoinOut{}, err
 	}
-	w, err := r.Create(ctx, schema.TableActorPeriods, f)
-	if err != nil {
-		return RejoinOut{}, err
-	}
 	patch, err := statusPatch(a, schema.ActorStatusActive, on, time.Time{}, time.Time{})
 	if err != nil {
 		return RejoinOut{}, err
 	}
-	if _, err = r.Update(ctx, schema.TableActors, a.ID, patch); err != nil {
+	var w row.Row
+	err = inOneCommit(ctx, "rejoin "+nameOf(a), func(ctx context.Context) error { // B1-21: the stint and the status, one commit
+		var werr error
+		if reopen != nil {
+			pf := map[string]value.Value{schema.FieldPeriodEndedOn: value.Null{}, schema.FieldPeriodEndReason: value.Null{}}
+			for _, k := range []string{schema.FieldPeriodType, schema.FieldPeriodOrgRole, schema.FieldPeriodNote} {
+				if v, ok := f[k]; ok {
+					pf[k] = v
+				}
+			}
+			w, werr = r.Update(ctx, schema.TableActorPeriods, reopen.ID, pf)
+		} else {
+			w, werr = r.Create(ctx, schema.TableActorPeriods, f)
+		}
+		if werr != nil {
+			return werr
+		}
+		_, werr = r.Update(ctx, schema.TableActors, a.ID, patch)
+		return werr
+	})
+	if err != nil {
 		return RejoinOut{}, err
 	}
 	r.Push(ctx)

@@ -220,6 +220,11 @@ func (r *OrgResolution) RepoIsClient(ctx context.Context) (bool, error) {
 	return s.IsClient()
 }
 
+// linkUnknownHint is the hint of E_LINK_UNKNOWN (B1-22): the store named
+// in the message was never fetched (or not reachable), and `lore sync`
+// fetches every store of the org.
+const linkUnknownHint = "run `lore sync` to fetch the org's stores, then retry; `lore whoami` shows the link status"
+
 // OrgStores is Options.OrgStores (CONFIG_GUIDE section 4 step 5b): the
 // resolved entry's store attached under the entry's name at the folder
 // this repo is linked to (the default link, else the first; else the
@@ -239,7 +244,8 @@ func (r *OrgResolution) OrgStores(ctx context.Context) ([]attach.Store, error) {
 		return nil, nil
 	}
 	if s.Result.LinkUnknown {
-		return nil, errs.New(errs.LinkUnknown, "the store links of this repo cannot be read: "+s.Result.LinkDetail)
+		return nil, errs.New(errs.LinkUnknown, "the store links of this repo cannot be read: "+s.Result.LinkDetail).
+			WithHint(linkUnknownHint).WithNext("lore", "sync")
 	}
 	if s.Result.Disagreement != nil {
 		// F10: LORE_ORG / org use contradicting a link. Nothing of the

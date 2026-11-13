@@ -110,7 +110,7 @@ func (a *App) restoreGuard(ctx context.Context, st *state, planned engine.TrashR
 		if err := a.unreachableGuard(ctx, st, store.SourceRepo); err != nil {
 			return err
 		}
-		q, err := a.writeQuery(st, t.Row.Table, trash.Clear(t.Row).Fields)
+		q, err := a.writeQuery(ctx, st, t.Row.Table, trash.Clear(t.Row).Fields)
 		if err != nil {
 			return err
 		}

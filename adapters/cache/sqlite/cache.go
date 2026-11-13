@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	// The pure-Go SQLite driver (no CGO); FTS5 and JSON1 are built in.
@@ -213,7 +214,11 @@ func (c *Cache) init(ctx context.Context) error {
 	}
 	var st state
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
-		for _, s := range append(slices.Clone(internalDDL), taskTreeDDL...) {
+		ddl, err := withoutCurrentViews(ctx, tx, append(slices.Clone(internalDDL), taskTreeDDL...))
+		if err != nil {
+			return err
+		}
+		for _, s := range ddl {
 			if _, err := tx.ExecContext(ctx, s); err != nil {
 				return dbErr("create internal tables", err)
 			}
@@ -221,10 +226,13 @@ func (c *Cache) init(ctx context.Context) error {
 		if err := backfillTaskTree(ctx, tx); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(layoutVersion)); err != nil {
-			return dbErr("stamp layout version", err)
+		if ver != layoutVersion {
+			// stamped once: setting it again on every open rewrote the file's
+			// header page, so a read changed the cache file each command (B1-16)
+			if _, err := tx.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(layoutVersion)); err != nil {
+				return dbErr("stamp layout version", err)
+			}
 		}
-		var err error
 		if st, err = c.loadState(ctx, tx); err != nil {
 			return err
 		}
@@ -235,6 +243,49 @@ func (c *Cache) init(ctx context.Context) error {
 	}
 	c.st = st
 	return nil
+}
+
+// Prefixes of a view the internal DDL drops and creates again on every open
+// (rowmeta.go), so a changed definition reaches an old cache.
+const (
+	dropViewPrefix   = `DROP VIEW IF EXISTS `
+	createViewPrefix = `CREATE VIEW IF NOT EXISTS `
+	storedViewPrefix = `CREATE VIEW `
+)
+
+// withoutCurrentViews returns ddl without each drop-and-create pair of a
+// view whose stored definition is already the one it would create (B1-16:
+// the drop and create changed the file's schema on every open, so every
+// command, a read included, rewrote the cache file and invalidated every
+// other connection's parsed schema). SQLite stores the CREATE text with
+// "IF NOT EXISTS" left out.
+func withoutCurrentViews(ctx context.Context, tx *sql.Tx, ddl []string) ([]string, error) {
+	out := make([]string, 0, len(ddl))
+	for i := 0; i < len(ddl); i++ {
+		name, isDrop := strings.CutPrefix(ddl[i], dropViewPrefix)
+		if isDrop && i+1 < len(ddl) && strings.HasPrefix(ddl[i+1], createViewPrefix+name+" ") {
+			want := storedViewPrefix + strings.TrimPrefix(ddl[i+1], createViewPrefix)
+			var have string
+			err := tx.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'view' AND name = ?`, unquoteName(name)).Scan(&have)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return nil, dbErr("read view "+name, err)
+			}
+			if err == nil && have == want {
+				i++ // current: neither dropped nor created
+				continue
+			}
+		}
+		out = append(out, ddl[i])
+	}
+	return out, nil
+}
+
+// unquoteName is a double-quoted SQL name without its quotes.
+func unquoteName(q string) string {
+	if len(q) >= 2 && q[0] == '"' && q[len(q)-1] == '"' {
+		return strings.ReplaceAll(q[1:len(q)-1], `""`, `"`)
+	}
+	return q
 }
 
 // resetFile drops every object of a file written with another layout. Views

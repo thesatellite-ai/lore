@@ -247,9 +247,6 @@ ERROR: [E_NEEDS_CONFIRM] offboard Mira Patel (@mira) (act_7a670ae8548ed05bf57ad2
 (exit 26)
 tomas (work/acme-hub)$ lore actor offboard @mira --reason 'moved abroad' --yes
 lore: pushed store agency/org: commit ef62c83 to branch main
-lore: pushed store agency/org: commit dd85e7d to branch main
-lore: pushed store agency/org: commit d18179e to branch main
-lore: pushed store agency/org: commit f4b8da2 to branch main
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/org (store agency/org)
 offboard Mira Patel (@mira) (act_7a670ae8548ed05bf57ad29ad0759504) on 2026-09-30:
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
@@ -269,7 +266,7 @@ ERROR: [E_NOT_FOUND] no person or team with handle @mira
   hint: they run `lore actor register` in a repo of the org, then `lore sync` here
 (exit 27)
 tomas (work/acme-hub)$ lore actor status @mira archived
-lore: pushed store agency/org: commit 70f4f88 to branch main
+lore: pushed store agency/org: commit dd85e7d to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
 ✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel (@mira): left → archived
 tomas (work/acme-hub)$ lore actor list --archived
@@ -280,8 +277,7 @@ act_77cb2df809cef85479f6587c4a7d76c4 [human] carol                   repo
 
 ### rejoin
 tomas (work/acme-hub)$ lore actor rejoin @mira --type contractor --org-role 'Contract engineer' --yes
-lore: pushed store agency/org: commit d33587e to branch main
-lore: pushed store agency/org: commit 34010c1 to branch main
+lore: pushed store agency/org: commit d18179e to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/actor_periods/apd_9a34c925c88945140e68f54b1ba3b418.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
 rejoin Mira Patel (@mira) (act_7a670ae8548ed05bf57ad29ad0759504) on 2026-11-02:
@@ -292,7 +288,7 @@ rejoin Mira Patel (@mira) (act_7a670ae8548ed05bf57ad29ad0759504) on 2026-11-02:
   status     archived → active
 ✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel (@mira) rejoined on 2026-11-02 as contractor
 tomas (work/acme-hub)$ lore project member add acme-hub @mira --role reviewer
-lore: pushed store agency/org: commit 070bbeb to branch main
+lore: pushed store agency/org: commit f4b8da2 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_bfed655e145f36ce2ef425180e72eeea.json (store agency/org)
 ✓ @mira added to acme-hub as reviewer from 2026-11-02 (pmb_bfed655e145f36ce2ef425180e72eeea)
 tomas (work/acme-hub)$ lore project member list acme-hub --history
@@ -338,9 +334,9 @@ lore store init: set up git for lore's row files in this clone: merge drivers lo
 ✓ created store acme (sto_376c6af9f6ebb2ad01d8b3c0201b8e1a) at git@github.com:acme/lore-notes; recorded in .lore/stores.yaml; commit it to share
 ana (work/handbook)$ lore org create acme --store acme --own 'github.com/acme/*' --key human:ana@acme.example --name 'Ana Lima' --handle ana --yes
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-lore: pushed store github.com/acme/lore-notes: commit 2297d41 to branch main
-lore: pushed store acme/org: commit c929695 to branch main
-lore: pushed store acme/org: commit 40bd5f4 to branch main
+lore: pushed store github.com/acme/lore-notes: commit 70f4f88 to branch main
+lore: pushed store acme/org: commit d33587e to branch main
+lore: pushed store acme/org: commit 34010c1 to branch main
 lore: wrote ~/.lore/stores/acme/lore-notes/org/projects/prj_67e20cdd829de837b50a73f9dc3c291e.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actors/act_8567cf97b52ccbe51c3bd8cd91d6366f.json (store acme/org)
 This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:

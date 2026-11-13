@@ -457,8 +457,14 @@ func teamOfRow(r row.Row) RosterTeam {
 // returns nil, false: the caller keeps its normal App, whose full open
 // attaches the org store beside the repo. Only the roster commands call
 // this; every other command keeps requiring a repo (fail closed).
+//
+// A read in a git repo with no lore project (no .lore/, not linked by a
+// store through its remote) is served the same way: the full open would
+// refuse it (a read creates nothing there, doctor_nocreate.go), yet the
+// roster lives in the org store, not in the repo. A person who joined an
+// org from a fresh clone could not `lore team show` there.
 func StoreOnlyRoster(ctx context.Context, opts Options, target store.Source) (*App, bool, error) {
-	if insideWorkTree(ctx, opts.RepoDir) {
+	if insideWorkTree(ctx, opts.RepoDir) && !readWithoutProject(ctx, opts) {
 		return nil, false, nil
 	}
 	a, err := New(opts)
@@ -477,6 +483,20 @@ func StoreOnlyRoster(ctx context.Context, opts Options, target store.Source) (*A
 		WithHint("run it inside a git repository")
 	a.mu.Unlock()
 	return a, true, nil
+}
+
+// readWithoutProject reports whether ctx is a read (WithNoCreate) run in a
+// git repo whose full open refuses it: no .lore/ at its top and no store
+// linking it by its remote (open.go: such a repo opens read-only instead).
+func readWithoutProject(ctx context.Context, opts Options) bool {
+	if !NoCreate(ctx) {
+		return false
+	}
+	top := gitTopLevel(ctx, opts.RepoDir)
+	if top == "" || loreFolderAt(top) {
+		return false
+	}
+	return opts.RepoLinkedByRemote == nil || opts.RepoLinkedByRemote(ctx) == ""
 }
 
 // insideWorkTree reports whether dir is inside a git work tree. A git that

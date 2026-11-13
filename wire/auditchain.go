@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/auditchain"
@@ -76,6 +77,9 @@ func AuditChainKey(dbPath string) string {
 // followed), imports nothing but still sets the marker, so a later lore.db
 // is never spliced in front of entries already chained.
 func ImportLoreDBAudit(ctx context.Context, ch *sqlite.AuditChain, key, dbPath string, at time.Time) error {
+	if git.NoClone(ctx) {
+		return nil // `lore fix --dry-run` writes nothing (B4-14): the next real run imports
+	}
 	done, err := ch.Imported(ctx, key)
 	if err != nil || done {
 		return err

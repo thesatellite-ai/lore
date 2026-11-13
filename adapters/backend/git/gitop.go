@@ -47,8 +47,15 @@ var gitOpMarkers = []struct{ file, op, way string }{
 // cannot be read).
 func (b *Backend) gitDirOf(ctx context.Context, dir string) string { return gitDirIn(ctx, b.git, dir) }
 
-// gitDirIn is gitDirOf through runner r.
+// gitDirIn is gitDirOf through runner r. A store clone is a plain clone
+// whose git dir is the .git folder at its top: that is read from the file
+// system, with no git process (lore doctor --all checks every clone and
+// stays within its git budget); anything else (a .git file of a worktree,
+// a folder below the top) asks git.
 func gitDirIn(ctx context.Context, r runner, dir string) string {
+	if gd, ok := plainGitDir(dir); ok {
+		return gd
+	}
 	out, err := r.run(ctx, call{dir: dir, args: []string{"rev-parse", "--absolute-git-dir"}})
 	if err != nil {
 		return ""
@@ -131,4 +138,53 @@ func (b *Backend) clearOwnMerge(ctx context.Context) {
 	if gd := b.gitDirOf(ctx, b.work); gd != "" {
 		_ = os.Remove(filepath.Join(gd, ownMergeFile)) // absent is fine
 	}
+}
+
+// PersonGitOpAt is personGitOp for the clone at dir (lore doctor and store
+// doctor report it, B2-26): op "" when none, else the operation and the
+// commands that finish or abort it.
+func PersonGitOpAt(ctx context.Context, dir string) (op, way string) {
+	b, err := sharedBackend(dir, false)
+	if err != nil {
+		return "", ""
+	}
+	return b.personGitOp(ctx, dir)
+}
+
+// plainGitDir is the absolute .git folder at the top of the checkout at
+// dir, when dir is such a top (a .git folder holding HEAD).
+func plainGitDir(dir string) (string, bool) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	gd := filepath.Join(abs, ".git")
+	if st, err := os.Lstat(gd); err != nil || !st.IsDir() {
+		return "", false
+	}
+	if st, err := os.Lstat(filepath.Join(gd, "HEAD")); err != nil || !st.Mode().IsRegular() {
+		return "", false
+	}
+	return gd, true
+}
+
+// RecoverOwnMerge aborts a merge a killed run of lore left in the clone
+// (MERGE_HEAD beside lore's own mark), under the store lock, as the next
+// sync would. The hand-edit pick-up calls it first: it runs before any
+// sync, and would otherwise take the half-merged row files for hand edits
+// and commit them. A person's merge is never touched (personGitOp); no
+// leftover merge costs no git process and no lock.
+func (b *Backend) RecoverOwnMerge(ctx context.Context) error {
+	if b.mode != modeClone {
+		return nil
+	}
+	gd := b.gitDirOf(ctx, b.work)
+	if gd == "" || !exists(filepath.Join(gd, ownMergeFile)) || !exists(filepath.Join(gd, "MERGE_HEAD")) {
+		return nil
+	}
+	lock, err := b.root.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	return releaseKeep(b.recoverMerge(ctx), lock)
 }

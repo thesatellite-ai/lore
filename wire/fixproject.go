@@ -46,8 +46,10 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -175,6 +177,10 @@ func (a *App) fixMigrate(ctx context.Context, top string, dry, teamLock bool) op
 	}
 	status, err := a.Status(ctx)
 	if err != nil {
+		if dryNeedsStores(dry, err) {
+			st.Result = dryStoresLine(err)
+			return st
+		}
 		st.Failed, st.Result = true, err.Error()
 		return st
 	}
@@ -425,7 +431,7 @@ func (a *App) fixRender(ctx context.Context, top string, dry, migrated bool) ops
 func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor.FixStep {
 	st := opsdoctor.FixStep{Step: opsdoctor.StepAgentHooks, Where: top, Result: opsdoctor.ResultCurrent}
 	client, _ := a.ClientRepo(ctx)
-	if note, _ := a.RepoClassNote(ctx); client && dry && strings.Contains(note, string(errs.LinkUnknown)) {
+	if note, _ := a.RepoClassNote(ctx); client && dry && (strings.Contains(note, string(errs.LinkUnknown)) || note == dryClientNote) {
 		// B4-14: see fixMigrate; the real run fetches the stores and then
 		// knows whether this is a client repo
 		st.Result = "would check once the stores are fetched (this dry run reached no remote): an own repo gets the hooks, a client repo none"
@@ -564,16 +570,50 @@ func (a *App) FixPrepare(ctx context.Context, dry bool, jobs int) opsfix.Prep {
 		return p
 	}
 	var dirs []string
+	have := map[string]bool{}
 	for _, f := range found {
-		if f.State == git.CloneWhole && f.Origin != "" {
+		// B1-22: a clone cut short before its first fetch (an org store a
+		// resolve only initialised) is fetched too; skipping it left the
+		// children, which do not fetch, unable to read the org's links
+		// (E_LINK_UNKNOWN on every repo, run after run).
+		if (f.State == git.CloneWhole || f.State == git.CloneNotCheckedOut) && f.Origin != "" {
 			dirs = append(dirs, f.Paths.Dir)
+			have[f.Paths.Dir] = true
+		}
+	}
+	// Every store of every org entry is fetched as well, cloned first when
+	// this machine has no clone of it yet (a new machine after org import
+	// or the setup page): a repo's links may sit in any of them.
+	clones := orgcfg.Clones{Home: a.opts.Home, Now: a.opts.Wall, Route: storeRouter(a.opts.Home, a.projectDir())}
+	orgStore := map[string]string{} // clone dir → store url, for the ones not cloned yet
+	if cfg, _, cerr := orgcfg.LoadConfig(a.opts.Home); cerr == nil {
+		for _, o := range cfg.Orgs {
+			for _, s := range o.Stores {
+				norm, nerr := repourl.NormalizeStore(s.URL)
+				if nerr != nil {
+					continue
+				}
+				if dir := clones.Dir(norm); !have[dir] {
+					have[dir] = true
+					orgStore[dir] = s.URL
+					dirs = append(dirs, dir)
+				}
+			}
 		}
 	}
 	var mu sync.Mutex
 	opsfix.RunAll(ctx, dirs, jobs, func(ctx context.Context, dir string) opsfix.RepoResult {
-		err := git.RefreshClone(ctx, dir, git.WithRoute(func(ctx context.Context, remote string) ([]string, []string) {
-			return cloneRoute(ctx, a.opts.Home, a.projectDir(), remote)
-		}))
+		var err error
+		if u, ok := orgStore[dir]; ok {
+			norm, _ := repourl.NormalizeStore(u) // checked above
+			if info := clones.Doctor(ctx, norm, u, nil); len(info.Problems) > 0 {
+				err = errs.New(errs.Offline, "fix: fetch the store "+norm)
+			}
+		} else {
+			err = git.RefreshClone(ctx, dir, git.WithRoute(func(ctx context.Context, remote string) ([]string, []string) {
+				return cloneRoute(ctx, a.opts.Home, a.projectDir(), remote)
+			}))
+		}
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
@@ -889,7 +929,8 @@ func (a *App) oldRowsGate(ctx context.Context, e op.Entry) error {
 		if e.Spec().Access != op.AccessWrite || !a.hasPendingV017Live(ctx) {
 			return nil
 		}
-	} else if e.Spec().Access != op.AccessWrite {
+	} else if e.Spec().Access != op.AccessWrite || OldRowsRead(ctx) {
+		// a read, or a sync run as one (D7, oldrowsread.go)
 		if a.opts.Notice != nil {
 			a.opts.Notice(OldRowsReadLine)
 		}

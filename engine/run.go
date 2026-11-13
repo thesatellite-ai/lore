@@ -87,7 +87,7 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		// POLICY (spec 9.2): agents.person_only names commands, so it is
 		// checked here, before the confirmation, for CLI and REST alike.
 		// Only an agent caller pays the settings read.
-		pol, _, perr := e.settings.Policy(cl.target)
+		pol, _, perr := e.settings.Policy(ctx, cl.target)
 		if perr != nil {
 			return op.Result{}, perr
 		}

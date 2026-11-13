@@ -109,7 +109,7 @@ func GitignoreHook(workDir string) Hook {
 // operation (ops/live), which writes no row file; v0.1.17's `lore live …`
 // left the checkout as it was (P3-LIVE-1).
 func NeedsGitignore(run *Run) bool {
-	if run.ReadOnly {
+	if run.ReadOnly || run.OldRows {
 		return false
 	}
 	if run.Entry == nil {

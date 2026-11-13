@@ -25,7 +25,7 @@ func (a *App) DoctorSLA(ctx context.Context) ([]DoctorFinding, error) {
 	now := a.Now()
 	var out []DoctorFinding
 	for _, src := range a.Stores() {
-		set, perr := st.eng.Policy(src)
+		set, perr := st.eng.Policy(ctx, src)
 		if perr != nil {
 			return nil, perr
 		}

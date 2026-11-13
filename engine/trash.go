@@ -119,8 +119,8 @@ func purgeOf(ctx context.Context) *PurgeRequest {
 }
 
 // purgeOnDelete reports policy trash.purge_on_delete for src (3.12).
-func (e *Engine) purgeOnDelete(src store.Source) bool {
-	set, _, err := e.settings.Policy(src)
+func (e *Engine) purgeOnDelete(ctx context.Context, src store.Source) bool {
+	set, _, err := e.settings.Policy(ctx, src)
 	if err != nil {
 		return false // an unreadable policy never turns a delete into a purge: the soft delete keeps the content restorable
 	}
@@ -173,7 +173,7 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 		return Written{}, err
 	}
 	// DELETION 475: policy delete.require_reason refuses a delete without one.
-	if reason == "" && e.requireReason(src) {
+	if reason == "" && e.requireReason(ctx, src) {
 		return Written{}, errs.New(errs.ReasonRequired, "delete "+cur.ID.String()+": policy delete.require_reason needs a --reason").WithHint("rerun with --reason \"<why>\"")
 	}
 	plan, err := e.planTrash(ctx, src, cur)
@@ -184,7 +184,7 @@ func (e *Engine) softDelete(ctx context.Context, src store.Source, cur row.Row) 
 	// the trash; it needs the literal --confirm (DQ2), which also answers
 	// the group question because it names every row that goes.
 	pr := purgeOf(ctx)
-	purge := (pr != nil && pr.Asked) || e.purgeOnDelete(src)
+	purge := (pr != nil && pr.Asked) || e.purgeOnDelete(ctx, src)
 	if purge {
 		if pr == nil || !pr.Confirmed {
 			q := "--purge removes " + cur.ID.String()
@@ -359,7 +359,7 @@ func (e *Engine) TrashMany(ctx context.Context, refs []Ref) (Written, error) {
 		if cur.Deleted {
 			continue // already gone or in the trash: nothing to do for it
 		}
-		if reason == "" && e.requireReason(src) {
+		if reason == "" && e.requireReason(ctx, src) {
 			return Written{}, errs.New(errs.ReasonRequired, "delete "+cur.ID.String()+": policy delete.require_reason needs a --reason").WithHint("rerun with --reason \"<why>\"")
 		}
 		roots = append(roots, trashItem{src, cur})
@@ -503,7 +503,7 @@ func (e *Engine) confirmGroup(ctx context.Context, src store.Source, root row.Ro
 		}
 	}
 	limit := int64(defaultPreviewRows)
-	if set, _, err := e.settings.Policy(src); err == nil {
+	if set, _, err := e.settings.Policy(ctx, src); err == nil {
 		if n, ok := set.Limit(policy.KeyBatchPreviewRows); ok {
 			limit = n
 		}
@@ -1067,7 +1067,7 @@ func (e *Engine) PurgeOlder(ctx context.Context, cutoff time.Time, expired bool,
 		old := !t.Info.At.IsZero() && t.Info.At.Before(cutoff)
 		if expired {
 			days := int64(0)
-			if set, _, perr := e.settings.Policy(t.Store); perr == nil {
+			if set, _, perr := e.settings.Policy(ctx, t.Store); perr == nil {
 				days, _ = set.Limit(policy.KeyTrashRetentionDays)
 			}
 			old = trash.Expired(t.Info.At, now, days)
@@ -1084,8 +1084,8 @@ func (e *Engine) PurgeOlder(ctx context.Context, cutoff time.Time, expired bool,
 }
 
 // requireReason reports policy delete.require_reason for src (DELETION 475).
-func (e *Engine) requireReason(src store.Source) bool {
-	set, _, err := e.settings.Policy(src)
+func (e *Engine) requireReason(ctx context.Context, src store.Source) bool {
+	set, _, err := e.settings.Policy(ctx, src)
 	if err != nil {
 		return true // fail closed: a policy that cannot be read cannot waive the requirement
 	}

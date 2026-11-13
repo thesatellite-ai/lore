@@ -81,3 +81,34 @@ func TestPersonMergeLeftAlone(t *testing.T) {
 		t.Fatal("lore's own crashed merge was not aborted (or its mark kept)")
 	}
 }
+
+// TestRecoverOwnMergeBeforePickUp: the hand-edit pick-up runs before any
+// sync, so RecoverOwnMerge aborts a merge a killed lore run left (its
+// mark beside MERGE_HEAD) and leaves a person's merge alone; the git dir
+// of a plain clone is found without a git process (doctor's budget).
+func TestRecoverOwnMergeBeforePickUp(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	b := clone(t, newRemote(t, true))
+	dir := b.Dir()
+	if gd, ok := plainGitDir(dir); !ok || gd != filepath.Join(dir, ".git") {
+		t.Fatalf("plainGitDir(%s) = %q, %v", dir, gd, ok)
+	}
+	if err := b.RecoverOwnMerge(ctx); err != nil {
+		t.Fatalf("no merge: %v", err)
+	}
+	personMerge(t, dir)
+	mergeHead := filepath.Join(dir, ".git", "MERGE_HEAD")
+	if err := b.RecoverOwnMerge(ctx); err != nil || !exists(mergeHead) {
+		t.Fatalf("a person's merge: err %v, MERGE_HEAD kept %v", err, exists(mergeHead))
+	}
+	if err := b.markOwnMerge(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.RecoverOwnMerge(ctx); err != nil {
+		t.Fatalf("lore's own merge: %v", err)
+	}
+	if exists(mergeHead) || exists(filepath.Join(dir, ".git", ownMergeFile)) {
+		t.Fatal("lore's own crashed merge was not aborted before the pick-up")
+	}
+}

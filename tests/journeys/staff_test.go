@@ -84,8 +84,12 @@ func TestJourneyStaff(t *testing.T) {
 		tlApply(t, ann, dir, tlTeamSetup, "join", map[string]any{"invite": tt.store.SSHURL()})
 		tlLastSteps(t, ann, dir, tlTeamSetup, []string{tlFolders})
 		tt.lore(tlAnn, "whoami").OK(t).Says(t, tlOrg, tlAnn.Email)
+		// Ann's clone has no lore project (the join writes only to the org
+		// store): the roster commands read the org store there; a general
+		// read such as `lore actor list` says lore is not set up in it
 		tt.lore(tlAnn, "team", "show", "@web").OK(t).Says(t, tlAnn.Name)
-		if a := tt.roster(t, tlAnn)["human:"+tlAnn.Email]; a.Display != tlAnn.Name || a.Status != "active" {
+		tt.lore(tlAnn, "member", "show", tlAnn.Email).OK(t).Says(t, tlAnn.Name, "active")
+		if a := tt.roster(t, tlLee)["human:"+tlAnn.Email]; a.Display != tlAnn.Name || a.Status != "active" {
 			t.Errorf("Ann's roster entry after her join: %+v", a)
 		}
 	})

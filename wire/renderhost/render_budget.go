@@ -67,7 +67,7 @@ func (h *Host) policySet(ctx context.Context) (policy.Set, bool) {
 	if err != nil {
 		return policy.Set{}, false
 	}
-	set, err := eng.Policy(store.SourceRepo)
+	set, err := eng.Policy(ctx, store.SourceRepo)
 	if err != nil {
 		return policy.Set{}, false
 	}

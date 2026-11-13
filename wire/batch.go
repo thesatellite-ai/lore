@@ -173,7 +173,7 @@ func (a *App) Policy(ctx context.Context, target store.Source) (policy.Set, erro
 	if err != nil {
 		return policy.Set{}, err
 	}
-	return eng.Policy(target)
+	return eng.Policy(ctx, target)
 }
 
 // batchPriorExt is the file of a batch's before-images, beside its event

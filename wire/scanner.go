@@ -68,7 +68,7 @@ type liveScanner struct {
 	// "" reads no file. policy reads the effective policy (set once the
 	// engine exists, usePolicy); nil means the key's default (true).
 	repoDir string
-	policy  func() (policy.Set, error)
+	policy  func(context.Context) (policy.Set, error)
 	mu      sync.Mutex
 	key     string // the rule rows' ids and HLCs the current scanner was built from
 	cur     *gitleaks.Scanner
@@ -183,11 +183,11 @@ func (s *liveScanner) refresh(ctx context.Context, strictSessions bool) error {
 	if err != nil {
 		return err
 	}
-	allow, allowKey, err := s.repoAllow()
+	allow, allowKey, err := s.repoAllow(ctx)
 	if err != nil {
 		return err
 	}
-	noProse, err := s.proseFilterOff()
+	noProse, err := s.proseFilterOff(ctx)
 	if err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func (s *liveScanner) refresh(ctx context.Context, strictSessions bool) error {
 
 // usePolicy late-binds the policy reader (the engine is built after its
 // scanner); the next Refresh honours secrets.use_repo_gitleaks.
-func (s *liveScanner) usePolicy(fn func() (policy.Set, error)) {
+func (s *liveScanner) usePolicy(fn func(context.Context) (policy.Set, error)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.policy = fn
@@ -224,14 +224,14 @@ func (s *liveScanner) usePolicy(fn func() (policy.Set, error)) {
 // proseFilterOff reports whether policy secrets.password_pair_prose_filter
 // is off (SECRETS 3.4: off keeps every password_pair match, stricter); no
 // policy reader yet, or the key unset, means the default (filter on).
-func (s *liveScanner) proseFilterOff() (bool, error) {
+func (s *liveScanner) proseFilterOff(ctx context.Context) (bool, error) {
 	s.mu.Lock()
 	pol := s.policy
 	s.mu.Unlock()
 	if pol == nil {
 		return false, nil
 	}
-	set, err := pol()
+	set, err := pol(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -247,7 +247,7 @@ func (s *liveScanner) proseFilterOff() (bool, error) {
 // (D8, default on), with a key that changes with the file's content or
 // the switch. A missing file is no allow; a bad file fails closed
 // (E_CONFIG_INVALID).
-func (s *liveScanner) repoAllow() (gitleaks.RepoAllow, string, error) {
+func (s *liveScanner) repoAllow(ctx context.Context) (gitleaks.RepoAllow, string, error) {
 	s.mu.Lock()
 	dir, pol := s.repoDir, s.policy
 	s.mu.Unlock()
@@ -255,7 +255,7 @@ func (s *liveScanner) repoAllow() (gitleaks.RepoAllow, string, error) {
 		return gitleaks.RepoAllow{}, "", nil
 	}
 	if pol != nil {
-		set, err := pol()
+		set, err := pol(ctx)
 		if err != nil {
 			return gitleaks.RepoAllow{}, "", err
 		}
@@ -556,5 +556,5 @@ func textField(r row.Row, name string) string {
 // repo store's effective policy (the level the repo .gitleaks.toml
 // belongs to).
 func (s *liveScanner) bindEngine(eng *engine.Engine) {
-	s.usePolicy(func() (policy.Set, error) { return eng.Policy(store.SourceRepo) })
+	s.usePolicy(func(ctx context.Context) (policy.Set, error) { return eng.Policy(ctx, store.SourceRepo) })
 }

@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
@@ -56,6 +57,16 @@ func (a *App) LocalTrash(ctx context.Context) ([]opstrash.LocalCopy, error) {
 	return readLocalTrash(ctx, filepath.Join(top, filepath.FromSlash(v017LoreDB)))
 }
 
+// v017ReadQuery is the sqlite query of a read-only open of a v0.1.17
+// lore.db: under `lore fix --dry-run` (git.NoClone) also immutable, so not
+// even the -shm/-wal files a WAL database's read makes appear (B4-14).
+func v017ReadQuery(ctx context.Context) string {
+	if git.NoClone(ctx) {
+		return "mode=ro&immutable=1"
+	}
+	return "mode=ro"
+}
+
 // readLocalTrash reads the safety copies of the lore.db at path; a missing
 // file or table holds none.
 func readLocalTrash(ctx context.Context, path string) ([]opstrash.LocalCopy, error) {
@@ -64,7 +75,7 @@ func readLocalTrash(ctx context.Context, path string) ([]opstrash.LocalCopy, err
 	} else if err != nil {
 		return nil, errs.Wrap(errs.Internal, "trash --local: stat "+v017LoreDB, err)
 	}
-	dsn := fileuri.URL(path, "mode=ro")
+	dsn := fileuri.URL(path, v017ReadQuery(ctx))
 	db, err := sql.Open(sqliteDriver, dsn)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "trash --local: open "+v017LoreDB, err)

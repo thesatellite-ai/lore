@@ -3,12 +3,14 @@ package wire
 import (
 	"context"
 	"errors"
+	"io"
 	"slices"
 	"testing"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // TestErrorLine: a refusal points at the line it is about.
@@ -68,5 +70,23 @@ func TestDeferredFetch(t *testing.T) {
 	t.Parallel()
 	if fetchDeferred(context.Background()) || !fetchDeferred(withDeferredFetch(context.Background())) {
 		t.Fatal("withDeferredFetch / fetchDeferred disagree")
+	}
+}
+
+// TestHandEditContextNeverFetches (I-1): a store read under the pick-up's
+// context neither fetches nor merges (the hand edit is committed first);
+// the same read under the command's context syncs as before.
+func TestHandEditContextNeverFetches(t *testing.T) {
+	t.Parallel()
+	f := &fakePushBackend{caps: store.Capabilities{Remote: true}}
+	b := &storePush{inner: f, name: "northwind", res: pushRes(t), notes: io.Discard}
+	if _, _, err := b.Read(handEditContext(background()), ""); err != nil || f.syncs != 0 {
+		t.Fatalf("a read inside the pick-up synced the store: syncs=%d err=%v", f.syncs, err)
+	}
+	if _, err := b.Get(handEditContext(background()), "tasks", ids.AnyID{}); !errors.Is(err, store.ErrNotFound) || f.syncs != 0 {
+		t.Fatalf("a get inside the pick-up synced the store: syncs=%d err=%v", f.syncs, err)
+	}
+	if _, _, err := b.Read(background(), ""); err != nil || f.syncs != 1 {
+		t.Fatalf("the read after the pick-up must sync once: syncs=%d err=%v", f.syncs, err)
 	}
 }

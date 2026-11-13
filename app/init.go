@@ -152,17 +152,16 @@ type initHost struct {
 	h     *host
 	wd    string
 	local bool
-	// hadLoreDir and atTop are read at process start (initHost): wd held a
-	// .lore/ folder, and wd is its git checkout's top folder.
-	hadLoreDir, atTop bool
+	// hadLoreData and atTop are read at process start (initHost): wd held
+	// row files (.lore/data), and wd is its git checkout's top folder.
+	hadLoreData, atTop bool
 }
 
 // initHost is the repoinit.Host for wd; local is hasLocalState(wd) read at
 // process start. The registry's repo.init uses the same value through
 // wire (RepoInitHost), so `lore repo init` and `lore init` agree.
 func (h *host) initHost(wd string, local bool) *initHost {
-	_, lerr := os.Lstat(filepath.Join(wd, rowfs.LoreDir))
-	return &initHost{h: h, wd: wd, local: local, hadLoreDir: lerr == nil, atTop: isGitTop(wd)}
+	return &initHost{h: h, wd: wd, local: local, hadLoreData: wire.HoldsLoreData(wd), atTop: isGitTop(wd)}
 }
 
 // WorkDir implements repoinit.Host.
@@ -216,11 +215,14 @@ func (i *initHost) CreateProject(ctx context.Context, id ids.ID[ids.Project], fi
 }
 
 // LinkedProject implements repoinit.Host (wire.App.LinkedRemoteProject):
-// only for the repo's top folder, and only when it held no .lore/ when the
-// process started (a link by remote names a repo with no lore files; a
-// monorepo subfolder is its own project).
+// only for the repo's top folder, and only when it held no row files
+// (.lore/data) when the process started: a link by remote names a repo
+// with no lore data; a monorepo subfolder is its own project. A .lore/
+// holding only machine-local leftovers (lock, state/, an old render: what
+// a copied or re-cloned checkout keeps, ignored by git) still counts as
+// no lore data (B1-18 round 2: such a leftover made init mint a new id).
 func (i *initHost) LinkedProject(ctx context.Context) (ids.ID[ids.Project], string, bool) {
-	if i.hadLoreDir || !i.atTop {
+	if i.hadLoreData || !i.atTop {
 		return ids.ID[ids.Project]{}, "", false
 	}
 	return i.h.app.LinkedRemoteProject(ctx)

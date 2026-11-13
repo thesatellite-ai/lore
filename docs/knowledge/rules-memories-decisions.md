@@ -194,7 +194,7 @@ $ lore memory delete mem_28f8…03df --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
 ✓ mem_28f8…03df moved to the trash (restore: lore trash restore mem_28f8…03df)
 $ lore memory show mem_28f8…03df || true
-ERROR: [E_IN_TRASH] mem_28f8…03df is in the trash (deleted by act_4c59…6c38 on 2026-11-02 10:02)
+ERROR: [E_IN_TRASH] mem_28f8…03df is in the trash (deleted by alice on 2026-11-02 10:02)
   hint: lore trash show mem_28f8…03df; bring it back with lore trash restore mem_28f8…03df
 ```
 <!-- /example -->
@@ -236,15 +236,15 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: sha
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 $ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_f147…5139.json
-✓ mem_3b62…e913
+lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_3b62…e913.json
+✓ mem_4c59…6c38
   scope: [master]
-$ ls .lore/data/memories | grep -c mem_3b62…e913 || true
+$ ls .lore/data/memories | grep -c mem_4c59…6c38 || true
 1
-$ lore memory delete mem_3b62…e913 --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
-✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
+$ lore memory delete mem_4c59…6c38 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
+✓ mem_4c59…6c38 moved to the trash (restore: lore trash restore mem_4c59…6c38)
 ```
 <!-- /example -->
 

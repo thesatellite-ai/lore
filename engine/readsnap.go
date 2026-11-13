@@ -41,6 +41,15 @@ func WithReadSnapshot(ctx context.Context) context.Context {
 	return context.WithValue(ctx, readSnapshotKey{}, &readSnapshot{full: map[store.Backend]snapRead{}})
 }
 
+// EnsureReadSnapshot is ctx when it has a read snapshot already (a doctor
+// run's shared one), else WithReadSnapshot(ctx).
+func EnsureReadSnapshot(ctx context.Context) context.Context {
+	if snapshotOf(ctx) != nil {
+		return ctx
+	}
+	return WithReadSnapshot(ctx)
+}
+
 func snapshotOf(ctx context.Context) *readSnapshot {
 	s, _ := ctx.Value(readSnapshotKey{}).(*readSnapshot)
 	return s

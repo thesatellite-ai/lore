@@ -16,6 +16,7 @@
 package engine
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"sync"
@@ -371,12 +372,13 @@ func (e *Engine) Registry() *schema.Registry { return e.reg }
 
 // Settings is where the engine reads the settings rows that govern a write
 // to one store, resolved over every level the repo sees (logic/policy).
+// Each read takes the command's ctx: reading the rows reads the stores.
 type Settings interface {
 	// Policy returns the effective policy and secret rule states for a
 	// write to target.
-	Policy(target store.Source) (policy.Set, policy.Rules, error)
+	Policy(ctx context.Context, target store.Source) (policy.Set, policy.Rules, error)
 	// Allows returns the "not a secret" entries that apply to target.
-	Allows(target store.Source) ([]scan.Allow, error)
+	Allows(ctx context.Context, target store.Source) ([]scan.Allow, error)
 }
 
 // uuidIDs is the default IDSource.

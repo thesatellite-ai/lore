@@ -70,7 +70,8 @@ func WithSharedModes() Option { return func(r *Root) { r.modes = sharedModes } }
 // repo's .lore/data). Every Open of a code repo passes LayoutRepo.
 func WithLayout(l Layout) Option { return func(r *Root) { r.layout = l } }
 
-// WithClock replaces time.Now for the stat cursor and tmp cleanup (tests).
+// WithClock replaces time.Now for the stat cursor (tests, LORE_NOW). Tmp
+// cleanup always uses the wall clock: a file's mtime is real time.
 func WithClock(now func() time.Time) Option {
 	return func(r *Root) {
 		if now != nil {

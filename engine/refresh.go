@@ -25,6 +25,9 @@ func (e *Engine) Refresh(ctx context.Context, source store.Source) (int, error) 
 	if err != nil {
 		return 0, err
 	}
+	if len(rows) == 0 && next == cur && cur != "" {
+		return 0, nil // nothing changed: the cache is current, not rewritten (B1-16)
+	}
 	if err := e.cache.Apply(ctx, source, rows, next); err != nil {
 		return 0, err
 	}

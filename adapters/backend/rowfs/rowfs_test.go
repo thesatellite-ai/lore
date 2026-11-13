@@ -635,3 +635,37 @@ func TestOpenRefusals(t *testing.T) {
 		t.Errorf("escape: %v", err)
 	}
 }
+
+// TestReadUnchangedKeepsCursor (B1-16): a read that finds nothing changed
+// and no racy file answers with the cursor it was given, so the caller's
+// cache is not rewritten on every command; a racy file moves the time on
+// until it is past the window, and any change gives a new cursor.
+func TestReadUnchangedKeepsCursor(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	clock := func() time.Time { return now }
+	r, g, ctx := openRoot(t, WithClock(clock)), newGen(t), context.Background()
+	f := folder(t, r, FolderRoot)
+	a := g.row(newID(t), "aaaa", hlc.HLC{})
+	apply(t, f, store.Change{Row: a})
+	_, cur, err := f.Read(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Hour) // the file is racy under the first cursor's time
+	_, cur2, err := f.Read(ctx, cur)
+	if err != nil || cur2 == cur {
+		t.Fatalf("a racy file must move the cursor's time on: same=%v %v", cur2 == cur, err)
+	}
+	now = now.Add(time.Hour)
+	rows, cur3, err := f.Read(ctx, cur2)
+	if err != nil || len(rows) != 0 || cur3 != cur2 {
+		t.Fatalf("nothing changed: want the same cursor and no rows, got %d rows, same=%v %v", len(rows), cur3 == cur2, err)
+	}
+	b := g.row(newID(t), "bbbb", hlc.HLC{})
+	apply(t, f, store.Change{Row: b})
+	rows, cur4, err := f.Read(ctx, cur3)
+	if err != nil || len(rows) != 1 || cur4 == cur3 {
+		t.Fatalf("a new file: %d rows, same cursor=%v %v", len(rows), cur4 == cur3, err)
+	}
+}

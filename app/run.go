@@ -125,9 +125,9 @@ func run(ctx context.Context, args []string) int {
 	if err := refuseRelativeHome(); err != nil { // home.go: E_INVALID_INPUT for a relative HOME (E-GAPS-1 S2)
 		return printHostError(err)
 	}
-	offlineFixDryRun(args) // fixoffline.go: lore fix --dry-run reaches no remote (owner bug 14)
-	capDoctorProcs(args)   // doctorprocs.go: doctor runs on at most min(4, CPUs) cores
-	cleanOldBinary()       // winold.go: an upgrade's lore.exe.old, on Windows (8.3)
+	defer offlineFixDryRun(args)() // fixoffline.go: lore fix --dry-run reaches no remote (owner bug 14) and writes nothing
+	capDoctorProcs(args)           // doctorprocs.go: doctor runs on at most min(4, CPUs) cores
+	cleanOldBinary()               // winold.go: an upgrade's lore.exe.old, on Windows (8.3)
 	// `lore init <path>` runs the whole command in that folder (initpath.go).
 	if p, rest, ok := initPathArg(args); ok {
 		if err := enterInitDir(p); err != nil {
@@ -229,6 +229,7 @@ func run(ctx context.Context, args []string) int {
 		}
 	}
 	rend.h = renderhost.New(renderhost.Options{App: app, Home: home, Now: clk.Now, External: renderhost.CoreExternal(app), Decor: renderDecor(flags)})
+	defer wire.RemoveDryScratch()      // wire/dryhome.go: a dry run's scratch caches (deferred before Close, so it runs after it)
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
 	// setupweb.go: setup.run / join / repair returning a WebStart open the page (ONB 5.1).

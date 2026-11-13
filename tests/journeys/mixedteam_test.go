@@ -88,9 +88,11 @@ func TestJourneyMixedVersionsOneStore(t *testing.T) {
 		up := laptop.Upgrade()
 		// lore fix migrates and makes the layout commit in the same run,
 		// after the line that warns the 0.1.17 users of the store
-		up.LoreIn(lap, "fix").Says(t, "must upgrade lore", "0.1.17 refuses the new layout", "layout commit", "moved to _store/: commit", "pushed store lore-notes").
+		// (the personal note was filed for acme: it keeps its folder, D5, so
+		// no personal move commit is made)
+		up.LoreIn(lap, "fix").Says(t, "must upgrade lore", "0.1.17 refuses the new layout", "layout commit", "pushed store lore-notes").
 			Never(t, "run `lore sync` to push the org store changes")
-		up.LoreIn(lap, "memory", "list").OK(t).Says(t, mxOrgNote)
+		up.LoreIn(lap, "memory", "list").OK(t).Says(t, mxOrgNote, mxNote)
 		if len(org.FilesMatching("main", "/.lore/data/")) != 0 {
 			t.Errorf("the org store still holds rows in the 0.1.17 place after lore fix: %v", org.FilesMatching("main", "/.lore/data/"))
 		}

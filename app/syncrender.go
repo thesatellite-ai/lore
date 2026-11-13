@@ -30,7 +30,7 @@ const syncHintPrefix = "· "
 func syncRenderHook(rend *lateRender, wd string) hosthooks.Hook {
 	return hosthooks.Hook{Name: hookSyncRender, Around: func(ctx context.Context, run *hosthooks.Run, next hosthooks.Next) (op.Result, error) {
 		res, err := next(ctx)
-		if err != nil || run.ReadOnly || run.Entry.Spec().Name != opssync.OpRun || rend.h == nil {
+		if err != nil || run.ReadOnly || run.OldRows || run.Entry.Spec().Name != opssync.OpRun || rend.h == nil {
 			return res, err
 		}
 		// SOURCE_OF_TRUTH rows 10, 11: LORE.md when its stamp no longer

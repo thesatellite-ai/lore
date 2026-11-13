@@ -76,6 +76,26 @@ func TestJourneyInitLinkedRepo(t *testing.T) {
 		lee.LoreIn(second, "whoami").OK(t).Never(t, "0 link(s) for this repo")
 	})
 
+	w.Step("day2/init-over-machine-local-leftovers-keeps-the-link", func() {
+		// B1-18 round 2: a checkout copied from an older one keeps lore's
+		// machine-local files (.lore/lock, .lore/state/, ignored by git) but
+		// no row files; the link (the folder's _meta.json links entry) still
+		// names the repo, and init takes its id
+		third := lee.Clone(remote, "svc-three")
+		lee.MoveClone(t, third, filepath.Join(parent, "svc-three"))
+		third.WriteFile(".lore/lock", "")
+		third.WriteFile(".lore/state/stamp", "")
+		r := lee.LoreIn(third, "init", "--non-interactive", "--name=svc").OK(t)
+		want, err := orgresolve.RemoteProjectID(ilSlug)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := ilProjectID.FindStringSubmatch(r.Stdout); m == nil || m[1] != want {
+			t.Fatalf("lore init over leftovers: project id %v, want the linked %s:\n%s", m, want, r)
+		}
+		lee.LoreIn(third, "memory", "list").OK(t).Says(t, ilNote)
+	})
+
 	w.Step("day3/a-client-repo-linked-by-its-remote", func() {
 		w.AdvanceDays(1)
 		lee.Lore(parent, "store", "folder", "add", "team", ilClientFolder).OK(t)

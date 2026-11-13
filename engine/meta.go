@@ -369,12 +369,12 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 		p.entries[id] = en
 	}
 	for _, t := range mw.Set {
-		if err := p.set(t, false); err != nil {
+		if err := p.set(ctx, t, false); err != nil {
 			return nil, nil, err
 		}
 	}
 	for _, t := range mw.JSON {
-		if err := p.set(t, true); err != nil {
+		if err := p.set(ctx, t, true); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -390,17 +390,17 @@ func (e *Engine) applyMetaOn(ctx context.Context, cl call, target store.Source, 
 				if _, has := p.entries[t.KeyID]; has {
 					continue // the add's own --meta wins
 				}
-				if err := p.set(t, true); err != nil {
+				if err := p.set(ctx, t, true); err != nil {
 					return nil, nil, err
 				}
 				c.filled.Add(1)
 			}
 		}
-		if err := p.createRules(string(def.Name)); err != nil {
+		if err := p.createRules(ctx, string(def.Name)); err != nil {
 			return nil, nil, err
 		}
 	}
-	if err := p.checkSize(); err != nil {
+	if err := p.checkSize(ctx); err != nil {
 		return nil, nil, err
 	}
 	if err := e.scanMeta(ctx, cl, target, rowID, p, sc); err != nil {
@@ -451,8 +451,8 @@ func (p *metaPlan) warn(field, msg string) {
 }
 
 // set applies one write term.
-func (p *metaPlan) set(t meta.Term, isJSON bool) error {
-	d, fields, err := p.resolve(t)
+func (p *metaPlan) set(ctx context.Context, t meta.Term, isJSON bool) error {
+	d, fields, err := p.resolve(ctx, t)
 	if err != nil {
 		return err
 	}
@@ -577,13 +577,13 @@ func (p *metaPlan) checkRules(d keyDef, raw []byte) error {
 // key with default_on naming the table and no value yet gets its default
 // (through the normal set path, so every check runs); then every key whose
 // required_on names the table must have a value, or E_META_REQUIRED.
-func (p *metaPlan) createRules(table string) error {
+func (p *metaPlan) createRules(ctx context.Context, table string) error {
 	have := func(d keyDef) bool { _, ok := p.entries[d.id]; return ok }
 	for _, d := range p.reg {
 		if d.retired || d.dflt == "" || !slices.Contains(d.defaultOn, table) || have(d) {
 			continue
 		}
-		if err := p.set(meta.Term{KeyID: d.id, Value: d.dflt}, false); err != nil {
+		if err := p.set(ctx, meta.Term{KeyID: d.id, Value: d.dflt}, false); err != nil {
 			return err
 		}
 		p.warn(d.name, "default: "+d.name+" = "+d.dflt)
@@ -612,7 +612,7 @@ func quoteName(s string) string { return `"` + s + `"` }
 // resolve finds the definition a term names (nil = a new key) and the
 // field path inside it (MQ12: id, else scope, else the one visible
 // definition; two or more → E_META_AMBIGUOUS).
-func (p *metaPlan) resolve(t meta.Term) (*keyDef, []string, error) {
+func (p *metaPlan) resolve(ctx context.Context, t meta.Term) (*keyDef, []string, error) {
 	if !t.KeyID.IsZero() {
 		for i := range p.reg {
 			if p.reg[i].id == t.KeyID {
@@ -622,7 +622,7 @@ func (p *metaPlan) resolve(t meta.Term) (*keyDef, []string, error) {
 		return nil, nil, errs.New(errs.MetaUnregistered, "meta: no key "+t.KeyID.String()+" is visible here").
 			WithHint("lore sync, or lore meta keys --ids")
 	}
-	depth, err := p.maxDepth()
+	depth, err := p.maxDepth(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -901,8 +901,8 @@ func (p *metaPlan) unset(rowID ids.AnyID, name string) error {
 
 // maxDepth is the team's meta.max_depth for the target (3.13, OV56); 0
 // (unset) lets meta.CheckName use meta.MaxDepth.
-func (p *metaPlan) maxDepth() (int, error) {
-	pol, _, err := p.e.settings.Policy(p.target)
+func (p *metaPlan) maxDepth(ctx context.Context) (int, error) {
+	pol, _, err := p.e.settings.Policy(ctx, p.target)
 	if err != nil {
 		return 0, err
 	}
@@ -914,8 +914,8 @@ func (p *metaPlan) maxDepth() (int, error) {
 }
 
 // checkSize applies meta.max_bytes and meta.warn_bytes (3.13).
-func (p *metaPlan) checkSize() error {
-	pol, _, err := p.e.settings.Policy(p.target)
+func (p *metaPlan) checkSize(ctx context.Context) error {
+	pol, _, err := p.e.settings.Policy(ctx, p.target)
 	if err != nil {
 		return err
 	}
@@ -954,7 +954,7 @@ func (p *metaPlan) checkFresh(ctx context.Context) error {
 	if a, err := p.e.attached(store.SourceRepo); err != nil || a.Client {
 		return nil // a client repo has no store registries to consult
 	}
-	pol, _, err := p.e.settings.Policy(store.SourceRepo)
+	pol, _, err := p.e.settings.Policy(ctx, store.SourceRepo)
 	if err != nil {
 		return err
 	}
@@ -1018,7 +1018,7 @@ func (p *metaPlan) register(ctx context.Context, cl call) error {
 	}
 	added := map[store.Source]int{}
 	for _, k := range p.pending {
-		if err := p.checkCaps(k.home, k.name, added[k.home]); err != nil {
+		if err := p.checkCaps(ctx, k.home, k.name, added[k.home]); err != nil {
 			return err
 		}
 		added[k.home]++
@@ -1069,8 +1069,8 @@ const defaultMaxKeysPerRegistry = 500
 // meta.max_keys_per_registry (E_META_SIZE, a data limit for every writer)
 // to an auto-registered key in home, which already gains added keys in
 // this write (FA-META-11).
-func (p *metaPlan) checkCaps(home store.Source, name string, added int) error {
-	pol, _, err := p.e.settings.Policy(home)
+func (p *metaPlan) checkCaps(ctx context.Context, home store.Source, name string, added int) error {
+	pol, _, err := p.e.settings.Policy(ctx, home)
 	if err != nil {
 		return err
 	}
@@ -1265,7 +1265,7 @@ func (e *Engine) bindInputMeta(ctx context.Context, in op.Input) (context.Contex
 		return ctx, none, nil
 	}
 	if len(f.Meta) > 0 && e.settings != nil {
-		pol, _, perr := e.settings.Policy(store.SourceRepo)
+		pol, _, perr := e.settings.Policy(ctx, store.SourceRepo)
 		if perr != nil {
 			return nil, none, perr
 		}

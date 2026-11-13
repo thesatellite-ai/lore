@@ -223,7 +223,7 @@ func TestStoreSettings(t *testing.T) {
 	w2 := w.memIn(t, store.SourceRepo, prj, "clean")
 	policyRow(t, w, store.SourceRepo, policy.KeyOnDetect, `"ask"`)
 	policyRow(t, w, agency, policy.KeyOnDetect, `"refuse"`)
-	if set, err := w.eng.Policy(store.SourceRepo); err != nil || set.OnDetect() != policy.OnDetectRefuse {
+	if set, err := w.eng.Policy(context.Background(), store.SourceRepo); err != nil || set.OnDetect() != policy.OnDetectRefuse {
 		t.Fatalf("stricter store policy lost: %v %v", set.OnDetect(), err)
 	}
 	if _, err := w.eng.Update(ctx, Ref{ID: w2.ID}, map[string]value.Value{"body": txt("key " + fakeKey)}); !errs.Has(err, errs.SecretDetected) {

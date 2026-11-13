@@ -197,7 +197,7 @@ func (o ops) offboard(ctx context.Context, in OffboardIn) (OffboardOut, error) {
 		q := plan.out.Preview()
 		return OffboardOut{}, errs.New(errs.NeedsConfirm, strings.TrimRight(q, "\n")).WithQuestion(q + "offboard " + nameOf(a) + "?").WithHint(confirmHint)
 	}
-	if err = plan.apply(ctx, r); err != nil {
+	if err = inOneCommit(ctx, "offboard "+nameOf(a), func(ctx context.Context) error { return plan.apply(ctx, r) }); err != nil {
 		return OffboardOut{}, err
 	}
 	r.Push(ctx)
@@ -381,13 +381,6 @@ func (p offboardPlan) apply(ctx context.Context, r profilestore.Roster) error {
 		}
 	}
 	if p.period != nil {
-		// The open period as it is stored, then the end on top of it.
-		stored := *p.period
-		stored.EndedOn, stored.EndReason = time.Time{}, ""
-		m, merr := materialise(ctx, r, stored)
-		if merr != nil {
-			return merr
-		}
 		patch := map[string]value.Value{schema.FieldPeriodEndedOn: endOn}
 		for field, s := range map[string]string{schema.FieldPeriodEndReason: p.reason, schema.FieldPeriodNote: p.note} {
 			if s == "" {
@@ -397,7 +390,7 @@ func (p offboardPlan) apply(ctx context.Context, r profilestore.Roster) error {
 				return err
 			}
 		}
-		if _, err = r.Update(ctx, schema.TableActorPeriods, m.ID, patch); err != nil {
+		if err = endPeriod(ctx, r, *p.period, patch); err != nil {
 			return err
 		}
 	}
@@ -407,4 +400,28 @@ func (p offboardPlan) apply(ctx context.Context, r profilestore.Roster) error {
 	}
 	_, err = r.Update(ctx, schema.TableActors, p.actor.ID, patch)
 	return err
+}
+
+// endPeriod writes the end (patch) of the open period stored. A period
+// read from active/left_at has no row yet: it is created already ended, in
+// one write, because offboard stages its writes (inOneCommit) and a staged
+// row cannot be read back to update it (engine.Staging: staged rows are
+// not visible to reads), so create-then-update answered E_NOT_FOUND.
+func endPeriod(ctx context.Context, r profilestore.Roster, stored teamprofile.Period, patch map[string]value.Value) error {
+	stored.EndedOn, stored.EndReason = time.Time{}, ""
+	if !stored.Synthesised() {
+		_, err := r.Update(ctx, schema.TableActorPeriods, stored.ID, patch)
+		return err
+	}
+	f, err := stored.Fields()
+	if err != nil {
+		return err
+	}
+	for k, v := range patch {
+		f[k] = v
+	}
+	if _, err = r.Create(ctx, schema.TableActorPeriods, f); err != nil {
+		return errs.Prefix("period: writing the period read from the roster (active/left_at)", err)
+	}
+	return nil
 }

@@ -371,7 +371,7 @@ func List(ctx context.Context, env Env, n Noun, s Scope, withArchived bool, only
 	}
 	sources := engine.ReadStoresOf(env)
 	if only != "" {
-		sources = []store.Source{only}
+		sources = engine.NamedSources(env, only)
 	}
 	var out []Item
 	var hid Hidden

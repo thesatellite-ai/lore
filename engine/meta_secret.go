@@ -49,11 +49,11 @@ func (e *Engine) scanMeta(ctx context.Context, cl call, target store.Source, row
 	if sc == nil {
 		return errs.New(errs.Internal, "the metadata secret scan needs the write's screened state")
 	}
-	_, rules, err := e.settings.Policy(target)
+	_, rules, err := e.settings.Policy(ctx, target)
 	if err != nil {
 		return err
 	}
-	allows, err := e.settings.Allows(target)
+	allows, err := e.settings.Allows(ctx, target)
 	if err != nil {
 		return err
 	}

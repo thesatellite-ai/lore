@@ -34,6 +34,14 @@ func (a *App) DoctorStoreClones(ctx context.Context) ([]DoctorFinding, error) {
 	for _, c := range found {
 		if f, ok := storeCloneFinding(c); ok {
 			out = append(out, f)
+			continue
+		}
+		// B2-26: a whole clone in the middle of the person's git merge or
+		// rebase: lore refuses every write and sync there until it ends
+		if op, way := gitbackend.PersonGitOpAt(ctx, c.Paths.Dir); op != "" {
+			out = append(out, DoctorFinding{Check: DoctorCheckStoreClone, Level: DoctorWarning,
+				Message: c.Paths.Dir + " is in the middle of a git " + op + "; lore leaves it alone (no write or sync there) until it is finished",
+				Fix:     "in " + c.Paths.Dir + ": " + way})
 		}
 	}
 	return append(out, a.strandedCloneFindings(ctx)...), nil

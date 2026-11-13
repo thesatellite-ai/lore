@@ -182,6 +182,7 @@ Cache files are named by a store id or by a hash of a repo's path, not by a name
 |---|---|---|
 | `.lore/data/` | the repo's rows, one JSON file per row, and `_meta.json` (the project id) | yes |
 | `.lore/lock`, `.lore/state/` | the write lock, local journals (the repo's search cache is in lore's home, `~/.lore/cache/repo/`, never here) | no (`.gitignore`) |
+| `.lore/data/**/.tmp-*` | a row file still being written; a write killed half way (an agent session stopped) leaves one behind, and the next write here removes it | no (`.gitignore`, line `.lore/data/**/.tmp-*`) |
 | `.lore/lore.db`, `.lore/backups/` | lore 0.1.17's database of this checkout and its backups; `lore fix` copies the rows and edits only the database held into `.lore/data`, then removes both once every row they hold is in a store here | no; `lore fix` removes them |
 | `.lore/LORE.md`, `.lore/stores.yaml` | rendered context for agents, the stores the repo attaches | yes |
 | a marked block in `.gitignore`, `.gitattributes`, `CLAUDE.md` / `AGENTS.md` / … | lore's lines; text outside the block is never touched | yes |

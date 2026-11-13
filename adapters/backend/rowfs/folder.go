@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -205,7 +204,6 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 	if err != nil {
 		return nil, nil, errs.Wrap(errs.Internal, "rowfs: list the data folder", err)
 	}
-	now := f.root.now()
 	flat := f.layout == LayoutStore
 	for _, t := range tables {
 		name := t.Name()
@@ -218,7 +216,7 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 		case IsOSJunk(name), name == MetaFileName, name == PurgedFileName:
 			continue
 		case strings.HasPrefix(name, tmpPrefix):
-			removeStaleTmp(filepath.Join(f.dataDir, name), now)
+			removeStaleTmp(filepath.Join(f.dataDir, name))
 			continue
 		case t.Type()&fs.ModeSymlink != 0:
 			problems = append(problems, Problem{Path: name, Reason: "symlink ignored"})
@@ -231,7 +229,7 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 			problems = append(problems, Problem{Path: name, Reason: "not a table name"})
 			continue
 		}
-		p, err := f.scanTable(name, files, now)
+		p, err := f.scanTable(name, files)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -241,7 +239,7 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 }
 
 // scanTable adds the row files of one table folder to files.
-func (f *Folder) scanTable(table string, files map[string]entry, now time.Time) ([]Problem, error) {
+func (f *Folder) scanTable(table string, files map[string]entry) ([]Problem, error) {
 	dir := filepath.Join(f.dataDir, table)
 	list, err := os.ReadDir(dir)
 	if err != nil {
@@ -255,7 +253,7 @@ func (f *Folder) scanTable(table string, files map[string]entry, now time.Time) 
 		case IsOSJunk(name):
 			continue
 		case strings.HasPrefix(name, tmpPrefix):
-			removeStaleTmp(filepath.Join(dir, name), now)
+			removeStaleTmp(filepath.Join(dir, name))
 			continue
 		case e.Type()&fs.ModeSymlink != 0:
 			problems = append(problems, Problem{Path: rel, Reason: "symlink ignored"})
@@ -325,11 +323,35 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 	f.badMu.Lock()
 	f.bad = bad
 	f.badMu.Unlock()
+	if cursor != "" && len(out) == 0 && settled(prev, next) {
+		// B1-16: nothing changed since cursor and no file is racy under its
+		// time, so a new cursor would say exactly what it says: it is the
+		// answer as it is, and the caller keeps its cache untouched instead
+		// of rewriting a 5,000-file cursor (and the cache file) every
+		// command. While a file is racy the time moves on as before, so it
+		// stops being re-hashed once it is past the window.
+		return nil, cursor, nil
+	}
 	c, err := next.Encode()
 	if err != nil {
 		return nil, "", err
 	}
 	return out, c, nil
+}
+
+// settled reports whether next lists exactly prev's files with the same
+// size, mtime and hash, none of them racy under prev's time.
+func settled(prev, next StatCursor) bool {
+	if len(prev.Files) != len(next.Files) {
+		return false
+	}
+	seen := prev.byPath()
+	for _, n := range next.Files {
+		if p, ok := seen[n.Path]; !ok || p.Size != n.Size || p.MTime != n.MTime || p.SHA256 != n.SHA256 || racy(n.MTime, prev.At) {
+			return false
+		}
+	}
+	return true
 }
 
 // check decides one scanned file against its previous stat p (known is
@@ -589,6 +611,12 @@ func (f *Folder) Apply(ctx context.Context, changes []store.Change) (*Applied, e
 		if err := syncDir(dir); err != nil {
 			return nil, errors.Join(errs.Wrap(errs.Internal, "rowfs: fsync a table folder", err), a.Undo())
 		}
+	}
+	// The caller holds the store lock: any other tmp file in a folder this
+	// batch wrote (or in the data folder, where _meta.json lives) is a dead
+	// writer's debris, removed now whatever its age (sweepTmp).
+	for _, dir := range append(dirs, f.dataDir) {
+		sweepTmp(dir)
 	}
 	return a, nil
 }

@@ -9,6 +9,7 @@ package rowscan_test
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/rowscan"
@@ -142,5 +143,38 @@ func TestScanSkipsDeletedRowsAndRulePatterns(t *testing.T) {
 		if h.ID.String() != otherID {
 			t.Fatalf("scanned a skipped row: %+v", h)
 		}
+	}
+}
+
+// countScanner is wordScanner counting its calls.
+type countScanner struct {
+	wordScanner
+	calls *atomic.Int64
+}
+
+func (c countScanner) Scan(field, text string) []scan.Finding {
+	c.calls.Add(1)
+	return c.wordScanner.Scan(field, text)
+}
+
+// TestScanOnceForEachDistinctText (B1-23): the same field text in many
+// rows is scanned once, and every row still gets its own hit (an allow on
+// one row keeps the others' hits).
+func TestScanOnceForEachDistinctText(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int64
+	sc := countScanner{wordScanner{"tok"}, &calls}
+	h := int64(scan.HashMatch("tok"))
+	rows := map[row.Table][]rowscan.Row{
+		schema.TableMemories:     {memRow(t, memID, "a tok here"), memRow(t, otherID, "a tok here")},
+		schema.TableSecretAllows: {allowRow(t, memID, "body", "w", h)},
+	}
+	got := rowscan.Scan(sc, rows)
+	if len(got) != 1 || got[0].ID.String() != otherID {
+		t.Fatalf("hits %+v, want one for %s (the other row is allowed)", got, otherID)
+	}
+	// the allow row's own texts are scanned too, each once
+	if n := calls.Load(); n != 4 {
+		t.Fatalf("%d scans, want 4 (one per distinct field text)", n)
 	}
 }

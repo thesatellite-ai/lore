@@ -145,8 +145,12 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 		return nil, err
 	}
 	if sit.Result.LinkUnknown {
-		return nil, errs.New(errs.LinkUnknown, "cannot tell whether this repo is a client repo; refusing to write coordination data").
-			WithHint("`lore whoami` shows the link status; fetch the store and retry")
+		msg := "cannot tell whether this repo is a client repo; refusing to write coordination data"
+		if d := sit.Result.LinkDetail; d != "" {
+			msg += " (" + d + ")" // names the store that was not read (B1-22)
+		}
+		return nil, errs.New(errs.LinkUnknown, msg).
+			WithHint(linkUnknownHint).WithNext("lore", "sync")
 	}
 	if who.Kind == identity.KindAgent && who.Owner == nil && sit.Result.Org != nil {
 		// An agent actor (LORE_ACTOR) must be on the roster; a detected

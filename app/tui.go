@@ -42,6 +42,7 @@ func (h *host) tuiCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			opts.ActorName = h.app.ActorNamer(cmd.Context()) // names, not act_ ids, on the row screen
 			return tui.Run(cmd.Context(), engineSource{eng: eng}, cmd.InOrStdin(), cmd.OutOrStdout(), opts)
 		},
 	}

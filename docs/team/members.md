@@ -4,7 +4,7 @@
 
 ## Before you start
 
-- An **admin setup** for the org is active (see [Guided setup](guided-setup.md)); run with `--setup <an admin setup>` from anywhere. The member commands run outside any repo too.
+- An **admin setup** for the org is active (see [Guided setup](guided-setup.md)); run with `--setup <an admin setup>` from anywhere. The member commands run outside any repo too, and their reads (`lore member show`, `lore team show`) work in a clone with no lore project yet.
 - The teams you name exist (`lore team add @web`, see [Teams](teams.md)).
 
 ## Step 1 — Add people
@@ -45,8 +45,8 @@ Someone not on the roster is refused with the reason and the command to ask for:
 - `lore member list [--all]`: everyone on the roster with email, name, org role, @handle and teams (`--json`).
 - `lore member show <email|@handle|act_…>`: one person.
 - `lore member edit <who> [--name] [--handle] [--role]`.
-- `lore member remove <who> [--reason] --yes`: they leave the org (`lore actor offboard`: their stint and memberships end, they are taken off every team, the row stays for history). From then on their own lore refuses writes to the org's stores and repos (`E_REFUSED` "you are marked as left in <org> since <day>", after their next `lore sync`); their personal store keeps working.
-- `lore member add <email>` for someone who left brings them back: active again, with their roster name; a stint that ended today is reopened, so a removal made by mistake is undone at once. Teams and projects are not given back on their own: add `--team` / `--project` to the same command.
+- `lore member remove <who> [--reason] --yes`: they leave the org (`lore actor offboard`: their stint and memberships end, they are taken off every team, the row stays for history; all of it is one store commit and one push, so a teammate never fetches half a removal). From then on their own lore refuses writes to the org's stores and repos, from any folder (a repo, or inside the store's clone; a hand edit in the clone is held, not committed) (`E_REFUSED` "you are marked as left in <org> since <day>", after their next `lore sync`); their personal store keeps working.
+- `lore member add <email>` for someone who left brings them back: active again, with their roster name; a stint that ended today is reopened, so a removal made by mistake is undone at once (`lore actor rejoin <who> --type <t>` does the same on the same day). After their next `lore sync`, their writes go through again and their `lore doctor` shows the open stint at once. Teams and projects are not given back on their own: add `--team` / `--project` to the same command.
 - `lore team member add @web <email|@handle>` works for every member at once.
 
 ## Pending invites

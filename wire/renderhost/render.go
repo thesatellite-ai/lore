@@ -494,7 +494,7 @@ func (h *Host) contextTargetsOf(ctx context.Context, app *wire.App) ([]string, b
 		fmt.Fprintln(os.Stderr, h.decor.warn("WARN: could not read the context.targets setting ("+err.Error()+"); using the repo's tool files"))
 		return nil, false, nil
 	}
-	set, err := eng.Policy(store.SourceRepo)
+	set, err := eng.Policy(ctx, store.SourceRepo)
 	if err != nil {
 		return nil, false, err
 	}

@@ -137,7 +137,7 @@ alice (work/website)$ lore memory delete mem_28f8d32584b2db54ffb146bede5b03df --
 lore: wrote ~/work/website/.lore/data/memories/mem_28f8d32584b2db54ffb146bede5b03df.json
 ✓ mem_28f8d32584b2db54ffb146bede5b03df moved to the trash (restore: lore trash restore mem_28f8d32584b2db54ffb146bede5b03df)
 alice (work/website)$ lore memory show mem_28f8d32584b2db54ffb146bede5b03df || true
-ERROR: [E_IN_TRASH] mem_28f8d32584b2db54ffb146bede5b03df is in the trash (deleted by act_4c590afb2a0cc7ae1b97b7e4e62d6c38 on 2026-11-02 10:02)
+ERROR: [E_IN_TRASH] mem_28f8d32584b2db54ffb146bede5b03df is in the trash (deleted by alice on 2026-11-02 10:02)
   hint: lore trash show mem_28f8d32584b2db54ffb146bede5b03df; bring it back with lore trash restore mem_28f8d32584b2db54ffb146bede5b03df
 
 ### secrets
@@ -146,137 +146,137 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (password_pair) at line 1: sha
   hint: re-run your own command with one of: --secret-ref "<manager>://<entry>" | --secret-unstored | --not-a-secret --reason "<why>" --yes
 (exit 26)
 alice (work/website)$ lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_f147dd95f1aaf742dd4f5214843a5139.json
-✓ mem_3b6283bc4392c556bbae5f094246e913
+lore: wrote ~/work/website/.lore/data/memories/mem_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_3b6283bc4392c556bbae5f094246e913.json
+✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38
   scope: [master]
-alice (work/website)$ ls .lore/data/memories | grep -c mem_3b6283bc4392c556bbae5f094246e913 || true
+alice (work/website)$ ls .lore/data/memories | grep -c mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 || true
 1
-alice (work/website)$ lore memory delete mem_3b6283bc4392c556bbae5f094246e913 --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
-✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore mem_3b6283bc4392c556bbae5f094246e913)
+alice (work/website)$ lore memory delete mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
+✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 moved to the trash (restore: lore trash restore mem_4c590afb2a0cc7ae1b97b7e4e62d6c38)
 
 ### hotfix
 alice (work/website)$ lore hotfix add --title 'Checkout button is broken on Safari' --body 'Use the old button until the fix ships.' --severity critical
-lore: wrote ~/work/website/.lore/data/hotfixes/hfx_2537f9b2f7de77bfe5ca958860216bbb.json
-⚠ hfx_2537f9b2f7de77bfe5ca958860216bbb — Checkout button is broken on Safari [critical]
+lore: wrote ~/work/website/.lore/data/hotfixes/hfx_f147dd95f1aaf742dd4f5214843a5139.json
+⚠ hfx_f147dd95f1aaf742dd4f5214843a5139 — Checkout button is broken on Safari [critical]
 alice (work/website)$ lore hotfix list
-hfx_2537f9b2f7de77bfe5ca958860216bbb [critical] Use the old button until the fix ships.
+hfx_f147dd95f1aaf742dd4f5214843a5139 [critical] Use the old button until the fix ships.
 
 ### pattern
 alice (work/website)$ lore pattern add --title 'Load data in one place' --body 'Each page loads its data in its loader, never inside a button handler.'
-lore: wrote ~/work/website/.lore/data/patterns/pat_b69e8368dd4986838455061d5d9e5ed7.json
-✓ pat_b69e8368dd4986838455061d5d9e5ed7
+lore: wrote ~/work/website/.lore/data/patterns/pat_2537f9b2f7de77bfe5ca958860216bbb.json
+✓ pat_2537f9b2f7de77bfe5ca958860216bbb
 
 ### playbook
 alice (work/website)$ lore playbook add --title 'How to release' --body '1. Run the tests. 2. Tag the release. 3. Post in the team chat.'
-lore: wrote ~/work/website/.lore/data/playbooks/pbk_0aaebe6aca5bb46cc521869f5ba2a61f.json
-✓ pbk_0aaebe6aca5bb46cc521869f5ba2a61f
+lore: wrote ~/work/website/.lore/data/playbooks/pbk_b69e8368dd4986838455061d5d9e5ed7.json
+✓ pbk_b69e8368dd4986838455061d5d9e5ed7
 
 ### prompt
 alice (work/website)$ lore prompt add --title 'Review a pull request' --description 'Bugs first, then style' --body 'Read the change, list bugs first, then style notes.'
-lore: wrote ~/work/website/.lore/data/prompts/prm_6a866bb99ce08addfe04ea845052ed8c.json
-✓ prm_6a866bb99ce08addfe04ea845052ed8c
+lore: wrote ~/work/website/.lore/data/prompts/prm_0aaebe6aca5bb46cc521869f5ba2a61f.json
+✓ prm_0aaebe6aca5bb46cc521869f5ba2a61f
 
 ### snapshot
 alice (work/website)$ lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'
-lore: wrote ~/work/website/.lore/data/snapshots/snp_4f89f5fcb1d81152bdf3f52979ebb64b.json
-✓ snp_4f89f5fcb1d81152bdf3f52979ebb64b — Week 44
+lore: wrote ~/work/website/.lore/data/snapshots/snp_6a866bb99ce08addfe04ea845052ed8c.json
+✓ snp_6a866bb99ce08addfe04ea845052ed8c — Week 44
 alice (work/website)$ lore snapshot list
-snp_4f89f5fcb1d81152bdf3f52979ebb64b Week 44   (2026-11-02)
+snp_6a866bb99ce08addfe04ea845052ed8c Week 44   (2026-11-02)
 
 ### incident
 alice (work/website)$ lore incident add --title 'Site down for 20 minutes' --body 'The disk filled up with logs. We now rotate logs daily.'
-lore: wrote ~/work/website/.lore/data/incidents/inc_77cb2df809cef85479f6587c4a7d76c4.json
-✓ inc_77cb2df809cef85479f6587c4a7d76c4
+lore: wrote ~/work/website/.lore/data/incidents/inc_4f89f5fcb1d81152bdf3f52979ebb64b.json
+✓ inc_4f89f5fcb1d81152bdf3f52979ebb64b
 
 ### behaviour
 alice (work/website)$ lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete any file you did not create.'
-lore: wrote ~/work/website/.lore/data/behaviours/bhv_d191616cfa49f94ede5d5148b8b045c2.json
-✓ bhv_d191616cfa49f94ede5d5148b8b045c2
+lore: wrote ~/work/website/.lore/data/behaviours/bhv_77cb2df809cef85479f6587c4a7d76c4.json
+✓ bhv_77cb2df809cef85479f6587c4a7d76c4
 
 ### architecturenote
 alice (work/website)$ lore architecturenote add --title 'How the site is built' --body 'The website reads products from the shop API and caches them for 5 minutes.'
-lore: wrote ~/work/website/.lore/data/architecture_notes/anr_b4d3d8fc9a019dca1371ad55c6a611aa.json
-✓ anr_b4d3d8fc9a019dca1371ad55c6a611aa
+lore: wrote ~/work/website/.lore/data/architecture_notes/anr_d191616cfa49f94ede5d5148b8b045c2.json
+✓ anr_d191616cfa49f94ede5d5148b8b045c2
 
 ### cookbookrecipe
 alice (work/website)$ lore cookbookrecipe add --title 'Add a new page' --body 'Copy pages/about, rename it, add a link in the menu.'
-lore: wrote ~/work/website/.lore/data/cookbook_recipes/cbr_9a34c925c88945140e68f54b1ba3b418.json
-✓ cbr_9a34c925c88945140e68f54b1ba3b418
+lore: wrote ~/work/website/.lore/data/cookbook_recipes/cbr_b4d3d8fc9a019dca1371ad55c6a611aa.json
+✓ cbr_b4d3d8fc9a019dca1371ad55c6a611aa
 
 ### suggestion
 alice (work/website)$ lore suggestion add --title 'Add dark mode' --body 'Several users asked for it.'
-lore: wrote ~/work/website/.lore/data/suggestions/sug_bfed655e145f36ce2ef425180e72eeea.json
-✓ sug_bfed655e145f36ce2ef425180e72eeea
+lore: wrote ~/work/website/.lore/data/suggestions/sug_9a34c925c88945140e68f54b1ba3b418.json
+✓ sug_9a34c925c88945140e68f54b1ba3b418
 
 ### tastepref
 alice (work/website)$ lore tastepref add --body 'Buttons are blue'
-lore: wrote ~/work/website/.lore/data/taste_prefs/tst_376c6af9f6ebb2ad01d8b3c0201b8e1a.json
-✓ tst_376c6af9f6ebb2ad01d8b3c0201b8e1a
+lore: wrote ~/work/website/.lore/data/taste_prefs/tst_bfed655e145f36ce2ef425180e72eeea.json
+✓ tst_bfed655e145f36ce2ef425180e72eeea
 
 ### techdoc
 alice (work/website)$ lore techdoc add --name 'Payments docs' --base-url https://docs.example.com/payments --description 'How to take a card payment'
-lore: wrote ~/work/website/.lore/data/tech_docs/tdc_67e20cdd829de837b50a73f9dc3c291e.json
-✓ tdc_67e20cdd829de837b50a73f9dc3c291e Payments docs
+lore: wrote ~/work/website/.lore/data/tech_docs/tdc_376c6af9f6ebb2ad01d8b3c0201b8e1a.json
+✓ tdc_376c6af9f6ebb2ad01d8b3c0201b8e1a Payments docs
 
 ### workflow
 alice (work/website)$ lore workflow add --title 'Code review' --body 'One approval from a second developer before merge.'
-lore: wrote ~/work/website/.lore/data/workflows/wfl_8567cf97b52ccbe51c3bd8cd91d6366f.json
-✓ wfl_8567cf97b52ccbe51c3bd8cd91d6366f
+lore: wrote ~/work/website/.lore/data/workflows/wfl_67e20cdd829de837b50a73f9dc3c291e.json
+✓ wfl_67e20cdd829de837b50a73f9dc3c291e
 
 ### workspace
 alice (work/website)$ lore workspace add --title 'Website redesign' --body 'Everything for the new look of the site.'
-lore: wrote ~/work/website/.lore/data/workspaces/wsp_71f07e3f4ec7ebaeff7d0686d814c07d.json
-✓ wsp_71f07e3f4ec7ebaeff7d0686d814c07d
+lore: wrote ~/work/website/.lore/data/workspaces/wsp_8567cf97b52ccbe51c3bd8cd91d6366f.json
+✓ wsp_8567cf97b52ccbe51c3bd8cd91d6366f
 
 ### other kinds listed
 alice (work/website)$ lore incident list; lore tastepref list; lore techdoc list
-IN  inc_77cb2df809cef85479f6587c4a7d76c4  Site down for 20 minutes
-TA  tst_376c6af9f6ebb2ad01d8b3c0201b8e1a  Buttons are blue
-tdc_67e20cdd829de837b50a73f9dc3c291e Payments docs https://docs.example.com/payments
+IN  inc_4f89f5fcb1d81152bdf3f52979ebb64b  Site down for 20 minutes
+TA  tst_bfed655e145f36ce2ef425180e72eeea  Buttons are blue
+tdc_376c6af9f6ebb2ad01d8b3c0201b8e1a Payments docs https://docs.example.com/payments
 
 ### other kinds show edit
-alice (work/website)$ lore pattern show pat_b69e8368dd4986838455061d5d9e5ed7
-PA  pat_b69e8368dd4986838455061d5d9e5ed7
+alice (work/website)$ lore pattern show pat_2537f9b2f7de77bfe5ca958860216bbb
+PA  pat_2537f9b2f7de77bfe5ca958860216bbb
   title: Load data in one place
 
 Each page loads its data in its loader, never inside a button handler.
 created 2026-11-02T10:03:10Z by alice · updated 2026-11-02T10:03:10Z by alice
-alice (work/website)$ lore pattern edit pat_b69e8368dd4986838455061d5d9e5ed7 --body 'Each page loads its data in its loader, never inside a button handler or an effect.'
-lore: wrote ~/work/website/.lore/data/patterns/pat_b69e8368dd4986838455061d5d9e5ed7.json
-✓ pattern pat_b69e8368dd4986838455061d5d9e5ed7 updated
+alice (work/website)$ lore pattern edit pat_2537f9b2f7de77bfe5ca958860216bbb --body 'Each page loads its data in its loader, never inside a button handler or an effect.'
+lore: wrote ~/work/website/.lore/data/patterns/pat_2537f9b2f7de77bfe5ca958860216bbb.json
+✓ pattern pat_2537f9b2f7de77bfe5ca958860216bbb updated
 alice (work/website)$ lore pattern search loader
-pat_b69e8368dd4986838455061d5d9e5ed7 Load data in one place
+pat_2537f9b2f7de77bfe5ca958860216bbb Load data in one place
 
 ### incident edit
-alice (work/website)$ lore incident edit inc_77cb2df809cef85479f6587c4a7d76c4 --severity high --ref pat_b69e8368dd4986838455061d5d9e5ed7 --relation fixed_by
-lore: wrote ~/work/website/.lore/data/incidents/inc_77cb2df809cef85479f6587c4a7d76c4.json
-lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_ada321d27469d49114b952fdeed0c018.json
-✓ inc_77cb2df809cef85479f6587c4a7d76c4 updated
-alice (work/website)$ lore incident show inc_77cb2df809cef85479f6587c4a7d76c4
-IN  inc_77cb2df809cef85479f6587c4a7d76c4
+alice (work/website)$ lore incident edit inc_4f89f5fcb1d81152bdf3f52979ebb64b --severity high --ref pat_2537f9b2f7de77bfe5ca958860216bbb --relation fixed_by
+lore: wrote ~/work/website/.lore/data/incidents/inc_4f89f5fcb1d81152bdf3f52979ebb64b.json
+lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_71f07e3f4ec7ebaeff7d0686d814c07d.json
+✓ inc_4f89f5fcb1d81152bdf3f52979ebb64b updated
+alice (work/website)$ lore incident show inc_4f89f5fcb1d81152bdf3f52979ebb64b
+IN  inc_4f89f5fcb1d81152bdf3f52979ebb64b
   title: Site down for 20 minutes
-  fixed_by patterns/pat_b69e8368dd4986838455061d5d9e5ed7
+  fixed_by patterns/pat_2537f9b2f7de77bfe5ca958860216bbb
 
 The disk filled up with logs. We now rotate logs daily.
 created 2026-11-02T10:03:35Z by alice · updated 2026-11-02T10:04:40Z by alice
 
 ### other kinds archive
-alice (work/website)$ lore snapshot archive snp_4f89f5fcb1d81152bdf3f52979ebb64b
-lore: wrote ~/work/website/.lore/data/snapshots/snp_4f89f5fcb1d81152bdf3f52979ebb64b.json
-✓ snp_4f89f5fcb1d81152bdf3f52979ebb64b archived
+alice (work/website)$ lore snapshot archive snp_6a866bb99ce08addfe04ea845052ed8c
+lore: wrote ~/work/website/.lore/data/snapshots/snp_6a866bb99ce08addfe04ea845052ed8c.json
+✓ snp_6a866bb99ce08addfe04ea845052ed8c archived
 alice (work/website)$ lore snapshot list
 (no snapshots)
-alice (work/website)$ lore snapshot unarchive snp_4f89f5fcb1d81152bdf3f52979ebb64b
-lore: wrote ~/work/website/.lore/data/snapshots/snp_4f89f5fcb1d81152bdf3f52979ebb64b.json
-✓ snp_4f89f5fcb1d81152bdf3f52979ebb64b unarchived
+alice (work/website)$ lore snapshot unarchive snp_6a866bb99ce08addfe04ea845052ed8c
+lore: wrote ~/work/website/.lore/data/snapshots/snp_6a866bb99ce08addfe04ea845052ed8c.json
+✓ snp_6a866bb99ce08addfe04ea845052ed8c unarchived
 
 ### show any row
-alice (work/website)$ lore show inc_77cb2df809cef85479f6587c4a7d76c4
-inc_77cb2df809cef85479f6587c4a7d76c4  incidents  repo  "Site down for 20 minutes"
+alice (work/website)$ lore show inc_4f89f5fcb1d81152bdf3f52979ebb64b
+inc_4f89f5fcb1d81152bdf3f52979ebb64b  incidents  repo  "Site down for 20 minutes"
   body: The disk filled up with logs. We now rotate logs daily.
-  created_by_actor_id: act_4c590afb2a0cc7ae1b97b7e4e62d6c38
+  created_by_actor_id: act_ada321d27469d49114b952fdeed0c018
   project_id: prj_78c802586e1d1bcbd68d3bc11b965b6c
   severity_str: high
   title: Site down for 20 minutes
@@ -284,7 +284,7 @@ created 2026-11-02T10:03:35Z by alice · updated 2026-11-02T10:04:40Z by alice
 alice (work/website)$ lore row show dec_76bd560aff0771fab8457dbfa9823f10 --origin
 dec_76bd560aff0771fab8457dbfa9823f10  decisions  repo  "We use Stripe for payments"
   body: Stripe already works in the client shop app, so we keep one payment provider.
-  created_by_actor_id: act_4c590afb2a0cc7ae1b97b7e4e62d6c38
+  created_by_actor_id: act_ada321d27469d49114b952fdeed0c018
   project_id: prj_78c802586e1d1bcbd68d3bc11b965b6c
   source_kind: manual
   status: superseded
@@ -301,8 +301,8 @@ origin (written once)
   command    lore decision add
 
 who and when
-  created    2026-11-02T10:00:50Z   alice (act_4c590afb2a0cc7ae1b97b7e4e62d6c38)
-  updated    2026-11-02T10:01:15Z   alice (act_4c590afb2a0cc7ae1b97b7e4e62d6c38)
+  created    2026-11-02T10:00:50Z   alice (act_ada321d27469d49114b952fdeed0c018)
+  updated    2026-11-02T10:01:15Z   alice (act_ada321d27469d49114b952fdeed0c018)
 
 last write
   lore       dev
@@ -323,14 +323,14 @@ decisions — 1–2 of 2 (page 1/1)
 > 
 dec_76bd560aff0771fab8457dbfa9823f10  decisions  store repo
   body: Stripe already works in the client shop app, so we keep one payment provider.
-  created_by_actor_id: act_4c590afb2a0cc7ae1b97b7e4e62d6c38
+  created_by_actor_id: act_ada321d27469d49114b952fdeed0c018 (alice)
   project_id: prj_78c802586e1d1bcbd68d3bc11b965b6c
   source_kind: manual
   status: superseded
   superseded_by_id: dec_d4314eba822f1bf5908b2b8ded5f313a
   title: We use Stripe for payments
   trust_score: 0.5
-  updated: 2026-11-02 10:01 by act_4c590afb2a0cc7ae1b97b7e4e62d6c38
+  updated: 2026-11-02 10:01 by alice
 b back · q quit
 > 
 
