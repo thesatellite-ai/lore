@@ -608,7 +608,7 @@ func (a *App) FixPrepare(ctx context.Context, dry bool, jobs int) opsfix.Prep {
 		if u, ok := orgStore[dir]; ok {
 			norm, _ := repourl.NormalizeStore(u) // checked above
 			if info := clones.Doctor(ctx, norm, u, nil); len(info.Problems) > 0 {
-				err = errs.New(errs.Offline, "fix: fetch the store "+norm)
+				err = errs.New(errs.Offline, "fix: fetch the store "+repourl.ShownStore(norm))
 			}
 		} else {
 			err = git.RefreshClone(ctx, dir, git.WithRoute(func(ctx context.Context, remote string) ([]string, []string) {

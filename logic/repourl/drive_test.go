@@ -15,3 +15,18 @@ func TestNormalizeStoreDrivePath(t *testing.T) {
 		}
 	}
 }
+
+// TestShownStore (B3-30): a local store's id reads as its path, a hosted
+// one as is.
+func TestShownStore(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{
+		"_local/srv/git/team":  "/srv/git/team",
+		"_local/C:/git/team":   "C:/git/team",
+		"github.com/acme/team": "github.com/acme/team",
+	} {
+		if got := ShownStore(in); got != want {
+			t.Errorf("ShownStore(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

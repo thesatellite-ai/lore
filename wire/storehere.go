@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -96,7 +97,7 @@ func storeHereEntry(home string, sc storeCheckout) (attach.Store, error) {
 			branch := headBranch(sc.top)
 			pinned, _, perr := gitbackend.CloneDirFor(home, r, branch)
 			if perr != nil || branch == "" || !sameFolder(pinned, sc.top) {
-				return attach.Store{}, errs.New(errs.Refused, "wire: "+sc.top+" is a clone of store "+r.Norm+" that lore does not use (lore's clone of it is "+used+"), so lore will not read or write it").
+				return attach.Store{}, errs.New(errs.Refused, "wire: "+sc.top+" is a clone of store "+repourl.ShownStore(r.Norm)+" that lore does not use (lore's clone of it is "+used+"), so lore will not read or write it").
 					WithHint("make lore use this clone: lore store use " + sc.top + " (or work in " + used + ")")
 			}
 			one.Branch = branch

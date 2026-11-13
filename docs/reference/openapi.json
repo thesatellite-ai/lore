@@ -60417,7 +60417,7 @@
       },
       "get": {
         "operationId": "rule.list",
-        "summary": "List rules (archived ones only with --archived)",
+        "summary": "List rules (archived ones too with --archived)",
         "tags": [
           "rule"
         ],

@@ -81,7 +81,7 @@ func Ops(env kn.Env) []op.Entry {
 			Examples: []op.Example{{Title: "add a rule", CLI: `lore rule add --body="Never log tokens" --severity=must`, Want: "rul_"}},
 		}, o.add),
 		op.Define(op.Spec{
-			Name: OpList, Summary: "List rules (archived ones only with --archived)",
+			Name: OpList, Summary: "List rules (archived ones too with --archived)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.ReadErrors,
 			Examples: []op.Example{{Title: "list as JSON", CLI: "lore rule list --json", Want: `"data"`}},
 		}, o.list),

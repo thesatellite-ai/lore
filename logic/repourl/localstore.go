@@ -43,3 +43,18 @@ func IsLocalStorePath(s string) bool {
 	}
 	return strings.HasPrefix(s, "/") && !strings.Contains(s, schemeSep) && !strings.ContainsAny(s, "?#")
 }
+
+// ShownStore is a store id (NormalizeStore) as a person reads it: a hosted
+// store's host/owner/repo as is, a local one as its path ("/srv/git/notes",
+// "C:/git/notes") rather than the internal LocalStoreHost key (B3-30).
+// Messages that have the url the person typed show that instead.
+func ShownStore(norm string) string {
+	rest, ok := strings.CutPrefix(norm, LocalStoreHost+"/")
+	if !ok {
+		return norm
+	}
+	if fileuri.IsDrivePath(rest) {
+		return rest
+	}
+	return "/" + rest
+}

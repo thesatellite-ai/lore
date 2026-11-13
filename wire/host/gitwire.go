@@ -54,7 +54,7 @@ const (
 	gitWiringStamp      = "git-wiring"
 	gitWiringReadSuffix = ".read"
 	// gitWiringVersion changes whenever what is installed changes.
-	gitWiringVersion = "2"
+	gitWiringVersion = "3"
 	binaryName       = "lore"
 )
 
@@ -160,7 +160,9 @@ func hookBlocks(rel string) map[string]struct {
 	// ends a rebase, which may render, from a checkout or amend inside one,
 	// which must not (refreshDeferred).
 	refresh := func(hook, args string) []string {
-		return []string{"( " + cd + guard + bn + " sync hook refresh " + hook + args + " >/dev/null 2>&1 ) || true"}
+		// stdout is dropped; stderr is kept for the one line saying the
+		// committed render changed (B3-32)
+		return []string{"( " + cd + guard + bn + " sync hook refresh " + hook + args + " >/dev/null ) || true"}
 	}
 	probe := bn + " sync hook --help >/dev/null 2>&1"
 	tooOld := `echo "` + bn + `: installed ` + bn + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`

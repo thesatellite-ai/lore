@@ -27,6 +27,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -141,7 +142,31 @@ func (s standaloneConfig) CheckConfig(_ context.Context) (opsconfig.CheckOut, er
 			WithHint("fix the problems listed; nothing else in lore reads an invalid config")
 	}
 	warnings = append(warnings, configLiveKindWarnings(cfg)...)
+	warnings = append(warnings, personalTwiceWarnings(s.home)...)
 	return opsconfig.CheckOut{Path: path, Exists: true, Orgs: cfg.OrgNames(), Warnings: warnings}, nil
+}
+
+// personalTwiceWarnings names a setup whose own personal_store sits beside
+// lore 0.1.17's `personal.store: local` (B4-22): commands read the 0.1.17
+// store as `me` until it is migrated, so the setup's store is not read.
+func personalTwiceWarnings(home string) []string {
+	mc, err := readMachineConfig(home)
+	if err != nil || mc.localPersonalV017(home) == "" {
+		return nil
+	}
+	sc, err := ReadSetupsConfig(home)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, st := range sc.Setups {
+		switch p := strings.TrimSpace(st.PersonalStore); p {
+		case "", onboard.PersonalStoreInherit, onboard.PersonalStoreNone:
+		default:
+			out = append(out, "setup "+st.Name+" names its own personal store ("+p+") while personal.store is lore 0.1.17's local store: commands read the 0.1.17 one as me until it is migrated; run lore migrate run (or save the setup's personal_store step again)")
+		}
+	}
+	return out
 }
 
 // errMessage is a problem's text without its code (the check's own error

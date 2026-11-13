@@ -385,10 +385,27 @@ func (ap setupApplier) applyPersonalStore(ctx context.Context, e onboard.SetupEn
 	if perr := refusePushWithoutRemote(push, choice, pushURL); perr != nil {
 		return opssetup.ApplyResult{}, perr
 	}
+	// D10: what the change leaves behind is said, and kept readable
+	// (personal_previous.go); a 0.1.17 local store the choice reuses is
+	// migrated to its root first, as lore migrate run does
+	if !req.DryRun && choice == onboard.PersonalStoreLocal {
+		if steps, _, merr := ap.a.migrateLocalPersonal(ctx, false); merr != nil {
+			return opssetup.ApplyResult{}, errs.Prefix("setup apply personal_store: move the lore 0.1.17 personal store to its root", merr)
+		} else if len(steps) > 0 {
+			ap.a.notice("setup apply personal_store: reused lore 0.1.17's personal store " + fileuri.OSPath(strings.TrimPrefix(value, fileuri.Scheme+"://")) + " as this setup's local store; its notes moved to its root (" + StepPersonalStoreFlatten + ")")
+		}
+	}
+	prevNote := ap.a.previousPersonalNote(ctx, e.PersonalStore, value)
 	e.PersonalStore = value
 	res, err := ap.putEntry(e, req.DryRun)
 	if err != nil || choice == onboard.PersonalStoreNone {
+		if err == nil && prevNote != "" && !req.DryRun {
+			ap.a.notice(prevNote)
+		}
 		return res, err
+	}
+	if prevNote != "" && !req.DryRun {
+		ap.a.notice(prevNote)
 	}
 	if !req.DryRun && initURL != "" {
 		if res, err = ap.initPersonalStore(ctx, res, initURL); err != nil {
@@ -418,6 +435,16 @@ func (ap setupApplier) personalStoreValue(choice, raw string) (value, initURL st
 	case onboard.PersonalStoreLocal:
 		// onboard.LocalStoreURL: the default `me` folder under the lore home.
 		raw = fileuri.URL(personalFolderDir(ap.a.opts.Home), "")
+		// B4-22 / D10: a lore 0.1.17 local personal store (personal.store:
+		// local, ~/.lore/personal) is this machine's local store already:
+		// the setup reuses it, so its notes stay read and `me` is never
+		// attached twice (its rows move to its root when the step is saved,
+		// applyPersonalStore)
+		if mc, merr := readMachineConfig(ap.a.opts.Home); merr == nil {
+			if dir := mc.localPersonalV017(ap.a.opts.Home); dir != "" {
+				raw = fileURL(dir)
+			}
+		}
 	case onboard.PersonalStoreCreate, onboard.PersonalStoreExisting:
 		if raw == "" {
 			return "", "", errs.New(errs.InvalidInput, "setup apply personal_store: "+choice+" needs a store url").
