@@ -279,7 +279,7 @@ steps:
     values: {"personal_store":"inherit"}
   - id: tools
     title: Which coding tools do you use?
-    help: lore installs its skill for each tool and 
+    help: lore records the tools you use and checks 
     kinds: solo, member, admin
     needs: kind
     questions:

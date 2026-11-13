@@ -71,6 +71,9 @@ const (
 	skipNoName        = "no name answered yet"
 	skipNoInviteGH    = "the invite names no GitHub user"
 	skipNotInRepo     = "not inside a repo"
+	// skipGitHubSkipped: the setup's github step was skipped (saved with no
+	// answers), so it records no account or route to check.
+	skipGitHubSkipped = "the github step was skipped: git reaches each store as it is configured"
 )
 
 // setupProber is the App's setup.Prober.
@@ -276,6 +279,13 @@ func githubOwnerRepo(u, alias string) (string, string, bool) {
 
 // probeOne runs one check.
 func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) opssetup.ProbeResult {
+	if githubCheck(r.Check.ID) && githubSkipped(r) {
+		// A github step saved with no answers (stores not on GitHub, an
+		// offline or self-hosted team) asked lore not to reach GitHub: an
+		// ssh -T to github.com here failed with "GitHub refused the key"
+		// and repair listed the skipped step to redo.
+		return skip(skipGitHubSkipped)
+	}
 	switch r.Check.ID {
 	case onboard.CheckSetupConfig:
 		if _, err := ValidateSetupsConfig(sp.a.opts.Home); err != nil {
@@ -714,6 +724,31 @@ func (sp setupProber) sshAuth(ctx context.Context, r opssetup.ProbeRequest) opss
 		return result(onboard.StatusFail, a.Host+" logs in as "+a.User, v)
 	}
 	return res
+}
+
+// githubCheck reports a check of the github step (ONB 4.3).
+func githubCheck(id onboard.CheckID) bool {
+	switch id {
+	case onboard.CheckGitHubSSHKey, onboard.CheckGitHubSSHAuth, onboard.CheckGitHubSSHUser, onboard.CheckGitHubKeyMatches,
+		onboard.CheckGitHubAliasConfig, onboard.CheckGitHubGHAccount, onboard.CheckGitHubGHMatches, onboard.CheckGitHubIdentityEmail:
+		return true
+	}
+	return false
+}
+
+// githubSkipped reports a setup whose github step was skipped: no github
+// block in its entry and no github answer in the request (a check of the
+// github step itself always names an account, a required answer).
+func githubSkipped(r opssetup.ProbeRequest) bool {
+	if !r.Setup.GitHub.IsZero() {
+		return false
+	}
+	for _, id := range []string{onboard.QIDGitHubAccount, onboard.QIDHostAlias, onboard.QIDSSHKey, onboard.QIDRoute} {
+		if answerText(r.Answers, id) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // aliasConfig is github.alias_config (4.3): the alias block has

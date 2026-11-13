@@ -142,6 +142,13 @@ func identityPath(key string) string {
 	return key
 }
 
+// needsOwnSSH reports whether this route only works through lore's own
+// ssh line: the key fallback of Q5 (c) passes the key with -i, which a
+// person's own ssh command would not do.
+func (r Route) needsOwnSSH() bool {
+	return r.HTTPSUser == "" && r.HostAlias == "" && r.SSHKey != ""
+}
+
 // GitSSHCommand is the GIT_SSH_COMMAND value for this route (git runs it
 // through a shell, so every word is single-quoted).
 func (r Route) GitSSHCommand(home string) string {

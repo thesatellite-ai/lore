@@ -828,7 +828,9 @@ func refusedFixText(c onboard.Check) string {
 	if goal == "" {
 		goal = string(c.ID)
 	}
-	return "No ready-made fix for this case. Goal: " + strings.ToLower(goal[:1]) + goal[1:] +
+	// The title is kept as written: lowercasing its first letter turned
+	// "GitHub accepts the key" into "gitHub accepts the key".
+	return "No ready-made fix for this case. Goal: " + goal +
 		". The line above says what failed; fix that by hand, then run lore doctor --all --fresh"
 }
 

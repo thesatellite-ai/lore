@@ -247,6 +247,13 @@ func supersedeWarning(fixes []supersedeFix) string {
 		"run `lore doctor --fix` to move each link onto the old row (lore migrate run and lore store adopt convert them too)", len(fixes), describeSupersedeFixes(fixes))
 }
 
+// supersedeFormatOldNote is supersedeWarning in a project on the 0.1.17
+// format, where lore migrate run is the one next step (fmt1).
+func supersedeFormatOldNote(fixes []supersedeFix) string {
+	return fmt.Sprintf("%d --supersedes link(s) written by lore 0.1.16 or older point from the new row to the old one (%s; each read as old → new, the row that replaces it); "+
+		"lore migrate run moves each link onto the old row", len(fixes), describeSupersedeFixes(fixes))
+}
+
 // Commands a --supersedes repair names in its commit title.
 const (
 	supersedeByDoctor  = "doctor --fix"
@@ -316,6 +323,13 @@ func (a *App) doctorSupersedes(ctx context.Context, fix bool, warn, note, fail, 
 		return nil
 	}
 	list := describeSupersedeFixes(fixes)
+	if top := gitTopLevel(ctx, a.projectDir()); top != "" && ProjectFormatOld(top) {
+		// fmt1: in a project on the 0.1.17 format this lore writes no row,
+		// so the repair is lore migrate run's (it converts them): a note
+		// naming it, never a doctor --fix that would be refused
+		note(supersedeFormatOldNote(fixes))
+		return nil
+	}
 	if !fix {
 		warn(supersedeWarning(fixes))
 		return nil

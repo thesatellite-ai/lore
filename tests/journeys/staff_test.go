@@ -28,6 +28,20 @@ func TestJourneyStaff(t *testing.T) {
 		tt.lore(tlLee, "team", "add", "@ops", "--members", "@lee").OK(t)
 	})
 
+	w.Step("day1/a-bad-csv-names-every-line", func() {
+		// B-2: one run names every bad line by its file line, a duplicate
+		// names both lines, a broken quote says why; nothing is written
+		bad := filepath.Join(lee.Home, "staff-bad.csv")
+		jWrite(t, bad, "email,name\n"+tlAnn.Email+",Ann\nnot-an-email,Broken\n"+tlAnn.Email+",Ann Again\n")
+		tt.lore(tlLee, "member", "add", "--from", bad, "--yes").Refused(t).
+			Says(t, "2 lines need a fix, nothing written", `line 3: "not-an-email" is not an email address`,
+				"line 4: "+tlAnn.Email+" is already on line 2", "in staff-bad.csv fix line 3", "--from "+bad+" --dry-run")
+		quote := filepath.Join(lee.Home, "quote.csv")
+		jWrite(t, quote, "email,name\n\""+tlAnn.Email+",broken\n")
+		tt.lore(tlLee, "member", "add", "--from", quote, "--dry-run").Refused(t).Says(t, "line 2: a quote", "never closed", "close the quote")
+		tt.lore(tlLee, "member", "list").OK(t).Never(t, tlAnn.Email)
+	})
+
 	w.Step("day1/add-staff-from-a-csv", func() {
 		csv := filepath.Join(lee.Home, "staff.csv")
 		jWrite(t, csv, "email,name,handle,github,role,teams\n"+

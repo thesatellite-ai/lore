@@ -50,7 +50,7 @@ const DoctorCheckRowFormat DoctorCheck = "row_format"
 
 const (
 	rowFormatBeforeNote = "row files written by lore 0.1.17 (_v: 1) are not migrated yet (%s)"
-	rowFormatBeforeFix  = "lore fix --migrate"
+	rowFormatBeforeFix  = "lore migrate run" // fmt1: the one next step doctor names in a 0.1.17-format project
 	rowFormatAfterWarn  = "row files at _v: 1 after this repo's migration (min_lore_version %s): a lore older than 0.1.18 still writes here, cannot read the migrated rows and cannot commit beside them (%s)"
 	rowFormatAfterFix   = "upgrade lore on the machine that wrote them (lore upgrade), then run lore fix --migrate"
 	rowFormatLeftBefore = "row files an earlier lore migrate run left at _v: 1 (%s): this lore's migration rewrites them too"

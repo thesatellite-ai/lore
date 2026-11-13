@@ -122,7 +122,7 @@ steps:
     values: {}
   - id: tools
     title: Which coding tools do you use?
-    help: lore installs its skill for each tool and 
+    help: lore records the tools you use and checks 
     kinds: solo, member, admin
     needs: kind
     questions:
@@ -177,11 +177,11 @@ steps:
 |---|---|---|---|
 | `kind` | What kind of setup is this? | all | the setup's kind and name; for `solo`, whether it is the default |
 | `identity` | Who are you? | all | your name, email, other addresses and handle (a `member` setup is prefilled with the invite's email) |
-| `github` | Which GitHub account? | all, optional | the GitHub user you pick, and the route lore found for it: `route: ssh` with the host alias (`github.com` or a `Host` block of yours) and the key's fingerprint (plus the key path when a `.pub` sits beside it or you gave one), or `route: https` (the account's gh login). Skip it (`lore setup apply --setup <setup> --step github --answers '{}'`, or Skip on the page) when your stores are not on GitHub (another git host, a local path) or the machine has no gh login or GitHub key: git then reaches each store as it is configured |
+| `github` | Which GitHub account? | all, optional | the GitHub user you pick, and the route lore found for it: `route: ssh` with the host alias (`github.com` or a `Host` block of yours) and the key's fingerprint (plus the key path when a `.pub` sits beside it or you gave one), or `route: https` (the account's gh login). Skip it (`lore setup apply --setup <setup> --step github --answers '{}'`, or Skip on the page) when your stores are not on GitHub (another git host, a local path) or the machine has no gh login or GitHub key: git then reaches each store as it is configured, and no GitHub check runs for the setup (`lore doctor --all` shows them as skip, `lore setup repair` never lists the step) |
 | `personal_store` | Where do your own notes go? | all | your personal store (`--to me`): create a new private repo, use an existing one (a git url, or the path of a bare git repository on this machine), a local folder (`file://~/.lore/stores/_me`), the same as your other setups (also when their `personal.store` is v0.1.17's `local`), or none; the repo url is only read for create and existing |
 | `join` | Join your team | member | the invite you were sent; joins the org and its roster |
-| `team` | Start or attach your team store | admin | the team name, a new or empty private repo for its store, the team's own repo patterns and client repo patterns; or your team's existing store, on a new machine of an admin: lore attaches it, builds the org entry from its `lore-org.yaml` (every store, `own` and `repos`, as a member's join does) and adds you to its roster as an admin when you are not on it yet. Only a repo that holds files and is not a lore store is refused (`org.free`) |
-| `tools` | Which coding tools do you use? | all, optional | the tool profiles (`claude_code`, `codex`, …); lore installs its skill for each ([skill install](../knowledge/skill-install.md)) |
+| `team` | Start or attach your team store | admin | the team name, a new or empty private repo for its store, the team's own repo patterns and client repo patterns (each `host/owner/repo` with `*` or `**` as a whole segment and never for the host, like `github.com/agency/*`: `lore setup check` reports any other shape as a field error, and `apply` refuses it before anything is cloned or written); or your team's existing store, on a new machine of an admin: lore attaches it, builds the org entry from its `lore-org.yaml` (every store, `own` and `repos`, as a member's join does) and adds you to its roster as an admin when you are not on it yet. Only a repo that holds files and is not a lore store is refused (`org.free`) |
+| `tools` | Which coding tools do you use? | all, optional | the tool profiles (`claude_code`, `codex`, …); saving records them and checks each tool has the current lore skill: a missing or old one shows as a warning with its fix, `lore skill install --tool <tool>` ([skill install](../knowledge/skill-install.md)) |
 | `secrets` | Where do you keep secrets? | all, optional | the default secret manager for new secret references (lore only asks it for its version) |
 | `folders` | Which folders is this setup for? | all, optional | folder globs and whether this is the default setup |
 | `this_folder` | This folder | all, optional | nothing; shown only when you started inside a git repo: which setup this repo uses and whether lore is set up in it |
@@ -220,7 +220,7 @@ On the GitHub step you pick only the account. lore then finds how git reaches Gi
 2. otherwise https with the account's gh login: every git call gets the token from `gh auth token --user <account>` through a credential helper given on that call only; the token stays in memory and is never written to git config, a url or a file;
 3. otherwise the step says what to do: log in with `gh auth login`, or add a `Host` block for the account's key.
 
-Store reads and writes of the setup use the same route (`-c url.<alias>.insteadOf` for an alias, `GIT_SSH_COMMAND -i <key>` for a forced key, the https rewrite and helper for https). lore never edits `~/.ssh/config` and never reads or copies a key.
+Store reads and writes of the setup use the same route (`-c url.<alias>.insteadOf` for an alias, `GIT_SSH_COMMAND -i <key>` for a forced key, the https rewrite and helper for https). The store checks (`store.read`, `store.write`, `org.free`) keep your own ssh command: when `GIT_SSH_COMMAND`, `GIT_SSH` or `core.sshCommand` is set (a jump host, a proxy, a key script), git runs it as it does for you; lore adds its own `ssh -o BatchMode=yes -o ConnectTimeout=5` only when you have none, or when the setup records a key file. lore never edits `~/.ssh/config` and never reads or copies a key.
 
 `lore setup aliases` shows what lore sees: each `Host` alias of github.com, its key file, and the GitHub user `ssh -T` greets it as, plus gh's logins (`--keys` also tests every key file alone, `--fresh` asks again). Tomas's `~/.ssh/config` has plain `github.com` and a `gh-agency` alias; his key files are not on this example machine, so ssh uses its own default key for both:
 
@@ -411,7 +411,7 @@ Everything the page does is also a command, so scripts and agents can do it too.
 | `lore setup import --setups '<json>'` | write setup entries as `import-scan` proposes them; a taken name is skipped |
 | `lore setup import-dismiss --key <banner_key>` | hide the setup page's import banner for the values it names (kept in `~/.lore/state/import-dismissed.json`) |
 
-Steps must be saved in order: a step whose earlier steps are not done is refused with `E_SETUP_STEP_ORDER`, and a step with a failing error-level check with `E_SETUP_STEP_FAILED`. Saving a step again with the same answers writes nothing. A `member` or `admin` setup is written to `setups:` only by its `join` or `team` step, once its org entry exists; until then its answers are kept as progress.
+Steps must be saved in order: a step whose earlier steps are not done is refused with `E_SETUP_STEP_ORDER`, and a step with a failing error-level check with `E_SETUP_STEP_FAILED`. Saving a step again with the same answers writes nothing. A `member` or `admin` setup is written to `setups:` only by its `join` or `team` step, once its org entry exists; until then its answers are kept as progress, and the `join` or `team` step writes every saved answer into the entry it creates: the GitHub account and personal store, the `kind` step's default, the tools, the secrets manager, and the folders with their default. A step saved before that reports `done` and is not saved again.
 
 ### Disable, remove and restore a setup
 

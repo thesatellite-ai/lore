@@ -91,11 +91,10 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 
 // Update implements opsmemory.Env.
 func (a *App) Update(ctx context.Context, ref engine.Ref, patch map[string]value.Value) (engine.Written, error) {
-	st, err := a.writeStateFor(ctx, ref.Store)
+	st, src, err := a.writeStateForRef(ctx, ref)
 	if err != nil {
 		return engine.Written{}, err
 	}
-	src := refStore(ctx, st, ref)
 	if uerr := a.unreachableGuard(ctx, st, explicitTarget(src)); uerr != nil {
 		return engine.Written{}, uerr
 	}
@@ -145,7 +144,7 @@ func (a *App) DeleteMany(ctx context.Context, refs []engine.Ref) error {
 	if len(refs) == 0 {
 		return nil
 	}
-	st, err := a.writeStateFor(ctx, refs[0].Store)
+	st, err := a.writeStateForRefs(ctx, refs)
 	if err != nil {
 		return err
 	}
@@ -169,11 +168,10 @@ func (a *App) DeleteMany(ctx context.Context, refs []engine.Ref) error {
 
 // Delete implements opsmemory.Env.
 func (a *App) Delete(ctx context.Context, ref engine.Ref) (engine.Written, error) {
-	st, err := a.writeStateFor(ctx, ref.Store)
+	st, src, err := a.writeStateForRef(ctx, ref)
 	if err != nil {
 		return engine.Written{}, err
 	}
-	src := refStore(ctx, st, ref)
 	if ferr := a.checkTarget(src); ferr != nil {
 		return engine.Written{}, ferr
 	}
@@ -548,6 +546,47 @@ func (a *App) writeStateFor(ctx context.Context, target store.Source) (*state, e
 		}
 	}
 	return st, nil
+}
+
+// writeStateForRef is writeStateFor for an edit of ref's row, gated by
+// the store that row is in: a ref without a store (a machine-local
+// sessions row's, a row found by id) is looked up first, so an edit of a
+// row outside the repo never meets the repo's format refusal (fmt1: in a
+// project on the 0.1.17 format, the session row's update made by the
+// first audited write of a process refused every setup step and render
+// history write with "is stored but its audit record failed"). A ref
+// that cannot be found gates as a repo write (fail closed); the write
+// itself then reports it missing.
+func (a *App) writeStateForRef(ctx context.Context, ref engine.Ref) (*state, store.Source, error) {
+	if ref.Store != "" {
+		st, err := a.writeStateFor(ctx, ref.Store)
+		return st, ref.Store, err
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	src := refStore(ctx, st, ref)
+	st, err = a.writeStateFor(ctx, src)
+	return st, src, err
+}
+
+// writeStateForRefs is writeStateForRef for several refs written as one:
+// gated as a write into their one store when they all resolve to the same
+// store, else as a repo write (every gate applies).
+func (a *App) writeStateForRefs(ctx context.Context, refs []engine.Ref) (*state, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, err
+	}
+	target := refStore(ctx, st, refs[0])
+	for _, ref := range refs[1:] {
+		if refStore(ctx, st, ref) != target {
+			target = ""
+			break
+		}
+	}
+	return a.writeStateFor(ctx, target)
 }
 
 // checkTarget is the O6 question of an attached v0.1.17 org store before

@@ -78,6 +78,9 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 			warn("cannot check the fetch refspec: " + rerr.Error())
 		case len(st.Unsafe) > 0:
 			warn("a fetch refspec writes straight into refs/lore/* and can overwrite unpushed live writes on a plain git fetch: " + strings.Join(st.Unsafe, ", ") + " (remove it; lore uses refs/lore-remote/)")
+		case !st.Present && wire.ProjectFormatOld(s.top):
+			// fmt1: the one next step there is lore migrate run (doctor's
+			// format line); lore sync writes nothing of a 0.1.17 project
 		case !st.Present:
 			note("tracking refspec not configured, so a plain `git fetch` does not fetch live rows (lore's own fetch does); `lore sync` or `lore doctor --fix` adds it")
 		default:
@@ -177,6 +180,9 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	if s.clientHooksInWorkTree(ctx, dir) {
 		warn(what + "; not installed: " + dir + " is in the work tree of a client repo, whose tracked files lore never changes; add the blocks by hand if this repo should carry rows on its pushes")
 		return
+	}
+	if !fix && wire.ProjectFormatOld(s.top) {
+		return // fmt1: lore fix refuses in a 0.1.17-format project; doctor names lore migrate run once
 	}
 	if !fix && s.neverWired(ctx, dir) {
 		// M-5: every teammate's fresh clone read DEGRADED, as if broken; a

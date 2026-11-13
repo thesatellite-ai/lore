@@ -85,3 +85,12 @@ func TestFixRefusedIsPlain(t *testing.T) {
 		t.Errorf("no title: %q", got)
 	}
 }
+
+// The goal keeps the check title's case: "GitHub accepts the key" read
+// "gitHub accepts the key" (A-14).
+func TestRefusedFixTextKeepsTitleCase(t *testing.T) {
+	got := refusedFixText(onboard.Check{ID: onboard.CheckGitHubSSHAuth, Title: "GitHub accepts the key"})
+	if !strings.Contains(got, "Goal: GitHub accepts the key.") {
+		t.Errorf("refusedFixText = %q", got)
+	}
+}

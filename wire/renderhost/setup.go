@@ -106,6 +106,12 @@ func (s *SetupHost) WriteAgentHooks(ctx context.Context, plans []opssetup.HookPl
 	if err != nil {
 		return err
 	}
+	// fmt1: the settings files are tracked; a project on the 0.1.17
+	// format gets no tracked file written before lore migrate run (the
+	// plan above still shows what would change)
+	if wire.ProjectFormatOld(root) && slices.ContainsFunc(plans, func(p opssetup.HookPlan) bool { return p.Change }) {
+		return wire.FormatOldErr(root)
+	}
 	for _, p := range plans {
 		if !p.Change {
 			continue

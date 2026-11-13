@@ -165,7 +165,11 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		if filepath.IsAbs(f.outPath) {
 			rendered = fileSize(f.outPath) >= 0
 		}
-		if rendered {
+		// fmt1: in a project on the 0.1.17 format the rendered files are
+		// lore 0.1.17's (its own layout) and lore render skips: only the
+		// budget is checked, as in a repo that never rendered
+		formatLine, formatOld := wire.FormatOldAt(ctx, root)
+		if rendered && !formatOld {
 			stale, serr := h.copiesOf(ctx, root, f.outPath, p)
 			if serr != nil {
 				return serr
@@ -176,9 +180,12 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		}
 		fmt.Fprintf(f.out(), "%s %s would be %d of %d bytes (%d%%; warn at %d%%)\n", h.decor.check(), f.outPath,
 			report.After, report.Budget, report.After*percent/max(report.Budget, 1), report.WarnPct)
-		if rendered {
+		switch {
+		case formatOld:
+			fmt.Fprintf(f.out(), "%s rendered files not compared: %s\n", h.decor.muted("·"), formatLine)
+		case rendered:
 			fmt.Fprintf(f.out(), "%s rendered files match their rows\n", h.decor.check())
-		} else {
+		default:
 			fmt.Fprintf(f.out(), "%s %s is not rendered yet (lore render)\n", h.decor.muted("·"), f.outPath)
 		}
 		return nil
@@ -210,6 +217,18 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 			return nil
 		}
 		return wire.UntouchedError(top)
+	}
+
+	// fmt1: a project on the 0.1.17 format gets no tracked file written
+	// (LORE.md, LORE.full.md, pointer blocks, folder files, render history)
+	// until lore migrate run: a 0.1.17 teammate rewrites LORE.md in its own
+	// layout, so both versions would churn it in every commit. render
+	// --check, --report and --dry-run above write nothing and still run.
+	if line, old := wire.FormatOldAt(ctx, root); old {
+		if !f.quiet {
+			fmt.Fprintf(f.out(), "%s lore render: skipped: %s\n", h.decor.muted("·"), line)
+		}
+		return nil
 	}
 
 	// Generated content goes to the out file (default .lore/LORE.md), never

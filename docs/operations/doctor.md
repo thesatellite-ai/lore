@@ -119,6 +119,8 @@ Status: HEALTHY
 ```
 <!-- /example -->
 
+In a repo still on the lore 0.1.17 format (`format: the lore 0.1.17 format (format 1)` in `[sync]`) doctor names one next step, `lore migrate run` (the `row_format` note says `fix: lore migrate run`), and leaves out what only that migration lets lore do: the merge driver, hook blocks and `.gitignore` notes, the rendered-copy warnings (`LORE.md` there is lore 0.1.17's own) and the `--supersedes` repair, which becomes a note naming `lore migrate run`. The format alone is not a warning, so a 0.1.17-format repo with nothing else wrong reads HEALTHY (exit 0), also in CI; `lore doctor --fix` there edits no tracked file. See [Upgrading](upgrade.md) for when to run the migration.
+
 When a sync conflict is kept aside doctor says DEGRADED (exit 1) and names `lore sync conflicts`; BROKEN (exit 2) means lore cannot read its notes at all, for example a row file under `.lore/data` that is not valid JSON. The full story of a cache rebuild is in [A damaged cache](backup-restore-repair.md).
 
 ## Look up an error code

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/gitenv"
@@ -64,6 +65,15 @@ type Options struct {
 // Prober runs the probes. Safe for concurrent use.
 type Prober struct {
 	o Options
+	// sshCfg caches whether the person's git config sets core.sshCommand
+	// (personHasSSHCommand); a pointer so the Prober stays copyable.
+	sshCfg *sshConfigOnce
+}
+
+// sshConfigOnce is the once-per-Prober read of core.sshCommand.
+type sshConfigOnce struct {
+	once sync.Once
+	set  bool
 }
 
 // New returns a Prober with o's defaults filled in.
@@ -86,7 +96,7 @@ func New(o Options) *Prober {
 	if o.Limiter == nil {
 		o.Limiter = NewLimiter(DefaultConcurrency)
 	}
-	return &Prober{o: o}
+	return &Prober{o: o, sshCfg: &sshConfigOnce{}}
 }
 
 func orDefault(d, def time.Duration) time.Duration {
@@ -206,10 +216,7 @@ func (p *Prober) env(extra []string) []string {
 		}
 		set[k] = kv
 	}
-	base := p.o.Env
-	if base == nil {
-		base = os.Environ()
-	}
+	base := p.baseEnv()
 	// The probes run git with -C or Dir; an inherited GIT_DIR (a git hook
 	// exports it) would point them at another repository (logic/gitenv).
 	base = gitenv.Clean(base)
@@ -227,6 +234,15 @@ func (p *Prober) env(extra []string) []string {
 		out = append(out, set[k])
 	}
 	return out
+}
+
+// baseEnv is the environment every child starts from: Options.Env, else
+// the process's own.
+func (p *Prober) baseEnv() []string {
+	if p.o.Env == nil {
+		return os.Environ()
+	}
+	return p.o.Env
 }
 
 // runKillable starts cmd and kills its process tree when ctx ends first.
@@ -252,6 +268,7 @@ const (
 	envHome           = "HOME"
 	envGitPrompt      = "GIT_TERMINAL_PROMPT"
 	envGitSSHCommand  = "GIT_SSH_COMMAND"
+	envGitSSH         = "GIT_SSH"
 	envLCAll          = "LC_ALL"
 	envGHPrompt       = "GH_PROMPT_DISABLED"
 	envGHNoUpdate     = "GH_NO_UPDATE_NOTIFIER"
