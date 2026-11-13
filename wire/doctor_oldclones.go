@@ -88,7 +88,8 @@ func (a *App) DoctorOldClones(ctx context.Context) ([]DoctorFinding, error) {
 			Message: p + " is an org link clone of an earlier build; this lore no longer uses it (the org link code uses the store clone)",
 			Fix:     "rm -rf " + p})
 	}
-	return append(out, a.personalV017Findings(ctx)...), nil
+	out = append(out, a.personalV017Findings(ctx)...)
+	return append(out, a.personalUnplacedFindings()...), nil
 }
 
 // personalV017Findings names personal notes lore 0.1.17 filed per org
@@ -101,7 +102,7 @@ func (a *App) personalV017Findings(ctx context.Context) []DoctorFinding {
 	var out []DoctorFinding
 	for _, p := range personalV017Candidates(home) {
 		out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorWarning,
-			Message: "personal store clone " + p.dir + " still holds notes lore 0.1.17 filed per org (" + strings.Join(git.PersonalFoldersV017At(p.dir), "/, ") + "/), which this lore does not read until they move to " + rowfs.StoreDataDir + "/",
+			Message: "personal store clone " + p.dir + " still holds lore 0.1.17's everywhere/ notes, which this lore does not read until they move to " + rowfs.StoreDataDir + "/",
 			Fix:     "run any lore command so lore moves them (it prints why when it cannot)"})
 	}
 	mc, err := readMachineConfig(home)

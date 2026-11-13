@@ -34,6 +34,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -86,6 +87,9 @@ type Run struct {
 	// REST), for hooks that explain an error by the command's id argument.
 	Cmd  *cobra.Command
 	Args []string
+	// OldRows marks a sync in a repo with unmigrated lore 0.1.17 rows: the
+	// hooks treat it as a read (no .gitignore, no git wiring, no render).
+	OldRows bool
 }
 
 // Options returns base with every hook's Options applied in order.
@@ -110,6 +114,9 @@ type State struct {
 	// Cmd and Args are the running command and its arguments.
 	Cmd  *cobra.Command
 	Args []string
+	// OldRows marks a sync in a repo with unmigrated lore 0.1.17 rows: the
+	// hooks treat it as a read (no .gitignore, no git wiring, no render).
+	OldRows bool
 }
 
 // Runner is the op.Runner every surface of a binary runs through (spec
@@ -145,6 +152,15 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		ctx = gitbackend.WithNoClone(ctx) // … not even a store clone (B4-14)
 	}
 	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: r.State.ReadOnly || os.Getenv(EnvReadOnly) == envOn, Cmd: r.State.Cmd, Args: r.State.Args}
+	// D7 (B2-20): `lore sync` in a repo lore 0.1.17 wrote and nobody
+	// migrated yet runs as a read: it changes no tracked file, so the
+	// admin's lore fix commit pulls cleanly here (wire/oldrowsread.go)
+	if e.Spec().Name == opssync.OpRun {
+		if wd, werr := os.Getwd(); werr == nil && wire.HasV017RowsAt(ctx, wd) {
+			ctx = wire.WithOldRowsRead(ctx)
+			run.OldRows = true
+		}
+	}
 	ctx = wire.WithCommandName(ctx, runCommandName(run)) // the prefix of what lore prints it set up (wire/cmdname.go)
 	if setUpRun(run) {
 		ctx = gitbackend.WithGitSetUp(ctx) // an explicit setup or sync may set store clones up for plain git (handgit.go)

@@ -194,7 +194,7 @@ func (a *App) DoctorTriageOwner(ctx context.Context) ([]DoctorFinding, error) {
 	if err != nil {
 		return nil, err
 	}
-	set, err := st.eng.Policy(store.SourceRepo)
+	set, err := st.eng.Policy(ctx, store.SourceRepo)
 	if err != nil {
 		return nil, err
 	}

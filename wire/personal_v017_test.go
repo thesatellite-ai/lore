@@ -129,6 +129,9 @@ func TestV017LocalPersonalStore(t *testing.T) {
 			t.Fatalf("%s still has a copy in everywhere/ after the move", id)
 		}
 	}
+	if _, serr := os.Stat(filepath.Join(home, personalDirV017, personalEverywhereV017)); serr == nil {
+		t.Fatal("the emptied everywhere/ folder was left behind")
+	}
 	got := string(mustRead(t, filepath.Join(home, ConfigFile)))
 	if !strings.Contains(got, "store: file://") || !strings.Contains(got, "# my settings") {
 		t.Fatalf("config.yaml after migrate: %q", got)
@@ -167,7 +170,9 @@ func TestV017LocalPersonalPlacement(t *testing.T) {
 			t.Fatalf("stores = %v, missing %s", a.Stores(), want)
 		}
 	}
-	if out, err := run(t, a, opsmemory.OpList, `{"store":"me"}`, false); err != nil || !strings.Contains(out, v017OrgMem) || strings.Contains(out, v017PersonalMem) {
+	// `--store me` is every personal note this repo reads, me/everywhere
+	// included (engine.NamedSources)
+	if out, err := run(t, a, opsmemory.OpList, `{"store":"me"}`, false); err != nil || !strings.Contains(out, v017OrgMem) || !strings.Contains(out, v017PersonalMem) {
 		t.Fatalf("me in an org repo: %s %v", out, err)
 	}
 	if out, err := run(t, a, opsmemory.OpList, `{"store":"me/everywhere"}`, false); err != nil || !strings.Contains(out, v017PersonalMem) {

@@ -879,3 +879,25 @@ func TestOffboardTakesThemOffTeams(t *testing.T) {
 		t.Errorf("@ops changed: %v", got)
 	}
 }
+
+// TestRejoinSameDayReopens (B2-24): offboarded today by mistake, rejoined
+// today: the stint that ended today is reopened (no E_PERIOD_OVERLAP for
+// a new stint starting the same day), and the person is active again.
+func TestRejoinSameDayReopens(t *testing.T) {
+	w := newWorld(t)
+	o := w.ops()
+	if _, err := o.offboard(yes(), OffboardIn{Actor: "@mira", Reason: "removed by mistake"}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := o.rejoin(yes(), RejoinIn{Actor: "@mira", Type: schema.PeriodTypeEmployee})
+	if err != nil || !out.Applied {
+		t.Fatalf("same-day rejoin: %+v %v", out, err)
+	}
+	ps := w.f.All(schema.TableActorPeriods)
+	if len(ps) != 1 || text(ps[0], schema.FieldPeriodEndedOn) != "" || text(ps[0], schema.FieldPeriodEndReason) != "" || text(ps[0], schema.FieldPeriodStartedOn) != "2026-01-12" {
+		t.Fatalf("periods after a same-day rejoin: %v", ps)
+	}
+	if m := w.get(t, schema.TableActors, w.mira); text(m, schema.FieldActorStatus) != schema.ActorStatusActive {
+		t.Fatalf("actor: %v", m.Fields)
+	}
+}

@@ -49,13 +49,17 @@ func TestJourneyTeamLeadStoreConflict(t *testing.T) {
 	})
 	// conflict makes both people retitle the task, Ann's edit waiting
 	// offline, then Lee's lands first: Ann's sync is refused (E_STALE).
-	conflict := func(lee, ann string) {
+	conflict := func(lee, ann string, extra ...[]string) {
 		t.Helper()
+		var leeMore, annMore []string
+		if len(extra) == 2 {
+			leeMore, annMore = extra[0], extra[1]
+		}
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		tt.m[tlAnn.Email].SetEnv("LORE_OFFLINE", "1")
 		tt.lore(tlAnn, "task", "show", taskID).OK(t)
-		tt.lore(tlAnn, "task", "edit", taskID, "--title", ann, "--yes").OK(t)
-		tt.lore(tlLee, "task", "edit", taskID, "--title", lee, "--yes").OK(t)
+		tt.lore(tlAnn, append([]string{"task", "edit", taskID, "--title", ann, "--yes"}, annMore...)...).OK(t)
+		tt.lore(tlLee, append([]string{"task", "edit", taskID, "--title", lee, "--yes"}, leeMore...)...).OK(t)
 		tt.lore(tlLee, "sync", "run").OK(t)
 		tt.m[tlAnn.Email].SetEnv("LORE_OFFLINE", "0")
 		r := tt.lore(tlAnn, "sync", "run")
@@ -132,5 +136,42 @@ func TestJourneyTeamLeadStoreConflict(t *testing.T) {
 		tt.lore(tlAnn, "task", "edit", taskID, "--title", "the agreed title", "--yes").OK(t)
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		agree("the agreed title")
+	})
+
+	// B2-22: settling the title never drops a field only one side changed
+	// (Lee's priority, Ann's status), by an edit or by resolve.
+	fields := func(p tlPerson) (priority, status string) {
+		t.Helper()
+		var o struct {
+			Data struct {
+				Priority string `json:"priority"`
+				Status   string `json:"status"`
+			} `json:"data"`
+		}
+		tlJSON(t, tt.lore(p, "task", "show", taskID, "--json").OK(t), &o)
+		return o.Data.Priority, o.Data.Status
+	}
+	both := func(priority, status string) {
+		t.Helper()
+		for _, p := range []tlPerson{tlLee, tlAnn} {
+			if pr, st := fields(p); pr != priority || st != status {
+				t.Errorf("%s reads priority %q status %q, want %q %q (each side's own field kept)", p.Name, pr, st, priority, status)
+			}
+		}
+	}
+	w.Step("day5/edit-keeps-the-other-fields", func() {
+		w.AdvanceDays(1)
+		conflict("Lee five", "Ann five", []string{"--priority", "high"}, []string{"--status", "in_progress"})
+		tt.lore(tlAnn, "task", "edit", taskID, "--title", "agreed five", "--yes").OK(t)
+		tt.lore(tlAnn, "sync", "run").OK(t)
+		agree("agreed five")
+		both("high", "in_progress")
+	})
+	w.Step("day6/take-other-keeps-my-fields", func() {
+		w.AdvanceDays(1)
+		conflict("Lee six", "Ann six", []string{"--priority", "low"}, []string{"--status", "todo"})
+		tt.lore(tlAnn, "sync", "resolve", "1", "--take", "other").OK(t)
+		agree("Lee six")
+		both("low", "todo")
 	})
 }

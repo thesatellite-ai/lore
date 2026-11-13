@@ -36,6 +36,18 @@ func TestStoreOnlyRosterOutsideARepo(t *testing.T) {
 		t.Fatalf("inside a work tree: ok %v err %v, want the normal App", ok, err)
 	}
 
+	// a read in a git repo with no lore project: the full open would refuse
+	// it (a read creates nothing there), so the org store alone serves it
+	bare := gitRepo(t)
+	if inRepo, ok, err := StoreOnlyRoster(WithNoCreate(ctx), Options{RepoDir: bare, Home: t.TempDir(), FlagActor: testEmail, OrgStores: hook, Wall: time.Now}, rosterStore); err != nil || !ok {
+		t.Fatalf("a read in a repo with no lore project: ok %v err %v, want the store-only App", ok, err)
+	} else {
+		_ = inRepo.Close()
+	}
+	if loreFolderAt(bare) {
+		t.Fatal("the store-only read created .lore/ in the repo")
+	}
+
 	a, ok, err := StoreOnlyRoster(ctx, opts, rosterStore)
 	if err != nil || !ok {
 		t.Fatalf("outside a repo: ok %v err %v", ok, err)

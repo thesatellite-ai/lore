@@ -80,7 +80,7 @@ func (a *App) contextTargetsSetting(ctx context.Context) (names []string, ok boo
 		}
 		return nil, false, "WARN: could not read the context.targets setting (" + err.Error() + "); using the repo's tool files", nil
 	}
-	set, err := eng.Policy(store.SourceRepo)
+	set, err := eng.Policy(ctx, store.SourceRepo)
 	if err != nil {
 		return nil, false, "", err
 	}

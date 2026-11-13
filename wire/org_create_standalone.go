@@ -223,9 +223,21 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 		return opsorgcmd.Report{Lines: lines}, orgFileError(err, url)
 	}
 	file := orgcfg.OrgFilePath(in.OrgFolder)
+	sg, serr := g.LocalSuggestion(ctx, url, "")
 	switch {
 	case res.Existed:
 		lines = append(lines, fmt.Sprintf("✓ the store already suggests org %s (%s kept)", in.Org, file))
+		if serr == nil {
+			// B2-19: the entry is the file's (every store, own and repos),
+			// as org import builds it for a member; not the one store and
+			// patterns typed here, which would make the org's own repos
+			// client repos on this machine only.
+			suggestedStores(&entry, sg, url)
+			if _, verr := orgConfigWith(h.home, func(root *yaml.Node) error { return appendOrgNode(root, entry) }); verr != nil {
+				return opsorgcmd.Report{Lines: lines}, verr
+			}
+			lines = append(lines, "  the entry takes the stores, own and repos of the store's "+file)
+		}
 	case res.Offline:
 		lines = append(lines, fmt.Sprintf("✓ wrote %s (committed in the local clone; offline, pushed by the next command)", file))
 	case !res.Pushed:
@@ -233,7 +245,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	default:
 		lines = append(lines, fmt.Sprintf("✓ wrote %s (pushed)", file))
 	}
-	if sg, serr := g.LocalSuggestion(ctx, url, ""); serr == nil && sg.Version != "" {
+	if serr == nil && sg.Version != "" {
 		src := sg.Source() // SOURCE_OF_TRUTH row 9: the entry copies the file just written
 		entry.Source = &src
 	}
@@ -241,7 +253,11 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 		return opsorgcmd.Report{Lines: lines}, err
 	}
 	lines = append(lines, "✓ added org entry "+in.Org)
-	if line, rerr := h.reg.register(ctx, in.Org, in.OrgFolder, h.wall()); rerr != nil {
+	regFolder := in.OrgFolder
+	if sc := entry.OrgFolderStore(); sc != nil {
+		regFolder = sc.OrgFolder // the file's org folder when the entry is the file's (B2-19)
+	}
+	if line, rerr := h.reg.register(ctx, in.Org, regFolder, h.wall()); rerr != nil {
 		// v0.1.17: the org exists; registering is finished by hand.
 		lines = append(lines, "  warning: the org is created, but registering on the roster failed: "+rerr.Error(),
 			"  run `LORE_ORG="+in.Org+" lore actor register` in one of "+in.Org+"'s repos or outside any repo")
@@ -251,6 +267,25 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	lines = append(lines, "  teammates join with: lore org import "+url+" --key human:<their email> --name \"Their Name\"",
 		"  tie a client repo to it (written only into the store): lore org link "+in.Org+" --project <folder>")
 	return opsorgcmd.Report{Lines: lines}, nil
+}
+
+// suggestedStores fills entry from the store's lore-org.yaml sg the way
+// org import (and so a member's join) builds it: own and repos patterns,
+// every store it lists (the store at url, with sg's folder, when it lists
+// none) and the client-repo defaults. org create on a store that already
+// has the file uses it too (B2-19), so the admin who starts a team on an
+// existing org gets the same entry as a member who joins it.
+func suggestedStores(entry *orgconf.Org, sg orgcfg.Suggestion, url string) {
+	entry.Own, entry.Repos, entry.Stores = sg.Doc.Own, sg.Doc.Repos, nil
+	for _, s := range sg.Doc.Stores {
+		entry.Stores = append(entry.Stores, orgconf.Store{URL: s.URL, Name: s.Name, Branch: s.Branch, OrgFolder: s.OrgFolder})
+	}
+	if len(entry.Stores) == 0 {
+		entry.Stores = []orgconf.Store{{URL: url, OrgFolder: sg.Folder}}
+	}
+	if len(sg.Doc.Defaults.ClientRepos) > 0 {
+		entry.Defaults.ClientRepos = sg.Doc.Defaults.ClientRepos
+	}
 }
 
 // Import implements opsorgcmd.Host.
@@ -266,7 +301,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if err != nil {
 		return opsorgcmd.Report{}, orgFileError(err, in.URL)
 	}
-	entry := orgconf.Org{Name: sg.Doc.Name, Own: sg.Doc.Own, Repos: sg.Doc.Repos}
+	entry := orgconf.Org{Name: sg.Doc.Name}
 	if in.As != "" {
 		entry.Name = in.As
 	}
@@ -277,15 +312,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+entry.Name+" already exists in ~/.lore/config.yaml").
 			WithHint("pass --as <another name>, or edit the existing entry")
 	}
-	for _, s := range sg.Doc.Stores {
-		entry.Stores = append(entry.Stores, orgconf.Store{URL: s.URL, Name: s.Name, Branch: s.Branch, OrgFolder: s.OrgFolder})
-	}
-	if len(entry.Stores) == 0 {
-		entry.Stores = []orgconf.Store{{URL: in.URL, OrgFolder: sg.Folder}}
-	}
-	if len(sg.Doc.Defaults.ClientRepos) > 0 {
-		entry.Defaults.ClientRepos = sg.Doc.Defaults.ClientRepos
-	}
+	suggestedStores(&entry, sg, in.URL)
 	entry.Identity = orgconf.OrgIdentity{Key: in.Key, Name: in.Name, Handle: in.Handle}
 	if ierr := needIdentity(entry); ierr != nil {
 		return opsorgcmd.Report{}, ierr

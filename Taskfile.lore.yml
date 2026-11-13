@@ -135,6 +135,7 @@ vars:
     journey-folders   2   test:journeys:folders PARALLEL=2
     journey-land      2   test:journeys:land PARALLEL=2
     journey-upgrader  2   test:journeys:upgrader PARALLEL=2
+    journey-rest      2   test:journeys:rest PARALLEL=2
     scenarios         3   scenarios:run JOBS=4
     chaos             1   chaos:run JOBS=4
     race              2   test:race:rest
@@ -175,11 +176,11 @@ vars:
     tests/team/docs/*               docs-examples
     tests/lib/parallel-sections.sh  docs-examples
     tests/userscen/*                userscen
-    tests/teame2e/teamharness/*     teame2e userscen journey-frame journey-teamlead journey-solo journey-agency journey-joiner journey-agents journey-folders journey-upgrader journey-land
+    tests/teame2e/teamharness/*     teame2e userscen journey-frame journey-teamlead journey-solo journey-agency journey-joiner journey-agents journey-folders journey-upgrader journey-land journey-rest
     tests/teame2e/*                 teame2e
     tests/setupe2e/*                setupe2e
     tests/machines/*                machines sweep-rest sweep-tasks life-teams life-setups life-objects life-rest
-    tests/journeys/*                journey-frame journey-teamlead journey-solo journey-agency journey-joiner journey-agents journey-folders journey-upgrader journey-land
+    tests/journeys/*                journey-frame journey-teamlead journey-solo journey-agency journey-joiner journey-agents journey-folders journey-upgrader journey-land journey-rest
     tests/scenarios/*               scenarios
     tests/chaos/*                   chaos
     tests/lib/common.sh             scenarios chaos
@@ -195,16 +196,16 @@ vars:
     *.md                            -
     skills/*                        -
     .ds/*                           -
-    ops/setup/*                     docs-examples scenarios chaos userscen teame2e setupe2e machines life-setups life-teams life-rest journey-joiner journey-teamlead
+    ops/setup/*                     docs-examples scenarios chaos userscen teame2e setupe2e machines life-setups life-teams life-rest journey-joiner journey-teamlead journey-rest
     surface/setupweb/*              docs-examples scenarios chaos userscen teame2e setupe2e life-rest
     wire/setup*                     docs-examples scenarios chaos userscen teame2e setupe2e machines life-setups life-teams life-rest
     ops/doctor/*                    docs-examples scenarios chaos userscen teame2e machines sweep-rest sweep-tasks
-    adapters/orgcfg/*               docs-examples scenarios chaos userscen teame2e setupe2e machines life-teams journey-agency journey-joiner
-    ops/migrate/*                   docs-examples scenarios chaos userscen teame2e journey-upgrader machines
+    adapters/orgcfg/*               docs-examples scenarios chaos userscen teame2e setupe2e machines life-teams journey-agency journey-joiner journey-rest
+    ops/migrate/*                   docs-examples scenarios chaos userscen teame2e journey-upgrader machines journey-rest
     *.go                            docs-examples scenarios chaos userscen teame2e
     go.mod                          docs-examples scenarios chaos userscen teame2e
     go.sum                          docs-examples scenarios chaos userscen teame2e
-    *                               journey-teamlead journey-solo userscen setupe2e journey-agency journey-joiner teame2e machines sweep-rest life-teams docs-examples journey-land journey-agents journey-folders journey-upgrader life-setups sweep-tasks life-objects life-rest scenarios chaos journey-frame
+    *                               journey-teamlead journey-solo userscen setupe2e journey-agency journey-joiner teame2e machines sweep-rest life-teams docs-examples journey-land journey-agents journey-folders journey-upgrader life-setups sweep-tasks life-objects life-rest scenarios chaos journey-frame journey-rest
   # Runs one step of lore:check as its own task process (tests/lib/gate-parallel.sh starts each
   # step in a separate shell). TASKFILE is this file's own path, so it works when this file is
   # included as `lore:` and when it is run alone with `task -t Taskfile.lore.yml`.
@@ -681,6 +682,16 @@ tasks:
     cmds:
       - task: test:journeys:part
         vars: {PART: upgrader, FILTER: "-run '^TestJourneyUpgrader'"}
+
+  # The parts above run the journeys their -run names; journey-rest runs every other test of the
+  # package (-skip of exactly those names), so a new journey is in the gate the day it is added.
+  # tests/journeys/gate_parts_test.go fails when a test is in no part or in two, and when a part
+  # is missing from GATE_STEPS: keep its -skip in step with the parts above.
+  test:journeys:rest:
+    desc: "Every journey no named part runs (the catch-all of the gate's journey parts): staff, store commands, offline, pull --rebase, init in a linked repo, mixed versions on one store, moves, and every journey added later"
+    cmds:
+      - task: test:journeys:part
+        vars: {PART: rest, FILTER: "-skip '^Test(Frame|Journey(Land|Solo|Agency|TeamLead|Joiner|Agents|Folders|Upgrader))'"}
 
 
   trial:github:

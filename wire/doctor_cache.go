@@ -118,6 +118,7 @@ func (a *App) DoctorStamp(_ context.Context, e onboard.SetupEntry) string {
 		}
 	}
 	part(org)
+	part(rosterCloneStamp(a.opts.Home, e.Org)) // identity.roster/period read the roster: a sync that changes it re-probes (B2-24)
 	personal := stampUnreadable
 	if mc, err := readMachineConfig(a.opts.Home); err == nil {
 		personal = mc.personalURL()

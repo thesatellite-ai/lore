@@ -590,7 +590,7 @@ func (e *Engine) clientTime(ctx context.Context, def schema.TableDef, to store.S
 	share := opt
 	fromPolicy := false
 	if share == "" {
-		pol, err := e.Policy(to)
+		pol, err := e.Policy(ctx, to)
 		if err != nil {
 			return nil, nil, err
 		}

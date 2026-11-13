@@ -2,7 +2,11 @@ package cli
 
 import (
 	"context"
+	"io"
 	"regexp"
+	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 // byActorID is an actor id where a human line names who did something:
@@ -36,4 +40,18 @@ func (c config) nameActors(ctx context.Context, text string) string {
 		}
 		return m
 	})
+}
+
+// printNamedError is printError for a generated command, with the human
+// line's actor ids named like its output ("revoked by act_…" in
+// E_LOST_CLAIM, "deleted by act_…" in E_IN_TRASH; bug hunt D-1). The
+// --json envelope goes to stdout untouched, ids and all.
+func (c config) printNamedError(cmd *cobra.Command, err error, asJSON bool) int {
+	if asJSON {
+		return printError(cmd.OutOrStdout(), cmd.ErrOrStderr(), err, true, c.color(StreamErr), cmd.CommandPath())
+	}
+	var line strings.Builder
+	code := printError(cmd.OutOrStdout(), &line, err, false, c.color(StreamErr), cmd.CommandPath())
+	_, _ = io.WriteString(cmd.ErrOrStderr(), c.nameActors(cmd.Context(), line.String()))
+	return code
 }

@@ -41,7 +41,21 @@ var GitignoreLines = []string{
 	".lore/lore-cache.db-shm",
 	".lore/lore-cache.db-wal",
 	".lore/lock",
+	// a write killed mid-way (an agent session stopped) leaves a
+	// .tmp-<random> file beside the row it was writing until the next
+	// locked write sweeps it: never a row, never to be committed by a
+	// quick `git add -A`
+	DataTmpLine,
 }
+
+// DataTmpLine ignores rowfs's in-flight tmp files anywhere under the
+// committed data folder. A repo gets it only while it holds .lore/data
+// (gitignoreOnlyWithData): a client repo without data has no such files.
+const DataTmpLine = ".lore/data/**/.tmp-*"
+
+// gitignoreOnlyWithData are the GitignoreLines that apply only to a repo
+// that keeps its own rows (HoldsLoreData).
+var gitignoreOnlyWithData = map[string]bool{DataTmpLine: true}
 
 // gitignoreOnlyIfThere are the GitignoreLines a project's .gitignore only
 // needs while the file is in the work tree (B4-7): the repo cache moved to
@@ -89,6 +103,9 @@ func MissingGitignoreLines(ctx context.Context, root string) []string {
 	var out []string
 	for _, line := range GitignoreLines {
 		if gitignoreOnlyIfThere[line] && !localPathExists(root, line) {
+			continue
+		}
+		if gitignoreOnlyWithData[line] && !HoldsLoreData(root) {
 			continue
 		}
 		if strings.Contains(existing, line) || sharedIgnores(ctx, root, line) {

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -65,4 +66,25 @@ func ReadStoresOf(l StoreLister) []store.Source {
 		return r.ReadStores()
 	}
 	return slices.Clone(l.Stores())
+}
+
+// personalStoreName is the personal store's reserved name (attach.ReservedMe).
+const personalStoreName = "me"
+
+// NamedSources is the read stores a `--store <name>` filter means: name
+// itself, and for the personal store also every `me/<folder>` attached
+// beside it (lore 0.1.17's per-org personal notes keep their org folder,
+// attached as me/<org> in that org's repos, D5), so `--store me` lists
+// every personal note this repo reads.
+func NamedSources(l StoreLister, name store.Source) []store.Source {
+	out := []store.Source{name}
+	if name != personalStoreName {
+		return out
+	}
+	for _, s := range ReadStoresOf(l) {
+		if strings.HasPrefix(string(s), personalStoreName+"/") {
+			out = append(out, s)
+		}
+	}
+	return out
 }

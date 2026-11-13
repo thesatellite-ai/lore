@@ -103,7 +103,7 @@ func (a *App) profileWriter(ctx context.Context, st *state, target store.Source)
 	if agent == "" {
 		agent = who.StableKey
 	}
-	set, err := st.eng.Policy(target)
+	set, err := st.eng.Policy(ctx, target)
 	if err != nil {
 		return err // fail closed: a policy that cannot be read allows nothing
 	}

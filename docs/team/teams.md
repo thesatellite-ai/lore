@@ -1,6 +1,6 @@
 # Teams
 
-**In short:** a team is an `@handle` on the org's roster that names a group of people. `lore team add @web --members @tomas,@mira` makes one; from then on `@web` works wherever a person's handle does, such as `lore task add … --assign @web`. The team commands run inside a repo of the org or outside any repo (the active setup's org store).
+**In short:** a team is an `@handle` on the org's roster that names a group of people. `lore team add @web --members @tomas,@mira` makes one; from then on `@web` works wherever a person's handle does, such as `lore task add … --assign @web`. The team commands run inside a repo of the org, in a clone with no lore project yet (a read there reads the org store; nothing is created in the clone), or outside any repo (the active setup's org store).
 
 You want this page when you assign work to a group rather than a person, or keep track of who is on which team. Every output below is a real run (`tests/team/docs/run-examples.sh teams`).
 

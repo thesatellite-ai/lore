@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -15,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // actors columns the period ops read that schema keeps unexported
@@ -320,4 +322,22 @@ func agentName(a row.Row) string {
 		n = text(a, fieldDisplayName)
 	}
 	return n + " (" + a.ID.String() + ")"
+}
+
+// inOneCommit runs write with every roster write staged, then commits them
+// as ONE store commit titled title (one push after it), as member add
+// does. Why (B1-21): offboard wrote the team rows, the period and the
+// actor as separate commits, each pushed, so a teammate could fetch a
+// half-applied removal. A failed write discards the stage: nothing is
+// written.
+func inOneCommit(ctx context.Context, title string, write func(ctx context.Context) error) error {
+	sctx := engine.Staging(store.WithCommitTitle(ctx, title))
+	if err := write(sctx); err != nil {
+		engine.Discard(sctx)
+		return err
+	}
+	if _, err := engine.Commit(sctx); err != nil {
+		return errs.Prefix(title+" (nothing written)", err)
+	}
+	return nil
 }

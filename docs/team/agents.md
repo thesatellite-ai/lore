@@ -177,7 +177,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_05e9…4603.json (store
 
 # agent-backend, in website
 $ lore task done tsk_05e9…4603
-ERROR: [E_LOST_CLAIM] tsk_05e9…4603: your claim (token ct_cb04f…) was revoked by act_2ad3…f891 at 10:16AM
+ERROR: [E_LOST_CLAIM] tsk_05e9…4603: your claim (token ct_cb04f…) was revoked by alice at 10:16AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 ```

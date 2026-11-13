@@ -177,7 +177,11 @@ func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Tabl
 	if err != nil {
 		return nil, err
 	}
-	var out []liveRow
+	type wanted struct {
+		path  string
+		table row.Table
+	}
+	var rows []wanted
 	for _, entry := range bytes.Split(listing, []byte{0}) {
 		meta, path, ok := strings.Cut(string(entry), "\t")
 		if !ok {
@@ -191,9 +195,24 @@ func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Tabl
 		if !ok || !want[table] || (folder != "" && liveRowFolder(path) != folder) {
 			continue
 		}
-		b, err := liveGit(ctx, top, "cat-file", "blob", fields[2])
-		if err != nil {
-			return nil, err
+		rows = append(rows, wanted{path: path, table: table})
+	}
+	// One git cat-file --batch for every row (B1-16: a git process per
+	// live row made each command start hundreds of them in a big repo).
+	paths := make([]string, len(rows))
+	for i, w := range rows {
+		paths[i] = w.path
+	}
+	blobs, err := revBlobs(ctx, top, nil, ref, paths)
+	if err != nil {
+		return nil, err
+	}
+	var out []liveRow
+	for _, w := range rows {
+		path, table := w.path, w.table
+		b, ok := blobs[path]
+		if !ok {
+			return nil, errs.New(errs.Internal, "wire: live row "+path+" could not be read from "+ref)
 		}
 		r, writer, err := decodeLiveRow(b)
 		if err != nil {

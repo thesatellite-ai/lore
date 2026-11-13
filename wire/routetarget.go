@@ -25,7 +25,7 @@ func (a *App) DefaultTargetOf(ctx context.Context, table row.Table) (store.Sourc
 	if err != nil {
 		return "", err
 	}
-	q, err := a.writeQuery(st, table, nil)
+	q, err := a.writeQuery(ctx, st, table, nil)
 	if err != nil {
 		return "", err
 	}

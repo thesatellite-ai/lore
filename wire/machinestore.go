@@ -69,7 +69,10 @@ func openMachine(ctx context.Context, home string, reg *schema.Registry, c *cach
 	if !hasMachineLocal(reg) {
 		return nil, nil, nil
 	}
-	writeHomeReadme(home)            // ~/.lore/README.md, when missing or for another layout
+	if !dryRunProcess() {
+		writeHomeReadme(home) // ~/.lore/README.md, when missing or for another layout
+	}
+	home = writableHome(home)        // dryhome.go: a dry run's machine store and cache are a scratch copy
 	tidyHome(home, time.Now().UTC()) // what lore left behind, by age (hometidy.go)
 	b, err := sqlite.OpenMachineStore(ctx, filepath.Join(home, filepath.FromSlash(MachineStoreFile)), false)
 	if err != nil {

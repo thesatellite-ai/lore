@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/osrename"
@@ -118,6 +119,8 @@ func writeRenamed(full string, b []byte, m fileModes) (dir string, err error) {
 		return "", errs.Wrap(errs.Internal, "rowfs: tmp name", err)
 	}
 	tmp := filepath.Join(dir, tmpPrefix+hex.EncodeToString(suffix))
+	inflight.Store(tmp, struct{}{})
+	defer inflight.Delete(tmp) // after the rename or the removal below
 	f, err := os.OpenFile(filepath.Clean(tmp), os.O_WRONLY|os.O_CREATE|os.O_EXCL, m.file)
 	if err != nil {
 		return "", errs.Wrap(errs.Internal, "rowfs: create a tmp file", err)
@@ -150,12 +153,22 @@ func removeIfExists(path string) error {
 	return nil
 }
 
+// inflight holds the tmp paths this process is writing right now
+// (writeRenamed): sweepTmp never removes one, so a sweep under a lock held
+// reentrantly (Root.Hold) cannot pull a tmp file from under a writer of
+// the same process.
+var inflight sync.Map
+
 // removeStaleTmp deletes a leftover tmp file older than staleTmpAge
-// (crash debris). Best effort by design: a failure leaves debris that the
-// next scan retries, and never affects a row.
-func removeStaleTmp(full string, now time.Time) {
+// (crash debris) by its real modification time against the wall clock:
+// never the injected clock (WithClock, LORE_NOW), under which a fresh
+// file's age is negative and the file would stay forever. A scan holds no
+// lock, so a younger file may belong to a running writer and is kept.
+// Best effort by design: a failure leaves debris that the next scan or
+// locked write retries, and never affects a row.
+func removeStaleTmp(full string) {
 	info, err := os.Lstat(full)
-	if err != nil || now.Sub(info.ModTime()) <= staleTmpAge {
+	if err != nil || time.Since(info.ModTime()) <= staleTmpAge {
 		return
 	}
 	if rmErr := os.Remove(full); rmErr != nil {
@@ -163,10 +176,36 @@ func removeStaleTmp(full string, now time.Time) {
 	}
 }
 
+// sweepTmp removes every tmp file in dir whatever its age, except the ones
+// this process is writing (inflight). Only a writer holding the store lock
+// calls it: no other process can be mid-write then, so every other tmp
+// file is debris of a writer that died (an agent session killed mid-write)
+// and would otherwise sit in git status until a scan found it a minute
+// old. Best effort: a failure leaves the file for the next sweep.
+func sweepTmp(dir string) {
+	list, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range list {
+		name := e.Name()
+		if !strings.HasPrefix(name, tmpPrefix) {
+			continue
+		}
+		full := filepath.Join(dir, name)
+		if _, busy := inflight.Load(full); busy {
+			continue
+		}
+		_ = removeIfExists(full) // best effort, see above
+	}
+}
+
 // WriteFile writes b atomically at rel (slash-separated, relative to the
 // store root), refusing a symlink anywhere on the way and any path that
 // could leave the root. The git backend writes merged row files with it,
-// which may live in any folder of the store.
+// which may live in any folder of the store. The caller holds the store
+// lock (every caller merges inside a locked sync), so the folder's tmp
+// debris is swept after the write (sweepTmp).
 func (r *Root) WriteFile(rel string, b []byte) error {
 	for seg := range strings.SplitSeq(rel, "/") {
 		if seg == "" || seg == "." || seg == ".." {
@@ -176,5 +215,10 @@ func (r *Root) WriteFile(rel string, b []byte) error {
 	if err := checkChain(r.dir, rel); err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(r.dir, filepath.FromSlash(rel)), b, r.modes)
+	full := filepath.Join(r.dir, filepath.FromSlash(rel))
+	if err := writeAtomic(full, b, r.modes); err != nil {
+		return err
+	}
+	sweepTmp(filepath.Dir(full))
+	return nil
 }

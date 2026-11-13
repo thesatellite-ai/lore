@@ -53,14 +53,14 @@ decisions — 1–2 of 2 (page 1/1)
 > 
 dec_76bd…3f10  decisions  store repo
   body: Stripe already works in the client shop app, so we keep one payment provider.
-  created_by_actor_id: act_4c59…6c38
+  created_by_actor_id: act_ada3…c018 (alice)
   project_id: prj_78c8…5b6c
   source_kind: manual
   status: superseded
   superseded_by_id: dec_d431…313a
   title: We use Stripe for payments
   trust_score: 0.5
-  updated: 2026-11-02 10:01 by act_4c59…6c38
+  updated: 2026-11-02 10:01 by alice
 b back · q quit
 > 
 ```
@@ -78,7 +78,7 @@ When you already have an id, `lore show <id>` (also spelled `lore row show <id>`
 $ lore row show dec_76bd…3f10 --origin
 dec_76bd…3f10  decisions  repo  "We use Stripe for payments"
   body: Stripe already works in the client shop app, so we keep one payment provider.
-  created_by_actor_id: act_4c59…6c38
+  created_by_actor_id: act_ada3…c018
   project_id: prj_78c8…5b6c
   source_kind: manual
   status: superseded
@@ -93,8 +93,8 @@ origin (written once)
   git        branch main at 601d2850ffd0
   command    lore decision add
 who and when
-  created    2026-11-02T10:00:50Z   alice (act_4c59…6c38)
-  updated    2026-11-02T10:01:15Z   alice (act_4c59…6c38)
+  created    2026-11-02T10:00:50Z   alice (act_ada3…c018)
+  updated    2026-11-02T10:01:15Z   alice (act_ada3…c018)
 last write
   lore       dev
 lineage

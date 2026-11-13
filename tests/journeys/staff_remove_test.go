@@ -11,8 +11,24 @@ package journeys
 // member add`; after a sync Ann writes to the org store again.
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
+
+// ownCommits counts ref's commits that are not merges of what a teammate
+// pushed meanwhile (a push after someone else's write merges first, B1-21
+// asks about the writes of one command).
+func ownCommits(r *teamharness.Remote, ref string) int {
+	n := 0
+	for _, s := range r.Log(ref) {
+		if s != "" && !strings.HasPrefix(s, "lore: merge") {
+			n++
+		}
+	}
+	return n
+}
 
 func TestJourneyStaffRemove(t *testing.T) {
 	t.Parallel()
@@ -20,6 +36,7 @@ func TestJourneyStaffRemove(t *testing.T) {
 	w := tt.w
 	lee := tt.person(tlLee)
 	orgStore := tlOrg + "/org"
+	mainRef := "refs/heads/main"
 
 	w.Step("day1/lee-adds-ann", func() {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
@@ -38,7 +55,12 @@ func TestJourneyStaffRemove(t *testing.T) {
 	})
 
 	w.Step("day1/lee-removes-ann", func() {
+		before := ownCommits(tt.store, mainRef)
 		tt.lore(tlLee, "member", "remove", tlAnn.Email, "--reason", "moved on", "--yes").OK(t).Says(t, "removed")
+		// B1-21: the stint, the team row and the actor in ONE store commit
+		if n := ownCommits(tt.store, mainRef) - before; n != 1 {
+			t.Errorf("member remove wrote %d store commits, want one", n)
+		}
 		tt.lore(tlLee, "member", "show", tlAnn.Email).OK(t).Says(t, "left").Never(t, "@web")
 		tt.lore(tlLee, "team", "show", "@web").OK(t).Never(t, tlAnn.Name)
 	})
@@ -48,12 +70,26 @@ func TestJourneyStaffRemove(t *testing.T) {
 		tt.lore(tlAnn, "memory", "add", "ann's note after", "--to", orgStore, "--yes").
 			Refused(t, "E_REFUSED", "you are marked as left in "+tlOrg, "lore member add")
 		tt.lore(tlAnn, "memory", "add", "my own note", "--to", "me", "--yes").OK(t)
+		// doctor says she left (and caches the answer for a minute)
+		tt.lore(tlAnn, "doctor", "--all").Says(t, "no open period", "lore member add")
 	})
 
 	w.Step("day1/lee-undoes-it-the-same-day", func() {
+		before := ownCommits(tt.store, mainRef)
 		tt.lore(tlLee, "member", "add", tlAnn.Email, "--team", "@web", "--yes").OK(t).Says(t, "back on the roster")
+		if n := ownCommits(tt.store, mainRef) - before; n != 1 {
+			t.Errorf("member add (restore) wrote %d store commits, want one", n)
+		}
+		before = ownCommits(tt.store, mainRef)
+		tt.lore(tlLee, "member", "edit", tlAnn.Email, "--name", "Ann B", "--role", "pm", "--yes").OK(t)
+		if n := ownCommits(tt.store, mainRef) - before; n != 1 {
+			t.Errorf("member edit --name --role wrote %d store commits, want one", n)
+		}
 		tt.lore(tlLee, "member", "show", tlAnn.Email).OK(t).Says(t, "active", "@web")
 		tt.lore(tlAnn, "sync").OK(t)
+		// B2-24: right after the sync doctor reads the restored roster, not
+		// its cached "left" answer
+		tt.lore(tlAnn, "doctor", "--all").Says(t, "employee since").Never(t, "no open period")
 		tt.lore(tlAnn, "memory", "add", "ann's note back", "--to", orgStore, "--yes").OK(t)
 	})
 }

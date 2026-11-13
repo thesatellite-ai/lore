@@ -86,26 +86,44 @@ func Scan(sc scan.Scanner, rows map[row.Table][]Row) []Hit {
 			}
 		}
 	}
-	found := make([][]scan.Finding, len(jobs))
+	// A scan's findings depend on the field and the text only, so each
+	// distinct pair is scanned once (B1-23: a big store repeats the same
+	// values across rows, and gitleaks costs per call as well as per byte);
+	// the allow filter, which depends on the row, runs per job.
+	type text struct{ field, text string }
+	uniq := map[text]int{}
+	var texts []text
+	of := make([]int, len(jobs))
+	for i, j := range jobs {
+		k := text{field: j.field, text: j.text}
+		n, ok := uniq[k]
+		if !ok {
+			n = len(texts)
+			uniq[k] = n
+			texts = append(texts, k)
+		}
+		of[i] = n
+	}
+	scanned := make([][]scan.Finding, len(texts))
 	var next atomic.Int64
 	var wg sync.WaitGroup
-	for range min(runtime.GOMAXPROCS(0), len(jobs)) {
+	for range min(runtime.GOMAXPROCS(0), len(texts)) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for {
 				i := int(next.Add(1) - 1)
-				if i >= len(jobs) {
+				if i >= len(texts) {
 					return
 				}
-				found[i] = scan.Filter(jobs[i].id, sc.Scan(jobs[i].field, jobs[i].text), allows)
+				scanned[i] = sc.Scan(texts[i].field, texts[i].text)
 			}
 		}()
 	}
 	wg.Wait()
 	var out []Hit
 	for i, j := range jobs {
-		for _, hit := range found[i] {
+		for _, hit := range scan.Filter(j.id, scanned[of[i]], allows) {
 			out = append(out, Hit{Table: j.table, Source: j.source, ID: j.id, Finding: hit})
 		}
 	}

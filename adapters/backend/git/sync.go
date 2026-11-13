@@ -424,7 +424,7 @@ func (b *Backend) resolveRow(ctx context.Context, path string) (ids.AnyID, *stor
 	case theirs == nil:
 		result = ours
 	case b.cfg.merger == nil:
-		if !b.settledSide(ctx, path, ours, theirs, &result) { // the person chose a side (settle.go)
+		if !b.settledSide(ctx, path, base, ours, theirs, &result) { // the person chose a side (settle.go)
 			return id, &store.Refusal{ID: id, Code: errs.Stale, Reason: "both sides changed the row and no merger is configured", Folder: folder}, nil
 		}
 	default:
@@ -433,7 +433,7 @@ func (b *Backend) resolveRow(ctx context.Context, path string) (ids.AnyID, *stor
 			return ids.AnyID{}, nil, errs.Wrap(errs.Internal, "git: merge a row", merr)
 		}
 		result = m
-		if conflict && !b.settledSide(ctx, path, ours, theirs, &result) { // the person chose a side (settle.go)
+		if conflict && !b.settledSide(ctx, path, base, ours, theirs, &result) { // the person chose a side (settle.go)
 			return id, &store.Refusal{ID: id, Code: conflictCode(table), Reason: "both sides changed the row and it cannot be merged automatically", Folder: folder}, nil
 		}
 	}

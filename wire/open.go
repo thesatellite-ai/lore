@@ -198,7 +198,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	// FLAG3: the cache use record (see after the caches open); committed
 	// marks the stores.yaml entries so prune sees a `lore store remove`.
-	cacheRoot := filepath.Join(opts.Home, cacheDir)
+	cacheRoot := filepath.Join(writableHome(opts.Home), cacheDir)
 	var uses []sqlite.Use
 	committed := map[store.Source]bool{}
 	if cfg, cfgErr := readStoresFile(st.repoTop); cfgErr == nil {
@@ -331,7 +331,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	actor = st.actor
-	st.refuseWritesIfLeft(ctx, attached) // leftgate.go: a removed person writes only to their personal store (B2-12)
+	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: a removed person writes only to their personal store (B2-12)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
 		// agent in a client repo is recorded as its owning person; an org
@@ -382,6 +382,10 @@ func (st *state) resolveActor(ctx context.Context, opts Options, notice bool) er
 	return nil
 }
 
+// dryClientNote is repoIsClient's note under a dry run that has not the
+// org's stores to check against (B4-14).
+const dryClientNote = "whether this is a client repo is checked by the next run that is not a dry run (its org's stores are not on this machine yet; a dry run fetches none)"
+
 // repoIsClient asks opts.RepoIsClient whether the repo store is a client
 // repo. No hook, or an error, answers client (fail closed: an internal
 // row must never be pointed at, nor a teammate's email written, from a
@@ -391,6 +395,12 @@ func repoIsClient(ctx context.Context, opts Options) (client bool, note string) 
 		return true, "the repo is treated as a client repo: no client-repo check is wired"
 	}
 	client, err := opts.RepoIsClient(ctx)
+	if err != nil && git.NoClone(ctx) && (errs.Has(err, errs.LinkUnknown) || errs.Has(err, errs.StoreUnreachable)) {
+		// B4-14: a dry run fetches and clones no store, so the org's links
+		// are not here yet; it still fails closed, but says why instead of
+		// calling an own repo a client repo
+		return true, dryClientNote
+	}
 	if err != nil {
 		return true, "the repo is treated as a client repo: whether it is one could not be checked (" + err.Error() + ")"
 	}
@@ -498,6 +508,11 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		}
 		if !dup {
 			cfg.Stores = append(cfg.Stores, me)
+		}
+		// D5: lore 0.1.17's notes for this repo's org keep their folder
+		// (personal_orgs.go)
+		if mo, ok := personalOrgStore(ctx, opts, p); ok && !slices.ContainsFunc(cfg.Stores, func(s attach.Store) bool { return s.Name == mo.Name }) {
+			cfg.Stores = append(cfg.Stores, mo)
 		}
 	}
 	raws := make([]string, 0, len(cfg.Stores))
@@ -818,7 +833,7 @@ func cachePath(home string, o attach.Opened) (string, error) {
 		}
 		name = clean
 	}
-	dir := filepath.Join(home, cacheDir, cacheStoresDir, id, filepath.FromSlash(branch))
+	dir := filepath.Join(writableHome(home), cacheDir, cacheStoresDir, id, filepath.FromSlash(branch))
 	path := filepath.Join(dir, filepath.FromSlash(name)+cacheExt)
 	if err := mkCacheDir(filepath.Dir(path)); err != nil {
 		return "", err
@@ -850,7 +865,7 @@ func cacheOpen(ctx context.Context, path string, reg *schema.Registry, exp sqlit
 // combinedCachePath is <home>/cache/combined/<sha256 of the repo top>.db:
 // one file per code repo, outside the repo so it never shows in git status.
 func combinedCachePath(home, repoTop string) (string, error) {
-	if err := mkCacheDir(filepath.Join(home, cacheDir, combinedDir)); err != nil {
+	if err := mkCacheDir(filepath.Join(writableHome(home), cacheDir, combinedDir)); err != nil {
 		return "", err
 	}
 	return hashedCacheFile(home, combinedDir, repoTop), nil
@@ -860,7 +875,7 @@ func combinedCachePath(home, repoTop string) (string, error) {
 // the combined and the remote-linked repo caches; nothing is created.
 func hashedCacheFile(home, dir, repoTop string) string {
 	sum := sha256.Sum256([]byte(repoTop))
-	return filepath.Join(home, cacheDir, dir, hex.EncodeToString(sum[:])+cacheExt)
+	return filepath.Join(writableHome(home), cacheDir, dir, hex.EncodeToString(sum[:])+cacheExt)
 }
 
 // RepoCachePath is the repo store's cache of the checkout at repoTop:
@@ -869,7 +884,7 @@ func hashedCacheFile(home, dir, repoTop string) string {
 // it); the hash of the (symlink-resolved) path gives two checkouts of one
 // name two files. Nothing is created.
 func RepoCachePath(home, repoTop string) string {
-	return filepath.Join(home, cacheDir, filepath.FromSlash(sqlite.RepoCacheRel(repoTop)))
+	return filepath.Join(writableHome(home), cacheDir, filepath.FromSlash(sqlite.RepoCacheRel(repoTop)))
 }
 
 // repoCacheOf is the cache file st's repo store was opened at ("" before
@@ -891,7 +906,7 @@ const remoteRepoDir = "remote"
 // remote with no .lore/ of its own: outside the repo, one file per
 // checkout, so nothing is ever created in the client's repository.
 func remoteRepoCachePath(home, repoTop string) (string, error) {
-	if err := mkCacheDir(filepath.Join(home, cacheDir, remoteRepoDir)); err != nil {
+	if err := mkCacheDir(filepath.Join(writableHome(home), cacheDir, remoteRepoDir)); err != nil {
 		return "", err
 	}
 	return hashedCacheFile(home, remoteRepoDir, repoTop), nil
@@ -1225,6 +1240,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil { // TEAM_PROFILES 6.3, as in open
 		return fail(err)
 	}
+	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: inside a store clone too (B2-25)
 	if st.storeFormat, err = readStoreFormats(ctx, opts, "", st.byName, st.actor); err != nil {
 		return fail(err)
 	}

@@ -166,3 +166,33 @@ func TestDoctorSyncOSJunkNotDataIgnored(t *testing.T) {
 		t.Errorf("one real row file ignored: sync %+v warnings %v", b.Sync, b.Warnings)
 	}
 }
+
+// TestDoctorSyncNoProjectNoIgnoreWarning pins B1-8: a repo with no lore
+// project (no .lore/data; its .lore/ holds only a LORE.md) whose own
+// .gitignore has a broad rule (`_*`) gets no warning about lore files that
+// do not exist; the same rule in a repo with rows still warns.
+func TestDoctorSyncNoProjectNoIgnoreWarning(t *testing.T) {
+	if isolate.Run(t) {
+		return
+	}
+	repo := gitRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lore"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".lore", "LORE.md"), []byte("# notes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte("_*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := openWith(t, repo, Options{})
+	b := doctorBase(t, a)
+	if hasLine(b.Warnings, doctorDataIgnoredPrefix) || hasLine(b.Warnings, ".lore/data is gitignored") || (b.Sync != nil && b.Sync.DataIgnored) {
+		t.Fatalf("no lore project, yet warned about ignored lore files: %v", b.Warnings)
+	}
+	// control: with rows, the same rule hides _meta.json
+	withProject(t, a)
+	if b = doctorBase(t, a); !hasLine(b.Warnings, doctorDataIgnoredPrefix) {
+		t.Fatalf("with rows the `_*` rule is not named: %v", b.Warnings)
+	}
+}

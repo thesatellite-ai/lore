@@ -493,9 +493,6 @@ ERROR: [E_NEEDS_CONFIRM] offboard Mira Patel (@mira) (act_7a67…9504) on 2026-0
 (exit 26)
 $ lore actor offboard @mira --reason 'moved abroad' --yes
 lore: pushed store agency/org: commit ef62c83 to branch main
-lore: pushed store agency/org: commit dd85e7d to branch main
-lore: pushed store agency/org: commit d18179e to branch main
-lore: pushed store agency/org: commit f4b8da2 to branch main
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/org (store agency/org)
 offboard Mira Patel (@mira) (act_7a67…9504) on 2026-09-30:
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
@@ -515,7 +512,7 @@ ERROR: [E_NOT_FOUND] no person or team with handle @mira
   hint: they run `lore actor register` in a repo of the org, then `lore sync` here
 (exit 27)
 $ lore actor status @mira archived
-lore: pushed store agency/org: commit 70f4f88 to branch main
+lore: pushed store agency/org: commit dd85e7d to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel (@mira): left → archived
 $ lore actor list --archived
@@ -547,8 +544,7 @@ After offboarding, `@mira` is out of `--assign` and pickers, still in `lore acto
 ```console
 # tomas, in acme-hub
 $ lore actor rejoin @mira --type contractor --org-role 'Contract engineer' --yes
-lore: pushed store agency/org: commit d33587e to branch main
-lore: pushed store agency/org: commit 34010c1 to branch main
+lore: pushed store agency/org: commit d18179e to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/actor_periods/apd_9a34…b418.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 rejoin Mira Patel (@mira) (act_7a67…9504) on 2026-11-02:
@@ -559,7 +555,7 @@ rejoin Mira Patel (@mira) (act_7a67…9504) on 2026-11-02:
   status     archived → active
 ✓ act_7a67…9504 Mira Patel (@mira) rejoined on 2026-11-02 as contractor
 $ lore project member add acme-hub @mira --role reviewer
-lore: pushed store agency/org: commit 070bbeb to branch main
+lore: pushed store agency/org: commit f4b8da2 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_bfed…eeea.json (store agency/org)
 ✓ @mira added to acme-hub as reviewer from 2026-11-02 (pmb_bfed…eeea)
 $ lore project member list acme-hub --history
@@ -573,7 +569,7 @@ act_7a67…9504  Mira Patel (@mira)  active
 ```
 <!-- /example -->
 
-- It starts a new company period on `--on` (default today), which must be after the last stint ended (`E_PERIOD_OVERLAP` otherwise) and not in the future (`E_INVALID_INPUT`: use today or a past day; run it on their first day back), and sets the status back to `active`.
+- It starts a new company period on `--on` (default today), which must be after the last stint ended (`E_PERIOD_OVERLAP` otherwise) and not in the future (`E_INVALID_INPUT`: use today or a past day; run it on their first day back), and sets the status back to `active`. On the day the last stint ended (a removal undone the same day) it reopens that stint instead of starting a new one. The new stint and the status are one store commit.
 - Project memberships are **not** restored. The preview lists the ones that ended when the person left, each with the `lore project member add` line to add it back.
 - A membership the offboard moved to the trash because it had not started yet ("offboarded before it started") is listed too, under `trashed`, with its start date and the `lore trash restore <id>` line that brings it back; the rejoin does not restore it. `--json` lists them in `trashed_memberships` (with `starts_on` and `not_started`).
 - Agents the person owns stay inactive; the preview gives `lore actor status <agent> active` for each.
@@ -595,9 +591,9 @@ lore store init: set up git for lore's row files in this clone: merge drivers lo
 ✓ created store acme (sto_376c…8e1a) at git@github.com:acme/lore-notes; recorded in .lore/stores.yaml; commit it to share
 $ lore org create acme --store acme --own 'github.com/acme/*' --key human:ana@acme.example --name 'Ana Lima' --handle ana --yes
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-lore: pushed store github.com/acme/lore-notes: commit 2297d41 to branch main
-lore: pushed store acme/org: commit c929695 to branch main
-lore: pushed store acme/org: commit 40bd5f4 to branch main
+lore: pushed store github.com/acme/lore-notes: commit 70f4f88 to branch main
+lore: pushed store acme/org: commit d33587e to branch main
+lore: pushed store acme/org: commit 34010c1 to branch main
 lore: wrote ~/.lore/stores/acme/lore-notes/org/projects/prj_67e2…291e.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actors/act_8567…366f.json (store acme/org)
 This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:

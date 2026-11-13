@@ -331,7 +331,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	}
 	sources := engine.ReadStoresOf(o.env)
 	if in.Store != "" {
-		sources = []store.Source{store.Source(in.Store)}
+		sources = engine.NamedSources(o.env, store.Source(in.Store))
 	}
 	out := ListOut{SchemaVersion: SchemaVersion, Kind: KindList, Data: []Record{}}
 	for _, src := range sources {

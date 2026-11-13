@@ -37,10 +37,10 @@ A hotfix has a `--severity`: `low`, `medium`, `high` (the default) or `critical`
 ```console
 # alice, in website
 $ lore hotfix add --title 'Checkout button is broken on Safari' --body 'Use the old button until the fix ships.' --severity critical
-lore: wrote ~/work/website/.lore/data/hotfixes/hfx_2537…6bbb.json
-⚠ hfx_2537…6bbb — Checkout button is broken on Safari [critical]
+lore: wrote ~/work/website/.lore/data/hotfixes/hfx_f147…5139.json
+⚠ hfx_f147…5139 — Checkout button is broken on Safari [critical]
 $ lore hotfix list
-hfx_2537…6bbb [critical] Use the old button until the fix ships.
+hfx_f147…5139 [critical] Use the old button until the fix ships.
 ```
 <!-- /example -->
 
@@ -54,8 +54,8 @@ Each kind is one `add` command. Here are the ones with a title and a body:
 ```console
 # alice, in website
 $ lore pattern add --title 'Load data in one place' --body 'Each page loads its data in its loader, never inside a button handler.'
-lore: wrote ~/work/website/.lore/data/patterns/pat_b69e…5ed7.json
-✓ pat_b69e…5ed7
+lore: wrote ~/work/website/.lore/data/patterns/pat_2537…6bbb.json
+✓ pat_2537…6bbb
 ```
 <!-- /example -->
 
@@ -63,8 +63,8 @@ lore: wrote ~/work/website/.lore/data/patterns/pat_b69e…5ed7.json
 ```console
 # alice, in website
 $ lore playbook add --title 'How to release' --body '1. Run the tests. 2. Tag the release. 3. Post in the team chat.'
-lore: wrote ~/work/website/.lore/data/playbooks/pbk_0aae…a61f.json
-✓ pbk_0aae…a61f
+lore: wrote ~/work/website/.lore/data/playbooks/pbk_b69e…5ed7.json
+✓ pbk_b69e…5ed7
 ```
 <!-- /example -->
 
@@ -74,8 +74,8 @@ A playbook and a prompt also keep a one-line summary. `--description` sets it; w
 ```console
 # alice, in website
 $ lore prompt add --title 'Review a pull request' --description 'Bugs first, then style' --body 'Read the change, list bugs first, then style notes.'
-lore: wrote ~/work/website/.lore/data/prompts/prm_6a86…ed8c.json
-✓ prm_6a86…ed8c
+lore: wrote ~/work/website/.lore/data/prompts/prm_0aae…a61f.json
+✓ prm_0aae…a61f
 ```
 <!-- /example -->
 
@@ -85,10 +85,10 @@ A snapshot is stamped with today's date, which `lore snapshot list` shows. `--so
 ```console
 # alice, in website
 $ lore snapshot add --title 'Week 44' --body 'Checkout works. Search is half done. Demo on Friday.'
-lore: wrote ~/work/website/.lore/data/snapshots/snp_4f89…b64b.json
-✓ snp_4f89…b64b — Week 44
+lore: wrote ~/work/website/.lore/data/snapshots/snp_6a86…ed8c.json
+✓ snp_6a86…ed8c — Week 44
 $ lore snapshot list
-snp_4f89…b64b Week 44   (2026-11-02)
+snp_6a86…ed8c Week 44   (2026-11-02)
 ```
 <!-- /example -->
 
@@ -96,8 +96,8 @@ snp_4f89…b64b Week 44   (2026-11-02)
 ```console
 # alice, in website
 $ lore incident add --title 'Site down for 20 minutes' --body 'The disk filled up with logs. We now rotate logs daily.'
-lore: wrote ~/work/website/.lore/data/incidents/inc_77cb…76c4.json
-✓ inc_77cb…76c4
+lore: wrote ~/work/website/.lore/data/incidents/inc_4f89…b64b.json
+✓ inc_4f89…b64b
 ```
 <!-- /example -->
 
@@ -105,8 +105,8 @@ lore: wrote ~/work/website/.lore/data/incidents/inc_77cb…76c4.json
 ```console
 # alice, in website
 $ lore behaviour add --title 'Ask before deleting' --body 'Ask before you delete any file you did not create.'
-lore: wrote ~/work/website/.lore/data/behaviours/bhv_d191…45c2.json
-✓ bhv_d191…45c2
+lore: wrote ~/work/website/.lore/data/behaviours/bhv_77cb…76c4.json
+✓ bhv_77cb…76c4
 ```
 <!-- /example -->
 
@@ -114,8 +114,8 @@ lore: wrote ~/work/website/.lore/data/behaviours/bhv_d191…45c2.json
 ```console
 # alice, in website
 $ lore architecturenote add --title 'How the site is built' --body 'The website reads products from the shop API and caches them for 5 minutes.'
-lore: wrote ~/work/website/.lore/data/architecture_notes/anr_b4d3…11aa.json
-✓ anr_b4d3…11aa
+lore: wrote ~/work/website/.lore/data/architecture_notes/anr_d191…45c2.json
+✓ anr_d191…45c2
 ```
 <!-- /example -->
 
@@ -123,8 +123,8 @@ lore: wrote ~/work/website/.lore/data/architecture_notes/anr_b4d3…11aa.json
 ```console
 # alice, in website
 $ lore cookbookrecipe add --title 'Add a new page' --body 'Copy pages/about, rename it, add a link in the menu.'
-lore: wrote ~/work/website/.lore/data/cookbook_recipes/cbr_9a34…b418.json
-✓ cbr_9a34…b418
+lore: wrote ~/work/website/.lore/data/cookbook_recipes/cbr_b4d3…11aa.json
+✓ cbr_b4d3…11aa
 ```
 <!-- /example -->
 
@@ -132,8 +132,8 @@ lore: wrote ~/work/website/.lore/data/cookbook_recipes/cbr_9a34…b418.json
 ```console
 # alice, in website
 $ lore suggestion add --title 'Add dark mode' --body 'Several users asked for it.'
-lore: wrote ~/work/website/.lore/data/suggestions/sug_bfed…eeea.json
-✓ sug_bfed…eeea
+lore: wrote ~/work/website/.lore/data/suggestions/sug_9a34…b418.json
+✓ sug_9a34…b418
 ```
 <!-- /example -->
 
@@ -141,8 +141,8 @@ lore: wrote ~/work/website/.lore/data/suggestions/sug_bfed…eeea.json
 ```console
 # alice, in website
 $ lore workflow add --title 'Code review' --body 'One approval from a second developer before merge.'
-lore: wrote ~/work/website/.lore/data/workflows/wfl_8567…366f.json
-✓ wfl_8567…366f
+lore: wrote ~/work/website/.lore/data/workflows/wfl_67e2…291e.json
+✓ wfl_67e2…291e
 ```
 <!-- /example -->
 
@@ -150,8 +150,8 @@ lore: wrote ~/work/website/.lore/data/workflows/wfl_8567…366f.json
 ```console
 # alice, in website
 $ lore workspace add --title 'Website redesign' --body 'Everything for the new look of the site.'
-lore: wrote ~/work/website/.lore/data/workspaces/wsp_71f0…c07d.json
-✓ wsp_71f0…c07d
+lore: wrote ~/work/website/.lore/data/workspaces/wsp_8567…366f.json
+✓ wsp_8567…366f
 ```
 <!-- /example -->
 
@@ -161,8 +161,8 @@ lore: wrote ~/work/website/.lore/data/workspaces/wsp_71f0…c07d.json
 ```console
 # alice, in website
 $ lore tastepref add --body 'Buttons are blue'
-lore: wrote ~/work/website/.lore/data/taste_prefs/tst_376c…8e1a.json
-✓ tst_376c…8e1a
+lore: wrote ~/work/website/.lore/data/taste_prefs/tst_bfed…eeea.json
+✓ tst_bfed…eeea
 ```
 <!-- /example -->
 
@@ -170,8 +170,8 @@ lore: wrote ~/work/website/.lore/data/taste_prefs/tst_376c…8e1a.json
 ```console
 # alice, in website
 $ lore techdoc add --name 'Payments docs' --base-url https://docs.example.com/payments --description 'How to take a card payment'
-lore: wrote ~/work/website/.lore/data/tech_docs/tdc_67e2…291e.json
-✓ tdc_67e2…291e Payments docs
+lore: wrote ~/work/website/.lore/data/tech_docs/tdc_376c…8e1a.json
+✓ tdc_376c…8e1a Payments docs
 ```
 <!-- /example -->
 
@@ -182,16 +182,16 @@ Every kind has `show`, `search` and `delete`; most have `edit` too. `lore <kind>
 <!-- example: knowledge#other-kinds-show-edit -->
 ```console
 # alice, in website
-$ lore pattern show pat_b69e…5ed7
-PA  pat_b69e…5ed7
+$ lore pattern show pat_2537…6bbb
+PA  pat_2537…6bbb
   title: Load data in one place
 Each page loads its data in its loader, never inside a button handler.
 created 2026-11-02T10:03:10Z by alice · updated 2026-11-02T10:03:10Z by alice
-$ lore pattern edit pat_b69e…5ed7 --body 'Each page loads its data in its loader, never inside a button handler or an effect.'
-lore: wrote ~/work/website/.lore/data/patterns/pat_b69e…5ed7.json
-✓ pattern pat_b69e…5ed7 updated
+$ lore pattern edit pat_2537…6bbb --body 'Each page loads its data in its loader, never inside a button handler or an effect.'
+lore: wrote ~/work/website/.lore/data/patterns/pat_2537…6bbb.json
+✓ pattern pat_2537…6bbb updated
 $ lore pattern search loader
-pat_b69e…5ed7 Load data in one place
+pat_2537…6bbb Load data in one place
 ```
 <!-- /example -->
 
@@ -200,14 +200,14 @@ pat_b69e…5ed7 Load data in one place
 <!-- example: knowledge#incident-edit -->
 ```console
 # alice, in website
-$ lore incident edit inc_77cb…76c4 --severity high --ref pat_b69e…5ed7 --relation fixed_by
-lore: wrote ~/work/website/.lore/data/incidents/inc_77cb…76c4.json
-lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_ada3…c018.json
-✓ inc_77cb…76c4 updated
-$ lore incident show inc_77cb…76c4
-IN  inc_77cb…76c4
+$ lore incident edit inc_4f89…b64b --severity high --ref pat_2537…6bbb --relation fixed_by
+lore: wrote ~/work/website/.lore/data/incidents/inc_4f89…b64b.json
+lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_71f0…c07d.json
+✓ inc_4f89…b64b updated
+$ lore incident show inc_4f89…b64b
+IN  inc_4f89…b64b
   title: Site down for 20 minutes
-  fixed_by patterns/pat_b69e…5ed7
+  fixed_by patterns/pat_2537…6bbb
 The disk filled up with logs. We now rotate logs daily.
 created 2026-11-02T10:03:35Z by alice · updated 2026-11-02T10:04:40Z by alice
 ```
@@ -218,10 +218,10 @@ To read the whole incident, use `lore show`, which works for any id:
 <!-- example: knowledge#show-any-row only=1 -->
 ```console
 # alice, in website
-$ lore show inc_77cb…76c4
-inc_77cb…76c4  incidents  repo  "Site down for 20 minutes"
+$ lore show inc_4f89…b64b
+inc_4f89…b64b  incidents  repo  "Site down for 20 minutes"
   body: The disk filled up with logs. We now rotate logs daily.
-  created_by_actor_id: act_4c59…6c38
+  created_by_actor_id: act_ada3…c018
   project_id: prj_78c8…5b6c
   severity_str: high
   title: Site down for 20 minutes
@@ -236,14 +236,14 @@ Hotfixes, patterns, playbooks, prompts and snapshots can be archived: the row st
 <!-- example: knowledge#other-kinds-archive -->
 ```console
 # alice, in website
-$ lore snapshot archive snp_4f89…b64b
-lore: wrote ~/work/website/.lore/data/snapshots/snp_4f89…b64b.json
-✓ snp_4f89…b64b archived
+$ lore snapshot archive snp_6a86…ed8c
+lore: wrote ~/work/website/.lore/data/snapshots/snp_6a86…ed8c.json
+✓ snp_6a86…ed8c archived
 $ lore snapshot list
 (no snapshots)
-$ lore snapshot unarchive snp_4f89…b64b
-lore: wrote ~/work/website/.lore/data/snapshots/snp_4f89…b64b.json
-✓ snp_4f89…b64b unarchived
+$ lore snapshot unarchive snp_6a86…ed8c
+lore: wrote ~/work/website/.lore/data/snapshots/snp_6a86…ed8c.json
+✓ snp_6a86…ed8c unarchived
 ```
 <!-- /example -->
 
@@ -253,9 +253,9 @@ lore: wrote ~/work/website/.lore/data/snapshots/snp_4f89…b64b.json
 ```console
 # alice, in website
 $ lore incident list; lore tastepref list; lore techdoc list
-IN  inc_77cb…76c4  Site down for 20 minutes
-TA  tst_376c…8e1a  Buttons are blue
-tdc_67e2…291e Payments docs https://docs.example.com/payments
+IN  inc_4f89…b64b  Site down for 20 minutes
+TA  tst_bfed…eeea  Buttons are blue
+tdc_376c…8e1a Payments docs https://docs.example.com/payments
 ```
 <!-- /example -->
 

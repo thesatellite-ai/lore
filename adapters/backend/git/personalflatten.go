@@ -10,10 +10,11 @@ package git
 // (after the layout commit, the same files sit at <org>/<table>/… and
 // everywhere/<table>/…). This lore reads a git personal store's root
 // folder only (`me` = _store/), so those rows were never read: the notes
-// looked lost. FlattenPersonal moves every row of such a folder to
-// _store/<table>/<id>.json in one commit, the same move personal_store_flatten
-// makes for a 0.1.17 local personal store: every personal note then loads in
-// every repo, as every 0.1.18 personal note does. A row found in two
+// looked lost. FlattenPersonal moves every row of everywhere/ to
+// _store/<table>/<id>.json in one commit: those notes load in every repo,
+// as they did. A 0.1.17 <org>/ folder keeps its scope (decision D5): it
+// stays where it is (the layout commit moves it to <org>/<table>/…) and is
+// attached as me/<org> only in that org's repos (wire/personal_orgs.go). A row found in two
 // folders (the person's actor row is in each) is merged with the row
 // merger; a folder's _meta.json (the 0.1.17 folder's project id) is
 // dropped, its _purged.json merged into _store/'s. The old paths stay in
@@ -40,7 +41,7 @@ import (
 )
 
 // PersonalFlattenSubject is the title of the commit FlattenPersonal makes.
-const PersonalFlattenSubject = "lore: personal store — lore 0.1.17's per-org notes move from <folder>/ to _store/"
+const PersonalFlattenSubject = "lore: personal store — lore 0.1.17's everywhere/ notes move to _store/"
 
 // personalEverywhereV017 is lore 0.1.17's no-org personal folder.
 const personalEverywhereV017 = "everywhere"
@@ -59,6 +60,22 @@ type PersonalFlattenResult struct {
 	// Kept lists the _store/ files a moved row could not be merged into:
 	// the _store/ copy is kept, the other is in the history.
 	Kept []string
+}
+
+// everywhereOnly is folders reduced to 0.1.17's everywhere/ (the one
+// FlattenPersonal moves).
+func everywhereOnly(folders []string) []string {
+	if slices.Contains(folders, personalEverywhereV017) {
+		return []string{personalEverywhereV017}
+	}
+	return nil
+}
+
+// PersonalEverywhereV017At reports whether the store clone at dir still
+// holds lore 0.1.17's everywhere/ personal folder (FlattenPersonal moves
+// it to _store/). Files only.
+func PersonalEverywhereV017At(dir string) bool {
+	return len(everywhereOnly(PersonalFoldersV017At(dir))) > 0
 }
 
 // PersonalFoldersV017At lists the top folders of the store clone at dir
@@ -181,7 +198,10 @@ func (b *Backend) FlattenPersonal(ctx context.Context) (PersonalFlattenResult, e
 		return res, err
 	}
 	defer func() { _ = lock.Release() }() // the commit is made or not by then
-	folders := PersonalFoldersV017At(b.work)
+	// D5: only everywhere/ moves; a 0.1.17 <org>/ folder keeps its scope
+	// (it stays a folder of the store, attached as me/<org> in that org's
+	// repos), so a note about one company never loads in another's
+	folders := everywhereOnly(PersonalFoldersV017At(b.work))
 	if len(folders) == 0 {
 		return res, nil
 	}
@@ -271,8 +291,8 @@ func (b *Backend) FlattenPersonal(ctx context.Context) (PersonalFlattenResult, e
 	if err != nil {
 		return res, err
 	}
-	msg := PersonalFlattenSubject + "\n\n" + "lore 0.1.17 filed personal notes per org (" + strings.Join(res.Folders, "/, ") + "/); this lore reads a personal store's " + rowfs.StoreDataDir + "/ folder." +
-		"\nEvery row moves there (a row in two folders is merged), so each note loads in every repo, as every 0.1.18 personal note does." +
+	msg := PersonalFlattenSubject + "\n\n" + "lore 0.1.17 filed personal notes for every repo under everywhere/; this lore reads them from " + rowfs.StoreDataDir + "/." +
+		"\nNotes 0.1.17 filed under an org's folder stay there and load only in that org's repos." +
 		"\nThe old paths stay in this store's history."
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(msg)}, env: env}); err != nil {
 		return res, errs.Wrap(errs.Internal, "git: commit the personal store move", err).

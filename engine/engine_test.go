@@ -99,10 +99,12 @@ type fixedSettings struct {
 	allows []scan.Allow
 }
 
-func (s fixedSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
+func (s fixedSettings) Policy(context.Context, store.Source) (policy.Set, policy.Rules, error) {
 	return s.set, s.rules, nil
 }
-func (s fixedSettings) Allows(store.Source) ([]scan.Allow, error) { return s.allows, nil }
+func (s fixedSettings) Allows(context.Context, store.Source) ([]scan.Allow, error) {
+	return s.allows, nil
+}
 
 // awsRule is the one scanner rule of these tests.
 const awsRule = "aws-access-token"

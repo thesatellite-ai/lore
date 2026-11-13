@@ -47,7 +47,7 @@ func (a *App) CreateClass(ctx context.Context, target store.Source, table row.Ta
 		if err != nil {
 			return "", err
 		}
-		q, err := a.writeQuery(st, table, fields)
+		q, err := a.writeQuery(ctx, st, table, fields)
 		if err != nil {
 			return "", err
 		}

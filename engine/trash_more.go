@@ -53,7 +53,7 @@ func (e *Engine) TrashStats(ctx context.Context) (TrashStats, error) {
 		out.ByDeleter[t.Info.By]++
 		d, ok := days[t.Store]
 		if !ok {
-			if set, _, perr := e.settings.Policy(t.Store); perr == nil {
+			if set, _, perr := e.settings.Policy(ctx, t.Store); perr == nil {
 				d, _ = set.Limit(policy.KeyTrashRetentionDays)
 			}
 			days[t.Store] = d

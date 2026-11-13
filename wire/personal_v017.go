@@ -258,6 +258,16 @@ func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, 
 		if len(added) > 0 {
 			steps = append(steps, StepPersonalStoreFlatten+": "+f+"/"+rowfs.RepoMetaPath+": features + "+formatgate.PersonalFlat)
 		}
+		// B4-12: a folder left with no row file (only its _meta.json and
+		// lore's own lock and cache files) is removed, so no empty 0.1.17
+		// tree stays behind; one still holding a row (a tombstone of a row
+		// the root never had) stays, and doctor names a live one
+		if old := filepath.Join(dir, f); !folderHasRows(old) {
+			if rerr := os.RemoveAll(old); rerr != nil {
+				return nil, 0, errs.FileIO("remove", old, rerr)
+			}
+			steps = append(steps, StepPersonalStoreFlatten+": "+f+"/: removed (every row is at the root now)")
+		}
 	}
 	cfg := configPath(a.opts.Home)
 	if b, rerr := os.ReadFile(filepath.Clean(cfg)); rerr == nil {

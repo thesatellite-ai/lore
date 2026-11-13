@@ -101,7 +101,7 @@ $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin m
 
 You can also edit the value in the file by hand; the next lore command reads it in.
 
-Or let lore pick one side for you. `lore sync conflicts` lists every row that still holds conflict markers, numbered: first the live rows (tasks shared before they land), then the row files of this repo that a git merge left with markers (with the file path; for those `kept` reads "both" until you choose). `lore sync status` counts the conflicted files too. `lore sync resolve <number> --take kept` keeps the first side of every marker block in that row (your edit; for a git merge, the branch you are on), `--take other` keeps the second (the edit that met it; for a git merge, the branch you merged in). It only ever chooses between texts already there, never writes new text:
+Or let lore pick one side for you. `lore sync conflicts` lists every row that still holds conflict markers, numbered: first the live rows (tasks shared before they land, each clashing field with the text `kept` and `other` would leave; kept is the first section, the edit of the machine that merged the two), then the row files of this repo that a git merge left with markers (with the file path; for those `kept` reads "both" until you choose). `lore sync status` counts the conflicted files too. `lore sync resolve <number> --take kept` keeps the first side of every marker block in that row (your edit; for a git merge, the branch you are on), `--take other` keeps the second (the edit that met it; for a git merge, the branch you merged in). It only ever chooses between texts already there, never writes new text:
 
 - A row file is written back in place and the local cache refreshed; you still `git add` and commit the merge yourself, lore never commits it for you.
 - A live row gets a new live version, pushed like any other live edit.
@@ -115,8 +115,8 @@ Rows of a team or personal store do not travel with your code commits: `lore syn
 
 - `lore sync conflicts` lists the row with its store, the fields both sides changed, and both values of each (`mine (kept)` and `theirs (other)`); `--json` carries both row files (`kept_doc`, `other_doc`).
 - `lore explain <id>` says which store holds the row and that it waits on a conflict.
-- `lore sync resolve <n> --take kept` keeps her version, `--take other` takes Bob's; either way lore merges the store, sends the result and both machines end with the same row. The rest of the row still merges field by field.
-- Or she edits the row to any value (hers, Bob's, or a third one) and runs `lore sync`: an edit made after the conflict was reported settles it with the row as she saved it.
+- `lore sync resolve <n> --take kept` keeps her version of each field both changed, `--take other` takes Bob's; either way lore merges the store, sends the result and both machines end with the same row. Only the clashing fields take the chosen side: a field only one of them changed (her status, his priority) keeps that change.
+- Or she edits the row to any value (hers, Bob's, or a third one) and runs `lore sync`: an edit made after the conflict was reported settles the clashing fields with her values, and Bob's changes to the other fields are kept.
 
 If Bob changes the row again before she settles it, her choice no longer applies and the next sync reports the new conflict.
 

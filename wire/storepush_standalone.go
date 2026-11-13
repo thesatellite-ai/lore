@@ -376,9 +376,12 @@ func (b *storePush) pushed(ctx context.Context, sent bool) {
 // now; batch only when push_every has passed); a failed push is a note
 // and the commit waits for `lore sync`.
 func (b *storePush) pushAfterWrite(ctx context.Context) {
-	if fetchDeferred(ctx) {
+	if fetchDeferred(ctx) && !readRun(ctx) {
 		return // the sync after the pick-up pushes it (handedit.go)
 	}
+	// A read's pick-up commit goes on: nothing pushes it (a read never
+	// pushes), and the store's first read of the command already ran before
+	// the commit, so only this call can say that it waits (readRun below).
 	if opsmigrate.NoPushAsked(ctx) {
 		return // `lore migrate run --no-push`: the commit stays local
 	}

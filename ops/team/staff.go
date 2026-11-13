@@ -923,16 +923,23 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 			return StaffWriteOut{}, err
 		}
 	}
+	// the actor row and the stint's role in ONE store commit (B1-21)
+	sctx := engine.Staging(store.WithCommitTitle(ctx, "member edit: "+in.Who))
 	if len(patch) > 0 {
-		if _, err := r.Update(ctx, schema.TableActors, a.ID, patch); err != nil {
+		if _, err := r.Update(sctx, schema.TableActors, a.ID, patch); err != nil {
+			engine.Discard(sctx)
 			return StaffWriteOut{}, err
 		}
 	}
 	if in.Role != "" {
 		w := &writer{r: r, actor: a, today: r.Today(), orgRole: in.Role}
-		if err := w.setOrgRole(ctx); err != nil {
+		if err := w.setOrgRole(sctx); err != nil {
+			engine.Discard(sctx)
 			return StaffWriteOut{}, err
 		}
+	}
+	if _, err := engine.Commit(sctx); err != nil {
+		return StaffWriteOut{}, errs.Prefix("member edit (nothing written)", err)
 	}
 	r.Push(ctx)
 	_, m, err := staffFind(ctx, r, a.ID.String())

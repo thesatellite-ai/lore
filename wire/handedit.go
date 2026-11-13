@@ -46,9 +46,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -58,6 +61,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -100,6 +104,14 @@ type deferFetchKey struct{}
 func withDeferredFetch(ctx context.Context) context.Context {
 	return context.WithValue(ctx, deferFetchKey{}, true)
 }
+
+// handEditContext is the context the pick-up runs under: store syncs
+// deferred (I-1). App.state runs the pick-up with the command's own
+// context, whose reads fetched and merged the remote (the secret scan's
+// and the reference checks' reads of a store) before the hand edit was
+// committed, against "valid hand edits are committed before any pull"; the
+// sync after the pick-up (pickUpThenSync) then fetches, merges and pushes.
+func handEditContext(ctx context.Context) context.Context { return withDeferredFetch(ctx) }
 
 // fetchDeferred reports whether ctx defers store syncs (withDeferredFetch).
 func fetchDeferred(ctx context.Context) bool {
@@ -196,6 +208,7 @@ func (st *state) pickUpHandEdits(ctx context.Context, say func(string)) {
 	if inCommitHook() || st.eng == nil {
 		return
 	}
+	ctx = handEditContext(ctx)
 	if say == nil {
 		say = func(string) {}
 	}
@@ -250,6 +263,13 @@ func (st *state) pickUpCheckout(ctx context.Context, co *handCheckout, say func(
 	// unstage (git reset), which ends it; leave the clone alone and say so.
 	if op, way := co.gb.PersonGitOp(ctx); op != "" {
 		say(handLinePrefix + gitbackend.GitOpInProgressError(co.dir, op, way).Message + " (" + way + ")")
+		return
+	}
+	// A merge a killed lore run left is lore's debris, not a hand edit: it
+	// is aborted before the files are compared (the sync that used to
+	// abort it first now runs after the pick-up).
+	if err := co.gb.RecoverOwnMerge(ctx); err != nil {
+		say(handLinePrefix + "could not look for hand edits in " + co.dir + ": " + err.Error())
 		return
 	}
 	rep, err := co.gb.HandChanges(ctx)
@@ -508,54 +528,102 @@ func (st *state) pickUpRepoEdits(ctx context.Context, gb *gitbackend.Backend, sa
 		say(handLinePrefix + "could not look for hand edits in " + gb.Dir() + ": " + err.Error())
 		return
 	}
-	for _, c := range rep.Rows {
-		if c.Kind != gitbackend.HandModified {
+	// The files are read, decoded and compared in parallel (B1-16: with a
+	// migration not committed yet every row file is modified, ~5,400
+	// decodes of the file and of its committed copy on each command); the
+	// engine part runs after, one file at a time in git's order, so the
+	// lines and writes are the same as a sequential loop.
+	cands := make([]repoEditCandidate, len(rep.Rows))
+	reg := st.eng.Registry()
+	parallelEach(len(rep.Rows), func(i int) { cands[i] = repoEditCandidateOf(reg, rep.Rows[i]) })
+	for i, c := range rep.Rows {
+		cand := cands[i]
+		if cand.refused != nil {
+			say(handRefusal(gb.Dir(), c, cand.hand, cand.refused))
 			continue
 		}
-		hand, err := os.ReadFile(c.Abs)
-		if err != nil {
-			continue
-		}
-		base, berr := row.Decode(c.Base)
-		h, herr := decodeHand(c, hand)
-		if berr != nil {
-			continue
-		}
-		if herr != nil {
-			if merge3.ContainsConflictMarkers(string(hand)) {
-				continue // a merge left for the person: lore sync and the hooks say so
-			}
-			say(handRefusal(gb.Dir(), c, hand, herr))
-			continue
-		}
-		if h.HLC != base.HLC {
-			continue // written by lore (or another branch), not by hand
-		}
-		if base.SourceVersion != row.FormatVersion {
-			// B1-10/B1-16: a v1 file the migration rewrote (not committed
-			// yet) keeps its stamp; its field changes are the migration's
-			// (empty refs as null, audit defaults), not a hand edit
-			base = upcastV1(st.eng.Registry(), base)
-		}
-		// Compare the fields before asking the engine: a format rewrite
-		// (`lore fix` migrating every row file) changes thousands of files
-		// and no field, and engine.Get of a code-repo row reads the live
-		// tree, so asking first made every command after a migration decode
-		// the live tree once per changed file (~25 s on 5,400 rows).
-		fields := engine.PickUpChanged(base, h)
-		if len(fields) == 0 {
+		if len(cand.fields) == 0 {
 			continue
 		}
 		_, cur, gerr := st.eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: c.Table, ID: c.ID})
-		if gerr != nil || cur.HLC != h.HLC {
+		if gerr != nil || cur.HLC != cand.h.HLC {
 			continue // the engine reads this row elsewhere (a live row)
 		}
-		if _, err := st.eng.PickUp(ctx, store.SourceRepo, base, h); err != nil {
-			say(handRefusal(gb.Dir(), c, hand, err))
+		if _, err := st.eng.PickUp(ctx, store.SourceRepo, cand.base, cand.h); err != nil {
+			say(handRefusal(gb.Dir(), c, cand.hand, err))
 			continue
 		}
-		say(handLinePrefix + "picked up a hand edit of " + rowName(c) + " (" + strings.Join(fields, ", ") + "): checked and stamped with your name and the time in " + c.Abs + "; commit it with your code")
+		say(handLinePrefix + "picked up a hand edit of " + rowName(c) + " (" + strings.Join(cand.fields, ", ") + "): checked and stamped with your name and the time in " + c.Abs + "; commit it with your code")
 	}
+}
+
+// repoEditCandidate is what one modified row file of a code repo holds
+// for the pick-up: the fields a person changed by hand (none: nothing to
+// pick up), or why the file is refused.
+type repoEditCandidate struct {
+	hand    []byte
+	base, h row.Row
+	fields  []string
+	refused error
+}
+
+// repoEditCandidateOf reads and compares one changed file (no engine
+// call, safe to run in parallel).
+func repoEditCandidateOf(reg *schema.Registry, c gitbackend.HandChange) repoEditCandidate {
+	if c.Kind != gitbackend.HandModified {
+		return repoEditCandidate{}
+	}
+	hand, err := os.ReadFile(c.Abs)
+	if err != nil {
+		return repoEditCandidate{}
+	}
+	base, berr := row.Decode(c.Base)
+	h, herr := decodeHand(c, hand)
+	if berr != nil {
+		return repoEditCandidate{}
+	}
+	if herr != nil {
+		if merge3.ContainsConflictMarkers(string(hand)) {
+			return repoEditCandidate{} // a merge left for the person: lore sync and the hooks say so
+		}
+		return repoEditCandidate{hand: hand, refused: herr}
+	}
+	if h.HLC != base.HLC {
+		return repoEditCandidate{} // written by lore (or another branch), not by hand
+	}
+	if base.SourceVersion != row.FormatVersion {
+		// B1-10/B1-16: a v1 file the migration rewrote (not committed
+		// yet) keeps its stamp; its field changes are the migration's
+		// (empty refs as null, audit defaults), not a hand edit
+		base = upcastV1(reg, base)
+	}
+	// Compare the fields before asking the engine: a format rewrite
+	// (`lore fix` migrating every row file) changes thousands of files
+	// and no field, and engine.Get of a code-repo row reads the live
+	// tree, so asking first made every command after a migration decode
+	// the live tree once per changed file (~25 s on 5,400 rows).
+	return repoEditCandidate{hand: hand, base: base, h: h, fields: engine.PickUpChanged(base, h)}
+}
+
+// parallelEach runs fn(0..n-1) on every CPU and waits for all of them.
+func parallelEach(n int, fn func(i int)) {
+	workers := min(runtime.GOMAXPROCS(0), n)
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= n {
+					return
+				}
+				fn(i)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // rowName is "<table> <id>" for messages.

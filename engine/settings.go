@@ -47,7 +47,7 @@ func levelOf(a Attached) policy.Level {
 
 // settingsRows reads the live rows of table in every attached store with
 // their levels, in precedence order.
-func (s storeSettings) settingsRows(table row.Table) ([]policy.Leveled[row.Row], error) {
+func (s storeSettings) settingsRows(ctx context.Context, table row.Table) ([]policy.Leveled[row.Row], error) {
 	e := s.e
 	e.openMu.Lock()
 	staging := len(e.open) > 0
@@ -56,7 +56,7 @@ func (s storeSettings) settingsRows(table row.Table) ([]policy.Leveled[row.Row],
 	if staging && ok {
 		return memo, nil
 	}
-	out, err := s.readSettingsRows(table)
+	out, err := s.readSettingsRows(ctx, table)
 	if err != nil || !staging {
 		return out, err
 	}
@@ -71,9 +71,13 @@ func (s storeSettings) settingsRows(table row.Table) ([]policy.Leveled[row.Row],
 	return out, nil
 }
 
-// readSettingsRows is settingsRows read from the stores.
-func (s storeSettings) readSettingsRows(table row.Table) ([]policy.Leveled[row.Row], error) {
-	ctx := context.Background()
+// readSettingsRows is settingsRows read from the stores, under the
+// caller's ctx: a store read is where the command's first fetch and its
+// read-or-write decision happen (wire storePush), so a settings read under
+// a fresh context.Background() lost the command's marks (a read never
+// pushes; the pick-up of a hand edit commits before any fetch) and spent
+// the command's one fetch before the pick-up had committed.
+func (s storeSettings) readSettingsRows(ctx context.Context, table row.Table) ([]policy.Leveled[row.Row], error) {
 	var out []policy.Leveled[row.Row]
 	for _, name := range s.e.order {
 		a := s.e.stores[name]
@@ -89,8 +93,8 @@ func (s storeSettings) readSettingsRows(table row.Table) ([]policy.Leveled[row.R
 }
 
 // Policy implements Settings.
-func (s storeSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
-	pols, err := s.settingsRows(schema.TablePolicies)
+func (s storeSettings) Policy(ctx context.Context, _ store.Source) (policy.Set, policy.Rules, error) {
+	pols, err := s.settingsRows(ctx, schema.TablePolicies)
 	if err != nil {
 		return policy.Set{}, policy.Rules{}, err
 	}
@@ -107,7 +111,7 @@ func (s storeSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
 	if err != nil {
 		return policy.Set{}, policy.Rules{}, err
 	}
-	rs, err := s.settingsRows(schema.TableSecretRules)
+	rs, err := s.settingsRows(ctx, schema.TableSecretRules)
 	if err != nil {
 		return policy.Set{}, policy.Rules{}, err
 	}
@@ -126,15 +130,15 @@ func (s storeSettings) Policy(store.Source) (policy.Set, policy.Rules, error) {
 // Settings source the write path reads (WithSettings, else every attached
 // store's policies rows at their levels). A malformed row fails closed
 // (E_CONFIG_INVALID naming it).
-func (e *Engine) Policy(target store.Source) (policy.Set, error) {
-	set, _, err := e.settings.Policy(target)
+func (e *Engine) Policy(ctx context.Context, target store.Source) (policy.Set, error) {
+	set, _, err := e.settings.Policy(ctx, target)
 	return set, err
 }
 
 // Allows implements Settings: every secret_allows row of every store. A
 // malformed row fails closed (E_CONFIG_INVALID naming it).
-func (s storeSettings) Allows(store.Source) ([]scan.Allow, error) {
-	rs, err := s.settingsRows(schema.TableSecretAllows)
+func (s storeSettings) Allows(ctx context.Context, _ store.Source) ([]scan.Allow, error) {
+	rs, err := s.settingsRows(ctx, schema.TableSecretAllows)
 	if err != nil {
 		return nil, err
 	}

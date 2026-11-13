@@ -85,7 +85,11 @@ var noWrites atomic.Bool
 // SkipCacheWrites keeps machine.json as it is for the rest of the process
 // (`lore fix --dry-run` writes nothing, B4-14): the id is worked out the
 // same way and used, only not saved.
-func SkipCacheWrites() { noWrites.Store(true) }
+// It returns the func that lifts the switch again.
+func SkipCacheWrites() func() {
+	noWrites.Store(true)
+	return func() { noWrites.Store(false) }
+}
 
 // writeCache writes machine.json atomically (temp file + rename).
 func writeCache(home string, w cacheWire) error {

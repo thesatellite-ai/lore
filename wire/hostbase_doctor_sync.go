@@ -177,13 +177,21 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 			}
 		}
 	}
-	probes := dataignore.Probes() // under dataignore.DataRel; this store's data path may differ
-	for i, p := range probes {
-		probes[i] = dataRel + strings.TrimPrefix(p, dataignore.DataRel)
-	}
-	hit, perr := dataignore.Ignored(ctx, dir, probes)
-	if perr == nil && len(hit) > 0 {
-		s.DataIgnored = true // a whole kind of lore file is ignored
+	// B1-8: the rules are only checked where rows live (.lore/data): a
+	// repo with no lore project of its own (a .lore/ holding only a
+	// LORE.md, a repo a store links by its remote) has no lore file a rule
+	// could hide, and warning about files that do not exist made it
+	// DEGRADED for nothing (the git wiring re-includes only there too)
+	var hit map[string]string
+	if s.DataDirPresent {
+		probes := dataignore.Probes() // under dataignore.DataRel; this store's data path may differ
+		for i, p := range probes {
+			probes[i] = dataRel + strings.TrimPrefix(p, dataignore.DataRel)
+		}
+		var perr error
+		if hit, perr = dataignore.Ignored(ctx, dir, probes); perr == nil && len(hit) > 0 {
+			s.DataIgnored = true // a whole kind of lore file is ignored
+		}
 	}
 	if s.DataIgnored {
 		warn(dataIgnoredLine(hit))

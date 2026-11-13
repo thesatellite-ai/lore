@@ -70,7 +70,7 @@ lore: pushed store agency: commit df3a55c to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json (store agency)
 ✓ revoked the claim on tsk_05e99e22e9e86e96fe4daa7777994603 (was held by agent-backend)
 agent-backend (work/website)$ lore task done tsk_05e99e22e9e86e96fe4daa7777994603
-ERROR: [E_LOST_CLAIM] tsk_05e99e22e9e86e96fe4daa7777994603: your claim (token ct_cb04f…) was revoked by act_2ad3618e878ebbf527d34d446ef4f891 at 10:16AM
+ERROR: [E_LOST_CLAIM] tsk_05e99e22e9e86e96fe4daa7777994603: your claim (token ct_cb04f…) was revoked by alice at 10:16AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 

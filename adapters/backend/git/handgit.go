@@ -311,4 +311,8 @@ var clonesForbidden atomic.Bool
 // (the CLI entry point of `lore fix --dry-run`, one command per process):
 // the org link lookups and doctor checks open stores on contexts of their
 // own, which WithNoClone cannot reach.
-func ForbidClones() { clonesForbidden.Store(true) }
+// It returns the func that lifts the switch again.
+func ForbidClones() func() {
+	clonesForbidden.Store(true)
+	return func() { clonesForbidden.Store(false) }
+}

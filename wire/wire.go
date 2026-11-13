@@ -929,6 +929,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err = a.prepareSource(ctx, e, d); err != nil {
 		return op.Result{}, err
 	}
+	// B2-21: a row named by id in a folder of the org's stores this repo
+	// does not attach (idfolder.go)
+	search, err := a.attachFolderOfID(ctx, e, d)
+	if err != nil {
+		return op.Result{}, err
+	}
 	eng, err := a.Engine(ctx)
 	if err != nil {
 		return op.Result{}, err
@@ -941,7 +947,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		a.ensureFolderProject(ctx) // the folder written to has its project row
 		a.afterWrite(ctx, e)       // OV3 MACH-AUTO: the profile goes with the next ordinary write
 	}
-	return res, err
+	return res, search.withSearchHint(err)
 }
 
 // unreachableTarget answers an operation whose `to` names an org store

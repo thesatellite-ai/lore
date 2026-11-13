@@ -149,3 +149,44 @@ func TestShellQuote(t *testing.T) {
 		}
 	}
 }
+
+// TestDoctorStoreCloneMidMerge (B2-26): a whole store clone left in the
+// middle of the person's git merge is named with the commands that finish
+// or abort it; a whole clone with nothing in progress is not reported.
+func TestDoctorStoreCloneMidMerge(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	p := makeStoreClone(t, home, "owner/notes", "https://host.example/owner/notes")
+	a, err := New(Options{Home: home, RepoDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = a.Close() })
+	if got, err := a.DoctorStoreClones(ctx); err != nil || len(got) != 0 {
+		t.Fatalf("an idle whole clone: %+v, %v", got, err)
+	}
+	put := func(body string) {
+		if err := os.WriteFile(filepath.Join(p.Dir, "placeholder.txt"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitRunT(t, p.Dir, "checkout", "-q", "-b", "side")
+	put("side\n")
+	gitRunT(t, p.Dir, "commit", "-q", "-am", "side")
+	gitRunT(t, p.Dir, "checkout", "-q", "main")
+	put("main\n")
+	gitRunT(t, p.Dir, "commit", "-q", "-am", "main")
+	m := exec.Command("git", "merge", "side")
+	m.Dir = p.Dir
+	m.Env = append(os.Environ(), "GIT_AUTHOR_NAME=placeholder", "GIT_AUTHOR_EMAIL=placeholder@example.invalid", "GIT_COMMITTER_NAME=placeholder", "GIT_COMMITTER_EMAIL=placeholder@example.invalid")
+	if err := m.Run(); err == nil {
+		t.Fatal("the merge was meant to conflict")
+	}
+	got, err := a.DoctorStoreClones(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || !strings.Contains(got[0].Message, "in the middle of a git merge") || !strings.Contains(got[0].Fix, "git merge --abort") {
+		t.Fatalf("mid-merge clone findings: %+v", got)
+	}
+}

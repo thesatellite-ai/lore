@@ -586,6 +586,9 @@ const doctorFixFlag = "fix"
 // Live.Prime and the repo.init path in around, both wireInstall). An input
 // it cannot read is wireRead, the side that changes less.
 func runWireMode(run *Run) wireMode {
+	if run.OldRows {
+		return wireRead // D7: a sync in an unmigrated 0.1.17 repo wires nothing
+	}
 	if run.Entry.Spec().Name == opsfix.OpRun { // lore fix wires like doctor --fix; --dry-run reads
 		if fixDryRun(run) {
 			return wireRead

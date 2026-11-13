@@ -88,7 +88,7 @@ func (e *Engine) detect(ctx context.Context, cl call, target store.Source, rowID
 			return screened{}, err
 		}
 	}
-	pol, rules, err := e.settings.Policy(target)
+	pol, rules, err := e.settings.Policy(ctx, target)
 	if err != nil {
 		return screened{}, err
 	}
@@ -110,7 +110,7 @@ func (e *Engine) detect(ctx context.Context, cl call, target store.Source, rowID
 	// (the person whose personal store is attached). A write a surface
 	// stamps as someone else (a shared `lore api`) keeps the rule.
 	own := e.actorOf(cl) == e.actor
-	allows, err := e.settings.Allows(target)
+	allows, err := e.settings.Allows(ctx, target)
 	if err != nil {
 		return screened{}, err
 	}

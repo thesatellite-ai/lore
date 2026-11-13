@@ -63,8 +63,10 @@ func ensureClone(ctx context.Context, dir, url string, own bool) error {
 		return nil // already this store's clone: nothing to write, no lock to wait for
 	}
 	if gitbackend.NoClone(ctx) {
-		// a dry run makes no clone, not even its lock (B4-14)
-		return errs.New(errs.StoreUnreachable, "orgcfg: the store "+url+" has no clone on this machine yet, and this run makes none (dry run)")
+		// a dry run makes no clone, not even its lock (B4-14): the store
+		// then reads as never fetched (fetchLocked refuses too), the same
+		// answer as a machine that is offline before its first fetch
+		return nil
 	}
 	lctx, unlock, err := gitbackend.LockClone(ctx, dir)
 	if err != nil {
@@ -83,6 +85,9 @@ func fetchLocked(ctx context.Context, r Router, dir string, now time.Time, branc
 	// A writer holding the store (a row batch, a sync) may be fetching it
 	// right now: the link index then reads the clone as it is (the stale
 	// rule, live.fetch_ttl / link_index.max_age) instead of waiting.
+	if gitbackend.NoClone(ctx) && gitbackend.OriginAt(dir) == "" {
+		return errs.New(errs.StoreUnreachable, "orgcfg: the store at "+dir+" has no clone on this machine yet, and this run makes none (dry run)")
+	}
 	lctx, unlock, err := gitbackend.TryLockClone(ctx, dir, fetchLockWait)
 	if err != nil {
 		return err

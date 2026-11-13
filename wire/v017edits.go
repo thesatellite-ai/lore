@@ -90,6 +90,7 @@ func (a *App) v017Edits(ctx context.Context) ([]v017Edit, error) {
 	}
 	defer func() { _ = db.Close() }() // read-only handle
 	var out []v017Edit
+	ctx = engine.EnsureReadSnapshot(ctx) // one read of each store for every table (v017Candidates)
 	for _, def := range st.eng.Registry().Tables() {
 		if def.MachineLocal {
 			continue // copied by the machine_local step
@@ -107,13 +108,92 @@ func (a *App) v017Edits(ctx context.Context) ([]v017Edit, error) {
 		}
 		q = strings.Replace(q, "SELECT json_object(", `SELECT json_object('`+v017UpdatedAt+`', "`+v017UpdatedAt+`", `, 1)
 		moved := func(err error, t row.Table, id ids.AnyID) bool { return isAmbiguousMoved(ctx, st, err, t, id) }
-		edits, err := v017TableEdits(ctx, st.eng, db, q, def.Name, fields, moved)
+		cands, err := v017Candidates(ctx, st.eng, db, def.Name)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, edits...)
+		for len(cands) > 0 {
+			chunk := cands[:min(len(cands), v017CandidateChunk)]
+			cands = cands[len(chunk):]
+			// the ids are parsed lore ids (v017Candidates: letters, digits and
+			// one underscore), so they are written into the query as literals
+			lits := make([]string, len(chunk))
+			for i, id := range chunk {
+				lits[i] = "'" + id.String() + "'"
+			}
+			cq := strings.Replace(q, ` ORDER BY id`, ` WHERE id IN (`+strings.Join(lits, ", ")+`) ORDER BY id`, 1)
+			edits, err := v017TableEdits(ctx, st.eng, db, cq, def.Name, fields, moved)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, edits...)
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name() < out[j].name() })
+	return out, nil
+}
+
+// v017CandidateChunk bounds the ids of one lore.db query (well below
+// SQLite's variable limit).
+const v017CandidateChunk = 500
+
+// v017Candidates lists the ids of lore.db's table whose row could be newer
+// than its stored copy: every id except those whose every stored copy
+// (one List per store, read once through a snapshot) is at least as new
+// as lore.db's updated_at (B1-23: v017TableEdits built and parsed every
+// row of a 44 MB lore.db and looked each one up in the engine on every
+// lore doctor, while after lore fix nearly none is newer). An id no
+// listed copy holds stays a candidate, so the engine decides it as before.
+// ctx carries a read snapshot (v017Edits), so the stores are read once
+// for every table.
+func v017Candidates(ctx context.Context, eng *engine.Engine, db *sql.DB, table row.Table) ([]ids.AnyID, error) {
+	oldest := map[string]time.Time{} // id → the oldest update time of its live, stamped copies
+	for _, src := range eng.Stores() {
+		rs, err := eng.List(ctx, src, table)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rs {
+			at := r.UpdatedAt.Truncate(time.Millisecond)
+			if r.UpdatedAt.IsZero() {
+				continue // nothing to compare: never an edit, whatever lore.db says
+			}
+			if o, ok := oldest[r.ID.String()]; !ok || at.Before(o) {
+				oldest[r.ID.String()] = at
+			}
+		}
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+v017IDColumn+`, `+v017UpdatedAt+` FROM "`+string(table)+`"`)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+	}
+	defer func() { _ = rows.Close() }() // read-only cursor
+	var out []ids.AnyID
+	for rows.Next() {
+		var id, raw sql.NullString
+		if err := rows.Scan(&id, &raw); err != nil {
+			return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		}
+		if !id.Valid || !raw.Valid {
+			continue // no id or no update time: v017TableEdits skips it too
+		}
+		o, held := oldest[id.String]
+		if held {
+			v, terr := v017Time(raw.String)
+			at, ok := v.(value.DateTime)
+			if terr == nil && ok && !at.Time().Truncate(time.Millisecond).After(o) {
+				continue // every stored copy is as new: not an edit
+			}
+		}
+		parsed, perr := ids.ParseAny(id.String)
+		if perr != nil {
+			continue // not a lore id: v017TableEdits skips it too
+		}
+		out = append(out, parsed)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+	}
 	return out, nil
 }
 

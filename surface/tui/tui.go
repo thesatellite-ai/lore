@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -69,6 +70,10 @@ type Options struct {
 	// Kind is the table to open first, by table name ("decisions") or its
 	// singular ("decision"); empty opens on the tables screen.
 	Kind string
+	// ActorName names an actor id (act_…) on the row screen: the @handle
+	// or name the stores give it, the id itself when none does. Nil prints
+	// ids (bug hunt D-1: "updated … by act_…" while lists printed names).
+	ActorName func(id string) string
 }
 
 // hit is one row with the store it came from.
@@ -83,6 +88,8 @@ type browser struct {
 	src Source
 	in  *bufio.Scanner
 	out io.Writer
+	// actorName is Options.ActorName (nil = ids as stored).
+	actorName func(string) string
 }
 
 // Run browses src until the person quits or in ends. opts is optional (at
@@ -95,6 +102,7 @@ func Run(ctx context.Context, src Source, in io.Reader, out io.Writer, opts ...O
 	if len(opts) > 0 {
 		o = opts[0]
 	}
+	b.actorName = o.ActorName
 	if o.Kind != "" {
 		d, err := resolve(defs, o.Kind)
 		if err != nil {
@@ -264,10 +272,10 @@ func (b *browser) show(d schema.TableDef, h hit) bool {
 	}
 	slices.Sort(names)
 	for _, k := range names {
-		b.put(fmt.Sprintf("  %s: %s\n", k, fieldText(d, h.r, k)))
+		b.put(fmt.Sprintf("  %s: %s\n", k, b.withActorName(fieldText(d, h.r, k))))
 	}
 	if !h.r.UpdatedAt.IsZero() {
-		b.put(fmt.Sprintf("  updated: %s by %s\n", h.r.UpdatedAt.UTC().Format("2006-01-02 15:04"), h.r.UpdatedBy))
+		b.put(fmt.Sprintf("  updated: %s by %s\n", h.r.UpdatedAt.UTC().Format("2006-01-02 15:04"), b.who(h.r.UpdatedBy.String())))
 	}
 	if d.Name == schema.TableActors { // TP-23: profile block (profile.go)
 		b.profile(h)
@@ -289,6 +297,32 @@ func fieldText(d schema.TableDef, r row.Row, name string) string {
 	}
 	return v.String()
 }
+
+// who is an actor id as the row screen names it: the name, else the id.
+func (b *browser) who(id string) string {
+	if b.actorName == nil || id == "" {
+		return id
+	}
+	if n := b.actorName(id); n != "" {
+		return n
+	}
+	return id
+}
+
+// withActorName is a field value with the actor's name after it when the
+// value is an actor id ("act_… (alice)"), so the id stays copyable.
+func (b *browser) withActorName(v string) string {
+	if !strings.HasPrefix(v, actorPrefix) {
+		return v
+	}
+	if n := b.who(v); n != v {
+		return v + " (" + n + ")"
+	}
+	return v
+}
+
+// actorPrefix opens an actor id.
+const actorPrefix = string(ids.PrefixActor) + "_"
 
 // label is a row's one-line label: the first non-empty label field.
 func label(d schema.TableDef, r row.Row) string {

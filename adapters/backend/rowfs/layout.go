@@ -57,8 +57,10 @@ const MaxFileSize = 4 << 20
 // changed again inside the same timestamp tick, so it is always re-hashed.
 const RacyWindow = 2 * time.Second
 
-// staleTmpAge is how old a leftover tmp file must be before a scan removes
-// it as crash debris (a younger one may belong to a running writer).
+// staleTmpAge is how old a leftover tmp file must be before a scan (which
+// holds no lock) removes it as crash debris (a younger one may belong to a
+// running writer). A locked write removes the tmp files of the folders it
+// writes whatever their age (sweepTmp). Measured on the wall clock.
 const staleTmpAge = time.Minute
 
 // File modes. Owner-only by default: a folder store of an internal store

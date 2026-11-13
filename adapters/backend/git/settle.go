@@ -222,18 +222,34 @@ func (b *Backend) stageBlob(ctx context.Context, name string) string {
 	return trimmed(out)
 }
 
-// settledSide sets *result to the side a settlement takes for path and
-// reports whether one applies (settled).
-func (b *Backend) settledSide(ctx context.Context, path string, ours, theirs []byte, result *[]byte) bool {
+// settledSide sets *result to the row a settlement gives path and reports
+// whether one applies. With a merger that can prefer a side (PreferMerger)
+// only the clashing fields take the chosen side and every field one side
+// alone changed keeps that change (bug hunt B2-22); without one, the
+// chosen side's whole row.
+func (b *Backend) settledSide(ctx context.Context, path string, base, ours, theirs []byte, result *[]byte) bool {
 	takeTheirs, ok := b.settled(ctx, path)
 	if !ok {
 		return false
+	}
+	if pm, can := b.cfg.merger.(PreferMerger); can {
+		if m, err := pm.MergePrefer(base, ours, theirs, takeTheirs); err == nil {
+			*result = m
+			return true
+		}
+		// a side that does not decode: the chosen side's whole file below
 	}
 	*result = ours
 	if takeTheirs {
 		*result = theirs
 	}
 	return true
+}
+
+// PreferMerger is a Merger that can settle a row's clashes with one side
+// while keeping the rest of the field merge (logic/merge.Driver).
+type PreferMerger interface {
+	MergePrefer(base, ours, theirs []byte, preferTheirs bool) ([]byte, error)
 }
 
 // clearSettlements removes the record once a merge committed (every

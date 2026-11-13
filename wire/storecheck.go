@@ -114,6 +114,11 @@ func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time) op
 	} else {
 		c.Reachable = true
 	}
+	// B2-26: the person's merge or rebase in the clone; every write and
+	// sync is refused until it ends (gitbackend gitop.go), so say how
+	if op, way := gitbackend.PersonGitOpAt(ctx, s.dir); op != "" {
+		c.Problems = append(c.Problems, "the clone "+s.dir+" is in the middle of a git "+op+"; lore leaves it alone until it is finished: "+way)
+	}
 	if s.err != "" {
 		c.Problems = append(c.Problems, s.err)
 		return c

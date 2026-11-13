@@ -10,8 +10,9 @@ package journeys
 // ~/.lore/clones/github.com/pia/lore-me.git. Lou used 0.1.17 with
 // `personal.store: local`. Both install this lore.
 //
-// What they check: every personal note is still listed (`--store me`, in
-// the org's repo and in a repo of no org), none twice; the note that never
+// What they check: every personal note is still listed (`--store me`), none
+// twice, and keeps its scope: a note filed for acme loads in acme's repos
+// only, an everywhere/ note in every repo; the note that never
 // left the laptop reaches the remote; the old bare clones are named by
 // doctor as lore 0.1.17's with a command naming real paths; the local
 // store's first write lands where lore reads it, with no copy left behind.
@@ -94,15 +95,19 @@ func TestJourneyUpgraderPersonalNotes(t *testing.T) {
 		for _, b := range []string{upAcmeNote, upAnyNote, upOfflineNote} {
 			upCount(t, "api", all.Stdout, b)
 		}
-		upCount(t, "dots", m.LoreIn(dots, "memory", "list").OK(t).Stdout, upAnyNote)
+		// D5: a note 0.1.17 filed for acme loads in acme's repos only
+		d := m.LoreIn(dots, "memory", "list").OK(t)
+		upCount(t, "dots", d.Stdout, upAnyNote)
+		d.Never(t, upAcmeNote, upOfflineNote)
 		files := strings.Join(me.Files("main"), "\n")
-		if n := strings.Count(files, "_store/memories/"); n != 3 {
-			t.Errorf("the personal store's remote holds %d notes in _store/, want 3 (the offline one pushed):\n%s", n, files)
+		if n := strings.Count(files, "/memories/mem_"); n != 3 {
+			t.Errorf("the personal store's remote holds %d notes, want 3 (the offline one pushed):\n%s", n, files)
 		}
-		for _, old := range []string{"acme/", "everywhere/"} {
-			if strings.Contains(files, old) {
-				t.Errorf("the personal store's remote still has %s after the move:\n%s", old, files)
-			}
+		if n := strings.Count(files, "_store/memories/"); n != 1 {
+			t.Errorf("the personal store's remote holds %d notes in _store/, want 1 (everywhere/'s):\n%s", n, files)
+		}
+		if strings.Contains(files, "everywhere/") {
+			t.Errorf("the personal store's remote still has everywhere/ after the move:\n%s", files)
 		}
 	})
 
