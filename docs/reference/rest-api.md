@@ -83,8 +83,8 @@ An error is one JSON object with the code, the message, the exit status the comm
 <!-- example: api#api-error -->
 ```console
 # alice, in ~
-$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" "http://127.0.0.1:$PORT/v1/rules?limit=5"
-{"error":{"code":"E_INVALID_INPUT","message":"unknown parameter limit","exit":20,"class":"bad_input","retryable":false,"needs_person":false}}
+$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" "http://127.0.0.1:$PORT/v1/rules?colour=red"
+{"error":{"code":"E_INVALID_INPUT","message":"unknown parameter colour","exit":20,"class":"bad_input","retryable":false,"needs_person":false}}
 HTTP 400
 $ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" -w "\nHTTP %{http_code}\n" http://127.0.0.1:$PORT/v1/notes
 {"error":{"code":"E_NOT_FOUND","message":"no route GET /v1/notes","exit":27,"class":"not_found","retryable":false,"needs_person":false}}
