@@ -276,7 +276,7 @@ func (b *Backend) RestoreHead(ctx context.Context, c HandChange) error {
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(c.Abs), handDirMode); err != nil {
-		return errs.FileIO("create", filepath.Dir(c.Abs), err)
+		return errs.FileIO("create the row folder", filepath.Dir(c.Abs), err)
 	}
 	if err := os.WriteFile(c.Abs, c.Base, handFileMode); err != nil {
 		return errs.FileIO("write", c.Abs, err)
@@ -293,7 +293,7 @@ func PutBack(c HandChange, hand []byte) error {
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(c.Abs), handDirMode); err != nil {
-		return errs.FileIO("create", filepath.Dir(c.Abs), err)
+		return errs.FileIO("create the row folder", filepath.Dir(c.Abs), err)
 	}
 	if err := os.WriteFile(c.Abs, hand, handFileMode); err != nil {
 		return errs.FileIO("write", c.Abs, err)

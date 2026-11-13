@@ -107,7 +107,7 @@ const personalPrivateMode = 0o700
 // them open. A symlinked folder is the person's own place: left as it is.
 func privatePersonalDir(dir string) error {
 	if err := os.MkdirAll(dir, personalPrivateMode); err != nil {
-		return errs.FileIO("create", dir, err)
+		return errs.FileIO("create the personal folder", dir, err)
 	}
 	for _, p := range []string{filepath.Dir(dir), dir} {
 		fi, err := os.Lstat(p)

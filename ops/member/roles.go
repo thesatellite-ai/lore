@@ -128,7 +128,7 @@ func parseRoles(in []string) ([]string, error) {
 		}
 	}
 	if len(out) == 0 {
-		return nil, errs.New(errs.InvalidInput, "no --role: a membership holds at least one role (TP-10)").WithHint("--role dev or --role dev,reviewer; " + roleHint)
+		return nil, errs.New(errs.InvalidInput, "no --role: a membership holds at least one role").WithHint("--role dev or --role dev,reviewer; " + roleHint)
 	}
 	return out, nil
 }

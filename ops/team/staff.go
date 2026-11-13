@@ -515,7 +515,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		s.Handle = h
 
 		if len(s.Projects) > 0 && len(s.ProjectRoles) == 0 {
-			return nil, errs.New(errs.InvalidInput, where+": --project needs at least one --project-role (a project membership has roles, TP-10); the org-level role is --role").
+			return nil, errs.New(errs.InvalidInput, where+": --project needs at least one --project-role (a project membership has roles); the org-level role is --role").
 				WithHint("--project-role dev")
 		}
 		if err := checkRoles(ctx, r, s.ProjectRoles); err != nil {

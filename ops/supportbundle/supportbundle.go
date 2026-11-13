@@ -255,7 +255,7 @@ func Run(ctx context.Context, h Host, now time.Time, in RunIn) (RunOut, error) {
 		return out, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(in.Out), dirMode); err != nil {
-		return RunOut{}, errs.Wrap(errs.Internal, "mkdir output", err)
+		return RunOut{}, errs.FileIO("create the output folder", filepath.Dir(in.Out), err)
 	}
 	if err := os.WriteFile(in.Out, data, fileMode); err != nil {
 		return RunOut{}, errs.Wrap(errs.Internal, "write bundle", err)

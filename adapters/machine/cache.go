@@ -97,7 +97,7 @@ func writeCache(home string, w cacheWire) error {
 		return nil
 	}
 	if err := os.MkdirAll(home, homeMode); err != nil {
-		return errs.Wrap(errs.Internal, "machine: create the lore home", err)
+		return errs.FileIO("create the lore home", home, err)
 	}
 	b, err := json.MarshalIndent(w, "", "  ")
 	if err != nil {

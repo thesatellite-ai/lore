@@ -215,6 +215,10 @@ func (h *Host) copiesOf(ctx context.Context, root, out string, p *committedPlan)
 	return append(found, priv...), nil
 }
 
+// fixIDsCommand is the fix of a private render that waits for its
+// store's sto_ id (a v0.1.17 marker): `lore fix` migrates, then renders.
+const fixIDsCommand = "lore fix"
+
 // privateCopies compares the private render of the repo at root (row 11)
 // with what render would write now.
 func (h *Host) privateCopies(ctx context.Context, root string) ([]opsrender.CopyFinding, error) {
@@ -240,10 +244,20 @@ func (h *Host) privateCopies(ctx context.Context, root string) ([]opsrender.Copy
 			if kind == opsrender.CopyEdited && stampIn == nil {
 				kind = opsrender.CopyStale
 			}
-			if kind != "" {
-				file := h.redact(f.path)
-				found = append(found, opsrender.CopyFinding{Kind: kind, File: file, Message: localCopyMessage(kind, file, what), Fix: renderFixCommand, Local: true})
+			if kind == "" {
+				continue
 			}
+			file := h.redact(f.path)
+			msg, fix := localCopyMessage(kind, file, what), renderFixCommand
+			if stem := strings.TrimSuffix(filepath.Base(f.path), privateFileExt); strings.HasPrefix(stem, privateNoIDPrefix) {
+				// B4-17: a store with a v0.1.17 marker has no sto_ id yet;
+				// `lore fix` gives it one and render writes sto_<id>.md, so
+				// naming name-<store>.md would name a file that never exists
+				file = h.redact(pp.dir)
+				msg = "the private render of store " + pp.sourcesOf(stem) + " is not in " + file + " yet: `lore fix` gives the store its id, then renders it as sto_<id>.md"
+				fix = fixIDsCommand
+			}
+			found = append(found, opsrender.CopyFinding{Kind: kind, File: file, Message: msg, Fix: fix, Local: true})
 		}
 	}
 	for _, l := range pp.locals {

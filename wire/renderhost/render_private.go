@@ -139,6 +139,22 @@ type privateStore struct {
 	url     string
 }
 
+// sourcesOf names the stores behind stem ("acme, acme/org"), for a
+// finding that cannot name the file yet.
+func (p *privatePlan) sourcesOf(stem string) string {
+	for _, st := range p.stores {
+		if st.stem != stem {
+			continue
+		}
+		names := make([]string, 0, len(st.sources))
+		for _, src := range st.sources {
+			names = append(names, string(src))
+		}
+		return strings.Join(names, ", ")
+	}
+	return strings.TrimPrefix(stem, privateNoIDPrefix)
+}
+
 // privateFile is one file the private render writes.
 type privateFile struct {
 	path string
@@ -218,7 +234,7 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 	}
 	if len(p.stores) > 0 {
 		if err := os.MkdirAll(p.dir, renderDirMode); err != nil {
-			return errs.Wrap(errs.Internal, "create the private render dir", err)
+			return errs.FileIO("create the private render folder", p.dir, err)
 		}
 		for _, f := range p.files {
 			if err := atomicWriteFile(f.path, []byte(f.body), renderFileMode); err != nil {
@@ -661,7 +677,7 @@ func writeLocalLines(ctx context.Context, root string, l privateLocal) error {
 		// Private render output stays owner-only (renderDirMode), unlike
 		// the committed files' dirMode.
 		if err := os.MkdirAll(filepath.Dir(path), renderDirMode); err != nil {
-			return errs.Wrap(errs.Internal, "create the folder of "+l.rel, err)
+			return errs.FileIO("create the folder of "+l.rel, filepath.Dir(path), err)
 		}
 		if err := atomicWriteFile(path, []byte(l.out), renderFileMode); err != nil {
 			return errs.Wrap(errs.Internal, "write "+l.rel, err)

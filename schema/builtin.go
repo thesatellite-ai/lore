@@ -178,10 +178,10 @@ func coreDefs() []TableDef {
 			Text(FieldActorPhotoURL, Internal(), Describe("an http(s) URL")),
 			Text(FieldActorTimezone, Internal(), Describe("an IANA name: Europe/Istanbul")),
 			Text(FieldActorLocation, Internal()),
-			Text(FieldActorTitle, Internal(), Describe("the profile headline; the stint's org role is on the period (TP-11)")),
+			Text(FieldActorTitle, Internal(), Describe("the profile headline; the stint's org role is on the period")),
 			Text(FieldActorBio, Internal(), WithWidget(WidgetMarkdown)),
 			Date(FieldActorBirthday, Internal(), Describe("YYYY-MM-DD; a year-less --MM-DD is stored as 0000-MM-DD")),
-			Text(FieldActorStatus, Internal(), OneOf(ActorStatuses()...), Describe("empty reads from active (TEAM_PROFILES 2.7)")),
+			Text(FieldActorStatus, Internal(), OneOf(ActorStatuses()...), Describe("empty reads from active")),
 			Date(FieldActorLeaveFrom, Internal(), Describe("set only while status is on_leave")),
 			Date(FieldActorLeaveUntil, Internal(), Describe("optional end of the leave; never switches the status on its own")),
 			Text(FieldActorStatusNote, Internal(), Describe("why the status is what it is; cleared when the person is active again")),
@@ -264,7 +264,7 @@ func coreDefs() []TableDef {
 			tagIDs(),
 			ManyToManyRel(RelTags, FieldTagIDs, TableTags, JoinMemoryTags, Cascade),
 		),
-		Table(TablePolicies, ids.PrefixPolicy, Synced(), Description("one policy entry (spec 4.3)"),
+		Table(TablePolicies, ids.PrefixPolicy, Synced(), Description("one policy entry"),
 			Text("key", Required()),
 			JSON("value", Required()),
 			Text("scope", Required()),
@@ -304,12 +304,12 @@ func coreDefs() []TableDef {
 			Text("context", OneOf("index")),
 			// type_history: earlier types [{type, until, by}], appended by
 			// meta edit --type (METADATA 3.3, R12, G-META-7).
-			JSON("type_history", Describe("earlier types [{type, until, by}] (METADATA 3.3)")),
+			JSON("type_history", Describe("earlier types [{type, until, by}]")),
 			// changed_by: one entry per loosening (internal, sensitive or
 			// strict turned off), written only by meta edit after its
 			// confirmation; the pre-commit check relies on it (RX7, OV58).
 			JSON("changed_by", MergeBy(MergeListByID),
-				Describe("loosenings [{id (the_…), field, to, by, at}] (METADATA 3.11, RX7)")),
+				Describe("loosenings [{id (the_…), field, to, by, at}]")),
 			UniqueOn(fieldName, "scope"),
 		),
 		Table(TableMetaValues, ids.PrefixMetaValue, Synced(), Description("an allowed value of a metadata key"),
@@ -439,7 +439,7 @@ func coreDefs() []TableDef {
 			JSON("fields", MergeBy(MergeEntriesByID)),
 			// history: capped field-change list, union by entry id (RES 3.22, OV49).
 			JSON(FieldResourceHistory, MergeBy(MergeListByID),
-				Describe("field changes [{id (the_…), at, by, batch, field_id, field, from, to}], hidden values masked (RESOURCES 3.22)")),
+				Describe("field changes [{id (the_…), at, by, batch, field_id, field, from, to}], hidden values masked")),
 			IndexOn(fieldKind, fieldName),
 			BelongsToRel("kind_def", fieldKind, TableKinds, Restrict),
 		),

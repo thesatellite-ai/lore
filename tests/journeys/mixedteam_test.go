@@ -183,7 +183,8 @@ func TestJourneyStoreOnlyUpgrade(t *testing.T) {
 		}
 		// the read moved every row already; fix converts the marker
 		// (lore_store: 4, checked below) and pushes it
-		up.LoreIn(lap, "fix").Says(t, "lore-store.yaml v1 → v2", "pushed")
+		up.LoreIn(lap, "fix").Says(t, "lore-store.yaml v1 → v2", "pushed").
+			Never(t, "store lore-me moves to the 0.1.18 layout now") // said once per store and machine (B4-21)
 		for _, r := range []*teamharness.Remote{st} {
 			if m, _ := r.Read("main", "lore-store.yaml"); !strings.Contains(m, "lore_store: 4") {
 				t.Errorf("%s: marker after lore fix:\n%s", r.Slug, m)

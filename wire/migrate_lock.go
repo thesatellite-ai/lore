@@ -181,7 +181,7 @@ const lockBeingWrittenPoll = 20 * time.Millisecond
 // a running or another machine's holder is E_MIGRATE_LOCKED at once.
 func acquireMigrateLock(ctx context.Context, path string, notice func(string)) error {
 	if err := os.MkdirAll(filepath.Dir(path), cacheDirMode); err != nil {
-		return errs.Wrap(errs.Internal, "wire: create .lore/state", err)
+		return errs.FileIO("create .lore/state", filepath.Dir(path), err)
 	}
 	for range lockMigrationAttempts {
 		err := createMigrateLock(path)

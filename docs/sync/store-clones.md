@@ -20,7 +20,7 @@ The first time lore clones or writes to the store it prints what it set up, incl
 ```console
 # alice, in website
 $ lore store init notes git@github.com:acme/notes
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/acme/notes (.git/config) to alice <alice@agency.example>: your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/acme/notes: git user set to alice <alice@agency.example> (your lore identity)
 ✓ created store notes (sto_7a67…9504) at git@github.com:acme/notes; recorded in .lore/stores.yaml; commit it to share
 $ lore task add 'Renew the TLS certificate' --to notes --no-live
 lore: pushed store notes: commit 601d285 to branch main

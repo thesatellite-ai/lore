@@ -43,7 +43,7 @@ func TryLockClone(ctx context.Context, dir string, wait time.Duration) (context.
 func lockClone(ctx context.Context, dir string, wait time.Duration) (context.Context, func(), error) {
 	p := PathsOf(dir)
 	if err := os.MkdirAll(p.StateDir, cloneDirMode); err != nil {
-		return ctx, nil, errs.FileIO("create", p.StateDir, err)
+		return ctx, nil, errs.FileIO("create the clone state folder", p.StateDir, err)
 	}
 	root, err := rowfs.Open(dir, rowfs.WithLockPath(p.Lock), rowfs.WithAllowNetworkFS(true), rowfs.WithLockTimeout(wait))
 	if err != nil {
@@ -83,7 +83,7 @@ func PrepareClone(ctx context.Context, dir, remote string, own bool) error {
 			WithHint("a run that is not a dry run clones it to " + dir)
 	}
 	if err := os.MkdirAll(p.StateDir, cloneDirMode); err != nil {
-		return errs.FileIO("create", p.StateDir, err)
+		return errs.FileIO("create the clone state folder", p.StateDir, err)
 	}
 	b, err := sharedBackend(dir, own)
 	if err != nil {

@@ -68,7 +68,7 @@ var _ localstate.Store = (*LocalState)(nil)
 // rows of the old per-table layout into it once.
 func OpenLocalState(ctx context.Context, path string) (*LocalState, error) {
 	if err := os.MkdirAll(filepath.Dir(path), localDirMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "localstate: create "+filepath.Dir(path), err)
+		return nil, errs.FileIO("create the local state folder", filepath.Dir(path), err)
 	}
 	dsn, err := fileDSN(path)
 	if err != nil {

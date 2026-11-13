@@ -128,7 +128,7 @@ func Update(reg *op.Registry, paths ...string) error {
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(p), newDirMode); err != nil {
-			return errs.Wrap(errs.Internal, "docs: create the folder of "+p, err)
+			return errs.FileIO("create the docs folder", filepath.Dir(p), err)
 		}
 		if err := os.WriteFile(p, want, mode); err != nil {
 			return errs.Wrap(errs.Internal, "docs: write "+p, err)

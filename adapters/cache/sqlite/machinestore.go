@@ -66,7 +66,7 @@ var _ store.Backend = (*MachineStore)(nil)
 // store.ErrReadOnly.
 func OpenMachineStore(ctx context.Context, path string, readOnly bool) (*MachineStore, error) {
 	if err := os.MkdirAll(filepath.Dir(path), localDirMode); err != nil {
-		return nil, errs.FileIO("create", filepath.Dir(path), err)
+		return nil, errs.FileIO("create the machine store folder", filepath.Dir(path), err)
 	}
 	dsn, err := fileDSN(path)
 	if err != nil {

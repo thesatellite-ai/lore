@@ -16,7 +16,7 @@ import (
 const wiredNotice = "lore task add: set up git for lore's row files in this clone: "
 
 // unwiredNote is a read's one note in a clone git is not set up in.
-const unwiredNote = "lore task list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync`"
+const unwiredNote = "lore task list: git is not set up for lore's row files in this clone: `lore sync`"
 
 // TestFreshCloneWiringNotice (E-GAPS-1 G3, owner bug 6): a read in a
 // teammate's fresh clone wires nothing and says so once, naming `lore

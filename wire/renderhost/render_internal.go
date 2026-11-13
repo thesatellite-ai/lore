@@ -107,7 +107,7 @@ func excludeInGit(ctx context.Context, root, name string) error {
 	}
 	add += "# lore: internal context import (never commit)\n" + pattern + "\n"
 	if mkdirErr := os.MkdirAll(filepath.Dir(excl), renderDirMode); mkdirErr != nil {
-		return errs.Wrap(errs.Internal, "create info dir", mkdirErr)
+		return errs.FileIO("create the git info folder", filepath.Dir(excl), mkdirErr)
 	}
 	f, err := os.OpenFile(filepath.Clean(excl), os.O_APPEND|os.O_CREATE|os.O_WRONLY, excludeFileMode)
 	if err != nil {

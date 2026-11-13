@@ -82,8 +82,8 @@ A note for yourself that should follow you into every repo is a plain `--to me` 
 ```console
 # alice, in website
 $ lore store init me
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to alice <alice@agency.example> (it was alice@agency.example, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/other/notes (.git/config) to alice <alice@agency.example> (it was alice@example.com, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes: git user set to alice <alice@agency.example> (your lore identity, was alice@agency.example)
+lore store init: store clone ~/.lore/stores/other/notes: git user set to alice <alice@agency.example> (your lore identity, was alice@example.com)
 ✓ created store me (sto_3b62…e913) at file://~/.lore/stores/_me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 $ lore memory add --to me --everywhere --body 'I write short commit messages'
 ERROR: [E_INVALID_INPUT] unknown flag: --everywhere

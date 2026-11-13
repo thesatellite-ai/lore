@@ -25,6 +25,7 @@ package wire
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -38,20 +39,21 @@ import (
 // resolves (the clone then keeps git's own rules).
 func (s storeSigner) cloneIdentity(ctx context.Context, remote string) git.CloneIdentity {
 	if sig, ok := s.owner(ctx, remote); ok {
-		why := "your identity in this store's org, the one lore signs its commits with"
+		why, who := "your identity in this store's org, the one lore signs its commits with", "org identity"
 		if org := orgOfURL(s.opts.Home, remote); org != "" {
 			why = "your identity in org " + org + " (orgs." + org + ".identity in ~/.lore/config.yaml), the one lore signs this store's commits with"
+			who = "your identity in org " + org
 		}
-		return git.CloneIdentity{Signature: sig, Why: why}
+		return git.CloneIdentity{Signature: sig, Why: why, Who: who}
 	}
 	if p, ok := s.personal(ctx, remote); ok {
-		return git.CloneIdentity{Signature: p.Sig, Why: p.Why + ", the one lore signs this store's commits with"}
+		return git.CloneIdentity{Signature: p.Sig, Why: p.Why + ", the one lore signs this store's commits with", Who: "personal store owner"}
 	}
 	sig := s.fallback(ctx)
 	if agentSignature(sig.Name, sig.Email) {
 		return git.CloneIdentity{} // no person address (a CI or bare agent key): git's own rules stay
 	}
-	return git.CloneIdentity{Signature: sig, Why: "your lore identity (`lore whoami`), the one lore signs this store's commits with"}
+	return git.CloneIdentity{Signature: sig, Why: "your lore identity (`lore whoami`), the one lore signs this store's commits with", Who: "your lore identity"}
 }
 
 // personal is the identity of the setup that owns the personal store at
@@ -91,16 +93,21 @@ func agentSignature(name, email string) bool {
 	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(email)), "@"+identity.CommitEmailDomain) || strings.Contains(name, viaTool)
 }
 
-// cloneIdentityLine is the one line said when a store clone got its git
-// identity.
-// It names the running command (wire/cmdname.go).
+// cloneIdentityLine is the one short line said when a store clone got
+// its git identity (once: when lore makes the clone, or when the identity
+// lore set changed). It names the running command (wire/cmdname.go), the
+// clone under ~ and who the identity is; `lore doctor` (store_identity)
+// and `lore where` give the long why (B4-17: the line was ~400 chars).
 func cloneIdentityLine(ctx context.Context, dir string, id git.CloneIdentity) string {
-	was := ""
-	if id.Was != "" {
-		was = " (it was " + id.Was + ", which lore had set before)"
+	home, _ := os.UserHomeDir() // "" leaves the path as it is
+	who := id.Who
+	if who == "" {
+		who = "your lore identity"
 	}
-	return CommandPrefix(ctx) + "set user.name and user.email in the store clone " + dir + " (.git/config) to " + id.Name + " <" + id.Email + ">" + was + ": " + id.Why +
-		", so your own git commits there carry it (your global git config is unchanged)"
+	if id.Was != "" {
+		who += ", was " + id.Was
+	}
+	return CommandPrefix(ctx) + "store clone " + tildeHome(dir, home) + ": git user set to " + id.Name + " <" + id.Email + "> (" + who + ")"
 }
 
 // sayCloneIdentity says cloneIdentityLine when opening b wrote the clone's

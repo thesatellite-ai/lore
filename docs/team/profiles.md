@@ -551,7 +551,7 @@ rejoin Mira Patel (@mira) (act_7a67…9504) on 2026-11-02:
   period     2026-11-02 → now  contractor  Contract engineer
   projects   acme-hub (dev, reviewer): lore project member add acme-hub act_7a67…9504 --role dev,reviewer
              prj_0aae…a61f (lead): lore project member add prj_0aae…a61f act_7a67…9504 --role lead
-             memberships are not restored (TP-16)
+             memberships are not restored
   status     archived → active
 ✓ act_7a67…9504 Mira Patel (@mira) rejoined on 2026-11-02 as contractor
 $ lore project member add acme-hub @mira --role reviewer
@@ -586,7 +586,7 @@ Profiles live in an org's store, so a team without an org starts with `lore org 
 ```console
 # ana, in handbook
 $ lore store init acme git@github.com:acme/lore-notes --yes
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/acme/lore-notes (.git/config) to ana <ana@acme.example>: your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/acme/lore-notes: git user set to ana <ana@acme.example> (your lore identity)
 lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/handbook/.git/config; hook blocks in ~/work/handbook/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ✓ created store acme (sto_376c…8e1a) at git@github.com:acme/lore-notes; recorded in .lore/stores.yaml; commit it to share
 $ lore org create acme --store acme --own 'github.com/acme/*' --key human:ana@acme.example --name 'Ana Lima' --handle ana --yes

@@ -87,7 +87,7 @@ func (r *Root) MoveRootToStoreDir(ctx context.Context) (StoreDirMove, error) {
 			return errs.FileIO("read", to, serr)
 		}
 		if merr := os.MkdirAll(filepath.Dir(to), dirMode); merr != nil {
-			return errs.FileIO("create", filepath.Dir(to), merr)
+			return errs.FileIO("create the row folder", filepath.Dir(to), merr)
 		}
 		if rerr := os.Rename(from, to); rerr != nil {
 			return errs.FileIO("move", from, rerr)

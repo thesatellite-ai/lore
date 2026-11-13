@@ -202,16 +202,16 @@ func workDefs() []TableDef {
 			// time_entries: closed spans of work (model/timeentry), union-merged
 			// by entry id; internal so client repos get no time data (TQ3).
 			JSON("time_entries", Internal(), MergeBy(MergeListByID),
-				Describe("closed time spans [{id, kind, source, actor_id, start, end, seconds, …}] (TIME_TRACKING_DESIGN 6.2)")),
+				Describe("closed time spans [{id, kind, source, actor_id, start, end, seconds, …}]")),
 			// time_open: open status spans, one per person working on the task
 			// (TIME_TRACKING_DESIGN 4.1, D2); same union-by-id merge, internal (TQ3).
 			// LoreRecord: open spans are written only by lore (no note field);
 			// time_entries is not, its note is free text (BUG-T7 sweep).
 			JSON("time_open", Internal(), LoreRecord(), MergeBy(MergeListByID),
-				Describe("open status spans [{id, source, actor_id, start}] (TIME_TRACKING_DESIGN 4.1)")),
+				Describe("open status spans [{id, source, actor_id, start}]")),
 			// time_totals: the opt-in client projection of a task's time (TQ3,
 			// lore move --with-time totals); not internal: it is what a client may see.
-			JSON("time_totals", Describe("time totals carried into a client repo: {from, to, workers: [{label, kind, seconds}], effort_seconds} (TIME_TRACKING_DESIGN 8)")),
+			JSON("time_totals", Describe("time totals carried into a client repo: {from, to, workers: [{label, kind, seconds}], effort_seconds}")),
 			Number("timebox_seconds"),
 			Text("gate", OneOf(TaskGates()...)),
 			Text("approved_by"),
@@ -228,16 +228,16 @@ func workDefs() []TableDef {
 			// only (T1: children are a query), rank orders siblings.
 			Ref(FieldTaskParent, TableTasks, Describe("the parent task (tsk_…); empty = top level")),
 			Text(FieldTaskRank, Describe("order among siblings (fractional index; ties by id)")),
-			Text(FieldTaskCloseReason, OneOf(TaskCloseReasons()...), Describe("why a closed task closed (TASK 8.3)")),
+			Text(FieldTaskCloseReason, OneOf(TaskCloseReasons()...), Describe("why a closed task closed")),
 			JSON(FieldTaskChecklist, MergeBy(MergeListByID),
-				Describe("checklist items [{id, text, done, done_at, done_by, rank, …}] (TASK 7.2)")),
-			JSON(FieldTaskRecur, Describe("recurrence {rule, series (rcs_…), index, until, stopped} (TASK 10.3)")),
-			Text(FieldTaskEstimate, Describe("estimate, a decimal >= 0 in the tasks.estimate_unit unit (TASK 9)")),
-			List(FieldTaskAssignees, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids responsible, the lead (assigned_to_actor_id) included (TASK 14.2)")),
-			List(FieldTaskWatchers, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids told about changes (TASK 14)")),
+				Describe("checklist items [{id, text, done, done_at, done_by, rank, …}]")),
+			JSON(FieldTaskRecur, Describe("recurrence {rule, series (rcs_…), index, until, stopped}")),
+			Text(FieldTaskEstimate, Describe("estimate, a decimal >= 0 in the tasks.estimate_unit unit")),
+			List(FieldTaskAssignees, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids responsible, the lead (assigned_to_actor_id) included")),
+			List(FieldTaskWatchers, value.KindText, MergeBy(MergeSetUnion), Describe("actor ids told about changes")),
 			// TSQ10: last tasks.history_max entries + one summary fold; union by id (17.3).
 			JSON(FieldTaskHistory, MergeBy(MergeListByID),
-				Describe("activity history [{id (the_…), at, by, field, from, to, note}] of tracked fields (TASK 17.2)")),
+				Describe("activity history [{id (the_…), at, by, field, from, to, note}] of tracked fields")),
 			IndexOn("project_id", "status"),
 			IndexOn("project_id", FieldTaskParent),
 			IndexOn("project_id", "commitment"),
@@ -288,7 +288,7 @@ func workDefs() []TableDef {
 			DateTime("target_date"),
 			// starts_at is new in 0.1.18 (TASK 15, option B: a mission is the
 			// "cycle" when it has dates); optional, so no migration.
-			DateTime("starts_at", Describe("when the mission's work starts (TASK 15)")),
+			DateTime("starts_at", Describe("when the mission's work starts")),
 			DateTime("completed_at"),
 			Ref("created_by_actor_id", TableActors),
 			List("approvers", value.KindText),
@@ -313,7 +313,7 @@ func workDefs() []TableDef {
 			Text("title", Required()),
 			Text("body", Required(), WithWidget(WidgetMarkdown)),
 			Text("status", OneOf(PlanStatuses()...)),
-			Text(FieldPlanStatusStr, Internal(), Describe("v0.1.17 free-form status; replaced by status (TSQ9)")),
+			Text(FieldPlanStatusStr, Internal(), Describe("v0.1.17 free-form status; replaced by status")),
 			Ref("created_by_actor_id", TableActors),
 			BelongsToRel("project", "project_id", TableProjects, Restrict),
 			BelongsToRel("created_by", "created_by_actor_id", TableActors, TombstoneOnly),

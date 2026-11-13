@@ -411,6 +411,9 @@ func cloneOps(m Manager) []op.Entry {
 			// Admin: it deletes a local folder, never a row; the unpushed-work
 			// refusal is the guard (side effect 20), so it does not ask.
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: cloneErrors, Local: true,
+			// MayAsk only so --yes is accepted like on every other store
+			// command (B3-29): forget itself never asks.
+			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
 			Examples: []op.Example{{Title: "drop a clone", CLI: "lore store forget git@github.com:agency/notes", Want: ""}},
 		}, func(ctx context.Context, in ForgetIn) (ForgetOut, error) {
 			c, err := cloner(m, "forget")

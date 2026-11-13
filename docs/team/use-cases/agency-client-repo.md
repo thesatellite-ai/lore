@@ -37,7 +37,7 @@ Once per company: turn a new, empty repo into the store. Run `lore store init <n
 ```console
 # alice, in tools
 $ lore store init agency git@github.com:agency/notes --yes
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 lore store init: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
 ✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 ```
@@ -79,7 +79,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store a
 # bob, in website
 $ lore actor register
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore actor register: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Bob Roe <bob@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore actor register: store clone ~/.lore/stores/agency/notes: git user set to Bob Roe <bob@agency.example> (your identity in org agency)
 lore actor register: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
 lore: pushed store agency/org: commit 05513aa to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_05e9…4603.json (store agency/org)

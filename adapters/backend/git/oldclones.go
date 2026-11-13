@@ -264,7 +264,7 @@ func writeMoveEntry(home, base string, e MoveEntry) error {
 	}
 	p := MoveRecordPath(home)
 	if err = os.MkdirAll(filepath.Dir(p), cloneDirMode); err != nil {
-		return errs.FileIO("create", filepath.Dir(p), err)
+		return errs.FileIO("create the state folder", filepath.Dir(p), err)
 	}
 	tmp := p + ".tmp"
 	if err = os.WriteFile(tmp, append(b, '\n'), 0o600); err == nil {
@@ -304,7 +304,7 @@ type MoveResult struct {
 func MoveLock(ctx context.Context, home string) (*rowfs.Lock, error) {
 	dir := filepath.Join(home, homeStateDir)
 	if err := os.MkdirAll(dir, cloneDirMode); err != nil {
-		return nil, errs.FileIO("create", dir, err)
+		return nil, errs.FileIO("create the state folder", dir, err)
 	}
 	root, err := rowfs.Open(dir, rowfs.WithLockPath(filepath.Join(dir, MoveLockFile)), rowfs.WithAllowNetworkFS(true))
 	if err != nil {
@@ -649,7 +649,7 @@ func moveFresh(ctx context.Context, g runner, o OldClone, origin, branch, dest s
 		return errs.FileIO("remove", tmp, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(dest), cloneDirMode); err != nil {
-		return errs.FileIO("create", filepath.Dir(dest), err)
+		return errs.FileIO("create the store clones folder", filepath.Dir(dest), err)
 	}
 	steps := [][]string{
 		{"init", "--quiet", "--", tmp},
@@ -681,11 +681,11 @@ func moveFresh(ctx context.Context, g runner, o OldClone, origin, branch, dest s
 		}
 	}
 	if err := os.MkdirAll(StateDirOf(tmp), cloneDirMode); err != nil {
-		return errs.FileIO("create", StateDirOf(tmp), err)
+		return errs.FileIO("create the clone state folder", StateDirOf(tmp), err)
 	}
 	info := filepath.Join(tmp, gitDirName, "info")
 	if err := os.MkdirAll(info, cloneDirMode); err != nil {
-		return errs.FileIO("create", info, err)
+		return errs.FileIO("create .git/info", info, err)
 	}
 	if err := os.WriteFile(filepath.Join(info, "attributes"), []byte(rowAttributesNoDriver+"\n"), 0o600); err != nil {
 		return errs.FileIO("write", filepath.Join(info, "attributes"), err)
@@ -831,7 +831,7 @@ func copyChanges(from, to string, list []change) error {
 			return errs.FileIO("read", src, err)
 		}
 		if err = os.MkdirAll(filepath.Dir(dst), cloneDirMode); err != nil {
-			return errs.FileIO("create", filepath.Dir(dst), err)
+			return errs.FileIO("create the row folder", filepath.Dir(dst), err)
 		}
 		_ = os.Remove(dst) // replaced below; a missing file is fine
 		if info.Mode()&fs.ModeSymlink != 0 {

@@ -93,6 +93,12 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		return store.SyncReport{}, err
 	}
 	pushedOver, pushed := "", false
+	// B3-29: the tracking tip before the fetch, to tell a remote that was
+	// deleted and made again from one that never had the branch.
+	tracked, err := b.resolve(ctx, b.work, trackingRefNS+b.branch)
+	if err != nil {
+		return store.SyncReport{}, err
+	}
 	for attempt := 0; ; attempt++ {
 		if ferr := b.fetch(ctx, b.work); ferr != nil {
 			if !isOffline(ferr) {
@@ -110,6 +116,15 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		} else if len(refusedEpoch) > 0 {
 			rep.Refused = append(rep.Refused, refusedEpoch...)
 			break
+		}
+		if attempt == 0 {
+			h0, herr := b.head(ctx)
+			if herr != nil {
+				return rep, herr
+			}
+			if rerr := b.checkRemoteReset(ctx, tracked, remote, h0); rerr != nil {
+				return rep, rerr // remotereset.go: never push the old store into a reset remote
+			}
 		}
 		merged, refused, merr := b.mergeRemote(ctx, remote)
 		if merr != nil {
@@ -605,7 +620,7 @@ func (b *Backend) mergeAttributes() (string, error) {
 		return filepath.ToSlash(p), nil
 	}
 	if err := os.MkdirAll(dir, cloneDirMode); err != nil {
-		return "", errs.FileIO("create", dir, err)
+		return "", errs.FileIO("create the row folder", dir, err)
 	}
 	if err := os.WriteFile(p, []byte(want), 0o600); err != nil {
 		return "", errs.FileIO("write", p, err)

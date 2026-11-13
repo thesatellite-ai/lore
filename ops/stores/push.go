@@ -297,3 +297,76 @@ func pushOps(m Manager) []op.Entry {
 		}),
 	}
 }
+
+// OpPush is `lore store push`.
+const OpPush = "store.push"
+
+// PushIn is the input of store.push.
+type PushIn struct {
+	Store   string `json:"store" arg:"0" desc:"the store: a name this repo or machine uses (me, team, a .lore/stores.yaml store) or its url"`
+	Restore bool   `json:"restore,omitempty" flag:"restore" desc:"put this machine's copy back into a store remote that was deleted and made again (lore found it reset)"`
+	// Branch is the store's pinned branch (from its entry; "" = default).
+	Branch string `json:"-"`
+}
+
+// PushOut is the output of store.push.
+type PushOut struct {
+	Store    string `json:"store"`
+	URL      string `json:"url"`
+	Restored bool   `json:"restored,omitempty"`
+	Sent     int    `json:"sent"`
+	Offline  bool   `json:"offline,omitempty"`
+}
+
+// Text prints the push.
+func (o PushOut) Text() string {
+	switch {
+	case o.Offline:
+		return "store " + o.Store + ": offline, nothing pushed; the local commits wait for the next sync\n"
+	case o.Restored:
+		return "✓ store " + o.Store + ": this machine's copy is back at " + o.URL + " (sent " + strconv.Itoa(o.Sent) + ")\n"
+	}
+	return "✓ store " + o.Store + ": sent " + strconv.Itoa(o.Sent) + "\n"
+}
+
+// StorePusherNow is the optional Manager upgrade behind store.push
+// (B3-29): push one store's clone now, and with Restore first clear the
+// mark of a remote lore found reset, so this copy goes back into it.
+type StorePusherNow interface {
+	PushStoreNow(ctx context.Context, in PushIn) (PushOut, error)
+}
+
+// pushNowOp is store.push bound to m.
+func pushNowOp(m Manager) op.Entry {
+	return op.Define(op.Spec{
+		Name: OpPush, Summary: "Push a store's local commits now; --restore puts this machine's copy back into a store remote that was deleted and made again",
+		Permission: op.PermAdmin, Access: op.AccessRead, Errors: pushErrors,
+		// --restore writes every old row into the remote someone reset: it asks.
+		Confirm: op.ConfirmRule{MayAsk: true, PersonOnlyEligible: true, NoSecretFindings: true},
+		Examples: []op.Example{
+			{Title: "push the personal store now", CLI: "lore store push me", Want: ""},
+			{Title: "put the local copy back into a reset remote", CLI: "lore store push team --restore --yes", Want: ""},
+		},
+	}, func(ctx context.Context, in PushIn) (PushOut, error) {
+		p, ok := upgrade.As[StorePusherNow](m)
+		if !ok {
+			return PushOut{}, errs.New(errs.Unsupported, "store push: this build cannot push a store on its own")
+		}
+		e, named, err := storeNamed(ctx, m, "push", in.Store)
+		if err != nil {
+			return PushOut{}, err
+		}
+		if in.Restore && !engine.Confirmed(ctx) {
+			q := "put this machine's copy of store " + strings.TrimSpace(in.Store) + " back into its remote, which was deleted and made again (every old row returns there)?"
+			return PushOut{}, errs.New(errs.NeedsConfirm, "store push --restore: "+q).WithQuestion(q).
+				WithHint("ask the person, then rerun with --yes")
+		}
+		out := PushOut{Store: strings.TrimSpace(in.Store)}
+		if named {
+			in.Store, in.Branch = e.URL, e.Branch
+		}
+		res, err := p.PushStoreNow(ctx, in)
+		res.Store = out.Store
+		return res, err
+	})
+}

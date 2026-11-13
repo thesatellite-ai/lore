@@ -112,7 +112,7 @@ func writeRenamed(full string, b []byte, m fileModes) (dir string, err error) {
 	}
 	dir = filepath.Dir(full)
 	if err = os.MkdirAll(dir, m.dir); err != nil {
-		return "", errs.Wrap(errs.Internal, "rowfs: create a table folder", err)
+		return "", errs.FileIO("create the table folder", dir, err)
 	}
 	suffix := make([]byte, tmpSuffixBytes)
 	if _, err = rand.Read(suffix); err != nil {

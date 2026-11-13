@@ -86,7 +86,7 @@ alice (work/website)$ git add -A && git commit -qm 'lore: test rule' && git push
 ### teammate clone
 bob (work)$ git clone -q https://github.com/client/website
 bob (work/website)$ lore rule list
-lore rule list: git is not set up for lore's row files in this clone; this command does not set it up: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
+lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 rul_162df51b7f78b785c97c26b41ea89666 [must/always] Run the tests before you push.
 
 ### sync by hand

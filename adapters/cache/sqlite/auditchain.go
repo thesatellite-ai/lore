@@ -98,7 +98,7 @@ type AuditChain struct {
 // chain tables in the machine store file at path. The caller closes it.
 func OpenAuditChain(ctx context.Context, path string) (*AuditChain, error) {
 	if err := os.MkdirAll(filepath.Dir(path), localDirMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "audit chain: create "+filepath.Dir(path), err)
+		return nil, errs.FileIO("create the audit chain folder", filepath.Dir(path), err)
 	}
 	dsn, err := fileDSN(path)
 	if err != nil {

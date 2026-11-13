@@ -209,7 +209,7 @@ func (a *App) migrateRepoDB(ctx context.Context, dryRun bool) ([]string, int, er
 			return nil, 0, errs.Wrap(errs.InvalidInput, "migrate: "+v017LoreDB+" names the project "+got.project+", which is not a project id", perr)
 		}
 		if err := os.MkdirAll(filepath.Dir(meta), cacheDirMode); err != nil {
-			return nil, 0, errs.Wrap(errs.Internal, "migrate: create .lore/data", err)
+			return nil, 0, errs.FileIO("create .lore/data", filepath.Dir(meta), err)
 		}
 		if err := a.SeedRepoMeta(ctx, pid); err != nil { // as lore init writes it
 			return nil, 0, err

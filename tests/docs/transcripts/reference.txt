@@ -206,11 +206,11 @@ orgs:
       - {url: "git@github.com:other/notes", org_folder: org}
     repos: [github.com/client/*]
 alice (work/website)$ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to Alice <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
 lore store init: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
 ✓ created store agency (sto_c0f3c11a5724b0cfd74b256190d9b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/other/notes (.git/config) to Alice <alice@example.com>: your identity in org freelance (orgs.freelance.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/other/notes: git user set to Alice <alice@example.com> (your identity in org freelance)
 lore store init: set up the store clone ~/.lore/stores/other/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
 ✓ created store freelance (sto_76bd560aff0771fab8457dbfa9823f10) at git@github.com:other/notes; recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ cat .lore/stores.yaml
@@ -369,8 +369,8 @@ ERROR: [E_META_UNKNOWN] rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 has no metadata key
 
 ### personal everywhere
 alice (work/website)$ lore store init me
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes (.git/config) to alice <alice@agency.example> (it was alice@agency.example, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/other/notes (.git/config) to alice <alice@agency.example> (it was alice@example.com, which lore had set before): your lore identity (`lore whoami`), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes: git user set to alice <alice@agency.example> (your lore identity, was alice@agency.example)
+lore store init: store clone ~/.lore/stores/other/notes: git user set to alice <alice@agency.example> (your lore identity, was alice@example.com)
 ✓ created store me (sto_3b6283bc4392c556bbae5f094246e913) at file://~/.lore/stores/_me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 alice (work/website)$ lore memory add --to me --everywhere --body 'I write short commit messages'
 ERROR: [E_INVALID_INPUT] unknown flag: --everywhere

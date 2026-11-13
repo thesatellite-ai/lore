@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -57,7 +58,16 @@ func isPlainLocalPath(raw string) bool {
 	if strings.Contains(raw, "://") {
 		return false
 	}
-	return strings.HasPrefix(raw, "/") || raw == homeTilde || strings.HasPrefix(raw, homeTilde+"/") || filepath.IsAbs(raw)
+	return strings.HasPrefix(raw, "/") || raw == homeTilde || strings.HasPrefix(raw, homeTilde+"/") || filepath.IsAbs(raw) ||
+		fileuri.IsDrivePath(raw) // C:\x on every OS (B3-27): a path, never scheme "c"
+}
+
+// missingPathError is E_BAD_PATH for a store path that is not a folder on
+// this machine: lore cannot tell which kind of store was meant, so the
+// hint names both spellings.
+func missingPathError(p string) error {
+	return errs.New(errs.BadPath, "store: "+p+" does not exist (or is not a folder)").
+		WithHint("for a git store give the path of an existing git repository (/path/to/repo.git, made with `git init --bare`); for a plain folder store give file:///path/to/folder (lore makes the folder)")
 }
 
 // localPathURL is the written store url of a plain path typed as a store
@@ -74,14 +84,16 @@ func localPathURL(raw string) (string, error) {
 		}
 		p = filepath.Join(home, strings.TrimPrefix(p, homeTilde))
 	}
+	if fileuri.IsDrivePath(p) && runtime.GOOS != windowsGOOS {
+		return "", missingPathError(p) // a drive path names no folder here
+	}
 	p, err := filepath.Abs(p)
 	if err != nil {
 		return "", errs.Wrap(errs.BadPath, "store: the store path", err)
 	}
 	st, err := os.Stat(p)
 	if err != nil || !st.IsDir() {
-		return "", errs.New(errs.BadPath, "store: "+p+" does not exist (or is not a folder)").
-			WithHint("for a git store give the path of an existing git repository (/path/to/repo.git, made with `git init --bare`); for a plain folder store give file:///path/to/folder (lore makes the folder)")
+		return "", missingPathError(p)
 	}
 	if isLocalGitRepo(p) {
 		return filepath.ToSlash(p), nil

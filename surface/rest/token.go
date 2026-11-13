@@ -66,7 +66,7 @@ func RotateToken(home string) (string, error) {
 		return "", err
 	}
 	if err := os.MkdirAll(home, homeMode); err != nil {
-		return "", errs.Wrap(errs.Internal, "rest: create "+home, err)
+		return "", errs.FileIO("create the lore home", home, err)
 	}
 	f, err := os.CreateTemp(home, tempFilePattern)
 	if err != nil {

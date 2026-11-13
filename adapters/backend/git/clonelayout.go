@@ -352,7 +352,7 @@ func writeCloneRecord(home string, r CloneRecord) error {
 		return errs.Wrap(errs.Internal, "git: encode the store clone record", err)
 	}
 	if err = os.MkdirAll(filepath.Dir(p), cloneDirMode); err != nil {
-		return errs.FileIO("create", filepath.Dir(p), err)
+		return errs.FileIO("create the state folder", filepath.Dir(p), err)
 	}
 	f, err := os.CreateTemp(filepath.Dir(p), CloneRecordFile+".*.tmp")
 	if err != nil {
@@ -544,7 +544,7 @@ func moveLegacyLocalClone(ctx context.Context, home string, r Remote, branch, di
 		return nil // another process moved it while this one waited
 	}
 	if err = os.MkdirAll(filepath.Dir(dir), cloneDirMode); err != nil {
-		return errs.FileIO("create", filepath.Dir(dir), err)
+		return errs.FileIO("create the store clones folder", filepath.Dir(dir), err)
 	}
 	if err = osrename.Rename(old, dir); err != nil {
 		return errs.FileIO("move the store clone to", dir, err)

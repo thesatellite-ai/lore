@@ -1,6 +1,7 @@
 package git
 
 import (
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -49,6 +50,9 @@ type Remote struct {
 // before Openers.Open, because net/url cannot parse the scp-like form.
 func CanonicalURL(raw string) (string, error) {
 	s := strings.TrimSpace(raw)
+	if fileuri.IsDrivePath(s) {
+		s = fileuri.DriveURLPath(s) // C:\x is a local path, not scheme "c" (B3-27)
+	}
 	if isSCPLike(s) {
 		userHost, path, _ := strings.Cut(s, ":")
 		user, host := "", userHost
@@ -139,6 +143,16 @@ func localRemote(u *url.URL) (Remote, error) {
 	return Remote{URL: clean, Norm: LocalHost + "/" + rel}, nil
 }
 
+// gitAddress is the address git is given for a store url: the url itself,
+// except a drive path, which lore carries as "/C:/x" (a url path) and git
+// reads as "C:/x" (B3-27).
+func gitAddress(u string) string {
+	if fileuri.IsDriveURLPath(u) {
+		return u[1:]
+	}
+	return u
+}
+
 // isLocal reports a Remote that is a git repository on this machine.
 func (r Remote) isLocal() bool { return strings.HasPrefix(r.Norm, LocalHost+"/") }
 
@@ -177,7 +191,7 @@ func OriginOf(raw string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return r.URL, nil
+	return gitAddress(r.URL), nil
 }
 
 // quoteScheme renders a scheme for a message (schemes never hold secrets).

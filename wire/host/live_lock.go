@@ -45,7 +45,7 @@ func (l *liveLock) release() error {
 // acquireLiveLock takes the lock in stateDir, waiting up to liveLockTimeout.
 func acquireLiveLock(ctx context.Context, stateDir string) (*liveLock, error) {
 	if err := os.MkdirAll(stateDir, liveStateMode); err != nil {
-		return nil, errs.Wrap(errs.Internal, "live state dir", err)
+		return nil, errs.FileIO("create the live state folder", stateDir, err)
 	}
 	path := filepath.Join(stateDir, liveLockFile)
 	deadline := time.Now().Add(liveLockTimeout)

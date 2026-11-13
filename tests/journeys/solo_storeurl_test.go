@@ -131,3 +131,57 @@ func TestJourneySoloNewLaptopFirstAddress(t *testing.T) {
 		desk.LoreIn(site, "memory", "list").OK(t).Says(t, "the repo's first note")
 	})
 }
+
+// TestJourneySoloStoreRemadeEmpty (B3-29): Sam deletes his kb store's
+// repo and makes an empty one at the same address to start fresh. Lore
+// never fills it with the old store on its own: the write and the sync
+// say the remote was reset and name both ways out; he picks "start
+// fresh" (store forget --yes, then store init), and only the new note is
+// in the new store.
+func TestJourneySoloStoreRemadeEmpty(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	sam := w.Persona(jsuName, jsuEmail)
+	m := sam.Laptop()
+	kb := w.Remote("github.com/sam-dev/kb")
+	app := m.Clone(w.Remote(jsuRepo), "site")
+	remake := func() {
+		t.Helper()
+		if err := os.RemoveAll(kb.Dir); err != nil {
+			t.Fatal(err)
+		}
+		w.Git(w.Root, "init", "-q", "--bare", "-b", "main", kb.Dir)
+	}
+
+	w.Step("day1/kb-with-an-old-note", func() {
+		m.LoreIn(app, "init").OK(t)
+		m.LoreIn(app, "store", "init", "kb", kb.SSHURL(), "--yes").OK(t)
+		m.LoreIn(app, "memory", "add", "--body", "an old note", "--to", "kb").OK(t)
+	})
+
+	w.Step("day1/repo-made-again-empty", func() {
+		remake()
+		m.LoreIn(app, "memory", "add", "--body", "written after the reset", "--to", "kb").
+			Says(t, "not pushed", "was reset", "lore store push --restore", "lore store forget")
+		r := m.LoreIn(app, "sync")
+		if r.Code == 0 {
+			t.Errorf("sync into a reset store must fail naming it: %s", r)
+		}
+		r.Says(t, "was reset")
+		if refs := w.TryGit(kb.Dir, "for-each-ref").Stdout; strings.TrimSpace(refs) != "" {
+			t.Errorf("lore pushed the old store into the new empty repo: %s", refs)
+		}
+	})
+
+	w.Step("day1/start-fresh", func() {
+		m.LoreIn(app, "store", "remove", "kb", "--yes").OK(t)
+		if r := m.LoreIn(app, "store", "forget", kb.SSHURL()); r.Code == 0 {
+			t.Errorf("forget of a clone holding the old store must ask first: %s", r)
+		}
+		m.LoreIn(app, "store", "forget", kb.SSHURL(), "--yes").OK(t)
+		m.LoreIn(app, "store", "init", "kb", kb.SSHURL(), "--yes").OK(t).Says(t, "created store kb").Never(t, "already a lore store")
+		m.LoreIn(app, "memory", "add", "--body", "a new note", "--to", "kb").OK(t)
+		list := m.LoreIn(app, "memory", "list").OK(t)
+		list.Says(t, "a new note").Never(t, "an old note", "written after the reset")
+	})
+}

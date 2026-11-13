@@ -727,7 +727,7 @@ func (w *writer) checkStints(ctx context.Context, projects []string) error {
 // stint starts today.
 func (w *writer) membership(ctx context.Context, project string, roles []string) error {
 	if len(roles) == 0 {
-		return errs.New(errs.InvalidInput, "the invite names project "+project+" but no role; a membership needs one (TP-10)").
+		return errs.New(errs.InvalidInput, "the invite names project "+project+" but no role; a membership needs one").
 			WithHint("ask the org admin for a new invite with --role")
 	}
 	pid, err := ids.ParseAny(project)

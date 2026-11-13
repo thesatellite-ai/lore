@@ -164,7 +164,7 @@ func (b *Backend) FlattenLayout(ctx context.Context) (FlattenResult, error) {
 	}
 	pending := filepath.Join(StateDirOf(b.work), flattenPendingFile)
 	if err := os.MkdirAll(filepath.Dir(pending), cloneDirMode); err != nil {
-		return res, errs.FileIO("create", filepath.Dir(pending), err)
+		return res, errs.FileIO("create the clone state folder", filepath.Dir(pending), err)
 	}
 	if err := os.WriteFile(pending, []byte("a store layout move started here; the next lore command finishes it\n"), 0o600); err != nil {
 		return res, errs.FileIO("write", pending, err)
@@ -398,7 +398,7 @@ func (b *Backend) flattenOne(ctx context.Context, m flatMove, index map[string]i
 	switch {
 	case fromOnDisk && !toOnDisk:
 		if err = os.MkdirAll(filepath.Dir(to), cloneDirMode); err != nil {
-			return "", false, false, errs.FileIO("create", filepath.Dir(to), err)
+			return "", false, false, errs.FileIO("create the row folder", filepath.Dir(to), err)
 		}
 		if err = os.Rename(from, to); err != nil {
 			return "", false, false, errs.FileIO("move", from, err)

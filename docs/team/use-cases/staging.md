@@ -34,7 +34,7 @@ Alice (an agency developer) creates the staging branch once (from her `stores` f
 # alice, in stores
 $ lore store init agency_stag 'git@github.com:agency/notes?branch=staging' --yes
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-lore store init: set user.name and user.email in the store clone ~/.lore/stores/agency/notes@staging (.git/config) to Alice Doe <alice@agency.example>: your identity in org agency (orgs.agency.identity in ~/.lore/config.yaml), the one lore signs this store's commits with, so your own git commits there carry it (your global git config is unchanged)
+lore store init: store clone ~/.lore/stores/agency/notes@staging: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 ✓ created store agency_stag (sto_7a67…9504) at git@github.com:agency/notes?branch=staging; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website

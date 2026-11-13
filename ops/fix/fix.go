@@ -39,6 +39,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -325,7 +326,11 @@ func (o Out) Text() string {
 	for _, n := range doctor.NextLines(o.Steps) {
 		b.WriteString(n + "\n")
 	}
-	fmt.Fprintf(&b, "Status: %s\n", strings.ToUpper(string(o.Status)))
+	if o.DryRun && o.Exit == 0 && o.Status != doctor.StatusHealthy && dryOnlyWouldDo(o) {
+		fmt.Fprintf(&b, "Status: %s (each finding is one the real lore fix run fixes)\n", strings.ToUpper(string(o.Status)))
+	} else {
+		fmt.Fprintf(&b, "Status: %s\n", strings.ToUpper(string(o.Status)))
+	}
 	return b.String()
 }
 
@@ -438,7 +443,29 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	if len(out.Failed) > 0 && out.Exit == 0 {
 		out.Exit = 1 // a step that could not run is not a healthy result
 	}
+	if in.DryRun && dryOnlyWouldDo(out) {
+		out.Exit = 0 // B4-14: every finding is one the real run fixes
+	}
 	return out, nil
+}
+
+// dryRealRunChecks are the doctor checks whose findings a dry run leaves
+// for the real run's steps (render rewrites stale copies).
+var dryRealRunChecks = []string{"rendered_copy: "}
+
+// dryOnlyWouldDo reports a dry run whose re-check found nothing but what
+// the real run's steps do: no error, no failed step, and every warning of
+// a check in dryRealRunChecks.
+func dryOnlyWouldDo(o Out) bool {
+	if len(o.Errors) > 0 || len(o.Failed) > 0 || o.Status == doctor.StatusBroken {
+		return false
+	}
+	for _, w := range o.Warnings {
+		if !slices.ContainsFunc(dryRealRunChecks, func(p string) bool { return strings.HasPrefix(w, p) }) {
+			return false
+		}
+	}
+	return true
 }
 
 // runAll is fix.run --all.

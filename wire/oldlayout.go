@@ -37,6 +37,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -161,7 +162,7 @@ func (a *App) flattenPersonal(ctx context.Context, p personalClone, say func(str
 	if gb == nil || gb.Dir() != p.dir {
 		return
 	}
-	a.SayOldLoreLockout(name)
+	a.SayOldLoreLockout(name, p.dir)
 	res, err := gb.FlattenPersonal(ctx)
 	if err != nil {
 		say(fmt.Sprintf("could not move lore 0.1.17's personal notes in %s, left as they are (they are not listed until moved): %s", p.dir, errLine(err)))
@@ -383,7 +384,7 @@ func (a *App) settleClone(ctx context.Context, dir string, say func(string)) {
 		return
 	}
 	if old, oerr := rowfs.IsOldStoreLayout(dir); oerr == nil && old {
-		a.SayOldLoreLockout(name)
+		a.SayOldLoreLockout(name, dir)
 	}
 	res, err := gb.FlattenLayout(ctx)
 	if err != nil {
@@ -417,24 +418,40 @@ var OldLoreLockoutLines = []string{
 	"lore:   lore 0.1.17 refuses the new layout with E_NOT_A_STORE (its hint to run lore store init is wrong) on every lore write to this store, and its pre-commit hook refuses git commits in repos linked to an org store; they upgrade and run lore fix.",
 }
 
-// lockoutSaid records the stores SayOldLoreLockout named in this process.
+// lockoutSaid records the clones SayOldLoreLockout named in this process.
 var lockoutSaid sync.Map
 
-// SayOldLoreLockout prints OldLoreLockoutLines for store name to stderr,
-// once per store and process, right before a commit that 0.1.17 cannot
-// read: the layout commit (settleClone: the first command, lore fix, the
-// first write's safe steps) and the move of 0.1.17's per-org personal
-// notes (flattenPersonal: the first command, a read included). It is
-// printed on its own, never inside a step's report, so it is seen before
-// the push line on every path; `lore fix --all` passes it through from
-// each repo's run (runFixIn).
-func (a *App) SayOldLoreLockout(name string) {
-	if _, done := lockoutSaid.LoadOrStore(name, true); done {
+// lockoutSaidFile, in a store clone's .git/lore, records that this machine
+// gave the clone's store the lockout block: a store is moved by up to two
+// commits (0.1.17's per-org personal notes on the first command, the
+// layout commit on the first write or lore fix), and the block is said
+// before the first of them only.
+const lockoutSaidFile = "lockout-said"
+
+// SayOldLoreLockout prints OldLoreLockoutLines for store name (its clone
+// at dir) to stderr, once per store and machine, right before the first
+// commit of that store that 0.1.17 cannot read: the layout commit
+// (settleClone: the first command, lore fix, the first write's safe steps)
+// or the move of 0.1.17's per-org personal notes (flattenPersonal: the
+// first command, a read included). It is printed on its own, never inside
+// a step's report, so it is seen before the push line on every path;
+// `lore fix --all` passes it through from each repo's run (runFixIn).
+// A clone whose state folder cannot be written says it again next time,
+// which is the safe side.
+func (a *App) SayOldLoreLockout(name, dir string) {
+	if _, done := lockoutSaid.LoadOrStore(dir, true); done {
+		return
+	}
+	mark := filepath.Join(git.StateDirOf(dir), lockoutSaidFile)
+	if fileExists(mark) {
 		return
 	}
 	w := a.pushNotes()
 	for _, l := range OldLoreLockoutLines {
 		_, _ = fmt.Fprintln(w, strings.ReplaceAll(l, "%s", name))
+	}
+	if err := os.MkdirAll(filepath.Dir(mark), 0o700); err == nil {
+		_ = os.WriteFile(mark, []byte("lore told this machine's user that lore 0.1.17 users of this store must upgrade\n"), 0o600)
 	}
 }
 

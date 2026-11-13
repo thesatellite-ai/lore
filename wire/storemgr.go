@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -218,6 +219,18 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 		return rowfs.Marker{}, false, errs.New(errs.StoreScheme, "store init: not a git store")
 	}
 	if old := gb.Marker(); old.Version > 0 {
+		// B3-29: the marker is the clone's; judge the remote's own content.
+		// A remote deleted and made again (empty, or another history) is
+		// not "already a lore store": this clone of the old one is stale.
+		reset, rerr := gb.RemoteReset(ctx)
+		if rerr != nil {
+			return rowfs.Marker{}, false, rerr
+		}
+		if reset {
+			shown := raw
+			return rowfs.Marker{}, false, errs.New(errs.Refused, "store init: "+shown+" was deleted and made again, but this machine's clone "+gb.Dir()+" still holds the old store ("+old.ID.String()+"); nothing was changed").
+				WithHint("start fresh: lore store forget " + shown + ", then run this command again; or put the old store back: lore store add <name> " + shown + ", then lore store push <name> --restore")
+		}
 		return old, true, nil
 	}
 	if err = rowfs.WriteMarker(gb.Dir(), m); err != nil {
@@ -925,6 +938,11 @@ func cleanFileURL(raw string) (string, error) {
 	}
 	if u.Path == "" {
 		return "", errs.New(errs.StoreScheme, "store: a file url needs an absolute path (file:///abs/path)")
+	}
+	if fileuri.IsDriveURLPath(u.Path) && runtime.GOOS != windowsGOOS {
+		// B3-28: file:///C:/… names a Windows drive; here it is no folder
+		// lore can make (it failed as E_INTERNAL "create the store folder")
+		return "", missingPathError(u.Path[1:])
 	}
 	p, err := filepath.Abs(fileuri.OSPath(u.Path))
 	if err != nil {

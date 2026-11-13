@@ -29,8 +29,30 @@ func FileIO(verb, path string, cause error) *Error {
 	case errors.Is(cause, syscall.ENOTDIR) || errors.Is(cause, fs.ErrExist):
 		return Wrap(BadPath, msg+": a file is in the way of a folder", cause).
 			WithHint("a file stands where lore keeps a folder on the way to " + path + "; move it aside (mv it to a .bak name) and run the command again")
+	case diskFull(cause):
+		return Wrap(DiskFull, msg+": no space left on the device", cause).
+			WithHint("free some space on the disk that holds " + dir + ", then run the command again")
+	case readOnlyFS(cause):
+		return Wrap(ReadOnlyFS, msg+": the file system is read-only", cause).
+			WithHint("use a folder on a writable disk")
+	case badName(cause):
+		// B3-28: a path this OS cannot have (a Windows drive path on Linux,
+		// a name too long, a character the file system refuses)
+		return Wrap(BadPath, msg+": "+osReason(cause), cause).
+			WithHint("check the path " + path + ": it must be a folder this machine can create")
 	}
-	return Wrap(Internal, msg, cause).WithHint("check " + path + " (ls -ld " + dir + ")")
+	return Wrap(Internal, msg+": "+osReason(cause), cause).WithHint("check " + path + " (ls -ld " + dir + ")")
+}
+
+// osReason is the operating system's own words for cause ("invalid
+// argument", "file name too long"): the reason without the path, which
+// the message names already.
+func osReason(cause error) string {
+	var pe *fs.PathError
+	if errors.As(cause, &pe) {
+		return pe.Err.Error()
+	}
+	return cause.Error()
 }
 
 // FileIOOr is FileIO for an err that may already be a lore error: a coded

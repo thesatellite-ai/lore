@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
@@ -88,8 +89,21 @@ func (c *standaloneClones) ForgetClone(ctx context.Context, in opsstores.ForgetI
 		return opsstores.ForgetOut{}, err
 	}
 	var pending []string
+	reset := len(clones) > 0
 	for _, cl := range clones {
 		pending = append(pending, unpushedIn(ctx, cl)...)
+		reset = reset && gitbackend.RemoteResetAt(cl.git)
+	}
+	if len(pending) > 0 && reset {
+		// B3-29: the remote was deleted and made again, so everything in
+		// the clone is "unpushed"; starting fresh means dropping it, which
+		// the person confirms (--yes).
+		if !op.Confirmed(ctx) { // a Local op: --yes arrives as op.WithConfirmed (localops.go)
+			q := "the store at " + shown + " was reset; delete this machine's copy of the old store (" + strings.Join(pending, ", ") + ")?"
+			return opsstores.ForgetOut{}, errs.New(errs.NeedsConfirm, "store forget: "+q).WithQuestion(q).
+				WithHint("ask the person, then rerun with --yes; or keep it: lore store push --restore " + in.URL)
+		}
+		pending = nil
 	}
 	if len(pending) > 0 {
 		return opsstores.ForgetOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("the clone holds unpushed work (%s); forgetting it would lose it", strings.Join(pending, ", "))).
