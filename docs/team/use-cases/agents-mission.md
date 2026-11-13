@@ -134,7 +134,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (stor
 
 ## 3. A fact every agent sees
 
-`agent-infra` learns something the others need, and saves it as a live memory: `--live` puts it on the store's live list at once, before any commit, and the org's defaults file it in the client project's store folder. Another agent sees it on its next fetch. Lore reuses a fetch for 60 seconds (`live.fetch_ttl`), so it can take up to a minute; `lore sync` fetches at once, and `lore search` finds it:
+`agent-infra` learns something the others need, and saves it as a live memory: `--live` puts it on the store's live list at once, before any commit, and the org's defaults file it in the client project's store folder. Another agent sees it on its next fetch. Lore reuses a fetch for 5 minutes (`live.fetch_ttl`), so it can take up to 5 minutes; `lore sync` fetches at once, and `lore search` finds it:
 
 <!-- example: agents#shared-fact -->
 ```console

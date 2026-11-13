@@ -65,11 +65,13 @@ func GitignoreHook(workDir string) Hook {
 			if root == "" {
 				return
 			}
-			if readRun(run) || !wire.HoldsLoreData(root) {
+			onlyData := run.Entry != nil && changesOnlyLoreData(run.Entry.Spec().Name)
+			if readRun(run) || !wire.HoldsLoreData(root) || onlyData {
 				// A repo that holds no lore data (a client repo linked to
 				// a store folder; plain files sweep 3.8) never gets a
 				// tracked file changed, by any command, doctor --fix
 				// included: lore's local files go to .git/info/exclude.
+				// A migration edits no tracked file but .lore/data (M-6).
 				// A read never edits the tracked .gitignore: the cache and
 				// lock it creates stay out of git status through the
 				// clone's own exclude file, and `lore doctor` names the
@@ -79,11 +81,11 @@ func GitignoreHook(workDir string) Hook {
 				// the lore home, owner item 16): it hides only what is
 				// already there, so with nothing there it writes nothing.
 				ensure := wire.EnsureLocalExclude
-				if readRun(run) {
+				if readRun(run) && !onlyData { // a migration takes .lore/lock and writes .tmp-* files after this
 					ensure = wire.EnsureLocalExcludeExisting
 				}
 				if added, _ := ensure(ctx, root); len(added) > 0 {
-					announceExclude(os.Stderr, root, added)
+					announceExclude(os.Stderr, root, added, onlyData)
 				}
 				return
 			}
@@ -244,11 +246,14 @@ func announceGitignore(w io.Writer, root string, added []string) {
 		strings.Join(added, ", "), filepath.Join(root, gitignoreName))
 }
 
-// announceExclude says which lines a read added to the clone's own
+// announceExclude says which lines a read or a migration added to the clone's own
 // exclude file (never committed; the tracked .gitignore is a write's).
-func announceExclude(w io.Writer, root string, added []string) {
+func announceExclude(w io.Writer, root string, added []string, migration bool) {
 	why := "a read never edits " + filepath.Join(root, gitignoreName) + ": `lore doctor --fix` adds them there"
-	if !wire.HoldsLoreData(root) {
+	switch {
+	case migration:
+		why = "a migration changes no tracked file but .lore/data: `lore doctor --fix` adds them to " + filepath.Join(root, gitignoreName)
+	case !wire.HoldsLoreData(root):
 		why = "this repo holds no lore data, so lore changes none of its tracked files"
 	}
 	_, _ = fmt.Fprintf(w, "lore: added %s to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; %s (`lore where` lists everything lore keeps here)\n",

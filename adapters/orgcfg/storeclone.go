@@ -128,11 +128,39 @@ func fetch(ctx context.Context, r Router, dir string) error {
 	return err
 }
 
+// headRefreshKey is the context key of withHeadRefresh.
+type headRefreshKey struct{}
+
+// withHeadRefresh returns ctx whose fetches ask the remote for the store's
+// HEAD branch again (lore sync, store doctor) instead of the one recorded.
+func withHeadRefresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, headRefreshKey{}, true)
+}
+
+// recordedBranch is the store's HEAD branch the clone's last fetch
+// recorded ("" when none).
+func recordedBranch(dir string) string {
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(gitbackend.StateDirOf(dir), defaultBranchFile)))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
 // recordFetch writes the fetch stamp and the store's HEAD branch (best
 // effort: an empty store has no HEAD) and returns that branch ("" when
-// unknown).
+// unknown). The branch is asked of the remote (ls-remote, one more
+// connection) only when the clone has none recorded or ctx asks for it
+// (withHeadRefresh): owner item M-4, a read on a Mac paid one ls-remote
+// per org store per command (~3 s each over ssh), for a branch that
+// almost never changes.
 func recordFetch(ctx context.Context, r Router, dir string, at time.Time) string {
 	writeState(dir, fetchStampFile, at.UTC().Format(time.RFC3339Nano))
+	if refresh, _ := ctx.Value(headRefreshKey{}).(bool); !refresh {
+		if name := recordedBranch(dir); name != "" {
+			return name
+		}
+	}
 	out, err := netGit(ctx, r, dir, "ls-remote", "--symref", "--", remoteName, "HEAD")
 	if err != nil {
 		return ""

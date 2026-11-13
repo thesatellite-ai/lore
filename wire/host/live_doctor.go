@@ -178,6 +178,13 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 		warn(what + "; not installed: " + dir + " is in the work tree of a client repo, whose tracked files lore never changes; add the blocks by hand if this repo should carry rows on its pushes")
 		return
 	}
+	if !fix && s.neverWired(ctx, dir) {
+		// M-5: every teammate's fresh clone read DEGRADED, as if broken; a
+		// clone lore has not set up yet is a note (the merge driver's is one
+		// too), and its first lore write, sync or fix sets it up
+		note(what + "; this clone is not set up for lore yet (a fresh clone): the next lore write here, `lore sync` or `lore fix` installs it")
+		return
+	}
 	if !fix {
 		warn(what + "; run `lore fix` (or `lore sync`) to install it; a read never does")
 		return
@@ -204,6 +211,30 @@ func missingRideHooks(dir string) []string {
 		}
 	}
 	return missing
+}
+
+// neverWired reports whether lore never set up git in this clone: no
+// merge.lore.driver in its config and no lore block (gitBlockMarker, the
+// ride-along blocks included) in any hook of dir. A fresh clone is like
+// that until its first lore write; a clone whose blocks were removed after
+// lore wired it keeps its driver config and is not.
+func (s *liveSession) neverWired(ctx context.Context, dir string) bool {
+	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "merge." + mergeDriverLore + ".driver"}}); err == nil && strings.TrimSpace(string(out)) != "" {
+		return false
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return true // no hook folder yet: nothing was ever installed
+	}
+	for _, e := range ents {
+		if e.IsDir() || strings.HasSuffix(e.Name(), ".sample") {
+			continue
+		}
+		if b, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, e.Name()))); rerr == nil && strings.Contains(string(b), gitBlockMarker) {
+			return false
+		}
+	}
+	return true
 }
 
 // clientHooksInWorkTree reports whether the repo is marked a client repo

@@ -20,9 +20,9 @@ import (
 // Built-in live defaults (v0.1.17 lorecfg: TEAM-025, TEAM-026, F8).
 // ds:def id=team-config-defaults-amp24fsn owner=@khanakia stability=stable desc="built-in live defaults of ~/.lore/config.yaml"
 const (
-	defaultLiveFetchTTL     = 60 * time.Second
-	defaultLiveMaxAge       = 7 * 24 * time.Hour // TEAM-026: an open row is copied to main after a week
-	defaultLiveAutopush     = false              // owner rule: nothing pushes without the person saying so (lore sync, git push)
+	defaultLiveFetchTTL     = orgconf.DefaultFetchTTL // M-4: one default for the repo and its stores (5 min)
+	defaultLiveMaxAge       = 7 * 24 * time.Hour      // TEAM-026: an open row is copied to main after a week
+	defaultLiveAutopush     = false                   // owner rule: nothing pushes without the person saying so (lore sync, git push)
 	defaultLiveCompactAfter = 1000
 	defaultLiveRemote       = "origin"
 	defaultPushRetries      = 5

@@ -601,6 +601,9 @@ func runWireMode(run *Run) wireMode {
 	if run.OldRows {
 		return wireRead // D7: a sync in an unmigrated 0.1.17 repo wires nothing
 	}
+	if changesOnlyLoreData(run.Entry.Spec().Name) {
+		return wireRead // M-6: a migration edits no tracked file but .lore/data (.gitattributes, hooks in a tracked folder)
+	}
 	if run.Entry.Spec().Name == opsfix.OpRun { // lore fix wires like doctor --fix; --dry-run reads
 		if fixDryRun(run) {
 			return wireRead

@@ -226,7 +226,7 @@ The one rule behind all of them: **hidden is not private**. Anyone who can clone
 ## Pitfalls
 
 - **"Finished" is per kind.** A task is finished when it is done or cancelled, a decision when it is superseded or rejected; rules, memories and notes count as finished as soon as they are written, so each write also lands a copy on `main`.
-- **The fetch cache.** Lore fetches once per command and reuses that fetch for 60 seconds; `lore sync` always fetches.
+- **The fetch cache.** Lore fetches once per command and reuses that fetch for 5 minutes; `lore sync` always fetches.
 - **Gates need a person.** Any person on the roster may approve a gate; a mission's `approvers:` list can narrow that. An agent never can.
 - **Teams stay internal.** In a linked client repo, assigning a whole team is refused; assign a person.
 

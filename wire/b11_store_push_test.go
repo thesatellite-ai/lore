@@ -21,6 +21,7 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
@@ -184,7 +185,7 @@ func TestStorePushRefresh(t *testing.T) {
 	}{
 		{"never fetched", true, 0, store.SyncReport{}, nil, 1, true},
 		{"fetched within ttl", true, 10 * time.Second, store.SyncReport{}, nil, 0, false},
-		{"stamp older than ttl", true, 2 * time.Minute, store.SyncReport{}, nil, 1, true},
+		{"stamp older than ttl", true, orgconf.DefaultFetchTTL + time.Minute, store.SyncReport{}, nil, 1, true},
 		{"stamp in the future (clock jumped back)", true, -time.Hour, store.SyncReport{}, nil, 1, true},
 		{"autopush off: never on its own", false, 0, store.SyncReport{}, nil, 0, false},
 		{"offline: reads local, no stamp", true, 0, store.SyncReport{Offline: true}, nil, 1, false},
