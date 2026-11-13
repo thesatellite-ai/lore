@@ -62,7 +62,7 @@ const (
 	// whereStatus is the --where key of fieldStatus: "status", the name
 	// --status and the help use (wheredel.Spec.Aliases).
 	whereStatus = "status"
-	// badge prefixes a list line ("TA  <id>", v0.1.17's generated output).
+	// badge opens the show's first line ("TA  <id>", v0.1.17's generated output).
 	badge = "TA"
 )
 
@@ -160,7 +160,7 @@ type ListOut struct {
 	tasks map[string]int
 }
 
-// Text prints one work.ListLine per list ("TA  <id>  <title> [<status>]  (<n> tasks)"); "(no tasklists)" when none.
+// Text prints one work.ListLine per list ("<id>  <title> [<status>]  (<n> tasks)"); "(no tasklists)" when none.
 func (o ListOut) Text() string { return o.rowsText() + work.NotesText(o.Notes) }
 
 // rowsText is the list lines.
@@ -170,7 +170,7 @@ func (o ListOut) rowsText() string {
 	}
 	var b strings.Builder
 	for _, r := range o.Data {
-		b.WriteString(work.ListLine(badge, r.ID, r.Title, r.StatusStr, o.tasks[r.ID], r.Label))
+		b.WriteString(work.ListLine(r.ID, r.Title, r.StatusStr, o.tasks[r.ID], r.Label))
 	}
 	return b.String()
 }

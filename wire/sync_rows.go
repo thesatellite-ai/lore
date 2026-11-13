@@ -223,6 +223,9 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 		out.Data.Stores = append(out.Data.Stores, opssync.StoreReport{Store: r.Store, Sent: r.Sent, Received: r.Received,
 			Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held})
 		line := fmt.Sprintf("store %s: sent %d, received %d, merged %d, refused %d", r.Store, r.Sent, r.Received, r.Merged, r.Refused)
+		if r.Unattached {
+			line += syncUnattachedFolder
+		}
 		if r.Held != "" {
 			line = "store " + r.Store + ": " + r.Held // its push did not run; the refusal is the other folder's line
 		}
@@ -268,6 +271,10 @@ const syncMarkedFileWhy = "git conflict markers; it is left out of every read un
 // syncLiveConflictWhy is the why of a live row with conflict markers in
 // the sync report.
 const syncLiveConflictWhy = "both sides edited a text field; both kept with conflict markers"
+
+// syncUnattachedFolder follows the line of a store folder this repo does
+// not attach whose rows the clone's sync carried (W-5).
+const syncUnattachedFolder = " (a folder of the store this repo does not attach)"
 
 // syncAlreadyInSync is v0.1.17's line for a `lore sync` with nothing to do
 // (stdout only; the --json report is unchanged).

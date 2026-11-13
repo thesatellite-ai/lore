@@ -971,7 +971,7 @@ func (it Item) line() string {
 func (o ShowOut) Text() string {
 	var b strings.Builder
 	if o.History {
-		b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  purged " + o.Data.when() + " by " + o.Data.DeletedBy + "\n")
+		b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  purged " + o.Data.when() + " by " + o.Data.deleter() + "\n")
 		b.WriteString("  from commit " + o.Data.LastIn + " (the last commit that had it)\n")
 		b.WriteString(fieldLines(o.Fields))
 		return b.String()
@@ -1010,7 +1010,7 @@ func (o ListOut) historyText() string {
 	}
 	var b strings.Builder
 	for _, it := range o.Data {
-		b.WriteString(it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  purged " + it.when() + "  by " + it.DeletedBy + "  last content in " + it.LastIn + "\n")
+		b.WriteString(it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  purged " + it.when() + "  by " + it.deleter() + "  last content in " + it.LastIn + "\n")
 	}
 	b.WriteString(count(o.Count, "row") + " in git history; they never come back (read one: lore trash show <id> --from-history)\n")
 	return b.String()

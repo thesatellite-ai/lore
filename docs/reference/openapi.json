@@ -16358,6 +16358,18 @@
                         ]
                       }
                     },
+                    "setup": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "setup_notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "skipped": {
                       "type": "array",
                       "items": {

@@ -233,7 +233,7 @@ func TestCampaignKnowledge_LintPiiWhyContext(t *testing.T) {
 	}
 	campMustAdd(t, c, knowKindByNoun(t, "rule"), "", "Never log tokens")
 	c.MustLore("render")
-	c.Lore("why-context", "show").OK(t).Says(t, "render_id:", ".lore/LORE.md", `"rules":1`)
+	c.Lore("why-context", "show").OK(t).Says(t, "render_id:", ".lore/LORE.md", "scope:        1 rules, ")
 	c.Lore("why-context", "show", "--json").OK(t)
 	c.Lore("why-context", "show", "--cut").OK(t)
 }

@@ -118,6 +118,10 @@ type Situation struct {
 	// a client repo linked by `lore org link` without any lore data in
 	// it); "" otherwise.
 	LinkedByRemote string
+	// OldLinks are the links of a store copy too old to decide by while
+	// the store is unreachable (orgresolve.LinkResult.Old): reads attach
+	// the folders they name, nothing else uses them (W-15).
+	OldLinks []orgresolve.Link
 }
 
 // ConfigPath is ~/.lore/config.yaml under home.
@@ -356,6 +360,7 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.OldLinks = lr.Old
 	s.Result, s.ResolveErr = orgresolve.Resolve(orgresolve.Inputs{
 		Config:             cfg,
 		EnvOrg:             strings.TrimSpace(in.EnvOrg),

@@ -223,15 +223,15 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (aws_access_key) at line 1: sh
 
 ### allow secrets
 alice (work/website)$ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
-lore: wrote ~/work/website/.lore/data/memories/mem_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_3b6283bc4392c556bbae5f094246e913.json
-✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
+lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
+✓ mem_3b6283bc4392c556bbae5f094246e913
   scope: [master]
 alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'
-.lore/data/memories/mem_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
-alice (work/website)$ lore memory delete mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 --yes
-lore: wrote ~/work/website/.lore/data/memories/mem_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
-✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 moved to the trash (restore: lore trash restore mem_4c590afb2a0cc7ae1b97b7e4e62d6c38)
+.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
+alice (work/website)$ lore memory delete mem_3b6283bc4392c556bbae5f094246e913 --yes
+lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
+✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore mem_3b6283bc4392c556bbae5f094246e913)
 alice (work/website)$ lore doctor
 Status: HEALTHY
 Binary: dev

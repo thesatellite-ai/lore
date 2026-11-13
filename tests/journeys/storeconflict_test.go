@@ -55,9 +55,10 @@ func TestJourneyTeamLeadStoreConflict(t *testing.T) {
 		if len(extra) == 2 {
 			leeMore, annMore = extra[0], extra[1]
 		}
-		tt.lore(tlAnn, "sync", "run").OK(t)
+		// W-15: the day changed and Ann goes offline before any other
+		// command: the store rows fetched yesterday are read as they are
 		tt.m[tlAnn.Email].SetEnv("LORE_OFFLINE", "1")
-		tt.lore(tlAnn, "task", "show", taskID).OK(t)
+		tt.lore(tlAnn, "task", "show", taskID).OK(t).Says(t, taskID)
 		tt.lore(tlAnn, append([]string{"task", "edit", taskID, "--title", ann, "--yes"}, annMore...)...).OK(t)
 		tt.lore(tlLee, append([]string{"task", "edit", taskID, "--title", lee, "--yes"}, leeMore...)...).OK(t)
 		tt.lore(tlLee, "sync", "run").OK(t)

@@ -246,11 +246,11 @@ Text that looks like a password stops `lore memory add` with a question; a bare 
 ```console
 # alice, in website
 $ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
-lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_28f8…03df.json
-✓ mem_b4f4…a5b0
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_b4f4…a5b0.json
+lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
+✓ mem_28f8…03df
   scope: [master]
-$ ls .lore/data/memories | grep -c mem_b4f4…a5b0 || true
+$ ls .lore/data/memories | grep -c mem_28f8…03df || true
 1
 ```
 <!-- /example -->

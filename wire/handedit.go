@@ -149,10 +149,35 @@ func handGitOption(say func(string)) gitbackend.Option {
 	})
 }
 
-// handGitSetUpLine is the line that names what lore wrote into a store
+// handGitSetUpLine is the one short line said when lore wrote a store
 // clone's git set-up, prefixed with the running command (wire/cmdname.go).
+// It names the clone (under ~) and what kind of thing was set; `lore
+// where` lists every file and key (W-4: the full list made it ~300 chars).
 func handGitSetUpLine(ctx context.Context, dir string, set []string) string {
-	return CommandPrefix(ctx) + "set up the store clone " + dir + " for plain git (pull, commit, push by hand): " + strings.Join(set, "; ")
+	return CommandPrefix(ctx) + "store clone " + underHome(dir) + ": set up for plain git (" + handGitParts(set) + "; `lore where` lists them)"
+}
+
+// handGitParts sums up what set (".git/config: merge.lore.driver",
+// ".git/hooks/pre-commit", …) holds: the merge driver and/or the hooks.
+func handGitParts(set []string) string {
+	merge, hooks := false, false
+	for _, s := range set {
+		switch {
+		case strings.Contains(s, "merge"):
+			merge = true
+		case strings.Contains(s, "hooks"):
+			hooks = true
+		}
+	}
+	switch {
+	case merge && hooks:
+		return "merge driver, pre-commit hook"
+	case hooks:
+		return "pre-commit hook"
+	case merge:
+		return "merge driver"
+	}
+	return strconv.Itoa(len(set)) + " setting(s)"
 }
 
 // storeHookLines is the pre-commit block of a store clone: lore's check of

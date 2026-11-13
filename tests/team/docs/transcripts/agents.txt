@@ -184,7 +184,7 @@ lore: store agency: 1 local commit(s) wait to be pushed; a read never pushes: ru
 ### merged by hand
 agent-coord (work/api)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator
 lore: pushed store agency: commit 40bd5f4 to branch main
-lore: the command was refused, so the git set-up it made first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
+lore: the command was refused, so what it changed first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging: waits for tsk_05e99e22e9e86e96fe4daa7777994603 to be merged (done, merge unknown)
   hint: lore task board shows what each task waits on
@@ -196,13 +196,13 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e99e22e9e86e96fe4daa
 
 ### gate
 agent-coord (work/api)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator
-lore: the command was refused, so the git set-up it made first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
+lore: the command was refused, so what it changed first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging: gate needs approval (lore gate approve tsk_c0f3c11a5724b0cfd74b256190d9b5b8)
   hint: lore task board shows what each task waits on
 (exit 10)
 agent-coord (work/api)$ lore gate approve tsk_c0f3c11a5724b0cfd74b256190d9b5b8
-lore: the command was refused, so the git set-up it made first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
+lore: the command was refused, so what it changed first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_INVALID_INPUT] approvals come from your identity file, never from LORE_ACTOR (LORE_ACTOR is set here)
   hint: an agent session cannot approve; run `lore gate approve` in your own shell
 (exit 20)

@@ -188,8 +188,6 @@ ERROR: [E_NEEDS_CONFIRM] store remove notes: detach store notes (file://~/stores
 $ lore store remove notes --yes
 ✓ detached store notes from .lore/stores.yaml; its rows stay in the store (`lore store forget` drops this machine's copy); commit the file to share
 $ lore store list
-stores:
-  NAME  URL  FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH  ADDRESS
 count: 0
 $ lore rule list
 (no rules)

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -32,9 +33,52 @@ import (
 )
 
 // setupSyncHere reports whether `lore sync` here is the setup's sync (no
-// code repo): the folder is a store checkout, or is in no git work tree.
+// lore project here): the folder is a store checkout, is in no git work
+// tree, or is in a git repo with no .lore folder from it up to the repo
+// top (a repo nobody ran lore init in, or one linked to an org folder by
+// its remote only). The last case answered E_NOT_A_STORE "a read creates
+// nothing there", though the person's stores (the org folder the repo is
+// linked to among them) were there to sync (batch 10 gate: once `setup
+// join` stopped creating .lore in the folder it ran in, a joiner's first
+// `lore sync` in that repo failed).
 func (a *App) setupSyncHere(ctx context.Context) bool {
-	return inStore(a.opts.RepoDir) || !insideWorkTree(ctx, a.opts.RepoDir)
+	if inStore(a.opts.RepoDir) || !insideWorkTree(ctx, a.opts.RepoDir) {
+		return true
+	}
+	return !loreFolderUpTo(a.opts.RepoDir, gitTop(ctx, a.opts.RepoDir))
+}
+
+// loreFolderUpTo reports whether dir or a folder above it, up to top,
+// holds a .lore folder (a monorepo's project may live in a subfolder).
+// An unknown top ("") answers true: nothing is changed on a guess.
+func loreFolderUpTo(dir, top string) bool {
+	if top == "" {
+		return true
+	}
+	d, err := filepath.Abs(dir)
+	if err != nil {
+		return true
+	}
+	if r, rerr := filepath.EvalSymlinks(d); rerr == nil {
+		d = r // git names the top by its real path (a symlinked temp folder)
+	}
+	t := filepath.Clean(top)
+	if r, rerr := filepath.EvalSymlinks(t); rerr == nil {
+		t = r
+	}
+	for {
+		if loreFolderAt(d) {
+			return true
+		}
+		if d == t {
+			return false
+		}
+		up := filepath.Dir(d)
+		if up == d || !strings.HasPrefix(d, t) {
+			return false
+		}
+		d = up
+	}
 }
 
 // SyncSetup is `lore sync` outside a code repo (see the file comment).
@@ -208,9 +252,15 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 		return fail(err)
 	}
 	res, err := opsstores.SyncAll(ctx, x, string(one.Name))
+	// this pass syncs the whole store: every folder's rows count for it,
+	// the folder reports SyncAll splits off (Unattached, W-5) included;
+	// the store's own report gives its state
 	for _, s := range res.Stores {
-		r.Sent, r.Received, r.Merged, r.Refused = s.Sent, s.Received, s.Merged, s.Refused
-		r.Problems, r.Offline, r.HeldBy, r.Held = s.Problems, s.Offline, s.HeldBy, s.Held
+		r.Sent, r.Received, r.Merged = r.Sent+s.Sent, r.Received+s.Received, r.Merged+s.Merged
+		if s.Unattached {
+			continue
+		}
+		r.Refused, r.Problems, r.Offline, r.HeldBy, r.Held = s.Refused, s.Problems, s.Offline, s.HeldBy, s.Held
 	}
 	if err != nil {
 		return fail(err)

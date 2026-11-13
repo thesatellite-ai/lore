@@ -139,8 +139,8 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd560aff0771fab8457dbfa9823f10
 ✓ tsk_76bd560aff0771fab8457dbfa9823f10 updated
 lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
 alice (work/website)$ lore tasklist list
-TA  tlt_7a670ae8548ed05bf57ad29ad0759504  default [active]  (4 tasks)
-TA  tlt_b4f4765e593d51fd1352985e8af3a5b0  Launch week [active]  (2 tasks)
+tlt_7a670ae8548ed05bf57ad29ad0759504  default [active]  (4 tasks)
+tlt_b4f4765e593d51fd1352985e8af3a5b0  Launch week [active]  (2 tasks)
 alice (work/website)$ lore tasklist search launch
 tlt_b4f4765e593d51fd1352985e8af3a5b0 Launch week
 alice (work/website)$ lore tasklist edit tlt_b4f4765e593d51fd1352985e8af3a5b0 --status closed

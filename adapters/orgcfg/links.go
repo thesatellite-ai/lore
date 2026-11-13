@@ -159,6 +159,13 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 			} else {
 				unrelated = append(unrelated, detail)
 			}
+			// links of a copy too old to trust are kept apart (Old): reads
+			// attach their folders, nothing decides by them
+			for _, l := range links {
+				if l.ProjectID == projectID && want[l.Remote] {
+					res.Old = append(res.Old, orgresolve.Link{Entry: l.entry, StoreURL: l.storeNorm, Folder: l.folder, Remote: l.Remote, Own: l.Own, Default: l.Default})
+				}
+			}
 			continue
 		case entryStale:
 			stale = append(stale, detail)
@@ -247,6 +254,7 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 	status := entryFresh
 	var out []indexedLink
 	var offlineWhy []string
+	var stale []indexedLink // links of copies older than maxAge (offline)
 	for _, sc := range o.Stores {
 		norm, err := repourl.NormalizeStore(sc.URL)
 		if err != nil {
@@ -278,6 +286,13 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 					age = "last fetched " + g.now().Sub(last).Round(time.Second).String() + " ago"
 				}
 				offlineWhy = append(offlineWhy, fmt.Sprintf("%s (%s)", norm, age))
+				if ok {
+					old, _ := readLinks(ctx, dir, tip) // best effort: only reads attach by them (LinkResult.Old)
+					for _, l := range old {
+						l.entry, l.storeNorm = o.Name, norm
+						stale = append(stale, l)
+					}
+				}
 				continue
 			}
 		}
@@ -298,7 +313,9 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		}
 	}
 	if len(offlineWhy) > 0 {
-		return nil, entryUnknown, o.Name + ": " + strings.Join(offlineWhy, ", "), nil
+		// the copies too old to trust, with every other store's links: an
+		// unknown entry's links are only ever kept as LinkResult.Old
+		return append(out, stale...), entryUnknown, o.Name + ": " + strings.Join(offlineWhy, ", "), nil
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].folder != out[j].folder {

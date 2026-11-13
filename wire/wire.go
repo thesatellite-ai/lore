@@ -363,6 +363,14 @@ type App struct {
 	opts Options
 	reg  *op.Registry
 
+	// watchPlaces (ServeAsPerson): each request checks whether a store
+	// moved since the state opened (servestale.go); placeFiles/placesAt
+	// are what it compares, retired the states it let go (closed by Close).
+	watchPlaces bool
+	placeFiles  []string
+	placesAt    string
+	retired     []*state
+
 	mu     sync.Mutex
 	opened bool
 	err    error
@@ -648,6 +656,7 @@ func (a *App) ServeAsPerson() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.opts.PersonOnly = true
+	a.watchPlaces = true
 	if a.opened && a.st != nil {
 		_ = a.st.close()
 	}
@@ -685,6 +694,7 @@ func (a *App) openState(ctx context.Context) (st *state, opened bool, err error)
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
 		if a.err == nil {
 			a.st.eng.SetRedactHook(a.redactTask) // D21: write-time store-then-rotate task (wire/secretmgrs.go)
+			a.notePlaces(a.st)                   // servestale.go
 		}
 		if a.err == nil && a.opts.Notice != nil {
 			a.healedNotices(a.st)
@@ -809,6 +819,7 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 			top = t
 		}
 	}
+	a.refreshMovedStores() // servestale.go: a serving App follows a store set-url made since it opened
 	res, err := a.run(ctx, e, d, c)
 	if err != nil && top != "" {
 		removeEmptyDirs(filepath.Join(top, loreFolderName))
@@ -1116,6 +1127,10 @@ func (a *App) Close() error {
 		a.st = nil
 		a.err = errs.New(errs.Internal, "wire: the app is closed")
 	}
+	for _, r := range a.retired { // servestale.go: states a moved store retired
+		all = append(all, r.close())
+	}
+	a.retired = nil
 	if a.mach != nil {
 		all = append(all, a.mach.Close())
 		a.mach = nil

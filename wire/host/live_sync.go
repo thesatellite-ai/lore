@@ -366,7 +366,9 @@ func cutLive(s string) string {
 }
 
 // Sides `lore sync resolve --take` names (G-SYNC-1): kept is the first
-// section of each conflict block (this machine's edit, merge3 "ours"),
+// section of each conflict block (merge3 "ours": the edit of the machine
+// that merged the two, which is this machine only if it did the merge; the
+// markers record no owner, so lists and hints say first/second, W-5),
 // other the second (the edit that met it, "theirs").
 const (
 	takeKept  = "kept"
@@ -384,7 +386,7 @@ func (l liveSync) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 	take := strings.TrimSpace(in.Take)
 	if take != takeKept && take != takeOther {
 		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "--take must be kept or other").
-			WithHint("kept keeps this machine's edit of each clash, other the edit that met it")
+			WithHint("kept keeps the first section of each clash (the edit of the machine that merged the two, not always this one: `lore sync conflicts` shows both), other the second")
 	}
 	n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(in.ID), "#"))
 	if err != nil || n < 1 {

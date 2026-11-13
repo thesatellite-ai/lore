@@ -129,6 +129,7 @@ func (o ops) listHistory(ctx context.Context, in ListIn, since time.Time, by str
 		return ListOut{}, err
 	}
 	out.Count = len(out.Data)
+	o.labelDeleters(ctx, out.Data) // W-7: the purger's name, not the act_ id
 	return out, nil
 }
 
@@ -144,7 +145,9 @@ func (o ops) showHistory(ctx context.Context, in ShowIn) (ShowOut, error) {
 			continue
 		}
 		it, r, ok := historyItem(h)
-		out := ShowOut{Data: it, Fields: map[string]string{}, History: true}
+		one := []Item{it}
+		o.labelDeleters(ctx, one)
+		out := ShowOut{Data: one[0], Fields: map[string]string{}, History: true}
 		if !ok {
 			return out, nil
 		}

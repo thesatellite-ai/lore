@@ -194,7 +194,7 @@ $ lore plan add --title 'Newsletter plan' --body 'Collect emails on the home pag
 lore: wrote ~/work/website/.lore/data/plans/pln_76bd…3f10.json
 ✓ pln_76bd…3f10
 $ lore plan list
-PL  pln_76bd…3f10  Newsletter plan [draft]  (0 tasks)
+pln_76bd…3f10  Newsletter plan [draft]  (0 tasks)
 $ lore plan search newsletter
 pln_76bd…3f10 Newsletter plan
 $ lore plan edit pln_76bd…3f10 --status approved

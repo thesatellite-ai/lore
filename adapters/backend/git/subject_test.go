@@ -40,8 +40,19 @@ func TestSubjectNamesWhatThePersonDid(t *testing.T) {
 	if got, want := subject("task.add", []store.Change{actor, list, task}), "lore: task add: Ship the beta (3 rows)"; got != want {
 		t.Fatalf("task add subject = %q, want %q", got, want)
 	}
-	if got := subject(DefaultOp, []store.Change{actor, task}); got != "lore: write "+task.Row.ID.String()+" (+1 more)" {
+	if got := subject(DefaultOp, []store.Change{actor, task}); got != "lore: task save "+task.Row.ID.String()+" (2 rows)" {
 		t.Fatalf("plain write subject = %q", got)
+	}
+	// W-11: writes lore makes by itself say what they are, never "write"
+	mch := mk("machines", ids.PrefixMachine, "hostname", "box-1")
+	if got := subject(DefaultOp, []store.Change{mch}); got != "lore: machine register "+mch.Row.ID.String() {
+		t.Fatalf("machine row subject = %q", got)
+	}
+	if got := subject(DefaultOp, []store.Change{actor}); got != "lore: actor copy "+actor.Row.ID.String() {
+		t.Fatalf("actor copy subject = %q", got)
+	}
+	if got := subject(DefaultOp, []store.Change{list}); got != "lore: task list save "+list.Row.ID.String() {
+		t.Fatalf("task list subject = %q", got)
 	}
 }
 

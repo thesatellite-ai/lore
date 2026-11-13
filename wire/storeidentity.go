@@ -99,7 +99,6 @@ func agentSignature(name, email string) bool {
 // clone under ~ and who the identity is; `lore doctor` (store_identity)
 // and `lore where` give the long why (B4-17: the line was ~400 chars).
 func cloneIdentityLine(ctx context.Context, dir string, id git.CloneIdentity) string {
-	home, _ := os.UserHomeDir() // "" leaves the path as it is
 	who := id.Who
 	if who == "" {
 		who = "your lore identity"
@@ -107,7 +106,7 @@ func cloneIdentityLine(ctx context.Context, dir string, id git.CloneIdentity) st
 	if id.Was != "" {
 		who += ", was " + id.Was
 	}
-	return CommandPrefix(ctx) + "store clone " + tildeHome(dir, home) + ": git user set to " + id.Name + " <" + id.Email + "> (" + who + ")"
+	return CommandPrefix(ctx) + "store clone " + underHome(dir) + ": git user set to " + id.Name + " <" + id.Email + "> (" + who + ")"
 }
 
 // sayCloneIdentity says cloneIdentityLine when opening b wrote the clone's
@@ -131,4 +130,12 @@ func cloneIdentitySay(notice func(string)) git.Option {
 			notice(cloneIdentityLine(ctx, dir, id))
 		}
 	})
+}
+
+// underHome shows p under the user's home as ~/… (os.UserHomeDir; an
+// unknown home leaves p as it is): the one-line notices of the store
+// clones stay short (B4-17, W-4).
+func underHome(p string) string {
+	home, _ := os.UserHomeDir() // "" leaves the path as it is
+	return tildeHome(p, home)
 }

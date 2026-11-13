@@ -705,8 +705,12 @@ func (b *Backend) compactLocked(ctx context.Context, req CompactRequest) (Compac
 	}
 	res := CompactResult{FromEpoch: b.epochAt(ctx, h)}
 	res.ToEpoch = res.FromEpoch
-	if res.Rows, err = b.countRows(ctx, "", h); err != nil {
+	all, err := b.countRows(ctx, "", h)
+	if err != nil {
 		return CompactResult{}, err
+	}
+	for _, n := range all {
+		res.Rows += n // every folder's rows: the compaction rewrites the whole clone
 	}
 	cut := slices.IndexFunc(chain, func(c chainCommit) bool { return c.at.Before(req.Cutoff) })
 	if cut < 0 || cut == len(chain)-1 {
@@ -882,7 +886,7 @@ func (b *Backend) forcePush(ctx context.Context, tip, expect string) error {
 	case flag == flagUpToDate:
 		return nil
 	case flag == flagForced || flag == flagFastForward:
-		b.recordPush(tip, true)
+		b.recordPush(tip, true, nil) // a compaction rewrites every folder: named by the store
 		return nil
 	case strings.Contains(summary, leaseLost) || slices.ContainsFunc(lostRaceReasons, func(r string) bool { return strings.Contains(summary, r) }):
 		return errs.New(errs.Contended, "another clone pushed while the compaction ran; nothing was changed").

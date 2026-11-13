@@ -72,6 +72,12 @@ func (s *olStore) oldBase(m *Machine) string {
 // newDir is where the store lands.
 func (s *olStore) newDir(m *Machine) string { return m.LorePath("stores", s.owner, s.repo) }
 
+// olShown is p as lore's one-line notices show it: under the machine's
+// home as ~/….
+func olShown(m *Machine, p string) string {
+	return "~" + strings.TrimPrefix(p, m.Home)
+}
+
 // rowPath is a memory's old-layout path in the store.
 func (s *olStore) oldRow(id string) string {
 	return filepath.Join(s.folder, ".lore", "data", "memories", id+".json")
@@ -170,9 +176,9 @@ func TestJourneyUpgraderOldLayout(t *testing.T) {
 
 		r := m.Lore(m.Home, "doctor")
 		for _, s := range stores {
-			r.Says(t, "moved store clone "+s.oldBase(m)+" -> "+s.newDir(m))
+			r.Says(t, "moved store clone "+olShown(m, s.oldBase(m))+" -> "+olShown(m, s.newDir(m)))
 		}
-		r.Says(t, "1 commit(s) the remote does not have carried", "1 uncommitted file(s) carried",
+		r.Says(t, "(kept 1 local commit)", "(kept 1 local file)",
 			"pushed store lore-hub", "rows moved from <folder>/.lore/data/ to <folder>/, the store's own rows to _store/", "clones-v017")
 		for _, s := range stores {
 			if _, err := os.Stat(filepath.Join(s.newDir(m), ".git")); err != nil {
@@ -250,7 +256,7 @@ func TestJourneyUpgraderOldLayout(t *testing.T) {
 		tm.Wake()
 		hub := stores[0]
 		r := tm.Lore(tm.Home, "doctor")
-		r.Says(t, "moved store clone "+hub.oldBase(tm)+" -> "+hub.newDir(tm))
+		r.Says(t, "moved store clone "+olShown(tm, hub.oldBase(tm))+" -> "+olShown(tm, hub.newDir(tm)))
 		r.Never(t, "rows moved") // Ola's layout commit is fetched, not made again
 		for _, id := range hub.ids {
 			tm.Lore(filepath.Join(hub.newDir(tm), hub.folder), "show", id).OK(t).Says(t, bodies[id])
@@ -265,7 +271,7 @@ func TestJourneyUpgraderOldLayout(t *testing.T) {
 		olOldClone(t, w, m, late)
 		half := late.newDir(m) + ".moving"
 		olWrite(t, filepath.Join(half, "README"), "cut short\n")
-		m.Lore(m.Home, "doctor").Says(t, "moved store clone "+late.oldBase(m)+" -> "+late.newDir(m), "rows moved")
+		m.Lore(m.Home, "doctor").Says(t, "moved store clone "+olShown(m, late.oldBase(m))+" -> "+olShown(m, late.newDir(m)), "rows moved")
 		if _, err := os.Stat(half); err == nil {
 			t.Errorf("the half-built %s is left", half)
 		}

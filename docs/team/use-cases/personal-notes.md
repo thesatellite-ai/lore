@@ -68,7 +68,7 @@ To sync between machines, make a new, empty private repo of your own into your p
 # alice, in scratch
 $ lore store init me git@github.com:alice/lore-me --yes
 lore store init: store clone ~/.lore/stores/alice/lore-me: git user set to alice <alice@devbox> (your lore identity)
-lore store init: set up the store clone ~/.lore/stores/alice/lore-me for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+lore store init: store clone ~/.lore/stores/alice/lore-me: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store me (sto_c0f3…b5b8) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 
 # alice, in website

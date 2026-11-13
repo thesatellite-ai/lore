@@ -27,6 +27,7 @@ package host
 import (
 	"context"
 	"os"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -186,13 +187,21 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 	// B1-1: a write that ends refused leaves the clone's git set-up as it
 	// was (refusalundo.go)
 	var snap *setupSnapshot
+	var tree *treeSnapshot
 	if e.Spec().Access == op.AccessWrite && !run.ReadOnly && !leavesWorkRepo(e.Spec().Name) {
 		if wd, werr := os.Getwd(); werr == nil {
 			snap = takeSetupSnapshot(ctx, wd)
+			// W-6: in an unmigrated 0.1.17 repo the first write migrates
+			// and renders before it runs; a refusal puts those files back
+			if wire.HasV017RowsAt(ctx, wd) {
+				tree = takeTreeSnapshot(ctx, wd)
+			}
 		}
 	}
 	undo := func(err error) error {
-		announceUndo(os.Stderr, snap.restore())
+		undone := append(snap.restore(), tree.restore(ctx)...)
+		slices.Sort(undone)
+		announceUndo(os.Stderr, slices.Compact(undone))
 		return err
 	}
 	for _, h := range r.hooks {

@@ -127,6 +127,16 @@ func FixProject(ctx context.Context, env Env, dry bool) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
+	if !dry {
+		// The active setup's checks too, as plain lore doctor runs them
+		// (git email, store access, …), so lore fix and lore doctor give
+		// one verdict for one repo (W-8: fix said HEALTHY where doctor
+		// said DEGRADED). They are read-only; a dry run reaches no remote,
+		// so it leaves them out.
+		if err := addSetups(ctx, env, RunIn{}, &r); err != nil {
+			return Report{}, err
+		}
+	}
 	r.finalize()
 	r.OK = r.Status == StatusHealthy
 	r.Exit = exitOf(r.Status)
@@ -366,4 +376,30 @@ func FailedSteps(steps []FixStep) []string {
 		}
 	}
 	return out
+}
+
+// SetupLines are the active setup's results as one line each for lore
+// fix: problems (warnings, failures, checks that could not run) with
+// their fix, and notes (info-level) apart, so fix shows what doctor shows.
+func SetupLines(r Report) (problems, notes []string) {
+	for _, s := range r.Setups {
+		for _, c := range s.Checks {
+			if !problem(c) {
+				continue
+			}
+			l := "setup " + s.Name + ": " + string(c.Check) + "  " + c.Detail
+			if l2 := targetLabel(c.Target); l2 != "" && !strings.HasPrefix(c.Detail, l2) {
+				l = "setup " + s.Name + ": " + string(c.Check) + "  " + l2 + ": " + c.Detail
+			}
+			if f := fixLine(c.Fix); f != "" {
+				l += "; fix: " + f
+			}
+			if c.Note() {
+				notes = append(notes, l)
+				continue
+			}
+			problems = append(problems, l)
+		}
+	}
+	return problems, notes
 }

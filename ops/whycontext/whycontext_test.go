@@ -21,14 +21,15 @@ func rec() Record {
 }
 
 // TestShowSummaryAndRendered: the default summary prints v0.1.17's lines
-// and JSON keys; the text only with --rendered.
+// (its scope line in words, not the record's JSON: W-8) and JSON keys;
+// the text only with --rendered.
 func TestShowSummaryAndRendered(t *testing.T) {
 	out, err := Show(rec(), ShowIn{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := out.Text()
-	for _, want := range []string{"render_id:    rh_1", "created_at:   2026-11-05 09:30:00Z", "target:       .lore/LORE.md", "total_bytes:  1200", "sha256:       abc", `scope:        {"included"`} {
+	for _, want := range []string{"render_id:    rh_1", "created_at:   2026-11-05 09:30:00Z", "target:       .lore/LORE.md", "total_bytes:  1200", "sha256:       abc", "scope:        0 rules, 0 hotfixes, 0 memories in full; 15000 of 16000 bytes (profile codex), 2 moved out of the core (lore why-context --cut lists them)"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("summary misses %q:\n%s", want, text)
 		}

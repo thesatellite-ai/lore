@@ -5,6 +5,12 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // TestWrittenLines: up to three files are named one by one (a store's
@@ -46,5 +52,22 @@ func TestWriteLogOnce(t *testing.T) {
 	l.add(Written{Store: "repo", File: "/x"})
 	if got := l.Files(); len(got) != 1 {
 		t.Fatalf("files = %v", got)
+	}
+}
+
+// TestWriteLogSkipsSecretEvents (W-9): a secret.* audit event only names
+// the row it is about (`secrets allow --file` names the project row) and
+// writes no file, so it is not listed as written; a row write still is.
+func TestWriteLogSkipsSecretEvents(t *testing.T) {
+	t.Parallel()
+	ctx, l := WithWriteLog(context.Background())
+	r := &routedAudit{rowFile: func(store.Source, row.Table, ids.AnyID) string { return "/r/.lore/data/projects/prj_1.json" }}
+	r.noteWrite(ctx, engine.Event{Action: engine.ActionSecretAllowAdded, Store: store.SourceRepo, Table: schema.TableProjects})
+	if got := l.Files(); len(got) != 0 {
+		t.Fatalf("a secret audit event was listed as a write: %v", got)
+	}
+	r.noteWrite(ctx, engine.Event{Action: engine.ActionCreate, Store: store.SourceRepo, Table: schema.TableProjects})
+	if got := l.Files(); len(got) != 1 {
+		t.Fatalf("a row write was not listed: %v", got)
 	}
 }

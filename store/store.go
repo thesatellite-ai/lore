@@ -108,6 +108,24 @@ type SyncReport struct {
 	Merged   []ids.AnyID // rows merged field by field
 	Refused  []Refusal
 	Offline  bool // the remote could not be reached; nothing was lost
+	// Folder is the data folder this backend reads (rowfs folder name,
+	// "." for the root), "" for a backend without folders. Sent and
+	// Received count only its rows when it has one.
+	Folder string
+	// Others counts the rows of the store's other folders this sync sent
+	// and received (one sync of a clone carries every folder), by folder,
+	// so a folder no attached store names is still reported under its own
+	// name instead of being added to this one's counts (bug hunt W-5).
+	Others map[string]FolderCount
+	// OfflineDetail is git's error text of the fetch or push that did not
+	// reach the remote ("" when unknown), so a caller can tell no network
+	// from a missing or unreadable repository (logic/gitfault).
+	OfflineDetail string
+}
+
+// FolderCount is what one sync sent and received for one data folder.
+type FolderCount struct {
+	Sent, Received int
 }
 
 // Refusal is one change the remote did not accept.

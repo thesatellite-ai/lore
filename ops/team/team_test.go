@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/orgcmd"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/ops/profilestore/profilestoretest"
 	"github.com/thesatellite-ai/lore/ops/setup"
 	"github.com/thesatellite-ai/lore/ops/stores"
@@ -90,6 +91,37 @@ type env struct {
 	setups  fakeSetups
 	origins map[string]Origin
 	gh      *fakeGH
+	// joinKey, joinHandle: the last import that left the registration to
+	// the join (SkipRegister), as the wire roster's RegisterCaller reads
+	// them from the org entry.
+	joinKey, joinHandle string
+}
+
+// Roster opens the fake roster; a write open whose op registers the
+// caller in its own commit (WithRegisterInCommit) gets RegisterCaller,
+// as the wire org roster has (W-12).
+func (e *env) Roster(ctx context.Context, write bool) (profilestore.Roster, func(), error) {
+	r, done, err := e.Fake.Roster(ctx, write)
+	if err != nil || !RegisterInCommit(ctx) {
+		return r, done, err
+	}
+	return registeringRoster{Roster: r, e: e}, done, nil
+}
+
+// registeringRoster is the fake roster with CallerRegisterer.
+type registeringRoster struct {
+	profilestore.Roster
+	e *env
+}
+
+func (r registeringRoster) RegisterCaller(context.Context) (bool, error) {
+	for _, a := range r.e.All(schema.TableActors) {
+		if a.ID == r.e.CallerID.Any() {
+			return false, nil
+		}
+	}
+	r.e.ensureActor(r.e.joinKey, r.e.joinHandle)
+	return true, nil
 }
 
 func (e *env) SetupStore(context.Context) (setup.Store, error) { return e.setups, nil }
@@ -121,6 +153,7 @@ func (o *fakeOrgs) Import(_ context.Context, in orgcmd.ImportIn, _ bool) (orgcmd
 		}
 	}
 	if in.SkipRegister {
+		o.e.joinKey, o.e.joinHandle = in.Key, in.Handle
 		return orgcmd.Report{}, nil
 	}
 	o.e.ensureActor(in.Key, in.Handle)

@@ -164,3 +164,76 @@ func TestWideCellsCutAndEmptyListsLeftOut(t *testing.T) {
 		t.Errorf("--json changed:\n%s", js.String())
 	}
 }
+
+type lineRow struct {
+	Field string `json:"field"`
+	Line  int    `json:"line,omitempty"`
+	Count int    `json:"count"`
+	Ok    bool   `json:"ok"`
+}
+
+type lineOut struct {
+	Rows []lineRow `json:"rows"`
+}
+
+// TestOptionalZeroCellIsBlank: an optional (omitempty) field at zero is a
+// blank cell, never "0" (W-8, import-scan's LINE); a required zero and a
+// false bool still print.
+func TestOptionalZeroCellIsBlank(t *testing.T) {
+	o := op.Define(op.Spec{Name: "setup.lines", Summary: "lines", Permission: op.PermRead, Access: op.AccessRead},
+		func(_ context.Context, _ cellIn) (lineOut, error) {
+			return lineOut{Rows: []lineRow{{Field: "kind"}, {Field: "org", Line: 7, Count: 2, Ok: true}}}, nil
+		})
+	in, err := o.Decode(op.JSONDecoder{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := o.Invoke(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := printHuman(&out, res, Palette{}, "lore setup lines"); err != nil {
+		t.Fatal(err)
+	}
+	var kind string
+	for l := range strings.SplitSeq(out.String(), "\n") {
+		if strings.Contains(l, "kind") {
+			kind = l
+		}
+	}
+	if f := strings.Fields(kind); len(f) != 3 || f[1] != "0" || f[2] != "false" {
+		t.Errorf("kind row %q: want the line blank, count 0, ok false\n%s", kind, out.String())
+	}
+}
+
+// TestEmptyTableLeftOut (W-6): a list of records with no item prints no
+// table (no header without rows) in human output; --json keeps [].
+func TestEmptyTableLeftOut(t *testing.T) {
+	o := op.Define(op.Spec{Name: "setup.empty", Summary: "empty", Permission: op.PermRead, Access: op.AccessRead},
+		func(_ context.Context, _ cellIn) (wideOut, error) {
+			return wideOut{Wrote: []string{"x"}, Rows: []wideRow{}}, nil
+		})
+	in, err := o.Decode(op.JSONDecoder{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := o.Invoke(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := printHuman(&out, res, Palette{}, "lore setup empty"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "rows") || strings.Contains(strings.ToUpper(out.String()), "HELP") {
+		t.Errorf("an empty table printed:\n%s", out.String())
+	}
+	var js bytes.Buffer
+	if err := printJSON(&js, res); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(js.String(), `"rows": []`) {
+		t.Errorf("--json lost the empty list:\n%s", js.String())
+	}
+}

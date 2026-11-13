@@ -87,7 +87,7 @@ func TestJourneyUpgraderPersonalNotes(t *testing.T) {
 
 	w.Step("day2/upgrade-keeps-every-personal-note", func() {
 		r := m.LoreIn(api, "memory", "list", "--store", "me").OK(t)
-		r.Says(t, "(lore 0.1.17)", "commit(s) the remote does not have carried", "personal store lore-me:", "moved to _store/")
+		r.Says(t, "(0.1.17) -> ", "local commit", "personal store lore-me:", "moved to _store/")
 		for _, b := range []string{upAcmeNote, upAnyNote, upOfflineNote} {
 			upCount(t, "api --store me", r.Stdout, b)
 		}

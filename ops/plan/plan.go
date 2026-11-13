@@ -60,7 +60,7 @@ const (
 	// DefaultStatus is a new plan's status (TSQ9).
 	DefaultStatus = schema.PlanStatusDraft
 	fieldStatus   = work.FieldStatus
-	// badge prefixes a list line ("PL  <id>", v0.1.17's generated output).
+	// badge opens the show's first line ("PL  <id>", v0.1.17's generated output).
 	badge = "PL"
 )
 
@@ -172,7 +172,7 @@ type ListOut struct {
 	tasks map[string]int
 }
 
-// Text prints one work.ListLine per plan ("PL  <id>  <title> [<status>]  (<n> tasks)"); "(no plans)" when none.
+// Text prints one work.ListLine per plan ("<id>  <title> [<status>]  (<n> tasks)"); "(no plans)" when none.
 func (o ListOut) Text() string { return o.rowsText() + work.NotesText(o.Notes) }
 
 // rowsText is the list lines.
@@ -182,7 +182,7 @@ func (o ListOut) rowsText() string {
 	}
 	var b strings.Builder
 	for _, r := range o.Data {
-		b.WriteString(work.ListLine(badge, r.ID, r.Title, r.Status, o.tasks[r.ID], r.Label))
+		b.WriteString(work.ListLine(r.ID, r.Title, r.Status, o.tasks[r.ID], r.Label))
 	}
 	return b.String()
 }

@@ -251,7 +251,14 @@ func (e engine) probe(ctx context.Context, s stepState, step onboard.Step, answe
 	items := make([]probeItem, 0, len(step.Checks))
 	own := map[onboard.CheckID]string{}
 	noURL := onboard.StoreURLMissing(step.ID, answers)
+	noStore := onboard.StoreChecksNotApplicable(step.ID, answers)
 	for _, id := range step.Checks {
+		if noStore && onboard.IsStoreCheck(id) {
+			// no store url belongs to this choice: a result that says so
+			// (every planned check has one), not "no store url yet"
+			own[id] = onboard.SkipNoStoreNeeded
+			continue
+		}
 		if noURL && onboard.IsStoreCheck(id) {
 			own[id] = onboard.SkipNoStoreURL
 			continue
@@ -271,7 +278,11 @@ func (e engine) probe(ctx context.Context, s stepState, step onboard.Step, answe
 	for _, id := range step.Checks {
 		if why, ok := own[id]; ok {
 			c, _ := e.cat.Check(id, step.ID, s.kind, nil)
-			out = append(out, onboard.CheckResult{Check: id, Status: onboard.StatusSkip, Level: c.Level, Detail: why, CheckedAt: e.now()})
+			lvl := c.Level
+			if why == onboard.SkipNoStoreNeeded {
+				lvl = onboard.LevelInfo // nothing to do: a note, not an error-level skip
+			}
+			out = append(out, onboard.CheckResult{Check: id, Status: onboard.StatusSkip, Level: lvl, Detail: why, CheckedAt: e.now()})
 			continue
 		}
 		out = append(out, resultsFor(got, id)...)

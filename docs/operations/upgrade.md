@@ -158,7 +158,7 @@ Status: HEALTHY
 ```
 <!-- /example -->
 
-A step that changed something says `ok` and what it did, with one line per detail under it. Rows migrated in a code repo are never committed by lore (you commit them with your code), so the output ends, just above the status, with the one command to run, for example `1 upgraded file in .lore/data waits for your commit: git add .lore/data && git commit -m "lore: migrate rows to format 2"`.
+A step that changed something says `ok` and what it did, with one line per detail under it. Rows migrated in a code repo are never committed by lore (you commit them with your code), so the output ends, just above the status, with the one command to run, for example `1 upgraded file in .lore/data waits for your commit: git add .lore/data && git commit -m "lore: migrate rows to format 2"`. After the steps, `lore fix` also runs the active setup's checks that `lore doctor` runs (git email, store access and the like; they only read), so the two give one status for the repo: each problem prints as a `warning: setup <name>: …` line with its fix, and each note as `note: setup <name>: …`, which changes nothing in the status. `--dry-run` leaves them out, since it reaches no remote.
 
 - **migrate** rewrites the row files lore 0.1.17 wrote (`_v: 1`), converts every store the repo uses that still has lore 0.1.17's `lore-store.yaml` (also when the repo itself holds no 0.1.17 row) and moves it to the new layout, and finishes an interrupted migration, exactly as `lore migrate run` does (backup ref, team lock, `lore migrate rollback` undoes it). A row a newer lore moved to another store (an org store, say) while this checkout kept its old copy (a row file, a `lore.db` row or a live row) is settled the way the move would have finished: the store whose copy records the move keeps the row, the old copy here becomes a tombstone (a copy edited here after the move is merged into the store's copy first), and each such row gets a `moved rows:` line naming the store.
 - **render** refreshes `.lore/LORE.md` and the tools' files when they are stale, or when the migration just rewrote rows; its lines name the files it wrote. A store the migration just gave its id (`sto_…`) is rendered under that id at once, in `~/.lore/render/<repo id>/sto_….md`; files an earlier run wrote under the store's name (`name-….md`) are removed, and its machine-local audit file `~/.lore/state/audit/name-….jsonl` is folded into `sto_….jsonl` (older entries first), so each store has one name.
@@ -182,9 +182,9 @@ A step that cannot run says why on its line (`FAILED`), the others still run, an
 Builds of 0.1.18 before the plain store layout kept each store as a bare clone plus a linked worktree under `~/.lore/clones/<host>/<owner>/<repo>.git` and `<repo>/work`, with the rows under `<folder>/.lore/data/` and the org config at `org/.lore/lore-org.yaml`. The first command of this lore (any command but `help`, `version`, a `--help` or `-h` call and the git hooks) moves all of it, without asking, and says what it moved:
 
 ```text
-lore: moved store clone ~/.lore/clones/github.com/acme/lore-hub -> ~/.lore/stores/acme/lore-hub (branch main; 1 commit(s) the remote does not have carried)
-lore: moved store clone ~/.lore/clones/work-gh/acme/lore-east -> ~/.lore/stores/acme/lore-east (branch main)
-lore: the old clone folders are left in place; once you have checked the moved clones, `lore doctor` names the command that removes each
+lore: moved store clone ~/.lore/clones/github.com/acme/lore-hub -> ~/.lore/stores/acme/lore-hub (kept 1 local commit)
+lore: moved store clone ~/.lore/clones/work-gh/acme/lore-east -> ~/.lore/stores/acme/lore-east
+lore: old clone folders kept; `lore doctor` names how to remove them once you have checked the moves
 lore: ~/.lore/clones-v017 holds 1 org link clone(s) of the earlier build; this lore no longer uses them (`lore doctor` names the command that removes them)
 lore: pushed store lore-hub: commit 3f2a9c1 to branch main
 lore: store lore-hub: rows moved from <folder>/.lore/data/ to <folder>/ (14 file(s); folders: org, team): commit 8d04e7b
@@ -203,8 +203,8 @@ lore: pushed store lore-hub: commit 8d04e7b to branch main
 lore 0.1.17 kept each store as a bare clone alone, `~/.lore/clones/<host>/<owner>/<repo>.git` (no worktree beside it), and wrote its commits straight into it. The first command of this lore moves each one the same way as above, without the network, and names it as 0.1.17's:
 
 ```text
-lore: moved store clone ~/.lore/clones/github.com/acme/lore-notes.git (lore 0.1.17) -> ~/.lore/stores/acme/lore-notes (branch main)
-lore: moved store clone ~/.lore/clones/github.com/alice/lore-me.git (lore 0.1.17) -> ~/.lore/stores/alice/lore-me (branch main; 2 commit(s) the remote does not have carried)
+lore: moved store clone ~/.lore/clones/github.com/acme/lore-notes.git (0.1.17) -> ~/.lore/stores/acme/lore-notes
+lore: moved store clone ~/.lore/clones/github.com/alice/lore-me.git (0.1.17) -> ~/.lore/stores/alice/lore-me (kept 2 local commits)
 lore: pushed store lore-me: commit 3b0cc44 to branch main
 lore: store lore-me moves to the 0.1.18 layout now: anyone who uses it with lore 0.1.17 (a teammate, or another machine of yours) must upgrade lore.
 lore:   lore 0.1.17 refuses the new layout with E_NOT_A_STORE (its hint to run lore store init is wrong) on every lore write to this store, and its pre-commit hook refuses git commits in repos linked to an org store; they upgrade and run lore fix.

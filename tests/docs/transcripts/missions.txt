@@ -114,7 +114,7 @@ alice (work/website)$ lore plan add --title 'Newsletter plan' --body 'Collect em
 lore: wrote ~/work/website/.lore/data/plans/pln_76bd560aff0771fab8457dbfa9823f10.json
 ✓ pln_76bd560aff0771fab8457dbfa9823f10
 alice (work/website)$ lore plan list
-PL  pln_76bd560aff0771fab8457dbfa9823f10  Newsletter plan [draft]  (0 tasks)
+pln_76bd560aff0771fab8457dbfa9823f10  Newsletter plan [draft]  (0 tasks)
 alice (work/website)$ lore plan search newsletter
 pln_76bd560aff0771fab8457dbfa9823f10 Newsletter plan
 alice (work/website)$ lore plan edit pln_76bd560aff0771fab8457dbfa9823f10 --status approved

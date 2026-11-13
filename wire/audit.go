@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sync"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -383,10 +384,14 @@ func firstErr(es ...error) error {
 
 // noteWrite adds ev's row file to ctx's write log (the command then names
 // it, writelog.go). Machine-local rows (store "machine", agent sessions)
-// are not files a person looks for: `lore where` names their file.
+// are not files a person looks for: `lore where` names their file. A
+// secret.* event (engine.AuditSecret) only names the row it is about (the
+// finding's row, or for `secrets allow --file` the project row): it wrote
+// no file, so it is never listed (W-9: "lore: wrote <project row>" made
+// the person look for a change that was not there).
 func (r *routedAudit) noteWrite(ctx context.Context, ev engine.Event) {
 	l := writeLogOf(ctx)
-	if l == nil || ev.Store == store.SourceMachine || ev.Table == schema.TableSessions {
+	if l == nil || ev.Store == store.SourceMachine || ev.Table == schema.TableSessions || slices.Contains(engine.SecretActions(), ev.Action) {
 		return
 	}
 	w := Written{Store: string(ev.Store)}

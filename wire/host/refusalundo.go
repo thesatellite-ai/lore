@@ -131,5 +131,124 @@ func announceUndo(w io.Writer, undone []string) {
 	if len(undone) == 0 {
 		return
 	}
-	_, _ = fmt.Fprintf(w, "lore: the command was refused, so the git set-up it made first is undone (%s); the next write that goes through sets it up again\n", strings.Join(undone, ", "))
+	_, _ = fmt.Fprintf(w, "lore: the command was refused, so what it changed first is undone (%s); the next write that goes through sets it up again\n", strings.Join(undone, ", "))
+}
+
+// treeSnapshot is the work tree of a repo with unmigrated lore 0.1.17 rows
+// before a write (W-6): a person's first write there runs lore fix's safe
+// steps (migrate, render) before the write itself, and when the write is
+// then refused those rewritten files must go back too. It records the
+// tracked changes already there (git stash create: a commit of them, the
+// tree untouched) and the untracked files with their bytes; restore puts
+// every path that changed since back as it was.
+type treeSnapshot struct {
+	top       string
+	stash     string            // "" when the tree had no tracked change
+	dirty     map[string]bool   // tracked paths changed before the write
+	untracked map[string][]byte // untracked files before the write
+}
+
+// gitIn runs git in dir with lore's clean environment.
+func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	cmd.Env = gitenv.Clean(os.Environ())
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+// statusPaths is `git status --porcelain -z -uall` as tracked-changed and
+// untracked path sets (paths relative to the top).
+func statusPaths(ctx context.Context, top string) (tracked, untracked map[string]bool, err error) {
+	out, err := gitIn(ctx, top, "status", "--porcelain=v1", "-z", "-uall", "--no-renames")
+	if err != nil {
+		return nil, nil, err
+	}
+	tracked, untracked = map[string]bool{}, map[string]bool{}
+	for _, e := range strings.Split(out, "\x00") {
+		if len(e) < 4 {
+			continue
+		}
+		if e[:2] == "??" {
+			untracked[e[3:]] = true
+		} else {
+			tracked[e[3:]] = true
+		}
+	}
+	return tracked, untracked, nil
+}
+
+// takeTreeSnapshot snapshots the work tree of the repo dir is in; nil
+// outside a repo or when git cannot say.
+func takeTreeSnapshot(ctx context.Context, dir string) *treeSnapshot {
+	topOut, err := gitIn(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil
+	}
+	top := strings.TrimSpace(topOut)
+	tracked, untracked, err := statusPaths(ctx, top)
+	if err != nil {
+		return nil
+	}
+	s := &treeSnapshot{top: top, dirty: tracked, untracked: map[string][]byte{}}
+	if len(tracked) > 0 {
+		out, serr := gitIn(ctx, top, "stash", "create")
+		if serr != nil {
+			return nil
+		}
+		s.stash = strings.TrimSpace(out)
+	}
+	for p := range untracked {
+		b, rerr := os.ReadFile(filepath.Join(top, filepath.FromSlash(p)))
+		if rerr != nil {
+			return nil // a file lore cannot read back: never guess
+		}
+		s.untracked[p] = b
+	}
+	return s
+}
+
+// restore puts back every path that changed since the snapshot and
+// returns them: a tracked file to its state then (HEAD, or the stash of
+// the changes it had), a new untracked file removed, an untracked file
+// that existed rewritten with its bytes.
+func (s *treeSnapshot) restore(ctx context.Context) []string {
+	if s == nil {
+		return nil
+	}
+	tracked, untracked, err := statusPaths(ctx, s.top)
+	if err != nil {
+		return nil
+	}
+	var undone []string
+	for p := range tracked {
+		src := "HEAD"
+		if s.dirty[p] {
+			if s.stash == "" {
+				continue
+			}
+			src = s.stash
+		}
+		if !s.dirty[p] || s.stash != "" {
+			if _, cerr := gitIn(ctx, s.top, "checkout", src, "--", p); cerr == nil {
+				undone = append(undone, p)
+			}
+		}
+	}
+	for p := range untracked {
+		full := filepath.Join(s.top, filepath.FromSlash(p))
+		if b, was := s.untracked[p]; was {
+			if cur, rerr := os.ReadFile(full); rerr == nil && string(cur) != string(b) {
+				if os.WriteFile(full, b, 0o644) == nil {
+					undone = append(undone, p)
+				}
+			}
+			continue
+		}
+		if os.Remove(full) == nil {
+			undone = append(undone, p)
+		}
+	}
+	sort.Strings(undone)
+	return undone
 }

@@ -207,11 +207,11 @@ orgs:
     repos: [github.com/client/*]
 alice (work/website)$ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
-lore store init: set up the store clone ~/.lore/stores/agency/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+lore store init: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store agency (sto_c0f3c11a5724b0cfd74b256190d9b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes
 lore store init: store clone ~/.lore/stores/other/notes: git user set to Alice <alice@example.com> (your identity in org freelance)
-lore store init: set up the store clone ~/.lore/stores/other/notes for plain git (pull, commit, push by hand): .git/config: merge.lore.name; .git/config: merge.lore.driver; .git/info/attributes: *.json merge=lore; .git/hooks/pre-commit
+lore store init: store clone ~/.lore/stores/other/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store freelance (sto_76bd560aff0771fab8457dbfa9823f10) at git@github.com:other/notes; recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ cat .lore/stores.yaml
 stores:

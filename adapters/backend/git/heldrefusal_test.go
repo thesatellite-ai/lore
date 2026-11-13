@@ -81,3 +81,29 @@ func TestRowPlace(t *testing.T) {
 		}
 	}
 }
+
+// TestSyncCountsByFolder (bug hunt W-5): one sync of a clone carries every
+// folder's commits; the syncing backend counts only its own folder's rows
+// and reports the others' by folder, so `lore sync` never names a write
+// to one folder under another.
+func TestSyncCountsByFolder(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	base := filepath.Join(t.TempDir(), "clones", "host", "store")
+	open := func(folder string) *Backend {
+		b, err := OpenClone(ctx, remote, base, folder, store.OpenOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = b.Close() })
+		return b
+	}
+	root, org := open(rowfs.FolderRoot), open(rowfs.FolderOrg)
+	g := newGen(t)
+	write(t, org, store.Change{Row: g.row(newID(t), "in org", hlc.HLC{})})
+	rep := syncOK(t, root)
+	if rep.Folder != rowfs.FolderRoot || rep.Sent != 0 || rep.Others[rowfs.FolderOrg].Sent != 1 {
+		t.Fatalf("root's sync report = %+v, want sent 0 and org's 1 row under Others", rep)
+	}
+}
