@@ -19,8 +19,8 @@ Alice:  Yes — decision. Reasons: the client already has an account,
 
 ```bash
 lore decision add \
-    --title="We use Stripe for payments" \
-    --body="Why:
+    --title "We use Stripe for payments" \
+    --body "Why:
 - The client already has a Stripe account.
 - It handles cards, refunds and receipts for us.
 - Setup takes about a day.

@@ -116,7 +116,7 @@ alice (work/website)$ grep -E '"(binary_version|status|rules|memories|sanitized)
   "sanitized": true,
 
 ### pii pattern
-alice (work/website)$ lore secrets rule add invoice-number --regex 'INV-[0-9]{6}' --description 'our invoice numbers' --yes
+alice (work/website)$ lore secrets rule add --id invoice-number --regex 'INV-[0-9]{6}' --description 'our invoice numbers' --yes
 lore: wrote ~/work/website/.lore/data/secret_rules/srl_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ invoice-number added in this repo (srl_…a5b0)
 alice (work/website)$ lore secrets rules
@@ -128,26 +128,26 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (invoice-number) at line 1: sh
 (exit 26)
 
 ### db config
-alice (work/website)$ lore config set default_branch main
+alice (work/website)$ lore config set --key default_branch --value main
 ✓ default_branch = main (~/.lore/config.yaml)
-alice (work/website)$ lore config get default_branch
+alice (work/website)$ lore config get --key default_branch
 main
 alice (work/website)$ lore config list
 default_branch=main
-alice (work/website)$ lore config set team.note 'Ask Bob before changing the build'
+alice (work/website)$ lore config set --key team.note --value 'Ask Bob before changing the build'
 ERROR: [E_INVALID_INPUT] config key "team.note" is not a key lore reads (unknown key, ignored: line 2: team)
   hint: nothing written; team rules are set with `lore policy set`
 (exit 20)
-alice (work/website)$ lore config get color
+alice (work/website)$ lore config get --key color
 ERROR: [E_NOT_FOUND] config key "color" not found
   hint: `lore config list` shows the keys set in ~/.lore/config.yaml
 (exit 27)
 
 ### team policy
-alice (work/website)$ lore policy set trash.retention_days 365 --yes
+alice (work/website)$ lore policy set --key trash.retention_days --value 365 --yes
 lore: wrote ~/work/website/.lore/data/policies/pol_28f8d32584b2db54ffb146bede5b03df.json
 ✓ trash.retention_days = 365 (this repo, pol_…03df)
-alice (work/website)$ lore policy show trash
+alice (work/website)$ lore policy show --id trash
 trash.purge_on_delete	false	default
 trash.retention_days	365	repo this repo (pol_…03df)
 
@@ -231,9 +231,9 @@ lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e
   scope: [master]
 alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'
 .lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
-alice (work/website)$ lore memory delete mem_3b6283bc4392c556bbae5f094246e913 --yes
+alice (work/website)$ lore memory delete --id mem_3b6283bc4392c556bbae5f094246e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
-✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore mem_3b6283bc4392c556bbae5f094246e913)
+✓ mem_3b6283bc4392c556bbae5f094246e913 moved to the trash (restore: lore trash restore --target mem_3b6283bc4392c556bbae5f094246e913)
 alice (work/website)$ lore doctor
 Status: HEALTHY
 Binary: dev
@@ -311,35 +311,35 @@ alice (work/website)$ ls ~/.lore/cache/repo | grep website | sed 's/-[0-9a-f]\{1
 website-<hash>.db
 
 ### config refusals
-alice (work/website)$ lore config set live.autopush maybe
+alice (work/website)$ lore config set --key live.autopush --value maybe
 ERROR: [E_INVALID_INPUT] config key "live.autopush": bad value "maybe" (line 3: live.autopush: expected true or false, got text)
   hint: nothing written; docs/reference/config.md lists every key with its type (a bool is true or false, a duration 45m or 2h)
 (exit 20)
-alice (work/website)$ lore config set policies.trash.retention_days 30
+alice (work/website)$ lore config set --key policies.trash.retention_days --value 30
 ERROR: [E_INVALID_INPUT] config key "policies.trash.retention_days" is a policy key; lore config set does not edit policies:
   hint: nothing written; edit policies: in ~/.lore/config.yaml by hand (it only tightens), or set a team rule with `lore policy set`
 (exit 20)
-alice (work/website)$ lore config set live.autopush true
+alice (work/website)$ lore config set --key live.autopush --value true
 ✓ live.autopush = true (~/.lore/config.yaml)
 alice (work/website)$ lore config check
 ✓ ~/.lore/config.yaml is valid: 0 org entries
 
 ### policy unset
-alice (work/website)$ lore policy set trash.retention_days soon --yes
+alice (work/website)$ lore policy set --key trash.retention_days --value soon --yes
 ERROR: [E_INVALID_INPUT] policy set trash.retention_days: "soon" is not a valid value
   hint: trash.retention_days takes a whole number, 0 or more
 (exit 20)
-alice (work/website)$ lore policy unset trash.retention_days --yes
+alice (work/website)$ lore policy unset --key trash.retention_days --yes
 lore: wrote ~/work/website/.lore/data/policies/pol_28f8d32584b2db54ffb146bede5b03df.json
 ✓ trash.retention_days unset in this repo (pol_…03df); the next level up or the default applies
-alice (work/website)$ lore policy show trash.retention_days
+alice (work/website)$ lore policy show --id trash.retention_days
 trash.retention_days	(unset)	default
 
 ### try settings
 alice (work/website)$ lore config list
 default_branch=main
 live.autopush=true
-alice (work/website)$ lore policy show secrets
+alice (work/website)$ lore policy show --id secrets
 secrets.agent_reveal	ask	default
 secrets.manager_timeout	5	default
 secrets.on_detect	ask	default

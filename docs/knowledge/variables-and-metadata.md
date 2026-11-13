@@ -159,19 +159,17 @@ lore: wrote ~/work/website/.lore/data/task_lists/tlt_c0f3…b5b8.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 — Fix the Safari checkout button [medium]
   created tasklist tlt_c0f3…b5b8 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore meta set --id tsk_76bd…3f10 --pair client=acme
 lore: wrote ~/work/website/.lore/data/meta_keys/mky_d431…313a.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 tasks tsk_…3f10: set client = acme
 new keys in repo: client (text)
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore meta set --id tsk_76bd…3f10 --pair cost_hours:number=3
 lore: wrote ~/work/website/.lore/data/meta_keys/mky_b4f4…a5b0.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 tasks tsk_…3f10: set cost_hours = 3
 new keys in repo: cost_hours (number)
-lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 $ lore meta get --id tsk_76bd…3f10
 client	acme
 cost_hours	3
@@ -203,10 +201,9 @@ added mky_…7ab0 priority_band (text, strict, values low, normal, urgent) to th
 $ lore meta set --id tsk_76bd…3f10 --pair priority_band=urgent
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 tasks tsk_…3f10: set priority_band = urgent
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ lore meta set --id tsk_76bd…3f10 --pair priority_band=asap
 ERROR: [E_META_VALUE] meta: "asap" is not an allowed value of priority_band; allowed: low, normal, urgent
-  hint: lore meta value add priority_band <value>
+  hint: lore meta value add --key priority_band --value <value>
 (exit 20)
 ```
 <!-- /example -->
@@ -224,11 +221,9 @@ $ lore task add --title 'Update the footer links' --meta client=acme && lore tas
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
 ✓ tsk_28f8…03df — Update the footer links [medium]
   on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4c59…6c38.json
 ✓ tsk_4c59…6c38 — Add dark mode [medium]
   on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 $ lore meta set --where client=acme --id billing=monthly --dry-run
 would set billing on 2 rows (tasks 2): tsk_76bd…3f10, tsk_28f8…03df
 dry run: nothing written
@@ -236,9 +231,8 @@ $ lore meta set --where client=acme --id billing=monthly --yes
 lore: wrote ~/work/website/.lore/data/meta_keys/mky_3b62…e913.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
-set billing on 2 rows; batch bat_f147…5139 (undo: lore batch undo bat_f147…5139)
+set billing on 2 rows; batch bat_f147…5139 (undo: lore batch undo --id bat_f147…5139)
 new keys in repo: billing (text)
-lore live: (live, pushed) commit df3a55c to origin refs/lore/live
 $ lore meta export --key client,billing
 id,key,value
 tsk_76bd…3f10,billing,monthly
@@ -273,8 +267,6 @@ priority_band	repo	text	1	asap, low, normal
 $ lore meta rename --id client --new-name customer --rewrite-rows
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 renamed client → customer in the registry; rewrote 3 row labels (batch bat_b69e…5ed7; labels only, no values or dates changed)
-lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
-lore live: landed on main (34ee210); leaves live once main is fetched
 $ lore meta get --id tsk_76bd…3f10
 billing	monthly
 cost_hours	3
@@ -293,8 +285,6 @@ priority_band	urgent
 $ lore meta unset --id tsk_76bd…3f10 --key cost_hours
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 tasks tsk_…3f10: removed cost_hours
-lore live: (live, pushed) commit 7898daa to origin refs/lore/live
-lore live: 4 row(s) left live (main holds them)
 $ lore meta get --id tsk_76bd…3f10
 billing	monthly
 customer	acme

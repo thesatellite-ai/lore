@@ -8,7 +8,7 @@ package wire
 // top-level personal.store, a previous store holding notes stays attached
 // as `me-before` (never a default target: nothing is written there unless
 // a command names it), so its notes keep showing, labelled, until they are
-// moved with `lore move <id> --to me` (a move takes the row out of it,
+// moved with `lore move --id <id> --to me` (a move takes the row out of it,
 // which is why it is not attached read-only).
 
 import (
@@ -142,7 +142,7 @@ func (a *App) previousPersonalNote(_ context.Context, oldValue, value string) st
 	}
 	where := "it is not read by this setup any more; move each note with lore move --id <id> --to me --yes"
 	if previousPersonalURL(home, value) != "" {
-		where = "it stays readable here as store " + PreviousPersonalStore + " (labelled [" + PreviousPersonalStore + "]; nothing new is written there); move each note with lore move <id> --to me --yes (lore memory list --store " + PreviousPersonalStore + " lists them)"
+		where = "it stays readable here as store " + PreviousPersonalStore + " (labelled [" + PreviousPersonalStore + "]; nothing new is written there); move each note with lore move --id <id> --to me --yes (lore memory list --store " + PreviousPersonalStore + " lists them)"
 	}
 	return "setup apply personal_store: the personal store used before (" + old + ") holds " + strconv.Itoa(n) + " note(s) this setup's new store does not have; " + where
 }

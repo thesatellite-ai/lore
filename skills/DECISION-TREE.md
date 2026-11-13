@@ -9,9 +9,9 @@ When the user's intent is ambiguous, walk this tree top-down.
 ```
 Is it a hard CONSTRAINT we should enforce?
 │
-├── Yes, blocking violation         → rule add --severity=must
-├── Yes, warn on violation          → rule add --severity=should
-├── Yes, suggest only               → rule add --severity=may
+├── Yes, blocking violation         → rule add --severity must
+├── Yes, warn on violation          → rule add --severity should
+├── Yes, suggest only               → rule add --severity may
 │
 └── No, it's not a constraint:
     │
@@ -23,7 +23,7 @@ Is it a hard CONSTRAINT we should enforce?
         │
         Do we KEEP HITTING this issue?
         │
-        ├── Yes, loud recurring warning  → hotfix add --severity=high
+        ├── Yes, loud recurring warning  → hotfix add --severity high
         │
         └── No, just a fact:
             │
@@ -42,10 +42,10 @@ Is it a hard CONSTRAINT we should enforce?
 ```
 Is it a discrete unit of work?
 │
-├── Yes, single item                → task add --tasklist=<tlt_id> --priority=<p>
+├── Yes, single item                → task add --tasklist <tlt_id> --priority <p>
 │                                     (tasklist required; create one first if needed)
 │
-├── Yes, multi-item initiative     → mission add  (then task add --tasklist=<tlt_id> --mission=<id>)
+├── Yes, multi-item initiative     → mission add  (then task add --tasklist <tlt_id> --mission <id>)
 │
 ├── Multi-phase plan with intent   → plan add
 │
@@ -53,8 +53,8 @@ Is it a discrete unit of work?
     │
     Recurring?
     │
-    ├── Yes  → reminder add --due=<next> --recurrence=<7d|30d|1m|3m|6m|1y>
-    └── No   → reminder add --due=YYYY-MM-DD
+    ├── Yes  → reminder add --due <next> --recurrence <7d|30d|1m|3m|6m|1y>
+    └── No   → reminder add --due YYYY-MM-DD
 ```
 
 ## "I want to find something"
@@ -64,7 +64,7 @@ Do I know which entity kind?
 │
 ├── Yes:
 │   │
-│   Just one row?  → lore <kind> show <id>
+│   Just one row?  → lore <kind> show --id <id>
 │   Multiple?      → lore <kind> list --json
 │   Substring?     → lore memory search "<q>" --json   (FTS5 BM25)
 │
@@ -110,8 +110,8 @@ Just regenerate?           → lore render
                               hybrid: pins only directive + must-rules
                               + critical/high hotfixes; everything else via search)
 Preview without writing?   → lore render --dry-run        (prints the .lore/LORE.md body)
-Different pointer file?    → lore render --target=AGENTS.md
-Different generated path?  → lore render --out=docs/LORE.md
+Different pointer file?    → lore render --target AGENTS.md
+Different generated path?  → lore render --out docs/LORE.md
 Generated file only?       → lore render --no-pointer
 Different scope?           → cd <repo> && lore render
 ```
@@ -157,34 +157,34 @@ What version?          → lore version --json
 ```
 intent                     command
 ─────────────────────────  ─────────────────────────
-hard rule                  rule add --severity=must|should|may
+hard rule                  rule add --severity must|should|may
 choice with rationale      decision add --title= --body=
-recurring warning          hotfix add --severity=…
+recurring warning          hotfix add --severity …
 plain fact                 memory add
 code template              pattern add
 procedure                  playbook add
 prompt                     prompt add
-work item                  task add --tasklist=… --priority=… --mission=… [--plan=… --assigned-to=…]  (tasklist required)
+work item                  task add --tasklist … --priority … --mission … [--plan … --assigned-to …]  (tasklist required)
 initiative                 mission add
 multi-phase plan           plan add
-reminder                   reminder add --due=… [--recurrence=…]
-label                      tag attach --on-table=… --on-id=… --tag=…
-note                       comment add --on-table=… --on-id=…
+reminder                   reminder add --due … [--recurrence …]
+label                      tag attach --on-table … --on-id … --tag …
+note                       comment add --on-table … --on-id …
 search (memory only)       memory search "<q>" --json
 search (any entity)        <kind> search "<q>" --json   (23 entities: task/rule/decision/hotfix/pattern/playbook/prompt/architecturenote/behaviour/cookbookrecipe/incident/suggestion/tastepref/snapshot/handoff/mission/tasklist/plan/workflow/workspace/techdoc/comment)
 search syntax              auth*  /  "exact phrase"  /  redis OR cache  /  auth NOT login
-search index admin         search status (drift health) | search rebuild [--kind=<e>]
+search index admin         search status (drift health) | search rebuild [--kind <e>]
 list / show                memory list | memory show <id>  (and `<kind> list / show` for every entity)
 post-upgrade migrate       nothing to run (cache + search index rebuild themselves); v0.1.17 data: a person runs migrate run [--dry-run] once, after every teammate upgraded (never automatic; E_FORMAT_OLD until then)
-edit in place              <kind> edit <id> --field=…  (16 entities; only flags you pass are applied)
-move/reparent task         task edit <id> --tasklist=… --mission=… --plan=… --assigned-to=… (+ --clear-* for nullable fields)
+edit in place              <kind> edit --id <id> --field …  (16 entities; only flags you pass are applied)
+move/reparent task         task edit --id <id> --tasklist … --mission … --plan … --assigned-to … (+ --clear-* for nullable fields)
 archive (soft-delete)      <kind> archive <id>  (memory|rule|decision|hotfix|pattern|playbook|prompt|project|repo)
 unarchive                  <kind> unarchive <id>
-supersede with audit       <kind> add ... --supersedes=<old_id>  (memory|rule|decision|hotfix|pattern)
+supersede with audit       <kind> add ... --supersedes <old_id>  (memory|rule|decision|hotfix|pattern)
 invalidate (bitemporal)    memory invalidate <id>  (sets valid_until=now; preserves history)
 pause/resume mission       mission pause <id> | mission resume <id>
 ack handoff                handoff ack <id>
-install agent directive    directive install [--target=CLAUDE.md,AGENTS.md]
+install agent directive    directive install [--target CLAUDE.md,AGENTS.md]
 inspect render             why-context
 recompile context          render
 diagnose                   doctor

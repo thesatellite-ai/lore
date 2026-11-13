@@ -283,7 +283,7 @@ A **tie** (two setups with the same glob, or two setups of one org matching by o
 # tomas, in lab
 $ lore task add --title 'renew the certificate'
 ERROR: [E_SETUP_AMBIGUOUS] ~/work/lab matches setups agency and personal equally; make one folder glob more specific (lore setup edit) or run with --setup
-  hint: lore setup edit agency --folder <a more specific glob>, or --setup agency
+  hint: lore setup edit --name agency --folder <a more specific glob>, or --setup agency
 (exit 21)
 $ lore task list
 (no tasks)
@@ -316,8 +316,8 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: ag
 ```console
 # tomas, in agency/site
 $ lore --setup personal memory add --to me --body 'Renew the domain in March.'
-ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit personal --personal-store <url>
-  hint: --to repo, --to <org store>, or lore setup edit personal --personal-store <url>
+ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit --name personal --personal-store <url>
+  hint: --to repo, --to <org store>, or lore setup edit --name personal --personal-store <url>
 (exit 20)
 ```
 <!-- /example -->
@@ -331,12 +331,12 @@ If an admin added you ([Adding your staff](members.md)), run `lore setup join --
 <!-- example: guided-setup#invite-and-join -->
 ```console
 # tomas, in agency/site
-$ lore team invite --email mira@agency.example
+$ lore team invite mira@agency.example
 lore: pushed store agency/org: commit 601d285 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
 Send this to mira@agency.example (it holds no secret):
-  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+  lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 
 # mira, in ~
 $ lore setup join --invite "$INVITE" --json | python3 -m json.tool | sed -n '/"invite": {/,/}/p'

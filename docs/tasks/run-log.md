@@ -24,7 +24,7 @@ lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 — Fix the typo on the pricing page [medium]
   created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 ```
 <!-- /example -->
 
@@ -50,7 +50,6 @@ run_162d…9666 started
 $ lore run end --id run_162d…9666 --outcome success --summary 'The price now says 19'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 run_162d…9666 ended  (10m 0s)
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -97,8 +96,7 @@ Work done away from lore (a phone call, a meeting) is logged with `lore task tim
 $ lore task time log --id tsk_2ad3…f891 --duration 30m --note 'Call with the client about the prices'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ logged tme_05e9…4603  30m  for alice  on 2026-11-02
-  hint: this overlaps run time 2026-11-02T10:00:10.000Z to 2026-11-02T10:10:10.000Z (tme_c0f3…b5b8); if it is the same work, remove one: lore task time rm tme_05e9…4603
-lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
+  hint: this overlaps run time 2026-11-02T10:00:10.000Z to 2026-11-02T10:10:10.000Z (tme_c0f3…b5b8); if it is the same work, remove one: lore task time rm --id tme_05e9…4603
 $ lore task time show --id tsk_2ad3…f891
 tsk_2ad3…f891  Fix the typo on the pricing page   (todo)
 effort   40m     elapsed  10m     manual  30m   (included in effort)
@@ -119,7 +117,6 @@ The hint is lore noticing that the new entry overlaps the run's span. If both ar
 $ lore task time edit --id tme_05e9…4603 --duration 45m
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ updated tme_05e9…4603  manual  45m (was 30m)
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ lore task time show --id tsk_2ad3…f891
 tsk_2ad3…f891  Fix the typo on the pricing page   (todo)
 effort   55m     elapsed  10m     manual  45m   (included in effort)
@@ -136,11 +133,9 @@ alice                         10m       45m       55m       2026-11-02 10:25
 $ lore task time rm --id tme_05e9…4603 --yes
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ removed tme_05e9…4603
-lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 $ lore task time restore --id tme_05e9…4603
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ restored tme_05e9…4603
-lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -154,11 +149,9 @@ While a task is `in_progress`, time runs for whoever started it. `lore task time
 $ lore task start --id tsk_2ad3…f891
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 started
-lore live: (live, pushed) commit df3a55c to origin refs/lore/live
 $ lore task time stop --id tsk_2ad3…f891
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ stopped your time on tsk_2ad3…f891  (20m, entry tme_76bd…3f10); status stays in_progress
-lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
 $ lore task time show --id tsk_2ad3…f891
 tsk_2ad3…f891  Fix the typo on the pricing page   (in_progress)
 effort   1h 15m     elapsed  30m     manual  45m   (included in effort)

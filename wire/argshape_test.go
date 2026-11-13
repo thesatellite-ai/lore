@@ -163,3 +163,40 @@ func TestFieldTakesOneFlagEverywhere(t *testing.T) {
 		}
 	}
 }
+
+// pageFlags are the shared paging flags every list takes (op.PageFlags):
+// JSON field → canonical flag.
+var pageFlags = map[string]string{"limit": "limit", "page": "page"}
+
+// TestEveryListPages (T-4): every *.list operation takes --limit and
+// --page as int flags, the same way. Found in a migration trial: `lore
+// search --limit` worked while `lore task list --limit` and `lore memory
+// list --limit` were refused as an unknown flag. A list input embeds
+// op.PageFlags (Invoke cuts the rows), or pages itself with the same two
+// fields (trash list); either way a new list command is checked here the
+// day it lands.
+func TestEveryListPages(t *testing.T) {
+	t.Parallel()
+	a := newTestApp(t, t.TempDir())
+	lists := 0
+	for _, e := range a.Registry().Entries() {
+		name := e.Spec().Name
+		if !strings.HasSuffix(name, ".list") {
+			continue
+		}
+		lists++
+		for field, flag := range pageFlags {
+			i := slices.IndexFunc(e.InputFields(), func(f op.FieldInfo) bool { return f.Name == field })
+			if i < 0 {
+				t.Errorf("%s: no --%s; every list takes --limit and --page (embed op.PageFlags in its input)", name, flag)
+				continue
+			}
+			if f := e.InputFields()[i]; f.Flag != flag || f.Type != op.TypeInt || f.Arg != op.NoArg {
+				t.Errorf("%s: field %q is --%s (%s, arg %d); want the int flag --%s of op.PageFlags", name, field, f.Flag, f.Type, f.Arg, flag)
+			}
+		}
+	}
+	if lists < 50 {
+		t.Fatalf("found %d *.list operations; the registry walk is broken", lists)
+	}
+}

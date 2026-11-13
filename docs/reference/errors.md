@@ -261,7 +261,7 @@ lore: wrote ~/work/website/.lore/data/rules/rul_4c59…6c38.json
   scope: [master] severity: must
 $ lore meta unset --id rul_4c59…6c38 --key client_tier
 ERROR: [E_META_UNKNOWN] rul_4c59…6c38 has no metadata key "client_tier"; it has no metadata
-  hint: lore meta show rul_4c59…6c38 lists its keys
+  hint: lore meta show --id rul_4c59…6c38 lists its keys
 (exit 20)
 ```
 <!-- /example -->

@@ -6,15 +6,15 @@ stores:
   agency      git@github.com:agency/notes          false      main    false     org     internal    local_copy  
   agency/org  git@github.com:agency/notes  org     false      main    false     org     internal    local_copy  
 count: 2
-tomas (work/clients)$ lore store folder add team client_north
+tomas (work/clients)$ lore store folder add --store team --folder client_north
 ✓ created folder client_north in agency (prj_7a670ae8548ed05bf57ad29ad0759504; shown only in repos that attach it)
-tomas (work/clients)$ lore store folder add team client_south
+tomas (work/clients)$ lore store folder add --store team --folder client_south
 ✓ created folder client_south in agency (prj_2ad3618e878ebbf527d34d446ef4f891; shown only in repos that attach it)
-tomas (work/clients)$ lore store folder add git@github.com:agency/notes client_east
+tomas (work/clients)$ lore store folder add --store git@github.com:agency/notes --folder client_east
 ✓ created folder client_east in agency (prj_162df51b7f78b785c97c26b41ea89666; shown only in repos that attach it)
 
 ### list the folders
-tomas (work/clients)$ lore store folder list team
+tomas (work/clients)$ lore store folder list --store team
 store agency folders:
   FOLDER        ID                                    CREATED BY   CREATED               ATTACHED HERE  ROWS
   client_east   prj_162df51b7f78b785c97c26b41ea89666  Tomas Weber  2026-11-02T10:00:20Z  no             0
@@ -22,24 +22,24 @@ store agency folders:
   client_south  prj_2ad3618e878ebbf527d34d446ef4f891  Tomas Weber  2026-11-02T10:00:15Z  no             0
 
 ### names that need a repo
-tomas (work/clients)$ lore store folder add golang tips
+tomas (work/clients)$ lore store folder add --store golang --folder tips
 ERROR: [E_NOT_FOUND] store folder add: no store named golang here: golang would come from a repo's .lore/stores.yaml, and ~/work/clients is not inside a git repo
   hint: here name team, agency, git@github.com:agency/notes; or cd into the repo whose .lore/stores.yaml attaches golang
 (exit 27)
-tomas (work/clients)$ lore store add golang git@github.com:agency/notes
+tomas (work/clients)$ lore store add --name golang --url git@github.com:agency/notes
 ERROR: [E_NOT_A_STORE] store add: it edits a repo's .lore/stores.yaml, and ~/work/clients is not inside a git repo
-  hint: cd into the repo that should attach the store; outside a repo, `lore store folder add team <folder>` and `lore store list` work from the setup alone (`lore store init me` makes the personal store)
+  hint: cd into the repo that should attach the store; outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)
 (exit 19)
 
 ### a client repo attaches one
-tomas (work/clients/north-web)$ lore org link agency --project client_north --yes
+tomas (work/clients/north-web)$ lore org link --org agency --project client_north --yes
 lore: pushed store github.com/agency/notes: commit 601d285 to branch main
 This marks github.com/client/north-web as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_north/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe984c9b495744c0217776765a28f2 at github.com/client/north-web → github.com/agency/notes@main:client_north/ (default=false)
 ✓ github.com/client/north-web (prj_54fe984c9b495744c0217776765a28f2) linked to github.com/agency/notes client_north/ (pushed)
   nothing was written to this repo
-tomas (work/clients/north-web)$ lore store folder list team
+tomas (work/clients/north-web)$ lore store folder list --store team
 store agency folders:
   FOLDER        ID                                    CREATED BY   CREATED               ATTACHED HERE  ROWS
   client_east   prj_162df51b7f78b785c97c26b41ea89666  Tomas Weber  2026-11-02T10:00:20Z  no             0
@@ -47,14 +47,14 @@ store agency folders:
   client_south  prj_2ad3618e878ebbf527d34d446ef4f891  Tomas Weber  2026-11-02T10:00:15Z  no             0
 
 ### a client repo with no lore files
-tomas (work/clients/south-app)$ lore org link agency --project client_south --yes
+tomas (work/clients/south-app)$ lore org link --org agency --project client_south --yes
 lore: pushed store github.com/agency/notes: commit 86dbae4 to branch main
 This marks github.com/client/south-app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_south/,
 and the leak guards turn on for everyone in agency.
   link: project prj_05e99e22e9e86e96fe4daa7777994603 at github.com/client/south-app → github.com/agency/notes@main:client_south/ (default=false)
 ✓ github.com/client/south-app (prj_05e99e22e9e86e96fe4daa7777994603) linked to github.com/agency/notes client_south/ (pushed)
   nothing was written to this repo
-tomas (work/clients/south-app)$ lore task add 'set up the staging deploy'
+tomas (work/clients/south-app)$ lore task add --title 'set up the staging deploy'
 lore: pushed store agency: commit 9b40ce7 to branch main
 lore: pushed store agency: commit 05513aa to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
@@ -69,19 +69,19 @@ tomas (work/clients/south-app)$ git status --short --ignored && ls -A
 README.md
 
 ### adopt a whole repo
-tomas (work/clients)$ lore store adopt team/client_east --from east-api --dry-run
+tomas (work/clients)$ lore store adopt --target team/client_east --from east-api --dry-run
 would adopt 5 rows of ~/work/clients/east-api into agency/client_east (prj_162df51b7f78b785c97c26b41ea89666), ids and HLCs kept
   actors 1, memories 1, policies 1, task_lists 1, tasks 1
   from the repo's live ref (refs/lore/live): 2
   left in the repo: projects: 1 row (the folder is its own project)
   left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
-tomas (work/clients)$ lore store adopt team/client_east --from east-api --yes
+tomas (work/clients)$ lore store adopt --target team/client_east --from east-api --yes
 ✓ adopted 5 rows of ~/work/clients/east-api into agency/client_east (prj_162df51b7f78b785c97c26b41ea89666), ids and HLCs kept
   actors 1, memories 1, policies 1, task_lists 1, tasks 1
   from the repo's live ref (refs/lore/live): 2
   left in the repo: projects: 1 row (the folder is its own project)
   left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
-tomas (work/clients)$ lore store adopt team/client_east --from east-api --yes
+tomas (work/clients)$ lore store adopt --target team/client_east --from east-api --yes
 ✓ nothing to adopt: agency/client_east already holds every row of ~/work/clients/east-api (no commit)
   already there: 5 unchanged, 0 newer or deleted in the folder (kept)
   left in the repo: projects: 1 row (the folder is its own project)
@@ -89,11 +89,11 @@ tomas (work/clients)$ lore store adopt team/client_east --from east-api --yes
 tomas (work/clients/east-api)$ git status --short
 
 ### remove a folder made by mistake
-tomas (work/clients)$ lore store folder add team client_old
+tomas (work/clients)$ lore store folder add --store team --folder client_old
 ✓ created folder client_old in agency (prj_d4314eba822f1bf5908b2b8ded5f313a; shown only in repos that attach it)
-tomas (work/clients)$ lore store folder remove team client_old --yes
+tomas (work/clients)$ lore store folder remove --store team --folder client_old --yes
 ✓ removed folder client_old (prj_d4314eba822f1bf5908b2b8ded5f313a) from agency
-tomas (work/clients)$ lore store folder remove team client_north --yes
+tomas (work/clients)$ lore store folder remove --store team --folder client_north --yes
 ERROR: [E_REFUSED] store folder remove: folder client_north of agency holds 1 repo link; nothing was removed
-  hint: unlink each repo with `lore org unlink <org> --project client_north` run in that repo; or remove it with everything in it: `lore store folder remove agency client_north --purge` (the rows go to the store's trash first)
+  hint: unlink each repo with `lore org unlink --org <org> --project client_north` run in that repo; or remove it with everything in it: `lore store folder remove --store agency --folder client_north --purge` (the rows go to the store's trash first)
 (exit 23)

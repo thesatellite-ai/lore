@@ -45,7 +45,7 @@ lore memory search --query "pay*"
 
 ```bash
 # Default: the repo you are in (if any) + master (the shared notes every repo sees)
-lore memory search --query "invoice" --repo=app
+lore memory search --query "invoice" --repo app
 
 # All repos
 lore memory search --query "invoice" --all-repos
@@ -54,7 +54,7 @@ lore memory search --query "invoice" --all-repos
 lore memory search --query "invoice" --master-only
 
 # Strict scope (don't include master fallback)
-lore memory search --query "invoice" --repo=app --no-inherit
+lore memory search --query "invoice" --repo app --no-inherit
 
 # Include archived
 lore memory search --query "invoice" --include-archived
@@ -63,8 +63,8 @@ lore memory search --query "invoice" --include-archived
 ## Limits
 
 ```bash
-lore memory search --query "" --limit=5         # last 5 memories
-lore memory search --query "" --limit=0         # unlimited (careful)
+lore memory search --query "" --limit 5         # last 5 memories
+lore memory search --query "" --limit 0         # unlimited (careful)
 ```
 
 ## Empty query = listing

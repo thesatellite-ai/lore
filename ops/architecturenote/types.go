@@ -56,6 +56,8 @@ type ListIn struct {
 	All        bool   `json:"all,omitempty" flag:"all" desc:"every row: every repo's and the archived ones (the default list says how many it hides)"`
 	Project    string `json:"project,omitempty" flag:"project" desc:"only architecturenotes of this project (prj_ id or name)"`
 	Store      string `json:"store,omitempty" flag:"store" alias:"to" desc:"only architecturenotes of this store (default every attached store)"`
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // ListOut is v0.1.17's list envelope.

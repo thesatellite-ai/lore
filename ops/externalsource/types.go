@@ -2,6 +2,7 @@ package externalsource
 
 import (
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
 	"strings"
 	"time"
@@ -34,6 +35,8 @@ type ListIn struct {
 
 	Project string `json:"project,omitempty" flag:"project" desc:"only sources of this project (prj_ id or name)"`
 	Store   string `json:"store,omitempty" flag:"store" alias:"to" desc:"only sources of this store (default every attached store)"`
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // ListOut is v0.1.17's list envelope.

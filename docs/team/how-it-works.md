@@ -57,8 +57,8 @@ Live always wins over branch data. So you see a teammate's edit on live, whateve
 # alice, in billing
 $ lore explain --id tsk_54fe…28f2
 tsk_54fe…28f2 in ~/work/billing (folder _root)
-  fetched 50s ago
-  live (local 6d00426): row, live since 2026-11-02T10:00:15Z, hlc 2026-11-02T10:00:40.000Z/0000/act_7a67…9504
+  fetched 35s ago
+  live (local 34ee210): row, live since 2026-11-02T10:00:25Z, hlc 2026-11-02T10:00:55.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: present
   wins: the live copy (rule 4: if a row id is in live, live wins)
@@ -93,12 +93,16 @@ Each lore command fetches once: one `git fetch` gets live, signals and `main` to
 
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console
+# bob, in billing
+$ lore sync
+lore live: pushed waiting live writes commit cf563f3 to origin refs/lore/live
+lore live: 1 row(s) left live (main holds them)
+lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
+lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
+
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
-$ lore sync && lore task list --mine
-· already in sync
-○ tsk_54fe…28f2 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
 
@@ -128,7 +132,7 @@ lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
 lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
   created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
-lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore live diff
 local     86dbae476bd6
 tracking  (none)
@@ -136,7 +140,6 @@ seen      (none)
 pending   2 write(s) not confirmed by the remote
   _root/task_lists/tlt_05e9…4603.json
   _root/tasks/tsk_54fe…28f2.json
-lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 ```
 <!-- /example -->
 
@@ -193,22 +196,25 @@ A **protected branch** is one GitHub only lets you change through a pull request
 
 <!-- example: small-team#protected-main only=2,4,5 -->
 ```console
+# bob, in billing
+$ lore sync
+lore live: pushed waiting live writes commit 51886a5 to origin refs/lore/live
+lore live: 2 row(s) left live (main holds them)
+lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
+lore live: pushed waiting live writes commit 22efc3b to origin refs/lore/live
+
 # alice, in billing
-$ lore sync >/dev/null && lore task done --id tsk_c0f3…b5b8
-lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
-✓ tsk_c0f3…b5b8 done
-  learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
+$ lore sync
+lore live: pushed waiting live writes commit 8c373dc to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
-$ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
-lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
-[feat/login 22efc3b] fix login timeout
- 1 file changed, 1 insertion(+)
- create mode 100644 login.txt
-$ git log --oneline -3
-8c373dc lore: land 1 row (_root)
-22efc3b fix login timeout
-df3a55c fix the checkout page on phones
+$ lore explain --id tsk_c0f3…b5b8
+tsk_c0f3…b5b8 in ~/work/billing (folder _root)
+  fetched 5s ago
+  live (local 8c373dc): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
+  this branch (HEAD): not present
+  origin/main: not present
+  wins: the live copy (rule 4: if a row id is in live, live wins)
+  land: waits: main is protected; rides on your next push
 ```
 <!-- /example -->
 
@@ -241,7 +247,7 @@ $ lore live compact
 ✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
 epoch 2
-9b40ce7 2026-11-02 alice  lore: live compact (epoch 2)
+601d285 2026-11-02 alice  lore: live compact (epoch 2)
 ```
 <!-- /example -->
 
@@ -341,7 +347,7 @@ Claims for tasks of a linked client repo sit on the **store's** signals list, ne
    3. merge_check.adapter: github → gh pr view <n>
  found     → merged_at = the merge commit's date, written once
  not found → "done, not merged yet"
- no commit, no trailer, no adapter → "done (merge unknown)"; `lore task merged <id>` marks it by hand
+ no commit, no trailer, no adapter → "done (merge unknown)"; `lore task merged --id <id>` marks it by hand
 ```
 
 If the linked store cannot be reached, the command still runs and prints `lore: warning: merge state not checked: <reason>; done tasks may show as not merged yet (the next lore command retries)`.
@@ -385,7 +391,7 @@ lore: pushed store agency: commit ef62c83 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
-  read its notes: lore task show tsk_54fe…28f2
+  read its notes: lore task show --id tsk_54fe…28f2
 ```
 <!-- /example -->
 
@@ -508,7 +514,7 @@ The guards catch copy-paste mistakes; they are not a wall. See [Cleaning up afte
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2630 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (2693 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
 ✓ private context → ~/.lore/render/rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks

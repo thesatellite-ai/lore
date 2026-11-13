@@ -36,7 +36,7 @@ func (a *App) DoctorIdentityContacts(ctx context.Context) ([]DoctorFinding, erro
 		out = append(out, DoctorFinding{Check: DoctorCheckIdentityContacts, Level: DoctorWarning,
 			Message: "identity contact " + d.Key.String() + " is held by " + in.displays(d.Actors) + " (contacts " + strings.Join(rows, ", ") +
 				"): it resolves to nobody until one person keeps it",
-			Fix: "lore actor contact remove <acn_id> on the wrong person (lore actor show --id " + d.Key.String() + " lists them)"})
+			Fix: "lore actor contact remove --id <acn_id> on the wrong person (lore actor show --id " + d.Key.String() + " lists them)"})
 	}
 	return out, nil
 }

@@ -59,15 +59,15 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
       fix: Optional: install gh and run gh auth login so lore can check that agency/notes is private
 setup personal (solo) ─ ~/work/personal/**
   ⚠ identity    tomas@home.example
-  – github      no GitHub account in this setup (lore setup apply personal --step github)
+  – github      no GitHub account in this setup (lore setup apply --setup personal --step github)
   – secrets     none
   ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
-      fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
+      fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit --name personal --folder <glob>
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
-  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit act_7a67…9504 --role admin)
+  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
 2 setups · 23 ok · 6 warnings · 0 errors → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
@@ -98,15 +98,15 @@ To find which alias logs in as which account, `github.key_matches` asks every `H
 $ lore doctor --all --setup personal
 setup personal (solo) ─ ~/work/personal/**
   ⚠ identity    tomas@home.example
-  – github      no GitHub account in this setup (lore setup apply personal --step github)
+  – github      no GitHub account in this setup (lore setup apply --setup personal --step github)
   – secrets     none
   ⚠ identity.actor_copies  Tomas Weber (act_7a67…9504) in repo has "tomas", agency/org says "Tomas Weber"
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
-      fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit personal --folder <glob>
+      fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit --name personal --folder <glob>
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
-  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit act_7a67…9504 --role admin)
+  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
 1 setup · 7 ok · 4 warnings · 0 errors → degraded (exit 1)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)
@@ -140,10 +140,10 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
       fix: gh auth login --hostname github.com
   ℹ store.private  agency: gh is not logged in, so lore cannot check whether agency/notes is private
       fix: Optional: install gh and run gh auth login so lore can check that agency/notes is private
-      repair: lore setup repair agency
+      repair: lore setup repair --name agency
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
-  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit act_7a67…9504 --role admin)
+  - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
 1 setup · 15 ok · 4 warnings · 2 errors → broken (exit 2)
 Context:
   - context: .lore/LORE.md not rendered yet (lore render)

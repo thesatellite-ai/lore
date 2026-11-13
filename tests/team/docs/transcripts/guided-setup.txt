@@ -136,25 +136,25 @@ active: agency (default: true)
 This folder: no org, no attached store, written as Tomas Weber <tomas@agency.example> — no setup matches (the default setup agency is for org agency, this repo is no org); lore setup offers a solo setup lab from this repo
 
 ### tie
-tomas$ lore setup edit personal --folder '~/work/**'
+tomas$ lore setup edit --name personal --folder '~/work/**'
 name: personal
 changed: true
-tomas$ lore setup edit agency --folder '~/work/**'
+tomas$ lore setup edit --name agency --folder '~/work/**'
 ERROR: [E_SETUP_AMBIGUOUS] setup edit: --folder ~/work/** ties with personal ~/work/**
-  hint: make one folder glob more specific than the other setup's; nothing was saved, run lore setup edit agency again
+  hint: make one folder glob more specific than the other setup's; nothing was saved, run lore setup edit --name agency again
 (exit 21)
-tomas (work/lab)$ lore task add 'renew the certificate'
+tomas (work/lab)$ lore task add --title 'renew the certificate'
 ERROR: [E_SETUP_AMBIGUOUS] ~/work/lab matches setups agency and personal equally; make one folder glob more specific (lore setup edit) or run with --setup
-  hint: lore setup edit agency --folder <a more specific glob>, or --setup agency
+  hint: lore setup edit --name agency --folder <a more specific glob>, or --setup agency
 (exit 21)
 tomas (work/lab)$ lore task list
 (no tasks)
-tomas$ lore setup edit agency --folder '~/work/agency/**'
+tomas$ lore setup edit --name agency --folder '~/work/agency/**'
 name: agency
 changed: true
 
 ### unknown name
-tomas (work/agency/site)$ lore --setup nope task add 'check the sitemap'
+tomas (work/agency/site)$ lore --setup nope task add --title 'check the sitemap'
 ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: agency, personal
   hint: lore setup list
 (exit 27)
@@ -165,8 +165,8 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: ag
 
 ### no personal store
 tomas (work/agency/site)$ lore --setup personal memory add --to me --body 'Renew the domain in March.'
-ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit personal --personal-store <url>
-  hint: --to repo, --to <org store>, or lore setup edit personal --personal-store <url>
+ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit --name personal --personal-store <url>
+  hint: --to repo, --to <org store>, or lore setup edit --name personal --personal-store <url>
 (exit 20)
 
 ### invite and join
@@ -175,8 +175,8 @@ lore: pushed store agency/org: commit 601d285 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
 ✓ invite inv_7a670ae8548ed05bf57ad29ad0759504 written to store agency (expires 2026-11-16)
 Send this to mira@agency.example (it holds no secret):
-  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
-mira$ lore setup join "$INVITE" --json | python3 -m json.tool | sed -n '/"invite": {/,/}/p'
+  lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+mira$ lore setup join --invite "$INVITE" --json | python3 -m json.tool | sed -n '/"invite": {/,/}/p'
     "invite": {
         "v": 1,
         "id": "inv_7a670ae8548ed05bf57ad29ad0759504",
@@ -189,7 +189,7 @@ mira$ lore setup join "$INVITE" --json | python3 -m json.tool | sed -n '/"invite
     },
 
 ### fix
-tomas (work/agency/site)$ lore setup fix agency --check github.gh_account
+tomas (work/agency/site)$ lore setup fix --setup agency --check github.gh_account
 ERROR: [E_FIX_REFUSED] fix for github.gh_account refused: fix is not runnable; do it by hand: gh is optional; it only speeds up checks and lets lore offer 'create repo'. To add: gh auth login --hostname github.com
   hint: run lore setup check to see the fix text and do it by hand
 (exit 20)

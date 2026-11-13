@@ -163,7 +163,10 @@ type RemoveIn struct {
 }
 
 // ListIn is the (empty) input of store.list.
-type ListIn struct{}
+type ListIn struct {
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
+}
 
 // ListOut is the output of store.list.
 type ListOut struct {

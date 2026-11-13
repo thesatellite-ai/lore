@@ -97,7 +97,7 @@ lore: pushed store agency: commit 2fc021b to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_76bd…3f10.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
 ✓ claimed tsk_162d…9666 send the invite email from the API (lease 20m, token ct_cb04f…) on refs/lore/signals/main
-  read its notes: lore task show tsk_162d…9666
+  read its notes: lore task show --id tsk_162d…9666
 
 # alice, in agents/app
 $ lore agent start --label agent-frontend --owner @alice
@@ -128,7 +128,7 @@ lore: pushed store agency: commit 8c373dc to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_b4f4…a5b0.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
 ✓ claimed tsk_05e9…4603 allow /invite on the proxy (lease 20m, token ct_87f6f…) on refs/lore/signals/main
-  read its notes: lore task show tsk_05e9…4603
+  read its notes: lore task show --id tsk_05e9…4603
 ```
 <!-- /example -->
 
@@ -206,7 +206,7 @@ lore: pushed store agency: commit ef62c83 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
-  read its notes: lore task show tsk_54fe…28f2
+  read its notes: lore task show --id tsk_54fe…28f2
 ```
 <!-- /example -->
 
@@ -258,7 +258,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_2537…6bbb.json (sto
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_d57ca…) on refs/lore/signals/main; reclaim, attempt 2; previous holder agent-frontend timed out
   work branch agent-frontend/invite-route
-  read its notes: lore task show tsk_54fe…28f2
+  read its notes: lore task show --id tsk_54fe…28f2
 $ git fetch -q origin agent-frontend/invite-route && git log --oneline -1 FETCH_HEAD
 f4b8da2 invite page
 
@@ -310,7 +310,7 @@ Now the deploy task is ready except for its gate. The coordinator stops there. A
 $ lore task next --mission msn_2ad3…f891 --role coordinator
 lore: the command was refused, so what it changed first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_NO_WORK] nothing ready:
-  tsk_c0f3…b5b8 deploy to staging: gate needs approval (lore gate approve tsk_c0f3…b5b8)
+  tsk_c0f3…b5b8 deploy to staging: gate needs approval (lore gate approve --id tsk_c0f3…b5b8)
   hint: lore task board shows what each task waits on
 (exit 10)
 $ lore gate approve --id tsk_c0f3…b5b8
@@ -330,7 +330,7 @@ $ lore task next --mission msn_2ad3…f891 --role coordinator
 lore: pushed store agency: commit 2d20e76 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ claimed tsk_c0f3…b5b8 deploy to staging (lease 20m, token ct_3de87…) on refs/lore/signals/main
-  read its notes: lore task show tsk_c0f3…b5b8
+  read its notes: lore task show --id tsk_c0f3…b5b8
 ```
 <!-- /example -->
 

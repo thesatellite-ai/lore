@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 )
 
@@ -356,7 +357,10 @@ type FixIn struct {
 type FixOut = FixRun
 
 // ListIn is setup.list's input.
-type ListIn struct{}
+type ListIn struct {
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
+}
 
 // SetupSummary is one row of setup.list.
 type SetupSummary struct {
@@ -382,7 +386,7 @@ type SetupSummary struct {
 
 // ListOut is setup.list's output.
 type ListOut struct {
-	Setups []SetupSummary `json:"setups"`
+	Setups []SetupSummary `json:"setups" page:"rows"`
 	Active ActiveSetup    `json:"active"`
 	// Here is the current folder's context (list.go, onboard.ResolveHere);
 	// zero (left out of the JSON) when the env has no HereSource. omitempty
@@ -633,6 +637,8 @@ type TeamInviteListIn struct {
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
 	metalist.Audit
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // InviteRow is one invite in a listing.

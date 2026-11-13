@@ -57,7 +57,7 @@ Delete the row (or edit the key out) before you commit:
 # alice, in website
 $ lore memory delete --id mem_3b62…e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
-✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore --target mem_3b62…e913)
 ```
 <!-- /example -->
 
@@ -100,7 +100,7 @@ $ lore memory add --secret-unstored --body "Mail relay password=$RELAY_PASSWORD"
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 ✓ mem_2ad3…f891
   scope: [master]
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore secrets list --unstored
 REF	HOLDER	USED IN	STATE
 unstored	-	mem_2ad3…f891 body (1)	-
@@ -118,7 +118,7 @@ Once the value is in your manager, `lore secrets link --id <row> --at <n> --ref 
 $ lore secrets link --id mem_2ad3…f891 --at 1 --ref 'gopass://acme/website/mail-relay'
 lore: wrote ~/work/website/.lore/data/memories/mem_2ad3…f891.json
 Replaced ${secret:unstored} #1 in mem_2ad3…f891 body with ${secret:gopass://acme/website/mail-relay?holder=mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff}.
-Its task stays open: rotate the secret, then lore task done <task>.
+Its task stays open: rotate the secret, then lore task done --id <task>.
 $ lore secrets show --id mem_2ad3…f891
 REF	HOLDER	USED IN	STATE
 gopass://acme/website/mail-relay?holder=mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff	mch_017941fe	mem_2ad3…f891 body	-
@@ -208,7 +208,6 @@ lore: wrote ~/work/website/.lore/data/memories/mem_2ad3…f891.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_76bd…3f10.json
 Moved 1 reference in 1 row (batch bat_d431…313a). Added task tsk_c0f3…b5b8 (tasklist secrets, repo).
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore secrets list --holder act_05e9…4603
 REF	HOLDER	USED IN	STATE
 gopass://acme/website/smtp-relay?holder=act_05e9…4603	act_05e99e22	mem_2ad3…f891 body	-
@@ -247,7 +246,7 @@ lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
 ✓ removed sal_…6c38; the finding is reported again on the next scan
 $ lore secrets allow list | grep -c sal_
 1
-$ lore secrets allow --row-id mem_3b62…e913 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
+$ lore secrets allow mem_3b62…e913 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_f147…5139.json
 ✓ github-pat: mem_…e913.body marked not a secret (sal_…5139)
 ```

@@ -190,7 +190,10 @@ func spaced(f string) string { return strings.Replace(f, "=", " ", 1) }
 var printedStart = regexp.MustCompile(`(?:^|[\s(,:;"'])lore\s`)
 
 // proseEnd cuts a printed command where its sentence goes on: at a ";",
-// "," or "." followed by a space or the end (outside quotes), and at a
+// "," or "." followed by a space or the end, at a " (" that opens an aside
+// ("lore move --id <id> --to me --yes (lore memory list … lists them)",
+// G-10: without the cut the span read as one command no parser accepts,
+// and its positional <id> went unreported), outside quotes, and at a
 // double quote that closes the string the command was quoted in ("run
 // \"lore sync trash\" to …"). A literal cut at a flag's "--" (the name is
 // joined on: "… --" + relation) ends there too.
@@ -213,6 +216,8 @@ func proseEnd(code string) string {
 			quote = c
 		case (c == ';' || c == ',' || c == '.') && (i+1 == len(code) || code[i+1] == ' '):
 			return code[:i]
+		case c == '(' && i > 0 && code[i-1] == ' ':
+			return strings.TrimSpace(code[:i])
 		}
 	}
 	return code

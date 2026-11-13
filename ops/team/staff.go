@@ -178,6 +178,8 @@ func (o StaffAddOut) Text() string {
 // StaffListIn is the input of member.list.
 type StaffListIn struct {
 	All bool `json:"all,omitempty" flag:"all" desc:"people who left or are archived too"`
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // StaffListOut is member.list's answer.

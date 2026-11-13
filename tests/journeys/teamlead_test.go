@@ -481,7 +481,7 @@ func TestJourneyTeamLeadUndo(t *testing.T) {
 
 	w.Step("week1/delete-then-restore", func() {
 		w.AdvanceDays(1)
-		tt.lore(tlLee, "memory", "delete", ruleID, "--yes").OK(t).Says(t, "trash restore "+ruleID)
+		tt.lore(tlLee, "memory", "delete", ruleID, "--yes").OK(t).Says(t, "trash restore --target "+ruleID)
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		if tt.body(t, tlAnn, ruleID) != "" {
 			t.Error("Ann still sees the rule the lead deleted")

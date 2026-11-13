@@ -18,11 +18,11 @@ EXTRA_ENV="LORE_READ_ONLY=1" on! alice work/website "lore rule add --body 'Never
 on! alice work/website "lore rule add --read-only --body 'Never put passwords in the code'"
 
 note "exit status"
-on alice work/website "lore task add 'Write the release notes'"
+on alice work/website "lore task add --title 'Write the release notes'"
 first=$(id tsk)
-on alice work/website "lore task add 'Send the release notes to the client' --after $first"
+on alice work/website "lore task add --title 'Send the release notes to the client' --after $first"
 second=$(id tsk)
-on alice work/website "lore task edit $first --after $second; echo \"exit status: \$?\""
+on alice work/website "lore task edit --id $first --after $second; echo \"exit status: \$?\""
 
 note "config check good"
 config alice <<'Y'
@@ -127,7 +127,7 @@ on alice . "cd work/website && lore rule list"
 
 note "db config"
 on alice work/website "lore config list"
-on alice work/website "lore config get default_branch || echo 'not set'"
+on alice work/website "lore config get --key default_branch || echo 'not set'"
 
 # --- default_branch (docs/reference/config.md) -------------------------------------------
 note "default branch"
@@ -136,9 +136,9 @@ config alice <<'Y'
 default_branch: develop
 Y
 on alice . "cat .lore/config.yaml"
-on alice work/website "lore task add 'Fix the footer links'"
+on alice work/website "lore task add --title 'Fix the footer links'"
 local t_footer; t_footer=$(id tsk)
-on alice work/website "lore task done $t_footer"
+on alice work/website "lore task done --id $t_footer"
 on alice work/website "git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1"
 quiet alice . "rm .lore/config.yaml"
 
@@ -166,15 +166,15 @@ orgs:
 Y
 on alice . "cat .lore/config.yaml"
 # 0.1.18: a store is attached to the repo by name (`lore store init <name> <url>`).
-on alice work/website "LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes"
-on alice work/website "LORE_ORG=freelance lore store init freelance git@github.com:other/notes --yes"
+on alice work/website "LORE_ORG=agency lore store init --name agency --url git@github.com:agency/notes --yes"
+on alice work/website "LORE_ORG=freelance lore store init --name freelance --url git@github.com:other/notes --yes"
 on alice work/website "cat .lore/stores.yaml"
 
 note "org use"
 on! alice work/website "lore whoami"
-on alice work/website "lore org use agency"
+on alice work/website "lore org use --entry agency"
 on alice . "grep -A4 repo_orgs ~/.lore/config.yaml"
-on alice work/website "lore org link agency --project client --yes"
+on alice work/website "lore org link --org agency --project client --yes"
 
 note "force org"
 on! alice work/website "LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'"
@@ -246,24 +246,24 @@ quiet alice . "rm .lore/config.yaml"
 
 # --- one refused command per error group (docs/reference/errors.md) ----------------------
 note "sql refused"
-on! alice work/website "lore sql 'DELETE FROM rules'"
+on! alice work/website "lore sql --query 'DELETE FROM rules'"
 
 note "has dependents"
 on alice work/website "lore project list"
-on! alice work/website "lore project delete \$(lore project list | cut -d' ' -f1) --yes"
+on! alice work/website "lore project delete --id \$(lore project list | cut -d' ' -f1) --yes"
 
 note "ref syntax"
-on alice work/website "lore vars set host staging.client.example"
-on! alice work/website "lore vars set base_url 'https://\${var:host?port=8080}/'"
+on alice work/website "lore vars set --name host --value staging.client.example"
+on! alice work/website "lore vars set --name base_url --value 'https://\${var:host?port=8080}/'"
 
 note "meta unknown"
 on alice work/website "lore rule add --body 'Keep the footer links in one list'"
 local r_footer; r_footer=$(id rul)
-on! alice work/website "lore meta unset $r_footer client_tier"
+on! alice work/website "lore meta unset --id $r_footer --key client_tier"
 
 # --- --everywhere is gone: a --to me row shows in every repo (docs/reference/flags.md) ---
 note "personal everywhere"
-on alice work/website "lore store init me"
+on alice work/website "lore store init --name me"
 on! alice work/website "lore memory add --to me --everywhere --body 'I write short commit messages'"
 on alice work/website "lore memory add --to me --body 'I write short commit messages'"
 on alice work/landing "lore memory list"

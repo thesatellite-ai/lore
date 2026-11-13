@@ -105,7 +105,7 @@ func (o ops) metaRetype(ctx context.Context, k located, in MetaEditIn) (RowOut, 
 	b.WriteString(head)
 	if len(bad) > 0 && !in.KeepAsText {
 		return RowOut{}, errs.New(errs.MetaType, fmt.Sprintf("%s: %s not fit %s, nothing written: %s", name, plural.Of(len(bad), "value does", "values do"), nt, strings.Join(bad, ", "))).
-			WithHint("fix those rows (lore meta set --id <id> " + name + "=… or lore meta unset --id <id> " + name + "), or rerun with --keep-as-text to keep them as text values")
+			WithHint("fix those rows (lore meta set --id <id> --pair " + name + "=… or lore meta unset --id <id> --key " + name + "), or rerun with --keep-as-text to keep them as text values")
 	}
 	listed := convs
 	if !in.All && len(listed) > retypeListMax {

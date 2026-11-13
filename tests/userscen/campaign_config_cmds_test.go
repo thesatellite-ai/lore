@@ -216,7 +216,7 @@ func TestCampaignConfig_RepoLifecycle(t *testing.T) {
 	for _, bad := range []string{"my repo", "a/b", "Web", "wéb", strings.Repeat("ü", 300)} {
 		c.Lore("repo", "add", bad).Fails(t, cliExitUsage, "ERROR: [E_INVALID_IDENTIFIER]", "hint: use lowercase letters")
 	}
-	c.Lore("repo", "add").Fails(t, cliExitUsage, "missing required field mount_name", "hint: give mount_name as argument 1")
+	c.Lore("repo", "add").Fails(t, cliExitUsage, "missing required field mount_name", `hint: pass --mount-name "<mount_name>"`)
 
 	c.MustLore("repo", "archive", web.ID).Says(t, "web archived")
 	if r := ccRepos(t, c)["web"]; r.ArchivedAt == "" {

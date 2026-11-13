@@ -1,6 +1,6 @@
 # Concepts
 
-**In short:** this page explains the few words lore uses, one at a time. A row is one note or task. Live rows are shared with everyone at once, before any merge. A store is a separate private repo for notes. An org is your company's setup. Your identity is your email.
+**In short:** this page explains the few words lore uses, one at a time. A row is one note or task. Live rows are shared with everyone on any branch, before any merge, as soon as you run `lore sync` or your next `git push`. A store is a separate private repo for notes. An org is your company's setup. Your identity is your email.
 
 Each section covers one idea, most with a diagram. The words in **bold** are the names lore uses in its output and errors.
 
@@ -72,7 +72,7 @@ Lore keeps rows in three places in a repo. They differ in **when** others see a 
 
 **Branch data** is what lore always had: rows in `.lore/data` on the branch you are on. A rule you add on `feat/x` stays on `feat/x` until the branch merges.
 
-**Live rows** are rows written to a hidden list on GitHub that is not a branch: the hidden ref `refs/lore/live`. Git's checkout never touches that ref, so switching branches does not hide them. Lore pushes and fetches it by itself. If a row id exists in live, **the live copy wins**, always. Tasks, missions, handoffs and comments are live by default. Any other row is live when you pass `--live`. `--no-live` keeps a row with the code.
+**Live rows** are rows written to a hidden list on GitHub that is not a branch: the hidden ref `refs/lore/live`. Git's checkout never touches that ref, so switching branches does not hide them. Lore fetches it by itself; it pushes it on `lore sync` or your next `git push` (or after every write with `live.autopush: true`). If a row id exists in live, **the live copy wins**, always. Tasks, missions, handoffs and comments are live by default. Any other row is live when you pass `--live`. `--no-live` keeps a row with the code.
 
 **Signals** are short-lived facts: "`agent-backend` holds this task until 10:20", a heartbeat (an agent's "I am still here"), a hold on the shared test suite. They sit on `refs/lore/signals`, which is replaced in place. It is always exactly one commit, so a thousand heartbeats leave no history. A signal carries an expiry time. An expired signal counts as absent.
 
@@ -107,7 +107,7 @@ $ git log --oneline refs/lore/live
 
 A row lands when:
 
-- it is **finished**: a task done or cancelled, a decision superseded or rejected (lore stores "rejected" as the status `deprecated`). Rules, memories, notes and comments count as finished on every write, so each write lands a copy right away (the row may stay live while people keep editing it);
+- it is **finished**: a task done or cancelled, a decision superseded or rejected (lore stores "rejected" as the status `deprecated`). Rules, memories, notes and comments count as finished on every write, so the next `lore sync` after each write lands a copy (the row may stay live while people keep editing it);
 - someone runs **`lore land`** (one id, `--all`, `--kind`, `--mission`; `--dry-run` shows the plan);
 - it is still open after **`live.max_age`** (7 days by default): a copy lands and the row stays live.
 
@@ -157,7 +157,7 @@ If two entries match at the same rule, that is an error (`E_ORG_AMBIGUOUS`): lor
 ```console
 # alice, in forked-tool
 $ lore whoami --explain
-org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
+org        none  (matched by: nothing matched)   hint: lore org use --entry <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity)
 machine    mch_98c3dece

@@ -60,7 +60,7 @@ ERROR: [E_NOT_FOUND] store folder add: no store named golang here: golang would 
 (exit 27)
 $ lore store add --name golang --url git@github.com:agency/notes
 ERROR: [E_NOT_A_STORE] store add: it edits a repo's .lore/stores.yaml, and ~/work/clients is not inside a git repo
-  hint: cd into the repo that should attach the store; outside a repo, `lore store folder add team <folder>` and `lore store list` work from the setup alone (`lore store init me` makes the personal store)
+  hint: cd into the repo that should attach the store; outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)
 (exit 19)
 ```
 <!-- /example -->
@@ -131,7 +131,7 @@ $ lore store folder remove --store team --folder client_old --yes
 ✓ removed folder client_old (prj_d431…313a) from agency
 $ lore store folder remove --store team --folder client_north --yes
 ERROR: [E_REFUSED] store folder remove: folder client_north of agency holds 1 repo link; nothing was removed
-  hint: unlink each repo with `lore org unlink <org> --project client_north` run in that repo; or remove it with everything in it: `lore store folder remove agency client_north --purge` (the rows go to the store's trash first)
+  hint: unlink each repo with `lore org unlink --org <org> --project client_north` run in that repo; or remove it with everything in it: `lore store folder remove --store agency --folder client_north --purge` (the rows go to the store's trash first)
 (exit 23)
 ```
 <!-- /example -->

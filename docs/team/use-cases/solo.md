@@ -26,12 +26,11 @@ lore: wrote ~/work/scratch/.lore/data/task_lists/tlt_2ad3…f891.json
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — write the README [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
-lore live: (live, local: no remote)
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task done --id tsk_162d…9666
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, local: no remote)
 $ lore land --all --dry-run
 would land 2 row(s) to main (_root/):
   tlt_2ad3…f891     land  named by lore land
@@ -44,7 +43,7 @@ $ git status --short
 ```
 <!-- /example -->
 
-Once the repo has a remote, the same task is pushed to `refs/lore/live` on the remote. It lands on `main` when it is done. See [Getting started](../getting-started.md#step-4--your-first-live-task).
+Once the repo has a remote, `lore sync` or your next `git push` pushes the same task to `refs/lore/live` on the remote (lore never pushes by itself). It lands on `main` on the next `lore sync` after it is done. See [Getting started](../getting-started.md#step-4--your-first-live-task).
 
 Do you want tasks to travel with your branch like every other row? Then turn live off for tasks:
 

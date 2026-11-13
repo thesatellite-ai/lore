@@ -109,7 +109,7 @@ ERROR: [E_NEEDS_CONFIRM] project delete prj_b69e…5ed7?
 $ lore project delete --id prj_b69e…5ed7 --yes
 lore: wrote ~/work/scratch/.lore/data/repos/rep_0aae…a61f.json
 lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e…5ed7.json
-✓ scratch (and this repo's row) moved to the trash (batch bat_6a86…ed8c; restore: lore trash restore bat_6a86…ed8c)
+✓ scratch (and this repo's row) moved to the trash (batch bat_6a86…ed8c; restore: lore trash restore --target bat_6a86…ed8c)
 $ lore project list
 (no projects)
 ```

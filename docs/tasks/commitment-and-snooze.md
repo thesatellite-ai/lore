@@ -28,13 +28,10 @@ $ lore task add --title 'Try a dark mode for the shop' --commitment someday
 lore: wrote ~/work/website/.lore/data/tasks/tsk_3b62…e913.json
 ✓ tsk_3b62…e913 — Try a dark mode for the shop [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
 $ lore task add --title 'Add a FAQ page' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
 ✓ tsk_f147…5139 — Add a FAQ page [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
 $ lore task list
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
 ○ tsk_76bd…3f10 Write the welcome email [medium]
@@ -67,7 +64,6 @@ To accept a proposal, change its commitment with `lore task edit`. It now shows 
 $ lore task edit --id tsk_f147…5139 --commitment accepted
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
 ✓ tsk_f147…5139 updated
-lore live: (live, pushed) commit aba91f6 to origin refs/lore/live
 $ lore task triage
 (no tasks)
 ```
@@ -82,27 +78,21 @@ $ lore task add --title 'Add a size guide' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
 ✓ tsk_77cb…76c4 — Add a size guide [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit d33587e to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
 $ lore task add --title 'Rename the shop to Website Pro' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 ✓ tsk_d191…45c2 — Rename the shop to Website Pro [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 34010c1 to origin refs/lore/live
 $ lore task triage
 ○ tsk_77cb…76c4 Add a size guide [medium] (proposed)
 ○ tsk_d191…45c2 Rename the shop to Website Pro [medium] (proposed)
 $ lore task accept --id tsk_77cb…76c4 --priority high
 lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
 ✓ tsk_77cb…76c4 updated
-lore live: (live, pushed) commit 070bbeb to origin refs/lore/live
 $ lore task decline --id tsk_d191…45c2 --reason wont_do --note 'The client keeps the name'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 lore: wrote ~/work/website/.lore/data/comments/cmt_b4d3…11aa.json
 ✓ tsk_d191…45c2 cancelled
   note kept as a comment
-lore live: (live, pushed) commit 2297d41 to origin refs/lore/live
-lore live: landed on main (c929695); leaves live once main is fetched
 $ lore task triage
 (no tasks)
 $ lore task list --status cancelled
@@ -136,7 +126,6 @@ $ lore task add --title 'Renew the SSL certificate' --defer-until 2026-12-01
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
 ✓ tsk_2537…6bbb — Renew the SSL certificate [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit a8de760 to origin refs/lore/live
 $ lore task deferred
 ○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
 $ lore task list --include-deferred
@@ -161,7 +150,6 @@ On that day the task comes back into `lore task list` by itself. You do not need
 $ lore task edit --id tsk_2537…6bbb --clear-defer
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
 ✓ tsk_2537…6bbb updated
-lore live: (live, pushed) commit 9169078 to origin refs/lore/live
 $ lore task deferred
 (no tasks)
 ```

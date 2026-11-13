@@ -169,7 +169,8 @@ func (l liveSync) refuseIgnoredData(ctx context.Context) error {
 // id, --all, --kind, --mission) land now; --dry-run prints the plan.
 func (l liveSync) Land(ctx context.Context, in opssync.LandIn) (opssync.DoneOut, error) {
 	if in.ID == "" && !in.All && in.Kind == "" && in.Mission == "" {
-		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "name a row id, or use --all, --kind or --mission")
+		return opssync.DoneOut{}, errs.New(errs.InvalidInput, "name a row with --id, or use --all, --kind or --mission").
+			WithHint("lore land run --id <id> (or --all, --kind <kind>, --mission <mission>; --dry-run shows the plan)")
 	}
 	if err := landBadID(in.ID); err != nil {
 		return opssync.DoneOut{}, err

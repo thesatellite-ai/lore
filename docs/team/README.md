@@ -10,7 +10,7 @@ You do not need to read the design spec to use any of this. Every command exampl
 
 | You are… | Start with | Then |
 |---|---|---|
-| a developer who wants tasks to reach teammates at once | [Getting started](getting-started.md) | [Small team in one repo](use-cases/small-team.md) |
+| a developer who wants tasks to reach teammates on any branch, without a merge | [Getting started](getting-started.md) | [Small team in one repo](use-cases/small-team.md) |
 | a team lead setting up an agency or company | [Overview](overview.md) | [Concepts](concepts.md), [Agency with a client repo](use-cases/agency-client-repo.md), [Contractor limited to one client](use-cases/contractor.md) |
 | someone working for two companies on one laptop | [One person in two companies](use-cases/two-companies.md) | [Personal notes](use-cases/personal-notes.md) |
 | running agents on a shared plan | [Agents](agents.md) | [Agents on one mission](use-cases/agents-mission.md) |
@@ -37,7 +37,7 @@ Each page follows the same order: the situation, the config, the commands with t
 | Page | Situation |
 |---|---|
 | [Solo developer](use-cases/solo.md) | one person, one repo; lore behaves as it always did |
-| [Small team in one repo](use-cases/small-team.md) | tasks reach teammates on any branch, at once |
+| [Small team in one repo](use-cases/small-team.md) | tasks reach teammates on any branch, without a merge |
 | [Agency with a client repo](use-cases/agency-client-repo.md) | internal notes and tasks the client never sees |
 | [Several repos as one product](use-cases/group-project.md) | one mission across backend, frontend and proxy repos |
 | [Same store, separate staging](use-cases/staging.md) | a test lore that never mixes with the real one |
@@ -50,7 +50,7 @@ Each page follows the same order: the situation, the config, the commands with t
 
 ## A first taste
 
-Two developers, one repo, two branches. Bob (an agency developer) gives Alice (another agency developer) a task. Alice sees it on her next command, without any merge (from [Small team in one repo](use-cases/small-team.md)):
+Two developers, one repo, two branches. Bob (an agency developer) gives Alice (another agency developer) a task. Alice sees it after his `lore sync` and hers, without any merge (from [Small team in one repo](use-cases/small-team.md)):
 
 <!-- example: small-team#assign-across-branches only=1,3 -->
 ```console
@@ -60,14 +60,10 @@ lore: wrote ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — check the checkout page on a phone [medium]
   created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
-lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
-$ lore sync && lore task list --mine
-· already in sync
-○ tsk_54fe…28f2 check the checkout page on a phone [medium]
+$ git switch -q -c feat/login && lore task list --mine
+(no tasks)
 ```
 <!-- /example -->
 

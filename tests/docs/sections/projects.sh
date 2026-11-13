@@ -10,12 +10,12 @@ lore_repo alice client/website
 note "project list"
 on alice work/website "lore project list"
 local prj_website; prj_website=$(id prj)
-on alice work/website "lore project show website"
+on alice work/website "lore project show --id website"
 
 note "add repos"
 on alice work/website "lore repo list"
-on alice work/website "lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'"
-on alice work/website "lore repo add help --display-name 'Help pages'"
+on alice work/website "lore repo add --mount-name shop --origin https://github.com/client/website --display-name 'Online shop'"
+on alice work/website "lore repo add --mount-name help --display-name 'Help pages'"
 local rep_help; rep_help=$(id rep)
 on alice work/website "lore repo list"
 
@@ -33,18 +33,18 @@ on alice work/website "LORE_PROJECT_ID=$prj_website LORE_REPO=shop lore rule lis
 on! alice work/website "LORE_PROJECT_ID=prj_00000000000000000000000000000000 lore rule list"
 
 note "archive a repo"
-on! alice work/website "lore repo archive help"
-on alice work/website "lore repo archive $rep_help"
+on! alice work/website "lore repo archive --id help"
+on alice work/website "lore repo archive --id $rep_help"
 on alice work/website "lore repo list"
-on alice work/website "lore repo unarchive $rep_help"
+on alice work/website "lore repo unarchive --id $rep_help"
 on alice work/website "git add -A && git commit -qm 'lore: repos' && git push -q origin main"
 
 note "repo moved"
 # The client renamed the repo on GitHub: a new bare repo on the fake GitHub stands in for it.
 remote client/website-v2
 on alice work/website "git remote set-url origin https://github.com/client/website-v2 && git push -q origin main"
-on alice work/website "lore repo set-url git@github.com:client/website-v2.git"
-on alice work/website "lore repo set-url https://gitlab.com/client/website-v2 --mirror"
+on alice work/website "lore repo set-url --url git@github.com:client/website-v2.git"
+on alice work/website "lore repo set-url --url https://gitlab.com/client/website-v2 --mirror"
 on alice work/website "lore repo list"
 on alice work/website "lore repo merge-ids --dry-run"
 on alice work/website "git add -A && git commit -qm 'lore: repo address' && git push -q origin main"
@@ -69,8 +69,8 @@ solo_repo alice client2/api
 solo_repo alice client2/infra
 quiet alice work/app "lore init --name=app"
 quiet alice work/api "lore init --name=api"
-on alice work/app "lore store init client2 file://\$HOME/stores/client2"
-on alice work/api "lore store add client2 file://\$HOME/stores/client2"
+on alice work/app "lore store init --name client2 --url file://\$HOME/stores/client2"
+on alice work/api "lore store add --name client2 --url file://\$HOME/stores/client2"
 on alice work/app "lore store list"
 
 note "shared notes"
@@ -86,12 +86,12 @@ solo_repo alice client2/scratch
 quiet alice work/scratch "lore init --name=scratch"
 on alice work/scratch "lore project list"
 local prj_scratch; prj_scratch=$(id prj)
-on alice work/scratch "lore project archive $prj_scratch"
+on alice work/scratch "lore project archive --id $prj_scratch"
 on alice work/scratch "lore project list"
-on alice work/scratch "lore project unarchive $prj_scratch"
-on! alice work/scratch "lore project delete $prj_scratch"
+on alice work/scratch "lore project unarchive --id $prj_scratch"
+on! alice work/scratch "lore project delete --id $prj_scratch"
 # Q-R3-11: the checkout's own repos row (PROV1) goes with the project in one batch.
-on alice work/scratch "lore project delete $prj_scratch --yes"
+on alice work/scratch "lore project delete --id $prj_scratch --yes"
 on alice work/scratch "lore project list"
 
 # A v0.1.17 shared database for infra: a project's rows in a lore.db outside the repo,
@@ -114,8 +114,8 @@ on alice work/infra "lore migrate status"
 on alice work/app "lore migrate status"
 on! alice work/app "lore migrate rollback"
 on alice work/app "lore migrate unlock"
-on alice work/app "lore migrate enable meta"
-on alice work/app "lore migrate enable meta"
+on alice work/app "lore migrate enable --feature meta"
+on alice work/app "lore migrate enable --feature meta"
 on alice work/app "lore migrate status | grep -E '^(features|min_lore_version)'"
 
 note "errors"

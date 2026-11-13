@@ -1,6 +1,6 @@
 
 ### one store per client
-alice (work/stores)$ lore store init agency git@github.com:agency/notes --yes && lore store init client git@github.com:agency/notes-client --yes && lore store init client2 git@github.com:agency/notes-client2 --yes
+alice (work/stores)$ lore store init --name agency --url git@github.com:agency/notes --yes && lore store init --name client --url git@github.com:agency/notes-client --yes && lore store init --name client2 --url git@github.com:agency/notes-client2 --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 ✓ created store agency (sto_7a670ae8548ed05bf57ad29ad0759504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
@@ -9,7 +9,7 @@ lore store init: store clone ~/.lore/stores/agency/notes-client: git user set to
 ✓ created store client (sto_2ad3618e878ebbf527d34d446ef4f891) at git@github.com:agency/notes-client; recorded in .lore/stores.yaml; commit it to share
 lore store init: store clone ~/.lore/stores/agency/notes-client2: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 ✓ created store client2 (sto_162df51b7f78b785c97c26b41ea89666) at git@github.com:agency/notes-client2; recorded in .lore/stores.yaml; commit it to share
-alice (work/website)$ lore org link agency --project client --store git@github.com:agency/notes-client --yes
+alice (work/website)$ lore org link --org agency --project client --store git@github.com:agency/notes-client --yes
 lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: pushed store github.com/agency/notes-client: commit 601d285 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,

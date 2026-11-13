@@ -55,7 +55,7 @@ D  _store/memories/mem_54fe…28f2.json
 $ lore memory list --store notes
 lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
 lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_54fe…28f2" in ~/.lore/stores/acme/notes
-  deleted memories mem_54fe…28f2 (moved to the trash; lore trash restore mem_54fe…28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json
+  deleted memories mem_54fe…28f2 (moved to the trash; lore trash restore --target mem_54fe…28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json
 (no memories)
 $ lore trash list
 mem_54fe…28f2  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by alice  bat_b4f4…a5b0

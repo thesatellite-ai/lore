@@ -138,7 +138,10 @@ type RevealOut struct {
 func (o RevealOut) Text() string { return "✓ opened " + o.Path + "\n" }
 
 // PathListIn is machine.path.list's (empty) input.
-type PathListIn struct{}
+type PathListIn struct {
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
+}
 
 // PathRow is one target's path; Path is "" when it has no place here.
 type PathRow struct {

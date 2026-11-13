@@ -177,7 +177,7 @@ lore: wrote ~/work/website/.lore/data/tech_docs/tdc_376c…8e1a.json
 
 ## Step 4 — Read, change and search one kind
 
-Every kind has `show`, `search` and `delete`; most have `edit` too. `lore <kind> show <id>` prints a two-letter tag and the id, the title or name, any references and the body; `lore show --id <id>` prints every field of any row. `lore <kind> edit <id>` changes only the flags you give, and `lore <kind> search <words>` searches that kind alone.
+Every kind has `show`, `search` and `delete`; most have `edit` too. `lore <kind> show --id <id>` prints a two-letter tag and the id, the title or name, any references and the body; `lore show --id <id>` prints every field of any row. `lore <kind> edit --id <id>` changes only the flags you give, and `lore <kind> search <words>` searches that kind alone.
 
 <!-- example: knowledge#other-kinds-show-edit -->
 ```console
@@ -261,7 +261,7 @@ tdc_376c…8e1a Payments docs https://docs.example.com/payments
 
 ## Pitfalls
 
-- **Some lists show only the id.** `lore incident list` and `lore tastepref list` print a two-letter tag and the id, not the text. Use `lore <kind> show <id>` or `lore search` to read them.
+- **Some lists show only the id.** `lore incident list` and `lore tastepref list` print a two-letter tag and the id, not the text. Use `lore <kind> show --id <id>` or `lore search` to read them.
 - **`hotfix list` shows the body, not the title.** Keep the first words of the body clear.
 - **Not every kind has `edit` or `archive`.** Snapshots and tech docs have no `edit`; only rules, memories, decisions, hotfixes, patterns, playbooks, prompts and snapshots have `archive`. Run `lore <kind> --help` to see the verbs.
 - **`<kind> show` is short on purpose.** For patterns, playbooks, prompts, behaviours, architecture notes, cookbook recipes, suggestions, taste preferences, workflows and workspaces it prints the tag and the id only (the 0.1.17 shape scripts depend on). Use `lore show --id <id>` or `--json` to read the title and body.

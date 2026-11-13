@@ -86,6 +86,8 @@ type SecretsListIn struct {
 	Manager  string `json:"manager,omitempty" flag:"manager" desc:"only this manager scheme (gopass, op, aws-secrets, …)"`
 	Unstored bool   `json:"unstored,omitempty" flag:"unstored" desc:"only ${secret:unstored} placeholders"`
 	Missing  bool   `json:"missing,omitempty" flag:"missing" desc:"check every entry now and keep the missing ones (opens the managers)"`
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // SecretsShowIn is the input of secrets.show.

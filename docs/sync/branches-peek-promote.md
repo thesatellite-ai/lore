@@ -126,7 +126,7 @@ ERROR: [E_INVALID_INPUT] refusing to commit onto the checked-out branch feature/
 - **Promote copies the file as it is on your current branch.** Make your last edit before you promote. It cannot target the branch you are on.
 - **Promote never pushes.** The new commit sits on your local main until you push it or open a pull request. If main is protected on GitHub (GitHub will not let anyone push to it directly), push it to a new branch and open a pull request instead.
 - **Rows that vanish on a branch switch are not lost.** When you switch to a branch that does not have a row's file, lore stops showing that row, because rows are read from the files of the branch you are on. That is normal; switching back brings the row back from its file. Nothing goes to `lore trash list --local`, which only holds copies an older lore (v0.1.17) made. See [Trash, restore from git and purge](trash-and-purge.md).
-- **Live rows do not follow branches.** Tasks are live by default: they are shared at once on every branch. See [Lore for teams](../team/README.md).
+- **Live rows do not follow branches.** Tasks are live by default: they are shared on every branch once you run `lore sync` or your next `git push`. See [Lore for teams](../team/README.md).
 
 ## Related
 

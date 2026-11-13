@@ -19,18 +19,18 @@ Tomas invites Mira as a developer and reviewer on `acme-hub`, and Ana as a contr
 <!-- example: invites#invite -->
 ```console
 # tomas, in acme-hub
-$ lore team invite --email mira@agency.example --role dev,reviewer --project acme-hub
+$ lore team invite mira@agency.example --role dev,reviewer --project acme-hub
 lore: pushed store agency/org: commit 601d285 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
 Send this to mira@agency.example (it holds no secret):
-  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
-$ lore team invite --email ana@agency.example --type contractor --expires 30d
+  lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+$ lore team invite ana@agency.example --type contractor --expires 30d
 lore: pushed store agency/org: commit 86dbae4 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 ✓ invite inv_2ad3…f891 written to store agency (expires 2026-12-02)
 Send this to ana@agency.example (it holds no secret):
-  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+  lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 ```
 <!-- /example -->
 
@@ -54,15 +54,15 @@ A second invite for an email that still has a pending one is refused (resend or 
 <!-- example: invites#invite-refusals -->
 ```console
 # tomas, in acme-hub
-$ lore team invite --email mira@agency.example
+$ lore team invite mira@agency.example
 ERROR: [E_INVALID_INPUT] invite inv_7a67…9504 for mira@agency.example is still pending (until 2026-11-16); one invite per person
-  hint: lore team invite resend mira@agency.example prints it again; lore team invite revoke mira@agency.example ends it
+  hint: lore team invite resend --ref mira@agency.example prints it again; lore team invite revoke --ref mira@agency.example ends it
 (exit 20)
-$ lore team invite --email bo@agency.example --role dev
+$ lore team invite bo@agency.example --role dev
 ERROR: [E_INVALID_INPUT] --role is applied on each --project, and no --project is given
   hint: --project <project>
 (exit 20)
-$ lore --setup personal team invite --email bo@agency.example
+$ lore --setup personal team invite bo@agency.example
 ERROR: [E_REFUSED] setup personal is a solo setup; team invites are written from an admin setup of the org
   hint: run with --setup <an admin setup>, or ask the org admin to invite
 (exit 23)
@@ -152,7 +152,7 @@ id: inv_2ad3…f891
 status: revoked
 $ lore team invite resend --ref ana@agency.example
 ERROR: [E_INVITE_REVOKED] invite inv_2ad3…f891 was revoked
-  hint: lore team invite ana@agency.example
+  hint: lore team invite --email ana@agency.example
 (exit 23)
 $ lore team invite list
 invites:

@@ -674,11 +674,13 @@ type MemberListIn struct {
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
 	metalist.Audit
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // MemberListOut is the list.
 type MemberListOut struct {
-	Members []MemberOut `json:"members"`
+	Members []MemberOut `json:"members" page:"rows"`
 	// Warnings are the TP-13 lines (W_TEAM_NOT_MEMBER), with a project only.
 	Warnings []string `json:"warnings,omitempty"`
 	// Project is the project shown, "" for every project.

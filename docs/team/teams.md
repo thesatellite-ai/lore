@@ -110,7 +110,7 @@ A team cannot take a person's handle (an `@mention` would mean two things), only
 # tomas, in ~
 $ lore team add --handle @mira
 ERROR: [E_INVALID_INPUT] handle @mira is taken by Mira Patel on the roster in agency org/; a team and a person cannot share one
-  hint: choose another team handle (lore team add @mira-team …)
+  hint: choose another team handle (lore team add --handle @mira-team …)
 (exit 20)
 $ lore team add --handle @ops --members @nobody
 ERROR: [E_NOT_FOUND] no one is @nobody on the roster in agency org/
@@ -118,7 +118,7 @@ ERROR: [E_NOT_FOUND] no one is @nobody on the roster in agency org/
 (exit 27)
 $ lore team show --handle @ops
 ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
-  hint: lore team list shows the teams; lore team add @ops --members <people> makes it
+  hint: lore team list shows the teams; lore team add --handle @ops --members <people> makes it
 (exit 27)
 ```
 <!-- /example -->
@@ -133,7 +133,7 @@ ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
 $ lore team remove --handle @web
 lore: pushed store agency/org: commit cf563f3 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web removed from the roster in agency org/ (kept for history: tasks that named it still read; lore team add @web brings it back)
+✓ tem_7a67…9504 @web removed from the roster in agency org/ (kept for history: tasks that named it still read; lore team add --handle @web brings it back)
 $ lore team list --all
 @web              Web platform             2 member(s)  [removed]
 $ lore team add --handle @web

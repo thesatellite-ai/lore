@@ -7,16 +7,16 @@
 lore_repo alice client/website
 
 note "live off"
-on alice work/website "LORE_LIVE=0 lore task add 'Update the privacy page'"
+on alice work/website "LORE_LIVE=0 lore task add --title 'Update the privacy page'"
 on alice work/website "git status --short"
-on alice work/website "lore task add 'Check the contact form on a phone'"
+on alice work/website "lore task add --title 'Check the contact form on a phone'"
 on alice work/website "lore live show"
 
 note "autopush off"
-on alice work/website "LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'"
+on alice work/website "LORE_LIVE_AUTOPUSH=0 lore task add --title 'Renew the SSL certificate'"
 local t_ssl; t_ssl=$(id tsk)
 on alice work/website "lore live diff"
-on! alice work/website "LORE_LIVE_AUTOPUSH=0 lore task claim $t_ssl"
+on! alice work/website "LORE_LIVE_AUTOPUSH=0 lore task claim --id $t_ssl"
 on alice work/website "lore sync"
 
 note "live remote"

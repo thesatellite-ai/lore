@@ -56,7 +56,7 @@ lore initialized
     repo_id:    rep_2ad3…f891
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
-· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
+· saved as context.targets; change with: lore policy set --key context.targets --value <profiles> --yes
   next: lore render            to write .lore/LORE.md for those tools
 $ git status --short
 ?? .gitattributes
@@ -107,7 +107,7 @@ rul_162d…9666 [must/always] Run the tests before you push
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2630 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (2693 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
 $ cat AGENTS.md
@@ -166,7 +166,7 @@ Notes:
   -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
 Context:
-  - context: .lore/LORE.md 2630 of 16000 bytes (16%, profile codex); warn at 80%
+  - context: .lore/LORE.md 2693 of 16000 bytes (16%, profile codex); warn at 80%
 ```
 <!-- /example -->
 

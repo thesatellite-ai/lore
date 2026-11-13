@@ -1,6 +1,6 @@
 
 ### show
-alice (work/website)$ lore store show me
+alice (work/website)$ lore store show --store me
 me: push now, compact off
   at        git@github.com:alice/lore-me
   used by   your setup agency (one personal store per person: any other setup of yours shares it)
@@ -8,7 +8,7 @@ me: push now, compact off
   epoch     0
 
 ### batch
-alice (work/website)$ lore store set me push=batch push_every=10m
+alice (work/website)$ lore store set --store me --settings push=batch --settings push_every=10m
 me: push batch every 10m, compact off
   set in    ~/.lore/config.yaml (personal:)
   epoch     0
@@ -23,7 +23,7 @@ alice (work/website)$ lore memory add --body 'I prefer short standups' --to me
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json (store me)
 ✓ mem_54fe984c9b495744c0217776765a28f2 [me]
   scope: [master]
-alice (work/website)$ lore store show me
+alice (work/website)$ lore store show --store me
 me: push batch every 10m, compact off
   at        git@github.com:alice/lore-me
   used by   your setup agency (one personal store per person: any other setup of yours shares it)
@@ -46,7 +46,7 @@ memories mem_54fe984c9b495744c0217776765a28f2
 Lore-Version: dev
 
 ### manual
-alice (work/website)$ lore store set me push=manual
+alice (work/website)$ lore store set --store me --settings push=manual
 me: push manual, compact off
   set in    ~/.lore/config.yaml (personal:)
   epoch     0
@@ -55,26 +55,26 @@ alice (work/website)$ lore doctor | grep 'store me:'
   - store me: push manual, compact off
 
 ### refused
-alice (work/website)$ lore store set repo push=batch
+alice (work/website)$ lore store set --store repo --settings push=batch
 ERROR: [E_REFUSED] store set: `repo` is the code repository's own .lore/data; lore never pushes or rewrites a code repo's history, so push and compact settings do not apply there
   hint: you push the code repo with your code; `lore live compact` compacts its live rows
 (exit 23)
-bob (work/website)$ lore store set agency push=batch
+bob (work/website)$ lore store set --store agency --settings push=batch
 ERROR: [E_REFUSED] store set: store agency belongs to org agency and only an admin of agency may change its shared settings; this machine has no admin setup of agency
-  hint: ask the org admin to run `lore store set agency …`; a member cannot override the org's setting locally
+  hint: ask the org admin to run `lore store set --store agency --settings …`; a member cannot override the org's setting locally
 (exit 23)
-alice (work/website)$ lore store set me push_every=30s
+alice (work/website)$ lore store set --store me --settings push_every=30s
 ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
   hint: e.g. compact=on compact_after=30d; push_every at least 1m, compact_after at least 1d
 (exit 20)
 
 ### org settings
-alice (work/website)$ lore store set agency push=batch push_every=15m
+alice (work/website)$ lore store set --store agency --settings push=batch --settings push_every=15m
 agency: push batch every 15m, compact off
   set in    the store's lore-store.yaml (org agency; set by an org admin, which this machine is)
   epoch     0
   pushed    2026-11-02T10:01:05Z
-bob (work/website)$ lore sync >/dev/null && lore store show agency
+bob (work/website)$ lore sync >/dev/null && lore store show --store agency
 agency: push batch every 15m, compact off
   set in    the store's lore-store.yaml (org agency; set by an org admin)
   epoch     0
@@ -86,13 +86,13 @@ lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e99e22e9e86e96fe4daa
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency)
 ✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8 [agency/client]
   scope: [master]
-alice (work/website)$ lore store compact agency --before 30d --dry-run
+alice (work/website)$ lore store compact --store agency --before 30d --dry-run
 would squash 7 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 7 row file(s); epoch 0 → 1
-alice (work/website)$ lore store compact agency --before 30d
+alice (work/website)$ lore store compact --store agency --before 30d
 ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 7 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
   hint: ask the person, then rerun with --yes
 (exit 26)
-alice (work/website)$ lore store compact agency --before 30d --yes
+alice (work/website)$ lore store compact --store agency --before 30d --yes
 ✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae476bd6)
   pushed store agency: commit 9b40ce7 to branch main
 bob (work/website)$ lore sync
@@ -111,7 +111,7 @@ lore: actor register act_05e99e22e9e86e96fe4daa7777994603
 lore: snapshot of the store history before 2026-10-03
 
 ### auto compact
-alice (work/website)$ lore store set me compact=on compact_after=90d
+alice (work/website)$ lore store set --store me --settings compact=on --settings compact_after=90d
 me: push manual, compact on after 90d
   set in    ~/.lore/config.yaml (personal:)
   epoch     0

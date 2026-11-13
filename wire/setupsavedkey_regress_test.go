@@ -83,7 +83,7 @@ func rwKeyMatches(t *testing.T, w *rwWorld) rwCheck {
 // as the setup.edit op.
 func rwRunEditFix(t *testing.T, w *rwWorld, argv []string) {
 	t.Helper()
-	if len(argv) < 4 || argv[0] != "lore" || argv[1] != "setup" || argv[2] != "edit" {
+	if len(argv) < 5 || argv[0] != "lore" || argv[1] != "setup" || argv[2] != "edit" || argv[3] != "--name" {
 		t.Fatalf("fix %q is not a lore setup edit --name line", argv)
 	}
 	type editIn struct {
@@ -93,8 +93,8 @@ func rwRunEditFix(t *testing.T, w *rwWorld, argv []string) {
 		Route     string `json:"route,omitempty"`
 		NoSSHKey  bool   `json:"no_ssh_key,omitempty"`
 	}
-	in := editIn{Name: argv[3]}
-	for i := 4; i < len(argv); i++ {
+	in := editIn{Name: argv[4]}
+	for i := 5; i < len(argv); i++ {
 		switch argv[i] {
 		case "--no-ssh-key":
 			in.NoSSHKey = true

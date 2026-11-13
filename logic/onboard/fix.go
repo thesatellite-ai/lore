@@ -442,12 +442,12 @@ var fixes = map[fixKey]Fix{
 	{check: CheckIdentityGitEmail, variant: FixRepo}: {Text: "{repo_root} commits as {git_email}. To use {email}: git -C {repo_root} config user.email {email}",
 		Command: argv(cmdGit, "-C", "{repo_root}", "config", "user.email", "{email}")},
 	// SOURCE_OF_TRUTH rows 7 and 9: one source per copied datum.
-	{check: CheckStoreAddress}: {Text: "Store {store_id} is reached at two addresses on this machine, and lore writes only to {url}. Run it to point every place naming the store at {url}: lore store set-url {store_id} {url} (to keep the other address, run lore store set-url --name {store_id} --url <that-address> instead)",
-		Command: argv(cmdLore, "store", "set-url", "{store_id}", "{url}"), Runnable: true},
+	{check: CheckStoreAddress}: {Text: "Store {store_id} is reached at two addresses on this machine, and lore writes only to {url}. Run it to point every place naming the store at {url}: lore store set-url --name {store_id} --url {url} (to keep the other address, run lore store set-url --name {store_id} --url <that-address> instead)",
+		Command: argv(cmdLore, "store", "set-url", "--name", "{store_id}", "--url", "{url}"), Runnable: true},
 	{check: CheckOrgSource}: {Text: "The {org} entry in ~/.lore/config.yaml is older than, or differs from, the store's lore-org.yaml (the team's source for its stores and repo patterns). Run it to copy them in: lore org refresh --org {org}",
-		Command: argv(cmdLore, "org", "refresh", "{org}"), Runnable: true},
+		Command: argv(cmdLore, "org", "refresh", "--org", "{org}"), Runnable: true},
 	{check: CheckIdentityRoster}: {Text: "Your email is not on the {org} roster yet; finish the join step or run lore actor contact add --actor <you> --type email --value <your-email>"},
-	{check: CheckIdentityPeriod}: {Text: "You are marked as left in {org}. If you are back, ask an admin of {org} to run lore member add {email} (it reopens a stint that ended today)"},
+	{check: CheckIdentityPeriod}: {Text: "You are marked as left in {org}. If you are back, ask an admin of {org} to run lore member add --email {email} (it reopens a stint that ended today)"},
 	// SOURCE_OF_TRUTH row 1: the setup is the one source of who you are.
 	{check: CheckIdentityTopLevel}: {Text: "The top-level identity: in ~/.lore/config.yaml ({top_identity}) is an old copy of setup {setup}'s identity. Run it to move what the setup lacks into it and remove the top-level block: lore identity migrate --keep setup --setup {setup}",
 		Command: argv(cmdLore, "identity", "migrate", "--keep", "setup", "--setup", "{setup}"), Runnable: true},
@@ -468,9 +468,9 @@ var fixes = map[fixKey]Fix{
 	{check: CheckGitHubSSHUser}:                          {Text: "{alias} logs in as {got}, not {user}. In ~/.ssh/config point Host {alias} at {user}'s key (IdentityFile <that key>, IdentitiesOnly yes), or pick the {got} account"},
 	{check: CheckGitHubKeyMatches}:                       {Text: "Nothing lore can use logs in as {user}. Run the GitHub step again so lore finds a route (an ssh alias that logs in as {user}, or https with {user}'s gh login: gh auth login), or add a Host block for {user}'s key to ~/.ssh/config"},
 	{check: CheckGitHubKeyMatches, variant: FixKeyPair}: {Text: "Use {fix_alias} with {fix_key}, which log in as {user}: lore setup edit --name {setup} --route ssh --host-alias {fix_alias} --ssh-key {fix_key}",
-		Command: argv(cmdLore, "setup", "edit", "{setup}", "--route", "ssh", "--host-alias", "{fix_alias}", "--ssh-key", "{fix_key}"), Runnable: true},
+		Command: argv(cmdLore, "setup", "edit", "--name", "{setup}", "--route", "ssh", "--host-alias", "{fix_alias}", "--ssh-key", "{fix_key}"), Runnable: true},
 	{check: CheckGitHubKeyMatches, variant: FixKeyAliasOnly}: {Text: "Use {fix_alias}, which logs in as {user}, with its own key: lore setup edit --name {setup} --route ssh --host-alias {fix_alias} --no-ssh-key",
-		Command: argv(cmdLore, "setup", "edit", "{setup}", "--route", "ssh", "--host-alias", "{fix_alias}", "--no-ssh-key"), Runnable: true},
+		Command: argv(cmdLore, "setup", "edit", "--name", "{setup}", "--route", "ssh", "--host-alias", "{fix_alias}", "--no-ssh-key"), Runnable: true},
 	{check: CheckGitHubAliasConfig}: {Text: "Add 'IdentitiesOnly yes' under 'Host {alias}' in ~/.ssh/config so ssh does not offer your other keys first"},
 	{check: CheckGitHubGHAccount}: {Text: "gh is optional; it only speeds up checks and lets lore offer 'create repo'. To add: gh auth login --hostname github.com",
 		Command: argv(cmdGH, "auth", "login", "--hostname", "github.com")},
@@ -512,12 +512,12 @@ var fixes = map[fixKey]Fix{
 		Command: argv(cmdGH, "repo", "edit", "{owner}/{repo}", "--visibility", "private"), Runnable: true, Outward: true},
 
 	{check: CheckInviteParse}:                         {Text: "This is not a lore invite. Copy the whole line starting with lore-invite:v1:"},
-	{check: CheckInviteFound}:                         {Text: "Invite {id} is not in {org}'s store. Ask {by} to run lore team invite {invite_email} again"},
+	{check: CheckInviteFound}:                         {Text: "Invite {id} is not in {org}'s store. Ask {by} to run lore team invite --email {invite_email} again"},
 	{check: CheckInviteFound, variant: FixMemberJoin}: {Text: "{email} is not on the org's roster. Ask an admin to run lore member add --email {email}, then join again (an outsider joins with an invite line instead)"},
 	{check: CheckInviteStatus}:                        {Text: "Invite {id} is {status}. Ask {by} for a new one"},
 	{check: CheckInviteEmail}:                         {Text: "This invite is for {invite_email}. Use that address, or ask {inviter} for a new invite to {email}"},
 	{check: CheckInvitePending}: {Text: "Invite {id} for {invite_email} is still pending. Resend it (lore team invite resend --ref {id}) or revoke it (lore team invite revoke --ref {id})",
-		Command: argv(cmdLore, "team", "invite", "resend", "{id}"), Runnable: true},
+		Command: argv(cmdLore, "team", "invite", "resend", "--ref", "{id}"), Runnable: true},
 	// --grant (Q9): runs only after an explicit confirm.
 	{check: CheckInviteGitHubAccess}: {Text: "{github} has no access to {owner}/{repo} yet. Grant push access: gh api -X PUT repos/{owner}/{repo}/collaborators/{github} -f permission=push",
 		Command: argv(cmdGH, "api", "-X", "PUT", "repos/{owner}/{repo}/collaborators/{github}", "-f", "permission=push"), Runnable: true, Outward: true},
@@ -561,7 +561,7 @@ var fixes = map[fixKey]Fix{
 	{check: CheckFoldersShadow}:  {Text: "{other_folder} stays with {other}"},
 	// Shown, not run: --default takes default: true from the other setup.
 	{check: CheckFoldersReachable}: {Text: "Add a folder on the Folders step (lore picks {setup} inside it), or make {setup} the default for folders no setup matches: lore setup edit --name {setup} --default",
-		Command: argv(cmdLore, "setup", "edit", "{setup}", "--default")},
+		Command: argv(cmdLore, "setup", "edit", "--name", "{setup}", "--default")},
 
 	// Runs in the repo: the FixRunner uses the result's repo as cwd.
 	// The text never repeats the command: the page and the CLI show the

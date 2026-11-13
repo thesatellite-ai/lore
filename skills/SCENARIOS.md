@@ -45,29 +45,29 @@ lore render
 
 ### B.1 User says "remember: we use Tailwind v4"
 ```bash
-lore memory add --body="We use Tailwind v4 (not v3) for all styling"
+lore memory add --body "We use Tailwind v4 (not v3) for all styling"
 lore render
 ```
 
 ### B.2 User says "we never wrap stdlib errors"
 ```bash
-lore rule add --severity=must --activation=always \
-    --body="Never wrap stdlib errors with fmt.Errorf; return them directly."
+lore rule add --severity must --activation always \
+    --body "Never wrap stdlib errors with fmt.Errorf; return them directly."
 lore render
 ```
 
 ### B.3 User says "should prefer composition over inheritance"
 ```bash
-lore rule add --severity=should \
-    --body="Prefer composition over inheritance in domain models."
+lore rule add --severity should \
+    --body "Prefer composition over inheritance in domain models."
 lore render
 ```
 
 ### B.4 User explains a decision: "we picked SQLite over Postgres because…"
 ```bash
 lore decision add \
-    --title="Use SQLite (not Postgres)" \
-    --body="Rationale: local-first, zero ops, single-writer fits load.
+    --title "Use SQLite (not Postgres)" \
+    --body "Rationale: local-first, zero ops, single-writer fits load.
 
 Considered: Postgres (extra service), DuckDB (no transactions).
 
@@ -77,14 +77,14 @@ lore render
 
 ### B.5 User: "I keep forgetting that ent regen wipes resolver/ helpers"
 ```bash
-lore hotfix add --severity=high --title="ent regen wipes resolver/ helpers" \
-    --body="ent regen wipes hand-written code in resolver/. Keep helpers in internal/ or pkg/."
+lore hotfix add --severity high --title "ent regen wipes resolver/ helpers" \
+    --body "ent regen wipes hand-written code in resolver/. Keep helpers in internal/ or pkg/."
 lore render
 ```
 
 ### B.6 User pastes a reusable code snippet: "let's save this pattern"
 ```bash
-lore pattern add --title="options-pattern" --body="$(cat <<'GO'
+lore pattern add --title "options-pattern" --body "$(cat <<'GO'
 type Option func(*Config)
 func WithTimeout(d time.Duration) Option { return func(c *Config) { c.timeout = d } }
 func New(opts ...Option) *Client {
@@ -99,7 +99,7 @@ lore render
 
 ### B.7 User: "let's record the release procedure"
 ```bash
-lore playbook add --title="release" --body="$(cat <<'MD'
+lore playbook add --title "release" --body "$(cat <<'MD'
 1. task test:all
 2. Tag: git tag v$(date +%Y.%m.%d)
 3. task release
@@ -112,15 +112,15 @@ lore render
 
 ### B.8 User: "save this prompt as our default system prompt"
 ```bash
-lore prompt add --title="system-v2" --body="$PROMPT_TEXT"
+lore prompt add --title "system-v2" --body "$PROMPT_TEXT"
 lore render
 ```
 
 ### B.9 User: "we had an outage yesterday — record what happened"
 ```bash
 lore incident add \
-    --title="2026-05-10 Redis OOM cascade" \
-    --body="Cause: missing TTL on session keys → 6 GB → OOM kill → connection storm → API 503s for 14m.
+    --title "2026-05-10 Redis OOM cascade" \
+    --body "Cause: missing TTL on session keys → 6 GB → OOM kill → connection storm → API 503s for 14m.
 
 Fix: set TTL=7d on session:* prefix. Add memory alert at 80%.
 
@@ -131,8 +131,8 @@ lore render
 ### B.10 User: "suggestion: we should add rate limiting to /api"
 ```bash
 lore suggestion add \
-    --title="Rate-limit /api/* endpoints" \
-    --body="Public endpoints currently uncapped. Suggest: 100req/min per IP, 1000req/min per API key. Use the shared ratelimit pkg."
+    --title "Rate-limit /api/* endpoints" \
+    --body "Public endpoints currently uncapped. Suggest: 100req/min per IP, 1000req/min per API key. Use the shared ratelimit pkg."
 lore render
 ```
 
@@ -142,27 +142,27 @@ lore render
 
 ### C.1 User: "add a task to wire FTS5"
 ```bash
-TL=$(lore tasklist list --json | jq -r '.data[0].id')   # or: lore tasklist add --title=… --body=… --json
-lore task add --title "Wire FTS5 backend" --tasklist=$TL --commitment=accepted --priority=high
+TL=$(lore tasklist list --json | jq -r '.data[0].id')   # or: lore tasklist add --title … --body … --json
+lore task add --title "Wire FTS5 backend" --tasklist $TL --commitment accepted --priority high
 lore render
 ```
 
 ### C.2 User: "track the v0.2 sprint"
 ```bash
-M=$(lore mission add --title "Ship v0.2" --target=2026-06-15 --json | jq -r '.data.id')
-# Then add tasks: lore task add "<title>" --tasklist=<tlt_id> --mission=$M --commitment=accepted
+M=$(lore mission add --title "Ship v0.2" --target 2026-06-15 --json | jq -r '.data.id')
+# Then add tasks: lore task add --title "<title>" --tasklist <tlt_id> --mission $M --commitment accepted
 ```
 
 ### C.3 User: "high-priority urgent task: fix login bug, due tomorrow"
 ```bash
-lore task add --title "Fix login redirect bug" --tasklist=<tlt_id> --commitment=accepted --priority=urgent --due=$(date -v+1d +%Y-%m-%d)
+lore task add --title "Fix login redirect bug" --tasklist <tlt_id> --commitment accepted --priority urgent --due $(date -v+1d +%Y-%m-%d)
 ```
 
 ### C.4 User: "what's on my plate?"
 ```bash
-lore task list --status=in_progress --json
+lore task list --status in_progress --json
 # and / or
-lore task list --status=todo --json | jq -r '.data | sort_by(.priority) | .[0:5][] | "T-\(.id) [\(.priority)] \(.title)"'
+lore task list --status todo --json | jq -r '.data | sort_by(.priority) | .[0:5][] | "T-\(.id) [\(.priority)] \(.title)"'
 ```
 
 ### C.5 User: "I'm starting tsk_<id>"
@@ -184,13 +184,13 @@ lore task cancel --id tsk_<id>
 ```bash
 TID=$(lore task list --json | jq -r '.data[] | select(.id==3) | .id')
 lore reminder add --message "Revisit task tsk_<id>" \
-    --due=$(date -v+2w +%Y-%m-%d) \
-    --on-table=tasks --on-id="$TID"
+    --due $(date -v+2w +%Y-%m-%d) \
+    --on-table tasks --on-id "$TID"
 ```
 
 ### C.9 User: "weekly review reminder"
 ```bash
-lore reminder add --message "Weekly review" --due=$(date -v+sun +%Y-%m-%d) --recurrence=7d
+lore reminder add --message "Weekly review" --due $(date -v+sun +%Y-%m-%d) --recurrence 7d
 ```
 
 ### C.10 User: "show me all my reminders"
@@ -263,7 +263,7 @@ lore render --dry-run | less
 
 ### E.4 "Also stitch the pointer into AGENTS.md for Codex"
 ```bash
-lore render --target=AGENTS.md
+lore render --target AGENTS.md
 # (Currently: render to one target at a time; multi-target is v0.2.)
 ```
 
@@ -314,7 +314,7 @@ git add .lore/data && git status --short .lore/data   # commit them; no separate
 
 ### F.7 "Open a bug — capture state"
 ```bash
-lore support-bundle --out=/tmp/lore-bug.tar.gz
+lore support-bundle --out /tmp/lore-bug.tar.gz
 # Attach to issue. No secrets — bodies are scrubbed.
 ```
 
@@ -324,17 +324,17 @@ lore support-bundle --out=/tmp/lore-bug.tar.gz
 
 ### G.1 "Add a memory only for the web repo"
 ```bash
-lore memory add --body="Tailwind v4 only" --repo=web
+lore memory add --body "Tailwind v4 only" --repo web
 ```
 
 ### G.2 "Add a project-wide memory"
 ```bash
-lore memory add --body="Client charges USD"    # no --repo
+lore memory add --body "Client charges USD"    # no --repo
 ```
 
 ### G.3 "Search in current repo only"
 ```bash
-lore memory search --query "tailwind" --repo=web --no-inherit
+lore memory search --query "tailwind" --repo web --no-inherit
 ```
 
 ### G.4 "Search across all repos"
@@ -344,7 +344,7 @@ lore memory search --query "tailwind" --all-repos
 
 ### G.5 "Register a new repo"
 ```bash
-lore repo add --mount-name admin --origin=git@github.com:org/admin.git --display-name="Admin Panel"
+lore repo add --mount-name admin --origin git@github.com:org/admin.git --display-name "Admin Panel"
 ```
 
 ### G.6 "List repos in this project"
@@ -381,23 +381,23 @@ lore migrate run              # converts; the pointer is kept as .lore/lore.yaml
 
 ### I.1 "Create urgent tag"
 ```bash
-lore tag add --name=urgent --color="#ff0033"
+lore tag add --name urgent --color "#ff0033"
 ```
 
 ### I.2 "Tag this memory as draft"
 ```bash
-lore tag attach --on-table=memories --on-id=mem_019e... --tag=draft
+lore tag attach --on-table memories --on-id mem_019e... --tag draft
 ```
 
 ### I.3 "Comment on dec_<id> with a status update"
 ```bash
 DID=$(lore decision list --json | jq -r '.data[] | select(.id==3) | .id')
-lore comment add --on-table=decisions --on-id=$DID --body="Reviewed 2026-08-01; still holds."
+lore comment add --on-table decisions --on-id $DID --body "Reviewed 2026-08-01; still holds."
 ```
 
 ### I.4 "Show all comments on dec_<id>"
 ```bash
-lore comment list --on-table=decisions --on-id=$DID --json
+lore comment list --on-table decisions --on-id $DID --json
 ```
 
 ---
@@ -451,20 +451,20 @@ N=$(lore rule list --json | jq '.data | length')
 ```bash
 cat .cursorrules
 # no importer in 0.1.18: add each item that is still true with its own command
-lore rule add --severity=must --body="<rule from the file>"
+lore rule add --severity must --body "<rule from the file>"
 ```
 
 ### L.2 "Import from a Notion export"
 ```bash
 # Convert each Notion page to a memory:
-find ./notion-export -name "*.md" -exec lore memory add "$(cat {})" \;
+find ./notion-export -name "*.md" -exec lore memory add --body "$(cat {})" \;
 lore render
 ```
 
 ### L.3 "Import a curated list of rules from JSON"
 ```bash
 jq -r '.rules[] | [.severity, .body] | @tsv' rules.json | while IFS=$'\t' read sev body; do
-    lore rule add --severity=$sev --body="$body"
+    lore rule add --severity $sev --body "$body"
 done
 lore render
 ```

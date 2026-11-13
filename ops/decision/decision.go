@@ -194,6 +194,8 @@ type ListIn struct {
 	Store      string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store (default every attached store)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
 	kn.MetaFlags
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // ListOut is v0.1.17's list envelope.

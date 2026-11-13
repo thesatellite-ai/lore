@@ -12,8 +12,8 @@ lore_repo alice acme/website
 remote acme/notes
 
 note "a git store"
-on alice work/website "lore store init notes git@github.com:acme/notes"
-on alice work/website "lore task add 'Renew the TLS certificate' --to notes --no-live"
+on alice work/website "lore store init --name notes --url git@github.com:acme/notes"
+on alice work/website "lore task add --title 'Renew the TLS certificate' --to notes --no-live"
 local t_cert; t_cert=$(id tsk)
 on alice work/website "lore memory add --to notes --body 'The staging database is reset every Monday.'"
 local m_stage; m_stage=$(id mem)
@@ -35,16 +35,16 @@ note "lore where"
 on alice work/website "lore where"
 
 note "lore path"
-on alice work/website "lore path $t_cert"
-on alice work/website "lore path $t_cert --json"
+on alice work/website "lore path --id $t_cert"
+on alice work/website "lore path --id $t_cert --json"
 
 note "lore edit"
 # The editor is a script that changes the task's priority and adds a line to its body, as a
 # person would in vi.
 quiet alice . "mkdir -p bin && printf '%s\n' '#!/bin/sh' 'sed -i -e \"s/^priority: .*/priority: high/\" -e \"\\\$a Ask the hosting provider for the new chain first.\" \"\$1\"' > bin/edit-task && chmod +x bin/edit-task"
-on alice work/website "lore row markdown $t_cert"
+on alice work/website "lore row markdown --id $t_cert"
 on alice work/website "EDITOR=\$HOME/bin/edit-task lore edit $t_cert"
-on alice work/website "lore task show $t_cert"
+on alice work/website "lore task show --id $t_cert"
 
 note "edit a row file by hand"
 on alice .lore/stores/acme/notes "sed -i 's/reset every Monday/reset every Sunday night/' _store/memories/$m_stage.json && git status --short"
@@ -68,9 +68,9 @@ on alice .lore/stores/acme/notes "git reset -q -- _store/tasks/$t_cert.json && g
 
 note "your own clone"
 on alice . "git clone -q git@github.com:acme/notes ~/code/notes && ls ~/code/notes"
-on alice work/website "lore store use ~/code/notes --yes"
+on alice work/website "lore store use --path ~/code/notes --yes"
 on alice work/website "lore store list"
-on alice work/website "lore path $t_cert"
+on alice work/website "lore path --id $t_cert"
 on alice work/website "lore store use --default notes --yes"
 
 note "lore fix"

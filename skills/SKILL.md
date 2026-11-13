@@ -81,7 +81,7 @@ After capture, **always** run `lore render`. Without render, the captured knowle
 | **[SCENARIOS.md](./SCENARIOS.md)** | Concrete "the user said X" → "you run Y" — 60+ situations across 15 sections (first contact, capture, work tracking, search, render, recovery, scope, Mode B, tags, identity, CI, migration, inspection, edge cases, what to refuse). |
 | **[ERRORS.md](./ERRORS.md)** | A command failed with `E_*` code. Exit statuses, the error envelope, every code + recovery decision tree. |
 | **[GLOSSARY.md](./GLOSSARY.md)** | You're unsure what a term means (activation, canary, master scope, polymorphic FK, mode A/B, etc.). |
-| **[SKILL-mini.md](./SKILL-mini.md)** | Compressed (~16KB) bundle for small-context / weak-instruction-following models. Same teaching as SKILL.md in trigger-DSL form. Regenerate via `lore skill compile --target=mini`. |
+| **[SKILL-mini.md](./SKILL-mini.md)** | Compressed (~16KB) bundle for small-context / weak-instruction-following models. Same teaching as SKILL.md in trigger-DSL form. Regenerate via `lore skill compile --target mini`. |
 | **[examples/01-bootstrap.md](./examples/01-bootstrap.md)** | Setting up lore for the first time in an existing project. |
 | **[examples/02-capture-correction.md](./examples/02-capture-correction.md)** | User corrected your approach; capture the corrected way as a rule. |
 | **[examples/03-multi-repo.md](./examples/03-multi-repo.md)** | Project has multiple repos under one product; scope memories per-repo. |
@@ -111,30 +111,30 @@ want a worked transcript     → examples/
 | Concept | Meaning | Verb |
 |---|---|---|
 | **Memory** | Free-form learned fact. "We use Tailwind v4." | `memory add` |
-| **Rule** | Hard constraint with severity. `must` blocks, `should` warns, `may` suggests. **Only `must`-severity rules are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `should`/`may` surface via search. | `rule add --severity=<s>` |
-| **Decision** | A choice and the reasons for it (like an ADR: a short record of what was chosen and why). **Not pinned in `.lore/LORE.md`** — surfaces via `lore search`. | `decision add --title=… --body=<why>` |
-| **Hotfix** | Loud warning we keep hitting. **Only `critical` + `high` severity hotfixes are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `medium`/`low` surface via search. Hotfix styling stays loud regardless of where it appears. | `hotfix add --severity=<s>` |
-| **Pattern** | Reusable code shape. | `pattern add --title=… --body=<code>` |
-| **Playbook** | Reusable procedure. | `playbook add --title=… --body=<steps>` |
-| **Prompt** | Reusable prompt template for a model. | `prompt add --title=… --body=<text>` |
+| **Rule** | Hard constraint with severity. `must` blocks, `should` warns, `may` suggests. **Only `must`-severity rules are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `should`/`may` surface via search. | `rule add --severity <s>` |
+| **Decision** | A choice and the reasons for it (like an ADR: a short record of what was chosen and why). **Not pinned in `.lore/LORE.md`** — surfaces via `lore search`. | `decision add --title … --body <why>` |
+| **Hotfix** | Loud warning we keep hitting. **Only `critical` + `high` severity hotfixes are pinned in `.lore/LORE.md`** (imported by CLAUDE.md); `medium`/`low` surface via search. Hotfix styling stays loud regardless of where it appears. | `hotfix add --severity <s>` |
+| **Pattern** | Reusable code shape. | `pattern add --title … --body <code>` |
+| **Playbook** | Reusable procedure. | `playbook add --title … --body <steps>` |
+| **Prompt** | Reusable prompt template for a model. | `prompt add --title … --body <text>` |
 | **Mission** | Initiative containing tasks. | `mission add "<title>"` |
-| **Task** | Discrete work item with status + priority. **Must belong to a tasklist** — `--tasklist=<tlt_id>` is required. | `task add "<title>" --tasklist=tlt_… --priority=…` |
+| **Task** | Discrete work item with status + priority. **Must belong to a tasklist** — `--tasklist <tlt_id>` is required. | `task add "<title>" --tasklist tlt_… --priority …` |
 | **TaskList / Plan** | Alternative groupings for tasks. | `tasklist add` / `plan add` |
-| **Reminder** | Time-based; supports recurrence. | `reminder add "<msg>" --due=…` |
-| **Tag** | Polymorphic label, attaches via `--on-table` + `--on-id`. | `tag attach --on-table=… --on-id=…` |
-| **Comment** | Polymorphic discussion, same shape as Tag. | `comment add --on-table=… --on-id=…` |
+| **Reminder** | Time-based; supports recurrence. | `reminder add "<msg>" --due …` |
+| **Tag** | Polymorphic label, attaches via `--on-table` + `--on-id`. | `tag attach --on-table … --on-id …` |
+| **Comment** | Polymorphic discussion, same shape as Tag. | `comment add --on-table … --on-id …` |
 | **ArchitectureNote, Behaviour, CookbookRecipe, Incident, Suggestion, TastePref, Handoff, Workspace, Workflow** | Same `add | list | show` shape, each captures a different kind of project artifact. | `<kind> add` |
 
 ### Cross-cutting relation flags (every `add` accepts the ones its schema supports)
 
 | Flag | Where it applies | Notes |
 |---|---|---|
-| `--supersedes=<id>` | memory, rule, decision, hotfix, pattern | Marks the new row as the replacement for `<id>`; the old row records the new id in `superseded_by_id` (a replaced decision becomes `superseded`). Unknown or already-replaced ids are refused and nothing is written. Rows linked by older versions point the wrong way; run `lore doctor --fix` once to repair them. |
-| `--repo=<mount\|rep_id>` | memory, rule, decision, hotfix, pattern, task | Scope to a repo within the project (master-scope when omitted). |
+| `--supersedes <id>` | memory, rule, decision, hotfix, pattern | Marks the new row as the replacement for `<id>`; the old row records the new id in `superseded_by_id` (a replaced decision becomes `superseded`). Unknown or already-replaced ids are refused and nothing is written. Rows linked by older versions point the wrong way; run `lore doctor --fix` once to repair them. |
+| `--repo <mount\|rep_id>` | memory, rule, decision, hotfix, pattern, task | Scope to a repo within the project (master-scope when omitted). |
 | `--mission`, `--tasklist`, `--plan` | task | Parent groupings. `--tasklist` is REQUIRED. |
-| `--assigned-to=<act_id>` | task | Assignee. |
-| `--validated-by=<act_id>` | memory | Reviewer that validated the entry. |
-| `--from=<act_id>`, `--to=<act_id>` | handoff | Sender / receiver. `--from` auto-fills from current identity. |
+| `--assigned-to <act_id>` | task | Assignee. |
+| `--validated-by <act_id>` | memory | Reviewer that validated the entry. |
+| `--from <act_id>`, `--to <act_id>` | handoff | Sender / receiver. `--from` auto-fills from current identity. |
 | `--on-table`, `--on-id` | reminder, tag, comment | Polymorphic target pointer. |
 
 > **Don't confuse `tastepref` with `memory`.** Subjective preferences ("I prefer X", "my taste is Y", "I strongly favor Z") map to `tastepref add`, not `memory add` — preferences have a dedicated entity so they can be rendered separately from facts.
@@ -148,7 +148,7 @@ want a worked transcript     → examples/
 ### Scope flags (work on every read/write)
 
 ```
---repo=<mount>     scope to a specific repo within the project
+--repo <mount>     scope to a specific repo within the project
 --all-repos        all repos in this project
 --master-only      project-master rows only (no repo)
 --no-inherit       strict scope; don't include broader-scope rows
@@ -161,11 +161,11 @@ When the user uses a value that's not in the documented enum, do **not** blindly
 
 | User says | You should |
 |---|---|
-| `--kind=foobar` (memory) | Note: not valid. Valid kinds: `core`, `retrieved`, `episodic`, `procedural`, `archival`. Don't emit the bad command. (Scoping uses `--repo` / `--master-only`, not a `--scope` flag.) |
-| `--severity=critical` | Not in enum. Valid: `must`, `should`, `may`. Map to closest (likely `must`) and confirm. |
-| `--priority=blocker` | Not valid. Valid: `low`, `medium`, `high`, `urgent`. Map to `urgent`. |
-| `--status=wip` | Not valid. Valid: `todo`, `in_progress`, `blocked`, `done`, `canceled`, `archived`. Map to `in_progress`. |
-| `--on-table=task` (singular) | Plural required: `tasks`. Fix silently and proceed. |
+| `--kind foobar` (memory) | Note: not valid. Valid kinds: `core`, `retrieved`, `episodic`, `procedural`, `archival`. Don't emit the bad command. (Scoping uses `--repo` / `--master-only`, not a `--scope` flag.) |
+| `--severity critical` | Not in enum. Valid: `must`, `should`, `may`. Map to closest (likely `must`) and confirm. |
+| `--priority blocker` | Not valid. Valid: `low`, `medium`, `high`, `urgent`. Map to `urgent`. |
+| `--status wip` | Not valid. Valid: `todo`, `in_progress`, `blocked`, `done`, `canceled`, `archived`. Map to `in_progress`. |
+| `--on-table task` (singular) | Plural required: `tasks`. Fix silently and proceed. |
 
 CLI will reject bad values with `E_INVALID_INPUT` (and unknown flags like `--scope` with an "unknown flag" error) anyway — catch before emitting.
 
@@ -196,7 +196,7 @@ This is the most important section in this file. Memorize.
 
 Examples that ARE capture triggers (despite being inside larger utterances):
 - "Oh by the way, **remember:** we use UTC for everything." → `memory add`
-- "I was thinking about auth today and realized **we never use globals** in this code. Anyway, can we move on to the next task?" → `rule add --severity=must`
+- "I was thinking about auth today and realized **we never use globals** in this code. Anyway, can we move on to the next task?" → `rule add --severity must`
 - "**Don't forget** — tests run via `task test`, not `go test`." → `memory add`
 
 If you see one of these triggers, **emit the `lore <verb> add` command immediately**, then continue with the rest of the user's request. DO NOT treat the trigger as conversational acknowledgement ("got it!" / "noted!") — that fails silently.
@@ -227,7 +227,7 @@ vs. real triggers (emit capture command):
 |---|---|
 | "We decided to use pgvector because…" | `lore decision add` — "decided" + "because" |
 | "Remember: we use pgvector now." | `lore memory add` — direct statement of fact |
-| "We always use pgvector in this codebase." | `lore rule add --severity=must` — "always" |
+| "We always use pgvector in this codebase." | `lore rule add --severity must` — "always" |
 
 **Decisive signal:** is the user *committing to a stance* or *floating an idea*? Only commitments get captured.
 
@@ -243,7 +243,7 @@ vs. real triggers (emit capture command):
 
 5. **Counterfactual / hypothetical** — `"if we HAD done X"`, `"had we used X"`, `"in retrospect we should have"`, `"imagine if we"`. These express regret about an unchosen path. They are NOT current facts. Don't capture them; don't invert them into positive claims (that's hallucination). Respond about the lesson in prose.
 
-6. **Invalid enum value in a flag** — user types `--kind=foobar`, `--severity=critical`, `--priority=blocker`, `--on-table=task` (singular instead of plural). DO NOT forward the bad value to the CLI. Surface the constraint in prose, list the valid values, ask for clarification. The output-as-one-bash-block convention is overridden here.
+6. **Invalid enum value in a flag** — user types `--kind foobar`, `--severity critical`, `--priority blocker`, `--on-table task` (singular instead of plural). DO NOT forward the bad value to the CLI. Surface the constraint in prose, list the valid values, ask for clarification. The output-as-one-bash-block convention is overridden here.
 
 If you find yourself paraphrasing the user's question into a statement and capturing it — STOP. That's a hallucinated capture; the user didn't commit.
 
@@ -253,12 +253,12 @@ When the user statement contains the word **"decided"** AND a **"because"** clau
 
 **Wrong** (the verb: a choice plus its reason is a decision, not a rule):
 ```bash
-lore rule add --severity=must --body="<X> because <Y>"
+lore rule add --severity must --body "<X> because <Y>"
 ```
 
 **Right:**
 ```bash
-lore decision add --title="<X>" --body="<Y>"
+lore decision add --title "<X>" --body "<Y>"
 lore render
 ```
 
@@ -286,11 +286,11 @@ Never emit a bare `rm -rf .lore`, `DROP TABLE`, or destructive SQL.
 
 Five rules, priority order. The presence of specific signal words is decisive — synthesize from these, do NOT copy any few-shot example's verb verbatim.
 
-1. **"we decided X because Y"** / "X because of Y" / "X so that Y" → ALWAYS `lore decision add --title="<X>" --body="<Y>"` (NEVER `rule add`)
-2. **"we always X"** / "we must X" / "we never X" / "don't X" → ALWAYS `lore rule add --severity=must` (no rationale = rule, not decision)
+1. **"we decided X because Y"** / "X because of Y" / "X so that Y" → ALWAYS `lore decision add --title "<X>" --body "<Y>"` (NEVER `rule add`)
+2. **"we always X"** / "we must X" / "we never X" / "don't X" → ALWAYS `lore rule add --severity must` (no rationale = rule, not decision)
 3. **"remember"** / "don't forget" / "save this" / bare fact statement → ALWAYS `lore memory add` (free-form, no severity, no rationale)
-4. **"we keep hitting X"** / "watch out for X" / "this bit us" / recurring trap → ALWAYS `lore hotfix add --severity=high --title="<headline>"`
-5. **"we tried X and it broke"** / post-mortem → ALWAYS `lore incident add --title=<t> --body=<what-happened>`
+4. **"we keep hitting X"** / "watch out for X" / "this bit us" / recurring trap → ALWAYS `lore hotfix add --severity high --title "<headline>"`
+5. **"we tried X and it broke"** / post-mortem → ALWAYS `lore incident add --title <t> --body <what-happened>`
 
 ### ⚠ Anti-pattern: do NOT roleplay lore's output
 
@@ -307,7 +307,7 @@ Task added:
 
 **Right** (emit the actual command):
 ```bash
-lore task add --title "refactor the auth middleware" --tasklist=tlt_default --priority=medium
+lore task add --title "refactor the auth middleware" --tasklist tlt_default --priority medium
 lore render
 ```
 
@@ -315,38 +315,38 @@ The first form looks helpful but persists nothing — the user is left to wonder
 
 ### Knowledge capture
 
-**Body shape:** Every `add` command takes the body as `--body=<text>`. lore does not read the body from stdin (an agent's open stdin would make it wait forever); pass a file as `--body="$(cat file.md)"`. **Positional args are not accepted for body.** Title (when required) is always `--title=<text>`. No mixing positional and flags.
+**Body shape:** Every `add` command takes the body as `--body <text>`. lore does not read the body from stdin (an agent's open stdin would make it wait forever); pass a file as `--body "$(cat file.md)"`. **Positional args are not accepted for body.** Title (when required) is always `--title <text>`. No mixing positional and flags.
 
 | User says | Run |
 |---|---|
-| "remember this", "don't forget", "save this" | `lore memory add --body="<the fact>"` |
-| "we always X", "we must X" | `lore rule add --severity=must --body="<X>"` |
-| "we should X" (soft) | `lore rule add --severity=should --body="<X>"` |
-| "we never X", "don't X" | `lore rule add --severity=must --body="Do not <X>"` |
-| "we decided X because Y" | `lore decision add --title="<X>" --body="<Y>"` |
-| "we keep hitting X", "watch out for X" | `lore hotfix add --severity=high --title="<X>" --body="<longer body>"` |
-| "this pattern: …" | `lore pattern add --title="<n>" --body="<code>"` |
-| "the procedure for X is …" | `lore playbook add --title="<n>" --body="<steps>"` |
-| "use this prompt: …" | `lore prompt add --title="<n>" --body="<prompt>"` |
-| "the architecture is …" | `lore architecturenote add --title="<t>" --body="<b>"` |
-| "we prefer X" / "I like X" | `lore tastepref add --body="<X>"` |
-| "for X, do: …" (recipe) | `lore cookbookrecipe add --title="<X>" --body="<steps>"` |
-| "always do X when …" (behaviour) | `lore behaviour add --title="<n>" --body="<body>"` |
-| "comment on dec_<id>: …" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="<text>"` |
-| "snapshot the project at …" | `lore snapshot add --title="<t>" --body="<body>"` |
+| "remember this", "don't forget", "save this" | `lore memory add --body "<the fact>"` |
+| "we always X", "we must X" | `lore rule add --severity must --body "<X>"` |
+| "we should X" (soft) | `lore rule add --severity should --body "<X>"` |
+| "we never X", "don't X" | `lore rule add --severity must --body "Do not <X>"` |
+| "we decided X because Y" | `lore decision add --title "<X>" --body "<Y>"` |
+| "we keep hitting X", "watch out for X" | `lore hotfix add --severity high --title "<X>" --body "<longer body>"` |
+| "this pattern: …" | `lore pattern add --title "<n>" --body "<code>"` |
+| "the procedure for X is …" | `lore playbook add --title "<n>" --body "<steps>"` |
+| "use this prompt: …" | `lore prompt add --title "<n>" --body "<prompt>"` |
+| "the architecture is …" | `lore architecturenote add --title "<t>" --body "<b>"` |
+| "we prefer X" / "I like X" | `lore tastepref add --body "<X>"` |
+| "for X, do: …" (recipe) | `lore cookbookrecipe add --title "<X>" --body "<steps>"` |
+| "always do X when …" (behaviour) | `lore behaviour add --title "<n>" --body "<body>"` |
+| "comment on dec_<id>: …" | `lore comment add --on-table decisions --on-id dec_<id> --body "<text>"` |
+| "snapshot the project at …" | `lore snapshot add --title "<t>" --body "<body>"` |
 
 **Long bodies** (file content, multi-line): command substitution, not a pipe:
 ```bash
-lore architecturenote add --title="overview" --body="$(cat ARCHITECTURE.md)"
-lore memory add --body="$LONG_BODY"
+lore architecturenote add --title "overview" --body "$(cat ARCHITECTURE.md)"
+lore memory add --body "$LONG_BODY"
 ```
 
 **Exceptions (the primary input is `--title`, not `--body`):**
 
 | Entity | Shape |
 |---|---|
-| `task add` | `lore task add --title "<title>" --tasklist=<id> [--body="..."]` |
-| `mission add` | `lore mission add --title "<title>" [--body="..."]` |
+| `task add` | `lore task add --title "<title>" --tasklist <id> [--body "..."]` |
+| `mission add` | `lore mission add --title "<title>" [--body "..."]` |
 
 ### Revising existing captures (don't create duplicates)
 
@@ -354,17 +354,17 @@ When the user wants to flag, revisit, or update an EXISTING capture, do NOT crea
 
 | User says | Run |
 |---|---|
-| "Flag dec_<id> for re-evaluation / revisit later" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>"` (dec_<id> stays active) |
+| "Flag dec_<id> for re-evaluation / revisit later" | `lore comment add --on-table decisions --on-id dec_<id> --body "REVISIT: <why>"` (dec_<id> stays active) |
 | "Mark mission msn_<id> as done / ship msn_<id>" | `lore mission done --id msn_<id>` (mission has its own `done` verb — NOT `task done` for msn_<id> IDs) |
-| "Cancel tsk_<id> because <reason>" | `lore task cancel --id tsk_<id>` + `lore comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"` (CLI has no native --reason flag) |
+| "Cancel tsk_<id> because <reason>" | `lore task cancel --id tsk_<id>` + `lore comment add --on-table tasks --on-id tsk_<id> --body "cancelled: <reason>"` (CLI has no native --reason flag) |
 | "Unarchive rul_<id>" | `lore rule unarchive --id rul_<id>` (every entity supports unarchive after archive) |
-| "Update dec_<id>'s body" / "Edit decision dec_<id>" | `lore decision edit --id dec_<id> --body="<new>"` (direct mutation; no need to show first if user provided the new content) |
-| "Update the X prompt template" | `lore prompt edit --id <X> --body="<new>"` |
-| "Update pattern X" | `lore pattern edit --id <X> --body="<new>"` |
+| "Update dec_<id>'s body" / "Edit decision dec_<id>" | `lore decision edit --id dec_<id> --body "<new>"` (direct mutation; no need to show first if user provided the new content) |
+| "Update the X prompt template" | `lore prompt edit --id <X> --body "<new>"` |
+| "Update pattern X" | `lore pattern edit --id <X> --body "<new>"` |
 | "Bulk archive mem_<id>, mem_<id>, mem_<id>" | One `lore memory archive` call per ID (no bulk syntax — emit 3 commands) |
 | "Mission msn_<id> is complete / ship msn_<id>" | `lore mission done --id msn_<id>` (mission has its own `done` verb; do NOT use `task done` for msn_<id> IDs) |
 | "Done with mission msn_<id>" | `lore mission done --id msn_<id>` (mission/handoff have no `archive` — use status transitions: `mission done`, `mission cancel`, `mission pause`/`resume`, `handoff ack`) |
-| "Flag dec_<id> for re-eval (don't archive)" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>"` (dec_<id> stays active; do NOT create a new decision) |
+| "Flag dec_<id> for re-eval (don't archive)" | `lore comment add --on-table decisions --on-id dec_<id> --body "REVISIT: <why>"` (dec_<id> stays active; do NOT create a new decision) |
 
 ### Correction / confirmation (revising captured knowledge)
 
@@ -373,7 +373,7 @@ When the user asks to **revise**, **scratch**, **reverse**, or **update** an exi
 ```bash
 RID=$(lore rule search --query "globals" --json | jq -r '.data[0].id')
 lore rule archive --id "$RID"
-lore rule add --severity=should --body="A single global request-id context is allowed for tracing"
+lore rule add --severity should --body "A single global request-id context is allowed for tracing"
 lore render
 ```
 
@@ -385,14 +385,14 @@ lore render
 
 | User says | Run |
 |---|---|
-| "no, that's not how we do it" | Capture the correct way: `rule add --severity=must` |
+| "no, that's not how we do it" | Capture the correct way: `rule add --severity must` |
 | "actually we have a rule against that" | The rule existed but wasn't followed. Search first: `lore rule list \| grep -i …`. If absent, add it. |
 | "yes, that's the right call" + non-obvious choice | `lore decision add` to lock in the rationale. |
-| "we tried X and it broke" | `lore incident add --title="<X>" --body="<what happened>"` |
+| "we tried X and it broke" | `lore incident add --title "<X>" --body "<what happened>"` |
 
 ### 🔗 Polymorphic attach (tag / comment)
 
-`tag` and `comment` are **polymorphic** — they attach to any other entity via `--on-table=<table-name>` + `--on-id=<id>`. **The on-table value is the literal SQL table name, NOT the singular CLI noun.** Snake_case where the schema uses it:
+`tag` and `comment` are **polymorphic** — they attach to any other entity via `--on-table <table-name>` + `--on-id <id>`. **The on-table value is the literal SQL table name, NOT the singular CLI noun.** Snake_case where the schema uses it:
 
 | CLI noun | `--on-table=` value |
 |---|---|
@@ -422,14 +422,14 @@ lore render
 
 | User says | Run |
 |---|---|
-| "pre-create a tag called X (without attaching yet)" | `lore tag add --name=X` (standalone tag entity — distinct from `tag attach`) |
-| "tag tsk_<id> as backend" | `lore tag attach --on-table=tasks --on-id=tsk_<id> --tag=backend` |
-| "remove the backend tag from tsk_<id>" | `lore tag detach --on-table=tasks --on-id=tsk_<id> --tag=backend` |
-| "tag this memory mem_<id> 'security'" | `lore tag attach --on-table=memories --on-id=mem_<id> --tag=security` |
-| "add a comment on dec_<id>: foo" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="foo"` |
-| "comment on hotfix H-2 that …" | `lore comment add --on-table=hotfixes --on-id=H-2 --body="…"` |
+| "pre-create a tag called X (without attaching yet)" | `lore tag add --name X` (standalone tag entity — distinct from `tag attach`) |
+| "tag tsk_<id> as backend" | `lore tag attach --on-table tasks --on-id tsk_<id> --tag backend` |
+| "remove the backend tag from tsk_<id>" | `lore tag detach --on-table tasks --on-id tsk_<id> --tag backend` |
+| "tag this memory mem_<id> 'security'" | `lore tag attach --on-table memories --on-id mem_<id> --tag security` |
+| "add a comment on dec_<id>: foo" | `lore comment add --on-table decisions --on-id dec_<id> --body "foo"` |
+| "comment on hotfix H-2 that …" | `lore comment add --on-table hotfixes --on-id H-2 --body "…"` |
 | "what tags exist?" | `lore tag list --json` (lists the project's tags; there is no per-row tag listing yet) |
-| "what's been commented on dec_<id>?" | `lore comment list --on-table=decisions --on-id=dec_<id> --json` |
+| "what's been commented on dec_<id>?" | `lore comment list --on-table decisions --on-id dec_<id> --json` |
 
 **Common slip:** singular table name (`task`, `memory`, `decision`). Always plural.
 
@@ -437,24 +437,24 @@ lore render
 
 | User says | Run |
 |---|---|
-| "add a task to X" | `lore task add --title "<X>" --tasklist=<tlt_id> --priority=medium` |
-| "high priority task: X" | `lore task add --title "<X>" --tasklist=<tlt_id> --priority=high` |
-| "urgent: X" | `lore task add --title "<X>" --tasklist=<tlt_id> --priority=urgent` |
-| "track an initiative: X" | `lore mission add --title "<X>" --target=YYYY-MM-DD` |
-| "what tasks are open?" | `lore task list --json` (default already hides done + cancelled; use `--all` for full history, `--status=X` for explicit filter) |
+| "add a task to X" | `lore task add --title "<X>" --tasklist <tlt_id> --priority medium` |
+| "high priority task: X" | `lore task add --title "<X>" --tasklist <tlt_id> --priority high` |
+| "urgent: X" | `lore task add --title "<X>" --tasklist <tlt_id> --priority urgent` |
+| "track an initiative: X" | `lore mission add --title "<X>" --target YYYY-MM-DD` |
+| "what tasks are open?" | `lore task list --json` (default already hides done + cancelled; use `--all` for full history, `--status X` for explicit filter) |
 | "show everything including done/cancelled" | `lore task list --all --json` |
-| "what is assigned to me / to X?" | `lore task list --assignee=@me --json` (also takes an actor_id (act_*), stable_key or display name; composes with `--status`, `--all` etc.) |
+| "what is assigned to me / to X?" | `lore task list --assignee @me --json` (also takes an actor_id (act_*), stable_key or display name; composes with `--status`, `--all` etc.) |
 | "start work on tsk_<id>" | `lore task start --id tsk_<id>` |
 | "mark tsk_<id> done" | `lore task done --id tsk_<id>` |
 | "cancel tsk_<id>" | `lore task cancel --id tsk_<id>` |
-| "move tsk_<id> to tasklist L-5" | `lore task edit --id tsk_<id> --tasklist=tlt_<id>` (or any other field via `edit`) |
-| "reassign tsk_<id> to act_xx" | `lore task edit --id tsk_<id> --assigned-to=act_xx` |
+| "move tsk_<id> to tasklist L-5" | `lore task edit --id tsk_<id> --tasklist tlt_<id>` (or any other field via `edit`) |
+| "reassign tsk_<id> to act_xx" | `lore task edit --id tsk_<id> --assigned-to act_xx` |
 | "detach tsk_<id> from its mission" | `lore task edit --id tsk_<id> --clear-mission` |
 | "pause mission msn_<id>" | `lore mission pause --id msn_<id>` |
 | "resume mission msn_<id>" | `lore mission resume --id msn_<id>` |
 | "ack handoff hnd_<id>" / "I've processed handoff hnd_<id>" | `lore handoff ack --id hnd_<id>` |
-| "remind me on YYYY-MM-DD to X" | `lore reminder add --message "<X>" --due=YYYY-MM-DD` |
-| "every week, remind me to X" | `lore reminder add --message "<X>" --due=<next> --recurrence=7d` |
+| "remind me on YYYY-MM-DD to X" | `lore reminder add --message "<X>" --due YYYY-MM-DD` |
+| "every week, remind me to X" | `lore reminder add --message "<X>" --due <next> --recurrence 7d` |
 
 ### Lifecycle / cleanup
 
@@ -463,8 +463,8 @@ lore render
 | "archive mem_<id>" / "stop showing mem_<id>" | `lore memory archive --id mem_<id>` (works for every entity: rule, decision, hotfix, pattern, playbook, prompt, project, repo) |
 | "unarchive mem_<id>" | `lore memory unarchive --id mem_<id>` |
 | "mem_<id> is no longer true as of today" (bitemporal — keep history) | `lore memory invalidate --id mem_<id>` (sets `valid_until=now`; preferred over archive when you want to remember WHEN it became wrong) |
-| "supersede mem_<id> with new memory X" | `lore memory add --body="X" --supersedes=mem_<id>` (preserves chain) |
-| "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit --id mem_<id> --body="..."` (no chain — use `--supersedes` instead if audit trail matters) |
+| "supersede mem_<id> with new memory X" | `lore memory add --body "X" --supersedes mem_<id>` (preserves chain) |
+| "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit --id mem_<id> --body "..."` (no chain — use `--supersedes` instead if audit trail matters) |
 | "archive project PRJ-X" / "retire repo REP-Y" | `lore project archive --id PRJ-X` / `lore repo archive --id REP-Y` |
 
 ### Directive (lock the file against agent drift)
@@ -472,7 +472,7 @@ lore render
 | User says | Run |
 |---|---|
 | "tell the agent to use lore, not inline CLAUDE.md" / "stop the agent from writing memories into the file" | `lore directive install` (idempotent; default target CLAUDE.md at cwd) |
-| "drop the directive in AGENTS.md too" | `lore directive install --target=AGENTS.md` (or `--target=CLAUDE.md,AGENTS.md`) |
+| "drop the directive in AGENTS.md too" | `lore directive install --target AGENTS.md` (or `--target CLAUDE.md,AGENTS.md`) |
 | "what does the directive block say?" | `lore directive show` (prints to stdout, no write) |
 
 ### Retrieval
@@ -495,7 +495,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "list all memories" / "what memories exist?" | `lore memory list [--archived] [--json]` |
 | "show mem_<id>" | `lore memory show --id mem_<id> [--json]` (includes archived_at, valid_until, superseded_by) |
 | "is search working / how healthy is the index" | `lore search status` — per-entity row counts + drift detection |
-| "rebuild the search index" | `lore search rebuild [--kind=<entity>]` |
+| "rebuild the search index" | `lore search rebuild [--kind <entity>]` |
 | "who modified X / audit trail for X / when was X last changed" | `lore audit log --limit 0 --json \| jq '.data[] \| select(.target_id == "X" or .target_table == "X")'` (newest first; `lore audit verify` checks the chain) |
 | "find anything starting with auth" (prefix) | `lore memory search --query "auth*" --json` |
 | "things mentioning X or Y" | `lore memory search --query "X OR Y" --json` |
@@ -504,9 +504,9 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 | "what rules exist?" | `lore rule list --json` |
 | "what decisions about X?" | `lore decision list --json \| jq '.data[] \| select(.title \| test("X";"i"))'` |
 | "why did you do X?" | `lore why-context --rendered` |
-| "show me mem_<id>", "show me tsk_<id>", "show me dec_<id>" | `lore <kind> show <id>` |
+| "show me mem_<id>", "show me tsk_<id>", "show me dec_<id>" | `lore <kind> show --id <id>` |
 | "show all rules INCLUDING archived" | `lore rule list --archived --json` (plain `rule list` hides archived rules; `--archived` shows them marked `[archived]`) |
-| "rules under project X (cross-project peek)" | `lore rule list --project=X --json` (one-shot override, doesn't change cwd project) |
+| "rules under project X (cross-project peek)" | `lore rule list --project X --json` (one-shot override, doesn't change cwd project) |
 
 ### Render + introspect
 
@@ -514,8 +514,8 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 |---|---|
 | "regenerate my context" / "re-render" | `lore render` (writes `.lore/LORE.md` + `@import` pointer into CLAUDE.md; hybrid: only directive + must-rules + critical/high hotfixes pinned) |
 | "what would render produce?" | `lore render --dry-run` (prints the `.lore/LORE.md` body) |
-| "stitch the pointer into AGENTS.md instead" | `lore render --target=AGENTS.md` |
-| "put the generated file somewhere else" | `lore render --out=docs/LORE.md` |
+| "stitch the pointer into AGENTS.md instead" | `lore render --target AGENTS.md` |
+| "put the generated file somewhere else" | `lore render --out docs/LORE.md` |
 | "write the generated file only, leave CLAUDE.md alone" | `lore render --no-pointer` |
 | "render just one repo's slice" | `cd <repo> && lore render` (render runs in the repo it renders; no `--repo`) |
 | "what did the agent actually see?" | `lore why-context` |
@@ -544,7 +544,7 @@ With `lore setup --agent-hooks`, Claude Code, Codex and Gemini CLI run step 2 fo
 
 | User says | Run |
 |---|---|
-| "compile a small-model skill bundle" | `lore skill compile --target=mini --model=claude-sonnet-4-6` |
+| "compile a small-model skill bundle" | `lore skill compile --target mini --model claude-sonnet-4-6` |
 
 ### Health / recovery
 
@@ -557,7 +557,7 @@ With `lore setup --agent-hooks`, Claude Code, Codex and Gemini CLI run step 2 fo
 | "what does doctor check?" | `lore doctor --help` (or `--json` to see structured output of checks) |
 | "back up my notes" | commit `.lore/data` (the files are the truth; `~/.lore/cache/repo/<repo folder>-<hash>.db` is a cache) |
 | "DB is broken" | `rm -f ~/.lore/cache/repo/<repo folder>-*`: the next command rebuilds the cache from `.lore/data` (`lore search rebuild` reindexes on demand) |
-| "file a bug" | `lore support-bundle --out=/tmp/bundle.tar.gz` (then attach to issue) |
+| "file a bug" | `lore support-bundle --out /tmp/bundle.tar.gz` (then attach to issue) |
 | "who changed this / is the history intact?" | `lore audit log` / `lore audit verify` (run verify before other commands when investigating) |
 | "list every error code" | `docs/reference/cli-commands.md#errors` (generated by `lore spec docs`) |
 | "what version am I on?" | `lore version` |
@@ -584,29 +584,29 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 | "GitHub says the PR has conflicts in .lore/data" | on the branch: `git pull origin main` (lore's driver merges there), settle any same-text conflict as below, push. Or `lore sync ci-merge --base origin/main` to see whether lore can settle it unattended |
 | "fix lore conflicts in PRs automatically" | `lore sync install-action` (opt-in GitHub workflow; runs only when started by hand, `--auto` to run on every PR that changes lore data, which uses Actions time) — confirm with the user, then they commit the file |
 
-**Merge conflicts in `.lore/data` files:** markers sit INSIDE the JSON string value (`"body": "<<<<<<< ours\n…\n=======\n…\n>>>>>>> theirs"`). lore imports the rest of the row and shows both versions in `lore <entity> show <id>`; the pre-commit hook refuses to commit until the text is settled. Ask the user which version (or what combination) to keep, then `lore <entity> edit <id> --body "<chosen text>"` — lore rewrites the file without markers — and commit. Never delete the file. Different fields of the same row merge automatically — those never need you. Markers that break the JSON itself (a merge done where lore's driver was not installed) block the file: run any lore command to install the driver, abort and redo the merge.
+**Merge conflicts in `.lore/data` files:** markers sit INSIDE the JSON string value (`"body": "<<<<<<< ours\n…\n=======\n…\n>>>>>>> theirs"`). lore imports the rest of the row and shows both versions in `lore <entity> show --id <id>`; the pre-commit hook refuses to commit until the text is settled. Ask the user which version (or what combination) to keep, then `lore <entity> edit --id <id> --body "<chosen text>"` — lore rewrites the file without markers — and commit. Never delete the file. Different fields of the same row merge automatically — those never need you. Markers that break the JSON itself (a merge done where lore's driver was not installed) block the file: run any lore command to install the driver, abort and redo the merge.
 
 ### CLI gaps (no native verb yet — use these workarounds)
 
 | User asks for | Status | Workaround |
 |---|---|---|
-| `lore task block <tsk_id>` | No native verb (despite `blocked` being a valid status enum) | `lore task edit --id tsk_<id> --status=blocked` (works via universal `edit`) |
-| Cancel-with-reason as one verb | `task cancel` has no `--reason` flag | Two-cmd: `task cancel tsk_<id>` + `comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"` |
+| `lore task block <tsk_id>` | No native verb (despite `blocked` being a valid status enum) | `lore task edit --id tsk_<id> --status blocked` (works via universal `edit`) |
+| Cancel-with-reason as one verb | `task cancel` has no `--reason` flag | Two-cmd: `task cancel tsk_<id>` + `comment add --on-table tasks --on-id tsk_<id> --body "cancelled: <reason>"` |
 
 ### Hard delete (escape hatch)
 
 | User says | Run |
 |---|---|
-| "delete rul_<id> / wipe that rule / nuke mem_<id>" | `lore <kind> delete <id> --confirm` |
-| "actually I want soft-delete" | `lore <kind> archive <id>` (reversible via `unarchive`) where archive exists; otherwise delete is the only option |
+| "delete rul_<id> / wipe that rule / nuke mem_<id>" | `lore <kind> delete --id <id> --confirm` |
+| "actually I want soft-delete" | `lore <kind> archive --id <id>` (reversible via `unarchive`) where archive exists; otherwise delete is the only option |
 
 `<kind> delete <id>` works on 25 entities. **Requires `--confirm`** to fire — accidentally typing it without the flag returns an error pointing at archive. Soft-archive should be preferred whenever the entity supports it (memory, rule, decision, hotfix, pattern, playbook, prompt, snapshot, project, repo); delete is the escape hatch for "I captured a secret" / "I need it gone for real."
 
 > **Closed gaps** (do NOT re-add as workarounds):
-> - "Attach tasks to a tasklist" → `lore task edit --id tsk_<id> --tasklist=<tlt_id>` (covered by universal `edit`)
-> - "Move task between tasklists / missions / plans" → `task edit tsk_<id> --tasklist=… --mission=… --plan=…` (or `--clear-mission` to detach)
+> - "Attach tasks to a tasklist" → `lore task edit --id tsk_<id> --tasklist <tlt_id>` (covered by universal `edit`)
+> - "Move task between tasklists / missions / plans" → `task edit tsk_<id> --tasklist … --mission … --plan …` (or `--clear-mission` to detach)
 > - "`memory search ""` returns null" → fixed; emits `results: []`
-> - "Archive memory / rule / decision / etc." → `lore <kind> archive <id>` / `unarchive <id>` (9 entities supported)
+> - "Archive memory / rule / decision / etc." → `lore <kind> archive --id <id>` / `unarchive --id <id>` (9 entities supported)
 > - "Per-entity full-text search" → `lore <kind> search "<q>"` works on 23 entities (FTS5, BM25, stemming, snippets, eager-loaded relations in JSON)
 
 ---
@@ -651,9 +651,9 @@ The user wants to start using lore. Use existing CLAUDE.md / AGENTS.md / .cursor
 
 There is no importer in 0.1.18. Read each source file section by section and add what is still true with its own command:
 ```bash
-lore rule add --severity=must --body="<a hard rule from the file>"
-lore decision add --title="<choice>" --body="<the choice and why>"
-lore memory add --body="<a fact worth keeping>"
+lore rule add --severity must --body "<a hard rule from the file>"
+lore decision add --title "<choice>" --body "<the choice and why>"
+lore memory add --body "<a fact worth keeping>"
 lore render
 ```
 
@@ -724,7 +724,7 @@ Commit `.lore/data` → `lore upgrade` → nothing else to run (the cache rebuil
 
 Run `lore whoami` once per repo: it says which org applies, why, and which identity you write as. Rules that hold in a team:
 
-- **Tasks are live:** a task you add or edit reaches everyone at once on any branch, and lands on `main` when done. Use `--live` to share a rule or memory at once; `--no-live` keeps a row with your branch.
+- **Tasks are live:** a task you add or edit reaches everyone on any branch once it is pushed, and lands on `main` after it is done. Nothing pushes by itself (`live.autopush` is off by default): `lore sync` or the person's `git push` sends live writes and lands finished rows; tell the person when a teammate needs to see a write now, and never turn autopush on for them. Use `--live` to share a rule or memory without a merge; `--no-live` keeps a row with your branch.
 - **Never put internal content into a client repo.** Without `--to`, notes in a client repo go to the org's internal store. Before posting a PR body or comment run `lore check pr-body --file <file>`; a commit carrying internal ids or sentences is refused (`E_LEAK_BLOCKED`, exit 19), and so is a push of one (the pre-push hook). Never pass `--no-verify` to `git commit` or `git push` there: it skips every local check. Move a note to the client on purpose with `lore move --id <id> --to repo`.
 - **A commit refused for a secret** (lore's commit check names the file, line, rule and a `sha256:…` fingerprint, never the value): strip a real secret and keep it in the vault. A placeholder (`${DB_PASSWORD}`, `<your-password>`, `***`) is never flagged. When the person confirms a finding is not a secret (a schema field named `password`, a test fixture), run the ready `lore secrets allow --file <path> --rule <rule> --match-hash sha256:… --reason "<why>"` line the refusal printed under that finding and commit the new `.lore/data/secret_allows` file with the change; a repo's own `.gitleaksignore` (gitleaks' `<path>:<rule>:<line>`) is honoured too. Never `--no-verify`.
 - **As an agent**, start with `lore agent start --label <name> --owner @<human>` and export what it prints, then loop: `lore inbox`, `lore task next --mission <id>` (exit 10 = no ready work), work, `lore task heartbeat` while working, `lore task note --id <id> --text "<progress>"`, `lore task done --id <id> --pr <n> --lesson "<what you learned>"`. Exit 12, 13 or 14 means the task is no longer yours: stop work on it.
@@ -899,11 +899,11 @@ Quick reactions:
 | Capturing in your reply but not calling `lore` | Dies with the session | `lore memory add` |
 | Calling `lore memory add` but skipping `lore render` | Knowledge is in DB but invisible to the agent | Always `render` after capture |
 | Adding a rule for a one-off preference | Pollutes future sessions | Use `memory add` for soft preferences; `rule add` for true constraints |
-| Mixing repo-scoped + master memories without `--repo` | Memories leak into other repos' renders | Always pass `--repo=<mount>` for repo-specific captures |
+| Mixing repo-scoped + master memories without `--repo` | Memories leak into other repos' renders | Always pass `--repo <mount>` for repo-specific captures |
 | Bypassing secret-scrub without user consent | Leaks credentials into DB | Refuse loudly; offer `--secret-ref` / `--secret-unstored`; `--not-a-secret --reason ... --yes` only with user OK |
 | Storing tasks that map 1:1 to GitHub issues | Duplicate state, drift | Use tags + comments to cross-link, don't mirror |
 | Using `rule` when `decision` is right | Rules say WHAT, decisions say WHY | Use `decision add` when the rationale matters more than the conclusion |
-| Adding rules without severity | Defaults to `must` (blocking) | Always set `--severity=must|should|may` explicitly |
+| Adding rules without severity | Defaults to `must` (blocking) | Always set `--severity must|should|may` explicitly |
 | Committing code but leaving `.lore/data/` out | The knowledge never reaches teammates or `main` | `git add .lore/data .gitattributes` with the change |
 | Resolving a `.lore/data` conflict by taking a whole file side | Silently drops the other side's edits | Edit the marked value; let lore merge the rest |
 | Deleting `.lore/data/` to "reset" | lore keeps the DB and warns; teammates lose rows when it is committed | `git checkout HEAD -- .lore/data` to bring it back |
@@ -916,7 +916,7 @@ Quick reactions:
 2. **Render after every write.** Otherwise the agent doesn't see it.
 3. **Never bypass secret-scrub silently.** A bare `--yes` no longer stores a detected secret; `--not-a-secret --reason "<why>" --yes` requires explicit user consent, and `--secret-ref` / `--secret-unstored` are the usual answers.
 4. **Read-only mode is honored.** If `LORE_READ_ONLY=1` or `--read-only`, refuse writes.
-5. **Scope before storing.** Repo-specific → `--repo=<mount>`. Cross-cutting → master.
+5. **Scope before storing.** Repo-specific → `--repo <mount>`. Cross-cutting → master.
 6. **Errors are codes, not prose.** Match `E_*` strings; the registry is in `docs/reference/cli-commands.md#errors`.
 7. **Never wrap lore in your own retry loop for `UNIQUE constraint failed`.** lore already retries 8x internally.
 8. **Never edit the cache (under `~/.lore/cache/`); prefer the CLI for row files.** The cache is rebuilt from the row files, so a direct edit is lost. A row file may be edited by hand (`lore edit --id <id>` opens it as Markdown; in a store clone the next lore command checks, commits or refuses the change), but the CLI is the safest path: it validates and runs the secret checks before anything is written.

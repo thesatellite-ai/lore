@@ -34,21 +34,18 @@ lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 — Write the launch email [high]
   created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task add --title 'Pick the product photos' --priority low
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Pick the product photos [low]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add --title 'Set up the payment provider' --priority urgent
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Set up the payment provider [urgent]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 $ lore task start --id tsk_54fe…28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 started
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ lore task board
 todo (2)
   tsk_2ad3…f891  Write the launch email
@@ -79,15 +76,12 @@ A checklist item is a small step of one task: no owner, no status, no claim. Add
 $ lore task checklist add --id tsk_2ad3…f891 --text 'Subject line' --item 'Product links' --item 'Discount code' --item 'Send a test to the client'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ 4 checklist items on tsk_2ad3…f891 (chk_05e9…4603, chk_c0f3…b5b8, chk_76bd…3f10, chk_d431…313a)
-lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 $ lore task checklist tick --id tsk_2ad3…f891 --item 1
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ [x] Subject line (1/4)
-lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
 $ lore task checklist edit --id tsk_2ad3…f891 --item 3 --text 'Discount code LAUNCH10'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ chk_76bd…3f10 Discount code LAUNCH10
-lore live: (live, pushed) commit df3a55c to origin refs/lore/live
 $ lore task checklist list --id tsk_2ad3…f891
 1. [x] Subject line  chk_05e9…4603
 2. [ ] Product links  chk_c0f3…b5b8
@@ -105,11 +99,9 @@ $ lore task checklist list --id tsk_2ad3…f891
 $ lore task checklist untick --id tsk_2ad3…f891 --item 1
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ [ ] Subject line (0/4)
-lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
 $ lore task checklist rm --id tsk_2ad3…f891 --item 2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ removed chk_c0f3…b5b8 Product links
-lore live: (live, pushed) commit 34ee210 to origin refs/lore/live
 $ lore task checklist list --id tsk_2ad3…f891
 1. [ ] Subject line  chk_05e9…4603
 2. [ ] Discount code LAUNCH10  chk_76bd…3f10
@@ -127,7 +119,6 @@ $ lore task checklist promote --id tsk_2ad3…f891 --item 3
 lore: wrote ~/work/website/.lore/data/tasks/tsk_b4f4…a5b0.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ chk_d431…313a became tsk_b4f4…a5b0 "Send a test to the client" under tsk_2ad3…f891
-lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 $ lore task list --parent tsk_2ad3…f891
 ○ tsk_b4f4…a5b0 Send a test to the client [high]
 ```
@@ -142,7 +133,6 @@ $ lore task add --title 'Check the shop on a phone' --body $'- [ ] iPhone\n- [ ]
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
 ✓ tsk_28f8…03df — Check the shop on a phone [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
 $ lore task checklist import --id tsk_28f8…03df --from body
 ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_28f8…03df?
   [ ] iPhone
@@ -153,7 +143,6 @@ ERROR: [E_NEEDS_CONFIRM] add 3 checklist items to tsk_28f8…03df?
 $ lore task checklist import --id tsk_28f8…03df --from body --yes
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
 ✓ 3 checklist items from the body of tsk_28f8…03df
-lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
 $ lore task checklist list --id tsk_28f8…03df
 1. [ ] iPhone  chk_4c59…6c38
 2. [ ] Android  chk_3b62…e913
@@ -185,7 +174,6 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_0aae…a61f.json
   2  tsk_b69e…5ed7 Shoot the mugs  (priority high)
   3  tsk_0aae…a61f Edit the photos
   inherited: tasklist tlt_7a67…9504, priority low, commitment accepted
-lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
 $ lore task list --parent tsk_162d…9666
 ○ tsk_2537…6bbb Shoot the shirts [low]
 ○ tsk_b69e…5ed7 Shoot the mugs [high]
@@ -225,25 +213,19 @@ $ lore task add --title 'Write the launch mail'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b — Write the launch mail [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 $ lore task relate --id tsk_4f89…b64b --duplicates tsk_2ad3…f891
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_77cb…76c4.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b duplicates tsk_2ad3…f891; tsk_4f89…b64b cancelled (close_reason duplicate)
-lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
-lore live: landed on main (8c373dc); leaves live once main is fetched
 $ lore task add --title 'Thank-you email after the first order'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 ✓ tsk_d191…45c2 — Thank-you email after the first order [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 6f11034 to origin refs/lore/live
-lore live: 2 row(s) left live (main holds them)
 $ lore task relate --id tsk_d191…45c2 --follows-up tsk_2ad3…f891 --blocked-by tsk_54fe…28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_b4d3…11aa.json
 ✓ tsk_d191…45c2 waits for tsk_54fe…28f2
 ✓ tsk_d191…45c2 follows up tsk_2ad3…f891
-lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -255,7 +237,6 @@ lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 $ lore task unrelate --id tsk_d191…45c2 --blocked-by tsk_54fe…28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 ✓ tsk_d191…45c2 no longer waits for tsk_54fe…28f2
-lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -271,11 +252,9 @@ already watching tsk_54fe…28f2
 $ lore task unwatch --id tsk_54fe…28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ stopped watching tsk_54fe…28f2
-lore live: (live, pushed) commit aba91f6 to origin refs/lore/live
 $ lore task watch --id tsk_54fe…28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ watching tsk_54fe…28f2
-lore live: (live, pushed) commit a8de760 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -289,12 +268,9 @@ lore live: (live, pushed) commit a8de760 to origin refs/lore/live
 $ lore task edit --id tsk_54fe…28f2 --priority high
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 updated
-lore live: (live, pushed) commit 9169078 to origin refs/lore/live
 $ lore task done --id tsk_54fe…28f2 --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 done
-lore live: (live, pushed) commit b733d8a to origin refs/lore/live
-lore live: landed on main (1833373); leaves live once main is fetched
 $ lore task history --id tsk_54fe…28f2
 2026-11-02 10:00  alice               created
 2026-11-02 10:00  alice               status todo → in_progress
@@ -407,8 +383,6 @@ lore: wrote 4 row file(s) in ~/work/website/.lore/data
 ✓ tsk_bfed…eeea — Release 1.4 [high]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
   template release: added 1 task and 3 sub-tasks
-lore live: (live, pushed) commit 59e9d31 to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
 
@@ -424,7 +398,7 @@ $ lore task template list
 shop_release  repo  1 task, 3 sub-tasks, 2 checklist items
 $ lore task template delete --name shop_release --yes
 lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34…b418.json
-✓ ttp_9a34…b418 — template shop_release moved to the trash (restore: lore trash restore ttp_9a34…b418)
+✓ ttp_9a34…b418 — template shop_release moved to the trash (restore: lore trash restore --target ttp_9a34…b418)
 ```
 <!-- /example -->
 
@@ -440,7 +414,6 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_376c…8e1a.json
 ✓ tsk_376c…8e1a — Back up the shop database [medium]
   recurs: every week → next: 2026-11-02, 2026-11-09, 2026-11-16 (series rcs_67e2…291e, #1)
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 7540e63 to origin refs/lore/live
 $ lore task recur show --id tsk_376c…8e1a
 tsk_376c…8e1a Back up the shop database
   rule: every week
@@ -460,8 +433,6 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_8567…366f.json
 ✓ tsk_376c…8e1a done
   every week due 2026-11-02
   next instance: tsk_8567…366f due 2026-11-09 (series rcs_67e2…291e, #2)
-lore live: (live, pushed) commit ef62c83 to origin refs/lore/live
-lore live: landed on main (dd85e7d); leaves live once main is fetched
 $ lore task list --series rcs_67e2…291e --all --sort due_at
 ✓ tsk_376c…8e1a Back up the shop database [medium] due:2026-11-02
 ○ tsk_8567…366f Back up the shop database [medium] due:2026-11-09
@@ -479,9 +450,6 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
 ✓ tsk_8567…366f skipped
   every week due 2026-11-09
   next instance: tsk_71f0…c07d due 2026-11-16 (series rcs_67e2…291e, #3)
-lore live: (live, pushed) commit d18179e to origin refs/lore/live
-lore live: landed on main (f4b8da2); leaves live once main is fetched
-lore live: 1 row(s) left live (main holds them)
 ```
 <!-- /example -->
 
@@ -494,8 +462,6 @@ $ lore task recur edit --id tsk_71f0…c07d --rule 'every! 14 days'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
 ✓ tsk_71f0…c07d updated
   recurs: every! 14 days → next: 2026-11-16, 2026-11-30, 2026-12-14 (series rcs_67e2…291e, #3)
-lore live: (live, pushed) commit 70f4f88 to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
 $ lore task recur show --id tsk_71f0…c07d
 tsk_71f0…c07d Back up the shop database
   rule: every! 14 days
@@ -516,7 +482,6 @@ ERROR: [E_NEEDS_CONFIRM] task recur stop tsk_71f0…c07d?
 $ lore task recur stop --id tsk_71f0…c07d --yes
 lore: wrote ~/work/website/.lore/data/tasks/tsk_71f0…c07d.json
 ✓ tsk_71f0…c07d series rcs_67e2…291e stopped (no further instances; this one stays)
-lore live: (live, pushed) commit d33587e to origin refs/lore/live
 $ lore task recur show --id tsk_71f0…c07d
 tsk_71f0…c07d Back up the shop database
   rule: every! 14 days
@@ -556,9 +521,7 @@ $ lore task stale --close --dry-run
 would cancel them with close_reason stale (nothing written, --dry-run)
 $ lore task stale --close --yes
 lore: wrote 9 row file(s) in ~/work/website/.lore/data
-✓ 9 tasks cancelled (close_reason stale, batch bat_06b1…3d1c); lore batch show bat_06b1…3d1c
-lore live: (live, pushed) commit 34010c1 to origin refs/lore/live
-lore live: landed on main (070bbeb); 4 open row(s) copied, they stay live; leaves live once main is fetched
+✓ 9 tasks cancelled (close_reason stale, batch bat_06b1…3d1c); lore batch show --id bat_06b1…3d1c
 $ lore task list
 ○ tsk_2ad3…f891 Write the launch email [high] 0/0
 ○ tsk_162d…9666 Pick the product photos [low] 0/0

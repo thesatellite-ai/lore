@@ -38,7 +38,7 @@ func TestEstimateNoDayUnit(t *testing.T) {
 	h.Seed("policies", map[string]string{"key": `"tasks.estimate_unit"`, "value": `"days"`, "scope": `"repo"`})
 	for _, raw := range []string{"2", "2d", "16h"} {
 		_, err := h.Run(opstask.OpAdd, `{"title":"x","estimate":"`+raw+`"}`)
-		if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "no day unit") || !strings.Contains(hintOf(err), "tasks.estimate_unit hours") {
+		if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "no day unit") || !strings.Contains(hintOf(err), "--key tasks.estimate_unit --value hours") {
 			t.Fatalf("add --estimate %s under days: %v / %s", raw, err, hintOf(err))
 		}
 		h.Fails(opstask.OpEdit, `{"id":"`+kept+`","estimate":"`+raw+`"}`, errs.InvalidInput)

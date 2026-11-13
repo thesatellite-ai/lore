@@ -12,7 +12,7 @@ ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: orgs[0] "agency": st
 ### not a store
 alice (work/website)$ lore whoami
 ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
-  hint: point stores: at a repo made with `lore store init <name> <url>`, or remove the entry from ~/.lore/config.yaml
+  hint: point stores: at a repo made with `lore store init --name <name> --url <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 alice$ lore store doctor
 ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
@@ -30,13 +30,13 @@ remotes    github.com/client/blog
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   me -> ~/.lore/personal
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
-  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+  hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 alice (work/blog)$ lore memory add --body 'the site deploys from the release branch'
 lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
-  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+  hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 
 ### link unknown
@@ -48,12 +48,12 @@ ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: can
 (exit 18)
 
 ### offline claim
-alice (work/website)$ lore task claim tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore task claim --id tsk_2ad3618e878ebbf527d34d446ef4f891
 ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): git fetch: '/srv/git/github.com/agency/notes' does not appear to be a git repository
   hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
 (exit 15)
 alice (work/website)$ lore memory add --body 'the API keys rotate every 90 days' --to agency || true
-lore: the change is committed in the local copy of store agency; no git repository at git@github.com:agency/notes ('/srv/git/github.com/agency/notes' does not appear to be a git repository); check the store's address (git@github.com:agency/notes): `lore store set-url <store> <url>` fixes a wrong one; local commits stay in the clone meanwhile; run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)
+lore: the change is committed in the local copy of store agency; no git repository at git@github.com:agency/notes ('/srv/git/github.com/agency/notes' does not appear to be a git repository); check the store's address (git@github.com:agency/notes): `lore store set-url --name <store> --url <url>` fixes a wrong one; local commits stay in the clone meanwhile; run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store agency)
 ✓ mem_162df51b7f78b785c97c26b41ea89666 [agency/client]
   scope: [master]
@@ -65,18 +65,18 @@ store agency: sent 1, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 
 ### store branch missing
-alice (work/website)$ LORE_ORG=agency-stag lore org link agency-stag --project client --yes
+alice (work/website)$ LORE_ORG=agency-stag lore org link --org agency-stag --project client --yes
 ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
-  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
+  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init --name <name> --url <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
 (exit 20)
 
 ### refs refused by the host
-bob (work/portal)$ lore task add 'set up the portal CI'
+bob (work/portal)$ lore task add --title 'set up the portal CI'
 lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
 lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — set up the portal CI [medium]
   created tasklist tlt_05e99e22e9e86e96fe4daa7777994603 "default" for tasks added without --tasklist
-lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 bob (work/portal)$ lore live diff
 local     86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
 tracking  (none)
@@ -84,7 +84,6 @@ seen      (none)
 pending   2 write(s) not confirmed by the remote
   _root/task_lists/tlt_05e99e22e9e86e96fe4daa7777994603.json
   _root/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
-lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 bob (work/portal)$ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 15s ago
@@ -93,5 +92,3 @@ bob (work/portal)$ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: 1 row(s) waiting to land; the next live write or `lore sync` lands them
   - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
   - live: post-commit and pre-push hook blocks installed
-  - live: the remote refused a push to refs/lore/live, so live rows stay on this machine (the host may allow only branches and tags): [remote rejected] (pre-receive hook declined)
-lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))

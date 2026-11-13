@@ -15,10 +15,10 @@ Agent:  Got it. Let me capture this so I don't forget.
 
 ```bash
 lore rule add \
-    --severity=must \
-    --activation=glob \
-    --globs='["**/*.go", "!**/*_test.go"]' \
-    --body="Never put passwords in the code; read them from environment variables."
+    --severity must \
+    --activation glob \
+    --globs '["**/*.go", "!**/*_test.go"]' \
+    --body "Never put passwords in the code; read them from environment variables."
 # ✓ rul_<id> rul_019e...
 #   severity:   must
 #   activation: glob

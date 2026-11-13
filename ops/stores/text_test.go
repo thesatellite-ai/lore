@@ -212,6 +212,10 @@ func TestStoreNamed(t *testing.T) {
 				if !errs.Has(err, c.code) || f.got.URL != "" {
 					t.Fatalf("err %v (want %s), opened %+v", err, c.code, f.got)
 				}
+				// U-4: the hint teaches the url form with its flag
+				if h := errs.EnvelopeOf(err).Error.Hint; !strings.Contains(h, "lore store open --url <url>") {
+					t.Fatalf("hint %q lacks the named url form", h)
+				}
 				return
 			}
 			if err != nil || f.got.URL != c.url || f.got.Branch != c.branch {

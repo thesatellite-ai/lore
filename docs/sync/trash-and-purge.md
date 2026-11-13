@@ -80,7 +80,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 purged 1 row
   mem_05e9…4603 (memories, repo)
 tombstones are kept forever; the old content is still in git history (rotate any leaked secret)
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ cat .lore/data/_purged.json
 {
   "_v": 1,
@@ -91,6 +91,7 @@ $ cat .lore/data/_purged.json
 $ git add -A && git status --short && git commit -qm 'lore: purge archived rows' && git push -q origin main
 A  .lore/data/_purged.json
 M  .lore/data/memories/mem_05e9…4603.json
+lore live: pushed waiting live writes commit 05513aa to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -109,7 +110,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
   scope: [master]
 $ lore memory delete --id mem_2537…6bbb --reason 'the demo moved' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
-✓ mem_2537…6bbb moved to the trash (restore: lore trash restore mem_2537…6bbb)
+✓ mem_2537…6bbb moved to the trash (restore: lore trash restore --target mem_2537…6bbb)
 $ lore trash list
 mem_2537…6bbb  memories  "The demo is on Friday at 10."  2026-11-02 10:07  by alice  reason "the demo moved"  bat_b69e…5ed7
 mem_3b62…e913  memories  "send the invoice reminder before the dem…"  2026-11-02 10:05  by bob  reason "merged into mem_4c59…6c38"  bat_f147…5139
@@ -157,7 +158,7 @@ would delete 2 memory(s): mem_0aae…a61f Staging deploys at 9.; mem_6a86…ed8c
 $ lore memory delete --where 'body~=deploys' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_0aae…a61f.json
 lore: wrote ~/work/website/.lore/data/memories/mem_6a86…ed8c.json
-✓ 2 memory(s) (--where) moved to the trash (batch bat_4f89…b64b; restore: lore trash restore bat_4f89…b64b)
+✓ 2 memory(s) (--where) moved to the trash (batch bat_4f89…b64b; restore: lore trash restore --target bat_4f89…b64b)
 $ lore trash stats
 3 rows in the trash (0 dependents), 0 past trash.retention_days
 by type

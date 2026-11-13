@@ -19,6 +19,7 @@ For example, the fetch a `lore sync` makes (the time is shown as `<time>` here):
 # alice, in billing
 $ lore sync --trace 2>&1 | grep -e '^trace: git fetch' -e '^trace: git push' -e '^·'
 trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok)
+trace: git push --porcelain --no-verify -- origin 05513aa29b78:refs/lore/live (<time>, ok)
 · already in sync
 ```
 <!-- /example -->
@@ -29,12 +30,16 @@ Lore fetches once per command and reuses that fetch for 60 seconds (`live.fetch_
 
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console
+# bob, in billing
+$ lore sync
+lore live: pushed waiting live writes commit cf563f3 to origin refs/lore/live
+lore live: 1 row(s) left live (main holds them)
+lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
+lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
+
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
 (no tasks)
-$ lore sync && lore task list --mine
-· already in sync
-○ tsk_54fe…28f2 check the checkout page on a phone [medium]
 ```
 <!-- /example -->
 
@@ -101,13 +106,13 @@ remotes    github.com/client/blog
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   me -> ~/.lore/personal
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
-  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+  hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore memory add --body 'the site deploys from the release branch'
 lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
-  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+  hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 ```
 <!-- /example -->
@@ -145,7 +150,7 @@ A staging entry (or a typo in `branch:`) names a store branch that does not exis
 <!-- example: errors#store-branch-missing -->
 ```console
 # alice, in website
-$ LORE_ORG=agency-stag lore org link agency-stag --project client --yes
+$ LORE_ORG=agency-stag lore org link --org agency-stag --project client --yes
 ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
   hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init --name <name> --url <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
 (exit 20)
@@ -231,7 +236,7 @@ lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
 lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
   created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
-lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore live diff
 local     86dbae476bd6
 tracking  (none)
@@ -239,7 +244,6 @@ seen      (none)
 pending   2 write(s) not confirmed by the remote
   _root/task_lists/tlt_05e9…4603.json
   _root/tasks/tsk_54fe…28f2.json
-lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 15s ago
@@ -248,12 +252,10 @@ $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: 1 row(s) waiting to land; the next live write or `lore sync` lands them
   - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
   - live: post-commit and pre-push hook blocks installed
-  - live: the remote refused a push to refs/lore/live, so live rows stay on this machine (the host may allow only branches and tags): [remote rejected] (pre-receive hook declined)
-lore live: (live, not pushed yet: 2 waiting; the remote refused refs/lore/live: [remote rejected] (pre-receive hook declined))
 ```
 <!-- /example -->
 
-Fix: allow `refs/lore/*` on the host (or in its pre-receive hook). Until then, live rows only reach teammates when they land on `main`. `lore land --all` lands them now. Setting `live.autopush: false` stops the retries.
+Fix: allow `refs/lore/*` on the host (or in its pre-receive hook). Until then, live rows only reach teammates when they land on `main`. `lore land --all` lands them now. Setting `live.autopush: false` (the default) stops the retries after each write.
 
 ## A URL shows `<redacted>`
 
@@ -359,7 +361,7 @@ Lore keeps a local cache (under `~/.lore/cache/`) and takes a short lock while i
 
 ## FAQ
 
-**Alice creates a task for Bob (another agency developer) on her branch. Does Bob get it only after a merge to `main`?** No. Tasks are live: they are pushed to `refs/lore/live` at once. Every clone sees them on its next command (cached up to 60 seconds), whatever branch anyone is on. They land on `main` (are copied into it) when finished.
+**Alice creates a task for Bob (another agency developer) on her branch. Does Bob get it only after a merge to `main`?** No. Tasks are live: Alice's `lore sync` or your next `git push` pushes them to `refs/lore/live` (lore never pushes by itself unless `live.autopush` is on). Every clone then sees them after its next fetch (`lore sync` fetches at once), whatever branch anyone is on. A finished task lands on `main` (is copied into it) on the next `lore sync`.
 
 **Is `refs/lore/live` a branch?** No. It is a git ref outside `refs/heads/`: fetched and pushed like a branch, but `git branch` does not list it and nobody checks it out. It is hidden, not private.
 

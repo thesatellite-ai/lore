@@ -27,17 +27,15 @@ lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 — Send the invoice reminder before Friday's demo [high]
   created tasklist tlt_7a67…9504 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task add --title 'Fix the typo on the pricing page' --body 'The Pro plan says 9 a month; it should say 19.'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Fix the typo on the pricing page [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add --title 'Update the footer year'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Update the footer year [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -68,7 +66,6 @@ $ lore task list
 $ lore task start --id tsk_162d…9666
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 started
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ lore task list --status in_progress
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
 ```
@@ -102,7 +99,6 @@ created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:00:25Z by alice
 $ lore task edit --id tsk_54fe…28f2 --priority low --due 2026-11-20 --title 'Update the footer year to 2027'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 updated
-lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 $ lore task show --id tsk_54fe…28f2
 tsk_54fe…28f2
   title:    Update the footer year to 2027
@@ -126,8 +122,6 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ tsk_2ad3…f891 done
   lesson → mem_05e9…4603
-lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
-lore live: landed on main (df3a55c); leaves live once main is fetched
 $ lore task list
 ▶ tsk_162d…9666 Fix the typo on the pricing page [medium]
 ○ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
@@ -168,9 +162,6 @@ Cancel a task you will not do. It stays in the history, so you can still find it
 $ lore task cancel --id tsk_54fe…28f2
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 cancelled
-lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
-lore live: landed on main (34ee210); leaves live once main is fetched
-lore live: 2 row(s) left live (main holds them)
 $ lore task list --status cancelled
 ✗ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
 ```
@@ -185,16 +176,13 @@ $ lore task add --title 'Test task, please ignore'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 — Test task, please ignore [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 7898daa to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
 $ lore task delete --id tsk_c0f3…b5b8
 ERROR: [E_NEEDS_CONFIRM] delete task tsk_c0f3…b5b8 Test task, please ignore?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore task delete --id tsk_c0f3…b5b8 --yes
 lore: wrote ~/work/website/.lore/data/tasks/tsk_c0f3…b5b8.json
-✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore tsk_c0f3…b5b8)
-lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
+✓ tsk_c0f3…b5b8 moved to the trash (restore: lore trash restore --target tsk_c0f3…b5b8)
 ```
 <!-- /example -->
 
@@ -211,12 +199,10 @@ $ lore task add --title 'Write the welcome email'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 — Write the welcome email [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 9d655a5 to origin refs/lore/live
 $ lore task add --title 'Send the welcome email' --after tsk_76bd…3f10
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d431…313a.json
 ✓ tsk_d431…313a — Send the welcome email [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
 $ lore task show --id tsk_d431…313a
 tsk_d431…313a
   title:    Send the welcome email
@@ -254,11 +240,9 @@ lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
 $ lore task add --title 'Check every link on the home page' --tasklist tlt_b4f4…a5b0
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
 ✓ tsk_28f8…03df — Check every link on the home page [medium]
-lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
 $ lore task edit --id tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 updated
-lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
 $ lore tasklist list
 tlt_7a67…9504  default [active]  (4 tasks)
 tlt_b4f4…a5b0  Launch week [active]  (2 tasks)
@@ -267,8 +251,6 @@ tlt_b4f4…a5b0 Launch week
 $ lore tasklist edit --id tlt_b4f4…a5b0 --status closed
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
 ✓ tasklist tlt_b4f4…a5b0 updated
-lore live: (live, pushed) commit 8c373dc to origin refs/lore/live
-lore live: landed on main (6f11034); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -349,8 +331,6 @@ $ lore task import --file ~/backlog.csv --map-status 'To Do=todo,In Review=in_pr
 lore: wrote ~/work/website/.lore/data/tasks/tsk_9a34…b418.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_bfed…eeea.json
 ✓ 2 tasks imported from csv (batch bat_376c…8e1a; `lore task list` shows their new ids)
-lore live: (live, pushed) commit 40bd5f4 to origin refs/lore/live
-lore live: 2 row(s) left live (main holds them)
 $ lore task import --file ~/backlog.csv --map-status 'To Do=todo,In Review=in_progress' --yes
   2 already imported, nothing added for them:
     T-1  Add a cookie banner  (already imported as tsk_9a34…b418)
@@ -391,13 +371,11 @@ The commands and their output are written to `tests/docs/transcripts/tasks.txt`.
 $ git commit -qm 'Fix the Pro plan price on the pricing page'
 lore: added 5 lore row file(s) to this commit: .lore/data/_meta.json, .lore/data/memories/mem_05e9…4603.json, .lore/data/reminders/rmd_b69e…5ed7.json, .lore/data/reminders/rmd_0aae…a61f.json, .lore/data/task_views/tvw_4c59…6c38.json (lore's rows travel with your commits)
 $ git push -q origin main
-To /srv/git/github.com/client/website
- ! [rejected]        main -> main (non-fast-forward)
+lore: added "lore: land 4 rows (_root)" to main (tlt_7a67…9504, tlt_b4f4…a5b0, tsk_2ad3…f891, tsk_54fe…28f2)
+ERROR: [E_INVALID_INPUT] lore added 'lore: land 4 rows (_root)' to main (rows that finished in live land with your push); run git push again
+  hint: the commit only adds .lore/data files of rows that finished in live
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
 error: failed to push some refs to '/srv/git/github.com/client/website'
-hint: Updates were rejected because the tip of your current branch is behind
-hint: its remote counterpart. If you want to integrate the remote changes,
-hint: use 'git pull' before pushing again.
-hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 (exit 1)
 $ git pull -q --rebase origin main && git push -q origin main
 ```

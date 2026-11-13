@@ -176,7 +176,7 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 <!-- example: environment#live-off -->
 ```console
 # alice, in website
-$ LORE_LIVE=0 lore task add 'Update the privacy page'
+$ LORE_LIVE=0 lore task add --title 'Update the privacy page'
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2ad3…f891.json
 ✓ tsk_2ad3…f891 — Update the privacy page [medium]
@@ -189,7 +189,7 @@ $ lore task add --title 'Check the contact form on a phone'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Check the contact form on a phone [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore live show
 task_lists tlt_7a67…9504     live      since 2026-11-02 10:00
 tasks      tsk_162d…9666     live      since 2026-11-02 10:00
@@ -202,23 +202,24 @@ tasks      tsk_162d…9666     live      since 2026-11-02 10:00
 <!-- example: environment#autopush-off -->
 ```console
 # alice, in website
-$ LORE_LIVE_AUTOPUSH=0 lore task add 'Renew the SSL certificate'
+$ LORE_LIVE_AUTOPUSH=0 lore task add --title 'Renew the SSL certificate'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Renew the SSL certificate [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, not pushed yet: 1 waiting; autopush is off, `lore sync` pushes)
 $ lore live diff
-local     86dbae476bd6
-tracking  601d2850ffd0
-seen      601d2850ffd0
-pending   1 write(s) not confirmed by the remote
+local     601d2850ffd0
+tracking  (none)
+seen      (none)
+pending   3 write(s) not confirmed by the remote
+  _root/task_lists/tlt_7a67…9504.json
+  _root/tasks/tsk_162d…9666.json
   _root/tasks/tsk_54fe…28f2.json
-lore live: pushed waiting live writes commit 86dbae4 to origin refs/lore/live
-$ LORE_LIVE_AUTOPUSH=0 lore task claim tsk_54fe…28f2
+$ LORE_LIVE_AUTOPUSH=0 lore task claim --id tsk_54fe…28f2
 ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
   hint: coordination writes (claims, releases, holds) are never queued; turn live.autopush on (or unset LORE_LIVE_AUTOPUSH=0) and run the command again
 (exit 15)
 $ lore sync
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
 · already in sync
 ```
 <!-- /example -->

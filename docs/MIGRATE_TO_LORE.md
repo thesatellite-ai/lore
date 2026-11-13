@@ -91,7 +91,7 @@ lore.
 - The notes are the files in `.lore/data`; commit them. lore's cache
   is outside the repo (`~/.lore/cache/repo/<folder>-<hash>.db`) and is
   rebuilt from those files, so there is no database to back up.
-- `--scope=foobar` and other invalid enum values: the skill bundle says to
+- `--scope foobar` and other invalid enum values: the skill bundle says to
   surface the error rather than forward.
 
 ## When you're done
@@ -100,7 +100,7 @@ End with one paste-ready command block I can use to capture more knowledge
 the natural way (no `lore` jargon — just normal English I'd say,
 followed by the command the skill should emit). Something like:
 
-> "Remember: <X>" → `lore memory add "<X>"; lore render`
+> "Remember: <X>" → `lore memory add --body "<X>"; lore render`
 > "We always <X>" → `lore rule add --severity=must "<X>"; lore render`
 > "We keep hitting <X>" → `lore hotfix add --severity=high "<X>"; lore render`
 > "We decided <X> because <Y>" → `lore decision add --title="<X>" --body="<Y>"; lore render`
