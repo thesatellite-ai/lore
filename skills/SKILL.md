@@ -716,7 +716,7 @@ Bulk export every entity kind to JSON for portability or fine-tuning. **Recipe: 
 Per-repo / master-only / tag-filtered renders. **Recipe: [PLAYBOOKS.md § P19](./PLAYBOOKS.md).**
 
 ### P20 — Migrate to a new lore version
-Commit `.lore/data` → `lore upgrade` → nothing else to run (the cache rebuilds itself); `lore migrate run` only for v0.1.17 data → verify. **Recipe: [PLAYBOOKS.md § P20](./PLAYBOOKS.md).**
+Commit `.lore/data` → `lore upgrade` → nothing else to run (the cache rebuilds itself); `lore migrate run` only for v0.1.17 data, run once by a person after every teammate upgraded (nothing migrates by itself; `E_FORMAT_OLD` until then) → verify. **Recipe: [PLAYBOOKS.md § P20](./PLAYBOOKS.md).**
 
 ---
 
