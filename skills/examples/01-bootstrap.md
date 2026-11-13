@@ -30,9 +30,9 @@ Alice:  Yes.
 ```
 
 ```bash
-lore rule add --severity=must --body="Run the tests before you push"
-lore rule add --severity=must --body="Never put passwords in the code"
-lore memory add --body="Buttons are blue"
+lore rule add --severity must --body "Run the tests before you push"
+lore rule add --severity must --body "Never put passwords in the code"
+lore memory add --body "Buttons are blue"
 lore render
 ```
 

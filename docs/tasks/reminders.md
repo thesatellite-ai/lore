@@ -72,7 +72,7 @@ ERROR: [E_NEEDS_CONFIRM] reminder delete rmd_0aae…a61f?
 (exit 26)
 $ lore reminder delete --id rmd_0aae…a61f --yes
 lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
-✓ rmd_0aae…a61f moved to the trash (restore: lore trash restore rmd_0aae…a61f)
+✓ rmd_0aae…a61f moved to the trash (restore: lore trash restore --target rmd_0aae…a61f)
 ```
 <!-- /example -->
 

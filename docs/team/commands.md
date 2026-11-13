@@ -64,7 +64,7 @@ Persist an identity: the active setup's in ~/.lore/config.yaml (top-level identi
 
 ```text
 Usage:
-  lore identity set [--identity identity]
+  lore identity set [--identity <identity>]
 
 Examples:
   # your email
@@ -73,12 +73,13 @@ Examples:
   lore identity set --org agency --key human:alice@agency.example --name "Alice Doe" --handle alice
 
 Flags:
-      --handle string   roster handle, without @
-      --json            print the result (or the error) as JSON
-      --key string      human:<your email> (with --org: your email in that org)
-      --name string     with --org: display name
-      --org string      set your identity inside this org entry of ~/.lore/config.yaml
-      --yes             answer yes to the confirmation without a terminal
+      --handle string     roster handle, without @
+      --identity string   your email, or "Name <email>", or a name with --key human:<email> (not with --org)
+      --json              print the result (or the error) as JSON
+      --key string        human:<your email> (with --org: your email in that org)
+      --name string       with --org: display name
+      --org string        set your identity inside this org entry of ~/.lore/config.yaml
+      --yes               answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -89,7 +90,7 @@ Link this repo to an internal project in the org's store
 
 ```text
 Usage:
-  lore org link [--org org]
+  lore org link [--org <org>]
 
 Examples:
   # link to an internal project
@@ -103,6 +104,7 @@ Flags:
       --default          the link --to <org> uses when this repo has several
       --dry-run          validate and show the link, write nothing
       --json             print the result (or the error) as JSON
+      --org string       the org entry (default: the only org entry on this machine, else the active setup's org)
       --own              this is one of the org's own repos (only for own: patterns)
       --project string   the internal project folder in the store (required)
       --remote string    which remote, when the repo has several
@@ -118,7 +120,7 @@ Choose the org entry for this project on this machine (not committed)
 
 ```text
 Usage:
-  lore org use [--entry entry]
+  lore org use [--entry <entry>]
 
 Examples:
   # work against the staging store branch here
@@ -127,9 +129,10 @@ Examples:
   lore org use --clear
 
 Flags:
-      --clear   forget the choice for this project
-      --json    print the result (or the error) as JSON
-      --yes     answer yes to the confirmation without a terminal
+      --clear          forget the choice for this project
+      --entry string   the org entry to use for this project on this machine
+      --json           print the result (or the error) as JSON
+      --yes            answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -151,6 +154,7 @@ Examples:
 Flags:
       --commit           confirm writing the committed .lore/org.yaml
       --json             print the result (or the error) as JSON
+      --org string       the org the committed .lore/org.yaml names (required)
       --project string   the internal project folder (optional)
       --yes              answer yes to the confirmation without a terminal
 ```
@@ -178,6 +182,7 @@ Flags:
       --json            print the result (or the error) as JSON
       --key string      your identity key in this org: human:<your email there> (required)
       --name string     your display name (required)
+      --url string      the org's store url (required)
       --yes             answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
@@ -221,9 +226,10 @@ Examples:
   lore actor deactivate --handle @carol
 
 Flags:
-      --json        print the result (or the error) as JSON
-      --read-only   refuse writes (also LORE_READ_ONLY=1)
-      --yes         answer yes to the confirmation without a terminal
+      --handle string   the person's @handle (required)
+      --json            print the result (or the error) as JSON
+      --read-only       refuse writes (also LORE_READ_ONLY=1)
+      --yes             answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -268,7 +274,7 @@ Make a git repo or folder a lore store and attach it (me = your personal store)
 
 ```text
 Usage:
-  lore store init --name <name> [--url url]
+  lore store init --name <name> [--url <url>]
 
 Examples:
   # your personal store, a local folder
@@ -278,6 +284,8 @@ Examples:
 
 Flags:
       --json                print the result (or the error) as JSON
+      --name string         the store's name in this repo (me = your personal store) (required)
+      --url string          git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)
       --visibility string   internal (default) or shareable: whether its rows may reach client repos
       --yes                 answer yes to the confirmation without a terminal
 ```
@@ -290,7 +298,7 @@ List the configured org stores, their clones and (with --links) the link index; 
 
 ```text
 Usage:
-  lore store show [--store store]
+  lore store show [--store <store>]
 
 Examples:
   # every store
@@ -299,8 +307,9 @@ Examples:
   lore store show --store me
 
 Flags:
-      --json    print the result (or the error) as JSON
-      --links   also print the cached link index of every entry
+      --json           print the result (or the error) as JSON
+      --links          also print the cached link index of every entry
+      --store string   one store (me, team, an org store or a .lore/stores.yaml store name): its push mode, compaction and unpushed commits
 ```
 <!-- /help -->
 
@@ -311,7 +320,7 @@ Set a store's push mode and history compaction (me, an org store as its admin, o
 
 ```text
 Usage:
-  lore store set --store <store> --settings <settings...>
+  lore store set --store <store> --settings <settings>
 
 Examples:
   # batch the personal store's pushes
@@ -320,7 +329,9 @@ Examples:
   lore store set --store team --settings compact=on --settings compact_after=30d
 
 Flags:
-      --json   print the result (or the error) as JSON
+      --json                   print the result (or the error) as JSON
+      --settings stringArray   key=value: push=now|batch|manual, push_every=5m, compact=on|off, compact_after=30d (required)
+      --store string           the store: me (personal), an org's store (team, or its name), or a .lore/stores.yaml store (required)
 ```
 <!-- /help -->
 
@@ -349,6 +360,7 @@ Flags:
       --reason string            why the detected text is not a secret (with --not-a-secret)
       --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
       --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --store string             the store: me (personal), an org's store (team, or its name), or a .lore/stores.yaml store (required)
       --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
@@ -369,6 +381,7 @@ Examples:
 Flags:
       --branch string   store branch (default: the entry's branch)
       --json            print the result (or the error) as JSON
+      --url string      the store url (any form a configured store uses) or a store name this repo attaches (required)
 ```
 <!-- /help -->
 
@@ -386,8 +399,9 @@ Examples:
   lore store forget --url git@github.com:agency/notes
 
 Flags:
-      --json   print the result (or the error) as JSON
-      --yes    answer yes to the confirmation without a terminal
+      --json         print the result (or the error) as JSON
+      --url string   the store url (or a store name this repo attaches) whose clone this machine drops (required)
+      --yes          answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -420,7 +434,7 @@ List this project's live rows, or print one live file
 
 ```text
 Usage:
-  lore live show [--id id]
+  lore live show [--id <id>]
 
 Examples:
   # every live row
@@ -429,7 +443,8 @@ Examples:
   lore live show --id tsk_31
 
 Flags:
-      --json   print the result (or the error) as JSON
+      --id string   a live row id: print its file (default: list every live row)
+      --json        print the result (or the error) as JSON
 ```
 <!-- /help -->
 
@@ -519,8 +534,10 @@ Someone deleted `refs/lore/live` on the server. From then on every live write, `
 ```console
 # alice, in billing
 $ git push -q origin :refs/lore/live && git ls-remote origin
-9b40ce71af28	HEAD
-9b40ce71af28	refs/heads/main
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
+remote: warning: allowing deletion of corrupt ref        
+86dbae476bd6	HEAD
+86dbae476bd6	refs/heads/main
 $ lore task add --title 'close the books for Q1'
 ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it (your local copy is kept as refs/lore-backup/live/20261102T100020)
   hint: run `lore live restore` to put your live rows back on the remote
@@ -536,12 +553,11 @@ $ lore doctor | grep 'remote live ref'
 $ lore live restore
 ✓ restored refs/lore/live: 3 rows (left out 0 already landed or purged)
 $ git ls-remote origin refs/lore/live
-05513aa29b78	refs/lore/live
+9b40ce71af28	refs/lore/live
 $ lore task add --title 'close the books for Q1'
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — close the books for Q1 [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 $ lore task list
 ○ tsk_2ad3…f891 send the March invoices [medium]
 ○ tsk_162d…9666 chase the unpaid February invoice [medium]
@@ -556,7 +572,7 @@ Remove rows from live for good (leak cleanup): no clone can push them back
 
 ```text
 Usage:
-  lore live purge --ids <ids...>
+  lore live purge --ids <ids>
 
 Examples:
   # see what a purge would remove
@@ -565,10 +581,11 @@ Examples:
   lore live purge --ids mem_0c3a --confirm
 
 Flags:
-      --confirm   required: purge removes rows from live for good
-      --dry-run   show what would be purged; write nothing
-      --json      print the result (or the error) as JSON
-      --yes       answer yes to the confirmation without a terminal
+      --confirm           required: purge removes rows from live for good
+      --dry-run           show what would be purged; write nothing
+      --ids stringArray   the live row ids to remove for good (required)
+      --json              print the result (or the error) as JSON
+      --yes               answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -579,8 +596,8 @@ Write live rows to main now (finished rows land; open rows are copied and stay l
 
 ```text
 Usage:
-  lore land [--id id]
-  lore land --id <command>
+  lore land [--id <id>]
+  lore land <command>
 
 Examples:
   # see what would land
@@ -594,6 +611,7 @@ Available Commands:
 Flags:
       --all              every live row of this project
       --dry-run          print the plan, change nothing
+      --id string        the row to land
       --json             print the result (or the error) as JSON
       --kind string      only rows of this kind (tasks, rules, …)
       --mission string   only the mission and its tasks
@@ -609,7 +627,7 @@ Show every copy of a row (live, this branch, the default branch), which one wins
 ```text
 Usage:
   lore explain --id <id>
-  lore explain --id <command>
+  lore explain <command>
 
 Examples:
   # why does this row look the way it does
@@ -619,7 +637,8 @@ Available Commands:
   run         Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision
 
 Flags:
-      --json   print the result (or the error) as JSON
+      --id string   the row id (required)
+      --json        print the result (or the error) as JSON
 ```
 <!-- /help -->
 
@@ -640,6 +659,7 @@ Examples:
 
 Flags:
       --drop-internal      into a client repo: remove the row's internal metadata values instead of refusing
+      --id string          any row id (required)
       --json               print the result (or the error) as JSON
       --to string          the target store: repo | me | <store>[/<folder>] (required)
       --with-children      a task: move its whole subtree too; every sub-task keeps its id and parent
@@ -698,8 +718,9 @@ Examples:
   gh pr view 12 --json body -q .body | lore check pr-body --file -
 
 Flags:
-      --explain   print the rule, the source and the matched words of each finding
-      --json      print the result (or the error) as JSON
+      --explain       print the rule, the source and the matched words of each finding
+      --file string   the body file, or - for stdin (required)
+      --json          print the result (or the error) as JSON
 ```
 <!-- /help -->
 
@@ -805,7 +826,7 @@ Add a new task
 
 ```text
 Usage:
-  lore task add [--title title...]
+  lore task add [--title <title>]
 
 Examples:
   # add a task
@@ -851,6 +872,7 @@ Flags:
       --tasklist string          tasklist_id (tlt_*); default: the project's default list (created on demand)
       --template string          apply this task template (its name or ttp_ id); the title comes from the template
       --timebox duration         time box, e.g. 60m (active lease time summed across holders)
+      --title string             the task title (several words are joined; omitted with --template)
       --to string                store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo) (also --store)
       --yes                      answer yes to the confirmation without a terminal
 ```
@@ -865,7 +887,7 @@ Edit task fields (only flags you pass are applied)
 
 ```text
 Usage:
-  lore task edit [--id id]
+  lore task edit [--id <id>]
 
 Examples:
   # raise the priority
@@ -893,6 +915,7 @@ Flags:
       --due string                    due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)
       --estimate string               estimate in the project's unit (tasks.estimate_unit)
       --first                         place first among its siblings
+      --id string                     the task id (tsk_…); leave out with --where
       --json                          print the result (or the error) as JSON
       --last                          place last among its siblings
       --lead string                   make this person the lead (added to the assignees if missing)
@@ -996,6 +1019,7 @@ Examples:
 Flags:
       --expand        fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string     the task id (tsk_…) (required)
       --json          print the result (or the error) as JSON
       --read-only     refuse writes (also LORE_READ_ONLY=1)
       --relations     show every relation, both directions
@@ -1024,6 +1048,7 @@ Flags:
       --commit string            the commit that finished the task
       --force                    close even with unticked checklist items
       --from string              the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string                the task id (tsk_…) (required)
       --json                     print the result (or the error) as JSON
       --lesson string            save a lesson learned (a memory pointing at the task)
       --no-lesson                skip the lesson reminder
@@ -1053,6 +1078,7 @@ Examples:
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string     the task id (tsk_…) (required)
       --json          print the result (or the error) as JSON
       --read-only     refuse writes (also LORE_READ_ONLY=1)
       --repo string   scope to a specific repo (mount_name or rep_id)
@@ -1075,6 +1101,7 @@ Examples:
 
 Flags:
       --children string           open sub-tasks: cancel | done them in the same write (required when there are any)
+      --id string                 the task id (tsk_…) (required)
       --json                      print the result (or the error) as JSON
       --not-a-secret              keep a detected secret as a false positive (needs --not-a-secret-why; --yes without a terminal)
       --not-a-secret-why string   why the detected text is not a secret (with --not-a-secret; this command's --reason means something else)
@@ -1093,7 +1120,7 @@ Add a new mission
 
 ```text
 Usage:
-  lore mission add --title <title...>
+  lore mission add --title <title>
 
 Examples:
   # add a mission
@@ -1116,6 +1143,7 @@ Flags:
       --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
       --starts-at string         when the mission's work starts (YYYY-MM-DD or a date phrase)
       --target string            target completion date (YYYY-MM-DD or a date phrase: eom, next fri, in 2w, …)
+      --title string             the mission title (several words are joined) (required)
       --to string                store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo) (also --store)
       --yes                      answer yes to the confirmation without a terminal
 ```
@@ -1135,6 +1163,7 @@ Examples:
   lore mission status --id msn_<id> --json
 
 Flags:
+      --id string   the mission id (msn_…) (required)
       --json        print the result (or the error) as JSON
       --read-only   refuse writes (also LORE_READ_ONLY=1)
 ```
@@ -1155,6 +1184,7 @@ Examples:
 
 Flags:
       --dry-run                  show what would be written; write nothing
+      --file string              the YAML plan file (required)
       --json                     print the result (or the error) as JSON
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
       --read-only                refuse writes (also LORE_READ_ONLY=1)
@@ -1210,6 +1240,7 @@ Examples:
 Flags:
       --coordinate         take a coordinator lease on a parent with open sub-tasks
       --from string        the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string          the task or mission id (tsk_…, msn_…) (required)
       --json               print the result (or the error) as JSON
       --owns stringArray   paths this claim owns (directory prefixes ending in / or exact files)
       --read-only          refuse writes (also LORE_READ_ONLY=1)
@@ -1251,7 +1282,7 @@ Renew your claim's lease (alive, not progress)
 
 ```text
 Usage:
-  lore task heartbeat [--id id]
+  lore task heartbeat [--id <id>]
 
 Examples:
   # renew one claim
@@ -1259,6 +1290,7 @@ Examples:
 
 Flags:
       --daemon      keep renewing until the claim ends or the parent exits
+      --id string   the claimed task (tsk_…); leave out to renew every claim of this session
       --json        print the result (or the error) as JSON
       --read-only   refuse writes (also LORE_READ_ONLY=1)
       --yes         answer yes to the confirmation without a terminal
@@ -1280,6 +1312,7 @@ Examples:
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string     the task id (tsk_…) (required)
       --json          print the result (or the error) as JSON
       --read-only     refuse writes (also LORE_READ_ONLY=1)
       --yes           answer yes to the confirmation without a terminal
@@ -1293,20 +1326,22 @@ Record a progress note on a task (pushes your work branch)
 
 ```text
 Usage:
-  lore task note --id <id> --text <text...>
+  lore task note --id <id> --text <text>
 
 Examples:
   # a checkpoint note
   lore task note --id tsk_<id> --text "route + loader done, form next"
 
 Flags:
-      --everywhere    with --to me: file the note under everywhere/ (loads in every repo)
-      --force-org     write even though LORE_ORG or lore org use disagrees with a store link
-      --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
-      --json          print the result (or the error) as JSON
-      --read-only     refuse writes (also LORE_READ_ONLY=1)
-      --to string     where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
-      --yes           answer yes to the confirmation without a terminal
+      --everywhere         with --to me: file the note under everywhere/ (loads in every repo)
+      --force-org          write even though LORE_ORG or lore org use disagrees with a store link
+      --from string        the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string          the task id (tsk_…) (required)
+      --json               print the result (or the error) as JSON
+      --read-only          refuse writes (also LORE_READ_ONLY=1)
+      --text stringArray   the note (several words are joined) (required)
+      --to string          where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --yes                answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1325,6 +1360,7 @@ Examples:
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string     the task id (tsk_…) (required)
       --json          print the result (or the error) as JSON
       --read-only     refuse writes (also LORE_READ_ONLY=1)
       --yes           answer yes to the confirmation without a terminal
@@ -1338,7 +1374,7 @@ Assign a task to someone else, dropping any claim (human override); --from reass
 
 ```text
 Usage:
-  lore task reassign [--id id]
+  lore task reassign [--id <id>]
 
 Examples:
   # offboarding
@@ -1347,6 +1383,7 @@ Examples:
 Flags:
       --assign string            the new assignee (@handle)
       --from string              reassign every open task of this person
+      --id string                the task id (tsk_…); leave out with --from
       --json                     print the result (or the error) as JSON
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
       --read-only                refuse writes (also LORE_READ_ONLY=1)
@@ -1372,6 +1409,7 @@ Examples:
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string     the task id (tsk_…) (required)
       --json          print the result (or the error) as JSON
       --yes           answer yes to the confirmation without a terminal
 ```
@@ -1392,6 +1430,7 @@ Examples:
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string     the task id (tsk_…) (required)
       --json          print the result (or the error) as JSON
       --yes           answer yes to the confirmation without a terminal
 ```
@@ -1414,6 +1453,7 @@ Examples:
 
 Flags:
       --json           print the result (or the error) as JSON
+      --name string    the resource to hold (a test suite, a staging slot) (required)
       --on string      project (the project's signals ref, the default) or machine
       --ttl duration   how long the hold lasts (default: lease.ttl)
       --yes            answer yes to the confirmation without a terminal
@@ -1434,8 +1474,9 @@ Examples:
   lore hold release --name full-suite
 
 Flags:
-      --json   print the result (or the error) as JSON
-      --yes    answer yes to the confirmation without a terminal
+      --json          print the result (or the error) as JSON
+      --name string   the resource to release (required)
+      --yes           answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1446,14 +1487,14 @@ Leave a handoff for someone (shows in their inbox)
 
 ```text
 Usage:
-  lore handoff add [--body text...]
+  lore handoff add
 
 Examples:
   # hand work over
   lore handoff add --for @agent-frontend --task tsk_31 --body "form is half done"
 
 Flags:
-      --body string              the handoff text (instead of the positional text)
+      --body string              the handoff text
       --for string               who the handoff is for (@handle, stable key, display name or act_ id)
       --json                     print the result (or the error) as JSON
       --meta stringArray         set metadata: key=value, key:type=value, project:key=value (repeatable)

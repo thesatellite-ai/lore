@@ -155,12 +155,12 @@ Disabling keeps the setup in `config.yaml` with `disabled: true` but takes it ou
 ```console
 # tomas, in ~
 $ lore setup disable --name personal
-disabled setup personal: it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable personal turns it back on
+disabled setup personal: it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable --name personal turns it back on
 
 # tomas, in personal/dotfiles
 $ lore --setup personal task add --title 'rotate the backup key'
 ERROR: [E_SETUP_NOT_FOUND] setup "personal" is disabled; it matches nothing until it is enabled
-  hint: lore setup enable personal
+  hint: lore setup enable --name personal
 (exit 27)
 
 # tomas, in ~
@@ -181,14 +181,14 @@ pinned this repo to setup personal (this machine only; lore setup use --here --c
 
 # tomas, in ~
 $ lore setup remove --name personal
-moved setup personal to the trash; lore setup trash restore personal brings it back
+moved setup personal to the trash; lore setup trash restore --name personal brings it back
 $ lore setup trash list
-setups in the trash (lore setup trash restore <name> brings one back):
+setups in the trash (lore setup trash restore --name <name> brings one back):
   personal  solo  removed 2026-11-02T10:01:25Z  — side projects and dotfiles
 $ lore setup trash restore --name personal
 restored setup personal from the trash
 $ lore setup remove --name personal
-moved setup personal to the trash; lore setup trash restore personal brings it back
+moved setup personal to the trash; lore setup trash restore --name personal brings it back
 $ lore setup trash purge --name personal --dry-run
 would delete for good:
   - the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress

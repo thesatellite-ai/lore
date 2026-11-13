@@ -192,10 +192,10 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 # alice, in website
 $ lore memory delete --id mem_28f8…03df --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
-✓ mem_28f8…03df moved to the trash (restore: lore trash restore mem_28f8…03df)
+✓ mem_28f8…03df moved to the trash (restore: lore trash restore --target mem_28f8…03df)
 $ lore memory show --id mem_28f8…03df || true
 ERROR: [E_IN_TRASH] mem_28f8…03df is in the trash (deleted by alice on 2026-11-02 10:02)
-  hint: lore trash show mem_28f8…03df; bring it back with lore trash restore mem_28f8…03df
+  hint: lore trash show --id mem_28f8…03df; bring it back with lore trash restore --target mem_28f8…03df
 ```
 <!-- /example -->
 
@@ -244,7 +244,7 @@ $ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
 $ lore memory delete --id mem_3b62…e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
-✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
+✓ mem_3b62…e913 moved to the trash (restore: lore trash restore --target mem_3b62…e913)
 ```
 <!-- /example -->
 

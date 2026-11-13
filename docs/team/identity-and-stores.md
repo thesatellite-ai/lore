@@ -373,7 +373,7 @@ ERROR: [E_REFUSED] store set: `repo` is the code repository's own .lore/data; lo
 # bob, in website
 $ lore store set --store agency --settings push=batch
 ERROR: [E_REFUSED] store set: store agency belongs to org agency and only an admin of agency may change its shared settings; this machine has no admin setup of agency
-  hint: ask the org admin to run `lore store set agency …`; a member cannot override the org's setting locally
+  hint: ask the org admin to run `lore store set --store agency --settings …`; a member cannot override the org's setting locally
 (exit 23)
 
 # alice, in website

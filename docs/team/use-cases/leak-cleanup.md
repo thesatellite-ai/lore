@@ -24,11 +24,11 @@ lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/work/website/.lore/data
 ✓ tsk_7a67…9504 — chase the client about the unpaid March invoice [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 
 # carol, in app
 $ lore sync >/dev/null; lore task list
-○ tsk_7a67…9504 chase the client about the unpaid March invoice [medium]
+(no tasks)
 ```
 <!-- /example -->
 
@@ -39,14 +39,13 @@ The cleanup has two steps. `lore live purge --ids <id> --confirm` removes the ro
 # alice, in website
 $ lore live purge --ids tsk_7a67…9504 --confirm
 ✓ purged tsk_7a67…9504 from live; run `lore live compact` to drop them from the ref's history too
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore live compact --dry-run
 refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2
 $ lore live compact
 ✓ compacted refs/lore/live to 1 commit (epoch 2); backup kept locally as refs/lore-backup/live/20261102T100025
 $ lore live log
 epoch 2
-9b40ce7 2026-11-02 alice  lore: live compact (epoch 2)
+601d285 2026-11-02 alice  lore: live compact (epoch 2)
 
 # carol, in app
 $ lore sync >/dev/null; lore task list

@@ -126,7 +126,7 @@ Flags:
 
 ## Pitfalls
 
-- **It does not edit.** To change a row, copy its id from the row screen and run `lore <kind> edit <id>`.
+- **It does not edit.** To change a row, copy its id from the row screen and run `lore <kind> edit --id <id>`.
 - **Sensitive values stay hidden.** A field marked sensitive shows `••••`; use `lore show --id <id> --show-sensitive` when you really need the value.
 
 ## Related

@@ -264,7 +264,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 		// row written by an earlier build still reads (its estimates read,
 		// new ones are refused); nothing sets it any more.
 		return RowOut{}, errs.New(errs.InvalidInput, "policy set tasks.estimate_unit: days is not a unit any more (estimates are points or hours; OWNERQ-21)").
-			WithHint("lore policy set tasks.estimate_unit hours (hours also take 90m), or points")
+			WithHint("lore policy set --key tasks.estimate_unit --value hours (hours also take 90m), or --value points")
 	}
 	level := storeLevel(o.env, target)
 	if _, err = policy.Resolve([]policy.Entry{{Level: level, Key: d.Key, Value: v}}); err != nil {

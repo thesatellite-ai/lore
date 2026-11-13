@@ -1379,7 +1379,7 @@ func refuseMarkers(fields map[string]value.Value, names []string) error {
 }
 
 // actorDeactivateHint is the way out a refused actor delete names.
-const actorDeactivateHint = "deactivate the person instead: lore actor deactivate <@handle> (the row stays, marked inactive)"
+const actorDeactivateHint = "deactivate the person instead: lore actor deactivate --handle <@handle> (the row stays, marked inactive)"
 
 // refuseActorDelete refuses a delete or purge of an actor row.
 //

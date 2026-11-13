@@ -145,7 +145,7 @@ remotes    github.com/client/website
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   not set
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, freelance) (candidates: agency, freelance)
-  hint: choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
+  hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore org use --entry agency
 ✓ prj_d431…313a uses org agency on this machine
@@ -161,7 +161,7 @@ repo_orgs:
 
 # alice, in website
 $ lore org link --org agency --project client --yes
-lore: pushed store github.com/agency/notes: commit df3a55c to branch main
+lore: pushed store github.com/agency/notes: commit 9b40ce7 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_d431…313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
@@ -183,18 +183,14 @@ $ lore task add --title 'Fix the footer links'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — Fix the footer links [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 $ lore task done --id tsk_05e9…4603
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
-lore live: landed on develop (dfd8dc8); leaves live once develop is fetched
-lore live: landed on develop; this checkout is on main, so those rows show here after you merge develop
 $ git fetch -q origin && git log --oneline origin/develop -2 && git log --oneline origin/main -1
-dfd8dc8 lore: land 2 rows (_root)
-cf563f3 lore: init
-cf563f3 lore: init
+601d285 lore: init
+86dbae4 init
+601d285 lore: init
 ```
 <!-- /example -->
 
@@ -477,7 +473,7 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 <!-- example: reference#store-marker only=2,4 -->
 ```console
 # alice, in website
-$ LORE_ORG=agency lore store init agency git@github.com:agency/notes --yes
+$ LORE_ORG=agency lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
 lore store init: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store agency (sto_c0f3…b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share

@@ -12,7 +12,7 @@ local r1; r1=$(id rul)
 on alice $W "lore rule add --body 'Never put passwords in the code' --severity must"
 on alice $W "lore rule add --body 'Keep pull requests under 400 lines' --severity should"
 on alice $W "lore rule list"
-on alice $W "lore rule show $r1"
+on alice $W "lore rule show --id $r1"
 
 note "memory"
 on alice $W "lore memory add --body 'The client replies faster on WhatsApp than email'"
@@ -25,11 +25,11 @@ note "decision"
 on alice $W "lore decision add --title 'We use Stripe for payments' --body 'Stripe already works in the client shop app, so we keep one payment provider.'"
 local d1; d1=$(id dec)
 on alice $W "lore decision list"
-on alice $W "lore decision show $d1"
+on alice $W "lore decision show --id $d1"
 
 note "edit"
-on alice $W "lore memory edit $m1 --body 'The client replies faster on WhatsApp than email, even on weekends'"
-on alice $W "lore memory show $m1"
+on alice $W "lore memory edit --id $m1 --body 'The client replies faster on WhatsApp than email, even on weekends'"
+on alice $W "lore memory show --id $m1"
 
 note "supersedes"
 on alice $W "lore decision add --title 'We use Stripe and bank transfer for payments' --body 'The client asked for bank transfer too.' --supersedes $d1"
@@ -38,34 +38,34 @@ on alice $W "lore decision list"
 note "invalidate"
 on alice $W "lore memory add --body 'The office printer is on the second floor'"
 local m2; m2=$(id mem)
-on alice $W "lore memory invalidate $m2"
+on alice $W "lore memory invalidate --id $m2"
 on alice $W "lore memory list"
-on alice $W "lore memory show $m2"
-on alice $W "lore search printer"
+on alice $W "lore memory show --id $m2"
+on alice $W "lore search --query printer"
 
 note "archive"
-on alice $W "lore rule archive $r1"
+on alice $W "lore rule archive --id $r1"
 on alice $W "lore rule list"
 on alice $W "lore rule list --archived"
 on alice $W "lore render >/dev/null && grep -c 'Run the tests before you push' .lore/LORE.md || true"
-on alice $W "lore rule unarchive $r1"
+on alice $W "lore rule unarchive --id $r1"
 on alice $W "lore rule list"
 
 note "search one kind"
-on alice $W "lore memory search WhatsApp"
+on alice $W "lore memory search --query WhatsApp"
 
 note "delete"
 on alice $W "lore memory add --body 'Lunch is at noon'"
 local m3; m3=$(id mem)
-on alice $W "lore memory delete $m3 --yes"
-on alice $W "lore memory show $m3 || true"
+on alice $W "lore memory delete --id $m3 --yes"
+on alice $W "lore memory show --id $m3 || true"
 
 note "secrets"
 on! alice $W "lore memory add --body 'The staging password is pass''word=example-only'"
 on alice $W "lore memory add --body 'The staging password is pass''word=example-only' --not-a-secret --reason 'example value, not a real password' --yes"
 local ms; ms=$(id mem)
 on alice $W "ls .lore/data/memories | grep -c $ms || true"
-on alice $W "lore memory delete $ms --yes"
+on alice $W "lore memory delete --id $ms --yes"
 
 # --- the other kinds ----------------------------------------------------------
 note "hotfix"
@@ -119,22 +119,22 @@ note "other kinds listed"
 on alice $W "lore incident list; lore tastepref list; lore techdoc list"
 
 note "other kinds show edit"
-on alice $W "lore pattern show $pt"
-on alice $W "lore pattern edit $pt --body 'Each page loads its data in its loader, never inside a button handler or an effect.'"
-on alice $W "lore pattern search loader"
+on alice $W "lore pattern show --id $pt"
+on alice $W "lore pattern edit --id $pt --body 'Each page loads its data in its loader, never inside a button handler or an effect.'"
+on alice $W "lore pattern search --query loader"
 
 note "incident edit"
-on alice $W "lore incident edit $inc --severity high --ref $pt --relation fixed_by"
-on alice $W "lore incident show $inc"
+on alice $W "lore incident edit --id $inc --severity high --ref $pt --relation fixed_by"
+on alice $W "lore incident show --id $inc"
 
 note "other kinds archive"
-on alice $W "lore snapshot archive $sn"
+on alice $W "lore snapshot archive --id $sn"
 on alice $W "lore snapshot list"
-on alice $W "lore snapshot unarchive $sn"
+on alice $W "lore snapshot unarchive --id $sn"
 
 note "show any row"
-on alice $W "lore show $inc"
-on alice $W "lore row show $d1 --origin"
+on alice $W "lore show --id $inc"
+on alice $W "lore row show --id $d1 --origin"
 
 note "tui"
 on alice $W "printf '1\\nq\\n' | lore tui --kind decision"
@@ -144,8 +144,8 @@ note "comment"
 on alice $W "lore comment add --on-table decisions --on-id $d1 --body 'The client confirmed this on the call.'"
 on alice $W "lore comment list --on-table decisions --on-id $d1"
 local c1; c1=$(id cmt)
-on alice $W "lore comment search confirmed"
-on alice $W "lore comment delete $c1 --yes"
+on alice $W "lore comment search --query confirmed"
+on alice $W "lore comment delete --id $c1 --yes"
 
 note "tag"
 on alice $W "lore tag add --name payments"
@@ -154,7 +154,7 @@ on alice $W "lore tag list"
 on alice $W "lore tag detach --tag payments --on-table decisions --on-id $d1"
 
 note "tag edit"
-on alice $W "lore tag edit payments --name billing --color '#1f6feb' --globs 'src/checkout/**'"
+on alice $W "lore tag edit --id payments --name billing --color '#1f6feb' --globs 'src/checkout/**'"
 on alice $W "lore tag list"
 
 note "commit"
@@ -174,18 +174,18 @@ on alice $W "lore memory add --body 'The client pays invoices on the first Monda
 on alice $W "rm .ai/notes.md && git status --short"
 
 note "imported"
-on alice $W "lore search invoices"
+on alice $W "lore search --query invoices"
 on alice $W "lore render >/dev/null && grep -c 'Ask the client before changing any price' .lore/LORE.md"
 
 note "external source"
 on alice $W "lore external-source add --kind wiki --name 'Team wiki'"
 on alice $W "lore external-source list"
 local e1; e1=$(id ext)
-on alice $W "lore external-source enable $e1 && lore external-source list"
-on alice $W "lore external-source disable $e1"
+on alice $W "lore external-source enable --id $e1 && lore external-source list"
+on alice $W "lore external-source disable --id $e1"
 
 # --- move a memory to another store ---------------------------------------------
 note "memory move"
-on alice $W "lore store init agency file://\$HOME/stores/agency"
-on alice $W "lore memory move $m1 --to agency --yes"
-on alice $W "lore memory show $m1"
+on alice $W "lore store init --name agency --url file://\$HOME/stores/agency"
+on alice $W "lore memory move --id $m1 --to agency --yes"
+on alice $W "lore memory show --id $m1"

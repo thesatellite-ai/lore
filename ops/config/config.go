@@ -143,7 +143,10 @@ type SetOut struct {
 func (o SetOut) Text() string { return fmt.Sprintf("✓ %s = %s (%s)\n", o.Key, o.Value, o.Path) }
 
 // ListIn is the (empty) input of config.list.
-type ListIn struct{}
+type ListIn struct {
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
+}
 
 // ListOut is every key set in the file.
 type ListOut struct {

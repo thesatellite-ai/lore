@@ -1,9 +1,9 @@
 
 ### a git store
-alice (work/website)$ lore store init notes git@github.com:acme/notes
+alice (work/website)$ lore store init --name notes --url git@github.com:acme/notes
 lore store init: store clone ~/.lore/stores/acme/notes: git user set to alice <alice@agency.example> (your lore identity)
 ✓ created store notes (sto_7a670ae8548ed05bf57ad29ad0759504) at git@github.com:acme/notes; recorded in .lore/stores.yaml; commit it to share
-alice (work/website)$ lore task add 'Renew the TLS certificate' --to notes --no-live
+alice (work/website)$ lore task add --title 'Renew the TLS certificate' --to notes --no-live
 lore: pushed store notes: commit 601d285 to branch main
 lore: pushed store notes: commit 86dbae4 to branch main
 lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)
@@ -243,9 +243,9 @@ elsewhere for you:
 what each one is and what happens if you edit or delete it: ~/.lore/README.md; `lore where --json` lists the same
 
 ### lore path
-alice (work/website)$ lore path tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore path --id tsk_2ad3618e878ebbf527d34d446ef4f891
 ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
-alice (work/website)$ lore path tsk_2ad3618e878ebbf527d34d446ef4f891 --json
+alice (work/website)$ lore path --id tsk_2ad3618e878ebbf527d34d446ef4f891 --json
 {
   "id": "tsk_2ad3618e878ebbf527d34d446ef4f891",
   "table": "tasks",
@@ -255,7 +255,7 @@ alice (work/website)$ lore path tsk_2ad3618e878ebbf527d34d446ef4f891 --json
 }
 
 ### lore edit
-alice (work/website)$ lore row markdown tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore row markdown --id tsk_2ad3618e878ebbf527d34d446ef4f891
 ---
 # lore edit: tsk_2ad3618e878ebbf527d34d446ef4f891 (tasks) as Markdown. Change values, save and close the editor, and lore checks the row and writes it.
 # store notes; file ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
@@ -320,7 +320,7 @@ lore: pushed store notes: commit dfd8dc8 to branch main
 lore: wrote ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json (store notes)
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 updated in store notes: body, priority
   file ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
-alice (work/website)$ lore task show tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore task show --id tsk_2ad3618e878ebbf527d34d446ef4f891
 tsk_2ad3618e878ebbf527d34d446ef4f891
   title:    Renew the TLS certificate
   status:   todo
@@ -355,7 +355,7 @@ D  _store/memories/mem_54fe984c9b495744c0217776765a28f2.json
 alice (work/website)$ lore memory list --store notes
 lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
 lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_54fe984c9b495744c0217776765a28f2" in ~/.lore/stores/acme/notes
-  deleted memories mem_54fe984c9b495744c0217776765a28f2 (moved to the trash; lore trash restore mem_54fe984c9b495744c0217776765a28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json
+  deleted memories mem_54fe984c9b495744c0217776765a28f2 (moved to the trash; lore trash restore --target mem_54fe984c9b495744c0217776765a28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json
 (no memories)
 alice (work/website)$ lore trash list
 mem_54fe984c9b495744c0217776765a28f2  memories  "The staging database is reset every Sund…"  2026-11-02 10:02  by alice  bat_b4f4765e593d51fd1352985e8af3a5b0
@@ -369,7 +369,7 @@ alice@agency.example
 alice (.lore/stores/acme/notes)$ sed -i 's/Renew the TLS certificate/Renew the TLS certificate (key AKIA''IOSFODNN7EXAMPLE)/' _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git add _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git commit -qm 'note the key'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit carries a secret:
   _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json:30 (field title) secret: rule aws_access_key match sha256:1a5d44a2dca1
-      not a secret? lore secrets allow tsk_2ad3618e878ebbf527d34d446ef4f891 --rule aws_access_key --field title --match-hash sha256:1a5d44a2dca1 --reason "<why>"
+      not a secret? lore secrets allow --row-id tsk_2ad3618e878ebbf527d34d446ef4f891 --rule aws_access_key --field title --match-hash sha256:1a5d44a2dca1 --reason "<why>"
   hint: store the value in your vault and reference it (${secret:…}, or a placeholder such as ${DB_PASSWORD}); if a finding is not a secret, run the `not a secret?` line printed under it with your reason (a .gitleaksignore <path>:<rule>:<line> entry works too) (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again (no --no-verify needed)
 (exit 1)
 alice (.lore/stores/acme/notes)$ git reset -q -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git checkout -- _store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json && git status --short
@@ -379,7 +379,7 @@ alice$ git clone -q git@github.com:acme/notes ~/code/notes && ls ~/code/notes
 README.md
 _store
 lore-store.yaml
-alice (work/website)$ lore store use ~/code/notes --yes
+alice (work/website)$ lore store use --path ~/code/notes --yes
 lore: pushed store notes: commit df3a55c to branch main
 ✓ store notes now uses your clone ~/code/notes (recorded on this machine only)
   before: ~/.lore/stores/acme/notes
@@ -389,7 +389,7 @@ stores:
   NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS
   notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy  
 count: 1
-alice (work/website)$ lore path tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore path --id tsk_2ad3618e878ebbf527d34d446ef4f891
 ~/code/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
 alice (work/website)$ lore store use --default notes --yes
 ✓ store notes uses lore's own clone again: ~/.lore/stores/acme/notes (the next command that needs it clones it if it is missing)

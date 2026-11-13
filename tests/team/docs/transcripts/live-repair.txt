@@ -1,20 +1,21 @@
 
 ### live ref deleted
-alice (work/billing)$ lore task add 'send the March invoices'
+alice (work/billing)$ lore task add --title 'send the March invoices'
 lore: wrote ~/work/billing/.lore/data/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 — send the March invoices [medium]
   created tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
-alice (work/billing)$ lore task add 'chase the unpaid February invoice'
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
+alice (work/billing)$ lore task add --title 'chase the unpaid February invoice'
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 — chase the unpaid February invoice [medium]
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 alice (work/billing)$ git push -q origin :refs/lore/live && git ls-remote origin
-9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91	HEAD
-9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91	refs/heads/main
-alice (work/billing)$ lore task add 'close the books for Q1'
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
+remote: warning: allowing deletion of corrupt ref        
+86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a	HEAD
+86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a	refs/heads/main
+alice (work/billing)$ lore task add --title 'close the books for Q1'
 ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it (your local copy is kept as refs/lore-backup/live/20261102T100020)
   hint: run `lore live restore` to put your live rows back on the remote
 (exit 23)
@@ -25,12 +26,11 @@ alice (work/billing)$ lore doctor | grep 'remote live ref'
 alice (work/billing)$ lore live restore
 ✓ restored refs/lore/live: 3 rows (left out 0 already landed or purged)
 alice (work/billing)$ git ls-remote origin refs/lore/live
-05513aa29b7881f12bc94eb06be8acf0d03eaed2	refs/lore/live
-alice (work/billing)$ lore task add 'close the books for Q1'
+9b40ce71af28cc54b467a9dd89dcb5ad6e6c0e91	refs/lore/live
+alice (work/billing)$ lore task add --title 'close the books for Q1'
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — close the books for Q1 [medium]
   on tasklist tlt_7a670ae8548ed05bf57ad29ad0759504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 alice (work/billing)$ lore task list
 ○ tsk_2ad3618e878ebbf527d34d446ef4f891 send the March invoices [medium]
 ○ tsk_162df51b7f78b785c97c26b41ea89666 chase the unpaid February invoice [medium]
@@ -39,4 +39,5 @@ alice (work/billing)$ lore task list
 ### trace
 alice (work/billing)$ lore sync --trace 2>&1 | grep -e '^trace: git fetch' -e '^trace: git push' -e '^·'
 trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok)
+trace: git push --porcelain --no-verify -- origin 05513aa29b7881f12bc94eb06be8acf0d03eaed2:refs/lore/live (<time>, ok)
 · already in sync

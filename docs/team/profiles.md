@@ -141,7 +141,7 @@ ERROR: [E_CONTACT_TYPE] contact value: a phone number holds at least 7 digits (+
 (exit 20)
 $ lore actor contact add --actor @tomas --type github --value mirap --identity
 ERROR: [E_CONTACT_TAKEN] identity contact github:mirap already belongs to Mira Patel (@mira) act_7a67…9504 (acn_05e9…4603)
-  hint: lore actor show github:mirap to see who has it; if it is on the wrong person, lore actor contact remove <acn_id> there
+  hint: lore actor show --id github:mirap to see who has it; if it is on the wrong person, lore actor contact remove --id <acn_id> there
 (exit 23)
 $ lore actor show --id github:mirap
 act_7a67…9504
@@ -237,7 +237,7 @@ website      url     -         built-in  Website      {value}
 bitbucket    handle  identity  added     -            https://bitbucket.org/{value}
 $ lore contact-type add --name email --kind email
 ERROR: [E_NAME_TAKEN] contact type email is already in the list (built-in)
-  hint: lore contact-type edit email
+  hint: lore contact-type edit --name email
 (exit 23)
 ```
 <!-- /example -->
@@ -267,7 +267,7 @@ act_7a67…9504  Mira Patel (@mira)  active
   apd_28f8…03df  2026-01-12 → now  employee  Senior engineer
 $ lore actor period add --actor @mira --type contractor --started-on 2026-02-01
 ERROR: [E_PERIOD_OVERLAP] period 2026-01-12 → now is still open while 2026-02-01 → now starts after it
-  hint: lore actor period list <actor> shows the stints; pick a date after the last end
+  hint: lore actor period list --actor <actor> shows the stints; pick a date after the last end
 (exit 23)
 ```
 <!-- /example -->
@@ -308,7 +308,7 @@ client  Client — the client's own person on the project
 tech_writer  Technical writer
 $ lore project member add --project acme-hub --actor @mira --role wizard
 ERROR: [E_ROLE_UNKNOWN] not a live role: wizard (unknown)
-  hint: lore role list; lore role add <name>
+  hint: lore role list; lore role add --name <name>
 (exit 20)
 $ lore role edit --name tech_writer --description 'writes the user docs'
 lore: pushed store agency/org: commit 8c373dc to branch main
@@ -399,7 +399,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_6a86…ed8c.json
 ✓ @tomas removed from northwind-app on 2026-03-01 (Mira reviews her own project now; history kept)
 $ lore project member remove --project northwind-app --actor @tomas
 ERROR: [E_NOT_FOUND] @tomas is not a member of northwind-app
-  hint: lore project member list northwind-app --history
+  hint: lore project member list --project northwind-app --history
 (exit 27)
 $ lore project member list --project northwind-app --history
 @mira  lead  since 2026-03-01
@@ -459,7 +459,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store a
 ✓ act_7a67…9504 Mira Patel (@mira): on_leave → active
 $ lore actor status --actor @mira --to left
 ERROR: [E_STATUS_CHANGE] Mira Patel (@mira) is active; leaving ends their stint and project memberships
-  hint: lore actor offboard @mira
+  hint: lore actor offboard --actor @mira
 (exit 23)
 ```
 <!-- /example -->
@@ -549,8 +549,8 @@ lore: wrote ~/.lore/stores/agency/notes/org/actor_periods/apd_9a34…b418.json (
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 rejoin Mira Patel (@mira) (act_7a67…9504) on 2026-11-02:
   period     2026-11-02 → now  contractor  Contract engineer
-  projects   acme-hub (dev, reviewer): lore project member add acme-hub act_7a67…9504 --role dev,reviewer
-             prj_0aae…a61f (lead): lore project member add prj_0aae…a61f act_7a67…9504 --role lead
+  projects   acme-hub (dev, reviewer): lore project member add --project acme-hub --actor act_7a67…9504 --role dev,reviewer
+             prj_0aae…a61f (lead): lore project member add --project prj_0aae…a61f --actor act_7a67…9504 --role lead
              memberships are not restored
   status     archived → active
 ✓ act_7a67…9504 Mira Patel (@mira) rejoined on 2026-11-02 as contractor
@@ -610,8 +610,8 @@ This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/c
 ✓ wrote org/lore-org.yaml (pushed)
 ✓ added org entry acme
 ✓ act_8567…366f Ana Lima (@ana) registered in acme org/
-  teammates join with: lore org import git@github.com:acme/lore-notes --key human:<their email> --name "Their Name"
-  tie a client repo to it (written only into the store): lore org link acme --project <folder>
+  teammates join with: lore org import --url git@github.com:acme/lore-notes --key human:<their email> --name "Their Name"
+  tie a client repo to it (written only into the store): lore org link --org acme --project <folder>
 $ lore org rename --old acme --new acme-studio
 ✓ org entry acme is now acme-studio (this machine)
   id prj_67e2…291e recorded (the org folder's project id; it never changes)

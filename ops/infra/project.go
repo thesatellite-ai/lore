@@ -29,6 +29,8 @@ type ProjectListIn struct {
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // Project is one project in v0.1.17's --json list form (the ent Project

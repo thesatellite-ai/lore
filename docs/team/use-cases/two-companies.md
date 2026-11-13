@@ -65,7 +65,7 @@ personal   me -> ~/.lore/personal
 
 # alice, in forked-tool
 $ lore whoami
-org        none  (matched by: nothing matched)   hint: lore org use <entry> (agency, client3)
+org        none  (matched by: nothing matched)   hint: lore org use --entry <entry> (agency, client3)
 identity   Alice Doe <human:alice@example.com>   act_05e9…4603  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity)
 machine    mch_98c3dece

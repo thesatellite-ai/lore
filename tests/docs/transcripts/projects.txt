@@ -2,7 +2,7 @@
 ### project list
 alice (work/website)$ lore project list
 prj_7a670ae8548ed05bf57ad29ad0759504  website  https://github.com/client/website
-alice (work/website)$ lore project show website
+alice (work/website)$ lore project show --id website
 Project: prj_7a670ae8548ed05bf57ad29ad0759504
   name:    website
   origin:  https://github.com/client/website
@@ -15,10 +15,10 @@ created 2026-11-02T10:00:00Z by alice · updated 2026-11-02T10:00:00Z by alice
 ### add repos
 alice (work/website)$ lore repo list
 rep_2ad3618e878ebbf527d34d446ef4f891  website  https://github.com/client/website
-alice (work/website)$ lore repo add shop --origin https://github.com/client/website --display-name 'Online shop'
+alice (work/website)$ lore repo add --mount-name shop --origin https://github.com/client/website --display-name 'Online shop'
 lore: wrote ~/work/website/.lore/data/repos/rep_162df51b7f78b785c97c26b41ea89666.json
 ✓ repo shop registered (rep_162df51b7f78b785c97c26b41ea89666)
-alice (work/website)$ lore repo add help --display-name 'Help pages'
+alice (work/website)$ lore repo add --mount-name help --display-name 'Help pages'
 lore: wrote ~/work/website/.lore/data/repos/rep_54fe984c9b495744c0217776765a28f2.json
 ✓ repo help registered (rep_54fe984c9b495744c0217776765a28f2)
 alice (work/website)$ lore repo list
@@ -62,30 +62,30 @@ ERROR: [E_NOT_FOUND] rule: no project "prj_76bd560aff0771fab8457dbfa9823f10"
 (exit 27)
 
 ### archive a repo
-alice (work/website)$ lore repo archive help
+alice (work/website)$ lore repo archive --id help
 ERROR: [E_INVALID_ID] repo: "help" is not a repo id (rep_…)
   hint: copy the whole id (its prefix, an underscore and 32 hex characters) from the list or show output of that kind
 (exit 20)
-alice (work/website)$ lore repo archive rep_54fe984c9b495744c0217776765a28f2
+alice (work/website)$ lore repo archive --id rep_54fe984c9b495744c0217776765a28f2
 lore: wrote ~/work/website/.lore/data/repos/rep_54fe984c9b495744c0217776765a28f2.json
 ✓ help archived
 alice (work/website)$ lore repo list
 rep_2ad3618e878ebbf527d34d446ef4f891  website  https://github.com/client/website
 rep_162df51b7f78b785c97c26b41ea89666  shop  https://github.com/client/website
 rep_54fe984c9b495744c0217776765a28f2  help [archived]
-alice (work/website)$ lore repo unarchive rep_54fe984c9b495744c0217776765a28f2
+alice (work/website)$ lore repo unarchive --id rep_54fe984c9b495744c0217776765a28f2
 lore: wrote ~/work/website/.lore/data/repos/rep_54fe984c9b495744c0217776765a28f2.json
 ✓ help unarchived
 alice (work/website)$ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 
 ### repo moved
 alice (work/website)$ git remote set-url origin https://github.com/client/website-v2 && git push -q origin main
-alice (work/website)$ lore repo set-url git@github.com:client/website-v2.git
+alice (work/website)$ lore repo set-url --url git@github.com:client/website-v2.git
 lore: wrote ~/work/website/.lore/data/repos/rep_2ad3618e878ebbf527d34d446ef4f891.json
 lore: wrote ~/work/website/.lore/data/projects/prj_7a670ae8548ed05bf57ad29ad0759504.json
 ✓ rep_2ad3618e878ebbf527d34d446ef4f891 primary address is now github.com/client/website-v2 (was github.com/client/website until today)
   .lore/data/_meta.json updated; commit it with your next push
-alice (work/website)$ lore repo set-url https://gitlab.com/client/website-v2 --mirror
+alice (work/website)$ lore repo set-url --url https://gitlab.com/client/website-v2 --mirror
 lore: wrote ~/work/website/.lore/data/repos/rep_2ad3618e878ebbf527d34d446ef4f891.json
 ✓ rep_2ad3618e878ebbf527d34d446ef4f891 mirror address added: gitlab.com/client/website-v2
   .lore/data/_meta.json updated; commit it with your next push
@@ -121,9 +121,9 @@ alice (work/website-fork)$ git status --short
 ?? .lore/data/repos/rep_d4314eba822f1bf5908b2b8ded5f313a.json
 
 ### one store
-alice (work/app)$ lore store init client2 file://$HOME/stores/client2
+alice (work/app)$ lore store init --name client2 --url file://$HOME/stores/client2
 ✓ created store client2 (sto_b4f4765e593d51fd1352985e8af3a5b0) at file://~/stores/client2; recorded in .lore/stores.yaml; commit it to share
-alice (work/api)$ lore store add client2 file://$HOME/stores/client2
+alice (work/api)$ lore store add --name client2 --url file://$HOME/stores/client2
 ✓ attached store client2 (whole store, folder backend, internal) in .lore/stores.yaml; commit it to share
 alice (work/app)$ lore store list
 stores:
@@ -162,22 +162,22 @@ alice (work/app)$ git status --short
 ### archive a project
 alice (work/scratch)$ lore project list
 prj_b69e8368dd4986838455061d5d9e5ed7  scratch  https://github.com/client2/scratch
-alice (work/scratch)$ lore project archive prj_b69e8368dd4986838455061d5d9e5ed7
+alice (work/scratch)$ lore project archive --id prj_b69e8368dd4986838455061d5d9e5ed7
 lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e8368dd4986838455061d5d9e5ed7.json
 ✓ scratch archived
 alice (work/scratch)$ lore project list
 prj_b69e8368dd4986838455061d5d9e5ed7  scratch  https://github.com/client2/scratch [archived]
-alice (work/scratch)$ lore project unarchive prj_b69e8368dd4986838455061d5d9e5ed7
+alice (work/scratch)$ lore project unarchive --id prj_b69e8368dd4986838455061d5d9e5ed7
 lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e8368dd4986838455061d5d9e5ed7.json
 ✓ scratch unarchived
-alice (work/scratch)$ lore project delete prj_b69e8368dd4986838455061d5d9e5ed7
+alice (work/scratch)$ lore project delete --id prj_b69e8368dd4986838455061d5d9e5ed7
 ERROR: [E_NEEDS_CONFIRM] project delete prj_b69e8368dd4986838455061d5d9e5ed7?
   hint: ask the person, then rerun with --yes
 (exit 26)
-alice (work/scratch)$ lore project delete prj_b69e8368dd4986838455061d5d9e5ed7 --yes
+alice (work/scratch)$ lore project delete --id prj_b69e8368dd4986838455061d5d9e5ed7 --yes
 lore: wrote ~/work/scratch/.lore/data/repos/rep_0aaebe6aca5bb46cc521869f5ba2a61f.json
 lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e8368dd4986838455061d5d9e5ed7.json
-✓ scratch (and this repo's row) moved to the trash (batch bat_6a866bb99ce08addfe04ea845052ed8c; restore: lore trash restore bat_6a866bb99ce08addfe04ea845052ed8c)
+✓ scratch (and this repo's row) moved to the trash (batch bat_6a866bb99ce08addfe04ea845052ed8c; restore: lore trash restore --target bat_6a866bb99ce08addfe04ea845052ed8c)
 alice (work/scratch)$ lore project list
 (no projects)
 
@@ -244,12 +244,12 @@ ERROR: [E_NOT_FOUND] migrate: no migration to roll back on this machine
 (exit 27)
 alice (work/app)$ lore migrate unlock
 no migration lock on this machine
-alice (work/app)$ lore migrate enable meta
+alice (work/app)$ lore migrate enable --feature meta
 feature: meta
 added: true
 features: hlc, meta, policy
 min_lore_version: 0.1.18
-alice (work/app)$ lore migrate enable meta
+alice (work/app)$ lore migrate enable --feature meta
 feature: meta
 features: hlc, meta, policy
 min_lore_version: 0.1.18

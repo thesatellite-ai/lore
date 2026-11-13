@@ -216,7 +216,7 @@ E_NOT_IMPLEMENTED / E_UNSUPPORTED
     → not available in this release or mode; tell the person, do not retry
 
 E_INTERNAL
-    → a bug. lore support-bundle --out=/tmp/bundle.tar.gz and file an issue
+    → a bug. lore support-bundle --out /tmp/bundle.tar.gz and file an issue
 ```
 
 ---
@@ -225,7 +225,7 @@ E_INTERNAL
 
 ```bash
 # Branch on the exit status, or on the code from --json
-out=$(lore memory add --json --body="$body" 2>&1); rc=$?
+out=$(lore memory add --json --body "$body" 2>&1); rc=$?
 if [ $rc -ne 0 ]; then
     code=$(printf '%s' "$out" | jq -r '.error.code // empty')
     case "$code" in

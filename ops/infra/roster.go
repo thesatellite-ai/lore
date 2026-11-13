@@ -196,7 +196,7 @@ func actorDeleteRefusal(id string) error {
 		what = "actor " + id
 	}
 	return errs.New(errs.Refused, what+" cannot be deleted: actors are never deleted, every *_by field points at them").
-		WithHint("deactivate the person instead: lore actor deactivate <@handle> (the row stays, marked inactive)")
+		WithHint("deactivate the person instead: lore actor deactivate --handle <@handle> (the row stays, marked inactive)")
 }
 
 // actorRegister validates in and registers.

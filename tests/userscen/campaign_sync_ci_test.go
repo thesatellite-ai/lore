@@ -71,7 +71,7 @@ func TestCampaignSync_MovedSpellings(t *testing.T) {
 	a.MustLore("sync", "trash", "list").Says(t, "lore trash --local", "this machine only")
 	a.MustLore("trash", "list", "--local").Says(t, "this machine only")
 	camSyncRefuses(t, a, camSyncRefusal{[]string{"sync", "trash", "restore", "1"}, "E_NOT_FOUND", 27, "no local copy #1"})
-	camSyncRefuses(t, a, camSyncRefusal{[]string{"trash", "restore", "--local", "1"}, "E_NOT_FOUND", 27, "no local copy #1"})
+	camSyncRefuses(t, a, camSyncRefusal{[]string{"trash", "restore", "--local", "--target", "1"}, "E_NOT_FOUND", 27, "no local copy #1"})
 	a.Lore("sync", "purge", "--archived-before", "1d").Fails(t, th.ExitNeedsConfirm, "[E_NEEDS_CONFIRM]", "lore trash purge --archived-before")
 	a.MustLore("sync", "purge", "--archived-before", "1d", "--confirm").Says(t, "purged 0 rows")
 }

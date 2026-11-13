@@ -319,6 +319,8 @@ type ListIn struct {
 	// --created-by / --updated-by: the shared writer filters of every noun
 	// list (INTEG-AUDIT-1); work.Narrow applies them.
 	metalist.Audit
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // ViewIn is the input of the triage, someday and deferred views.

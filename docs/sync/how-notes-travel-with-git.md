@@ -17,7 +17,7 @@ You want this page when you set up lore in a repo that other people also use, or
 ## Before you start
 
 - lore installed ([Install](../../README.md#install)) and a git repo with a remote. Here Alice (an agency developer) works in `github.com/client/website`.
-- No team or org set-up is needed. In a repo with no org, rules, memories and decisions are kept with the code (this page). Tasks are live by default: they go on a live list, a list every teammate sees at once, whatever branch they are on (see [Lore for teams](../team/README.md)).
+- No team or org set-up is needed. In a repo with no org, rules, memories and decisions are kept with the code (this page). Tasks are live by default: they go on a live list, a list every teammate sees whatever branch they are on, once you share it with `lore sync` or `git push` (see [Lore for teams](../team/README.md)).
 
 ## Step 1 — Set up lore and commit what it wrote
 
@@ -35,7 +35,7 @@ lore initialized
     repo_id:    rep_2ad3…f891
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
-· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
+· saved as context.targets; change with: lore policy set --key context.targets --value <profiles> --yes
   next: lore render            to write .lore/LORE.md for those tools
 $ git status --short
 ?? .gitattributes
@@ -218,7 +218,7 @@ lore initialized
     repo_id:    rep_d431…313a
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/shop/AGENTS.md (pointer → .lore/LORE.md)
-· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
+· saved as context.targets; change with: lore policy set --key context.targets --value <profiles> --yes
   next: lore render            to write .lore/LORE.md for those tools
 $ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)

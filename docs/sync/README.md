@@ -31,7 +31,7 @@ The examples follow Alice and Bob (two agency developers) in the client's repo `
 
 ## What these pages do not cover
 
-Some notes do not wait for a commit. Tasks, for example, are *live* by default: lore shares them at once through a hidden list on GitHub that is not a branch (a "ref"), so a teammate sees a new task straight away. Live rows, stores (private notes kept outside the client's repo) and teams have their own pages:
+Some notes do not wait for a commit. Tasks, for example, are *live* by default: lore shares them through a hidden list on GitHub that is not a branch (a "ref"), so a teammate on any branch sees a new task as soon as you run `lore sync` or `git push`. Live rows, stores (private notes kept outside the client's repo) and teams have their own pages:
 
 - [Lore for teams](../team/README.md), with [Concepts](../team/concepts.md) and [How it works](../team/how-it-works.md)
 - [Getting started with teams](../team/getting-started.md)

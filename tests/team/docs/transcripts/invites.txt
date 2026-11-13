@@ -5,18 +5,18 @@ lore: pushed store agency/org: commit 601d285 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
 ✓ invite inv_7a670ae8548ed05bf57ad29ad0759504 written to store agency (expires 2026-11-16)
 Send this to mira@agency.example (it holds no secret):
-  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+  lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 tomas (work/acme-hub)$ lore team invite ana@agency.example --type contractor --expires 30d
 lore: pushed store agency/org: commit 86dbae4 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3618e878ebbf527d34d446ef4f891.json (store agency/org)
 ✓ invite inv_2ad3618e878ebbf527d34d446ef4f891 written to store agency (expires 2026-12-02)
 Send this to ana@agency.example (it holds no secret):
-  lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
+  lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 
 ### invite refusals
 tomas (work/acme-hub)$ lore team invite mira@agency.example
 ERROR: [E_INVALID_INPUT] invite inv_7a670ae8548ed05bf57ad29ad0759504 for mira@agency.example is still pending (until 2026-11-16); one invite per person
-  hint: lore team invite resend mira@agency.example prints it again; lore team invite revoke mira@agency.example ends it
+  hint: lore team invite resend --ref mira@agency.example prints it again; lore team invite revoke --ref mira@agency.example ends it
 (exit 20)
 tomas (work/acme-hub)$ lore team invite bo@agency.example --role dev
 ERROR: [E_INVALID_INPUT] --role is applied on each --project, and no --project is given
@@ -65,21 +65,21 @@ tomas (work/acme-hub)$ lore team invite list --status pending --json
 }
 
 ### resend and revoke
-tomas (work/acme-hub)$ lore team invite resend mira@agency.example
+tomas (work/acme-hub)$ lore team invite resend --ref mira@agency.example
 id: inv_7a670ae8548ed05bf57ad29ad0759504
 text: lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
-tomas (work/acme-hub)$ lore team invite revoke ana@agency.example
+tomas (work/acme-hub)$ lore team invite revoke --ref ana@agency.example
 ERROR: [E_NEEDS_CONFIRM] Revoke invite inv_2ad3618e878ebbf527d34d446ef4f891 for ana@agency.example?
   hint: nothing written; confirm with --yes (or "yes": true over lore api)
 (exit 26)
-tomas (work/acme-hub)$ lore team invite revoke ana@agency.example --yes
+tomas (work/acme-hub)$ lore team invite revoke --ref ana@agency.example --yes
 lore: pushed store agency/org: commit 9b40ce7 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3618e878ebbf527d34d446ef4f891.json (store agency/org)
 id: inv_2ad3618e878ebbf527d34d446ef4f891
 status: revoked
-tomas (work/acme-hub)$ lore team invite resend ana@agency.example
+tomas (work/acme-hub)$ lore team invite resend --ref ana@agency.example
 ERROR: [E_INVITE_REVOKED] invite inv_2ad3618e878ebbf527d34d446ef4f891 was revoked
-  hint: lore team invite ana@agency.example
+  hint: lore team invite --email ana@agency.example
 (exit 23)
 tomas (work/acme-hub)$ lore team invite list
 invites:

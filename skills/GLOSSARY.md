@@ -11,7 +11,7 @@ A rule's render-time scope policy. Values: `always`, `glob`, `semantic`, `manual
 The identity behind any write. Resolved via 8-step fallback chain (flag → env → toml → git config → $USER → machine-id → persisted salt → ephemeral). Always resolves; the chain step is recorded.
 
 ## AGENTS.md
-A file name several coding tools read for agent context. `lore render --target=AGENTS.md` stitches the `@import` pointer into `AGENTS.md` instead of `CLAUDE.md`; the generated knowledge still lives in `.lore/LORE.md`.
+A file name several coding tools read for agent context. `lore render --target AGENTS.md` stitches the `@import` pointer into `AGENTS.md` instead of `CLAUDE.md`; the generated knowledge still lives in `.lore/LORE.md`.
 
 ## Audit log
 Append-only, hash-chained log of every change lore makes on this machine (create, update, delete, purge, secret reveals), kept in `~/.lore/state/machine.db`. `lore audit verify` checks the chain (`E_AUDIT_CHAIN_BROKEN` on an edited or deleted entry); `lore audit log` lists entries. Teammates' changes are in `git log -- .lore/data`.
@@ -137,7 +137,7 @@ Pre-write check that refuses bodies containing credential patterns (AWS keys, Gi
 lore refuses to write a database file (the cache and its sidecars, the machine store), the store lock `.lore/lock` or an audit file through a symbolic link (`E_SYMLINK_DB`); `.lore/LORE.md` may be a link only when it stays inside the repository. Prevents an attacker with write access to `.lore/` from redirecting writes to `/etc/passwd` etc.
 
 ## Tag
-Polymorphic label. Created once (`tag add --name=…`), then attached to many entities via `tag attach --on-table=… --on-id=…`.
+Polymorphic label. Created once (`tag add --name …`), then attached to many entities via `tag attach --on-table … --on-id …`.
 
 ## Task
 Discrete work item with status + priority + optional mission. Lifecycle: todo → in_progress → done; alternative terminal states: cancelled / blocked.

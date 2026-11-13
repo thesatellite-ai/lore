@@ -23,12 +23,11 @@ Both point at a row by its *table* (the kind of row, in the plural: `rules`, `me
 $ lore comment add --on-table decisions --on-id dec_76bd…3f10 --body 'The client confirmed this on the call.'
 lore: wrote ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json
 ✓ comment cmt_06b1…3d1c on decisions/dec_76bd…3f10 
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
-lore live: landed on main (9b40ce7); leaves live once main is fetched
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 ```
 <!-- /example -->
 
-Comments are *live* by default: lore shares them with everyone at once on a hidden list on the git server that is not a branch (git calls it a *ref*), and because a comment counts as finished when you write it, lore copies it to main straight away. The `lore live:` lines say that this happened. Pass `--no-live` to keep a comment with your branch instead.
+Comments are *live* by default: lore shares them with everyone on a hidden list on the git server that is not a branch (git calls it a *ref*) when you run `lore sync` or your next `git push`, and because a comment counts as finished when you write it, that same `lore sync` copies it to main. The `lore live:` line says it is kept here until then. Pass `--no-live` to keep a comment with your branch instead.
 
 ## Step 2 — Tag a row
 
@@ -65,9 +64,7 @@ $ lore comment search --query confirmed
 cmt_06b1…3d1c [decisions/dec_76bd…3f10] The client confirmed this on the call.
 $ lore comment delete --id cmt_06b1…3d1c --yes
 lore: wrote ~/work/website/.lore/data/comments/cmt_06b1…3d1c.json
-✓ cmt_06b1…3d1c moved to the trash (restore: lore trash restore cmt_06b1…3d1c)
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
-lore live: landed on main (dfd8dc8); leaves live once main is fetched
+✓ cmt_06b1…3d1c moved to the trash (restore: lore trash restore --target cmt_06b1…3d1c)
 ```
 <!-- /example -->
 
@@ -102,7 +99,7 @@ cmt_06b1…3d1c on decisions/dec_76bd…3f10  The client confirmed this on the c
 ## Pitfalls
 
 - **The table name is plural.** `--on-table decisions`, not `decision`. The names are the folder names under `.lore/data`.
-- **A comment goes to main at once.** Because comments are live and count as finished on write, lore lands them on main without waiting for your next commit (see the `landed on main` line above). Write comments as if the whole team can read them immediately, because it can.
+- **A comment goes to main on your next `lore sync`.** Because comments are live and count as finished on write, the next `lore sync` lands them on main without waiting for your next commit. Write comments as if the whole team will read them, because after that sync it can.
 - **Tags belong to one project.** A tag made in one repo's project does not exist in another; create it there too.
 - **Two kinds of tag.** `memory add --tag` writes a label on the memory itself; `lore tag` makes a shared label any row can carry. Use `lore tag attach` when you want `lore tag list` to see it. In the example on this page, the memory tagged `staging` while it was added does not appear in `lore tag list`.
 

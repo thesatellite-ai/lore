@@ -45,7 +45,7 @@
   <!-- 3. Boxes: step (blue), what lives in the layer (white), return step (green), helper (purple). -->
   <rect x="37" y="104" width="200" height="54" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
   <text x="137.0" y="126" font-size="12" fill="#1e40af" text-anchor="middle">1 · Run a command</text>
-  <text x="137.0" y="144" font-size="10" fill="#64748b" text-anchor="middle">lore task add "Ship v2"</text>
+  <text x="137.0" y="144" font-size="10" fill="#64748b" text-anchor="middle">lore task add --title "Ship v2"</text>
   <rect x="262" y="104" width="200" height="54" rx="6" fill="#ffffff" stroke="#94a3b8"/>
   <text x="362.0" y="126" font-size="12" fill="#1e293b" text-anchor="middle">People and coding agents</text>
   <text x="362.0" y="144" font-size="10" fill="#64748b" text-anchor="middle">terminal · lore tui · REST</text>

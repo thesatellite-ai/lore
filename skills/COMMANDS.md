@@ -12,14 +12,14 @@ Every command takes `--color auto|always|never` and `--trace`; most take `--json
 Initializes a project at cwd: writes the project and repo rows to `.lore/data/` (commit it), adds lore's machine files (lock, state) to `.gitignore` (the local cache lives in `~/.lore/cache/repo/`, never in the repo), and writes `.lore/LORE.md` and the tool pointer file. In a clone that already has `.lore/data/` it adopts the shared project instead of minting a new one.
 
 ```bash
-lore init --non-interactive --name=my-app
+lore init --non-interactive --name my-app
 # ✓ lore initialized at /path/to/my-app
 #     project_id: prj_019e...
 #     name:       my-app
 #     identity:   human:alice@example.com (git config)
 ```
 
-Flags: `--name=<str>`, `--non-interactive`.
+Flags: `--name <str>`, `--non-interactive`.
 
 ### `lore store init` / `lore store add` (notes shared by several repos)
 One folder store holds the notes several repos share; each repo attaches it once. (The v0.1.17 shared-database mode, `lore project shared-init`, is retired; `lore migrate run` converts a repo that still has its `.lore/lore.yaml` pointer.)
@@ -40,16 +40,16 @@ There is no importer in 0.1.18 (`learn-from` and `learn` are dropped). Read CLAU
 
 ```bash
 # add
-lore memory add --body="Tailwind v4 only" [--repo=web] [--kind=procedural] [--tag=frontend] [--yes]
+lore memory add --body "Tailwind v4 only" [--repo web] [--kind procedural] [--tag frontend] [--yes]
 
 # search (FTS5 BM25; LIKE fallback)
-lore memory search --query "tailwind" [--limit=10] [--all-repos|--master-only|--no-inherit] [--include-archived] [--json]
+lore memory search --query "tailwind" [--limit 10] [--all-repos|--master-only|--no-inherit] [--include-archived] [--json]
 
 # list — repo-scoped, SAME scope semantics as search
-lore memory list [--repo=web | --all-repos | --master-only | --no-inherit] [--json]
+lore memory list [--repo web | --all-repos | --master-only | --no-inherit] [--json]
 #   default (no --repo)      → master rows only (repo_id IS NULL)
-#   --repo=web               → that repo's rows + master (inherited)
-#   --repo=web --no-inherit  → that repo's rows only
+#   --repo web               → that repo's rows + master (inherited)
+#   --repo web --no-inherit  → that repo's rows only
 #   --all-repos              → every row regardless of repo
 #   --master-only            → master rows only
 ```
@@ -59,10 +59,10 @@ lore memory list [--repo=web | --all-repos | --master-only | --no-inherit] [--js
 > **Re-scoping an existing row** (`memory/rule/decision/hotfix/pattern/architecturenote`): use the explicit rebind flags on `edit`:
 >
 > ```bash
-> lore <kind> edit <id> --rebind-repo=<mount>   # move row to that repo (sets repo_id) lore <kind> edit <id> --rebind-master         # move row to master (clears repo_id)
+> lore <kind> edit --id <id> --rebind-repo <mount>   # move row to that repo (sets repo_id) lore <kind> edit --id <id> --rebind-master         # move row to master (clears repo_id)
 > ```
 >
-> `--rebind-repo` errors loudly if the mount is unknown. Note: bare `--repo` on `edit` is **context-only** (which repo's data to resolve) and never mutates scope — it now prints a loud note instead of silently no-op'ing. For an audited body+scope change (new row + history chain) use `lore <kind> add "<body>" --supersedes=<old_id> --repo=<mount>` instead. Verify with `lore <kind> list --repo=<mount> --no-inherit`.
+> `--rebind-repo` errors loudly if the mount is unknown. Note: bare `--repo` on `edit` is **context-only** (which repo's data to resolve) and never mutates scope — it now prints a loud note instead of silently no-op'ing. For an audited body+scope change (new row + history chain) use `lore <kind> add "<body>" --supersedes <old_id> --repo <mount>` instead. Verify with `lore <kind> list --repo <mount> --no-inherit`.
 
 Kinds (typed enum, validated): `core | retrieved | episodic | procedural | archival`. Default `retrieved`. Quick guide:
 
@@ -89,7 +89,7 @@ JSON envelope:
 ## Rule (hard constraints)
 
 ```bash
-lore rule add --severity=must --activation=always --body="no fmt.Println in prod" [--globs='["**/*.go"]']
+lore rule add --severity must --activation always --body "no fmt.Println in prod" [--globs '["**/*.go"]']
 lore rule list [--json]
 lore rule show --id <id> [--json]
 ```
@@ -112,7 +112,7 @@ lore rule show --id <id> [--json]
 ## Decision (ADR-style)
 
 ```bash
-lore decision add --title="Use SQLite not Postgres" --body="local-first; zero ops"
+lore decision add --title "Use SQLite not Postgres" --body "local-first; zero ops"
 lore decision list [--json]
 lore decision show --id <id> [--json]
 ```
@@ -124,7 +124,7 @@ Status: `proposed | accepted | superseded | rejected`.
 ## Hotfix (loud recurring warnings)
 
 ```bash
-lore hotfix add --severity=high --title="ent regen wipes resolver helpers" --body="Beware: ent regen wipes resolver/ helpers"
+lore hotfix add --severity high --title "ent regen wipes resolver helpers" --body "Beware: ent regen wipes resolver/ helpers"
 lore hotfix list [--json]
 lore hotfix show --id <id> [--json]
 ```
@@ -137,23 +137,23 @@ Severity: `info | low | medium | high | critical`. Hotfixes are **never truncate
 
 ```bash
 # mission = container for tasks
-lore mission add --title "Ship v0.1" --target=2026-06-30 --body="..." [--json]   # --json: the new mission (.data.id)
-lore mission list [--status=active|paused|done|cancelled] [--json]
+lore mission add --title "Ship v0.1" --target 2026-06-30 --body "..." [--json]   # --json: the new mission (.data.id)
+lore mission list [--status active|paused|done|cancelled] [--json]
 lore mission show --id <id> [--json]   # --json: mission fields + .data.tasks
 lore mission done --id <id>
 
 # task = discrete work — `--tasklist` is REQUIRED.
 # `--commitment` is REQUIRED for agent callers (no default; missing = hard error)
 lore task add --title "Wire FTS5 backend" \
-  --tasklist=tlt_<id> \
-  --commitment=accepted \    # accepted | proposed | someday  (agents MUST pass this)
-  --priority=high \
-  --defer-until=2026-07-01 \ # optional snooze; hidden until then, auto-resurfaces
-  --mission=msn_<id> \
-  --plan=pln_<id> \
-  --due=2026-05-20 \
-  --assigned-to=act_<id>
-lore task list [--status=…] [--commitment=…] [--mission=<id>] [--assignee=<ref>] \
+  --tasklist tlt_<id> \
+  --commitment accepted \    # accepted | proposed | someday  (agents MUST pass this)
+  --priority high \
+  --defer-until 2026-07-01 \ # optional snooze; hidden until then, auto-resurfaces
+  --mission msn_<id> \
+  --plan pln_<id> \
+  --due 2026-05-20 \
+  --assigned-to act_<id>
+lore task list [--status …] [--commitment …] [--mission <id>] [--assignee <ref>] \
                [--include-proposed] [--include-someday] [--include-deferred] [--all] [--json]
                                    # default = ActiveTask (accepted, not done/cancelled, not future-deferred)
                                    # --assignee: filter by assignee: actor_id (act_*), @me, stable_key or display name
@@ -169,28 +169,28 @@ lore task search --query <query> [--all]   # default surfaces only ActiveTask hi
 
 # task edit — reparent, reassign, reprioritize, commit/snooze in one place
 lore task edit --id <id> \
-  [--title=…] [--body=…] [--priority=…] [--status=…] \
-  [--commitment=accepted|proposed|someday] \
-  [--defer-until=YYYY-MM-DD | --clear-defer] \
-  [--due=YYYY-MM-DD | --clear-due] \
-  [--tasklist=tlt_…] \
-  [--mission=msn_… | --clear-mission] \
-  [--plan=pln_… | --clear-plan] \
-  [--assigned-to=act_… | --clear-assignee]
+  [--title …] [--body …] [--priority …] [--status …] \
+  [--commitment accepted|proposed|someday] \
+  [--defer-until YYYY-MM-DD | --clear-defer] \
+  [--due YYYY-MM-DD | --clear-due] \
+  [--tasklist tlt_…] \
+  [--mission msn_… | --clear-mission] \
+  [--plan pln_… | --clear-plan] \
+  [--assigned-to act_… | --clear-assignee]
 ```
 
 Priority: `low | medium | high | urgent`. Status: `todo | in_progress | done | cancelled | blocked`. Commitment: `accepted | proposed | someday` (orthogonal to status; agents must set it explicitly on `add`).
 
-**Required fields for `task add`:** `--title "<title>"` and `--tasklist=<tlt_id>`. Create the tasklist first (`lore tasklist add --title=...`) if none exists. **Agent callers must also pass `--commitment`** — `accepted` (user asked / doing now), `proposed` (your speculative idea), or `someday` (parking lot). No default; omitting it as an agent is a hard error so speculative tasks can't silently pollute the active list.
+**Required fields for `task add`:** `--title "<title>"` and `--tasklist <tlt_id>`. Create the tasklist first (`lore tasklist add --title ...`) if none exists. **Agent callers must also pass `--commitment`** — `accepted` (user asked / doing now), `proposed` (your speculative idea), or `someday` (parking lot). No default; omitting it as an agent is a hard error so speculative tasks can't silently pollute the active list.
 
 **Relation flags (apply across `<entity> add`):**
 - `--mission`, `--tasklist`, `--plan` — group/parent relations (task)
 - `--repo` — scope to a repo (memory, rule, decision, hotfix, pattern, architecturenote, task)
-- `--supersedes=<id>` — supersede a previous row (memory, rule, decision, hotfix, pattern)
+- `--supersedes <id>` — supersede a previous row (memory, rule, decision, hotfix, pattern)
 - The author is never a flag: every row records `created_by` / `updated_by` from the identity that wrote it (`created_by_actor_id` is filled the same way); `<noun> list --created-by` filters by it
-- `--assigned-to=<act_id>` — task assignee
-- `--validated-by=<act_id>` — memory validator
-- `--from=<act_id>`, `--to=<act_id>` — handoff sender / receiver
+- `--assigned-to <act_id>` — task assignee
+- `--validated-by <act_id>` — memory validator
+- `--from <act_id>`, `--to <act_id>` — handoff sender / receiver
 
 Task JSON eager-loads parent IDs (`mission_id`, `tasklist_id`, `plan_id`).
 
@@ -202,14 +202,14 @@ lore actor list [--json]
 lore actor show --id <act_id> [--json]
 
 # snapshot — point-in-time knowledge captures
-lore snapshot add --title="<t>" --body="<body>"     # body via arg or stdin
+lore snapshot add --title "<t>" --body "<body>"     # body via arg or stdin
 lore snapshot list [--json]
 lore snapshot show --id <id> [--json]
 lore snapshot archive / unarchive <id>
 
 # secret rules — your own secret detectors (settings rows; pii-pattern add|enable|disable refuse)
 lore secrets rules
-lore secrets rule add --id <rule-id> --regex=<re> [--description=<d>] [--to <store>]
+lore secrets rule add --id <rule-id> --regex <re> [--description <d>] [--to <store>]
 lore secrets rule off|on <rule-id>
 lore pii-pattern list              # read-only: patterns copied from v0.1.17, not checked
 
@@ -220,11 +220,11 @@ lore task list --view <name>
 
 # external-source — registered outside sources (a list; nothing reads them yet)
 lore external-source list [--json]
-lore external-source add --name=<n> --kind=<k> [--config=<json>]
+lore external-source add --name <n> --kind <k> [--config <json>]
 lore external-source enable / disable <id>
 
 # techdoc — external documentation refs
-lore techdoc add --name=<n> [--base-url=<u>] [--description=<d>]
+lore techdoc add --name <n> [--base-url <u>] [--description <d>]
 lore techdoc list [--json]
 lore techdoc show --id <id> [--json]
 
@@ -242,7 +242,7 @@ Every text-bearing entity exposes a `search` subcommand. Powered by SQLite FTS5 
 
 ```bash
 # Per-entity search
-lore task search --query "<query>"       [--limit=20] [--all] [--json]
+lore task search --query "<query>"       [--limit 20] [--all] [--json]
 lore memory search --query "<query>"
 lore rule search --query "<query>"
 lore decision search --query "<query>"
@@ -276,10 +276,10 @@ lore comment search --query "<query>"
 - `{title body}: auth` — column-scoped (rarely needed; `--column=` is cleaner)
 
 **Common flags on every search:**
-- `--column=<a,b,c>` — restrict MATCH to specific columns
-- `--limit=N` — cap results (default 20)
+- `--column <a,b,c>` — restrict MATCH to specific columns
+- `--limit N` — cap results (default 20)
 - `--include-archived` — include soft-deleted rows
-- `--repo=<m> | --all-repos | --master-only | --no-inherit` — standard scope
+- `--repo <m> | --all-repos | --master-only | --no-inherit` — standard scope
 - `--json` — envelope with eager-loaded relations
 
 **JSON shape** (every entity returns the same envelope):
@@ -308,7 +308,7 @@ lore comment search --query "<query>"
 lore search --query "auth middleware"
 lore search --query "redis OR cache"
 lore search --query "auth NOT login" --json
-lore search --query "auth*" --tables=memory,rule,decision --limit=10
+lore search --query "auth*" --tables memory,rule,decision --limit 10
 
 # Output shape
 # rule      rul_<id>  <body excerpt>  (score=0.017)
@@ -318,9 +318,9 @@ lore search --query "auth*" --tables=memory,rule,decision --limit=10
 ```
 
 **Flags:**
-- `--tables=<a,b,c>` restrict to specific entities (memory, rule, decision, …)
-- `--limit=N` total hits after merge (default 20)
-- `--per-table=N` per-entity top-K before merge (default 10)
+- `--tables <a,b,c>` restrict to specific entities (memory, rule, decision, …)
+- `--limit N` total hits after merge (default 20)
+- `--per-table N` per-entity top-K before merge (default 10)
 - `--include-archived` include soft-deleted rows
 - `--repo / --all-repos / --master-only` scope flags
 - `--json` envelope output
@@ -335,15 +335,15 @@ lore search --query "auth*" --tables=memory,rule,decision --limit=10
 lore search status                # per-entity row counts + drift health
 lore search status --json         # envelope for scripts
 lore search rebuild               # drop + recreate every FTS table; reindex all
-lore search rebuild --kind=memory # one entity only
+lore search rebuild --kind memory # one entity only
 ```
 
 ## Render (hybrid)
 
 ```bash
 lore render                        # hybrid: directive + hotfixes + severity=must rules → .lore/LORE.md
-lore render --target=AGENTS.md     # stitch the @import pointer into AGENTS.md instead of CLAUDE.md
-lore render --out=docs/LORE.md     # change the generated knowledge-file path
+lore render --target AGENTS.md     # stitch the @import pointer into AGENTS.md instead of CLAUDE.md
+lore render --out docs/LORE.md     # change the generated knowledge-file path
 lore render --no-pointer           # write the generated file only; leave the agent file untouched
 lore render --dry-run              # stdout, no write
 ```
@@ -371,28 +371,28 @@ Anchor "this work shipped as `<sha>`" against any entity — task, run, mission,
 
 ```bash
 # Link the current HEAD commit to tsk_<id>. Auto-captures sha + message + author + committed-at.
-lore link add --entity=tsk_<id> --commit=HEAD
+lore link add --entity tsk_<id> --commit HEAD
 
 # Specific sha
-lore link add --entity=tsk_<id> --commit=abc1234
+lore link add --entity tsk_<id> --commit abc1234
 
 # With explicit metadata override (when not in a git repo)
-lore link add --entity=tsk_<id> --commit=abc1234 --message="feat: wire auth" --author="Alice <a@x>"
+lore link add --entity tsk_<id> --commit abc1234 --message "feat: wire auth" --author "Alice <a@x>"
 
 # Multi-repo project: point at a sibling repo
-lore link add --entity=tsk_<id> --commit=HEAD --repo-path=../web-app
+lore link add --entity tsk_<id> --commit HEAD --repo-path ../web-app
 
 # Link a run to its closing commit
-lore link add --entity=$RID --commit=HEAD
+lore link add --entity $RID --commit HEAD
 
 # Same commit closes multiple tasks
-lore link add --entity=tsk_<id> --commit=HEAD
-lore link add --entity=tsk_<id> --commit=HEAD
+lore link add --entity tsk_<id> --commit HEAD
+lore link add --entity tsk_<id> --commit HEAD
 
 # List
 lore link list                       # all links in this project
-lore link list --entity=tsk_<id>          # commits linked to tsk_<id>
-lore link list --commit=abc1234      # entities linked to a sha
+lore link list --entity tsk_<id>          # commits linked to tsk_<id>
+lore link list --commit abc1234      # entities linked to a sha
 lore link list --json
 
 # Reverse lookup
@@ -402,7 +402,7 @@ lore commit show --id abc1234             # all entities for this sha
 lore link remove --id cml_xxx --yes      # asks first; --yes after the person agrees
 ```
 
-**Note**: `--commit=HEAD` runs `git rev-parse HEAD` + `git log -1 --format=...` to capture full sha, message, author, and committed-at automatically. Pass a literal sha if you're outside the repo or want a specific commit.
+**Note**: `--commit HEAD` runs `git rev-parse HEAD` + `git log -1 --format=...` to capture full sha, message, author, and committed-at automatically. Pass a literal sha if you're outside the repo or want a specific commit.
 
 **Duplicates**: a `(entity, sha)` pair is unique — re-linking the same commit to the same entity errors. Link the same sha to a *different* entity is fine.
 
@@ -413,16 +413,16 @@ A run times one attempt at a task: which agent, which model, how it ended, token
 ```bash
 # Open a run before starting work; prints "<run-id> started"
 RID=$(lore run start \
-    --task=tsk_<id> \
-    --model=<model-id> \
-    --agent=my-agent \
-    --goal="wire auth middleware against JWT provider" | awk '{print $1}')
+    --task tsk_<id> \
+    --model <model-id> \
+    --agent my-agent \
+    --goal "wire auth middleware against JWT provider" | awk '{print $1}')
 
 # Close
-lore run end --id $RID --outcome=success --summary="shipped" --tokens-in=1200 --tokens-out=340 --cost=0.05
+lore run end --id $RID --outcome success --summary "shipped" --tokens-in 1200 --tokens-out 340 --cost 0.05
 # Or fail / cancel
-lore run end --id $RID --outcome=failed --error="timeout fetching JWKS"
-lore run cancel --id $RID --reason="scope changed"
+lore run end --id $RID --outcome failed --error "timeout fetching JWKS"
+lore run cancel --id $RID --reason "scope changed"
 
 # The time it added to the task
 lore task time show --id tsk_<id>
@@ -432,7 +432,7 @@ lore task time show --id tsk_<id>
 
 **No steps, list, show or replay.** A run is a timer, not a transcript. Record what was tried or decided as a memory or decision row instead.
 
-**Retries**: pass `--retry-of=<prior-run-id>` on `run start` to link the chain. Useful for "tsk_<id> failed twice before succeeding".
+**Retries**: pass `--retry-of <prior-run-id>` on `run start` to link the chain. Useful for "tsk_<id> failed twice before succeeding".
 
 ## Agent directive
 
@@ -440,8 +440,8 @@ The CLI ships a loud, prescriptive directive block you can pin to the top of any
 
 ```bash
 lore directive install                                # default: CLAUDE.md at cwd
-lore directive install --target=AGENTS.md             # any file
-lore directive install --target=CLAUDE.md,AGENTS.md   # repeatable
+lore directive install --target AGENTS.md             # any file
+lore directive install --target CLAUDE.md,AGENTS.md   # repeatable
 lore directive show [--full]                          # print block to stdout (--full: the long form)
 # to remove the block, delete the lines between the sentinel markers by hand
 ```
@@ -488,10 +488,10 @@ Only flags you actually pass are applied — pass `--field` to set, `--clear-<fi
 Same shape — `add | list | show`. Each `list/show` supports `--json`.
 
 ```bash
-lore plan add --title="Q2 roadmap" --body="..."
-lore tasklist add --title="Triage queue" --body="..." [--json]   # --json: .data.id, for task add --tasklist
-lore workflow add --title="release" --body="..."
-lore workspace add --title="dev" --body="..."
+lore plan add --title "Q2 roadmap" --body "..."
+lore tasklist add --title "Triage queue" --body "..." [--json]   # --json: .data.id, for task add --tasklist
+lore workflow add --title "release" --body "..."
+lore workspace add --title "dev" --body "..."
 lore handoff add --for @alice --task tsk_31 --body "ctx for next session"
 ```
 
@@ -504,15 +504,15 @@ lore handoff add --for @alice --task tsk_31 --body "ctx for next session"
 Same `add | list | show` shape. Each `list/show` supports `--json`.
 
 ```bash
-lore pattern   add --title=NoFmt --body="..."
-lore playbook  add --title=Release --body="..."
-lore prompt    add --title=SystemV2 --body="..."
-lore architecturenote add --title="Why SQLite" --body="..."
-lore behaviour add --title=careful --body="..."
-lore cookbookrecipe add --title="add-resolver" --body="..."
-lore incident  add --title="..." --body="..."
-lore suggestion add --title="..." --body="..."
-lore tastepref add --body="..."
+lore pattern   add --title NoFmt --body "..."
+lore playbook  add --title Release --body "..."
+lore prompt    add --title SystemV2 --body "..."
+lore architecturenote add --title "Why SQLite" --body "..."
+lore behaviour add --title careful --body "..."
+lore cookbookrecipe add --title "add-resolver" --body "..."
+lore incident  add --title "..." --body "..."
+lore suggestion add --title "..." --body "..."
+lore tastepref add --body "..."
 ```
 
 ---
@@ -520,7 +520,7 @@ lore tastepref add --body="..."
 ## Reminder
 
 ```bash
-lore reminder add --message "Review FTS quality" --due=2026-06-01 [--recurrence=30d] [--on-table=tasks --on-id=tsk_...]
+lore reminder add --message "Review FTS quality" --due 2026-06-01 [--recurrence 30d] [--on-table tasks --on-id tsk_...]
 lore reminder list [--done] [--json]
 lore reminder done --id <id>      # recurring → reschedules; one-shot → marks done
 ```
@@ -533,14 +533,14 @@ Recurrence values: `7d | 30d | 1m | 3m | 6m | 1y` (typed enum; bad values reject
 
 ```bash
 # tag
-lore tag add --name=urgent [--color=#ff0000]
+lore tag add --name urgent [--color #ff0000]
 lore tag list [--json]
-lore tag attach --on-table=memories --on-id=mem_<id> --tag=urgent
-lore tag detach --on-table=memories --on-id=mem_<id> --tag=urgent
+lore tag attach --on-table memories --on-id mem_<id> --tag urgent
+lore tag detach --on-table memories --on-id mem_<id> --tag urgent
 
 # comment
-lore comment add --on-table=decisions --on-id=dec_<id> --body="agreed; revisit Q3"
-lore comment list [--on-table=...] [--on-id=...] [--json]
+lore comment add --on-table decisions --on-id dec_<id> --body "agreed; revisit Q3"
+lore comment list [--on-table ...] [--on-id ...] [--json]
 ```
 
 Entity tables you can attach to: `memories | rules | decisions | hotfixes | patterns | tasks | missions | playbooks | …` (any entity table name).
@@ -554,7 +554,7 @@ lore project list [--json]
 lore project show --id <id-or-name> [--json]    # JSON eager-loads repos
 lore store list                            # stores this repo sees (replaces project shared-list)
 
-lore repo add --mount-name <mount> [--origin=git@...] [--display-name=...]
+lore repo add --mount-name <mount> [--origin git@...] [--display-name ...]
 lore repo list [--json]
 ```
 
@@ -565,8 +565,8 @@ lore repo list [--json]
 ```bash
 lore render                       # writes .lore/LORE.md + stitches @import pointer into CLAUDE.md
 lore render --dry-run             # prints the generated .lore/LORE.md body to stdout, doesn't write
-lore render --out=.lore/LORE.md   # change the generated knowledge-file path
-lore render --target=AGENTS.md    # stitch the pointer into a different agent file
+lore render --out .lore/LORE.md   # change the generated knowledge-file path
+lore render --target AGENTS.md    # stitch the pointer into a different agent file
 lore render --no-pointer          # write the generated file only; don't touch the agent file
 ```
 
@@ -642,7 +642,7 @@ lore whoami                                   # org, why it matched, identity, w
 lore config check                             # validate ~/.lore/config.yaml
 ```
 
-Live rows (shared with everyone at once; tasks, missions, handoffs and comments are live by default; rules, decisions and memories travel with the code, `lore sync promote --ids <id> --to main` sends one to main now):
+Live rows (shared with everyone on any branch on `lore sync` or `git push`, never by themselves unless `live.autopush: true`; tasks, missions, handoffs and comments are live by default; rules, decisions and memories travel with the code, `lore sync promote --ids <id> --to main` sends one to main now):
 
 ```bash
 lore task add --title "Rotate the staging keys"            # tasks, missions, handoffs and comments are live
@@ -691,7 +691,7 @@ lore task revoke --id tsk_31                       # the holder is fenced out
 ## Support Bundle (incident reporting)
 
 ```bash
-lore support-bundle [--out=path]    # sanitized tarball: DB schema, doctor, last error, scrubbed audit log
+lore support-bundle [--out path]    # sanitized tarball: DB schema, doctor, last error, scrubbed audit log
 ```
 
 Strips bodies/comments — only structure + metadata.
@@ -729,14 +729,14 @@ The `skill` group manages the SKILL.md bundle (the docs you're reading right now
 Reads every `.md` under `--source-dir` and asks a model to produce a compressed `SKILL-mini.md` (~13-25KB) suitable for small-context (≤32K) or weak-instruction-following models. The compiler's editorial rules are baked into the command (see `skill_compile.go::compressionRules`); update them there, then re-run.
 
 ```bash
-lore skill compile --target=mini \
-    [--source-dir=./skill] \
-    [--output=./skill/SKILL-mini.md] \
-    [--model=claude-sonnet-4-6] \
-    [--budget-bytes=14000] \
-    [--temperature=0.2] \
+lore skill compile --target mini \
+    [--source-dir ./skill] \
+    [--output ./skill/SKILL-mini.md] \
+    [--model claude-sonnet-4-6] \
+    [--budget-bytes 14000] \
+    [--temperature 0.2] \
     [--dry-run] \
-    [--include='*.md,examples/*.md,playbooks/*.md']
+    [--include '*.md,examples/*.md,playbooks/*.md']
 ```
 
 - **`--model=` recommendations:** `claude-sonnet-4-6` (default; ~$0.18 / compile) gives best editorial judgment. `claude-haiku-4-5-20251001` is ~5× cheaper but tends to under-compress. `ollama:qwen2.5:32b` is free + local but slower (~3-5 min).
@@ -750,7 +750,7 @@ lore skill compile --target=mini \
 
 ```bash
 # 1. Compile to a SCRATCH path, never directly over SKILL-mini.md
-lore skill compile --target=mini --output=skill/SKILL-mini-draft.md
+lore skill compile --target mini --output skill/SKILL-mini-draft.md
 
 # 2. Diff structurally
 diff -u skill/SKILL-mini.md skill/SKILL-mini-draft.md | less
@@ -786,7 +786,7 @@ JSON envelope:
 Intent                                       → Command
 ─────────────────────────────────────────── → ─────────────────────────────────
 "persist a fact"                             → memory add
-"persist a hard rule"                        → rule add --severity=must
+"persist a hard rule"                        → rule add --severity must
 "persist a decision rationale"               → decision add
 "persist a warning we keep hitting"          → hotfix add
 "create a tracked work item"                 → task add

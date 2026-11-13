@@ -53,22 +53,22 @@ on alice $W "git status --short"
 note "pin"
 on alice $W "lore rule add --body 'Every price change needs the client written OK' --severity must"
 local rp; rp=$(id rul)
-on alice $W "lore pin set $rp --context line"
+on alice $W "lore pin set --id $rp --context line"
 on alice $W "lore render >/dev/null && grep -n 'price change' .lore/LORE.md"
-on alice $W "lore pin set $rp --context full"
+on alice $W "lore pin set --id $rp --context full"
 on alice $W "lore render >/dev/null && grep -n -B1 -A2 'price change' .lore/LORE.md"
-on alice $W "lore pin unset $rp"
+on alice $W "lore pin unset --id $rp"
 
 note "scope"
 quiet alice $W "mkdir -p src/checkout && echo 'export {}' > src/checkout/pay.ts"
 on alice $W "lore rule add --body 'Checkout code never calls the payment API directly' --severity must --scope dir:src/checkout"
 on alice $W "lore scope list"
-on alice $W "lore scope show src/checkout/pay.ts"
+on alice $W "lore scope show --path src/checkout/pay.ts"
 on alice $W "lore render"
 
 note "scope move"
 quiet alice $W "git add -A && git commit -qm wip && git mv src/checkout src/payments"
-on alice $W "lore scope move src/checkout src/payments"
+on alice $W "lore scope move --old src/checkout --new src/payments"
 on alice $W "lore scope list"
 
 # --- the lore skill in each tool's skill folder (docs/knowledge/skill-install.md) ---

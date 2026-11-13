@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"slices"
@@ -33,6 +34,8 @@ type ActorListIn struct {
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // Actor is one actor in v0.1.17's --json form (the ent Actor struct; the

@@ -247,7 +247,7 @@ func (t *Tree) CheckMove(id, parent string, maxDepth int) error {
 		chain := append(reversed(t.Ancestors(parent)), parent, id)
 		return errs.New(errs.TreeDepth, "sub-task tree would be "+strconv.Itoa(depth)+" levels deep, over tasks.max_depth "+
 			strconv.Itoa(maxDepth)+": "+strings.Join(chain, " → ")).
-			WithHint("flatten the tree, or raise the policy: lore policy set tasks.max_depth <n> (at most 8)")
+			WithHint("flatten the tree, or raise the policy: lore policy set --key tasks.max_depth --value <n> (at most 8)")
 	}
 	return nil
 }
@@ -267,7 +267,7 @@ func (t *Tree) CheckWidth(parent string, n, maxChildren int) error {
 	chain := append(reversed(t.Ancestors(parent)), parent)
 	return errs.New(errs.TreeWidth, "task "+parent+" would have "+strconv.Itoa(have+n)+" sub-tasks, over tasks.max_children "+
 		strconv.Itoa(maxChildren)+": "+strings.Join(chain, " → ")).
-		WithHint("group the sub-tasks under intermediate tasks, or raise the policy: lore policy set tasks.max_children <n> (at most 1000)")
+		WithHint("group the sub-tasks under intermediate tasks, or raise the policy: lore policy set --key tasks.max_children --value <n> (at most 1000)")
 }
 
 // pathDown is the ids from below id down to target (target included),

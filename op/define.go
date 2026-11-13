@@ -38,6 +38,9 @@ type Op[In, Out any] struct {
 	ask func(context.Context, In) (string, error)
 	// check refuses a bad input before anything opens (Checks); nil = none.
 	check func(In) error
+	// page cuts a list's rows to --limit / --page (page.go); nil when In
+	// does not embed PageFlags.
+	page *pageShape
 }
 
 var _ Entry = (*Op[struct{}, struct{}])(nil)
@@ -61,6 +64,7 @@ func Define[In, Out any](spec Spec, run func(context.Context, In) (Out, error)) 
 		run:  run,
 		in:   in,
 		out:  fieldsOf(spec.Name, reflect.TypeFor[Out](), dirOutput),
+		page: pageShapeOf(spec.Name, reflect.TypeFor[In](), reflect.TypeFor[Out]()),
 	}
 }
 
@@ -97,11 +101,29 @@ func (o *Op[In, Out]) Invoke(ctx context.Context, in Input) (Result, error) {
 	if !ok {
 		return Result{}, errs.New(errs.Internal, "op: input type mismatch for "+o.spec.Name)
 	}
+	var pf PageFlags
+	if o.page != nil {
+		var err error
+		if pf, err = o.page.pageFlags(o.spec.Name, in.v); err != nil {
+			return Result{}, err
+		}
+	}
 	out, err := o.run(ctx, typed)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{v: reflect.ValueOf(&out).Elem(), fields: o.out}, nil
+	res := Result{v: reflect.ValueOf(&out).Elem(), fields: o.out}
+	if o.page != nil {
+		if line := o.page.cut(pf, res.v); line != "" {
+			res = res.WithTextEdit(func(s string) string {
+				if s != "" && !strings.HasSuffix(s, "\n") {
+					s += "\n"
+				}
+				return s + line
+			})
+		}
+	}
+	return res, nil
 }
 
 // Questioner is the optional Entry upgrade an operation with a confirm

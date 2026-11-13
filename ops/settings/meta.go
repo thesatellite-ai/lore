@@ -685,7 +685,7 @@ func rowID(s string) (ids.AnyID, error) {
 			// the key only, since the value may be a secret the write scan
 			// never saw, and an error is printed and logged in clear.
 			return ids.AnyID{}, lookup.BadID("meta: "+quote(key+"=…")+" is not a row id", err).
-				WithHint("give the row id first: lore meta set --id <id> " + key + "=<value>")
+				WithHint("give the row id first: lore meta set --id <id> --pair " + key + "=<value>")
 		}
 		return ids.AnyID{}, lookup.BadID("meta: "+quote(s)+" is not a row id", err)
 	}

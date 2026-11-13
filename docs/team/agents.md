@@ -34,10 +34,10 @@ Words used below:
    │ exit 10 → nothing ready; the message says why each task waits. Stop or wait, do not spin.
    │ exit 11 → every claim lost a race; wait a little, then try again
    ▼
- work ─┬─ lore task heartbeat --daemon --id <id> &      keeps the lease alive (alive, not progress)
-       ├─ lore task note <id> "<checkpoint>"        progress; also pushes your work branch
-       ├─ lore memory add "<fact>"                  something every agent should know (lore search finds it)
-       ├─ lore gate request <id>                    a step needs a person's go-ahead
+ work ─┬─ lore task heartbeat --daemon --id <id> &         keeps the lease alive (alive, not progress)
+       ├─ lore task note --id <id> --text "<checkpoint>"   progress; also pushes your work branch
+       ├─ lore memory add --body "<fact>"                  something every agent should know (lore search finds it)
+       ├─ lore gate request --id <id>                      a step needs a person's go-ahead
        └─ lore check pr-body --file <file|->               before posting any PR text or comment
    │
    ▼
@@ -228,16 +228,16 @@ When someone leaves the team, `lore task reassign --from @bob --assign @alice` m
 $ lore actor list
 act_7a67…9504 [human] bob
 act_2ad3…f891 [human] alice
-$ lore task add --title 'make the buttons blue' --assign @bob
+$ lore task add --title 'make the buttons blue' --assign @bob && lore sync
 lore: wrote ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — make the buttons blue [medium]
   created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
+· already in sync
 
 # bob, in billing
-$ lore task list
+$ lore sync >/dev/null && lore task list
 ○ tsk_54fe…28f2 make the buttons blue [medium]
 ```
 <!-- /example -->

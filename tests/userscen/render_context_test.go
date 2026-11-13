@@ -81,7 +81,7 @@ func TestRenderContextForFileAndTopics(t *testing.T) {
 	if kinds[ids["dir1"]] != "rule" || kinds[ids["dir2"]] != "rule" || kinds[ids["dirhot"]] != "hotfix" {
 		t.Errorf("--json picks name the folder's rules and hotfix by kind: %+v", picks.Data)
 	}
-	c.MustLore("context", "--for-file", "docs/nothing/here.md").Says(t, "(nothing in the store applies here; try `lore search \"<keywords>\"`)").Never(t, ids["dir1"])
+	c.MustLore("context", "--for-file", "docs/nothing/here.md").Says(t, "(nothing in the store applies here; try `lore search --query \"<keywords>\"`)").Never(t, ids["dir1"])
 
 	// Topics: a tag on two rows.
 	c.MustLore("tag", "add", "--name", "payments")

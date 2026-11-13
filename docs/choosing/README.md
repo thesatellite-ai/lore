@@ -16,7 +16,7 @@
 
 ## A good default for most people
 
-- One repo, no config: run `lore init`. Notes travel with the code, tasks are live (every teammate sees them at once, whatever branch they are on), and `lore render` points the file your coding tool reads (`AGENTS.md`, `CLAUDE.md` and the like) at them. You do not need to change anything on this list.
+- One repo, no config: run `lore init`. Notes travel with the code, tasks are live (every teammate sees them whatever branch they are on, once you run `lore sync` or `git push`), and `lore render` points the file your coding tool reads (`AGENTS.md`, `CLAUDE.md` and the like) at them. You do not need to change anything on this list.
 - An agency with clients: one org entry (a few lines in your config that say which company you work for), one store for everything (a separate private repo that only the agency can open, like a locked filing cabinet next to the client's repo), and each client repo linked to a project in the store. Split the store into one per client the day a contractor or a confidentiality agreement (NDA) appears.
 - Several agents: one mission (one shared goal with its tasks). Start each agent with `lore agent start`; it takes its next task with `lore task next`. Put a gate (a step that waits for a person to say yes) on every risky step.
 

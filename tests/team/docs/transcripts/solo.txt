@@ -4,17 +4,16 @@ alice (work/scratch)$ lore init --name=scratch >/dev/null 2>&1 && lore rule add 
 lore: wrote ~/work/scratch/.lore/data/rules/rul_7a670ae8548ed05bf57ad29ad0759504.json
 ✓ rul_7a670ae8548ed05bf57ad29ad0759504
   scope: [master] severity: must
-alice (work/scratch)$ lore task add 'write the README'
+alice (work/scratch)$ lore task add --title 'write the README'
 lore: wrote ~/work/scratch/.lore/data/task_lists/tlt_2ad3618e878ebbf527d34d446ef4f891.json
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 — write the README [medium]
   created tasklist tlt_2ad3618e878ebbf527d34d446ef4f891 "default" for tasks added without --tasklist
-lore live: (live, local: no remote)
-alice (work/scratch)$ lore task done tsk_162df51b7f78b785c97c26b41ea89666
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
+alice (work/scratch)$ lore task done --id tsk_162df51b7f78b785c97c26b41ea89666
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, local: no remote)
 alice (work/scratch)$ lore land --all --dry-run
 would land 2 row(s) to main (_root/):
   tlt_2ad3618e878ebbf527d34d446ef4f891     land  named by lore land
@@ -26,7 +25,7 @@ alice (work/scratch)$ git status --short
 ?? AGENTS.md
 
 ### tasks with the code
-alice (work/scratch)$ lore task add 'tidy the scripts folder'
+alice (work/scratch)$ lore task add --title 'tidy the scripts folder'
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
 ✓ tsk_54fe984c9b495744c0217776765a28f2 — tidy the scripts folder [medium]
   on tasklist tlt_2ad3618e878ebbf527d34d446ef4f891 "default" (the default; --tasklist picks another)

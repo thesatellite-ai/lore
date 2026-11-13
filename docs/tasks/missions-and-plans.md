@@ -29,27 +29,23 @@ Alice (an agency developer) plans the client's online shop in `github.com/client
 $ lore mission add --title 'Open the online shop' --target 2026-11-30 --body 'The shop goes live with ten products and a launch email.'
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 — Open the online shop
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task add --title 'Take the product photos' --mission msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_2ad3…f891.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — Take the product photos [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore task add --title 'Write the product pages' --mission msn_7a67…9504 --after tsk_162d…9666
 lore: wrote ~/work/website/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — Write the product pages [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
 $ lore task add --title 'Send the invoice reminder'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — Send the invoice reminder [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
 $ lore task edit --id tsk_05e9…4603 --mission msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 updated
-lore live: (live, pushed) commit dfd8dc8 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -91,8 +87,6 @@ msn_7a67…9504 Open the online shop   3 tasks · 0 done · 0 claimed · 2 ready
 $ lore task done --id tsk_162d…9666 --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 done
-lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
-lore live: landed on main (df3a55c); leaves live once main is fetched
 $ lore mission status --id msn_7a67…9504
 msn_7a67…9504 Open the online shop   3 tasks · 1 done · 0 claimed · 2 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
   done      tsk_162d…9666  Take the product photos      alice        not merged yet
@@ -122,8 +116,6 @@ $ lore task list --mission msn_7a67…9504
 $ lore mission edit --id msn_7a67…9504 --target 2026-12-07 --title 'Open the online shop before Christmas'
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 updated
-lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
-lore live: 2 row(s) left live (main holds them)
 $ lore mission search --query christmas
 msn_7a67…9504 [active] Open the online shop before Christmas
 ```
@@ -137,13 +129,11 @@ Pause a mission you have put on hold, and resume it when you pick it up again:
 $ lore mission pause --id msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 paused
-lore live: (live, pushed) commit 34ee210 to origin refs/lore/live
 $ lore mission list
 msn_7a67…9504 [paused] Open the online shop before Christmas   (3 tasks)
 $ lore mission resume --id msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 resumed
-lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -155,8 +145,6 @@ lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 $ lore mission done --id msn_7a67…9504
 lore: wrote ~/work/website/.lore/data/missions/msn_7a67…9504.json
 ✓ msn_7a67…9504 completed
-lore live: (live, pushed) commit ccfb0bb to origin refs/lore/live
-lore live: landed on main (9d655a5); leaves live once main is fetched
 $ lore mission list
 (no missions)
 $ lore mission list --all
@@ -172,16 +160,13 @@ Delete is for mistakes only. lore asks first; without a terminal it stops with `
 $ lore mission add --title 'Test mission, please ignore'
 lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
 ✓ msn_c0f3…b5b8 — Test mission, please ignore
-lore live: (live, pushed) commit 2fc021b to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
 $ lore mission delete --id msn_c0f3…b5b8
 ERROR: [E_NEEDS_CONFIRM] run mission delete?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore mission delete --id msn_c0f3…b5b8 --yes
 lore: wrote ~/work/website/.lore/data/missions/msn_c0f3…b5b8.json
-✓ msn_c0f3…b5b8 moved to the trash (restore: lore trash restore msn_c0f3…b5b8)
-lore live: (live, pushed) commit 51886a5 to origin refs/lore/live
+✓ msn_c0f3…b5b8 moved to the trash (restore: lore trash restore --target msn_c0f3…b5b8)
 ```
 <!-- /example -->
 
@@ -234,7 +219,6 @@ lore: wrote 4 row file(s) in ~/work/website/.lore/data
   tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
   tsk_28f8…03df Write the first newsletter    after form
   tsk_4c59…6c38 Send the first newsletter     after first
-lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
 $ lore mission status --id msn_d431…313a
 msn_d431…313a Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_b4f4…a5b0  Add the sign-up form to the home page              0s (timebox 1h30m)
@@ -284,8 +268,6 @@ A handoff is for someone on the repo's *roster* (the list of people and agents l
 $ lore actor register
 lore: wrote ~/work/website/.lore/data/actors/act_3b62…e913.json
 ✓ act_3b62…e913 alice (@alice) already registered (refreshed) in this repo
-lore live: (live, pushed) commit 8c373dc to origin refs/lore/live
-lore live: landed on main (6f11034); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -298,12 +280,9 @@ $ lore task add --title 'Write the about page'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
 ✓ tsk_f147…5139 — Write the about page [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
 $ lore handoff add --for @alice --task tsk_f147…5139 --body 'Two of the three sections are written; the team photo is still missing'
 lore: wrote ~/work/website/.lore/data/handoffs/hnd_2537…6bbb.json
 ✓ handoff hnd_2537…6bbb for @alice
-lore live: (live, pushed) commit 9ea0ca8 to origin refs/lore/live
 $ lore inbox
 -  handoff  @alice       tsk_f147…5139  Two of the three sections are written; the team photo is still missing
 ```
@@ -317,7 +296,6 @@ $ lore inbox
 $ lore handoff ack --id hnd_2537…6bbb
 lore: wrote ~/work/website/.lore/data/handoffs/hnd_2537…6bbb.json
 ✓ hnd_2537…6bbb acked
-lore live: (live, pushed) commit aba91f6 to origin refs/lore/live
 $ lore inbox
 (inbox empty)
 $ lore handoff search --query photo
@@ -338,7 +316,6 @@ lore: wrote 4 row file(s) in ~/work/website/.lore/data
   tsk_b4f4…a5b0 Add the sign-up form to the home page  timebox 1h30m
   tsk_28f8…03df Write the first newsletter    after form
   tsk_4c59…6c38 Send the first newsletter     after first
-lore live: (live, pushed) commit 22efc3b to origin refs/lore/live
 $ lore mission status --id msn_d431…313a
 msn_d431…313a Start the monthly newsletter   3 tasks · 0 done · 0 claimed · 1 ready · 2 waiting · 0 gated · 0 expired · 0 blocked
   ready     tsk_b4f4…a5b0  Add the sign-up form to the home page              0s (timebox 1h30m)

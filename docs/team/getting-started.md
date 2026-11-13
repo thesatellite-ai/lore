@@ -1,6 +1,6 @@
 # Getting started
 
-**In short:** install lore and set it up in a repo. Add a first task that your teammates see at once. Then connect your company's private notes repo. Each step shows the real output you will see.
+**In short:** install lore and set it up in a repo. Add a first task that your teammates see on any branch. Then connect your company's private notes repo. Each step shows the real output you will see.
 
 This page takes you from nothing to a first live task, a first landing and a first org. The examples follow Alice (an agency developer).
 
@@ -40,7 +40,7 @@ lore initialized
     repo_id:    rep_2ad3…f891
 · context targets: codex (AGENTS.md) (no AI tool file found; AGENTS.md is the cross-tool file, change with --target <profile>)
 ✓ ~/work/notes-app/AGENTS.md (pointer → .lore/LORE.md)
-· saved as context.targets; change with: lore policy set context.targets <profiles> --yes
+· saved as context.targets; change with: lore policy set --key context.targets --value <profiles> --yes
   next: lore render            to write .lore/LORE.md for those tools
 $ git add -A && git commit -qm 'lore: init' && git push -q origin main
 ```
@@ -71,7 +71,7 @@ config     ~/.lore/config.yaml does not exist (no orgs configured)
 
 ## Step 4 — Your first live task
 
-Tasks are live by default. Adding one writes it to a hidden list on GitHub that is not a branch (the hidden ref `refs/lore/live`), and pushes it at once. Your branch, your staging area and your working folder do not change:
+Tasks are live by default. Adding one writes it to a hidden list on GitHub that is not a branch (the hidden ref `refs/lore/live`). Nothing goes to the remote by itself: `lore sync` or your next `git push` sends it (or set `live.autopush: true` to send each write at once). Your branch, your staging area and your working folder do not change:
 
 <!-- example: getting-started#first-live-task -->
 ```console
@@ -81,11 +81,13 @@ lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — fix login timeout [medium]
   created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task list
 ○ tsk_05e9…4603 fix login timeout [medium]
 $ git status --short
-$ git ls-remote origin
+$ lore sync && git ls-remote origin
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
+· already in sync
 86dbae476bd6	HEAD
 86dbae476bd6	refs/heads/main
 9b40ce71af28	refs/lore/live
@@ -96,7 +98,7 @@ tasks      tsk_05e9…4603     live      since 2026-11-02 10:00
 ```
 <!-- /example -->
 
-Look at what `git status` and `git ls-remote` show. No file changed in your checkout. The remote now has a `refs/lore/live` next to `main`. Every teammate's next lore command fetches it, whatever branch they are on. `lore live show` lists the rows that are live right now. The task list row is the default list lore created for the task.
+Look at what `git status` and `git ls-remote` show. No file changed in your checkout. After `lore sync` the remote has a `refs/lore/live` next to `main` (before it, the task was only on your machine). Every teammate sees it after their next fetch (`lore sync` fetches at once), whatever branch they are on. `lore live show` lists the rows that are live right now. The task list row is the default list lore created for the task.
 
 ## Step 5 — Your first landing
 
@@ -109,25 +111,23 @@ $ lore task done --id tsk_05e9…4603
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore live: (live, pushed) commit 05513aa to origin refs/lore/live
-lore live: landed on main (dfd8dc8); leaves live once main is fetched
 $ git fetch -q origin && git log --oneline origin/main
-dfd8dc8 lore: land 2 rows (_root)
 86dbae4 lore: init
-cf563f3 init
+05513aa init
 $ lore live show
 task_lists tlt_54fe…28f2     live      since 2026-11-02 10:00
 tasks      tsk_05e9…4603     live      since 2026-11-02 10:00
 2 live rows in _root (epoch 1)
 $ lore sync
-lore live: 2 row(s) left live (main holds them)
+lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
+lore live: landed on main (cf563f3); leaves live once main is fetched
+$ lore sync >/dev/null && lore live show
 lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
-$ lore live show
 0 live rows in _root (epoch 1)
 ```
 <!-- /example -->
 
-Right after the landing the rows are still live ("leaves live once main is fetched"). The next command that fetches (here `lore sync`) sees that `main` holds the same content. It then removes them from live. If your `main` is protected, the landing rides along on your next push instead. See [Small team in one repo](use-cases/small-team.md#when-main-is-protected).
+Right after the landing the rows are still live ("leaves live once main is fetched"). The next fetch (here a second `lore sync`) sees that `main` holds the same content and removes them from live. If your `main` is protected, `lore sync` cannot land them, and the landing rides along on your next commit instead. See [Small team in one repo](use-cases/small-team.md#when-main-is-protected).
 
 ## Step 6 — A v0.1.17 identity file moves into config.yaml
 
@@ -251,7 +251,7 @@ Repos outside the org keep your fallback identity, never a company one:
 ```console
 # alice, in notes-app
 $ lore whoami
-org        none  (matched by: nothing matched)   hint: lore org use agency
+org        none  (matched by: nothing matched)   hint: lore org use --entry agency
 identity   Alice Doe <human:alice@example.com>   act_162d…9666  (from: top-level identity (config.yaml))
 repo       no org  (fallback identity)
 machine    mch_98c3dece
@@ -265,7 +265,7 @@ personal   me -> ~/.lore/personal
 
 ## Try it
 
-In any repo where you ran `lore init`, add a task and list it. The task is live at once: teammates see it after their next fetch, before any commit lands on main:
+In any repo where you ran `lore init`, add a task and list it. The task is live: after your next `lore sync` or `git push`, teammates see it on their next fetch, before any commit lands on main:
 
 <!-- example: getting-started#first-live-task only=1,2 -->
 ```console
@@ -275,7 +275,7 @@ lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — fix login timeout [medium]
   created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore task list
 ○ tsk_05e9…4603 fix login timeout [medium]
 ```
@@ -286,7 +286,7 @@ $ lore task list
 - **Commit after `lore init`.** The new `.lore/` files belong in git like any other project file.
 - **Use your email as the identity key** (`human:alice@example.com`), never a display name.
 - **Run `lore config check` after every config edit.** A wrong key is reported there, before any command uses it.
-- **A teammate's new row may take up to 60 seconds to show.** Run `lore sync` to fetch now.
+- **A teammate's new row shows after your next fetch, once they have run `lore sync` or `git push`.** Run `lore sync` to fetch now. Nothing you write is pushed until you do the same.
 - **Every teammate needs the same or a newer lore.** A live ref records the lowest version allowed to write to it; an older binary can only read there and answers `E_OLD_LORE` to a write.
 
 ## Related

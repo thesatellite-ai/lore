@@ -37,11 +37,13 @@ const OpFolderList = "store.folder.list"
 // FolderListIn is the input of store.folder.list.
 type FolderListIn struct {
 	Store string `json:"store,omitempty" arg:"0" desc:"the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name); default: every store the setup sees"`
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // FolderListOut is the output of store.folder.list.
 type FolderListOut struct {
-	Folders []FolderRow `json:"folders"`
+	Folders []FolderRow `json:"folders" page:"rows"`
 	Count   int         `json:"count"`
 	// Stores are the stores read, in the order listed (a store with no
 	// folder yet is still named here).

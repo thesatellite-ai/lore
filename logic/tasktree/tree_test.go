@@ -162,3 +162,24 @@ func TestCheckWidth(t *testing.T) {
 		}
 	}
 }
+
+// TestTreeLimitHintsNamed (U-4): the depth and width refusals teach the
+// policy command with its flags, never `lore policy set <key> <n>`.
+func TestTreeLimitHintsNamed(t *testing.T) {
+	tr := Build(append(chain(4), Node{ID: "c1", Parent: "a"}))
+	cases := []struct {
+		err  error
+		want string
+	}{
+		{tr.CheckMove("new", "d", 4), "lore policy set --key tasks.max_depth --value <n>"},
+		{tr.CheckWidth("a", 1, 2), "lore policy set --key tasks.max_children --value <n>"},
+	}
+	for _, c := range cases {
+		if c.err == nil {
+			t.Fatalf("no refusal for %q", c.want)
+		}
+		if h := errs.EnvelopeOf(c.err).Error.Hint; !strings.Contains(h, c.want) {
+			t.Fatalf("hint %q lacks %q", h, c.want)
+		}
+	}
+}

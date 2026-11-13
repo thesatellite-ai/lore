@@ -70,7 +70,7 @@ func Parse(raw string, unit Unit) (string, error) {
 	s := strings.TrimSpace(raw)
 	if unit == Days {
 		return "", errs.New(errs.InvalidInput, "--estimate "+strconv.Quote(raw)+": "+noDayUnit+"; tasks.estimate_unit is days").
-			WithHint("set the unit to hours or points: lore policy set tasks.estimate_unit hours --yes (then give hours, e.g. 16 or 90m)")
+			WithHint("set the unit to hours or points: lore policy set --key tasks.estimate_unit --value hours --yes (then give hours, e.g. 16 or 90m)")
 	}
 	if s == "" {
 		return "", bad(raw, unit, "empty")

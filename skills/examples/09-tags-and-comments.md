@@ -9,10 +9,10 @@
 ### Create + list
 
 ```bash
-lore tag add --name=urgent     --color="#ff0033"
-lore tag add --name=draft      --color="#888888"
-lore tag add --name=needs-review
-lore tag add --name=blocked
+lore tag add --name urgent     --color "#ff0033"
+lore tag add --name draft      --color "#888888"
+lore tag add --name needs-review
+lore tag add --name blocked
 
 lore tag list --json | jq -r '.data[] | "\(.name) (\(.uses // 0) uses)"'
 ```
@@ -21,16 +21,16 @@ lore tag list --json | jq -r '.data[] | "\(.name) (\(.uses // 0) uses)"'
 
 ```bash
 # Tag a memory
-lore tag attach --on-table=memories  --on-id=mem_019e... --tag=draft
+lore tag attach --on-table memories  --on-id mem_019e... --tag draft
 
 # Tag a task
-lore tag attach --on-table=tasks     --on-id=tsk_019e... --tag=blocked
+lore tag attach --on-table tasks     --on-id tsk_019e... --tag blocked
 
 # Tag a decision
-lore tag attach --on-table=decisions --on-id=dec_019e... --tag=needs-review
+lore tag attach --on-table decisions --on-id dec_019e... --tag needs-review
 
 # Tag a hotfix
-lore tag attach --on-table=hotfixes  --on-id=hfx_019e... --tag=urgent
+lore tag attach --on-table hotfixes  --on-id hfx_019e... --tag urgent
 ```
 
 `--on-table` accepts any entity table name (`memories`, `rules`, `decisions`, `hotfixes`, `tasks`, `missions`, `playbooks`, etc.). Pretty IDs (`mem_<id>`, `dec_<id>`) NOT accepted — use the opaque `<prefix>_<hex>` form.
@@ -38,7 +38,7 @@ lore tag attach --on-table=hotfixes  --on-id=hfx_019e... --tag=urgent
 ### Detach
 
 ```bash
-lore tag detach --on-table=tasks --on-id=tsk_019e... --tag=blocked
+lore tag detach --on-table tasks --on-id tsk_019e... --tag blocked
 ```
 
 ### Find everything tagged X
@@ -62,8 +62,8 @@ lore comment list --json | jq '.data[]'   # (replace with eventual `tag uses` cm
 
 ```bash
 lore comment add \
-    --on-table=decisions \
-    --on-id=dec_019e... \
+    --on-table decisions \
+    --on-id dec_019e... \
     --body "Checked again on 2026-08-01. Still right: Stripe fees are below 3% of sales."
 ```
 
@@ -74,7 +74,7 @@ lore comment add \
 lore comment list --json
 
 # Comments on a specific entity
-lore comment list --on-table=decisions --on-id=dec_019e... --json
+lore comment list --on-table decisions --on-id dec_019e... --json
 ```
 
 ### Comments are timeline-style

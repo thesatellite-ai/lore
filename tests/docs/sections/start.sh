@@ -33,11 +33,11 @@ note "doctor"
 on alice work/website "lore doctor"
 
 note "sql"
-on alice work/website "lore sql \"SELECT 'rules' AS kind, count(*) AS n FROM rules UNION ALL SELECT 'memories', count(*) FROM memories\""
+on alice work/website "lore sql --query \"SELECT 'rules' AS kind, count(*) AS n FROM rules UNION ALL SELECT 'memories', count(*) FROM memories\""
 
 note "sql more"
-on alice work/website "lore sql 'SELECT id, body, severity FROM rules' --format json"
-on! alice work/website "lore sql 'DELETE FROM rules'"
+on alice work/website "lore sql --query 'SELECT id, body, severity FROM rules' --format json"
+on! alice work/website "lore sql --query 'DELETE FROM rules'"
 
 note "completion"
 on alice work/website "lore completion bash | head -3"

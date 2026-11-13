@@ -145,7 +145,10 @@ func (e engine) toggle(ctx context.Context, in ToggleIn, disabled bool) (ToggleO
 }
 
 // TrashListIn is setup.trash.list's input (none).
-type TrashListIn struct{}
+type TrashListIn struct {
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
+}
 
 // TrashItem is one trashed setup.
 type TrashItem struct {

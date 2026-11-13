@@ -131,7 +131,12 @@ var healCaches = true
 // refills it from the row files. One notice per healed file is kept in
 // c.healed for the person.
 func (c *caches) openHealing(ctx context.Context, path string, reg *schema.Registry, exp sqlite.Expander) (*sqlite.Cache, error) {
+	seeded := seedDryCache(path) // dryhome.go: a dry run starts from a copy of the real cache
 	f, err := cacheOpen(ctx, path, reg, exp)
+	if err != nil && seeded && sqlite.IsCorrupt(err) {
+		dropDryCache(path) // a damaged copy: build the scratch cache from the row files instead
+		f, err = cacheOpen(ctx, path, reg, exp)
+	}
 	if err == nil || !healCaches || !sqlite.IsCorrupt(err) {
 		return f, err
 	}

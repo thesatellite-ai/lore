@@ -25,7 +25,7 @@ setup resolution (first step that answers wins):
   · 7. none     
 
 ### show
-tomas$ lore setup show personal
+tomas$ lore setup show --name personal
 setup:
   name: personal
   kind: solo
@@ -39,25 +39,25 @@ setup:
 tomas (work/agency/site)$ lore --setup personal whoami | head -2
 org        agency  (matched by: own pattern github.com/agency/* of agency)
 setup      personal  (flag: --setup personal)
-tomas (work/agency/site)$ lore setup use personal
+tomas (work/agency/site)$ lore setup use --name personal
 export LORE_SETUP=personal
-tomas (work/agency/site)$ lore setup use personal --here
+tomas (work/agency/site)$ lore setup use --name personal --here
 pinned this repo to setup personal (this machine only; lore setup use --here --clear removes the pin)
 tomas (work/agency/site)$ lore setup list | tail -2
 active: personal (repo: rep_2ad3618e878ebbf527d34d446ef4f891)
 This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup personal (repo rep_2ad3618e878ebbf527d34d446ef4f891)
 tomas (work/agency/site)$ lore setup use --here --clear
 cleared this repo's setup pin; lore setup list shows the setup lore picks here now
-tomas (work/agency/site)$ lore --setup nope task add 'check the sitemap'
+tomas (work/agency/site)$ lore --setup nope task add --title 'check the sitemap'
 ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: agency, personal
   hint: lore setup list
 (exit 27)
 
 ### edit
-tomas$ lore setup edit personal --folder '~/work/personal/**' --folder '~/src/**' --note 'side projects and dotfiles'
+tomas$ lore setup edit --name personal --folder '~/work/personal/**' --folder '~/src/**' --note 'side projects and dotfiles'
 name: personal
 changed: true
-tomas$ lore setup show personal
+tomas$ lore setup show --name personal
 setup:
   name: personal
   kind: solo
@@ -69,40 +69,40 @@ setup:
   note: side projects and dotfiles
 
 ### disable and enable
-tomas$ lore setup disable personal
-disabled setup personal: it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable personal turns it back on
-tomas (work/personal/dotfiles)$ lore --setup personal task add 'rotate the backup key'
+tomas$ lore setup disable --name personal
+disabled setup personal: it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable --name personal turns it back on
+tomas (work/personal/dotfiles)$ lore --setup personal task add --title 'rotate the backup key'
 ERROR: [E_SETUP_NOT_FOUND] setup "personal" is disabled; it matches nothing until it is enabled
-  hint: lore setup enable personal
+  hint: lore setup enable --name personal
 (exit 27)
-tomas$ lore setup enable personal
+tomas$ lore setup enable --name personal
 enabled setup personal
 
 ### remove and restore
-tomas (work/personal/dotfiles)$ lore setup use personal --here
+tomas (work/personal/dotfiles)$ lore setup use --name personal --here
 pinned this repo to setup personal (this machine only; lore setup use --here --clear removes the pin)
-tomas$ lore setup remove personal
-moved setup personal to the trash; lore setup trash restore personal brings it back
+tomas$ lore setup remove --name personal
+moved setup personal to the trash; lore setup trash restore --name personal brings it back
 tomas$ lore setup trash list
-setups in the trash (lore setup trash restore <name> brings one back):
+setups in the trash (lore setup trash restore --name <name> brings one back):
   personal  solo  removed 2026-11-02T10:01:25Z  — side projects and dotfiles
-tomas$ lore setup trash restore personal
+tomas$ lore setup trash restore --name personal
 restored setup personal from the trash
-tomas$ lore setup remove personal
-moved setup personal to the trash; lore setup trash restore personal brings it back
-tomas$ lore setup trash purge personal --dry-run
+tomas$ lore setup remove --name personal
+moved setup personal to the trash; lore setup trash restore --name personal brings it back
+tomas$ lore setup trash purge --name personal --dry-run
 would delete for good:
   - the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
 stays:
   - the personal store local in ~/.lore/config.yaml
   - every GitHub repo: lore never deletes a repository
-tomas$ lore setup trash purge personal
+tomas$ lore setup trash purge --name personal
 ERROR: [E_NEEDS_CONFIRM] deletes: the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
 stays: the personal store local in ~/.lore/config.yaml; every GitHub repo: lore never deletes a repository
 Delete setup personal for good?
   hint: rerun with --confirm to delete it for good (--yes never purges); --dry-run shows what stays
 (exit 26)
-tomas$ lore setup trash purge personal --confirm
+tomas$ lore setup trash purge --name personal --confirm
 deleted for good:
   - the trashed setup personal (removed 2026-11-02T10:01:40Z) and its unfinished-step progress
 stays:
@@ -218,15 +218,15 @@ steps:
     help: Every step and every warning with its fix.
     kinds: solo, member, admin
     values: {}
-tomas$ lore setup apply side --step kind --answers '{"kind":"solo","name":"side"}' | head -4
+tomas$ lore setup apply --setup side --step kind --answers '{"kind":"solo","name":"side"}' | head -4
 step: kind
 status: done
 changed: true
 wrote: ~/.lore/config.yaml
-tomas$ lore setup check side --step identity --answers '{"name":"Tomas Weber","email":"tomas@home.example"}' | head -2
+tomas$ lore setup check --setup side --step identity --answers '{"name":"Tomas Weber","email":"tomas@home.example"}' | head -2
 step: identity
 status: ready
-tomas$ lore setup apply side --step github --answers '{"user":"tomas-dev"}'
+tomas$ lore setup apply --setup side --step github --answers '{"user":"tomas-dev"}'
 ERROR: [E_SETUP_STEP_ORDER] step github needs identity first
   hint: run lore setup apply side --step identity
 (exit 23)
@@ -259,7 +259,7 @@ tomas$ lore setup import --setups '[{"name":"personal","kind":"solo"}]'
 imported: personal
 
 ### join
-tomas$ lore setup join lore-invite:v1:garbage
+tomas$ lore setup join --invite lore-invite:v1:garbage
 ERROR: [E_INVITE_INVALID] this is not a lore invite; copy the whole line starting with lore-invite:v1: (the text after the prefix is cut or changed)
-  hint: ask the person who invited you to run lore team invite resend <your email>
+  hint: ask the person who invited you to run lore team invite resend --ref <your-email>
 (exit 20)

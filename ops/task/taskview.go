@@ -91,6 +91,8 @@ type ViewListIn struct {
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
 	metalist.Audit
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // ViewOut is one view.

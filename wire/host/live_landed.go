@@ -10,7 +10,16 @@ package host
 //	no live copy, not in the work tree ─▶ landedOnDefault: origin/<default>'s
 //	   file, unless HEAD holds it (deleted here on purpose: not read through)
 //	no live copy, in the work tree     ─▶ landedOver: origin's copy when the
-//	   work tree equals HEAD (nothing local pending) and origin's is newer
+//	   work tree equals HEAD (nothing local pending), origin changed the
+//	   file since the merge base (it landed after this checkout's last
+//	   pull) and origin's is newer
+//
+// The merge-base rule (T-3): a file only HEAD changed since the common
+// ancestor is not a landed copy, whatever its hlc says; origin's copy is
+// the one this checkout already pulled. It keeps a list from reading and
+// decoding every row twice when HEAD and origin differ on all of them (a
+// migrated, committed and not yet pushed repo: 5,500 rows took 15-25 s
+// per read; a bare ls-tree of the merge base now drops them all).
 //
 // Other branches keep "not found". Best effort: a file that cannot be
 // read or decoded leaves the row unseen, as before the read-through. A full
@@ -18,6 +27,7 @@ package host
 // ls-trees, then one read per landed row.
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"path"
@@ -73,6 +83,11 @@ func (b *liveBackend) landedCopy(ctx context.Context, s *liveSession, k live.Row
 	if err != nil || !ok {
 		return store.Row{}, false
 	}
+	if base := s.mergeBase(ctx, remote); base != "" {
+		if baseRaw, inBase, err := s.repo.ReadFile(ctx, base, file); err == nil && inBase && bytes.Equal(baseRaw, raw) {
+			return store.Row{}, false // only this checkout changed it since the last pull: not a landed copy
+		}
+	}
 	r, ok := decodeLanded(raw)
 	if !ok || r.Key() != branchRow.Key() || r.HLC.Compare(branchRow.HLC) <= 0 {
 		return store.Row{}, false
@@ -85,6 +100,16 @@ func (s *liveSession) onDefaultBranch(ctx context.Context) (string, bool) {
 	branch := s.defaultBranch(ctx)
 	head, off := s.checkoutBranch(ctx, branch)
 	return branch, !off && head != ""
+}
+
+// mergeBase is the merge base of HEAD and rev ("" when git cannot say:
+// no common history, an unborn HEAD).
+func (s *liveSession) mergeBase(ctx context.Context, rev string) string {
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"merge-base", "HEAD", rev}})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // decodeLanded decodes a row file read from a commit; false when it is not
@@ -158,7 +183,9 @@ func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[s
 
 // landedOverRows swaps, in place, each branch row of out (index by key in
 // branchOnly) whose copy on origin/<default> is newer while the work tree
-// equals HEAD (landedCopy's rule); only paths whose blobs differ are read.
+// equals HEAD (landedCopy's rule); only paths whose blobs differ between
+// HEAD and origin, and that origin changed since the merge base, are read
+// (a path origin still holds at the merge base's blob changed here only).
 func (b *liveBackend) landedOverRows(ctx context.Context, s *liveSession, out []store.Row, branchOnly map[live.RowKey]int) {
 	if len(branchOnly) == 0 {
 		return
@@ -167,13 +194,21 @@ func (b *liveBackend) landedOverRows(ctx context.Context, s *liveSession, out []
 	if !ok {
 		return
 	}
+	remote := "refs/remotes/" + s.ref.RemoteName + "/" + branch
 	inHead := b.dataPaths(ctx, s, "HEAD")
-	landed := b.dataPaths(ctx, s, "refs/remotes/"+s.ref.RemoteName+"/"+branch)
+	landed := b.dataPaths(ctx, s, remote)
+	var atBase map[string]string // nil (every differing path is read) when git has no merge base
+	if base := s.mergeBase(ctx, remote); base != "" {
+		atBase = b.dataPaths(ctx, s, base)
+	}
 	for k, i := range branchOnly {
 		p := mainDataPath(b.folder, k.Table+"/"+k.ID+rowFileExt)
 		lo, onRemote := landed[p]
 		if ho, inH := inHead[p]; !onRemote || !inH || ho == lo || !readsLive(s, row.Table(k.Table)) {
 			continue
+		}
+		if bo, inBase := atBase[p]; inBase && bo == lo {
+			continue // origin has not touched it since the merge base: HEAD's change is local
 		}
 		if r, newer := b.landedCopy(ctx, s, k, out[i], true); newer {
 			out[i] = r
@@ -200,11 +235,7 @@ func (b *liveBackend) pullWouldAdd(ctx context.Context, s *liveSession, k live.R
 	if _, inRemote, err := s.repo.ReadFile(ctx, remote, file); err != nil || !inRemote {
 		return false
 	}
-	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"merge-base", "HEAD", remote}})
-	if err != nil {
-		return false
-	}
-	base := strings.TrimSpace(string(out))
+	base := s.mergeBase(ctx, remote)
 	if base == "" {
 		return false
 	}

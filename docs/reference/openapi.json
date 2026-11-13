@@ -67,6 +67,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -904,6 +924,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -1592,6 +1632,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -4332,6 +4392,26 @@
               "type": "string",
               "description": "only architecturenotes of this store (default every attached store)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -5970,6 +6050,26 @@
               "type": "string",
               "description": "only batches of this kind: task | meta | delete | resource | import | secrets"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -6566,6 +6666,26 @@
             "schema": {
               "type": "string",
               "description": "only behaviours of this store (default every attached store)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -8263,6 +8383,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -9213,6 +9353,28 @@
         "tags": [
           "config"
         ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -9885,6 +10047,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -10721,6 +10903,26 @@
             "schema": {
               "type": "string",
               "description": "only cookbookrecipes of this store (default every attached store)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -12173,6 +12375,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -15517,6 +15739,26 @@
               "type": "string",
               "description": "only sources of this store (default every attached store)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -16904,6 +17146,26 @@
             "schema": {
               "type": "string",
               "description": "only handoffs of this store (default every attached store)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -18568,6 +18830,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -21114,6 +21396,26 @@
               "type": "string",
               "description": "only incidents of this store (default every attached store)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -22751,6 +23053,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -24214,6 +24536,28 @@
         "tags": [
           "machine"
         ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -24355,6 +24699,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -25111,6 +25475,26 @@
             "schema": {
               "type": "boolean",
               "description": "people who left or are archived too"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -26483,6 +26867,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -34044,6 +34448,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -38437,6 +38861,26 @@
               "type": "string",
               "description": "only patterns of this store (default every attached store)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -40139,6 +40583,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -41206,6 +41670,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -42821,6 +43305,26 @@
             "schema": {
               "type": "string",
               "description": "only playbooks of this store (default every attached store)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -45142,6 +45646,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -45986,6 +46510,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -47175,6 +47719,26 @@
             "schema": {
               "type": "string",
               "description": "only prompts of this store (default every attached store)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -48917,6 +49481,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -50112,6 +50696,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -53826,6 +54430,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           },
           {
@@ -58740,6 +59364,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -60732,6 +61376,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -63302,6 +63966,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -64428,6 +65112,26 @@
               "type": "boolean",
               "description": "check every entry now and keep the missing ones (opens the managers)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -64827,6 +65531,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -66926,6 +67650,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -67094,6 +67838,28 @@
         "summary": "List the setups on this machine and the one active here",
         "tags": [
           "setup"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -71904,6 +72670,28 @@
         "tags": [
           "setup"
         ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -73560,6 +74348,26 @@
               "type": "string",
               "description": "only snapshots of this store (default every attached store)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -75210,6 +76018,26 @@
               "type": "string",
               "description": "the store (team, me, an org's name, an org store's url, or a .lore/stores.yaml name); default: every store the setup sees"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -75691,6 +76519,28 @@
         "summary": "List the stores this repo sees, in precedence order (outside a repo: the stores of the setup)",
         "tags": [
           "store"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -78629,6 +79479,26 @@
               "type": "string",
               "description": "only suggestions of this store (default every attached store)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -80110,6 +80980,28 @@
         "summary": "Moved: lore trash --local (this spelling goes away in the next release)",
         "tags": [
           "sync"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -82159,6 +83051,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -82921,6 +83833,26 @@
             "schema": {
               "type": "string",
               "description": "the task id (tsk_…)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -85356,6 +86288,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -88302,6 +89254,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -89516,6 +90488,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -91608,6 +92600,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -93328,6 +94340,10 @@
                     "type": "boolean",
                     "description": "only tasks with no open sub-tasks (what can be worked on)"
                   },
+                  "limit": {
+                    "type": "integer",
+                    "description": "at most this many rows (default: all; 50 when --page is given)"
+                  },
                   "max_time": {
                     "type": "string",
                     "description": "only tasks with at most this effort (e.g. 30m)"
@@ -93350,6 +94366,10 @@
                   "mission": {
                     "type": "string",
                     "description": "filter by mission_id"
+                  },
+                  "page": {
+                    "type": "integer",
+                    "description": "page number, from 1 (with --limit)"
                   },
                   "parent": {
                     "type": "string",
@@ -100794,6 +101814,26 @@
               "type": "string",
               "description": "only tasteprefs of this store (default every attached store)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -102089,6 +103129,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -102990,6 +104050,26 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -104137,6 +105217,26 @@
             "schema": {
               "type": "string",
               "description": "only techdocs of this store (default every attached store)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],
@@ -106688,6 +107788,26 @@
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -108555,6 +109675,26 @@
               "type": "string",
               "description": "only workflows of this store (default every attached store)"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
           }
         ],
         "responses": {
@@ -109933,6 +111073,26 @@
             "schema": {
               "type": "string",
               "description": "only workspaces of this store (default every attached store)"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
             }
           }
         ],

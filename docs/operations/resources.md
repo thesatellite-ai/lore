@@ -135,15 +135,15 @@ A value outside the closed set, a name that does not fit the kind's name format 
 # alice, in infra
 $ lore resource add --kind host --name hub_test --set provider=linode
 ERROR: [E_RESOURCE_INVALID] host hub_test: provider "linode" is not one of hetzner, aws
-  hint: lore resource kind show host
+  hint: lore resource kind show --id host
 (exit 20)
 $ lore resource add --kind host --name Hub-Test --set provider=aws
 ERROR: [E_RESOURCE_NAME] host Hub-Test: the name does not fit the kind's name format
-  hint: lore resource kind show host
+  hint: lore resource kind show --id host
 (exit 20)
 $ lore resource add --kind service --name hub_cron
 ERROR: [E_RESOURCE_INVALID] service hub_cron: required field runs_on is missing
-  hint: lore resource kind show service
+  hint: lore resource kind show --id service
 (exit 20)
 ```
 <!-- /example -->
@@ -222,7 +222,7 @@ lore: wrote ~/work/infra/.lore/data/tasks/tsk_2537…6bbb.json
 lore: wrote ~/work/infra/.lore/data/knowledge_refs/kfr_b69e…5ed7.json
 ✓ tsk_2537…6bbb — Rotate the hub_api database password [medium]
   created tasklist tlt_f147…5139 "default" for tasks added without --tasklist
-lore live: (live, pushed) commit 601d285 to origin refs/lore/live
+lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore resource impact --id hub_prod
 what breaks if host hub_prod goes down
   1  service    hub_api              runs_on → hub_prod
@@ -314,11 +314,11 @@ would edit 2 host resources (dry run, nothing written):
 $ lore resource edit --kind host --where provider=hetzner --set os=debian-13 --yes
 lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
 lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
-edit 2 host resources; batch bat_4f89…b64b (undo: lore batch undo bat_4f89…b64b)
+edit 2 host resources; batch bat_4f89…b64b (undo: lore batch undo --id bat_4f89…b64b)
 $ lore resource check --kind host --where provider=hetzner --yes
 lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
 lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
-check 2 host resources; batch bat_77cb…76c4 (undo: lore batch undo bat_77cb…76c4)
+check 2 host resources; batch bat_77cb…76c4 (undo: lore batch undo --id bat_77cb…76c4)
 ```
 <!-- /example -->
 
@@ -355,7 +355,7 @@ A ref field in the file may name a row the same file creates, by its bare name o
 # alice, in infra
 $ lore resource import --file ~/hosts2.csv --kind host --upsert-by name --yes
 ERROR: [E_RESOURCE_BATCH] resource import: host hub_mail: provider "linode" is not one of hetzner, aws; nothing written (all or nothing; --skip-errors writes the valid rows)
-  hint: lore resource kind show host
+  hint: lore resource kind show --id host
 (exit 23)
 $ lore resource import --file ~/hosts2.csv --kind host --upsert-by name --dry-run
   update  host hub_db
@@ -476,7 +476,7 @@ $ lore resource delete --id hub_prod_new --with-dependents --dry-run
 would delete 3 resources: host hub_prod_new, service hub_api, service hub_web (dry run, nothing written)
 $ lore resource delete --id hub_db --yes
 lore: wrote ~/work/infra/.lore/data/resources/res_d191…45c2.json
-✓ res_…45c2 (hub_db) moved to the trash (restore: lore trash restore res_d191…45c2)
+✓ res_…45c2 (hub_db) moved to the trash (restore: lore trash restore --target res_d191…45c2)
 ```
 <!-- /example -->
 
@@ -618,7 +618,7 @@ created 2026-11-02T10:02:45Z by alice · updated 2026-11-02T10:06:10Z by alice
 # alice, in infra
 $ lore resource edit --kind server --where provider=hetzner --set renews=2026-11-20 --yes
 lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
-edit 1 server resources; batch bat_7289…c813 (undo: lore batch undo bat_7289…c813)
+edit 1 server resources; batch bat_7289…c813 (undo: lore batch undo --id bat_7289…c813)
 $ lore resource lint
 remind           server hub_prod_new.renews     2026-11-20 is within 30d
 1 findings

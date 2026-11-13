@@ -1,5 +1,7 @@
 package sync
 
+import "github.com/thesatellite-ai/lore/op"
+
 // types.go — the inputs and outputs of the sync, land and explain
 // operations. Field names and JSON keys are v0.1.17's (`lore sync … --json`),
 // so a script reading the old output reads the new one unchanged.
@@ -25,7 +27,10 @@ type ResolveIn struct {
 
 // TrashListIn is the input of sync.trash.list (old spelling of
 // `lore trash --local`).
-type TrashListIn struct{}
+type TrashListIn struct {
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
+}
 
 // TrashRestoreIn is the input of sync.trash.restore.
 type TrashRestoreIn struct {

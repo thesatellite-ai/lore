@@ -29,13 +29,11 @@ Commit as usual. If you finished another task earlier, lore has already written 
 $ git commit -qm 'Fix the Pro plan price on the pricing page'
 lore: added 5 lore row file(s) to this commit: .lore/data/_meta.json, .lore/data/memories/mem_05e9…4603.json, .lore/data/reminders/rmd_b69e…5ed7.json, .lore/data/reminders/rmd_0aae…a61f.json, .lore/data/task_views/tvw_4c59…6c38.json (lore's rows travel with your commits)
 $ git push -q origin main
-To /srv/git/github.com/client/website
- ! [rejected]        main -> main (non-fast-forward)
+lore: added "lore: land 4 rows (_root)" to main (tlt_7a67…9504, tlt_b4f4…a5b0, tsk_2ad3…f891, tsk_54fe…28f2)
+ERROR: [E_INVALID_INPUT] lore added 'lore: land 4 rows (_root)' to main (rows that finished in live land with your push); run git push again
+  hint: the commit only adds .lore/data files of rows that finished in live
+lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
 error: failed to push some refs to '/srv/git/github.com/client/website'
-hint: Updates were rejected because the tip of your current branch is behind
-hint: its remote counterpart. If you want to integrate the remote changes,
-hint: use 'git pull' before pushing again.
-hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 (exit 1)
 $ git pull -q --rebase origin main && git push -q origin main
 ```
@@ -50,10 +48,10 @@ $ git pull -q --rebase origin main && git push -q origin main
 # alice, in website
 $ lore link add --entity tsk_162d…9666 --commit HEAD
 lore: wrote ~/work/website/.lore/data/commit_links/cml_6a86…ed8c.json
-✓ linked b733d8a0 → tasks/tsk_162d…9666  (cml_6a86…ed8c)
-  message: Fix the Pro plan price on the pricing page
+✓ linked 86dbae47 → tasks/tsk_162d…9666  (cml_6a86…ed8c)
+  message: lore: land 4 rows (_root)
 $ lore link list --entity tsk_162d…9666
-cml_6a86…ed8c  b733d8a0 → tasks/tsk_162d…9666 — Fix the Pro plan price on the pricing page
+cml_6a86…ed8c  86dbae47 → tasks/tsk_162d…9666 — lore: land 4 rows (_root)
 ```
 <!-- /example -->
 
@@ -65,13 +63,13 @@ cml_6a86…ed8c  b733d8a0 → tasks/tsk_162d…9666 — Fix the Pro plan price o
 ```console
 # alice, in website
 $ lore commit-show --id $(git rev-parse HEAD)
-Commit b733d8a0360e — 1 linked entities:
+Commit 86dbae476bd6 — 1 linked entities:
   tasks/tsk_162d…9666
 $ lore commit-show --id HEAD
-Commit b733d8a0360e — 1 linked entities:
+Commit 86dbae476bd6 — 1 linked entities:
   tasks/tsk_162d…9666
 $ lore commit show --id $(git rev-parse HEAD)
-Commit b733d8a0360e — 1 linked entities:
+Commit 86dbae476bd6 — 1 linked entities:
   tasks/tsk_162d…9666
 ```
 <!-- /example -->
@@ -87,17 +85,16 @@ Commit b733d8a0360e — 1 linked entities:
 # alice, in website
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_162d…9666.json
-✓ tsk_162d…9666 done (commit b733d8a); waiting for merge
-lore live: (live, pushed) commit 1833373 to origin refs/lore/live
-lore live: landed on main (59e9d31); leaves live once main is fetched
+✓ tsk_162d…9666 done (commit 86dbae4); waiting for merge
 $ lore sync
-lore live: 1 row(s) left live (main holds them)
-lore live: pushed waiting live writes commit 7540e63 to origin refs/lore/live
+lore live: pushed waiting live writes commit 9b40ce7 to origin refs/lore/live
+lore live: landed on main (05513aa); leaves live once main is fetched
+lore live: 4 row(s) left live (main holds them)
+lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 $ lore task list --status done
-✓ tsk_162d…9666 merged 10:04 (found by: ancestry, b733d8a)
+✓ tsk_162d…9666 merged 10:04 (found by: ancestry, 86dbae4)
 ✓ tsk_2ad3…f891 Send the invoice reminder before Friday's demo [high] due:2026-11-06
 ✓ tsk_162d…9666 Fix the typo on the pricing page [medium]  ✓ done · merged 10:04
-lore live: landed on main (ef62c83); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -112,17 +109,12 @@ $ lore task add --title 'Shrink the hero image'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b — Shrink the hero image [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
-lore live: (live, pushed) commit dd85e7d to origin refs/lore/live
-lore live: 1 row(s) left live (main holds them)
 $ lore task done --id tsk_4f89…b64b --no-lesson
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b done
-lore live: (live, pushed) commit d18179e to origin refs/lore/live
-lore live: landed on main (f4b8da2); leaves live once main is fetched
 $ lore task merged --id tsk_4f89…b64b
 lore: wrote ~/work/website/.lore/data/tasks/tsk_4f89…b64b.json
 ✓ tsk_4f89…b64b merged (marked by hand, 10:05)
-lore live: landed on main (70f4f88); leaves live once main is fetched
 ```
 <!-- /example -->
 
@@ -136,7 +128,7 @@ Merged matters when another task waits for this one with `--after <id>:merged` (
 ```console
 # alice, in website
 $ lore link list
-cml_6a86…ed8c  b733d8a0 → tasks/tsk_162d…9666 — Fix the Pro plan price on the pricing page
+cml_6a86…ed8c  86dbae47 → tasks/tsk_162d…9666 — lore: land 4 rows (_root)
 $ lore link remove --id cml_6a86…ed8c
 ERROR: [E_NEEDS_CONFIRM] link remove cml_6a86…ed8c?
   hint: ask the person, then rerun with --yes
@@ -156,8 +148,8 @@ The shortest path from a commit to its task, using the commands above:
 # alice, in website
 $ lore link add --entity tsk_162d…9666 --commit HEAD
 lore: wrote ~/work/website/.lore/data/commit_links/cml_6a86…ed8c.json
-✓ linked b733d8a0 → tasks/tsk_162d…9666  (cml_6a86…ed8c)
-  message: Fix the Pro plan price on the pricing page
+✓ linked 86dbae47 → tasks/tsk_162d…9666  (cml_6a86…ed8c)
+  message: lore: land 4 rows (_root)
 ```
 <!-- /example -->
 

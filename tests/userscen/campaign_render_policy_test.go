@@ -104,7 +104,7 @@ func TestCampaignRender_PolicyBadInput(t *testing.T) {
 			campRefusal(t, c, campExitBadInput, "E_INVALID_INPUT", tc.hint, "policy", "set", tc.key, tc.value, "--yes")
 		})
 	}
-	campRefusal(t, c, campExitBadInput, "E_INVALID_INPUT", "argument 2", "policy", "set", "trash.retention_days", "--yes")
+	campRefusal(t, c, campExitBadInput, "E_INVALID_INPUT", `pass --value "<value>"`, "policy", "set", "trash.retention_days", "--yes")
 	campRefusal(t, c, campExitNotFound, "E_NOT_FOUND", "", "policy", "set", "trash.retention_days", "5", "--to", "no-such-store", "--yes")
 	campSameTree(t, "refused policy writes", before, campTree(t, c.Dir))
 	// The negative number reaches the value check only after `--`.

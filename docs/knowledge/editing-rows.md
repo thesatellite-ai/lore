@@ -200,7 +200,7 @@ created_by: act_05e9…4603
 updated_at: "2026-11-02T10:00:10Z"
 updated_by: act_05e9…4603
 …
-$ EDITOR=$HOME/bin/edit-task lore edit --id tsk_2ad3…f891
+$ EDITOR=$HOME/bin/edit-task lore edit tsk_2ad3…f891
 lore: pushed store notes: commit dfd8dc8 to branch main
 lore: wrote ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json (store notes)
 ✓ tsk_2ad3…f891 updated in store notes: body, priority

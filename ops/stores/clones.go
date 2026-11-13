@@ -356,7 +356,15 @@ func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, e
 		return Entry{}, false, nil // not a store name lore knows: a path or url as given
 	}
 	return Entry{}, false, errs.New(errs.NotFound, "store "+cmd+": no store named "+name+" in this repo").
-		WithHint("run `lore store list`, or give the store url (lore store " + cmd + " <url>)")
+		WithHint("run `lore store list`, or give the store url (" + storeURLForm[cmd] + ")")
+}
+
+// storeURLForm is the url form of each command storeNamed serves, with
+// its flag (U-4: a hint never gives a value by position).
+var storeURLForm = map[string]string{
+	"open":   "lore store open --url <url>",
+	"forget": "lore store forget --url <url>",
+	"push":   "lore store push --store <url>",
 }
 
 // cloneOps are the clone commands bound to m.

@@ -424,7 +424,7 @@ func TestCLI_SQLFormatsAndInput(t *testing.T) {
 	c.Lore("sql", "SELECT 7 AS n").OK(t).Says(t, "7")
 	c.Lore("sql", "run", "SELECT", "8", "AS", "n").OK(t).Says(t, "8")
 	// Bare lore sql prints its help.
-	c.Lore("sql").OK(t).Says(t, "Usage:", "lore sql <query...> [flags]", "Examples:")
+	c.Lore("sql").OK(t).Says(t, "Usage:", "lore sql --query <query> [flags]", "Examples:")
 	bad := []struct {
 		args []string
 		say  []string

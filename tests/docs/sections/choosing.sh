@@ -8,7 +8,7 @@
 lore_repo alice client/website
 
 note "where the files are"
-on alice work/website "lore store init notes file://\$HOME/stores/notes"
+on alice work/website "lore store init --name notes --url file://\$HOME/stores/notes"
 on alice work/website "lore memory add --to notes --body 'The client pays invoices on the 15th.'"
 on alice work/website "lore rule add --body 'Run the tests before you push.'"
 on alice work/website "find ~/stores/notes -type f | sort"
@@ -17,4 +17,4 @@ on alice work/website "ls -a .lore"
 on alice work/website "find ~/.lore/cache -name '*.db' | sed -e 's#/sto_[0-9a-z]*/#/<store id>/#' -e 's/-[0-9a-f]\{12\}\.db/-<hash>.db/' | sort"
 
 note "cloud sync folder"
-on! alice work/website "lore store init synced file://\$HOME/Dropbox/notes"
+on! alice work/website "lore store init --name synced --url file://\$HOME/Dropbox/notes"

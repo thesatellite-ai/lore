@@ -1,6 +1,6 @@
 # Overview
 
-**In short:** lore keeps your project's notes and to-dos as small files in git. For a team it adds three things. Your teammates see a new task at once, whatever branch they are on. Private notes can live in a separate repo the client cannot open. And several coding agents can share one plan without doing the same task twice.
+**In short:** lore keeps your project's notes and to-dos as small files in git. For a team it adds three things. Your teammates see a new task whatever branch they are on, as soon as you share it with `lore sync` or your next `git push`. Private notes can live in a separate repo the client cannot open. And several coding agents can share one plan without doing the same task twice.
 
 Lore stores what your project knows and what it has to do as rows. A row is one note: a rule ("Run the tests before you push"), a decision ("We use Stripe for payments"), a memory ("The client replies faster on WhatsApp than email"), a task ("Send the invoice reminder before Friday's demo") or a mission (a bigger goal made of tasks). Each row is one small JSON file under `.lore/data/` in your repo. So git already shares it: you commit it with your code, it travels on your branch, and it reaches `main` when the branch merges.
 
@@ -10,7 +10,7 @@ That works well for one person. For a team it leaves gaps. Lore for teams fills 
 
 | Problem | Without lore for teams | With lore for teams |
 |---|---|---|
-| **Branches.** Bob (an agency developer) adds a task for Alice (another agency developer) while both are on feature branches. | Alice sees it only after Bob's branch merges into `main`. | Tasks are **live** (a live list every teammate sees at once, whatever branch they are on): Alice sees it on her next lore command. |
+| **Branches.** Bob (an agency developer) adds a task for Alice (another agency developer) while both are on feature branches. | Alice sees it only after Bob's branch merges into `main`. | Tasks are **live** (a live list every teammate sees, whatever branch they are on): once Bob runs `lore sync` (or `git push`), Alice sees it after her next `lore sync`. |
 | **Private notes.** You keep notes about the client that the client must never read, but the client can read the repo. | The client can read anything in the repo, hidden or not. | Internal notes live in a **store**: a separate private repo only the agency can open, like a locked filing cabinet next to the client's repo. |
 | **Many repos.** Client 2's product is spread over three repos: app, API and infra. | Each repo has its own lore. Nothing ties them together. | The repos **link** to one internal project. A mission and its tasks span all three. |
 | **Many companies.** You work for two companies on one laptop. | One identity everywhere, notes mixed together. | Each **org** (one company's setup) has its own identity, store and roster (the list of people and agents in it). A repo loads exactly one org. |
@@ -61,7 +61,7 @@ Who sees what:
 
 1. **A row is a file.** Every task, rule or note is one JSON file. The copy in `main`'s `.lore/data` is its lasting home. On other branches, rows behave like code.
 2. **Live is a whiteboard in the hallway.** Some rows are written to a hidden list on GitHub that is not a branch (git calls it a *ref*: `refs/lore/live`). Tasks, missions, handoffs and comments go there by default, and any row you add with `--live`. Every clone fetches that list, so everyone sees these rows at once, from any branch. The live copy wins over any branch copy.
-3. **Landing files the whiteboard into the archive.** When a live row is finished, lore writes it to `main`'s `.lore/data` by itself. This is called landing. Finished means: a task is done or cancelled, a decision is superseded or rejected; rules, memories and notes count as finished on write. Once `main` holds the same content, lore wipes the row off live. If `main` is protected, the row rides along in your next push as a small extra commit.
+3. **Landing files the whiteboard into the archive.** When a live row is finished, your next `lore sync` (or `lore land`, or your own `git push` of `main`) writes it to `main`'s `.lore/data`; lore never does it behind your back. This is called landing. Finished means: a task is done or cancelled, a decision is superseded or rejected; rules, memories and notes count as finished on write. Once `main` holds the same content, lore wipes the row off live. If `main` is protected, the row rides along in your next commit after that sync, as a small extra commit.
 4. **Signals are sticky notes by the door.** "`agent-backend` is working on this task until 14:20" changes every few minutes and matters only now. So it lives on another hidden list, `refs/lore/signals`. That list always holds exactly one commit and never builds history.
 5. **Privacy is decided by which repo a row is in.** A hidden ref is hidden, not private: anyone who can clone a repo can download every ref in it. So internal notes never go into the client's repo at all. They go into a **store**, a separate repo only your company can read.
 6. **One org per repo.** Your `~/.lore/config.yaml` lists your orgs (the companies you work for). In each repo lore picks exactly one, by a link in a store or by the repo's URL. It loads that org's identity, store and roster, plus your personal notes for that org. `lore whoami` tells you which one and why.
@@ -69,7 +69,7 @@ Who sees what:
 
 ## What stays the same
 
-If you work alone in one repo, nothing changes unless you want it to. No config is needed, and every command works as before. One thing is new: tasks are live by default, so with a remote they are pushed to `refs/lore/live` at once. See [Solo developer](use-cases/solo.md) for how to keep the old behaviour.
+If you work alone in one repo, nothing changes unless you want it to. No config is needed, and every command works as before. One thing is new: tasks are live by default, so with a remote they go to `refs/lore/live` on your next `lore sync` or `git push` (lore never pushes by itself unless you set `live.autopush: true`). See [Solo developer](use-cases/solo.md) for how to keep the old behaviour.
 
 ## Next
 

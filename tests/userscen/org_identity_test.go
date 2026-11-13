@@ -369,7 +369,7 @@ func TestOrgTeamInvitesFromAnAdminSetup(t *testing.T) {
 	}
 	o.app.MustLore("team", "invite", "revoke", "dan@example.com", "--yes").Says(t, "status: revoked")
 	o.app.MustLore("team", "invite", "revoke", byEmail["dan@example.com"].ID, "--yes").OK(t) // again: nothing to change
-	o.app.Lore("team", "invite", "resend", "dan@example.com").Fails(t, th.ExitRefused, "E_INVITE_REVOKED", "lore team invite dan@example.com")
+	o.app.Lore("team", "invite", "resend", "dan@example.com").Fails(t, th.ExitRefused, "E_INVITE_REVOKED", "lore team invite --email dan@example.com")
 	if p := orgInvites(t, o.app, "--status", "pending"); len(p) != 1 || p[0].Email != "carol@example.com" {
 		t.Fatalf("pending after revoke: %+v", p)
 	}

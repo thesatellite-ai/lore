@@ -8,50 +8,50 @@ Map of "I want to do X" → exact command. Skim this first when you're unsure wh
 
 | Intent | Command |
 |---|---|
-| Persist any free-form fact | `lore memory add --body="<text>"` |
-| Persist a hard constraint with severity | `lore rule add --severity=must --body="<text>"` |
-| Persist a decision rationale (ADR-style) | `lore decision add --title="<t>" --body="<why>"` |
-| Persist a recurring warning | `lore hotfix add --severity=high --title="<headline>" --body="<text>"` |
-| Reusable code pattern | `lore pattern add --title=<n> --body="<code>"` |
-| Reusable procedure | `lore playbook add --title=<n> --body="<steps>"` |
-| Reusable model prompt | `lore prompt add --title=<n> --body="<prompt>"` |
-| Architectural note | `lore architecturenote add --title=<t> --body=<b>` |
-| Behaviour mode preset | `lore behaviour add --title=<n> --body=<b>` |
-| Recipe (cookbook entry) | `lore cookbookrecipe add --title=<n> --body=<b>` |
-| Incident postmortem | `lore incident add --title=<t> --body=<b>` |
-| Improvement suggestion | `lore suggestion add --title=<t> --body=<b>` |
-| Taste preference | `lore tastepref add --body=<b>` |
+| Persist any free-form fact | `lore memory add --body "<text>"` |
+| Persist a hard constraint with severity | `lore rule add --severity must --body "<text>"` |
+| Persist a decision rationale (ADR-style) | `lore decision add --title "<t>" --body "<why>"` |
+| Persist a recurring warning | `lore hotfix add --severity high --title "<headline>" --body "<text>"` |
+| Reusable code pattern | `lore pattern add --title <n> --body "<code>"` |
+| Reusable procedure | `lore playbook add --title <n> --body "<steps>"` |
+| Reusable model prompt | `lore prompt add --title <n> --body "<prompt>"` |
+| Architectural note | `lore architecturenote add --title <t> --body <b>` |
+| Behaviour mode preset | `lore behaviour add --title <n> --body <b>` |
+| Recipe (cookbook entry) | `lore cookbookrecipe add --title <n> --body <b>` |
+| Incident postmortem | `lore incident add --title <t> --body <b>` |
+| Improvement suggestion | `lore suggestion add --title <t> --body <b>` |
+| Taste preference | `lore tastepref add --body <b>` |
 
 ## Track work
 
 | Intent | Command |
 |---|---|
 | Create an initiative | `lore mission add --title "<title>"` |
-| Create a discrete work item | `lore task add --title "<title>" --priority=<p>` (`--tasklist=<tlt_id>` optional: the default list is used, created on demand) |
-| Attach task to mission | `lore task add --title "<t>" --tasklist=<tlt_id> --mission=<msn_id>` |
-| Attach task to plan | `lore task add --title "<t>" --tasklist=<tlt_id> --plan=<pln_id>` |
-| Assign task to an actor | `lore task add --title "<t>" --tasklist=<tlt_id> --assigned-to=<act_id>` |
-| Supersede a memory/rule/decision/hotfix/pattern | `lore <kind> add ... --supersedes=<old_id>` |
-| Mark a memory as validated by an actor | `lore memory add --body ... --validated-by=<act_id>` |
-| Rows a given actor wrote (any entity) | `lore <noun> list --created-by=<act_id>` (the author is recorded from the writing identity, never set by hand) |
-| Move task to another tasklist | `lore task edit --id <id> --tasklist=<tlt_id>` |
-| Reassign task | `lore task edit --id <id> --assigned-to=<act_id>` |
+| Create a discrete work item | `lore task add --title "<title>" --priority <p>` (`--tasklist <tlt_id>` optional: the default list is used, created on demand) |
+| Attach task to mission | `lore task add --title "<t>" --tasklist <tlt_id> --mission <msn_id>` |
+| Attach task to plan | `lore task add --title "<t>" --tasklist <tlt_id> --plan <pln_id>` |
+| Assign task to an actor | `lore task add --title "<t>" --tasklist <tlt_id> --assigned-to <act_id>` |
+| Supersede a memory/rule/decision/hotfix/pattern | `lore <kind> add ... --supersedes <old_id>` |
+| Mark a memory as validated by an actor | `lore memory add --body ... --validated-by <act_id>` |
+| Rows a given actor wrote (any entity) | `lore <noun> list --created-by <act_id>` (the author is recorded from the writing identity, never set by hand) |
+| Move task to another tasklist | `lore task edit --id <id> --tasklist <tlt_id>` |
+| Reassign task | `lore task edit --id <id> --assigned-to <act_id>` |
 | Detach task from mission | `lore task edit --id <id> --clear-mission` |
-| Rename / re-body any editable entity | `lore <kind> edit <id> --title=… --body=…` |
-| Group tasks (alt grouping) | `lore tasklist add --title=<t>` |
-| Multi-phase plan | `lore plan add --title=<t>` |
+| Rename / re-body any editable entity | `lore <kind> edit --id <id> --title … --body …` |
+| Group tasks (alt grouping) | `lore tasklist add --title <t>` |
+| Multi-phase plan | `lore plan add --title <t>` |
 | Hand off context to a collaborator | `lore handoff add --for @<handle> [--task <id>] --body "<ctx>"` |
-| Active task list view | `lore task list --status=in_progress` |
-| My tasks / tasks assigned to someone | `lore task list --assignee=@me` (or `--assignee=<act_id\|stable_key\|display name>`) |
+| Active task list view | `lore task list --status in_progress` |
+| My tasks / tasks assigned to someone | `lore task list --assignee @me` (or `--assignee <act_id\|stable_key\|display name>`) |
 | Start a task | `lore task start --id <id\|tsk_<id>>` |
 | Finish a task | `lore task done --id <id\|tsk_<id>>` |
 | Cancel a task | `lore task cancel --id <id\|tsk_<id>>` |
 | Pause / resume a mission | `lore mission pause --id <id>` / `mission resume <id>` |
 | Acknowledge a handoff | `lore handoff ack --id <id>` |
-| Future reminder | `lore reminder add --message "<msg>" --due=YYYY-MM-DD` |
-| Recurring reminder | `... --recurrence=7d\|30d\|1m\|3m\|6m\|1y` |
-| Tag/label any entity | `lore tag attach --on-table=<t> --on-id=<id> --tag=<n>` |
-| Discuss any entity | `lore comment add --on-table=<t> --on-id=<id> --body="<text>"` |
+| Future reminder | `lore reminder add --message "<msg>" --due YYYY-MM-DD` |
+| Recurring reminder | `... --recurrence 7d\|30d\|1m\|3m\|6m\|1y` |
+| Tag/label any entity | `lore tag attach --on-table <t> --on-id <id> --tag <n>` |
+| Discuss any entity | `lore comment add --on-table <t> --on-id <id> --body "<text>"` |
 
 ## Teams, stores and agents
 
@@ -60,7 +60,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Intent | Command |
 |---|---|
 | See which org, identity and stores apply here, and why | `lore whoami` (`--explain` for every rule) |
-| Share a row with the whole team at once, on any branch | `lore task add --title "<title>"` (tasks are live by default); other kinds: `--live` |
+| Share a row with the whole team on any branch, without a merge (then `lore sync`) | `lore task add --title "<title>"` (tasks are live by default); other kinds: `--live` |
 | Keep a row with the branch instead | `--no-live` |
 | Give a task to a teammate | `lore task add --title "<title>" --assign @<handle>` |
 | See a teammate's new row now (skip the 60 s fetch cache) | `lore sync` |
@@ -92,17 +92,17 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 
 | Intent | Command |
 |---|---|
-| Archive an entity (soft-delete) | `lore <kind> archive <id>` (memory, rule, decision, hotfix, pattern, playbook, prompt, project, repo) |
-| Unarchive | `lore <kind> unarchive <id>` |
+| Archive an entity (soft-delete) | `lore <kind> archive --id <id>` (memory, rule, decision, hotfix, pattern, playbook, prompt, project, repo) |
+| Unarchive | `lore <kind> unarchive --id <id>` |
 | Invalidate a memory at a point in time (bitemporal) | `lore memory invalidate --id <id>` — sets `valid_until=now`; preserves the row in history |
-| Supersede a knowledge row with audit trail | `lore <kind> add ... --supersedes=<old_id>` (memory, rule, decision, hotfix, pattern) |
+| Supersede a knowledge row with audit trail | `lore <kind> add ... --supersedes <old_id>` (memory, rule, decision, hotfix, pattern) |
 
 ## Lock CLAUDE.md against agent drift
 
 | Intent | Command |
 |---|---|
 | Install the agent directive at the top of CLAUDE.md | `lore directive install` |
-| Same, but into AGENTS.md (or both) | `lore directive install --target=AGENTS.md` (or `--target=CLAUDE.md,AGENTS.md`) |
+| Same, but into AGENTS.md (or both) | `lore directive install --target AGENTS.md` (or `--target CLAUDE.md,AGENTS.md`) |
 | Print the directive block (no write) | `lore directive show` |
 
 ## Retrieve / search
@@ -112,19 +112,19 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | BM25 full-text search across memories | `lore memory search --query "<q>"` |
 | Same for any other entity | `lore <kind> search "<q>"` — works on 23 entities (rule, decision, hotfix, pattern, playbook, prompt, architecturenote, behaviour, cookbookrecipe, incident, suggestion, tastepref, snapshot, handoff, mission, task, tasklist, plan, workflow, workspace, techdoc, comment) |
 | Search task title + body, eager-load relations | `lore task search --query "auth*" --json` (returns task + tasklist + mission + plan) |
-| Restrict to specific columns | `lore <kind> search "<q>" --column=title,body` |
+| Restrict to specific columns | `lore <kind> search "<q>" --column title,body` |
 | List memories newest-first | `lore memory list --json` |
 | Phrase search | `lore memory search --query '"exact phrase"'` |
 | Boolean search | `lore memory search --query "redis OR cache"` |
 | Wildcard prefix | `lore memory search --query "auth*"` |
 | Negation | `lore rule search --query "auth NOT login"` |
-| Scoped to one repo | `... --repo=<mount>` |
+| Scoped to one repo | `... --repo <mount>` |
 | Across all repos | `... --all-repos` |
 | Master only (no repo) | `... --master-only` |
 | Strict scope (no inheritance) | `... --no-inherit` |
 | Include archived | `... --include-archived` |
 | Index health / row counts | `lore search status [--json]` |
-| Force rebuild index | `lore search rebuild [--kind=<entity>]` |
+| Force rebuild index | `lore search rebuild [--kind <entity>]` |
 
 ## Upgrade / migrate
 
@@ -133,17 +133,17 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | First-time setup on a fresh project | `lore init` (runs setup internally) |
 | After upgrading the binary | nothing: the cache and search index rebuild themselves; `lore migrate run` only for v0.1.17 data |
 | Install the coding tools' hooks | `lore setup --agent-hooks` (optional; `--dry-run` shows the changes) |
-| Limit | `... --limit=<n>` |
-| Show details for any entity | `lore <kind> show <id>` |
-| List by status | `lore <kind> list --status=<s>` (where applicable) |
+| Limit | `... --limit <n>` |
+| Show details for any entity | `lore <kind> show --id <id>` |
+| List by status | `lore <kind> list --status <s>` (where applicable) |
 
 ## Render + introspect
 
 | Intent | Command |
 |---|---|
 | Compile `.lore/LORE.md` from DB + `@import` pointer into CLAUDE.md (hybrid; pins only directive + must-rules + critical/high hotfixes) | `lore render` |
-| Stitch the pointer into a different agent file | `lore render --target=AGENTS.md` |
-| Change the generated knowledge-file path | `lore render --out=docs/LORE.md` |
+| Stitch the pointer into a different agent file | `lore render --target AGENTS.md` |
+| Change the generated knowledge-file path | `lore render --out docs/LORE.md` |
 | Write the generated file only (no pointer stitch) | `lore render --no-pointer` |
 | See what render would produce (the `.lore/LORE.md` body) | `lore render --dry-run` |
 | What did the agent actually see? | `lore why-context` |
@@ -158,7 +158,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Share notes between repos (replaces Mode B) | `lore store init --name <name> --url file://<abs-path>` once, `lore store add --name <name> --url <url>` in each other repo; an old Mode B repo: `lore migrate run` |
 | List projects in cwd's DB | `lore project list` |
 | Show project + repos | `lore project show --id <name> --json` |
-| Add a repo | `lore repo add --mount-name <mount> --origin=<url>` |
+| Add a repo | `lore repo add --mount-name <mount> --origin <url>` |
 | List repos in current project | `lore repo list` |
 
 ## Health + recovery
@@ -171,7 +171,7 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | Keep a safe copy of the notes | commit `.lore/data` (the files are the truth) |
 | Rebuild a damaged cache | `rm -f ~/.lore/cache/repo/<repo folder>-*`: the next command rebuilds it from `.lore/data` |
 | Rebuild the search index | `lore search rebuild` |
-| Capture bug bundle | `lore support-bundle --out=<path>` |
+| Capture bug bundle | `lore support-bundle --out <path>` |
 
 ## Identity
 

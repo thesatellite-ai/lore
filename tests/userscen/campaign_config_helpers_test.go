@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -73,10 +74,12 @@ func ccExampleLines(help string) []string {
 }
 
 // ccRequired reports whether a leaf needs input a bare call lacks: a
-// required <argument> in its usage line or a flag marked (required).
+// required <argument> in its usage line or a flag marked (required). An
+// optional part of the usage line, in [...], does not count: since U-4 an
+// optional value is shown named, `lore store show [--store <store>]`.
 func ccRequired(n cliNode) bool {
 	for _, u := range cliBlock(n.Help, "Usage:") {
-		if strings.Contains(u, "<") {
+		if strings.Contains(ccOptionalPart.ReplaceAllString(u, ""), "<") {
 			return true
 		}
 	}
@@ -87,6 +90,10 @@ func ccRequired(n cliNode) bool {
 	}
 	return false
 }
+
+// ccOptionalPart is one optional [...] part of a usage line (innermost
+// first: ccRequired strips them all).
+var ccOptionalPart = regexp.MustCompile(`\[[^\[\]]*\]`)
 
 // ccNoStack fails when a process printed a Go stack or a panic.
 func ccNoStack(t *testing.T, r cliProc) {

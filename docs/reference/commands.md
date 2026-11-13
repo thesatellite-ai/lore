@@ -366,8 +366,8 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore member` … | The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join --invite "<the org's store url>" | — |
-| `lore member add` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join --invite "<the org's store url>" | — |
+| `lore member` … | The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join --invite <store-url> | — |
+| `lore member add` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join --invite <store-url> | — |
 | `lore member edit` | Change a person's name, @handle or org-level role | — |
 | `lore member list` | List the org's people: email, name, org role, handle, teams | — |
 | `lore member remove` | Take a person off the org (actor offboard: their stint and memberships end; the row stays for history) | — |
@@ -877,7 +877,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore sync status` | Show sync state: baseline, pending exports, conflicts, broken files, live rows | [sync/how-notes-travel-with-git › Step 4 — Run a pass by hand when you want to see it](../../docs/sync/how-notes-travel-with-git.md#step-4--run-a-pass-by-hand-when-you-want-to-see-it) |
 | `lore sync trash` … | Moved: lore trash --local (this spelling goes away in the next release) | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
 | `lore sync trash list` | Moved: lore trash --local (this spelling goes away in the next release) | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
-| `lore sync trash restore` | Moved: lore trash restore --local <n> | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
+| `lore sync trash restore` | Moved: lore trash restore --local --target <n> | [sync/how-notes-travel-with-git › Try it — turn sync off for one command](../../docs/sync/how-notes-travel-with-git.md#try-it--turn-sync-off-for-one-command) |
 
 ### lore tag
 

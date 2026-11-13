@@ -143,9 +143,9 @@ lore init                # create the local lore project
 lore directive install   # add the agent-directive block to CLAUDE.md / AGENTS.md
 
 # capture knowledge
-lore memory add --body="The client replies faster on WhatsApp than email"
-lore rule add --body="Run the tests before you push"
-lore decision add --title="Payments" --body="We use Stripe for payments"
+lore memory add --body "The client replies faster on WhatsApp than email"
+lore rule add --body "Run the tests before you push"
+lore decision add --title "Payments" --body "We use Stripe for payments"
 
 # retrieve it
 lore search --query "whatsapp"           # search across all knowledge
@@ -161,7 +161,7 @@ git add .lore/data .gitattributes && git commit -m "lore knowledge"
 
 - **Project** — one per repo (created by `lore init`): every note is a small JSON file under `.lore/data/` that you commit with the code, so it travels with it; a local cache under `.lore/` is rebuilt from those files whenever it is missing (see [Team sync through git](#team-sync-through-git)).
 - **Entities** — typed knowledge records: `memory`, `rule`, `decision`, `pattern`, `hotfix`, `snapshot`, `playbook`, `prompt`, `task`, `mission`, `plan`, `reminder`, `handoff`, `incident`, `techdoc`, and more.
-- **Scope** — knowledge is scoped to the whole project (`master`) or a specific `--repo`. `add` persists `repo_id`; `list` and `search` filter by it with identical semantics (`--repo`, `--all-repos`, `--master-only`, `--no-inherit`). Real per-repo scoping — no body prefix-tag convention needed. Re-scope an existing row with `edit --rebind-repo=<mount>` / `edit --rebind-master`. Bare `--repo` on `edit` is context-only (never mutates scope; warns loudly). For audited body+scope change use `add --supersedes=<old_id> --repo=<mount>`.
+- **Scope** — knowledge is scoped to the whole project (`master`) or a specific `--repo`. `add` persists `repo_id`; `list` and `search` filter by it with identical semantics (`--repo`, `--all-repos`, `--master-only`, `--no-inherit`). Real per-repo scoping — no body prefix-tag convention needed. Re-scope an existing row with `edit --rebind-repo <mount>` / `edit --rebind-master`. Bare `--repo` on `edit` is context-only (never mutates scope; warns loudly). For audited body+scope change use `add --supersedes <old_id> --repo <mount>`.
 - **Render** — `lore render` compiles a small **core** of the project's knowledge into a generated file (default `.lore/LORE.md`), kept inside a byte budget: must rules, critical and high hotfixes, the agent's operating rules and an index of topics. It stitches an idempotent `@import` pointer into the file your coding tool reads (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/lore.mdc`, `GEMINI.md`, … chosen with `--target`; otherwise `lore init` picks the tools of the setup that applies to the folder, else the tool files the repo already has, else `AGENTS.md`), so your hand-written content is never clobbered. Use `--no-pointer` to write only the generated file, or `--out` to change its path.
 - **Agent workflow** — the agent reads the core (it is already loaded through the pointer file), runs `lore context --for-file <path>` before it touches a path (the rules, hotfixes and notes for that file and its folders), and `lore search --query "<keywords>"` for everything else. `lore setup --agent-hooks` makes Claude Code, Codex and Gemini CLI fetch the per-file context by themselves.
 
@@ -170,16 +170,16 @@ git add .lore/data .gitattributes && git commit -m "lore knowledge"
 Almost every entity supports the same sub-verbs, so once you know one you know them all:
 
 ```sh
-lore <entity> add      --body="…"      # create (some take --title too)
+lore <entity> add      --body "…"      # create (some take --title too)
 lore <entity> list                     # list active rows
-lore <entity> show     <id>            # full detail
-lore <entity> edit     <id> --body="…" # update only the fields you pass
+lore <entity> show     --id <id>            # full detail
+lore <entity> edit     --id <id> --body "…" # update only the fields you pass
 lore <entity> search   "query"         # search within that entity
-lore <entity> archive  <id>            # soft-delete (reversible: unarchive)
-lore <entity> delete   <id>            # HARD delete (no undo — prefer archive)
+lore <entity> archive  --id <id>            # soft-delete (reversible: unarchive)
+lore <entity> delete   --id <id>            # HARD delete (no undo — prefer archive)
 ```
 
-Bodies can be passed with `--body="…"` or piped: `echo "text" | lore memory add`.
+Bodies can be passed with `--body "…"` or piped: `echo "text" | lore memory add`.
 
 ## Command reference
 
@@ -253,7 +253,7 @@ The knowledge entities above (`memory` … `techdoc`) all support `list / show /
 | Command | Use case |
 |---|---|
 | `lore run` | Time one try at a task: `start / end / cancel`; the span lands on the task's time |
-| `lore link add --commit=<sha> --entity=<id>` | Link a git commit to any entity (task/run/mission/decision/…). Also `list` / `remove` |
+| `lore link add --commit <sha> --entity <id>` | Link a git commit to any entity (task/run/mission/decision/…). Also `list` / `remove` |
 | `lore external-source` | Register outside sources: `add / enable / disable / list` (disabled by default) |
 | `lore directive` | Install or show the agent-directive block |
 | `lore skill` | Meta-tools for the lore skill bundle (`compile` — shorten the main bundle with a model) |
@@ -294,7 +294,7 @@ A sync pass runs automatically before and after every command; these subcommands
 
 Lore works for a whole team, several repos, several companies and a crew of coding agents, with git as the only infrastructure:
 
-- **Tasks reach teammates at once, on any branch.** Live rows (notes every teammate sees at once) are shared on one hidden list on GitHub that is not a branch (git calls it a ref: `refs/lore/live`, one per repo). They land on `main` by themselves when finished, or ride along with your next push when `main` is protected.
+- **Tasks reach teammates on any branch, without a merge.** Live rows (notes every teammate sees whatever branch they are on) are shared on one hidden list on GitHub that is not a branch (git calls it a ref: `refs/lore/live`, one per repo). Nothing pushes by itself: `lore sync` or your next `git push` sends them, and lands the finished ones on `main` (or lets them ride along with your next commit when `main` is protected). `live.autopush: true` pushes each write at once.
 - **Internal notes stay internal.** Notes a client must never read live in a store: a separate notes-only repo linked to the client repo, like a locked filing cabinet next to it. Leak checks stop internal text from reaching the client's commits and pull requests.
 - **Several repos, one product; one person, several companies.** Repos link to one shared project; each repo loads exactly one org (one company), with its own identity, roster (the list of people and agents) and personal notes.
 - **Agents do not step on each other.** `lore task next` claims a task: the agent puts its name on it, like writing your name on a whiteboard job. The claim has a lease, so it runs out after a set time unless the agent keeps saying it is alive, and it is kept on a second hidden ref (`refs/lore/signals`). A crashed agent's task is picked up when its lease runs out, and people approve gates (steps that wait for a person to say yes).
@@ -363,7 +363,7 @@ lore keeps a fast local cache in its home folder (`~/.lore/cache/repo/<repo fold
 
 A second driver, `lore-keep-ours`, handles `.lore/LORE.md`: it keeps your copy, and lore re-renders the file from the merged data on the next command. git only runs a driver the clone has configured; lore configures both in each clone automatically (`.git/config`), the same way it installs its hooks. In a folder that is not a git repository there is nothing to configure, and lore leaves git alone.
 
-**Settling a real conflict.** `lore <entity> show <id>` displays both versions; pick one (or combine them) with `lore <entity> edit <id> --body "…"`, which rewrites the file without markers, then commit. The pre-commit hook refuses to commit a file that still has markers. Markers that break the JSON itself only appear when a merge ran where lore's driver was not configured: abort it, run any lore command (which configures the driver), and merge again.
+**Settling a real conflict.** `lore <entity> show --id <id>` displays both versions; pick one (or combine them) with `lore <entity> edit --id <id> --body "…"`, which rewrites the file without markers, then commit. The pre-commit hook refuses to commit a file that still has markers. Markers that break the JSON itself only appear when a merge ran where lore's driver was not configured: abort it, run any lore command (which configures the driver), and merge again.
 
 **Pull requests.** Most pull requests never need the driver: new rules, memories and tasks are new files with unique ids, and editing a row nobody else touched is an ordinary change, so GitHub merges them like any other file. When the same row was edited on the branch *and* on `main`, GitHub reports a conflict, because its merge button never runs custom drivers. Two ways to clear it:
 

@@ -173,6 +173,8 @@ type ResListIn struct {
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // ResStaleIn is the input of resource.stale.
@@ -1303,7 +1305,8 @@ func (o ops) resDelete(ctx context.Context, in ResDeleteIn) (ResDeleteOut, error
 	case bulkForm:
 		return o.resDeleteWhere(ctx, in)
 	case in.Name == "":
-		return ResDeleteOut{}, errs.New(errs.InvalidInput, "resource delete: name the resource, or use --kind <kind> --where <filter>")
+		return ResDeleteOut{}, errs.New(errs.InvalidInput, "resource delete: name the resource with --id, or use --kind with --where").
+			WithHint(`lore resource delete --id <name or res_ id> (or --kind <kind> --where "<field>=<value>" for the bulk form)`)
 	case in.DryRun:
 		return ResDeleteOut{}, errs.New(errs.InvalidInput, "resource delete: --dry-run belongs to the bulk form --kind --where")
 	}

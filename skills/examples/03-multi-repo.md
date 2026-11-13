@@ -9,25 +9,25 @@
 ```bash
 mkdir -p ~/projects/platform && cd ~/projects/platform
 git init -q
-lore init --non-interactive --name=platform
+lore init --non-interactive --name platform
 
 # Register the three repos
-lore repo add --mount-name app   --origin=git@github.com:client2/app.git
-lore repo add --mount-name admin --origin=git@github.com:client2/admin.git
-lore repo add --mount-name api   --origin=git@github.com:client2/api.git
+lore repo add --mount-name app   --origin git@github.com:client2/app.git
+lore repo add --mount-name admin --origin git@github.com:client2/admin.git
+lore repo add --mount-name api   --origin git@github.com:client2/api.git
 ```
 
 ## Capture knowledge with scope
 
 ```bash
 # Repo-scoped (only visible in that repo's context)
-lore memory add --body="Buttons are blue on every page"         --repo=app
-lore memory add --body="Only staff can open the admin pages"   --repo=admin
-lore memory add --body="Run the API tests before you push"     --repo=api
+lore memory add --body "Buttons are blue on every page"         --repo app
+lore memory add --body "Only staff can open the admin pages"   --repo admin
+lore memory add --body "Run the API tests before you push"     --repo api
 
 # Cross-cutting (visible to ALL repos)
-lore memory add --body="All times are shown in the user's own time zone"
-lore memory add --body="Never put passwords in the code"
+lore memory add --body "All times are shown in the user's own time zone"
+lore memory add --body "Never put passwords in the code"
 
 # render runs in the repo it renders (no --repo on render)
 (cd ../app   && lore render)
@@ -48,12 +48,12 @@ The staff-only note does NOT appear in `app/CLAUDE.md`. The blue-buttons note do
 ## Search variations
 
 ```bash
-# Default: --repo=app sees web rows + master rows.
-lore memory search --query "" --repo=app --json | jq '.count'
+# Default: --repo app sees web rows + master rows.
+lore memory search --query "" --repo app --json | jq '.count'
 # 3
 
 # Strict scope (no master fallback)
-lore memory search --query "" --repo=app --no-inherit --json | jq '.count'
+lore memory search --query "" --repo app --no-inherit --json | jq '.count'
 # 1
 
 # Master only
@@ -70,7 +70,7 @@ lore memory search --query "" --all-repos --json | jq '.count'
 Without scope, every repo would see every other repo's noise. The website developer would see "only staff can open the admin pages", which is not about their repo.
 
 The right mental model: **scope = audience**. Who needs to know this?
-- Only this repo? → `--repo=<name>`
+- Only this repo? → `--repo <name>`
 - Every repo in this project? → no flag (master scope)
 - Every project on this machine? → not lore's job; use a global tool
 

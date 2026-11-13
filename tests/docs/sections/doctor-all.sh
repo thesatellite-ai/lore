@@ -25,7 +25,7 @@ person tomas tomas@agency.example
 fake_github_ssh tomas-dev
 remote agency/notes
 lore_repo tomas agency/site agency/site
-quiet tomas work "mkdir -p stores && cd stores && git init -q && lore store init agency git@github.com:agency/notes --yes"
+quiet tomas work "mkdir -p stores && cd stores && git init -q && lore store init --name agency --url git@github.com:agency/notes --yes"
 config tomas <<'Y'
 orgs:
   - name: agency
@@ -71,8 +71,8 @@ note "json"
 on tomas work/agency/site "lore doctor --all --setup agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r[\"status\"], r[\"exit_status\"], r[\"counts\"]); [print(c[\"check\"], c[\"status\"], c[\"level\"], c.get(\"target\",\"-\"), \"|\", c.get(\"detail\",\"\")) for s in r[\"setups\"] for c in s[\"checks\"] if c[\"status\"] not in (\"ok\", \"skip\")]'"
 
 note "repair"
-on! tomas work/agency/site "lore setup repair agency --dry-run"
+on! tomas work/agency/site "lore setup repair --name agency --dry-run"
 # took_ms and checked_at differ per run: only the step and check ids are shown.
-on tomas work/agency/site "lore setup repair agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); [print(s[\"name\"], st[\"step\"], [c[\"check\"] for c in st[\"checks\"]]) for s in r[\"setups\"] for st in s[\"steps\"]]'"
+on tomas work/agency/site "lore setup repair --name agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); [print(s[\"name\"], st[\"step\"], [c[\"check\"] for c in st[\"checks\"]]) for s in r[\"setups\"] for st in s[\"steps\"]]'"
 fake_github_ssh tomas-dev
-on tomas work/agency/site "lore setup repair agency --dry-run"
+on tomas work/agency/site "lore setup repair --name agency --dry-run"

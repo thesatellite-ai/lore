@@ -114,3 +114,22 @@ func TestMetaMaintenance(t *testing.T) {
 		t.Errorf("lint %q", got)
 	}
 }
+
+// TestMetaSetMissingIDHintNamed (U-4): a key=value pair given where the
+// id belongs is refused with a hint that names both flags, and the value
+// (maybe a secret) is never echoed.
+func TestMetaSetMissingIDHintNamed(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	_, err := h.RunYes(settings.OpMetaSet, `{"id":"vendor_key=do-not-echo-this-value"}`)
+	if err == nil {
+		t.Fatal("a pair in the id slot was accepted")
+	}
+	env := errs.EnvelopeOf(err).Error
+	if want := "lore meta set --id <id> --pair vendor_key=<value>"; !strings.Contains(env.Hint, want) {
+		t.Fatalf("hint %q lacks %q", env.Hint, want)
+	}
+	if strings.Contains(env.Message+env.Hint, "do-not-echo") {
+		t.Fatalf("the value is echoed: %+v", env)
+	}
+}

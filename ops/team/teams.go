@@ -136,6 +136,8 @@ type TeamListIn struct {
 	// list (INTEG-AUDIT-1; bound by the direct runner, applied by the
 	// roster's engine).
 	metalist.Audit
+	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
+	op.PageFlags
 }
 
 // TeamRefIn names one team.

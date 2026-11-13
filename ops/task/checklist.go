@@ -104,10 +104,12 @@ type ChecklistItemOut struct {
 
 // ChecklistData is one task's checklist.
 type ChecklistData struct {
-	TaskID string             `json:"task_id"`
-	Done   int                `json:"done"`
-	Total  int                `json:"total"`
-	Items  []ChecklistItemOut `json:"items"`
+	TaskID string `json:"task_id"`
+	Done   int    `json:"done"`
+	Total  int    `json:"total"`
+	// Items are the rows task.checklist.list pages (op.PageFlags); Done
+	// and Total still count the whole checklist.
+	Items []ChecklistItemOut `json:"items" page:"rows"`
 }
 
 // ChecklistOut is the output of task.checklist.list and of the writes
@@ -410,8 +412,15 @@ func (o ops) checklistRm(ctx context.Context, in ChecklistItemIn) (ChecklistOut,
 	return o.saveChecklist(ctx, h, []string{h.list[i].ID.String()}, work.Success+" removed "+h.list[i].ID.String()+" "+h.list[i].Text+"\n")
 }
 
+// ChecklistListIn is the input of task.checklist.list: the task id plus
+// the shared --limit / --page of every list (op.PageFlags, T-4).
+type ChecklistListIn struct {
+	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+	op.PageFlags
+}
+
 // checklistList lists a task's live items (ids always in --json).
-func (o ops) checklistList(ctx context.Context, in IDIn) (ChecklistOut, error) {
+func (o ops) checklistList(ctx context.Context, in ChecklistListIn) (ChecklistOut, error) {
 	h, err := o.getChecklist(ctx, in.ID)
 	if err != nil {
 		return ChecklistOut{}, err

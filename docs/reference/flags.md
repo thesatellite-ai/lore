@@ -141,8 +141,8 @@ ERROR: [E_INVALID_INPUT] unknown flag: --force-org
   hint: lore memory add --help lists its flags
 (exit 20)
 $ lore memory add --to freelance --body 'The client pays invoices in 30 days'
-lore: pushed store freelance: commit 6d00426 to branch main
-lore: pushed store agency: commit 34ee210 to branch main
+lore: pushed store freelance: commit 05513aa to branch main
+lore: pushed store agency: commit dfd8dc8 to branch main
 lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes/_store (store agency)
 lore: wrote 2 row file(s) in ~/.lore/stores/other/notes/_store (store freelance)
 ✓ mem_b4f4…a5b0 [freelance]

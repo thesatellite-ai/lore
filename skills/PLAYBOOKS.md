@@ -15,9 +15,9 @@ cd ~/projects/my-app
 lore init --non-interactive            # creates .lore/
 # Existing CLAUDE.md / AGENTS.md / .cursorrules: no importer in 0.1.18.
 # Read them and add each item that is still true with its own command:
-lore rule add --severity=must --body="<a hard rule>"
-lore decision add --title="<choice>" --body="<the choice and why>"
-lore memory add --body="<a fact>"
+lore rule add --severity must --body "<a hard rule>"
+lore decision add --title "<choice>" --body "<the choice and why>"
+lore memory add --body "<a fact>"
 
 lore render                            # writes .lore/LORE.md + @import pointer in CLAUDE.md
 ```
@@ -32,9 +32,9 @@ User just said "no, we don't wrap stdlib errors here."
 
 ```bash
 lore rule add \
-    --severity=must \
-    --activation=always \
-    --body="Do not wrap stdlib errors with fmt.Errorf in this repo"
+    --severity must \
+    --activation always \
+    --body "Do not wrap stdlib errors with fmt.Errorf in this repo"
 lore render
 ```
 
@@ -42,10 +42,10 @@ If the rule applies only to specific files:
 
 ```bash
 lore rule add \
-    --severity=must \
-    --activation=glob \
-    --globs='["**/*.go", "!**/*_test.go"]' \
-    --body="Do not wrap stdlib errors with fmt.Errorf in non-test Go files"
+    --severity must \
+    --activation glob \
+    --globs '["**/*.go", "!**/*_test.go"]' \
+    --body "Do not wrap stdlib errors with fmt.Errorf in non-test Go files"
 ```
 
 ---
@@ -56,8 +56,8 @@ User said "we picked SQLite over Postgres because we want local-first and zero o
 
 ```bash
 lore decision add \
-    --title="Use SQLite (not Postgres)" \
-    --body="Local-first design. Zero ops. Acceptable since single-writer + WAL handles all expected load. Revisit if multi-tenant. Decided: 2026-04-30."
+    --title "Use SQLite (not Postgres)" \
+    --body "Local-first design. Zero ops. Acceptable since single-writer + WAL handles all expected load. Revisit if multi-tenant. Decided: 2026-04-30."
 lore render
 ```
 
@@ -69,9 +69,9 @@ User: "ugh, ent regen wiped my resolver helpers AGAIN."
 
 ```bash
 lore hotfix add \
-    --severity=high \
-    --title="ent regen overwrites resolver/" \
-    --body="ent regen overwrites resolver/ files — keep helpers in internal/ or pkg/"
+    --severity high \
+    --title "ent regen overwrites resolver/" \
+    --body "ent regen overwrites resolver/ files — keep helpers in internal/ or pkg/"
 lore render
 ```
 
@@ -84,19 +84,19 @@ Hotfixes are **never truncated** in the rendered `.lore/LORE.md`, even under tig
 A monorepo with `web`, `admin`, `api` repos sharing one lore project.
 
 ```bash
-lore init --non-interactive --name=my-platform
-lore repo add --mount-name web   --origin=git@github.com:org/web.git
-lore repo add --mount-name admin --origin=git@github.com:org/admin.git
-lore repo add --mount-name api   --origin=git@github.com:org/api.git
+lore init --non-interactive --name my-platform
+lore repo add --mount-name web   --origin git@github.com:org/web.git
+lore repo add --mount-name admin --origin git@github.com:org/admin.git
+lore repo add --mount-name api   --origin git@github.com:org/api.git
 
 # Scoped memories
-lore memory add --body="Tailwind v4"          --repo=web
-lore memory add --body="Mantine"              --repo=admin
-lore memory add --body="gqlgen + ent"         --repo=api
+lore memory add --body "Tailwind v4"          --repo web
+lore memory add --body "Mantine"              --repo admin
+lore memory add --body "gqlgen + ent"         --repo api
 
 # Cross-cutting (no --repo)
-lore memory add --body="Client charges in USD"
-lore memory add --body="All times in UTC"
+lore memory add --body "Client charges in USD"
+lore memory add --body "All times in UTC"
 
 # Render per repo (each gets only its repo + master)
 (cd web   && lore render)   # render runs in the repo it renders
@@ -159,11 +159,11 @@ Machine-local things (the audit log, sessions) live in `~/.lore/state/machine.db
 ## P8 — Add a task tracked under a mission
 
 ```bash
-M=$(lore mission add --title "Ship v0.1" --target=2026-06-30 --json | jq -r '.data.id')
-TL=$(lore tasklist add --title="v0.1" --body="release backlog" --json | jq -r '.data.id')   # every task belongs to a tasklist
-lore task add --title "Wire FTS5 backend"      --tasklist=$TL --mission=$M --commitment=accepted --priority=high
-lore task add --title "Write SC scenarios"     --tasklist=$TL --mission=$M --commitment=accepted --priority=high --due=2026-05-15
-lore task add --title "macOS code signing"     --tasklist=$TL --mission=$M --commitment=accepted --priority=medium
+M=$(lore mission add --title "Ship v0.1" --target 2026-06-30 --json | jq -r '.data.id')
+TL=$(lore tasklist add --title "v0.1" --body "release backlog" --json | jq -r '.data.id')   # every task belongs to a tasklist
+lore task add --title "Wire FTS5 backend"      --tasklist $TL --mission $M --commitment accepted --priority high
+lore task add --title "Write SC scenarios"     --tasklist $TL --mission $M --commitment accepted --priority high --due 2026-05-15
+lore task add --title "macOS code signing"     --tasklist $TL --mission $M --commitment accepted --priority medium
 
 lore mission show --id $M --json | jq '.data.tasks'      # eager-loaded tasks
 ```
@@ -182,14 +182,14 @@ lore task done  --id tsk_019e...           # status: in_progress → done
 
 ```bash
 # Once-off: 2026-06-01
-lore reminder add --message "Audit FTS index quality" --due=2026-06-01
+lore reminder add --message "Audit FTS index quality" --due 2026-06-01
 
 # Recurring: every 30 days
-lore reminder add --message "Weekly review" --due=2026-05-18 --recurrence=7d
+lore reminder add --message "Weekly review" --due 2026-05-18 --recurrence 7d
 
 # Attached to a specific decision
-lore reminder add --message "Re-evaluate SQLite choice" --due=2026-12-31 \
-    --on-table=decisions --on-id=dec_<id>
+lore reminder add --message "Re-evaluate SQLite choice" --due 2026-12-31 \
+    --on-table decisions --on-id dec_<id>
 ```
 
 `reminder done <id>` reschedules recurring; marks one-shot complete.
@@ -316,7 +316,7 @@ M=$(lore memory search --query "stdlib errors" --json | jq -r '.data[0].id')
 
 # Capture the same content as a rule
 BODY=$(lore memory show --id $M --json | jq -r '.data.body')
-lore rule add --severity=must --body="$BODY"
+lore rule add --severity must --body "$BODY"
 
 # Archive the original memory
 lore memory archive --id "$M"
@@ -334,7 +334,7 @@ The opposite — turns out it was too strict.
 R=$(lore rule list --json | jq -r '.data[] | select(.body | test("stdlib errors")) | .id')
 BODY=$(lore rule show --id $R --json | jq -r '.data.body')
 
-lore memory add --body="(formerly rule) $BODY"
+lore memory add --body "(formerly rule) $BODY"
 lore rule archive --id "$R"
 lore render
 ```
@@ -361,7 +361,7 @@ lore reminder list --json | jq --arg until "$(date -v+7d +%Y-%m-%d)" '
 lore hotfix list --json | jq '.data[] | "HF-\(.id) [\(.severity)] \(.body[0:80])"'
 
 # 5. Stale tasks (in_progress > 7 days)
-lore task list --status=in_progress --json | jq --arg cutoff "$(date -v-7d +%Y-%m-%dT00:00:00Z)" '
+lore task list --status in_progress --json | jq --arg cutoff "$(date -v-7d +%Y-%m-%dT00:00:00Z)" '
     .data[] | select(.started_at < $cutoff) | "T-\(.id) stale since \(.started_at)"
 '
 

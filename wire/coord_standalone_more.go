@@ -99,7 +99,8 @@ func (h standaloneCoord) TaskReassignPlan(ctx context.Context, in opscoord.Reass
 // the new assignee's actor id on the repo roster.
 func (h standaloneCoord) reassignCaller(ctx context.Context, in opscoord.ReassignIn) (*coordWorld, string, error) {
 	if strings.TrimSpace(in.Assign) == "" {
-		return nil, "", errs.New(errs.InvalidInput, "--assign @handle is required")
+		return nil, "", errs.New(errs.InvalidInput, "--assign is required: the new assignee").
+			WithHint(`lore task reassign --id <id> --assign "@handle" (or --from "@handle" for every open task of a person)`)
 	}
 	w, err := h.openWorld(ctx)
 	if err != nil {

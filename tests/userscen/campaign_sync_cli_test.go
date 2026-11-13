@@ -67,7 +67,7 @@ func TestCampaignSync_BadInputMatrix(t *testing.T) {
 		{[]string{"sync", "resolve", "nope"}, "E_INVALID_INPUT", 20, "take"},
 		{[]string{"sync", "peek", "nope"}, "E_INVALID_INPUT", 20, "nope"},
 		{[]string{"sync", "promote", "nope"}, "E_INVALID_INPUT", 20, "branch"},
-		{[]string{"sync", "merge-rows", "a", "b", "c"}, "E_INVALID_INPUT", 20, "too many arguments"},
+		{[]string{"sync", "merge-rows", "a", "b", "c"}, "E_INVALID_INPUT", 20, `unexpected value "b"`},
 		{[]string{"sync", "purge"}, "E_INVALID_INPUT", 20, "--archived-before is required"},
 		{[]string{"sync", "ci-merge"}, "E_INVALID_INPUT", 20, "base"},
 		{[]string{"sync", "trash", "restore", "999"}, "E_NOT_FOUND", 27, "no local copy #999"},

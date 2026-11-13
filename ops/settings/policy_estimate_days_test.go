@@ -22,7 +22,7 @@ func TestEstimateUnitDaysRefusedAtEveryLevel(t *testing.T) {
 	h := multiStore(t)
 	for _, to := range []string{"", "kb", "kb/web"} {
 		_, err := h.RunYes(settings.OpPolicySet, setIn(estimateUnitKey, "days", to))
-		if !errs.Has(err, errs.InvalidInput) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "tasks.estimate_unit hours") {
+		if !errs.Has(err, errs.InvalidInput) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "--key tasks.estimate_unit --value hours") {
 			t.Fatalf("days --to %q: %v (hint %q), want E_INVALID_INPUT naming hours", to, err, errs.EnvelopeOf(err).Error.Hint)
 		}
 		if r := showRules(t, h, estimateUnitKey)[estimateUnitKey]; r.Value != "points" || r.Source != "default" {

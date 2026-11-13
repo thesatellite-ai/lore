@@ -66,10 +66,10 @@ func TestNoDayUnit(t *testing.T) {
 		{"2d", Hours, "duration like 90m"},
 		{"0.5d", Hours, "unit is hours"},
 		{" 3d ", Points, "unit is points"},
-		{"2d", Days, "tasks.estimate_unit hours"},
-		{"2", Days, "tasks.estimate_unit hours"},
-		{"16h", Days, "tasks.estimate_unit hours"},
-		{"", Days, "tasks.estimate_unit hours"},
+		{"2d", Days, "--key tasks.estimate_unit --value hours"},
+		{"2", Days, "--key tasks.estimate_unit --value hours"},
+		{"16h", Days, "--key tasks.estimate_unit --value hours"},
+		{"", Days, "--key tasks.estimate_unit --value hours"},
 	}
 	for _, c := range cases {
 		got, err := Parse(c.raw, c.unit)

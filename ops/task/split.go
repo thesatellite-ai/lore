@@ -201,7 +201,7 @@ func splitPieces(in SplitIn) ([]splitPiece, error) {
 	}
 	if len(out) == 0 {
 		return nil, errs.New(errs.InvalidInput, "task split: no sub-task titles").
-			WithHint(`lore task split <id> "First" "Second" (or --title …), or --from <file|->`)
+			WithHint(`lore task split --id <id> --title "First" --title "Second", or --from <file|->`)
 	}
 	// FB-TASK-2, P3-TASK-1: the shared flags fill what a piece does not
 	// set itself (a piece's own --assign replaces the shared list).
