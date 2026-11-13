@@ -106,7 +106,7 @@ func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore 
 		if len(plain) > 0 {
 			if blobs, err := revBlobs(ctx, top, nil, base, plain); err == nil {
 				for p, b := range blobs {
-					oldFiles[p] = union(oldFiles[p], previewsOf(scanDoc(sc, nil, p, b, inStore)))
+					oldFiles[p] = union(oldFiles[p], previewsOf(scanDoc(sc, hookAllows{}, p, b, inStore)))
 				}
 			}
 		}
@@ -233,7 +233,7 @@ func historyFingerprints(ctx context.Context, sc scan.Scanner, top string, inSto
 		}
 		// No allow entries: every finding of the old row, allowed or not,
 		// is a fingerprint already in history.
-		set := previewsOf(scanDoc(sc, nil, p, b, inStore))
+		set := previewsOf(scanDoc(sc, hookAllows{}, p, b, inStore))
 		for k := range had[r.ID] {
 			set[k] = true // the row at two paths at HEAD: both count
 		}
@@ -278,7 +278,7 @@ func (a *App) migratedSecretsLine(ctx context.Context, top, tree, data string, d
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
-	hits := scanDocs(sc, nil, paths, docs, false)
+	hits := scanDocs(sc, hookAllows{}, paths, docs, false)
 	var named []string
 	n := 0
 	for i, p := range paths {

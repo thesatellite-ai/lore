@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -96,6 +97,7 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 		hits, inHistory = dropHistoryHits(ctx, sc, root, inStore, paths, docs, hits)
 	}
 	var lines, refused []string
+	named := true // every hit got its own ready allow line
 	for i, p := range paths {
 		for _, h := range hits[i] {
 			at := fmt.Sprintf("%s:%d", p, h.Line)
@@ -103,9 +105,14 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 				at += " (field " + h.Field + ")"
 			}
 			lines = append(lines, fmt.Sprintf("  %-40s secret: rule %s match %s", at, h.Rule, h.Preview))
-			if where == checkWhereCommit && !inStore && p != checkWhereCommitMsg && !isRowDocPath(p, inStore) {
-				// an ordinary file: the exact allow line, fingerprint only
-				lines = append(lines, "      not a secret? lore secrets allow --file "+shellWord(p)+" --rule "+h.Rule+" --match-hash "+h.Preview+" --reason '<why>'")
+			l := ""
+			if where == checkWhereCommit {
+				l = allowLineOf(p, h, inStore)
+			}
+			if l != "" {
+				lines = append(lines, "      not a secret? "+l)
+			} else {
+				named = false
 			}
 			refused = append(refused, "path="+p+" rule="+h.Rule)
 		}
@@ -115,20 +122,48 @@ func (a *App) hookSecrets(ctx context.Context, root, where string, docs map[stri
 	}
 	a.auditHookRefused(ctx, where, refused)
 	return inHistory, errs.New(errs.LeakBlocked, "blocked, this "+where+" carries a secret:\n"+strings.Join(lines, "\n")).
-		WithHint(leakHint(inStore))
+		WithHint(leakHint(inStore, named))
+}
+
+// allowLineOf is the exact `lore secrets allow` command that accepts the
+// one finding h of the file at p, with its path (or row id and field),
+// rule and match hash filled in; only the reason is left to write. ""
+// where no entry can accept it: a commit message, or a store file that is
+// not a row. A refusal that names the command keeps people from reaching
+// for --no-verify (user report).
+func allowLineOf(p string, h leakcheck.SecretHit, inStore bool) string {
+	const reason = ` --reason "<why>"`
+	switch {
+	case p == checkWhereCommitMsg:
+		return ""
+	case isRowDocPath(p, inStore):
+		id, err := ids.ParseAny(strings.TrimSuffix(path.Base(p), ".json"))
+		if err != nil || h.Field == "" {
+			return ""
+		}
+		return "lore secrets allow " + id.String() + " --rule " + h.Rule + " --field " + shellWord(h.Field) + " --match-hash " + h.Preview + reason
+	case inStore:
+		return ""
+	}
+	return "lore secrets allow --file " + shellWord(p) + " --rule " + h.Rule + " --match-hash " + h.Preview + reason
 }
 
 // leakHint is the next step of a refused commit or push. A code repo keeps
 // its allow entries in .lore/data/secret_allows, to be committed with the
 // change; a store clone has no .lore/data: `lore secrets allow` there
 // writes and commits the entry itself, as <folder>/secret_allows/<id>.json
-// in the store, so the person only commits again.
-func leakHint(inStore bool) string {
-	const vault = "store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <the sha256:… match shown> --reason \"<why>\""
-	if inStore {
-		return vault + " (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again"
+// in the store, so the person only commits again (never --no-verify).
+// named: every finding was printed with its own ready allow line, so the
+// hint points at those lines instead of a template to fill in.
+func leakHint(inStore, named bool) string {
+	vault := "store the value in your vault and reference it (${secret:…}); if it is not a secret: lore secrets allow <row id> --rule <rule> --field <field> --match-hash <the sha256:… match shown> --reason \"<why>\""
+	if named {
+		vault = "store the value in your vault and reference it (${secret:…}, or a placeholder such as ${DB_PASSWORD}); if a finding is not a secret, run the `not a secret?` line printed under it with your reason (a .gitleaksignore <path>:<rule>:<line> entry works too)"
 	}
-	return vault + ", add the new .lore/data/secret_allows file, then commit again"
+	if inStore {
+		return vault + " (a store has no .lore/data: lore writes and commits the entry itself, as <folder>/secret_allows/<id>.json), then commit again (no --no-verify needed)"
+	}
+	return vault + ", add the new .lore/data/secret_allows file, then commit again (no --no-verify needed)"
 }
 
 // hookIndexEnv passes on the index git gave the hook. `git commit -a`,
@@ -159,12 +194,13 @@ func hookIndexEnv(top string) []string {
 const storeAllowsPathspec = ":(glob)**/" + schema.TableSecretAllows + "/*.json"
 
 // committedAllows reads every secret_allows row file in the git index under
-// root's .lore/data (19.4: only the tree being committed counts). Not a git
-// checkout: none. A file that does not decode allows nothing.
-func committedAllows(ctx context.Context, root string) ([]scan.Allow, error) {
+// root's .lore/data (19.4: only the tree being committed counts), and the
+// repo top's .gitleaksignore from the same index (gitleaksignore.go). Not
+// a git checkout: none. A file that does not decode allows nothing.
+func committedAllows(ctx context.Context, root string) (hookAllows, error) {
 	top := gitTop(ctx, root)
 	if top == "" {
-		return nil, nil
+		return hookAllows{}, nil
 	}
 	env := hookIndexEnv(top)
 	list := gitRun{dir: root, env: env, args: []string{"ls-files", "-z", "--full-name", "--", allowsDirRel}}
@@ -173,21 +209,24 @@ func committedAllows(ctx context.Context, root string) ([]scan.Allow, error) {
 	}
 	out, err := list.output(ctx)
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "list committed secret allow entries", err)
+		return hookAllows{}, errs.Wrap(errs.Internal, "list committed secret allow entries", err)
 	}
 	paths := strings.Split(string(out), "\x00")
-	blobs, err := indexBlobs(ctx, top, env, paths) // one git process, not one per entry
+	blobs, err := indexBlobs(ctx, top, env, append(paths, gitleaksIgnoreFile)) // one git process, not one per entry
 	if err != nil {
-		return nil, err
+		return hookAllows{}, err
 	}
-	var allows []scan.Allow
+	var allows hookAllows
+	if b, ok := blobs[gitleaksIgnoreFile]; ok {
+		allows.ignore = parseGitleaksIgnore(b)
+	}
 	for _, p := range paths {
 		b, ok := blobs[p]
 		if !ok {
 			continue
 		}
 		if al, ok := allowOfFile(b); ok {
-			allows = append(allows, al)
+			allows.entries = append(allows.entries, al)
 		}
 	}
 	return allows, nil
@@ -251,7 +290,7 @@ func fileAllowed(p string, found []scan.Finding, allows []scan.Allow) []scan.Fin
 // safe for concurrent use; item 30: a 5,000-row commit scanned one file
 // after another). hits[i] are the findings of paths[i], so the refusal
 // lists them in path order whatever finished first.
-func scanDocs(sc scan.Scanner, allows []scan.Allow, paths []string, docs map[string][]byte, inStore bool) [][]leakcheck.SecretHit {
+func scanDocs(sc scan.Scanner, allows hookAllows, paths []string, docs map[string][]byte, inStore bool) [][]leakcheck.SecretHit {
 	hits := make([][]leakcheck.SecretHit, len(paths))
 	if len(paths) == 0 {
 		return hits
@@ -280,17 +319,19 @@ func scanDocs(sc scan.Scanner, allows []scan.Allow, paths []string, docs map[str
 // scanDoc scans one document (see the file comment).
 // inStore: p is a path in a store clone, whose row files sit at
 // <folder>/<table>/<id>.json rather than under .lore/data.
-func scanDoc(sc scan.Scanner, allows []scan.Allow, p string, b []byte, inStore bool) []leakcheck.SecretHit {
+// A hit a .gitleaksignore fingerprint names (path, rule, line) is dropped
+// last, on the hits as the refusal would print them.
+func scanDoc(sc scan.Scanner, allows hookAllows, p string, b []byte, inStore bool) []leakcheck.SecretHit {
 	content := string(b)
 	if strings.Contains("/"+p, "/"+loreDataMark) || (inStore && isStoreRowPath(p)) {
 		if r, err := row.Decode(b); err == nil && !r.ID.IsZero() {
-			return oneHitPerValue(scanRowDoc(sc, allows, r, content))
+			return allows.ignore.drop(p, oneHitPerValue(scanRowDoc(sc, allows.entries, r, content)))
 		}
 	}
 	// The path is the field of a plain document, so path-scoped filters
 	// (a go.sum module hash) can tell the file; hits keep no field.
 	found := sc.Scan(p, content)
-	return oneHitPerValue(hitsOf(content, "", sameValueAllowed(found, fileAllowed(p, found, allows))))
+	return allows.ignore.drop(p, oneHitPerValue(hitsOf(content, "", sameValueAllowed(found, fileAllowed(p, found, allows.entries)))))
 }
 
 // sameValueAllowed drops from kept (found after the allow entries) every
