@@ -255,6 +255,8 @@ $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
 ```
 <!-- /example -->
 
+`lore sync` says it in one line, with the host's own words: `live: 2 write(s) not pushed: the remote refused refs/lore/live ([remote rejected] (pre-receive hook declined)); kept here; allow pushes to refs/lore/* on origin (…), then run lore sync`. A command tries the push once: a refused or unanswered push is not sent again before the command ends.
+
 Fix: allow `refs/lore/*` on the host (or in its pre-receive hook). Until then, live rows only reach teammates when they land on `main`. `lore land --all` lands them now. Setting `live.autopush: false` (the default) stops the retries after each write.
 
 ## A URL shows `<redacted>`

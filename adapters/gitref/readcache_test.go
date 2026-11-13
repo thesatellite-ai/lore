@@ -292,7 +292,15 @@ func TestReadCacheClassify(t *testing.T) {
 		{Invocation{Args: []string{"symbolic-ref", "-d", "HEAD"}}, classWrite},
 		{Invocation{Args: []string{"symbolic-ref", "-m", "why", "HEAD", "refs/heads/x"}}, classWrite},
 		{Invocation{Args: []string{"update-ref", "refs/lore/live", "x"}}, classWrite},
-		{Invocation{Args: []string{"config", "--get", "user.email"}}, classWrite},
+		{Invocation{Args: []string{"config", "--get", "user.email"}}, classPassthrough},
+		{Invocation{Args: []string{"config", "--get-regexp", "^remote\\..*\\.url$"}}, classPassthrough},
+		{Invocation{Args: []string{"config", "--global", "--get", "user.name"}}, classPassthrough},
+		{Invocation{Args: []string{"config", "user.email", "a@example.test"}}, classWrite},
+		{Invocation{Args: []string{"config", "--unset", "user.email"}}, classWrite},
+		{Invocation{Args: []string{"config", "--add", "--get", "x.y", "z"}}, classWrite},
+		{Invocation{Args: []string{"config", "--file", "other", "--get", "x.y"}}, classWrite},
+		{Invocation{Args: []string{"log", "--format=%H", "HEAD"}}, classPassthrough},
+		{Invocation{Args: []string{"log", "--output=f", "HEAD"}}, classWrite},
 		{Invocation{Args: []string{"fetch", "origin"}}, classWrite},
 		{Invocation{Args: []string{"-C", "/elsewhere", "rev-parse", "HEAD"}}, classWrite},
 		{Invocation{Args: []string{"rev-parse", "HEAD"}, Env: []string{"GIT_INDEX_FILE=x"}}, classWrite},
@@ -302,5 +310,48 @@ func TestReadCacheClassify(t *testing.T) {
 		if got := classify(c.inv); got != c.want {
 			t.Errorf("classify(%q env %q) = %d, want %d", c.inv.Args, c.inv.Env, got, c.want)
 		}
+	}
+}
+
+// TestReadCacheReadOnlyCommandsKeepAnswers: config reads and log run every
+// time (their answers are never kept) and drop nothing, so the tree read
+// before them is still answered from the cache after them. Before, each
+// identity lookup or merged-check log in an operation wiped the cache and a
+// 5,500-row repo's whole-tree ls-trees ran again per table read.
+func TestReadCacheReadOnlyCommandsKeepAnswers(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	r, _, counter := cachedRepo(t)
+	tree := Invocation{Args: []string{"ls-tree", "-r", "HEAD"}}
+	for range 3 {
+		if _, err := r.Run(ctx, tree); err != nil {
+			t.Fatalf("ls-tree: %v", err)
+		}
+		if _, err := r.Run(ctx, Invocation{Args: []string{"config", "--get", "user.email"}}); err != nil {
+			if _, exited := ExitCode(err); !exited {
+				t.Fatalf("config --get: %v", err)
+			}
+		}
+		if _, err := r.Run(ctx, Invocation{Args: []string{"log", "--format=%H", "HEAD"}}); err != nil {
+			t.Fatalf("log: %v", err)
+		}
+	}
+	if got := counter.count("ls-tree"); got != 1 {
+		t.Errorf("ls-tree ran %d times, want 1 (config and log reads must not drop it)", got)
+	}
+	if got, want := counter.count("config"), 3; got != want {
+		t.Errorf("config ran %d times, want %d (never answered from the cache)", got, want)
+	}
+	if got, want := counter.count("log"), 3; got != want {
+		t.Errorf("log ran %d times, want %d (never answered from the cache)", got, want)
+	}
+	if _, err := r.Run(ctx, Invocation{Args: []string{"config", "lore.test", "x"}}); err != nil {
+		t.Fatalf("config set: %v", err)
+	}
+	if _, err := r.Run(ctx, tree); err != nil {
+		t.Fatalf("ls-tree: %v", err)
+	}
+	if got := counter.count("ls-tree"); got != 2 {
+		t.Errorf("ls-tree ran %d times after a config write, want 2 (a write still drops it)", got)
 	}
 }

@@ -396,8 +396,12 @@ type ruleEntry struct {
 func ruleRows(ctx context.Context, backends map[store.Source]store.Backend, folders map[store.Source]string) ([]ruleEntry, string, error) {
 	var out []ruleEntry
 	var keys []string
+	// Only the rules table: a full read decoded and stat'ed every row file of
+	// a 5,500-row repo on each scanner refresh (the backend may ignore the
+	// hint; the loop below keeps rule rows either way).
+	rulesOnly := store.WithTables(ctx, row.Table(schema.TableSecretRules))
 	for name, b := range backends {
-		got, _, readErr := b.Read(ctx, "")
+		got, _, readErr := b.Read(rulesOnly, "")
 		if readErr != nil {
 			return nil, "", readErr
 		}

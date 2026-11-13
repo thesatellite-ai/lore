@@ -315,11 +315,13 @@ func TestSyncTeam_UnpushedWritesAreReportedBySync(t *testing.T) {
 	cases := []struct {
 		name     string
 		cut, fix func(st *syncTeam)
+		says     []string // sync's one line: why, and what to do next
 	}{
-		{"offline", func(st *syncTeam) { st.people[0].Offline() }, func(st *syncTeam) { st.people[0].Online() }},
+		{"offline", func(st *syncTeam) { st.people[0].Offline() }, func(st *syncTeam) { st.people[0].Online() },
+			[]string{"1 write(s) not pushed", "next sync"}},
 		{"remote refuses lore refs", func(st *syncTeam) { st.app.RefuseLoreRefs() }, func(st *syncTeam) {
 			st.w.Git(st.app.Dir, "config", "core.hooksPath", "/dev/null")
-		}},
+		}, []string{"1 write(s) not pushed: the remote refused refs/lore/live ([remote rejected] (pre-receive hook declined))", "allow pushes to refs/lore/* on origin", "then run `lore sync`"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -333,8 +335,14 @@ func TestSyncTeam_UnpushedWritesAreReportedBySync(t *testing.T) {
 			if len(diff.Pending) != 1 || diff.Pending[0] != liveRowFile(syncTblTasks, id) {
 				t.Fatalf("live diff must list the waiting write: %+v", diff)
 			}
+			pushes := len(st.w.GitPushes(syncPeople[0].name))
 			s := a.MustLore("sync")
-			s.Never(t, syncAlready).Says(t, "1 write(s) not pushed", "next sync")
+			s.Never(t, syncAlready, "(live, not pushed yet").Says(t, tc.says...)
+			// one try per command: sync's push, never again at its end (each
+			// is a network round trip; on a refusing host the answer is the same)
+			if n := len(st.w.GitPushes(syncPeople[0].name)) - pushes; n > 1 {
+				t.Fatalf("one sync pushed %d times, want at most once", n)
+			}
 			rep := th.DecodeJSON[syncReport](t, a.MustLore("sync", "--json"))
 			if rep.Data.LivePending != 1 {
 				t.Fatalf("sync --json must count the waiting write: %+v", rep.Data)

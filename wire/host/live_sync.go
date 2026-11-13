@@ -79,6 +79,12 @@ const syncLiveWaiting = "live: %d write(s) not pushed (%s): kept here, sent on t
 // syncWaitWhyDefault is syncLiveWaiting's reason when the push named none.
 const syncWaitWhyDefault = "offline, or the remote refused refs/lore/*"
 
+// syncLiveRefused is the sync report line when the remote refused the push
+// of refs/lore/live (a hook, a protected namespace, a read-only token): the
+// next sync would be refused the same way, so it names the remote's words
+// and what changes the answer instead of "sent on the next sync".
+const syncLiveRefused = "live: %d write(s) not pushed: the remote refused refs/lore/live (%s); kept here; allow pushes to refs/lore/* on %s, then run `lore sync`"
+
 // pushAndLand pushes the waiting live writes, then lands what is due.
 // waiting is the number of live writes still not on the remote after the
 // push (0 when every write was delivered or there is no remote).
@@ -104,6 +110,9 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 			// The push could not deliver (offline, refused): the writes
 			// wait here; say so rather than "already in sync".
 			n := s.waiting()
+			if s.waitWhy == liveRefusedWhy {
+				return []string{fmt.Sprintf(syncLiveRefused, n, s.refusedDetail, s.remoteLabel())}, n, nil
+			}
 			why := s.waitWhy
 			if why == "" {
 				why = syncWaitWhyDefault

@@ -69,3 +69,54 @@ func TestReadSnapshot(t *testing.T) {
 		t.Fatalf("a new snapshot: %d full reads, want 3", got)
 	}
 }
+
+// slowBackend is countingBackend whose full read waits for release, so a
+// test can have many readers ask while the first read is still running.
+type slowBackend struct {
+	countingBackend
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b slowBackend) Read(ctx context.Context, c store.Cursor) ([]store.Row, store.Cursor, error) {
+	if c == "" {
+		select {
+		case b.started <- struct{}{}:
+		default:
+		}
+		<-b.release
+	}
+	return b.countingBackend.Read(ctx, c)
+}
+
+// TestReadSnapshotSharesAConcurrentFill: doctor's checks run in parallel
+// under one snapshot; readers that ask while the first full read runs wait
+// for it instead of each reading the whole store (a 5,500-row repo was read
+// ~20 times at once per doctor run).
+func TestReadSnapshotSharesAConcurrentFill(t *testing.T) {
+	t.Parallel()
+	var n atomic.Int64
+	b := slowBackend{
+		countingBackend: countingBackend{memstore.NewData().Open(store.OpenOptions{}), &n},
+		started:         make(chan struct{}, 1),
+		release:         make(chan struct{}),
+	}
+	st := Attached{Name: "kb", Backend: b}
+	ctx := WithReadSnapshot(context.Background())
+	const readers = 8
+	errc := make(chan error, readers)
+	go func() { _, _, err := readAll(ctx, st); errc <- err }()
+	<-b.started // the first reader is filling
+	for range readers - 1 {
+		go func() { _, _, err := readAll(ctx, st); errc <- err }()
+	}
+	close(b.release)
+	for range readers {
+		if err := <-errc; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := n.Load(); got != 1 {
+		t.Fatalf("%d readers under one snapshot made %d full reads, want 1", readers, got)
+	}
+}

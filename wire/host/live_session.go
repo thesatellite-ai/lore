@@ -130,6 +130,15 @@ type liveSession struct {
 	// waitWhy is the reason of the last push that left writes waiting
 	// ("" none): offline, or the remote's fault (gitfault).
 	waitWhy string
+	// undelivered is the local live ref commit a push of this run could
+	// not deliver (offline, refused, a remote fault); "" when none. A
+	// later push of the same commit in the run (sync's own, then finish)
+	// would only reach the same answer again, a slow network round trip
+	// each on a real remote, so push skips it.
+	undelivered string
+	// refusedDetail is the remote's own words when it refused the last
+	// push of this run ("" otherwise), for sync's line.
+	refusedDetail string
 	// fetched: this run fetched the remote successfully (refetch).
 	fetched bool
 	// blocked is set when the remote live ref was rewritten: no writes.
@@ -155,6 +164,9 @@ type liveSession struct {
 	// while that push is not confirmed.
 	atomicMark string
 	atomicOpen bool
+	// listings holds dataPaths' parsed tree listings by commit id and
+	// folder: immutable, so they live as long as the session.
+	listings map[string]map[string]string
 	// decoded holds the live folders' rows decoded from the last live ref
 	// commit read (liveFiles), so a run that Gets thousands of rows decodes
 	// the tree once per commit, not once per Get.
@@ -415,6 +427,9 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.waitWhy = "autopush is off"
 		return false
 	}
+	if s.undelivered != "" && s.undelivered == snap.Local {
+		return false // this run already tried this commit; waitWhy still says why
+	}
 	out, err := s.ref.Push(ctx)
 	s.notes = append(s.notes, out.Notes...)
 	s.printNotes()
@@ -426,8 +441,14 @@ func (s *liveSession) push(ctx context.Context) bool {
 		return false
 	}
 	s.reportPush(out)
+	if out.Status == live.PushOffline || out.Status == live.PushRefused {
+		s.undelivered = snap.Local
+	}
 	return out.Pushed()
 }
+
+// liveRefusedWhy is waitWhy after the remote refused refs/lore/live.
+const liveRefusedWhy = "the remote refused refs/lore/live"
 
 // reportPush is the run's "(live, …)" line (v0.1.17 text).
 func (s *liveSession) reportPush(out live.PushOutcome) {
@@ -452,8 +473,11 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 	case live.PushOffline:
 		s.reportOffline(out.Detail)
 	case live.PushRefused:
-		s.waitWhy = "the remote refused refs/lore/live"
-		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; the remote refused refs/lore/live: %s)", s.waiting(), out.Detail))
+		s.waitWhy = liveRefusedWhy
+		s.refusedDetail = out.Detail
+		// said once per state, as the offline line, and not during sync's
+		// report (its own line says it, with the next step)
+		s.sayOnce(fmt.Sprintf("(live, not pushed yet: %d waiting; the remote refused refs/lore/live: %s)", s.waiting(), out.Detail))
 		_ = s.writeNote(liveNoteRefused, out.Detail) // best effort: feeds `lore live doctor` only
 	case live.PushRetriesOut:
 		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; lost %d races, the next command retries)", s.waiting(), out.Attempts))

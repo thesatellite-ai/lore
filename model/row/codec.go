@@ -101,8 +101,24 @@ func (r Row) check() error {
 // with E_OLD_LORE (writes must never round-trip data this binary cannot
 // represent) and upcasts older versions in memory through the step
 // registry (steps.go): v1 gets "_hlc" from updated_at, counter 0 and
-// updated_by (spec 12).
+// updated_by (spec 12). The same bytes decoded again in one process are
+// answered from a memo (decodememo.go) with their own copies of the maps.
 func Decode(b []byte) (Row, error) {
+	if len(b) < decodeMemoMinBytes {
+		return decode(b)
+	}
+	if r, ok := memo.get(b); ok {
+		return r, nil
+	}
+	r, err := decode(b)
+	if err == nil {
+		memo.put(b, r)
+	}
+	return r, err
+}
+
+// decode is Decode without the memo.
+func decode(b []byte) (Row, error) {
 	ms, parsed, err := canon.MembersInspected(b)
 	if err != nil {
 		return Row{}, errs.Wrap(errs.InvalidInput, "row: not a JSON object", err)

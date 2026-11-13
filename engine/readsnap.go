@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -23,14 +24,24 @@ import (
 // read back. A change made around the engine (another process, a fix that
 // edits files directly) is not seen until the snapshot ends: a caller that
 // makes such changes takes a new snapshot after them.
+//
+// Concurrent readers share one fill: doctor runs its checks in parallel,
+// and before fills were shared every check that found the snapshot empty
+// read the whole store itself (a 5,500-row repo was read ~20 times at once,
+// ~170,000 stat calls per doctor run). The first reader fills; the others
+// wait for it (snapFill.done).
 type readSnapshot struct {
 	mu   sync.Mutex
-	full map[store.Backend]snapRead
+	full map[store.Backend]*snapFill
 }
 
-type snapRead struct {
+// snapFill is one backend's full read: done closes once rows, next and err
+// are set, and they never change after that.
+type snapFill struct {
+	done chan struct{}
 	rows []store.Row
 	next store.Cursor
+	err  error
 }
 
 type readSnapshotKey struct{}
@@ -39,7 +50,7 @@ type readSnapshotKey struct{}
 // whole store under it are made once and shared until a write through the
 // engine drops them. It replaces any snapshot ctx already had.
 func WithReadSnapshot(ctx context.Context) context.Context {
-	return context.WithValue(ctx, readSnapshotKey{}, &readSnapshot{full: map[store.Backend]snapRead{}})
+	return context.WithValue(ctx, readSnapshotKey{}, &readSnapshot{full: map[store.Backend]*snapFill{}})
 }
 
 // EnsureReadSnapshot is ctx when it has a read snapshot already (a doctor
@@ -65,20 +76,48 @@ func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error
 		return st.Backend.Read(ctx, "")
 	}
 	s.mu.Lock()
-	r, ok := s.full[st.Backend]
-	s.mu.Unlock()
-	if ok {
-		return slices.Clone(r.rows), r.next, nil
+	f, ok := s.full[st.Backend]
+	if !ok {
+		f = &snapFill{done: make(chan struct{})}
+		s.full[st.Backend] = f
 	}
-	rows, next, err := st.Backend.Read(ctx, "")
-	if err != nil {
-		return nil, "", err
-	}
-	s.mu.Lock()
-	s.full[st.Backend] = snapRead{rows: slices.Clone(rows), next: next}
 	s.mu.Unlock()
-	return rows, next, nil
+	if !ok {
+		s.fill(ctx, st, f)
+	} else {
+		select {
+		case <-f.done:
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		}
+		if f.err != nil {
+			return st.Backend.Read(ctx, "") // the filler's failure (its own context, say) is not this reader's
+		}
+	}
+	if f.err != nil {
+		return nil, "", f.err
+	}
+	return slices.Clone(f.rows), f.next, nil
 }
+
+// fill runs f's read for st and publishes it (done closes even if the
+// read panics, so no waiter hangs). A failed read is not kept: the next
+// reader tries again.
+func (s *readSnapshot) fill(ctx context.Context, st Attached, f *snapFill) {
+	defer close(f.done)
+	f.err = errFillAborted // replaced below unless Read panics
+	f.rows, f.next, f.err = st.Backend.Read(ctx, "")
+	if f.err != nil {
+		s.mu.Lock()
+		if s.full[st.Backend] == f {
+			delete(s.full, st.Backend)
+		}
+		s.mu.Unlock()
+	}
+}
+
+// errFillAborted is what waiters see of a fill whose read panicked.
+var errFillAborted = errs.New(errs.Internal, "a shared store read did not finish")
 
 // readOneTable is the rows readTable filters for table: the run's shared
 // full read when ctx has a read snapshot (doctor's checks list ~80 tables,
